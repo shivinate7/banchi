@@ -1,10 +1,10 @@
-"""Four stored-data checks the owner took whole, from D237's
+"""Four stored-data checks the owner took whole, from D239's
 own class 1 through class 4. Each one reads a card's already-stored fields — `name`,
 `number`, `set_name` — and needs no catalogue and no network. Each is a REVIEW SIGNAL, never
 a repair: D234's own worked example is a genuine secret rare that a denominator or
 digit-count check would ALSO flag, correctly, because the check can only say "uncommon for
 this set, look at the photo," never "wrong." `CLAUDE.md`'s own boundary — two agreeing
-signals release a claim (D146), one disagreeing signal never resolves one on its own — is
+signals release a claim (D23), one disagreeing signal never resolves one on its own — is
 why nothing here writes a card.
 
 PURE FUNCTIONS OVER PLAIN DATA, NO STORE IMPORT. Every check takes an iterable of
@@ -21,7 +21,7 @@ self-contradiction check (two copies of one SKU disagreeing about the card's num
 different, more speculative build, kept separate on the owner's own ruling; it lives in
 `pipeline/sku_contradictions.py`, not here.
 
-Cites D146, D173, D234, D237, D239 (this
+Cites D23, D173, D234, D239 (this
 module's own decision entry).
 """
 
@@ -46,7 +46,7 @@ LONG_NAME_THRESHOLD = 60
 # card names — it would match unrelated short names by chance. 0.82 is the ratio the cited
 # analysis measured against the owner's store: tight enough that `Grandmaster at Arms` and
 # `Jax, Grandmaster at Arms` still register (a champion's short title against its own full
-# name, D237's own "resolved fine" case), loose enough to catch a
+# name, D239's own "resolved fine" case), loose enough to catch a
 # single glued letter (`Shadbow`/`Shadow`).
 NAME_MATCH_CUTOFF = 0.82
 
@@ -219,7 +219,7 @@ def flag_near_duplicate_names(
     return out
 
 
-#: Every check, in the order D237 numbers its classes.
+#: Every check, in the order D239 numbers its classes.
 ALL_CHECKS = {
     "long_name": flag_long_names,
     "denominator_outlier": flag_denominator_outliers,

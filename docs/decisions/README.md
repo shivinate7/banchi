@@ -1,8 +1,7 @@
 # Settled decisions
 
 Each file here is one decision, named `D<number>-<slug>.md`. A glob sorts the files into
-corpus order. `ORDER.json` records that order, because three chunks are not entries. The
-Deferred list, the Someday list and the v1 bug table sit between D79 and D80.
+corpus order. `ORDER.json` records that order, with the preamble first.
 
 Every entry is closed. Sessions do not re-litigate an entry. To reopen one, name the entry and
 the new evidence, then wait for the owner. When a decision changes, rewrite its entry in place.

@@ -1,5 +1,5 @@
 // Protects: Home's "cannot be filled" figure never counts an order that the feed has already closed.
-// Governs: D63, D114, D121, D202, D218
+// Governs: D63, D91, D121, D218
 import { test, expect, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { runRow } from './routeFixtures'
@@ -8,7 +8,7 @@ import type { OrderRow, OrdersPayload, ResolvedLine, ResolvedOrder } from '../sr
 
 /* HOME'S "CANNOT BE FILLED" FIGURE, PINNED AGAINST A MIXED LEDGER.
  *
- * `## D202`. `app/src/standing.ts` and `app/src/Home.tsx` both once
+ * `## D121`. `app/src/standing.ts` and `app/src/Home.tsx` both once
  * summed `ResolvedOrder.outstanding` across EVERY row `GET /orders`' `resolution.orders`
  * carried, unconditionally — so an order the feed itself has already closed (Shipped,
  * Delivered, Canceled — `store/orders.py:is_terminal_status`, D63 amended 2026-09-13) still
@@ -25,7 +25,7 @@ import type { OrderRow, OrdersPayload, ResolvedLine, ResolvedOrder } from '../sr
  * fix: `standing.ts` and `Home.tsx` now index the open orders by `key` and count a resolved
  * line's `outstanding` only where its own order is in that set.
  *
- * NEITHER FILE MAY READ `status` OR GROW ITS OWN TERMINAL VOCABULARY (D114 — "there is no
+ * NEITHER FILE MAY READ `status` OR GROW ITS OWN TERMINAL VOCABULARY (D91 — "there is no
  * status vocabulary anywhere in `app/`"). `open` is the one field either module reads.
  */
 

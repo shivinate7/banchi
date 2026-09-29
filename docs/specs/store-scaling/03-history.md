@@ -360,7 +360,7 @@ Insert after `history()` (ends line 185) and before `named_events()` (line 187):
 ```
 
 Use the placeholder citation `the decision entry item 3's PR adds` verbatim (a slug, not a guessed
-number) — this repo claims decision numbers at merge time (`make claim-ids`, D140, D187); do
+number) — this repo claims decision numbers at merge time (`make claim-ids`, D140); do
 not write a literal `D189` or similar. Add a matching entry under `docs/decisions/` with that
 same heading slug in whatever this session's own step for "write the decision entry" is (this
 playbook's own scope is `docs/specs/store-scaling/03-history.md` only — the implementing

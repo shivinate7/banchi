@@ -430,7 +430,7 @@ class CardPlan:
         name moving to a name the read disputes. The other is the drawn number moving to a
         number the read does not equal after the join's fold." Both halves reuse the exact
         tests the classifier itself ran (`name_disputes`, `number_agrees`), never a bare
-        string or case comparison — a case, accent or qualifier difference (D146's own
+        string or case comparison — a case, accent or qualifier difference (D23's own
         tolerance) is a spelling change, never a move, and only the real dispute/fold tests
         can tell the two apart. Reviewed and fixed 2026-09-24 (LOW): the prior `.upper()`
         name test and the unconditional `cls == T4U` number test undercounted T3's own
@@ -584,7 +584,7 @@ def held_review_entry(card: Card, row: SkuRow, plan: "MigrationPlan") -> "QueueE
     )
 
 
-# §5.5: D242 (`cards contradictions`) and D255 (`cards sku-names`) retire into this report's
+# §5.5: D242 (`cards contradictions`, `cards sku-names`) retires into this report's
 # name half and number half. Both exclude a card a human has already answered — "a human who
 # chose that SKU off the photograph has already answered the report's question", and a guard
 # that goes red on an answered question is spent (§5.5's own words). `migration` belongs
@@ -606,7 +606,7 @@ class AuditFindings:
     """§4.3 point 2 and §5.5, the merged report's own two halves.
 
     `identity_drift`/`sku_not_in_table`/`rarity_disagreement` are §4.3's three audit
-    failures. `name_half`/`number_half` are D242/D255's replacement (§5.5): every
+    failures. `name_half`/`number_half` are D242's replacement (§5.5): every
     SKU-bound card, `bound_by` not in `APPROVED_BOUND_BY`, whose READ still disputes the row it is bound to — a
     property that can change after the bind, when a newer export changes the row's own
     facts (§3.2's `sku_facts_changed`)."""

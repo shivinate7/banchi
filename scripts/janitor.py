@@ -40,7 +40,7 @@ against `startedAt` so a recycled pid cannot inherit a dead session's claim on a
 `_same_process` for why that comparison is made on the epoch and never on the `procStart`
 string beside it, and for why every unreadable case resolves to LIVE.
 
-IDENTITY IS AN ABSOLUTE PATH, NEVER A PID AND NEVER A PORT. Pids churn — D53's supervisor
+IDENTITY IS AN ABSOLUTE PATH, NEVER A PID AND NEVER A PORT. Pids churn — D138's supervisor
 re-execs and its children are replaced, twice inside twenty minutes on the day this was
 written — and `started_at` in a pidfile is rewritten by that re-exec, so it is not process age.
 The port cannot be inverted: it is `sha256(path)[:4] % 300`, one-way, and 300 slots collide.
@@ -435,7 +435,7 @@ def servers_under(tree: str, skip: Set[int],
     return found
 
 
-# ------------------------------------------------- the process nothing owns any more (D175)
+# ------------------------------------------------- the process nothing owns any more (D305)
 
 class Loose(NamedTuple):
     pid: int
@@ -587,7 +587,7 @@ def loose_processes(root: str, main_tree: str, trees: Sequence[Tree],
     AND IT CAN NEVER NAME THE MAIN CHECKOUT'S SERVER, BY CONSTRUCTION RATHER THAN BY SUBTRACTION.
     Being inside a LINKED worktree is a requirement to be offered at all, not an exclusion
     applied afterwards, so there is no ordering, no `continue` and no failed `main_checkout()`
-    lookup that can let the rig through. D53 means that process to outlive every session, it has
+    lookup that can let the rig through. D138 means that process to outlive every session, it has
     no session record by design, and a rule that offered it up would be wrong however carefully
     the rest of it read — this repo has already killed it once with `pkill -f` (D127). The cost
     of the requirement is a real and named gap: a loop backgrounded from a session standing in
@@ -1062,7 +1062,7 @@ def sweep(root: str, sessions_dir: Path, confirm: bool, tier1: bool,
     # a session in is a tree it calls empty. An unreadable `git worktree list` is worse: `trees`
     # comes back empty, so every branch loses the protection `held` gives it and `main_tree`
     # comes back "" — which puts the MAIN CHECKOUT in `linked` inside `loose_processes` and
-    # makes the rig supervisor D53 exists to protect offerable. Both of those failed OPEN.
+    # makes the rig supervisor D138 exists to protect offerable. Both of those failed OPEN.
     if oracle.unreadable:
         say("  KEPT      every tree, branch and process — the liveness oracle is incomplete")
         for name in oracle.unreadable:
@@ -1097,7 +1097,7 @@ def sweep(root: str, sessions_dir: Path, confirm: bool, tier1: bool,
         say("  KEPT      pid {0}".format(loose.pid))
         say("            {0}".format(_shorten(loose.command)))
         if not loose.owner:
-            say("            the MAIN CHECKOUT's — D53 means it to outlive every session")
+            say("            the MAIN CHECKOUT's — D138 means it to outlive every session")
         else:
             say("            up {0:.1f} h, and {1} still owns it — ask, do not reap".format(
                 loose.hours, loose.owner))
@@ -1373,7 +1373,7 @@ def cut_merged_branches(root: str, confirm: bool) -> Tuple[int, int]:
 def teardown(tree: str, sessions_dir: Path) -> int:
     """Stop what a leaving session started in `tree`, and nothing else.
 
-    THE MAIN CHECKOUT IS NEVER TOUCHED, WHICH IS THE WHOLE OF D53 RESPECTED. `make up` there is
+    THE MAIN CHECKOUT IS NEVER TOUCHED, WHICH IS THE WHOLE OF D138 RESPECTED. `make up` there is
     the owner's product, kept alive at login by a launch agent, serving their real store; it is
     SUPPOSED to outlive every session. In a linked worktree the same behaviour is the leak this
     tool exists for: the supervisor outlives the session, then the tree, then loops forever.

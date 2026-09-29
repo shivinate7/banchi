@@ -128,7 +128,7 @@ store, on its own port, sweeps every GET the client can build against the parame
 seeded store actually holds, records every 200 response into `app/demo/bundle.json` plus the
 photographs Vite will bundle, and stops that server again. It never starts, restarts, or binds
 `make up`'s port — which in the main checkout is the owner's live process over their real
-inventory (D43, D53). A 404 recorded here means the path is not a read this demo replays, not
+inventory (D43, D138). A 404 recorded here means the path is not a read this demo replays, not
 that a read failed.
 
 **What the sweep records, since 2026-09-24.** The first sweep left whole screens refusing, so a
@@ -474,7 +474,7 @@ subset of the invented demo's seven orders — 127 sets. The owner's real ledger
 orders, measured 2026-09-26. Recording every subset of 834 orders is not a number this repo
 can reach by raising a constant. The fix narrows the question instead. Only an OPEN order
 can ever be ticked: every caller of `walkPlan` sends open keys alone (`Fulfillment.tsx`,
-`Orders.tsx`, D96/D220). So the sweep now reads the recorded `/orders` GET. It keeps the
+`Orders.tsx`, D97/D220). So the sweep now reads the recorded `/orders` GET. It keeps the
 open keys only. THE OPEN QUESTION IS NOW ANSWERED (2026-09-27): a real 71-open-order rebuild
 hit the refusal (`2^71` sets, not `2^7`). The recorder now records every SINGLE open order.
 It also records the one full "walk all" set every screen asks for whole — never a merge,

@@ -65,7 +65,7 @@ card is NOT bound, and `bound_at` still holds a fresh, non-null time. `store/mas
 `identity_source`. Never read it alone.
 
 **Amendments.** D213 widens from `set_name`/`rarity` to the whole identity group. D239's
-caller now builds off `read_*`. D242 and D255 merge into one report, `cards identity`. Each
+caller now builds off `read_*`. D242 merge into one report, `cards identity`. Each
 original class becomes empty by construction. A bound card's stored number or name can no
 longer disagree with its own SKU. Neither one is stored independently of it any more.
 D252 amends its route to one `bind_sku` call, instead of seven hand-written fields. D253 keeps
@@ -108,6 +108,6 @@ Governs `store/master.py` (`IDENTITY_FIELDS`, `IDENTITY_WRITERS`, `Inventory.hol
 `cli/cmd_cards.py`, `cli/archive_review.py`,
 `.github/workflows/demo.yml`, and `scripts/checks.py`. `demo-determinism.py` was one
 of these callers and is retired (D295 amended, L5, 2026-09-27). Cites D213, D239, D242, D252, D253,
-D254 and D255 — each amended, as above. Cites D172 (the first photograph is the name), D173
+D254 and D242 — each amended, as above. Cites D172 (the first photograph is the name), D173
 (a rule that can be enforced is enforced), D18 (a generator may write, and nothing that writes
 may gate a commit), and D140 (a number is claimed at merge, never guessed on a branch).

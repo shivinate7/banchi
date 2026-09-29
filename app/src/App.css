@@ -217,7 +217,7 @@
    longer copy anywhere in the product — Home's lede carries the sentence a person reads. */
 
 
-/* `min-height: 0` IS WRITTEN RATHER THAN LEFT TO THE DEFAULT (D204).
+/* `min-height: 0` IS WRITTEN RATHER THAN LEFT TO THE DEFAULT (D266).
    A flex item's automatic minimum size only resolves to 0 for an axis where its own overflow is
    not `visible` — which `overflow-y: auto` here already satisfies per spec, so this line changes
    no browser's rendering today. It is written anyway because the correctness of every rule below
@@ -498,7 +498,7 @@
   border-bottom: 0;
 }
 .bn-drawer .bn-overlay-title { display: flex; line-height: 0; }
-/* ONE SCROLLING LIST AND NO FIXED FOOT (D266, amends D204). The body is
+/* ONE SCROLLING LIST AND NO FIXED FOOT (D266). The body is
    the frame; the nav inside it is the one scroller, so every row, the old foot's included, passes
    under the thumb and none sits under a fixed block. */
 .bn-drawer .bn-overlay-body {
@@ -913,7 +913,7 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
    wide, so this query cannot reach one.
 
    WHAT THE TWO STEPS BELOW BUY IS FEWER ROWS BEHIND A SCROLL, NEVER REACHABILITY
-   (D204). Read `754px` and the row counts in the next block's own
+   (D266). Read `754px` and the row counts in the next block's own
    comment as a COSMETIC arithmetic, not a correctness one: `.bn-nav`'s `overflow-y: auto` plus
    its explicit `min-height: 0` (above, at the base rule) means the last row of the last group —
    the old foot's rows since D266 — is always inside the nav's own

@@ -84,13 +84,13 @@ agent stays its own verb in both directions, and `up` does not touch it.
 - **`make status`** is unchanged.
 - **`make launch-agent`** installs the login note; `ARGS=--remove` takes it down. Unchanged.
 - **`restart` becomes `make up ARGS=--restart`**, and keeps `--confirm` on the main checkout
-  for exactly D53's reason: the thing on `:8000` there is the owner's, mid-capture, and a
+  for exactly D138's reason: the thing on `:8000` there is the owner's, mid-capture, and a
   session bouncing it cut a write in flight once. Fewer words does not mean fewer guards.
   `run` stays because launchd execs it; it was never for a person.
 
 What goes, then, is one target (`restart`) and one process. The verbs were asked about
 because there were many; the answer was that four of the five are each doing one thing, and
-this touches D53's command surface in one place.
+this touches D138's command surface in one place.
 
 ## 2. The shape
 
@@ -142,7 +142,7 @@ own capture port, built from its own source; a session that wants hot reload run
 on its own dev port, which is what the Browser pane's `launch.json` already starts. One code
 path, one supervisor, nothing forked by tree. Nothing new is derived: `server/ports.py:capture_port` already
 answers, and the bundle bakes only the capture port and resolves the host from the address
-bar (D53), which under one origin is trivially right.
+bar (D138), which under one origin is trivially right.
 
 **`dist/` absent.** Every route answers as today. `GET /` answers 503 with one sentence:
 `the app is not built — the supervisor builds it; see .serve/supervisor.log`. Not a page,
@@ -247,7 +247,7 @@ reported exactly like a failed build, and the old `node_modules/` is left as it 
 `make status` names the fix.
 
 **Node missing.** `npx` not on `PATH` is the one thing that can make the app half fail while
-the capture half is fine, and it is the failure D53's plist section already names. The
+the capture half is fine, and it is the failure D138's plist section already names. The
 supervisor treats it like a failed build: the API comes up, the log says `npx: not found —
 see make launch-agent`, and `make status` says so. A `make up` from a terminal that has Node
 will build; a launchd start without it will not, and will say why.
@@ -329,7 +329,7 @@ home-screen bookmark, if one exists, is re-added.
 
 **The docs.** `CLAUDE.md`'s `make up` block and the front-end section's opening sentence
 ("Vite + React 19 + TypeScript over the capture server" stays true; "the Vite app on :5173"
-describes `make dev` only). `README.md`'s quick start. D53 gains an amendment paragraph
+describes `make dev` only). `README.md`'s quick start. D138 gains an amendment paragraph
 pointing here for the reversal of its `dist` rejection and `restart` folding into `up`; D108 gains
 one for the port and the two origin-keyed resets. `docs/map.py` entries for `serve.py`,
 `status.py`, `capture_server.py`, `lan-check.py`. `docs/debts/` names what §8 leaves
@@ -377,7 +377,7 @@ recorded here so it is not re-derived, and not planned further because no such p
 |---|---|---|---|
 | 1 | The static serve in `capture_server.py` | T7's `check_app_serve`, 24 assertions; `make harness` green | Nothing changed on their machine |
 | 2 | The supervisor's build, the verbs, `make status`'s line, the guard narrowed | `serve-selftest`, 25 assertions over two throwaway trees; `make check` green | `make up` prints one link; two processes become one |
-| 3 | `lan-check` on the capture port, the docs, D53 and D108 amended | `make docs-audit` green; `make lan-check` still to run from the phone | One reinstall, one camera prompt, one theme reset |
+| 3 | `lan-check` on the capture port, the docs, D138 and D108 amended | `make docs-audit` green; `make lan-check` still to run from the phone | One reinstall, one camera prompt, one theme reset |
 
 **PR 1 narrowed as it was built, and the narrowing is the interesting part.** The plan said the
 fallback would serve `index.html` for any unmatched path, which is what every SPA host does. Written

@@ -158,7 +158,7 @@ def case_disjoint_in_one_drawer() -> None:
     """TWO DISJOINT SELECTIONS IN ONE DRAWER MUST BOTH BE ALLOWED.
 
     This is the over-refusal `_busy_run` accepts by construction — it compares BOX numbers, so
-    two presses over different cards in box 3 are one refusal — and D48 records that narrowing
+    two presses over different cards in box 3 are one refusal — and D180 records that narrowing
     as accepted for want of a card-level vocabulary. This is the vocabulary.
     """
     fresh_store()

@@ -357,7 +357,7 @@ def run(args, say) -> int:
         refuse_json("spread_across_boxes")
         raise runs.RunError(
             f"REFUSING: this run's cards are spread across boxes "
-            f"{', '.join(str(b) for b in landed)}. D48 keeps a run to one box, and a rescue "
+            f"{', '.join(str(b) for b in landed)}. D180 keeps a run to one box, and a rescue "
             f"that wrote one run over several would be a cart nobody has argued for.\n"
             f"Nothing was written."
         )

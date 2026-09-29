@@ -1,5 +1,5 @@
 // Protects: The published static demo build draws real data, photographs and controls on every screen a reviewer grades it on.
-// Governs: D183, D227, D271, D277, D282, D295, D301
+// Governs: D183, D227, D271, D277, D298, D295, D301
 /**
  * The published demo, as built: every screen a reviewer grades on it must draw its data.
  *
@@ -424,7 +424,7 @@ test.describe('the published demo draws what reviewers grade', () => {
   })
 
   test('Sales: "Priced for" draws a figure', async ({ page }) => {
-    // STALE, REWRITTEN 2026-09-27 (D282: "a line with no price gets its price from
+    // STALE, REWRITTEN 2026-09-27 (D298: "a line with no price gets its price from
     // TCGplayer" — pricing the shelf became automatic, and the "Value my stock" button that
     // used to trigger it is gone). Same behavior: the figure draws once holdings load, with
     // no press needed.

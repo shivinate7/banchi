@@ -1,5 +1,5 @@
 // Protects: The shipping export routes rows into three lanes and never reaches the capture server.
-// Governs: D16, D61, D63, D117, D196, D218, D292
+// Governs: D16, D61, D63, D117, D196, D218
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { batchOf, order as orderRow, payloadOf, shippingRow as row } from './routeFixtures'
@@ -62,7 +62,7 @@ const CSV = 'Order #,FirstName\nA2FFC195-0000F4-006AC,Ada\n'
 
 type Wire = { method: string; path: string; body: unknown }
 
-/* `row` and `batchOf` moved to `./routeFixtures` (D194's copy-ratchet fixtures) so
+/* `row` and `batchOf` moved to `./routeFixtures` (D284's copy-ratchet fixtures) so
  * `copy-budget.spec.ts` can build the same `#/shipping` shapes without a second, drifting
  * copy. `routeFixtures.ts:batchOf`'s default `batch` id is this file's own `BATCH` constant,
  * kept in step deliberately — see that file's comment. */
@@ -607,7 +607,7 @@ test('an order the ledger already knows opens it; an order it does not stays pla
 
 /* -------------------------------------------------------------------------------------- 12 */
 
-test('on a phone every lane opens folded; off a phone every lane opens shown (UX-016/D292)', async ({
+test('on a phone every lane opens folded; off a phone every lane opens shown (UX-016/D61)', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })

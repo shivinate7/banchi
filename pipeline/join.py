@@ -180,7 +180,7 @@ class Position:
     opened it — and where it is given, every number below is rendered in that space instead
     of in index space. `Card 17` is then the seventeenth card you can count rather than the
     seventeenth slot, which is the distinction `docs/specs/order-flow.md` §10.4 spends its
-    length on and D30 was waiting on a physical marker to explain.
+    length on and D58 was waiting on a physical marker to explain.
 
     THE INDEX STILL NEVER MOVES, AND THAT IS WHAT MAKES THIS CHEAP. D10 as amended already
     draws this seam — *"positions are never renumbered" governs the INDEX; the label is a
@@ -223,7 +223,7 @@ class Position:
     # says. `compare=False` because a name is a label and never part of the card's identity:
     # a rename must not make two positions of one card unequal.
     box_name: Optional[str] = field(default=None, compare=False)
-    # WHERE THE CARD STANDS IN ITS BOX'S ORDER (D265), or None when the order is the index.
+    # WHERE THE CARD STANDS IN ITS BOX'S ORDER (D294), or None when the order is the index.
     # `(this card's order, occupied in order space, departed in order space)`. `index`,
     # `occupied` and `departed` above stay the STORE's, because callers key writes by them.
     # Every number below is counted in this space instead. `BoxView.at` fills it.
@@ -335,7 +335,7 @@ class Position:
         every box that has grown into its own dividers.
         """
         ahead = bisect.bisect_left(self._occ or (), start)
-        # `ceil` keeps this a count of slots when the box's keys are fractions (D265). For a
+        # `ceil` keeps this a count of slots when the box's keys are fractions (D294). For a
         # whole-number key it is `start - 1 - high_water`, exactly as before.
         unfilled = max(0, math.ceil(start - self.high_water) - 1)
         return ahead + unfilled + 1
@@ -618,7 +618,7 @@ class BoxView:
     # The box's registry name, carried to every `Position` built here, so a label says the
     # name (D259). None where the caller has no registry to ask.
     name: Optional[str] = None
-    # THE BOX'S ORDER (D265). `occupied` and `departed` stay in INDEX space, because every
+    # THE BOX'S ORDER (D294). `occupied` and `departed` stay in INDEX space, because every
     # caller asks "is this index here" of them. `sections` is already in order space (it is
     # `Box.sections`). `at()` hands `Position` orders, so the one label formula counts the
     # cards in the order they stand, and never needs to know an order exists.
@@ -684,18 +684,18 @@ def divider_index(
     """
     if ordinal <= 1:
         # The front of the box: 1, or below it where a section was placed in front of card
-        # 1 (D265, the order key).
+        # 1 (D294, the order key).
         lows = [v[0] for v in (occupied, departed) if v]
         return master.front_of_box((), min(lows) if lows else None)[0]
     if ordinal <= len(occupied):
         # THE KEY ITSELF, NEVER `int()` OF IT (the R4 review): a placed card's key is a
-        # fraction, and cutting it moved the divider onto the card in front (D265).
+        # fraction, and cutting it moved the divider onto the card in front (D294).
         return master.as_order(occupied[ordinal - 1])
     high = max(
         int(occupied[-1]) if occupied else 0,
         int(departed[-1]) if departed else 0,
     )
-    # `int` keeps a planned divider on the whole-number keys a capture takes (D265).
+    # `int` keeps a planned divider on the whole-number keys a capture takes (D294).
     return int(high) + (ordinal - len(occupied))
 
 
@@ -1144,7 +1144,7 @@ def name_alternatives(
 
     THE PIPELINE HAD ALREADY REASONED THE NUMBER'S ROW WAS WRONG AND THEN OFFERED IT ALONE.
     That is the defect this answers, and it is a defect of PRESENTATION rather than of
-    resolution: `name_disputes` has flagged the contradiction since D146, and the entry it
+    resolution: `name_disputes` has flagged the contradiction since D23, and the entry it
     wrote narrowed the candidate list to `resolution.row` — the one card the screen had just
     told the operator was not what the photograph says. Pressing `L` and typing the name the
     model had ALREADY READ was the only way to the right row.
@@ -1172,7 +1172,7 @@ def name_alternatives(
     D253). This call passed `True` from 2026-09-12 until then, on the
     argument that "these rows were found BY the name, so the name agrees with them." That
     argument is circular: `rows_for_name` finding a row BECAUSE its name matches is not a
-    SECOND signal independent of the name — D146's release needs two, and this call had
+    SECOND signal independent of the name — D23's release needs two, and this call had
     only one, wearing two names. Measured cost on the owner's store: a card read
     `Pyke, Returned`, claimed `rarity_claim=['Showcase']`, whose NUMBER found `Pyke,
     Returned` (Rare, the base print) — the claim contradicts that row outright and should
@@ -1234,7 +1234,7 @@ def name_alternatives(
     # widen in here would be the same rule stated twice. `NAME_ALTERNATIVE_LIMIT` still
     # bounds the NON-matching rows only — a card carrying no claim behaves exactly as
     # before, since every row scores zero and `matched` is empty. A row past the ninth
-    # keyed slot is still mouse-only (D46/`MAX_KEYED_CANDIDATES`), never dropped — this
+    # keyed slot is still mouse-only (D77/`MAX_KEYED_CANDIDATES`), never dropped — this
     # only ever WIDENS what a claim can keep past the screen's own keyboard limit, it
     # never narrows what a human is offered.
     ranked = rank_by_claims(tuple(rows), card)
@@ -1345,7 +1345,7 @@ def rank_by_claims(
 
     DECIDES NOTHING. It reorders a list a caller already built; it can neither add a row
     nor drop one, and calling it on a `HUMAN_ANSWERED` card's own one-row answer is a
-    no-op rather than a rule this function has to enforce — D146's "rung 0 must not
+    no-op rather than a rule this function has to enforce — D23's "rung 0 must not
     consult the claim" holds because rung 0 never reaches here with more than one row to
     rank, not because this function checks the stage.
     """
@@ -1909,7 +1909,7 @@ class Catalog:
         # last paragraph, amended) precisely so it cannot depend again on how the file was made.
         #
         # WHAT IT COSTS IS NOTHING, AND THAT IS MEASURED RATHER THAN ARGUED. A play grade is not
-        # a finish — D64's own words, and its own measurement: "all 153 numbers read as thinned
+        # a finish — D65's own words, and its own measurement: "all 153 numbers read as thinned
         # and not one had lost a finish". Re-measured on the owner's 2026-09-11 export, 0 of
         # 1,246 numbers lose a finish here, because each finish keeps its own Near Mint row.
         # What it RESTORES is D3 rung 2, which the wide file had killed outright: 0 of those
@@ -2181,7 +2181,7 @@ class SkuMatch:
     def name(self) -> str:
         """The card's own name, off the export row.
 
-        Added for the pricing surfaces (D49), which name a SKU to a human in three places —
+        Added for the pricing surfaces (D86), which name a SKU to a human in three places —
         a watch line, a warning and the per-SKU table — and had `self.row[NAME_COLUMN]`
         written out at each. `set_name` and `condition` above are the same accessor for the
         same reason: the column constant belongs in one place per fact.
@@ -2913,7 +2913,7 @@ def join_batch(
         # store's own record: 212 entries reached this rung, every one of them was answered
         # by a human, and in 212 OF 212 the human chose the SKU this block was already
         # holding. Not one disagreed. A question whose answer is known before it is asked,
-        # asked 212 times, is the shape D29 and D146 were both written about.
+        # asked 212 times, is the shape D29 and D23 were both written about.
         #
         # WHAT SURVIVES OF D35 IS ITS CAUTION ABOUT A WEAK NAME, and that caution is now the
         # gate rather than a blanket. A name that answers TWO cards is exactly the evidence
@@ -3027,7 +3027,7 @@ def join_batch(
             # picks a single product out of it: `Pyke, Returned` (base, Rare) and
             # `Pyke, Returned (Alternate Art)` (Showcase) are two products under one
             # folded name, and a `rarity_claim=['Showcase']` names exactly one of them.
-            # THAT IS A SECOND AGREEING SIGNAL, D146's own shape — the name narrows the
+            # THAT IS A SECOND AGREEING SIGNAL, D23's own shape — the name narrows the
             # search to one card's every printing, the claim narrows within that to one
             # printing — so it may release, the same way two signals release a rarity
             # contradiction elsewhere in this ladder. ONLY THE RARITY CLAIM COUNTS FOR
@@ -3283,7 +3283,7 @@ def prices_for(
     """
     overrides = dict(sku_dispositions or {})
     unpriced = dict(no_market_data or {})
-    # THE OPERATOR IS DELIBERATELY NOT LISTING THESE (D49). Absent from the returned mapping,
+    # THE OPERATOR IS DELIBERATELY NOT LISTING THESE (D86). Absent from the returned mapping,
     # exactly as an UNLISTED answer is below — `import_rows` already reads absence as "write
     # no row", which is the whole reason a withhold needed no new machinery downstream.
     #

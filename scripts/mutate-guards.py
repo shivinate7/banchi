@@ -333,14 +333,14 @@ REAP = SCRIPTS / "reap.py"
 
 REAP_MUTATIONS: Tuple[Mutation, ...] = (
     Mutation(
-        "D53: the main checkout's own supervisor is no longer protected",
+        "D138: the main checkout's own supervisor is no longer protected",
         '        if pid in guarded:\n            out.append(Target(pid, MAIN, command, main))\n'
         '            continue',
         '        if False:\n            out.append(Target(pid, MAIN, command, main))\n'
         '            continue',
     ),
     Mutation(
-        "D169: the relative-path arm (arm two) is dropped, so `make server` is invisible again",
+        "D305: the relative-path arm (arm two) is dropped, so `make server` is invisible again",
         '    if not cwd:\n        return False\n    for token in command.split():',
         '    if not cwd:\n        return False\n    for token in []:',
     ),
@@ -367,7 +367,7 @@ PRIMARY_SYNC = SCRIPTS / "primary_sync.py"
 
 PRIMARY_SYNC_MUTATIONS: Tuple[Mutation, ...] = (
     Mutation(
-        "D139/D158: a linked worktree is no longer exempt from being synced",
+        "D158: a linked worktree is no longer exempt from being synced",
         '    if ports.is_linked_worktree(subject):\n        return _quiet("subject-is-linked")',
         '    if False:\n        return _quiet("subject-is-linked")',
     ),

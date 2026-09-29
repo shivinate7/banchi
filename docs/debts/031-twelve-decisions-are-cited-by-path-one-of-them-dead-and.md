@@ -28,7 +28,7 @@ older style. It names a real entry by its full `D<n>-<slug>.md` filename, not by
 
 Eleven of these resolve. ONE IS DEAD. `scripts/docs-audit.py`, line 11689, cites
 `docs/decisions/D218.md`. That file does not exist. The real one is
-`docs/decisions/D218-no-typed-interpunct-on-screen.md`. The citation dropped the descriptive
+`docs/decisions/D218-a-typed-dot-is-a-defect.md`. The citation dropped the descriptive
 tail, the same shape PR #424's defect added one where none belonged, in reverse.
 
 **Why the dead one was never caught, verified rather than assumed.** `make docs-audit`'s

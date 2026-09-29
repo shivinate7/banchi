@@ -1,5 +1,5 @@
 // Protects: The generated logo mark draws at the right cut and size at every place the app shows it.
-// Governs: D102, D134, D136, D204
+// Governs: D102, D134, D136, D266
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -787,7 +787,7 @@ test('the phone wordmark is the lockup roman, set as text', async ({ page }) => 
  * owner chose the sidebar tab anyway: *"I thought we're just making it a tab in the sidebar
  * not inserting it into other screens."* What this case gives up is a TEST'S OWN stricter
  * promise — every row on screen with nothing to scroll to reach it — never a decision:
- * D204 already rules that the nav scrolls in the space above its foot for ANY row count, so
+ * D266 already rules that the nav scrolls in the space above its foot for ANY row count, so
  * reachability was never the thing this case protected past today. Headings, lockup and row
  * height are unchanged and still asserted here.
  */
@@ -814,7 +814,7 @@ test('the drawer keeps its headings on an iPhone in Safari, and every row stays 
 
   // THE ELEVENTH ROW MEANS THIS NO LONGER FITS WHOLE — the comment above names the arithmetic
   // and the owner's ruling. What is still true, and what this asserts: the overflow is small
-  // (under one row), and what does not fit scrolls rather than clips silently (D204).
+  // (under one row), and what does not fit scrolls rather than clips silently (D266).
   expect(seen.overflow, `the nav runs ${seen.overflow}px past the fold`).toBeLessThan(44)
   expect(seen.scrollable, 'what does not fit scrolls, rather than clipping silently').toBe(true)
 
@@ -839,7 +839,7 @@ test('the second step reaches the mini and the iPhone 14, and stops short of a t
      THE ELEVENTH ROW (`#/revenue`) COSTS IT AGAIN, and the owner chose it knowingly, 2026-09-19:
      eleven rows at the 40px floor run 37px past 754, not 0. The floor is still right — there is
      no lower step to give (CLAUDE.md's thumb rule) — so what this measures now is that the
-     overflow is small and still scrolls to (D204), never that it is gone. */
+     overflow is small and still scrolls to (D266), never that it is gone. */
   await page.setViewportSize(SHORT_PHONE)
   await page.goto('/')
   await page.getByText('More', { exact: true }).click()

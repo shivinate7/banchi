@@ -9,10 +9,9 @@ and the summary was WRONG: it said `harness + docs-audit + the self-tests + lint
 while five more targets ran, and had said so since those five landed. CLAUDE.md caught up; the
 front door never did, and nothing compared them.
 
-So the composition becomes data with a reader. Two rows in `scripts/docs-audit.py` consume
-this file — `check registry` reconciles it against the Makefile recipe and the published
-prose, and `commit path writes` asserts D18 mechanically
-for the first time by refusing any writing check on the commit path.
+So the composition becomes data with a reader. The `check registry` row in `scripts/docs-audit.py` consumes
+this file and reconciles it against the Makefile recipe and the published prose. No row
+enforces D18 on the commit path yet.
 
 **THIS FILE DOES NOT DRIVE `make check` AND MUST NOT.** The Makefile recipe is what runs; this
 is a parallel declaration reconciled against it. The distinction is the whole point of the
@@ -62,8 +61,7 @@ NEEDS = {
 #
 # `writes` IS A SENTENCE AND NOT A FLAG, and that is deliberate: "it writes" is the start of
 # the question D18 asks, never the end of it. An empty string means it writes nothing anywhere.
-# `commit path writes` in the audit reads it as truthy/falsy and reports the sentence, so the
-# reason travels with the finding.
+# The sentence carries the reason a reader needs for D18.
 #
 # `why_off_commit_path` is empty exactly where `commit_path` is true. The audit checks that
 # pairing, because an entry claiming both would be describing nothing.
@@ -305,7 +303,7 @@ CHECKS = (
                    "other's finding. Durations normalize (`0.7s` = `700ms`) before "
                    "comparing. `var(--x, fallback)` and `calc(...)` are never read as a "
                    "literal. RATCHETED PER FILE in scripts/token-literal-check.json "
-                   "(D256, D229's shape) — main already carries many "
+                   "(D256, D280's shape) — main already carries many "
                    "of these, so the gate is a ceiling on each file's own count, never zero. "
                    "scripts/token-literal-allow.json excuses a named one-off, refused if it "
                    "matches no real finding.",
@@ -315,7 +313,7 @@ CHECKS = (
         "why_off_commit_path": "not armed in scripts/githooks/pre-commit — css-var-check's "
                                "reason exactly. `make check` is where it runs.",
         "gates": True,
-        "governed_by": ("D18", "D173", "D229"),
+        "governed_by": ("D18", "D173", "D280"),
     },
     {
         "target": "kit-adoption",
@@ -592,7 +590,7 @@ CHECKS = (
         "why_off_commit_path": "D18 — it writes a temp store and it signals processes. Same "
                                "standing as janitor-selftest and reap-selftest.",
         "gates": True,
-        "governed_by": ("D7", "D18", "D48", "D88"),
+        "governed_by": ("D7", "D18", "D180", "D88"),
     },
     {
         "target": "cid-selftest",
@@ -636,8 +634,8 @@ CHECKS = (
                    "through its own export row, and an archive-verified id resolving "
                    "through a market that refuses every row it is actually asked to "
                    "resolve — each with its own mutation guard. Also D219's key argument "
-                   "(range, not width_days), D223's ranking, D224's chunked resume and "
-                   "D233's ledger-row retry, all proved offline against `FakeMarket`/"
+                   "(range, not width_days), D231's ranking, D224's chunked resume and "
+                   "D231's ledger-row retry, all proved offline against `FakeMarket`/"
                    "`RecordingMarket`, no network.",
         "needs": ("python3",),
         "writes": "one sqlite store, one cached-export CSV tree and one price-history "
@@ -648,7 +646,7 @@ CHECKS = (
         "why_off_commit_path": "D18 — it writes a temp store and temp export files. Same "
                                "standing as cid-selftest right above it.",
         "gates": True,
-        "governed_by": ("D18", "D166", "D219", "D222", "D223", "D224", "D233", "D234",
+        "governed_by": ("D18", "D166", "D219", "D222", "D231", "D224", "D234",
                         "D240", "D254"),
     },
     {
@@ -673,7 +671,7 @@ CHECKS = (
         "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
                                "pricearchive-selftest right above it.",
         "gates": True,
-        "governed_by": ("D167", "D219", "D233", "D234", "D26", "D58", "D89", "D247"),
+        "governed_by": ("D167", "D219", "D231", "D234", "D26", "D58", "D89", "D247"),
     },
     {
         "target": "holdings-selftest",
@@ -700,8 +698,8 @@ CHECKS = (
                                "adding a new check to the hook is a separate decision this "
                                "entry does not make.",
         "gates": True,
-        "governed_by": ("D62", "D159", "D189", "D212", "D219", "D225", "D236", "D247",
-                        "D250"),
+        "governed_by": ("D278", "D277", "D189", "D212", "D219", "D225", "D236", "D247",
+                        ),
     },
     {
         "target": "identity-checks-selftest",
@@ -725,7 +723,7 @@ CHECKS = (
                                "path for the same reason as holdings-selftest beside it: "
                                "PATH GATED into `make check` alone (D247), never the hook.",
         "gates": True,
-        "governed_by": ("D146", "D173", "D234", "D237", "D239", "D247"),
+        "governed_by": ("D23", "D173", "D234", "D239", "D247"),
     },
     {
         "target": "price-postings-selftest",
@@ -765,7 +763,7 @@ CHECKS = (
                    "called at all. A SKU the archive has never swept falls through to the "
                    "live reader and answers source: live — proved the opposite way, by "
                    "confirming a FakeMarket was in fact reached. This is `#/product`'s own "
-                   "route (D226), a real, screen-reachable caller.",
+                   "route (D60), a real, screen-reachable caller.",
         "needs": ("python3",),
         "writes": "one sqlite store and one price-history archive per case, all under "
                   "`mktemp -d`. `PKMNSCAN_HOME` is repointed for every case, so the "
@@ -774,7 +772,7 @@ CHECKS = (
         "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
                                "price-postings-selftest above it.",
         "gates": True,
-        "governed_by": ("D62", "D219", "D227", "D247", "D254"),
+        "governed_by": ("D278", "D219", "D227", "D247", "D254"),
     },
     {
         "target": "sku-number-contradictions-selftest",
@@ -797,7 +795,7 @@ CHECKS = (
                                "identity-checks-selftest: PATH GATED into `make check` "
                                "alone (D247), never the hook.",
         "gates": True,
-        "governed_by": ("D146", "D167", "D173", "D234", "D242", "D247"),
+        "governed_by": ("D23", "D167", "D173", "D234", "D242", "D247"),
     },
     {
         "target": "readings-selftest",
@@ -892,7 +890,7 @@ CHECKS = (
         "target": "identity-binding-selftest",
         "runs": "python3 scripts/identity-binding-selftest.py",
         "asserts": "pipeline/identity_binding.py, the migration's classifier and the merged "
-                   "D242/D255 report (docs/specs/identity-follows-sku.md §5.5, §7, lane 2), "
+                   "D242 report (docs/specs/identity-follows-sku.md §5.5, §7, lane 2), "
                    "over plain Card/SkuRow objects, no store. number_agrees's 'equal or "
                    "blank' fold for both number strategies; name_fold_matches's exact-fold "
                    "test; distinct_products_by_line/matching_products' D162 uniqueness "
@@ -918,7 +916,7 @@ CHECKS = (
                                "selftest`'s own precedent: PATH GATED into `make check` "
                                "alone, never the hook.",
         "gates": True,
-        "governed_by": ("D63", "D162", "D172", "D242", "D253", "D255"),
+        "governed_by": ("D63", "D162", "D172", "D242", "D253"),
     },
     {
         "target": "identity-readers-selftest",
@@ -994,7 +992,7 @@ CHECKS = (
         "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
                                "skus-selftest and identity-store-selftest.",
         "gates": True,
-        "governed_by": ("D25", "D36", "D63", "D64", "D87", "D104", "D137", "D166", "D172",
+        "governed_by": ("D25", "D36", "D63", "D65", "D87", "D104", "D137", "D166", "D172",
                          "D213", "D253"),
     },
     {
@@ -1014,7 +1012,7 @@ CHECKS = (
         "why_off_commit_path": "D18 — it writes, and it signals processes. It drives the one "
                                "tool here besides icloud-sweep that can delete a worktree.",
         "gates": True,
-        "governed_by": ("D18", "D44", "D53"),
+        "governed_by": ("D18", "D44", "D138"),
     },
     {
         "target": "reap-selftest",
@@ -1034,7 +1032,7 @@ CHECKS = (
         "why_off_commit_path": "D18 — it writes, and it signals processes. It drives the one "
                                "guard here that can refuse a shell command outright.",
         "gates": True,
-        "governed_by": ("D18", "D53", "D111", "D127"),
+        "governed_by": ("D18", "D138", "D111", "D127"),
     },
     {
         "target": "silent-write-selftest",
@@ -1157,12 +1155,12 @@ CHECKS = (
                   "and capture servers running under them, all inside `mktemp -d`. The "
                   "capture port is PINNED with `PKMNSCAN_PORT` to a free socket rather than "
                   "derived: a copy with no `.git` takes a slot from its path "
-                  "(D268), and a slot can collide with another worktree's "
+                  "(D261), and a slot can collide with another worktree's "
                   "where a free socket cannot.",
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes, and it starts and signals real processes.",
         "gates": True,
-        "governed_by": ("D18", "D43", "D53", "D138"),
+        "governed_by": ("D18", "D43", "D138"),
     },
     {
         "target": "sync-selftest",
@@ -1190,7 +1188,7 @@ CHECKS = (
         "why_off_commit_path": "D18 — it writes, and what it writes are branch switches and "
                                "ref moves. Same standing as merge-selftest beside it.",
         "gates": True,
-        "governed_by": ("D18", "D42", "D43", "D53", "D139", "D158"),
+        "governed_by": ("D18", "D42", "D43", "D138", "D158"),
     },
     {
         "target": "verdict-selftest",
@@ -1199,7 +1197,7 @@ CHECKS = (
                    "failing spec: the verdict, the counts, the failing title and its "
                    "location — file AND line, the line asserted against the probe's own "
                    "source, because Playwright 1.55.1 miscounted it under Node 23+ and the "
-                   "verdict named the wrong line (D129; 1.58.0 is the floor that counts it "
+                   "verdict named the wrong line (1.58.0 is the floor that counts it "
                    "right, and this arm is what would see a bump bring it back) — the in-flight `running` sentinel (observed by the passing test "
                    "from inside the run, which is the only way to see it that is not a race), "
                    "and that the error text carries no ANSI escapes and no NUL bytes. "
@@ -1220,7 +1218,7 @@ CHECKS = (
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes, and it shells out to node.",
         "gates": True,
-        "governed_by": ("D16", "D18", "D129"),
+        "governed_by": ("D16", "D18"),
     },
     {
         "target": "js-breakpoints-selftest",
@@ -1310,7 +1308,7 @@ CHECKS = (
         "why_off_commit_path": "token-literal-check's reason exactly — not armed in "
                                "scripts/githooks/pre-commit, `make check` only.",
         "gates": True,
-        "governed_by": ("D18", "D173", "D229"),
+        "governed_by": ("D18", "D173", "D280"),
     },
     {
         "target": "kit-adoption-selftest",
@@ -1351,8 +1349,8 @@ CHECKS = (
         "why_off_commit_path": "D18 — it writes, starts a Vite and a Playwright run, binds "
                                "ports and stops the processes it started.",
         "gates": True,
-        "governed_by": ("D18", "D43", "D268",
-                        "D261"),
+        "governed_by": ("D18", "D43", "D261",
+                        ),
     },
     {
         "target": "match-selftest",

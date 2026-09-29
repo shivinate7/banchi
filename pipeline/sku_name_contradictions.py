@@ -3,7 +3,7 @@ the STORED NUMBERS to disagree. Here they agree (one SKU, one number) and the NA
 the card's own stored `name` and the catalogue's own `Product Name` for the SKU the store
 currently has it under.
 
-REUSES `pipeline.join.name_disputes`, NEVER A SECOND SIMILARITY RULE. That function is D146's
+REUSES `pipeline.join.name_disputes`, NEVER A SECOND SIMILARITY RULE. That function is D23's
 own name-agreement test — containment first, then a `SequenceMatcher` ratio against
 `NAME_DISPUTE_SIMILARITY` — and it is being fitted by a sibling session on `pipeline/join.py`,
 which this module never touches and never restates. A card the fold cannot fault (a blank
@@ -57,7 +57,7 @@ the real store and the real exports and hands them to this module shaped this wa
 module never opens a database, a socket, or a file, and is exercised in tests with nothing
 but literal `tcgcsv.Row` dicts.
 
-Cites D146 (name agreement as a release signal), D239 (the four approved stored-data checks
+Cites D23 (name agreement as a release signal), D239 (the four approved stored-data checks
 this is a fifth, sibling check to, on `D242`'s own precedent of being kept apart),
 D240 (the join-time measurement that found the same class of defect from the number-matched
 side and named the tolerance this module reuses rather than re-derives), D242 (the sibling

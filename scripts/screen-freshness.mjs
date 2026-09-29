@@ -171,7 +171,7 @@ const NON_MUTATING_CLAIM = /writes nothing|creates no run directory|creates noth
  * `check` and `ci-check`; until then no recipe, hook or workflow passed `--self-test` at all.
  *
  * FIVE NAMES ARRIVED IN ONE UPDATE ON 2026-09-01, AND FOUR OF THEM WERE ALREADY OVERDUE.
- * `getPriceTrends` (D79), `getExportScope` (D76), `moveCard` and `moveCards` (D83) all landed
+ * `getPriceTrends` (D277), `getExportScope` (D76), `moveCard` and `moveCards` (D83) all landed
  * before `getPricingWorklist` (D86) and none of them updated this record, so the ordinary run
  * had been printing "classification has moved since it was recorded" for days with nobody
  * acting on it. That is exactly the drift the comment above predicts and the reason the record
@@ -180,7 +180,7 @@ const NON_MUTATING_CLAIM = /writes nothing|creates no run directory|creates noth
  * AND IT HAPPENED AGAIN ACROSS TWO COMMITS OF ONE BRANCH, WHICH IS THE CASE THE PARAGRAPH ABOVE
  * DOES NOT COVER: a deletion updated this record and an addition did not. `fillEnvelope` and
  * `undoEnvelope` were struck from `writes` the hour the envelope walk they reached was deleted
- * (D96, amended), so that half was the deliberate act; D100's four — `getMarkdowns`,
+ * (D97, amended), so that half was the deliberate act; D100's four — `getMarkdowns`,
  * `markdownListings`, `applyMarkdown` and `markdownFileUrl`, one per bucket but `writes` — landed
  * two commits later against a record nobody re-read, and `--self-test` went from green to
  * `3 FAILED` while every `make check` on the branch stayed green, because the Makefile ran this
@@ -196,10 +196,10 @@ const RECORDED = {
     'getBoxPhotos', 'getMarkdowns',
     // The graveyard's one read (D134). Its own line, for the reason the writes below give.
     'getGraveyard',
-    // The markdown lens's three (D103) — the survey table, and D62's history and trends
+    // The markdown lens's three (D103) — the survey table, and D278's history and trends
     // strip re-addressed at a stamp instead of a run.
     'getMarkdownTable', 'markdownHistory', 'markdownTrends',
-    // The band lens's whole input (D159): every card on hand, ranked, one row per copy.
+    // The band lens's whole input (D277): every card on hand, ranked, one row per copy.
     // Split in two by store-scaling item 7 — `getValueAggregates` (the store-wide totals,
     // boxes and unrankable counts) and `getValuePage` (one band's rows, cursor-paginated) —
     // where `getValueTable` used to fetch the whole unpaginated shape in one call.
@@ -259,7 +259,7 @@ const RECORDED = {
     // analysis. Grouped by the decision that landed them, each group on its own line, so two
     // branches adding writes in the same week conflict over neither.
     'refreshQueues',                                              // D167, the store-wide re-resolve
-    'pushMarkdown', 'rollbackMarkdown', 'publishMarkdown',        // D106, the two presses and the undo
+    'pushMarkdown', 'rollbackMarkdown', 'publishMarkdown',        // D273, the two presses and the undo
     'fetchLiveExport',                                            // D104, the second document
     'fillLine', 'undoFill', 'declareLineKind',                    // D113, a line closes three ways
     'closeOrders', 'closeLines', 'reopenLines', 'reopenOrders',   // D113, the stand-down and its inverse
@@ -269,7 +269,7 @@ const RECORDED = {
                                               // backfill naming a buyer the fetch found unnamed
     'reconcileBacklog',                      // D203, the one-time
                                               // stand-down over the historical backlog
-    'rescueRun',                              // D165/D210, the run rebind
+    'rescueRun',                              // D145/D210, the run rebind
     'correctAnswer', 'undoCorrectAnswer',     // D252, past D28's own
                                                // undo_too_late boundary
     'sendCopies', 'sendMarkdown', 'takeBackSend', // D273: the one

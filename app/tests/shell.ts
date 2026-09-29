@@ -700,7 +700,7 @@ async function stubStore(page: Page): Promise<void> {
 
   await stubCropPreview(page)
 
-  /* D46's CATALOG LOOKUP, WHICH THE QUEUE ENTRY ABOVE IS WHAT ASKS FOR. A `no_catalog_row`
+  /* D77's CATALOG LOOKUP, WHICH THE QUEUE ENTRY ABOVE IS WHAT ASKS FOR. A `no_catalog_row`
      card with zero candidates is offered rows out of the export on arrival, unasked — so
      populating the queue at all brings this route with it. The seal is how that was learned:
      the entry went in, and `GET /review/2/1/catalog` was named on the next run. */

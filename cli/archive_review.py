@@ -71,7 +71,7 @@ ARCHIVE_UNRESOLVED = variant.NO_CATALOG_ROW
 # JSON: ...") and `Blocked`'s own message, which always contains "answered HTTP 403" (matched
 # by the broader "answered HTTP" already). BY THE TIME A REFUSAL REACHES THIS MODULE IT IS
 # ALREADY A PLAIN STRING — `pipeline/pricehistory.py:Market.readings_for_rows` folds every
-# `PriceHistoryError` into `str(exc)` before this layer ever sees one (D233's own note), and
+# `PriceHistoryError` into `str(exc)` before this layer ever sees one (D231's own note), and
 # this module may not edit that file to carry the exception type further. Substring matching
 # on a message this repo already writes in a fixed shape is the same discipline
 # `pipeline/pricearchive.py:BLOCKED_SIGNATURE` already uses for the identical problem one

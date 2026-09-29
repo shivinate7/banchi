@@ -213,7 +213,7 @@ export const ROUTES: readonly Route[] = [
   { path: '/revenue', label: 'Sales', icon: 'dollar', view: Revenue, persona: 'owner', group: 'sell', hotkey: 'v', nav: true, keywords: 'revenue sold gross money history search by name retrospective', keys: SALES_KEYS },
   /* THE STALE-LISTING MARKDOWN IS NOT A ROW HERE, AND IT MOVED SCREENS RATHER THAN GAINING ONE.
    *
-   * D100 wanted `#/markdown` on D49's precedent — a worklist the operator sits in is what earned
+   * D100 wanted `#/markdown` on D86's precedent — a worklist the operator sits in is what earned
    * `#/pricing` a route — and was refused by arithmetic over a horizontal nav: 1,484.9px to draw
    * eleven links on one row against the owner's 1,440px desk. D95 deleted that strip, and this
    * shell's sidebar was re-measured on 2026-09-04: a tenth link costs 38px inside an existing
@@ -1241,7 +1241,7 @@ function TabBar({ path, drawerOpen, onMore }: { path: string; drawerOpen: boolea
 /* THE DRAWER IS THE KIT'S SHEET (UX-014), on its own left edge (kit.css carves the drawer out of
    the rise-from-the-bottom rule). So it is modal: focus moves in, stays in, and goes back to More
    when it closes, and Escape is the one stack's. ITS FOOT JOINED THE LIST
-   (D266, amends D204): Cards to pull and the theme are the last rows of the one
+   (D266): Cards to pull and the theme are the last rows of the one
    scrolling list, so no row ever sits under a fixed block. */
 function Drawer({ open, path, onClose, theme, onToggleTheme }: { open: boolean; path: string; onClose: () => void; theme: Theme; onToggleTheme: () => void }) {
   /* THE ONE PLACE IN THIS SHELL WHERE THE SIZE IS CHOSEN IN JS RATHER THAN IN A STYLESHEET, and
@@ -1323,7 +1323,7 @@ export function App() {
 
   /* A ROUTE CHANGE LANDS AT THE TOP. `path` is query-stripped (`currentPath`, above), so a
      same-path query change — `#/pricing` -> `#/pricing?band=top` — does not re-fire this and the
-     scroll position a click left behind is kept, which is D159's own rule: staleness is a filter,
+     scroll position a click left behind is kept, which is D277's own rule: staleness is a filter,
      never a jump. `.bn-shell-main` carries no `overflow` rule (App.css), so the document — the
      window — is what scrolls at every width this shell is verified at; there is no second
      scroller to reset. */

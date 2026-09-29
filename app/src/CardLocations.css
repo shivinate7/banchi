@@ -471,7 +471,7 @@
 .card-locations-owner .card-locations-identity-card { color: var(--bn-ink); font-weight: 800; }
 .card-locations-owner .card-locations-identity-num { font-variant-numeric: tabular-nums; }
 .card-locations-owner .card-locations-identity-note { font-weight: 600; }
-/* THE STRUCK FIGURE (D58, D71, D259): a departed copy keeps the card it left, struck through,
+/* THE STRUCK FIGURE (D58, D41, D259): a departed copy keeps the card it left, struck through,
    never worded. */
 .card-locations-owner .card-locations-identity[data-departed='true'] .card-locations-identity-num {
   text-decoration: line-through;

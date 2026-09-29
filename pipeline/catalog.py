@@ -11,7 +11,7 @@ card's `number` and `printedTotal` from the IDENTIFICATION and matches them agai
 export's `Number` column — nothing there calls this module today, and `join.py`'s own
 docstring says the vendored catalog's only caller is `harness/eval/fixtures.py`'s ground
 truth. That stays true here: nothing in this file changes what a run listing does. What it
-adds is a place a FUTURE caller — D46's "a card the pipeline could not place is offered the
+adds is a place a FUTURE caller — D77's "a card the pipeline could not place is offered the
 catalog, and a human may point at a row" is the standing candidate — can look up a card by
 the same `join_key` the runtime join already composes, without either side re-deriving the
 fold `pipeline.join.number_index_key` exists to keep from drifting.

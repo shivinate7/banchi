@@ -1147,7 +1147,7 @@ export function RunsComposer({
                     {/* THE STORE KEY AND NOT A CARD NUMBER, on all four of this panel's figures.
                         `/pipeline/crop-preview` sends `{box, index}` and no slot, because what
                         it is describing is a PHOTOGRAPH — the same `(box, index)` `photoUrl` names
-                        it by (D52) — and D58's countable number moves under that key every time a
+                        it by (D183) — and D58's countable number moves under that key every time a
                         card in front of this one leaves the box. Drawn as `Card 17` this panel
                         would name a different card than the one a hand counting into the drawer
                         reaches, so it draws what it actually has. */}

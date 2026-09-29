@@ -1,5 +1,5 @@
 // Protects: Sales sorts, filters, cross-filters, drills down and deep-links over the orders payload, on a fixed fake clock.
-// Governs: D62, D201, D214, D217, D225, D281, D298
+// Governs: D278, D201, D214, D217, D225, D196, D298
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 
@@ -545,7 +545,7 @@ test('a line closed for a DIFFERENT reason (shipped_elsewhere) is not excluded',
   await open(page, '?period=all')
   await expect(page.locator('.revenue-summary-figure')).toContainText('$12.50')
   // D225's own sentence still renders at zero (the marketplace's own word, never a habit
-  // this screen asks the owner to trust). The REFUND sentence is the one D281 overrides
+  // this screen asks the owner to trust). The REFUND sentence is the one D196 overrides
   // (review round, item 6): a note about a habit that has never once caught anything reads
   // as a warning rather than a fact, so it draws only once the count is real.
   await expect(page.locator('.revenue-verdict-refunded')).toHaveCount(0)
@@ -575,7 +575,7 @@ test('the owner\'s real store has zero not_shipping lines today, and the screen 
   ])
   await open(page, '?period=all')
   await expect(page.locator('.revenue-verdict-canceled')).toHaveText('1 excluded')
-  // D281 (review round, item 6): the refund sentence does not draw at zero.
+  // D196 (review round, item 6): the refund sentence does not draw at zero.
   await expect(page.locator('.revenue-verdict-refunded')).toHaveCount(0)
 })
 
@@ -607,7 +607,7 @@ test('the prior-period line never says "So far" about the CLOSED prior period (d
 
 /* --------------------------------------------------------- then against now (D225) */
 
-test('market comparison is a press, never a mount, and draws a sign and a word (D62)', async ({ page }) => {
+test('market comparison is a press, never a mount, and draws a sign and a word (D278)', async ({ page }) => {
   const calls = stubPrices(page, { '9100001': { market: '18.00', at: 1_758_000_000 } })
   await stub(page, [
     orderRow({
@@ -630,7 +630,7 @@ test('market comparison is a press, never a mount, and draws a sign and a word (
   await expect(page.locator('.revenue-table thead th', { hasText: 'Today' })).toBeVisible()
   const cell = page.locator('.revenue-table tbody tr', { hasText: 'Charizard ex' }).locator('.revenue-market')
   await expect(cell).toContainText('$18.00')
-  // A SIGN and a WORD, never a colour (D62) — market is above what it sold for.
+  // A SIGN and a WORD, never a colour (D278) — market is above what it sold for.
   await expect(cell).toContainText('+$5.50 above what it sold for')
   await expect(page.locator('.revenue-market-note')).toContainText('Blind to what any of this cost you')
 })

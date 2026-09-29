@@ -17,7 +17,7 @@ came back with an empty environment column. So reading env back after the fact c
 mechanism, whatever the sketch assumed about older macOS.
 
 WHAT WORKS INSTEAD, AND WHY IT NEEDED NO NEW PRIMITIVE. `scripts/reap.py:protected_pids`
-already solves this exact shape for D53's supervisor: a marker FILE under `.serve/`, holding a
+already solves this exact shape for D138's supervisor: a marker FILE under `.serve/`, holding a
 pid, walked DOWN the process tree with `_descendants` to cover children the marker was written
 before. This file is that same pattern, generalised from "the one supervisor" to "whichever
 session's launcher wrote it": one JSON file per launched root, and `reap.py` reads the whole
@@ -55,11 +55,11 @@ which blocks, so that process stays the real child's direct parent for the whole
 
 THE OWNER IS `CLAUDE_CODE_SESSION_ID` — READ, NOT INVENTED. It is a primitive Claude Code
 itself already sets and every child inherits ordinarily (this is fork/exec inheritance, not
-the `ps -E` read-back the sketch assumed and which does not work here). D175 solved the
+the `ps -E` read-back the sketch assumed and which does not work here). D305 solved the
 neighbouring "whose is this" question in `janitor.py` with a Bash-wrapper argv fragment
 because no such id existed on this machine in 2026-09-12; it exists now, and this file uses it
-directly rather than re-deriving D175's fragment for a question it does not answer (D175
-answers "is ANY session's", never "WHICH session's").
+directly rather than re-deriving a Bash-wrapper fragment for a question it does not
+answer (D305 answers "is ANY session's", never "WHICH session's").
 
 A LAUNCHER RUN OUTSIDE A CLAUDE CODE SESSION — a human's bare terminal — HAS NO SUCH ID, AND
 THAT IS AN HONEST ANSWER, NOT A FAILURE. The mark is written with an EMPTY owner, which
@@ -67,7 +67,7 @@ THAT IS AN HONEST ANSWER, NOT A FAILURE. The mark is written with an EMPTY owner
 still reachable by naming it explicitly. See that file's own header for the full rule.
 
 THE MARK NAMES A PROCESS, NOT A PID, AND `write_mark` READS THAT PID'S OWN PROCESS-START TIME
-AT THE MOMENT IT WRITES — `reap.py:proc_start_epoch`, the same `ps -o lstart=` reading D175's
+AT THE MOMENT IT WRITES — `reap.py:proc_start_epoch`, the same `ps -o lstart=` reading D305's
 entry already uses for the neighbouring question. A pid is a number the OS hands out again. A
 mark that only remembered the number would let a LIVE, UNRELATED later process inherit a dead
 one's tag the instant the two numbers collided — found in the same review that found the `make

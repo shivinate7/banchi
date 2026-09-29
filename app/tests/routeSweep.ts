@@ -17,7 +17,7 @@ import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, SHIPPING_EXPORT_CSV } from './rou
  * at 390 read a full one. That, and the load race below, was all of the "variation" the first
  * build blamed on the fixture.
  *
- * A ROUTE ARRIVING IS NOT A ROUTE LOADED. `copy-budget.spec.ts` (D194, deleted) measured it:
+ * A ROUTE ARRIVING IS NOT A ROUTE LOADED. `copy-budget.spec.ts` (D284, deleted) measured it:
  * `#/inventory` painted "Reading the inventory…" under a visible `<main>`, and read 4 words
  * mid-load against 156 once painted. `openSettled` waits for five things before any caller
  * reads the screen: `.bn-shell[data-route]` names the route, exactly one `.bn-view` exists,

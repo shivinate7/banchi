@@ -28,7 +28,7 @@ WHAT IT COMPARES, and it is deliberately two different things:
      where both sides are looking at the same tree. That is one case, and it is the case that
      matters: it is the pair a running `make server` and a running `make dev` actually use.
 
-  3. THE THREE KINDS OF TREE, on COPIES (D268, a copied tree never gets
+  3. THE THREE KINDS OF TREE, on COPIES (D261, a copied tree never gets
      the live port). Both files are copied into three throwaway trees, and each copy is asked
      for its OWN default ports, through the same module-location read a real build makes:
        - `.git` a DIRECTORY, the primary checkout: 8000 and 5173, on both sides.
@@ -316,7 +316,7 @@ def main() -> int:
                     failures.append(
                         f"{kind} tree: {side} answers the PRIMARY checkout's live port. A "
                         f"build here would call the owner's live server "
-                        f"(D268, a copied tree never gets the live port)"
+                        f"(D261, a copied tree never gets the live port)"
                     )
 
         # The claimed slot: both sides read one registry before the hash.
@@ -329,7 +329,7 @@ def main() -> int:
             if any(port in url for port in live):
                 failures.append(
                     f"a client bundle with no port define addresses {url}, the PRIMARY "
-                    f"checkout's live port (D268, a copied tree never gets "
+                    f"checkout's live port (D261, a copied tree never gets "
                     f"the live port)"
                 )
         if client["calls"]:

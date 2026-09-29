@@ -189,7 +189,7 @@ def api_key() -> str:
     """The pokemontcg.io key, from the environment or `.env`. Empty means keyless.
 
     `get` AND NOT `get_live`, DECIDED 2026-09-11 when the Anthropic key moved the other way
-    (D64, amended). Two things separate them. The harness is one process per run, started
+    (D65, amended). Two things separate them. The harness is one process per run, started
     fresh and gone in minutes, so there is no long-running process for a replaced key to
     rotate under — which is the whole subject of `get_live`. And this key is not a bearer
     instrument that expires: it raises a rate limit, `_headers` sends it to the API host and

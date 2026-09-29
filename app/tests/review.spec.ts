@@ -1,5 +1,5 @@
 // Protects: Review shows the photograph beside the choices and lets the owner resolve each card in the queue.
-// Governs: D23, D24, D28, D32, D46, D77, D118, D218
+// Governs: D23, D24, D28, D32, D77, D118, D218
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest, settleAnimations } from './shell'
@@ -140,7 +140,7 @@ const REVIEW = [
   entry(5, 'low_confidence', '1.10', [candidate(0, '1.10')]),
 ]
 
-/* D46 — the export rows a lookup offers for a card the pipeline found nothing for. Modelled
+/* D77 — the export rows a lookup offers for a card the pipeline found nothing for. Modelled
    on the real case: run 2026-08-29-box1-01 read `Master Yi, Wuju Master` as `Wuju Master`,
    dropping the champion, so an exact name match finds nothing and only a substring does. */
 const CATALOG_ROWS: Candidate[] = [
@@ -163,7 +163,7 @@ const CATALOG_ROWS: Candidate[] = [
 ]
 
 /** A queue entry the pipeline offered NO rows for — `no_catalog_row` with zero candidates.
- *  Before D46 this was a dead end: the answer route refuses it as `no_candidates`, so the
+ *  Before D77 this was a dead end: the answer route refuses it as `no_candidates`, so the
  *  only moves were skip and stand-down. */
 const NO_ROWS: Entry[] = [entry(14, 'no_catalog_row', null, [])]
 
@@ -215,7 +215,7 @@ async function open(
     await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG })
   })
 
-  /* D46's catalog lookup. Fulfilled from `catalogRows`, which the zero-candidate test
+  /* D77's catalog lookup. Fulfilled from `catalogRows`, which the zero-candidate test
      overrides; every other test in this file has candidates on every entry and so never
      reaches it. Recorded into `sent` as a GET so a test can assert it was asked at all —
      the suggest-on-arrival property is otherwise invisible. */
@@ -737,7 +737,7 @@ test('a pooled card never draws a photograph here', async ({ page }) => {
   await expect(page.locator('.review-inset')).toHaveCount(0)
 })
 
-/* ---------------------------------------------------------- D46: the card with no rows */
+/* ---------------------------------------------------------- D77: the card with no rows */
 
 /* Before this, the zero-candidate arm drew one paragraph of prose saying the only move was
    to skip and pointing at a command in a terminal. Both halves were stale: D37 had put a
@@ -774,7 +774,7 @@ test('choosing a suggested row answers the card and says the row came from the c
   expect(body.sku).toBe(CATALOG_ROWS[0]!.sku)
   expect(body.condition).toBe(CATALOG_ROWS[0]!.condition)
   /* THE FLAG IS THE WHOLE POINT OF THE ROUTE CHANGE. Without it the server refuses this
-     write as `no_candidates`, which is the guard D46 deliberately left standing for every
+     write as `no_candidates`, which is the guard D77 deliberately left standing for every
      answer that does not come from the catalog. */
   expect(body.from_catalog).toBe(true)
 })
@@ -786,7 +786,7 @@ test('an ordinary answer carries no catalog flag at all', async ({ page }) => {
   await expect.poll(() => sent.filter((s) => s.method === 'POST').length).toBeGreaterThan(0)
   const body = sent.find((s) => s.method === 'POST')!.body as { from_catalog?: boolean }
   /* Absent, not false. Every answer this screen has ever written goes through one call, and
-     a flag about D46 riding on all of them would put a claim about how the row was found
+     a flag about D77 riding on all of them would put a claim about how the row was found
      onto thousands of answers that have nothing to do with it. */
   expect(body.from_catalog).toBeUndefined()
 })
@@ -977,11 +977,11 @@ test('"Show N more" adds rows below and moves nothing outside the card panel (D1
 
 /* ------------------------------------- D77: the rows are there and they are the wrong card */
 
-/* THE CASE D46 COULD NOT REACH, and it is not hypothetical: box 3 card 66 in the owner's own
+/* THE CASE D77 COULD NOT REACH, and it is not hypothetical: box 3 card 66 in the owner's own
    store, and the only open entry in it. `Nasus, Ascended` was read with its number misread as
    `8/298` — a REAL key in that export, belonging to `Get Excited!` — so the entry carries two
    confident candidate rows for a different card at $0.07 and $0.29, while the card's own row
-   (`046/166`, Near Mint Foil, $0.74) sits in the same file. D46 offered the export only where
+   (`046/166`, Near Mint Foil, $0.74) sits in the same file. D77 offered the export only where
    the pipeline offered nothing, so the only moves here were to answer with a wrong row, skip
    forever, or close the card.
 
@@ -1015,7 +1015,7 @@ test('an entry with rows is not offered the export unasked', async ({ page }) =>
   const sent = await open(page, WRONG_ROWS)
   await expect(page.locator('.review-candidate').first()).toContainText('Get Excited!')
 
-  /* D46'S SECOND ARGUMENT, KEPT. It refused to fetch a catalog beside a good list of rows —
+  /* D77'S SECOND ARGUMENT, KEPT. It refused to fetch a catalog beside a good list of rows —
      "a second, looser list beside a good one is how a screen teaches you to stop reading the
      first" — and that is an argument about what appears UNASKED, which D77 does not touch.
      The timeout is the assertion: an arrival fetch would already have been sent. */
@@ -1159,7 +1159,7 @@ test('the contradiction names both words, not just that there was one', async ({
 test('the claim is a chip, so it is on screen before the sentence is read', async ({ page }) => {
   await open(page, NAMED_CONTRADICTION)
   /* "Claimed" alone did not say claimed WHAT — renamed to "Rarity" to match "Sorted as" and
-     "Photo" beside it, at the same word count (D194's ratchet). */
+     "Photo" beside it, at the same word count (D284's ratchet). */
   const chip = page.locator('.review-chip', { hasText: 'Rarity' })
   await expect(chip).toContainText('Epic')
 })

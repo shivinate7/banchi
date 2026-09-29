@@ -219,7 +219,7 @@ export function runChip(run: Pick<PricingWorklist['roster'][number], 'owed' | 'u
 }
 
 /** Runs that owe a PRICE, not only the send. ONE COUNT FOR HOME'S LINE AND HOME'S TILE, so the
- *  two cannot say different things about the same runs (UX-006; D198's one-figure rule). A run
+ *  two cannot say different things about the same runs (UX-006; D121's one-figure rule). A run
  *  that is only `never_emitted` waits on the SEND: counting it "to price" is what had Home say
  *  "2 runs to price" while Pricing said "Ready". */
 export function runsOwingPrice(roster: PricingWorklist['roster']): number {
@@ -283,12 +283,12 @@ export function standing(input: StandingInput): Standing | null {
      (`server/capture_server.py:do_orders`, D63 amended) — a Canceled or already-shipped
      order is excluded from it before this ever runs. This still joins by KEY against `open`
      rather than trusting that shape blind: `open` is the one field this module is allowed to
-     read (D114 — no status vocabulary in `app/`), so a resolution row is counted only where
+     read (D91 — no status vocabulary in `app/`), so a resolution row is counted only where
      its own order reads `open: true` on the wire, never derived from `status` text and never
-     assumed pre-filtered. See `## D202`. */
+     assumed pre-filtered. See `## D121`. */
   /* THE SAME RULE THE ORDERS LIST FILTERS ON (`orderBuyers.ts:groupMissing`, summed by
      `missingCopies`): every missing copy on an open order, and only the open orders that miss one.
-     `groupBuyers` keeps only rows that read `open: true` as open (D202). */
+     `groupBuyers` keeps only rows that read `open: true` as open (D121). */
   const missing = orders === null ? null : missingCopies(orders.orders, orders.resolution.orders, Date.now())
   const unfindable = missing === null ? null : missing.copies
   /* WHAT IS READY, AND WHAT OWES A PRICE: `#/pricing`'s bar rule, per SKU (R4 F1). A run with

@@ -5,13 +5,13 @@ pricing corpus/dashboard of everything, with boxes feeding it? why is it we've m
 federalist state system when this is best done as a centralized system?"*
 
 They are right, and the repo had already written down the evidence twice without acting on
-it. D49 named the gap — *"no durable home for a hold outside the run directory; no cross-run
-view of what is being held"* — and D62 repeated *"No cross-run view."*
+it. D86 named the gap — *"no durable home for a hold outside the run directory; no cross-run
+view of what is being held"* — and D278 repeated *"No cross-run view."*
 
 THE ARGUMENT, WHICH IS ABOUT SCOPE AND NOT ABOUT TIDINESS. `runs/<n>/decisions.json` held two
 different kinds of fact in one file:
 
-    rule / basis / sub_threshold     arguably a property of the lot     (D48's argument)
+    rule / basis / sub_threshold     arguably a property of the lot     (D180's argument)
     overrides / no_market_data       a property of the CARD             (D7's argument)
 
 The second half is what a price actually is. TCGplayer prices per SKU globally, D7 states
@@ -28,12 +28,12 @@ conflict detection on the row, and an agreement refusal before a merged file cou
 — all of which exists only to reconcile a duplication that a single store does not have. The
 conflict class stops existing here rather than being reported.
 
-D48 IS NARROWED, NOT REPEALED. That entry's subject is a RUN: one reading, one queue, one
+D180 IS NARROWED, NOT REPEALED. That entry's subject is a RUN: one reading, one queue, one
 join. All of that stays per run and is untouched. What leaves the run
 directory is the pricing ANSWER. The policy fields go too, on the owner's instruction, with a
 per-run override kept for the lot that genuinely differs — see `for_run`.
 
-THE FILE IS THE AUTHORITY AND THE RUN IS THE RECORD, which is D49 Part One unchanged and
+THE FILE IS THE AUTHORITY AND THE RUN IS THE RECORD, which is D86 Part One unchanged and
 pointed one level up: `join` still writes what it ran with into the manifest, and a record of
 what happened is not an answer to what should happen.
 
@@ -94,7 +94,7 @@ DEFAULT_SUB_THRESHOLD: dict = {decisions_mod.FLAT_KEY: DEFAULT_CUTOFF}
 class Answer:
     """One card's answer, and the provenance of it.
 
-    THE SHAPES ARE D49's, UNCHANGED. A price is a string; a hold is `withheld` plus an optional
+    THE SHAPES ARE D86's, UNCHANGED. A price is a string; a hold is `withheld` plus an optional
     `watch_above` and `note`. They are round-tripped rather than re-modelled so that
     `Decisions.parse` — the one parser for what an answer MEANS — stays the only one.
 
@@ -130,7 +130,7 @@ class Corpus:
 
     `unknown` IS THE ROUND-TRIP AND IT IS LOAD-BEARING. `PUT /pricing` replaces this document
     wholesale, so a key a later version adds — or `_note`, which a person writes by hand —
-    must survive a screen that has never heard of it. D49 gave `decisions.json` the same
+    must survive a screen that has never heard of it. D86 gave `decisions.json` the same
     property for the same reason and it is the reason `to_payload` is not a field list.
     """
 
@@ -184,7 +184,7 @@ class Corpus:
         answers: Dict[str, Answer] = {}
         for sku, row in (payload.get("skus") or {}).items():
             if row is None:
-                # `null` DROPS AN ANSWER AND NEVER ROUND-TRIPS — D49's rule for clearing a key,
+                # `null` DROPS AN ANSWER AND NEVER ROUND-TRIPS — D86's rule for clearing a key,
                 # kept identical here so a screen clears an answer the way it always has.
                 continue
             if isinstance(row, dict) and "value" in row:
@@ -196,7 +196,7 @@ class Corpus:
                 )
             else:
                 # A BARE VALUE IS AN ANSWER WITH NO PROVENANCE, which is what a person editing
-                # this file by hand will write. Accepted for the reason D49 accepts a bare
+                # this file by hand will write. Accepted for the reason D86 accepts a bare
                 # `"unlisted"`: the spelling a terminal user reaches for has to work.
                 answers[str(sku)] = Answer(value=row)
         keep = {k: v for k, v in payload.items() if k not in ("policy", "skus", "version")}
@@ -204,7 +204,7 @@ class Corpus:
         # `rule` and `basis` are round-tripped as STRINGS here — the corpus stores what was
         # written — so nothing in this class would have raised on `undercut:not-a-number`, and
         # the `UnknownRule` surfaced later at `pricing.Rule.parse` in the middle of `emit`,
-        # outside every `except` that exists to turn it into a sentence. D49 recorded this
+        # outside every `except` that exists to turn it into a sentence. D86 recorded this
         # exact shape once already: these are `ValueError`s, not `MalformedDecisions`, and
         # nothing above `cli/__main__.py` catches them. The results are discarded; only the
         # raising matters.
@@ -322,10 +322,10 @@ class Corpus:
         THE WHOLE POINT OF THIS METHOD IS THAT NOTHING DOWNSTREAM CHANGED. `join`, `emit`,
         `prices_for` and every harness case already take a `Decisions`; handing them one built
         from the corpus means the pipeline never learns that answers moved, which is the same
-        property D48 spent its length protecting when the CART changed and the run did not.
+        property D180 spent its length protecting when the CART changed and the run did not.
 
         THE PER-RUN OVERRIDE IS POLICY ONLY, AND DELIBERATELY NOT PER-SKU. A lot of commons
-        can want a different `sub_threshold` from a lot of hits — that is D48's argument and it
+        can want a different `sub_threshold` from a lot of hits — that is D180's argument and it
         survives. A per-SKU override would re-create the duplication this file exists to end,
         so there is no shape here that can express one.
 
@@ -708,7 +708,7 @@ class Clear:
 
     #: The SKUs whose answer this clear removes.
     skus: List[str] = field(default_factory=list)
-    #: In scope and left alone because a hold is a judgement, not a typed price (D49).
+    #: In scope and left alone because a hold is a judgement, not a typed price (D86).
     holds: List[str] = field(default_factory=list)
     #: In scope and left alone because `channel != "price"` is the ABSENCE of an answer.
     unknown: List[str] = field(default_factory=list)
@@ -744,7 +744,7 @@ def clearable(
     `channel == "price" and not is_hold`, and its three rules each say why the other two are
     not answers at all:
 
-    - A HOLD IS NOT A PRICE (D49). `withheld` carries a reason, a watch and a note — a
+    - A HOLD IS NOT A PRICE (D86). `withheld` carries a reason, a watch and a note — a
       judgement the operator wrote in words. Removing one does not return a row to a blank
       field with a suggestion behind it; it puts the card back into the next `emit`, which is
       a money consequence in the direction that costs. The owner's store carries **23**, every

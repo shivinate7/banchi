@@ -290,7 +290,7 @@ def _scope_for(items: List["Item"], inventory: master.Inventory) -> Optional[dic
     swept up all of box 3 as well as for one aimed at it.
 
     THE BOX STILL COMES FROM THE SIDECARS AND NOT FROM THE PATH, and two boxes still get NO
-    scope rather than a guessed one. That was D48's rule and it is the one part of that entry
+    scope rather than a guessed one. That was D180's rule and it is the one part of that entry
     this change keeps: a scope block naming one of two drawers would be a claim about cards it
     is wrong about, and the run that produced this function — `2026-08-29-box1-01`, whose 99
     cards are all in box 3 — is what a guess costs.

@@ -1,7 +1,7 @@
-"""T7's box map cases (D262, D264, D265): a section moves whole, and nothing it owns is lost.
+"""T7's box map cases (D262, D264, D294): a section moves whole, and nothing it owns is lost.
 
 Protects: Moving a section moves it whole and loses nothing it owns.
-Governs: D165, D262, D264, D265
+Governs: D145, D262, D264, D294
 
 A SIBLING OF `t7_store_and_seams.py`, NOT A NEW HARNESS TEST. `t7_store_and_seams.run()` calls
 every `check_*` here, so T7's verdict carries them and the harness still has ten tests. They
@@ -44,7 +44,7 @@ def check_box_map_safety(checks: Checks) -> None:
     1. A card with a live paid reading could move. The batch then writes onto the tombstone
        and the moved card stays unidentified, with the money spent.
     2. A moved card fell off its run. `realign` looked only in the run's own boxes, so the
-       card read as `departed` and lost its row on Pricing (D165 measured 99 such cards).
+       card read as `departed` and lost its row on Pricing (D145 measured 99 such cards).
     3. A card could move only once. The second tombstone took the first one's
        `moved:<name>`, and `cards_cid` is UNIQUE, so the commit failed.
     """
@@ -191,13 +191,13 @@ def _label(box: int, name: str) -> str:
 
 
 def check_section_moves(checks: Checks) -> None:
-    """The box map's write (D264, D265): a section moves whole, before any section.
+    """The box map's write (D264, D294): a section moves whole, before any section.
 
     Each case below was red before `do_move_sections` existed (the route answered nothing),
     and the placement cases were red again against a first draft that appended at the back.
     """
     checks.note("")
-    checks.note("BOX MAP — section moves, placement, reorder, merge, split, undo (D264, D265)")
+    checks.note("BOX MAP — section moves, placement, reorder, merge, split, undo (D264, D294)")
 
     with isolated_home():
         _shelf()
@@ -266,7 +266,7 @@ def check_section_moves(checks: Checks) -> None:
         inv = Store().read().inventory
         checks.equal(
             [card.index for _, _, card in inv.records_in(1)], [8, 9, 1, 2, 3, 4, 5, 6, 7],
-            "the stored index never moves (D10, D58): only the order does (D265)",
+            "the stored index never moves (D10, D58): only the order does (D294)",
         )
         status, row = capture_server.do_capture(capture_payload(1))
         checks.ok(
@@ -363,7 +363,7 @@ def _changed(before: dict, after: dict) -> List[int]:
 
 
 def check_order_key_migration(checks: Checks) -> None:
-    """Schema 13 (D265, "A key on each card"): every card gets the key its index already is.
+    """Schema 13 (D294, "A key on each card"): every card gets the key its index already is.
 
     Red before `_add_card_order` existed: the column was missing and every payload had no key.
     """
@@ -372,7 +372,7 @@ def check_order_key_migration(checks: Checks) -> None:
     from store import db, files
 
     checks.note("")
-    checks.note("BOX MAP — the order key migration, schema 12 to 13 (D265)")
+    checks.note("BOX MAP — the order key migration, schema 12 to 13 (D294)")
     with isolated_home():
         _shelf()
         labels_before = [_label(1, f"o{i}") for i in range(1, 10)]
@@ -411,9 +411,9 @@ def check_order_key_migration(checks: Checks) -> None:
 
 
 def check_per_card_order(checks: Checks) -> None:
-    """Each kind of move writes the key of each moved card, and no other card (D265)."""
+    """Each kind of move writes the key of each moved card, and no other card (D294)."""
     checks.note("")
-    checks.note("BOX MAP — per-card order keys after each kind of move (D265)")
+    checks.note("BOX MAP — per-card order keys after each kind of move (D294)")
 
     with isolated_home():
         _shelf()
@@ -556,7 +556,7 @@ def check_delete_after_placement(checks: Checks) -> None:
     tombstone's `moved_to` kept naming the old index after the destination slid (item 5).
     """
     checks.note("")
-    checks.note("BOX MAP R3 — a mid-box delete after a placement (D265, D10 ruling 1)")
+    checks.note("BOX MAP R3 — a mid-box delete after a placement (D294, D10 ruling 1)")
 
     def distinct(box: int) -> bool:
         keys = [k for k in _keys(box).values()]
@@ -630,7 +630,7 @@ def check_front_of_box(checks: Checks) -> None:
     `GET /boxes` raised IndexError (a 500) after a card was placed in front of card 1.
     """
     checks.note("")
-    checks.note("BOX MAP R3 — the front of the box after a far-back placement (D265)")
+    checks.note("BOX MAP R3 — the front of the box after a far-back placement (D294)")
 
     def reads() -> object:
         try:
@@ -717,7 +717,7 @@ def check_divider_editor_keys(checks: Checks) -> None:
     the moved section.
     """
     checks.note("")
-    checks.note("BOX MAP R4 — the divider editor after a placement (D265)")
+    checks.note("BOX MAP R4 — the divider editor after a placement (D294)")
     with isolated_home():
         _shelf()
         _drag_sections(1, {"first": 2, "to_box": 2, "before": 2})
@@ -1185,7 +1185,7 @@ def _fuzz_dividers(seeds, rounds, sections=False):
 
 
 def check_divider_anchor(checks: Checks) -> None:
-    """The divider proof (D264, D265, D260, D58, D10): no write moves a divider off the cards
+    """The divider proof (D264, D294, D260, D58, D10): no write moves a divider off the cards
     it separates. Three named cases, one per defect the proof found, then the fuzz.
 
     F1: a divider left above the next card's key (`Inventory.next_key`) took the next

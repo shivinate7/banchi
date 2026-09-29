@@ -61,7 +61,7 @@ lookup it makes is indexed. The mechanism (confirmed by reading the code, not as
   `Inventory.records_in(number)` (`store/master.py`, doc'd at `server/capture_server._Places`)
   — every record in the box is hydrated into a full `Card` object (JSON payload parsed,
   every field built) so `_walk` can read that card's `name` and `state`. This is needed for
-  D30's neighbor/gap decoration (`neighbors`, `section_gaps`), which needs every card's
+  D58's neighbor/gap decoration (`neighbors`, `section_gaps`), which needs every card's
   NAME.
 - `_walk`'s result is cached per box (`self._boxmates[number]`), so a box is only ever
   fully hydrated ONCE per `_Places` instance no matter how many picks land in it. The O(cards)
@@ -76,7 +76,7 @@ lookup it makes is indexed. The mechanism (confirmed by reading the code, not as
 that reads it** (`app/src/Orders.tsx`, which backs both `#/orders` and `#/shipping` per
 D69 — `OrdersShipStage.tsx` renders inside the same `OrdersHub`): `label`, `located`, `box`,
 `box_name`, `section`, `slot`, `game`, `game_display`, and `index` (grep results below).
-`Orders.tsx` reads NEITHER `neighbors` NOR `section_gaps` — D30's decoration, the one thing
+`Orders.tsx` reads NEITHER `neighbors` NOR `section_gaps` — D58's decoration, the one thing
 that forces `_walk`'s full-box hydration — anywhere. Grep for confirmation before writing
 code (this file's grep at the time of writing found zero hits for either field in
 `app/src/Orders.tsx` or `app/src/OrdersShipStage.tsx`):
@@ -98,7 +98,7 @@ the leaner form scoped to exactly those boxes.
    `slot`/`label`/`section`/`card`/`box_total`/`fraction`/`box_name`/`box_closed`/
    `section_start`/`section_end` values to today's `_Places(inventory).of(box, index)`, for
    every pick `do_orders` renders, and answers `neighbors: null, section_gaps: null` instead
-   of D30's decoration.
+   of D58's decoration.
 2. `do_orders` uses it, scoped to the picks its own resolution produced.
 3. The stale comment at `server/capture_server.do_orders` ("ONE `_Places` FOR THE WHOLE
    RESPONSE. It walks the entire store per instantiation...") is replaced with what the
@@ -159,7 +159,7 @@ correct; only the ORDER of landing is at stake, not correctness.
   before writing code — they are short and settle exactly the "one snapshot, resolved once"
   invariant this item must preserve.
 - `docs/specs/order-pipeline.md` — background on the order screens; confirms steps 8-12 are
-  built and step 13/14 (shipped status, tracking write-back) are not, and that D96 deleted
+  built and step 13/14 (shipped status, tracking write-back) are not, and that D97 deleted
   the envelope-walk code (`orderWalk.ts` etc.) that is unrelated to `do_orders`.
 - `server/capture_server._Places` (`_Places` in full — class docstring through `.of()`)
   and `pipeline/join.Position` (`Position` in full — the ONE label formula; read this
@@ -192,7 +192,7 @@ Insert directly after `_positions_in` (which ends at line 1519 with `return out`
 def occupied_indices(self, box: int) -> Tuple[int, ...]:
     """Every ON-HAND (non-terminal) index in `box`, ascending — D58's `occupied` input for
     a caller that needs `Position.slot`/`label`/`section`/`card`/`fraction` and NOTHING
-    else: no name, no photo path, no D30 neighbor walk. `_positions_in`'s own docstring is
+    else: no name, no photo path, no D58 neighbor walk. `_positions_in`'s own docstring is
     the precedent: two indexed columns read as three `select` queries, never a walk that
     hydrates a `Card` per row.
 
@@ -259,7 +259,7 @@ def for_keys(
     cls, inventory: "master.Inventory", keys: Iterable[Tuple[int, int]]
 ) -> "_Places":
     """A `_Places` scoped to exactly the boxes `keys` touches, for `Place.slot` and
-    everything derived from it — NOT for D30's neighbor/gap decoration, which needs
+    everything derived from it — NOT for D58's neighbor/gap decoration, which needs
     every card's NAME and is exactly the cost this constructor exists to avoid.
 
     `do_orders` is the one caller. An order's picks can span most of the store's boxes, and
@@ -290,7 +290,7 @@ Add `self._sparse = False` to `__init__` (`server/capture_server._Places`, right
 
 ### 3. Short-circuit `_company` in sparse mode — `server/capture_server._Places`
 
-`_company` (D30's neighbor/gap walk) currently opens with:
+`_company` (D58's neighbor/gap walk) currently opens with:
 
 ```python
     def _company(
@@ -343,7 +343,7 @@ with:
 
     # ONE `_Places` FOR THE WHOLE RESPONSE, SCOPED TO THE PICKS THE RESOLUTION ACTUALLY
     # RETURNED. The ordinary constructor is lazy per box but still hydrates a full `Card`
-    # per record in every box a pick touches (`_walk`, D30's neighbor decoration), and an
+    # per record in every box a pick touches (`_walk`, D58's neighbor decoration), and an
     # order's picks routinely span most of the store's boxes — with five boxes, that is
     # effectively the whole store, once, on the route Orders and Shipping poll. Neither
     # screen draws `neighbors` or `section_gaps` (grep `app/src/Orders.tsx`), so
@@ -490,7 +490,7 @@ for a in resolution.orders:
                 ordinary_block.pop(key, None)
             checks.equal(
                 sparse_block, ordinary_block,
-                f"the sparse and whole-box builds agree on everything but D30's decoration "
+                f"the sparse and whole-box builds agree on everything but D58's decoration "
                 f"for {p.box}/{p.index}",
             )
 ```

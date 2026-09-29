@@ -112,7 +112,7 @@ import './Pricing.css'
 import { SendCard } from './SendCard'
 import { ABSENT_SENTENCE, AbsentPhotoNote, gameLabel, noPhotoSentence } from './CardHero'
 
-/* #/pricing — THE HAND-PRICING WORKLIST (D49, D86), REBUILT TO THE OWNER'S RE-INTERVIEW (D277).
+/* #/pricing — THE HAND-PRICING WORKLIST (D86), REBUILT TO THE OWNER'S RE-INTERVIEW (D277).
  *
  * Every row, the rows that need the owner on top, then the rest by value (Q1, Q2). One slim bar
  * holds Send, sticky at the top on a desk and pinned above the tab bar on a phone (Q4). The rule
@@ -208,7 +208,7 @@ function customSays(rule: CustomRule): string {
   return `New cards list ${rule.pct.trim()}% ${rule.kind === 'undercut' ? 'under' : 'over'} ${BASIS_SAYS[rule.basis]}`
 }
 
-/** The snap keys (D49's closed alphabet: every letter is a command). Only the columns the row
+/** The snap keys (D86's closed alphabet: every letter is a command). Only the columns the row
  *  draws have a key: `m` Market and `l` Lowest. `n` is the asking price on the Live tab. */
 const SNAPS: { key: string; field: keyof PricingSku['snap']; says: string }[] = [
   { key: 'm', field: 'market', says: 'Market' },
@@ -478,7 +478,7 @@ function numberSuffix(number: string): RegExp | null {
  *  the stored name is never touched. */
 /* F3 (the owner's word, 2026-09-29): THE FILTERS ARE VIEW-ONLY. the ux-2026-09-23 review's F3
    is the design. Price bands read the MARKET cell and nothing else. A row with no market price is
-   its own band (D49: a missing price is unknown, never low). */
+   its own band (D86: a missing price is unknown, never low). */
 const BANDS = [
   { value: 'none', text: 'No market price', label: <>No market price</>, within: (c: number | null) => c === null },
   { value: 'under1', text: 'Under one dollar', label: <>Under <Money value={1} /></>, within: (c: number | null) => c !== null && c < 100 },
@@ -868,7 +868,7 @@ export function Pricing() {
   const holdButtons = useRef(new Map<string, HTMLButtonElement>())
   const [photoFor, setPhotoFor] = useState<{ sku: string; at: number } | null>(null)
 
-  /* The trend strip (D79), cleared when the loaded set changes. */
+  /* The trend strip (D277), cleared when the loaded set changes. */
   const [trends, setTrends] = useState<Record<string, TrendRead>>({})
   const [trendRun, setTrendRun] = useState<{ total: number; done: number; reading: boolean } | null>(null)
   const trendWalk = useRef(0)
@@ -1418,7 +1418,7 @@ export function Pricing() {
   }, [rows, answerFor, askedFor])
 
   /* ROWS WITH NO MARKET PRICE AND NO ANSWER: they stay on the list and stay out of a send (Q3,
-     D49: a missing price is unknown, not low). Counted off the rows, which is what is drawn. */
+     D86: a missing price is unknown, not low). Counted off the rows, which is what is drawn. */
   const needsPrice = rows.filter((row) => rowShare(row, answerFor(row)).needsPrice).length
 
   /* THE MIXED SEND'S PRICE CHANGES (the owner's ruling, 2026-09-24: "Allow mixed"). A row this
@@ -1542,7 +1542,7 @@ export function Pricing() {
     (sku: PricingSku, raw: string) => {
       if (!touched.current.has(sku.sku)) return
       let text = raw.trim()
-      /* ON THE LIVE TAB A TYPED PRICE IS KEPT TO THE CENT (D221, D267): `17.5` is written, shown
+      /* ON THE LIVE TAB A TYPED PRICE IS KEPT TO THE CENT (D221): `17.5` is written, shown
          and sent as `17.50`, so the field shows exactly what the press sends. */
       if (source.kind === 'markdown' && text !== '') {
         text = moneyField(text) ?? text
@@ -1741,7 +1741,7 @@ export function Pricing() {
   }, [ruleRows, book])
 
   /** Write the cut-off onto every unanswered live row under it, in ONE press and ONE undo. Live
-   *  tab only: a run's cheap half is priced by policy at the send (D9/D98). */
+   *  tab only: a run's cheap half is priced by policy at the send (D9). */
   const applyCut = useCallback(() => {
     const price = cut.trim()
     if (price === '' || cheapRows.length === 0) return
@@ -2958,7 +2958,7 @@ function fieldState(
   asking: string | null | undefined,
 ): { text: ReactNode; tone: 'quiet' | 'ok' | 'warn'; title?: string } | null {
   if (isWithheld(standing)) {
-    // The human label is drawn; the machine string it stands for travels in the title (D49).
+    // The human label is drawn; the machine string it stands for travels in the title (D86).
     const reason = heldReason(standing)
     const label = (HOLD_SHORT as Record<string, string>)[reason] ?? ''
     return label === '' ? null : { text: label, tone: 'quiet', title: `withheld: ${reason}` }
@@ -3256,7 +3256,7 @@ function PricingRow({
 
 /* ======================================================================= the sheets */
 
-/* THE BIG FIGURE, TYPED INTO DIRECTLY (D98): the `$` is drawn beside it, the alphabet is closed
+/* THE BIG FIGURE, TYPED INTO DIRECTLY (D9): the `$` is drawn beside it, the alphabet is closed
    to money, Enter and blur commit, Escape puts back what stood. It holds its own draft and
    publishes nothing until a commit, so a half-typed figure never re-partitions the list. */
 function BigMoney({ value, onCommit, label }: { value: string; onCommit: (next: string) => void; label: string }) {
@@ -3669,7 +3669,7 @@ function UnreachableLine({ at }: { at: Unreachable | null }) {
   /* "OVER A DELETED BOX" NAMED NO ACTION AND SOUNDED LIKE A LOSS (the owner's review,
      2026-09-26: "gives me anxiety unnecessarily"). It is neither: D36's `bid` means the box
      was only renumbered, and every one of these runs already has its fix — `#/runs` offers a
-     Rebind press the moment it opens a stranded run (`RunPanel.tsx`, D165). So this reads as
+     Rebind press the moment it opens a stranded run (`RunPanel.tsx`, D145). So this reads as
      the other unreachable reasons do, a link straight to that action. */
   const strandedRuns = heldBack(at.reallocated)
   const stranded = strandedRuns.reduce((n, one) => n + (one.cards ?? 0), 0)

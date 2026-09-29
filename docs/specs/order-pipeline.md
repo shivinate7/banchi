@@ -30,10 +30,10 @@ here (T2b), and a `T6` that collided with the harness's own.
 
 | step | state |
 |---|---|
-| 8 order in | **built, two ways, reachable at `#/orders`.** Paste, projected client-side by `app/src/orderPaste.ts`, and a fetch behind the same control — `POST /orders/fetch`, `server/order_transport.py` (T3). **The fetch is one press since `D193`'s amendment of D114**, all statuses and skip-known by default, with D91's ticked-status flow reachable as a secondary "Only these statuses…" control and `{all_statuses: true}` the explicit body for "every one". The transport's endpoints, auth kind, body shape and four refusal codes were measured; `search` has run authenticated and returned three real orders, and the summary walk is proven by D91's own refusal. `detail` — the half that carries a buyer's address, still excluded — has not run live; the buyer's DISPLAY NAME alone is now carried into the ledger from both the summary (`POST /orders/names`, zero detail calls) and the detail. Section 6. |
+| 8 order in | **built, two ways, reachable at `#/orders`.** Paste, projected client-side by `app/src/orderPaste.ts`, and a fetch behind the same control — `POST /orders/fetch`, `server/order_transport.py` (T3). **The fetch is one press since `D193`'s amendment of D91**, all statuses and skip-known by default, with D91's ticked-status flow reachable as a secondary "Only these statuses…" control and `{all_statuses: true}` the explicit body for "every one". The transport's endpoints, auth kind, body shape and four refusal codes were measured; `search` has run authenticated and returned three real orders, and the summary walk is proven by D91's own refusal. `detail` — the half that carries a buyer's address, still excluded — has not run live; the buyer's DISPLAY NAME alone is now carried into the ledger from both the summary (`POST /orders/names`, zero detail calls) and the detail. Section 6. |
 | 9 resolve | **built and reachable.** `pipeline/orders.py`, drawn by `GET /orders` out of one store snapshot. |
 | 10 route | **built and reachable at `#/shipping`.** `pipeline/shipping.py` (D61), on its own surface (T2 below). |
-| 11 pull | **built and reachable, in ONE form — the per-copy press.** `POST /orders/pull` writes the ledger and sells in one `Store.write()`, aimed by the row's own `capture_id`, with the undo on a twenty-second receipt. It is pressed a card at a time, from an order's own panel or from the cross-order pass through the drawers (`#/orders`, "Walk the boxes"). **T6's envelope form is deleted, not built** (D96 amended 2026-09-04): main's `POST /orders/fill` and the `#/inventory?order=` walk were reachable from no screen here and are gone, the want they served answered by the walk mode above. |
+| 11 pull | **built and reachable, in ONE form — the per-copy press.** `POST /orders/pull` writes the ledger and sells in one `Store.write()`, aimed by the row's own `capture_id`, with the undo on a twenty-second receipt. It is pressed a card at a time, from an order's own panel or from the cross-order pass through the drawers (`#/orders`, "Walk the boxes"). **T6's envelope form is deleted, not built** (D97 amended 2026-09-04): main's `POST /orders/fill` and the `#/inventory?order=` walk were reachable from no screen here and are gone, the want they served answered by the walk mode above. |
 | 12 ship | **the spreadsheet is reachable; the tcgtracking call still does not exist.** `pipeline/pirateship.py`'s file downloads from `#/shipping`. Nobody has fed it to Pirate Ship. `POST /shipping/batches/<batch>/stamps` fills the three Rubber Stamp columns from the ledger as of 2026-09-05, and NO SCREEN PRESSES IT YET (T2b) — so what an operator downloads today still has them empty. |
 | 13 track back | **missing.** |
 | 14 tell buyer | **missing.** Deferred behind 13. |
@@ -325,7 +325,7 @@ overlapped the moment T6 was added below on 2026-08-30 — the harness's own T6 
 cited in this file. Every reference to one of those now says `harness` in front of the number; a
 bare `T4` is this section's.
 
-The order below is D66's, and D66 carries the argument. Three claims decide it: a transport-first
+The order below is D69's, and D69 carries the argument. Three claims decide it: a transport-first
 session cannot state a Done this repo accepts, the shipping lane depends on neither the screen nor
 the transport, and the transport question is one probe rather than one session.
 
@@ -419,7 +419,7 @@ both.
 **Both stated blockers are spent, and they were spent by other people's work rather than by this
 one.** `server/shipping_routes.py`'s header named them: both of D63's maps being empty, and
 needing a `store.orders.OrderRecord -> pipeline.orders.Order` adapter "that the order branch also
-needs, which is exactly the two-branches-one-file collision D66 told us to avoid." The order
+needs, which is exactly the two-branches-one-file collision D69 told us to avoid." The order
 branch landed and the adapter is `server/capture_server.py:_engine_order`, whose own docstring
 calls itself THE ONLY ADAPTER, so that collision cannot happen. And the ledger stopped being empty
 on 2026-09-02: **twenty real TCGplayer orders with real SKUs, 17 of them since pulled to the end.**
@@ -501,7 +501,7 @@ summaries alone — `fetch_open_orders` already parses `buyerName` off every sum
 drops the known ones, so a names-only pass costs zero detail calls and `/orders/fetch` keeps its
 `writes_nothing` contract. `{all_statuses: true}` is the explicit "every one" `statuses_required`
 always allowed a caller to say in words, used by the one-time `LastTwoYears` backfill and the
-ordinary all-statuses press D114's amendment made the default.
+ordinary all-statuses press D91's amendment made the default.
 
 **It is two calls, and that is not an optimisation failure.** The search result carries no per-line
 SKU; only the order detail does, as `products[].skuId`. The SKU is the join key — `products[].skuId`
@@ -550,9 +550,9 @@ the wire and are recorded once, in `server/order_transport.py`'s WHAT IS DELIBER
 block. Read them there rather than a second copy here — that module cites this section by
 number for the ruling.
 
-### T6 — the order drives the walk, and the pull becomes a mode of the inventory screen. SUPERSEDED 2026-09-04 (D96 amended)
+### T6 — the order drives the walk, and the pull becomes a mode of the inventory screen. SUPERSEDED 2026-09-04 (D97 amended)
 
-> **SUPERSEDED 2026-09-04, and DELETED rather than left standing (D96, amended).** Everything
+> **SUPERSEDED 2026-09-04, and DELETED rather than left standing (D97, amended).** Everything
 > below records what main built and is kept as that record; none of it is in this product's tree.
 > The owner used both shapes and ruled for the per-copy walk — *"I don't want the walk picking for
 > me"* — so `POST /orders/fill`, `do_order_fill`, `app/src/orderWalk.ts`,
@@ -614,7 +614,7 @@ that does not exist.
 
 | what | where | what it already does |
 |---|---|---|
-| ~~the handoff~~ **superseded, and D49 is the precedent** | ~~`app/src/runHandoff.ts`~~ → the route's own parameter | the walk is asked for in the URL — `#/inventory?order=<key>` or `#/inventory?orders=open`, read by `app/src/orderWalk.ts:askInHash`. `sessionStorage` would stand a second source of truth, with its own clearing rules, beside a hash that already says what the screen is doing; D49 made exactly this argument for `#/pricing?run=`. It also decides the reload question this section left open |
+| ~~the handoff~~ **superseded, and D86 is the precedent** | ~~`app/src/runHandoff.ts`~~ → the route's own parameter | the walk is asked for in the URL — `#/inventory?order=<key>` or `#/inventory?orders=open`, read by `app/src/orderWalk.ts:askInHash`. `sessionStorage` would stand a second source of truth, with its own clearing rules, beside a hash that already says what the screen is doing; D86 made exactly this argument for `#/pricing?run=`. It also decides the reload question this section left open |
 | the jump | `BoxBrowse`'s `goTo: {key, at}` (D45) | the walk already takes a jump request from OUTSIDE, switching box if it has to, with a counter so one target may be asked for twice |
 | its callers | `app/src/Inventory.tsx` `walkTo`, and now the landing effect | `walkTo` is one line fed by a press on a copy's position label; the walk adds one more caller and no second mechanism |
 | the arrows | `BoxBrowse`'s existing window `keydown` listener, behind `arrows?: {says, onStep}` | ArrowLeft/Right already step card to card inside the box, and the copies panel already redraws for whichever card is selected. While an order drives, the same two keys step the QUEUE, consulted after the same guards in the same listener — one table, one listener. This is the owner's request verbatim: *"i want that same mechanic on the order walks too"* |
@@ -743,7 +743,7 @@ route-is-not-a-feature rule: the entry controls on `#/orders`, the banner and it
 
 **`make design-check` WAS where the reachability half was evidenced, and it no longer is** —
 `app/tests/order-walk.spec.ts` was deleted with the mode it covered when the Banchi front end
-declined D90's envelope walk (D96), so the thirteen cases below describe a screen this product
+declined D90's envelope walk (D97), so the thirteen cases below describe a screen this product
 does not draw. They are left in this paragraph as the record of what the walk WAS proved to do,
 in main's history at `71c6dcb`, and not as a claim about what is tested today. What they covered: the parameter
 reaching the screen, the landing, the arrows stepping the queue across a box, `Mark sold` absent

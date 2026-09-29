@@ -31,7 +31,7 @@ the actual code below:
 
 1. The **aggregates** — `boxes`, `unrankable`, `totals`, `sources`, `threshold` — are computed
    server-side over **every** on-hand row, via a column-only `select()` (never a built `Card`
-   object), so D159's "nothing on hand is omitted" figures stay whole no matter which page of
+   object), so D277's "nothing on hand is omitted" figures stay whole no matter which page of
    the row list is open. This is unavoidably O(cards) — an aggregate over the whole store has
    to touch the whole store — but the fix removes the per-row cost of building a `Card`
    (JSON-parsing every field, most of them unused here), which is where the 19–21x scaling
@@ -546,7 +546,7 @@ around **two fetches**:
     explicitly, since it differs from a literal `list.reverse()`).
   - `band="gaps"` reconstructs every unpriced row in `(box, index)` order and its `total`
     equals `unrankable["total"]`.
-  - **A D159 arm, required by this playbook's own instructions**: build a store with at least
+  - **A D277 arm, required by this playbook's own instructions**: build a store with at least
     one card of each of the three `why` causes (`never_identified`, `read_nothing`,
     `no_reading`) AND at least one priced card, request `band="top"` with `limit=1` (i.e.
     open the very first page), and assert the returned `unrankable` block still counts all
@@ -974,9 +974,9 @@ and are never rewritten to match a later tree — do not edit §1's existing tab
   every page fetch still walks the whole store once to build `boxes`/`unrankable`/`totals`.
   What is fixed is the per-row cost (no `Card` construction) and the response SIZE (a page
   instead of the whole store). If the aggregate pass alone is still too slow at 50,000 cards,
-  that is a real finding for the PR to report, not a reason to silently drop the D159
+  that is a real finding for the PR to report, not a reason to silently drop the D277
   "nothing dropped" requirement by computing aggregates over a sample or over the current
-  page only — the "Read first" and T7 D159 arm above exist specifically to catch that
+  page only — the "Read first" and T7 D277 arm above exist specifically to catch that
   temptation.
 - **`stack_index`/`stack_of` and `reach` are new fields this playbook adds beyond what
   `docs/specs/store-scaling.md`'s own item-7 paragraph names.** They exist because §A3

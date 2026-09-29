@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # `make reap-selftest` — scripts/reap.py, proved by pointing it at processes it must not kill.
 # Protects: The reap command stops only processes this session started and refuses every other process.
-# Governs: D18, D53
+# Governs: D18, D138
 #
 # WHY THIS EXISTS. The guard's whole claim is that it can tell a process this session started
 # from one it did not, and refuse the second. That claim is only worth anything if the REFUSALS
@@ -19,7 +19,7 @@
 # reproduced with real processes and a real socket rather than asserted about.
 #
 # WHAT IT CANNOT PROVE. Anything about the machine's real process table: every case is confined
-# to the fixture. And the D53 case is proved through a `.serve/` pidfile it writes itself, so it
+# to the fixture. And the D138 case is proved through a `.serve/` pidfile it writes itself, so it
 # proves the mechanism and not that the real supervisor writes one — `scripts/serve.py` owns
 # that half and `make status` reads it.
 
@@ -411,9 +411,9 @@ case "$status:$out" in
   *) bad "a kill whose target cannot be read was allowed" ;;
 esac
 
-# ------------------------------------------------------------------------ the hook: D53
+# ------------------------------------------------------------------------ the hook: D138
 echo
-echo "  -- D53: the main checkout's server, even from the main checkout --"
+echo "  -- D138: the main checkout's server, even from the main checkout --"
 
 mkdir -p "$tmp/checkout/.serve"
 printf '{"pid": %s, "argv": [], "started_at": 0}\n' "$mine" > "$tmp/checkout/.serve/capture.pid"

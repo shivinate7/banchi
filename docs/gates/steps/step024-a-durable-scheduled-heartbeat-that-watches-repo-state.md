@@ -1,5 +1,5 @@
 24. ~~**A durable scheduled heartbeat that watches repo state across
-    sessions**~~ — **done 2026-09-13.** `D200`. `scripts/heartbeat.py` —
+    sessions**~~ — **done 2026-09-13.** `scripts/heartbeat.py` —
     a thin caller of what already existed rather than a fourth reader of the same facts:
     `scripts/coordinator.py --json` for open PRs pinned to their head SHA, `id claims`, dirty
     worktrees and live sessions, plus two things coordinator does not answer — whether MAIN'S

@@ -307,7 +307,7 @@ prevent. On the owner's store today it has never fired.
 ## 8. The screen
 
 `Walk the boxes` **becomes** this mode. It is not a third mode beside the existing two, and
-`By buyer` keeps its own job: one person, one envelope, the ledger's own view (D193, D209).
+`By buyer` keeps its own job: one person, one envelope, the ledger's own view (D193, D296).
 
 ### Selecting
 
@@ -696,25 +696,25 @@ then make one deliberate pass. The first is the serious one.
    row read with a hand already in a drawer. This one is about reaching a drawer at all.
 
 **A settled figure lost its footing, and this paragraph is the record rather than the ruling.**
-D96's "N orders complete in this pass" head figure, and the boot-triggered clear beside it, are
+D97's "N orders complete in this pass" head figure, and the boot-triggered clear beside it, are
 GONE from the rebuild. That figure was twice amended and hard won: it existed because a lifetime
 total was masquerading as a progress figure on the owner's own store. Nothing here answers its
 argument. It simply has nothing left to attach to — `WalkPass` fetches the plan once and never
 re-reads `GET /orders`, so there is no live comparison between what is open and what this pass
 covers, and completion is now counted per card row rather than per order.
 
-**This document does NOT rule D96 superseded.** A settled decision is an argument, and repealing
+**This document does NOT rule D97 superseded.** A settled decision is an argument, and repealing
 one is the owner's act, not a session's. What is recorded is that the argument is unanswered and
 the mechanism is absent. Two ways out, for the owner: rebuild the figure client-side over the
-orders already in hand and the pass's own recorded map, or rule D96 superseded here and say so in
-an entry. One piece of D96 IS already reversed in the open, by section 8's own words: "leaving the
-walk ends the pass" directly contradicts D96 amended's "a toggle is not the end of a pass," and
+orders already in hand and the pass's own recorded map, or rule D97 superseded here and say so in
+an entry. One piece of D97 IS already reversed in the open, by section 8's own words: "leaving the
+walk ends the pass" directly contradicts D97 amended's "a toggle is not the end of a pass," and
 that reversal was the owner's, in the 2026-09-17 interview.
 
 **DEFERRED ON THE OWNER'S WORD, 2026-09-19.** Asked directly, with both ways out on the table,
 the owner's answer was: *"we don't really need it right now so leave that as it is."* So this
 paragraph stays exactly what it is — a record that the argument is unanswered and the mechanism
-absent. D96 is NOT superseded and the figure is NOT being rebuilt. A later session should not
+absent. D97 is NOT superseded and the figure is NOT being rebuilt. A later session should not
 re-raise this as an open question; it was raised and held.
 
 Worth noting for whoever does pick it up: the mechanism got cheaper after this was written. The
@@ -764,7 +764,7 @@ settled work by accident before.
   first one cheaper.
 - **`#/orders` gets longer, not shorter.** Photographs at `#/inventory`'s size are the
   screen's pixel budget spent on the card (D32) and the scroll is the cost. The word count
-  should fall (D194), because sentences are replaced by counters — but this design is not
+  should fall (D284), because sentences are replaced by counters — but this design is not
   argued on the ratchet and must not be pinned to fit.
 
 ## 11. What would reopen this
@@ -797,7 +797,7 @@ inventory engine, except the left portion of the inventory screen turns into ord
 sort is by density."* And, on the vocabulary: *"Stop this 'drawer' nonsense, that term doesn't
 exist anywhere else, neither does 'pull'. You will reuse Inventory's UI/UX and terminology
 exactly."* D90 (an order drives the walk as a mode of the inventory screen) said the same on
-2026-09-02, was built at `71c6dcb5`, and was deleted at `84be07ed` under D96. The owner has
+2026-09-02, was built at `71c6dcb5`, and was deleted at `84be07ed` under D97. The owner has
 heard that argument and overruled the deletion — but D90 is NOT brought back as it was. The
 owner's word: *"D90 itself was not perfect, do not just bring D90 back."* What follows is what
 they said today, answered question by question, with the mock they picked.
@@ -863,7 +863,7 @@ their own branch).
 
 The owner saw the rebuilt screen over a seeded store beside `#/inventory` and answered:
 
-- **Copy budget (D194).** `#/orders` measures 140 words against the pinned 107. The 33 are
+- **Copy budget (D284).** `#/orders` measures 140 words against the pinned 107. The 33 are
   Inventory's Details vocabulary the reused pane carries. **Pin to the measured count.** The
   pane is worth its words. Hiding facts on one screen would make the two panes differ.
 - **`so far`.** Dropped everywhere — see §8's caption paragraph.
@@ -968,7 +968,7 @@ the end of that walk, the plan is computed once and does not move. A new order d
 it. A copy that goes elsewhere marks its own row and moves nothing around it. The freeze covers
 the WALK, in the main column.
 
-The left column is the orders list, and that list is live. It re-sorts on Ready to Ship (D209).
+The left column is the orders list, and that list is live. It re-sorts on Ready to Ship (D296).
 Rows change status under the hand. So one screen would hold a frozen walk beside a moving list.
 
 **The answers above resolve it, and the resolution needs the owner's word.** The walk covers the

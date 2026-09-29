@@ -1,5 +1,5 @@
 """`pkmnscan archive` — the price-history archive: sweep the live endpoint into it, or look
-at what it holds (D219, D224, D223,
+at what it holds (D219, D224, D231,
 D222).
 
 WHY THIS COMMAND EXISTS. `pipeline/pricehistory.py`'s history endpoint has a hard ceiling of
@@ -20,7 +20,7 @@ repo shares (`reprice list`, `prices adopt`, `reconcile --live`), and it is hone
 what it can say for nothing: what the archive already holds, never a live figure it did not
 pay to fetch. Building the SUBJECT LIST no longer costs literally nothing: resolving a
 sealed order-ledger SKU's own Set Name needs `Market.category_id`/`.groups`
-(`pipeline.pricearchive.rows_from_store`'s widened subject set, the gap D223 named and this closes). Both are cached, whole-CATEGORY reads — at most one
+(`pipeline.pricearchive.rows_from_store`'s widened subject set, the gap D231 named and this closes). Both are cached, whole-CATEGORY reads — at most one
 request per distinct Product Line this ledger has ever sold, never per SKU, and zero once
 the mirror's category/group lists are warm on disk. A store with no sealed sales, or one
 whose mirror lists are already cached, still previews for nothing; the first preview after
@@ -38,7 +38,7 @@ chunk's reads.
 A RESUMED SWEEP DOES NOT RE-READ WHAT IT ALREADY HOLDS FROM A RECENT PASS.
 `pipeline.pricearchive.freshness_index` and `split_by_freshness` check the archive itself —
 not a second, ephemeral cache — before asking the market for anything, using
-`pipeline.pricearchive.RESUME_TTL_SECONDS` (six days, D230) as
+`pipeline.pricearchive.RESUME_TTL_SECONDS` (six days, D224) as
 "recently read enough to trust", NEVER `pipeline.pricehistory.HISTORY_TTL_SECONDS` (one
 hour) — that number is right for the live `#/pricing` screen's single-SKU read and wrong
 for this walk. `rank_by_revenue` makes this pass read the same few hundred names first,
@@ -46,7 +46,7 @@ every time; a one-hour window sent every later pass back to re-read exactly thos
 and never advance, measured against the owner's real store.
 
 THE SUBJECT ORDER IS SOLD VALUE FIRST, NOT WHATEVER `cards.select` RETURNED
-(`pipeline.pricearchive.rows_from_store`/`rank_by_revenue`, D223).
+(`pipeline.pricearchive.rows_from_store`/`rank_by_revenue`, D231).
 Measured 2026-09-19: an unranked pass answered for 206 of 914 SKUs before the host throttled
 it, and only 37 of those 206 were SKUs the owner had ever actually sold. A pass that gets cut
 off should have spent its requests on what earns.
@@ -67,7 +67,7 @@ proven is not the problem.
 when, and (with `--sku`) one SKU's own buckets across every range it has been read in.
 
 DELIBERATELY OUT OF SCOPE, BY THE OWNER'S WORD: any timer, cron or launch agent that fires
-this on its own. `sweep` is a press a person runs. A schedule reverses D62's own statement
+this on its own. `sweep` is a press a person runs. A schedule reverses D278's own statement
 that this reader cannot fire by itself, and that reversal needs its own argument, which
 nobody has made yet.
 """
@@ -117,7 +117,7 @@ def _user_agent() -> str:
 
 def _format_window(seconds: int) -> str:
     """`seconds` as the largest whole unit that divides it evenly, days first — so the
-    resume window (D230, days) and
+    resume window (D224, days) and
     `pipeline/pricehistory.py:HISTORY_TTL_SECONDS` (minutes) each print in the unit a
     person actually reads them in, rather than one shared `// 60` that turns six days into
     a four-figure minute count nobody would recognize as "six days"."""

@@ -44,7 +44,7 @@ const IDLE_POLL_MS = 20000
  * fetch against this run's last export and refused a file that was smaller or had nothing to
  * compare against — which refused the very improvement it existed to allow, and left the
  * operator pressing past it to get on with the work. This branch answered the two refusals
- * up front with an `ACCEPT_ALWAYS` pair; D64's own amendment then took the guard out of the
+ * up front with an `ACCEPT_ALWAYS` pair; D65's own amendment then took the guard out of the
  * SERVER, so the two acknowledgement fields are gone from the wire and there is nothing left
  * to answer. A fetch produces a RECEIPT now, not a question — `previousLine` below is that
  * receipt's second line, and every remaining refusal is a sentence with nothing to press. */
@@ -136,7 +136,7 @@ function scopeWords(asked: ExportAsked): string {
 /** THE EXPORT BEFORE THIS ONE — the receipt's second line, and the whole of its reassurance:
  *  it says the figure above is a normal size for this run.
  *
- *  THE SHAPE IS `ExportFetched.previous` (D64, amended 2026-09-02): what the LAST JOIN used,
+ *  THE SHAPE IS `ExportFetched.previous` (D65, amended 2026-09-02): what the LAST JOIN used,
  *  per game this file answers for, and `{}` on a run's first fetch. It is INFORMATION AND
  *  NOTHING REFUSES ON IT — the delta guard that once turned this comparison into a refusal is
  *  retired, D65's positive scope check is the whole guard now, and this line exists so a
@@ -339,7 +339,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
   const [trouble, setTrouble] = useState<Trouble | null>(null)
 
   const [openStep, setOpenStep] = useState<Command | null>(null)
-  /* D165's repair, offered only where `detail.box_former` is true. Closed on every run
+  /* D145's repair, offered only where `detail.box_former` is true. Closed on every run
      switch, so it can never survive onto a healthy run under `openRun`'s own key. */
   const [rescueOpen, setRescueOpen] = useState(false)
 
@@ -604,7 +604,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
   /* Partitioned, never filtered: running first, then runs over the drawers the selection names,
      then the rest — and only when the selection names a drawer to group against. A selection
      over a STATE, a game or a sitting names none, which is the same ungrouped list an empty cart
-     already drew: there is no drawer to be other than, which is the fault D48 found in this
+     already drew: there is no drawer to be other than, which is the fault D180 found in this
      very block and fixed. */
   const inCart = new Set(drawers)
   const running: RunSummary[] = []
@@ -839,7 +839,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                   ) : null}
                 </span>
                 {/* D196: the run's own directory name is a repository path. The box label
-                    is the human title; where a run has none (a stranded run, D165), the
+                    is the human title; where a run has none (a stranded run, D145), the
                     title falls back to the raw id — the one case nothing better exists to
                     say — with the id still on the title attribute for a reader who needs
                     it. */}
@@ -848,7 +848,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 </h2>
               </div>
               <div className="runs-detail-side">
-                {/* D165's repair, offered ONLY where the store can no longer join this run —
+                {/* D145's repair, offered ONLY where the store can no longer join this run —
                     a drawer reused since (`detail.box_former`). It is a press, not a route
                     change (D118): the sheet opens over this same header. */}
                 {detail.box_former === true ? (

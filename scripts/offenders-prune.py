@@ -8,7 +8,7 @@
 THE TWO LISTS (D280): `scripts/typed-interpunct-allow.json`, which its `typed interpunct`
 row reads, and `scripts/markdown-spelling-allow.json`, which the `identifier spelling` row's
 markdown half reads (owner's ruling, test-audit plan, 2026-09-27). Two lists were cut.
-`scripts/ste-offenders.json` went 2026-09-27 (test-audit plan, D226/D229/D280 amended): the
+`scripts/ste-offenders.json` went 2026-09-27 (test-audit plan, D60/D280 amended): the
 write-time STE hook already lints new prose, so the `ste offenders` row was retired along
 with the list. `scripts/line-anchor-offenders.json` went 2026-09-28 (line-anchor lane): the
 last anchor was converted, so the one `line anchors` row now refuses every anchor and

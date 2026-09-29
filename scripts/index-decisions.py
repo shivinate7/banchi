@@ -19,7 +19,7 @@ THE HEADING IS THE SOURCE. An entry's id and title come from its own `## D<id> �
 line, never from the filename: a slug is lossy, truncated to 58 characters and sometimes
 disambiguated with a numeric suffix, and it is a convenience for a human running `ls`.
 
-the v1 bug table sat between D79 and D80 and still do. This file no longer emits that order
+the v1 bug table sat between two entries. This file no longer emits that order
 into CLAUDE.md either — `decision index`'s own row is retired, the check side alongside the
 write side, now that `make map ARGS=--decisions` renders the same list off the corpus (D60
 amended) — but the manifest half stays, because a rendered view still needs a manifest to

@@ -1,0 +1,13 @@
+## D93 — Copies are picked one press each
+
+**Which copies of an order line are taken is chosen off the copies panel, one press per copy, in any box.** The machine ranks and the person reaches. The resolver's picks stay the default, so the common case costs no press. `resolve_all` still allocates over the whole open set in one pass, so two orders cannot name one card.
+
+- **An identity is not a view.** A copy could not be aimed at, because `GET /search` sent no `capture_id`. `_copy_row` sends it now. A copy with a null id (a record written before ids were kept) says `no capture id` where its control would be, never a press the server would refuse. `SearchCopy` still refuses `confidence`, to stop a second inventory view growing inside a search.
+- **A full line refuses the take.** At `2 of 2`, every other row draws the count where its control would be, and dropping one makes room. A ring that drops the longest-standing take was declined: nothing may leave the take on a press aimed at something else. A swap is `Don't take` then `Take`, and the panel says so.
+- **One map keyed by stop.** A picker has one fact per stop, the copies taken. It reads with `??` and not `||`, so a stop the operator emptied stays empty ("none of these" can be said). The words follow the gesture: `taking` and `not taking`, `2 of 2 taken`.
+- **The walk follows a drop and not a take.** A take appends, so the walk stands still. Dropping the copy the walk stands on moves it to the next taken copy, in any box.
+- **Two shortfalls stay apart.** `short` is copies the resolver never found (the ledger's problem). `not taken` is copies it found that are not in the take (the shelf's). `Stop.available` counts aimable picks, `owed - take` is what is missing, and the part a pick could still answer is `not taken`. Derive them in that order, or a hand-taken free copy is counted against the gap it closed.
+- **A copy allocated to another stop is refused by the allocation and not by the drawer** (D7). A pooled copy (D24) is refused too, since it has no slot for the aim check.
+- **The choice is session state.** A reload falls back to the resolver's picks with nothing on screen saying so. A take is a statement about the next press, not a fact about the store. A line the resolver could not answer at all is not walkable, since `stopsOf` keeps it out of the queue. The `orderWalk.ts` and `OrderWalkBanner` this was built over were deleted (D97), and the rules stand for a rebuilt pick.
+
+Reopen for a second pair of hands (two people walking one wave each hold a take the other spent), a line the resolver answered short while a copy sat takeable, or a tap that costs a card.

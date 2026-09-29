@@ -1,11 +1,11 @@
 // Protects: The product history draws market prices and the owner's own sales as two different shapes, and leaves the deep link cleanly.
-// Governs: D62, D227, D278
+// Governs: D278, D227
 import { test, expect, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 
 import type { OrderRow, OrdersPayload, ProductHistoryPayload, SearchGroup, SearchResult } from '../src/types'
 
-/* `#/product` — THE PER-PRODUCT VIEW (D227, D62, `D278`). Off-nav, reached
+/* `#/product` — THE PER-PRODUCT VIEW (D227, D278). Off-nav, reached
  * by hash and `?sku=`, so `VIEW_ROUTE` below is the one thing a compiler cannot check for this
  * screen — the same reason `fulfillment.spec.ts` and `gallery.spec.ts` pin their own route
  * verbatim.

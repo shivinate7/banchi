@@ -16,7 +16,7 @@ and where it corrected this playbook.
 **Goal.** Stop every non-capture screen from paying `Inventory.to_payload()`'s full-store
 walk (78 ms today, 1,485 ms at 20x rows) on every load and after every write. Reopen the
 refusal at `server/capture_server.CaptureHandler`'s `do_GET` ("a per-box read would be a second renderer for
-one caller that does not exist yet" — the caller exists now, D53's own §5 argument) and give
+one caller that does not exist yet" — the caller exists now, D138's own §5 argument) and give
 `#/inventory` a real per-box data path. Remove `store/rows.Rows`'s `__len__` degrade so a scoped `where()`/
 `select()` never pays for an earlier full load. `GET /inventory` itself is **kept**, on the
 guard's allowlist, unused by any screen this item touches — it is not deleted and no PR in
@@ -804,7 +804,7 @@ two separate answers:
    `cards` — read `:236-260` to confirm exactly how `cards` feeds order resolution before
    changing this). The boxes involved are named by the server's own order resolution
    (`GET /orders`'s response already carries which boxes each candidate copy sits in, per
-   D66/`do_orders`'s existing shape — check `OrdersPayload`'s type for a `place`/`box` field
+   D69/`do_orders`'s existing shape — check `OrdersPayload`'s type for a `place`/`box` field
    on each resolved line). Fetch `getInventoryBox(box)` for the small, bounded set of boxes
    the CURRENT open orders actually name (dedup, one fetch per box), merge their `cards` maps
    client-side into the same shape `cards` holds today, and feed that into the existing
@@ -1371,7 +1371,7 @@ one. From the primary checkout (never a worktree — the real store lives there,
 
 ```bash
 # 1. Copy the real store aside (read-only; never point PKMNSCAN_HOME at the live one
-#    while measuring — that would race the owner's own capture server, D53).
+#    while measuring — that would race the owner's own capture server, D138).
 sqlite3 inventory/store.sqlite ".backup /tmp/store-scaling-measure/base.sqlite"
 
 # 2. Build the 20x copy the same way the plan's own measurement did — check

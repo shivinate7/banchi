@@ -37,7 +37,7 @@ _from_file: set = set()
 #
 # MEASURED ON THE OWNER'S OWN MACHINE, 2026-09-11. The capture server under the main checkout
 # carried `ANTHROPIC_API_KEY`, `TCGPLAYER_STORE_COOKIE` and `PKMNSCAN_LAN_NAME` in its initial
-# environment — all three lifted out of `.env` by D53's supervisor, which reads exactly one of
+# environment — all three lifted out of `.env` by D138's supervisor, which reads exactly one of
 # them. The sibling checkout, which has no `.env`, carried none of the three. So this was not a
 # hazard waiting to happen: it was the state of the process the owner was using.
 #
@@ -134,7 +134,7 @@ def get(name: str) -> str:
 def get_live(name: str) -> str:
     """Value for `name`, re-read from `.env` every time. For a secret that ROTATES.
 
-    `get` CANNOT SEE A REPLACED VALUE, AND THAT MADE A REFUSAL'S OWN REMEDY NOT WORK (D64).
+    `get` CANNOT SEE A REPLACED VALUE, AND THAT MADE A REFUSAL'S OWN REMEDY NOT WORK (D65).
     Two caches sit in the way and they fail differently, so both had to go:
 
       - `load` returns early once `_loaded` is set, so a value ADDED to `.env` while the
@@ -144,7 +144,7 @@ def get_live(name: str) -> str:
 
     `TCGPLAYER_STORE_COOKIE` is a session that EXPIRES: `server/tcg_export.py` refuses
     `tcg_session_expired` and tells the operator to sign in again and replace the value in
-    `.env` — and under D53's supervisor, which runs for days and does not watch `.env`, `get`
+    `.env` — and under D138's supervisor, which runs for days and does not watch `.env`, `get`
     would have handed back the dead cookie forever. A refusal whose printed remedy does not
     work is worse than one that says nothing.
 
@@ -154,7 +154,7 @@ def get_live(name: str) -> str:
     a new one into `.env`. Measured 2026-09-11, on the owner's: the key expired, they replaced
     it, and `./pkmnscan identify` and the `#/runs` press both kept failing with the dead one —
     `make down` / `make up` was the only thing that picked up the new key, which is the restart
-    discipline D53 exists to make unnecessary. `PKMNSCAN_IMAGE_MIRROR` keeps the judgement and
+    discipline D138 exists to make unnecessary. `PKMNSCAN_IMAGE_MIRROR` keeps the judgement and
     keeps `get`: a path to a disk is not a credential and does not expire.
 
     THE PRECEDENCE IS UNCHANGED, which is the whole reason `_from_file` exists. A real

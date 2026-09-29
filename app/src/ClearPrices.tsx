@@ -27,7 +27,7 @@
  * clearable SKUs and their ages in its envelope; everything here is set arithmetic over that
  * list. Deciding *which answers are clearable* in TypeScript would be `pipeline/corpus.py:
  * clearable` written a second time against the one file in this product that holds money —
- * D49 refused that across two languages and D103 found it happening across two Python modules.
+ * D86 refused that across two languages and D103 found it happening across two Python modules.
  */
 import { useEffect, useMemo, useState } from 'react'
 

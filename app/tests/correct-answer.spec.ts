@@ -1,5 +1,5 @@
 // Protects: The "this answer was wrong" listing-correction control is reachable on Inventory and sends the correction.
-// Governs: D46, D252
+// Governs: D77, D252
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
@@ -212,7 +212,7 @@ test('the listing-correction control is reachable on #/inventory for a card not 
 }) => {
   await open(page)
 
-  // D46's own search, reused rather than a second lookup — `GET /review/<box>/<index>/catalog`,
+  // D77's own search, reused rather than a second lookup — `GET /review/<box>/<index>/catalog`,
   // stubbed as it would answer for a card in no queue at all (card.run is irrelevant here: the
   // server re-reads its own export, and this test asserts the CLIENT reaches the route, not the
   // export logic T7 already covers).
@@ -256,7 +256,7 @@ test('the listing-correction control is reachable on #/inventory for a card not 
   await expect(wrongCard).toBeVisible()
   await wrongCard.click()
 
-  // Opening the panel fires the empty-query suggestion, D46's arriving-at-the-card case.
+  // Opening the panel fires the empty-query suggestion, D77's arriving-at-the-card case.
   await expect.poll(() => catalogQueries.length).toBeGreaterThan(0)
   await expect(page.getByText('Adaptatron')).toBeVisible()
 

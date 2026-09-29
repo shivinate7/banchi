@@ -71,7 +71,7 @@ test('the sentinel is on disk while the run is in flight', async () => {{
 """
 
 # THE PROBE IS THE SMALLEST FAILING SPEC THERE IS, AND THE LINE ARM BELOW IS WHAT CATCHES A
-# PLAYWRIGHT THAT COUNTS LINES WRONG (D129). @playwright/test 1.55.1 reported this test's
+# PLAYWRIGHT THAT COUNTS LINES WRONG. @playwright/test 1.55.1 reported this test's
 # `location` one line short under Node 23+ — `:2` for a declaration at 3, and the real suite's
 # `capture-claims.spec.ts` at 314 as line 279 — which sent a session reading the wrong test, on
 # a Mac whose Homebrew Node is 25. It is the ESM path — `app/package.json` is `type: module`,
@@ -201,7 +201,7 @@ def main() -> int:
                     "and its location, relative to app/, so the file is clickable",
                     str(one.get("location")),
                 )
-                # THE LINE TOO, NOT ONLY THE FILE (D129): the verdict's `location` is what a
+                # THE LINE TOO, NOT ONLY THE FILE: the verdict's `location` is what a
                 # session opens, and a wrong line is worse than none. The message names the
                 # one cause this repo has met, so a red here is read as that before anything
                 # else.
@@ -210,7 +210,7 @@ def main() -> int:
                     one.get("location") == f"tests/probe.spec.ts:{FAILING_LINE}",
                     f"and the line is the one the test is declared on ({FAILING_LINE})",
                     f"got {one.get('location')!r} under node {node}. @playwright/test below 1.58.0 reports "
-                    "`test.location` short under Node 23+ (D129); this repo pins 1.58.0 in app/package.json "
+                    "`test.location` short under Node 23+; this repo pins 1.58.0 in app/package.json "
                     "for exactly that. Check the installed version (`npm --prefix app ls @playwright/test`) "
                     "before suspecting the reporter.",
                 )

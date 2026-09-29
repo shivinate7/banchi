@@ -1836,7 +1836,7 @@ def follow_moved(
     hold, or `(None, None)` when `key` is not a moved tombstone at all. D262.
 
     ONE HOP AT A TIME, along each tombstone's own `moved_to`. NO OTHER SEARCH RUNS: the join
-    never looks in a box for any other reason (D165's protected outcome). At the end, the
+    never looks in a box for any other reason (D145's protected outcome). At the end, the
     card's name must be the name the first tombstone carries under its `moved:` prefix, and
     where the run recorded the photograph's digest, the digest must agree too. Either
     mismatch is a card the join refuses and names (`departed`), never a guess.
@@ -2003,7 +2003,7 @@ def paperwork_for(run: runs.Run) -> List[orders.PaperworkEntry]:
     is a question.
 
     A RUN WITH NO PRICING TABLE ANSWERS NOTHING, WITHOUT COMPLAINT. `pricing.json` is
-    written by `join` and by nothing else (D49), so a run that was identified and never
+    written by `join` and by nothing else (D86), so a run that was identified and never
     joined legitimately has none — and the resolver's card-first pass does not need it.
     """
     table = files.read_json(run.path(runs.PRICING))

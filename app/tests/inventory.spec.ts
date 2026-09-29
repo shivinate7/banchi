@@ -113,7 +113,7 @@ function card(input: {
   number?: string | null
   printedTotal?: string | null
   noDisplay?: boolean
-  /** D30's neighbours, as the server sends them. NULL IS THE DEFAULT AND IS A REAL WIRE STATE
+  /** D58's neighbours, as the server sends them. NULL IS THE DEFAULT AND IS A REAL WIRE STATE
    *  — an older server, or a record whose position will not read — which the app draws as no
    *  block at all, so a fixture that only ever passed null could never render one. That was
    *  every fixture in this file until 2026-08-30, which is how the ranked block's whole
@@ -2718,7 +2718,7 @@ test('moving the selection opens the section it lands in, so the mark is never h
   await expect(page.locator('.browse-row')).not.toHaveCount(0)
 })
 
-// ------------------------------------------------------- two depths on one row (D20, D30)
+// ------------------------------------------------------- two depths on one row (D20, D58)
 
 test('a copy row draws how far into the box AND how far into the section', async ({ page }) => {
   await open(page)
@@ -2816,7 +2816,7 @@ test('the card with no group gets both depths too', async ({ page }) => {
   await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Position 1 of 2')
   await expect(bar.locator('.position-bar-text-section')).toHaveCount(0)
 
-  /* AND ITS LABEL IS RANKED, WHICH IS THE HALF THIS CASE DID NOT LOOK AT (D71). This test reaches
+  /* AND ITS LABEL IS RANKED, WHICH IS THE HALF THIS CASE DID NOT LOOK AT (D41). This test reaches
    * the lone-copy branch and asserted only the two bars, so the label beside them went on being
    * the raw server string in the utility face — D41's treatment shipped to five sites and this
    * was not one of them. Nothing failed, because nothing here read it. */
@@ -2828,7 +2828,7 @@ test('the card with no group gets both depths too', async ({ page }) => {
 })
 
 test('a sold card with no group is ranked too, and its lens keeps the box but loses the mark', async ({ page }) => {
-  /* THE THIRD SCREEN THAT RENDERS "ONE COPY AND WHERE IT IS", AND THE ONE D68 MISSED (D71).
+  /* THE THIRD SCREEN THAT RENDERS "ONE COPY AND WHERE IT IS", AND THE ONE D68 MISSED (D41).
    * That entry deleted an empty track captioned `where this sits in the box is not known yet`
    * from the copies list, on the grounds that a bar cannot draw a card that is in no place and
    * that the walk has omitted it since D58 — two screens agreeing about one card. This panel is
@@ -2900,7 +2900,7 @@ test('a sold card with no group is ranked too, and its lens keeps the box but lo
      2026-09-25): the section's name and the departed state it used to say in words —
      `3 slots · this copy is not in one`, then `Rares · was card 4` — are both said once now,
      on the header above (`RowIdentity`'s own struck figure and `Was at ...` accessible name).
-     The old flex-shrink priority between this caption's head and tail (D194's own "the tail
+     The old flex-shrink priority between this caption's head and tail (D284's own "the tail
      may clip, never the head") has nothing left to protect: there is no caption left to clip. */
   await expect(lens.locator('.position-bar-text-section')).toHaveCount(0)
 })
@@ -2956,7 +2956,7 @@ test('a departed card draws no number, and the cards behind it count past it', a
    * a card that is in no place, so it is absent rather than drawn at zero. */
   await page.locator('.browse-row').nth(3).click()
 
-  /* THE TREATMENT APPLIES, AND THIS CASE USED TO FLOOR THE OPPOSITE (D71). It read the raw
+  /* THE TREATMENT APPLIES, AND THIS CASE USED TO FLOOR THE OPPOSITE (D41). It read the raw
    * string as text and asserted `.card-locations-identity` count ZERO — a floor on the component
    * REFUSING a departed label — and what that refusal actually drew was the pre-D41 plain
    * string: `Box 2 · departed` at 44px in the face the address is drawn in, wrapped onto two
@@ -4297,7 +4297,7 @@ test('the copies of a card cannot be positioned by the pipeline console', async 
   await expect(page.locator('.card-locations-rows')).toBeVisible()
 })
 
-/* D30's NEIGHBOURS, WHICH NOTHING IN THIS FILE HAD EVER RENDERED.
+/* D58's NEIGHBOURS, WHICH NOTHING IN THIS FILE HAD EVER RENDERED.
  *
  * Every fixture here passed `neighbors: null` — a real wire state that draws no block at all —
  * so the sentence, its vocabulary, its face and its two sites were unasserted from the day they
@@ -4340,8 +4340,8 @@ const NEIGHBORLY: Cards = {
     neighbors: { prev: null, next: { index: 4, slot: 3, name: 'Conscription' } },
   }),
   /* LOC-28'S ROW: two on-hand cards toward the back carry no name. The owner's ruling of
-     2026-09-24 (amending D116) makes them the neighbour, said as "2 unread cards", where D116
-     walked past them to Galio. `next` is a named card, in the same fixture, so a renderer that
+     makes them the neighbour, said as "2 unread cards" (D260), and never walks past them
+     to Galio. `next` is a named card, in the same fixture, so a renderer that
      drew every side as unread fails too. */
   '2/5': card({
     index: 5,
@@ -4931,7 +4931,7 @@ test('the header holds one worded primary and the filter bar one line, at 390 an
 test('the value sort ranks boxes by their own dollar total, high to low by default', async ({
   page,
 }) => {
-  /* The owner's ruling, 2026-09-24: the value list (D159, `#/pricing?band=`) becomes an
+  /* The owner's ruling, 2026-09-24: the value list (D277, `#/pricing?band=`) becomes an
    * Inventory sort through the shared `SortControl`, fetched lazily off the same aggregates
    * `ValueBands.tsx` reads — `GET /pipeline/value`'s per-box `total`, never re-derived here. */
   await page.route(/\/pipeline\/value\?/, async (route) => {
@@ -5341,10 +5341,9 @@ test('an unread neighbour is said in words, and counts as the neighbour (LOC-28)
     search: (query) => searchAnswer(query, NEIGHBORLY),
   })
 
-  /* THE OWNER'S RULING, 2026-09-24 (amending D116): an unread card is a neighbour. D116 walked
-     past it to the nearest named card and added "with 2 unidentified cards in between"; the
-     owner read that as a real card dropped from the sentence (UX-264). Now the side IS the
-     unread run, "2 unread cards", and never a bare figure (D116's own complaint).
+  /* AN UNREAD CARD IS A NEIGHBOUR (D260). The side IS the unread run, "2 unread cards", and
+     never a bare figure; walking past it to a named card reads as a card dropped from the
+     sentence.
 
      THE THIRD COPY IS THE SUBJECT and its two sides are the case: `prev` is two unread cards,
      `next` is a named card. A renderer that drew every side as unread fails on the second row,
@@ -5490,7 +5489,7 @@ test('the gap clause is gone from every site that drew it', async ({ page }) => 
      consolidated box" — and it is not: the server counts the terminal records between the
      section's bounds, so box 1 with two sold drew the clause on every card in it. Under D58 the
      box closes up, so `Card 19` is the nineteenth card a hand can count to and the clause's one
-     stated job in D30, saying why a hand-count came out short, is void.
+     stated job in D58, saying why a hand-count came out short, is void.
 
      ASSERTED OVER THE WHOLE DOCUMENT rather than on one node, because the string had three
      render sites and a fix that reached two of them is the one this case exists to catch. */
@@ -5927,7 +5926,7 @@ test("the box's census and its forecast are told apart, and the fill says which 
 test('a narrow copies column shortens the bar, never the position label', async ({ page }) => {
   await open(page)
 
-  /* THE TRADE THIS PROTECTS, AND IT IS THE ONE D40 REFUSED FIRST. In the three-column layout the
+  /* THE TRADE THIS PROTECTS, AND IT IS THE ONE D38 REFUSED FIRST. In the three-column layout the
      copies column gives this list ~586px, where the row was 144px: `8 + place 51 + gap 12 + bar
      65 + 8`. The obvious fix — lowering the 860px container threshold so the bar rejoins the row
      — does produce a 129px row, and it gets there by squeezing `.card-locations-place` to 231px,
@@ -6521,14 +6520,14 @@ test('two departed copies of one card draw two different rows', async ({ page })
   /* Marked, not worded (D259): the row's own state class finds them. */
   const gone = page.locator('.card-locations-row.is-gone')
   await expect(gone).toHaveCount(2)
-  /* RANKED, NOT PLAIN (D71), and the store key is the value of the thing that explains it. This
+  /* RANKED, NOT PLAIN (D41), and the store key is the value of the thing that explains it. This
      read `.position-storekey` — the orphan sub-line under a raw string — and the raw string was
      the pre-D41 rendering, drawn here at 28px as the loudest thing in a list whose live rows are
      ranked. The pair is still what separates the two records, which is all D68 asked for. */
   await expect(gone.nth(0).locator('.card-locations-identity')).toHaveText('ME01 commonsSection 1Card 4')
   await expect(gone.locator('.card-locations-identity-num')).toHaveText(['4', '5'])
 
-  /* AND EVERY ROW'S IDENTITY STARTS AT ONE X, live or departed (D71's own claim, re-derived for
+  /* AND EVERY ROW'S IDENTITY STARTS AT ONE X, live or departed (D41's own claim, re-derived for
      `RowIdentity`, the owner's Direction-B build, 2026-09-25). The reservation this used to name
      — `--pos-slot-key`, a padding sized to a `CARD` keyword no departed row draws — is retired
      with the slot column it belonged to (`CardLocations.css`'s own note where that block stood):

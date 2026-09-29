@@ -13,7 +13,7 @@ never deletes a row, so a SKU the sweep has ever visited keeps every bucket it w
 with, past the source's own 357-day slide. This module trusts that table completely once it
 has anything for a SKU — a live re-read of a SKU the archive already covers would spend a
 request restating what is already on disk, and worse, would silently widen this READ-ONLY
-view's job to "call a mirror on every page view," which is the rude pattern D62's own panel
+view's job to "call a mirror on every page view," which is the rude pattern D278's own panel
 was built once to avoid. Only a SKU the archive has zero rows for at all falls through to
 `pipeline/pricehistory.py:Market`, the same reader `server/pipeline_routes.py:_history_for_entry`
 already calls for `#/pricing`'s panel — one live read, cached the way that call already is,
@@ -21,7 +21,7 @@ never a sweep and never a write to the archive table.
 
 NEVER WRITES. Not to `price_history`, not to `price_history_sources`, not to the corpus. A
 live fallback read is answered straight to the caller and never folded back into the archive
-— `pkmnscan archive sweep` is the one press that does that, and it stays a press (D62's own
+— `pkmnscan archive sweep` is the one press that does that, and it stays a press (D278's own
 statement: this reader cannot fire on its own).
 
 THE SPREAD IS CARRIED PER BUCKET, NEVER COLLAPSED TO ONE NUMBER. Each archived bucket already

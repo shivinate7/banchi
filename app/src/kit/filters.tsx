@@ -333,7 +333,7 @@ export function SortHeader<K extends string>({
 }: {
   readonly sortKey: K
   readonly value: SortValue<K>
-  /** A sort press RE-SORTS AT ONCE (FLT-01, amending D209's freeze during a walk to the sort
+  /** A sort press RE-SORTS AT ONCE (FLT-01, amending D296's freeze during a walk to the sort
    *  toggle only — the freeze still stops a SALE from re-ranking the list, never a press the
    *  owner made on purpose). */
   readonly onChange: (next: SortValue<K>) => void

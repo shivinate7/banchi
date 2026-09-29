@@ -489,7 +489,7 @@ def case_do_search_finds_a_hyphenated_name() -> None:
 # step could never surface a mid-word fragment, and store-scaling item 8's own trade-off
 # said not to chase it. The owner reversed that trade-off ("Add mid-word search").
 # `_fts_substring_candidates` gets the candidate there now, measured first on a synthetic
-# 2,500-card store (`docs/decisions/D271-one-forgiving-search-matcher.md` carries the
+# 2,500-card store (`docs/decisions/D271-every-search-uses-one-matcher.md` carries the
 # numbers) — case 16 is asserted like every other row below. Kept as an empty dict, not
 # deleted, so a future row needing this same escape hatch has the shape ready.
 CASE_TABLE_INPUT_NEEDED: Dict[int, Tuple[str, str]] = {}

@@ -315,7 +315,7 @@ def run(args, say) -> int:
     # so a join still writes exactly one document; nothing between here and there touches it.
     #
     # `rule` AND `basis` ARE DELIBERATELY NOT TAKEN FROM IT HERE. They are `--rule`/`--basis`
-    # at join time and the corpus's at emit time, which is the seam D49 Part One draws — the
+    # at join time and the corpus's at emit time, which is the seam D86 Part One draws — the
     # manifest RECORDS what a join ran with — and moving them is a separate argument nobody
     # has made. The threshold is not a seed: there is no `--threshold`, and the stored figure
     # is the only one there is.
@@ -690,7 +690,7 @@ def run(args, say) -> int:
                 book.answers[sku] = corpus.Answer(value=None, channel="unknown", from_run=run_dir.name)
                 added.append(sku)
 
-        # `rule` AND `basis` ARE THE CORPUS'S AND ARE NOT REASSIGNED FROM THE RUN. D49 Part One,
+        # `rule` AND `basis` ARE THE CORPUS'S AND ARE NOT REASSIGNED FROM THE RUN. D86 Part One,
         # unchanged and pointed one level up: the manifest records what THIS join ran with and
         # `report.txt` prints it, and a record of what happened is not the answer to what should
         # happen. `--rule` seeds an EMPTY corpus and nothing else, because a document that cannot
@@ -719,7 +719,7 @@ def run(args, say) -> int:
     for warning in choice.warnings:
         say(f"                 note: {warning}")
 
-    # THE WATCH, AND THIS IS THE ONLY COMMAND THAT CAN FIRE IT (D49). A withhold can name a
+    # THE WATCH, AND THIS IS THE ONLY COMMAND THAT CAN FIRE IT (D86). A withhold can name a
     # market price the operator wants to be told about; `join` is free, re-runnable and
     # pointed at a REFRESHED export, so it is the only moment a price has moved and therefore
     # the only moment a watch has anything to say.
@@ -729,7 +729,7 @@ def run(args, say) -> int:
     for reason in choice.blocking(resolved.sub_threshold_skus):
         say(f"                 EMIT WILL REFUSE: {reason}")
 
-    # ---------------------------------------------------------------- pricing.json (D49)
+    # ---------------------------------------------------------------- pricing.json (D86)
     # WRITTEN AFTER THE CORPUS, so the rule it records is the one this join resolved
     # with and the one the screen will draw as the source of every suggestion. Written on
     # every join for the same reason the report is: it describes THIS join, and a stale copy

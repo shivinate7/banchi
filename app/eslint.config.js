@@ -292,7 +292,7 @@ export default tseslint.config(
      * was argued informally before it was a
      * decision — the remembered deviceId and the photo rotation, both of which that file
      * justifies at length beside the keys themselves. `deviceMemory.ts` holds the shell's own —
-     * the theme, the rail, D114's order status filter, D132's two inventory-walk habits, and
+     * the theme, the rail, D91's order status filter, D132's two inventory-walk habits, and
      * the capture screen's last setup (D142), every one of which came here
      * rather than to its call site precisely because this message asks for that. All of them are facts about the
      * machine this browser is running on: meaningless on the Fulfiller's laptop, actively wrong
