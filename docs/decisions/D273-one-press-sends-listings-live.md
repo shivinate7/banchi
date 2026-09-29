@@ -20,7 +20,7 @@ records the answers and the decisions they amend.
 
 ### The premise that no longer holds
 
-This entry (the push and the publish are two presses) says a single button "would spend that margin
+The two-press design (the push and the publish are two presses) says a single button "would spend that margin
 for one saved click". The margin is the gap between Import to Staged and Move to Live.
 
 The flow review counted the real cost of the hand path. From capture to live, the owner makes
@@ -36,11 +36,11 @@ Of 9 steps, 5 hold a real choice. The review also found three hazards in the cod
 
 The review recommended two presses. The owner chose one.
 
-### What this entry protected, and what protects it now
+### What the two-press design protected, and what protects it now
 
-This entry protects one outcome: a buyer never sees a price the owner did not mean to publish. The
+The two-press design protects one outcome: a buyer never sees a price the owner did not mean to publish. The
 Staged margin was that protection. For the listing file, the margin is gone, and the owner
-accepted that cost. These protections stay, and they are its own promises:
+accepted that cost. These protections stay, and they are the two-press design's own promises:
 
 - The move is scoped to one upload. `SCOPE_THIS_UPLOAD` is a constant, never a parameter.
 - The upload id comes off disk, never off the request.
@@ -67,7 +67,7 @@ already hold. A send that would double a quantity is refused or trimmed, and the
 what it trimmed. When the live check cannot run, because the owner is signed out or TCGplayer
 is slow, Send refuses. It says why and offers "Try again". It never sends blind.
 
-This amends the earlier form further: its two presses were one margin, and this read is another. It amends
+This amends the two-press design further: its two presses were one margin, and this read is another. It amends
 D87 (the reconcile is store-wide): the reconcile is no longer only a check after the fact. It
 is a gate in front of every send. The guard must go red on a double send before any listing
 file uses the transport.
@@ -207,7 +207,7 @@ The pricing lane follows, with the rest of the screen and the Live tab.
 ### The review rounds
 
 Rounds 2 to 6 of the adversarial review, each finding and its fix, are the entry
-`D273` (the send press's review record). Round 5 built the mixed send above.
+The send press's review record. Round 5 built the mixed send above.
 It also ordered two presses in one second by press time, and it folded the taken-back warning
 to one line on a phone. Round 6 limited the price rows to the prices the screen named.
 

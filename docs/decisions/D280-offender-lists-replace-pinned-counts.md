@@ -3,7 +3,7 @@
 **The rule.** On 2026-09-23 the owner retired D284's word ceiling, because he did not want to keep a "stagnant static pin". D284 carried out that ruling. On 2026-09-24 the owner extended the ruling to the two other pinned counts. This entry replaces both.
 
 - D218's typed-dot ratchet. `make docs-audit`'s `typed interpunct` row failed only when the COUNT of typed dots rose past a pinned number.
-- The per-file prose ratchet. `make docs-audit`'s `ste ratchet` row failed only when a file's error RATIO rose past its own pinned number. This entry amended D60, so the ratchet half of D60 goes too.
+- The per-file prose ratchet. `make docs-audit`'s `ste ratchet` row failed only when a file's error RATIO rose past its own pinned number. It amended D60, so the ratchet half of D60 goes too.
 
 This entry supersedes the ratchet parts of D218 and D60. Each of those entries carries a "Superseded" note that names what stays.
 
@@ -34,7 +34,7 @@ Typed-dot growth is counted PER FILE, by the string without its scope. A dot str
 
 ### A new file starts clean
 
-This entry accepted a new file at its own ratio. Its reason was cost: refusing the file forced a re-pin on every branch that added a document. There is no pin now, so that cost is gone.
+The ratchet accepted a new file at its own ratio. Its reason was cost: refusing the file forced a re-pin on every branch that added a document. There is no pin now, so that cost is gone.
 
 A new file is not in the list at the merge-base. So any entry for it is growth, and the row refuses it. For prose, the one exception is a sentence that left another file in the same branch. The author of a new document is writing it now, so the author can fix its prose at no extra cost. A new component with a typed dot has no exception. Dot growth is per file, so a dot fixed elsewhere excuses nothing in the new file. A file that git renamed is not new: its entries map back to the old path.
 
@@ -98,7 +98,7 @@ The rows read tracked files only. `markdown_files()` in `scripts/docs-audit.py` 
 
 ### The line-anchor pin becomes a list too
 
-The owner's ruling, later on 2026-09-24, was "convert both of the last pins". D245's `line anchor ratchet` row pinned a count of line anchors per file, in this entry's shape. It is now the `line anchor offenders` row, over an offender list (deleted 2026-09-28, when the last anchor was converted).
+The owner's ruling, later on 2026-09-24, was "convert both of the last pins". D245's `line anchor ratchet` row pinned a count of line anchors per file, in the ratchet's shape. It is now the `line anchor offenders` row, over an offender list (deleted 2026-09-28, when the last anchor was converted).
 
 - **An entry is the anchor as written**, `path:N` or `path:N-M`, once per occurrence. An edit elsewhere in the file, or a reflow, does not touch it.
 - **A claim moves nothing.** A decision entry's number is folded out of the document's own file key, as the prose list folds it. It is also folded out of an anchor's decision path, so both read `docs/decisions/*-<slug>.md`.

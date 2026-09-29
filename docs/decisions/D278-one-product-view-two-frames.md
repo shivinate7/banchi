@@ -13,11 +13,11 @@ capability is reachable from every screen that draws a product name. No route ch
 needed. D227's own argument for the address is kept: a pasteable link, a bookmark, an order
 line. The route stays, unchanged in what it answers.
 
-**What this entry protected, and what protects it now.** This entry drew the price-history panel beside the
+**What the earlier panel design protected, and what protects it now.** It drew the price-history panel beside the
 hold on `#/pricing`, not on `#/inventory`'s card panel. A read cost 1.3s, at a public mirror. A
 panel that fired on the pointer or the arrow keys would spend both, on every move. That
 premise moved for a swept SKU: `getProductHistory` reads the archive first (D219), and the
-read is local. What this entry still protects holds unchanged here: no request per arrow key, and a
+read is local. What that design still protects holds unchanged here: no request per arrow key, and a
 press or a hold rather than follow-focus. `ProductHistoryView` fetches once per `sku`. It
 fetches on mount, or on a printing switch, never on a hover or a keystroke.
 

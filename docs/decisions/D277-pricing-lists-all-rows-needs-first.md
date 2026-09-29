@@ -49,12 +49,12 @@ steps. The sheet opens with 92 words and a shell command (UX-017, UX-120).
 
 ### What each decision protected, and what protects it now
 
-- **This entry** protects one statement of where pricing stands. The slim bar is that statement, and
+- **The slim-bar design** protects one statement of where pricing stands. The slim bar is that statement, and
   the deck, the legend and the sentence go.
 - **D9** protects one figure for the cheap half, typed at display size, never a coupling to a
   moving floor. The figure stays the same input. It moves into the one "Change" sheet, beside
   the rule and a box's own cut-off. The line above the list says it in words.
-- **This entry** protects a list of cards by value, to pull for bulk sale. It becomes a sort on
+- **The value-list design** protects a list of cards by value, to pull for bulk sale. It becomes a sort on
   Inventory, where the cards are.
 - **D105** protects one place where prices are decided and sent. The Live tab keeps mark-downs
   on Pricing, with the same rows and the same Send.

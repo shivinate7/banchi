@@ -5,7 +5,7 @@ from a card's own stored fields. Those fields now follow the bound SKU, not the 
 card is bound. So the caller builds the name and number from `read_*` instead — the model's
 own evidence, never the catalog echo. The checks themselves are unchanged.
 
-**What this builds.** The four checks this entry named. Each is
+**What this builds.** The four checks the analysis named. Each is
 mechanizable from stored data, with no catalogue and no network. The owner took all four.
 `pipeline/identity_checks.py` holds the pure logic. `pkmnscan cards checks` is the one
 reachable place a human runs them, read-only, beside `cards name` and `cards audit`.
@@ -51,7 +51,7 @@ function still finds the minority.
 owner's store. It stays tight enough to still catch a single glued letter
 (`Shadbow`/`Shadow`). It stays loose enough to register a champion's short title beside its
 own full name (`Grandmaster at Arms`/`Jax, Grandmaster at Arms`). That second shape is the
-one this entry names as `Draven, Glorious Executioner`, "resolved
+one the analysis names as `Draven, Glorious Executioner`, "resolved
 fine."
 
 ### Measured against the owner's real store, read-only, 2026-09-20

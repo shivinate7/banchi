@@ -86,7 +86,7 @@ No route, no client function in `app/src/server.ts`, and no screen reaches eithe
 
 ### On this entry's own number
 
-Taken as this entry, free now that the number below it has merged; it was contested by two unmerged branches when this was written, which is the heading collision D16 records, in progress again. **The owner's rule, given when asked: always renumber YOUR OWN branch, never another's.** That is narrower than D16's renumber-by-position rule and does not conflict with it — D16 settles headings that have **already** landed, and this settles who yields **before** they do: the incoming branch, always. The alternative is each session moving whichever entry it finds easiest, which is how a cited id comes to point at a different entry.
+Taken as this number, free now that the number below it has merged; it was contested by two unmerged branches when this was written, which is the heading collision D16 records, in progress again. **The owner's rule, given when asked: always renumber YOUR OWN branch, never another's.** That is narrower than D16's renumber-by-position rule and does not conflict with it — D16 settles headings that have **already** landed, and this settles who yields **before** they do: the incoming branch, always. The alternative is each session moving whichever entry it finds easiest, which is how a cited id comes to point at a different entry.
 
 ---
 

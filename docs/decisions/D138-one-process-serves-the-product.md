@@ -66,7 +66,7 @@ manifest is already relative (D108) and needs no edit; the reinstall is one pres
   complaint, and it does not touch that.
 - **Keeping Vite's dev server inside the package, hidden.** Two processes behind one icon is
   the current shape with the lid on. It keeps Node as a run-time requirement and keeps every
-  failure mode this entry measured.
+  failure mode the restart memo measured.
 - **Dropping start-at-login.** Asked twice; "always just there" won over "one icon, quit when
   done" once the reboot case was named.
 
