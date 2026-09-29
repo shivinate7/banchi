@@ -21,8 +21,8 @@ own data, and the second half is measured as a defect that already happened:
     was added twice. That is the defect this module is shaped to make unreachable.
 
 SO NOTHING IS EVER DELETED AT TCGPLAYER TO LOWER A PRICE, and this module never proposes a
-quantity. `Total Quantity` is not a writable column — there is no CSV route to lowering a
-quantity even for a caller that wanted one — and every row every command here writes carries
+quantity. `Total Quantity` is not a writable column. A negative `Add to Quantity` does lower a live
+quantity (D100, as amended), but that is a separate owner decision this module never makes, and every row every command here writes carries
 `Add to Quantity` = 0. The rule is not "remember to write zero"; it is that the quantity is
 not a variable in this module at all.
 
