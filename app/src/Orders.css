@@ -918,7 +918,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-paste-dropped .bn-mono { font-size: var(--bn-fs-sm); }
 
 /* ---- the empty ledger ----------------------------------------------------------- */
-.orders-empty { max-width: 720px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; }
+.orders-empty { display: flex; flex-direction: column; }
 .orders-empty .bn-empty { padding-bottom: var(--bn-5); }
 .orders-empty .bn-rule { padding: 0 var(--bn-6); }
 .orders-empty .orders-paste { padding: var(--bn-5) var(--bn-6) var(--bn-6); }

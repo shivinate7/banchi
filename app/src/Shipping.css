@@ -20,8 +20,8 @@
 /* ---- before a file: the drop zone -------------------------------------------- */
 /* `margin: 0 auto` CENTRED this block under the page's own left-aligned heading (D197: one
    left edge for every screen, and only WIDTH may vary by route — review finding 9, "Shipping
-   has two left edges"). The width cap stays for readability; only the centring is deleted. */
-.shipping-empty { display: flex; flex-direction: column; gap: var(--bn-5); max-width: 880px; width: 100%; margin: 0; }
+   has two left edges"). Width fills the page frame; body copy keeps its own ch measure. */
+.shipping-empty { display: flex; flex-direction: column; gap: var(--bn-5); }
 .shipping-drop {
   position: relative;
   display: flex;

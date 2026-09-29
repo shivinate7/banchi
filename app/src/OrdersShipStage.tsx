@@ -368,7 +368,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
       <div className="shipping-stage">
         {/* Inside the centred column, not above it: the hero is the only content on this branch
             and a banner left-aligned beside it read as belonging to another screen. */}
-        <div className="shipping-empty">
+        <div className="shipping-empty bn-empty-frame">
           {notices}
           <label
             className={`shipping-drop${over ? ' shipping-drop-over' : ''}`}

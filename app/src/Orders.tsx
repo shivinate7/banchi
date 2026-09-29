@@ -3466,7 +3466,7 @@ function PullStage({
     return (
       <div className="orders-stage">
         {failure === null ? null : <Notice tone="danger" title={failure.message} />}
-        <div className="bn-panel orders-empty">
+        <div className="bn-panel orders-empty bn-empty-frame">
           <EmptyState
             icon="cart"
             title="No orders yet"

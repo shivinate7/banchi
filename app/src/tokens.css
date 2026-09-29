@@ -272,6 +272,8 @@
      to 330px on the owner's own rig; `app/tests/page-edge.spec.ts` asserts the anchor. */
   --bn-page-w: 1600px;
   --bn-page-w-rows: 1344px;
+  /* ONE CAP FOR AN EMPTY OR LONE STATE (D-empty-state-fills-the-frame): `.bn-empty-frame` in kit.css reads it. */
+  --bn-empty-w: 960px;
   /* ONE WIDTH AND ONE TOP GAP FOR EVERY PAGE BUILT ON `Page` (D272, amends D197).
      A page drawn by `Page` carries `data-bn-page` and ignores `--bn-page-max`: the width is
      `--bn-page-w` at every screen, fluid below it, and the title sits `--bn-page-top` below the

@@ -1645,7 +1645,7 @@ export function ReviewQueue() {
       )}
 
       {current === null && refusal !== null ? (
-        <div className="review-lone">
+        <div className="review-lone bn-empty-frame">
           <RefusalNotice refusal={refusal} onReload={reload} onDismiss={() => setRefusal(null)} disabled={disabled} />
         </div>
       ) : null}
@@ -1656,7 +1656,7 @@ export function ReviewQueue() {
         everyone.length === 0 ? (
           <Done tally={tally} startedAt={startedAt.current} receipts={receipts} onUndo={undo} disabled={disabled} onOpenRuns={() => openRuns(false)} />
         ) : (
-          <section className="review-lone bn-panel">
+          <section className="review-lone bn-panel bn-empty-frame">
             <EmptyState
               icon="filter"
               title="Nothing waiting for this reason"
@@ -1865,7 +1865,7 @@ function Done({
       </>
     )
   return (
-    <section className="review-done bn-panel">
+    <section className="review-done bn-panel bn-empty-frame">
       <EmptyState
         icon="check"
         className="review-done-empty"
