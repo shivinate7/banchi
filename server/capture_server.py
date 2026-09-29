@@ -296,11 +296,14 @@ import json
 import os
 import re
 import signal
+import selectors
+import traceback
 import socket
 import sqlite3
 import sys
 import unicodedata
 import concurrent.futures
+from queue import Empty, SimpleQueue
 import threading
 import time
 import uuid
@@ -16181,14 +16184,20 @@ class CaptureHandler(BaseHTTPRequestHandler):
         # LOAD-BEARING. `_inflight` is what `drain()` waits on, and a request queued for a slot
         # has not started and cannot finish — counting it would make the drain wait on work that
         # is not happening and then kill it, which is the failure this whole bound is about.
-        if not _slots.acquire(timeout=files.LOCK_TIMEOUT_SECONDS):
+        # THE LANE IS DECIDED BY THE PATH THE HANDLER PARSED, NEVER BY THE SORTER'S GUESS. The
+        # sorter (`CaptureServer._sort`) only picks which pool runs this; a photo it sent to the
+        # slot pool (a slow client) still takes the photo gate here, so the bound holds either way.
+        photo = self.command == "GET" and photo_lane_path(self.path)
+        gate = _photo_slots if photo else _slots
+        if not gate.acquire(timeout=files.LOCK_TIMEOUT_SECONDS):
             self._fail(
                 HTTPStatus.SERVICE_UNAVAILABLE,
-                "server_busy",
-                f"This server is answering {REQUEST_SLOTS} requests already and this one waited "
-                f"{files.LOCK_TIMEOUT_SECONDS:.0f}s for a turn. Nothing was read or written. "
-                f"Retry, and if it keeps happening something is driving it harder than a person "
-                f"can — see DEBT11.",
+                "photo_busy" if photo else "server_busy",
+                f"This server is answering {PHOTO_SLOTS if photo else REQUEST_SLOTS} "
+                f"{'photograph and app-file ' if photo else ''}requests already and this one "
+                f"waited {files.LOCK_TIMEOUT_SECONDS:.0f}s for a turn. Nothing was read or "
+                f"written. Retry, and if it keeps happening something is driving it harder than "
+                f"a person can — see DEBT11.",
             )
             return
         _inflight_enter()
@@ -16279,7 +16288,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
             )
         finally:
             _inflight_leave()
-            _slots.release()
+            gate.release()
 
     def do_OPTIONS(self) -> None:  # noqa: N802 — BaseHTTPRequestHandler's naming
         """The preflight. It answers 204 for any path, and now not for any origin.
@@ -17379,6 +17388,29 @@ _inflight = 0
 REQUEST_SLOTS = 4
 _slots = threading.BoundedSemaphore(REQUEST_SLOTS)
 
+# THE PHOTO LANE (owner's ruling, 2026-09-28, reopening DEBT11 for these GETs only). Photograph and
+# built-app GETs touch no store and no lock (`do_photo` is a lock-free WAL read), so they get a
+# bound of their own instead of queueing behind writers that hold a slot up to
+# `LOCK_TIMEOUT_SECONDS`. Its own pool, its own semaphore, its own refusal (`photo_busy`).
+# The value and the measurement are DEBT11's.
+PHOTO_SLOTS = 4
+_photo_slots = threading.BoundedSemaphore(PHOTO_SLOTS)
+PHOTO_LANE_PREFIXES = ("/photo/", "/assets/")
+# The longest prefix, as the bytes a request line starts with. The sorter compares these.
+_PHOTO_LANE_LINES = tuple(b"GET " + p.encode() for p in PHOTO_LANE_PREFIXES)
+# How long a silent connection waits for its first byte before it goes to the slot pool by default.
+SORT_SECONDS = 1.0
+
+
+def photo_lane_path(target: str) -> bool:
+    """One predicate for both sides: the sorter's peek and `_dispatch`'s gate."""
+    return target.startswith(PHOTO_LANE_PREFIXES)
+
+
+def photo_slots_in_use() -> int:
+    """For the harness, beside `slots_in_use`."""
+    return PHOTO_SLOTS - _photo_slots._value  # noqa: SLF001 — the counter has no public reader
+
 
 def slots_in_use() -> int:
     """For the harness: how many requests hold a slot right now. Never more than `REQUEST_SLOTS`."""
@@ -17467,13 +17499,136 @@ class CaptureServer(ThreadingHTTPServer):
     # edit from restoring keep-alive, and on that day the pool bounds threads and the semaphore is
     # the only thing still bounding execution. T7 asserts the invariant, not the transport.
     _pool: Optional[concurrent.futures.ThreadPoolExecutor] = None
+    _photo_pool: Optional[concurrent.futures.ThreadPoolExecutor] = None
+    _sorter: Optional[threading.Thread] = None
 
-    def process_request(self, request, client_address) -> None:
+    # ------------------------------------------------------------------ the sorter
+    #
+    # THE ACCEPT THREAD NEVER READS A CLIENT. It hands every connection to ONE sorter thread, which
+    # watches them all with `selectors` (no thread per connection, so DEBT11's thread bound holds),
+    # and when a connection has bytes it PEEKS them (`MSG_PEEK`, nothing consumed) and routes it to
+    # the photo pool or the slot pool. WORST CASE OF A SLOW OR SILENT CLIENT: one open file
+    # descriptor for `SORT_SECONDS` (1s), then it goes to the slot pool exactly as it did before
+    # this lane existed. It stalls nobody: not accept, not the sorter, not another connection. A
+    # client that drips the request line a byte at a time is routed on its first byte and, if that
+    # is not a photo prefix, lands in the slot pool, where `_dispatch` still gates by the parsed
+    # path — so a wrong guess costs a lane, never the bound.
+    def _start_pools(self) -> None:
+        # `is None` because a harness leg hands an instance a wider pool BEFORE the first request.
         if self._pool is None:
             self._pool = concurrent.futures.ThreadPoolExecutor(
                 max_workers=REQUEST_SLOTS, thread_name_prefix="capture"
             )
-        self._pool.submit(self._serve_one, request, client_address)
+        if self._photo_pool is None:
+            self._photo_pool = concurrent.futures.ThreadPoolExecutor(
+                max_workers=PHOTO_SLOTS, thread_name_prefix="photo"
+            )
+        self._arrivals: "SimpleQueue" = SimpleQueue()
+        self._wake_r, self._wake_w = socket.socketpair()
+        self._wake_r.setblocking(False)
+        self._sorting = True
+        self._sorter = threading.Thread(target=self._sort, name="sorter", daemon=True)
+        self._sorter.start()
+
+    # `_sorting` IS THE HEALTH FLAG. While true, connections go through the sorter. When the sorter
+    # cannot go on (its selector failed) it sets this false, hands everything it holds to the slot
+    # pool, and ends: `process_request` then routes straight to the slot pool, which is base
+    # behaviour. A sorter fault DEGRADES THE SERVER TO BASE. It never causes an outage.
+    _sorting = False
+
+    def process_request(self, request, client_address) -> None:
+        if self._sorter is None:
+            self._start_pools()
+        if not self._sorting:
+            self._route(request, client_address, b"")
+            return
+        self._arrivals.put((request, client_address))
+        if not self._sorting:  # the sorter ended between the check and the put
+            self._flush_arrivals()
+            return
+        with contextlib.suppress(OSError):  # a full wake buffer: the sorter is already due to wake
+            self._wake_w.send(b"x")
+
+    def _flush_arrivals(self) -> None:
+        while True:
+            try:
+                request, addr = self._arrivals.get_nowait()
+            except Empty:
+                return
+            self._route(request, addr, b"")
+
+    def _route(self, request, client_address, peeked: bytes) -> None:
+        """Pick a pool. Never raises: a connection that cannot be routed is closed, not lost."""
+        try:
+            pool = self._photo_pool if peeked.startswith(_PHOTO_LANE_LINES) else self._pool
+            pool.submit(self._serve_one, request, client_address)
+        except Exception:  # noqa: BLE001 — one bad connection must not end the sorter
+            traceback.print_exc()
+            try:
+                self._pool.submit(self._serve_one, request, client_address)
+            except Exception:  # noqa: BLE001 — pool shut down: close it
+                self.shutdown_request(request)
+
+    def _sort(self) -> None:
+        try:
+            self._sort_loop()
+        except Exception:  # noqa: BLE001 — the selector itself failed: degrade to base
+            traceback.print_exc()
+            sys.stderr.write("sorter failed: routing every connection to the slot pool\n")
+        finally:
+            self._sorting = False
+            self._flush_arrivals()
+
+    def _sort_loop(self) -> None:
+        sel = selectors.DefaultSelector()
+        sel.register(self._wake_r, selectors.EVENT_READ, None)
+        waiting: Dict[int, tuple] = {}  # fd -> (request, client_address, deadline)
+        try:
+            while True:
+                now = time.monotonic()
+                timeout = min((w[2] - now for w in waiting.values()), default=None)
+                events = sel.select(None if timeout is None else max(timeout, 0))
+                for key, _ in events:
+                    if key.data is None:
+                        try:
+                            if not self._wake_r.recv(4096):
+                                return  # `server_close` shut the write end
+                        except BlockingIOError:
+                            pass
+                        while True:
+                            try:
+                                request, addr = self._arrivals.get_nowait()
+                            except Empty:
+                                break
+                            try:
+                                fd = request.fileno()
+                                sel.register(request, selectors.EVENT_READ, fd)
+                                waiting[fd] = (request, addr, time.monotonic() + SORT_SECONDS)
+                            except Exception:  # noqa: BLE001 — this one connection, not the loop
+                                traceback.print_exc()
+                                self._route(request, addr, b"")
+                        continue
+                    request, addr, _ = waiting.pop(key.data)
+                    with contextlib.suppress(Exception):
+                        sel.unregister(request)
+                    try:
+                        peeked = request.recv(len(_PHOTO_LANE_LINES[-1]), socket.MSG_PEEK)
+                    except OSError:
+                        peeked = b""
+                    self._route(request, addr, peeked)
+                now = time.monotonic()
+                for fd in [f for f, w in waiting.items() if w[2] <= now]:
+                    request, addr, _ = waiting.pop(fd)
+                    with contextlib.suppress(Exception):
+                        sel.unregister(request)
+                    self._route(request, addr, b"")
+        finally:
+            for request, addr, _ in waiting.values():
+                self._route(request, addr, b"")
+            with contextlib.suppress(Exception):
+                sel.close()
+            with contextlib.suppress(Exception):
+                self._wake_r.close()
 
     def _serve_one(self, request, client_address) -> None:
         """`ThreadingMixIn.process_request_thread`'s body, run on a pooled worker instead."""
@@ -17486,8 +17641,10 @@ class CaptureServer(ThreadingHTTPServer):
 
     def server_close(self) -> None:
         super().server_close()
-        if self._pool is not None:
+        if self._sorter is not None:
+            self._wake_w.close()  # wakes the sorter, which sees EOF and ends
             self._pool.shutdown(wait=False)
+            self._photo_pool.shutdown(wait=False)
 
 
 class _DualStackCaptureServer(CaptureServer):

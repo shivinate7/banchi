@@ -36641,7 +36641,13 @@ def check_request_slots(checks: Checks) -> None:
         # READ WHILE THE LOAD IS ON, beside the other two. Taken after `gate.set()` the callers
         # have finished and the server's threads have gone with them, so the count is 0 whatever
         # the transport does — which is how the first draft of this passed with the pool deleted.
-        serving = [t for t in threading.enumerate() if t not in before and t.name != "t7-caller"]
+        # THE ONE SORTER THREAD is excluded by name: it is ONE sorter thread shared by ALL
+        # connections, a fixed cost of the photo lane and not a worker per connection. A filter on a name that MATCHES NOTHING is
+        # the vacuous shape this leg was rebuilt to avoid, so only this one name is dropped.
+        serving = [
+            t for t in threading.enumerate()
+            if t not in before and t.name not in ("t7-caller", "sorter")
+        ]
         gate.set()
         for caller in callers:
             caller.join(timeout=10)
@@ -36866,6 +36872,323 @@ def check_request_slots(checks: Checks) -> None:
         "and every slot is given back — a leak here would wedge the server after N requests, "
         "which is worse than the unbounded server it replaces",
     )
+
+
+def check_photo_lane(checks: Checks) -> None:
+    """The photo lane holds its own bound, apart from the slot pool (owner's ruling, 2026-09-28).
+
+    WHAT IT PROVES: with more photo callers than `PHOTO_SLOTS`, exactly `PHOTO_SLOTS` execute and
+    the rest are refused `photo_busy`; `GET /status` still answers while the lane is full; and the
+    slot pool's own count stays at zero. WHAT IT DOES NOT: that the lane fixes a real store's
+    latency. That is DEBT11's measurement.
+
+    THE PHOTO POOL IS WIDENED, as `check_request_slots` leg 2 widens the slot pool: the pool is a
+    confound, so the semaphore has to be the only thing left that can hold the bound. Occupancy is
+    counted by the route itself (a patched `do_photo`), never by `photo_slots_in_use()`, which is
+    the mechanism reporting on itself.
+
+    THREE MUTATIONS IT IS KEPT FOR. The photo gate removed (unbounded lane): peak equals every
+    caller, and no refusal is owed. Photos sent back through the slot gate: `slots_in_use()` reads
+    the bound and `/status` is refused. Photos sent back through the slot POOL by the sorter:
+    the same `/status` starvation. READ ON A CONDITION, NOT A CLOCK: every caller is inside or
+    answered before anything is read, as in leg 2.
+    """
+    import concurrent.futures
+    import http.client
+
+    asking = capture_server.PHOTO_SLOTS + 6
+    original = capture_server.do_photo
+    lock = threading.Lock()
+    state = {"depth": 0, "peak": 0, "outcomes": [], "closes": []}
+    gate = threading.Event()
+
+    def held_photo(*args, **kwargs):
+        with lock:
+            state["depth"] += 1
+            state["peak"] = max(state["peak"], state["depth"])
+        try:
+            gate.wait(timeout=5.0)
+            return original(*args, **kwargs)
+        finally:
+            with lock:
+                state["depth"] -= 1
+
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    port = httpd.server_address[1]
+    wide = concurrent.futures.ThreadPoolExecutor(max_workers=asking, thread_name_prefix="t7-wide")
+    httpd._photo_pool = wide  # noqa: SLF001 — the pool is the confound this leg removes
+    thread = _spawn_server(httpd)
+    capture_server.do_photo = held_photo
+    real_timeout = files.LOCK_TIMEOUT_SECONDS
+    files.LOCK_TIMEOUT_SECONDS = 0.3
+    checks.note("")
+    checks.note("PHOTO LANE — its own bound, and the slot pool untouched")
+    try:
+        callers = []
+        for _ in range(asking):
+
+            def one() -> None:
+                outcome, close, code = "error", None, None
+                try:
+                    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
+                    conn.request("GET", "/photo/1/1")
+                    response = conn.getresponse()
+                    raw = response.read()
+                    code = error_code(raw) if response.status == 503 else None
+                    outcome, close = int(response.status), response.getheader("Connection")
+                    conn.close()
+                except Exception:  # noqa: BLE001 — the outcome is the assertion
+                    pass
+                with lock:
+                    state["outcomes"].append((outcome, code))
+                    state["closes"].append(close)
+
+            caller = threading.Thread(target=one, daemon=True, name="t7-caller")
+            caller.start()
+            callers.append(caller)
+
+        # THE LANE IS FULL when `PHOTO_SLOTS` photos hold. `/status` is probed AT THAT MOMENT,
+        # while the holders are still holding: probed later, a build that sent photos through the
+        # slot pool would have drained its queue by then and answer `/status` at once.
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            with lock:
+                if state["depth"] >= capture_server.PHOTO_SLOTS:
+                    break
+            time.sleep(0.01)
+        slots_held = capture_server.slots_in_use()
+        started = time.monotonic()
+        status, _, _ = request(port, "GET", "/status")
+        status_wait = time.monotonic() - started
+        deadline = time.monotonic() + 20.0
+        while time.monotonic() < deadline:
+            with lock:
+                accounted = len(state["outcomes"]) + state["depth"]
+            if accounted >= asking:
+                break
+            time.sleep(0.01)
+        with lock:
+            peak, inside, answered = state["peak"], state["depth"], len(state["outcomes"])
+            refusals = [code for status, code in state["outcomes"] if status == 503]
+        gate.set()
+        for caller in callers:
+            caller.join(timeout=30)
+
+        checks.equal(
+            answered + inside,
+            asking,
+            f"every one of the {asking} photo callers is accounted for before anything is read "
+            f"({inside} inside, {answered} answered) — the guard on the readings below",
+        )
+        checks.ok(
+            peak <= capture_server.PHOTO_SLOTS,
+            f"no more than PHOTO_SLOTS ({capture_server.PHOTO_SLOTS}) photo requests execute at "
+            f"once, with {asking} asking and a pool that would admit all of them — peak {peak}, "
+            f"counted by the route itself",
+        )
+        checks.equal(
+            refusals,
+            ["photo_busy"] * (asking - capture_server.PHOTO_SLOTS),
+            f"and the {asking - capture_server.PHOTO_SLOTS} excess were refused `photo_busy` — "
+            f"the lane's own refusal, in `server_busy`'s shape, not `server_busy`",
+        )
+        checks.equal(
+            status,
+            int(HTTPStatus.OK),
+            "`GET /status` answers 200 while the photo lane is full — a photo flood does not "
+            "starve the app's other requests",
+        )
+        checks.ok(status_wait < 2.0, f"and it answered at once, not after a wait — {status_wait:.2f}s")
+        checks.equal(
+            slots_held,
+            0,
+            "and the slot pool's own count is untouched while the lane is full — photos hold no "
+            "slot, so a writer parked on the store lock cannot starve them and they cannot starve it",
+        )
+        checks.ok(
+            state["closes"] and all(c == "close" for c in state["closes"]),
+            "and every photo response, refusals included, sends `Connection: close`",
+        )
+    finally:
+        files.LOCK_TIMEOUT_SECONDS = real_timeout
+        capture_server.do_photo = original
+        gate.set()
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+        wide.shutdown(wait=False)
+
+    checks.equal(
+        capture_server.photo_slots_in_use(),
+        0,
+        "and every photo slot is given back",
+    )
+
+
+def check_photo_lane_threads_and_faults(checks: Checks) -> None:
+    """The photo pool bounds THREADS, and a sorter fault degrades the server to base.
+
+    LEG A: with more photo callers than `PHOTO_SLOTS`, the server holds no more than
+    `PHOTO_SLOTS` threads (the one sorter aside). Kept for a thread per photo connection, which
+    `check_photo_lane` cannot see because it widens the pool on purpose. READ ON A CONDITION: the
+    read waits until every caller is inside or answered, which a thread-per-connection build
+    reaches at once and the shipped pool never does, so the shipped read falls to a short deadline.
+
+    LEG B: a fault in the sorter must never become an outage. Once the selector's `select()`
+    raises, and once a route to the photo pool raises for one connection, `/status` and a photo
+    still answer afterwards. A sorter that dies on either leaves accept taking connections that
+    nothing serves.
+    """
+    import http.client
+
+    def get(port: int, path: str):
+        try:
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+            conn.request("GET", path)
+            response = conn.getresponse()
+            response.read()
+            conn.close()
+            return int(response.status)
+        except Exception:  # noqa: BLE001 — a hang or reset is the finding
+            return None
+
+    # ------------------------------------------------------------------ leg A: threads
+    checks.note("")
+    checks.note("PHOTO LANE — leg A: the photo pool bounds threads")
+    asking = capture_server.PHOTO_SLOTS + 6
+    original = capture_server.do_photo
+    lock = threading.Lock()
+    state = {"depth": 0, "answered": 0}
+    gate = threading.Event()
+
+    def held_photo(*args, **kwargs):
+        with lock:
+            state["depth"] += 1
+        try:
+            gate.wait(timeout=5.0)
+            return original(*args, **kwargs)
+        finally:
+            with lock:
+                state["depth"] -= 1
+
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    port = httpd.server_address[1]
+    thread = _spawn_server(httpd)
+    capture_server.do_photo = held_photo
+    real_timeout = files.LOCK_TIMEOUT_SECONDS
+    files.LOCK_TIMEOUT_SECONDS = 0.3
+    try:
+        before = set(threading.enumerate())
+
+        def one() -> None:
+            get(port, "/photo/1/1")
+            with lock:
+                state["answered"] += 1
+
+        callers = [threading.Thread(target=one, daemon=True, name="t7-caller") for _ in range(asking)]
+        for caller in callers:
+            caller.start()
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            with lock:
+                if state["depth"] >= capture_server.PHOTO_SLOTS:
+                    break
+            time.sleep(0.01)
+        # THE PEAK, sampled through the wait: a refused caller's thread ends the moment it is
+        # answered, so a single read at the end would miss it and pass a thread per connection.
+        peak_serving = 0
+        deadline = time.monotonic() + 1.5
+        while time.monotonic() < deadline:
+            peak_serving = max(peak_serving, len([
+                t for t in threading.enumerate()
+                if t not in before and t.name not in ("t7-caller", "sorter")
+            ]))
+            with lock:
+                if state["depth"] + state["answered"] >= asking:
+                    break
+            time.sleep(0.005)
+        serving = range(peak_serving)
+        gate.set()
+        for caller in callers:
+            caller.join(timeout=30)
+        checks.ok(
+            len(serving) <= capture_server.PHOTO_SLOTS,
+            f"the server holds no more than PHOTO_SLOTS ({capture_server.PHOTO_SLOTS}) threads "
+            f"for {asking} photo callers — {len(serving)}, where one per connection would be more",
+        )
+    finally:
+        files.LOCK_TIMEOUT_SECONDS = real_timeout
+        capture_server.do_photo = original
+        gate.set()
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+    # ------------------------------------------------------------------ leg B: sorter faults
+    checks.note("")
+    checks.note("PHOTO LANE — leg B: a sorter fault degrades to base, never to an outage")
+    import types
+
+    real_selectors = capture_server.selectors
+
+    class FaultySelector(real_selectors.DefaultSelector):
+        def select(self, timeout=None):
+            raise RuntimeError("t7: injected select() fault")
+
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    port = httpd.server_address[1]
+    thread = _spawn_server(httpd)
+    capture_server.selectors = types.SimpleNamespace(
+        DefaultSelector=FaultySelector, EVENT_READ=real_selectors.EVENT_READ
+    )
+    try:
+        with redirect_stderr(io.StringIO()):
+            status = [get(port, "/status") for _ in range(2)]
+            photo = get(port, "/photo/1/1")
+        checks.equal(status, [200, 200], "after `select()` raised, `/status` still answers")
+        checks.ok(photo in (200, 404), f"and a photo still gets an answer, not a hang — {photo}")
+    finally:
+        capture_server.selectors = real_selectors
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+    class OnceBrokenPool:
+        """A photo pool whose first submit raises, as a per-connection routing fault would."""
+
+        def __init__(self, real):
+            self.real, self.broken = real, True
+
+        def submit(self, *args, **kwargs):
+            if self.broken:
+                self.broken = False
+                raise RuntimeError("t7: injected per-connection fault")
+            return self.real.submit(*args, **kwargs)
+
+        def shutdown(self, *args, **kwargs):
+            return self.real.shutdown(*args, **kwargs)
+
+    import concurrent.futures
+
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    port = httpd.server_address[1]
+    httpd._photo_pool = OnceBrokenPool(  # noqa: SLF001 — the fault under test
+        concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="t7-photo")
+    )
+    thread = _spawn_server(httpd)
+    try:
+        with redirect_stderr(io.StringIO()):
+            first = get(port, "/photo/1/1")
+            later = [get(port, "/status"), get(port, "/photo/1/1")]
+        checks.ok(first in (200, 404), f"the connection whose routing raised is still answered — {first}")
+        checks.ok(
+            later[0] == 200 and later[1] in (200, 404),
+            f"and the sorter goes on: `/status` and a photo answer afterwards — {later}",
+        )
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
 
 
 def check_order_fetch_route(checks: Checks) -> None:
@@ -40220,6 +40543,8 @@ def run() -> Result:
     check_inventory_copies_route(checks)
     check_order_fetch_route(checks)
     check_request_slots(checks)
+    check_photo_lane(checks)
+    check_photo_lane_threads_and_faults(checks)
     check_connection_close(checks)
     check_crop_preview(checks)
     check_export_fetch(checks)
