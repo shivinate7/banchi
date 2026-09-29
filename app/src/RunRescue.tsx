@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { describeFailure, rescueRun, type Failure } from './server'
+import { describeFailure, rescueRun, type Failure, failureTone } from './server'
 import type { RescueResult } from './types'
 import { Button, Notice, Sheet, Stat } from './kit'
 import { boxTitle } from './kit/data'
@@ -126,7 +126,7 @@ export function RunRescue({
           )}
 
           {failure === null ? null : (
-            <Notice tone="danger" title="The rebind did not run, and nothing was written" code={failure.code}>
+            <Notice tone={failureTone(failure)} title="The rebind did not run, and nothing was written" code={failure.code}>
               {failure.message}
             </Notice>
           )}

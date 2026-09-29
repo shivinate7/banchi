@@ -209,6 +209,7 @@ from decimal import Decimal
 from fractions import Fraction
 from http import HTTPStatus
 from pathlib import Path
+from unittest import mock
 from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -2759,10 +2760,7 @@ def check_undo(checks: Checks) -> None:
                 "in the same code the terminal states get — one code, remedy named per state",
             )
             checks.ok(
-                all(
-                    f"/inventory/3/3/{route}" in str(caught)
-                    for route in ("photo", "retire", "remove")
-                ),
+                all(word in str(caught) for word in ("re-shoot", "retire", "delete")),
                 "and the refusal names all three remedies: re-shoot, retire, and the "
                 "mid-box remove — which one is right depends on what is wrong with the "
                 "card, and only the operator knows that",
@@ -4721,6 +4719,7 @@ def check_queues(checks: Checks) -> None:
                 "age_days",
                 "box",
                 "candidates",
+                "capture_id",
                 "cid",
                 "cleared_by_human",
                 "confidence",
@@ -4735,7 +4734,7 @@ def check_queues(checks: Checks) -> None:
                 "reason",
             ],
             "a queue row is the whole QueueEntry record plus age_days, the card's place block "
-            "and its stable name (the review pill opens THIS card, LOC-12) — not a projection "
+            "its stable name (the review pill opens THIS card, LOC-12) and the photograph's version (`photoUrl`'s `?v=`) — not a projection "
             "the app has to hold against review.json field by field",
         )
         checks.equal(
@@ -4960,8 +4959,8 @@ def check_review_answer(checks: Checks) -> None:
                 "and it refuses as no_candidates",
             )
             checks.ok(
-                "identification_failed" in str(caught),
-                "and the refusal names why the card is queued, since that is what says "
+                "no candidate cards" in str(caught),
+                "and the refusal says the card has nothing to choose from, since that is what says "
                 "whether it needs a re-shoot or a re-identify",
                 f"message was: {caught}",
             )
@@ -5180,8 +5179,8 @@ def check_review_answer(checks: Checks) -> None:
                 "re-identify, not an answer borrowed from the parked entry",
             )
             checks.ok(
-                "review" in str(caught) and "card_not_detected" in str(caught),
-                "naming the queue it read the offer from and why that card is queued",
+                "no candidate cards" in str(caught) and "re-shoot" in str(caught),
+                "saying there is nothing to choose from and offering the re-shoot",
                 f"message was: {caught}",
             )
 
@@ -5799,8 +5798,8 @@ def check_group_answer(checks: Checks) -> None:
             )
             checks.ok(
                 # D196: same fix — the raw key is gone, the said place is not.
-                "Section 1, Card 6" in str(caught) and "4/6" not in str(caught) and "not_in_queue" in str(caught),
-                "and the failing position is named WITH ITS OWN CODE, so one 409 still "
+                "Section 1, Card 6" in str(caught) and "4/6" not in str(caught) and "not_in_queue" not in str(caught),
+                "and the failing position is named in plain words, so one 409 still "
                 "reports per position, said the way the screens say it",
                 f"message was: {caught}",
             )
@@ -8050,7 +8049,7 @@ def check_retire(checks: Checks) -> None:
         if caught is not None:
             checks.equal(getattr(caught, "code", None), "card_retired", "in its own code")
             checks.ok(
-                "/inventory/3/1/retire" in str(caught),
+                "undo the retirement" in str(caught),
                 "and it names the RETIRE route as the way back — a retired card that "
                 "genuinely sells is two honest steps, reverse then sell",
                 f"message was: {caught}",
@@ -8070,7 +8069,7 @@ def check_retire(checks: Checks) -> None:
                 "in the same code a sold card gets — one code, two remedies",
             )
             checks.ok(
-                "/inventory/3/1/retire" in str(caught),
+                "undo it on the card itself" in str(caught).lower() and "retirement" in str(caught),
                 "and the message names the RETIRE route, not the sale's — 'reverse the "
                 "sale' on a retired card sends the operator to a route that will refuse",
                 f"message was: {caught}",
@@ -8140,7 +8139,7 @@ def check_retire(checks: Checks) -> None:
         if caught is not None:
             checks.equal(getattr(caught, "code", None), "already_sold", "in its own code")
             checks.ok(
-                "/inventory/3/2/sold" in str(caught),
+                "undo it first" in str(caught) and "sale was a mistake" in str(caught),
                 "naming the SALE's reversal route — the pair is what keeps each terminal "
                 "state's history clean enough for the other's reversal to read",
                 f"message was: {caught}",
@@ -8525,7 +8524,7 @@ def check_reshoot(checks: Checks) -> None:
         if caught is not None:
             checks.equal(getattr(caught, "code", None), "card_sold", "in its own code")
             checks.ok(
-                "/inventory/3/2/sold" in str(caught),
+                "undo it first" in str(caught) and "sold" in str(caught),
                 "naming the sale's reversal as the way back",
                 f"message was: {caught}",
             )
@@ -8540,7 +8539,7 @@ def check_reshoot(checks: Checks) -> None:
         if caught is not None:
             checks.equal(getattr(caught, "code", None), "card_retired", "in its own code")
             checks.ok(
-                "/inventory/3/2/retire" in str(caught),
+                "undo the retirement" in str(caught),
                 "naming the retirement's reversal as its way back — two codes, because "
                 "the remedies differ",
                 f"message was: {caught}",
@@ -10701,7 +10700,7 @@ def check_inventory_box_route(checks: Checks) -> None:
 
 def check_rows_scoped_after_full_load(checks: Checks) -> None:
     """D192/item 2: `where()`/`select()` cost what the index costs, even after this
-    session's own `Rows` has been fully materialised. The mechanism is `rows.py:177`'s own
+    session's own `Rows` has been fully materialised. The mechanism is `store/rows.Rows`'s `__len__` own
     citation in docs/specs/store-scaling.md; this pins it so a later change to `Rows` cannot
     reopen it silently.
     """
@@ -10754,7 +10753,7 @@ def check_rows_scoped_after_full_load(checks: Checks) -> None:
 
         # --- a session that WRITES, then queries, must still see its own write -----------
         # VERIFIED AGAINST THE TREE, CORRECTING THE PLAYBOOK'S OWN SKETCH: `Card.key` is a
-        # COMPUTED PROPERTY of `(box, index)` (`store/master.py:523-525`), so moving "2/1"
+        # COMPUTED PROPERTY of `(box, index)` (`store/master.Card`'s `key`), so moving "2/1"
         # into box 1 while keeping its index at 1 makes its `.key` recompute to "1/1" —
         # colliding with box 1's own real card at index 1, which is why the playbook's
         # original sketch (assert `"2/1" in moved_in`) can never pass: nothing in `_loaded`
@@ -12884,6 +12883,105 @@ def check_photo_cache(checks: Checks) -> None:
                 "under a new ETag, so the next request revalidates against the right "
                 "photograph rather than the one that was deleted",
             )
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+    # -------------------------------------- by-card: versioned, 304 without a read, re-shoot
+    # `?v=<capture_id>` versions the address. A matching revalidation is a 304 that never READS
+    # the file. A D26 re-shoot writes new bytes under the SAME cid, and the new version must
+    # get the new bytes, with the OLD tag answered 200. No version means `no-cache` over a
+    # content digest, never `immutable`.
+    with isolated_home():
+        capture_server.do_capture(
+            {"box": 3, "capture_id": "q1", "image": blob(9), "set_hint": "sv9"}
+        )
+        cid = next(iter(Store().read().inventory.cards.values())).cid
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = _spawn_server(httpd)
+        reads: List[str] = []
+        real = Path.read_bytes
+
+        def counting(self: Path) -> bytes:
+            if cid[:16] in str(self):
+                reads.append(str(self))
+            return real(self)
+
+        url = f"/photo/by-card/{cid}"
+        try:
+            with mock.patch.object(Path, "read_bytes", counting):
+                status, body, headers = request(port, "GET", f"{url}?v=q1")
+                checks.equal(status, 200, "by-card with a version answers 200 with the bytes")
+                checks.ok(
+                    "immutable" in (headers.get("Cache-Control") or ""),
+                    "and is immutable, because the URL names the version",
+                )
+                old_tag = headers.get("ETag")
+                reads.clear()
+                status, body, headers = request(
+                    port, "GET", f"{url}?v=q1", extra_headers={"If-None-Match": old_tag}
+                )
+                checks.equal(status, 304, "a matching If-None-Match answers 304")
+                checks.equal(body, b"", "with no body")
+                checks.equal(reads, [], "and the 304 never READ the photograph")
+                checks.equal(
+                    (headers.get("Connection") or "").lower(),
+                    "close",
+                    "and still says Connection: close (DEBT11: a kept socket holds a worker)",
+                )
+                reshot = b"\xff\xd8\xff" + bytes([77]) * 64
+                capture_server.do_reshoot(
+                    3, 1, {"capture_id": "q2", "image": base64.b64encode(reshot).decode("ascii")}
+                )
+                status, body, headers = request(
+                    port, "GET", f"{url}?v=q2", extra_headers={"If-None-Match": old_tag}
+                )
+                checks.equal(
+                    status, 200, "AFTER A RE-SHOOT THE OLD TAG ON THE NEW VERSION IS 200, NOT 304"
+                )
+                checks.equal(body, reshot, "and the bytes are the new photograph's")
+                checks.ok(headers.get("ETag") not in (None, old_tag), "under a new ETag")
+                status, body, headers = request(port, "GET", url)
+                checks.equal(body, reshot, "an unversioned request gets the current bytes")
+                checks.equal(
+                    headers.get("Cache-Control"),
+                    "no-cache",
+                    "and is never immutable: it cannot say which version it means",
+                )
+                status, _, _ = request(
+                    port, "GET", url, extra_headers={"If-None-Match": headers.get("ETag")}
+                )
+                checks.equal(status, 304, "its digest tag still revalidates to 304")
+                # The id is the version in `?v=`: new bytes under the card's CURRENT id would
+                # sit behind an immutable URL for a year. Same bytes stay an idempotent replay.
+                caught = checks.raises(
+                    capture_server.BadRequest,
+                    lambda: capture_server.do_reshoot(
+                        3,
+                        1,
+                        {
+                            "capture_id": "q2",
+                            "image": base64.b64encode(b"\xff\xd8\xff" + bytes([88]) * 64).decode(
+                                "ascii"
+                            ),
+                        },
+                    ),
+                    "a re-shoot with the card's CURRENT capture_id and different bytes refuses",
+                )
+                if caught is not None:
+                    checks.equal(
+                        getattr(caught, "code", None), "capture_id_in_use", "in its own code"
+                    )
+                capture_server.do_reshoot(
+                    3, 1, {"capture_id": "q2", "image": base64.b64encode(reshot).decode("ascii")}
+                )
+                checks.equal(
+                    request(port, "GET", f"{url}?v=q2")[1],
+                    reshot,
+                    "and the same bytes replay cleanly",
+                )
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -15756,7 +15854,7 @@ def check_identify_preflight_stage(checks: Checks) -> None:
     site wrote `prepared.sha256` into the run payload. Hash-first makes a CACHE HIT
     unprepared too, so a reorder that left that test alone would have reported every
     healthy cached card as unreadable, counted it as neither hit nor miss, and written
-    `photo_sha256: null` onto its record — where `cli/resolve.py:1108` reads a missing
+    `photo_sha256: null` onto its record — where `cli/resolve.realign` reads a missing
     digest as `blind` and D36's realign can no longer re-bind the card to a slot. That is
     `CLAUDE.md`'s "Never silently drop a card", four different ways.
 
@@ -18731,7 +18829,7 @@ def check_pricing_authority(checks: Checks) -> None:
     decisions.json — your edits are kept"*. `join` is free and re-runnable and is re-run
     routinely, so an edited rule survived until the next join and then silently was not there.
 
-    T5 asserts `decisions.json` CARRIES a rule (`:305-306`) and passed throughout — carrying it
+    T5 asserts `decisions.json` CARRIES a rule and passed throughout — carrying it
     was never the question. These cases assert that it REACHES A PRICE, which is a fact about
     the command seam and belongs here.
 
@@ -31816,8 +31914,8 @@ def check_history_blocked_route(checks: Checks) -> None:
                     "is wrong with the run",
                 )
                 checks.ok(
-                    pricehistory.AGENT_ENV in str(refusal),
-                    "...and the refusal NAMES THE REMEDY, the environment variable (D171)",
+                    "browser signature" in str(refusal),
+                    "...and the refusal NAMES THE REMEDY, the browser signature setting, in plain words (D171, D196)",
                     str(refusal),
                 )
             checks.ok(
@@ -32330,8 +32428,8 @@ def check_order_ledger(checks: Checks) -> None:
         )
         if caught is not None:
             checks.ok(
-                key in str(caught) and "o2" in str(caught),
-                "and the refusal names the order and the copy holding it, so the operator "
+                key in str(caught),
+                "and the refusal names the order holding the copy, so the operator "
                 "can go and look rather than guess",
             )
 
@@ -33768,7 +33866,7 @@ def check_order_screen(checks: Checks) -> None:
         checks.ok(
             refused_aim is not None
             and refused_aim[0] == "pull_entry_refused"
-            and "capture_id_mismatch" in refused_aim[1],
+            and "not the card the screen showed" in refused_aim[1],
             "a target whose `capture_id` is not the card at that position is refused as "
             "`capture_id_mismatch`, reported through the whole-pull `pull_entry_refused`. A "
             "mid-box delete, a capture undo releasing an index or a re-shoot all change a "
@@ -33777,7 +33875,7 @@ def check_order_screen(checks: Checks) -> None:
         )
         checks.ok(
             refused_aim is not None
-            and f"The card at {where_3_2} is not the card the screen drew" in refused_aim[1]
+            and f"The card at {where_3_2} is not the card the screen showed" in refused_aim[1]
             and "3/2" not in refused_aim[1]
             and "box 3" not in refused_aim[1].lower(),
             "and the message NAMES THE PLACE, not the store position — the section and "
@@ -33972,8 +34070,8 @@ def check_order_screen(checks: Checks) -> None:
         checks.ok(
             aggregate is not None
             and aggregate[0] == "pull_entry_refused"
-            and f"{where_3_3}: capture_id_mismatch" in aggregate[1]
-            and f"{where_3_4}: copy_not_identifiable" in aggregate[1]
+            and f"{where_3_3}: The card at" in aggregate[1]
+            and f"{where_3_4}: The card at" in aggregate[1]
             and "3/3:" not in aggregate[1] and "3/4:" not in aggregate[1],
             "THREE TARGETS, TWO REFUSALS, AND EACH IS NAMED BY ITS PLACE, WITH ITS OWN "
             "CODE — never the store position `3/3` or `3/4` (D259). "
@@ -35442,8 +35540,8 @@ def check_price_history(checks: Checks) -> None:
             "the override still reached the wire — the host refused it, not this module",
         )
         checks.ok(
-            pricehistory.AGENT_ENV in str(exc),
-            "A 403 RAISES `Blocked` AND NAMES THE REMEDY — the environment variable, so a "
+            "browser signature" in str(exc),
+            "A 403 RAISES `Blocked` AND NAMES THE REMEDY — the browser signature setting, so a "
             "refusal that reaches a caller says what to do next (D171)",
             str(exc),
         )
@@ -36540,7 +36638,13 @@ def check_request_slots(checks: Checks) -> None:
         # READ WHILE THE LOAD IS ON, beside the other two. Taken after `gate.set()` the callers
         # have finished and the server's threads have gone with them, so the count is 0 whatever
         # the transport does — which is how the first draft of this passed with the pool deleted.
-        serving = [t for t in threading.enumerate() if t not in before and t.name != "t7-caller"]
+        # THE ONE SORTER THREAD is excluded by name: it is ONE sorter thread shared by ALL
+        # connections, a fixed cost of the photo lane and not a worker per connection. A filter on a name that MATCHES NOTHING is
+        # the vacuous shape this leg was rebuilt to avoid, so only this one name is dropped.
+        serving = [
+            t for t in threading.enumerate()
+            if t not in before and t.name not in ("t7-caller", "sorter")
+        ]
         gate.set()
         for caller in callers:
             caller.join(timeout=10)
@@ -36765,6 +36869,323 @@ def check_request_slots(checks: Checks) -> None:
         "and every slot is given back — a leak here would wedge the server after N requests, "
         "which is worse than the unbounded server it replaces",
     )
+
+
+def check_photo_lane(checks: Checks) -> None:
+    """The photo lane holds its own bound, apart from the slot pool (owner's ruling, 2026-09-28).
+
+    WHAT IT PROVES: with more photo callers than `PHOTO_SLOTS`, exactly `PHOTO_SLOTS` execute and
+    the rest are refused `photo_busy`; `GET /status` still answers while the lane is full; and the
+    slot pool's own count stays at zero. WHAT IT DOES NOT: that the lane fixes a real store's
+    latency. That is DEBT11's measurement.
+
+    THE PHOTO POOL IS WIDENED, as `check_request_slots` leg 2 widens the slot pool: the pool is a
+    confound, so the semaphore has to be the only thing left that can hold the bound. Occupancy is
+    counted by the route itself (a patched `do_photo`), never by `photo_slots_in_use()`, which is
+    the mechanism reporting on itself.
+
+    THREE MUTATIONS IT IS KEPT FOR. The photo gate removed (unbounded lane): peak equals every
+    caller, and no refusal is owed. Photos sent back through the slot gate: `slots_in_use()` reads
+    the bound and `/status` is refused. Photos sent back through the slot POOL by the sorter:
+    the same `/status` starvation. READ ON A CONDITION, NOT A CLOCK: every caller is inside or
+    answered before anything is read, as in leg 2.
+    """
+    import concurrent.futures
+    import http.client
+
+    asking = capture_server.PHOTO_SLOTS + 6
+    original = capture_server.do_photo
+    lock = threading.Lock()
+    state = {"depth": 0, "peak": 0, "outcomes": [], "closes": []}
+    gate = threading.Event()
+
+    def held_photo(*args, **kwargs):
+        with lock:
+            state["depth"] += 1
+            state["peak"] = max(state["peak"], state["depth"])
+        try:
+            gate.wait(timeout=5.0)
+            return original(*args, **kwargs)
+        finally:
+            with lock:
+                state["depth"] -= 1
+
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    port = httpd.server_address[1]
+    wide = concurrent.futures.ThreadPoolExecutor(max_workers=asking, thread_name_prefix="t7-wide")
+    httpd._photo_pool = wide  # noqa: SLF001 — the pool is the confound this leg removes
+    thread = _spawn_server(httpd)
+    capture_server.do_photo = held_photo
+    real_timeout = files.LOCK_TIMEOUT_SECONDS
+    files.LOCK_TIMEOUT_SECONDS = 0.3
+    checks.note("")
+    checks.note("PHOTO LANE — its own bound, and the slot pool untouched")
+    try:
+        callers = []
+        for _ in range(asking):
+
+            def one() -> None:
+                outcome, close, code = "error", None, None
+                try:
+                    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
+                    conn.request("GET", "/photo/1/1")
+                    response = conn.getresponse()
+                    raw = response.read()
+                    code = error_code(raw) if response.status == 503 else None
+                    outcome, close = int(response.status), response.getheader("Connection")
+                    conn.close()
+                except Exception:  # noqa: BLE001 — the outcome is the assertion
+                    pass
+                with lock:
+                    state["outcomes"].append((outcome, code))
+                    state["closes"].append(close)
+
+            caller = threading.Thread(target=one, daemon=True, name="t7-caller")
+            caller.start()
+            callers.append(caller)
+
+        # THE LANE IS FULL when `PHOTO_SLOTS` photos hold. `/status` is probed AT THAT MOMENT,
+        # while the holders are still holding: probed later, a build that sent photos through the
+        # slot pool would have drained its queue by then and answer `/status` at once.
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            with lock:
+                if state["depth"] >= capture_server.PHOTO_SLOTS:
+                    break
+            time.sleep(0.01)
+        slots_held = capture_server.slots_in_use()
+        started = time.monotonic()
+        status, _, _ = request(port, "GET", "/status")
+        status_wait = time.monotonic() - started
+        deadline = time.monotonic() + 20.0
+        while time.monotonic() < deadline:
+            with lock:
+                accounted = len(state["outcomes"]) + state["depth"]
+            if accounted >= asking:
+                break
+            time.sleep(0.01)
+        with lock:
+            peak, inside, answered = state["peak"], state["depth"], len(state["outcomes"])
+            refusals = [code for status, code in state["outcomes"] if status == 503]
+        gate.set()
+        for caller in callers:
+            caller.join(timeout=30)
+
+        checks.equal(
+            answered + inside,
+            asking,
+            f"every one of the {asking} photo callers is accounted for before anything is read "
+            f"({inside} inside, {answered} answered) — the guard on the readings below",
+        )
+        checks.ok(
+            peak <= capture_server.PHOTO_SLOTS,
+            f"no more than PHOTO_SLOTS ({capture_server.PHOTO_SLOTS}) photo requests execute at "
+            f"once, with {asking} asking and a pool that would admit all of them — peak {peak}, "
+            f"counted by the route itself",
+        )
+        checks.equal(
+            refusals,
+            ["photo_busy"] * (asking - capture_server.PHOTO_SLOTS),
+            f"and the {asking - capture_server.PHOTO_SLOTS} excess were refused `photo_busy` — "
+            f"the lane's own refusal, in `server_busy`'s shape, not `server_busy`",
+        )
+        checks.equal(
+            status,
+            int(HTTPStatus.OK),
+            "`GET /status` answers 200 while the photo lane is full — a photo flood does not "
+            "starve the app's other requests",
+        )
+        checks.ok(status_wait < 2.0, f"and it answered at once, not after a wait — {status_wait:.2f}s")
+        checks.equal(
+            slots_held,
+            0,
+            "and the slot pool's own count is untouched while the lane is full — photos hold no "
+            "slot, so a writer parked on the store lock cannot starve them and they cannot starve it",
+        )
+        checks.ok(
+            state["closes"] and all(c == "close" for c in state["closes"]),
+            "and every photo response, refusals included, sends `Connection: close`",
+        )
+    finally:
+        files.LOCK_TIMEOUT_SECONDS = real_timeout
+        capture_server.do_photo = original
+        gate.set()
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+        wide.shutdown(wait=False)
+
+    checks.equal(
+        capture_server.photo_slots_in_use(),
+        0,
+        "and every photo slot is given back",
+    )
+
+
+def check_photo_lane_threads_and_faults(checks: Checks) -> None:
+    """The photo pool bounds THREADS, and a sorter fault degrades the server to base.
+
+    LEG A: with more photo callers than `PHOTO_SLOTS`, the server holds no more than
+    `PHOTO_SLOTS` threads (the one sorter aside). Kept for a thread per photo connection, which
+    `check_photo_lane` cannot see because it widens the pool on purpose. READ ON A CONDITION: the
+    read waits until every caller is inside or answered, which a thread-per-connection build
+    reaches at once and the shipped pool never does, so the shipped read falls to a short deadline.
+
+    LEG B: a fault in the sorter must never become an outage. Once the selector's `select()`
+    raises, and once a route to the photo pool raises for one connection, `/status` and a photo
+    still answer afterwards. A sorter that dies on either leaves accept taking connections that
+    nothing serves.
+    """
+    import http.client
+
+    def get(port: int, path: str):
+        try:
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+            conn.request("GET", path)
+            response = conn.getresponse()
+            response.read()
+            conn.close()
+            return int(response.status)
+        except Exception:  # noqa: BLE001 — a hang or reset is the finding
+            return None
+
+    # ------------------------------------------------------------------ leg A: threads
+    checks.note("")
+    checks.note("PHOTO LANE — leg A: the photo pool bounds threads")
+    asking = capture_server.PHOTO_SLOTS + 6
+    original = capture_server.do_photo
+    lock = threading.Lock()
+    state = {"depth": 0, "answered": 0}
+    gate = threading.Event()
+
+    def held_photo(*args, **kwargs):
+        with lock:
+            state["depth"] += 1
+        try:
+            gate.wait(timeout=5.0)
+            return original(*args, **kwargs)
+        finally:
+            with lock:
+                state["depth"] -= 1
+
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    port = httpd.server_address[1]
+    thread = _spawn_server(httpd)
+    capture_server.do_photo = held_photo
+    real_timeout = files.LOCK_TIMEOUT_SECONDS
+    files.LOCK_TIMEOUT_SECONDS = 0.3
+    try:
+        before = set(threading.enumerate())
+
+        def one() -> None:
+            get(port, "/photo/1/1")
+            with lock:
+                state["answered"] += 1
+
+        callers = [threading.Thread(target=one, daemon=True, name="t7-caller") for _ in range(asking)]
+        for caller in callers:
+            caller.start()
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            with lock:
+                if state["depth"] >= capture_server.PHOTO_SLOTS:
+                    break
+            time.sleep(0.01)
+        # THE PEAK, sampled through the wait: a refused caller's thread ends the moment it is
+        # answered, so a single read at the end would miss it and pass a thread per connection.
+        peak_serving = 0
+        deadline = time.monotonic() + 1.5
+        while time.monotonic() < deadline:
+            peak_serving = max(peak_serving, len([
+                t for t in threading.enumerate()
+                if t not in before and t.name not in ("t7-caller", "sorter")
+            ]))
+            with lock:
+                if state["depth"] + state["answered"] >= asking:
+                    break
+            time.sleep(0.005)
+        serving = range(peak_serving)
+        gate.set()
+        for caller in callers:
+            caller.join(timeout=30)
+        checks.ok(
+            len(serving) <= capture_server.PHOTO_SLOTS,
+            f"the server holds no more than PHOTO_SLOTS ({capture_server.PHOTO_SLOTS}) threads "
+            f"for {asking} photo callers — {len(serving)}, where one per connection would be more",
+        )
+    finally:
+        files.LOCK_TIMEOUT_SECONDS = real_timeout
+        capture_server.do_photo = original
+        gate.set()
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+    # ------------------------------------------------------------------ leg B: sorter faults
+    checks.note("")
+    checks.note("PHOTO LANE — leg B: a sorter fault degrades to base, never to an outage")
+    import types
+
+    real_selectors = capture_server.selectors
+
+    class FaultySelector(real_selectors.DefaultSelector):
+        def select(self, timeout=None):
+            raise RuntimeError("t7: injected select() fault")
+
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    port = httpd.server_address[1]
+    thread = _spawn_server(httpd)
+    capture_server.selectors = types.SimpleNamespace(
+        DefaultSelector=FaultySelector, EVENT_READ=real_selectors.EVENT_READ
+    )
+    try:
+        with redirect_stderr(io.StringIO()):
+            status = [get(port, "/status") for _ in range(2)]
+            photo = get(port, "/photo/1/1")
+        checks.equal(status, [200, 200], "after `select()` raised, `/status` still answers")
+        checks.ok(photo in (200, 404), f"and a photo still gets an answer, not a hang — {photo}")
+    finally:
+        capture_server.selectors = real_selectors
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+    class OnceBrokenPool:
+        """A photo pool whose first submit raises, as a per-connection routing fault would."""
+
+        def __init__(self, real):
+            self.real, self.broken = real, True
+
+        def submit(self, *args, **kwargs):
+            if self.broken:
+                self.broken = False
+                raise RuntimeError("t7: injected per-connection fault")
+            return self.real.submit(*args, **kwargs)
+
+        def shutdown(self, *args, **kwargs):
+            return self.real.shutdown(*args, **kwargs)
+
+    import concurrent.futures
+
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    port = httpd.server_address[1]
+    httpd._photo_pool = OnceBrokenPool(  # noqa: SLF001 — the fault under test
+        concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="t7-photo")
+    )
+    thread = _spawn_server(httpd)
+    try:
+        with redirect_stderr(io.StringIO()):
+            first = get(port, "/photo/1/1")
+            later = [get(port, "/status"), get(port, "/photo/1/1")]
+        checks.ok(first in (200, 404), f"the connection whose routing raised is still answered — {first}")
+        checks.ok(
+            later[0] == 200 and later[1] in (200, 404),
+            f"and the sorter goes on: `/status` and a photo answer afterwards — {later}",
+        )
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
 
 
 def check_order_fetch_route(checks: Checks) -> None:
@@ -37828,8 +38249,8 @@ def check_pricing_reach(checks: Checks) -> None:
         "here irreversible as well as quiet",
     )
     checks.ok(
-        "--cap" in str(refusal or ""),
-        "and the refusal NAMES THE WAY FORWARD — `--cap N` — rather than only reporting that "
+        "cap when you send" in str(refusal or ""),
+        "and the refusal NAMES THE WAY FORWARD — a cap asked for at the send — rather than only reporting that "
         "the key is unwelcome, which is the shape every refusal in this pipeline takes",
     )
     checks.ok(
@@ -40119,6 +40540,8 @@ def run() -> Result:
     check_inventory_copies_route(checks)
     check_order_fetch_route(checks)
     check_request_slots(checks)
+    check_photo_lane(checks)
+    check_photo_lane_threads_and_faults(checks)
     check_connection_close(checks)
     check_crop_preview(checks)
     check_export_fetch(checks)

@@ -1197,7 +1197,7 @@ function drops(page: Page) {
  * "there's currently no way to undo an image that's in the middle of the capturings without
  * losing all the subsequent capturings from that session." `removeCardInPlace` is D10 ruling
  * 1's OTHER route: it deletes one card anywhere in a box and slides every higher card down
- * one, and it already exists (`BoxBrowse.tsx:2418`). This is reach, not a build — a second
+ * one, and it already exists (`BoxBrowse.tsx`'s `CardOps`). This is reach, not a build — a second
  * control on each row, beside the one `undoBack` already owns. `U` and a whole-row click are
  * untouched by every case below.
  * ════════════════════════════════════════════════════════════════════════════════════════ */
@@ -1489,7 +1489,7 @@ const HALT_CODES: readonly { code: string; headline: string }[] = [
   { code: 'store_unavailable', headline: 'the store could not be reached' },
   { code: 'inventory_conflict', headline: 'the store disagreed with what this screen expected' },
   { code: 'game_invalid', headline: 'capturing as a game the server does not know' },
-  { code: 'game_unverified', headline: 'this game has no export to join against' },
+  { code: 'game_unverified', headline: 'this game has no export to check its cards against' },
   { code: 'rarity_claim_invalid', headline: 'the Rarity claim no longer matches this game' },
   { code: 'variant_invalid', headline: 'the Finish claim no longer matches this game' },
   { code: 'box_required', headline: 'no box reached the server' },
@@ -1498,7 +1498,7 @@ const HALT_CODES: readonly { code: string; headline: string }[] = [
   { code: 'image_invalid', headline: 'the photograph did not reach the server intact' },
   { code: 'image_too_large', headline: 'the photograph was too large to send' },
   { code: 'image_not_jpeg', headline: 'the camera sent a frame the server will not store' },
-  { code: 'server_error', headline: 'the server hit a bug' },
+  { code: 'server_error', headline: 'the server hit a problem' },
 ]
 
 /** Overrides `open()`'s own always-succeeds `/capture` stub with one refusal, carrying the

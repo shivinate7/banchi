@@ -2,7 +2,7 @@
 
 **Settled 2026-09-10, the owner deferring to the session's recommendation after two rounds of**
 **evidence.** A peer session reading `.serve/design-check.json` after a local red was sent to
-`capture-claims.spec.ts:279` for a test declared at line 314 — thirty-five lines into the
+`capture-claims.spec.ts` line 279 at `33126887` for a test declared at line 314 — thirty-five lines into the
 previous test — and the runner's own reporter had named 314 for the identical file. The verdict
 file carries that weight on purpose (`CLAUDE.md`'s `make design-check` paragraph), and it had
 just pointed a reader at the wrong code.

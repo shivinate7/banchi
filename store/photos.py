@@ -120,8 +120,7 @@ def path(cid: str, home: Optional[Path] = None) -> Path:
     """
     if not is_photo_cid(cid):
         raise UnnamedPhotograph(
-            f"{cid!r} names no photograph. `moved:` and `nophoto:` cids are records of a "
-            "card that has one somewhere else or none at all — ask `find` instead."
+            "This card has no photograph of its own. Cards that were moved or never photographed have none."
         )
     return root(home) / cid[:SHARD] / f"{cid}{PHOTO_SUFFIX}"
 

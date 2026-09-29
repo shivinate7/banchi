@@ -283,6 +283,8 @@ export type Failure = {
    *  server was not reached, it failed inside, or it was busy. `refusal` is a "no" that the
    *  same press will get again. Optional, so a failure a screen builds by hand still types. */
   kind?: 'refusal' | 'retry'
+  /** The HTTP status when a response arrived, so a tone can tell a server fault (>= 500) from a refusal. */
+  status?: number
   /** What the refusal carries beside its sentence, when it carries any (round 7). */
   data?: unknown
 }
@@ -290,9 +292,12 @@ export type Failure = {
 /** The codes a second press can clear: nothing answered, or the store was mid-write. */
 const RETRY_CODES: ReadonlySet<string> = new Set(['unreachable', 'bad_response', 'store_busy'])
 
+/** ONE RULE FOR "THE SERVER BROKE": a 5xx. `failureKind` and `failureTone` both read it. */
+const isServerFault = (status: number | undefined): boolean => status !== undefined && status >= 500
+
 function failureKind(code: string, status: number): 'refusal' | 'retry' {
   if (RETRY_CODES.has(code)) return 'retry'
-  if (status >= 500 || status === 429 || status === 423) return 'retry'
+  if (isServerFault(status) || status === 429 || status === 423) return 'retry'
   return 'refusal'
 }
 
@@ -324,14 +329,47 @@ function failureKind(code: string, status: number): 'refusal' | 'retry' {
  * "finish the job" by wiring this into it.
  */
 export function describeFailure(err: unknown): Failure {
-  if (err instanceof ServerError) return { code: err.code, message: err.message, kind: failureKind(err.code, err.status), data: err.data }
-  const detail = err instanceof Error ? err.message : String(err)
+  if (err instanceof ServerError) return { code: err.code, message: err.message, kind: failureKind(err.code, err.status), status: err.status, data: err.data }
+  console.error('The app failed before the server could answer.', err) // the detail belongs in the console, never on screen
   return {
     kind: 'refusal',
     code: 'client_bug',
     message:
-      `The app failed before the capture server could answer: ${detail}. That is a bug in ` +
-      'the app rather than a refusal — check the browser console.',
+      'The app hit a problem before it could ask the server. Reload the page, and if it repeats, restart the app on the Mac.',
+  }
+}
+
+/** Which colour a failure earns. Red is for a real fault: the server did not answer, answered
+ *  garbage, or broke inside. A refusal, a busy store or a guard is a "no" the person can act on,
+ *  so it is a warning and never danger red. */
+const FAULT_CODES: ReadonlySet<string> = new Set([
+  'unreachable',
+  'origin_blocked',
+  'no_server_address',
+  'bad_response',
+  'http_error',
+  'client_bug',
+  'server_error',
+  'store_unavailable',
+  // Named 500s a run start reports inside a 200, where no status reaches the screen.
+  'spawn_failed',
+  'pkmnscan_missing',
+])
+
+export function failureTone(failure: { readonly code?: string | null; readonly status?: number }): 'warn' | 'danger' {
+  if (isServerFault(failure.status)) return 'danger'
+  return failure.code !== undefined && failure.code !== null && FAULT_CODES.has(failure.code) ? 'danger' : 'warn'
+}
+
+/** A refusal toast for a caught failure: amber for a refusal, red for a real fault, by the same
+ *  `failureTone` a Notice uses. With `title` given it is the headline and the server's sentence is the body. */
+export function refusalToast(err: unknown, title?: string) {
+  const f = describeFailure(err)
+  return {
+    kind: 'refusal' as const,
+    tone: failureTone(f),
+    title: title ?? f.message,
+    ...(title === undefined ? {} : { body: f.message }),
   }
 }
 
@@ -359,8 +397,11 @@ export function describeFailure(err: unknown): Failure {
  * is FILED under the card's own name and `GET /photo/by-card/<cid>` serves it. The URL means
  * one thing forever — a mid-box delete does not change it, an undo does not change it, and two
  * cards cannot share it because `cards_cid` is UNIQUE — so a cache hit is always the right
- * bytes and the validator is a formality rather than the only defence. No caller has to know
- * which capture it is drawing, because the address says.
+ * bytes and the validator is a formality rather than the only defence. ONE CASE MOVES THE BYTES
+ * UNDER THE NAME: a D26 re-shoot writes a new photograph at the same cid. So every by-card URL
+ * carries `?v=<capture_id>`, the one field that moves with the bytes, and a by-card URL with no
+ * version is never built: it falls back to the slot, which revalidates. `photoUrl` is the only
+ * place a photo URL is built, and the only place that stamp is decided.
  *
  * THE SLOT ROUTE IS THE FALLBACK AND IT IS NOT DEPRECATION THEATRE. `runs/<n>/pricing.json`
  * holds 3,629 position records across 12 immutable files, 0 of which carry a cid, and
@@ -381,7 +422,16 @@ export function describeFailure(err: unknown): Failure {
  */
 const PHOTO_CID = /^[0-9a-f]{64}(?:-[1-9][0-9]*)?$/
 
-export function photoUrl(box: number, index: number, cid?: string | null): string {
+export type PhotoRef = { cid?: string | null; capture_id?: string | null }
+
+/* `ref` is any row that carries the card's name and its photograph's version: pass the row.
+ * `nonce` is a version newer than the row (a re-shoot's own response, a capture's revision). */
+export function photoUrl(
+  box: number,
+  index: number,
+  ref?: PhotoRef | null,
+  nonce?: string | null,
+): string {
   /* THE DEMO BUILD HAS NO PHOTO SERVICE, so the same address resolves to a bundled file.
    * `BASE_URL` rather than a leading slash: a static host serves the demo from a
    * subdirectory (`/banchi/` on GitHub Pages), and an absolute path would 404 on every
@@ -394,10 +444,13 @@ export function photoUrl(box: number, index: number, cid?: string | null): strin
    * 404 every photograph on the published page. Moving the demo onto the name is a
    * coordinated change to the seed and the recorded bundle, not a change to this line. */
   if (DEMO) return `${import.meta.env.BASE_URL}demo/photos/${box}/${index}.jpg`
-  if (cid !== undefined && cid !== null && PHOTO_CID.test(cid)) {
-    return `${base}/photo/by-card/${cid}`
+  const version = nonce ?? ref?.capture_id ?? null
+  const stamp = version === null ? '' : `?v=${encodeURIComponent(version)}`
+  const cid = ref?.cid
+  if (cid !== undefined && cid !== null && PHOTO_CID.test(cid) && version !== null) {
+    return `${base}/photo/by-card/${cid}${stamp}`
   }
-  return `${base}/photo/${box}/${index}`
+  return `${base}/photo/${box}/${index}${stamp}`
 }
 
 /**
@@ -670,13 +723,6 @@ async function serverAnswersReads(): Promise<boolean> {
   }
 }
 
-/* The address in the phone's address bar, which is the thing being refused and the thing the
- * operator has to recognise. Guarded for the non-browser callers `sameHostBase` already names
- * — `tsc`, the specs' module imports, an editor's type server — where there is no address bar
- * to quote. */
-const pageOrigin = (): string =>
-  typeof window !== 'undefined' && window.location ? window.location.origin : 'this page'
-
 async function request(path: string, init?: RequestInit): Promise<unknown> {
   /* THE ONE SEAM. Every client function in this module funnels through here, so this branch
    * is the whole of what makes a published demo possible — no screen, no hook and no kit
@@ -692,8 +738,8 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
   if (base === FALLBACK_BASE) {
     throw new ServerError(
       'no_server_address',
-      'This copy of the app was built without the address of its capture server, so it ' +
-        'will not guess one. Nothing was sent. Build it again with `make up`.',
+      'This copy of the app does not know where its server is, so it sent nothing. ' +
+        'Start the app again from the Mac.',
       0,
     )
   }
@@ -736,18 +782,15 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
       noteReachable(true)
       throw new ServerError(
         'origin_blocked',
-        `The capture server at ${base} is running, but it will not accept changes from ` +
-          `${pageOrigin()}. Nothing was saved. Restarting the server will not help — the ` +
-          'address this page was opened at has to be one it allows. On the Mac, set ' +
-          'PKMNSCAN_LAN_NAME in .env to this address\u2019s host name and start it again.',
+        'The server is running, but it will not accept changes from this address. Nothing was saved. ' +
+          'Open the app at the address the Mac shows.',
         0,
       )
     }
     noteReachable(false)
     throw new ServerError(
       'unreachable',
-      `No answer from the capture server at ${base}. It may not be running — ` +
-        'start it with `make server`, then try again.',
+      'The server did not answer. It may not be running, so start it on the Mac, then try again.',
       0,
     )
   }
@@ -761,8 +804,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
      * this is precisely the lost-response case the retry guard exists for. */
     throw new ServerError(
       'unreachable',
-      `The connection to the capture server dropped while reading its answer to ${path}. ` +
-        'Retry the request.',
+      'The connection dropped before the server finished answering. Try again.',
       response.status,
     )
   }
@@ -777,7 +819,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
      * rather than inventing an explanation for a response nobody in this repo wrote. */
     throw new ServerError(
       'http_error',
-      `${response.status} ${response.statusText} from ${url}.`,
+      'Something between this page and the server refused the request. Try again, and if it repeats, restart the app on the Mac.',
       response.status,
     )
   }
@@ -788,8 +830,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
      * empty object that a screen renders as blanks. */
     throw new ServerError(
       'bad_response',
-      `The capture server answered ${response.status} for ${path} with a body that is not ` +
-        'JSON. This is a bug — check the server log.',
+      'The server answered with something the app cannot read. Try again, and if it repeats, restart the app on the Mac.',
       response.status,
     )
   }
@@ -3263,7 +3304,7 @@ export async function getHoldingsValue(range: HoldingsRange = 'month'): Promise<
 
 /** One SKU's answer from `getSkuPhotos` — the first on-hand copy of that SKU that still
  *  carries a photograph, exactly `photoUrl`'s own `(box, index, cid)` triple. */
-export type SkuPhotoEntry = { box: number; index: number; cid: string | null }
+export type SkuPhotoEntry = { box: number; index: number; cid: string | null; capture_id?: string | null }
 
 /** `getSkuPhotos`'s own answer, two fields so the caller knows which kind of photo it has
  *  (F2, the owner: "why does the sales page not pull the icons like you're able to do on

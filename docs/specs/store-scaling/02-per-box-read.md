@@ -17,7 +17,7 @@ and where it corrected this playbook.
 walk (78 ms today, 1,485 ms at 20x rows) on every load and after every write. Reopen the
 refusal at `server/capture_server.CaptureHandler`'s `do_GET` ("a per-box read would be a second renderer for
 one caller that does not exist yet" — the caller exists now, D53's own §5 argument) and give
-`#/inventory` a real per-box data path. Remove `rows.py:177`'s degrade so a scoped `where()`/
+`#/inventory` a real per-box data path. Remove `store/rows.Rows`'s `__len__` degrade so a scoped `where()`/
 `select()` never pays for an earlier full load. `GET /inventory` itself is **kept**, on the
 guard's allowlist, unused by any screen this item touches — it is not deleted and no PR in
 this plan may delete it.
@@ -60,7 +60,7 @@ argument. The allowlist count is unchanged at 13 after this item.
 - **Item 4 (`_copies_out` as one pass)** touches `cli/resolve.py`, not this item's files. No
   overlap.
 - **Item 6 (`do_orders` per SKU)** is the REAL fix for `Orders.tsx`'s `indexStore` /
-  `rereadStore` (`Orders.tsx:1359-1373`). This item does the minimum removal described in
+  `rereadStore` (`app/src/Orders.tsx`'s `OrdersHub`). This item does the minimum removal described in
   §(c) below and explicitly leaves one sub-feature ("Walk the boxes") on the old call,
   named as item 6's to finish — see "Do not touch" and "Risks".
 - **This item touches, in this order:** `server/capture_server.py` (route table + one new
@@ -82,7 +82,7 @@ argument. The allowlist count is unchanged at 13 after this item.
   §4's allowlist. This file is that plan's item 2 written out.
 - `CLAUDE.md`, section "Hard rules" — especially "A rule that can be mechanically enforced
   must be mechanically enforced" (item 1's guard reads this item's own diff) and "Fix the
-  cause, never the symptom" (why `rows.py:177` gets a real fix and not a call-site patch).
+  cause, never the symptom" (why `store/rows.Rows`'s `__len__` gets a real fix and not a call-site patch).
 - `CLAUDE.md`, section "The front end" — the `#/inventory` screen's own paragraph, D181's
   freeze rule (`app/src/frozenRank.ts`), D132's rail ordering, D58's numbering. This item
   must not change what any of those rulings say the screen does — only where the data comes
@@ -270,10 +270,9 @@ not "does box N exist" — that second question is still `GET /boxes`'s alone.
 
 ### Step 4 — T7 proof the route is scoped, before touching any client code
 
-Add to `harness/tests/t7_store_and_seams.py`, near `check_box_routes_and_search` (`:7183`,
+Add to `harness/tests/t7_store_and_seams.py`, near `check_box_routes_and_search` (
 same file, same section — put the new function directly after it so the box-route tests stay
-together). Model: `check_store_of_record`'s `built <= 2` / `not complete` assertion at
-`:1084-1089`.
+together). Model: `check_store_of_record`'s `built <= 2` / `not complete` assertion in it.
 
 ```python
 def check_inventory_box_route(checks: Checks) -> None:
@@ -378,7 +377,7 @@ export async function getInventoryBox(box: number): Promise<Inventory> {
 }
 ```
 
-**No new type.** `Inventory` (types.ts:522-532) already declares `boxes?` and `listings?` as
+**No new type.** `Inventory` (types.ts) already declares `boxes?` and `listings?` as
 optional — this response simply omits `boxes` and narrows `listings`, both already legal
 shapes of the existing type. Do not add `InventoryBox` or similar; that would be the "second
 renderer" mistake the plan spent a paragraph refusing to repeat (§2's first bullet).
@@ -400,16 +399,16 @@ new `getInventoryBox(shelf)` call), and the search-driven cross-box behavior (D1
 that a search can jump the rail to a box you are not standing in) is re-derived from the
 search's OWN result (`results: SearchResult`, already held by this component via
 `useSearch()` at `:690`) instead of from `rows`. This works because `SearchCopy` already
-carries `place.box` and `place.section` (`types.ts:1204`, `1180-1220`) — everything the rail
+carries `place.box` and `place.section` (`app/src/types.ts`'s `Place`, `1180-1220`) — everything the rail
 ranking needs — without requiring the box's full card objects to be loaded.
 
 **Verified: the copies-list ("other boxes hold this card too") needs no change.** It is NOT
 sourced from `BoxBrowse`'s `rows` at all — `Inventory.tsx`'s `CopiesFor` component
-(`:628-650` area) runs its OWN `useSearch()` keyed on the selected card's SKU/name
-(`:651-676`) and hands the resulting `SearchGroup.copies` straight to `CardLocations`. That
+runs its OWN `useSearch()` keyed on the selected card's SKU/name
+and hands the resulting `SearchGroup.copies` straight to `CardLocations`. That
 call already goes through `/search`, a full-store server-side walk that item 8 (not this one)
 scopes. Nothing in this item touches `Inventory.tsx`'s `CopiesFor` — confirm this by reading
-`Inventory.tsx:628-770` before you start and again after you finish; if you find yourself
+`app/src/Inventory.tsx`'s `CopiesPanel` before you start and again after you finish; if you find yourself
 editing it to "fix" the copies list, stop, you have misread the dependency.
 
 **6a. Replace the full-store fetch effect.**
@@ -514,8 +513,8 @@ function copyDeparted(copy: SearchCopy): boolean {
 ```
 
 `isDeparted` is already imported from `./server` at `:17`. Add `copy.place.located` — check
-`SearchCopy.place: Place` (`types.ts:1377`) already carries `located?: boolean`
-(`types.ts:1196`), so this compiles against the existing type with no change to `types.ts`.
+`SearchCopy.place: Place` (`types.ts`) already carries `located?: boolean`
+(`app/src/types.ts`'s `Place`), so this compiles against the existing type with no change to `types.ts`.
 
 Now change three computations to read `results` (the search hook's own state, already at
 `:690`, unchanged) instead of `inQuery`/`rows`:
@@ -635,12 +634,12 @@ of being filtered client-side from a store-wide array. Do not touch `inQuery` (`
 `onShelf` (`:771-774`), `visible` (`:793-801`) or `sections` (`:803`).
 
 **6d. Reload triggers.** Every place that calls `setReloads((n) => n + 1)` inside
-`BoxBrowse.tsx` (the reshoot success handler at `:842`, the remove-in-place handler around
-`:2242` which is followed by its own `setReloads`, and the manual "Reload" button at `:1732`)
+`BoxBrowse.tsx` (the reshoot success handler, the remove-in-place handler
+which is followed by its own `setReloads`, and the manual "Reload" button)
 needs no change: they bump the SAME `reloads` counter, and the fetch effect (6a) now reads
 `getInventoryBox(shelf)` keyed on `[shelf, reloads, reloadToken, onListings]` — bumping
 `reloads` re-fetches the CURRENT box, which is exactly "the `reloads` counter … becomes
-box-scoped" from the plan text. No edits needed at `:842`, `:1732`, or the remove-in-place
+box-scoped" from the plan text. No edits needed at the manual "Reload" button or the remove-in-place
 call site beyond what 6a already changed in the effect itself.
 
 **6e. `getBoxes()` effect (`:890-912`) is unchanged.** It already reads `GET /boxes`, which
@@ -649,12 +648,12 @@ touch it.
 
 ### Step 7 — `Inventory.tsx`: nothing to change, verify only
 
-`Inventory.tsx`'s `doSell` (`markSold` at `:370`, `setReloads` at `:386`) and `doRetire`
-(`retireCard` inside, `setReloads` at `:442`) both already end by bumping THIS file's own
-`reloads` counter (`:243`), which flows down as `<BoxBrowse reloadToken={reloads}>` at
-`:563` and `:587`. `BoxBrowse`'s fetch effect (6a) already lists `reloadToken` in its
+`Inventory.tsx`'s `doSell` (`markSold`, `setReloads`) and `doRetire`
+(`retireCard` inside, `setReloads`) both already end by bumping THIS file's own
+`reloads` counter, which flows down as `<BoxBrowse reloadToken={reloads}>` at
+its two call sites. `BoxBrowse`'s fetch effect (6a) already lists `reloadToken` in its
 dependency array, so a sale or a retirement already re-triggers `getInventoryBox(shelf)` with
-no change needed in `Inventory.tsx`. Read `:340-475` once after finishing step 6 and confirm
+no change needed in `Inventory.tsx`. Read `doSell`/`doRetire` once after finishing step 6 and confirm
 no call in this file still imports or calls `getInventory` — it should not, since `Inventory.tsx`
 never called it directly (only `BoxBrowse.tsx` did); this is a verification step, not an
 edit.
@@ -664,12 +663,11 @@ same way — same verification, no edit expected.
 
 ### Step 8 — `BoxOps.tsx`: the move, and why it needs no special case
 
-`BoxOps.tsx:446-459`'s `doMove` calls `moveCards(record.box, ..., toBox)` — `record.box` is
+`BoxOps.tsx`'s `doMove` calls `moveCards(record.box, ..., toBox)` — `record.box` is
 the box currently open in the "Manage box" sheet, i.e. the CURRENT shelf. Its `write()`
 wrapper (find the `write` helper passed into `BoxOps`'s props — it is the same one every
-other `BoxOps` mutation uses, e.g. `applyClaims` at `:434-442`, `saveSectionNames` at
-`:479-481`) calls `onChanged` on success, which every caller wires to
-`setReloads((n) => n + 1)` on `BoxBrowse` (confirmed at `:1871` and `:2008`). After step 6,
+other `BoxOps` mutation uses, e.g. `applyClaims`, `saveSectionNames`) calls `onChanged` on success, which every caller wires to
+`setReloads((n) => n + 1)` on `BoxBrowse` (confirmed at both call sites). After step 6,
 that reload re-fetches `getInventoryBox(shelf)` — i.e., the SOURCE box, which is exactly the
 box whose card count just changed. The DESTINATION box (`toBox`) is not re-fetched, and does
 not need to be: `BoxBrowse` never holds more than one box's `rows` at a time (6a deliberately
@@ -685,7 +683,7 @@ needs to not ask for a `toBox` refetch that would in fact be dead code.
 
 Each screen's ONLY use of `getInventory()` / its fields, and its replacement:
 
-**`Home.tsx:405`** —
+**`Home.tsx`** —
 
 ```tsx
   const shelf = useLoad<Record<string, InventoryCard>>(async () => (await getInventory()).cards)
@@ -704,8 +702,8 @@ route**, per the task's own third option.
 `captured_at` is already an indexed column (`store/master.Inventory`'s `CARDS`
 `column_names` includes it; `store/db.TABLES` confirms it in the SQLite schema). Add:
 
-- `store/rows.py`: extend the `Source` contract (documented at the top of the file,
-  `:36-49`) with one more method, and implement it only where a table is actually queried
+- `store/rows.py`: extend the `Source` contract (documented at the top of the file)
+  with one more method, and implement it only where a table is actually queried
   this way (cards):
 
   ```python
@@ -751,7 +749,7 @@ route**, per the task's own third option.
 
 - `server/capture_server.py`: a small new route, `GET /inventory/recent?limit=N`, dispatched
   from `do_GET`'s `run()` beside the other query-string routes (model: `/search`'s
-  `parse_qs` handling at `:10657-10662`). Handler:
+  `parse_qs` handling). Handler:
 
   ```python
   def do_inventory_recent(limit: int) -> dict:
@@ -790,16 +788,16 @@ route**, per the task's own third option.
 
 - `app/src/server.ts`: `getRecentCards(limit: number): Promise<RecentCards>` beside
   `getInventory`, same `request()` pattern.
-- `Home.tsx:405`: replace the `shelf`/`fromCards`/`deckFromCards` machinery with a load of
+- `Home.tsx`: replace the `shelf`/`fromCards`/`deckFromCards` machinery with a load of
   `getRecentCards(DECK_DEPTH)` and a small mapper that produces the same `DeckCard[]` shape
   `deckFromCards` produced (`{key, box, index, photo: photoUrl(box, index, cid), card:
   null}` — note `card: null` here is fine; check every reader of `DeckCard.card` in
   `Home.tsx` to see whether it only reads `box`/`index`/`photo`/`key`, which is likely since
-  the "front card" is used for `useCardCrop({box, index})` at `:419`, not for name/state
+  the "front card" is used for `useCardCrop({box, index})`, not for name/state
   display beside it — if a reader DOES need `card.name`, carry `name` through `DeckCard` as
   an added optional field rather than fetching a second, full `InventoryCard`).
 
-**`Fulfillment.tsx:451`** — two separate uses of the same `getInventory()` call, and they get
+**`Fulfillment.tsx`** — two separate uses of the same `getInventory()` call, and they get
 two separate answers:
 
 1. **Order resolution** (`waiting`/`walk`, built from `orders` which itself resolves against
@@ -831,7 +829,7 @@ two separate answers:
    it doesn't yet, and inventing one under time pressure would be the "band-aid presented as
    the solution" the same rule forbids).
 
-**`Orders.tsx:1361`** — `rereadStore`'s `indexStore(inventory)` (`:623-639`) builds a
+**`app/src/Orders.tsx`'s `OrdersHub`** — `rereadStore`'s `indexStore(inventory)` builds a
 `sku -> PickRow[]` map over every on-hand card in the store, for the "Walk the boxes"
 cross-order feature (D97). Same shape of problem as Fulfillment's browse view, and the same
 answer: item 6 (`do_orders` per SKU) is the real fix, described in the plan as building
@@ -877,11 +875,11 @@ Python scan — exactly the mechanism the plan names, and exactly what item 2's 
 rule out, not just the route's happy path.
 
 **What `_complete` currently gates (`store/rows.py`, read end to end before editing).**
-`__iter__` (`:173-175`) and `to_dict()` (`:289-292`) call `_load_all()` (`:185-205`), which
+`__iter__` and `to_dict()` call `_load_all()`, which
 sets `self._complete = True` after copying every source row into `self._loaded`. `MutableMapping`
 derives `.values()`/`.items()`/`.keys()` from `__iter__` + `__getitem__`, so `to_payload()`'s
 `self.cards.items()` (`store/master.Inventory`) is what flips `_complete` for `do_inventory`'s
-own session. `__len__` (`:177-181`) branches on `_complete` too, but only to pick between
+own session. `__len__` branches on `_complete` too, but only to pick between
 `len(self._loaded)` and `source.count() - deleted + fresh` — both are O(1)-ish (no row
 filtering), so **`__len__` needs no change** and is not part of this fix; note this in the PR
 so a reviewer does not go looking for a change that should not exist.
@@ -912,7 +910,7 @@ already there. The bug is the line AFTER that gate, in both methods: the final f
 Once `_load_all()` has run, `self._loaded` holds every row in the table — 50,000 of them at
 the size this plan is written for — so this loop costs O(table size) on every subsequent
 scoped call, in Python, with none of the benefit `cards_box` or `cards_sku`'s SQLite index
-gives. This is `rows.py:177`'s degrade, exactly as the plan names it, and it is NOT fixed by
+gives. This is `store/rows.Rows`'s `__len__` degrade, exactly as the plan names it, and it is NOT fixed by
 touching the `if not self._complete:` gate above it — that gate only controls whether the
 SOURCE is re-asked, and the source has nothing left to say once every row is loaded. The fix
 has to bound the FINAL filter, not the query above it.
@@ -948,7 +946,7 @@ becomes:
         # mutated after `_remember` loaded it from the source. Bounded by what this request
         # touched, never by the size of a prior full load: this is the set `where()`/
         # `select()` must re-check by hand after `_complete`, because the source's own index
-        # cannot see an uncommitted change (D188, item 2's `rows.py:177` fix).
+        # cannot see an uncommitted change (D188, item 2's `store/rows.Rows`'s `__len__` fix).
         self._touched: set = set()
 ```
 
@@ -1160,7 +1158,7 @@ two.
 ```python
 def check_rows_scoped_after_full_load(checks: Checks) -> None:
     """D188/item 2: `where()`/`select()` cost what the index costs, even after this
-    session's own `Rows` has been fully materialised. The mechanism is `rows.py:177`'s own
+    session's own `Rows` has been fully materialised. The mechanism is `store/rows.Rows`'s `__len__` own
     citation in docs/specs/store-scaling.md; this pins it so a later change to `Rows` cannot
     reopen it silently.
     """
@@ -1274,7 +1272,7 @@ New routes added: `GET /inventory/<box>` (`do_inventory_box`), `GET /inventory/r
   box, `loaded_count` bounded by that box's size on a fresh read, a corrupt record in another
   box does not affect this box's answer, an uncaptured box answers empty rather than 404.
 - A second new check, `check_rows_scoped_after_full_load` (put it near
-  `check_store_of_record`, `:1020`), for the `rows.py` fix (step 10 below, not yet written —
+  `check_store_of_record`), for the `rows.py` fix (step 10 below, not yet written —
   see that step): load every card via `.values()` inside one session (forcing `_complete =
   True`), then call `.where(box=N)` and assert (a) the result is still correct and (b) — this
   is the part that actually tests the fix rather than just correctness — that a SECOND,
@@ -1348,7 +1346,7 @@ The two rows the plan's §4 table already marked "stays" are unaffected by any o
   (`:10636-10637`). Kept, unused, on the allowlist. No PR in this plan deletes it — deleting
   it is explicitly out of scope per the item's own framing at the top of this file.
 - `Inventory.tsx`'s `CopiesFor` component and its `useSearch()`-driven copies list
-  (`:628-770` area) — already sourced from `/search`, not from `GET /inventory`. Confirmed in
+  — already sourced from `/search`, not from `GET /inventory`. Confirmed in
   step 6's opening paragraph. Do not edit.
 - `app/src/frozenRank.ts` and D181's freeze semantics — `ranksAsLive`/`ranksAsShown` are
   called with the same `(key, departed, frozen)` signature whether the caller is iterating
@@ -1436,7 +1434,7 @@ above.
   a future handler that reaches into `self._loaded[key]` and mutates the object in place
   without reassigning it through `__setitem__` would change a row's columns without adding it
   to `_touched`, and `where()`/`select()` would then trust the source's stale index for it.
-  This is not a new risk this fix introduces — `changes()` (`:274-282`) already depends on the
+  This is not a new risk this fix introduces — `changes()` already depends on the
   same discipline (a mutated-in-place object still gets diffed correctly there because it
   re-dumps every key in `_loaded`, but `_touched` is a stricter dependency, since it is
   consulted BEFORE the final dump). Grep for any `self.cards[key].<attr> = ...` pattern that
@@ -1447,7 +1445,7 @@ above.
   too or it breaks at attribute-access time rather than at a typed boundary (Python duck
   typing, per `rows.py`'s own docstring: "duck-typed rather than declared"). Grep for every
   class that currently implements `get`/`has`/`count`/`all`/`where`/`select`/`distinct` (the
-  contract's full method list, `rows.py:36-49`) before adding `top` — there may be more than
+  contract's full method list, `rows.py` lines 36-49 at `1eeabb7e`) before adding `top` — there may be more than
   one.
 - **`do_inventory_box`'s narrowed `listings` could silently break a screen that reads a
   listing for a SKU NOT in the current box** — verified in this playbook that `Inventory.tsx`

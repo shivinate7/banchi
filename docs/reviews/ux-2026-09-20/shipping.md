@@ -8,7 +8,7 @@ Files read: `app/src/OrdersShipStage.tsx`, `app/src/Shipping.css`, `app/src/toke
 ## Findings
 
 ### 1. The three-lane grid stays 3-wide right up to 1279px, then drops straight to 2 columns — no observed problem at 1280, but the guide comment reveals the layout was previously broken between 1024 and 1279
-**What I saw:** `Shipping.css:290-304`:
+**What I saw:** `Shipping.css` lines 290-304:
 ```
 @media (min-width: 768px) and (max-width: 1279px) {
   .shipping-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); ... }
@@ -22,7 +22,7 @@ with a comment explaining that 3 columns below 1280 measured ~210-250px per lane
 **Does it recur:** n/a.
 
 ### 2. `.shipping-chip-count`'s dimmed color under a collapsed lane is a hand-picked value, and the comment explaining it undercuts its own reasoning at a glance
-**What I saw:** `Shipping.css:222-227`:
+**What I saw:** `Shipping.css` lines 222-227:
 ```
 /* A COLLAPSED LANE IS RECESSED, NEVER FADED. The count is the figure this screen exists to
    show; dropping it to the lightest ink took it to 2.4:1 in light. The fold is carried by the
@@ -34,13 +34,13 @@ This is actually a well-reasoned, well-documented decision (avoiding a contrast 
 **Severity:** n/a (not a defect).
 
 ### 3. `figuresOf()` can return an empty array, and the row still renders `.shipping-figures` as an empty flex container
-**What I saw in source:** `OrdersShipStage.tsx:92-98`, `figuresOf()` returns `[]` when a row has no value, no weight, and no item count (all three are nullable and independently omitted "on purpose," per the surrounding comment at lines 89-91, so a fully-unknown row is plausible for the `unjudged` lane specifically). `Shipping.css:261` styles `.shipping-figures { display: inline-flex; flex-wrap: wrap; gap: 6px; }` with no empty-state handling. If `figuresOf(row)` is empty, this renders a zero-height, zero-content flex box — harmless layout-wise (no visible gap since `gap` only applies between children) but means an `unjudged` row with literally no data at all shows nothing where the reader would expect at least a "no data" cue, right next to the `REASON_SAYS` text that already explains why (e.g. `no_value_data`/`no_weight_data`). This is very likely fine in practice since the reason text carries the explanation, but I flag it because I could not confirm live whether this combination (all three figures null) actually occurs in real export data, or whether the router's own logic guarantees at least one figure survives whenever a reason like `no_weight_data` fires (which by definition means weight is absent, but value or item count could still be present).
+**What I saw in source:** `OrdersShipStage.tsx` lines 92-98, `figuresOf()` returns `[]` when a row has no value, no weight, and no item count (all three are nullable and independently omitted "on purpose," per the surrounding comment at lines 89-91, so a fully-unknown row is plausible for the `unjudged` lane specifically). `Shipping.css` line 261 styles `.shipping-figures { display: inline-flex; flex-wrap: wrap; gap: 6px; }` with no empty-state handling. If `figuresOf(row)` is empty, this renders a zero-height, zero-content flex box — harmless layout-wise (no visible gap since `gap` only applies between children) but means an `unjudged` row with literally no data at all shows nothing where the reader would expect at least a "no data" cue, right next to the `REASON_SAYS` text that already explains why (e.g. `no_value_data`/`no_weight_data`). This is very likely fine in practice since the reason text carries the explanation, but I flag it because I could not confirm live whether this combination (all three figures null) actually occurs in real export data, or whether the router's own logic guarantees at least one figure survives whenever a reason like `no_weight_data` fires (which by definition means weight is absent, but value or item count could still be present).
 **Where:** `app/src/OrdersShipStage.figuresOf`; `app/src/Shipping.css` (`.shipping-figures`).
 **Severity:** nit, unconfirmed live.
 **Does it recur:** n/a.
 
 ### 4. `.shipping-guide-unjudged` and `.shipping-chip-unjudged` both draw a dashed warning outline with `outline-offset: -1.5px` — consistent between the two, but double-check against the sold-value semantics used elsewhere
-**What I saw:** `Shipping.css:91`, `:199` — both correctly use the identical `outline: 1.5px dashed var(--bn-warn); outline-offset: -1.5px;` for the guide tile and the live lane chip. This is good consistency, not a defect — noted only because it's the kind of pair that's easy to let drift and didn't. No action needed.
+**What I saw:** `Shipping.css` line 91, line 199 — both correctly use the identical `outline: 1.5px dashed var(--bn-warn); outline-offset: -1.5px;` for the guide tile and the live lane chip. This is good consistency, not a defect — noted only because it's the kind of pair that's easy to let drift and didn't. No action needed.
 **Severity:** n/a (not a defect — noted as a healthy pattern, for contrast with the Inventory/BoxOps drift findings in `inventory.md`).
 
 ## What I could not check

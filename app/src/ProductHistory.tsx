@@ -47,7 +47,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { describeFailure, getOrders, getProductHistory, search, type Failure } from './server'
+import { describeFailure, getOrders, getProductHistory, search, type Failure, failureTone } from './server'
 import type { OrderLineWire, OrderRow, ProductHistoryPayload, ProductHistoryRange, SearchGroup } from './types'
 import {
   Chip, EmptyState, IconButton, Loading, Money, Notice, Page, Pill, Sep, Sheet,
@@ -416,7 +416,7 @@ export function ProductHistoryView({ sku, onSwitchSku }: { readonly sku: string;
   }, [fills, payload])
 
   if (loading) return <Loading shape="rows" rows={2} label="Reading the archive" />
-  if (failure !== null) return <Notice tone="danger" code={failure.code}>{failure.message}</Notice>
+  if (failure !== null) return <Notice tone={failureTone(failure)} code={failure.code}>{failure.message}</Notice>
   if (payload === null) return null
 
   return (
@@ -488,7 +488,7 @@ export function ProductHistoryView({ sku, onSwitchSku }: { readonly sku: string;
 
 function ProductSearchResults({ state, onPick }: { readonly state: SearchState; readonly onPick: (sku: string) => void }) {
   if (state.loading) return <Loading shape="rows" rows={3} label="Searching" />
-  if (state.failure !== null) return <Notice tone="danger" code={state.failure.code}>{state.failure.message}</Notice>
+  if (state.failure !== null) return <Notice tone={failureTone(state.failure)} code={state.failure.code}>{state.failure.message}</Notice>
   if (state.results === null) return null
   const groups = state.results.groups.filter((g): g is SearchGroup & { sku: string } => g.sku !== null)
   if (groups.length === 0) {

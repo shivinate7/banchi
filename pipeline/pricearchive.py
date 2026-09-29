@@ -384,7 +384,7 @@ def parse_ledger_name(name: str, groups: Dict[str, dict]) -> dict:
     """
     text = str(name or "").strip()
     if not text:
-        raise UnresolvedLedgerName("the line carries no name at all")
+        raise UnresolvedLedgerName("The line carries no name at all")
     if " - " not in text:
         raise UnresolvedLedgerName(
             f"{text!r} has no ' - ' separator marking where the product line ends"
@@ -394,7 +394,7 @@ def parse_ledger_name(name: str, groups: Dict[str, dict]) -> dict:
     match = _longest_group_prefix(remainder, groups)
     if match is None:
         raise UnresolvedLedgerName(
-            f"no group tcgcsv lists for {line!r} prefixes {remainder!r} — either the "
+            f"No group tcgcsv lists for {line!r} prefixes {remainder!r} — either the "
             "mirror does not carry that set or this name is not shaped like a real export"
         )
     set_name, rest = match
@@ -520,7 +520,7 @@ def revenue_by_sku(ledger) -> Dict[str, Decimal]:
 
     THIS IS THE ONLY THING A SEALED-PRODUCT SKU IS EVER WORTH TO THIS MODULE. Sealed
     product is never captured (`pipeline/games.py`'s own line for it) and so has no row in
-    `cards` and never will — `store/orders.py:982` says the same of a sealed Holiday
+    `cards` and never will — `store/orders.py` says the same of a sealed Holiday
     Calendar's fulfilment record. A sealed SKU's revenue is computed here anyway, because
     `rank_by_revenue` is handed EVERY key this function can answer for, not only the ones
     `rows_from_store`'s own subject set happens to contain — the gap between the two is

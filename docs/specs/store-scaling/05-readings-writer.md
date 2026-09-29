@@ -240,7 +240,7 @@ walk independently and was never coupled to `_run_readings`'s internal shape.
 
 ### 2. `store/readings.py` — add `Readings.replace_source`, a scoped sibling of `replace()`.
 
-Insert after `replace()` (which ends the file, after line ~202):
+Insert after `replace()` (which ends the file):
 
 ```python
     def replace_source(
@@ -359,7 +359,7 @@ name is not already shadowed. `readings_store` avoids colliding with the existin
 `store` entirely.)
 
 **Dry runs are unaffected.** `args.dry_run` returns via `_preview` well before this code
-(line ~486), so nothing here runs on a preview, and nothing here runs on the `run_dir is
+(in `run`), so nothing here runs on a preview, and nothing here runs on the `run_dir is
 None` / `--keys` in-memory-run path either — wait, it does: a store-backed join (`--keys`,
 no run directory) still calls `runs.create` unless `args.dry_run`, so `run_dir.path(...)`
 and this new block execute identically whether the run came from `identify` or from
@@ -533,9 +533,9 @@ tree:
 
 | Input `collect()` reads | Writer | File:line | Wired in this item? |
 |---|---|---|---|
-| `runs/<n>/pricing.json` | `join` (`cli/cmd_join.py`, invoked directly as `pkmnscan join` and by `POST /pipeline/runs/<name>/join` via `server/pipeline_routes.py:do_pipeline_step`, which shells out to the identical CLI at line ~6372 — **one code path, not two**) | `cli/cmd_join.run` (pricing.json write) | **Yes** — step 3 |
+| `runs/<n>/pricing.json` | `join` (`cli/cmd_join.py`, invoked directly as `pkmnscan join` and by `POST /pipeline/runs/<name>/join` via `server/pipeline_routes.py:do_pipeline_step`, which shells out to the identical CLI — **one code path, not two**) | `cli/cmd_join.run` (pricing.json write) | **Yes** — step 3 |
 | newest file under `inventory/.live/` | `do_live_export` (`POST /pipeline/live-export`, in-process, never a subprocess) | `server/pipeline_routes.do_live_export` (`path.write_bytes(body)`) | **Yes** — step 4 |
-| — (neither input) | `reconcile --live` (`cli/cmd_reconcile.py:run_live`) | writes only `Listing.live` / `Listing.live_as_of` inside `store.write()` at line ~234 | **No — ruled out.** It reads a live export file (fetched earlier, or a hand-uploaded CSV that may not even live under `inventory/.live/`) and never writes a new file there and never writes `pricing.json`. It changes nothing `collect()` reads. |
+| — (neither input) | `reconcile --live` (`cli/cmd_reconcile.py:run_live`) | writes only `Listing.live` / `Listing.live_as_of` inside `store.write()` | **No — ruled out.** It reads a live export file (fetched earlier, or a hand-uploaded CSV that may not even live under `inventory/.live/`) and never writes a new file there and never writes `pricing.json`. It changes nothing `collect()` reads. |
 | — (neither input) | a run directory deletion | **does not exist** — there is no CLI command or route that deletes a run directory; every doc in this repo (`docs/specs/`, CLAUDE.md) calls a run directory an immutable input | **No — no such writer to wire.** This is exactly the case `readings adopt` remains the hand repair for. |
 | — (not an input) | the pricing corpus (`inventory/prices.json`, `pipeline/corpus.py`) | `book.write()` | **No.** `pipeline/readings.py:collect()` never reads the corpus — confirmed by reading `_run_readings` and `_newest_live_reading`, neither of which touches `corpus.py` or `prices.json`. `readings` holds a market OBSERVATION; the corpus holds an operator ANSWER (D86) — D189's own closing paragraph makes this distinction explicit. |
 

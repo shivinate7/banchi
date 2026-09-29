@@ -30,7 +30,7 @@
 **Recurs elsewhere in slice:** no.
 
 ### 5. `Holding N` pill and hold-reason picker use `bn-pill`-style geometry inconsistently with `bn-chip`
-**What I saw:** the "Holding 19" control in the toolbar renders as a `bn-chip`-styled pill (`border-radius: 999px`, height 28px) sitting beside plain rectangular 6px-radius buttons ("Load trends," "Runs") in the same row, at the same height. This is an intentional pill-vs-button distinction elsewhere in the kit (status pills are round, actions are square-radius), so on reflection this is consistent with the design system rather than a defect — recorded as cleared after measurement (radius 999px vs 6px, by design, per `kit.css:239` `.bn-btn-pill`).
+**What I saw:** the "Holding 19" control in the toolbar renders as a `bn-chip`-styled pill (`border-radius: 999px`, height 28px) sitting beside plain rectangular 6px-radius buttons ("Load trends," "Runs") in the same row, at the same height. This is an intentional pill-vs-button distinction elsewhere in the kit (status pills are round, actions are square-radius), so on reflection this is consistent with the design system rather than a defect — recorded as cleared after measurement (radius 999px vs 6px, by design, per `kit.css` line 239 `.bn-btn-pill`).
 **Severity:** n/a (cleared).
 
 ## What I could not check

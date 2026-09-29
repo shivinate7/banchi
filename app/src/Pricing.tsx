@@ -33,6 +33,8 @@ import {
   getRuns,
   photoUrl,
   type Failure,
+  failureTone,
+  refusalToast,
 } from './server'
 import type {
   DecisionsDocument,
@@ -690,9 +692,9 @@ function PricingThumb({
       ) : (
         <img
           className="bn-crop"
-          /* THE SLOT ROUTE (D172): a run file's frozen position carries no `cid`, and a run
-             directory is an immutable input. */
-          src={photoUrl(at.box, at.index)}
+          /* BY NAME (D172): `_relabel_positions` decorates each position with the card's cid at read
+             time. The frozen run file is untouched; the slot route remains where none is found. */
+          src={photoUrl(at.box, at.index, at)}
           alt=""
           loading="lazy"
           /* `data-cropped` BELONGS ON THE IMG, NOT THE BUTTON (the owner's review, 2026-09-26):
@@ -2132,7 +2134,7 @@ export function Pricing() {
       })
     } catch (err) {
       const trouble = describeFailure(err)
-      toast({ kind: 'refusal', title: 'Not undone', body: `${trouble.message} (${trouble.code})` })
+      toast({ kind: 'refusal', tone: failureTone(trouble), title: 'Not undone', body: trouble.message })
     }
   }, [])
 
@@ -2191,7 +2193,7 @@ export function Pricing() {
                   body: restoreSkipBody(back.skipped),
                 })
               } catch (err) {
-                toast({ kind: 'refusal', title: describeFailure(err).message })
+                toast({ ...refusalToast(err) })
               }
             })()
           },
@@ -2582,7 +2584,7 @@ export function Pricing() {
   const status = (
     <>
       {failure === null || table === null ? null : (
-        <Notice tone="danger" title={failure.message} code={failure.code} compact>
+        <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} compact>
           {/* A CONFLICT HAS SOMEWHERE TO GO: the file moved under this screen, and re-reading
               costs what is unsaved, so the press says so. */}
           {failure.code !== 'corpus_moved' ? null : (
@@ -3494,7 +3496,7 @@ function LiveSheet({
           {note === null ? null : <p className="pricing-sheet-bad">{note}</p>}
         </div>
       )}
-      {failure === null ? null : <Notice tone="danger" compact title={failure.message} code={failure.code} />}
+      {failure === null ? null : <Notice tone={failureTone(failure)} compact title={failure.message} code={failure.code} />}
     </Sheet>
   )
 }
@@ -3518,7 +3520,7 @@ function PhotoSheet({ sku, at, onNext, onClose }: { sku: MergedSku | null; at: n
       {sku === null ? null : (
         <div className="pricing-photo">
           <div className="pricing-photo-frame">
-            <img src={photoUrl(place?.box ?? 0, place?.index ?? 0)} alt={sku.name} />
+            <img src={photoUrl(place?.box ?? 0, place?.index ?? 0, place)} alt={sku.name} />
           </div>
           <p className="pricing-photo-caption">
             <Location label={place?.label ?? null} flow="run" />

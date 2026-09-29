@@ -178,7 +178,7 @@ class Corpus:
             return cls()
         if not isinstance(payload, dict):
             raise decisions_mod.MalformedDecisions(
-                f"{FILENAME}: expected an object, got {type(payload).__name__}"
+                f"The store's price settings file ({Path(FILENAME).name}) does not hold a set of settings. Restore it from a backup."
             )
         policy = payload.get("policy") or {}
         answers: Dict[str, Answer] = {}
@@ -227,10 +227,9 @@ class Corpus:
         # holds, and what `to_payload` wrote for as long as the key existed.
         if policy.get("live_cap") is not None:
             raise decisions_mod.MalformedDecisions(
-                f"this store holds policy.live_cap = {policy['live_cap']!r}, and the standing "
-                f"cap was retired on 2026-09-07. A cap is asked for per send now: pass "
-                f"`--cap N` to `pkmnscan emit`, or type it into the ship bar on #/pricing. "
-                f"Remove the key from inventory/prices.json — or set it to null — to continue."
+                f"This store holds a standing cap of {policy['live_cap']!r} live copies per card, which was retired on 2026-09-07. "
+                "Ask for a cap when you send instead (the ship bar on Pricing), and remove the standing cap from the "
+                "store's price settings file, or set it to nothing, to continue."
             )
         # THE ONE KEY WITH A DEFAULT VALUE, AND ONLY WHERE THE FILE IS SILENT. Absent or `null`
         # reads as `DEFAULT_SUB_THRESHOLD`; `"floor"` and a written flat price are what they
@@ -275,7 +274,9 @@ class Corpus:
         try:
             return cls.parse(json.loads(target.read_text("utf-8")))
         except json.JSONDecodeError as exc:
-            raise decisions_mod.MalformedDecisions(f"{target}: {exc}") from exc
+            raise decisions_mod.MalformedDecisions(
+                f"The store's price settings file ({target.name}) is damaged and could not be read. Restore it from a backup."
+            ) from exc
 
     # ------------------------------------------------------------------------ writing
 

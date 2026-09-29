@@ -13,7 +13,7 @@ MAKE (D62). Buckets from different ranges overlap on the calendar: one calendar 
 one-day bucket in `month` and the same day sits inside a seven-day bucket in `annual`. Those
 are two different facts about that day and D62 forbids merging them. A key built from
 `(sku, width_days, start)` looks like it would tell them apart, until you notice
-`semiannual` and `annual` are BOTH SEVEN-DAY BUCKETS (`pipeline/pricehistory.py:41-45`) — a
+`semiannual` and `annual` are BOTH SEVEN-DAY BUCKETS (`pipeline/pricehistory.py`) — a
 width-keyed table would silently fold a semiannual bucket and an annual bucket that happen to
 start on the same date into one row, exactly the D62 collision this table exists to prevent,
 and it would do it precisely on the boundary where the two ranges' coverage overlaps most.

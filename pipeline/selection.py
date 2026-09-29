@@ -378,14 +378,13 @@ def _state_of(raw: Any) -> str:
     `--reidentify-stale` is the re-read, and `--run <name>` is how a run's own cards are named.
     """
     if not isinstance(raw, str):
-        raise SelectionError("selection_invalid", f"`state` is {raw!r}, which is not a state.")
+        raise SelectionError("selection_invalid", f"{raw!r} is not a card state.")
     try:
         return master.check_state(raw)
     except Exception:
         raise SelectionError(
             "selection_invalid",
-            f"`state` is {raw!r}. The states a card can be in are "
-            f"{', '.join(master.STATES)}.",
+            f"{raw!r} is not a card state. The states are {', '.join(master.STATES)}.",
         ) from None
 
 
@@ -443,7 +442,7 @@ def _run_of(raw: Any) -> str:
     ever should, so anything carrying a separator or a dot-dot is not a run name.
     """
     if not isinstance(raw, str) or not re.fullmatch(r"[A-Za-z0-9._-]+", raw or ""):
-        raise SelectionError("selection_invalid", f"`run` is {raw!r}, which is not a run name.")
+        raise SelectionError("selection_invalid", f"{raw!r} is not a run name. Open a run from the list of runs.")
     return raw
 
 
@@ -529,8 +528,7 @@ def check(selection: Selection) -> Selection:
     if selection.box is not None and selection.bid is not None:
         raise SelectionError(
             "selection_invalid",
-            "`box` and `bid` both name a drawer — the number on the shelf and its true index "
-            "(D145) — so naming both is two answers to one question. Send whichever you have.",
+            "A drawer can be named by its number on the shelf or by its permanent id, not both. Use one of them.",
         )
     return selection
 
@@ -571,9 +569,8 @@ def narrow(
             if entry is None:
                 raise SelectionError(
                     "selection_invalid",
-                    f"No drawer has true index {bid}. An id is fixed when the drawer is "
-                    f"created and is never handed back out, so an unknown one is a typo "
-                    f"rather than a deleted box.",
+                    f"No drawer has the permanent id {bid}. Ids are never reused, so this one was mistyped "
+                    "rather than deleted.",
                 )
             found.append(int(entry.box))
         boxes = tuple(sorted(set(found)))

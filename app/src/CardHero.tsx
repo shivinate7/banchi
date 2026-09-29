@@ -58,6 +58,7 @@ import {
   reviewCatalog,
   undoConfirmIdentity,
   undoCorrectAnswer,
+  refusalToast,
 } from './server'
 import type { BoxRecord, CandidateRow, CatalogLookup, InventoryCard, Listing, PricingPayload } from './types'
 import './CardHero.css'
@@ -418,9 +419,7 @@ export function CardPane({ row, game, place = null, dimmed = false, preChips, po
  * response and the inventory re-read that carries the new `capture_id` onto the row. Moved
  * from `BoxBrowse.tsx` whole — see that file's history for the measurement this rests on. */
 export function photoSrc(row: Row, nonce: string | null): string {
-  const base = photoUrl(row.card.box, row.card.index, row.card.cid)
-  const stamp = nonce ?? row.card.capture_id
-  return stamp === null ? base : `${base}?card=${encodeURIComponent(stamp)}`
+  return photoUrl(row.card.box, row.card.index, row.card, nonce)
 }
 
 export type PhotoPanelProps = {
@@ -699,7 +698,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
         })
       })
       .catch((err: unknown) => {
-        toast({ kind: 'refusal', title: 'The correction was not undone', body: describeFailure(err).message })
+        toast({ ...refusalToast(err, 'The correction was not undone') })
       })
   }
 
@@ -725,7 +724,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
         })
       })
       .catch((err: unknown) => {
-        toast({ kind: 'refusal', title: 'The card was not corrected', body: describeFailure(err).message })
+        toast({ ...refusalToast(err, 'The card was not corrected') })
       })
       .finally(() => setBusy(false))
   }
@@ -752,7 +751,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
         })
       })
       .catch((err: unknown) => {
-        toast({ kind: 'refusal', title: 'The confirmation was not undone', body: describeFailure(err).message })
+        toast({ ...refusalToast(err, 'The confirmation was not undone') })
       })
   }
 
@@ -777,7 +776,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
         })
       })
       .catch((err: unknown) => {
-        toast({ kind: 'refusal', title: 'The listing was not confirmed', body: describeFailure(err).message })
+        toast({ ...refusalToast(err, 'The listing was not confirmed') })
       })
       .finally(() => setConfirmBusy(false))
   }

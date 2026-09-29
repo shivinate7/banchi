@@ -3736,6 +3736,25 @@ COMPONENTS = [
                 "governed_by": ["D1", "D2", "D9", "D11", "D24", "D58", "D63", "D86", "D87",
                                 "D99", "D106", "D174", "D181", "D196",
                                 "D260", "D284"]},
+            "error-words.py": {
+                "does": "the refusal half of D196, read at the source. `machine-words.spec.ts` "
+                        "reads loaded screens and never sees an error state, and `no mechanism "
+                        "on screen` reads JSX literals, so the messages a refusal carries to the "
+                        "screen word for word were unread. This walks `server/*.py` for the "
+                        "message argument of every refusal constructor and `app/src` for "
+                        "`new ServerError(...)`, and fails on a backtick, a decision id, a repo "
+                        "path, a snake_case token, an HTTP detail, raw exception text, a typed "
+                        "dot, a word from `machine-words.json`, or a lowercase first letter. "
+                        "Run as `make docs-audit`'s `error words` row. `--list` prints every "
+                        "finding, `--self-test` proves the matcher. Never writes.",
+                "governed_by": ["D196", "D284"]},
+            "error-words-allow.json": {
+                "does": "the shrinking offender list for `error words` (D196), file -> the "
+                        "first 50 characters of a message -> the lane that owes it. Every entry "
+                        "today is request-shape validation, a message for a caller and not a "
+                        "person. Read by `scripts/error-words.py`, which fails on an unlisted "
+                        "finding and on a listed entry that matches nothing.",
+                "governed_by": ["D22", "D32", "D58", "D91", "D196", "D284"]},
             "machine-words-allow.json": {
                 "does": "the shrinking offender list for `no mechanism on screen` (D196), "
                         "file -> word -> lane, on `kit-adoption-allow.json`'s own shape. "
@@ -5334,7 +5353,7 @@ COMPONENTS = [
                 # the `runs` line on 2026-08-29 — the pipeline's own route. This comment said
                 # that line was "the one owner render that draws no stored capture photo, so
                 # the `views exposure` question the others raise does not arise for it", and
-                # both halves were wrong: RunsComposer.tsx:692 draws one, `views exposure`
+                # both halves were wrong: `RunsComposer.tsx`'s `RunsComposer` draws one, `views exposure`
                 # names the line on every run, and the manifest's own paragraph was corrected
                 # on 2026-09-05 to describe the RENDER STATE and the three gates that hold it
                 # rather than the screen. D86 is the same drift on the `pricing` line — the
@@ -8884,6 +8903,15 @@ COMPONENTS = [
                         "`make design-check`.",
                 "governed_by": ["D57", "D58", "D118", "D181", "D260", "D264"],
             },
+            "tests/photo-cache.spec.ts": {
+                "does": "Home, Review and Pricing draw every photograph by name and version "
+                        "(`D172`, `D26`): a by-card URL carries `?v=<capture_id>` because a "
+                        "re-shoot writes new bytes under the same name, and never a bare or "
+                        "slot URL. Read off the DOM, on the first visit and the revisit. A "
+                        "route-fulfilled stub is never HTTP-cached, so the cache hit itself "
+                        "is held by harness T7 `check_photo_cache`. Run by `make design-check`.",
+                "governed_by": ["D26", "D172"],
+            },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "
                         "`margin: 0 auto` centered a screen with a lower `--bn-page-max` "
@@ -9265,7 +9293,7 @@ COMPONENTS = [
                         "re-add the link and all 20 brand cases fail naming the URL. Not "
                         "a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
-                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86",
+                "governed_by": ["D16", "D37", "D172", "D43", "D46", "D56", "D58", "D63", "D70", "D86",
                                 "D124", "D125", "D134", "D174", "D192", "D259", "D273", "D276",
                                 "D298", "D301"]},
             "tests/fontsReady.ts": {
@@ -9747,7 +9775,7 @@ COMPONENTS = [
                         "moves nothing outside `.browse-card` and changes neither the "
                         "document's scroll height nor its scroll position. EVERY ROUTE IS "
                         "STUBBED, the same rule: no write ever reaches a real store.",
-                "governed_by": ["D28", "D118", "D252"],
+                "governed_by": ["D28", "D118", "D252", "D269"],
                 "note": "NOT a harness test: it starts a browser, so it runs under "
                         "`make design-check`. The sweep is what caught the review-round "
                         "defect `ListingCorrection`'s own `Written.via`/`confirmable` fields "

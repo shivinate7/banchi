@@ -316,7 +316,7 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
   .runs-composer-head { padding: var(--bn-3) var(--bn-3) var(--bn-3) var(--bn-4); gap: var(--bn-2); }
   .runs-composer-title { font-size: var(--bn-fs-lg); white-space: normal; }
   .runs-stage-label { display: none; }
-  /* A DONE STAGE IS A BUTTON — `RunsComposer.tsx:473` renders one, so this is a target and not
+  /* A DONE STAGE IS A BUTTON — `RunsComposer.tsx`'s `RunsComposer` renders one, so this is a target and not
      an indicator, and 36px was under the floor (D117). The chip keeps its drawn size, which is
      what lets six of them and their connectors sit on one line at 390; the hit area reaches past
      it, the way BoxBrowse's tick does. */

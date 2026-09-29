@@ -558,9 +558,7 @@ def do_shipping_file(batch: str, filename: str) -> Tuple[bytes, str]:
         raise ShippingRefusal(
             HTTPStatus.BAD_REQUEST,
             "file_name_invalid",
-            "{!r} is not a file of this batch. It holds one: {}.".format(
-                filename, IMPORT_FILENAME
-            ),
+            "That file is not part of this batch. The batch has one file, {}.".format(IMPORT_FILENAME),
         )
     held = _recall(batch)
     return held.blob, "text/csv"

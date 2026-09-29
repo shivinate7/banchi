@@ -187,7 +187,7 @@ own. That reversal needs its own argument, which nobody has made.
 
 Two items are questions rather than defects. They are not for a builder to settle.
 
-- Money in a table is set in mono. `CLAUDE.md:321` forbids it. A comment at `RunPanel.tsx:226`
+- Money in a table is set in mono. `CLAUDE.md` line 321 at `6e55a354` forbids it. A comment at `app/src/RunPanel.tsx`'s `StepCard`
   defends it. One of the two has to give way and that is a repository level ruling.
 - The month chart's three faults are known and the owner ruled that they stay. A session may not
   quietly fix them.

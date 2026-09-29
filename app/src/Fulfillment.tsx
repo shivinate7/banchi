@@ -153,6 +153,8 @@ type Sellable = {
    *  view model built three ways and a missing key would read as an oversight in whichever
    *  constructor forgot it. */
   cid: string | null
+  /** The photograph's version, stamped on the by-card URL by `photoUrl`. */
+  capture_id: string | null
   /** Set when an open order is waiting for this copy. The sale then goes through the order
    *  rather than around it, so the owner's ledger counts the pull. */
   order: OrderRef | null
@@ -317,6 +319,7 @@ function sellable(key: string, card: InventoryCard): Sellable | null {
     // The inventory row's own name for its photograph (D172). Raw here — `photoUrl` is what
     // refuses a `moved:` or `nophoto:` name, so this passes on whatever the store said.
     cid: card.cid ?? null,
+    capture_id: card.capture_id ?? null,
     order: null,
   }
 }
@@ -332,6 +335,7 @@ function asSellable(group: SearchGroup, copy: SearchCopy): Sellable {
     where: copy.place,
     // `_copy_row` already filtered this one to a name that really is a photograph's.
     cid: copy.cid ?? null,
+    capture_id: copy.capture_id ?? null,
     order: null,
   }
 }
@@ -732,6 +736,7 @@ export function Fulfillment() {
           about: item.about,
           where: copy.place,
           cid: copy.cid,
+          capture_id: copy.capture_id,
           order: {
             orderKey: ref.key,
             source: row.source,
@@ -1085,7 +1090,7 @@ export function Fulfillment() {
     /* BY NAME WHERE THE ROW HAS ONE (D172) — the inventory and search paths do, an order
        pick does not; see `Sellable.cid`. He is looking at a photograph to decide whether the
        card in his hand is the card on the screen, so it had better be this card's. */
-    const src = photoUrl(chosen.box, chosen.index, chosen.cid)
+    const src = photoUrl(chosen.box, chosen.index, chosen)
     const forOrder = chosen.order
 
     body = (
@@ -1610,7 +1615,7 @@ export function Fulfillment() {
         <img
           className="ff-zoom-img"
           /* The same address the confirm frame drew, so the big view is a cache hit. */
-          src={photoUrl(chosen.box, chosen.index, chosen.cid)}
+          src={photoUrl(chosen.box, chosen.index, chosen)}
           alt={`The card in ${sayPlace(chosen.place)}, bigger`}
         />
         <span className="fulfillment-say ff-zoom-hint">Tap anywhere to go back.</span>

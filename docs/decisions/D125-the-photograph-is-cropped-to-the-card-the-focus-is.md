@@ -33,7 +33,7 @@ card cannot letterbox and cannot clip.
 **Keep the whole frame where it is shown to JUDGE the card or to CHECK THE RIG.** So: the `#/inventory` preview, the `#/pricing`
 drawer and its thumbnails, the sell-confirm, the Home hero, the Fulfiller's pull preview. Not:
 
-- **`#/review`**, whose photograph carries no `object-fit` on purpose — `ReviewQueue.css:189`,
+- **`#/review`**, whose photograph carries no `object-fit` on purpose — `ReviewQueue.css` line 189 at `33126887`,
   *"The `<img>` box IS the drawn image — so the loupe maps the pointer to a natural pixel with no
   letterbox arithmetic."* Cropping puts letterbox arithmetic back inside a loupe built to avoid
   it, on the screen where D32 keeps the whole frame because a card is being judged.

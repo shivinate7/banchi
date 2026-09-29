@@ -70,7 +70,7 @@ every input this repo's tests already exercise.
   `cli/resolve.py:box_views` (line 372) — a different function in the same file. If item 7
   is developed concurrently, both PRs touch `cli/resolve.py` but not the same lines
   (`box_views` is lines 372–426; `_copies_out` and its new helper are placed just above it,
-  lines ~487–560 after this rewrite — confirm no overlap by diffing line ranges before
+  its rewritten `_copies_out` region — confirm no overlap before
   merging either).
 - **If run concurrently with any branch editing `cli/resolve.py` lines 429–735** (the
   `LiveReading`/`_live_by_sku`/`_copies_out`/`_oldest_first`/`_committed_keys` block), check
@@ -217,7 +217,7 @@ every input this repo's tests already exercise.
   orphan scan immediately before it) — see "Allowlist entries removed" for why this matters.
 - `docs/specs/store-scaling/01-guard.md` — the (not-yet-landed-as-of-this-writing, but
   Phase-0-first per `00-phases.md`) `unscoped walk` guard. Read its `UNSCOPED_WALK_ALLOWED`
-  frozenset (that file's own lines ~94-108) and its scanner's `select` rule (`elif func.attr
+  frozenset (that file's own constant) and its scanner's `select` rule (`elif func.attr
   == "select" and _cards_chain(func.value) and not node.keywords:` — flags a `select()` call
   ONLY when it carries literally zero keyword arguments, static-AST, per file). Two facts
   from it matter here and are load-bearing for the next section:

@@ -16,7 +16,7 @@ comparison ("does any stylesheet anywhere under app/src declare 1024") is blind 
 because `RunPanel.css` and `App.css` both happen to open a regime at that value for reasons
 of their own — the row would read the defect as clean. Pairing by the IMPORT GRAPH instead
 asks the only question D123 actually means: does the CSS THIS COMPONENT ANSWERS TO agree with
-the JavaScript it also carries. `app/src/BoxBrowse.tsx:704` is the shape this row wants
+the JavaScript it also carries. `app/src/BoxBrowse.tsx` is the shape this row wants
 everywhere: `useMediaQuery('(max-width: 767px)')`, and `BoxBrowse.tsx` imports
 `BoxBrowse.css`, which declares exactly that.
 

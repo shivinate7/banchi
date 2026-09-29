@@ -261,9 +261,8 @@ def _post(path: str, fields: Dict[str, object]) -> dict:
     except (ValueError, UnicodeDecodeError):
         raise FetchRefusal(
             "tcg_write_unreadable",
-            f"TCGplayer answered 200 to {path} with a body that is not JSON, which is what "
-            f"an interstitial or a WAF challenge looks like. Nothing is assumed to have been "
-            f"written, and nothing further was sent.",
+            "TCGplayer answered with something this app cannot read, which is what a security check page looks "
+            "like. Nothing is assumed to have been written, and nothing further was sent.",
         ) from None
 
 
@@ -357,9 +356,8 @@ def _check(rows: Sequence[dict], *, listing: bool = False) -> None:
             # no-op. A non-zero quantity here means the file did not come from `reprice`.
             raise FetchRefusal(
                 "tcg_import_moves_quantity",
-                f"SKU {sku} carries Add to Quantity {quantity}, and this path only ever "
-                f"pushes 0 — that is what makes uploading the same file twice a no-op (D100). "
-                f"Nothing was sent.",
+                f"SKU {sku} carries an add-quantity of {quantity}, and this path only ever pushes 0, which is what "
+                "makes uploading the same file twice safe. Nothing was sent.",
             )
 
 
@@ -458,7 +456,7 @@ def move_to_live(upload_id: str) -> dict:
     if not upload_id:
         raise FetchRefusal(
             "tcg_move_no_upload",
-            "A move to live names one staged upload, and no id was given. Nothing was sent.",
+            "Moving an upload live needs to know which upload. None was named. Nothing was sent.",
         )
     return _post(
         MOVE_TO_LIVE,

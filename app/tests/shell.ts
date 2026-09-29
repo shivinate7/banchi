@@ -178,6 +178,8 @@ function card(over: {
       section_gaps: 0,
     },
     photo: `photos/${over.box}/${over.index}.jpg`,
+    /* THE CARD'S OWN NAME, as `_card_row` sends it (D172): 64 hex, so screens address by name. */
+    cid: (over.box * 1000 + over.index).toString(16).padStart(64, '0'),
     set_hint: 'ME01',
     metadata_finish: 'normal',
     game: 'pokemon',
@@ -407,6 +409,9 @@ async function stubCropPreview(page: Page): Promise<void> {
 }
 
 async function stubStore(page: Page): Promise<void> {
+  await page.route(/\/photo\/by-card\//, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG }),
+  )
   await page.route(/\/photo\/\d+\/\d+/, (route) =>
     route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG }),
   )
@@ -556,6 +561,8 @@ async function stubStore(page: Page): Promise<void> {
           index: 1,
           label: 'Box 2, Section 1, Card 1',
           photo: 'photos/2/1.jpg',
+          cid: (2001).toString(16).padStart(64, '0'),
+          capture_id: 'cap-2-1',
           read: { name: 'Volcanion', number: '025', printed_total: '132', set_hint: 'ME01' },
           confidence: null,
           reason: 'no_catalog_row',
@@ -588,7 +595,7 @@ async function stubStore(page: Page): Promise<void> {
   /* THE ORDER OF THESE TWO IS THE MECHANISM, NOT A TIDY-UP. `/\/pricing$/` matches
      `…/pipeline/pricing` as happily as `…/pricing`, and Playwright takes the NEWEST handler
      first — so registering the corpus last answered the WORKLIST with a corpus, `roster` came
-     back undefined, and `Home.tsx:241` took the whole screen down behind its route boundary
+     back undefined, and `Home.tsx`'s `Home` took the whole screen down behind its route boundary
      with `undefined.filter`. The narrower route is registered second and therefore wins. D86
      is why there are two at all: the corpus is the store's one pricing answer and the worklist
      is which cards are in front of the operator. */

@@ -46,7 +46,7 @@ The extraction is `scripts/user-strings.mjs`'s existing AST walk. It is the same
 **What is still invisible, named rather than hidden behind a clean run:**
 
 - A helper can build a separator without `.join`. It might use string concatenation into a `const`. It might return a template literal. Either way, if it is read elsewhere by reference, `{formatThing(x)}`, this walk cannot see it. `no mechanism on screen`'s own docstring names this same gap for itself. This rule narrows it by one call shape, and no further. Tracing it needs real data-flow analysis, which an AST alone does not carry.
-- **CSS is never read.** The walk covers `.tsx` files only. `ReviewQueue.css:772` types a whole sentence into a `content:` property: `content: 'Parked · under the threshold'`. That is a different, and worse, defect than a bare separator. D41's own CSS rules paint only `'·'`, nothing else. No widening of this extractor can see it, because `content:` never becomes a `.tsx` AST node. It is recorded here for the sweep to find by hand.
+- **CSS is never read.** The walk covers `.tsx` files only. `ReviewQueue.css` line 772 at `248b060c` types a whole sentence into a `content:` property: `content: 'Parked · under the threshold'`. That is a different, and worse, defect than a bare separator. D41's own CSS rules paint only `'·'`, nothing else. No widening of this extractor can see it, because `content:` never becomes a `.tsx` AST node. It is recorded here for the sweep to find by hand.
 - **Server-side strings are a different language.** `pipeline/join.py`'s `Position.label`, `pooled_label`, `departed_label`, and `place_text` all still compose `' · '`-joined text. D41 keeps every one of them exactly as it is. They are the accessible name a screen reader announces. This entry's rule is that a CLIENT stops rendering them verbatim. It is not that the server stops emitting them. A Python string is not something this row, or `scripts/user-strings.mjs`, can or should reach.
 
 ### The scoreboard, so the sweep has a starting line
@@ -67,7 +67,7 @@ The survey counted these by hand, the day of the ruling, before this row existed
 | CardLocations | 7 |
 | position.ts | 7 |
 
-Two more items sit outside this table: `ReviewQueue.css:772`, and the four `pipeline/join.py` functions named above. Both are out of this row's reach, named above under "what it cannot see."
+Two more items sit outside this table: `ReviewQueue.css` line 772 at `248b060c`, and the four `pipeline/join.py` functions named above. Both are out of this row's reach, named above under "what it cannot see."
 
 **The row's own number is the record now, not this table.** `scripts/typed-interpunct.json` pins **249**, as measured the day this entry landed. That is higher than the survey's rough 200. `--join-literals` and `--include-code-attr` see two whole channels the hand survey had no reason to isolate: the two re-typing roots, and `Notice`'s `code` prop. Whoever runs the sweep should re-pin as each screen's count reaches zero. Watch the total fall through `git diff scripts/typed-interpunct.json`. Never edit the number by hand.
 

@@ -20,10 +20,10 @@ alone, and there is none. The Rig's skeleton is the best-evidenced structure in 
 "The Rig as written" still fails, because it specifies no resting state, no per-task
 configuration, no persistence rule and no reset.
 
-**Claims verified against this tree before recording**: five max-widths (`CaptureScreen.css:16`
-1400, `Inventory.css:43` 1240, `Gallery.css:10` 900, `Fulfillment.css:41` 720,
-`ReviewQueue.css:85` 688); `ReviewQueue.css:93` `--photo-cap: 48vh`; `App.tsx:254`
-`CHORD_MS = 1500`; `RunPanel.tsx:438` `<details className="run-panel">`; `RunPanel.tsx:68`
+**Claims verified against this tree before recording**: five max-widths (`app/src/CaptureScreen.css`'s `.capture`
+1400, `app/src/Inventory.css`'s `.inventory` 1240, `app/src/Gallery.css`'s `.gallery` 900, `app/src/Fulfillment.css`'s `.fulfillment` 720,
+`ReviewQueue.css` 688); `app/src/ReviewQueue.css`'s `.review` `--photo-cap: 48vh`; `app/src/App.tsx`'s `CHORD_MS`
+`CHORD_MS = 1500`; `RunPanel.tsx` `<details className="run-panel">`; `app/src/RunPanel.tsx`'s `STEPS`
 `STEPS` holding exactly identify / join / emit / reconcile.
 
 **A defect found while verifying, since fixed.** `ReviewQueue.css` carried a comment reading
@@ -46,9 +46,9 @@ reads headings, and put the recommendation outside the status line that governs 
 
 These matter because two of them change the arithmetic.
 
-1. **There are five max-widths, not three.** Verified: `CaptureScreen.css:16` → 1400px, `Inventory.css:43` → 1240px, `Gallery.css:10` → 900px, `Fulfillment.css:41` → 720px, `ReviewQueue.css:85` → 688px. Every one was chosen alone and argued alone.
+1. **There are five max-widths, not three.** Verified: `app/src/CaptureScreen.css`'s `.capture` → 1400px, `app/src/Inventory.css`'s `.inventory` → 1240px, `app/src/Gallery.css`'s `.gallery` → 900px, `app/src/Fulfillment.css`'s `.fulfillment` → 720px, `app/src/ReviewQueue.css`'s `.review` → 688px. Every one was chosen alone and argued alone.
 
-2. **The capture screen already has a portrait frame variant.** `CaptureScreen.css:985` ships a portrait pair for rotation 90/270, added after the first feeder session because "the landscape frame spent two thirds of itself on letterbox." The 16:9 waste is real only at rotation 0. The *coequal* half of the criticism stands; the aspect half is half-fixed.
+2. **The capture screen already has a portrait frame variant.** `app/src/CaptureScreen.css`'s `.capture-frame` ships a portrait pair for rotation 90/270, added after the first feeder session because "the landscape frame spent two thirds of itself on letterbox." The 16:9 waste is real only at rotation 0. The *coequal* half of the criticism stands; the aspect half is half-fixed.
 
 3. **The review photo is not merely small — it is capped, and the cap is what the empty column buys.** `ReviewQueue.css` declares `--photo-cap: 48vh` = **432px** at 900px viewport. A 63×88mm card (aspect 0.716) at 432px tall draws **309px wide**: 133,488px², **10.3% of a 1440×900 viewport**, for the one thing that screen exists to show. The cap exists because everything stacks in one 688px column and the sentence plus first candidate must stay visible. **The 752px of empty width is not idle waste sitting next to a badly-sized photo. It is the direct cause of the photo being that size.** That reframing is the single most useful finding in this whole exercise.
 
@@ -64,7 +64,7 @@ Call it **one skeleton, four protocols**.
 
 The evidence is one-sided on the *unit of navigation*. Jenkins Blue Ocean was the purest stage-first UX ever shipped and is **deprecated July 2026** ([jenkins.io/doc/book/blueocean](https://www.jenkins.io/doc/book/blueocean/)); the stage graph survived only as a view inside a job object. Dagster beat Airflow by moving *further toward objects* ([dagster.io/blog/dagster-airflow](https://dagster.io/blog/dagster-airflow)). GitHub Actions ships zero counts in navigation. Shopify demoted stage tabs off its highest-traffic fulfilment screen to search-first ([help.shopify.com](https://help.shopify.com/en/manual/shopify-admin/productivity-tools/searching-filtering-views)). No tool with multiple object types navigates by stage alone. **B is not brave and untested; it is the position the field occupied and vacated.** D31 already reached the same answer from use: *"it's basically find a card in a box-based system if anything."*
 
-B additionally fails on its own facts. Verified against `RunPanel.tsx:68`, the pipeline has **four** steps — identify, join, emit, reconcile — and B's seven stops omit `join`, the step whose own note reads *"Writes the queues and the pricing questions."* B renders ANSWER and PRICE as stops while hiding the command that produces both, and has nowhere to put `join --bypass`, which cleared 209 of box 2's 256 queue candidates. B's counts also carry three denominators — cards (`STATES`), run directories (`_phase`, which explicitly permits parallel runs across boxes), and SKU copies (`Listing.pushed/staged/live`) — which destroys the one claim B is built on. And D7's fungibility means a card is at several stops at once.
+B additionally fails on its own facts. Verified against `app/src/RunPanel.tsx`'s `STEPS`, the pipeline has **four** steps — identify, join, emit, reconcile — and B's seven stops omit `join`, the step whose own note reads *"Writes the queues and the pricing questions."* B renders ANSWER and PRICE as stops while hiding the command that produces both, and has nowhere to put `join --bypass`, which cleared 209 of box 2's 256 queue candidates. B's counts also carry three denominators — cards (`STATES`), run directories (`_phase`, which explicitly permits parallel runs across boxes), and SKU copies (`Listing.pushed/staged/live`) — which destroys the one claim B is built on. And D7's fungibility means a card is at several stops at once.
 
 C dies on an absence: the research was searched for a counterexample and found none. Superhuman — the most keyboard-extreme product surveyed — writes it out in its own palette guide: *"Of course, your typical UI elements — such as buttons, dropdown menus, etc. — should continue to exist!"* ([blog.superhuman.com](https://blog.superhuman.com/how-to-build-a-remarkable-command-palette/)). Prodigy has no in-page nav because it has one dataset per server process and selection happens at a terminal — the exact boundary C crosses. And C's arithmetic is fatal on its own terms: deleting a 45px nav strip to install a 40px command line recovers **5px of 900**, 0.56%, while the measured waste is 752px of width and 4,018px of scroll.
 
@@ -145,7 +145,7 @@ This is not academic here. The human on this screen is the appeal court for a de
 
 ### 3.4 The pipeline leaves the `<details>`.
 
-Verified: `RunPanel.tsx:438` is `<details className="run-panel" open={live > 0}>`. NN/g names this in one sentence — *"Never hide essential information in collapsed panels"* — prices the interaction at five accumulating substeps, warns collapsed content *"may be missed altogether"*, and lists the explicit do-not-use case as content users need on most visits ([nngroup.com/articles/accordions-on-desktop](https://www.nngroup.com/articles/accordions-on-desktop/)).
+Verified: `RunPanel.tsx` is `<details className="run-panel" open={live > 0}>`. NN/g names this in one sentence — *"Never hide essential information in collapsed panels"* — prices the interaction at five accumulating substeps, warns collapsed content *"may be missed altogether"*, and lists the explicit do-not-use case as content users need on most visits ([nngroup.com/articles/accordions-on-desktop](https://www.nngroup.com/articles/accordions-on-desktop/)).
 
 The radiology interruption literature prices the departure it forces: **+2.3 min per interruption**, gaze off the subject for 30 s afterward, sternal-fracture detection collapsing **60% → 12.5%** ([PMC5833804](https://pmc.ncbi.nlm.nih.gov/articles/PMC5833804/)). D33's fold argument — ~250px, reached once a box — proves the panel belongs *on the box*. It does not prove it belongs *collapsed*: a thing reached once per box is reached every box, which is the definition of the primary task.
 
@@ -167,7 +167,7 @@ Also: **stop swapping a full-size image at 1.6 Hz.** Capture One ships `Auto Sel
 
 ### 3.7 The keyboard corrections.
 
-- `CHORD_MS = 1500` (verified, `App.tsx:254`) → **1000ms**. Vim's `timeoutlen` and which-key's default are both 1000; practitioners recommend 500. At a 623ms cadence, 1500ms is **2.4 card-cycles of swallowed input**, and the code's own comment says *"an armed leader eats the next keystroke."*
+- `CHORD_MS = 1500` (verified, `App.tsx`) → **1000ms**. Vim's `timeoutlen` and which-key's default are both 1000; practitioners recommend 500. At a 623ms cadence, 1500ms is **2.4 card-cycles of swallowed input**, and the code's own comment says *"an armed leader eats the next keystroke."*
 - **Split on `tab` / `shift-tab`, not `\`.** Superhuman shipped this exact feature and chose positional keys, because pane movement is spatial and has no verb to be a mnemonic for.
 - **Fix the `g` collision.** `g` = game picker on capture, `g` = GROUP bulk-answer on review. The other three collisions (`c`, `r`, `s`) are memory load only; `g` is the doorway to a write across N cards. Move the group offer to the leader or the palette.
 - **Ship `?`, context-scoped.** lazygit exposes 144 keybindings through help scoped to the *focused panel*. A flat sheet is the "alphabetically sorted, equally useless" failure. Costs zero pixels at rest.
@@ -221,7 +221,7 @@ D31 is right that he is downstream. The break is admitting the consequence rathe
 
 **The frame fixes none of the four measured defects, and two of its three zones already exist.**
 
-Verified: `CaptureScreen.css:151` is already `grid-template-columns: var(--side-w) minmax(0, 1fr)`. `BoxBrowse.css:137` is already `minmax(300px, 380px) minmax(0, 1fr)`. **The 240px header and the y=482 photo happened inside rail|stage layouts.** And `BoxBrowse.css`'s own header records what actually fixed the 240px: deleting a 48px title, a 68px lede and a 52px mode switch — DESIGN.md's page-chrome budget, which is orthogonal to zoning. Likewise the 4,018px of scroll is a *stacking* decision inside a 688px column, not a missing frame.
+Verified: `app/src/CaptureScreen.css`'s `.capture-shell` is already `grid-template-columns: var(--side-w) minmax(0, 1fr)`. `app/src/BoxBrowse.css`'s `.browse-body` is already `minmax(300px, 380px) minmax(0, 1fr)`. **The 240px header and the y=482 photo happened inside rail|stage layouts.** And `BoxBrowse.css`'s own header records what actually fixed the 240px: deleting a 48px title, a 68px lede and a 52px mode switch — DESIGN.md's page-chrome budget, which is orthogonal to zoning. Likewise the 4,018px of scroll is a *stacking* decision inside a 688px column, not a missing frame.
 
 So the honest case is: every item in §3.1–3.10 is achievable without a frame, and the frame's remaining claim rests on CommandMaps — a result measured on **command selection in Microsoft Word**, not on a four-screen app whose one user already knows where everything is. The 25–34% may not transfer at all.
 

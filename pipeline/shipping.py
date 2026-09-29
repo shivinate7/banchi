@@ -257,18 +257,18 @@ def parse(data: bytes, source: Optional[Path] = None) -> ShippingExport:
     this module never writes this format.
     """
     if data.startswith(codecs.BOM_UTF8):
-        raise MalformedShipping("unexpected UTF-8 BOM; the real export has none")
+        raise MalformedShipping("Unexpected UTF-8 BOM; the real export has none")
 
     records = list(csv.reader(io.StringIO(data.decode(ENCODING), newline="")))
     if not records:
-        raise MalformedShipping("empty file")
+        raise MalformedShipping("Empty file")
 
     header = tuple(records[0])
     if header != CANONICAL_HEADER:
         missing = [c for c in CANONICAL_HEADER if c not in header]
         extra = [c for c in header if c not in CANONICAL_HEADER]
         raise MalformedShipping(
-            "not the Export Shipping header this module reads; "
+            "Not the Export Shipping header this module reads; "
             f"missing {missing}, unexpected {extra}"
         )
 
@@ -276,7 +276,7 @@ def parse(data: bytes, source: Optional[Path] = None) -> ShippingExport:
     for lineno, record in enumerate(records[1:], start=2):
         if len(record) != len(header):
             raise MalformedShipping(
-                f"line {lineno}: {len(record)} fields, header has {len(header)}"
+                f"Line {lineno}: {len(record)} fields, header has {len(header)}"
             )
         shipments.append(Shipment(cells=dict(zip(header, record))))
     return ShippingExport(header=header, shipments=tuple(shipments), source=source)

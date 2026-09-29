@@ -923,7 +923,16 @@ export async function seedPopulatedReview(page: Page): Promise<void> {
 
 /** One worklist row, the fields `#/pricing` draws. Two copies of it cover the two drawn
  *  columns a dollar figure sits in: Market and Lowest. */
-function pricingRow(sku: string, name: string, market: string, low: string, place: { box: number; index: number; label: string }) {
+const NAME_A = 'a'.repeat(64)
+const NAME_B = 'b'.repeat(64)
+
+function pricingRow(
+  sku: string,
+  name: string,
+  market: string,
+  low: string,
+  place: { box: number; index: number; label: string; cid?: string; capture_id?: string },
+) {
   return {
     sku,
     game: 'pokemon',
@@ -975,8 +984,8 @@ export async function seedPopulatedPricing(page: Page): Promise<void> {
         runs: [],
         roster: [],
         skus: [
-          pricingRow('8608859', 'Articuno', '22.03', '21.98', { box: 2, index: 1, label: 'Box 2, Section 1, Card 1' }),
-          pricingRow('8608459', 'Dunsparce', '2.06', '1.48', { box: 3, index: 4, label: 'Box 3, Section 2, Card 4' }),
+          pricingRow('8608859', 'Articuno', '22.03', '21.98', { box: 2, index: 1, label: 'Box 2, Section 1, Card 1', cid: NAME_A, capture_id: 'cap-2-1' }),
+          pricingRow('8608459', 'Dunsparce', '2.06', '1.48', { box: 3, index: 4, label: 'Box 3, Section 2, Card 4', cid: NAME_B, capture_id: 'cap-3-4' }),
         ],
         written_at: {},
         skipped: [],

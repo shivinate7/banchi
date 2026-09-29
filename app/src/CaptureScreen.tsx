@@ -17,6 +17,7 @@ import {
   ServerError,
   capture,
   createBox,
+  describeFailure,
   getBoxes,
   getCaptureSitting,
   getGames,
@@ -24,6 +25,7 @@ import {
   newCaptureId,
   openSection,
   photoUrl,
+  type PhotoRef,
   removeCardInPlace,
   undoCapture,
   closeSection,
@@ -136,11 +138,11 @@ const HALT_CODE_INFO: Record<string, { headline: string; resume: string }> = {
   },
   store_busy: {
     headline: 'Captures are paused — the store is busy.',
-    resume: 'An `identify` or `emit` run is using it. Wait for it to finish, then resume.',
+    resume: 'An identify or a send is using it. Wait for it to finish, then resume.',
   },
   store_unavailable: {
     headline: 'Captures are paused — the store could not be reached.',
-    resume: 'Check the capture server is still running, then resume.',
+    resume: 'Check that the app is still running on the Mac, then resume.',
   },
   inventory_conflict: {
     headline: 'Captures are paused — the store disagreed with what this screen expected.',
@@ -151,7 +153,7 @@ const HALT_CODE_INFO: Record<string, { headline: string; resume: string }> = {
     resume: 'Reload the page to pick up the current game list, then choose Game again.',
   },
   game_unverified: {
-    headline: 'Captures are paused — this game has no export to join against.',
+    headline: 'Captures are paused — this game has no export to check its cards against.',
     resume: 'Choose a different game, or leave this one for a note-only capture, then resume.',
   },
   rarity_claim_invalid: {
@@ -187,8 +189,8 @@ const HALT_CODE_INFO: Record<string, { headline: string; resume: string }> = {
     resume: 'Check the camera feed is live, then resume.',
   },
   server_error: {
-    headline: 'Captures are paused — the server hit a bug.',
-    resume: 'Check the server log names it, then resume.',
+    headline: 'Captures are paused — the server hit a problem.',
+    resume: 'Wait a moment, then resume. If it repeats, restart the app on the Mac.',
   },
 }
 
@@ -597,8 +599,7 @@ function describe(err: unknown): Note {
   // strings — they say what happened and what to do next — and rewording them into
   // something friendlier makes them less actionable, not more.
   if (err instanceof ServerError) return { text: err.message, code: err.code }
-  if (err instanceof Error) return { text: err.message, code: null }
-  return { text: String(err), code: null }
+  return { text: describeFailure(err).message, code: null }
 }
 
 /* THE ADDRESS FIRST, AND THE NONCE ONLY WHERE THE ADDRESS CANNOT ANSWER (D172).
@@ -619,10 +620,9 @@ function describe(err: unknown): Note {
  * THE TEST IS WHETHER THE NAME CHANGED THE ADDRESS, never whether a cid was passed. `photoUrl`
  * ignores one in the demo build and refuses a `moved:`/`nophoto:` name, and both of those land
  * back on the slot route, where the nonce is still owed. */
-function photoSrc(box: number, index: number, cid: string | null, revision: number): string {
-  const url = photoUrl(box, index, cid)
-  if (url !== photoUrl(box, index)) return url
-  return `${url}${url.includes('?') ? '&' : '?'}v=${revision}`
+function photoSrc(box: number, index: number, ref: PhotoRef, revision: number): string {
+  const url = photoUrl(box, index, ref)
+  return url.includes('?') ? url : `${url}?v=${revision}`
 }
 
 function blurActive(): void {
@@ -2223,7 +2223,7 @@ export function CaptureScreen() {
       setBoxNote(
         error instanceof ServerError
           ? error.message
-          : 'The box could not be created. Check the capture server is running.',
+          : 'The box could not be created. Check that the app is running on the Mac, then try again.',
       )
     } finally {
       setBoxBusy(false)
@@ -3057,7 +3057,7 @@ export function CaptureScreen() {
             const undone = await undoCapture(target.box, target.index)
             patchOnHand(target.box, undone.on_hand)
             // THE CAUSE, NOT THE SYMPTOM (reviewer's finding): the capture handler increments
-            // this same section's count on the way in (line ~2865); an undo removes exactly
+            // this same section's count on the way in; an undo removes exactly
             // that card, so it decrements it back on the way out. Left undone, the Section
             // row's own "next card N" stayed one too high until the next `GET /boxes` — the
             // number every other "next card" on this screen now also reads (D118's one number).
@@ -4346,7 +4346,7 @@ export function CaptureScreen() {
               <img
                 key={last.card.key}
                 className="capture-media"
-                src={photoSrc(last.card.box, last.card.index, last.card.cid ?? null, revision)}
+                src={photoSrc(last.card.box, last.card.index, last.card, revision)}
                 alt={`Capture at ${last.card.label}`}
               />
             )}
@@ -4874,7 +4874,7 @@ export function CaptureScreen() {
                     >
                       <img
                         className="capture-undo-thumb capture-undo-thumb-portrait"
-                        src={photoSrc(target.box, target.index, target.cid, revision)}
+                        src={photoSrc(target.box, target.index, { cid: target.cid, capture_id: target.captureId }, revision)}
                         alt=""
                       />
                       {/* THE DRAWER GOES IN THE CAPTION, WHICH IS ALREADY ABSOLUTE — `left: 0;

@@ -31,7 +31,7 @@ store — real, fixture, demo-seeded, or CI's throwaway ones — is ever without
    candidate set comes from an FTS5 `MATCH` query, and every downstream line (grouping by
    SKU, `positions_for_sku`, `copies_on_hand`, the `loose` bag, the wire shape) is otherwise
    byte-for-byte what it is today. `T7`'s existing search assertions (`harness/tests/t7_store_and_seams.check_box_routes_and_search`,
-   the code-ledger dispute lookup at `:9924-9945`) pass unmodified except where the ORDER of
+   the code-ledger dispute lookup) pass unmodified except where the ORDER of
    groups changes (see Tests).
 2. A store opened by an older build's migration path (`store/db.py:_upgrade`) gets the FTS5
    table, its three sync triggers, and a populated index — automatically, once, under the
@@ -46,8 +46,8 @@ store — real, fixture, demo-seeded, or CI's throwaway ones — is ever without
    does not, and that loss is accepted, not a bug). Every T7 case that pins an exact ORDER
    of `do_search(...)["groups"]` still gets that order, or the case is updated with the
    reason (bm25 rank vs. the old insertion-order walk can reorder ties — see Tests).
-5. `scripts/cid-selftest.py:table_bytes` (`:165-175`) and
-   `case_the_reverse_restores_every_table_byte_identically` (`:649-684`) are updated to
+5. `scripts/cid-selftest.py:table_bytes` and
+   `case_the_reverse_restores_every_table_byte_identically` are updated to
    exclude the FTS5 shadow tables from the byte-exact comparison — see Call sites.
 
 ## Depends on / conflicts with
@@ -103,32 +103,31 @@ store — real, fixture, demo-seeded, or CI's throwaway ones — is ever without
   `docs/decisions/D045-the-copies-list-is-a-way-back-into-the-walk-and-the.md`) — confirms
   search narrows the box walk **client-side**: `GET /search` is store-wide with no box
   parameter (verified: `grep -n "search" app/src/server.ts` — `search(q)` at
-  `app/src/server.search` takes only `q`), and `BoxBrowse.tsx:710-716` intersects the
+  `app/src/server.search` takes only `q`), and `app/src/BoxBrowse.tsx`'s `VariantChooser` intersects the
   box's own rows against the returned copy keys in a `useMemo`. **This migration does not
   add box scoping to the wire** — that would be new surface area D45 does not ask for.
 - `server/capture_server.do_search` — `do_search` in full (reproduced under Call sites).
 - `server/capture_server._card_number_key` — `_card_number_key`, `_number_display`,
   `_match_rank`, `_distinct`.
 - `store/db.py` (module docstring, D88's argument), `SCHEMA_VERSION` and the
-  comment about the 3→4 merge collision — the precedent for this item's own version claim),
-  `:112-150` (`TABLES`, `_INDEXES`, `_CID_INDEXES` — the existing pattern for a derived,
-  indexed column), `:213-283` (`_ensure_schema`), `:285-345` (`_upgrade`), `:496-628`
-  (`_add_card_ids`, the closest existing model: additive column, backfill loop, receipt),
-  `:798-813` (`_add_submissions`, the *purest* additive step — no backfill question at all,
+  comment about the 3→4 merge collision (the precedent for this item's own version claim),
+  `TABLES`, `_INDEXES`, `_CID_INDEXES` (the existing pattern for a derived
+  indexed column), `_ensure_schema`, `_upgrade`, `_add_card_ids` (the closest existing
+  model: additive column, backfill loop, receipt), `_add_submissions` (the *purest*
+  additive step, no backfill question at all,
   which this migration's FTS *build* resembles more closely than the card-id backfill
-  does), `:990-1005` (`connect`), `:1092-1136` (`SqliteSource.upsert` — **note the ON
+  does), `connect`, `SqliteSource.upsert` (**note the ON
   CONFLICT DO UPDATE form, not INSERT OR REPLACE**, which is what keeps `rowid` stable
-  across a card's lifetime; see Steps 2), `:1140-1143` (`delete`).
-- `store/master._card_columns` (`_card_columns`), `:2480-2487` (`Inventory.CARDS`
-  `TableSpec`).
+  across a card's lifetime; see Steps 2), and `delete`.
+- `store/master._card_columns` and `Inventory.CARDS`'s `TableSpec`.
 - `pipeline/join.py` (`join_key`, the **composition** form `_card_number_key` uses
-  — zero-padded, no D55 set-code strip), `:623-650` (`display_number`, the **screen** form —
-  no padding, set code stripped per D55/D67), `:653-710` (`number_index_key`, the
+  — zero-padded, no D55 set-code strip), `display_number` (the **screen** form —
+  no padding, set code stripped per D55/D67), `number_index_key` (the
   **catalog-match** form — NOT what search uses; do not confuse the three).
 - `harness/tests/t7_store_and_seams.check_game_and_note_seam` (every existing search
   assertion).
-- `scripts/cid-selftest.raw` (`raw`, `table_bytes`) and `:649-684` (the reverse
-  test that enumerates every table by `sqlite_master`).
+- `scripts/cid-selftest.raw` (`raw`, `table_bytes`) and the reverse
+  test that enumerates every table by `sqlite_master`.
 - `app/src/useSearch.ts` (the one call site of `search()` on the client — `Inventory.tsx`,
   `BoxBrowse.tsx` and `Fulfillment.tsx` all go through this one hook) and
   `app/src/server.undoRetire`.
@@ -632,7 +631,7 @@ assertions already do this structurally — see Tests).
 
 ## Tests
 
-**T7 (`harness/tests/t7_store_and_seams.py`), existing block at `:7363-7500`:**
+**T7 (`harness/tests/t7_store_and_seams.py`), existing block:**
 
 - The three blank-query refusals (`:7381-7387`) — unchanged; `_require_query` is untouched.
 - `do_search("eiscue")["groups"] == [{"sku": "555", ...}]` (`:7389-7454`) — unchanged: one
@@ -660,7 +659,7 @@ assertions already do this structurally — see Tests).
   differ between two copies of one SKU (the D67 case above), and `min()` picks the lowest
   rank regardless of which copy contributed it — so **the group's `rank` field is
   order-independent already**, and `groups.sort(key=lambda g: (g["_rank"], names[0].lower(),
-  g["sku"]))` (`:8048`) is a total order with no tie left to iteration order.
+  g["sku"]))` is a total order with no tie left to iteration order.
   **Conclusion: no existing T7 assertion should need its expected VALUES changed, only
   re-run to confirm.** If any case proves otherwise, fix its expectation and note why in
   the PR — do not reorder `do_search`'s output to match a stale expectation.
@@ -743,7 +742,7 @@ mirror of `do_search` used to stub `page.route(/\/search\?/, ...)` in Playwright
 calls the real server, so it is unaffected by a server-side implementation change).
 **Ordering IS a risk here**: if `searchAnswer`'s own grouping/sort logic assumes anything
 about which physical copy of a tied-rank SKU appears first (grep its body for `.sort(` and
-compare against `do_search`'s own `groups.sort` at `:8048` — if `searchAnswer` mirrors that
+compare against `do_search`'s own `groups.sort` — if `searchAnswer` mirrors that
 exact sort key, as it should, it is unaffected by this change for the same order-independence
 argument given above for T7). Re-run the suite; do not hand-edit the fixture speculatively.
 

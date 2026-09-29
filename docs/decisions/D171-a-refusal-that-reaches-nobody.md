@@ -201,3 +201,5 @@ required check is missing instead of only counting.
 
 **Neither mechanism has caught a real instance yet**, because both were built the day the
 failures happened. **The self-tests are what stand in for that** until one does.
+
+**Amended 2026-09-28 (D196).** A user-facing refusal names the setting to change in plain words. The variable name stays in the docs and the logs.

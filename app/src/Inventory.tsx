@@ -24,6 +24,7 @@ import {
   retireCard,
   undoRetire,
   undoSale,
+  failureTone,
 } from './server'
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
@@ -267,7 +268,7 @@ const MOVE_BUILT_ON = 'move_built_on'
  * disclosure to put a machine string behind, so it does not carry one. The server's own
  * sentence, already in `failure.message`, is what a person reads; `code` stays off-screen. */
 function report(failure: Failure): void {
-  toast({ kind: 'refusal', title: failure.message })
+  toast({ kind: 'refusal', tone: failureTone(failure), title: failure.message })
 }
 
 /* ONE OWNER-SIDE VIEW OF STORED CARDS (D31), SEEN TWO WAYS: the walk, card by card, and the
@@ -967,7 +968,7 @@ function CopiesPanel({
 
   return (
     <section className="inventory-copies">
-      {failure === null ? null : <Notice tone="danger" title={failure.message} code={failure.code} />}
+      {failure === null ? null : <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />}
 
       {/* D118: a press changes what is on screen, never where the rest of it is. A re-read
           after `Mark sold` (`doSell`'s `setReloads`) keeps `group` standing from the old
@@ -1308,7 +1309,7 @@ function RetirePanel({
                  already filtered to the two shapes that name a photograph — so the copy this
                  dialog is about to retire is the copy on screen, whatever has slid through
                  its slot since the search answered. */
-              src={photoUrl(copy.place.box, copy.place.index, copy.cid)}
+              src={photoUrl(copy.place.box, copy.place.index, copy)}
               alt={`The card stored at ${sayPlace(copy.place.label ?? copy.key)}`}
               onError={() => setBroken(true)}
             />

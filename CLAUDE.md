@@ -431,7 +431,9 @@ Rationale, sales strategy, and open questions: `docs/CODES-DECISIONS.md`.
   `CaptureHandler.timeout = 15` (reaps only idle connections). A burst of concurrent clients
   kills it. `REQUEST_SLOTS = 4` bounds executing requests with a
   `ThreadPoolExecutor(REQUEST_SLOTS)`. It is safe over HTTP/1.1 only because every response
-  sends `Connection: close` (DEBT11 has the mechanism and the measurements). `make
+  sends `Connection: close` (DEBT11 has the mechanism and the measurements). `PHOTO_SLOTS = 4` is
+  a second, separate bound for `/photo/` and `/assets/` GETs, sorted off the accept thread (owner's
+  ruling, 2026-09-28, DEBT11); its refusal is `photo_busy`. `make
   launch-agent` keeps this alive over the owner's real store. Run the full suite ONCE at the
   end. Never `make up ARGS=--restart`, `make down` or `make up` to fix a wedge — the refusal
   without `--confirm` is the answer.
@@ -604,11 +606,13 @@ Rationale, sales strategy, and open questions: `docs/CODES-DECISIONS.md`.
   (`ARGS=<n>` with no `--confirm`) never waits, and is never this clause's business.
 - **A CITATION NAMES A SYMBOL, NEVER A LINE.** A line number rots on the next edit above it.
   Write a decision id, a section, or the `module.symbol` form the `paths` row verifies. That
-  form takes no `.py` before the symbol. Mechanized by one `make docs-audit` row, `line
-  anchors`. It refuses every `path:N` and `path:N-M` in every markdown file, with no list of
-  exceptions. It runs at commit. A dated record that must quote a line writes it in words, as
-  in "line 182, column 81". A citation of a symbol that has moved stays invisible, which D149
-  ruled no check can see.
+  form takes no `.py` before the symbol. A method is "`module.Class`'s `method`". A CSS rule is
+  its selector. Mechanized by one `make docs-audit` row, `line anchors`, at commit. It refuses
+  `path:N`, `file.ext:N`, `~N` and a bare `:N` after a cited file, in every markdown file and in
+  code comments, docstrings and `docs/map.py`'s prose, with no list of exceptions. A time, a
+  ratio, `host:port`, a slice and a port `server/ports.py` emits are not anchors. A bare `:N`
+  with no file in its paragraph cannot be told from other text, so it is not read. A dated record that must quote a line writes it in words, as in
+  "line 182, column 81". A citation of a symbol that has moved stays invisible, which D149 ruled no check can see.
 - **A screen answers to the system**: `--bn-*` tokens only, verified at 1440 and 820,
   light and dark (390 only on an owner phone report). `docs/DESIGN.md` is the record. `make docs-audit`'s `design tokens` row
   locks every name and hex both ways.

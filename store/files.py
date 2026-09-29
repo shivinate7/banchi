@@ -9,6 +9,7 @@ from __future__ import annotations
 import errno
 import json
 import os
+import sys
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -73,6 +74,37 @@ class LockTimeout(StoreError):
     """Someone else is holding the store lock. Almost always the capture server."""
 
 
+def log_note(message: str) -> None:
+    """One line to the server log (stderr). The screen says it plainly; this keeps the facts."""
+    print(message, file=sys.stderr, flush=True)
+
+
+def log_cause(what: str, exc: BaseException) -> None:
+    """The exception behind a plain refusal, kept in the server log."""
+    log_note(f"{what}: {type(exc).__name__}: {exc}")
+
+
+def plain_cause(exc: BaseException) -> str:
+    """Why the store could not be read, in words that read after "because"."""
+    if isinstance(exc, LockTimeout):
+        return "another job is holding it"
+    if isinstance(exc, (json.JSONDecodeError, UnicodeDecodeError)):
+        return "a file in it is damaged"
+    if type(exc).__module__ == "sqlite3":
+        return "its database reported a problem"
+    if isinstance(exc, PermissionError):
+        return "the app is not allowed to open a file in it"
+    if isinstance(exc, FileNotFoundError):
+        return "a file in it is missing"
+    if isinstance(exc, OSError):
+        return "the disk could not be read"
+    if isinstance(exc, StoreError):
+        return "the store reported a problem"
+    if isinstance(exc, (KeyError, TypeError, ValueError)):
+        return "a record in it is not in the shape Banchi expects"
+    return "something unexpected went wrong"
+
+
 def home() -> Path:
     override = os.environ.get(HOME_ENV, "").strip()
     return Path(override).expanduser().resolve() if override else REPO_ROOT
@@ -128,7 +160,8 @@ def exclusive(directory: Path, timeout: float = LOCK_TIMEOUT_SECONDS):
                 break
             except OSError as exc:
                 if exc.errno not in (errno.EACCES, errno.EAGAIN):
-                    raise StoreError(f"could not lock {path}: {exc}") from exc
+                    log_note(f"store lock: {type(exc).__name__}: {exc}")
+                    raise StoreError("The store could not be locked for writing because the disk or its folder is not available. Check that the disk is available, then try again.") from exc
                 if time.monotonic() > deadline:
                     raise LockTimeout(
                         f"{path} is locked by another process after {timeout}s — the "
@@ -177,7 +210,7 @@ def read_json(path: Path, default: Optional[Any] = None) -> Any:
     try:
         return json.loads(path.read_text("utf-8"))
     except json.JSONDecodeError as exc:
-        raise StoreError(f"{path} is not valid JSON: {exc}") from exc
+        raise StoreError(f"The store file {Path(path).name} is damaged and could not be read. Restore it from a backup.") from exc
 
 
 def append_jsonl(path: Path, record: Any) -> None:
@@ -232,5 +265,5 @@ def read_jsonl(path: Path):
         try:
             out.append(json.loads(line))
         except json.JSONDecodeError as exc:
-            raise StoreError(f"{path}:{lineno} is not valid JSON: {exc}") from exc
+            raise StoreError(f"Line {lineno} of the store file {Path(path).name} is damaged and could not be read. Restore it from a backup.") from exc
     return out

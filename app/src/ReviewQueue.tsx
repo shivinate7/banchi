@@ -36,6 +36,8 @@ import {
   undoAnswer,
   undoRetire,
   undoStandDown,
+  failureTone,
+  refusalToast,
 } from './server'
 import {
   Button,
@@ -828,11 +830,11 @@ export function ReviewQueue() {
         openRuns(false, first.run)
       } else {
         const failed = answer.failed[0]
-        toast({ kind: 'refusal', title: 'Nothing was paid for', body: failed?.sentence ?? failed?.message ?? 'The run did not start.' })
+        toast({ kind: 'refusal', tone: failed === undefined ? 'warn' : failureTone(failed), title: 'Nothing was paid for', body: failed?.sentence ?? failed?.message ?? 'The run did not start.' })
       }
       setReloads((n) => n + 1)
     } catch (err) {
-      toast({ kind: 'refusal', title: 'Nothing was paid for', body: describeFailure(err).message })
+      toast({ ...refusalToast(err, 'Nothing was paid for') })
     } finally {
       spending.current = false
       setSpendBusy(false)
@@ -1298,10 +1300,9 @@ export function ReviewQueue() {
     const next = worklist[1]
     if (next === undefined) return null
     if (next.entry.box < 1 || next.entry.photo === null) return null
-    /* The slot route, for `QueuePhoto`'s reason below: a queue entry carries no `cid`. The
-       prefetch must address the photograph exactly as the render will, or it warms a URL
-       nothing asks for. */
-    return photoUrl(next.entry.box, next.entry.index)
+    /* By name when the entry carries one, exactly as `QueuePhoto` renders it, or the prefetch
+       warms a URL nothing asks for. */
+    return photoUrl(next.entry.box, next.entry.index, next.entry)
   }, [worklist])
 
   useEffect(() => {
@@ -1775,7 +1776,7 @@ function Tray({
 function RefusalNotice({ refusal, onReload, onDismiss, disabled }: { refusal: Refusal; onReload: () => void; onDismiss: () => void; disabled: boolean }) {
   const stale = STALE_CODES.has(refusal.failure.code)
   return (
-    <Notice tone="danger" title={refusal.failure.message} code={`${refusal.failure.code}${refusal.at === null ? '' : ` ${refusal.at}`}`} className="review-refusal review-note">
+    <Notice tone={failureTone(refusal.failure)} title={refusal.failure.message} code={`${refusal.failure.code}${refusal.at === null ? '' : ` ${refusal.at}`}`} className="review-refusal review-note">
       <span className="review-refusal-actions">
         {/* ICON-MAP (review): words, not an icon — this is the notice's own recovery, the
             one primary action beside Dismiss. words="only-primary" (rule 4). */}
@@ -1963,9 +1964,8 @@ function GroupConfirm({
             ) : (
               <img
                 className="review-group-photo"
-                /* The slot route again, and for the same reason: these are queue entries
-                   (D29's homogeneous group), which carry no `cid`. */
-                src={photoUrl(row.entry.box, row.entry.index)}
+                /* By name (D172); the slot route only for an entry with no cid. */
+                src={photoUrl(row.entry.box, row.entry.index, row.entry)}
                 alt={`The card photographed at ${row.entry.label}`}
                 loading="lazy"
                 onError={() =>
@@ -2598,15 +2598,10 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
     )
   }
 
-  /* THE SLOT ROUTE, BECAUSE A QUEUE ENTRY HAS NO NAME TO ADDRESS BY (D172). `_queue_row` is
-     `asdict(QueueEntry)`, and that record — written by `cli/resolve.py` at join time and read
-     back out of the store's queue table — carries `box`, `index`, `label` and `photo` and no
-     `cid`: the queues predate the name by a long way, and nothing re-derives one for an entry
-     that is already waiting. `GET /photo/<box>/<index>` is the correct address for it and is
-     kept for exactly this population, alongside the 3,629 position records in 12 immutable
-     `runs/<n>/pricing.json` files. Its `no-cache` and its digest ETag are what keep this
-     picture honest while the box shifts under it. */
-  const src = photoUrl(entry.box, entry.index)
+  /* BY NAME WHEN THE ROUTE DECORATED THE ENTRY WITH ONE (D172): `_queue_row` adds `cid` for an
+     addressable slot, so a revisit costs no request. An entry with none (box 0, no card at
+     the slot) keeps the slot route, whose digest ETag stays honest while the box shifts. */
+  const src = photoUrl(entry.box, entry.index, entry)
 
   if (absent) {
     return (
@@ -3030,7 +3025,7 @@ function QueueRefresh({
           /* The TITLE carries the reassurance, not the body. `describeFailure`'s own
              messages already end with one — `origin_blocked`'s says "Nothing was saved" —
              and appending a second read as two different claims about one refusal. */
-          <Notice tone="danger" title="The re-check did not run, and nothing was written" code={failure.code}>
+          <Notice tone={failureTone(failure)} title="The re-check did not run, and nothing was written" code={failure.code}>
             {failure.message}
           </Notice>
         )}

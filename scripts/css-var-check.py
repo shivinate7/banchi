@@ -148,7 +148,7 @@ def strip_ts_comments(source: str) -> str:
     `_style_span_end`'s idea: a `//` inside a `'...'`, `"..."` or `` `...` `` literal is not a
     comment, and a regex that blanked one anyway truncated `'http://localhost:8000'` at the
     slashes and blanked everything after it on the line. LIVE in this tree before this fix:
-    `app/src/Gallery.tsx:193`, `app/src/server.ts:157` and `app/src/useCamera.ts:314` each
+    `app/src/Gallery.tsx`, `app/src/server.ts` and `app/src/useCamera.ts` each
     carry `http://` inside a string, and each got its tail blanked — the scan still read 0
     findings only because none of those tails happened to hold a `var()` or a definition key,
     which is luck and not a property this tool could claim. A `${...}` interpolation inside a

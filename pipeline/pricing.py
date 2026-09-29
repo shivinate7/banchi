@@ -131,7 +131,7 @@ class Rule:
             raise UnknownRule("{0!r} not in {1}".format(raw, RULES))
         if kind == RULE_MATCH:
             if percent:
-                raise UnknownRule("`match` takes no percentage, got {0!r}".format(raw))
+                raise UnknownRule("The match rule takes no percentage, got {0!r}".format(raw))
             return cls(kind=RULE_MATCH)
         if not percent:
             raise UnknownRule(
@@ -143,10 +143,10 @@ class Rule:
             raise UnknownRule("{0!r} is not a percentage".format(percent)) from exc
         if value < 0:
             raise UnknownRule(
-                "a negative percentage inverts the rule — use the other one, not {0!r}".format(raw)
+                "A negative percentage inverts the rule — use the other one, not {0!r}".format(raw)
             )
         if kind == RULE_UNDERCUT and value >= 100:
-            raise UnknownRule("undercut:{0} prices at or below zero".format(value))
+            raise UnknownRule("Undercut:{0} prices at or below zero".format(value))
         return cls(kind=kind, percent=value)
 
     def apply(self, basis_price: Decimal) -> Decimal:
@@ -158,7 +158,7 @@ class Rule:
             return basis_price * (Decimal("1") - factor)
         if self.kind == RULE_MARKUP:
             return basis_price * (Decimal("1") + factor)
-        raise UnknownRule("unknown rule kind: {0!r}".format(self.kind))
+        raise UnknownRule("Unknown rule kind: {0!r}".format(self.kind))
 
     @property
     def describe(self) -> str:
@@ -238,11 +238,11 @@ def check_threshold(value) -> Decimal:
         parsed = Decimal(text)
     except (ArithmeticError, InvalidOperation, ValueError) as exc:
         raise InvalidThreshold(
-            "threshold {0!r} is not a price".format(text)
+            "Threshold {0!r} is not a price".format(text)
         ) from exc
     if not parsed.is_finite() or parsed <= 0:
         raise InvalidThreshold(
-            "threshold {0!r} must be above zero".format(text)
+            "Threshold {0!r} must be above zero".format(text)
         )
     return parsed
 
@@ -341,8 +341,8 @@ def flat_price(price, allow_below_floor: bool = False, floor: Decimal = FLOOR) -
     price = price if isinstance(price, Decimal) else Decimal(str(price))
     if price < floor and not allow_below_floor:
         raise BelowFloor(
-            f"${price} is under the ${floor} floor, where a sale loses money including "
-            f"labor. Pass allow_below_floor=True to mean it."
+            f"${price} is under the ${floor} floor, where a sale loses money once labor is counted. "
+            "Go below the floor only by allowing it explicitly."
         )
     return Disposition(kind=FLAT_PRICE, price=price)
 

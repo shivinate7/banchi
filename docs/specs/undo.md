@@ -48,7 +48,7 @@ defect, and the pull is one of three rather than a case on its own:
 | the retirement | `{"undo": true}` on the retire route | the receipt only, for 20 s |
 | the pull | `{"undo": true}` on the pull route | the receipt only, for 20 s |
 
-`undoPull` has exactly two callers, `Orders.tsx:941` and `Fulfillment.tsx:705`, and both are
+`undoPull` has exactly two callers, `app/src/Orders.tsx`'s `undoFromToast` and `Fulfillment.tsx`, and both are
 toast actions. `UNDO_WINDOW_MS = 20_000` is declared three times.
 
 ## 2. The ruling: two mechanisms, and they are not the same mechanism
@@ -149,7 +149,7 @@ once, but I also want that granularity."*
 one index — D10 ruling 1, the one sanctioned renumber. It takes the target's own capture id as
 an aim check, and it refuses (`renumber_blocked`) if any higher card in the drawer has sold,
 retired or picked up a listing hold. `app/src/server.ts:removeCardInPlace` is the client half,
-and `BoxBrowse.tsx:2418` already presses it.
+and `app/src/BoxBrowse.tsx`'s `CardOps` already presses it.
 
 **So this is reach, not a build.** The capture strip's rows get the same press the box browser
 already has. The owner confirmed the slide is the behavior wanted: the stack really does close

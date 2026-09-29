@@ -202,7 +202,7 @@ it.
 | 2 | Commands section: name, one line, and flags only | ~28,000-30,000 (estimate) | Once per session |
 | 3 | Code cards section: move op detail to `docs/specs/code-cards.md` | ~5,000 | Once per session |
 | 4 | Incident narration: move to cited decision or debt entries (get-wrong sections and writing-a-brief) | ~5,000-6,000 (estimate) | Once per session |
-| 5 | MEMORY.md: two candidate stale lines | ~350-400 | Once per session, pending owner confirmation |
+| 5 | MEMORY.md: two candidate stale lines | 350 to 400 | Once per session, pending owner confirmation |
 | - | Decision index, 26,420 bytes | out of scope, already ruled | assigned to another lane |
 | - | Global CLAUDE.md, hooks besides decision-context.py, skills | no action proposed | measured only |
 

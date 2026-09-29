@@ -8,7 +8,7 @@ Files read: `app/src/Orders.tsx`, `app/src/Orders.css`, `app/src/OrdersWalkPane.
 ## Findings
 
 ### 1. `--bn-radius-md` does not exist — the walk pane's photo placeholder has no border-radius
-**What I saw, verified live:** when a walk card's take has not resolved to a real row (`row === null` in `OrdersWalkPane.tsx:692`), it renders a placeholder tile with class `.orders-walk-photo` instead of the real `PhotoPanel`. That class is styled at `OrdersWalkPane.css:12-22`:
+**What I saw, verified live:** when a walk card's take has not resolved to a real row (`row === null` in `OrdersWalkPane.tsx` line 692), it renders a placeholder tile with class `.orders-walk-photo` instead of the real `PhotoPanel`. That class is styled at `OrdersWalkPane.css` lines 12-22:
 ```
 .orders-walk-photo {
   width: 100%;
@@ -24,7 +24,7 @@ Files read: `app/src/Orders.tsx`, `app/src/Orders.css`, `app/src/OrdersWalkPane.
 **Does it recur:** no other file references `--bn-radius-md`, so this is contained to one line, but I'd flag it for a broader search of undefined `var()` references across the app — this one only surfaced because I happened to read the file closely; a build-time or lint-time check for undefined custom properties would catch this class of bug automatically.
 
 ### 2. The lede collapses from a full sentence to a bare, jargon-y count once the ledger loads
-**What I saw:** before the order ledger answers, `Orders.tsx:2167` shows a full descriptive sentence: *"Which copies each buyer gets, and where in the boxes they are. One press per copy, with twenty seconds to take it back."* The instant it loads, the lede becomes just `<strong>551</strong> lines` (via `summaryOf()`, `Orders.tsx:914-921`) — no sentence, no explanation of what a "line" is. Confirmed live: the header under "Orders" reads exactly **"551 lines"** with nothing else.
+**What I saw:** before the order ledger answers, `Orders.tsx` line 2167 shows a full descriptive sentence: *"Which copies each buyer gets, and where in the boxes they are. One press per copy, with twenty seconds to take it back."* The instant it loads, the lede becomes just `<strong>551</strong> lines` (via `summaryOf()`, `Orders.tsx` lines 914-921) — no sentence, no explanation of what a "line" is. Confirmed live: the header under "Orders" reads exactly **"551 lines"** with nothing else.
 **Where:** `app/src/Orders.OrdersHub` (two places).
 **Severity:** nit-to-medium. "Line" is order-fulfillment jargon (an order line item) that a returning owner probably knows, but it's a steep drop in informativeness compared to the loading-state sentence one line above it in the same function, and a new/infrequent user gets no help understanding what the number means.
 **Fix:** something like `<strong>551</strong> lines across 39 buyers` (or similar), keeping the number but restoring a little context, the way `Shipping`'s own lede ("TCGplayer's shipping export, sorted into three lanes") stays a full sentence permanently rather than collapsing to a bare figure.
@@ -45,7 +45,7 @@ Files read: `app/src/Orders.tsx`, `app/src/Orders.css`, `app/src/OrdersWalkPane.
 **Does it recur:** no, single occurrence.
 
 ### 4. Three different micro-gap values used for icon-to-text spacing in adjoining rules
-**What I saw:** within `Orders.css`, several visually similar "icon + short text" patterns use different `margin-right`/`gap` values for what reads as the same relationship: `margin-right: 3px` (`Orders.css:477`), `margin-right: 4px` (`Orders.css:521`), and `gap: 4px` used elsewhere for the same icon-label pairing pattern (e.g. `Orders.css:678`, `894`, `908`). None of these are on the `--bn-*` spacing scale (which starts at 4px/`--bn-1`), so `3px` in particular is a one-off value with no token backing it.
+**What I saw:** within `Orders.css`, several visually similar "icon + short text" patterns use different `margin-right`/`gap` values for what reads as the same relationship: `margin-right: 3px` (`Orders.css` line 477), `margin-right: 4px` (`Orders.css` line 521), and `gap: 4px` used elsewhere for the same icon-label pairing pattern (e.g. `Orders.css` line 678, `894`, `908`). None of these are on the `--bn-*` spacing scale (which starts at 4px/`--bn-1`), so `3px` in particular is a one-off value with no token backing it.
 **Where:** `app/src/Orders.css` (`.orders-order-figure b` and a second rule; compare the file's other figure rules).
 **Severity:** nit — these are all sub-token "optical" adjustments and might be individually justified (kerning against a specific glyph), but a 3px vs 4px split for the same visual role, with no comment explaining why one icon needs 1px less clearance than another, reads as drift rather than intent. Nothing else in this codebase's more heavily-commented files (PositionBar.css, PositionLabel.css) leaves an optical adjustment like this uncommented — every hand-tuned pixel value there has a paragraph explaining the measurement.
 **Fix:** either standardize on one value for icon-to-label clearance in this file, or add the same kind of one-line comment this codebase uses everywhere else to justify a non-token value.
@@ -53,10 +53,10 @@ Files read: `app/src/Orders.tsx`, `app/src/Orders.css`, `app/src/OrdersWalkPane.
 
 ## What I could not check
 - **Dark theme, live, on this screen.** Read from `tokens.css` values only after the Browser pane stopped compositing frames; not visually confirmed.
-- **1280 width, live.** `Orders.css:108` and `:145` both switch layout at `max-width: 1279px` (the view-controls grid and the two-pane `.orders-layout` column width, 300px → 268px). At exactly 1280 the wide layout should still apply per the CSS; I did not confirm this boundary live, only read it.
+- **1280 width, live.** `Orders.css` line 108 and line 145 both switch layout at `max-width: 1279px` (the view-controls grid and the two-pane `.orders-layout` column width, 300px → 268px). At exactly 1280 the wide layout should still apply per the CSS; I did not confirm this boundary live, only read it.
 - **The Shipping half of this same file** is covered in `shipping.md`, not here, even though they share one React component (`Orders.tsx`) and one `OrdersHubStore`.
 - **Empty state** (zero open orders) — not observed; the live store had 39 buyers.
-- **Loading state** — the ledger answered before I could reliably catch the loading sentence live; I only have it from source (`Orders.tsx:2167`).
+- **Loading state** — the ledger answered before I could reliably catch the loading sentence live; I only have it from source (`Orders.tsx` line 2167).
 - **The paste composer** (pasting a new order export) — not opened; it's a write-adjacent flow I did not want to risk triggering a real submission.
 - **Keyboard walk (`J`/`K` stepping)** and **undo** — not exercised, since Undo is a write-adjacent control per the task's safety fence.
 - **Finding 3's exact trigger condition** — needs a closer read of `Orders.tsx` than I completed in this pass.

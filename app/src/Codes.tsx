@@ -12,6 +12,7 @@ import {
   photoUrl,
   scanCodes,
   type Failure,
+  failureTone,
 } from './server'
 import type {
   BoxRecord,
@@ -729,7 +730,7 @@ export function Codes() {
   const failureNode =
     failure === null ? null : (
       <div className="codes-failure bn-anim-pop">
-        <Notice tone="danger" title={failure.message} code={failure.code || undefined} />
+        <Notice tone={failureTone(failure)} title={failure.message} code={failure.code || undefined} />
         <IconButton size="sm" icon="x" label="Dismiss" onClick={() => setFailure(null)} />
       </div>
     )
@@ -800,7 +801,7 @@ export function Codes() {
       {sheet === null ? failureNode : null}
       {loadFailure !== null && ledger !== null ? (
         <div className="codes-failure bn-anim-pop">
-          <Notice tone="danger" title={loadFailure.message} code={loadFailure.code || undefined}>
+          <Notice tone={failureTone(loadFailure)} title={loadFailure.message} code={loadFailure.code || undefined}>
             The screen is showing codes as they were last read.
           </Notice>
           <Button variant="ghost" size="sm" icon="refresh" busy={retrying} disabled={retrying} onClick={() => void retry()}>

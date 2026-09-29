@@ -910,11 +910,11 @@ def check_sections(sections) -> Tuple[int, ...]:
     # THE FIRST DIVIDER IS THE FRONT OF THE BOX. It is 1 on every box nothing was placed into
     # before its first card; a section placed in front of card 1 starts below 1 (D265).
     if not 0 < out[0] <= 1:
-        raise BadSections(f"the first section starts at the front of the box, not {out[0]}")
+        raise BadSections(f"The first section starts at the front of the box, not {out[0]}")
     if list(out) != sorted(out):
         raise BadSections(f"{list(out)} is not sorted")
     if len(set(out)) != len(out):
-        raise BadSections(f"{list(out)} repeats an index — two dividers in one slot")
+        raise BadSections(f"{list(out)} repeats a starting card, so two dividers would share one spot")
     return out
 
 
@@ -1505,9 +1505,7 @@ class Listing:
         """
         if stage == LIVE:
             raise UnknownState(
-                "`live` is not bumped (D115). A READING goes through `observe_live`, which "
-                "arbitrates it by `live_as_of`; a SALE goes through `sale()`, which counts "
-                "against the reading rather than editing it."
+                "A live reading cannot be changed by hand. Record a new reading or a sale instead."
             )
         if stage not in LISTING_STAGES:
             raise UnknownState(f"{stage!r} not in {LISTING_STAGES}")
@@ -2086,7 +2084,7 @@ class Inventory:
             if len(out) >= count:
                 return out[:count], ordinal, last
             self._respace(box)
-        raise BadSections("the gap stayed too narrow after the box was re-spaced")
+        raise BadSections("The gap stayed too narrow after the box was re-spaced")
 
     def section_div_of(self, box, key) -> str:
         """The divider key of the section a card with order key `key` stands in."""
@@ -2175,7 +2173,7 @@ class Inventory:
             if placed is not None:
                 return placed
             self._respace(box)
-        raise BadSections("the gap stayed too narrow after the box was re-spaced")
+        raise BadSections("The gap stayed too narrow after the box was re-spaced")
 
     def _try_place(self, box, items, target) -> Optional[List[int]]:
         arriving = [int(v) for kind, v in items if kind == "card"]
@@ -2187,7 +2185,7 @@ class Inventory:
         insert_at = len(sections)
         take_div: Optional[int] = None
         if kind == "before" and not any(what == "div" for what, _ in items):
-            raise BadSections("cards without a divider go in front of a card or at a section's end")
+            raise BadSections("Cards without a divider go in front of a card or at a section's end")
         if kind == "end":
             last = max((n for n, sec in enumerate(sections) if sec["slots"]), default=-1)
             if last + 1 < len(sections):
@@ -2199,14 +2197,14 @@ class Inventory:
                 hi = None
         if kind == "before":
             if not (at is not None and 1 <= at <= len(sections)):
-                raise BadSections(f"there is no section {at} to put them in front of")
+                raise BadSections(f"There is no section {at} to put them in front of")
             div = float(sections[at - 1]["div"])
             lo = max(slots_below(div) + divs_below(div) + [0.0])
             hi = div
             insert_at = at - 1
         elif kind == "section_end":
             if not (at is not None and 1 <= at <= len(sections)):
-                raise BadSections(f"there is no section {at}")
+                raise BadSections(f"There is no section {at}")
             sec = sections[at - 1]
             lo = max([key(i) for i in sec["slots"]] + [float(sec["div"])])
             hi = float(sections[at]["div"]) if at < len(sections) else None
@@ -2214,7 +2212,7 @@ class Inventory:
         elif kind == "card":
             owner = next((n for n, sec in enumerate(sections) if int(at) in sec["slots"]), None)
             if owner is None:
-                raise BadSections("that card is not in this box, or it is moving")
+                raise BadSections("That card is not in this box, or it is moving")
             mine = key(int(at))
             hi = mine
             div = float(sections[owner]["div"])
@@ -2369,10 +2367,7 @@ class Inventory:
         unknown = sorted(set(claims) - set(CAPTURE_CLAIM_FIELDS))
         if unknown:
             raise UnknownClaim(
-                f"{', '.join(unknown)} is not a capture claim. "
-                f"Capture writes: {', '.join(CAPTURE_CLAIM_FIELDS)}. Adding one means "
-                "declaring it on `Card` and naming it in CAPTURE_CLAIM_FIELDS, so that "
-                "`Inventory.parse` keeps it and `record_capture` carries it over a re-record."
+                f"{', '.join(unknown)} is not something a capture can record. A capture records: {', '.join(CAPTURE_CLAIM_FIELDS)}."
             )
 
         if capture_id is not None:
@@ -2391,9 +2386,7 @@ class Inventory:
         key = position_key(box, index)
         if key in self.cards:
             raise PositionOccupied(
-                f"allocate_capture computed {key}, which already holds a card. "
-                "The high-water scan and this check disagree, which means the inventory "
-                "was mutated outside the lock."
+                "That position already holds a card. Reload the box and try again."
             )
 
         # `cid` IS A KEYWORD BESIDE `capture_id` AND DELIBERATELY NOT A MEMBER OF
@@ -2441,12 +2434,7 @@ class Inventory:
             # capture arrives named at zero extra I/O.
             if not card.cid:
                 raise UnnamedCard(
-                    f"{card.key} would be a new card with no `cid`. A card's name is the "
-                    "sha256 of the photograph the store held when the id was issued (D172), "
-                    "it is issued once here, and the photograph is filed under it — so a "
-                    "record without one names bytes nothing can find. Pass `cid=` to "
-                    "`allocate_capture`, or compute it from the photograph with "
-                    "`store.photos.sha256_of`."
+                    f"{card.key} would be a new card with no photograph name. Save the photograph first, then record the card."
                 )
             card.captured_at = card.captured_at or now()
             card.state = card.state or CAPTURED
@@ -2659,9 +2647,7 @@ class Inventory:
         row = skus.entries.get(str(sku))
         if row is None:
             raise SkuUnknown(
-                f"{sku!r} is not in the skus table (identity-follows-sku.md §3.2) — every "
-                "writer upserts the row it is about to bind, in the same transaction, "
-                "before calling bind_sku; fill it first"
+                f"{sku!r} is not in the SKU list yet. Fetch this game's export or the live export, then try again."
             )
         if expected_product_line and row.product_line != expected_product_line:
             raise GameMismatch(
@@ -2742,9 +2728,7 @@ class Inventory:
             row = skus.entries.get(str(sku))
             if row is None:
                 raise SkuUnknown(
-                    f"{sku!r} is not in the skus table (identity-follows-sku.md §3.2) — "
-                    "the table never deletes a row, so a previously bound SKU missing here "
-                    "means it was never upserted at all"
+                    f"{sku!r} is not in the SKU list yet. Fetch this game's export or the live export, then try again."
                 )
             if expected_product_line and row.product_line != expected_product_line:
                 raise GameMismatch(
@@ -2923,8 +2907,7 @@ class Inventory:
             row = skus.entries.get(str(sku))
             if row is None:
                 raise SkuUnknown(
-                    f"{sku!r} is not in the skus table (identity-follows-sku.md §3.2) — a "
-                    "hold is still a claim about a real listing; fill it first"
+                    f"{sku!r} is not in the SKU list yet. Fetch this game's export or the live export, then try again."
                 )
             if expected_product_line and row.product_line != expected_product_line:
                 raise GameMismatch(
@@ -3039,7 +3022,7 @@ class Inventory:
         to_box = _as_position_int(to_box, "to_box")
         card = self.cards.get(key)
         if card is None:
-            raise CardNotFound(f"no card at {key!r}")
+            raise CardNotFound(f"No card at {key!r}")
         if card.state in TERMINAL_STATES:
             where = f" to {card.moved_to}" if card.state == MOVED and card.moved_to else ""
             raise CardDeparted(f"{key} is already {card.state}{where}")
@@ -3055,9 +3038,7 @@ class Inventory:
         new_key = position_key(to_box, new_index)
         if new_key in self.cards:
             raise PositionOccupied(
-                f"move_card computed {new_key}, which already holds a card. "
-                "The high-water scan and this check disagree, which means the inventory "
-                "was mutated outside the lock."
+                "That position already holds a card. Reload the box and try again."
             )
 
         # AT THE BACK OF THE DESTINATION (D265): a later `place` gives it its real key.
@@ -3127,20 +3108,20 @@ class Inventory:
         """
         card = self.cards.get(key)
         if card is None:
-            raise CardNotFound(f"no card at {key!r}")
+            raise CardNotFound(f"No card at {key!r}")
         if card.state != MOVED or not card.moved_to:
             raise CardDeparted(f"{key} is {card.state}, not moved")
         new_key = str(card.moved_to)
         transplant = self.cards.get(new_key)
         if transplant is None:
-            raise CardNotFound(f"the card moved from {key} is no longer at {new_key}")
+            raise CardNotFound(f"The card moved from {key} is no longer at {new_key}")
         # THE SAME CARD, BY ITS NAME (D172), before anything is deleted. `moved_to` is a
         # key, and a key can hold another card: the demo seed's tombstone names a slot
         # another card holds. `move_card` put `moved:<name>` on the tombstone, so the two
         # names must agree, or this would delete a card that never moved.
         names = {f"{MOVED_CID_PREFIX}{transplant.cid}@{key}", f"{MOVED_CID_PREFIX}{transplant.cid}"}
         if not transplant.cid or card.cid not in names:
-            raise CardNotFound(f"the card at {new_key} is not the one moved from {key}")
+            raise CardNotFound(f"The card at {new_key} is not the one moved from {key}")
         if int(transplant.index) != self.next_index(transplant.box) - 1:
             raise CardDeparted(f"{new_key} is no longer the newest card in its box")
         # A DIVIDER PUT IN BEHIND THE TRANSPLANT builds on the move too. Deleting the
@@ -3164,7 +3145,7 @@ class Inventory:
             had = {float(v) for v in sections_at_move}
             behind = [start for start in behind if start not in had]
         if behind:
-            raise CardDeparted(f"a divider was put in after {new_key}")
+            raise CardDeparted(f"A divider was put in after {new_key}")
 
         # THE ORDER KEY COMES BACK FROM THE TOMBSTONE TOO (D265). The transplant holds the
         # new box's back position, and the old box sorts by `order`, so without this the card
@@ -3476,7 +3457,7 @@ class Inventory:
             if entry.box == number or entry.name is None:
                 continue
             if entry.name.strip().casefold() == wanted:
-                raise BoxNameTaken(f"another box is already called {entry.name!r}")
+                raise BoxNameTaken(f"Another box is already called {entry.name!r}")
 
     def set_name(self, number, name: Optional[str]) -> Box:
         """Name a box, rename it, or clear the name. Logs both names; refuses a duplicate.
@@ -3635,10 +3616,10 @@ class Inventory:
             try:
                 at = int(ordinal)
             except (TypeError, ValueError):
-                raise BadSections(f"section {ordinal!r} is not a number") from None
+                raise BadSections(f"Section {ordinal!r} is not a number") from None
             if at < 1 or at > len(layout):
                 raise BadSections(
-                    f"section {at} does not exist: {self.box_title(entry.box)} has "
+                    f"Section {at} does not exist: {self.box_title(entry.box)} has "
                     f"{len(layout)} section{'s' if len(layout) != 1 else ''}"
                 )
             key = divider_key(layout[at - 1])
@@ -3698,7 +3679,7 @@ class Inventory:
                 floor, hi = divs[ordinal - 1], divs[ordinal]
                 if not any(floor <= float(k) < hi for _, k in self.box_order(entry.box).pairs):
                     raise SectionEmpty(
-                        f"section {ordinal} of {self.box_title(entry.box)} holds nothing yet. "
+                        f"Section {ordinal} of {self.box_title(entry.box)} holds nothing yet. "
                         f"Capture a card into it before starting another after it."
                     )
                 keys, _, _ = self.section_tail_key(entry.box, after, layout_token)
@@ -3709,7 +3690,7 @@ class Inventory:
         last = layout[-1]
         if last >= at:
             raise SectionEmpty(
-                f"section {len(layout)} of {self.box_title(entry.box)} holds nothing yet. "
+                f"Section {len(layout)} of {self.box_title(entry.box)} holds nothing yet. "
                 f"Capture a card into it before starting another."
             )
         return self.set_sections(entry.box, layout + [at])

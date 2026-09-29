@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 
-import { describeFailure, getGraveyard, type Failure } from './server'
+import { describeFailure, getGraveyard, type Failure, failureTone } from './server'
 import type { DepartedCard } from './types'
 import { Button, EmptyState, Notice, Page, Pill, ReloadButton, Segmented, type PillTone } from './kit'
 import { readingAgo, readingExact, stateLabel, stateTone } from './cardState'
@@ -154,7 +154,7 @@ export function Graveyard() {
       status={
         failure !== null && rows !== null ? (
           <div className="graveyard-failure bn-anim-pop">
-            <Notice tone="danger" title={failure.message} code={failure.code || undefined}>
+            <Notice tone={failureTone(failure)} title={failure.message} code={failure.code || undefined}>
               As last read.
             </Notice>
             <Button variant="ghost" size="sm" icon="refresh" busy={retrying} disabled={retrying} onClick={() => void retry()}>
@@ -224,7 +224,7 @@ export function Graveyard() {
                   /* THE SHARED CADENCE (UX review, 2026-09-20), not a hand-rolled one: this
                      row used to set its own `animationDelay` (16ms * min(i, 24)), a second
                      copy of the stagger every other list in the product reads off
-                     `--bn-stagger`/`--bn-stagger-cap` (`kit.css:81`). `.bn-stagger` on the
+                     `--bn-stagger`/`--bn-stagger-cap` (`kit.css`). `.bn-stagger` on the
                      body plus `--i` here is the same mechanism `Orders.tsx` already uses. */
                   <tr key={key} className={`graveyard-row is-${row.how}`} style={{ '--i': i } as CSSProperties}>
                     <td data-th="Left" className="graveyard-when" title={readingExact(stamp) ?? undefined}>

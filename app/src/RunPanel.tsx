@@ -10,6 +10,7 @@ import {
   matchRun,
   runStep,
   type Failure,
+  failureTone,
 } from './server'
 import type { ExportAsked, ExportFetched, ExportScope, RunDetail, RunSummary } from './types'
 import { usePoll } from './usePoll'
@@ -700,7 +701,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
   const troubleFor = (keys: readonly Trouble['key'][]) =>
     trouble !== null && keys.includes(trouble.key) ? (
       <div className="runs-trouble">
-        <Notice tone="danger" code={trouble.failure.code}>
+        <Notice tone={failureTone(trouble.failure)} code={trouble.failure.code}>
           {trouble.failure.message}
         </Notice>
         <IconButton size="sm" icon="x" label="Dismiss" onClick={() => setTrouble(null)} />
@@ -756,7 +757,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
         </div>
         {pageFailure !== null ? (
           <div className="runs-trouble">
-            <Notice tone="danger" code={pageFailure.code}>
+            <Notice tone={failureTone(pageFailure)} code={pageFailure.code}>
               {pageFailure.message}
             </Notice>
           </div>

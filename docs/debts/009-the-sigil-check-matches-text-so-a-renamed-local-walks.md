@@ -57,8 +57,8 @@ two spellings the product actually uses. **Until the nominal type is ruled on, a
 which is more than it meant and still less than it sounds like, and the sweep that catches the rest
 is a person reading `app/src` and asking of each figure what number it is.**
 
-**Two the sweep can see and neither pattern can, left deliberately.** `Pricing.tsx:2641` draws
-`` `no label · ${photoAt.box}/${photoAt.index}` `` and `Orders.tsx:1205` draws
+**Two the sweep can see and neither pattern can, left deliberately.** `Pricing.tsx` line 2641 at `b61ffa32` draws
+`` `no label · ${photoAt.box}/${photoAt.index}` `` and `Orders.tsx` line 1205 at `b61ffa32` draws
 `` `box ${target.box}, index ${target.index}` ``. Both spell the key in prose with no figure at
 all, so no sigil rule reaches them and none should — naming the index *as* the index is the one
 thing that is never the confusion. They are here because they are the shape a future reader will

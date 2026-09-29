@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { describeFailure, getInventorySets, getSoldPrices, type Failure, type SoldPricesLookup } from './server'
+import { describeFailure, getInventorySets, getSoldPrices, type Failure, type SoldPricesLookup, failureTone } from './server'
 import type { SetGroup, SetGroupCard } from './types'
 import { EmptyState, Loading, Money, Notice, Pill, Select } from './kit'
 import { patchViewQuery, useViewParam } from './kit/viewState'
@@ -185,7 +185,7 @@ export function InventorySets({ reloadToken = 0 }: { readonly reloadToken?: numb
   }, [current])
 
   if (failure !== null) {
-    return <Notice tone="danger" title={failure.message} code={failure.code} />
+    return <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />
   }
   if (report === null) return <Loading shape="cards" rows={12} />
 

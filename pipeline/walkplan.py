@@ -684,7 +684,7 @@ def solve(
     missing = sorted(sku for sku, count in wanted.items() if reach.get(sku, 0) < int(count))
     if missing:
         raise Uncoverable(
-            "no set of stops can fill "
+            "No set of stops can fill "
             + ", ".join(
                 f"{sku} (wants {wanted[sku]}, {reach.get(sku, 0)} reachable)"
                 for sku in missing
@@ -913,7 +913,7 @@ def plan(
         # `app/src/Orders.tsx` on main (`count` descending, `name` ascending tie-break).
         # `Take` carries no name, so the tie-break here is `sku` ascending instead: stable,
         # and deterministic across two reads of the same plan. THE COPIES INSIDE ONE TAKE
-        # rank the other way, front to back by slot (`app/src/Orders.tsx:1381`'s own
+        # rank the other way, front to back by slot (`app/src/Orders.tsx`'s own
         # comment: a hand goes front to back) — that register is untouched here, `_assign`
         # and `supply` already order `Take.copies` that way, and this loop only orders the
         # SKUs, never the copies under one.

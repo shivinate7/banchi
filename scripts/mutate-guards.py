@@ -355,7 +355,7 @@ REAP_MUTATIONS: Tuple[Mutation, ...] = (
 # DROPPED, NAMED RATHER THAN SILENTLY OMITTED: a fourth reap.py mutation flipped the UNKNOWN
 # verdict (a pid with no readable evidence) to GONE (nothing to judge). It SURVIVED —
 # reap-selftest.sh never poses a case that actually resolves to UNKNOWN and checks the outcome;
-# it only comments that the behaviour exists (line ~291: "a process carrying no absolute path
+# it only comments that the behaviour exists ("a process carrying no absolute path
 # in its argv is UNKNOWN and refused") and its one `lsof`-absent path is a SKIP, not an
 # assertion. Keeping this arm in the table would make `python3 scripts/mutate-guards.py` fail
 # on a real gap in a file this branch does not own (reap-selftest.sh), so it is left out BY
