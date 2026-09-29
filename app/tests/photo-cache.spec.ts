@@ -36,16 +36,17 @@ async function photosOn(page: Page, hash: string): Promise<string[]> {
   return srcs
 }
 
-for (const [name, hash] of [
-  ['Home', '#/'],
-  ['Review', '#/review'],
-  ['Pricing', '#/pricing'],
+for (const [name, path] of [
+  /* The three screens this case is about, not a roster of the app: paths, with the `#` added below. */
+  ['Home', '/'],
+  ['Review', '/review'],
+  ['Pricing', '/pricing'],
 ] as const) {
   test(`${name} draws every photograph by name and version, on the first visit and the revisit`, async ({ page }) => {
-    if (name === 'Pricing') await seedPopulatedPricing(page)
+    if (path === '/pricing') await seedPopulatedPricing(page)
     await page.goto('/#/shipping')
     for (const visit of [1, 2]) {
-      for (const src of await photosOn(page, hash)) expect(src, `${name}, visit ${visit}`).toMatch(PHOTO)
+      for (const src of await photosOn(page, `#${path}`)) expect(src, `${name}, visit ${visit}`).toMatch(PHOTO)
       await page.evaluate(() => (window.location.hash = '#/shipping'))
     }
   })

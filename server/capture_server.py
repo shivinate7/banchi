@@ -11198,6 +11198,21 @@ def do_reshoot(box: int, index: int, payload: dict) -> dict:
                 f"another card's.",
             )
 
+        # A RE-SHOOT MUST MINT A NEW ID WHEN THE BYTES CHANGE. The id is the version in every
+        # by-card URL (`?v=`, `immutable`), so new bytes under the card's CURRENT id would
+        # show the old photograph for up to a year. The same bytes under the same id is a
+        # replay, and stays idempotent.
+        if capture_id == card.capture_id:
+            current = photos.path(card.cid)
+            if not current.is_file() or current.read_bytes() != blob:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "capture_id_in_use",
+                    f"capture_id {capture_id!r} already names this card's current photograph, "
+                    f"and these bytes differ. Every new photograph gets a fresh id — mint a "
+                    f"new one.",
+                )
+
         previous_capture_id = card.capture_id
 
         # The caller's own integers, exactly as `_card_row` renders from them: the record

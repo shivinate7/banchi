@@ -12882,6 +12882,34 @@ def check_photo_cache(checks: Checks) -> None:
                     port, "GET", url, extra_headers={"If-None-Match": headers.get("ETag")}
                 )
                 checks.equal(status, 304, "its digest tag still revalidates to 304")
+                # The id is the version in `?v=`: new bytes under the card's CURRENT id would
+                # sit behind an immutable URL for a year. Same bytes stay an idempotent replay.
+                caught = checks.raises(
+                    capture_server.BadRequest,
+                    lambda: capture_server.do_reshoot(
+                        3,
+                        1,
+                        {
+                            "capture_id": "q2",
+                            "image": base64.b64encode(b"\xff\xd8\xff" + bytes([88]) * 64).decode(
+                                "ascii"
+                            ),
+                        },
+                    ),
+                    "a re-shoot with the card's CURRENT capture_id and different bytes refuses",
+                )
+                if caught is not None:
+                    checks.equal(
+                        getattr(caught, "code", None), "capture_id_in_use", "in its own code"
+                    )
+                capture_server.do_reshoot(
+                    3, 1, {"capture_id": "q2", "image": base64.b64encode(reshot).decode("ascii")}
+                )
+                checks.equal(
+                    request(port, "GET", f"{url}?v=q2")[1],
+                    reshot,
+                    "and the same bytes replay cleanly",
+                )
         finally:
             httpd.shutdown()
             httpd.server_close()
