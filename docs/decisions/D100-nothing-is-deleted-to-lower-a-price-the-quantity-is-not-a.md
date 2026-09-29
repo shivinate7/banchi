@@ -118,4 +118,4 @@ own rule price always goes. Proof: T7 `check_live_markdown_guards`.
 
 ### 2026-09-29 amendment: a sale or retirement in the app never lowers TCGplayer
 
-**The owner ruled on 2026-09-29, in paraphrase: marking a card sold or retired in the app must not lower its TCGplayer quantity.** A quantity is lowered only by an explicit push, never as a side effect of a state change. This pairs with the negative-quantity paragraph above: that paragraph says a negative `Add to Quantity` can lower a live quantity, and this one says nothing writes one unless the operator presses for it.
+**The owner ruled on 2026-09-29, in paraphrase: marking a card sold or retired in the app must not lower its TCGplayer quantity.** The phantom-listing finding in the amendment above (sold or retired cards never lower TCGplayer) is therefore accepted behaviour. The drift it leaves is corrected by an explicit write-down.
