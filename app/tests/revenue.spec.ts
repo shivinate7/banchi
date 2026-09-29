@@ -457,6 +457,38 @@ test('no horizontal scroll at 390, with Custom selected — the fifth period opt
   expect(overflow).toBeLessThanOrEqual(0)
 })
 
+test('no PAGE horizontal scroll at 820 with a long month strip of large figures (screen pass F6)', async ({ page }) => {
+  // Twelve months of five-figure sales: each column's value and label are `nowrap`, so the strip's
+  // own content (not the page) is what must give way. Measured: `.revenue-month-barwrap` and
+  // `.revenue-month-label` reached x=828 in an 820px viewport.
+  const months = ['2025-10', '2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09']
+  const orders = months.map((m, i) =>
+    orderRow({
+      number: `ORD-${2000 + i}`,
+      placed_at: `${m}-05T10:00:00+00:00`,
+      lines: [line({ sku: '9100001', name: 'Charizard ex', quantity: 1, unit_price: `${12000 + i * 111}.50` })],
+    }),
+  )
+  await page.setViewportSize({ width: 820, height: 900 })
+  await stub(page, orders)
+  await open(page, '?period=all')
+  await expect(page.locator('.revenue-month-col').first()).toBeVisible()
+  const strip = await page.evaluate(() => {
+    const cols = [...document.querySelectorAll<HTMLElement>('.revenue-month-col')]
+    return {
+      tops: new Set(cols.map((c) => Math.round(c.getBoundingClientRect().top))).size,
+      spill: cols.filter((c) => {
+        const box = c.getBoundingClientRect()
+        return [...c.querySelectorAll('.revenue-month-v, .revenue-month-label')].some((e) => e.getBoundingClientRect().right > box.right + 0.5)
+      }).length,
+    }
+  })
+  expect(strip.tops, 'the month strip wrapped into rows instead of scrolling in its own box').toBe(1)
+  expect(strip.spill, 'a month figure or label runs out of its own column').toBe(0)
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  expect(overflow).toBeLessThanOrEqual(0)
+})
+
 test('no PAGE horizontal scroll at 390 with the Today column active — it scrolls in its own wrapper', async ({ page }) => {
   // The Today column (D225) is the widest state the product table can be in.
   // `.revenue-table-wrap` is where any overflow belongs, never `document.documentElement`.

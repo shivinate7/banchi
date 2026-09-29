@@ -94,6 +94,20 @@ async function openGraveyard(page: Page, rows: unknown[] = GRAVEYARD_ROWS): Prom
 
 sealEveryTest()
 
+test('at 820 no header or cell in the table is cut short (screen pass F7)', async ({ page }) => {
+  // The wrap is ~690px at 820: seven columns left `Captured` reading "CAPTURE", its cells "28 da…" and
+  // the condition "Near Mint …". The two lowest-value columns leave and the rest stay whole.
+  await page.setViewportSize({ width: 820, height: 900 })
+  await openGraveyard(page, GRAVEYARD_ROWS.map((row) => (row.sku === null ? row : { ...row, condition: 'Near Mint Holofoil' })))
+  await expect(page.locator('.graveyard-table tbody tr').first()).toBeVisible()
+  const cut = await page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>('.graveyard-table th, .graveyard-table td, .graveyard-table .graveyard-condition, .graveyard-table .bn-pill')]
+      .filter((el) => el.getClientRects().length > 0 && el.scrollWidth > el.clientWidth + 1)
+      .map((el) => `${el.tagName}:${(el.textContent ?? '').slice(0, 24)}`),
+  )
+  expect(cut).toEqual([])
+})
+
 test.describe('the graveyard', () => {
   test('exactly three tabs, All/Sold/Retired, with the right counts — no Moved, no Buried', async ({
     page,

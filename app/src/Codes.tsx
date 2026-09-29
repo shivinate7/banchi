@@ -853,7 +853,7 @@ export function Codes() {
           <div className="bn-panel codes-empty">
             <EmptyState
               icon="qr"
-              title="Empty"
+              title="No code cards yet. Photograph a box to read them."
               /* UX-159: ONE first step. With the ledger empty, the header hides its own
                  "Read a box" (above) — there is nothing captured yet for it to read — so
                  this is the only button on screen. Once a box is captured and read, the

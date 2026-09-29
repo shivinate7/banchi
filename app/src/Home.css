@@ -331,6 +331,8 @@ a.home-deck { pointer-events: auto; }
 .home-box-bar > span { display: block; height: 100%; background: var(--bn-accent); border-radius: 3px; transition: width var(--bn-t-slow) var(--bn-ease); }
 .home-run-when { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; }
 @media (max-width: 559px) { .home-box-bar { display: none; } }
+/* A THUMB PRESSES THESE ROWS (F8): the run link drew 38px on a tablet. The pointer decides, not the width. */
+@media (hover: none) and (pointer: coarse) { .home-box, .home-run { min-height: 40px; } }
 @media (max-width: 767px) {
   .home-run-box { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 }

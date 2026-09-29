@@ -3844,6 +3844,18 @@ test('a long section name is drawn whole, and its count is said once, at 820', a
   await expect(title.locator('.browse-secttitle-count')).toHaveClass(/bn-sr/)
 })
 
+test('the walk column keeps the box name readable beside the action cell, at 820', async ({ page }) => {
+  /* SCREEN PASS F5: the action cell reserves 169px (D118) and the walk column is 220px, so the
+     row's `1fr` track was 3px and "RB Epics" drew as one character. */
+  await page.setViewportSize({ width: 820, height: 1180 })
+  await open(page, { orders: threeBuyerPayload(), walkPlan: walkPlanOf([walkPlanStop({})]) })
+  await page.locator('.orders-index-item').first().locator('.orders-index-tick input').check()
+  const box = page.locator('.walk-pick-where .card-locations-row .card-locations-identity-box').first()
+  await expect(box).toBeVisible()
+  const full = await box.evaluate((el) => ({ shown: el.getBoundingClientRect().width, needed: el.scrollWidth }))
+  expect(full.shown, 'the box name was cut to a sliver').toBeGreaterThanOrEqual(Math.min(full.needed, 60))
+})
+
 /* ------------------------------------------------------------------- the trap: no re-sort */
 
 test('a sale does not re-sort the walk list, and this section leads', async ({ page }) => {

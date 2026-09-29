@@ -427,7 +427,7 @@ export function ProductHistoryView({ sku, onSwitchSku }: { readonly sku: string;
           {payload.set_name ? <Pill tone="default">{payload.set_name}</Pill> : null}
           {payload.condition ? <Pill tone="default">{payload.condition}</Pill> : null}
           <Pill tone={payload.source === 'archive' ? 'ok' : 'default'}>
-            {payload.source === 'archive' ? 'Read from the archive — no host reached' : 'Read live, just now'}
+            {payload.source === 'archive' ? 'Read from the saved archive; the market site could not be reached.' : 'Read live, just now'}
           </Pill>
         </div>
       </header>

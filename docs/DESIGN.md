@@ -483,10 +483,12 @@ CONTAINER       widths measured against a COLUMN rather than the window, so they
   copies  470   CardLocations — the marker's track stops being 110px and starts being ~285
   copies  479   CardLocations — the identity keeps every character, the stage triple drops
   copies  619   CardLocations — the address takes the whole line
+  copies  339   CardLocations — the action cell takes its own row under the address
   pane    479   BoxBrowse — the fact grid goes to one column
   pane    559   BoxBrowse — the photograph stops short of the full width
   pane    560   BoxBrowse — the photo/copies band splits in two
   pane    760   BoxBrowse — the fact grid goes to two columns
+  graveyard 819  Graveyard — Order and Captured leave the table; the other five share the width
   orders  560   Orders — the buyer list moves beside the card and the walk
   orders  1000  Orders — the card pane moves beside the walk, sticky, and its photograph grows
   bn-page 559   Pricing — the row becomes two lines, the price on the right with Market under it

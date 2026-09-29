@@ -69,7 +69,7 @@
    than the column. `table-layout: fixed` sizes every column off the <colgroup> below, and a
    value too long for its column truncates with an ellipsis rather than wrapping or pushing
    the table wider than `.bn-page`. `overflow-x: auto` stays as a floor for a narrower rail. */
-.graveyard-table-wrap { overflow-x: auto; }
+.graveyard-table-wrap { overflow-x: auto; container-name: graveyard; container-type: inline-size; }
 .graveyard-table { table-layout: fixed; }
 .graveyard-col-left { width: 10%; }
 .graveyard-col-card { width: 25%; }
@@ -134,6 +134,29 @@
 
 /* UX-036: a windowed list's own "Show N more" row. */
 .graveyard-more { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3); padding: var(--bn-3) var(--bn-4); }
+
+/* A COLUMN TOO NARROW FOR SEVEN (screen pass F7). At 820 the wrap is ~690px and the last column
+   read `CAPTURE`, its cells `28 da…`. Order and Captured are the two lowest-value columns (Captured
+   repeats Left, Order is empty for most rows), so they go first and the five that stay share the
+   width. The card's condition wraps rather than ending in an ellipsis. */
+@media (min-width: 640px) {
+  @container graveyard (max-width: 819px) {
+    .graveyard-col-left { width: 14%; }
+    .graveyard-col-card { width: 28%; }
+    .graveyard-col-sku { width: 16%; }
+    .graveyard-col-how { width: 22%; }
+    .graveyard-col-where { width: 20%; }
+    .graveyard-col-order,
+    .graveyard-col-captured,
+    .graveyard-table th:nth-child(n + 6),
+    .graveyard-table td[data-th='Order'],
+    .graveyard-table td[data-th='Captured'] { display: none; }
+    .graveyard-condition { white-space: normal; overflow-wrap: anywhere; }
+    .graveyard-table td[data-th='Where'] { white-space: normal; overflow: visible; }
+    .graveyard-where { flex-wrap: wrap; row-gap: var(--bn-1); }
+    .graveyard-where .bn-pill { white-space: normal; text-align: left; }
+  }
+}
 
 /* ---- phones: the ledger becomes cards -------------------------------------------- */
 @media (max-width: 639px) {

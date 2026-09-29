@@ -881,7 +881,7 @@
   .browse-rowtick::after,
   .browse-secttick::after { content: ''; position: absolute; inset: -12px; }
   .browse-rowline .browse-rowtick { opacity: 0.8; }
-  .browse-quiet { height: var(--bn-control-h-lg); padding: 0 var(--bn-3); font-size: var(--bn-fs-sm); }
+  .browse-quiet { height: var(--bn-control-h-lg); min-width: 40px; justify-content: center; padding: 0 var(--bn-3); font-size: var(--bn-fs-sm); }
   .browse-status { gap: var(--bn-1) var(--bn-2); }
   /* the context bar's search button and the rail sheet's input are thumb-sized too */
   .browse-mobilebar .bn-btn { --btn-h: var(--bn-control-h-lg); min-width: var(--bn-control-h-lg); }
