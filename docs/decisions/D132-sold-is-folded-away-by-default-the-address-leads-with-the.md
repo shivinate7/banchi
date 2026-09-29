@@ -123,3 +123,5 @@ No server-side recency, no first-listed stamp, no name uniqueness for sections (
 never addressed by its name the way a box is, D20 amended), and the Fulfiller's screens are
 untouched — his list is his order, his place labels are plain text, and none of the four asks
 was about him.
+
+**Amended 2026-09-29 (owner's word, A1).** Under a search, a tie on section density now breaks by the box's natural name, the same as the Orders walk. The no-search order is unchanged. `docs/specs/order-walk-plan.md` §17 states how each screen ranks a search.

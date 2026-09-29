@@ -7436,6 +7436,33 @@ test('D132 — the copies list, the rail and the landing lead with the section h
   await expect(page.locator('.card-locations-row.is-current .card-locations-identity')).toHaveAttribute('aria-label', 'Box 2, Section 2, Card 1')
 })
 
+test('A1 — under a search, two boxes tied on density rank by natural name, and recency still leads with no search', async ({ page }) => {
+  /* One live Thievul in each box: a tie on density. The box named "Bin 10" was opened most
+     recently and has the LOWER number, so recency and number both say it leads. Natural name
+     (the Orders walk's own tie-break, D132 amended 2026-09-29) puts "Bin 2" first. */
+  const at = (box: number, name: string) =>
+    card({ index: 1, at: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3, box, boxName: name, boxTotal: 3 })
+  const cards: Cards = { '3/1': at(3, 'Bin 10'), '9/1': at(9, 'Bin 2') }
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  const boxes = {
+    boxes: [
+      { ...BOXES.boxes[0], box: 3, name: 'Bin 10', cards: 3, on_hand: 3, fill: 3, next_index: 4, sold: 0, retired: 0 },
+      { ...BOXES.boxes[0], box: 9, name: 'Bin 2', cards: 3, on_hand: 3, fill: 3, next_index: 4, sold: 0, retired: 0 },
+    ],
+  }
+  await page.addInitScript(() => {
+    if (window.name === 'seeded') return
+    window.name = 'seeded'
+    /* eslint-disable-next-line no-restricted-syntax -- SEEDING THE KEY UNDER TEST, as the D132 rail case does. */
+    window.localStorage.setItem('banchi.box-recency', JSON.stringify({ '3': '2026-09-09T10:00:00.000Z' }))
+  })
+  await open(page, boxes, store, () => PRICING, SALE, { route: '/#/inventory?box=3', hideSold: null, settle: '.browse-boxcell' })
+  const names = page.locator('.browse-boxcell .browse-boxcell-name')
+  await expect(names).toHaveText(['Bin 10', 'Bin 2'])
+  await page.getByRole('searchbox').fill('Thievul')
+  await expect(names).toHaveText(['Bin 2', 'Bin 10'])
+})
+
 /* ============================================================== F8: rank before pile size
  *
  * THE OWNER'S REPORT, 2026-09-27: searching "hand hammer" showed "Jayce, Hammer in Hand" first,

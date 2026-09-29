@@ -1056,10 +1056,20 @@ export function BoxBrowse({
         }
       }
     }
+    /* UNDER A SEARCH A DENSITY TIE FALLS TO THE BOX'S NATURAL NAME, AS THE ORDERS WALK'S DOES
+       (D132 amended 2026-09-29, `pipeline/walkplan.py:_drawn_key`): "Box 2" before "Box 10".
+       Recency is for browsing only. `numeric` collation is the platform's own natural sort. */
+    const byName = filtered && results !== null
+    const titleOf = new Map(boxRecords.map((record) => [record.box, boxTitle(record.name, record.box)]))
+    const natural = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
     return (a: number, b: number): number => {
       const ma = liveMatches.get(a) ?? 0
       const mb = liveMatches.get(b) ?? 0
       if (ma !== mb) return mb - ma
+      if (byName) {
+        const named = natural.compare(titleOf.get(a) ?? '', titleOf.get(b) ?? '')
+        if (named !== 0) return named
+      }
       const rra = rankOf.get(a) ?? Number.MAX_SAFE_INTEGER
       const rrb = rankOf.get(b) ?? Number.MAX_SAFE_INTEGER
       if (rra !== rrb) return rra - rrb

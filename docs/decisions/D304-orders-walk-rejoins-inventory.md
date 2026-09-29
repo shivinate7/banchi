@@ -87,3 +87,5 @@ word, on 2026-09-27.
 The lane plan (`orders-a/PLAN.md`, lanes A1 through A6) is not built by this entry. This
 entry is the design record the lanes build from. `docs/specs/order-walk-plan.md` §16 points
 here for the design, and holds the sort-order argument's own detail.
+
+**Amended 2026-09-29 (owner's word, A1).** Under a search, a tie on section density now breaks by the box's natural name, the same as the Orders walk. The no-search order is unchanged. `docs/specs/order-walk-plan.md` §17 states how each screen ranks a search.
