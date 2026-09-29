@@ -41,6 +41,7 @@ import {
 } from './server'
 import {
   Button,
+  EmptyFrame,
   EmptyState,
   Icon,
   IconButton,
@@ -1645,9 +1646,9 @@ export function ReviewQueue() {
       )}
 
       {current === null && refusal !== null ? (
-        <div className="review-lone bn-empty-frame">
+        <EmptyFrame className="review-lone">
           <RefusalNotice refusal={refusal} onReload={reload} onDismiss={() => setRefusal(null)} disabled={disabled} />
-        </div>
+        </EmptyFrame>
       ) : null}
 
       {rows === null && refusal === null ? <LoadingCard /> : null}
@@ -1656,7 +1657,7 @@ export function ReviewQueue() {
         everyone.length === 0 ? (
           <Done tally={tally} startedAt={startedAt.current} receipts={receipts} onUndo={undo} disabled={disabled} onOpenRuns={() => openRuns(false)} />
         ) : (
-          <section className="review-lone bn-panel bn-empty-frame">
+          <EmptyFrame as="section" className="review-lone bn-panel">
             <EmptyState
               icon="filter"
               title="Nothing waiting for this reason"
@@ -1667,7 +1668,7 @@ export function ReviewQueue() {
                 </Button>
               }
             />
-          </section>
+          </EmptyFrame>
         )
       ) : null}
 
@@ -1865,7 +1866,7 @@ function Done({
       </>
     )
   return (
-    <section className="review-done bn-panel bn-empty-frame">
+    <EmptyFrame as="section" className="review-done bn-panel">
       <EmptyState
         icon="check"
         className="review-done-empty"
@@ -1888,7 +1889,7 @@ function Done({
           <SessionList receipts={receipts} onUndo={onUndo} disabled={disabled} limit={3} />
         </div>
       )}
-    </section>
+    </EmptyFrame>
   )
 }
 

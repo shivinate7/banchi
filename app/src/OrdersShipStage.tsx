@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 
 import { readUpload } from './csvUpload'
-import { Button, EmptyState, Icon, IconButton, Money, Notice, OrderLink, type IconName } from './kit'
+import { Button, EmptyFrame, EmptyState, Icon, IconButton, Money, Notice, OrderLink, type IconName } from './kit'
 import { toast } from './kit/toast'
 import { SHIP_LANES, setHub, useHub } from './OrdersHubStore'
 import { describeFailure, fillShippingStamps, forgetShippingExport, readShippingExport, shippingFileUrl, failureTone } from './server'
@@ -368,7 +368,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
       <div className="shipping-stage">
         {/* Inside the centred column, not above it: the hero is the only content on this branch
             and a banner left-aligned beside it read as belonging to another screen. */}
-        <div className="shipping-empty bn-empty-frame">
+        <EmptyFrame className="shipping-empty">
           {notices}
           <label
             className={`shipping-drop${over ? ' shipping-drop-over' : ''}`}
@@ -423,7 +423,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
               </div>
             ))}
           </div>
-        </div>
+        </EmptyFrame>
       </div>
     )
   }
