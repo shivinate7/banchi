@@ -1405,8 +1405,19 @@ test('pressing the pause button moves nothing else on the screen (D118)', async 
    * itself spends real frame time opening the Rig and the Trigger field, which is enough
    * for the banner to already be up before there is any clock left to freeze. */
   await page.clock.install()
-  await page.clock.pauseAt(Date.now())
+  /* NOT `Date.now()`: the install above spends real time, so the page's clock can already be
+   * past the node clock and `pauseAt` refuses to go back ("Cannot fast-forward to the past",
+   * 3 of 40 at 12 workers). One second ahead is always in the page's future. */
+  await page.clock.pauseAt(Date.now() + 1000)
   await armMotion(page)
+  /* THE SECOND CONFOUND, measured (scrollY 84 -> 0 in every failing run, layout heights
+   * identical before and after): opening the Trigger field scrolls the page down to bring the
+   * open list into view (`OpenField`'s own effect), and the scroll stays after it closes. The
+   * click below then makes PLAYWRIGHT scroll the pause button back into view, which moves the
+   * shutter by exactly that offset — the test's own actionability scroll, not the control.
+   * Whether the field scrolls depends on layout at open time, hence intermittent. Bringing the
+   * button into view BEFORE the first measurement makes the click scroll nothing. */
+  await pauseplay(page).scrollIntoViewIfNeeded()
   const before = await shutter(page).boundingBox()
   await pauseplay(page).click()
   const after = await shutter(page).boundingBox()
