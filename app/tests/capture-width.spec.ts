@@ -35,13 +35,7 @@ for (const theme of ['light', 'dark'] as const) {
   ] as const) {
     test(`Capture leaves no unused horizontal band at ${width}, ${theme}`, async ({ page }) => {
       await page.setViewportSize({ width, height })
-      await page.addInitScript((t) => {
-        try {
-          localStorage.setItem('banchi.theme', t)
-        } catch {
-          /* the theme is a convenience */
-        }
-      }, theme)
+      await page.emulateMedia({ colorScheme: theme })
       await page.goto('/#/capture')
       await page.locator('.capture-shell').waitFor()
       await page.locator('.capture-frame-last').waitFor()
