@@ -1,4 +1,4 @@
-## DEBT-provision-selftest-race-case — the worktree-provision selftest's race case fails
+## DEBT56 — the worktree-provision selftest's race case fails
 
 **Symptom.** `make worktree-provision-selftest`, the case "two concurrent runs launch only one
 npm ci", reports `FAIL neither concurrent run reported an already-running install`. The case

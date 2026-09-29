@@ -130,4 +130,7 @@ DEBT50 git and gh CLI traps hit from this checkout
 DEBT51 A guard or probe can pass for the wrong reason
 DEBT52 Claude Code multi-agent and worktree session traps
 DEBT53 ~~the pricing corpus has five unlocked writers~~ — CLOSED 2026-09-27, fixed as recommended
+DEBT54 the 13th-row undo walk times out under load
+DEBT55 the audit self-test crashes when app/node_modules is missing
+DEBT56 the worktree-provision selftest's race case fails
 ```
