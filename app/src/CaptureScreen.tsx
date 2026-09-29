@@ -4133,6 +4133,7 @@ export function CaptureScreen() {
                         <span className="capture-frame-glyph" aria-hidden="true">
                           <Icon name="camera" size={26} />
                         </span>
+                        <p className="capture-frame-body">Camera is off. Turn it on to start.</p>
                         <Button variant="primary" icon="camera" className="capture-frame-open-words" onClick={camera.retry}>
                           Camera
                         </Button>
@@ -4342,6 +4343,7 @@ export function CaptureScreen() {
                 <span className="capture-frame-glyph" aria-hidden="true">
                   <Icon name="image" size={24} />
                 </span>
+                <p className="capture-frame-title">Nothing captured yet.</p>
               </div>
             ) : (
               <img
