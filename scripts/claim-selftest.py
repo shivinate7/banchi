@@ -2607,6 +2607,26 @@ def main() -> int:
                "growth` recognizes its own sanctioned rename and does not refuse its own claim",
                committed.stdout.decode("utf-8", errors="replace"))
 
+    # A CLAIMED ID IN A TEST'S `Governs:` HEADER STALES THE GENERATED docs/TESTS.md. The claim
+    # commit must carry it regenerated, or `docs-audit`'s `test purposes` row fails on that very
+    # commit (the PR #517 refusal). Red on a claim that only rewrites the header.
+    print("\n  -- a claimed id in a spec header regenerates docs/TESTS.md in the same claim --")
+    with tempfile.TemporaryDirectory() as raw:
+        gwork = build_split(Path(raw))
+        with_claimer(gwork)
+        shutil.copy(CLAIMER.parent / "tests_page.py", gwork / "scripts" / "tests_page.py")
+        git(gwork, "checkout", "-q", "-b", "feature-spec")
+        SD3 = "D-" + "spec-header-slug"
+        write(gwork, "docs/decisions/" + SD3 + ".md", f"## {SD3} — Spec header\n\nbody\n")
+        write(gwork, "app/tests/x.spec.ts", f"// Protects: a thing.\n// Governs: {SD3}\n")
+        git(gwork, "add", "-A")
+        git(gwork, "commit", "-qm", "a spec cites a slug")
+        claim(gwork, "--write")
+        page = gwork / "docs" / "TESTS.md"
+        text = page.read_text(encoding="utf-8") if page.exists() else ""
+        ok(f"| {D(3)} |" in text and SD3 not in text,
+           "docs/TESTS.md carries the claimed number, not the slug", text[-300:])
+
     print("\nclaim self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))
     return 1 if FAIL else 0
