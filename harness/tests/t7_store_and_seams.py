@@ -16830,6 +16830,127 @@ def check_box_true_index(checks: Checks) -> None:
             "younger than the run and the box's 133 cards are all another run's",
         )
 
+def check_emit_buried_box(checks: Checks) -> None:
+    """An emit over a buried box refuses and creates no card (2026-09-27 incident).
+
+    THE CASE: a run over box 3 was joined, then box 3 was deleted (its cards buried, its
+    registry row gone). `Inventory.box_disowns_run` used to answer None for a box with no row,
+    so the emit upserted a ghost card per position and sent phantom copies. Asserted: the
+    deletion record refuses the run on both branches (bid, time), the single and the merged
+    path refuse, a position the store holds no card at is refused, the Send screen's mapping
+    shows the owner one plain sentence, and a card that MOVED to another live box still sends.
+    (docs/debts slug `emit-buried-box`.)
+    """
+    checks.note("")
+    checks.note("EMIT OVER A BURIED BOX — refused, and no ghost card is born")
+
+    cards = [(3, 1, "Dunsparce", "120", "normal"), (3, 2, "Dunsparce", "120", "normal")]
+
+    def bury(inventory, *, log: bool) -> None:
+        for key in [k for k, c in inventory.cards.items() if int(c.box) == 3]:
+            del inventory.cards[key]
+        entry = inventory.boxes.pop("3")
+        if log:
+            inventory._log("box_deleted", None, box=3, bid=entry.bid, name=entry.name,
+                           cards=2, buried=2)
+
+    def owner_sentence(said: str) -> str:
+        refused = send_routes._empty_send_refusal(said, [], "sent", 1)
+        return str(refused.args[-1]) if refused.args else str(refused)
+
+    # --- both branches of `box_disowns_run`, on the rule itself ---------------------------
+    with isolated_home():
+        inventory = Store().read().inventory
+        gone = [{"event": "box_deleted", "box": 3, "bid": 7, "at": "2026-09-16T02:00:00+00:00"}]
+        checks.ok(
+            inventory.box_disowns_run(3, "r", "2026-09-01T00:00:00+00:00", bid=7, deleted=gone)
+            is not None,
+            "bid branch: the run's drawer index equals the deleted drawer's — refused",
+        )
+        checks.ok(
+            inventory.box_disowns_run(3, "r", "2026-09-01T00:00:00+00:00", bid=8, deleted=gone)
+            is None,
+            "bid branch: a different drawer's index is not the deleted one — passes",
+        )
+        checks.ok(
+            inventory.box_disowns_run(3, "r", "2026-09-01T00:00:00+00:00", deleted=gone)
+            is not None,
+            "time branch: no index anywhere, deleted after the run started — refused",
+        )
+        checks.ok(
+            inventory.box_disowns_run(3, "r", "2026-09-20T00:00:00+00:00", deleted=gone)
+            is None,
+            "time branch: deleted BEFORE the run started — not this run's drawer, passes",
+        )
+        checks.ok(
+            inventory.box_disowns_run(3, "r", "2026-09-01T00:00:00+00:00") is None,
+            "and with no deletion record and no row the rule still abstains, as before",
+        )
+
+    # --- the single path, through the Send screen's mapping -------------------------------
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        with Store().write() as snapshot:
+            bury(snapshot.inventory, log=True)
+        said = command(checks, "emit", str(run_dir.directory), exits=1)
+        sentence = owner_sentence(said)
+        checks.ok(
+            run_dir.name in sentence and "box 3" in sentence and "nothing was sent" in sentence
+            and "REFUSING" not in sentence,
+            "a run over a deleted box refuses, and the Send screen shows ONE plain sentence "
+            "naming the run and the box",
+            sentence,
+        )
+        checks.equal(len(Store().read().inventory.cards), 0, "and no card was created")
+
+    # --- the merged path (what Send runs): one good run, one over the buried box ----------
+    with isolated_home():
+        good, _ = seam_run(checks, [(4, 1, "Articuno", "161", None)])
+        bad, _ = seam_run(checks, cards)
+        with Store().write() as snapshot:
+            bury(snapshot.inventory, log=True)
+        before = len(Store().read().inventory.cards)
+        said = command(checks, "emit", str(good.directory), str(bad.directory), exits=1)
+        checks.ok(
+            bad.name in owner_sentence(said) and "box 3" in owner_sentence(said),
+            "the merged emit refuses the whole send on the buried run, same sentence",
+            said,
+        )
+        checks.equal(
+            len(Store().read().inventory.cards), before,
+            "and the merged refusal created no card and stamped nothing",
+        )
+
+    # --- a position with no card, in a live box -------------------------------------------
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        with Store().write() as snapshot:
+            bury(snapshot.inventory, log=False)
+            snapshot.inventory.ensure_box(3)
+        said = command(checks, "emit", str(run_dir.directory), exits=1)
+        sentence = owner_sentence(said)
+        checks.ok(
+            "Box 3, card 1" in sentence and "3/1" not in sentence and "nothing was sent" in sentence,
+            "a position with no card refuses, named as a place ('Box 3, card 1'), never a key",
+            sentence,
+        )
+        checks.equal(len(Store().read().inventory.cards), 0, "and no card was created")
+
+    # --- the moved card still sends -------------------------------------------------------
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(4)
+            snapshot.inventory.move_card("3/1", 4)
+        said = command(checks, "emit", str(run_dir.directory))
+        checks.ok(
+            "pushed" in said and "REFUSING" not in said,
+            "a run over box 3 whose card moved to box 4 still sends: nothing here may refuse "
+            "a card that is where the store says it is",
+            said,
+        )
+
+
 def check_rescue_stranded_run(checks: Checks) -> None:
     """The one-time repair for a run D36 refuses, and the binding that ends the class.
 
@@ -26522,9 +26643,10 @@ def check_listing_commands(checks: Checks) -> None:
         )
 
     # --- emit against a position the store has never seen ---------------------------------
-    # A run joined from a recovered or hand-made identifications file. The push loop upserts
-    # before it writes, because `set_state` returns False for an unknown position and a
-    # transition reported as having happened that did not is v1 bug 5 exactly.
+    # A run joined from a recovered or hand-made identifications file. It USED TO upsert a
+    # card here; that birth made 99 ghost cards and ~96 phantom TCGplayer copies on
+    # 2026-09-27 (docs/debts slug `emit-buried-box`). No caller needs it, so it is gone: the
+    # emit refuses, names the position, and writes and creates nothing.
     with isolated_home():
         run_dir = runs.create("t7-unseen")
         run_dir.write_identifications(identifications_for([(7, 1, "Articuno", "161", None)]))
@@ -26534,36 +26656,15 @@ def check_listing_commands(checks: Checks) -> None:
             Store().read().inventory.get("7/1") is None,
             "the store has never seen this position, and `join` does not invent it",
         )
-        said = command(checks, "emit", str(run_dir.directory))
-        landed = Store().read().inventory
-        checks.equal(
-            (landed.get("7/1").state, landed.get("7/1").sku),
-            (master.IDENTIFIED, ARTICUNO_SKU),
-            "emit UPSERTS the position first, so the identity write lands somewhere",
-        )
-        checks.equal(
-            landed.get("7/1").game,
-            "pokemon",
-            "F1'S DEFECT (owner's report, 2026-09-27: two sets of Unleashed, the 99-card one "
-            "with no photos). `_stamp_single` resolves this SAME match's game two lines "
-            "before it births this position, to pass `bind_sku`'s `expected_product_line` — "
-            "but never carried it into the `Card(...)` that upserts the position itself, so "
-            "a never-seen position born through `emit` was born with `game IS NULL`. "
-            "`server/pipeline_routes.py:do_pipeline_sets` groups on `(game, set_name)`, so a "
-            "null game formed a second, photo-less group — `pipeline/stockimages.py:url_for` "
-            "returns no photo for one. A card `join` HAS seen before its emit never showed "
-            "this: `allocate_capture` already stamped a game at the capture screen, so this "
-            "birth site is the one place D21's claim was silently dropped rather than carried",
-        )
-        checks.equal(
-            landed.listing_for(ARTICUNO_SKU).pushed,
-            1,
-            "and the copy is counted exactly once against the SKU",
+        said = command(checks, "emit", str(run_dir.directory), exits=1)
+        checks.ok(
+            "Box 7, card 1" in said,
+            "emit REFUSES and names the position the store holds no card at",
+            said,
         )
         checks.ok(
-            "pushed           1 copy(ies) across 1 SKU(s)" in said,
-            "and what the command reports is what landed — nothing counted that did not",
-            said,
+            Store().read().inventory.get("7/1") is None,
+            "and it births no card: an emit ships only copies a stored card stands behind",
         )
 
     # --- reconcile: pushed -> staged, as counts -------------------------------------------
@@ -40519,6 +40620,7 @@ def run() -> Result:
     check_run_realignment(checks)
     check_reused_box_refusal(checks)
     check_box_true_index(checks)
+    check_emit_buried_box(checks)
     check_rescue_stranded_run(checks)
     check_rescue_discharges_stranded_count(checks)
     check_rescue_route(checks)

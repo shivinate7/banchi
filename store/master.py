@@ -3205,7 +3205,12 @@ class Inventory:
         return self.boxes.get(str(_as_position_int(number, "box")))
 
     def box_disowns_run(
-        self, box, run: str, ran_at: Optional[str], bid: Optional[int] = None
+        self,
+        box,
+        run: str,
+        ran_at: Optional[str],
+        bid: Optional[int] = None,
+        deleted: Iterable[dict] = (),
     ) -> Optional[str]:
         """The sentence refusing `run` over `box`, or None when the box is the run's own.
 
@@ -3223,6 +3228,24 @@ class Inventory:
         """
         entry = self.box(box)
         if entry is None:
+            # NO REGISTRY ROW IS NOT "NOBODY'S TO DISOWN" (2026-09-27 incident, docs/debts
+            # slug `emit-buried-box`). A box that was buried has no row, and the store's
+            # `box_deleted` events are the only record of it: they carry the drawer's `bid`
+            # (D145, newer ones) and the time. `deleted` is those events, read by the caller.
+            # A run started before the deletion, or over that exact drawer, is refused.
+            number = _as_position_int(box, "box")
+            for event in deleted:
+                if event.get("box") != number:
+                    continue
+                if bid is not None and event.get("bid") is not None:
+                    hit = int(bid) == int(event["bid"])
+                else:
+                    hit = newer_stamp(event.get("at"), ran_at) is True
+                if hit:
+                    return (
+                        f"run {run} was over box {number}, which was deleted at "
+                        f"{event.get('at')} and holds no registry entry now"
+                    )
             return None
         number = int(entry.box)
         # THE TRUE INDEX DECIDES OUTRIGHT WHERE THE CALLER HAS ONE (D145). The
