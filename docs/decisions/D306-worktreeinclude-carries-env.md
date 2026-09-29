@@ -1,4 +1,4 @@
-## D-worktreeinclude-carries-env — `.worktreeinclude` copies `.env` and two local configs into each Claude Code worktree
+## D306 — `.worktreeinclude` copies `.env` and two local configs into each Claude Code worktree
 
 **Settled 2026-09-28, on the owner's ruling.** Amends the Makefile's old `worktree-setup` argument that `.env` is deliberately not copied (a secret copied around a disk ends up somewhere nobody tracks, and T1 does not need it once the cache is warm).
 
