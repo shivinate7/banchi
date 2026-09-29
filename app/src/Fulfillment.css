@@ -131,7 +131,7 @@
    flattens exactly the curve the shape is chosen for. The shadow follows the real outline via
    drop-shadow rather than the element box, for the same reason. */
 .ff-mark { flex: none; filter: drop-shadow(0 2px 6px rgb(0 0 0 / 0.28)); }
-.ff-head-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ff-head-text { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
 .ff-greeting {
   font-size: var(--ff-fs-base);
   font-weight: 500;
@@ -473,7 +473,7 @@
 .ff-done-name { font-weight: 700; }
 .ff-done-place { color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
 /* D218: the server's own parts, kept apart by CSS. */
-.ff-done-place > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.ff-done-place > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 /* An older sale's own way back (finding #1): pushed to the row's own trailing edge, never a
    second sheet. Same 40px floor every thumb target on this screen keeps. */
 .ff-done-undo {
@@ -573,7 +573,7 @@
   grid-template-areas: 'name chev' 'place chev';
   align-items: center;
   column-gap: var(--bn-3);
-  row-gap: 2px;
+  row-gap: var(--bn-0-5);
   padding: var(--bn-4) var(--bn-4) var(--bn-4) var(--bn-5);
   border-radius: 14px;
   text-align: left;
@@ -620,7 +620,7 @@
 .ff-place-num { font-weight: 800; color: var(--bn-ink); }
 /* D218: the server's `' · '` is never retyped. `PlaceText` hands one `.ff-place-elem` per part;
    the seam is drawn here, on every part but the first. */
-.ff-place-elem:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.ff-place-elem:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 
 /* ---- the card ------------------------------------------------------------------------------ */
 /* Back on the left, the next card in the walk on the right — the two ways off this card. */
@@ -658,7 +658,7 @@
 }
 .ff-card-about { color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
 /* D218: condition and number are sibling spans; the seam is CSS. */
-.ff-card-about > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.ff-card-about > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 /* Which order this card is for — the walk-position sibling this once seamed against
    (`.ff-card-step`) is gone with the redesign (D212/D93: no preselected copy, no linear walk
    count), so there is one child here now and no seam to draw. */
@@ -762,7 +762,7 @@
   --pb-marker: 8px;
   --pb-gap: var(--bn-2);
 }
-.ff .position-bar-fulfiller .position-bar-track { gap: 3px; }
+.ff .position-bar-fulfiller .position-bar-track { gap: var(--bn-0-75); }
 .ff .position-bar-fulfiller .position-bar-segment {
   border-radius: var(--bn-r-full);
   background: var(--bn-surface-2);
@@ -912,7 +912,7 @@
   gap: var(--bn-4);
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
-.ff .card-locations-head { display: flex; flex-direction: column; gap: 2px; padding: 0 var(--bn-1); }
+.ff .card-locations-head { display: flex; flex-direction: column; gap: var(--bn-0-5); padding: 0 var(--bn-1); }
 .ff .card-locations-name {
   font-family: var(--bn-font-display);
   font-size: var(--ff-fs-2xl);
@@ -1217,7 +1217,7 @@
   color: var(--bn-ok);
 }
 .ff-receipt-icon[data-tone='note'] { background: var(--bn-surface-2); color: var(--bn-ink-2); }
-.ff-receipt-text { grid-area: text; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ff-receipt-text { grid-area: text; display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
 .ff-receipt-said {
   font-family: var(--bn-font-display);
   font-size: var(--ff-fs-md);
@@ -1230,10 +1230,10 @@
 /* D218: the name, the place and the order are sibling spans; the seam is CSS on each after the
    first, drawn twice so an order line and a placeless line both read right. */
 .ff-receipt-place::before,
-.ff-receipt-order::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.ff-receipt-order::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 /* D218: `.ff-receipt-place`'s OWN parts (the place label, split the same way `PlaceText`
    splits it) get the same seam, one level in. */
-.ff-receipt-place > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.ff-receipt-place > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 .ff-receipt-note { margin-top: var(--bn-1); }
 .ff-undo {
   grid-area: undo;

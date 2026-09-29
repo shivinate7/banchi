@@ -89,7 +89,7 @@
   margin-bottom: var(--bn-6);
   flex-wrap: wrap;
 }
-.bn-head-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bn-head-text { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
 .bn-eyebrow {
   font-family: var(--bn-font-mono);
   font-size: var(--bn-fs-xs);
@@ -529,7 +529,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   color: var(--bn-ink-3);
   vertical-align: middle;
 }
-.bn-kbd-group { display: inline-flex; gap: 3px; align-items: center; }
+.bn-kbd-group { display: inline-flex; gap: var(--bn-0-75); align-items: center; }
 /* A size modifier for a keycap a finger or a digit lands on, not a keyboard shortcut hint
    (system review, 2026-09-20; this sheet already called `.review-key`, ReviewQueue.css's own
    26px reimplementation, "a candidate for promotion" — this is that promotion). Only the
@@ -561,14 +561,14 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-pill-mono { font-family: var(--bn-font-mono); font-weight: 500; }
 .bn-pill-outline { background: transparent; box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
 /* Inside a button, a tab or a dense row: one small pill rather than a height per screen. */
-.bn-pill-sm { height: 18px; padding: 0 6px; font-size: var(--bn-fs-2xs); }
+.bn-pill-sm { height: 18px; padding: 0 var(--bn-1-5); font-size: var(--bn-fs-2xs); }
 .bn-pill-sm .bn-icon { width: 10px; height: 10px; }
 
 /* ---- chip: choose one of a set, filter a list ------------------------------------------- */
 .bn-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--bn-1-5);
   height: var(--bn-control-h-sm);
   padding: 0 var(--bn-3);
   border-radius: var(--bn-r-full);
@@ -613,7 +613,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 /* ---- code: the secondary machine string (a reason code, a SKU, a key) -------------------- */
 .bn-code {
   display: inline-block;
-  padding: 2px 6px;
+  padding: var(--bn-0-5) var(--bn-1-5);
   border-radius: var(--bn-r-xs);
   box-shadow: inset 0 0 0 1px var(--bn-line);
   background: var(--bn-surface-2);
@@ -650,7 +650,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--bn-1-5);
   min-width: 0;
 }
 .bn-field-label { font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-2); }
@@ -681,7 +681,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-input-lg { min-height: var(--bn-control-h-lg); font-size: var(--bn-fs-lg); border-radius: var(--bn-r-lg); }
 .bn-input-wrap { position: relative; display: flex; align-items: center; }
 .bn-input-wrap > .bn-icon { position: absolute; left: 10px; color: var(--bn-ink-4); pointer-events: none; }
-.bn-input-wrap > .bn-input { padding-left: 32px; }
+.bn-input-wrap > .bn-input { padding-left: var(--bn-7); }
 .bn-input-wrap > .bn-kbd { position: absolute; right: 8px; }
 .bn-select {
   appearance: none;
@@ -728,8 +728,8 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-seg {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 3px;
+  gap: var(--bn-0-5);
+  padding: var(--bn-0-75);
   border-radius: var(--bn-r);
   background: var(--bn-surface-2);
 }
@@ -737,7 +737,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--bn-1-5);
   height: 28px;
   padding: 0 var(--bn-3);
   border-radius: var(--bn-r-sm);
@@ -766,7 +766,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
    phone thumb-floor rule below, which reads `.bn-seg-item` at the same one-class weight and
    depends on winning by being LAST in the sheet. Same weight here keeps that ordering
    intact, so `-sm` still grows to the touch floor under 767px or a coarse pointer. */
-.bn-seg-sm { padding: 2px; gap: 2px; }
+.bn-seg-sm { padding: var(--bn-0-5); gap: var(--bn-0-5); }
 .bn-seg-item-sm { height: 24px; padding: 0 var(--bn-2); font-size: var(--bn-fs-xs); }
 
 /* ---- section pick (D300: no auto default, the owner picks) ---------- */
@@ -808,7 +808,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--bn-1-5);
   height: 38px;
   padding: 0 var(--bn-3);
   font-size: var(--bn-fs-md);
@@ -839,7 +839,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   transition: transform var(--bn-t) var(--bn-ease-out);
 }
 .bn-tab[aria-selected='true']::after, .bn-tab[aria-current]::after { transform: scaleX(1); }
-.bn-tab .bn-pill { height: 18px; padding: 0 6px; font-size: var(--bn-fs-2xs); }
+.bn-tab .bn-pill { height: 18px; padding: 0 var(--bn-1-5); font-size: var(--bn-fs-2xs); }
 
 /* ---- key/value list ----------------------------------------------------------- */
 .bn-kv { display: grid; grid-template-columns: max-content 1fr; column-gap: var(--bn-4); row-gap: var(--bn-2); align-items: baseline; }
@@ -847,7 +847,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-kv dd { font-size: var(--bn-fs-md); color: var(--bn-ink); min-width: 0; }
 
 /* ---- stat tile --------------------------------------------------------------- */
-.bn-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bn-stat { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
 .bn-stat-value {
   font-family: var(--bn-font-display);
   font-size: var(--bn-fs-2xl);
@@ -1007,7 +1007,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   color: var(--bn-ink);
   font-size: var(--bn-fs-md);
 }
-.bn-notice > .bn-icon { flex: none; margin-top: 2px; color: var(--bn-accent); }
+.bn-notice > .bn-icon { flex: none; margin-top: var(--bn-0-5); color: var(--bn-accent); }
 .bn-notice-warn { background: var(--bn-warn-tint); }
 .bn-notice-warn > .bn-icon { color: var(--bn-warn); }
 .bn-notice-danger { background: var(--bn-danger-tint); }
@@ -1504,7 +1504,7 @@ img.bn-crop[data-cropped='true'] {
   from { opacity: 1; max-height: 140px; }
   to { opacity: 0; transform: translateY(6px) scale(0.98); max-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: calc(-1 * var(--bn-2)); }
 }
-.bn-toast-icon { flex: none; margin-top: 2px; opacity: 0.85; }
+.bn-toast-icon { flex: none; margin-top: var(--bn-0-5); opacity: 0.85; }
 .bn-toast-ok .bn-toast-icon { color: var(--bn-ok); opacity: 1; }
 /* Amber means the server declined; red means something broke. `failureTone` picks (D269). */
 .bn-toast-refusal .bn-toast-icon { color: var(--bn-warn); opacity: 1; }
@@ -1513,11 +1513,11 @@ img.bn-crop[data-cropped='true'] {
 :root[data-theme='dark'] .bn-toast-receipt .bn-toast-icon { color: var(--bn-accent); }
 .bn-toast-text { flex: 1 1 auto; min-width: 0; font-size: var(--bn-fs-md); line-height: 1.4; }
 .bn-toast-title { font-weight: 600; }
-.bn-toast-body { opacity: 0.75; font-size: var(--bn-fs-sm); margin-top: 2px; }
+.bn-toast-body { opacity: 0.75; font-size: var(--bn-fs-sm); margin-top: var(--bn-0-5); }
 .bn-toast-action {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--bn-1-5);
   height: 28px;
   padding: 0 var(--bn-3);
   border-radius: var(--bn-r-sm);

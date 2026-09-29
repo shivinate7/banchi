@@ -142,7 +142,7 @@ a.home-deck { pointer-events: auto; }
 /* The chip hangs off the bottom-left corner, so the card's own caption has to end above it or
    the number line is read through a pill. `--deck-chip` is that reserved band: the front card
    pads its content by it, and the deck's own bottom margin clears the part that hangs out. */
-.home-deck { position: relative; width: 220px; height: 310px; margin: 0 auto 24px; --deck-chip: 30px; }
+.home-deck { position: relative; width: 220px; height: 310px; margin: 0 auto var(--bn-6); --deck-chip: 30px; }
 .home-deck-card {
   /* the deck lifts with the link it sits in — the response floor cannot reach a <div>. */
   transition: box-shadow var(--bn-t-fast) var(--bn-ease);
@@ -159,10 +159,10 @@ a.home-deck { pointer-events: auto; }
 .home-deck-card-2 { transform: rotate(-4deg) translate(-12px, 4px); opacity: 0.8; animation-delay: 120ms; }
 .home-deck-card-1 {
   transform: rotate(3deg);
-  padding: 12px;
+  padding: var(--bn-3);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--bn-2);
   animation-delay: 180ms;
 }
 /* A REAL PHOTOGRAPH, so this is a frame around an image rather than a painted rectangle.
@@ -191,7 +191,7 @@ a.home-deck { pointer-events: auto; }
 .home-deck-name { font-family: var(--bn-font-display); font-weight: 700; font-size: 13px; letter-spacing: -0.01em; }
 .home-deck-meta { font-family: var(--bn-font-mono); font-size: 10px; color: var(--bn-ink-3); }
 /* D218: the number and the finish are sibling spans; the seam is CSS. */
-.home-deck-meta > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.home-deck-meta > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 /* The address chip is a stage: dark in both themes, so "Card 17" reads at 6.6:1 either way. */
 .home-deck-address {
   position: absolute;
@@ -199,8 +199,8 @@ a.home-deck { pointer-events: auto; }
   bottom: -12px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
+  gap: var(--bn-1-5);
+  padding: var(--bn-2) var(--bn-3);
   border-radius: var(--bn-r-full);
   background: var(--bn-stage-bg);
   color: var(--bn-stage-ink);
@@ -216,7 +216,7 @@ a.home-deck { pointer-events: auto; }
 .home-deck-address .bn-icon { color: var(--bn-stage-live); }
 .home-deck-card-no { color: var(--bn-stage-accent); }
 /* D218: the server's own parts, kept apart by CSS. */
-.home-deck-card-no > span:not(:first-child)::before { content: '·'; margin: 0 4px; opacity: 0.6; }
+.home-deck-card-no > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1); opacity: 0.6; }
 /* `from` only, on purpose: each card lands on ITS OWN rotation, which a `to { transform: none }`
    would strip. The end of an enter animation is the element's resting style. */
 @keyframes home-deck-in { from { opacity: 0; transform: translateY(14px); } }
@@ -287,7 +287,7 @@ a.home-deck { pointer-events: auto; }
 /* panels */
 .home-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--bn-4); }
 @media (max-width: 899px) { .home-grid2 { grid-template-columns: 1fr; } }
-.home-more { display: inline-flex; align-items: center; gap: 4px; font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-3); }
+.home-more { display: inline-flex; align-items: center; gap: var(--bn-1); font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-3); }
 .home-more:hover { color: var(--bn-accent); text-decoration: none; }
 /* the only way into the full lists from here: the same words, a thumb's worth of hit area.
    ON THE POINTER AND NOT THE WIDTH (D117) — an iPad in portrait is 820px and all thumb. */
@@ -323,10 +323,10 @@ a.home-deck { pointer-events: auto; }
 .home-box-text, .home-run-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
 .home-box-name, .home-run-box { font-weight: 600; font-size: var(--bn-fs-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* D218: the box's number and its name are sibling spans; the seam is CSS. */
-.home-run-box > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-3); }
+.home-run-box > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-3); }
 .home-box-meta { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* D218: on hand, sold and sealed are sibling spans; the seam is CSS. */
-.home-box-meta > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.home-box-meta > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 .home-box-bar { width: 96px; height: 6px; border-radius: 3px; background: var(--bn-surface-2); overflow: hidden; flex: none; }
 .home-box-bar > span { display: block; height: 100%; background: var(--bn-accent); border-radius: 3px; transition: width var(--bn-t-slow) var(--bn-ease); }
 .home-run-when { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; }
