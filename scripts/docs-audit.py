@@ -13197,8 +13197,8 @@ def _route_prose_findings() -> List[Finding]:
     """The route lists in prose, against `ROUTES`, both ways.
 
     README's `## Use it` table must name every route, and mark `Off-nav` on exactly the
-    `aside` routes. CLAUDE.md's route block under `### The screens` must open with every
-    route. A route added, dropped or moved off the nav fails until the prose follows.
+    `aside` routes. A route added, dropped or moved off the nav fails until the prose follows.
+    CLAUDE.md no longer lists routes: `ROUTES` is the one roster.
     """
     rows, _, _ = app_routes()
     if not rows:
@@ -13224,16 +13224,6 @@ def _route_prose_findings() -> List[Finding]:
         table = re.findall(r"^\|[^|\n]*\|\s*`(#/[^`]*)`\s*\|(.*)$", part, re.M)
         diff(rel(readme), "the `## Use it` route table", {r for r, _ in table}, want)
         diff(rel(readme), "the table's `Off-nav` rows", {r for r, rest in table if "Off-nav" in rest}, aside)
-
-    claude = ROOT / "CLAUDE.md"
-    if exists(claude):
-        text = read(claude)
-        block = re.search(r"### The screens.*?```\n(.*?)```", text, re.S)
-        if block is None:
-            out.append(Finding(rel(claude), "has no route block under `### The screens`."))
-        else:
-            have = set(re.findall(r"^(#/\S*)\s", block.group(1), re.M))
-            diff(rel(claude), "the route block under `### The screens`", have, want)
     return out
 
 
