@@ -67,7 +67,7 @@ test('Home asks for no photograph of a card that has none', async ({ page }) => 
     await route.fallback()
   })
   const boxesRead = page.waitForResponse(/\/boxes$/)
-  await page.goto('/#/')
+  await page.goto('/')
   await boxesRead
   await page.waitForTimeout(500) // a wait for the render after both reads, not an assertion
   await expect(page.locator('.home-deck[data-empty="true"]')).toBeVisible()
