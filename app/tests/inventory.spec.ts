@@ -2245,8 +2245,9 @@ test('another device having sold the copy draws a receipt and no undo anywhere',
     'Another device sold this copy first, so nothing was written here.',
   )
   await expect(page.getByRole('button', { name: /Undo/ })).toHaveCount(0)
-  // `stateLabel` — the human word, which is the register every state pill on this screen uses.
-  await expect(row).toContainText('Sold')
+  // A departed copy draws no state pill (UX-221, S2): the row's own mark is `is-gone` and its struck number.
+  await expect(row).toHaveClass(/is-gone/)
+  await expect(row.locator('.card-locations-identity-num')).toBeVisible()
 
   // One request, and no reversal was ever attempted.
   expect(wire.filter((call) => call.path.endsWith('/sold'))).toHaveLength(1)
@@ -2283,8 +2284,9 @@ test('a sale the store cannot put back offers no undo, in the row or on the rece
   await expect(receiptToast(page)).toContainText('No undo for this one.')
   await expect(receiptToast(page)).not.toContainText('origin_unknown')
   await expect(page.getByRole('button', { name: /Undo/ })).toHaveCount(0)
-  // `stateLabel` — the human word, which is the register every state pill on this screen uses.
-  await expect(row).toContainText('Sold')
+  // A departed copy draws no state pill (UX-221, S2): the row's own mark is `is-gone` and its struck number.
+  await expect(row).toHaveClass(/is-gone/)
+  await expect(row.locator('.card-locations-identity-num')).toBeVisible()
   expect(wire.filter((call) => call.path.endsWith('/sold'))).toHaveLength(1)
 })
 
