@@ -15,11 +15,11 @@ had stopped implementing. Re-derived, with both dates kept in the comment, becau
 moved with no record of it is one nobody can argue with.
 
 **The ten that remain were then classified rather than trimmed, and none of them is over for the
-reason the row exists to catch.** D32 16,391 · D38 20,441 · D42 20,296 · D43 16,530 · D49 18,705 ·
-D53 20,913 · D58 17,658 · D65 19,041 · D86 22,670 · D90 20,301.
+reason the row exists to catch.** D32 16,391 · D38 20,441 · D42 20,296 · D43 16,530 · D86 18,705 ·
+D138 20,913 · D58 17,658 · D65 19,041 · D86 22,670 · D90 20,301.
 
 The row's stated theory is that *"an entry at twice the median is one that should have cited a
-neighbor instead of re-arguing it"*. That theory was right twice: D92 and D96 were brought under in
+neighbor instead of re-arguing it"*. That theory was right twice: D92 and D97 were brought under in
 exactly that way, by deleting passages that re-derived D58's slot/index split and the open/done rule
 and citing instead. **It does not hold for these ten.** Their largest paragraphs were read: most cite
 no other entry at all, and the two that cite heavily — D38's claim inventory and D58's

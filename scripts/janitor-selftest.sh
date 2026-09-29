@@ -220,7 +220,7 @@ husk_pid="$(plain_spawn "$tmp/work/.claude/worktrees/husk-busy/.serve/keep.py")"
 # an orphan: its own script is gone, its project directory is not
 orphan_pid="$(plain_spawn "$tmp/work/.claude/worktrees/ghost/scripts/serve.py")"; kids="$kids $orphan_pid"
 
-# ------------------------------------------------- the process nothing owns any more (D175)
+# ------------------------------------------------- the process nothing owns any more (D305)
 #
 # THE FAKE SHELL SNAPSHOT IS THE FIXTURE'S WHOLE LEVER. `loose_processes` will name only a
 # process it can PROVE a session started, and the proof is this path in the argv. It lives
@@ -261,7 +261,7 @@ JSON
 
 # THE SUPERVISOR ARM, AND IT IS THE MOST IMPORTANT CASE IN THIS FILE. A long-lived process in
 # the MAIN checkout with no session record at all is what `make launch-agent` leaves running over
-# the owner's real store, and D53 means it to outlive every session. It is given the session mark
+# the owner's real store, and D138 means it to outlive every session. It is given the session mark
 # as well — the worst case for the rule, not the easiest — so that being in the main checkout is
 # the ONLY thing standing between it and a reap.
 mkdir -p "$tmp/work/scripts"
@@ -553,12 +553,12 @@ echo
 echo "  -- and the three it must never touch --"
 
 # THE SUPERVISOR ARM. `make launch-agent` keeps this process alive at login over the owner's
-# real store; D53 means it to outlive every session, and `pkill -f` has already killed it once.
+# real store; D138 means it to outlive every session, and `pkill -f` has already killed it once.
 not_said "THE MAIN CHECKOUT'S PROCESS IS NEVER OFFERED" \
          "would reap pid $rig_parent" "$prev"
 not_said "nor its child"            "would reap pid $rig_kid"    "$prev"
-said "and the refusal is PRINTED, naming D53" \
-     "the MAIN CHECKOUT's — D53 means it to outlive every session" "$prev"
+said "and the refusal is PRINTED, naming D138" \
+     "the MAIN CHECKOUT's — D138 means it to outlive every session" "$prev"
 
 # A live session owns these, so the sweep does not get to decide: the owner is there to ask.
 not_said "a process a live session owns is never offered" \

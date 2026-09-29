@@ -27,7 +27,7 @@ the Boxes screen; the Fulfiller's search; D28's layout half. T7 reaches the stor
 routes. `make docs-audit` is clean.
 
 **RATIFIED HERE, BUILT SINCE.** D26 (`retired`), D29 (group answers over a homogeneous
-queue) and D30 (the gap convention) were owner rulings with no code behind them when this
+queue) and D58 (the gap convention) were owner rulings with no code behind them when this
 was written. All three landed by 2026-08-23; `docs/GATES.md`'s build-order step 13 names
 them. Section 10 keeps each argument, including the name collision that bit D26.
 
@@ -678,10 +678,10 @@ go looking for a second bug.
 
 ---
 
-## 10. D26, D29 and D30 — ratified here, all three built since
+## 10. D26, D29 and D58 — ratified here, all three built since
 
 **All three are built.** D26 landed 2026-08-23 as `retired` (§10.1 tells it); D29's group
-answer is `server/capture_server.py:do_review_group_answer`; D30's gap convention is
+answer is `server/capture_server.py:do_review_group_answer`; D58's gap convention is
 `neighbors` and `section_gaps`, rendered per card. **This heading read "Ratified and NOT
 BUILT" until 2026-08-30**, and the paragraph under it said none of the section was done —
 false for over a week, in a file `CLAUDE.md` tells sessions to read as settled.
@@ -745,7 +745,7 @@ a reason code, **and** every entry offers the same single candidate. Anything lo
 write over cards a human has not actually compared, which is what D4 exists to prevent. A group
 write still shows the photographs it is about to answer for.
 
-### 10.4 — D30's gap convention
+### 10.4 — D58's gap convention
 
 **AND THE WHOLE SECTION IS OVERTAKEN BY D58 (2026-08-30):** a card's number counts the cards
 in the box now, so there is no gap left to leave a marker in and the physical half never had
@@ -770,7 +770,7 @@ uncountable by hand.
 **It is retroactive, which is why it wants settling before more sales happen.** A convention
 adopted after fifty gaps exist cannot be applied to them.
 
-Two halves, and only one is code. The physical marker is the owner's call and belongs in D30 once
+Two halves, and only one is code. The physical marker is the owner's call and belongs in D58 once
 made. The digital half is free and is the part this step could have built: a position rendered
 with its neighbors and its section's gap count — "Card 17, between Mantine and Thievul · 2 slots
 in this section are empty". Neighbors make a label countable again without anyone learning the
@@ -879,7 +879,7 @@ directly.
   already satisfied by the screen it would sit on.
 
   **The third path landed 2026-09-02 on main, met that rule, and was then DELETED here
-  2026-09-04 without ever being reachable** (D96, amended). The paragraph is kept because the rule
+  2026-09-04 without ever being reachable** (D97, amended). The paragraph is kept because the rule
   it tests is the point: `POST /orders/fill` recorded a whole order's envelope, every copy pulled
   and sold in one write, and it brought both guards rather than arguing them away. **There are two
   sale paths again**, and an order's pass through the drawers presses `POST /orders/pull` a card

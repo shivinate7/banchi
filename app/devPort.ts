@@ -87,7 +87,7 @@ function canonical(root: string): string {
   }
 }
 
-// ONLY A `.git` DIRECTORY KEEPS 5173 AND 8000 (D268, a copied tree never
+// ONLY A `.git` DIRECTORY KEEPS 5173 AND 8000 (D261, a copied tree never
 // gets the live port). This used to ask "is `.git` a FILE?" and read every other answer as
 // "the main tree". On 2026-09-23 a scratch copy of main with no `.git` built an app. It
 // baked 8000, the owner's LIVE capture server, and the page read the real store. So the

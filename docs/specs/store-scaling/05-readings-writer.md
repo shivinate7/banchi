@@ -27,7 +27,7 @@ their own transactions, not to relitigate this entry."* This item is that fix.
    fetch's fresh reading on the very next call, with nothing else run in between.
 5. `make harness` T7 passes with a new arm proving (4), and `make readings-selftest` still
    passes 31/31 (the refactor below must not change `collect()`'s observable behavior).
-6. The decision entry `docs/decisions/D189-readings-table.md` carries an amendment
+6. The decision entry `docs/decisions/D189-the-market-reading-is-a-table.md` carries an amendment
    paragraph (see "Steps" §6) rather than a rewritten section — D189's own text is a settled
    record of what PR #333 shipped and why the gap existed; this item closes the gap it named
    and says so in an addition, not a rewrite.
@@ -41,7 +41,7 @@ since this worktree's branch does not itself contain that merge. If for any reas
 commit is not yet on `origin/main` when you start, stop and re-read `gh pr view 333 --json
 state` — do not reimplement PR #333's own tables from scratch; wait for it.
 
-The decision is already numbered **D189** (`docs/decisions/D189-readings-table.md`,
+The decision is already numbered **D189** (`docs/decisions/D189-the-market-reading-is-a-table.md`,
 `docs/decisions/ORDER.json`) — not an unclaimed slug. Do not run `make claim-ids` for it and
 do not write a new `## D-<slug>` heading; you are amending an existing, numbered file.
 
@@ -58,7 +58,7 @@ rebase rather than editing around each other — they are adjacent in the same f
 
 ## Read first
 
-- `docs/decisions/D189-readings-table.md` — the whole rationale for the manual press and the
+- `docs/decisions/D189-the-market-reading-is-a-table.md` — the whole rationale for the manual press and the
   exact paragraph that pre-authorizes this item (quoted above).
 - `pipeline/readings.py` — the two-source walk. Read the whole file; it is ~200 lines and
   every function below is touched or extended.
@@ -490,7 +490,7 @@ command this repo runs (there is no run-deletion subcommand; every doc that disc
 directory calls it an immutable input), or a genuine clock-skew edge case. Do not remove
 `--write`'s preview-by-default shape or `show`.
 
-### 6. Amend `docs/decisions/D189-readings-table.md` — append, do not rewrite.
+### 6. Amend `docs/decisions/D189-the-market-reading-is-a-table.md` — append, do not rewrite.
 
 Append a new section at the end of the file (after "What this does not touch"):
 
@@ -671,7 +671,7 @@ after — the count must be identical.
   `_readings()` call, `box_views`, `_release_plan`) — this item only touches the lines shown
   in step 4.
 - `app/src/types.ts` / `ValueTable` / `ValueCopy` — no wire shape change. `ValueCopy.
-  read_at` / `.source` and `ValueTable.sources` already exist (D79/D189) and already draw
+  read_at` / `.source` and `ValueTable.sources` already exist (D277/D189) and already draw
   the reading's own age; this item makes what they draw fresher, not different.
 
 ## Measure

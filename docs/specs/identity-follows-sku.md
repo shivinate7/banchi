@@ -39,7 +39,7 @@ hide the misread rate. So `cards.name`, `cards.number` and `cards.printed_total`
 model's read, written by `Inventory.record_identification` in `store/master.py`.
 
 The SKU arrived later, as a second, independent column: the catalog row the join (D11) or a
-human (D4, D46) chose. D213 (the set is a stored fact) then made `set_name` and `rarity` follow
+human (D4, D77) chose. D213 (the set is a stored fact) then made `set_name` and `rarity` follow
 the SKU, written at the moment a SKU is committed. It left `name` and `number` as the read, on
 purpose. Two writers since overwrite them from a catalog row: the D252 correction (a wrong
 answer gets a correct route) and the D253 near-miss correction (a card lists off name AND number
@@ -60,7 +60,7 @@ the two fields D213 did not reach:
 | number different | 241 |
 | number blank | 205 |
 
-D255's own report (`./pkmnscan cards sku-names`) ran six minutes earlier on the live store. It
+D242's own report (`./pkmnscan cards sku-names`) ran six minutes earlier on the live store. It
 reads 65 disputed (59 identified, 6 sold). The one-card difference is `1/75`, corrected between
 the two reads. The brief's figure of 57 is an earlier count.
 
@@ -179,9 +179,9 @@ brought it. So the one writer reads the table, never an export file.
 | primitive | what it is | fit |
 |---|---|---|
 | `pipeline/pricearchive.merged_export_rows_by_sku` (D254 tier b) | every cached export merged into `sku -> row`, rebuilt from disk on each call | the right SHAPE, in memory. The table is its persisted form, and this function becomes a reader of the table |
-| `pipeline/sku_name_contradictions.Catalog` (D255) | every row of one export by SKU and by name, all conditions, in memory | the same shape again. The merged report reads the table instead |
+| `pipeline/sku_name_contradictions.Catalog` (D242) | every row of one export by SKU and by name, all conditions, in memory | the same shape again. The merged report reads the table instead |
 | `export_for` in `cli/cmd_cards.py` (D213 backfill) | a `sku -> (set, rarity)` walk over cached exports | the same shape a third time. Retired by the press in section 7 |
-| `pipeline/join.Catalog` | one export, narrowed to the game's Near Mint rows (D137), built per join | NOT reused. It is the join's candidate universe, and its completeness is the export's (D64, D65). A table of every SKU ever seen has no completeness claim, so a join must never read candidates from it |
+| `pipeline/join.Catalog` | one export, narrowed to the game's Near Mint rows (D137), built per join | NOT reused. It is the join's candidate universe, and its completeness is the export's (D65). A table of every SKU ever seen has no completeness claim, so a join must never read candidates from it |
 | `readings` table (D189) | per SKU: market, name, set, condition, source | NOT reused. It is a FULL REPLACE cache by design, so it drops a SKU whose source file goes. That is the one behaviour this table must never have |
 | `listings` table (D34, D109) | per SKU: condition and the pushed, staged and live counts | NOT reused. It holds counts, no product facts. It joins to the table on the SKU |
 | `pipeline/catalog.py` over `vendor/pokemon-tcg-data/catalog.sqlite` (D15, step 9) | the pokemontcg.io snapshot, Pokemon only | NOT a source. Measured: 0 cards in the 174 vendored set files carry any TCGplayer field, so no SKU and no product id. `catalog.sqlite` is also not built on the main checkout (the file is absent). It stays a possible later cross-check for Pokemon rarity and number |
@@ -214,7 +214,7 @@ difference is the refusal `game_mismatch`.
 **How it is filled.** An upsert, keyed on the SKU, at every place a TCGplayer export enters the
 store:
 
-1. A fetched Filtered Export (D64, D166), in `server/pipeline_routes._keep_export`, in the same
+1. A fetched Filtered Export (D65, D166), in `server/pipeline_routes._keep_export`, in the same
    press that keeps the file. A reuse inside D166's window adds nothing, because the file is
    already in.
 2. A fetched live export (D104), in `server/pipeline_routes.do_live_export`.
@@ -333,13 +333,13 @@ The list comes from a grep for `set_state(`, `.sku =`, `.name =`, `.number =`, `
 | writer | writes today | after |
 |---|---|---|
 | `cli/cmd_emit.run` and `cli/cmd_emit.run_merged` (the join's commit) | `set_state(sku, condition, set_name, rarity, name=D253 near-miss)` | upsert the matched rows, then `bind_sku(bound_by=join)`. D253's `JoinReport.name_corrections` retires: the identity name is the row's by construction |
-| `server/capture_server.do_review_answer` (D4 candidate, D46 `from_catalog`) | `sku`, `condition`, `set_name`, `rarity`. Leaves `name` and `number` as the read | upsert the chosen row, then `bind_sku(bound_by=answer)`. This is the largest drift source: 147 human-bound cards hold a number the SKU disputes |
+| `server/capture_server.do_review_answer` (D4 candidate, D77 `from_catalog`) | `sku`, `condition`, `set_name`, `rarity`. Leaves `name` and `number` as the read | upsert the chosen row, then `bind_sku(bound_by=answer)`. This is the largest drift source: 147 human-bound cards hold a number the SKU disputes |
 | `server/capture_server._reverse_answer` (D28 undo) | restores `sku`, `condition`, `set_name`, `rarity` | `unbind_sku` to the recorded previous binding |
 | `server/capture_server.do_review_group_answer` (D29) | `sku`, `condition`, `set_name`, `rarity` | upsert, then `bind_sku(bound_by=group_answer)` per card |
 | `server/capture_server.do_correct_answer` (D252) | `sku`, `condition`, `set_name`, `rarity`, `name`, `number`, `printed_total` | upsert, then `bind_sku(bound_by=correction)`, and the D34 release as today |
 | `server/capture_server._reverse_correction` | restores the seven fields, key by key | `unbind_sku`. Section 8.3 covers old history lines |
 | +`POST /inventory/<box>/<index>/confirm` | does not exist | `bind_sku(current sku, bound_by=confirm)`. Section 8 |
-| `server/pipeline_routes._keep_export` (D64, D166) | keeps the fetched file | also upserts every row into the SKU table |
+| `server/pipeline_routes._keep_export` (D65, D166) | keeps the fetched file | also upserts every row into the SKU table |
 | `server/pipeline_routes.do_live_export` (D104) | keeps the fetched live file | also upserts every row into the SKU table |
 | `cli/cmd_join.py` with `--export`, and `./pkmnscan reconcile --live <file>` | read the file | also upsert every row into the SKU table |
 | `Inventory.record_identification`, called by `cli/cmd_identify.run` and `codes/scan.py` | `name`, `number`, `printed_total`, `confidence`, `detected_finish` | the same values into `read_*`. On a card with no SKU the identity follows the read. On a SKU-bound card the identity stays, and the caller recomputes `read_disputes` |
@@ -381,7 +381,7 @@ enforced) requires a mechanism, not a sentence. Three, each proving a different 
 3. **The residue count.** The same report prints how many SKU-bound cards still carry
    `identity_source = read`. **NOT MECHANIZED as a ratchet:** the count lives in the owner's
    store, which no commit reads. The review queue carries each held card instead (section 7.3),
-   and Home's Review tile counts it (D198).
+   and Home's Review tile counts it (D121).
 
 ## 5. The readers
 
@@ -394,7 +394,7 @@ reader the grep found, and its kind.
 ### 5.1 The join: evidence, and the one reader that must not change meaning
 
 `pipeline/join.py` compares an `IdentifiedCard`'s read name and number against catalog rows
-(D146, D162, D253). It must keep comparing the READ. Three builders make an `IdentifiedCard`:
+(D23, D162, D253). It must keep comparing the READ. Three builders make an `IdentifiedCard`:
 
 - `cli/resolve.py` builds one from a run record's `identification`. Unchanged: a run record is
   the read.
@@ -436,12 +436,12 @@ Each reads the field names that stay, and so draws the SKU's product.
 |---|---|
 | `#/inventory` copies list and section list (`BoxBrowse`, `server/capture_server._number_display`, `_card_number_key`) | product name and number |
 | `#/inventory` Details (`app/src/CardHero.tsx`, `CardDetailsSection`) | product name and number, plus the new read line (5.4) |
-| the landmark walk (`_walk`, D116) | a neighbour draws its product name |
+| the landmark walk (`_walk`, D260) | a neighbour draws its product name |
 | Home's recent deck (`do_inventory_recent`) | product name |
 | `#/graveyard` (`do_graveyard`), box delete (`do_delete_box`) | the name at burial. Frozen history, never derived again (D134) |
 | orders and the walk (`_pick_row`, `server/capture_server._walk_plan_sku_display`, `_walk_plan_take`) | product name, which now matches the buyer's order line |
 | the Fulfiller's screen (`app/src/Fulfillment.tsx`) | `card.name` and `card.number_display`. No new string reaches it. Section 5.8 |
-| holdings (`server/pipeline_routes.py` `_value_rows`, D236, D250) | reads the market reading's name first, the card's second. Both now agree |
+| holdings (`server/pipeline_routes.py` `_value_rows`, D236) | reads the market reading's name first, the card's second. Both now agree |
 | the archive subject key (`pipeline/pricearchive.py`, D234) | `number_key` composes from the catalog pair, so D234's glued-code repair has nothing to repair on a SKU-bound card |
 | `#/pricing` (`server/pipeline_routes.py` `do_pipeline_worklist`) | SKU-keyed rows. Whether any row falls back to a card's name: unmeasured |
 
@@ -455,12 +455,12 @@ card. D254's order is unchanged.
 `CardDetailsSection` draws one extra line, **"Read as {read_name} {read number}"**, only when
 `read_disputes` is true. A card whose read agrees draws nothing new. The Fulfiller never sees
 it (D5). The words pass D196 (no decision, path or pipeline noun on screen). They raise
-`#/inventory`'s visible word count only on a disputed card. Whether the D194 fixture holds one:
+`#/inventory`'s visible word count only on a disputed card. Whether the D284 fixture holds one:
 unmeasured. A raise of the pinned ceiling is the owner's word, never a quiet pin.
 
-### 5.5 One report for D242 and D255 (ruling 6)
+### 5.5 One report for D242 (ruling 6)
 
-The owner ruled: "Merge them". Today D255 (`pipeline/sku_name_contradictions.py`,
+The owner ruled: "Merge them". Today D242 (`pipeline/sku_name_contradictions.py`,
 `./pkmnscan cards sku-names`) compares `card.name` against the SKU's row. D242
 (`pipeline/sku_number_contradictions.py`, `./pkmnscan cards contradictions`) finds one SKU with
 two stored numbers. After the change both read the SKU's own values, so both read zero forever.
@@ -547,7 +547,7 @@ rewritten silently where the photograph has not been checked.
 A CHANGE is the drawn identity moving to a different card. One case is the drawn name moving
 to a name the read disputes. The other is the drawn number moving to a number the read does not
 equal after the join's fold. A spelling change draws the same card: case, accent, a catalog
-qualifier, an embedded number, or a near miss that D146's own tolerance accepts. The owner's
+qualifier, an embedded number, or a near miss that D23's own tolerance accepts. The owner's
 rulings 1 and 2 (section 12) approve the classes below that derive.
 
 **What the migration never changes:** a SKU, a listing count, a price, a queue answer, a
@@ -576,7 +576,7 @@ falls to `sku_unknown`.
 **Why each derives.**
 
 - **T1, T2.** The read and the SKU name the same card. The change is spelling. No photograph
-  is needed to say so. D146's tolerance (`NAME_DISPUTE_SIMILARITY`, 0.80, fitted by D251) is
+  is needed to say so. D23's tolerance (`NAME_DISPUTE_SIMILARITY`, 0.80, fitted by D251) is
   the test the join itself uses.
 - **T3.** A human chose the SKU on the review screen, photo first (D4), or corrected it (D252).
   That is the photograph checked. **Measured risk: human answers are not perfect.** The store
@@ -717,7 +717,7 @@ and `set_name`. `unbind_sku` ignores them and derives the identity from the SKU.
    owner's store: unmeasured. That is the price of never deleting.
 5. **Filling on a fetch adds work to the press.** Upserting about 10,000 rows inside the fetch's
    write: cost unmeasured. Lane 0 times it on a copy of the store.
-6. **The D194 word ceiling** may rise on `#/inventory` by the "Read as" line. That is the
+6. **The D284 word ceiling** may rise on `#/inventory` by the "Read as" line. That is the
    owner's word, never a quiet pin.
 7. **Given up:** D253's near-miss name write, `cards variants`, `cards sku-names`,
    `cards contradictions`, the repair script, three in-memory SKU maps, and every per-field
@@ -749,8 +749,7 @@ outcome now.
   The two store-backed builders (5.1) move to `read_*`. That move is what keeps the READ name
   the thing the join checks. The premise that changes: "it does not build a second write path
   for a card's stored name". This spec replaces every such path with one.
-- **D255 (one SKU, a disputing name) and D242 (one SKU, two stored numbers). AMENDED, merged
-  (ruling 6).** One report, `cards identity`, reads `read_*` against the SKU table and excludes
+- **D242 (one SKU, a disputing name or two stored numbers). Merged (ruling 6).** One report, `cards identity`, reads `read_*` against the SKU table and excludes
   cards a human bound. The premise that changes: "the card's own stored name and number" are no
   longer the read. D242's original class becomes empty by construction, which is the outcome it
   protected.
@@ -760,7 +759,7 @@ outcome now.
   instead of merging cached exports on each call. The tier order and the owner's ruling stand.
 - **D15 (catalog data is vendored). CITED, NOT A SOURCE.** Measured: the vendored snapshot
   carries no TCGplayer id, so it cannot fill a SKU row.
-- **D64, D104, D166 (the Filtered Export and the live export are fetched, and the export is a
+- **D65, D104, D166 (the Filtered Export and the live export are fetched, and the export is a
   property of the game). CITED.** They are the table's sources. Their files stay on disk as the
   evidence for a reading, unchanged. The join keeps reading its candidates from them (D65).
 - **D189 (the market reading is a table). CITED.** Its full-replace shape is refused for the
@@ -777,7 +776,7 @@ outcome now.
   bound to its `cid`, because a position key is reused (`6/53`).
 - **D67 (the number a screen draws is composed once). CITED.** It keeps governing the drawn
   read. It argued against normalizing the RECORD of the read. `read_number` stays raw.
-- **D162, D146 (a unique name decides, and two signals release a claim). CITED, unchanged.** D162's
+- **D162, D23 (a unique name decides, and two signals release a claim). CITED, unchanged.** D162's
   standing is the argument for class T4u, and the owner applied it to the migration.
 - **D137 (the catalog is Near Mint by rule). CITED.** It is why grade is constant on this store.
   If it lifts, grade already lives where it must: in the SKU table and in `condition`.
@@ -797,9 +796,9 @@ there. That is a schema step on open, or a press.
 | 3a. The server | `server/capture_server.py`, `server/pipeline_routes.py`, `harness/tests/t7_store_and_seams.py` | 0, 1, 2 | no (code only) | no | T7 proves: each server writer in 4.2 upserts, then leaves identity equal to its table row and `read_*` untouched. Both fetches fill the table. The confirm route and its undo work. A `listing_disputed` answer routes to confirm or to the correction. D252's checks still pass, with the four real history-line shapes as fixtures. `make harness` is green |
 | 3b. The CLI writers | `cli/cmd_emit.py`, `cli/cmd_identify.py`, `cli/cmd_join.py`, `cli/cmd_reconcile.py`, `codes/scan.py`, `scripts/identity-cli-selftest.py` | 0, 1 | no (code only) | no | the self-test proves: an emit binds through `bind_sku` and upserts first; a re-identification writes only `read_*` on a bound card; `--export` and `reconcile --live` fill the table. `harness/tests/t3_join_coverage.py` stays green |
 | 4. The evidence readers | `cli/requeue.py`, `cli/resolve.py`, `pipeline/pricearchive.py` | 0, 1 | no | no | one mutation arm per builder: a builder that reads `name` instead of `read_name` lets a disputed fixture card through, and the check goes red. D254's tier (b) from the table gives the same product for the 914 card-covered SKUs D254 measured as the merged-export map does, on a copy. `harness/tests/t3_join_coverage.py` stays green |
-| 5. The screens | `app/src/types.ts`, `app/src/server.ts`, `app/src/CardHero.tsx`, new or changed specs under `app/tests/` | 3a | no | YES: `#/inventory` Details and its new press, plus a look at `#/fulfillment`, `#/orders`, `#/review` and Home, at 1440, 820 and 390, light and dark | `npx tsc --noEmit` prints nothing. `make design-check` is green, with the Fulfillment floors and the press-stability sweep of `inventory.spec.ts` (D118) over the new press. The D194 and D196 rows are green, or the ceiling raise goes to the owner |
+| 5. The screens | `app/src/types.ts`, `app/src/server.ts`, `app/src/CardHero.tsx`, new or changed specs under `app/tests/` | 3a | no | YES: `#/inventory` Details and its new press, plus a look at `#/fulfillment`, `#/orders`, `#/review` and Home, at 1440, 820 and 390, light and dark | `npx tsc --noEmit` prints nothing. `make design-check` is green, with the Fulfillment floors and the press-stability sweep of `inventory.spec.ts` (D118) over the new press. The D284 and D196 rows are green, or the ceiling raise goes to the owner |
 | 6. The demo | `scripts/demo-seed.py` | 0, 1, 5 | the demo store only | YES: the demo build at the three widths, both themes | `make demo` runs clean |
-| 7. The guard and the record | `scripts/docs-audit.py`, `Makefile` (wires the new self-tests into `make check`), a new decision entry under a slug (its number claimed at merge), amendment notes on D213, D239, D242, D252, D253, D254 and D255, `CLAUDE.md`, and `scripts/correction-rarity-number-repair.py`, which it deletes | 0, 2, 3a, 3b, 4 | no | no | the `identity writers` row goes red on a planted assignment and green on the tree. The `check census` and `check registry` rows are green with the new self-tests. `make docs-audit` is green |
+| 7. The guard and the record | `scripts/docs-audit.py`, `Makefile` (wires the new self-tests into `make check`), a new decision entry under a slug (its number claimed at merge), amendment notes on D213, D239, D242, D252, D253, D254, `CLAUDE.md`, and `scripts/correction-rarity-number-repair.py`, which it deletes | 0, 2, 3a, 3b, 4 | no | no | the `identity writers` row goes red on a planted assignment and green on the tree. The `check census` and `check registry` rows are green with the new self-tests. `make docs-audit` is green |
 
 **The order.** Lane 0 goes first, then lane 1. Lanes 2, 3b and 4 then run in parallel. Lane 3a
 follows lane 2, which owns the new reason. Lane 5 follows lane 3a, which owns the wire. Lane 6
@@ -824,7 +823,7 @@ All seven questions are ANSWERED. The owner's words are quoted.
    indexes the catalog name only, and `read_*` is not searchable (5.2).
 5. **ANSWERED: "yes I'd been saying we build this".** The store-owned SKU table is built now, as
    lane 0 (3.2).
-6. **ANSWERED: "Merge them".** D242 and D255 become one report, `cards identity` (5.5).
+6. **ANSWERED: "Merge them".** D242 become one report, `cards identity` (5.5).
 7. **ANSWERED: "Straight to lanes".** No `OPEN` step. Section 11 is the plan.
 
 ## Appendix: how the measurements were taken

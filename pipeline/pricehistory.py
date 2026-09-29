@@ -3,7 +3,7 @@
 D8 makes the TCGplayer Filtered CSV the pricing source, and everything downstream of that
 is a statement about RIGHT NOW — sixteen columns, four of them prices, not one carrying a
 timestamp or a sample size. So the product has never been able to answer "is this rising",
-which is exactly the question D49's `bullish` withhold and its `watch_above` threshold are
+which is exactly the question D86's `bullish` withhold and its `watch_above` threshold are
 set against. An operator holding a card back has been doing it from memory.
 
 THIS MODULE IS A LIBRARY AND NOT A FEATURE. Nothing calls it, no route serves it, no screen
@@ -21,11 +21,11 @@ statements were false and the entry is corrected; what follows is what was measu
   infinite-api.tcgplayer.com/price/history/<productId>/detailed?range=<r>
 
 WAS public with no key, no cookie, no `Referer`, no session — HTTP 200 to a bare `curl` —
-MEASURED 2026-08-30 (D62). THAT PREMISE ROTTED (see D216):
+MEASURED 2026-08-30 (D278). THAT PREMISE ROTTED (see D216):
 measured again 2026-09-19, the same honest `USER_AGENT` below now answers HTTP 403 on this
 host, while a browser User-Agent still answers 200 with no cookie, no `Referer` and no
 session — the request signature alone decides it. `AGENT_ENV` below is the escape hatch,
-read the way `server/tcg_export.py` already reads its own copy of the same key (D64); a
+read the way `server/tcg_export.py` already reads its own copy of the same key (D65); a
 checkout with no override still presents the honest string and is told by name (`Blocked`)
 rather than folded into `Unreachable`, whose whole meaning is that nothing is wrong with the
 run. tcgcsv.com answers either User-Agent, measured the same day, so one knob covers both
@@ -199,7 +199,7 @@ USER_AGENT = "pkmnscan/1.0 (+private single-operator inventory tool)"
 
 # THE ESCAPE HATCH'S NAME, NOT ITS VALUE — a string only, and never read from `.env` here.
 # `pipeline/` imports nothing outside itself and the stdlib (see `Market`'s header below), so
-# this module cannot ask `envfile` for anything; the caller that already may (D64's own
+# this module cannot ask `envfile` for anything; the caller that already may (D65's own
 # `server/tcg_export.py`, and `server/pipeline_routes.py` beside it) resolves the value and
 # hands it to `fetch_json`/`Market` the same way it already hands `Market` a cache directory
 # — passed in, never discovered. Spelled here as a literal, identical to
@@ -317,7 +317,7 @@ class Offline(Unreachable):
     re-attempting (and re-sleeping the courtesy delay) once per product.
 
     MEASURED, 2026-09-27, on a real demo-mirror recording. 387 SKUs over a run,
-    `readings_for_rows` batched by product (D79) but resolved 325 distinct
+    `readings_for_rows` batched by product (D277) but resolved 325 distinct
     (product, range) pairs, one `history()` fetch each — every one refused by the
     recording's offline network guard, and NONE of it cached (`Market.get` only stores a
     SUCCESSFUL fetch). 613 of those repeated the 0.15s courtesy delay for a connection that
@@ -329,7 +329,7 @@ class Offline(Unreachable):
 class Blocked(PriceHistoryError):
     """A host answered HTTP 403 to a request it once answered — a client refused BY NAME.
 
-    A SIBLING OF `Unreachable`, NOT A SUBCLASS. `history_unreachable`'s whole meaning (D62)
+    A SIBLING OF `Unreachable`, NOT A SUBCLASS. `history_unreachable`'s whole meaning (D278)
     is that nothing is wrong with the run and a public mirror simply did not answer; that is
     the wrong sentence for a 403, which says the client presenting itself is the thing being
     declined, and the honest remedy is `AGENT_ENV` rather than "try again"

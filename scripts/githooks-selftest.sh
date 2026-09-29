@@ -70,7 +70,7 @@ expect() {
 # THE BRANCH WARNING IS ASSERTED ON OUTPUT, NOT ON EXIT STATUS, AND `expect` CANNOT SEE IT.
 # `scripts/githooks/post-checkout` runs AFTER the switch has happened — git has no
 # `pre-checkout` hook — so it has nothing left to refuse and exits 0 whichever way it decides
-# (D139). A case written with `expect allow` would pass on a hook that printed nothing at all,
+# (D158). A case written with `expect allow` would pass on a hook that printed nothing at all,
 # which is the entire failure mode these two exist to catch. They assert the marker the warning
 # leads with, which is why it leads with one rather than opening on prose.
 MARK="PRIMARY CHECKOUT:"
@@ -115,7 +115,7 @@ git config core.hooksPath "$HOOKS_DIR"
 # ---------------------------------------------------------------------------- the cases
 echo "  -- the ordinary path stays open --"
 # THE SETUP SWITCHES BELOW DROP STDERR, AND ONLY BECAUSE THEY ARE SETUP. Every one of them moves
-# this fixture — a primary checkout — onto a branch, so post-checkout's D139 warning fires on each
+# this fixture — a primary checkout — onto a branch, so post-checkout's D158 warning fires on each
 # and interleaves three blocks of it through sections about something else. The warning is ASSERTED
 # in its own section at the foot of this file; muting it here is muting a passing guard's noise, not
 # skipping a case, and it is done per-command rather than globally so a hook that starts printing
@@ -240,8 +240,8 @@ expect refuse "delete loose-only main stating its value" git update-ref -d refs/
 git switch -q side 2>/dev/null
 cd "$tmp/work" || exit 1
 
-echo "  -- D139: which branch the primary checkout stands on --"
-# WHY THIS IS A GUARD AT ALL. D53 keeps a supervisor alive at login out of the PRIMARY checkout
+echo "  -- D158: which branch the primary checkout stands on --"
+# WHY THIS IS A GUARD AT ALL. D138 keeps a supervisor alive at login out of the PRIMARY checkout
 # over the owner's real store, so the branch that ONE directory stands on silently decides which
 # code serves their real inventory. A linked worktree has its own store and its own ports to be
 # wrong on its own (D43), so it must stay silent — and that is the arm most likely to be written
@@ -386,7 +386,7 @@ case "$out" in
 esac
 git switch -q main 2>/dev/null
 
-# AND IT MAY NOT INVENT A SERVER. D139's warning asserted that the live capture server "now
+# AND IT MAY NOT INVENT A SERVER. D158's warning asserted that the live capture server "now
 # runs THIS branch's code" whether or not one was running — the hazard printed as a fact. With
 # no supervisor there is nothing to say about one, and a line that appears anyway is the same
 # defect a register down.
@@ -403,7 +403,7 @@ esac
 git switch -q main 2>/dev/null
 rm -rf "$tmp/work/.serve" "$tmp/work/scripts/serve.py"
 
-# AND THE BLOCK D139 DID NOT TOUCH, which was covered by nothing: deleting the `make hooks`
+# AND THE BLOCK D158 DID NOT TOUCH, which was covered by nothing: deleting the `make hooks`
 # staleness reminder outright left every other case in this file green. Two blocks now share one
 # hook file, so "intact and untouched" was a claim about a diff rather than something asserted —
 # and a reminder that silently stopped firing is a clone running hooks nobody installed.

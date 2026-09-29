@@ -34,7 +34,7 @@ network call in a test" rule, without this module importing anything from `unitt
 
 --------------------------------------------------------------------------------------
 FOUR THINGS `cli/cmd_pricearchive.py` LAYERS ON TOP OF `sweep`, ALL IN THIS FILE AS PURE,
-TESTABLE FUNCTIONS SO THE CLI ITSELF STAYS A THIN DRIVER (D223,
+TESTABLE FUNCTIONS SO THE CLI ITSELF STAYS A THIN DRIVER (D231,
 D222):
 
   1. RANKED SUBJECTS. `rows_from_store` orders its answer by what the ledger says that SKU
@@ -75,12 +75,12 @@ from store.session import Store
 CHUNK_SKUS = 20
 
 # How long a SKU's own buckets are trusted fresh enough that a RESUMED SWEEP skips it
-# (D230), NEVER `pipeline/pricehistory.py:HISTORY_TTL_SECONDS` — that
+# (D224), NEVER `pipeline/pricehistory.py:HISTORY_TTL_SECONDS` — that
 # constant is one hour, argued for a different reader with a different need (the live
 # `#/pricing` screen, where an hour-old figure is honest and a longer one would not be).
 # `split_by_freshness` treats this pass the same way whether it is resumed a minute later
 # or five hours later, and D222 measures the host throttling this client after roughly
-# 800 requests — with `rank_by_revenue` now stable and deterministic (D223), a one-hour
+# 800 requests — with `rank_by_revenue` now stable and deterministic (D231), a one-hour
 # window sends every pass back to read the SAME top ~200 names it already read last time,
 # never advancing past them. MEASURED AGAINST THE OWNER'S REAL STORE: two passes five
 # hours apart, the second skipped nothing and restarted from the top of the ranked list —
@@ -418,7 +418,7 @@ def _ledger_export_rows(
     ledger, skus: Iterable[str], market: _MarketLike
 ) -> Tuple[Dict[str, dict], Dict[str, str]]:
     """The shared machinery behind `ledger_subject_rows` and the
-    `D233` card-row fallback: for EXACTLY the SKUs named in `skus`
+    `D231` card-row fallback: for EXACTLY the SKUs named in `skus`
     (no exclusion of any kind — that is the caller's job), find the order line that priced
     each one, parse its `name` into an export-shaped row, and answer `(rows, refusals)`.
 
@@ -486,7 +486,7 @@ def ledger_subject_rows(
 ) -> Tuple[Dict[str, dict], Dict[str, str]]:
     """Every SKU the order ledger ever priced a line for, that `known_skus` (the `cards`
     table's own subject set) cannot already answer for, resolved into an export-shaped row
-    by parsing the line's own `name` — this is the sealed-product widening D223
+    by parsing the line's own `name` — this is the sealed-product widening D231
     names as a gap and D231 closes: sealed product has no
     `cards` row and never will, but the ledger's own `name` carries every cell an
     export-shaped row needs.
@@ -498,7 +498,7 @@ def ledger_subject_rows(
     THIN WRAPPER OVER `_ledger_export_rows`. That function does the actual parsing; this
     one only computes which SKUs are still open — every SKU the ledger ever priced, minus
     `known_skus` — and hands that set down. `rows_from_store`'s own card-row fallback
-    (`D233`) calls `_ledger_export_rows` directly, over the
+    (`D231`) calls `_ledger_export_rows` directly, over the
     OPPOSITE set — SKUs `known_skus` already covers — because it wants a fallback row for a
     SKU that has both, not a wider subject set.
     """
@@ -524,7 +524,7 @@ def revenue_by_sku(ledger) -> Dict[str, Decimal]:
     Calendar's fulfilment record. A sealed SKU's revenue is computed here anyway, because
     `rank_by_revenue` is handed EVERY key this function can answer for, not only the ones
     `rows_from_store`'s own subject set happens to contain — the gap between the two is
-    exactly the reachability limit D223 argues
+    exactly the reachability limit D231 argues
     about and does not solve.
 
     A LINE WITH NO READABLE `unit_price` CONTRIBUTES NOTHING AND IS NEVER AN ERROR — D9's
@@ -552,7 +552,7 @@ def revenue_by_sku(ledger) -> Dict[str, Decimal]:
 
 
 def rank_by_revenue(skus: Iterable[str], revenue: Dict[str, Decimal]) -> List[str]:
-    """Every SKU in `skus`, sold value first (D223).
+    """Every SKU in `skus`, sold value first (D231).
 
     A pass that gets cut off partway — D222's whole subject, and the
     NORMAL case measured 2026-09-19, not the exception — should have spent its requests on
@@ -572,13 +572,13 @@ def rows_from_store(
 ) -> Dict[str, dict]:
     """`sku -> export-shaped row`, one per distinct SKU this store can price a subject for,
     ORDERED BY WHAT THAT SKU HAS ACTUALLY SOLD FOR
-    (`rank_by_revenue`, D223) — a plain `dict` preserves the order it
+    (`rank_by_revenue`, D231) — a plain `dict` preserves the order it
     is built in, so a caller that chunks or iterates this in order walks the highest-value
     subjects first with no second sort.
 
     `fallback_rows`, WHEN GIVEN AND `market` IS ALSO GIVEN, IS FILLED WITH A SECOND,
     LEDGER-DERIVED ROW FOR EVERY CARD-COVERED SKU THE LEDGER CAN ALSO ANSWER FOR
-    (`D233`). `cards` still wins as the PRIMARY row for the return
+    (`D231`). `cards` still wins as the PRIMARY row for the return
     value below — that is unchanged. This is a candidate the CALLER (`sweep`) may retry
     with, and only when the primary card-derived row fails to resolve against the mirror.
     Built the same way `ledger_subject_rows` builds the ledger's second SOURCE (its own
@@ -598,7 +598,7 @@ def rows_from_store(
     `Market.product_id_for_row` will refuse on its own if the two together no longer
     resolve.
 
-    SEALED PRODUCT IS THE SECOND SOURCE, WHEN `market` IS GIVEN — the gap D223 named and
+    SEALED PRODUCT IS THE SECOND SOURCE, WHEN `market` IS GIVEN — the gap D231 named and
     left unsolved. A SKU that sold but has no `cards` row is resolved from the order
     ledger's own `name` (`ledger_subject_rows`, over `parse_ledger_name`). `market` is
     `None` by default: a caller with no `Market` in hand (this module's own tests, or a
@@ -665,7 +665,7 @@ def sweep(
     the endpoint unreachable or blocked — carrying `Market`'s own message, never dropped.
 
     A CARD-DERIVED ROW THAT REFUSES RETRIES ONCE, AGAINST THE LEDGER'S OWN ROW
-    (`D233`, `rows_from_store`'s `fallback_rows` out-parameter).
+    (`D231`, `rows_from_store`'s `fallback_rows` out-parameter).
     `cards` stays the PREFERRED source — this only fires for a SKU `readings_for_rows`
     could not resolve on its first attempt, and only when `fallback_rows` names a
     different, ledger-derived row for that same SKU to try instead. A SKU with no fallback
@@ -843,7 +843,7 @@ def split_by_freshness(
 def chunk_rows(rows: Dict[str, dict], size: int) -> List[Dict[str, dict]]:
     """`rows` split into ordered pieces of at most `size`, IN THE CALLER'S OWN ORDER —
     never re-sorted here. `rows_from_store` orders by sold revenue
-    (D223); re-sorting alphabetically in this function would silently
+    (D231); re-sorting alphabetically in this function would silently
     undo that ranking, which is exactly the kind of defect `CLAUDE.md` asks to be named
     rather than reintroduced by a "helper" three lines away from the decision it defeats.
     """

@@ -233,11 +233,11 @@ def _merged_cap(legs) -> Optional[int]:
 class Disagreement(Exception):
     """The runs in a send do not share a pricing policy, and this module may not choose.
 
-    THE ONLY DISAGREEMENT LEFT, AND IT IS THE D48 REMNANT. Per-SKU answers cannot disagree any
+    THE ONLY DISAGREEMENT LEFT, AND IT IS THE D180 REMNANT. Per-SKU answers cannot disagree any
     more: they live in one corpus keyed by SKU (D86, amended), so a card has one answer by
     construction and the class of conflict this module was first written to detect no longer
     exists. What can still differ is a per-run POLICY OVERRIDE — a lot of commons wanting a
-    different `sub_threshold` from a lot of hits, which is D48's argument and survives it — and
+    different `sub_threshold` from a lot of hits, which is D180's argument and survives it — and
     one file needs one answer to that.
     """
 
@@ -249,7 +249,7 @@ class _Shim:
     A SHIM AND NOT A SYNTHETIC `JoinReport`, because a real one would have to be built from
     catalogs and cards this module does not have and does not need. `prices_for` reads
     `report.matches` and, only to compose a refusal, `below_threshold`. Passing the ladder a
-    narrower object is honest; re-implementing the ladder is what D49 forbids, and this exists
+    narrower object is honest; re-implementing the ladder is what D86 forbids, and this exists
     so nothing has to.
     """
 

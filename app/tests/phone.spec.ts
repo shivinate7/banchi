@@ -1,5 +1,5 @@
 // Protects: The owner-side shell at phone width fits without sideways scroll and keeps every touch target at 40px or more, including menus, sheets and the palette.
-// Governs: D117, D134, D204, D266, D288, D291
+// Governs: D117, D134, D266, D288, D291
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { POPULATED_ROUTE_SEEDS, seedPopulatedGraveyard } from './routeFixtures'
@@ -683,7 +683,7 @@ test('leaving a scrolled screen lands the next one at the top', async ({ page })
   expect(await page.evaluate(() => window.scrollY)).toBe(0)
 })
 
-/* THE DRAWER'S LAST ROW, CONFIRMED RATHER THAN ASSUMED (D204).
+/* THE DRAWER'S LAST ROW, CONFIRMED RATHER THAN ASSUMED (D266).
  *
  * The complaint: `.bn-side-foot` — Cards to pull, the theme toggle, the server line — is the
  * last thing the drawer draws, and it sits on the row Codes renders in, the last row of the
@@ -757,7 +757,7 @@ test.skip('every drawer route is reachable by tap, at two phone heights', async 
   }
 })
 
-/* THE DRAWER HAS NO FIXED FOOT (D266, amends D204; UX-037).
+/* THE DRAWER HAS NO FIXED FOOT (D266; UX-037).
  * Cards to pull, the theme and the server line are the last rows of the one scrolling list, so
  * nothing covers the end of it. And on this file's own phone every SCREEN in the drawer shows
  * without a scroll: before, Graveyard and Codes sat under the foot with a 32px fade as the only

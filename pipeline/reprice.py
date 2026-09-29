@@ -118,7 +118,7 @@ ADD_TO_QUANTITY = 0
 
 SOLD_OUT = "sold_out"                    # the export carries the row with no live copies
 NOT_THIS_STORE = "not_this_store"        # live at TCGplayer, no card here ever carried it
-HELD = "held"                            # withheld in the corpus, and live (D49)
+HELD = "held"                            # withheld in the corpus, and live (D86)
 SOLD_RECENTLY = "sold_recently"          # a copy sold here inside the window
 TOO_YOUNG = "too_young"                  # owned for less than the window
 PRICED_RECENTLY = "priced_recently"      # this store answered this SKU's price in the window
@@ -464,7 +464,7 @@ def plan(
     a SKU absent from `owned_since` alone is merely one no card here carries, which is drawn
     as evidence and refuses nothing (it was a terminal refusal until 2026-09-06; see
     `Candidate.held_here`). `last_sold` and `priced_at` map SKU to a stamp; absent means
-    never. `held` is the withheld SKUs from the corpus (D49), reported and never marked
+    never. `held` is the withheld SKUs from the corpus (D86), reported and never marked
     down.
 
     Nothing here reads a clock unless `now` is None, so a test drives its own window.
@@ -480,7 +480,7 @@ def plan(
 
     A ROW WITH NO MARKET PRICE IS NEVER MARKED DOWN (the owner's ruling, 2026-09-26: "Skip
     no-market cards"). It is refused `no_market` before the rule prices it, whatever the basis:
-    a card nobody has priced is one the owner prices by hand (D49), never one a rule lowers.
+    a card nobody has priced is one the owner prices by hand (D86), never one a rule lowers.
     """
     rule = pricing.Rule.parse(rule if rule is not None else pricing.MATCH)
     cap = check_cap(cap)

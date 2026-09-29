@@ -1,4 +1,4 @@
-/* `#/product` — one product's own view (D227, D62, `D278`). Every color is a
+/* `#/product` — one product's own view (D227, D278). Every color is a
    `--bn-*` token; the market series and the owner's own fills are drawn with deliberately
    different marks (a line versus a diamond), never a shared color standing in for the
    distinction. The page frame (width, top gap, the h1) is the kit's `Page` now — this file
@@ -178,7 +178,7 @@
 }
 
 /* THE PER-BUCKET SPREAD — a thin tick, muted, never the same weight as the market line
-   itself: it is a sanity check, not a peer figure (D62). */
+   itself: it is a sanity check, not a peer figure (D278). */
 .producthistory-spread {
   stroke: var(--bn-ink-3);
   stroke-width: 1;
@@ -186,7 +186,7 @@
 }
 
 /* THE OWNER'S OWN FILLS — a distinct mark (a diamond) in the one accent this design system
-   allows, and never a color standing in for "beat" or "missed" the market (D62: direction is
+   allows, and never a color standing in for "beat" or "missed" the market (D278: direction is
    a sign and a word, never a color, and this is not even a direction — it is a fact). */
 .producthistory-fill-mark {
   fill: var(--bn-accent);

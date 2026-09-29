@@ -370,7 +370,7 @@ function stillHere(group: SearchGroup, gone: ReadonlySet<string>): SearchGroup |
   }
 }
 
-/* The card's order in its box (D265), which is its index until a section is placed there. */
+/* The card's order in its box (D294), which is its index until a section is placed there. */
 function inWalkOrder(cards: Sellable[]): Sellable[] {
   const at = (card: Sellable) => card.where?.order ?? card.index
   return [...cards].sort((a, b) => a.box - b.box || at(a) - at(b))

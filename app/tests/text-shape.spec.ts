@@ -12,9 +12,7 @@ import { sweepEveryRoute } from './routeSweep'
 import { PRODUCT_ROUTE } from './routeFixtures'
 import { injectRepeatedSentence, measureTextShape, type TextShapeResult } from './textShape'
 
-/* D194 IS SUPERSEDED BY `D284`. The owner's ruling, 2026-09-23: "I think we
- * need to kill ceilings and instead just use a different way I don't like keeping a stagnant
- * static pin." This file is the repetition check and the sentence-shape check. The third
+/* NO CEILING, NO PIN (D284). This file is the repetition check and the sentence-shape check. The third
  * piece, the on-demand density pass, is `make text-density`, which runs THIS file's sweep in a
  * report mode (`TEXT_DENSITY=1`, below), so the pass reads the same screens in the same state.
  * See `textShape.ts` for what each of the four signals measures and why.

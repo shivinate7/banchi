@@ -78,7 +78,7 @@ import './BoxBrowse.css'
  * from './BoxBrowse'` keeps working) — `#/orders`' walk pane builds one too. */
 export type { Row } from './CardHero'
 
-/* Box-walk order — box, then the card's order in it (D265), the order the cards physically
+/* Box-walk order — box, then the card's order in it (D294), the order the cards physically
  * sit in. The order is the index until a section is placed into the box. */
 function rowsOf(cards: Record<string, InventoryCard>): Row[] {
   const at = (card: InventoryCard) => card.place?.order ?? card.index
@@ -798,7 +798,7 @@ export function BoxBrowse({
      the press moved the pressed box to the top, and the row under the pointer became another
      box. */
   const [recency] = useState<ReadonlyMap<number, string>>(() => storedBoxRecency())
-  /* THE RAIL'S OWN SORT (the ruling of 2026-09-24: the value list is D159's own screen no
+  /* THE RAIL'S OWN SORT (the ruling of 2026-09-24: the value list is D277's own screen no
    * longer — it is an Inventory sort, through the same `SortControl` every other sorted list
    * in the kit uses). `recent` is the resting order above and needs no fetch; `value` reads
    * `GET /pipeline/value`'s aggregates, fetched lazily the first time it is picked and kept —

@@ -67,7 +67,7 @@ WHY THIS EXISTS. `runs -> join` is otherwise autonomous: `identify` spawns detac
 `join`, `emit` and `reconcile` are free and re-runnable, and the queues, the pricing table
 and the import files are all reachable from a screen. The one step nobody could automate was
 the operator going to TCGplayer, pressing Export Filtered CSV, waiting for the download and
-uploading the file back. That is the manual step this removes, and D64 is the decision entry
+uploading the file back. That is the manual step this removes, and D65 is the decision entry
 — including the part it does NOT remove, which is that one fetch answers for one game.
 
 STDLIB ONLY, like the rest of the server. `urllib.request` and not `requests`:
@@ -144,7 +144,7 @@ FILTERS_URL = "https://store.tcgplayer.com/admin/pricing/getjsonfilters"
 # READ THROUGH `envfile.get_live` AND NOT `envfile.get`, WHICH IS NOT A DETAIL: this session
 # EXPIRES, and `tcg_session_expired` tells the operator to sign in again and replace the value
 # in `.env`. `get` caches per process and, worse, cannot replace a value it already lifted out
-# of the file — so under D53's supervisor, which runs for days and does not watch `.env`, that
+# of the file — so under D138's supervisor, which runs for days and does not watch `.env`, that
 # printed remedy would not have worked and the refusal would have repeated forever over a
 # cookie the operator had already fixed. A bare name rather than a
 # `PKMNSCAN_` one, which is this repo's existing split: knobs are prefixed, secrets are not
@@ -197,7 +197,7 @@ _LOGON_MARKER = "account/logon"
 # measurement rather than reasoning past it. Do not flip this back on a reading of the field
 # name; it is the owner's instruction and it goes back to the owner.
 #
-# AND NOTHING DOWNSTREAM CAN EVER CHECK IT, WHICH IS WHY THE GUARD IS HERE. D64 measured
+# AND NOTHING DOWNSTREAM CAN EVER CHECK IT, WHICH IS WHY THE GUARD IS HERE. D65 measured
 # `Photo URL` empty in all eleven exports, filtered and unfiltered: this axis leaves NO trace
 # in the file. A wrong value produces a clean join, a clean reconcile and a green
 # `make check`, forever.

@@ -1,0 +1,14 @@
+## D83 — Moved is a third way a card leaves
+
+**A card may leave a box by moving.** The source keeps a `moved` tombstone and the card is recorded fresh at a newly allocated index in the destination, D26's `retired` pattern extended to a third destination: add a state, inherit the machinery. The cascade shape (shift every higher card down) was refused. D58 already keeps the stored index fixed while rendered ranks close up, and a cascade inherits `renumber_blocked` across any sold, retired or held card, so a box sold through partway could give up almost nothing.
+
+- **`MOVED` joins `master.TERMINAL_STATES`,** so every reader keyed on that tuple (`_Places`, `copies_on_hand`, occupancy rendering) closes the gap on screen unchanged.
+- **The tombstone clears `sku`, `condition`, `capture_id` and `photo`; the transplant keeps them.** `copies_not_sold` and `positions_for_sku` filter on `sku` alone, so a tombstone that kept its SKU would double-bill every cap forever. Two cards sharing a `capture_id` raise `DuplicateCaptureId`. Descriptive fields stay on the tombstone, as `retire()` leaves them.
+- **No listing-hold guard.** Copies are fungible (D7), so the hold travels with the transplant's `sku`.
+- **Undo is the same primitive in the other direction.** It lands at a fresh index in the original box, and the first tombstone is never reclaimed. No `undo_move` route exists.
+- **A moved card refuses to leave again** (`card_moved`) at `do_remove_card`, `do_delete_box`, `do_mark_sold`, `do_retire` and `do_reshoot`. `Inventory.move_card` raises `CardDeparted` or `CardNotFound` as a backstop. `_state_before_sale` and `_state_before_retirement` refuse a `moved` history line, since restoring to `moved` would give a card no `moved_to`, no transplant and no tombstone.
+- **`Inventory.move_cards` is one call inside one lock,** ascending source order, so a selection lands contiguous and in order. A whole box moved (`indices: null`) is a merge, with no separate route. Routes: `POST /inventory/<box>/<index>/move` and `POST /inventory/<box>/move`. The control is "Move to box" in `BoxOps.tsx`, taking a typed destination. `_box_row` counts `moved` beside `sold` and `retired`. A source emptied by a merge holds only tombstones and stays undeletable, which is the named cost of a merge.
+- **Named risks.** The photo rename follows the store call, because the destination index is unknown until it is allocated. A crash between them leaves a photo at the new path with the store naming the old one, and recovery is manual. `cli/resolve.py:realign` reads photo bytes without a lock, so never run a move beside `join --realign`.
+- **Not built:** a searchable box picker, a section-move that carries the section name (`Box.section_names` has no write path), a dedicated split route, and a `combine` flag letting one identification run span boxes (D180).
+
+Reopen for a move across a filesystem boundary, since `os.replace` is atomic only within one tree.

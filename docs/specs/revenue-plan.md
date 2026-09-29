@@ -51,7 +51,7 @@ Rules that govern how it is drawn:
 - It is blind to what the card cost. That fact belongs next to the figure. A card bought at two
   dollars and sold at eighteen against a twenty dollar market is a large gain. This figure draws
   it as a shortfall.
-- Direction is a sign and a word, never a color. D62 sets this. The palette holds no red and no
+- Direction is a sign and a word, never a color. D278 sets this. The palette holds no red and no
   green.
 - Today's price comes from the readings table, drawn with its own age. A press refreshes it. The
   screen never fetches on its own.
@@ -156,7 +156,7 @@ The house pattern is the readings table and its adopt command, applied here.
 
 Buckets are keyed by `(sku, range, start)`, **not** by width. The ranges overlap. `semiannual`
 and `annual` are both seven-day-wide, so a width-only key would collide two independent
-observations. That is exactly the collision D62 forbids.
+observations. That is exactly the collision D278 forbids.
 D219 argues the key in full.
 
 The archive never deletes a row. A bucket a later sweep does not mention is left exactly as it
@@ -168,8 +168,7 @@ The sweep's subject is every distinct SKU the `cards` table has ever recorded. S
 neither state deletes the row (D26, D134).
 
 The owner asked for a scheduled sweep. The schedule is still deferred. The sweep is a press a
-person runs. A timer reverses D62's own statement. D62 says this reader cannot fire on its
-own. That reversal needs its own argument, which nobody has made.
+person runs. A timer reverses D278's statement that this reader cannot fire on its own. That reversal needs its own argument, which nobody has made.
 
 ## 5. Defects to carry into whichever change comes first
 

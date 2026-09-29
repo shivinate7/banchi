@@ -162,7 +162,7 @@ def _show(args, say) -> int:
     held = {sku: answer for sku, answer in book.answers.items() if answer.is_hold}
     say(f"answers          {len(book.answers)} ({len(held)} held back)")
     if args.held:
-        # THE CROSS-RUN VIEW OF WHAT IS BEING HELD — D49 named its absence and D62 repeated it.
+        # THE CROSS-RUN VIEW OF WHAT IS BEING HELD — D86 named its absence and D278 repeated it.
         # It is one line here because the answers are in one file; it was unbuildable while
         # they were in eight.
         for sku, answer in sorted(held.items()):

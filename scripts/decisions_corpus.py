@@ -19,9 +19,8 @@ entry" a thing you could only get by parsing; a directory makes it a thing you c
 `path_for("D58")` is now a real answer, and `scripts/decision-context.py` names a file a
 session can read rather than a region of a file it must not.
 
-ORDER IS THE MANIFEST'S, NOT THE FILESYSTEM'S. `ORDER.json` records the order the chunks
-sat in, because three of them are not entries at all — Deferred, Someday and the v1 bug
-table sat between D79 and D80 and still do. Sorting by filename would move them, and
+ORDER IS THE MANIFEST'S, NOT THE FILESYSTEM'S. `ORDER.json` records the order of the
+chunks, with the preamble, which is not an entry, first. Sorting by filename would move it, and
 `decision index` reconciles the index against the headings IN ORDER, so the order is data
 rather than a convention anybody could re-derive.
 """
@@ -71,7 +70,7 @@ def order() -> List[str]:
     surface hiding inside this change — every entry-adding branch appending to one JSON array
     at the same position is the collision this split exists to remove, wearing a different
     file extension. So membership is DERIVED: the manifest pins the order of what it knows,
-    which is what keeps the three non-entry sections between D79 and D80, and a file it has
+    which is what keeps the preamble first, and a file it has
     never heard of is appended rather than rejected.
 
     `make merge` normalizes the manifest at claim time, which is the one moment the final

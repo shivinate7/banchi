@@ -3,8 +3,8 @@
 Bulk-list pre-sorted TCG singles on TCGplayer with zero attention per card, and know where
 every card physically is.
 
-Code cards are a feature of this product, not a second track (D248, code cards fold into one
-rules file). The feature is DORMANT. See "Code cards (dormant feature)" below.
+Code cards are a feature of this product, not a second track (D248, turn end never runs the harness, and code cards
+share one rules file). The feature is DORMANT. See "Code cards (dormant feature)" below.
 D14 (two tracks, one rig) still stands in structure. `codes/` is its own package. `docs/map.py`
 carries a `TRACKS` tuple. `scripts/decision-context.py` prints a track banner. Repeal needs the
 owner's word.
@@ -49,7 +49,7 @@ make up             # the server, detached, one process. ARGS=--restart bounces 
                     #   Refuses on a primary checkout off main. PKMNSCAN_SERVE_MAIN=off overrides.
 make reap           # stop what THIS session started, nothing else. Previews. ARGS="--confirm",
                     #   "port:N --confirm", "match:X --confirm" or "pid:N --confirm". A subagent's bare
-                    #   --confirm stops only its own session's pids (D305, one session of two).
+                    #   --confirm stops only its own session's pids (D305, the reaper stops only its own).
 make janitor-install # copy the sweep and reap to the user's home Claude bin directory.
 make merge          # merge a PR and move main onto it. ARGS=<n> previews. ARGS="<n> --confirm" merges.
                     #   The owner names the session an Orchestrator first, per turn. It carries a needed
@@ -228,7 +228,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   `banchi.orders.last-check`.
   `app/eslint.config.js` bans `localStorage` outside `useCamera.ts` and `deviceMemory.ts`.
 
-  `sessionStorage` is a separate store. It holds `banchi.session.captureId` and `banchi.run-scope` (D39, the pipeline gets a route).
+  `sessionStorage` is a separate store. It holds `banchi.session.captureId` and `banchi.run-scope` (D39, a run's scope is a selection handed off).
   The `storage keys` row of `make docs-audit` reconciles this roster (D27, session state is device-local).
 - **No duplicate SKU rows in an import file.** Aggregate by SKU. `Add to Quantity` equals the copy count. There is no standing
   cap (D7, duplicates aggregate by SKU). A send may ask for one (`emit --cap N`) or for a quantity (`emit --quantity SKU=N`).
@@ -238,7 +238,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **A card's number counts the cards in the box, not the slots** (D58, a card's number counts the cards). The stored index never moves. A departed card
   renders `pipeline/join.departed_label`.
 - **A set hint on some cards narrows nothing** (D76, how wide to ask is per game). Widening needs every card hinted and
-  every hint resolved. A Pokemon run that would widen is refused (`export_needs_hint` in `pipeline/games.py`, D170, a widening is safe only while the category fits)
+  every hint resolved. A Pokemon run that would widen is refused (`export_needs_hint` in `pipeline/games.py`, D170, a Pokemon run names its sets)
   unless the operator named `set_ids` or `scope`. A widening is never silent: every fetch carries a `width` block.
   Fix an unhinted card in Manage box, under Set claims.
 - **The catalog export belongs to the game, not the drawer** (D166, the catalog export is a property of the game). It lands in `inventory/.exports/<game>/`.
@@ -250,7 +250,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   legacy and read by nothing.
 - **A sold card's photograph is reclaimed on purpose** (D89, reclaimed on purpose): `POST /boxes/<box>/photos/reclaim` deletes sold
   photographs and keeps every record.
-- **`emit` over several runs writes one file, and a cap is spent once** (D86, the worklist spans runs; `pipeline/join.py:add_to_quantity`).
+- **`emit` over several runs writes one file, and a cap is spent once** (D86, one pricing file for the store; `pipeline/join.py:add_to_quantity`).
   `#/pricing` lands on every unsent copy in the store (D156, one worklist), read live.
 - **No automatic sectioning** (D10, inventory model). A divider is put in with `S` on the capture screen
   (`store/master.py:open_section`, inside the store lock).
@@ -272,7 +272,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   Never silently drop a card. **NOT MECHANIZED (the guess half):** a machine cannot tell a confident correct
   reading from a guess. The drop half is `harness/tests/t3_join_coverage.py`.
 - **Report unmatched rows in both directions before you write output.** `harness/tests/t3_join_coverage.py` enforces it.
-- **Scope is argued, not gated.** New surface needs a reason and a decision entry.
+- **Scope is argued, not gated.** New surface needs a reason, written into the decision that owns it.
   The `repo map` row of `make docs-audit` fails a file with no map entry.
   Its `decision ids` row fails an id with no entry.
 - **Fix the cause, never the symptom. Check whether the primitive exists first.**
@@ -287,7 +287,8 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   `docs/map.py` first. **NOT MECHANIZED:** a machine cannot read a sentence to a person and decide whether
   this repo can already do it.
 - **No date in repo prose.** History is git's. Rewrite a claim in place, and keep only what is true now.
-  Old dates go when their file is next rewritten. Never in a sweep. See D308 (no dates in repo prose).
+  Old dates go when their file is next rewritten. Never in a sweep. A decision file is a rule, not a log. A change rewrites it.
+  Old records are deleted, not archived. See D308 (no dates in repo prose).
   **NOT MECHANIZED:** a machine cannot tell a date from a version number, a port or a test fixture without intent.
 - **Opsec.** A live unredeemed code card is a bearer instrument. No code-card photo in a listing, README,
   screenshot or commit. `scripts/githooks/pre-commit` enforces it, armed by `make hooks`.
@@ -330,7 +331,7 @@ Use bold labels in one quoted block, never a code fence. Start with the point. N
   `Next:` lines, so a lane resumes from its branch alone.
 - Read `docs/decisions/` before you propose an architecture change (`scripts/decision-context.py` finds the entry,
   `make map ARGS=--decisions` indexes them). Reopen one only by citing it and waiting for the owner's word.
-- Design work is repo work. Land it in `docs/specs/` or a decision entry in the same session, or declare it abandoned.
+- Design work is repo work. Land it in `docs/specs/` or the decision that owns it in the same session, or declare it abandoned.
 - When compacting, keep the fixture schema facts, every `make` command and the modified-file list.
 
 ### Writing a brief

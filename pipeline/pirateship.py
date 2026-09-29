@@ -23,7 +23,7 @@ the wizard:
 WHAT THIS MODULE MAY NEVER DO, and both are refusals rather than omissions:
 
   IT NEVER SELECTS INSURANCE. `REFUSED_COLUMNS` names every insurance-shaped header the
-  import understands and `render` refuses a row carrying one. This is D49's rule in another
+  import understands and `render` refuses a row carrying one. This is D86's rule in another
   lane — `pipeline/decisions.py` states it as "nothing here is ever defaulted on your
   behalf — that is the entire point", and an insured value written into a spreadsheet is a
   charge the owner did not choose, on a per-order judgement only they can make. The guard
@@ -128,7 +128,7 @@ COLUMNS: Tuple[str, ...] = (
 # braces and is not. `render` refuses any column outside `COLUMNS` on its own, so a caller
 # adding `Insurance` is already stopped; what this adds is the REASON. A refusal reading
 # "not a Pirate Ship column" invites the fix of adding it to `COLUMNS`, and a refusal
-# naming D49 does not.
+# naming D86 does not.
 REFUSED_COLUMNS: Tuple[str, ...] = (
     "Insurance",
     "Insured Value",

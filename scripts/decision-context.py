@@ -113,7 +113,7 @@ def decision_gists(path: Optional[Path] = None, prefix: str = "D") -> Dict[str, 
             gists[current] = (title, pick_rulings(bolds))
 
     for line in body.splitlines():
-        # The slug form is an id until the merge claims it (D72, rewritten 2026-09-11), and
+        # The slug form is an id until the merge claims it (D140, rewritten 2026-09-11), and
         # a session editing a file its branch's own unclaimed entry governs must be shown
         # that entry — which is the one moment it is least likely to be remembered.
         heading = re.match(

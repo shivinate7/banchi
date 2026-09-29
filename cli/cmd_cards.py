@@ -13,7 +13,7 @@ EIGHT SUBCOMMANDS AND SIX OF THEM WRITE NOTHING EVER.
                         its set, a name one edit from a sibling in the same set. Review
                         signals, never repairs, never a catalogue call.
   cards identity         `docs/specs/identity-follows-sku.md` §5.5, §7 (lane 2): the
-                        migration's own classifier AND the merged D242/D255 report — every
+                        migration's own classifier AND the merged D242 report — every
                         card's class (T1-T6, `sku_unknown`), the §4.3 audit, and the name/
                         number contradiction halves. Previews by default; `--write`
                         performs the one-time migration. `cards contradictions` and `cards

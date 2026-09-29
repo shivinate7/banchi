@@ -63,7 +63,7 @@ export function stageOf(row: RunSummary): Stage {
          price is owed — that is Pricing's worklist, too heavy for the polled list — so it names
          the screen the step is on, which is one screen and one press whatever the prices say.
          Two words, the same as the label it replaced: Inventory draws this pill too, and its
-         word ceiling holds (D194). Home's line reads the worklist and says which. */
+         word ceiling holds (D284). Home's line reads the worklist and says which. */
       return { label: 'Next: Pricing', tone: 'accent', filled: 3, live: false, step: 2 }
     }
     case 'reconcile':

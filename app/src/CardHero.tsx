@@ -11,7 +11,7 @@
  * `BoxBrowse.tsx` imports them back with no change to its own JSX. Lane A2a's own move below
  * (`CardHeroHead`/`CardPane`) DOES change `BoxBrowse.tsx`'s JSX — the markup now calls a
  * component instead of writing the tags out — but not what it RENDERS: `app/tests/
- * inventory.spec.ts` is what proves the rendered screen is unchanged (D96's "the screens
+ * inventory.spec.ts` is what proves the rendered screen is unchanged (D97's "the screens
  * answer to the owner's interview" — this repo's own suite is the interview here).
  *
  * `CardHeroHead` IS THE WHOLE HEAD NOW (lane A2a) — the one `BoxBrowse.tsx` used to draw
@@ -47,7 +47,7 @@ import { toast } from './kit/toast'
 import { money } from './money'
 import { relativeDate, toDate } from './dates'
 import { sayPlace } from './position'
-// D46's own picker, reused rather than forked — this file's own header rule: "added to
+// D77's own picker, reused rather than forked — this file's own header rule: "added to
 // inventory and both screens get it, not a fork" (D252).
 import { CatalogPanel } from './ReviewQueue'
 import {

@@ -151,7 +151,7 @@ export function captureBoxLabel(box: number, name: string | null | undefined): s
 /** SEVERAL DRAWERS, AS ONE PHRASE — `boxLabel`'s plural, and the name is deliberately dropped
  *  from it.
  *
- *  WHY THIS EXISTS. A run is one box (D48) and `boxLabel` answers for one, which was the whole
+ *  WHY THIS EXISTS. A run is one box (D180) and `boxLabel` answers for one, which was the whole
  *  vocabulary while a scope was a drawer. A scope can now be a STATE narrowed by a game or a
  *  sitting, and 1,091 of the owner's 2,535 stamped cards — 43% — were photographed in a sitting
  *  that spanned more than one drawer, so "several drawers" is the ordinary case rather than the

@@ -223,7 +223,7 @@ EXPECTED = {
 # `cycles` is the luma-crossing count read off each trace; `feeding` is when the first card
 # reached the lens, read off `dBase` crossing the floor.
 #
-# NAMED `CADENCE` UNTIL 2026-09-11, AND THE TRIGGER IT WAS NAMED FOR IS DELETED. D130 built a
+# NAMED `CADENCE` UNTIL 2026-09-11, AND THE TRIGGER IT WAS NAMED FOR IS DELETED. D144 built a
 # second, beat-locked machine on the first two of these and D131 made it a dual; the owner
 # retired it the same evening, once the settle machine reached their cards without it. THE
 # RECORDINGS STAY AND SO DO THEIR RECEIPTS: `fires` and `cycles` are what the SHIPPED settle
@@ -448,7 +448,7 @@ def run() -> Result:
     checks.equal(still_refused, 18, "18 of them would still be refused by a floor of 90")
 
     # ---- every card clears the distance gate, on every rig --------------------------
-    # The cadence corpus (D130) is graded in its own block above; these are the presence
+    # The cadence corpus (D144) is graded in its own block above; these are the presence
     # checks keyed by EXPECTED, which is the settle corpus.
     for name in sorted(EXPECTED):
         trace = traces[name]

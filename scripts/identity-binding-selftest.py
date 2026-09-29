@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""`pipeline/identity_binding.py` — the migration's classifier and the merged D242/D255
+"""`pipeline/identity_binding.py` — the migration's classifier and the merged D242
 report (`docs/specs/identity-follows-sku.md` §5.5, §7, lane 2) — proved against literal
 fixtures. No store, no network, no `Store()` — every function under test is pure, over plain
 `store.master.Card`/`store.skus.SkuRow` objects built in memory.
 
 Protects: The identity migration classifier and its report give every class in order and exclude human-bound cards.
-Governs: D242, D255
+Governs: D242
 
 WHAT THIS PROVES, in the lane's own words (§11's "done when" line): "every class and its
 order, the human-bound exclusion, and both report halves."
@@ -330,7 +330,7 @@ def main() -> int:
        findings4.rarity_disagreement)
 
     # ----------------------------------------------- the approved-bound exclusion (§5.5)
-    print("\nthe approved-bound exclusion (§5.5, D242/D255's replacement)")
+    print("\nthe approved-bound exclusion (§5.5, D242's replacement)")
     disputing_row = sku_row("600", "Rell, Magnetic Storm", "100/298")
     automatic_card = card(
         4, sku="600", identity_source=IDENTITY_SKU, bound_by="join",

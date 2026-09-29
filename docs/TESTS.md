@@ -17,7 +17,6 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 - `app/tests/pricing.spec.ts`: D218 in part superseded by D280
 - `app/tests/review.spec.ts`: D218 in part superseded by D280
 - `app/tests/shipping.spec.ts`: D218 in part superseded by D280
-- `scripts/product-history-selftest.py`: D226 in part superseded by D280
 
 ## Capture
 
@@ -38,8 +37,8 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | `app/tests/absent-photo.spec.ts` | a missing photograph says so in one plain sentence with one way to re-shoot, and never prints an address. | D118, D196, D172 |
 | `app/tests/card-variants.spec.ts` | Two SKUs that differ only by set stay two distinguishable tiles in the name-to-variant chooser. | D213 |
 | `app/tests/confirm-identity.spec.ts` | The confirm control on a held card whose camera-read name is wrong sends the confirmation and shows its result. | D118, D252 |
-| `app/tests/correct-answer.spec.ts` | The "this answer was wrong" listing-correction control is reachable on Inventory and sends the correction. | D46, D252 |
-| `app/tests/review.spec.ts` | Review shows the photograph beside the choices and lets the owner resolve each card in the queue. | D23, D24, D28, D32, D46, D77, D118, D218 |
+| `app/tests/correct-answer.spec.ts` | The "this answer was wrong" listing-correction control is reachable on Inventory and sends the correction. | D77, D252 |
+| `app/tests/review.spec.ts` | Review shows the photograph beside the choices and lets the owner resolve each card in the queue. | D23, D24, D28, D32, D77, D118, D218 |
 | `harness/tests/t1_id_eval.py` | The paid vision read identifies official card images correctly, at 95% holdout accuracy or better, on both name and number. | D2, D23 |
 | `harness/tests/t3_join_coverage.py` | Every identified card matches exactly one export row, or is reported unmatched in both directions before any output is written. | D25 |
 | `harness/tests/t4_variant_ladder.py` | Each stage of the variant ladder picks the right condition string and price, and no flag ever overrides a recorded finish claim. | D3 |
@@ -54,9 +53,9 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | `app/tests/graveyard.spec.ts` | The Graveyard shows its three tabs with the right cards in each, and Inventory shows where a moved card came from. | D134, D196 |
 | `app/tests/inventory-sets.spec.ts` | The Inventory "By set" view shows one set at a time, switches by picker, takes quantity from the server, and opens the box walk on a tap. | D172, D264, D285, D293, D301 |
 | `app/tests/inventory.spec.ts` | Every Inventory capability (walk, search, copies, box operations, claims, sold) is reachable from a screen and sends the right request. | D10 |
-| `app/tests/locating.spec.ts` | Where a card sits reads the same on every screen: box by name, card number within its section, the exact card on the ruler. | D116, D259, D260 |
+| `app/tests/locating.spec.ts` | Where a card sits reads the same on every screen: box by name, card number within its section, the exact card on the ruler. | D260, D259 |
 | `app/tests/section-ruler.spec.ts` | The section ruler never passes its container and scrolls the current section into view. | D155 |
-| `harness/tests/t7_box_map.py` | Moving a section moves it whole and loses nothing it owns. | D165, D262, D264, D265 |
+| `harness/tests/t7_box_map.py` | Moving a section moves it whole and loses nothing it owns. | D145, D262, D264, D294 |
 | `harness/tests/t7_store_and_seams.py` | The store, the capture server and the command seams keep positions unique, round-trip sidecars, refuse with their own codes and read the columns they name. | D4, D10 |
 
 ## Pricing and runs
@@ -65,24 +64,24 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | --- | --- | --- |
 | `app/tests/live-reconcile.spec.ts` | The store-wide reconcile against a live export is reachable from a screen, previews without writing, and settles only after the preview answers. | D33, D87, D118, D174, D218 |
 | `app/tests/photo-cache.spec.ts` | Home, Review and Pricing ask for each photograph by card name and version, never by box slot. | D26, D172 |
-| `app/tests/pricing-markdown.spec.ts` | The Pricing Live tab reprices live TCGplayer listings and leaves the run-based Pricing flow untouched. | D28, D62, D103, D107, D118, D218, D273, D277 |
-| `app/tests/pricing.spec.ts` | Pricing shows every unsent copy, writes only what the owner sets, and sends only what the Send bar says. | D49, D59, D62, D79, D86, D118, D218, D277 |
-| `app/tests/product-history.spec.ts` | The product history draws market prices and the owner's own sales as two different shapes, and leaves the deep link cleanly. | D62, D227, D278 |
-| `app/tests/run-panel.spec.ts` | The pipeline (identify, join, emit, reconcile) is reachable from a screen, and the button that spends money does not exist until the free preview answers. | D32, D33, D36, D56, D64, D174, D180, D291 |
+| `app/tests/pricing-markdown.spec.ts` | The Pricing Live tab reprices live TCGplayer listings and leaves the run-based Pricing flow untouched. | D28, D278, D103, D107, D118, D218, D273, D277 |
+| `app/tests/pricing.spec.ts` | Pricing shows every unsent copy, writes only what the owner sets, and sends only what the Send bar says. | D86, D59, D278, D277, D118, D218 |
+| `app/tests/product-history.spec.ts` | The product history draws market prices and the owner's own sales as two different shapes, and leaves the deep link cleanly. | D278, D227 |
+| `app/tests/run-panel.spec.ts` | The pipeline (identify, join, emit, reconcile) is reachable from a screen, and the button that spends money does not exist until the free preview answers. | D32, D33, D36, D56, D65, D174, D180, D291 |
 | `harness/tests/t2_round_trip.py` | Writing an import file changes exactly the two writable fields and keeps the unquoted header, quoted fields and CRLF line ends. | none |
 | `harness/tests/t5_pricing.py` | Every pricing rule prices exactly, the floor clamps after rounding, the threshold reads market, and a card with no market data is never auto-priced. | D9 |
-| `scripts/product-history-selftest.py` | The product history route answers from the archive without a network call and falls back to the live market on a miss. | D226, D227, D247 |
+| `scripts/product-history-selftest.py` | The product history route answers from the archive without a network call and falls back to the live market on a miss. | D60, D227, D247 |
 
 ## Orders, sales and shipping
 
 | File | Protects | Governs |
 | --- | --- | --- |
 | `app/tests/home-deck.spec.ts` | Home's verdict follows the greeting at the header gap; the card deck never stretches the header. | D121, D275 |
-| `app/tests/home.spec.ts` | Home's "cannot be filled" figure never counts an order that the feed has already closed. | D63, D114, D121, D202, D218 |
+| `app/tests/home.spec.ts` | Home's "cannot be filled" figure never counts an order that the feed has already closed. | D63, D91, D121, D218 |
 | `app/tests/order-walk.spec.ts` | Undo in the order walk stays on the newest pull and never expires on a clock. | D118, D136, D164, D252 |
-| `app/tests/orders.spec.ts` | Orders groups by buyer, walks each order, sends a pull with the pressed row's capture id, and shows all six unfillable reasons. | D91, D96, D113, D114, D118, D132, D193, D203 |
-| `app/tests/revenue.spec.ts` | Sales sorts, filters, cross-filters, drills down and deep-links over the orders payload, on a fixed fake clock. | D62, D201, D214, D217, D225, D281, D298 |
-| `app/tests/shipping.spec.ts` | The shipping export routes rows into three lanes and never reaches the capture server. | D16, D61, D63, D117, D196, D218, D292 |
+| `app/tests/orders.spec.ts` | Orders groups by buyer, walks each order, sends a pull with the pressed row's capture id, and shows all six unfillable reasons. | D91, D97, D113, D118, D132, D193, D203 |
+| `app/tests/revenue.spec.ts` | Sales sorts, filters, cross-filters, drills down and deep-links over the orders payload, on a fixed fake clock. | D278, D201, D214, D217, D225, D196, D298 |
+| `app/tests/shipping.spec.ts` | The shipping export routes rows into three lanes and never reaches the capture server. | D16, D61, D63, D117, D196, D218 |
 | `harness/tests/t11_walk_plan.py` | The order walk plan opens the fewest drawers that fill the ticked orders and never asks for a copy that is not in the drawer it names. | D24 |
 
 ## The Fulfiller's screen
@@ -95,17 +94,17 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 
 | File | Protects | Governs |
 | --- | --- | --- |
-| `app/tests/brand.spec.ts` | The generated logo mark draws at the right cut and size at every place the app shows it. | D102, D134, D136, D204 |
+| `app/tests/brand.spec.ts` | The generated logo mark draws at the right cut and size at every place the app shows it. | D102, D134, D136, D266 |
 | `app/tests/button-stack.spec.ts` | Buttons of the same role that stack in one panel share one width. | D195 |
 | `app/tests/cursor.spec.ts` | Every control shows the right cursor, response and press behavior, and no press or hover moves the layout. | D43, D50, D70, D110, D118 |
 | `app/tests/filters.spec.ts` | The shared filter bar, hide toggle, sortable table header and match highlight behave the same on every screen that filters a list. | D118, D132, D270, D288 |
-| `app/tests/gallery.spec.ts` | The Kit sheet draws every row shape the product can draw, so no specimen is unreachable there. | D24, D68, D71, D118, D119, D269, D272 |
+| `app/tests/gallery.spec.ts` | The Kit sheet draws every row shape the product can draw, so no specimen is unreachable there. | D24, D68, D41, D118, D119, D269, D272 |
 | `app/tests/icon-button.spec.ts` | The icon button keeps its 40px hit area, unclipped tooltip, no ghost click after a long press, readable toast close and correct glyph size. | D118, D288 |
 | `app/tests/kit-data.spec.ts` | The kit data primitives and the shared search matcher give the right output and draw right at four widths in both themes. | D118, D195, D288 |
 | `app/tests/match.spec.ts` | The one search matcher passes every row of the shared case table and stays fast on a large list. | none |
 | `app/tests/nav.spec.ts` | The shell keyboard (comma-then-letter jump, Cmd-arrow ring step, help sheet) does what it says and leaves typing alone. | D20, D43, D51, D70, D86, D105, D134, D192 |
 | `app/tests/page-edge.spec.ts` | Every screen starts its content at one shared left edge, whatever its width cap. | D5, D197 |
-| `app/tests/phone.spec.ts` | The owner-side shell at phone width fits without sideways scroll and keeps every touch target at 40px or more, including menus, sheets and the palette. | D117, D134, D204, D266, D288, D291 |
+| `app/tests/phone.spec.ts` | The owner-side shell at phone width fits without sideways scroll and keeps every touch target at 40px or more, including menus, sheets and the palette. | D117, D134, D266, D288, D291 |
 | `app/tests/scaffold.spec.ts` | Every route inherits the page frame: one Page, one h1, the page width and top gap tokens, no sideways scroll, one fixed document title. | D121, D275, D276, D291 |
 | `app/tests/wide.spec.ts` | Screens stay balanced at 1920px and 2560px wide, with no starved field or unbounded prose line. | D27, D123, D275 |
 | `harness/tests/t6_geometry.py` | Card detection finds the card within tolerance across offset, scale and rotation, and refuses when no card is there. | none |
@@ -123,7 +122,7 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 
 | File | Protects | Governs |
 | --- | --- | --- |
-| `app/tests/demo-coverage.spec.ts` | The published static demo build draws real data, photographs and controls on every screen a reviewer grades it on. | D183, D227, D271, D277, D282, D295, D301 |
+| `app/tests/demo-coverage.spec.ts` | The published static demo build draws real data, photographs and controls on every screen a reviewer grades it on. | D183, D227, D271, D277, D298, D295, D301 |
 | `scripts/demo-record-resume-selftest.py` | An interrupted demo recording resumes from its cache of answered routes instead of starting again. | D193, D295 |
 | `scripts/demo-record-selftest.py` | The demo recorder's child server never hangs on a full output pipe during a long sweep. | none |
 | `scripts/demo-record-walkplan-selftest.py` | The demo recorder picks a small walk-plan subject list and never grows it with the number of open orders. | D269 |
@@ -138,25 +137,25 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 
 | File | Protects | Governs |
 | --- | --- | --- |
-| `scripts/catalog-index-selftest.py` | The catalog index builder and reader answer correctly over a small synthetic vendor tree. | D15, D18, D206 |
+| `scripts/catalog-index-selftest.py` | The catalog index builder and reader answer correctly over a small synthetic vendor tree. | D15, D18 |
 | `scripts/cid-selftest.py` | A card keeps its stable name, and the photograph store refuses and saves work correctly on a throwaway store. | D18, D172, D183 |
-| `scripts/holdings-selftest.py` | The holdings reader answers correctly over in-memory inventory, archive and ledger fixtures. | D236, D247, D250 |
-| `scripts/identity-binding-selftest.py` | The identity migration classifier and its report give every class in order and exclude human-bound cards. | D242, D255 |
+| `scripts/holdings-selftest.py` | The holdings reader answers correctly over in-memory inventory, archive and ledger fixtures. | D236, D247 |
+| `scripts/identity-binding-selftest.py` | The identity migration classifier and its report give every class in order and exclude human-bound cards. | D242 |
 | `scripts/identity-checks-selftest.py` | Each stored-data identity check goes red on its own named defect and stays quiet on clean data. | D239, D247 |
 | `scripts/identity-cli-selftest.py` | The CLI writers bind a SKU through the one bind function, on a fresh store. | D18, D137, D253 |
 | `scripts/identity-readers-selftest.py` | The identity evidence readers do not go silent when a card has no camera-read fields. | D253 |
 | `scripts/identity-store-selftest.py` | Binding and unbinding a SKU is the one writer of card identity, and its refusals write nothing. | D18, D63 |
 | `scripts/pipeline-trends-archive-ids-selftest.py` | The trends route reuses the archive's verified product ids and never resolves a product it already covers. | D254 |
-| `scripts/price-postings-selftest.py` | The price postings table is append-only, so posting one SKU twice keeps both rows. | D243, D244, D247 |
-| `scripts/pricearchive-selftest.py` | The price-history archive sweeps, stores and reads back correctly with a fake market and no network call. | D62, D219, D223, D247 |
+| `scripts/price-postings-selftest.py` | The price postings table is append-only, so posting one SKU twice keeps both rows. | D243, D247 |
+| `scripts/pricearchive-selftest.py` | The price-history archive sweeps, stores and reads back correctly with a fake market and no network call. | D278, D219, D231, D247 |
 | `scripts/pricehistory-cache-selftest.py` | Catalog answers never expire from the cache while current prices keep their own finite lifetime. | none |
-| `scripts/pricehistory-offline-selftest.py` | The price-history market fails fast once the network is unreachable instead of sleeping through every retry. | D62 |
+| `scripts/pricehistory-offline-selftest.py` | The price-history market fails fast once the network is unreachable instead of sleeping through every retry. | D278 |
 | `scripts/readings-selftest.py` | The stored market readings equal an independent walk of every run, and refresh only what changed. | D18, D189 |
 | `scripts/repair-born-game-selftest.py` | The born-game repair sets the game on cards with a bound SKU, leaves the rest alone and writes nothing on a preview. | D18 |
 | `scripts/sku-name-contradictions-selftest.py` | The check for one SKU with disagreeing names flags a real contradiction and leaves a short title beside its full name alone. | D240, D242 |
 | `scripts/sku-number-contradictions-selftest.py` | The check for one number with disagreeing SKUs flags a real contradiction, even in a dense set. | D242, D247 |
 | `scripts/skus-selftest.py` | The SKU table adopts files without letting an older file overwrite a newer one, and has no delete path. | D18 |
-| `scripts/stockimages-cache-selftest.py` | Stock images answer offline from a warmed disk cache and answer nothing, with no network call, when the cache is empty. | D302 |
+| `scripts/stockimages-cache-selftest.py` | Stock images answer offline from a warmed disk cache and answer nothing, with no network call, when the cache is empty. | D301 |
 | `scripts/submission-selftest.py` | A second identify press over already-claimed cards is refused, including under concurrent presses. | D18, D136 |
 
 ## Repository guards and tooling
@@ -165,7 +164,7 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | --- | --- | --- |
 | `scripts/claim-selftest.py` | Claiming a numbered record allocates above what main has taken, not above the branch's own copy. | D18, D140 |
 | `scripts/hand-search-selftest.py` | The lint rule against hand-rolled search goes red on each hand-rolled shape and stays green elsewhere. | D247, D271 |
-| `scripts/serve-selftest.py` | The supervisor rebuilds a stale bundle, keeps the old one when a build fails, and keeps Python and screen edits on separate tracks. | D18, D138, D268 |
+| `scripts/serve-selftest.py` | The supervisor rebuilds a stale bundle, keeps the old one when a build fails, and keeps Python and screen edits on separate tracks. | D18, D138, D261 |
 | `scripts/subagent-override-selftest.py` | The subagent override row finds a forgotten model override, including one in a nested worktree's settings. | D18, D161 |
 | `scripts/sync-selftest.py` | The primary checkout syncs to main only when safe and refuses on uncommitted work, proved on a throwaway clone. | D18, D42, D158 |
 | `scripts/verdict-selftest.py` | The design-check reporter really writes its verdict file when Playwright runs it. | D18 |
@@ -173,6 +172,6 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | `scripts/guard-shell-selftest.sh` | The shell guard refuses each of its mistakes, proved by committing each mistake in a throwaway repository. | D18 |
 | `scripts/janitor-selftest.sh` | The janitor removes only what a finished session left behind, proved on a throwaway clone with real worktrees and processes. | D18, D127 |
 | `scripts/merge-selftest.sh` | The local half of the merge command moves main only as intended, proved in a throwaway repository. | D18, D42 |
-| `scripts/reap-selftest.sh` | The reap command stops only processes this session started and refuses every other process. | D18, D53 |
+| `scripts/reap-selftest.sh` | The reap command stops only processes this session started and refuses every other process. | D18, D138 |
 | `scripts/silent-write-selftest.sh` | The silent-write guard refuses a git write whose output is thrown away, proved by reproducing the 2026-09-12 incident. | D18 |
 | `scripts/worktree-provision-selftest.sh` | A fresh worktree gets a current app/node_modules, and a run in main never deletes the real install. | D18, D257 |

@@ -1,0 +1,9 @@
+## D160 — One file per decision entry
+
+**Two branches each appending an entry to one file collide textually every time, though they disagree about nothing.** One 10,000-line file conflicted five times in a day, each costing a hand resolution. So an entry is a file under `docs/decisions/`, and two pull requests adding two files never conflict.
+
+- **Ids never move and citations are bare ids** (`D58`, never a path), so a split costs no citation. Only the resolvers changed, and they all read `scripts/decisions_corpus.py`, which hands them the same bytes. `path_for("D58")` is a real answer, and `scripts/decision-context.py` names a file a session reads and not a region of one it must not. The single file became a stub, not a generated concatenation (every branch regenerating 1.4 MB collides) and not a deletion (breaks paths cited in merged PRs).
+- **The move was performed by a committed script and is proved, not eyeballed.** `scripts/split-decisions.py` cuts at every `## ` line, so reassembly is concatenation and losslessness is true by construction. `--verify` and `--verify-split REF` re-establish it.
+- **The self-test asserts the ongoing claim, not the historical one.** `make decisions-selftest` checks that the set is complete: every file the manifest names is present, every file present is named, and no id is in two files. It does not hash the live corpus, since editing an entry is the normal way this corpus changes. `ORDER.json` records the order, with the preamble first. `make docs-audit`'s `decision ids` row compares across the corpus, and `decision structure` and `entry budget` report against the entry's own file.
+- **A parent-relative reference inside an entry resolves rooted at `docs/`,** preserving the author's meaning without editing entry text.
+- **A new entry is a claim slug** allocated at merge by `make merge` (D140).

@@ -179,7 +179,7 @@ in the order the hand took them (D164). The granular press is beside it, not ins
   index it left from, and no other card in the drawer moves.
 - **`renumber_blocked` reaches the capture strip as a sentence.** The mid-sitting press refuses
   over a sold card higher in the drawer, and the operator is told which one.
-- **The copy ceiling is measured and reported either way** (D194). The order line loses its
+- **The copy ceiling is measured and reported either way** (D284). The order line loses its
   position text and gains nothing, so the arithmetic should fall the right way. It is never
   pinned quietly.
 - `U`'s new binding is in `SHORTCUTS`. A binding is not done until it is.
@@ -382,7 +382,7 @@ items that need nothing from S.
 ### 11.5 Seen, outside undo
 
 - **Enter moves to the next price** (audit 7). `Pricing.tsx:onKey` commits and moves on
-  Enter. It is the worklist's walk (D49), and a question for the Pricing lane.
+  Enter. It is the worklist's walk (D86), and a question for the Pricing lane.
 - **Slow screen switches, about 3 s** (audit 10). Unmeasured. A performance item.
 - **Stacked toasts cover about 40% of a phone** (audit 9). The toast stack, a kit item.
 - **"Clear typed" reads "Clear" on a phone.** A Pricing copy item.
@@ -459,7 +459,7 @@ proves each one. Three choices the table left open are recorded here.
 - **A chain of moves undoes one link.** Move a card from A to B, then from B to C. Undo the
   second move, and the card is back at B. The first move is then built on, because box B
   changed. Its fix is an ordinary move back to A. Section 11.1's table stands as it is.
-- **The move undo restores the order key too (D265).** The card comes home at its own index
+- **The move undo restores the order key too (D294).** The card comes home at its own index
   and at its own place in the walk.
 - **A section reorder inside a box does not build on a move.** A reorder writes no card
   history, so the move undo still returns the card to its own order key.
@@ -486,7 +486,7 @@ Built on branch `ux/undo-capture`, `app/tests/capture-undo.spec.ts`.
   that divider, while it is the last and empty, and refuses a stale `U` as
   `divider_built_on`. A refusal clears `pendingDivider`, so the next `U` reaches the captures. It
   replaced `updateBox({ sections })` on 2026-09-26: that route reads card counts, and the box's
-  `sections` are order keys, so other dividers moved (D265). It fires only while `pendingDivider` is
+  `sections` are order keys, so other dividers moved (D294). It fires only while `pendingDivider` is
   still the newer of the two reversible writes here, by `at` against the sitting's own
   newest shot. A capture into the SAME box clears it. The divider is built on.
 - **UN-3 (Q2, "keep the confirm here only").** The mechanism is unchanged. `do_remove_card`

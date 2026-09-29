@@ -33,7 +33,7 @@ own vowel signs) is not a combining mark by that test, so it survives to the nex
 instead — and since a Mark character is never `str.isalnum()`, that step folds it into a
 WORD BREAK (one space) rather than deleting it, splitting a word the JS side would have kept
 joined. No case in `app/src/kit/match.cases.json` has ever needed a ccc-0 mark folded, so
-this is recorded rather than chased: `docs/decisions/D271-one-forgiving-search-matcher.md`
+this is recorded rather than chased: `docs/decisions/D271-every-search-uses-one-matcher.md`
 carries it.
 
 USED TWO WAYS. `scripts/match-selftest.py` calls `match_query` directly against the generic

@@ -61,7 +61,7 @@ and the eight earlier sessions do not move. **It is SPECIFIED and BUILT and NOT 
 the replay says the machine fires on more cards, and only the rig says whether those
 photographs are readable. §7's last block is that run's checklist.
 
-**AND THERE IS ONE TRIGGER AGAIN.** D130's beat-locked cadence machine and D131's dual are
+**AND THERE IS ONE TRIGGER AGAIN.** D144's beat-locked cadence machine and D131's dual are
 deleted, on the owner's word — *"motion is better. always."* — once the settle machine reached
 their cards without a beat. The cadence module under `app/src/` and its spec under
 `app/tests/` are gone — named in prose because the paths no longer resolve — and so are the
@@ -341,7 +341,7 @@ the rest above it.** Still frames were defined only by frames already under `tLo
 rig where a resting card reads d 5-8 — brightness jitter under the owner's lamp, |Δluma| p90
 of 6-8 at rest against 2-3 on every earlier session — the tracker converged to 4.5-7 while the
 rest sat at 7-9, and the settle rule fired on 5 of 29 cards with every readout looking normal.
-D130 read that as a scene that was never still. It was still; the machine's word for still
+D144 read that as a scene that was never still. It was still; the machine's word for still
 was wrong in the one direction the ratchet could not move.
 
 **The escape.** When the frames the machine calls still fall under `stillFractionMin` (0.30)
@@ -747,7 +747,7 @@ one 60-second trace and score it — `scripts/score-trace.py`, §4 — *before* 
 
 ## 7. The rescue — the card that will not settle (2026-09-11)
 
-Added the evening D130's cadence trigger was deleted, and it is what replaced it. The owner's
+Added the evening D144's cadence trigger was deleted, and it is what replaced it. The owner's
 complaint is the whole subject: *"it's really bad when the cards are coming a little slower or
 aren't landing perfectly, the engine is then bad at picking those up"*. Six saved sessions say
 what that looked like — 268 photographs against 20 stalls, about 93% — and what each miss was.
@@ -858,7 +858,7 @@ twice — two earlier motion fixes were derived from frames nobody rendered, whi
   frame against photograph, the way D84's four lost cards were only ever provable — a trace says
   what the machine decided, only the photograph says what was on the stand.
 - **If the rescued frames blur, the lever is the camera's exposure**, not `rescueK`: a shorter
-  shutter freezes motion the feeder never removes. That is a rig fact, and the same one D130 got
+  shutter freezes motion the feeder never removes. That is a rig fact, and the same one D144 got
   right about its own blind fires.
 - **Save the trace and score it**: `summary` reports the rescued count beside the replayed one,
   and `stalls` prints what the rescue could not save.

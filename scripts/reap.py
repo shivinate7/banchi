@@ -7,7 +7,7 @@ had itself launched killed a process belonging to somebody else:
   1. `pkill -f "capture_server.py"` — meant for a scratch server the session had started in a
      worktree. `pkill -f` matches on the WHOLE MACHINE, so it also matched
      `/Users/shivinate/Developer/pkmnscan/server/capture_server.py`: the owner's live capture
-     server on :8000 over their real 1,625-card store, the process D53 exists to keep alive.
+     server on :8000 over their real 1,625-card store, the process D138 exists to keep alive.
      The supervisor restored it 25s later and D88 meant the store survived, but any request in
      flight was severed mid-write.
   2. `for p in $(lsof -ti tcp:5439); do kill $p; done` — meant for the session's own Vite
@@ -49,7 +49,7 @@ the tool it recommends uses another is a guard people learn to route around. `sc
 already owns the neighbouring notion — what a FINISHED session left behind — and this file
 deliberately does not duplicate it: the janitor sweeps trees, branches and orphans on its own
 schedule, this decides one signal at the moment it is sent. What they share is the reasoning
-(D53's server is untouchable, liveness is read and never guessed) and, where the shapes matched,
+(D138's server is untouchable, liveness is read and never guessed) and, where the shapes matched,
 the code was copied with its argument rather than re-derived (`_real`, the process table, the
 leader-only `killpg`).
 
@@ -295,7 +295,7 @@ def _all_cwds() -> Dict[int, str]:
 def _descendants(roots: Set[int]) -> Set[int]:
     """`roots` and everything below them in the process tree.
 
-    D53's supervisor RE-EXECS itself and replaces its children — twice inside twenty minutes on
+    D138's supervisor RE-EXECS itself and replaces its children — twice inside twenty minutes on
     the day `janitor.py` was written — so a child can be running before the pidfile naming it
     has been rewritten. Walking down from the pids the pidfiles DO name closes that window
     without depending on the window being small.
@@ -363,7 +363,7 @@ def _ancestors(pid: int) -> Set[int]:
 def protected_pids(main: str) -> Set[int]:
     """The main checkout's supervisor, its children, and everything below them.
 
-    THIS IS D53 WRITTEN AS A SET OF INTEGERS. `make launch-agent` keeps that process alive at
+    THIS IS D138 WRITTEN AS A SET OF INTEGERS. `make launch-agent` keeps that process alive at
     login over the owner's real store; it is SUPPOSED to outlive every session, and a session
     standing in the main checkout would otherwise find it under its own root and judge it fair
     game. `scripts/serve.py` records the pid of each child it starts under `.serve/*.pid`, so
@@ -408,7 +408,7 @@ def protected_pids(main: str) -> Set[int]:
 # process table after the fact, whatever the sketch assumed about an older macOS.
 #
 # WHAT WORKS INSTEAD NEEDED NO NEW PRIMITIVE, ONLY THIS FILE'S OWN PATTERN ONE REGISTER DOWN.
-# `protected_pids` above already solves this exact shape for D53's one supervisor: a marker FILE
+# `protected_pids` above already solves this exact shape for D138's one supervisor: a marker FILE
 # under `.serve/`, holding a pid, walked DOWN with `_descendants` to reach children the marker was
 # written before. `scripts/reap_mark.py` generalises it from "the one supervisor" to "whichever
 # session's launcher wrote it" — one JSON file per launched root under `.serve/owners/`, and this
@@ -419,9 +419,9 @@ def protected_pids(main: str) -> Set[int]:
 # THE OWNER IS `CLAUDE_CODE_SESSION_ID` — A PRIMITIVE THAT ALREADY EXISTS AND ALREADY PROPAGATES.
 # Every child of a Claude Code session inherits it by ordinary fork/exec, which is not the
 # `ps -E` read-back the sketch assumed and which this file measured does not work. It answers
-# WHICH session; D175's Bash-wrapper argv fragment only ever answered ANY session, because no
-# per-session id existed on this machine when D175 was written. This does not replace that
-# fragment — it answers a question D175 never asked.
+# WHICH session; D305's Bash-wrapper argv fragment only ever answered ANY session, because no
+# per-session id existed on this machine when D305 was written. This does not replace that
+# fragment — it answers a question D305 never asked.
 _OWNER_MARKS_DIRNAME = os.path.join(".serve", "owners")
 
 
@@ -464,7 +464,7 @@ def proc_start_epoch(pid: int) -> Optional[float]:
 
     COPIED FROM `janitor.py:_proc_start`, WITH ITS ARGUMENT: `ps -o lstart=` renders in LOCAL
     time and `startedAt` is written in the same local `time.mktime` space, so the two compare
-    directly. D175's own entry records the trap in the other direction — comparing a UTC
+    directly. D305's own entry records the trap in the other direction — comparing a UTC
     string against a local one read every session as five hours stale — and the fix there was
     the same one taken here: pick ONE space and never let a raw string cross into it unparsed.
     """
@@ -633,7 +633,7 @@ def verdict_for(pids: Sequence[int], root: str, main: str) -> List[Target]:
         # WHICH PATH THE REFUSAL QUOTES IS THE WHOLE VALUE OF THE REFUSAL. Every interpreted
         # process carries its INTERPRETER's absolute path first in argv — `/Library/.../Python`
         # — and quoting that says nothing about whose process it is. The main checkout beats
-        # everything (it names D53 outright), then the cwd, then the LAST argv path, which for
+        # everything (it names D138 outright), then the cwd, then the LAST argv path, which for
         # `python3 /a/b/server.py` is the script rather than the interpreter.
         elsewhere = next((path for path in seen if _under(path, main)), "") if main else ""
         out.append(Target(pid, OUTSIDE, command,
@@ -750,7 +750,7 @@ def pids_under(root: str, mine: int) -> Sweep:
     its argv absolutely — so the gap presented as "reap sees Vite and not Python", which reads
     like a carve-out and is not one.
 
-    IT IS NOT D53'S CARVE-OUT, and that was established before anything here was changed.
+    IT IS NOT D138'S CARVE-OUT, and that was established before anything here was changed.
     `protected_pids` globs `<main checkout>/.serve/*.pid` and nothing else; from a worktree it
     spares the main tree's supervisor and its children, correctly, and has nothing to say about
     a worktree's own server. The same measurement confirms it from both sides: the main
@@ -1007,7 +1007,7 @@ def read_command(command: str) -> Intent:
 # ------------------------------------------------------------------------------ the refusals
 
 _REFUSED = {
-    MAIN: "the main checkout's own server (D53) — it is the owner's product, kept alive at "
+    MAIN: "the main checkout's own server (D138) — it is the owner's product, kept alive at "
           "login, over their real store",
     OUTSIDE: "outside this checkout",
     UNKNOWN: "not placeable — no absolute path in its argv and no readable cwd",

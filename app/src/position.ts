@@ -429,7 +429,7 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
        `state` could say `sold from here` or `retired from here`, but every caller of this
        function today is fed through `PositionBar`, which does not thread that word in either.
        One neutral phrase, shorter than what it replaces, says exactly what is known and no
-       more (D194 — the count only ever goes down). */
+       more (D284 — the count only ever goes down). */
     /* THE TAIL IS EMPTY HERE TOO NOW (the owner's Direction-B build, 2026-09-25). It used to say
        `was card 4` — a fact `CardLocations.tsx`'s `RowIdentity` now carries on the header, struck
        through, with `Was at ...` as its own accessible name. Left populated, this caption

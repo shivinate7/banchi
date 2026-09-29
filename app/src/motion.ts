@@ -1039,7 +1039,7 @@ export const DIAG_INTERVAL_MS = 200
 
 /** One decoded frame of the watch region, delivered to whoever is deciding on it.
  *
- *  THE SAMPLER IS SHARED AND THE MACHINES ARE NOT (D130). Two triggers read the lens now —
+ *  THE SAMPLER IS SHARED AND THE MACHINES ARE NOT (D144). Two triggers read the lens now —
  *  the settle machine above and `src/cadence.ts`'s beat-locked one — and both want exactly
  *  this: one 64x36 luma grid per decoded frame, the watch region cut out of it, on one
  *  monotonic clock. Everything below the `onRoi` call is a fact about the <video> element

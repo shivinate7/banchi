@@ -219,7 +219,7 @@ screens. The argument, the allowlist and the environment variable that extends i
 `SAFE_METHODS` below. It is a CSRF gate, NOT authentication, and it still adds none.
 
 THE REASON IT USED TO GIVE FOR THAT IS NOW FALSE, AND IT IS CORRECTED RATHER THAN LEFT
-STANDING (D64). This sentence read "there are no credentials in this product and this adds
+STANDING (D65). This sentence read "there are no credentials in this product and this adds
 none", and the first half was deleted by a change made later: `server/tcg_export.py` reads a
 TCGplayer session cookie out of `.env` and `POST /pipeline/runs/<name>/export` spends it. A
 premise quietly falsified by a later change, with its conclusion left in place, is the
@@ -342,7 +342,7 @@ from store import orders as order_store  # noqa: E402
 # unbroken.
 #
 # THAT SENTENCE IS NOW TRUE OF THIS FILE AND FALSE OF THE PROCESS, and it is rewritten rather
-# than qualified (D64). `server/tcg_export.py` reads the TCGplayer session cookie out of
+# than qualified (D65). `server/tcg_export.py` reads the TCGplayer session cookie out of
 # `.env` and opens a socket to `store.tcgplayer.com` to download the operator's own Filtered
 # Export — so this server does hold a secret and does make an outbound call, and saying "no
 # socket TO ANTHROPIC" instead would be the technicality-narrowing D16 exists to catch. What
@@ -363,7 +363,7 @@ from server import send_routes  # noqa: E402
 # no socket and holds no key, but it does hold a buyer's ADDRESS in memory for half an hour,
 # which is its own boundary worth keeping in one file rather than inlined here.
 from server import shipping_routes  # noqa: E402
-# The order transport, and it is the SECOND outbound call this process makes (D63/D66). Below
+# The order transport, and it is the SECOND outbound call this process makes (D63/D69). Below
 # the line and beside the two above for the reason the paragraph gives: it reads the
 # TCGplayer session cookie out of `.env` and opens a socket to
 # `order-management-api.tcgplayer.com`. It cannot cause a charge — it is a read of this
@@ -391,7 +391,7 @@ STARTED_AT = time.time()
 # or it is present on the wire and unreadable from JavaScript — see `_cors_headers`.
 BOOT_HEADER = "X-Pkmnscan-Boot"
 
-# DERIVED PER CHECKOUT, NOT A CONSTANT (D46). It was `8000` here while `store/files.py:home()`
+# DERIVED PER CHECKOUT, NOT A CONSTANT (D77). It was `8000` here while `store/files.py:home()`
 # already defaulted to the checkout the code runs from — so every worktree served a DIFFERENT
 # store on the SAME port, and whichever process won the bind answered everyone. The main tree
 # still answers 8000 and every doc that says so stays true; a linked worktree gets its own.
@@ -672,7 +672,7 @@ _BOX_PHOTOS_RECLAIM_RE = re.compile(r"^/boxes/(\d+)/photos/reclaim$")
 _SUBMISSION_RELEASE_RE = re.compile(r"^/pipeline/submissions/([A-Za-z0-9._-]+)/release$")
 _RUN_ITEM_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)$")
 _RUN_FILE_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/file$")
-# The pricing table and this run's answers, in one read (D49). Matched before the
+# The pricing table and this run's answers, in one read (D86). Matched before the
 # run-item pattern for the same reason the download is: the more specific path reads
 # first, for whoever is following this list rather than the regex engine.
 _RUN_PRICING_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/pricing$")
@@ -681,13 +681,13 @@ _RUN_PRICING_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/pricing$")
 # site is what keeps this route from being refused as `no_such_step` — the same care every
 # GET-only sibling below needs, and the reason they are declared together.
 _RUN_EXPORT_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/export$")
-# D165's rescue, offered from a screen. Matched before `_RUN_STEP_RE` for `_RUN_EXPORT_RE`'s
+# D145's rescue, offered from a screen. Matched before `_RUN_STEP_RE` for `_RUN_EXPORT_RE`'s
 # own reason: `rescue` is `[a-z]+` too, and the more specific pattern has to read first.
 _RUN_RESCUE_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/rescue$")
 # THE AUTOMATIC MATCH (flow interview, Q4). Before `_RUN_STEP_RE` for `_RUN_EXPORT_RE`'s
 # reason: `match` is `[a-z]+` as well.
 _RUN_MATCH_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/match$")
-# The price history for ONE SKU, named on the query string (D62). Matched before the
+# The price history for ONE SKU, named on the query string (D278). Matched before the
 # run-item and step patterns for the same reason the two above are: the more specific
 # path reads first. `history` would otherwise be eaten by `_RUN_STEP_RE`, whose
 # `[a-z]+` matches it exactly — and a GET never reaches that pattern, so the collision
@@ -695,7 +695,7 @@ _RUN_MATCH_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/match$")
 # GET step, the specific path is already above it.
 _RUN_HISTORY_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/history$")
 
-# D79's batched read, beside D62's single one. `/history` answers one SKU for the panel and
+# D277's batched read, beside D278's single one. `/history` answers one SKU for the panel and
 # `/trends` answers many for the row strip — two routes because they carry two different
 # payloads for two different drawings, not one route with a mode: the panel needs every figure
 # a reading has and the strip needs a shape and a sign, and a shared handler would send the
@@ -868,7 +868,7 @@ GROUP_ANSWER_ENTRY_FIELDS = ("box", "index", "sku", "condition")
 
 # What `POST /inventory/<box>/<index>/correct` carries (D252). Only the
 # new SKU — the row is re-read from the card's own export exactly as `from_catalog` answers
-# already are (D46), and `condition` is never accepted from the client for the same reason it
+# already are (D77), and `condition` is never accepted from the client for the same reason it
 # is never accepted there: it comes off the chosen row, not off the wire. `undo` is the same
 # shape `ANSWER_FIELDS` carries it in, and for the identical reason — one control, one window,
 # no second path to the reversal a stale client could find on its own.
@@ -1024,7 +1024,7 @@ BOX_PUT_FIELDS = ("name", "sections", "section_names")
 
 # ----------------------------------------------------------- the order screen, on the wire
 #
-# THESE SIX TUPLES ARE THE PII BACKSTOP AND THAT IS WHY THEY ARE THIS NARROW (D63, D66,
+# THESE SIX TUPLES ARE THE PII BACKSTOP AND THAT IS WHY THEY ARE THIS NARROW (D63, D69,
 # amended by D193). An order feed carries a buyer's name AND a
 # shipping address, and this repo now keeps exactly one of the two: `buyer`, the display
 # name, because the owner walks drawers per *person* and a screen naming only an order
@@ -1328,7 +1328,7 @@ LISTINGS_RELEASED = "listings_released"
 # THE ELEVENTH AND TWELFTH ROUTE-WRITTEN EVENTS (D252). A card that was
 # answered onto the wrong catalog row (D4) gets a SECOND catalog row, chosen the same way the
 # first one was — a human, looking at the photograph, picking from this card's own export
-# (D46) — after the first SKU has already gone out (D28's undo refuses `undo_too_late` at
+# (D77) — after the first SKU has already gone out (D28's undo refuses `undo_too_late` at
 # exactly this point, which is the gap this pair closes). NOT `answered`/`unanswered`:
 # reusing those names would make this route's own history indistinguishable from an ordinary
 # D4 answer, and the two are different claims — an answer says the pipeline offered nothing
@@ -1511,7 +1511,7 @@ def photo_at(inventory: "master.Inventory", box, index) -> Optional[Path]:
 
     A POSITION IS A LOOKUP AND NOT AN ADDRESS ANY MORE, and that is the whole change. The
     slot route and D89's reclaim both arrive holding `(box, index)` and both have to go
-    through the store to reach the bytes — which is what makes the stale-cache hazard D52
+    through the store to reach the bytes — which is what makes the stale-cache hazard D183
     measured fixable at all: the photograph a URL names can now be named by its own digest.
     """
     card = inventory.cards.get(master.position_key(box, index))
@@ -2273,8 +2273,8 @@ def _history(inventory: master.Inventory, event: str, key: Optional[str], **extr
 
 
 # One box's walk, as `_Places._walk` caches it: the located non-terminal records ascending
-# as `(index, name)`, the located terminal indices — D30's permanent holes — and the
-# POSITIONS into the first tuple that carry a name, which is what D116's outward walk
+# as `(index, name)`, the located terminal indices — D58's permanent holes — and the
+# POSITIONS into the first tuple that carry a name, which is what D260's outward walk
 # bisects rather than scans.
 _Boxmates = Tuple[
     Tuple[Tuple[int, Optional[str]], ...],
@@ -2290,7 +2290,7 @@ def _positioner(
     order: master.BoxOrder,
     **extra,
 ):
-    """`index -> join.Position` for one box, counted in the box's order (D265).
+    """`index -> join.Position` for one box, counted in the box's order (D294).
 
     `occupied` is the on-hand indices IN PHYSICAL ORDER (index order until something is
     placed into the box). Mapped to orders once, here, so a walk over a whole box is linear.
@@ -2370,7 +2370,7 @@ class _Places:
     pooled card is each view's own ruling, and the Fulfillment view's is asserted in
     `app/tests/fulfillment.spec.ts`.
 
-    NEIGHBOURS AND THE SECTION'S GAP COUNT — D30's digital half. `Card 17` is the
+    NEIGHBOURS AND THE SECTION'S GAP COUNT — D58's digital half. `Card 17` is the
     seventeenth SLOT, not the seventeenth card you can count, and once a section has holes
     (every sale and every retirement makes one, permanently — D10) the two stop being the
     same number and every label in the section becomes uncountable by hand. So a located
@@ -2382,8 +2382,8 @@ class _Places:
     and is not a gap, and counting terminal RECORDS is what makes that true by
     construction rather than by a bounds check.
 
-    AN UNREAD CARD IS A NEIGHBOUR (the owner's ruling, 2026-09-24, LOC-28, amending D116).
-    D116 walked past an unnamed on-hand card to the nearest named one. Now the adjacent card
+    AN UNREAD CARD IS A NEIGHBOUR (the owner's ruling, 2026-09-24, LOC-28, amending D260).
+    D260 walked past an unnamed on-hand card to the nearest named one. Now the adjacent card
     is the neighbour, named or not, and `unread` says how many unread cards stand in a row
     from it, so the sentence can say "an unread card" or "3 unread cards". `_company` has
     the argument.
@@ -2418,11 +2418,11 @@ class _Places:
         self._cache: Dict[
             int, Tuple[Optional[master.Box], Tuple[int, ...], int, Optional[Tuple[int, ...]]]
         ] = {}
-        # D30's walk, one scan per instance, lazily: box -> (occupants, gaps, named), where
+        # D58's walk, one scan per instance, lazily: box -> (occupants, gaps, named), where
         # `occupants` is every located, non-terminal record as (index, name) sorted by
         # index, `gaps` is the sorted indices of the located TERMINAL records — the
         # permanent holes — and `named` is the positions into `occupants` that carry a
-        # name, which is D116's landmark set. `_boxmates` is None after the scan has met a record it cannot
+        # name, which is D260's landmark set. `_boxmates` is None after the scan has met a record it cannot
         # read (the whole-store degrade the docstring argues); `_walked` says whether it
         # has run at all. Cached for the same reason `_cache` above is: this class is
         # instantiated per request, so `do_inventory` renders 5,000 rows against one walk
@@ -2436,7 +2436,7 @@ class _Places:
         self._degraded = False
         self._boxmates: Dict[int, _Boxmates] = {}
         # False for the ordinary constructor, always. `for_keys` flips it on the instance it
-        # builds, and `_company` reads it to short-circuit D30's decoration for that instance
+        # builds, and `_company` reads it to short-circuit D58's decoration for that instance
         # alone — see `for_keys`'s own docstring for why.
         self._sparse = False
         # PER-POSITION MEMO FOR `.of()`, KEYED BY `(box, index)`. Added for `do_orders`
@@ -2449,7 +2449,7 @@ class _Places:
         # caches the CARD, which is the layer `view()` cannot see. Safe for the same reason
         # every other cache on this class is: the instance never outlives one request.
         self._of_cache: Dict[Tuple[int, int], dict] = {}
-        # PER-BOX MEMO FOR `Inventory.box_order` (D265), THE PR 3 INTEGRATION. `box_order`
+        # PER-BOX MEMO FOR `Inventory.box_order` (D294), THE PR 3 INTEGRATION. `box_order`
         # selects the whole box every call, and `.of()` reached it three times per card
         # (`_company`, the neighbour walk and the block's own `order`). Search's mid-word
         # widening answers hundreds of rows, so 'ex' on a 3,000-card store spent 17s here.
@@ -2464,7 +2464,7 @@ class _Places:
         cls, inventory: "master.Inventory", keys: Iterable[Tuple[int, int]]
     ) -> "_Places":
         """A `_Places` scoped to exactly the boxes `keys` touches, for `Place.slot` and
-        everything derived from it — NOT for D30's neighbor/gap decoration, which needs
+        everything derived from it — NOT for D58's neighbor/gap decoration, which needs
         every card's NAME and is exactly the cost this constructor exists to avoid.
 
         `do_orders` is the one caller today. An order's picks can span most of the store's
@@ -2598,7 +2598,7 @@ class _Places:
             return None
 
     def _walk(self, box: int) -> Optional[_Boxmates]:
-        """One box's `(occupants, gaps, named)` for D30's decoration, or None — degraded.
+        """One box's `(occupants, gaps, named)` for D58's decoration, or None — degraded.
 
         The scan reads every record's own `box` and `index`, coerced the way the rest of
         this file coerces them (`int()` — a string-typed "3" counts, the regression T7
@@ -2609,7 +2609,7 @@ class _Places:
         failure — it has no slot, so it is nobody's neighbour and no section's gap (D24).
 
         `named` IS THE POSITIONS INTO `occupants` THAT CARRY A NAME, and it exists so
-        D116's outward walk is a bisect rather than a scan. Without it, the search for the
+        D260's outward walk is a bisect rather than a scan. Without it, the search for the
         nearest NAMED neighbour is O(box) per card in the one case that matters most: a box
         freshly off the feeder, where every card is unnamed until `join` has run, and where
         `do_inventory` would then be O(n²) over 723 records. It is positions and not
@@ -2634,7 +2634,7 @@ class _Places:
             self._degraded = True
             self._boxmates = {}
             return None
-        # IN THE BOX'S ORDER (D265): a neighbour is the card physically next to this one.
+        # IN THE BOX'S ORDER (D294): a neighbour is the card physically next to this one.
         order = self._order(number)
         rows.sort(key=lambda row: order.of(row[0]))
         occupants = tuple((i, name) for i, name, gone in rows if not gone)
@@ -2654,14 +2654,14 @@ class _Places:
         `neighbors` is the ADJACENT non-terminal record on each side of `at`, `{index,
         slot, name, unread}`, null past either end of the box. A sold or retired record is
         passed over rather than named — a departed card cannot be the thing you count from,
-        which is the whole reason D30 wants the sentence.
+        which is the whole reason D58 wants the sentence.
 
-        AN UNREAD CARD IS A NEIGHBOUR, WHICH AMENDS D116 (the owner's ruling, 2026-09-24,
-        LOC-28). D116 passed over an on-hand card no identification had named and walked on
+        AN UNREAD CARD IS A NEIGHBOUR, WHICH AMENDS D260 (the owner's ruling, 2026-09-24,
+        LOC-28). D260 passed over an on-hand card no identification had named and walked on
         to the nearest named one, because the app drew a bare `#270` for it. The owner read
         that walk as dropping a real card from the sentence (UX-264), and ruled that an
         unread card counts: the sentence says "an unread card", or "3 unread cards" for a
-        run of them. It never draws a bare figure, which was D116's real complaint.
+        run of them. It never draws a bare figure, which was D260's real complaint.
 
         `unread` IS THE RUN: how many cards nothing has named stand in a row on that side,
         starting with this neighbour and ending at the next named card or the box's end.
@@ -2706,7 +2706,7 @@ class _Places:
             return None, None
         occupants, gaps, named = mates
 
-        # IN ORDER SPACE (D265). `gaps` is already orders; `at`, `start` and `end` are
+        # IN ORDER SPACE (D294). `gaps` is already orders; `at`, `start` and `end` are
         # indices, mapped here. With no order, each map is the identity.
         order = self._order(box)
         indices = self._company_indices.get(box)
@@ -2732,7 +2732,7 @@ class _Places:
             }
 
         # THE NEIGHBOUR IS THE ADJACENT CARD ON HAND, NAMED OR NOT (the owner's ruling,
-        # 2026-09-24, LOC-28, amending D116). An unread card is a neighbour: the sentence
+        # 2026-09-24, LOC-28, amending D260). An unread card is a neighbour: the sentence
         # says "an unread card" or "3 unread cards", and never walks past it to a name
         # further along. `unread` is the run, found as two bisects into `named` rather than
         # a scan over `occupants` — see `_walk` for why: an unidentified box is the case
@@ -2787,7 +2787,7 @@ class _Places:
                 "section_end": None,
                 "box_total": 0,
                 "fraction": None,
-                # D30's decoration answers null with the rest of the place: a pooled card
+                # D58's decoration answers null with the rest of the place: a pooled card
                 # has no slot to count from and no section to have gaps in. Null and not
                 # zero for `section_gaps`, because zero would claim a countable section
                 # with no holes, which is a different fact from "no section at all".
@@ -2851,7 +2851,7 @@ class _Places:
         if end is None:
             end = total or None
 
-        # D30's decoration is still read in INDEX space, and must be: `_company` bisects the
+        # D58's decoration is still read in INDEX space, and must be: `_company` bisects the
         # walk's own index lists to find the nearest cards either side, which is a question
         # about what is physically next to this one. `section_start`/`end` are now counts,
         # so they are mapped back to indices for it — `section_gaps` then counts the
@@ -2876,7 +2876,7 @@ class _Places:
             "label": position.label,
             "box": number,
             "index": at,
-            # WHERE THE CARD STANDS IN ITS BOX, 1 AT THE FAR BACK (D265): the sort key a walk
+            # WHERE THE CARD STANDS IN ITS BOX, 1 AT THE FAR BACK (D294): the sort key a walk
             # orders by. It equals `index` until something is placed into the box. Never drawn.
             "order": self._order(number).of(at),
             # D58 — this card's number among the cards in the box, which is what every
@@ -2903,7 +2903,7 @@ class _Places:
             "section_start": position.section_start,
             "section_end": end,
             "box_total": total,
-            # D30's digital half: what makes `Card 17` countable by hand again once the
+            # D58's digital half: what makes `Card 17` countable by hand again once the
             # section has holes. Both null together when the walk degraded — the app
             # draws no sentence, which is the honest rendering of "cannot say".
             "neighbors": neighbors,
@@ -3485,7 +3485,7 @@ def app_owns(path: str) -> bool:
 
 
 def do_photo(box: int, index: int) -> Tuple[bytes, str]:
-    """The stored capture, and a validator for it. D6's route, D52's validator.
+    """The stored capture, and a validator for it. D6's route, D183's validator.
 
     THE URL NAMES A SLOT, NOT A PHOTOGRAPH, AND THAT IS WHY THE SECOND RETURN VALUE EXISTS.
     `/photo/2/180` means "whatever is in box 2's slot 180 today", and three operations move
@@ -4978,7 +4978,7 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
             del inventory.cards[old_key]
             other.box = int(box)
             other.index = new_index
-            # NO ORDER KEY IS WRITTEN (D265, the R3 review). Every card keeps its key, so
+            # NO ORDER KEY IS WRITTEN (D294, the R3 review). Every card keeps its key, so
             # every card keeps its place; the deleted card leaves a gap in key space, which
             # nothing counts. A key that slid with its index crossed the keys of placed cards.
             # THE MOVE LINK FOLLOWS THE SLIDE (D262): a tombstone that named this card's old
@@ -5497,7 +5497,7 @@ def do_move_cards(box: int, payload: dict) -> dict:
                 "to_box_same",
                 f"to_box is {join.said_place(inventory, box)} itself — nothing to move.",
             )
-        # IN THE BOX'S ORDER (D265), so the cards land at the destination as they stood.
+        # IN THE BOX'S ORDER (D294), so the cards land at the destination as they stood.
         wanted = sorted(wanted, key=inventory.box_order(box).of)
         # THE TAIL IS READ ONCE, and each card takes the next slot, so they land in the
         # order sent and the lock is held for one read of the box, not one per card.
@@ -5515,7 +5515,7 @@ def do_move_cards(box: int, payload: dict) -> dict:
     }
 
 
-# ---------------------------------------------------------------- the box map (D264, D265)
+# ---------------------------------------------------------------- the box map (D264, D294)
 #
 # A SECTION IS AN OBJECT THAT MOVES WHOLE, AND A CARD OR A RANGE MOVES BY ITSELF. One press
 # moves touching sections (with their dividers and names), or one card or a range of cards
@@ -5524,7 +5524,7 @@ def do_move_cards(box: int, payload: dict) -> dict:
 # `_move_one`, so every guard a single move has (a live paid reading, a card that already
 # left) holds here too, and the queues and the cache follow each card by the same code.
 #
-# EACH MOVED CARD TAKES A NEW ORDER KEY BETWEEN ITS NEW NEIGHBOURS' KEYS (D265, the owner's
+# EACH MOVED CARD TAKES A NEW ORDER KEY BETWEEN ITS NEW NEIGHBOURS' KEYS (D294, the owner's
 # ruling "A key on each card"), in the same write. `Inventory.place` is the one placement.
 #
 # THE RECEIPT IS THE PHYSICAL INSTRUCTION, in the owner's orientation: card 1 is at the far
@@ -5615,7 +5615,7 @@ def _landmarks(
     inventory: master.Inventory, box: int, slots: Sequence[int]
 ) -> Tuple[Optional[str], Optional[str], int]:
     """The first and last NAMED card of a run of slots, and how many cards are on hand in it.
-    A card nobody has named is not a landmark (D116)."""
+    A card nobody has named is not a landmark (D260)."""
     named: List[str] = []
     count = 0
     for at in slots:
@@ -7465,7 +7465,7 @@ def _answer_origin(store: Store, key: str) -> Tuple[Optional[dict], Optional[str
 
 
 def _raw_catalog_row(card, sku: str) -> Tuple[dict, str, dict, Optional[Path]]:
-    """The catalog row `sku` names, in this card's own export, or a refusal (D46) — BOTH
+    """The catalog row `sku` names, in this card's own export, or a refusal (D77) — BOTH
     shapes at once: the normalized `chosen` dict the screen has always drawn (`_catalog_row`,
     `sku`/`name`/`set`/`number`/`condition`/`market`/optional `rarity`) and the RAW row
     (`tcgcsv.Row`, real TCGplayer column names — `Product Line`, `Set Name`, ...) plus the
@@ -7505,7 +7505,7 @@ def _raw_catalog_row(card, sku: str) -> Tuple[dict, str, dict, Optional[Path]]:
 
 def _catalog_answer(card, sku: str) -> Tuple[dict, str]:
     """`_raw_catalog_row`'s normalized half alone, GAME included — the shape
-    `_answer_target`'s own `from_catalog` branch (D46) draws for the screen, which never
+    `_answer_target`'s own `from_catalog` branch (D77) draws for the screen, which never
     needs the raw row `do_correct_answer` folds into the `skus` table.
     """
     chosen, game, _row, _source = _raw_catalog_row(card, sku)
@@ -7609,10 +7609,10 @@ def _answer_target(
     offering, governing = holders[0]
     candidates: List[dict] = list(governing.candidates)
     if from_catalog:
-        # D46 — THE ROW CAME OUT OF THE EXPORT, SO IT IS NOT FREE TEXT.
+        # D77 — THE ROW CAME OUT OF THE EXPORT, SO IT IS NOT FREE TEXT.
         #
         # D77 WIDENED WHICH ENTRIES THIS REACHES, AND CHANGED NOTHING ABOUT WHAT IT CHECKS.
-        # The condition was `not candidates and from_catalog` until 2026-08-31, on D46's
+        # The condition was `not candidates and from_catalog` until 2026-08-31, on D77's
         # reasoning that a card the pipeline found rows for already has its answer on screen.
         # Box 3 card 66 is the counter-example and it was the only open entry in the store:
         # `Nasus, Ascended` read with its number misread as `8/298`, which is a REAL key in
@@ -7664,7 +7664,7 @@ def _answer_target(
         # re-shoot, never a typed SKU, so the refusal stands on the evidence it asked
         # for.
         #
-        # WHAT IT NO LONGER MEANS IS "THIS CARD CANNOT BE ANSWERED". D46 gave it a remedy
+        # WHAT IT NO LONGER MEANS IS "THIS CARD CANNOT BE ANSWERED". D77 gave it a remedy
         # and the sentence went on describing the dead end for two days; D77 widened the
         # remedy to every entry and the sentence would have been wrong in a second way. It
         # names the flag now, because the operator reading this refusal on a screen has the
@@ -8053,7 +8053,7 @@ def _catalog_row(row) -> dict:
     cell for the identical reason D213 states — an absent cell is evidence of nothing and a
     drawn `""` would assert the row is unrated. This function never got the same line, so
     every reader of `chosen.get("rarity")` off a catalog row — `do_review_answer`'s
-    `from_catalog` branch (D46) and `do_correct_answer` (D252) alike — read `None` always,
+    `from_catalog` branch (D77) and `do_correct_answer` (D252) alike — read `None` always,
     whatever the row's own `Rarity` cell said. `do_correct_answer`'s
     `card.rarity = str(chosen.get("rarity") or "").strip() or None` line was already correct;
     the row it read from was not.
@@ -8098,7 +8098,7 @@ def _row_for_bind(snapshot, sku: str) -> "SkuRow":  # noqa: F821 - store.skus.Sk
     overwrite a fuller row already there depending on `Skus.fold`'s own stamp rule (review
     finding, identity-follows-sku.md §4.2: "no partial upsert into skus"). `do_correct_
     answer` is the one writer that still fills the table, because it already re-reads the
-    REAL export row (D46) and folds it whole through `_fold_export_row` below — never this
+    REAL export row (D77) and folds it whole through `_fold_export_row` below — never this
     function.
     """
     row = snapshot.skus.entries.get(str(sku))
@@ -8238,7 +8238,7 @@ def _fold_export_row(snapshot, row: dict, source: Optional[Path]) -> None:
     `row` IS A RAW EXPORT ROW (`tcgcsv.Row`, real column names), NEVER THE NORMALIZED
     `chosen` SHAPE `_catalog_row` draws for the screen — review round, §4.2: "no partial
     upsert into skus". `do_correct_answer` is this function's one caller, because it is the
-    one writer left that re-reads a fresh row off disk (D46) rather than binding to a row
+    one writer left that re-reads a fresh row off disk (D77) rather than binding to a row
     the table already holds.
     """
     name = source.name if source is not None else ""
@@ -8318,7 +8318,7 @@ def do_review_catalog(box: int, index: int, query: str) -> dict:
     presses a digit, and `do_review_answer` still validates what they picked. This route is
     the evidence, not the decision.
 
-    IT WAS NEVER GATED ON THE CARD HAVING NO CANDIDATES AND STILL IS NOT, which under D46
+    IT WAS NEVER GATED ON THE CARD HAVING NO CANDIDATES AND STILL IS NOT, which under D77
     was an accident of it being free and read-only, and under D77 is the point. The gate
     lived entirely in the two places that decide: the screen, which drew the search only in
     the zero-candidate arm, and `_answer_target`, which honoured `from_catalog` only there.
@@ -8666,7 +8666,7 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
         return _reverse_answer(box, index)
 
     _reject_unknown(payload, ANSWER_FIELDS)
-    # D46. Opt-in, per request, and only this route ever passes it.
+    # D77. Opt-in, per request, and only this route ever passes it.
     #
     # THE GROUP ROUTE STILL DOES NOT, AND D77 CHANGED THE REASON RATHER THAN THE RULE. The
     # old reason was arithmetic — a group is uniform over ONE shared candidate row, so a
@@ -8698,7 +8698,7 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
         # whole so the group route can run the identical checks — card before queue, one
         # governing entry, the pair checked against the offered row. Nothing is written
         # until it returns.
-        # `chosen` (the candidate's normalized dict, D46's own shape) is unpacked and
+        # `chosen` (the candidate's normalized dict, D77's own shape) is unpacked and
         # unused below — the row this route needs now comes straight off the `skus` table
         # (`_row_for_bind`, review round: "no partial upsert into skus"), never off this
         # abbreviated shape, which carries no `Product Line` cell to trust in the first
@@ -8799,14 +8799,14 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
             queue=offering.name,
             reason=governing.reason,
             restores_to=full_snapshot,
-            # D46. Present only when it is true, because `_history` drops a None extra — so
+            # D77. Present only when it is true, because `_history` drops a None extra — so
             # every line already on disk keeps its exact shape and a reader can tell a row the
             # PIPELINE offered from a row a HUMAN went and found. Those are different claims
             # about how much the machine knew, and after the write there is no other evidence
             # which one happened.
             #
             # D77 DROPPED THE `not governing.candidates` HALF, AND THAT IS THE FLAG FINALLY
-            # MEANING WHAT ITS NAME SAYS. Under D46 the two conditions could not come apart,
+            # MEANING WHAT ITS NAME SAYS. Under D77 the two conditions could not come apart,
             # so the extra clause cost nothing and read as belt-and-braces; now they can, and
             # keeping it would have written `from_catalog` off a card that had rows and
             # silently omitted it off a card whose rows were wrong — which is exactly the
@@ -9421,7 +9421,7 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
     pipeline offered" — but a card this route was built for is not in a queue any more;
     `do_review_answer` already cleared it, correctly, for the wrong row. So this route
     re-reads the new SKU straight out of `_catalog_for_card`'s export through `_catalog_answer`
-    (D46's own primitive, not a second one) and never opens `review.json` or `parked.json` at
+    (D77's own primitive, not a second one) and never opens `review.json` or `parked.json` at
     all. That is also why this is its own route rather than a branch on `do_review_answer`:
     that route's whole first half is "which queue entry governs this answer", and a card
     holding none has nothing for it to govern.
@@ -9446,7 +9446,7 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
     THE STORED NAME FOLLOWS THE CATALOG, on the owner's ruling. A card wrong about its SKU is
     wrong about its name in the same breath, and `card.name` is what `#/inventory` and
     `#/orders` draw as the card's identity — neither should go on saying the old product's
-    name once the SKU says otherwise. `set_name`/`rarity` are set from the same row a D46
+    name once the SKU says otherwise. `set_name`/`rarity` are set from the same row a D77
     `from_catalog` answer already sets them from — and, as of D252's amendment,
     actually carry a rarity: `_catalog_row` was missing the key `_candidate_rows` has always
     had (D213), so this line read `chosen.get("rarity")` off a row that could never answer,
@@ -9477,7 +9477,7 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
     card that exists and never creates one), `card_departed` (the card has left inventory —
     correcting a sold or retired card's SKU is a different, larger question this route does
     not attempt), `not_identified` (no existing SKU to correct — that is `do_review_answer`'s
-    job), `sku_required`, `sku_not_in_catalog` (`_catalog_answer`'s own D46 refusal, reused
+    job), `sku_required`, `sku_not_in_catalog` (`_catalog_answer`'s own D77 refusal, reused
     verbatim — no export, no run, or the SKU is not a row in it), `sku_unchanged` (the row
     chosen is the row already on the card).
 
@@ -9526,7 +9526,7 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
                 f"correct. Answer it on the review screen first.",
             )
 
-        # D46's OWN LOOKUP AND ITS OWN REFUSAL, REUSED VERBATIM: the row is re-read from
+        # D77's OWN LOOKUP AND ITS OWN REFUSAL, REUSED VERBATIM: the row is re-read from
         # THIS CARD'S export, inside the lock, and never taken on the client's word. The
         # GAME comes back too — `_catalog_for_card`'s own resolution, `card.game or
         # games.DEFAULT_GAME` — because it decides how the chosen row's `Number` cell is
@@ -9558,7 +9558,7 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
         # THE RAW ROW, NEVER THE NORMALIZED `chosen` SHAPE, folds into the `skus` table
         # (review round, §4.2: "no partial upsert into skus") — `do_correct_answer` is the
         # one writer left that still fills the table, because it already re-reads a real
-        # row off the export (D46). `number`/`printed_total` ARE NOT READ HERE EITHER, ON
+        # row off the export (D77). `number`/`printed_total` ARE NOT READ HERE EITHER, ON
         # THE ORCHESTRATOR'S RULING (within D36, corrected on review): `bind_sku` derives
         # them straight off the folded row's own `Number` cell through `number_strategy`.
         game_entry = games.get(catalog_game)
@@ -12019,7 +12019,7 @@ def do_skus_photos(
     Only a SKU that loses that check is looked up in `snapshot.skus.entries` (D258's own
     table) for the `product_line`/`set_name`/`number`/`product_name` `url_for`/
     `url_for_product` need. A SKU with a `number` is a single card and reuses `url_for`
-    exactly as `#/pricing` and Sets do; a SKU with none is SEALED PRODUCT (D223, D231 —
+    exactly as `#/pricing` and Sets do; a SKU with none is SEALED PRODUCT (D231 —
     Pokemon included) and reuses `url_for_product` (F2's own addition) instead. Both answer
     `None` on a join miss, which simply omits the SKU from `stock_photos` too — the client's
     plain-tile fallback still covers that case, and this route still opens no socket when
@@ -12451,7 +12451,7 @@ def _section_spans(
     editor honest: it seeds from `start` and posts in the same space, and `do_put_box` maps
     it back through the same `occupied` before the store sees an index.
     """
-    # `occupied` is in physical order and `order` maps it (D265).
+    # `occupied` is in physical order and `order` maps it (D294).
     order = order if order is not None else master.BoxOrder()
     position_of = _positioner(box, layout, occupied, order)
     per_section: Dict[int, int] = {}
@@ -13123,7 +13123,7 @@ def do_put_box(box: int, payload: dict) -> dict:
             keep = stored if len(stored) == len(seeded) else []
             occupied = _Places(inventory).occupied(box)
             if occupied is not None:
-                # IN ORDER SPACE (D265): the dividers are stored as orders.
+                # IN ORDER SPACE (D294): the dividers are stored as orders.
                 order = inventory.box_order(box)
                 gone = tuple(
                     sorted(
@@ -13267,7 +13267,7 @@ def do_close_section(box: int, div: Optional[str]) -> dict:
 
 # --------------------------------------------------------------------------- the orders
 #
-# D66'S SCREEN HALF, AND IT IS FOUR ROUTES. `GET /orders` says which physical copies fill
+# D69'S SCREEN HALF, AND IT IS FOUR ROUTES. `GET /orders` says which physical copies fill
 # which line and why a line found nothing; `POST /orders/fetch` asks TCGplayer for this
 # account's own orders and hands back a body the next route accepts unchanged; `POST
 # /orders/ingest` takes the feed's word for what was bought; `POST /orders/pull` records
@@ -13603,7 +13603,7 @@ def _order_row(
     silently dropping off the screen — which is the guessing `store/orders.py`'s header still
     forbids and the reason a closed vocabulary here is a lookup table and not a guess.
 
-    `terminal` RIDES THE WIRE BESIDE `open` FOR THE SAME REASON D114 GIVES: *"there is no
+    `terminal` RIDES THE WIRE BESIDE `open` FOR THE SAME REASON D91 GIVES: *"there is no
     status vocabulary anywhere in `app/`"*. A screen that wants to know whether the
     marketplace itself considers this order finished reads this field rather than growing its
     own copy of `TERMINAL_STATUSES` or branching on `status` — either of which is the second
@@ -14037,7 +14037,7 @@ def _walk_plan_take(
 
     ORDER IS LOAD-BEARING (the wire contract's own words) and fixed HERE, not left to the
     client to sort: this stop's copies first, in the solver's densest-first order, then
-    every other on-hand copy in box-walk order, by box and then order key (D265) — the same
+    every other on-hand copy in box-walk order, by box and then order key (D294) — the same
     order `copies_on_hand` (`positions_for_sku`, sorted `(box, order key, index)`) already
     returns, so the remainder needs no second sort, only the stop's own copies filtered back
     out of it.
@@ -14166,7 +14166,7 @@ def do_order_walk_plan(payload: dict) -> dict:
     IT USES THE ORDINARY `_Places`, WHICH IS ALREADY SCOPED BY BEING LAZY, and that is a
     reversal of what shipped on 2026-09-18. `_Places.for_keys` was borrowed from
     `do_orders` — "the route the Orders and Shipping screens poll" — whose picks span most
-    of the store's boxes, and its whole trade is to drop D30's neighbour decoration because
+    of the store's boxes, and its whole trade is to drop D58's neighbour decoration because
     that needs every card's NAME. THE PREMISE DOES NOT REACH THIS ROUTE. This one fires ONCE
     per pass (§8: the plan is computed once and there is no `Re-plan` control), and it covers
     only the boxes the plan touches, which the solver exists to keep few — and `view()` walks
@@ -14181,7 +14181,7 @@ def do_order_walk_plan(payload: dict) -> dict:
         all 275 walkable, 64 stops, 8 drawers, 275 copies  24.1 ms -> 32.2 ms
 
     The delta is the per-box `records_in` walk — a fixed cost of the drawers the plan
-    reaches, not of the copies in it, and paid once per press. D116 is what it buys: a card
+    reaches, not of the copies in it, and paid once per press. D260 is what it buys: a card
     nobody has named is not a landmark, and the distance is what keeps the skip honest.
 
     WIDENED TO EVERY ON-HAND COPY OF EACH SKU, STORE-WIDE, RULED 2026-09-19 ("The stop,
@@ -14253,7 +14253,7 @@ def do_order_walk_plan(payload: dict) -> dict:
 
     # THE LAZY WALK IS THE SCOPING — see the docstring's measurement. `view()` walks a box
     # the first time a position in it is asked for and never again, so this instance touches
-    # exactly the drawers the plan reaches, with D30's decoration intact.
+    # exactly the drawers the plan reaches, with D58's decoration intact.
     places = _Places(snapshot.inventory)
 
     return {
@@ -14915,7 +14915,7 @@ def _prepare_targets(
     place, writing nothing.
 
     A SEPARATE FUNCTION FOR A SECOND DOOR THAT NO LONGER EXISTS. It was lifted out of
-    `do_order_pull` for D90's `/orders/fill`, which D96 deleted rather than wired up; the
+    `do_order_pull` for D90's `/orders/fill`, which D97 deleted rather than wired up; the
     shape stays because it is the honest one either way. Refusals are COLLECTED rather than
     raised, because the caller — not this function — decides the unit that is refused whole,
     and `seen` is the caller's for the same reason.
@@ -15941,7 +15941,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         # WHICH PROCESS ANSWERED, ON EVERY RESPONSE — the same `boot_id` `GET /status` reports,
         # here so the app can notice a restart WITHOUT ASKING. `make up` restarts this server on
-        # every Python edit (D53), and the alternative was a client that polled `/status` on a
+        # every Python edit (D138), and the alternative was a client that polled `/status` on a
         # timer: it worked, and it made every owner-side screen issue a request nothing had
         # asked for, in every Playwright spec, against whatever real server is listening —
         # which is the hazard `app/tests/inventory.spec.ts` documents in its own comment. A
@@ -16289,7 +16289,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_graveyard())
             if path == "/games":
                 return self._json(HTTPStatus.OK, do_games())
-            # D66's order screen. An exact string and therefore no ordering hazard, and a
+            # D69's order screen. An exact string and therefore no ordering hazard, and a
             # read: it takes no lock, writes nothing, and resolves the open orders in one
             # pass so no two of them are offered the same physical card.
             if path == "/orders":
@@ -16413,7 +16413,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # row by its VALUE rather than by an offset into a list that may have
                 # shifted between two fetches. The aggregates (`boxes`, `unrankable`,
                 # `totals`, `sources`) are computed over EVERY on-hand row regardless of
-                # which page is open — D159's "nothing on hand is omitted" never shrinks to
+                # which page is open — D277's "nothing on hand is omitted" never shrinks to
                 # "what this page could see".
                 query = parse_qs(parsed.query, keep_blank_values=True)
                 band = (query.get("band") or [None])[0]
@@ -16501,7 +16501,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 # `sku` REPEATS AND IS REQUIRED HERE. A survey is the whole live inventory and
                 # an unfiltered walk over 441 rows is ~5.5 minutes at a public mirror, which
-                # would make D62's press meaningless — the handler refuses an empty list.
+                # would make D278's press meaningless — the handler refuses an empty list.
                 asked = parse_qs(parsed.query, keep_blank_values=True).get("sku") or []
                 return self._json(
                     HTTPStatus.OK,
@@ -16560,7 +16560,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
             match = _RUN_TRENDS_RE.match(path)
             if match:
                 # THE SAME READ, BATCHED, AND IT LEAVES THIS MACHINE FOR THE SAME REASON.
-                # D62 named this route and the condition for building it; D79 is the owner
+                # D278 named this route and the condition for building it; D277 is the owner
                 # answering that condition. It is still a press — nothing polls it — and what
                 # changed is that one press covers the list instead of one card.
                 #
@@ -17026,7 +17026,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     HTTPStatus.OK,
                     pipeline_routes.do_pipeline_export(match.group(1), self._body()),
                 )
-            # D165's repair, offered from a screen. Before `_RUN_STEP_RE`, whose `[a-z]+`
+            # D145's repair, offered from a screen. Before `_RUN_STEP_RE`, whose `[a-z]+`
             # would otherwise match `rescue` and refuse it as a step that does not exist —
             # the same hazard `/export` above it carries and the same remedy.
             match = _RUN_RESCUE_RE.match(path)
@@ -17050,7 +17050,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                         match.group(1), match.group(2), self._body()
                     ),
                 )
-            # D66's three writes, all exact strings — no regex, and therefore no ordering
+            # D69's three writes, all exact strings — no regex, and therefore no ordering
             # hazard against each other or against anything above. NONE OF THEM SPENDS:
             # `/orders/fetch` is a read of this account's own orders at TCGplayer, and the
             # other two touch only this store. The one route that can cost money is still
@@ -17631,9 +17631,9 @@ def serve(host: str = HOST, port: int = PORT) -> None:
     # WHICH CHECKOUT IS SERVING, printed because the two lines above are absolute paths that
     # differ between trees by one path segment nobody reads at a glance. A worktree's server
     # over a worktree's empty store looks exactly like the real one until a capture lands
-    # somewhere that gets deleted with the branch — which is the failure D46 exists for.
+    # somewhere that gets deleted with the branch — which is the failure D77 exists for.
     # Gated on "not the primary checkout", so a copy with no `.git` says so too
-    # (D268, a copied tree never gets the live port).
+    # (D261, a copied tree never gets the live port).
     if not ports.is_primary_checkout(ports.REPO_ROOT):
         print(f"  WORKTREE  {ports.REPO_ROOT.name} — this is NOT the main checkout's store")
         print(f"            main tree serves :{ports.CAPTURE_BASE_PORT}")

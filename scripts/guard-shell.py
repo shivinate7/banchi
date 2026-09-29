@@ -1119,7 +1119,7 @@ _RUNAWAY = [
     "  re-resolving branches it was resolving. A human noticed a four-hour bash in their own "
     "UI.",
     "  (`make janitor` finds a poller that is ALREADY running and that nobody owns any more "
-    "— D175.",
+    "— D305.",
     "  This refuses the one being created, which is the half no sweep can reach.)",
 ]
 

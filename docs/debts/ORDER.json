@@ -56,6 +56,16 @@
     "059-unreadable-claim-no-remedy.md",
     "060-demo-walk-recording.md",
     "061-advances-carryover.md",
-    "062-demo-assets-lfs.md"
+    "062-demo-assets-lfs.md",
+    "063-bench-scan-identify.md",
+    "064-catalog-number-crosscheck.md",
+    "065-number-corner-crop-always.md",
+    "066-perceptual-hash-layer.md",
+    "067-photo-backup.md",
+    "068-posted-price-view.md",
+    "069-price-refresh-schedule.md",
+    "070-sales-export-price-series.md",
+    "071-set-hint-worth.md",
+    "072-vault-supabase-ebay.md"
   ]
 }

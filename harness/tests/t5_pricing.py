@@ -259,7 +259,7 @@ def run() -> Result:
     c.equal(
         pricing.flat_floor().resolve(cheap_store.threshold),
         Decimal("0.29"),
-        "a legacy `floor` disposition resolves at the store's cut-off too — D98 retired it as "
+        "a legacy `floor` disposition resolves at the store's cut-off too — D9 retired it as "
         "an answer anybody may CHOOSE, and while it resolved at the constant a store set below "
         "$0.40 sent its cheapest cards out dearer than its mid ones",
     )
@@ -516,7 +516,7 @@ def run() -> Result:
         "a hold saved again keeps the date the server gave it the first time, never the client's",
     )
 
-    # --- withholding: an answer that is not a price (D49) ------------------------------------
+    # --- withholding: an answer that is not a price (D86) ------------------------------------
     #
     # THE MIRROR OF THE `no_market_data` CASE ABOVE, ONE CHANNEL OVER. That field has accepted
     # `unlisted` since D9; `overrides` demanded a price, so a card WITH a market price had no

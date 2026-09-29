@@ -21,15 +21,15 @@ module answers two things and keeps them apart, per this feature's own rules:
 
 WHAT THIS MODULE DELIBERATELY DOES NOT DO. It does not fetch. It does not write. It does not
 run `pkmnscan archive sweep`'s walk — that is `pipeline/pricearchive.py`'s job and stays a
-press (D219's own statement, D62's before it: this reader cannot fire on its own). It takes
+press (D219's own statement, D278's before it: this reader cannot fire on its own). It takes
 an already-loaded `Snapshot`'s `inventory`, `archive` and `ledger` and answers a pure
 computation over them, so a test never needs a store on disk, only the three dataclasses this
 module actually reads.
 
-RANGES ARE NEVER MERGED (D62). Every function here is asked for exactly one
+RANGES ARE NEVER MERGED (D278). Every function here is asked for exactly one
 `store.pricearchive.RANGE_WIDTH_DAYS` key and answers only that range's own buckets. A caller
 wanting all four ranges calls this four times; nothing in this file offers a combined answer,
-because D62 forbids one existing at all.
+because D278 forbids one existing at all.
 
 A MISSING BUCKET BREAKS THE LINE, MADE INTO DATA RATHER THAN LEFT FOR A SCREEN TO INFER.
 `pipeline/productview.py`'s existing convention passes a bucket's own `market: null` straight
@@ -169,7 +169,7 @@ class SkuSeries:
     def latest_value(self) -> Optional[str]:
         """The most recent priced point's own value, or `None` when every point in this
         SKU's series carries no market at all — never a zero standing in for an absent
-        price (D159's rule, inherited)."""
+        price (D277's rule, inherited)."""
         for point in reversed(self.points):
             if point.value is not None:
                 return point.value
@@ -211,7 +211,7 @@ class TotalPoint:
     it rather than left for the total alone to imply full coverage: `priced_names` never
     equals the store's whole on-hand SKU count until the archive has swept everything, and a
     total that looked complete before then would be exactly the silent-total this repo
-    refuses everywhere else (D159's rule, one register up)."""
+    refuses everywhere else (D277's rule, one register up)."""
 
     start: str
     value: str
@@ -228,7 +228,7 @@ def aggregate_totals(series: List[SkuSeries], on_hand_count: int) -> List[TotalP
 
     `width_days` for the gap test is read off whichever series is longest, since every
     `SkuSeries` handed to one call was built from the same requested range and therefore
-    shares one bucket width; a caller that mixes ranges here has already broken D62's own
+    shares one bucket width; a caller that mixes ranges here has already broken D278's own
     rule and this function will compute a meaningless gap column rather than raise, because
     the mixing is a caller bug this module cannot see from its own arguments alone.
     """

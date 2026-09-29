@@ -3,7 +3,7 @@
 against a throwaway store (D227).
 
 Protects: The product history route answers from the archive without a network call and falls back to the live market on a miss.
-Governs: D226, D227, D247
+Governs: D60, D227, D247
 
 NO NETWORK CALL for the archive-hit arm — the whole reason this route may answer without
 leaving the machine. The live-fallback arm is exercised with a `FakeMarket`, modelled on
@@ -23,7 +23,7 @@ PATH GATED, THE TWENTY-FIRST (D247, owner's word 2026-09-23, on the same ground 
 `pricearchive-selftest`'s sixteenth entry): `make product-history-selftest`, wired into
 `make check` and `make ci-check` through `scripts/guard-scope.py`. This file is no longer
 the exception it was when written — `do_product_history` is `#/product`'s own route
-(`app/src/App.tsx`'s off-nav `#/product` screen, D226), a real, live, screen-reachable
+(`app/src/App.tsx`'s off-nav `#/product` screen, D60), a real, live, screen-reachable
 caller. Once it's done, it only needs to be tested when touched.
 """
 

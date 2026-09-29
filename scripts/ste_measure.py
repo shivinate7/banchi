@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""The STE prose check's one measurer (D226, D280). Its one caller,
+"""The STE prose check's one measurer (D60, D280). Its one caller,
 `scripts/docs-audit.py`'s `ste offenders` row, was CUT 2026-09-27 (test-audit plan;
-D226/D229/D280 amended): the write-time STE hook already lints new prose. `measure()`,
+D60/D280 amended): the write-time STE hook already lints new prose. `measure()`,
 `EXEMPTIONS` and the offender-identity machinery below have no caller left. `list_key` alone
 stays imported, by the `identifier spelling` (markdown half) row, which keys a decision entry by its file tail the same way this module's own retired
 list did.
@@ -122,7 +122,7 @@ def plain_word_count(text: str) -> int:
 # judging. Only ARTIFACT classes with a class-level MECHANICAL recognition rule are built.
 #
 # THE FOURTH, `via`, IS EXEMPT BY ARGUMENT RATHER THAN BY ARTIFACT RATE (owner's ruling,
-# D226): STE007's own stated reason — different readers read a Latin abbreviation
+# D60): STE007's own stated reason — different readers read a Latin abbreviation
 # differently, and machine translation handles it badly — does not hold for an ordinary
 # English preposition every reader reads the same way. `vs`/`vs.` IS a real abbreviation (of
 # "versus") and stays a finding; a BORDERLINE class that concedes it needs a person's
@@ -130,7 +130,7 @@ def plain_word_count(text: str) -> int:
 # that reason alone, which is why this one exemption is argued rather than measured.
 #
 # A FIFTH CLASS, "verbatim quotation" (a blockquote or a `*"…"*` quoted line), WAS BUILT AND
-# WAS REMOVED ON THE OWNER'S RULING (D226): the owner chose to rewrite around a
+# WAS REMOVED ON THE OWNER'S RULING (D60): the owner chose to rewrite around a
 # quotation that trips a rule rather than exempt it. The cost is named where the pin is
 # generated and in the decision entry — most of it lands on STE008 (contraction), whose
 # sample was 93.3% this shape. Do not re-add this class without a new ruling.
@@ -212,7 +212,7 @@ def _vs_code(finding: Finding, lines: Sequence[str]) -> bool:
 
 
 def _via(finding: Finding, lines: Sequence[str]) -> bool:
-    """The word "via" itself, on the OWNER'S RULING (D226), by argument rather
+    """The word "via" itself, on the OWNER'S RULING (D60), by argument rather
     than by a measured artifact rate. STE007's own stated reason for flagging a Latin
     abbreviation is that different readers read it differently, and that machine translation
     handles it badly — true of the rule's genuine abbreviations (a full stop, or a two-word
@@ -289,7 +289,7 @@ _DECISION_FILE = re.compile(r"^docs/decisions/D(?:\d+)?-(?P<tail>[^/]+\.md)$")
 def list_key(relpath: str) -> str:
     """The key a file's offenders sit under in a shrinking offender list — `scripts/line-
     anchor-offenders.json` and `scripts/markdown-spelling-allow.json` today. Its own list,
-    `scripts/ste-offenders.json`, was CUT 2026-09-27 (test-audit plan; D226/D229/D280
+    `scripts/ste-offenders.json`, was CUT 2026-09-27 (test-audit plan; D60/D280
     amended)."""
     match = _DECISION_FILE.match(relpath)
     return f"docs/decisions/*-{match.group('tail')}" if match else relpath

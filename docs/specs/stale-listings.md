@@ -371,7 +371,7 @@ by a refusal after the press.
 
 ### It opens on `#/pricing`, and the measurement that decided against a route is history
 
-D49's precedent says a worklist the operator sits in earns a route, and this is one. `#/markdown`
+D86's precedent says a worklist the operator sits in earns a route, and this is one. `#/markdown`
 was built and then measured out against the shell of the time: **the horizontal nav strip needed
 1,484.9px to draw eleven links on one row against the owner's 1,440.** The aside group wrapped,
 the nav doubled from 45.5px to 90px, and `app/tests/review.spec.ts`'s between-cards floor went
@@ -424,7 +424,7 @@ mark down the entire store on a rounding artifact. Asserted in T7.
 |---|---|
 | `sold_out` | `Total Quantity` 0. The export keeps the row; there is no listing. |
 | `not_this_store` | live at TCGplayer, no card here ever carried the SKU |
-| `held` | withheld in the corpus (D49), and live. Reported, never silently marked down. |
+| `held` | withheld in the corpus (D86), and live. Reported, never silently marked down. |
 | `sold_recently` | a copy sold here inside the window |
 | `too_young` | owned for less than the window, or a stamp that does not parse |
 | `priced_recently` | this store answered this SKU's price inside the window — the ratchet |

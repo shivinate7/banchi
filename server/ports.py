@@ -35,7 +35,7 @@ so the answer stays as stable as the hash was.
 THE MAIN WORKING TREE KEEPS 8000, exactly as it keeps 5173, so nothing about the ordinary
 single-checkout workflow changes and every doc that names the number stays true. ONLY the
 main working tree keeps them: a tree must show a `.git` DIRECTORY to get the base ports, and
-a tree with no `.git` takes a slot like a linked worktree (D268, a copied
+a tree with no `.git` takes a slot like a linked worktree (D261, a copied
 tree never gets the live port).
 
 TWO IMPLEMENTATIONS OF ONE ALGORITHM, WHICH IS A DRIFT RISK AND IS TESTED RATHER THAN
@@ -86,7 +86,7 @@ def is_linked_worktree(root: Path) -> bool:
     spelled the same way on purpose. `scripts/serve.py` and `scripts/status.py` call it to
     ask "is this a linked worktree?" and nothing else.
 
-    THE PORT DOES NOT ASK THIS QUESTION ANY MORE (D268, a copied tree never
+    THE PORT DOES NOT ASK THIS QUESTION ANY MORE (D261, a copied tree never
     gets the live port). A tree with no `.git` is not a linked worktree, and this answers
     False for it, as it always did. The port used to read that False as "the primary
     checkout" and gave such a tree 8000. `is_primary_checkout` below is the question the
@@ -101,7 +101,7 @@ def is_linked_worktree(root: Path) -> bool:
 def is_primary_checkout(root: Path) -> bool:
     """The primary checkout's `.git` is a DIRECTORY. Only this tree keeps 8000 and 5173.
 
-    D268, a copied tree never gets the live port. On 2026-09-23 a scratch
+    D261, a copied tree never gets the live port. On 2026-09-23 a scratch
     copy of main with no `.git` built an app. The old rule read "no `.git`" as "the primary
     checkout", so that app called 8000, the owner's LIVE capture server, and read the real
     store. Any press there would have written to it.

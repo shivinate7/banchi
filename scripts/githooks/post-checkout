@@ -21,10 +21,10 @@ if git diff --name-only "$old" "$new" -- scripts/githooks 2>/dev/null | grep -q 
   echo "" >&2
 fi
 
-# ------------------------------------------------- the primary checkout left off main (D139)
+# ------------------------------------------------- the primary checkout left off main (D158)
 # WHICH BRANCH THIS DIRECTORY STANDS ON DECIDES WHICH CODE SERVES THE OWNER'S REAL STORE.
 #
-# D53 keeps a supervisor alive at login out of the PRIMARY checkout, over the real
+# D138 keeps a supervisor alive at login out of the PRIMARY checkout, over the real
 # `inventory/store.sqlite`. So a branch switch here is not a private act: the capture server
 # on :8000 is rebuilt from whatever this directory now holds, and the owner goes on
 # photographing cards into their real store through a branch's code. That is D43's hazard
@@ -41,11 +41,11 @@ fi
 # and fires no ref transaction at all, so a guard built there would have been silent through
 # both observed incidents while firing on `checkout --detach`, which is neither of them.
 #
-# THE REFUSAL IS IN THE SERVER INSTEAD, because the harm is not the branch, it is D53's
+# THE REFUSAL IS IN THE SERVER INSTEAD, because the harm is not the branch, it is D138's
 # supervisor adopting this tree's code over the owner's real store. `scripts/serve.py:off_main`
 # refuses the spawn, the reload, the re-exec and the build; this file, whose INSTALLED COPY a
 # branch switch cannot rewrite, says so at the moment of the move and says the opposite where
-# the branch just checked out has no such guard in it. D139's other two moments — `make status`
+# the branch just checked out has no such guard in it. D158's other two moments — `make status`
 # and the SessionStart guard — still stand, because any one reader alone is missable.
 #
 # THE PRIMARY/LINKED TEST IS `server/ports.py:is_linked_worktree`'s, SPELLED ITS WAY: a linked
@@ -70,12 +70,12 @@ if [ -n "$top" ] && [ -d "$top/.git" ] && git rev-parse --verify --quiet main >/
     echo "" >&2
     echo "PRIMARY CHECKOUT: now on $branch, not main." >&2
     echo "  This is the directory \`make launch-agent\` serves the owner's REAL store out of" >&2
-    echo "  (D53, D139)." >&2
+    echo "  (D138, D158)." >&2
     echo "  Undo: git switch -   ·   on main again: git switch main" >&2
 
     # ------------------------- what the server will do about it
     # D158
-    # D139 ASSERTED THE HARM AND CHECKED NOTHING: it said the live capture server "now runs
+    # D158 ASSERTED THE HARM AND CHECKED NOTHING: it said the live capture server "now runs
     # THIS branch's code" whether or not one was running at all. Since that entry the
     # supervisor
     # REFUSES to adopt a primary checkout that is off main, so the true sentence is different

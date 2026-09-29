@@ -3,7 +3,7 @@
 proved against a counting fetcher and a fake clock — no network, no sleep spent for real.
 
 Protects: The price-history market fails fast once the network is unreachable instead of sleeping through every retry.
-Governs: D62
+Governs: D278
 
 WHAT THIS PROVES. Measured 2026-09-27 on a real demo-mirror recording:
 `GET /pipeline/runs/<name>/trends` over 387 SKUs took 102.2s under the recorder's offline
@@ -15,7 +15,7 @@ was retried, and re-slept-for, once per distinct (product, range) pair.
 Fixed: the first `Offline` `Market` ever sees is remembered for the rest of that instance's
 life, and every `get()` after it raises immediately with no sleep and no fetch attempt. An
 ordinary `Unreachable` (a host that DID answer, just with a bad status) is NOT sticky —
-the next product may still resolve normally, which is D62's own promise that one card's bad
+the next product may still resolve normally, which is D278's own promise that one card's bad
 day cannot cost every other card in the batch.
 
 A READ TIMEOUT IS NOT A CONNECT FAILURE (the orchestrator's finding, 2026-09-27, on an
@@ -83,7 +83,7 @@ def _offline_only_fetches_once() -> None:
 
 def _plain_unreachable_is_not_sticky() -> None:
     """A 500 or similar (Unreachable, not Offline) must NOT poison later, distinct calls —
-    a mirror having a bad moment on one product says nothing about the next one (D62)."""
+    a mirror having a bad moment on one product says nothing about the next one (D278)."""
     calls = []
 
     def fetcher(url):

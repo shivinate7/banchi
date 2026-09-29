@@ -229,7 +229,7 @@ function readLastCheck(): LastCheck | null {
     return {
       at,
       matched: typeof matched === 'number' && Number.isFinite(matched) ? matched : null,
-      /* A check written before D114 carries no scope. Absent reads as null — "everything" —
+      /* A check written before D91 carries no scope. Absent reads as null — "everything" —
          which is exactly what that press asked for, so an upgrade does not invent a mismatch. */
       statuses: Array.isArray(scope) ? scope.filter((one): one is string => typeof one === 'string') : null,
     }
@@ -255,7 +255,7 @@ type FetchReceiptData = {
   readonly at: number
   readonly previous: LastCheck | null
   /** EVERY order the window held, filter or no filter — the preview's own `total`. It is the
-   *  denominator the filtered figure is honest against: before D114 there was only one number
+   *  denominator the filtered figure is honest against: before D91 there was only one number
    *  here and it was drawn as "in the window", which a filtered press would have made a lie. */
   readonly windowTotal: number | null
   /** How many of those the statuses this press asked for matched — the wire's own `matched`. */
@@ -1352,7 +1352,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   /** The store's own sheet: fetch, paste and both stand-downs (UX-165, UX-193). */
   const [storeOpen, setStoreOpen] = useState(false)
 
-  /* ---------------------------------------------------------- the fetch filter (D114) ---- */
+  /* ---------------------------------------------------------- the fetch filter (D91) ---- */
 
   /** What this device narrows the fetch to. Read from `localStorage` ONCE, on mount: it is a
    *  habit and not a subscription, and re-reading it per render would fight the panel. */
@@ -2848,7 +2848,7 @@ function PullStage({
   /* THE LIST'S VIEW LIVES IN THE URL (FLT-11, D285): a link, a bookmark and Back
    *  restore it, and nothing about it is kept on the device. `q` is the search, `show` and
    *  `status` the two facets (read below, once their options are known), `sort`/`dir` the sort,
-   *  `unknown` the hide toggle. A sort press re-sorts at once (FLT-01, amending D209). */
+   *  `unknown` the hide toggle. A sort press re-sorts at once (FLT-01, amending D296). */
   const [query, setQuery] = useViewParam('q')
   const [sort, setSort] = useSortParam<OrderSortKey>(SORT_AT_REST, { options: SORT_OPTIONS })
   const [hideUnknown, setHideUnknown] = useViewFlag('unknown', false)
@@ -4101,7 +4101,7 @@ function OrderDetail({
 
   /* A DONE ORDER IS NOT ALWAYS A CLOSED BOOK (fix for the owner's report: a shipped order can
      still owe copies). `ownsAWalkableBody` is the discriminator — `terminal` plus what is
-     still owed, never the `status` string (D114) — so an order closed because every copy was
+     still owed, never the `status` string (D91) — so an order closed because every copy was
      already pulled draws nothing here exactly as before, and one closed by the marketplace
      while copies remain open gets its lines and its Pull button back. */
   const body =

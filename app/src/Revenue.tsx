@@ -460,7 +460,7 @@ function bucketRangeOf(at: Date, granularity: Granularity): { readonly key: stri
 
 /** ONLY THE BUCKETS THAT HAVE A SALE, same as the screen this replaces always drew — a
  *  historical month with nothing in it was never on the strip before this change and is not
- *  now either (D194's own cost of drawing one, measured: `copy-budget.spec.ts`'s populated
+ *  now either (D284's own cost of drawing one, measured: `copy-budget.spec.ts`'s populated
  *  fixture alone adds four empty rows across an otherwise one-sale window). The one bucket
  *  forced onto the strip even when it is empty is the CURRENT one, and only when the
  *  selection actually reaches `now` (`forceNow`, `null` for a closed custom range that ended
@@ -518,7 +518,7 @@ type Product = {
 }
 
 /** "Then against now" for one already-sold name (D225) — a market observation and
- *  NEVER a profit or a loss, D62's rule for this exact shape ("direction is a sign and a
+ *  NEVER a profit or a loss, D278's rule for this exact shape ("direction is a sign and a
  *  word, never a color"). `word` is never rendered as a color anywhere this is used. */
 type MarketCompare = { readonly market: number; readonly at: number; readonly diff: number; readonly word: 'above' | 'below' | 'even with' }
 
@@ -1062,7 +1062,7 @@ export function Revenue() {
 
   const shelfColumn = (
     /* WHAT'S STILL ON THE SHELF (D236) — UNSOLD stock, valued off the price-history
-     archive, one range at a time (D62: never merged with another range). Loads on arrival
+     archive, one range at a time (D278: never merged with another range). Loads on arrival
      (sales-directions.md, finding 3); a range change re-reads (a plain, bounded read, D236's
      own header — no socket, no run, no write). NEVER the same figure as what already sold. */
     <div className="revenue-shelf">
@@ -1240,7 +1240,7 @@ export function Revenue() {
               one. Collapsing the two into one sentence, or hiding either at zero, would say
               more than this store actually knows. */}
           <p className="revenue-verdict-canceled">{`${canceledOrders.toLocaleString()} excluded`}</p>
-          {/* D281: A NOTE ABOUT ZERO DOES NOT DRAW. "0 lines were marked ... treat it as a
+          {/* D196: A NOTE ABOUT ZERO DOES NOT DRAW. "0 lines were marked ... treat it as a
               habit, not a guarantee" reads as a warning about a habit that has never once
               caught anything — at zero, this whole sentence is drawn only when it has
               something to report (review round, item 6). The CANCELED sentence above stays

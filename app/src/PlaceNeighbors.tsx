@@ -1,4 +1,4 @@
-/* D30's neighbours, RANKED rather than joined, drawn as ONE LINE (Direction B, the owner's
+/* D58's neighbours, RANKED rather than joined, drawn as ONE LINE (Direction B, the owner's
  * pick, 2026-09-25, corrected the same day: "THIS #5 repeats Card 5. Remove it." —
  * `CardLocations.tsx:RowIdentity` already states the card's own figure once, so this line
  * names only what is beside it, `Name → Name`). This collapsed a three-row `back`/`this`/
@@ -34,9 +34,8 @@
  * sides are ordered `back` then `front` now, the owner's own orientation (card 1 at the far
  * back), never the reverse.
  *
- * AN UNREAD CARD IS A NEIGHBOUR (the owner's ruling, 2026-09-24, LOC-28, amending D116). D116
- * walked past an unnamed on-hand card to a named one, because the bare `#270` it drew read as a
- * sold card. The owner ruled the unread card is the neighbour, said in words: "an unread card",
+ * AN UNREAD CARD IS A NEIGHBOUR (D260, LOC-28). Walking past an unnamed on-hand card to a
+ * named one drew a bare `#270`, which read as a sold card. The unread card is said in words: "an unread card",
  * or "3 unread cards" for a run of them (`server.ts:neighborWords`). Never a bare figure.
  *
  * A DEPARTED CARD SPEAKS IN THE PAST TENSE (LOC-09), on `aria-label` alone: `placeParts`

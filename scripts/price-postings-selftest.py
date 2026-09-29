@@ -3,7 +3,7 @@
 store (D243).
 
 Protects: The price postings table is append-only, so posting one SKU twice keeps both rows.
-Governs: D243, D244, D247
+Governs: D243, D247
 
 THE ARM THIS FILE EXISTS FOR is the append-only property itself — the whole value of this
 feature and the one way it silently becomes useless (the task brief's own words). It is proved
@@ -21,8 +21,8 @@ NO NETWORK. `emit` and `reprice apply` are `store/postings.py:Postings.record()`
 callers today, both real presses (`./pkmnscan emit`, `./pkmnscan reprice apply`) — the sentence
 that used to sit here ("no caller a screen reaches yet") described the table's READ side,
 never the write side this file proves, and had gone stale for the write side regardless.
-NOTHING READS `price_postings` BACK ONTO A SCREEN YET (D244 — "shelved until there is a
-history to draw"); that is a separate fact from whether a press writes it, and this file
+NOTHING READS `price_postings` BACK ONTO A SCREEN YET (DEBT68: shelved until
+there is a history to draw); that is a separate fact from whether a press writes it, and this file
 proves only the write.
 
 PATH GATED, THE TWENTIETH (D247, owner's word 2026-09-23, on the same ground as

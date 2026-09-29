@@ -44,7 +44,7 @@ FLAT_KEY = "flat"
 # import it back; the path is `store/files.py:prices_path()`'s, spelled for a person.
 POLICY_FILE = "inventory/prices.json"
 
-# ------------------------------------------------------------------------ withholding (D49)
+# ------------------------------------------------------------------------ withholding (D86)
 #
 # THE OWNER'S WORDS: "say i'm bullish on the price going up, and don't want to list any right
 # now", and then "definitely want someway of flagging that i'm intentionally holding this card".
@@ -199,7 +199,7 @@ class Withheld:
 
     IT IS A CORPUS ROW KEYED BY SKU AND IT OUTLIVES EVERY RUN (D86). A hold used to live in
     the run's own file and die with it, so a second run over the same box started with none —
-    the limit D49 recorded and the one that put three deliberate holds under a later price.
+    the limit D86 recorded and the one that put three deliberate holds under a later price.
     It is one answer for the store now: every run over the card is held until the hold is
     lifted on `#/pricing`, and `pkmnscan prices show --held` is the cross-run view of what is
     being held.
@@ -354,7 +354,7 @@ class Decisions:
 
         AN UNANSWERED CARD WITH NO MARKET PRICE IS NOT A REASON ANY MORE (D277 Q3, the owner:
         "send every ready copy; unpriced rows stay on the list"). A missing price is still
-        unknown and never low (D9, D49), so that card cannot go: `emit` leaves it out, names
+        unknown and never low (D9, D86), so that card cannot go: `emit` leaves it out, names
         it, and it stays owed. It no longer holds every other ready card back with it.
         `unanswered` above still names them, for the screens and for `emit`'s own line."""
         reasons = []

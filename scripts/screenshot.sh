@@ -23,7 +23,7 @@
 set -uo pipefail
 
 # Must match app/package.json's @playwright/test pin — two Playwright versions in one repo
-# is two browser downloads and two behaviours. 1.58.0 is the floor for D129: through 1.57 an
+# is two browser downloads and two behaviours. 1.58.0 is the floor: through 1.57 an
 # ESM spec has its `test.location` reported short under Node 23+, and the verdict file named
 # the wrong line.
 #
@@ -71,7 +71,7 @@ EOF
 
 # A TREE THAT IS NOT THE PRIMARY CHECKOUT AND CANNOT DERIVE ITS PORT RENDERS NOTHING. Only a
 # `.git` DIRECTORY is the primary checkout, the same one fact server/ports.py and
-# app/devPort.ts detect on (D268, a copied tree never gets the live port).
+# app/devPort.ts detect on (D261, a copied tree never gets the live port).
 # A linked worktree (`.git` a FILE) and a copy with no `.git` both refuse. Refusing is the
 # answer here rather than an obstacle: falling back to the documented default would render
 # the main checkout's app and the renders would look fine, which is the failure being fixed

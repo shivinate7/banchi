@@ -1,5 +1,5 @@
 // Protects: Orders groups by buyer, walks each order, sends a pull with the pressed row's capture id, and shows all six unfillable reasons.
-// Governs: D91, D96, D113, D114, D118, D132, D193, D203
+// Governs: D91, D97, D113, D118, D132, D193, D203
 import { test, expect, type Locator, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
@@ -1680,7 +1680,7 @@ test('a paste is projected before it is sent, and what was dropped is named', as
 
 /* -------------------------------------------------------------------------------------- 8 */
 
-/* THREE OF MAIN'S CASES ARE DELETED HERE, WITH THE FEATURES THEY COVERED (D96).
+/* THREE OF MAIN'S CASES ARE DELETED HERE, WITH THE FEATURES THEY COVERED (D97).
 
    `the fetch is two presses: the window by status, then only the ticked statuses (D91)` — the
    owner ruled the two-press flow out: the press asks and takes in the same gesture. D91's real
@@ -1791,7 +1791,7 @@ test('the two-years control sends the LastTwoYears range', async ({ page }) => {
  * `open`-vs-`walkKeys` comparison left to drive a pass-scoped completion count, and no boot
  * listener to clear one.
  *
- * THIS IS FLAGGED, NOT QUIETLY ACCEPTED. The figure was D96's own twice-amended, hard-won
+ * THIS IS FLAGGED, NOT QUIETLY ACCEPTED. The figure was D97's own twice-amended, hard-won
  * result — a real defect (a lifetime total pretending to be a progress figure) measured on the
  * owner's own store, fixed twice, and reasoned through the ONE way it can be `true` (a count,
  * never a fraction; the pass's own frozen set, not `open`; no re-freeze on a mode toggle). None
@@ -1801,8 +1801,8 @@ test('the two-years control sends the LastTwoYears range', async ({ page }) => {
  * saying so is exactly the "quiet regression" `make docs-audit`'s `recorded deletions` row
  * exists to catch.
  *
- * ONE PIECE OF D96 IS SUPERSEDED, NOT LOST: §8's "leaving the walk ends the pass" (the owner's
- * ruling, 2026-09-17 — tapping `By buyer` IS tapping another screen) directly reverses D96
+ * ONE PIECE OF D97 IS SUPERSEDED, NOT LOST: §8's "leaving the walk ends the pass" (the owner's
+ * ruling, 2026-09-17 — tapping `By buyer` IS tapping another screen) directly reverses D97
  * amended's "a toggle is not the end of a pass, and freezing on every entry made it one." That
  * reversal is cited and deliberate; the rest of the figure's argument is not.
  */
@@ -1810,7 +1810,7 @@ test('the two-years control sends the LastTwoYears range', async ({ page }) => {
 
 /* ------------------------------------------------------------------------------------- 12
  *
- * D114: THE STATUS REQUIREMENT IS ANSWERED BY A TICK, AND THE TICK IS THIS DEVICE'S.
+ * D91: THE STATUS REQUIREMENT IS ANSWERED BY A TICK, AND THE TICK IS THIS DEVICE'S.
  *
  * Case 9 above pins the unchosen press — every status the preview answered, handed straight
  * back — and that is the behaviour an operator who never opens the picker keeps. What follows
@@ -1837,7 +1837,7 @@ async function remember(page: Page, statuses: string[] | null, skipKnown = false
         /* eslint-disable-next-line no-restricted-syntax -- SEEDING THE VERY KEY UNDER TEST, in
            the one file whose subject it is. The rule bans the STORE so that a new device-local
            key lands in `app/src/deviceMemory.ts` in front of a reviewer, and this one did — see
-           D114. Asserting how that key behaves means writing it, and a spec that reached it
+           D91. Asserting how that key behaves means writing it, and a spec that reached it
            through the UI instead would be testing the panel's layout on the way past. One of
            a handful of `localStorage` calls in `app/tests`: `wide.spec.ts:withRail` seeds the
            shell's rail state before first paint (D123), and `inventory.spec.ts` seeds the
@@ -1894,7 +1894,7 @@ test('a ticked status this window holds none of is named on screen, and is not s
   await expect(page.locator('.orders-receipt-absent')).toContainText('Awaiting Shipment')
 
   /* BOTH FIGURES, BECAUSE ONE OF THEM ALONE IS THE LIE. `matched` was drawn as "in the window"
-     until D114, which is true only while a press takes the whole window; the preview's `total` is
+     until D91, which is true only while a press takes the whole window; the preview's `total` is
      the denominator now and the filtered figure is a second clause beside it. */
   await expect(page.locator('.orders-receipt')).toContainText('370 in the window')
   await expect(page.locator('.orders-receipt')).toContainText('2 matched your statuses')
@@ -1967,10 +1967,8 @@ test('the picker is built from the preview alone, and unticking one narrows the 
 
 /* ------------------------------------------------------------------------------------- 16
  *
- * THE UNASKED DEVICE NO LONGER STOPS (`D193`, amending D114). D114's
- * measurement stands — 69 of 83 open orders were already shipped and held 31 physical copies —
- * but the owner's later ruling on the backfill (a one-time full history, then an all-statuses
- * append forever after) makes the picker's own ask moot for the ORDINARY press: an unasked
+ * THE UNASKED DEVICE NEVER STOPS (D91, `D193`). A one-time full history, then an
+ * all-statuses append forever after, makes the picker's own ask moot for the ORDINARY press: an unasked
  * device gets exactly the same all-statuses, skip-known fetch an asked one gets, and the picker
  * is reached only by choice, from its own "Only these statuses…" control. */
 
@@ -2371,7 +2369,7 @@ test('under Done, every done buyer is listed open, however long ago it closed (U
 
 /* ------------------------------------------------------------------------------------- 20
  *
- * SORT AND FILTER (`D209`). Ready to Ship leads, newest first within a group,
+ * SORT AND FILTER (`D296`). Ready to Ship leads, newest first within a group,
  * everything else stays reachable behind the status select — an ORDERING and never a hiding.
  *
  * THREE BUYERS, ONE FIXTURE. Alice (Ready to Ship, oldest), Carol (Ready to Ship, newest),
@@ -2658,7 +2656,7 @@ test('the filter bar clears the 40px thumb floor at phone width', async ({ page 
   expect((await trigger.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(40)
 })
 
-/* A SORT PRESS RE-SORTS AT ONCE (FLT-01, the owner's ruling, amending D209; UX-170). Ready to
+/* A SORT PRESS RE-SORTS AT ONCE (FLT-01, the owner's ruling, amending D296; UX-170). Ready to
  * ship still leads, and the list says so. */
 test('the sort press re-orders the list at once, Ready first, and the list says so', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
@@ -3093,7 +3091,7 @@ test('the search finds a nameless buyer by the label its row draws', async ({ pa
 /* ------------------------------------------------------------------------------------- 22
  *
  * A DONE ORDER THAT STILL OWES COPIES OPENS BACK UP. `_order_row`'s `terminal` field, plus
- * what is still owed, is the discriminator — never the `status` string (D114). An order the
+ * what is still owed, is the discriminator — never the `status` string (D91). An order the
  * marketplace calls done because every copy already went stays exactly as closed as before.
  */
 

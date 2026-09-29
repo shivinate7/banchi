@@ -83,7 +83,7 @@
 /* THE COLUMN BELONGS TO THE LIST, AND THAT IS THE WHOLE OF THE FIX. The rule above holds the
    DIGITS in a column, which a row can do alone. What a row cannot hold is the KEY beside them:
    it may or may not draw one — `slot.key === ''` renders the number alone, and a state terminal
-   renders a void where the figure would be (D58, D71) — and no row can see what its siblings
+   renders a void where the figure would be (D58, D41) — and no row can see what its siblings
    drew. So the list declares the KEY's advance once, as `--pos-slot-key`, and the figure-less row
    reserves it as padding; a label standing on its own declares nothing and reserves nothing, which
    is the `0px` fallback below.

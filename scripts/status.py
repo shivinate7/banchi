@@ -753,11 +753,11 @@ def guards() -> List[str]:
 
 
 def serving_branch() -> List[str]:
-    """WHICH BRANCH THE LIVE SERVER IS SERVING, when that is not main (D139).
+    """WHICH BRANCH THE LIVE SERVER IS SERVING, when that is not main (D158).
 
     `serving()` below answers whether anything is up and whose store it answers for.
     This answers the third question in that family and the one nothing asked: whose CODE.
-    D53 keeps a supervisor alive at login out of the PRIMARY checkout over the owner's real
+    D138 keeps a supervisor alive at login out of the PRIMARY checkout over the owner's real
     store, and the supervisor rebuilds from whatever this directory holds — so the branch this
     one directory stands on silently decides which code photographs the owner's real cards.
     D43 made the PORT follow the store; this is the same hazard through the other door, the
@@ -799,7 +799,7 @@ def serving_branch() -> List[str]:
     return [
         field("the code", f"{branch} — NOT main"),
         cont("this is the PRIMARY checkout, the one `make launch-agent` serves the"),
-        cont("owner's REAL store out of (D53, D139)."),
+        cont("owner's REAL store out of (D138, D158)."),
         # AND THE LINE THIS SECTION USED TO GET WRONG. Until D158 it said the live capture
         # server "is running THIS branch's code", which was the hazard stated as a fact. The
         # supervisor now REFUSES to adopt it: what is serving is whatever was serving before
@@ -815,7 +815,7 @@ def sidecar(rel: str, name: str) -> Tuple[object, str]:
 
     THREE SECTIONS NEEDED THE SAME EIGHT LINES and two of them already had their own copy.
     `serving()` loads `scripts/serve.py`, `ports_and_store()` loads `server/ports.py`, and
-    D139's branch line needs `server/ports.py:is_linked_worktree` — which is the one function
+    D158's branch line needs `server/ports.py:is_linked_worktree` — which is the one function
     in this file's reach whose job is to answer a question that must have exactly one answer.
     A third copy of the dance would have been a third place for the primary/linked test to be
     spelled differently, which is the defect, not the chore.

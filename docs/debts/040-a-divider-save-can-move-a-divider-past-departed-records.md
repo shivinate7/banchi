@@ -17,4 +17,4 @@ the move, the card list and undo.
 departed or not. Then the divider keeps the departed records on its far side.
 
 Cites D58 (a card's number counts the cards in the box), D134 (a departed record is buried) and
-D265 (a card's order key).
+D294 (a card's order key).

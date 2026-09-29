@@ -7613,7 +7613,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
         checks.equal(
             (getattr(home, "order", None), getattr(home, "order_key", None) is not None),
             (mover.order, True),
-            "and the card's order key comes back too (D265), so it stands where it stood",
+            "and the card's order key comes back too (D294), so it stands where it stood",
         )
         checks.equal(
             (getattr(home, "cid", None), getattr(home, "moved_from", "unset")),
@@ -10346,7 +10346,7 @@ def check_search_fts5(checks: Checks) -> None:
     prefix-only trade-off. `server/capture_server.py:_fts_substring_candidates` is a
     fourth candidate source, a plain SQL `LIKE '%term%'` scan, measured first on a
     synthetic 2,500-card store before it shipped
-    (`docs/decisions/D271-one-forgiving-search-matcher.md` carries the numbers). The
+    (`docs/decisions/D271-every-search-uses-one-matcher.md` carries the numbers). The
     `midword` case below now asserts the FOUND direction.
 
     ORDINARY WRITES EXERCISE `cards_fts_ad` THEN `cards_fts_ai`, NEVER `cards_fts_au` —
@@ -10398,7 +10398,7 @@ def check_search_fts5(checks: Checks) -> None:
             "and a mid-word fragment DOES too ('izard' finds Charizard) — the owner "
             "reversed the earlier trade-off ('Add mid-word search'); measured first on a "
             "synthetic 2,500-card store, never this repo's own, before it shipped "
-            "(docs/decisions/D271-one-forgiving-search-matcher.md)",
+            "(docs/decisions/D271-every-search-uses-one-matcher.md)",
             f"midword={midword!r} prefix={prefix!r}",
         )
 
@@ -11315,14 +11315,14 @@ def check_box_claims(checks: Checks) -> None:
 
 
 def check_place_neighbors(checks: Checks) -> None:
-    """D30's digital half on the wire: `neighbors` and `section_gaps` in the place block.
+    """D58's digital half on the wire: `neighbors` and `section_gaps` in the place block.
 
     `Card 17` IS THE SEVENTEENTH CARD YOU CAN COUNT, WHICH IS D58 AND IS THE REVERSE OF WHAT
     THIS PARAGRAPH SAID UNTIL D92. It read "the seventeenth SLOT, not the seventeenth card
-    you can count", which was true when D30 wrote it and was made false on 2026-08-30 by the
-    entry that answered D30. Every sale and every retirement leaves a permanent gap in the
+    you can count", which was true when D58 wrote it and was made false on 2026-08-30 by the
+    entry that answered D58. Every sale and every retirement leaves a permanent gap in the
     INDEX (D10) and the label closes over it, so what diverges behind a gap is the label and
-    the store key — not the label and the hand. D30's ruling still stands and its reason
+    the store key — not the label and the hand. D58's ruling still stands and its reason
     moved: a located place block carries the nearest NON-TERMINAL records on either side, and
     how many permanent holes this card's own section holds. Asserted on `GET /inventory`'s
     rows — the route the app polls — because the block is wire-only and the wire is the only
@@ -11348,7 +11348,7 @@ def check_place_neighbors(checks: Checks) -> None:
     therefore degrades WHOLE and STORE-WIDE, and costs nobody their label.
     """
     checks.note("")
-    checks.note("PLACE BLOCK — neighbors and section gaps (D30), server/capture_server.py")
+    checks.note("PLACE BLOCK — neighbors and section gaps (D58), server/capture_server.py")
 
     with isolated_home():
         # --- a gapped box tells the truth ------------------------------------------------
@@ -11373,10 +11373,10 @@ def check_place_neighbors(checks: Checks) -> None:
             },
             "a card between two gaps names the nearest NON-TERMINAL record — the sold card "
             "at 2 and the retired card at 4 are skipped, never named: a departed card cannot "
-            "be the thing you count from (D30) — and each side carries BOTH numbers (D92): "
+            "be the thing you count from (D58) — and each side carries BOTH numbers (D92): "
             "the store key and D58's count, which this box has already pulled apart. `next` "
-            "IS THE UNREAD CARD AT 5, `unread: 1`: the owner's ruling of 2026-09-24 (LOC-28, "
-            "amending D116) counts an unread card as a neighbor, where D116 answered null",
+            "IS THE UNREAD CARD AT 5, `unread: 1`: an unread card counts as a neighbor (D260, "
+            "LOC-28)",
         )
         checks.equal(
             rows["4/3"]["place"]["section_gaps"],
@@ -11398,10 +11398,9 @@ def check_place_neighbors(checks: Checks) -> None:
         checks.equal(
             rows["4/5"]["place"]["neighbors"]["prev"],
             {"index": 3, "slot": 2, "name": None, "unread": 1},
-            "AN UNREAD CARD IS A NEIGHBOUR (the owner's ruling, 2026-09-24, LOC-28, amending "
-            "D116). D116 walked past the unread card at 3 to name Mantine, and the screen "
-            "said `with 1 unidentified card in between`; the owner's word is that the card "
-            "next to this one is the neighbor, read or not, said as `an unread card`. THE "
+            "AN UNREAD CARD IS A NEIGHBOUR (D260, LOC-28): the card next to this one is the "
+            "neighbor, read or not, said as `an unread card`, never `with 1 unidentified "
+            "card in between`. THE "
             "TWO NUMBERS STILL DIVERGE AND ARE STILL PINNED TOGETHER (D92): the card at "
             "index 3 is the SECOND card in this box",
         )
@@ -11421,7 +11420,7 @@ def check_place_neighbors(checks: Checks) -> None:
         # THE OWNER ASKED THIS QUESTION OF A REAL SCREEN (2026-09-07) — "sold cards should
         # anyway not be in the before/after" — reading a `#270` in the ladder as a departed
         # card that had leaked in. It had not: the ladder had never named one, and the
-        # figure was an unnamed LIVE card, which is what D116 above is about. This case is
+        # figure was an unnamed LIVE card, which is what D260 above is about. This case is
         # the claim they could not see, made in the one place it can be seen: a card is
         # named as a landmark, then SOLD through its own route, and the neighbor that used
         # to name it must move to the next named card rather than keep pointing at it.
@@ -11444,7 +11443,7 @@ def check_place_neighbors(checks: Checks) -> None:
             {"index": 1, "slot": 1, "name": "Mantine", "unread": 0},
             "AND SELLING IT MOVES THE LANDMARK RATHER THAN NAMING A SOLD CARD. Thievul is "
             "not in that drawer any more, so a sentence naming him sends a hand to a slot "
-            "the card has left (D30) — the walk names Mantine, who has closed up to be "
+            "the card has left (D58) — the walk names Mantine, who has closed up to be "
             "the card in front (D58), and `unread` stays 0 because a departed card lies "
             "between nothing at all",
         )
@@ -11544,7 +11543,7 @@ def check_place_neighbors(checks: Checks) -> None:
         # sidecar are named after it — but it has no slot, so its block carries the pooled
         # nulls and the located cards' sentences never mention it.
         capture_server.do_capture(capture_payload(4, game="pokemon_code"))
-        # NAMED, AND THAT IS LOAD-BEARING SINCE D116. The walk now passes over an unnamed
+        # NAMED, AND THAT IS LOAD-BEARING SINCE D260. The walk now passes over an unnamed
         # card as well as a pooled one, so an unnamed code card would be skipped for either
         # reason and the case below could no longer tell the two rulings apart. Named, the
         # only thing keeping it out of card 5's sentence is D24.
@@ -12032,7 +12031,7 @@ def check_consolidated_numbering(checks: Checks) -> None:
 
     THE PROPERTY, AND IT IS ONE SENTENCE: sell card 17 and the card behind it becomes card
     17. `docs/specs/order-flow.md` §10.4 spells out what that replaces — *"`Card 17` is the
-    seventeenth slot, not the seventeenth card you can count"* — and D30 has been waiting
+    seventeenth slot, not the seventeenth card you can count"* — and D58 has been waiting
     since 2026-08-23 for a physical marker to explain the difference to whoever is holding
     the box. There is nothing left to explain.
 
@@ -12513,7 +12512,7 @@ def check_origin_gate(checks: Checks) -> None:
     with tempfile.TemporaryDirectory() as plain:
         checks.ok(
             ports.dev_port(Path(plain)) != 5173,
-            "and a root with NO .git does not derive 5173 (D268, a copied "
+            "and a root with NO .git does not derive 5173 (D261, a copied "
             "tree never gets the live port): a scratch copy of main once derived the main "
             "tree's ports and its app read the owner's live store",
         )
@@ -13873,7 +13872,7 @@ ONE_PIECE_EXPORT = (
 
 
 def check_review_catalog(checks: Checks) -> None:
-    """GET /review/<box>/<index>/catalog and D46's answer path — the card with no rows.
+    """GET /review/<box>/<index>/catalog and D77's answer path — the card with no rows.
 
     ITS OWN ISOLATED HOME, this file's standing lesson: it answers a card, which clears queue
     entries and writes history lines the blocks around it count over stores they build by hand.
@@ -13891,7 +13890,7 @@ def check_review_catalog(checks: Checks) -> None:
     than believed.
 
     D77 WIDENED WHICH ENTRIES THE FLAG REACHES, AND THIS BLOCK ASSERTS BOTH HALVES. It used
-    to reach only an entry with NO candidates, on D46's reasoning that a card the pipeline
+    to reach only an entry with NO candidates, on D77's reasoning that a card the pipeline
     found rows for already has its answer on screen. Box 3 card 66 was the counter-example
     and it was the only open entry in the owner's store: `Nasus, Ascended`, its number
     misread as `8/298` — a real key in that export, belonging to `Get Excited!` — so the
@@ -13901,7 +13900,7 @@ def check_review_catalog(checks: Checks) -> None:
     was never offered.
     """
     checks.note("")
-    checks.note("REVIEW CATALOG — GET /review/<box>/<index>/catalog, and D46's answer")
+    checks.note("REVIEW CATALOG — GET /review/<box>/<index>/catalog, and D77's answer")
 
     with isolated_home() as home:
         # A run holding the riftbound export, exactly as an app-driven join leaves it: the
@@ -13961,13 +13960,13 @@ def check_review_catalog(checks: Checks) -> None:
             names = [str(row["name"]) for row in found["rows"]]
             checks.ok(
                 "Master Yi, Wuju Master" in names,
-                "D46: the row the pipeline could not find is offered — the read dropped the "
+                "D77: the row the pipeline could not find is offered — the read dropped the "
                 "champion, so only a substring match recovers it",
             )
             checks.equal(
                 found["game"],
                 "riftbound",
-                "D46: and it is looked up as the game the CARD records, not the default",
+                "D77: and it is looked up as the game the CARD records, not the default",
             )
 
         typed = answers(
@@ -13978,7 +13977,7 @@ def check_review_catalog(checks: Checks) -> None:
         if typed is not None:
             checks.ok(
                 any(str(row["number"]) == "191/219" for row in typed["rows"]),
-                "D46: a number finds its row",
+                "D77: a number finds its row",
             )
 
         empty = answers(
@@ -13990,7 +13989,7 @@ def check_review_catalog(checks: Checks) -> None:
             checks.equal(
                 (len(empty["rows"]), empty["found"]),
                 (0, 0),
-                "D46: and it does NOT guess — an empty result is an empty result",
+                "D77: and it does NOT guess — an empty result is an empty result",
             )
 
         refusal(
@@ -14015,7 +14014,7 @@ def check_review_catalog(checks: Checks) -> None:
                 1, 1, {"sku": "9192027", "condition": "Near Mint Foil"}
             ),
             "no_candidates",
-            "WITHOUT the flag a zero-candidate entry still refuses — D46 narrows this guard "
+            "WITHOUT the flag a zero-candidate entry still refuses — D77 narrows this guard "
             "and does not remove it",
         )
         refusal(
@@ -14050,7 +14049,7 @@ def check_review_catalog(checks: Checks) -> None:
             checks.equal(
                 answered["condition"],
                 "Near Mint Foil",
-                "D46: and the CONDITION comes off the export row, never off the request",
+                "D77: and the CONDITION comes off the export row, never off the request",
             )
 
         stored = Store().read()
@@ -14084,7 +14083,7 @@ def check_review_catalog(checks: Checks) -> None:
             checks,
             before_catalog_answer,
             Store().read().inventory.identity_snapshot("1/1"),
-            "the D46 from_catalog answer's own undo",
+            "the D77 from_catalog answer's own undo",
         )
         line = [
             event
@@ -14093,7 +14092,7 @@ def check_review_catalog(checks: Checks) -> None:
         ]
         checks.ok(
             bool(line) and line[-1].get("from_catalog") is True,
-            "D46: the history line records that a HUMAN found this row rather than the "
+            "D77: the history line records that a HUMAN found this row rather than the "
             "pipeline — after the write there is no other evidence which happened",
         )
 
@@ -14101,7 +14100,7 @@ def check_review_catalog(checks: Checks) -> None:
         #
         # THIS BLOCK REPLACES AN ASSERTION THAT SAID THE OPPOSITE, and the reversal is the
         # whole of D77. It read: "an entry WITH candidates is unaffected by the flag: it
-        # still answers only from the rows it was offered, which is the laundering guard D46
+        # still answers only from the rows it was offered, which is the laundering guard D77
         # must not reach." That sentence conflated two guards. The laundering guard is that
         # no string a client sends becomes a listing on its own, and it is asserted twice
         # above and once again below — the SKU is re-read out of the card's own export and
@@ -14256,7 +14255,7 @@ def check_correct_answer(checks: Checks) -> None:
             checks,
             lambda: capture_server.do_correct_answer(4, 1, {"sku": "0000000"}),
             "sku_not_in_catalog",
-            "an unknown sku refuses — D46's own guard, reused verbatim: the row is re-read "
+            "an unknown sku refuses — D77's own guard, reused verbatim: the row is re-read "
             "server-side and never taken on the client's word",
         )
         refusal(
@@ -15034,7 +15033,7 @@ def check_identity_binding(checks: Checks) -> None:
             Store().read().skus.entries.get(new_sku) is not None,
             "and the new row is upserted into the `skus` table before the bind — "
             "`do_correct_answer` is the one writer left that still fills the table, "
-            "because it re-reads a real row off the export (D46) and folds it whole "
+            "because it re-reads a real row off the export (D77) and folds it whole "
             "through `_fold_export_row`, never a partial one",
         )
         last = last_event("62/1")
@@ -17281,7 +17280,7 @@ def check_rescue_stranded_run(checks: Checks) -> None:
         says(caught, "naming what it refuses", "more than one record")
 
     with isolated_home() as home:
-        # THE CARDS ARE SPREAD ACROSS TWO DRAWERS. D48 keeps a run to one box.
+        # THE CARDS ARE SPREAD ACROSS TWO DRAWERS. D180 keeps a run to one box.
         digests = {1: photo(home, 3, 2, b"split-a"), 2: photo(home, 4, 20, b"split-b")}
         run = runs.create("box1")
         run.set(created_at="2026-08-29T22:37:47+00:00")
@@ -17295,7 +17294,7 @@ def check_rescue_stranded_run(checks: Checks) -> None:
             runs.RunError,
             lambda: cmd_rescue.run(Args(run.directory, write=True), hush),
             "cards spread across two drawers refuse — a rescue that wrote one run over "
-            "several would be a cart nobody has argued for (D48)",
+            "several would be a cart nobody has argued for (D180)",
         )
         says(caught, "and names both drawers", "3, 4")
         checks.equal(run_count(), before, "and nothing is written")
@@ -17453,7 +17452,7 @@ def check_rescue_discharges_stranded_count(checks: Checks) -> None:
 
 
 def check_rescue_route(checks: Checks) -> None:
-    """`POST /pipeline/runs/<name>/rescue` — the CLI reached from a screen, D165.
+    """`POST /pipeline/runs/<name>/rescue` — the CLI reached from a screen, D145.
 
     `check_rescue_stranded_run` above asserts `cmd_rescue.run` itself; this is the route that
     makes it reachable from `#/runs` at all, and it is not the same shape as every other free
@@ -18122,7 +18121,7 @@ def check_run_binds_to_bid(checks: Checks) -> None:
             cmd_identify._scope_for([FakeItem(3), FakeItem(4)], inventory),
             None,
             "A RUN WHOSE CAPTURES NAME TWO BOXES GETS NO SCOPE RATHER THAN A GUESSED ONE. "
-            "That was D48's rule and it is the part of that entry the selection keeps: a scope "
+            "That was D180's rule and it is the part of that entry the selection keeps: a scope "
             "naming one of two drawers would be a claim about cards it is wrong about, and "
             "`2026-08-29-box1-01` — 99 cards the path calls box 1, all in box 3 — is the cost",
         )
@@ -19168,7 +19167,7 @@ def check_threshold_and_file_shape(checks: Checks) -> None:
         # asserted `$0.40` until that amendment, which is the same defect one register along
         # from the one it was written for: a stored `"floor"` answer resolved at the module
         # constant while the store's own cut-off said something else, so a store set BELOW
-        # $0.40 listed its cheapest cards ABOVE the price its mid cards went out at. D98
+        # $0.40 listed its cheapest cards ABOVE the price its mid cards went out at. D9
         # retired `"floor"` as an answer anybody may choose on the ground that a sub-threshold
         # price must not track *"a figure that moves for a different reason"* — and the floor no
         # longer moves for a different reason, because it is the cut-off. `"floor"` and the
@@ -19255,7 +19254,7 @@ def check_threshold_and_file_shape(checks: Checks) -> None:
             (code, "is unusable" in text and "'free'" in text),
             (1, True),
             "an unusable threshold refuses by name. `InvalidThreshold` is a ValueError and "
-            "NOT a `MalformedDecisions` — the same shape D49 already paid for twice with "
+            "NOT a `MalformedDecisions` — the same shape D86 already paid for twice with "
             "`UnknownRule` and `UnknownBasis`, and nothing above `cli/__main__.py` catches "
             "one, so the catch has to name it",
         )
@@ -22742,7 +22741,7 @@ def check_send_review_r4(checks: Checks) -> None:
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         first = send_routes.do_send(one_articuno(run_dir, confirm=True))["send"]["stamp"]
-        # THE EXPORT HAS NOT SHOWN THE FIRST SEND YET (D106's lag), so the second press reads
+        # THE EXPORT HAS NOT SHOWN THE FIRST SEND YET (D273's lag), so the second press reads
         # the same baseline of none.
         second = send_routes.do_send(
             {"runs": [run_dir.name], "quantities": {ARTICUNO_SKU: 1, DUNSPARCE_SKU: 1},
@@ -23552,7 +23551,7 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
 
     checks.equal(
         db.SCHEMA_VERSION, 14,
-        "the current schema is 14: skus at 11, send_claims at 12, the order key at 13 (D265), the price summary at 14 (D219)",
+        "the current schema is 14: skus at 11, send_claims at 12, the order key at 13 (D294), the price summary at 14 (D219)",
     )
 
     # --- a store at 10 has neither table -------------------------------------------------
@@ -24146,7 +24145,7 @@ def check_live_markdown_guards(checks: Checks) -> None:
 
 
 def check_publish_lag(checks: Checks) -> None:
-    """`reconcile --live` will not settle a SKU this pipeline just published (D106).
+    """`reconcile --live` will not settle a SKU this pipeline just published (D273).
 
     THE DEFECT IS A TIMESTAMP THAT TELLS THE TRUTH ABOUT THE WRONG THING. `Export From Live`
     is not read-your-writes — measured 2026-09-06, forty seconds after a confirmed publish it
@@ -24947,7 +24946,7 @@ def check_pricing_route(checks: Checks) -> None:
                 (status, error_code(body)),
                 (409, "pricing_not_written"),
                 "a run that has not been joined refuses IN ITS OWN CODE and names the "
-                "command that writes the file — every run made before D49 is in this state, "
+                "command that writes the file — every run made before D86 is in this state, "
                 "so the screen has to be able to say `re-join this run` rather than break",
             )
 
@@ -25300,7 +25299,7 @@ def check_pricing_clear(checks: Checks) -> None:
     one file in this product that holds money is only safe if the set it may reach is exactly
     the set of TYPED PRICES, and each of the three things it must not reach fails differently:
 
-    - A HOLD IS A JUDGEMENT (D49) and removing one puts the card back into the next `emit`.
+    - A HOLD IS A JUDGEMENT (D86) and removing one puts the card back into the next `emit`.
       The owner's store carries 23, every one `bullish`.
     - A `channel != "price"` ANSWER IS THE ABSENCE OF ONE. `pipeline/decisions.py:blocking`
       reads that table to refuse an emit, so clearing one makes an unpriced card read as
@@ -25422,7 +25421,7 @@ def check_pricing_clear(checks: Checks) -> None:
         checks.equal(sorted(left.answers), ["1002", "1003", "1004", "1005"], "the file agrees")
         checks.ok(
             left.answers["1004"].is_hold,
-            "THE HOLD IS STILL STANDING after a store-wide clear — D49's judgement with a "
+            "THE HOLD IS STILL STANDING after a store-wide clear — D86's judgement with a "
             "reason on it, which no window and no scope in this route can reach",
         )
         checks.equal(
@@ -25703,7 +25702,7 @@ def check_box_views_bounded(checks: Checks) -> None:
 
 
 def check_withholding(checks: Checks) -> None:
-    """A withheld SKU writes no row, moves no count, and is still FINDABLE (D49).
+    """A withheld SKU writes no row, moves no count, and is still FINDABLE (D86).
 
     THE OWNER ASKED THE QUESTION THIS SECTION ANSWERS. Shown that a held card would keep
     `state: captured` and carry no `sku`, they said: "Wait i want to be able to find it, why
@@ -25725,9 +25724,7 @@ def check_withholding(checks: Checks) -> None:
 
     with isolated_home():
         run_dir, _ = seam_run(checks, cards)
-        # THE HOLD IS THE CORPUS'S AND OUTLIVES THE RUN (D86, amended). D49 named the absence
-        # of a durable home for a hold as work it had not done; this is that home, and the
-        # shapes it stores are D49's own, unchanged.
+        # THE HOLD IS THE CORPUS'S AND OUTLIVES THE RUN (D86).
         book = corpus.Corpus.read()
         book.sub_threshold = "floor"
         book.answers[ARTICUNO_SKU] = corpus.Answer(
@@ -28114,7 +28111,7 @@ def check_pipeline_routes(checks: Checks) -> None:
             )
             checks.ok(
                 "scopes" not in single and "boxes" not in single["total"],
-                "and the answer is ONE quote. D48's rule was that the shape must not change "
+                "and the answer is ONE quote. D180's rule was that the shape must not change "
                 "with the request, which is why a cart's answer was always a list; with one "
                 "selection per press there is one thing being quoted and a one-element list "
                 "would be the cart's ghost",
@@ -28143,14 +28140,14 @@ def check_pipeline_routes(checks: Checks) -> None:
 
             # ----------------------------------- TWO DRAWERS ARE ONE SELECTION AND ONE RUN
             #
-            # THE CART WAS USED, ONCE, AND THAT IS WHY `box` IS LIST-VALUED. D48 named its own
+            # THE CART WAS USED, ONCE, AND THAT IS WHY `box` IS LIST-VALUED. D180 named its own
             # reopening condition — *"a cart that is never used with more than one box"* — and
             # the measurement does NOT meet it: on 2026-09-01T21:50:52 the operator sent boxes
             # 3, 4 and 5 in one press, three run directories created in the same second, all
             # `started_by: app`. A selection that could name one drawer would have taken a
             # capability away.
             #
-            # WHAT WAS NEVER USED IS THE PER-LEG READING, which is the argument D48 actually
+            # WHAT WAS NEVER USED IS THE PER-LEG READING, which is the argument D180 actually
             # rested on: all three legs of that press carried `max_edge` 1200, 12 of 15 runs on
             # this store share that figure, and the three that differ are three separate presses
             # on three different days. So the cart survives as a list-valued FILTER and the
@@ -28168,7 +28165,7 @@ def check_pipeline_routes(checks: Checks) -> None:
             checks.equal(
                 both["scope"],
                 None,
-                "and it records NO drawer, because its cards are in two. That was D48's rule "
+                "and it records NO drawer, because its cards are in two. That was D180's rule "
                 "and it is the part of that entry this change keeps: a scope block naming one "
                 "of two drawers would be a claim about cards it is wrong about",
             )
@@ -29270,7 +29267,7 @@ def check_drain(checks: Checks) -> None:
 
 
 def check_export_fetch(checks: Checks) -> None:
-    """D64: the Filtered Export fetched instead of downloaded, and every refusal in the way.
+    """D65: the Filtered Export fetched instead of downloaded, and every refusal in the way.
 
     ITS OWN `isolated_home`, this file's own repeated lesson — and its own ENVIRONMENT too,
     which is new. This is the first section that reads `.env`, and one that left
@@ -29290,7 +29287,7 @@ def check_export_fetch(checks: Checks) -> None:
     keeps nothing, that the cookie reaches the socket and reaches no file, and that a fetched
     file is the one `join` then actually joins against. NOT provable: whether TCGplayer's WAF
     accepts this client when the request carries a real session. That is one live fetch by the
-    owner, and D64 names it as owed rather than implying it has happened.
+    owner, and D65 names it as owed rather than implying it has happened.
     """
     keys = (
         "PKMNSCAN_TCG_EXPORT_URL",
@@ -29764,9 +29761,9 @@ def check_export_fetch(checks: Checks) -> None:
 
                 # ------------------------------------------- A NARROWER FILE IS REPORTED
                 #
-                # D64's delta guard refused this file: Dunsparce has a Near Mint row and a
+                # D65's delta guard refused this file: Dunsparce has a Near Mint row and a
                 # Near Mint Reverse Holofoil row, and a file carrying only the first turns it
-                # into a number the CATALOG decides (D3 rung 2). Retired 2026-09-02 (D64,
+                # into a number the CATALOG decides (D3 rung 2). Retired 2026-09-02 (D65,
                 # amended): D65 names the scope, so the positive check is the whole guard,
                 # and the delta refused every run's FIRST fetch by construction. What the
                 # receipt keeps is the comparison — the last joined export's rows beside this
@@ -29819,13 +29816,13 @@ def check_export_fetch(checks: Checks) -> None:
                     "a run with no previous export reports NONE rather than refusing — a run "
                     "directory is new per run, so `export_unverified` fired on every run's "
                     "first fetch and cost each one an acknowledgement and a second download "
-                    "of the same file (D64, amended 2026-09-02)",
+                    "of the same file (D65, amended 2026-09-02)",
                 )
 
                 # ------------------------------ THE GATE IS WHAT PROTECTS THE CREDENTIAL
                 #
                 # `capture_server.py`'s CSRF paragraph used to justify itself with "there
-                # are no credentials in this product", and D64 falsified that half: this
+                # are no credentials in this product", and D65 falsified that half: this
                 # route spends the owner's TCGplayer session. The comment is corrected
                 # there; this is the assertion it now leans on. A page in another tab must
                 # not be able to make this server spend that session, and the refusal has
@@ -30049,7 +30046,7 @@ def check_export_fetch(checks: Checks) -> None:
                     "must arrive with all of them or D3 rung 2 decides it from whichever "
                     "survived; and listings-with-photos EXCLUDED, which is the owner's "
                     "standing instruction and the one of the three that nothing downstream "
-                    "could ever catch — D64 measured `Photo URL` empty in every export, "
+                    "could ever catch — D65 measured `Photo URL` empty in every export, "
                     "filtered and unfiltered, so a wrong value here is invisible in the file "
                     "it narrows (D76)",
                 )
@@ -30850,7 +30847,7 @@ def check_export_fetch(checks: Checks) -> None:
                 # THE REFUSAL'S OWN REMEDY, EXERCISED. `tcg_session_expired` tells the
                 # operator to sign in again and replace the value in `.env` — and
                 # `envfile.get` caches per process AND cannot replace a name it already
-                # lifted out of the file, so under D53's supervisor (days of uptime, and it
+                # lifted out of the file, so under D138's supervisor (days of uptime, and it
                 # does not watch `.env`) that remedy would not have worked. The refusal
                 # would have repeated forever over a cookie already fixed.
                 #
@@ -30935,16 +30932,16 @@ def check_key_rotation(checks: Checks) -> None:
     THE DEFECT, ON THE OWNER'S OWN RIG: the key expired, they pasted a new one into `.env`, and
     `./pkmnscan identify` and the `#/runs` press both kept failing with the dead one. `make
     down` / `make up` picked it up, and nothing short of that did — which is the restart
-    discipline D53 exists to make unnecessary.
+    discipline D138 exists to make unnecessary.
 
     TWO CAUSES, ONE PER HALF OF THIS BLOCK, AND THE FIRST HALF ALONE DOES NOT FIX IT.
 
       - `_client` constructed `anthropic.Anthropic()` with NO KEY and let the SDK read
         `os.environ` itself, so the value the process was STARTED with was the only value it
-        could ever send. `envfile.get_live` is the fix D64 already built, for the cookie.
+        could ever send. `envfile.get_live` is the fix D65 already built, for the cookie.
       - and `get_live` could not see the rotation either, one process down. `_from_file` — the
         half of the precedence rule that says "this came out of a file" — is a process global,
-        and every child here is spawned with `dict(os.environ)`. D53's supervisor reads ONE
+        and every child here is spawned with `dict(os.environ)`. D138's supervisor reads ONE
         `.env` line (`PKMNSCAN_LAN_NAME`) and `load` lifts them all, so the capture server
         inherits the key as a REAL environment variable and `get_live`, correctly by its own
         rule, declines to read the file again. `envfile.FROM_FILE_ENV` carries the set across
@@ -31565,9 +31562,9 @@ def check_order_resolver(checks: Checks) -> None:
         checks.equal(
             resolve.paperwork_for(run_without), [],
             "and a run that was identified and never joined has no pricing table, which is "
-            "an ordinary state and not a complaint (D49) — the card-first pass needs none",
+            "an ordinary state and not a complaint (D86) — the card-first pass needs none",
         )
-# ------------------------------------------------------------------ price history (D8, D49)
+# ------------------------------------------------------------------ price history (D8, D86)
 
 
 # Named as relative paths rather than assembled from segments, which is T2's shape and is
@@ -31624,7 +31621,7 @@ def _seed_market_cache(directory, product_id: int, month: dict, annual: dict) ->
 
 
 def check_history_route(checks: Checks) -> None:
-    """`GET /pipeline/runs/<name>/history` — D62's route, and the reading it serves.
+    """`GET /pipeline/runs/<name>/history` — D278's route, and the reading it serves.
 
     OFFLINE, AND NOT MERELY BY HABIT. `check_price_history` above states why the harness may
     not reach a third party: it runs behind the Stop hook at the end of every turn, so a case
@@ -31646,7 +31643,7 @@ def check_history_route(checks: Checks) -> None:
     reads — the sort could be correct in `pipeline/` and undone by a serializer.
     """
     checks.note("")
-    checks.note("PRICE HISTORY ROUTE — D62's seam, offline against committed fixtures")
+    checks.note("PRICE HISTORY ROUTE — D278's seam, offline against committed fixtures")
 
     month = json.loads(PRICE_HISTORY.read_text("utf-8"))
     # THE SAME CAPTURE SERVES BOTH RANGES, and it is the honest thing to do rather than
@@ -31777,7 +31774,7 @@ def check_history_route(checks: Checks) -> None:
             pipeline_routes.do_pipeline_history(name, "9189317")
             checks.ok(True, "and a second read is served from the same warm cache")
 
-            # ------------------------------------------- the batched read (D79)
+            # ------------------------------------------- the batched read (D277)
             #
             # THE SAME WARM CACHE AND THE SAME SOCKET BAN. `readings_for_rows` walks the
             # identical `Market`, so a batch that opened a connection would trip `no_sockets`
@@ -31803,7 +31800,7 @@ def check_history_route(checks: Checks) -> None:
                 [p["market"] for p in answer["ranges"][0]["points"] if p["market"] is not None],
                 "and the strip's points are the panel's own bucket prices, in the same order",
             )
-            # NO MONEY ON THIS PAYLOAD, WHICH IS D79's RULE AS A TEST RATHER THAN A PARAGRAPH.
+            # NO MONEY ON THIS PAYLOAD, WHICH IS D277's RULE AS A TEST RATHER THAN A PARAGRAPH.
             # The row draws this one column from the field a listing price is typed into, so
             # every figure it carries is dimensionless or a date. A later session adding `vwap`
             # here would be reopening D8 by widening a serializer.
@@ -31887,7 +31884,7 @@ def check_history_route(checks: Checks) -> None:
                     "skus_required",
                     "AN UNFILTERED WALK IS REFUSED HERE AND ALLOWED ON A RUN, and the "
                     "difference is size: a survey is the whole live inventory, ~441 rows, "
-                    "about 5.5 minutes at a public mirror — which would make D62's press "
+                    "about 5.5 minutes at a public mirror — which would make D278's press "
                     "meaningless rather than merely slow",
                 )
             try:
@@ -32114,7 +32111,7 @@ def check_history_blocked_route(checks: Checks) -> None:
                     refusal.code,
                     "history_blocked",
                     "A 403 FROM infinite-api REFUSES AS `history_blocked` — never folded "
-                    "into `history_unreachable`, whose whole meaning (D62) is that nothing "
+                    "into `history_unreachable`, whose whole meaning (D278) is that nothing "
                     "is wrong with the run",
                 )
                 checks.ok(
@@ -32131,7 +32128,7 @@ def check_history_blocked_route(checks: Checks) -> None:
 
             # THE OVERRIDE, SET LIVE — `get_live` is what `_history_user_agent` reads, so a
             # value that appears in `.env` after the process started still takes effect,
-            # the same guarantee D64 built `_agent()` on.
+            # the same guarantee D65 built `_agent()` on.
             os.environ["PKMNSCAN_TCG_USER_AGENT"] = "pkmnscan-t7-browser-stand-in/1"
             try:
                 pipeline_routes.do_pipeline_history(name, "9189317")
@@ -33333,7 +33330,7 @@ def check_order_screen(checks: Checks) -> None:
     """
     checks.note("")
     checks.note(
-        "ORDER SCREEN — GET /orders, POST /orders/ingest, POST /orders/pull (D63, D66, D69)"
+        "ORDER SCREEN — GET /orders, POST /orders/ingest, POST /orders/pull (D63, D69)"
     )
 
     def line(sku, quantity=1, **extra) -> dict:
@@ -34408,7 +34405,7 @@ def check_order_walk_plan_route(checks: Checks) -> None:
             capture_server.do_capture(capture_payload(7, capture_id=f"o{at}", set_hint="sv9"))
         with Store().write() as snapshot:
             for at in range(1, 13):
-                # EVERY CARD NAMED, because D116 walks PAST a card nobody has named: a box
+                # EVERY CARD NAMED, because D260 walks PAST a card nobody has named: a box
                 # straight off the feeder draws no ladder at all, and a fixture like that
                 # would make a null `neighbors` look correct.
                 snapshot.inventory.record_identification(
@@ -34517,9 +34514,9 @@ def check_order_walk_plan_route(checks: Checks) -> None:
             checks.equal(
                 [side.get("name") for side in named],
                 ["Landmark 3", "Landmark 4"],
-                "AND D30's LADDER IS REAL, WHICH IS THE WHOLE OF THIS BLOCK. `for_keys` "
+                "AND D58's LADDER IS REAL, WHICH IS THE WHOLE OF THIS BLOCK. `for_keys` "
                 "answered null here for every copy on every walk — a legal degraded state "
-                "that reads as correct all the way to the screen. D116 is what it buys: a "
+                "that reads as correct all the way to the screen. D260 is what it buys: a "
                 "card nobody has named is not a landmark, and the ladder is what makes "
                 "`Card 4` countable by hand once the section has holes",
             )
@@ -34560,7 +34557,7 @@ def check_order_places_scoped(checks: Checks) -> None:
     eager scan — but the cost that survived that fix is what "per box" means once it runs:
     `_walk` hydrates a full `Card` for every record in a touched box (`records_in`), to
     answer `slot`/`label`/`section`/`fraction`, fields two indexed integer columns already
-    answer, because the SAME walk also builds D30's neighbor/gap decoration, which
+    answer, because the SAME walk also builds D58's neighbor/gap decoration, which
     genuinely needs every card's name. An order's picks routinely span most of the store's
     boxes, so five boxes cost a fifth of a full read, five times — measured 185 ms ->
     3,465 ms at 20x the store (`docs/specs/store-scaling.md` §1).
@@ -34695,7 +34692,7 @@ def check_order_places_scoped(checks: Checks) -> None:
                         ordinary_block.pop(field, None)
                     checks.equal(
                         sparse_block, ordinary_block,
-                        f"the sparse and whole-box builds agree on everything but D30's "
+                        f"the sparse and whole-box builds agree on everything but D58's "
                         f"decoration for {pick.box}/{pick.index} — slot, label, section, "
                         "card, fraction, box_total, box_name and box_closed all included",
                     )
@@ -35758,7 +35755,7 @@ def check_price_history(checks: Checks) -> None:
         checks.ok(
             not isinstance(exc, pricehistory.Unreachable),
             "...and `Blocked` is a SIBLING of `Unreachable`, never a subclass — "
-            "`history_unreachable`'s whole meaning (D62) is that nothing is wrong with the "
+            "`history_unreachable`'s whole meaning (D278) is that nothing is wrong with the "
             "run, and a 403 says the opposite: the client presenting itself is declined",
         )
     except pricehistory.Unreachable:
@@ -35840,7 +35837,7 @@ def check_shipping_lane(checks: Checks) -> None:
       expensive direction: the catalog constant counts the cardboard and not the mailer, so
       it buys postage for less than the parcel weighs and the bill arrives at the far end.
 
-      INSURANCE IS REFUSED. D49's rule in another lane. A row carrying an insurance column
+      INSURANCE IS REFUSED. D86's rule in another lane. A row carrying an insurance column
       raises rather than being dropped, because dropping it silently is an operator who
       believes they asked for insurance and did not.
 
@@ -36066,7 +36063,7 @@ def check_shipping_lane(checks: Checks) -> None:
             "and `Package Weight` is STILL BLANK. The catalog constant counts the cardboard "
             "and not the mailer, so writing it buys postage for less than the parcel "
             "weighs — under-paid at the far end, weeks later. Nothing is defaulted on the "
-            "owner's behalf (D49)",
+            "owner's behalf (D86)",
         )
 
         # ------------------------------------------------------------ what is refused
@@ -39032,7 +39029,7 @@ def check_value_page(checks: Checks) -> None:
             len(gaps_seen), whole["unrankable"]["total"], "and its count equals `unrankable.total`"
         )
 
-        # --- the D159 arm: aggregates never shrink to what one page could see ---------------
+        # --- the D277 arm: aggregates never shrink to what one page could see ---------------
         for band in ("top", "bottom", "gaps"):
             first_page = pipeline_routes.do_pipeline_value_page(
                 band=band, box=None, after=None, limit=1
@@ -39112,7 +39109,7 @@ def check_emit_unpriced_left_out(checks: Checks) -> None:
 
     `emit` used to refuse the WHOLE file while any card with no market price had no answer
     (`Decisions.blocking`, `join.prices_for`). A missing price is still unknown and never low
-    (D9, D49), so that card still cannot go: it is LEFT OUT, named, and stays owed. The two
+    (D9, D86), so that card still cannot go: it is LEFT OUT, named, and stays owed. The two
     priced cards go. Both paths the send can take are asserted: one run, and several runs.
     """
     checks.note("")

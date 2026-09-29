@@ -122,8 +122,8 @@ RESTART_BACKOFF = (1, 2, 4, 8, 15, 30)
 # watched Python file would ever have given them back. Five such deaths, however far apart,
 # and the capture server stops coming back while the log claims it "failed to stay up".
 #
-# That is D85's shape one file over — a variable nothing sets is not a fallback, and a
-# constant nothing reads is not a policy.
+# A variable nothing sets is not a fallback, and a constant nothing reads is not a
+# policy.
 FAST_FAILURE_LIMIT = 5
 FAST_FAILURE_SECONDS = 5.0
 
@@ -210,7 +210,7 @@ BUILD_PREFIX = "[build]"
 # The Makefile is deliberately NOT here. Three comments in this file mention it and nothing
 # reads it — `make` re-reads it from disk on every invocation, so it cannot make a running
 # process stale. That was claimed once in conversation and is wrong.
-# THE FILES THIS SUPERVISOR IS MADE OF. A change to any one re-execs it (D53), so nothing
+# THE FILES THIS SUPERVISOR IS MADE OF. A change to any one re-execs it (D138), so nothing
 # here goes stale on a `git pull`.
 #
 # `scripts/primary_sync.py` JOINED THEM WITH THE SELF-SYNC and had to: it is called at all four
@@ -686,7 +686,7 @@ def _run_build_step(argv: list[str], root: Path, label: str) -> tuple[int, str]:
             text=True, timeout=BUILD_TIMEOUT_SECONDS,
         )
     except FileNotFoundError:
-        # THE ONE FAILURE THAT IS NOT THE CODE'S FAULT, and D53's plist section already names
+        # THE ONE FAILURE THAT IS NOT THE CODE'S FAULT, and D138's plist section already names
         # it: launchd hands an agent a minimal PATH and `npm` is routinely not on it.
         log(f"{BUILD_PREFIX} {argv[0]}: not found — is node on PATH?")
         log(f"{BUILD_PREFIX}   under launchd it often is not; see `make launch-agent`.")
@@ -987,7 +987,7 @@ def report(root: Path = REPO_ROOT) -> dict:
         "dev_answering": port_answering(dev_port),
         "worktree": ports.is_linked_worktree(root),
         # The branch this PRIMARY checkout stands on when serving is refused, else None
-        # (D158). `scripts/status.py:serving_branch()` already names the branch from D139;
+        # (D158). `scripts/status.py:serving_branch()` already names the branch;
         # this is the second half of that line — whether the refusal is in force — and it is
         # read from the same function the supervisor decides on rather than re-derived.
         "off_main": off_main(root),
@@ -1011,7 +1011,7 @@ def urls(root: Path = REPO_ROOT) -> tuple[str, str]:
 def print_where(root: Path = REPO_ROOT) -> None:
     """ONE LINK, because there is one server (D138). The app and the API are the same origin
     now, which is also what makes the bundle's own composition trivially right: it bakes the
-    capture port and resolves the host from the address bar (D53)."""
+    capture port and resolves the host from the address bar (D138)."""
     _, capture_url = urls(root)
     print("pkmnscan is up.")
     print(f"  banchi    {capture_url}     <- bookmark this")
@@ -1027,7 +1027,7 @@ def print_where(root: Path = REPO_ROOT) -> None:
         # The same sentence `serve()` prints, for the same reason: a worktree's server over a
         # worktree's empty store looks exactly like the real one until a capture lands
         # somewhere that gets deleted with the branch. Gated on "not the primary checkout",
-        # so a copy with no `.git` says so too (D268).
+        # so a copy with no `.git` says so too (D261).
         print(f"  WORKTREE  {root.name} — this is NOT the main checkout's store")
         print(f"            main tree serves :{ports.CAPTURE_BASE_PORT}")
 
@@ -1041,17 +1041,17 @@ SERVE_MAIN_ENV = "PKMNSCAN_SERVE_MAIN"
 def off_main(root: Path = REPO_ROOT) -> Optional[str]:
     """The branch this PRIMARY checkout stands on, when that is not `main`. `None` otherwise.
 
-    THE HARM IS NOT THE BRANCH, IT IS THE SERVER. D53 keeps one supervisor alive at login out
+    THE HARM IS NOT THE BRANCH, IT IS THE SERVER. D138 keeps one supervisor alive at login out
     of the primary checkout over the owner's real `inventory/store.sqlite`, and since D138 that
     process serves the built app as well — so the branch this ONE directory stands on decides
-    which code photographs real cards into a real store. D139 put three readers on that fact
+    which code photographs real cards into a real store. D158 put three readers on that fact
     and made every one of them a WARNING, on the ground that git has no `pre-checkout` hook.
     That ceiling was right about git and wrong about where the guard goes: the checkout is not
     the thing to refuse, the SERVING is, and this is the function that refuses it.
 
     A LINKED WORKTREE IS NOT THE SUBJECT and must never be caught by this — it has its own
     store and its own ports to be wrong on its own, which is what D43 bought. The test is
-    `server/ports.py:is_linked_worktree`, CALLED rather than respelled: D139 is emphatic that
+    `server/ports.py:is_linked_worktree`, CALLED rather than respelled: D158 is emphatic that
     the primary/linked question has exactly one answer in this repo, and a fourth spelling of
     it here would be a fourth place for it to be written backwards.
 
@@ -1095,7 +1095,7 @@ def off_main(root: Path = REPO_ROOT) -> Optional[str]:
             return None
         return ref[len("refs/heads/"):] if ref.startswith("refs/heads/") else ref
     # A raw object id is a detached HEAD, which is off main as surely as a branch is and is
-    # named as what it is rather than reported as a branch called `HEAD` (D139's own arm).
+    # named as what it is rather than reported as a branch called `HEAD` (D158's own arm).
     if len(head) >= 7 and all(c in "0123456789abcdef" for c in head.lower()):
         return f"a detached HEAD at {head[:9]}"
     return None
@@ -1116,7 +1116,7 @@ def stand_down_lines(branch: str, running: bool) -> list[str]:
     """The refusal, in one place, because `do_up` prints it and the supervisor logs it."""
     out = [
         f"NOT SERVING: this is the PRIMARY checkout and it is on {branch}, not main.",
-        "  D53 keeps THIS directory's server alive over the owner's REAL store, and since",
+        "  D138 keeps THIS directory's server alive over the owner's REAL store, and since",
         "  D138 it serves the built app too — so serving this branch would photograph real",
         "  cards through code that is not main's.",
     ]
@@ -1405,7 +1405,7 @@ class Supervisor:
     def _await_capture(self) -> None:
         """Wait for the child THIS supervisor just spawned, and record when it came up.
 
-        `wait_for_port` takes the child rather than only the port, which is D53's own
+        `wait_for_port` takes the child rather than only the port, which is D138's own
         correction: a port another process holds answers exactly like one of ours does, so
         asking the socket alone reports a squatter as success.
         """

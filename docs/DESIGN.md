@@ -597,7 +597,7 @@ verbatim on `aria-label`.
   28, the copies list at 22, an order's pick row at 22, and `#/review`'s caption at 15. The
   warning this list used to carry is still the reason it is per-site: 44px down a seven-copy
   list cost +86px and dropped a copy below the fold.
-- **A label with no figure is still ranked, and it is the FIGURE that goes (D71).** A
+- **A label with no figure is still ranked, and it is the FIGURE that goes (D41).** A
   departed card's label ends on a state where a slot number would be (`Box 3 · departed`).
   The state and the store key ride the path as one more key/value pair, the number column is
   drawn empty, and the reserve holds the whole slot column so a figure-less row's path starts
@@ -937,7 +937,7 @@ control that hands the ticked selection over. **It must never become two rows**,
 the whole sequence above documents.
 
 **AND ON 2026-08-29 IT MOVED AGAIN, TO THE HEADER ROW, WHICH IS THIS FILE'S OWN RULE APPLIED TO
-IT (D40).** The page-chrome section above says the title "shares a line with the screen's controls
+IT (D38).** The page-chrome section above says the title "shares a line with the screen's controls
 and counts" and that "the first row of real content sits within 150px of the top of the viewport".
 A box's run state and a link to `#/runs` are a count and a control, and in the content column that
 line was missing this file's floor by 1014-1422px — its y was set by the copy count and by whether
@@ -1071,7 +1071,7 @@ this screen. The mid-box delete is deliberately not there: it renumbers every ca
 one being deleted, which would re-point the worklist the panel is drawn from, and it is the one
 operation here with no undo. D37 carries the whole argument.
 
-**THE ZERO-CANDIDATE CARD IS NO LONGER A DEAD END (D46, 2026-08-29), AND THE COPY THAT SAID IT
+**THE ZERO-CANDIDATE CARD IS NO LONGER A DEAD END (D77, 2026-08-29), AND THE COPY THAT SAID IT
 WAS IS GONE.** That arm of the screen drew one paragraph: the only move was to skip, and the way
 out was a command in a terminal. Both halves had gone stale — D37 had put a stand-down on this
 very screen and the copy never mentioned it, and the row the pipeline missed was usually sitting
@@ -1284,7 +1284,7 @@ Mechanized past the reason-string exception: `scripts/docs-audit.py`'s `no mecha
 screen` row (D196) refuses a decision citation, a repository path, or a
 pipeline-internal noun in any other user-visible string in `app/src`.
 
-Less text is always better than more. D194's pinned-ceiling ratchet is retired, on the owner's
+Less text is always better than more. D284's pinned-ceiling ratchet is retired, on the owner's
 ruling (`D284`, 2026-09-23): no more stagnant static pin. Three checks replace
 it, run by `make design-check`: `app/tests/text-shape.spec.ts` (a repetition and a sentence-
 shape check), `app/tests/machine-words.spec.ts` (D196's own gap, over rendered text) and

@@ -1,11 +1,11 @@
 ---
 name: text-density
-description: Run the on-demand text-density pass over Banchi's own screens and read its cut table. Use when a session is asked to review copy, cut words from a screen, or repeat the 2026-09-23 density review's method, now that D194's pinned ceiling is retired.
+description: Run the on-demand text-density pass over Banchi's own screens and read its cut table. Use when a session is asked to review copy, cut words from a screen, or repeat the density review's method. D284 holds three checks and no pinned ceiling.
 ---
 
 # Text density pass
 
-`D284` replaced D194's pinned word ceiling with three things. None of them is
+`D284` replaces a pinned word ceiling with three things. None of them is
 a count. Two are gates: `app/tests/text-shape.spec.ts` (repetition and sentence shape) and
 `app/tests/machine-words.spec.ts` (D196's own rendered-text gap). The third is this pass. A
 session runs it on demand. It is never a gate. `D284` carries the argument.
@@ -59,7 +59,7 @@ things, in the 2026-09-23 review's own order:
 ## What this pass does not do
 
 It never asserts and never fails a build. It has no opinion on whether a word count is too
-high. That judgement is why D194's ratchet was retired. It reads only each route's landing
+high. That judgement is why D284 pins no ceiling. It reads only each route's landing
 state: no sheet, modal, toast, drawer or palette is opened.
 
 ## If a screen looks wordy and the gates are silent

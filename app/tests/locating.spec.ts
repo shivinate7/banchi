@@ -1,5 +1,5 @@
 // Protects: Where a card sits reads the same on every screen: box by name, card number within its section, the exact card on the ruler.
-// Governs: D116, D259, D260
+// Governs: D260, D259
 import { test, expect, type Page, type Route } from '@playwright/test'
 
 import { settleFonts } from './fontsReady'
@@ -388,7 +388,7 @@ for (const size of SIZES) {
 test('an unread neighbour is said in words on the ladder, never as a figure (LOC-28)', async ({ page }) => {
   await frame(page, SIZES[0], 'light')
   /* The card toward the front of index 7 has not been read, and neither has the one after it:
-     the neighbour is "2 unread cards", the owner's words (amends D116). */
+     the neighbour is "2 unread cards", the owner's words (amends D260). */
   await stubBox(page, 'RB Origins', (cards) => {
     const seven = cards[`${BOX}/7`]
     if (seven === undefined) return

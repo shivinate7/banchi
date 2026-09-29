@@ -2,7 +2,7 @@
 """The supervisor's build job, proved against a throwaway tree (D138).
 
 Protects: The supervisor rebuilds a stale bundle, keeps the old one when a build fails, and keeps Python and screen edits on separate tracks.
-Governs: D18, D138, D268
+Governs: D18, D138, D261
 
 WHAT IS UNDER TEST IS THE SUPERVISOR, NOT VITE. The behaviours that matter here are all the
 supervisor's own: when it decides the bundle is behind, what it does while a build is running,
@@ -20,7 +20,7 @@ THE PORT IS PINNED WITH `PKMNSCAN_PORT`, TO A FREE SOCKET THE OS HANDS OUT. The 
 script ran, the derivation asked whether the directory was a LINKED WORKTREE. A
 `shutil.copytree` of this repo is not one, so the copy called itself the main checkout and
 claimed :8000, the owner's live capture server over their real store. Measured: `up` in the copy
-refused with ":8000 is already held". Since D268 (a copied tree never gets the
+refused with ":8000 is already held". Since D261 (a copied tree never gets the
 live port), only a `.git` DIRECTORY keeps :8000, so a copy with no `.git` takes a slot from its
 path. The pin stays: a slot can collide with another worktree's, and a free socket cannot.
 
@@ -174,7 +174,7 @@ def make_primary_checkout(tree: Path) -> None:
     D158 is the entry.
 
     REPRODUCED RATHER THAN ASSERTED ABOUT. The situation this guard exists for is one
-    directory — the one D53 serves the owner's real store out of — standing on a feature
+    directory — the one D138 serves the owner's real store out of — standing on a feature
     branch, and the only way to know the supervisor refuses it is to put a real supervisor in
     a real checkout in that real state. A mocked `off_main` would prove the arms call it.
 
@@ -581,7 +581,7 @@ def main() -> int:
             wait_until(lambda: get(port, "/status")[0] == 0, seconds=60)
 
         # --------------------------------------------------- no node at all on PATH
-        # THE FAILURE D53's PLIST SECTION ALREADY NAMES, and the one that separates the two
+        # THE FAILURE D138's PLIST SECTION ALREADY NAMES, and the one that separates the two
         # halves of this process: launchd hands an agent a minimal PATH, `npx` is routinely
         # not on it, and the app half then cannot build while the API half is perfectly fine.
         # A missing `node_modules` is deliberately NOT the case tested here — with a lockfile

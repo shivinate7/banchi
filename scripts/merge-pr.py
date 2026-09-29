@@ -370,7 +370,7 @@ def primary_half(root: str, confirm: bool) -> int:
     — the ordinary state of this clone, with ~30 worktrees on feature branches — the refspec
     form moves `refs/heads/main` and stands in no tree at all. So the merge completes, main is
     current, and the PRIMARY checkout is still parked on whatever branch it was on: the exact
-    state D139 and D158 were both written about, arrived at by the command that is supposed to
+    state D158 were both written about, arrived at by the command that is supposed to
     leave everything tidy.
 
     THE COORDINATOR HAD BEEN DOING THIS BY HAND ALL NIGHT, with a driver script that dies with
@@ -495,7 +495,7 @@ def local_half(root: str, commit: str, confirm: bool) -> int:
 
 # THE NUMBER IS ALLOCATED HERE AND NOWHERE EARLIER (D140). A branch writes
 # its entry's heading as a slug because the allocation's only input — what main has taken — is not knowable
-# until this moment. Thirteen renumber events are in D72 and every one of them is a branch
+# until this moment. Thirteen renumber events are in D140 and every one of them is a branch
 # having guessed; `origin/main` took two decision numbers and two build steps DURING the
 # session that built this, which is the race happening while it was being written about.
 #
@@ -914,7 +914,7 @@ def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
     """Allocate, commit, push, and wait for the claim commit's checks. 0 when clear.
 
     THE TREE IS ESTABLISHED BEFORE ANYTHING READS IT, and that ordering is the whole of
-    D143. Both readers below — the staleness check and the pending check — ask
+    D148. Both readers below — the staleness check and the pending check — ask
     their question of the CHECKED-OUT TREE. Neither can tell whether that tree is the pull
     request's, so a run pointed at the wrong one answers truthfully about the tree in front of
     it and uselessly about the merge it is performing.

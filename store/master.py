@@ -649,7 +649,7 @@ class Card:
     # value invented for the column.
     set_name: Optional[str] = None
     # THE CATALOGUE'S OWN RARITY, kept beside `rarity_claim` above and never merged into it.
-    # `rarity_claim` is the operator's claim at the shutter (D23, D146) and can disagree with
+    # `rarity_claim` is the operator's claim at the shutter (D23) and can disagree with
     # what TCGplayer calls the product — a disagreement is itself information and both are
     # kept on the record for that reason. Same source and same write moment as `set_name`.
     rarity: Optional[str] = None
@@ -746,7 +746,7 @@ class Card:
     # survives a re-record, and this must not be settable by one. It is issued once, at the
     # birth of the record, by `record_capture`.
     cid: Optional[str] = None
-    # THE CARD'S ORDER KEY IN ITS BOX (D265, the owner's ruling "A key on each card"). Where
+    # THE CARD'S ORDER KEY IN ITS BOX (D294, the owner's ruling "A key on each card"). Where
     # it stands, apart from `index`, which never moves. A number: a placement between two
     # cards takes one between their keys. None only on a record built outside the store
     # (a test, a v1 parse), which reads as its index (`order_key`).
@@ -911,7 +911,7 @@ def check_sections(sections) -> Tuple[int, ...]:
         # module never knew the size and still does not.
         return out
     # THE FIRST DIVIDER IS THE FRONT OF THE BOX. It is 1 on every box nothing was placed into
-    # before its first card; a section placed in front of card 1 starts below 1 (D265).
+    # before its first card; a section placed in front of card 1 starts below 1 (D294).
     if not 0 < out[0] <= 1:
         raise BadSections(f"The first section starts at the front of the box, not {out[0]}")
     if list(out) != sorted(out):
@@ -966,7 +966,7 @@ def as_order(value) -> float:
 
 
 def front_of_box(dividers, lowest=None) -> Tuple:
-    """THE ONE RULE FOR THE FRONT OF A BOX (D265, the R3 review). The first divider is the
+    """THE ONE RULE FOR THE FRONT OF A BOX (D294, the R3 review). The first divider is the
     front: 1 for an undeclared box, and never above the lowest key in the box, because there is
     no card before the front. `pipeline/join.py:Position`, `Inventory.layout_of` and the
     divider editor all read the front through this, so they cannot disagree about it."""
@@ -985,7 +985,7 @@ KEY_EPSILON = 1e-6
 
 @dataclass(frozen=True)
 class BoxOrder:
-    """Where each card stands in its box: its ORDER KEY, read off the cards (D265).
+    """Where each card stands in its box: its ORDER KEY, read off the cards (D294).
 
     THE OWNER'S RULING, 2026-09-25, on the form: "A key on each card". So each card carries
     `Card.order`, a number apart from its stored index, and this is the box's cards' keys
@@ -1660,7 +1660,7 @@ def _card_columns(card: "Card") -> Dict[str, object]:
         # turns the column from inert to live, so the residue count (§4.3) is one indexed
         # probe rather than a walk the day a later lane reads it.
         "identity_source": card.identity_source,
-        # THE ORDER KEY (D265), so a box's order is one indexed read. A record with none reads
+        # THE ORDER KEY (D294), so a box's order is one indexed read. A record with none reads
         # as its index, which is the key the schema 13 migration gives every such card.
         "ord": float(card.order) if card.order is not None else (
             float(int_or_none(card.index)) if int_or_none(card.index) is not None else None
@@ -1879,7 +1879,7 @@ class Inventory:
     def occupied_indices(self, box: int) -> Tuple[Tuple[int, Optional[str]], ...]:
         """`(index, game claim)` for every ON-HAND (non-terminal) record in `box`, ascending
         by index — D58's `occupied` input for a caller that needs `Position.slot`/`label`/
-        `section`/`card`/`fraction` and NOTHING ELSE: no name, no photo path, no D30 neighbor
+        `section`/`card`/`fraction` and NOTHING ELSE: no name, no photo path, no D58 neighbor
         walk. `_positions_in`'s own docstring is the precedent: two indexed columns read as
         three `select` queries, never a walk that hydrates a `Card` per row.
 
@@ -1937,11 +1937,11 @@ class Inventory:
             (_as_position_int(card.index, f"index of card {card.key}"), card.key, card)
             for card in self.cards.where(box=box)
         ]
-        # IN THE BOX'S ORDER (D265): by each card's own order key.
+        # IN THE BOX'S ORDER (D294): by each card's own order key.
         out.sort(key=lambda row: (row[2].order_key, row[0]))
         return out
 
-    # ------------------------------------------------------------ the order key (D265)
+    # ------------------------------------------------------------ the order key (D294)
 
     def box_order(self, box) -> BoxOrder:
         """Every record's order key in `box`, read off two indexed columns."""
@@ -3044,7 +3044,7 @@ class Inventory:
                 "That position already holds a card. Reload the box and try again."
             )
 
-        # AT THE BACK OF THE DESTINATION (D265): a later `place` gives it its real key.
+        # AT THE BACK OF THE DESTINATION (D294): a later `place` gives it its real key.
         # `moved_from` tells a transplant from a capture (UN-14 review round).
         transplant = replace(
             card, box=to_box, index=new_index, photo=None, order=new_order, moved_from=key
@@ -3129,7 +3129,7 @@ class Inventory:
             raise CardDeparted(f"{new_key} is no longer the newest card in its box")
         # A DIVIDER PUT IN BEHIND THE TRANSPLANT builds on the move too. Deleting the
         # transplant would leave a section that starts past the box's next index, so the
-        # next capture would land in the wrong section. KEYS AGAINST KEYS (D265): a divider
+        # next capture would land in the wrong section. KEYS AGAINST KEYS (D294): a divider
         # is an order key, so it is compared with the transplant's order key, never its
         # stored index (the divider proof's F3).
         registered = self.boxes.get(str(transplant.box))
@@ -3150,7 +3150,7 @@ class Inventory:
         if behind:
             raise CardDeparted(f"A divider was put in after {new_key}")
 
-        # THE ORDER KEY COMES BACK FROM THE TOMBSTONE TOO (D265). The transplant holds the
+        # THE ORDER KEY COMES BACK FROM THE TOMBSTONE TOO (D294). The transplant holds the
         # new box's back position, and the old box sorts by `order`, so without this the card
         # would come home at its own index but stand at the wrong place in the walk.
         restored = replace(
@@ -3710,7 +3710,7 @@ class Inventory:
                     )
                 keys, _, _ = self.section_tail_key(entry.box, after, layout_token)
                 return self.set_sections(entry.box, sorted(list(entry.layout()) + keys))
-        # IN KEY SPACE (D265): the divider goes where the next card's KEY is, the back.
+        # IN KEY SPACE (D294): the divider goes where the next card's KEY is, the back.
         at = self.next_key(entry.box)
         layout = list(entry.layout()) or [1]
         last = layout[-1]
@@ -3818,7 +3818,7 @@ class Inventory:
 
     def positions_for_sku(self, sku: str) -> List[Card]:
         """Every copy holding this SKU, in box-walk order (D7's SKU -> positions map)."""
-        # BY THE ORDER KEY (D265): a card placed or captured mid-box has a high index and a
+        # BY THE ORDER KEY (D294): a card placed or captured mid-box has a high index and a
         # middle key, so the index is not the walk.
         return sorted(self.cards.where(sku=sku), key=lambda c: (c.box, c.order_key, c.index))
 
@@ -3947,7 +3947,7 @@ class Inventory:
             # LANE 0's inert column (identity-follows-sku.md §3.1), filled by `_card_columns`
             # above as of lane 1 — matching `store/db.py:TABLES["cards"]`.
             "identity_source",
-            # D265: the order key, REAL in `store/db.py`.
+            # D294: the order key, REAL in `store/db.py`.
             "ord",
         ),
     )

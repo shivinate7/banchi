@@ -15,8 +15,8 @@ between chunks, because a chunk boundary is a line boundary and the last line of
 is immediately followed by the first line of the next.
 
 A chunk is an ENTRY when its heading matches `## D<id>`, and a SECTION otherwise. The
-three sections that are not entries — Deferred, Someday and the v1 bug table — sit
-BETWEEN D79 and D80 in the original and are not decisions at all; they get their own files
+three sections that are not entries — Deferred, Someday and the v1 bug table — sat
+between two entries in the original and are not decisions at all; they get their own files
 and the manifest records where they sat, so the reassembly is exact rather than
 approximately right.
 

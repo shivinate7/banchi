@@ -330,7 +330,7 @@ CONDITIONS = ("Near Mint", "Lightly Played")
 
 # The queue's reasons, spread across several real codes rather than repeating one. Every
 # member is a key of `app/src/reasons.ts:REASON_LABELS` — a code that map lacks renders on
-# screen as a raw enum, and D78 groups the queue BY reason, so a queue carrying one code has
+# screen as a raw enum, and D277 groups the queue BY reason, so a queue carrying one code has
 # nothing to group.
 REASONS = (
     "set_ambiguous",
@@ -745,7 +745,7 @@ def build_store(force: bool) -> dict:
         # ---------------------------------------------------------------- review queue
         # Real ambiguity, not filler. Every entry here is a card the pipeline could not
         # settle on its own, carrying the candidates it was choosing between — which is
-        # what the review screen exists to draw (D4, D46).
+        # what the review screen exists to draw (D4, D77).
         review_pool = [
             (card, row) for card, row in placed if card.state == "captured"
         ][:9]
@@ -771,7 +771,7 @@ def build_store(force: bool) -> dict:
             ]
             # REAL CODES, out of `app/src/reasons.ts:REASON_LABELS`. A code that map has no
             # entry for renders as a raw enum on screen — which is what an invented
-            # `variant_ambiguous` did — and D78 makes a reason a HEADING the queue groups
+            # `variant_ambiguous` did — and D277 makes a reason a HEADING the queue groups
             # under, so the spread across several is the thing worth demonstrating.
             reason = REASONS[offset % len(REASONS)] if len(candidates) > 1 else "no_catalog_row"
             snapshot.review.upsert(
@@ -878,7 +878,7 @@ def write_corpus(placed: List[Tuple[Card, "Row"]]) -> int:
     "0 answer(s) in the corpus" over 90 of them. Written through `Corpus.parse` so that if
     this shape is ever wrong again it raises here rather than being silently kept.
 
-    THREE DELIBERATE HOLDS (D49), because a demo where every card has a price shows only half
+    THREE DELIBERATE HOLDS (D86), because a demo where every card has a price shows only half
     the screen. Holding a card back on purpose — with a reason, a watch and a note — is what
     makes `#/pricing` a judgement tool rather than a calculator, and it is the half a viewer
     would not otherwise know exists. The reasons are the real vocabulary

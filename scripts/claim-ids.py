@@ -11,7 +11,7 @@ occurs nowhere else in the tree (measured: zero tokens of either shape existed t
 vocabulary was chosen), so the substitution is exhaustive text replacement and there is no
 judgement in it anywhere. That is the entire argument for doing it at merge time rather than
 by hand — a hand renumber is the same edit with a human deciding which occurrences count, and
-D72 records what that costs thirteen times over.
+D140 records what that costs thirteen times over.
 
 `max + 1`, NEVER THE LOWEST FREE ID. D80 culled step 12 and rules that the hole is correct;
 reusing it would resurrect every `step 12` in the tree onto a step that is not the one meant.
@@ -326,8 +326,8 @@ def unclaimed_from_pieces(pieces: List[str], letter: str) -> List[str]:
     entry (decisions, since D160).
 
     SCOPED TO THE FIRST LINE OF EACH FILE, NEVER ANY `##` LINE FURTHER DOWN. An entry can
-    hold an internal subsection that also starts with the letter — `_deferred-…md`'s entire
-    content is the heading `## Deferred — argued, not gated: …`, which starts with `D` — and
+    hold an internal subsection that also starts with the letter — a section file whose
+    only heading is `## Deferred — argued, not gated: …` starts with `D` — and
     scanning every `##` line in the corpus rather than each file's own first would report
     that as a second unclaimed decision beside itself. `Deferred` does not match here because
     the character right after `D` is `e`, neither a digit nor a hyphen.

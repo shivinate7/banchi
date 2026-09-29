@@ -3,7 +3,7 @@
 THE OWNER'S RULINGS, 2026-09-23 AND 2026-09-24 (`D273`):
 
   - Banchi sends the listing file itself. "Download the file instead" stays as a second door.
-  - ONE PRESS sends AND makes live. It amends D106 (the push and the publish are two presses).
+  - ONE PRESS sends AND makes live. It amends D273 (the push and the publish are two presses).
   - Every send first reads what is live, by itself, and never doubles a quantity. When that
     read cannot run, the send REFUSES, says why, and the screen offers "Try again".
   - After the lag, the live check runs by itself: an open app when the wait ends, a closed app
@@ -47,7 +47,7 @@ double send this module exists to prevent.
 THE RECEIPT IS A FILE BESIDE A COPY OF WHAT WENT, under `inventory/sends/<stamp>/`, written
 BEFORE the first byte reaches TCGplayer and advanced at each step (`phase`), so a server that
 dies mid-press leaves a receipt that says how far it got. `cli/cmd_reprice.py:
-published_recently` reads it, so the lag guard (D106's measurement) covers a listing publish.
+published_recently` reads it, so the lag guard (D273's measurement) covers a listing publish.
 
 EVERY FAILURE AFTER THE RECEIPT EXISTS ENDS KNOWN (`_settle`, round 3): a failed press whose
 copies were counted is UNKNOWN, holds its cards and waits for the check, and one that counted
@@ -1672,7 +1672,7 @@ def do_live_check(payload: dict) -> dict:
     is the manual "Check what is live" press, which runs even with nothing due.
 
     A SEND STILL INSIDE ITS WAIT IS NOT JUDGED BY A FORCED CHECK. Export From Live serves old
-    figures for a while after a publish (D106, measured), so reading it early would call a copy
+    figures for a while after a publish (D273, measured), so reading it early would call a copy
     missing that simply has not shown yet. `reconcile --live` holds those SKUs back itself.
 
     ONE RISE IS CREDITED ONCE, ACROSS RECEIPTS AND ACROSS CHECKS (`_credits`, the round-3

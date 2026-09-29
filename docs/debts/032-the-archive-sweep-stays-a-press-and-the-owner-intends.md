@@ -1,7 +1,7 @@
 ## 32 — The archive sweep stays a press, and the owner intends to schedule it eventually
 
 **What is recorded.** `pkmnscan archive sweep` is a press today. Nothing in this repo fires
-it on its own. D62 states this plainly, for the same reader `pipeline/pricearchive.py`
+it on its own. D278 states this plainly, for the same reader `pipeline/pricearchive.py`
 walks: "it cannot fire on its own, since no screen polls it." `cli/cmd_pricearchive.py`'s
 own module docstring says the same thing again, by name: "any timer, cron or launch agent
 that fires this on its own" is "DELIBERATELY OUT OF SCOPE, BY THE OWNER'S WORD."
@@ -15,7 +15,7 @@ press for now, but record that I intend to eventually make it scheduled."* This 
 not an argument. It is recorded here rather than acted on, so it is not mistaken for done
 and not mistaken for abandoned.
 
-**Why a schedule needs its own argument, and cannot ride in on this one.** D62's own
+**Why a schedule needs its own argument, and cannot ride in on this one.** D278's own
 statement — this reader cannot fire on its own — is one of the guarantees D33 named when it
 broke this process's outbound-call rule in half: no socket to Anthropic, and every other
 outbound read is either free, cached, or a press a person chose to make. A schedule reverses
@@ -26,7 +26,7 @@ answer. None of that reasoning exists yet. `cli/cmd_pricearchive.py`'s own docst
 "that reversal needs its own argument, which nobody has made yet."
 
 **What would close this entry.** A decision entry that argues the schedule on its own terms
-— the pace, the failure mode, and what changes about D62's own guarantee — reviewed and
+— the pace, the failure mode, and what changes about D278's own guarantee — reviewed and
 ruled on by the owner. Until then this stays a press, and this entry stays open, the way
 debt 30 records a standing, dated deferral rather than a task with a deadline.
 

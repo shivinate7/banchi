@@ -10,7 +10,7 @@ one shape only, `x.toLowerCase().includes(y)`. It let three real shapes through 
 `.startsWith`/`.endsWith`/`.indexOf` beside `.includes`, `.toLocaleLowerCase()` beside
 `.toLowerCase()`, and a fold on the ARGUMENT instead of the receiver
 (`x.includes(y.toLowerCase())`). A rule proved on one shape and silently missing three more is
-worse than an honest gap: `docs/decisions/D271-one-forgiving-search-matcher.md` said "every
+worse than an honest gap: `docs/decisions/D271-every-search-uses-one-matcher.md` said "every
 search field," and a reviewer had to read the selector itself to find out it did not.
 
 THE ONLY WAY TO PROVE AN ESLINT SELECTOR IS THE SELECTOR ITSELF, RUN. Reading

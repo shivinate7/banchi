@@ -81,4 +81,14 @@ DEBT59 an unreadable live claim has no way out on screen
 DEBT60 the demo builds with Hide unpullable forced off
 DEBT61 eight build proposals from the 2026-08-31 review are still open
 DEBT62 the demo photos are 171 MB of plain git, and the owner wants them in Git LFS
+DEBT63 T1 has never been compared with TCGplayer Scan & Identify
+DEBT64 the collector number is not cross-checked against the local catalog
+DEBT65 the number-corner crop is sent only on a retry
+DEBT66 no perceptual-hash cross-check on identification
+DEBT67 capture photographs exist in one place
+DEBT68 the posted-price history has no screen
+DEBT69 prices are not refreshed on a schedule, and nothing says which SKUs moved
+DEBT70 the owner's realized prices are not read
+DEBT71 the value of the set hint is asserted, not measured
+DEBT72 PKMNVAULT, Supabase and eBay are unbuilt
 ```

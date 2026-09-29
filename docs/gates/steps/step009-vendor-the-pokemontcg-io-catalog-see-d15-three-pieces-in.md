@@ -18,7 +18,7 @@
       red-first by `make catalog-index-selftest`, against a throwaway two-set fixture rather
       than the real snapshot. `pipeline/catalog.py` is the read-only reader; nothing in
       `pipeline/join.py` calls it, and the runtime join's matching is unchanged — see the
-      decision entry below for why wiring it into a screen is a separate, unbuilt task (D46).
+      decision entry below for why wiring it into a screen is a separate, unbuilt task (D77).
     - **RECORDED, NOT FILLED.** The image mirror from `images.pokemontcg.io`:
       `scripts/catalog-image-mirror.py` builds the manifest from the vendored snapshot (no
       network) and implements a rate-limited, resumable, per-file-skip downloader.
@@ -37,4 +37,4 @@
     swapping its source needs its own measurement that the vendored 150-card selection matches
     what was banked, or the fingerprint check silently starts comparing against a different
     population. Left open rather than done quietly; see
-    D206.
+    D15.

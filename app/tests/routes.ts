@@ -108,7 +108,7 @@ export async function routesFromNav(page: Page): Promise<string[]> {
      is still swept with no edit here. */
   /* `#/product` IS NAMED FOR THE SAME REASON `#/gallery` IS, ONE LINE UP: it is off-nav
      (D227), reached by `?sku=` rather than the sidebar, so the discovered
-     list above never finds it. It is still an OWNER screen and D194's ratchet is written
+     list above never finds it. It is still an OWNER screen and D284's ratchet is written
      against "every owner screen", not "every screen the sidebar draws" — dropping it from
      this list would exempt a real screen from the one rule that keeps this app's copy from
      growing, by an accident of routing rather than a decision anybody made.

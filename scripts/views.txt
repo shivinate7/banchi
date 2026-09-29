@@ -158,7 +158,7 @@ review        http://localhost:5173/#/review  .review,.bn-title
 # a `pooled` assertion in `app/tests/runs.spec.ts` — which does not exist — not a sentence here.
 runs          http://localhost:5173/#/runs  .runs,.bn-title
 
-# Hand-pricing, on its own route since 2026-08-30 (D49). Rendered with no `?run=` parameter.
+# Hand-pricing, on its own route since 2026-08-30 (D86). Rendered with no `?run=` parameter.
 #
 # WHAT STOOD HERE WAS FALSE ON BOTH HALVES, AND IT IS DRIFT RATHER THAN AN ERROR OF REASONING.
 # The paragraph was written 2026-08-29 (a5b7064), when a run WAS the unit of this screen; D86's

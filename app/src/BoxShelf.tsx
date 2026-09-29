@@ -85,7 +85,7 @@ function cardName(card: InventoryCard): string {
 
 const onHand = (card: InventoryCard) => card.state !== 'sold' && card.state !== 'retired' && card.state !== 'moved'
 
-/** A box's on-hand cards by section, in the order they stand (the card's order key, D265). */
+/** A box's on-hand cards by section, in the order they stand (the card's order key, D294). */
 function bySection(cardsOf: readonly InventoryCard[]): Map<number, InventoryCard[]> {
   const out = new Map<number, InventoryCard[]>()
   const sorted = [...cardsOf].filter(onHand).sort((a, b) => (a.place?.order ?? a.index) - (b.place?.order ?? b.index))
