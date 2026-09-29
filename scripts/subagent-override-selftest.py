@@ -30,7 +30,7 @@ the same file, red on one side of "current" and quiet on the other.
 WHY IT IS NOT IN THE GIT HOOK. D18: it writes a temporary git repository and a real worktree.
 It IS in `make check` and `make ci-check`, in the guard-selftest section at the end (D161).
 
-WHAT IT CANNOT PROVE. That a session actually writes `CLAUDE_CODE_SUBAGENT_MODEL_UNTIL` when
+WHAT IT CANNOT PROVE. That a session actually writes the top-level `_subagentCapUntil` when
 it sets the override — that half is a habit this repo can argue for and cannot enforce, because
 the write happens one directory up, in the owner's own global tooling. This proves the READER
 the owner's rule was missing; it does not (and cannot) reach into the writer.
@@ -93,9 +93,11 @@ def load_docs_audit():
     return module
 
 
-def write_env(path: Path, env: dict) -> None:
+def write_env(path: Path, env: dict, until: str | None = None) -> None:
+    """`until` is the parent's top-level `_subagentCapUntil`, beside `env`, never inside it."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"env": env}), encoding="utf-8")
+    doc = {"env": env, **({"_subagentCapUntil": until} if until is not None else {})}
+    path.write_text(json.dumps(doc), encoding="utf-8")
 
 
 def run_row(mod, root: Path):
@@ -190,7 +192,7 @@ def main() -> int:
 
         # --- case 4: same file, an expiry already in the past ---------------------------
         expired = (now - timedelta(hours=3)).isoformat()
-        write_env(nested_local, {**override, "CLAUDE_CODE_SUBAGENT_MODEL_UNTIL": expired})
+        write_env(nested_local, override, expired)
         row = run_row(mod, work)
         if len(row.findings) == 1 and "in the past" in row.findings[0].message:
             ok("nested override with an expiry already in the past: red, named as expired")
@@ -199,7 +201,7 @@ def main() -> int:
 
         # --- case 5: same file, an expiry inside the lookahead ceiling — THE CURRENT CASE
         current = (now + timedelta(hours=2)).isoformat()
-        write_env(nested_local, {**override, "CLAUDE_CODE_SUBAGENT_MODEL_UNTIL": current})
+        write_env(nested_local, override, current)
         row = run_row(mod, work)
         if not row.findings:
             ok("nested override with an expiry 2 hours out (inside the ceiling): GREEN — "
@@ -210,7 +212,7 @@ def main() -> int:
 
         # --- case 6: same file, an expiry past the lookahead ceiling ---------------------
         far = (now + timedelta(hours=72)).isoformat()
-        write_env(nested_local, {**override, "CLAUDE_CODE_SUBAGENT_MODEL_UNTIL": far})
+        write_env(nested_local, override, far)
         row = run_row(mod, work)
         if len(row.findings) == 1 and "standing" in row.findings[0].message:
             ok("nested override with a 72-hour expiry (past the 24h ceiling): red, named "
@@ -222,7 +224,7 @@ def main() -> int:
 
         # --- case 7: the override in the TRACKED settings.json, with a CURRENT, valid
         #     expiry — no expiry excuses a committed override -----------------------------
-        write_env(own_tracked, {**override, "CLAUDE_CODE_SUBAGENT_MODEL_UNTIL": current})
+        write_env(own_tracked, override, current)
         row = run_row(mod, work)
         if len(row.findings) == 1 and "TRACKED" in row.findings[0].message:
             ok("override in the TRACKED settings.json, with a currently-valid expiry: red "
