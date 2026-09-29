@@ -488,6 +488,7 @@ CONTAINER       widths measured against a COLUMN rather than the window, so they
   pane    559   BoxBrowse — the photograph stops short of the full width
   pane    560   BoxBrowse — the photo/copies band splits in two
   pane    760   BoxBrowse — the fact grid goes to two columns
+  graveyard 819  Graveyard — Order and Captured leave the table; the other five share the width
   orders  560   Orders — the buyer list moves beside the card and the walk
   orders  1000  Orders — the card pane moves beside the walk, sticky, and its photograph grows
   bn-page 559   Pricing — the row becomes two lines, the price on the right with Market under it
