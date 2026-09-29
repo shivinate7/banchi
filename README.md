@@ -2,9 +2,8 @@
 
 Photograph a box of trading cards. Get a TCGplayer import file back. Know where every card is.
 
-Banchi is a one-seller tool for a TCGplayer store (Pokemon, One Piece, Riftbound).
-It is the working tool of one seller. No card needs more than a photo from a person. Banchi
-(番地) means lot number. Each card has an address: box, section, position. When an order
+Banchi is the working tool of one TCGplayer seller (Pokemon, One Piece, Riftbound). No card
+needs more than a photo from a person. Banchi (番地) means lot number. Each card has an address: box, section, position. When an order
 arrives, Banchi says which box to open and where the card sits.
 
 [Live demo](https://shivinate7.github.io/banchi/): the real app on recorded answers from a
@@ -102,7 +101,7 @@ The name Banchi belongs to the app. The packages, CLI, store and wire keep `pkmn
 
 - **Gates A, B and C passed** in July and August 2026. Gate B ran 53 real cards end to end.
   Records: [`docs/GATES.md`](docs/GATES.md).
-- **Guards run on every commit** through `make docs-audit`: the docs against the code,
+- **Guards run on every commit and in CI** through `make docs-audit`: the docs against the code,
   design tokens, route rosters, decision ids, and opsec rules for code-card photos.
 - **Tests:** [`docs/TESTS.md`](docs/TESTS.md) says what each test protects.
 
@@ -111,6 +110,6 @@ The name Banchi belongs to the app. The packages, CLI, store and wire keep `pkmn
 - [`CLAUDE.md`](CLAUDE.md): the full command list and the working rules.
 - [`docs/decisions/`](docs/decisions/): each settled decision. `make map ARGS=D<n>` prints one.
 - [`docs/specs/`](docs/specs/): the spec for each feature.
-- [`docs/DESIGN.md`](docs/DESIGN.md): the limits on the Fulfiller's screen.
+- [`docs/DESIGN.md`](docs/DESIGN.md): the design tokens, and the limits on the Fulfiller's screen.
 
 No license file: default copyright applies.
