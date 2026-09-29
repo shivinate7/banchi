@@ -4360,7 +4360,7 @@ const FILTER_SKUS = [
   sku({ sku: '9000001', name: 'Annie, Dark Child', game: 'riftbound', set_name: 'Origins', snap: { ...sku().snap, market: '3.50' } }),
   sku({ sku: '9000002', name: 'Poro Snax', game: 'riftbound', set_name: 'Origins', bucket: 'no_market_data', snap: { ...sku().snap, market: null } }),
 ]
-const firstWords = (texts: string[]) => texts.map((text) => text.trim().split(/[ ,-]/)[0])
+const firstWords = (texts: string[]) => texts.map((text) => /^\w+/.exec(text.trim())?.[0])
 
 async function openFilterSheet(page: Page): Promise<Locator> {
   await page.locator(`${VIEW} .bn-filterbar-trigger`).click()
