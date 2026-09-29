@@ -12,9 +12,6 @@ for (const [w, h] of [[1440, 900], [820, 1100]] as const) {
   for (const theme of ['light', 'dark']) {
     test(`Home verdict sits under the greeting, ${w}px ${theme}`, async ({ page }) => {
       await page.setViewportSize({ width: w, height: h })
-      await page.addInitScript((t) => {
-        try { localStorage.setItem('banchi.theme', t) } catch { /* no storage */ }
-      }, theme)
       await page.route(/\/orders$/, (route) =>
         route.fulfill({ contentType: 'application/json', body: JSON.stringify({ summary: '', orders: [], resolution: { orders: [], counts: {} } }) }),
       )
@@ -22,6 +19,7 @@ for (const [w, h] of [[1440, 900], [820, 1100]] as const) {
       await expect(page.locator('main.home')).toBeVisible()
       const verdict = page.locator('.home-standing')
       await expect(verdict).toBeVisible()
+      await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), theme)
       await page.waitForTimeout(700)
       if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/home-${w}-${theme}.png` })
       const h1 = await page.locator('main.home h1').boundingBox()
