@@ -13193,6 +13193,77 @@ def expected_rosters() -> Tuple[Dict[str, List[str]], List[Finding]]:
     )
 
 
+def _route_prose_findings() -> List[Finding]:
+    """The route lists in prose, against `ROUTES`, both ways.
+
+    README's `## Use it` table must name every route, and mark `Off-nav` on exactly the
+    `aside` routes. CLAUDE.md's route block under `### The screens` must open with every
+    route. A route added, dropped or moved off the nav fails until the prose follows.
+    """
+    rows, _, _ = app_routes()
+    if not rows:
+        return []
+    want = {f"#{path}" for path, _, _ in rows}
+    aside = {f"#{path}" for path, group, _ in rows if group == "aside"}
+    out: List[Finding] = []
+
+    def diff(where: str, what: str, have: set, need: set) -> None:
+        gone, extra = sorted(need - have), sorted(have - need)
+        if gone or extra:
+            out.append(Finding(
+                where,
+                f"{what} does not match App.tsx's ROUTES.\n"
+                + (f"missing: {', '.join(gone)}\n" if gone else "")
+                + (f"not a route here: {', '.join(extra)}" if extra else ""),
+            ))
+
+    readme = ROOT / "README.md"
+    if exists(readme):
+        text = read(readme)
+        part = text.split("## Use it", 1)[-1]
+        table = re.findall(r"^\|[^|\n]*\|\s*`(#/[^`]*)`\s*\|(.*)$", part, re.M)
+        diff(rel(readme), "the `## Use it` route table", {r for r, _ in table}, want)
+        diff(rel(readme), "the table's `Off-nav` rows", {r for r, rest in table if "Off-nav" in rest}, aside)
+
+    claude = ROOT / "CLAUDE.md"
+    if exists(claude):
+        text = read(claude)
+        block = re.search(r"### The screens.*?```\n(.*?)```", text, re.S)
+        if block is None:
+            out.append(Finding(rel(claude), "has no route block under `### The screens`."))
+        else:
+            have = set(re.findall(r"^(#/\S*)\s", block.group(1), re.M))
+            diff(rel(claude), "the route block under `### The screens`", have, want)
+    return out
+
+
+# CLAUDE.md's "Codex reads this same file" paragraph names these four links.
+AGENT_LINKS: Tuple[Tuple[str, str], ...] = (
+    ("AGENTS.md", "CLAUDE.md"),
+    (".agents/skills", "../.claude/skills"),
+    ("code-card-fork/AGENTS.md", "CLAUDE.md"),
+    ("code-card-fork/CLAUDE.md", "../CLAUDE.md"),
+)
+
+
+def check_agent_links(report: Report) -> None:
+    """Each link CLAUDE.md names is a relative symlink to its stated target."""
+    findings: List[Finding] = []
+    for link, target in AGENT_LINKS:
+        path = ROOT / link
+        if not path.is_symlink():
+            findings.append(Finding(link, f"is not a symlink; CLAUDE.md says it links to `{target}`."))
+        elif os.readlink(path) != target:
+            findings.append(Finding(link, f"links to `{os.readlink(path)}`; CLAUDE.md says `{target}`."))
+    report.add(
+        "agent links",
+        MECHANICAL,
+        findings,
+        f"{len(AGENT_LINKS)} relative symlinks resolve to CLAUDE.md or .claude/skills",
+        scanned=len(AGENT_LINKS),
+    )
+
+
 def check_route_rosters(report: Report) -> None:
     """A hand-typed list of routes in a spec, against `App.tsx`'s own table.
 
@@ -13301,6 +13372,8 @@ def check_route_rosters(report: Report) -> None:
                         + f"\nhave: {', '.join(found)}",
                     )
                 )
+
+    findings.extend(_route_prose_findings())
 
     report.add(
         "route rosters",
@@ -20383,6 +20456,8 @@ def audit(staged_only: bool, commit_only: bool = False) -> Report:
         check_doc_hygiene(report, docs)
     if _run_at_commit("route rosters", commit_only):
         check_route_rosters(report)
+    if _run_at_commit("agent links", commit_only):
+        check_agent_links(report)
     if _run_at_commit("recorded deletions", commit_only):
         check_recorded_deletions(report)
     if _run_at_commit("spec seal", commit_only):

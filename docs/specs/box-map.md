@@ -1,10 +1,9 @@
 # Box map: sections as objects you can see and move
 
-**Status: SPECIFIED, NOT BUILT.** Written 2026-09-23 from the owner's rulings in the UX review
-interview and from the box map deliberation of the same day. The decisions it builds on are the
-entries with slugs `a-section-is-an-object`, `card-order-key` and
-`a-moved-card-keeps-its-price`. The UX plan it sits beside is
-`docs/specs/ux-overhaul-2026-09-23.md`.
+**Status: BUILT.** D264 (a section is an object) records what shipped: the Map view on
+`#/inventory`, checked by `app/tests/boxmap.spec.ts` and harness test T7. D262 (a moved card
+keeps its price) and D265 (card order key) carry slice 0 and the key. Sections 5 to 7 are the
+design, not a description of the screen. Written 2026-09-23.
 
 ## 1. The ask, in the owner's words
 

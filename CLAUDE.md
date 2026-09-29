@@ -16,7 +16,8 @@ track banner. Repealing those is a code change and needs the owner's word on its
 symlink to `CLAUDE.md`. `code-card-fork/AGENTS.md` and `code-card-fork/CLAUDE.md` are both
 relative symlinks to this same file too, since 2026-09-20 — the fold above, not a new
 exception. `.agents/skills` is a directory symlink to `.claude/skills`. `.codex/hooks.json`
-mirrors `.claude/settings.json`'s hooks. `make docs-audit`'s `codex hooks` row checks both
+mirrors `.claude/settings.json`'s hooks. `make docs-audit`'s `agent links` row checks the four
+links. Its `codex hooks` row checks both
 directions. `.codex/config.toml` stays untracked, like `.claude/settings.local.json`.
 
 ## The name is the app's, and nothing beneath it (D94)
@@ -225,8 +226,8 @@ the browser. No second store. No auth. `app/src/server.ts` is the only client-ca
 ### The screens
 
 **Every screen and route lives in `app/src/App.tsx`'s `ROUTES` table — most are the owner's,
-one is the Fulfiller's.** Four routes are off-nav (the `aside` group — Kit, Cards to pull,
-the per-product view D227 added, and Runs since D291), so the nav itself draws ten rows.
+one is the Fulfiller's.** The `aside` group is off-nav: Kit, Cards to pull, the per-product
+view (D227) and Runs (D291). The nav draws every other row.
 `ROUTES` is the count. Recount from the table, never a sentence (see "the census" below).
 
 ```
@@ -247,7 +248,7 @@ the per-product view D227 added, and Runs since D291), so the nav itself draws t
 #/shipping     Shipping       shipping export routed into three lanes
 #/revenue      Sales          gross-revenue retrospective (D214):
                               verdict, month strip, by-name search. Canceled excluded, gross
-                              only, never profit. AN ELEVENTH NAV ROW ON PURPOSE — the owner
+                              only, never profit. A NAV ROW ON PURPOSE — the owner
                               was shown the 37px-past-the-fold cost at 390x754 and chose the
                               sidebar tab anyway, 2026-09-19
 #/inventory    Inventory      box walk: search, copies, box operations (Manage box sheet).
@@ -283,10 +284,10 @@ stages, not two unrelated views.
 **`#/inventory` is the one owner-side view of stored cards** (D31). `#/boxes` and `#/pull` are
 not routes. Box operations live in its Manage box sheet.
 
-**Four routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen, the
+**The `aside` routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen, the
 kit, `#/product`, the per-product view (D227), and `#/runs` (D291). `#/product` is a deep link
 reached by SKU, never a destination anyone browses to cold. `#/runs` is a link target only: its
-content is Review's runs sheet. All four stay registered routes, reachable from elsewhere.
+content is Review's runs sheet. All stay registered routes, reachable from elsewhere.
 
 **The census.** Read the route or screen count from `ROUTES` itself, never from a number in
 prose (Q2, test-audit-2026-09-27: a hand-typed count that a table already gives is deleted,
