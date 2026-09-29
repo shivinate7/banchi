@@ -26,5 +26,8 @@ written, when a position it would send has no card in the store (`_unheld_positi
 upsert is removed. No real caller needs it: only a hand-made identifications file did.
 Test: `check_emit_buried_box` in `harness/tests/t7_store_and_seams.py`.
 
-**Live state.** The live TCGplayer quantities were lowered by hand on 2026-09-29. The 99 ghost
-rows are still in the store, pending the owner's word. Nothing in this fix touches them.
+**Live state.** On 2026-09-29, on the owner's word, the store was backed up
+(`~/pkmnscan-backups/store-before-box5-nuke-20260929T024312Z.sqlite`) and the 99 ghost rows were
+removed through `Store().write()`, one `ghost_removed` event each. The store now holds 3510
+cards. The live quantities were lowered by 96 copies in 64 SKUs, using negative
+`Add to Quantity` pushes (the D100 amendment on another branch records the measurement).
