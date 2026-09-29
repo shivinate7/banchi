@@ -123,7 +123,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # THREE SHARDS IN PARALLEL, AND ONE JOB NAMED `check` THAT ANSWERS FOR THEM (owner's word,
+  # FOUR SHARDS IN PARALLEL, NONE MUCH OVER 150s, AND ONE JOB NAMED `check` THAT ANSWERS FOR THEM (owner's word,
   # 2026-09-28; D161, amended). The serial `make ci-check` took 600s on run 36509895299. The
   # shards' recipes together are exactly `ci-check`'s, and `make docs-audit`'s `check registry`
   # row fails when they are not. Each shard installs the same way and keeps D161's order, product
@@ -135,7 +135,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [ci-check-product, ci-check-guards-1, ci-check-guards-2]
+        target: [ci-check-product, ci-check-static, ci-check-guards-1, ci-check-guards-2]
     steps:
       # The self-tests build throwaway clones and read `git worktree list`, and `merge-selftest`
       # walks main against a fixture origin. Full history is not needed for any of that, but a

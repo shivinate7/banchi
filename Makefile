@@ -563,6 +563,8 @@ ci-check:
 # recipe, target for target, with none missing and none run twice.
 ci-check-product:
 	@$(MAKE) --no-print-directory harness
+
+ci-check-static:
 	@$(MAKE) --no-print-directory docs-audit
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
@@ -1486,7 +1488,7 @@ janitor-install:
 # answers from the tree alone, and a row that resolves DNS and expects a server to be up would
 # go red on a train and in every worktree. A check that fails for reasons unrelated to the
 # commit is one people learn to ignore.
-.PHONY: janitor janitor-selftest janitor-install serve-selftest sync-selftest ci-check ci-check-product ci-check-guards-1 ci-check-guards-2
+.PHONY: janitor janitor-selftest janitor-install serve-selftest sync-selftest ci-check ci-check-product ci-check-static ci-check-guards-1 ci-check-guards-2
 
 .PHONY: lan-check
 # Is the LAN URL still good? DNS, both servers, and a real write. Reaches the

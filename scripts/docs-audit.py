@@ -13893,7 +13893,7 @@ def _check_recipe() -> Optional[List[str]]:
 
 
 # The parallel shards `.github/workflows/check.yml` runs in place of one `make ci-check`.
-CI_SHARD_RULES = ("ci-check-product", "ci-check-guards-1", "ci-check-guards-2")
+CI_SHARD_RULES = ("ci-check-product", "ci-check-static", "ci-check-guards-1", "ci-check-guards-2")
 
 
 def _ci_check_recipe() -> Optional[List[str]]:
