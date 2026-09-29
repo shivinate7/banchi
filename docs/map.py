@@ -9834,7 +9834,7 @@ COMPONENTS = [
                         "aimed by the pointer, painting native pixels rather than a second "
                         "downscale, and leaving nothing behind when the pointer does (the "
                         "four cases were rewritten 2026-08-25 when the loupe stopped being a "
-                        "fixed centered inset; the old ones asserted `50% 50%` and an element "
+                        "fixed centred inset; the old ones asserted `50% 50%` and an element "
                         "on screen at rest, both wrong by design now) — an answer that stays reversible past "
                         "the twenty seconds the old clock allowed, the single column below "
                         "900px, and D24's pooled card drawing no photograph here. Run by "

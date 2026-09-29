@@ -85,7 +85,7 @@ for (const theme of ['light', 'dark'] as const) {
       }
 
       test('Shipping loaded lanes reach the frame edge', async ({ page }) => {
-        await page.goto('/#/' + 'shipping')
+        await page.goto('/#/shipping')
         await page.locator('.shipping-empty').waitFor()
         await page.getByLabel('Read an export').setInputFiles({ name: 'x.csv', mimeType: 'text/csv', buffer: Buffer.from('Order #\nA\n') })
         await page.locator('.shipping-lanes').waitFor()
