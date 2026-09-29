@@ -10,55 +10,11 @@
         "judgement"
       ]
     },
-    "AGENTS.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behaviour",
-        "behaviour",
-        "catalogue",
-        "honoured",
-        "judgement",
-        "labelled"
-      ]
-    },
-    "CLAUDE.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behaviour",
-        "behaviour",
-        "catalogue",
-        "honoured",
-        "judgement",
-        "labelled"
-      ]
-    },
     "HANDOFF.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "judgement",
         "recognises"
-      ]
-    },
-    "code-card-fork/AGENTS.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behaviour",
-        "behaviour",
-        "catalogue",
-        "honoured",
-        "judgement",
-        "labelled"
-      ]
-    },
-    "code-card-fork/CLAUDE.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behaviour",
-        "behaviour",
-        "catalogue",
-        "honoured",
-        "judgement",
-        "labelled"
       ]
     },
     "docs/CODES-DECISIONS.md": {
