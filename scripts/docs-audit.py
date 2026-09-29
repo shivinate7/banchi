@@ -5727,9 +5727,9 @@ _SUBAGENT_OVERRIDE_KEYS = (_SUBAGENT_MODEL_KEY, _SUBAGENT_FORCE_KEY)
 # environment variable: it is a persistent artifact this repo can require to carry its own
 # proof of currency, the way D178 requires a `+` marker to be a claim WITH AN EXPIRY rather
 # than a bare assertion. So the override is legitimate exactly when it names the moment it
-# stops being current, and this is the sibling key that states it — read from the same `env`
-# block, alongside the two keys it governs.
-_SUBAGENT_UNTIL_KEY = "CLAUDE_CODE_SUBAGENT_MODEL_UNTIL"
+# stops being current, and this is the sibling key that states it — a top-level key of the same file
+# (the parent's `roles-override-carries-expiry` key), beside the `env` block that holds the two keys it governs.
+_SUBAGENT_UNTIL_KEY = "_subagentCapUntil"
 
 # Opus-shaped work is the parent rule's own phrase for what earns this override:
 # "long-horizon, whole-codebase, or many-hour autonomous work" — hours, named as hours, never
@@ -5748,7 +5748,7 @@ _SUBAGENT_SETTINGS_NAMES = ("settings.json", "settings.local.json")
 
 
 def _parse_subagent_until(value: object) -> Optional[datetime]:
-    """`CLAUDE_CODE_SUBAGENT_MODEL_UNTIL`'s value as an aware UTC datetime, or None.
+    """`_subagentCapUntil`'s value as an aware UTC datetime, or None.
 
     `None` covers both "absent" and "present but unreadable" on purpose — the caller reports
     them differently, but this function's only job is "can this be trusted as a clock
@@ -5829,12 +5829,12 @@ def _subagent_override_findings(
             ))
             continue
 
-        until_raw = env.get(_SUBAGENT_UNTIL_KEY)
+        until_raw = data.get(_SUBAGENT_UNTIL_KEY)
         until = _parse_subagent_until(until_raw)
         if until_raw is None:
             findings.append(Finding(
                 where,
-                f"its `env` block sets {detail} with no `{_SUBAGENT_UNTIL_KEY}`.\n"
+                f"its `env` block sets {detail} with no top-level `{_SUBAGENT_UNTIL_KEY}`.\n"
                 f"  An override with no stated expiry cannot be told apart from a forgotten "
                 f"one — which is exactly what sat here for hours on 2026-09-19. State when "
                 f"it stops being current (an ISO-8601 UTC timestamp), or remove the file.",
@@ -5925,7 +5925,7 @@ def check_subagent_override(report: Report) -> None:
 
     TAKEN: a required, self-stated expiry, on D178's own idiom — "a marker that could be left
     on would turn every proposal into a permanent exemption," read here for a settings key
-    instead of a `+` in a document. `CLAUDE_CODE_SUBAGENT_MODEL_UNTIL` alongside the override
+    instead of a `+` in a document. `_subagentCapUntil`, a top-level key beside the `env` block (the parent's key), alongside the override
     states when it stops being current; this row reads it, compares it to now, and stays quiet
     exactly while the stated window holds. A file with the override and no expiry, an expiry
     already past, an expiry that fails to parse, or an expiry so far out it reads as standing
@@ -13193,6 +13193,77 @@ def expected_rosters() -> Tuple[Dict[str, List[str]], List[Finding]]:
     )
 
 
+def _route_prose_findings() -> List[Finding]:
+    """The route lists in prose, against `ROUTES`, both ways.
+
+    README's `## Use it` table must name every route, and mark `Off-nav` on exactly the
+    `aside` routes. CLAUDE.md's route block under `### The screens` must open with every
+    route. A route added, dropped or moved off the nav fails until the prose follows.
+    """
+    rows, _, _ = app_routes()
+    if not rows:
+        return []
+    want = {f"#{path}" for path, _, _ in rows}
+    aside = {f"#{path}" for path, group, _ in rows if group == "aside"}
+    out: List[Finding] = []
+
+    def diff(where: str, what: str, have: set, need: set) -> None:
+        gone, extra = sorted(need - have), sorted(have - need)
+        if gone or extra:
+            out.append(Finding(
+                where,
+                f"{what} does not match App.tsx's ROUTES.\n"
+                + (f"missing: {', '.join(gone)}\n" if gone else "")
+                + (f"not a route here: {', '.join(extra)}" if extra else ""),
+            ))
+
+    readme = ROOT / "README.md"
+    if exists(readme):
+        text = read(readme)
+        part = text.split("## Use it", 1)[-1]
+        table = re.findall(r"^\|[^|\n]*\|\s*`(#/[^`]*)`\s*\|(.*)$", part, re.M)
+        diff(rel(readme), "the `## Use it` route table", {r for r, _ in table}, want)
+        diff(rel(readme), "the table's `Off-nav` rows", {r for r, rest in table if "Off-nav" in rest}, aside)
+
+    claude = ROOT / "CLAUDE.md"
+    if exists(claude):
+        text = read(claude)
+        block = re.search(r"### The screens.*?```\n(.*?)```", text, re.S)
+        if block is None:
+            out.append(Finding(rel(claude), "has no route block under `### The screens`."))
+        else:
+            have = set(re.findall(r"^(#/\S*)\s", block.group(1), re.M))
+            diff(rel(claude), "the route block under `### The screens`", have, want)
+    return out
+
+
+# CLAUDE.md's "Codex reads this same file" paragraph names these four links.
+AGENT_LINKS: Tuple[Tuple[str, str], ...] = (
+    ("AGENTS.md", "CLAUDE.md"),
+    (".agents/skills", "../.claude/skills"),
+    ("code-card-fork/AGENTS.md", "CLAUDE.md"),
+    ("code-card-fork/CLAUDE.md", "../CLAUDE.md"),
+)
+
+
+def check_agent_links(report: Report) -> None:
+    """Each link CLAUDE.md names is a relative symlink to its stated target."""
+    findings: List[Finding] = []
+    for link, target in AGENT_LINKS:
+        path = ROOT / link
+        if not path.is_symlink():
+            findings.append(Finding(link, f"is not a symlink; CLAUDE.md says it links to `{target}`."))
+        elif os.readlink(path) != target:
+            findings.append(Finding(link, f"links to `{os.readlink(path)}`; CLAUDE.md says `{target}`."))
+    report.add(
+        "agent links",
+        MECHANICAL,
+        findings,
+        f"{len(AGENT_LINKS)} relative symlinks resolve to CLAUDE.md or .claude/skills",
+        scanned=len(AGENT_LINKS),
+    )
+
+
 def check_route_rosters(report: Report) -> None:
     """A hand-typed list of routes in a spec, against `App.tsx`'s own table.
 
@@ -13301,6 +13372,8 @@ def check_route_rosters(report: Report) -> None:
                         + f"\nhave: {', '.join(found)}",
                     )
                 )
+
+    findings.extend(_route_prose_findings())
 
     report.add(
         "route rosters",
@@ -13892,6 +13965,10 @@ def _check_recipe() -> Optional[List[str]]:
     return _recipe_targets("check")
 
 
+# The parallel shards `.github/workflows/check.yml` runs in place of one `make ci-check`.
+CI_SHARD_RULES = ("ci-check-product", "ci-check-static", "ci-check-guards-1", "ci-check-guards-2")
+
+
 def _ci_check_recipe() -> Optional[List[str]]:
     """The targets `make ci-check` runs — the gate `.github/workflows/check.yml` invokes.
 
@@ -14062,6 +14139,36 @@ def _check_registry() -> Row:
                     "an absence that is over; delete it, or the next reader believes CI does "
                     "not run this.",
                 ))
+
+    # ---- CI runs `ci-check` as shards; their union is `ci-check`, target for target -----
+    shards = [_recipe_targets(rule) for rule in CI_SHARD_RULES]
+    if ci_recipe is not None:
+        for rule, body in zip(CI_SHARD_RULES, shards):
+            if body is None:
+                findings.append(Finding("Makefile", (
+                    "the `{0}:` recipe could not be read, and `.github/workflows/check.yml` "
+                    "runs it as one of the parallel shards of `ci-check`."
+                ).format(rule)))
+        if all(body is not None for body in shards):
+            ran = [name for body in shards for name in body]
+            for name in ci_recipe:
+                if name not in ran:
+                    findings.append(Finding("Makefile", (
+                        "`make ci-check` runs `{0}` and no CI shard does.\n"
+                        "  A target in no shard gates nothing on a pull request, and the "
+                        "`check` job is green because it never ran."
+                    ).format(name)))
+            for name in sorted(set(ran)):
+                if name not in ci_recipe:
+                    findings.append(Finding("Makefile", (
+                        "a CI shard runs `{0}` and `make ci-check` does not.\n"
+                        "  A session cannot reproduce it before pushing."
+                    ).format(name)))
+                elif ran.count(name) > 1:
+                    findings.append(Finding("Makefile", (
+                        "`{0}` is in more than one CI shard, or twice in one.\n"
+                        "  Each target runs once."
+                    ).format(name)))
 
     # ---- a slot in `make check` that cannot fail says so where the run is read ----------
     makefile_text = read(ROOT / "Makefile") if exists(ROOT / "Makefile") else ""
@@ -20349,6 +20456,8 @@ def audit(staged_only: bool, commit_only: bool = False) -> Report:
         check_doc_hygiene(report, docs)
     if _run_at_commit("route rosters", commit_only):
         check_route_rosters(report)
+    if _run_at_commit("agent links", commit_only):
+        check_agent_links(report)
     if _run_at_commit("recorded deletions", commit_only):
         check_recorded_deletions(report)
     if _run_at_commit("spec seal", commit_only):

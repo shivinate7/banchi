@@ -1164,7 +1164,7 @@ export function RunsComposer({
                            nothing else — it describes a PHOTOGRAPH the detector just read off
                            disk, not a store record — so there is no `cid` on this payload to
                            address it by. */
-                        src={photoUrl(preview.sample.box, preview.sample.index)}
+                        src={photoUrl(preview.sample.box, preview.sample.index) ?? undefined}
                         alt=""
                         aria-hidden="true"
                         draggable={false}

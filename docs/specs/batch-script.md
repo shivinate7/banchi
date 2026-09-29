@@ -810,15 +810,10 @@ Logic in `pipeline/`, `identify/`, `geometry/`; tests in `harness/`.
   records what that leaves.
   number, and GATES.md records that blind spot the way T1's `finish` blind spot is recorded.
 
-Adding T5 and T6 requires editing `docs/GATES.md`, `CLAUDE.md`'s `make harness` comment
-("all four verification tests"), `harness/run.py`'s `TESTS` list, and `README.md`. That is a
-deliberate contract change, not a drive-by. **The harness is six tests.**
+Adding a harness test requires editing `docs/GATES.md`, `harness/run.py`'s `TESTS` list,
+and `README.md`. That is a deliberate contract change, not a drive-by.
 
-> **Status, 2026-08-13:** the harness is seven. T7 was added for `store/`, `server/` and
-> `cli/`, through exactly the process the paragraph above demands — argued first, the
-> contract in `docs/GATES.md` amended, every count reconciled in the same commit. The
-> sentence is left as written because the rule it states is the point and still holds; only
-> the number moved.
+> **Status:** the harness is ten tests (T1-T9 and T11); `make harness` is the count. The rule above still holds.
 
 ---
 

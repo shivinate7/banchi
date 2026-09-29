@@ -672,7 +672,7 @@ separates nothing on a dark page. What is still refused is the panel header stri
 bar carrying each panel's name and queue depth was built, looked at, and rejected. Do not
 add one, and do not write a rule about it either.
 
-## The review queue — BUILT 2026-08-13. Description, except where marked.
+## The review queue
 
 **This section specified a screen that now exists, and reads as a description of it.**
 `app/src/ReviewQueue.tsx` and `app/src/ReviewQueue.css` render it at `#/review`.

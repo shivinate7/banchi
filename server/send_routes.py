@@ -897,6 +897,9 @@ def _empty_send_refusal(console: str, trimmed: list, step: str, code: int = 1) -
     A card the live guard trimmed is named beside any reason (R4 F5), never hidden behind it.
     Where emit printed its `send_empty` line, the title is worded from those reasons (R6-9)."""
     held = _trimmed_words(trimmed)
+    said = (_json_line(console, "send_refused") or {}).get("sentence")
+    if said:
+        return PipelineRefusal(HTTPStatus.CONFLICT, "not_sendable", said)
     empty = _json_line(console, "send_empty")
     if empty and any(int(empty.get(key) or 0) for key in ("needs_price", "under_cut_off")):
         return _empty_reasons(empty, trimmed, step)

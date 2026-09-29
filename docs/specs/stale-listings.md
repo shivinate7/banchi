@@ -74,8 +74,8 @@ untouched export would delist the seller's entire inventory, and TCGplayer does 
 export that destroys the account it was taken from.
 
 `Total Quantity` is not a writable column at all (`pipeline/tcgcsv.py:WRITABLE_COLUMNS`, and
-the `tcgplayer-csv` skill). **There is no CSV route to lowering or setting a quantity even for
-a caller that wanted one.**
+the `tcgplayer-csv` skill). **A negative `Add to Quantity` does lower a live quantity (measured
+2026-09-29, D100's amendment); this feature still never writes one.**
 
 ### The price column edits the live listing in place
 

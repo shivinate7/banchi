@@ -142,7 +142,7 @@ const json = (route: Route, body: unknown, status = 200) =>
  *  ONE OF THE FOUR HAS LEFT (D58), because a box that closes up behind a departed card is the
  *  state most of this product's labelling logic is about, and a fixture where every card is on
  *  hand cannot draw it. */
-function card(over: {
+export function card(over: {
   box: number
   index: number
   section: number

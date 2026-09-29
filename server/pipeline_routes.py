@@ -6659,8 +6659,8 @@ def _trends_for_entries(
 
     # THE ARCHIVE'S ALREADY-VERIFIED PRODUCT IDS, SKIPPING `product_id_for_row` FOR EVERY
     # SKU IT COVERS (D254) — the same lookup `do_pipeline_price_now` already makes, over the
-    # same per-SKU index (`store/pricearchive.py:PriceArchive.for_sku`, O(1) since the
-    # 2026-09-27 review). Measured without this: 400 SKUs with no known id cost ~63s of
+    # same per-SKU index (`store/pricearchive.py:PriceArchive.for_sku`, one indexed
+    # read). Measured without this: 400 SKUs with no known id cost ~63s of
     # courtesy delay ALONE (`pipeline/pricehistory.py:Market.get` never caches a FAILED
     # fetch, so `category_id()`/`group_id()` re-fetch and re-sleep on every row) — a real
     # demo-mirror recording timed out here at the client's 30s GET timeout

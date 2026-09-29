@@ -71,19 +71,15 @@ function useLoad<T>(load: () => Promise<T>, again = 0): Loaded<T> {
  * on the product's own front page has to be the product, or the first thing this screen teaches
  * is that it is a mock-up.
  *
- * IT IS BUILT TWICE, AND THAT IS THE POINT. `GET /boxes` is already on this screen's critical
- * path, and a box's `next_index` high-water mark plus `GET /photo/<box>/<index>` is enough to
- * put the last three photographs on screen with NO extra request and no waiting. That is the
- * first pass. The second arrives when `GET /inventory` lands (160 ms warm, measured on a
- * healthy server) and upgrades the same three frames to the cards themselves: the name, the
- * number, the finish, and the exact place the front one sits in.
+ * NO PHOTOGRAPH IS REQUESTED UNTIL THE CARD READ ANSWERS (D172). A first pass used to draw the
+ * last three slots of the newest box off `GET /boxes` alone, by slot address. A slot's occupant
+ * is unknown without the record, and a card with no photograph has no file there, so that pass
+ * could ask for a 404. The frames stay empty until `GET /inventory/recent` lands, and the box
+ * is named under them as soon as `GET /boxes` does.
  *
- * So the hero is never empty while something loads, and never poorer than the data allows.
- *
- * WHAT IT WILL NOT DO IS INVENT A NAME. Until the card map lands there is no name to draw, and
- * the fixture's whole sin was drawing one anyway; the first pass says the box, by its real
- * name, and nothing more. An index whose photograph was undone or reclaimed (D89) simply does
- * not draw and the frame stays. */
+ * WHAT IT WILL NOT DO IS INVENT A NAME. Until the card map lands there is no name to draw. A
+ * card whose name is no photograph's, or whose photograph was reclaimed (D89), is not in the
+ * deck and the frame stays. */
 
 const DECK_DEPTH = 3
 
@@ -92,7 +88,7 @@ type DeckCard = {
   readonly box: number
   readonly index: number
   readonly photo: string
-  /** Present once the card map has landed; absent on the first pass. */
+  /** Present once the card map has landed; never null once a card is drawn. */
   readonly card: InventoryCard | null
 }
 
@@ -126,27 +122,16 @@ function finishOf(card: InventoryCard): string | null {
    art off; this is where the art and the name are. */
 const FOCUS = 0.34
 
-/* The last named deck this tab drew. The placeholder pass below addresses SLOTS, which the
-   browser re-requests on every visit; a revisit shows this deck by name until the fresh read lands. */
+/* The last named deck this tab drew: a revisit shows it by name until the fresh read lands. */
 let lastNamedDeck: DeckCard[] = []
 
-/** First pass: the last few indices of the newest box that holds cards. No extra request. */
-function deckFromBoxes(boxes: BoxRecord[] | null): { cards: DeckCard[]; box: BoxRecord | null } {
-  if (boxes === null) return { cards: [], box: null }
-  const holding = boxes.filter((b) => b.next_index > 1 && b.cards > 0)
-  if (holding.length === 0) return { cards: [], box: null }
-  const box = holding.reduce((newest, one) => (one.box > newest.box ? one : newest), holding[0]!)
-  const cards: DeckCard[] = []
-  for (let back = 0; back < DECK_DEPTH; back += 1) {
-    const index = box.next_index - 1 - back
-    if (index < 1) break
-    /* THE SLOT ROUTE, BECAUSE THIS PASS HAS NO CARD TO GET A NAME FROM (D172). The index is
-       arithmetic off the registry's `next_index` — there is no record here at all, which is
-       the whole point of the first pass — so there is nothing carrying a `cid` to address
-       the photograph by. The second pass below has the records and uses the name. */
-    cards.push({ key: `${box.box}/${index}`, box: box.box, index, photo: photoUrl(box.box, index), card: null })
-  }
-  return { cards, box }
+/** The newest box that holds cards, named under the hero. NO PHOTOGRAPH IS ASKED FOR FROM IT:
+ *  a slot's occupant is unknown until the card read answers, and a card with no photograph
+ *  has no file at its slot (D172), so the frames stay empty until the named cards arrive. */
+function newestBox(boxes: BoxRecord[] | null): BoxRecord | null {
+  const holding = (boxes ?? []).filter((b) => b.next_index > 1 && b.cards > 0)
+  if (holding.length === 0) return null
+  return holding.reduce((newest, one) => (one.box > newest.box ? one : newest), holding[0]!)
 }
 
 /* Second pass: the newest IDENTIFIED cards in the store, as the cards they are.
@@ -170,16 +155,14 @@ function deckFromCards(cards: Record<string, InventoryCard> | null): DeckCard[] 
         card.name !== '',
     )
     .sort((a, b) => String(b[1].captured_at).localeCompare(String(a[1].captured_at)))
-    .slice(0, DECK_DEPTH)
-    .map(([key, card]) => ({
-      key,
-      box: card.box,
-      index: card.index,
+    .flatMap(([key, card]): DeckCard[] => {
       /* BY NAME (D172): an inventory row carries the card's own `cid`, so the hero addresses
-         the photograph rather than the slot it happens to sit in. */
-      photo: photoUrl(card.box, card.index, card),
-      card,
-    }))
+         the photograph rather than the slot it happens to sit in. A card whose name is no
+         photograph's has none to draw, so it is not in a picture of photographs. */
+      const photo = photoUrl(card.box, card.index, card)
+      return photo === null ? [] : [{ key, box: card.box, index: card.index, photo, card }]
+    })
+    .slice(0, DECK_DEPTH)
 }
 
 function greeting(): string {
@@ -483,12 +466,9 @@ export function Home() {
      map (D192, item 2) — on its own load so no panel above waits on it, and `deckFromCards`
      below applies exactly the same filter/sort/slice it always has over the smaller result. */
   const shelf = useLoad<Record<string, InventoryCard>>(async () => (await getRecentCards(DECK_DEPTH)).cards)
-  const fromBoxes = deckFromBoxes(boxes.state === 'ready' ? boxes.value : null)
   const fromCards = deckFromCards(shelf.state === 'ready' ? shelf.value : null)
-  /* The box-derived pass is a placeholder for the moment before the card map lands, so it
-     yields to the named cards the instant they arrive. */
-  const deck = fromCards.length > 0 ? (lastNamedDeck = fromCards) : lastNamedDeck.length > 0 ? lastNamedDeck : fromBoxes.cards
-  const deckBox = fromBoxes.box
+  const deck = fromCards.length > 0 ? (lastNamedDeck = fromCards) : lastNamedDeck
+  const deckBox = newestBox(boxes.state === 'ready' ? boxes.value : null)
   const front = deck[0]
   const frontCard = front?.card ?? null
   /* THE HERO'S READING COMES OFF THE SHARED MACHINE NOW (D125, `cardCrop.ts`). It was written

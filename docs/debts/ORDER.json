@@ -53,6 +53,7 @@
     "053-pricing-corpus-five-unlocked-writers.md",
     "054-capture-undo-13th-row-flake.md",
     "055-audit-self-test-no-node-modules.md",
-    "056-provision-selftest-race-case.md"
+    "056-provision-selftest-race-case.md",
+    "057-emit-buried-box.md"
   ]
 }

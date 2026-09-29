@@ -16,7 +16,8 @@ track banner. Repealing those is a code change and needs the owner's word on its
 symlink to `CLAUDE.md`. `code-card-fork/AGENTS.md` and `code-card-fork/CLAUDE.md` are both
 relative symlinks to this same file too, since 2026-09-20 — the fold above, not a new
 exception. `.agents/skills` is a directory symlink to `.claude/skills`. `.codex/hooks.json`
-mirrors `.claude/settings.json`'s hooks. `make docs-audit`'s `codex hooks` row checks both
+mirrors `.claude/settings.json`'s hooks. `make docs-audit`'s `agent links` row checks the four
+links. Its `codex hooks` row checks both
 directions. `.codex/config.toml` stays untracked, like `.claude/settings.local.json`.
 
 ## The name is the app's, and nothing beneath it (D94)
@@ -225,8 +226,8 @@ the browser. No second store. No auth. `app/src/server.ts` is the only client-ca
 ### The screens
 
 **Every screen and route lives in `app/src/App.tsx`'s `ROUTES` table — most are the owner's,
-one is the Fulfiller's.** Four routes are off-nav (the `aside` group — Kit, Cards to pull,
-the per-product view D227 added, and Runs since D291), so the nav itself draws ten rows.
+one is the Fulfiller's.** The `aside` group is off-nav: Kit, Cards to pull, the per-product
+view (D227) and Runs (D291). The nav draws every other row.
 `ROUTES` is the count. Recount from the table, never a sentence (see "the census" below).
 
 ```
@@ -247,7 +248,7 @@ the per-product view D227 added, and Runs since D291), so the nav itself draws t
 #/shipping     Shipping       shipping export routed into three lanes
 #/revenue      Sales          gross-revenue retrospective (D214):
                               verdict, month strip, by-name search. Canceled excluded, gross
-                              only, never profit. AN ELEVENTH NAV ROW ON PURPOSE — the owner
+                              only, never profit. A NAV ROW ON PURPOSE — the owner
                               was shown the 37px-past-the-fold cost at 390x754 and chose the
                               sidebar tab anyway, 2026-09-19
 #/inventory    Inventory      box walk: search, copies, box operations (Manage box sheet).
@@ -283,10 +284,10 @@ stages, not two unrelated views.
 **`#/inventory` is the one owner-side view of stored cards** (D31). `#/boxes` and `#/pull` are
 not routes. Box operations live in its Manage box sheet.
 
-**Four routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen, the
+**The `aside` routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen, the
 kit, `#/product`, the per-product view (D227), and `#/runs` (D291). `#/product` is a deep link
 reached by SKU, never a destination anyone browses to cold. `#/runs` is a link target only: its
-content is Review's runs sheet. All four stay registered routes, reachable from elsewhere.
+content is Review's runs sheet. All stay registered routes, reachable from elsewhere.
 
 **The census.** Read the route or screen count from `ROUTES` itself, never from a number in
 prose (Q2, test-audit-2026-09-27: a hand-typed count that a table already gives is deleted,
@@ -394,7 +395,7 @@ not rendered — not focusable, not reachable by a screen reader).
 
 - `cd app && npx tsc --noEmit` prints nothing.
 - Look at it at 1440 and 820, in both themes. Look at 390 only when the owner reports a
-  phone problem (owner's ruling, 2026-09-28). The specs that assert phone layout stay in CI.
+  phone problem. Exception to the parent's every-size rule (owner's ruling, 2026-09-28). The specs that assert phone layout stay in CI.
 - Anything a thumb presses is 40px or more.
 - `make design-check` asserts `docs/DESIGN.md`'s Fulfillment floors in a real browser: 20px
   body, 32px position labels, 320px photograph, 44px targets, 7:1 contrast, no jargon, no
@@ -654,14 +655,15 @@ is the specified/built/validated vocabulary the gates already use, applied to th
 itself. "Solved" with no bucket named is refused. Bold labels in one quoted block to the owner,
 never a code fence. Start with the point. No task restatement.
 
-- Run `make harness` before saying something works. Show the output.
+- Run `make harness` before saying something works. Give the verdict, never the output.
 - Keep UI/UX at the forefront of any screen work (owner's ruling, 2026-09-02: *"experience
   is everything."*). Run a design pass before you build a screen. Review the built screen
   against that pass before you call it done.
 - Reserve Opus for planning, for a builder redesigning a whole flow, and for resolving a hard
   merge. Every review is Sonnet. An Opus review needs the orchestrator to ask the owner first
   and get a yes (owner's ruling, 2026-09-28). Sonnet builds every ordinary screen lane, fix
-  round and delta review by default (owner's ruling, 2026-09-24).
+  round and delta review by default (owner's ruling, 2026-09-24). Say an Opus lane in one
+  line first. Raise it only on the owner's word, in `.claude/settings.local.json`.
 - A builder commits and pushes its own branch after every pass, even when a check is red.
   Each commit message ends with a `Done:` line and a `Next:` line. The `Next:` line names
   what is left, in order, so a lane can resume from its branch alone (owner's ruling,

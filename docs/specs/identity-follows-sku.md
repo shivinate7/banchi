@@ -1,9 +1,9 @@
 # A card's identity follows its SKU
 
-**Status, 2026-09-24. APPROVED BY THE OWNER, NOT BUILT.** The owner answered all seven questions
-of section 12 the same day. This revision carries his rulings. Ruling 5 adds a store-owned SKU
-table to the plan (section 3.2), and ruling 4 keeps the read name out of search (section 5.2).
-The build goes straight to lanes (section 11), with no `OPEN` step.
+**Status: BUILT.** D258 (identity follows the SKU) records the ruling. The SKU table, the one
+writer, `pipeline/identity_binding.py`, `pipeline/identity_checks.py` and `cards identity
+--write` are in the tree. Whether `--write` has run on the owner's store is unmeasured here.
+Section 11 is the plan the lanes followed. The measurements below are from 2026-09-24.
 
 Nothing here writes the store. Every number below was measured read-only. The store source is
 a `sqlite3 -readonly` backup copy of `inventory/store.sqlite`, taken 2026-09-24 11:58 local. The

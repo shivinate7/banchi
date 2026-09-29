@@ -1287,7 +1287,8 @@ function RetirePanel({
   onCancel: () => void
 }) {
   const [broken, setBroken] = useState(false)
-  const gone = !copy.has_photo || broken
+  const src = photoUrl(copy.place.box, copy.place.index, copy)
+  const gone = !copy.has_photo || src === null || broken
 
 
   return (
@@ -1309,7 +1310,7 @@ function RetirePanel({
                  already filtered to the two shapes that name a photograph — so the copy this
                  dialog is about to retire is the copy on screen, whatever has slid through
                  its slot since the search answered. */
-              src={photoUrl(copy.place.box, copy.place.index, copy)}
+              src={src ?? undefined}
               alt={`The card stored at ${sayPlace(copy.place.label ?? copy.key)}`}
               onError={() => setBroken(true)}
             />

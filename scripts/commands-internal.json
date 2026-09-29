@@ -1,5 +1,9 @@
 {
   "audit-history": "diagnostic over which docs-audit checks ever fired; never gates, no caller outside a session debugging the audit itself",
+  "ci-check-guards-1": "a CI shard of `ci-check` (D161); the workflow calls it, and a session runs `make ci-check` instead",
+  "ci-check-guards-2": "a CI shard of `ci-check` (D161); the workflow calls it, and a session runs `make ci-check` instead",
+  "ci-check-static": "a CI shard of `ci-check` (D161); the workflow calls it, and a session runs `make ci-check` instead",
+  "ci-check-product": "a CI shard of `ci-check` (D161); the workflow calls it, and a session runs `make ci-check` instead",
   "cid-audit": "reads the whole corpus, so it is deliberately not in `make check`; cited by name in CLAUDE.md's ./pkmnscan cards audit entry",
   "claim-ids": "one-off dev tool for previewing a branch's id claims; `make merge` is what actually calls the claimer",
   "claim-stale": "one-off dev tool for checking a claimed id against a moved main; cited by name in CLAUDE.md's Hard rules",

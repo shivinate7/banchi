@@ -428,6 +428,10 @@ export type InventoryCard = {
    *  writes it back. */
   moved_from: string | null
 
+  /** ON THE TOMBSTONE A MOVE LEFT (`store/master.py:Card.moved_to`): `"box/index"` of the card
+   *  it became. Absent on a route mock and null on every other card. */
+  moved_to?: string | null
+
   /** THE CATALOGUE'S OWN SET (D213), ALREADY ON THIS WIRE AND NEVER TYPED HERE UNTIL NOW.
    *  `server/capture_server.py:_card_row` and `do_inventory` both ship `asdict(card)`
    *  raw — `store/master.py:Card.set_name` has carried this field since schema 8, and it

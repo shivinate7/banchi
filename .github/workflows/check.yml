@@ -46,13 +46,9 @@
 # registry` fails on an entry for a target `make check` does not run.
 #
 # THE "TWELVE TO FIFTEEN MINUTES" ABOVE IS WHAT IT COST FROM 2026-09-07 TO 2026-09-11, AND IT
-# IS LEFT AS WRITTEN (D136). Measured over 56 jobs: 940-1,020s wall-clock per run, 913 of 954s
-# in the `make design-check` step, `481 passed (15.2m)` on ONE worker — the runner has two
-# vCPUs and Playwright's default of half of them floors to one. Three things changed it, each
-# argued at the job below and in D136: the suite runs as three shards of one worker each; the
-# seven sleeps on a real clock (2.3 minutes of the serial run) became a fake clock advanced
-# by the same numbers; and the post-merge run below is skipped when the tree it would test
-# already passed on the PR. The new figures are in D136, from a dispatch of this file.
+# IS LEFT AS WRITTEN. What changed it, how the matrix is sharded now, and the measured figures
+# are in D136 and its amendments, never in this comment: the browser matrix's shard count, its
+# worker count and its case count have each moved since, and a number typed here goes stale.
 #
 # ON `push: main` TOO, AT THAT PRICE, for the reason the `on:` block below already gives about
 # every other row: a merge can break what neither side broke alone, and two branches editing one
@@ -127,17 +123,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  # FOUR SHARDS IN PARALLEL, NONE MUCH OVER 150s, AND ONE JOB NAMED `check` THAT ANSWERS FOR THEM (owner's word,
+  # 2026-09-28; D161, amended). The serial `make ci-check` took 600s on run 36509895299. The
+  # shards' recipes together are exactly `ci-check`'s, and `make docs-audit`'s `check registry`
+  # row fails when they are not. Each shard installs the same way and keeps D161's order, product
+  # first. `fail-fast: false` because a red shard is a claim about its own targets and the
+  # others are still worth their verdict.
+  ci-check:
+    name: ci-check (${{ matrix.target }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [ci-check-product, ci-check-static, ci-check-guards-1, ci-check-guards-2]
     steps:
       # The self-tests build throwaway clones and read `git worktree list`, and `merge-selftest`
       # walks main against a fixture origin. Full history is not needed for any of that, but a
       # detached single commit is: `renumbered ids` compares this branch against main.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           # 3.11 for the reason demo.yml gives at length: the rig's 3.9.6 is EOL and pinned for
           # a cp39 wheel this path never loads. Nothing here runs the QR decode or the camera.
@@ -146,7 +154,7 @@ jobs:
           python-version: '3.11'
           cache: pip
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: npm
@@ -190,8 +198,26 @@ jobs:
           print('FTS5 is available.')
           "
 
-      - name: make ci-check
-        run: make ci-check
+      - name: make ${{ matrix.target }}
+        run: make ${{ matrix.target }}
+
+  # THE REQUIRED CHECK. The ruleset names `check`, so this job keeps that name and passes only
+  # when every shard passed. `if: always()` because a job that `needs` a red shard is otherwise
+  # SKIPPED, and a skipped required check reads as not run; the test is `== 'success'` on every
+  # result, so a failed, skipped or cancelled shard all fail it.
+  check:
+    needs: [ci-check]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: every shard succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "shard results: ${RESULTS}"
+          for r in ${RESULTS}; do
+            [ "${r}" = "success" ] || { echo "a shard did not succeed"; exit 1; }
+          done
 
   # D133's guard as its own check on the PR, so a refusal reads as what it is rather than as one
   # red line inside ninety seconds of `make ci-check` (which runs it too, as `revert-guard`).
@@ -202,14 +228,31 @@ jobs:
   revert-guard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       # `github.base_ref` is set on pull_request only; on a push to main HEAD IS origin/main
       # and the script says nothing would land.
       - name: revert guard
-        run: python3 scripts/revert-audit.py branch --upstream "origin/${{ github.base_ref || 'main' }}"
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: python3 scripts/revert-audit.py branch --upstream "origin/$BASE_REF"
+
+  # THE WORKFLOWS' OWN LINT. zizmor reads `.github/workflows/` for unpinned actions, persisted
+  # checkout tokens, template injection and over-broad permissions. Pinned to one version so a
+  # release cannot turn this red on its own. NOT a required check: the ruleset names `check`
+  # and `revert-guard` only.
+  zizmor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: zizmor
+        run: pipx run zizmor==1.30.1 .github/workflows
 
   # HAS THIS TREE ALREADY PASSED? Asked on every event and ACTED ON only for a push to main
   # (D136). It runs the lookup on a PR and a dispatch too, and prints the answer, so the
@@ -224,7 +267,9 @@ jobs:
     outputs:
       skip: ${{ steps.lookup.outputs.skip }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Look the tree up
         id: lookup
@@ -255,8 +300,9 @@ jobs:
       specs: ${{ steps.specs.outputs.specs }}
       partial: ${{ steps.specs.outputs.partial }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Does the change reach what a browser draws?
@@ -270,7 +316,9 @@ jobs:
       # every direction, to every spec.
       - name: Which specs can the change reach?
         id: specs
-        run: python3 scripts/browser-scope.py specs --base "origin/${{ github.base_ref || 'main' }}"
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: python3 scripts/browser-scope.py specs --base "origin/$BASE_REF"
 
   # The browser half. Same tree, different question: what a person actually sees.
   #
@@ -279,8 +327,8 @@ jobs:
   # widened" on the premise that `ubuntu-latest` was 2 vCPU on a PRIVATE repo, so half-of-cores
   # floored to one and more workers meant more of DEBT8's one-in-thirteen red. THAT PREMISE WENT
   # FALSE ON 2026-09-11: the repository went public, and the hosted runner measured on this repo
-  # (run 35420998424) is 4 vCPU / 15 GB, not 2. A local one-worker run of the full 668-case suite
-  # takes 11.7 minutes; `--workers=2` fits the runner's real core count. The clause is amended,
+  # (run 35420998424) is 4 vCPU / 15 GB, not 2. A local one-worker run of the whole suite
+  # took 11.7 minutes then; `--workers=2` fits the runner's real core count. The clause is amended,
   # not repealed — D136's own file records the amendment and the reason. Proof lives at
   # a twenty-dispatch table (at most 1 red run in 20) landing in a decision
   # entry of its own in a later commit of the same task; this comment is not the ongoing reader. Six shards over two runners'
@@ -301,9 +349,11 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4, 5, 6]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: npm
@@ -317,7 +367,7 @@ jobs:
       # rule that the two move together or neither does. A third hand-typed copy of the version
       # here would be a third thing to forget.
       - name: Cache the browser
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('app/package-lock.json') }}
@@ -336,7 +386,9 @@ jobs:
       # a path with a space would silently become two filters — the reason the classifier
       # answers "every spec" rather than name one.
       - name: make design-check
-        run: make design-check PW_ARGS="--shard=${{ matrix.shard }}/6 --workers=2 ${{ needs.browser-scope.outputs.specs != 'all' && needs.browser-scope.outputs.specs || '' }}"
+        env:
+          SPECS: ${{ needs.browser-scope.outputs.specs != 'all' && needs.browser-scope.outputs.specs || '' }}
+        run: make design-check PW_ARGS="--shard=${{ matrix.shard }}/6 --workers=2 $SPECS"
 
       # WHAT A RED RUN LEAVES BEHIND, because until 2026-09-11 it left four lines. The config turns
       # `trace: retain-on-failure` on under CI, so a failing case has its DOM before and after every
@@ -346,7 +398,7 @@ jobs:
       # it has never reproduced on the rig. Open one with `npx playwright show-trace <zip>`.
       - name: Keep the failing cases' traces
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           # Per shard, or the second red shard's upload collides with the first's.
           name: design-check-failures-${{ matrix.shard }}
@@ -370,7 +422,9 @@ jobs:
     if: github.event_name != 'push' && needs.browser-scope.outputs.partial != 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Name the tree
         id: tree
@@ -381,7 +435,7 @@ jobs:
             "${tree}" "${GITHUB_SERVER_URL}" "${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}" "${GITHUB_EVENT_NAME}" \
             > design-check-pass.txt
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: design-check-pass-${{ steps.tree.outputs.tree }}
           path: design-check-pass.txt

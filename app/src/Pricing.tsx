@@ -103,6 +103,7 @@ import {
 import { toast } from './kit/toast'
 import './Pricing.css'
 import { SendCard } from './SendCard'
+import { noPhotoSentence } from './CardHero'
 
 /* #/pricing — THE HAND-PRICING WORKLIST (D49, D86), REBUILT TO THE OWNER'S RE-INTERVIEW (D277).
  *
@@ -687,14 +688,14 @@ function PricingThumb({
           loading="lazy"
           onError={() => setStockFailed(true)}
         />
-      ) : at === null ? (
+      ) : at === null || photoUrl(at.box, at.index, at) === null ? (
         <Icon name="image" size={14} />
       ) : (
         <img
           className="bn-crop"
           /* BY NAME (D172): `_relabel_positions` decorates each position with the card's cid at read
              time. The frozen run file is untouched; the slot route remains where none is found. */
-          src={photoUrl(at.box, at.index, at)}
+          src={photoUrl(at.box, at.index, at) ?? undefined}
           alt=""
           loading="lazy"
           /* `data-cropped` BELONGS ON THE IMG, NOT THE BUTTON (the owner's review, 2026-09-26):
@@ -3520,7 +3521,11 @@ function PhotoSheet({ sku, at, onNext, onClose }: { sku: MergedSku | null; at: n
       {sku === null ? null : (
         <div className="pricing-photo">
           <div className="pricing-photo-frame">
-            <img src={photoUrl(place?.box ?? 0, place?.index ?? 0, place)} alt={sku.name} />
+            {photoUrl(place?.box ?? 0, place?.index ?? 0, place) === null ? (
+              <p className="pricing-photo-caption">{noPhotoSentence(place?.cid, null)}</p>
+            ) : (
+              <img src={photoUrl(place?.box ?? 0, place?.index ?? 0, place) ?? undefined} alt={sku.name} />
+            )}
           </div>
           <p className="pricing-photo-caption">
             <Location label={place?.label ?? null} flow="run" />

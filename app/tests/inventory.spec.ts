@@ -3669,7 +3669,7 @@ test('a card whose row carries a name is addressed by the name, stamp and all', 
  *
  * SO `PHOTO_CID` IS LOAD-BEARING RATHER THAN DEFENSIVE, and it is the client's half of a
  * predicate the server spells `is_photo_cid`. This is what goes red when it stops matching. */
-test('a name that names no photograph falls back to the slot address', async ({ page }) => {
+test('a name that names no photograph draws no photo address at all', async ({ page }) => {
   /* Both shapes that name no file, against one that does — because a guard tested on one
      rejection is a guard that might be testing the prefix rather than the shape. */
   const TOMBSTONE = 'moved:3f5a1c7e9b0d2468ace13579bdf02468ace13579bdf02468ace13579bdf02468'
@@ -3702,16 +3702,15 @@ test('a name that names no photograph falls back to the slot address', async ({ 
   await expandAll(page)
 
   await page.locator('.browse-row', { hasText: 'Thievul' }).first().click()
-  await expect(page.locator('.browse-photo')).toHaveAttribute(
-    'src',
-    /\/photo\/2\/1\?v=cap-1$/,
-  )
+  await expect(page.locator('.browse-photo')).toHaveCount(0)
+  /* A tombstone is a card that MOVED, with its photograph, so it may not read as never
+     photographed. The fixture's tombstone carries no `moved_to`, hence the fallback words. */
+  await expect(page.locator('.browse-absent')).toContainText('This card moved to another box')
+  await expect(page.locator('.browse-absent')).not.toContainText('never photographed')
 
   await page.locator('.browse-row', { hasText: 'Nickit' }).first().click()
-  await expect(page.locator('.browse-photo')).toHaveAttribute(
-    'src',
-    /\/photo\/2\/2\?v=cap-2$/,
-  )
+  await expect(page.locator('.browse-photo')).toHaveCount(0)
+  await expect(page.locator('.browse-absent')).toContainText('never photographed')
 })
 
 test('a sold or retired card is not offered the mid-box delete at all', async ({ page }) => {
@@ -3965,6 +3964,48 @@ test('a reclaimed photograph is drawn as reclaimed, not as a photo the store los
   await expect(page.locator('.browse-absent')).toContainText('Photograph reclaimed after the sale')
   await expect(page.locator('.browse-absent')).toContainText('sha256 deadbeef00112233')
   await expect(page.locator('.browse-absent')).not.toContainText('did not load')
+})
+
+test('a card that never had a photograph asks for none and says so, not that a file is lost', async ({
+  page,
+}) => {
+  /* `nophoto:` is D172's name for a card with no photograph and no digest: `photoUrl` gives no
+     address for it, so nothing may request `/photo/2/4` (which would 404) and the panel may
+     not claim a file went missing. */
+  const cards: Cards = {
+    ...CARDS,
+    '2/4': card({
+      index: 4, state: 'identified', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1,
+      sectionEnd: 3, cid: 'nophoto:2/4@2026-08-22T12:34:00',
+    }),
+  }
+  const asked: string[] = []
+  page.on('request', (r) => {
+    if (/\/photo\/2\/4(\?|$)/.test(r.url())) asked.push(r.url())
+  })
+  await open(page, BOXES, { ...STORE, cards })
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
+  await expect(page.locator('.browse-absent')).toContainText('This card was never photographed')
+  await expect(page.locator('.browse-absent')).not.toContainText('not on disk')
+  expect(asked, 'no photo request for a card with no photograph').toEqual([])
+})
+
+test('a moved card names the box it went to, by name', async ({ page }) => {
+  const cards = {
+    ...CARDS,
+    '2/4': {
+      ...card({
+        index: 4, state: 'identified', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1,
+        sectionEnd: 3, cid: `moved:${'ab'.repeat(32)}`,
+      }),
+      moved_to: '2/6',
+    },
+  } as Cards
+  await open(page, BOXES, { ...STORE, cards })
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
+  await expect(page.locator('.browse-absent')).toContainText('This card moved to ME01 commons.')
 })
 
 test('a listing hold is named on the delete panel rather than discovered by pressing it', async ({
