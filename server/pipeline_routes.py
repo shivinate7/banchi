@@ -2063,6 +2063,7 @@ def _position_label(
     inventory: Optional[master.Inventory],
     box,
     index,
+    games: Optional[Dict[str, Any]] = None,
 ) -> Optional[str]:
     """Where the copy stored at `box/index` is RIGHT NOW, or None where that cannot be said.
 
@@ -2085,14 +2086,38 @@ def _position_label(
         number, at = int(box), int(index)
     except (TypeError, ValueError):
         return None
-    card = inventory.cards.get(master.position_key(number, at))
-    game = str(getattr(card, "game", None) or game_registry.DEFAULT_GAME)
+    # `games` is `_games_in_boxes`'s one scoped read per box, handed down by a caller that
+    # labels many positions (`_relabel_positions`) so each label is not its own `cards.get`.
+    if games is None:
+        card = inventory.cards.get(master.position_key(number, at))
+        stored = getattr(card, "game", None)
+    else:
+        stored = games.get(master.position_key(number, at))
+    game = str(stored or game_registry.DEFAULT_GAME)
     if not join.is_located(game):
         return join.place_text(game, join.BoxView().at(number, at))
     view = views.get(number)
     if view is None:
         return None
     return join.place_text(game, view.at(number, at))
+
+
+def _games_in_boxes(inventory: master.Inventory, boxes) -> Dict[str, Any]:
+    """`{position key: game}` for the given boxes, one indexed `select` per box.
+
+    Store-scaling item 4's shape (a column `select`, no per-key `Rows.get`), scoped by the
+    `box` index like `records_in` so it is not an unscoped walk. `Rows.select` re-validates
+    loaded rows against the live object, so it sees this session's own writes.
+    """
+    games: Dict[str, Any] = {}
+    for box in boxes:
+        try:
+            number = int(box)
+        except (TypeError, ValueError):
+            continue
+        for key, (game,) in inventory.cards.select(("game",), box=number):
+            games[key] = game
+    return games
 
 
 def _relabel_positions(table) -> None:
@@ -2160,13 +2185,14 @@ def _relabel_positions(table) -> None:
         if isinstance(at, dict) and at.get("box") is not None
     }
     views = {} if inventory is None else run_resolve.box_views(inventory, boxes=boxes)
+    games = None if inventory is None else _games_in_boxes(inventory, boxes)
     for entry in table.get("skus") or ():
         if not isinstance(entry, dict):
             continue
         for at in entry.get("positions") or ():
             if not isinstance(at, dict):
                 continue
-            at["label"] = _position_label(views, inventory, at.get("box"), at.get("index"))
+            at["label"] = _position_label(views, inventory, at.get("box"), at.get("index"), games)
 
 
 def do_pipeline_pricing(name: str) -> dict:
@@ -2600,15 +2626,26 @@ def _unsent_ledger(
     held_out, live_out = run_resolve._copies_out(inventory, readings, by_sku=by_sku)
     committed = run_resolve._committed_keys(inventory, held_out, by_sku=by_sku)
     unsent: Dict[str, List[str]] = {}
+    # `by_sku` already holds every SKU-bearing card's state, so the per-key `cards.get` below is
+    # kept only for a card `by_sku` cannot describe (no SKU, or no such card).
+    by_key = {row.key: (owner, row.state) for owner, rows in by_sku.items() for row in rows}
     for sku, keys in positions.items():
         free: List[str] = []
         for key in keys:
-            card = inventory.cards.get(key)
-            if card is None or card.state in master.TERMINAL_STATES:
+            hit = by_key.get(key)
+            if hit is not None:
+                card_sku, state = hit
+                card_sku = card_sku if card_sku else None
+            else:
+                card = inventory.cards.get(key)
+                if card is None:
+                    continue
+                card_sku, state = (str(card.sku) if card.sku else None), card.state
+            if state in master.TERMINAL_STATES:
                 continue
             # A RECORD RE-IDENTIFIED SINCE THE JOIN IS NOT THIS SKU'S COPY ANY MORE — the
             # review answer or a later emit stamped it with the card it actually is.
-            if card.sku and str(card.sku) != sku:
+            if card_sku and card_sku != sku:
                 continue
             if key in committed:
                 continue
