@@ -1,11 +1,10 @@
 /* THE LOCKUP'S DRAWING, IN ONE PLACE.
  *
- * IT EXISTS BECAUSE A SECOND COPY OF IT ALREADY COST A ROUND. `lockup-round.html` was generated
- * from `lockup-tails.html` at round 1 and then kept its own frozen copy of `frame()`. At round 6
- * the option being swept -- the corner radius -- did not exist in that copy, so every specimen
- * fell through to the same value and the row was six drawings of one bracket, presented as a
- * sweep. docs/specs/logo.md section 6 records the ancestor: "three images approved as different
- * were the same image."
+ * IT EXISTS BECAUSE A SECOND COPY OF IT ALREADY COST A ROUND. A sheet once kept its own frozen
+ * copy of `frame()`. When the option being swept (the corner radius) did not exist in that copy,
+ * every specimen fell through to the same value and the row was six drawings of one bracket,
+ * presented as a sweep. docs/specs/logo.md section 6 records the ancestor: "three images approved
+ * as different were the same image."
  *
  * A sheet that draws the lockup and does not load this file is that bug coming back.
  *
@@ -33,8 +32,9 @@ function taperParts(x0,y0,aX,aY,r,w,tip,tlf){
   caps:[[pts[0].x,pts[0].y,pts[0].w/2],[pts[pts.length-1].x,pts[pts.length-1].y,pts[pts.length-1].w/2]]}}
 /* THE RAIL END OF THE COLLAPSE, from this same sampler — and that is the whole reason the
    sidebar's bracket can morph at all.
-   docs/specs/logo.md section 16 recorded a morph as impossible: "a ~600-point filled taper
-   against a 52-byte stroked wire -- paths that shape cannot interpolate". That is true of how
+   A morph between the lockup's tapered bracket and the mark's stroked wire looks impossible: a
+   ~600-point filled taper against a 52-byte stroked wire, paths that shape cannot interpolate.
+   That is true of how
    the two are EXPRESSED and false of what they are. Both are one L: a vertical leg, a rounded
    elbow, a horizontal leg. `taperParts` is that L parametrically at a fixed 301 samples, and the
    mark's small cut is THE SAME CALL with `tip = 1`, because section 11 removed the taper and

@@ -721,23 +721,7 @@
     "docs/specs/logo.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "centre",
-        "centre",
-        "centre",
-        "centreline",
-        "colours",
-        "favour",
-        "grey",
-        "greys",
-        "honoured",
-        "honoured",
-        "judgement",
-        "judgement",
-        "judgement",
-        "judgement",
-        "labelled",
-        "labelled",
-        "optimises"
+        "greys"
       ]
     },
     "docs/specs/mechanization-backlog.md": {
