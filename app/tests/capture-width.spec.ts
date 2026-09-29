@@ -3,9 +3,10 @@
 import { expect, test } from '@playwright/test'
 import { sealEveryTest, settleAnimations } from './shell'
 
-/* THE WIDTH THE VIEWFINDER GAVE UP MUST GO TO SOMETHING (owner, 2026-09-28; spec §5.7).
- * `fc90e00c` made the stage panel hug its 9:16 frame and handed the freed width to a `1fr` last
- * capture column. That photo is 9:16 and height-bound, so it could not use the width: the panel
+/* SPARE WIDTH GOES TO THE BLACK STAGE PANEL, NEVER TO A WHITE BAND (owner, 2026-09-28, 2026-09-29).
+ * The stage panel flexes with the sidebar and its 9:16 frame stays centred (a painted box, so its
+ * width is not a band); the last-capture column hugs its photo. `fc90e00c` once handed the freed
+ * width to a `1fr` last capture column instead. That photo is 9:16 and height-bound, so it could not use the width: the panel
  * went from 320 to 403px at 1440 and the frame inside stayed narrower, a white band either side.
  *
  * WHAT THIS MEASURES: for every 8px row from the stage's top to the photo's bottom, the width of the shell that no
@@ -27,8 +28,6 @@ const PAINTED = [
 
 /** 24px for a frame's own padding and rounding, on top of the grid's two column gaps (read live). */
 const SLACK = 24
-/** The deliberate right-hand margin: what is left of the shell once the controls sit at their cap. */
-const RIGHT_MARGIN = (w: { rightBand: number; railW: number }) => (w.railW >= 459 ? w.rightBand : 0)
 
 for (const theme of ['light', 'dark'] as const) {
   for (const [width, height] of [
@@ -95,17 +94,16 @@ for (const theme of ['light', 'dark'] as const) {
           const colGap = parseFloat(getComputedStyle(document.querySelector('.capture-shell')!).columnGap) || 0
           // Nothing may sit between Last capture and the shell's right edge but a small margin.
           const lastRight = document.querySelector('.capture-last')!.getBoundingClientRect().right
-          const railW = Math.round(document.querySelector('.capture-card-run')!.getBoundingClientRect().width)
-          return { colGap, railW, rightBand: Math.round(shell.right - lastRight), worstGap: Math.round(worstGap), worstY, shellWidth: Math.round(shell.width) }
+          return { colGap, rightBand: Math.round(shell.right - lastRight), worstGap: Math.round(worstGap), worstY, shellWidth: Math.round(shell.width) }
         },
         { painted: PAINTED, step: 8 },
       )
       expect(
         worst.worstGap,
         `${worst.worstGap}px of the ${worst.shellWidth}px shell is unpainted at y=${worst.worstY}`,
-      ).toBeLessThanOrEqual(2 * worst.colGap + SLACK + RIGHT_MARGIN(worst))
-      // Width the controls cannot use (they stop at 460px) is page margin on the right, and only then.
-      expect(worst.rightBand, `${worst.rightBand}px of empty shell right of Last capture`).toBeLessThanOrEqual(worst.railW >= 459 ? 400 : 48)
+      ).toBeLessThanOrEqual(2 * worst.colGap + SLACK)
+      // The stage panel (black, a painted box) takes the spare width, so nothing is left beside Last capture.
+      expect(worst.rightBand, `${worst.rightBand}px of empty shell right of Last capture`).toBeLessThanOrEqual(48)
     })
   }
 }
