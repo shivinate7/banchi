@@ -8,14 +8,14 @@ const PATHS = {
   camera: 'M4 8h3l2-3h6l2 3h3v11H4z M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   play: 'M6 4l14 8-14 8z',
   pause: 'M7 4h4v16H7z M13 4h4v16h-4z',
-  layers: 'M12 3l9 5-9 5-9-5z M3 13l9 5 9-5 M3 17l9 5 9-5',
+  layers: 'M12 2.6l9 5 -9 5 -9 -5z M3 12.6l9 5 9 -5 M3 16.6l9 5 9 -5',
   inbox: 'M3 13l3-8h12l3 8v6H3z M3 13h5l2 3h4l2-3h5',
-  tag: 'M3 12V4h8l9 9-8 8z M7.5 8.5h.01',
+  tag: 'M3.4 12V4h8l9 9 -8 8z M7.9 8.5h0.01',
   cart: 'M3 4h2l2.4 11h11l2-8H6.2 M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2z M18 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2z',
-  truck: 'M3 6h11v10H3z M14 10h4l3 3v3h-7z M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
+  truck: 'M3 5.6h11v10H3z M14 9.6h4l3 3v3h-7z M7 18.6a2 2 0 1 0 0 -4 2 2 0 0 0 0 4z M17 18.6a2 2 0 1 0 0 -4 2 2 0 0 0 0 4z',
   box: 'M21 8l-9-4-9 4v9l9 4 9-4z M3 8l9 4 9-4 M12 12v9',
   qr: 'M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h2v2h-2z M18 14h2v2h-2z M14 18h2v2h-2z M18 18h2v2h-2z',
-  hand: 'M8 11V5a1.5 1.5 0 0 1 3 0v6 M11 10V4a1.5 1.5 0 0 1 3 0v7 M14 11V6a1.5 1.5 0 0 1 3 0v8a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7L3 13.5a1.6 1.6 0 0 1 2.5-2L8 14',
+  hand: 'M8.9 11.6V5.6a1.5 1.5 0 0 1 3 0v6 M11.9 10.6V4.6a1.5 1.5 0 0 1 3 0v7 M14.9 11.6V6.6a1.5 1.5 0 0 1 3 0v8a6 6 0 0 1 -6 6h-1a6 6 0 0 1 -5 -2.7L3.9 14.1a1.6 1.6 0 0 1 2.5 -2L8.9 14.6',
   grid: 'M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z',
   search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M20 20l-4-4',
   check: 'M5 12l5 5 9-10',
@@ -33,8 +33,8 @@ const PATHS = {
   trash: 'M4 7h16 M10 11v6 M14 11v6 M6 7l1 13h10l1-13 M9 7V4h6v3',
   alert: 'M12 3l10 18H2z M12 10v5 M12 18h.01',
   info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 11v5 M12 8h.01',
-  sparkles: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z M19 17l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z',
-  zap: 'M13 2L4 14h7l-1 8 9-12h-7z',
+  sparkles: 'M10.8 2.7l1.8 5.2L17.8 9.7l-5.2 1.8L10.8 16.7l-1.8 -5.2L3.8 9.7l5.2 -1.8z M17.8 16.7l0.7 2 2 0.7 -2 0.7 -0.7 2 -0.7 -2 -2 -0.7 2 -0.7z',
+  zap: 'M13.3 2L4.3 14h7l-1 8 9 -12h-7z',
   clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 7v5l3 2',
   eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   image: 'M4 5h16v14H4z M4 16l5-5 4 4 3-3 4 4 M15.5 9.5h.01',
@@ -72,10 +72,10 @@ const PATHS = {
      (`Pricing.css`, `Pricing.tsx`). */
   lock: 'M6 9.7h12v10H6z M9 9.7V5.7a3 3 0 0 1 6 0v4',
   unlock: 'M6 9.7h12v10H6z M9 9.7V5.7a3 3 0 0 1 5.5-1.7',
-  flag: 'M5 21V4 M5 4h12l-2 4 2 4H5',
+  flag: 'M5.8 21V4 M5.8 4h12l-2 4 2 4H5.8',
   filter: 'M3 5h18l-7 8v6l-4 2v-8z',
   columns: 'M4 4h16v16H4z M12 4v16',
-  external: 'M14 4h6v6 M20 4l-9 9 M19 14v5H5V5h5',
+  external: 'M13.6 4.4h6v6 M19.6 4.4l-9 9 M18.6 14.4v5H4.6V5.4h5',
   copy: 'M9 9h11v11H9z M5 15H4V4h11v1',
   circle: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z',
   dot: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
@@ -83,7 +83,7 @@ const PATHS = {
   rotate: 'M4 4v5h5 M4.6 9A8 8 0 1 1 4 13',
   film: 'M4 4h16v16H4z M4 9h16 M4 15h16 M9 4v16 M15 4v16',
   package: 'M21 8l-9-4-9 4v9l9 4 9-4z M3 8l9 4 9-4 M12 12v9 M7.5 6l9 4',
-  wallet: 'M3 7h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z M3 7a2 2 0 0 1 2-2h11v2 M16 13h5v3h-5z',
+  wallet: 'M3 6.5h16a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2H5a2 2 0 0 1 -2 -2V6.5z M3 6.5a2 2 0 0 1 2 -2h11v2 M16 12.5h5v3h-5z',
   send: 'M22 2L11 13 M22 2l-7 20-4-9-9-4z',
   home: 'M3 11l9-8 9 8v10H3z M9 21v-6h6v6',
   mail: 'M3 6h18v12H3z M3 7l9 6 9-6',
@@ -91,15 +91,15 @@ const PATHS = {
   hash: 'M4 9h16 M4 15h16 M10 3L8 21 M16 3l-2 18',
   paste: 'M9 3h6v3H9z M7 5H5v16h14V5h-2',
   ruler: 'M3 17L17 3l4 4L7 21z M8 12l2 2 M11 9l2 2 M14 6l2 2',
-  wand: 'M15 4l5 5L9 20l-5-5z M15 4l-1.5 1.5 M18 7l-1.5 1.5 M4 4h.01 M9 2h.01 M20 12h.01 M20 19h.01 M2 12h.01',
+  wand: 'M15 4.25l5 5L9 20.25l-5 -5z M15 4.25l-1.5 1.5 M18 7.25l-1.5 1.5 M4 4.25h0.01 M9 2.25h0.01 M20 12.25h0.01 M20 19.25h0.01 M2 12.25h0.01',
   /* A lidded box with a handle strap — retiring a card is putting it away, not deleting it
      (`trash`) or shipping it (`package`/`box`). Added for the Retire control (owner's ruling,
      2026-09-20, "clearer icon only"): the bare `minus` read as unclear icon-only. */
-  archive: 'M3 4h18v4H3z M4 8h16v11H4z M10 12h4',
+  archive: 'M3 4.4h18v4H3z M4 8.4h16v11H4z M10 12.4h4',
   /* ONE ICON, ONE MEANING (UX-118). `history` meant four things: the graveyard, a product's
      history, the run list and a row's price history. These two take two of them over; the
      table under PATHS says which name means what. */
-  headstone: 'M6 21V10a6 6 0 0 1 12 0v11 M4 21h16 M10 12h4 M12 10v5',
+  headstone: 'M6 20.6V9.6a6 6 0 0 1 12 0v11 M4 20.6h16 M10 11.6h4 M12 9.6v5',
   chart: 'M4 4v16h16 M7 15l4-5 3 3 5-6',
   /* The eight icons the ICONOGRAPHY map added (`docs/specs/iconography.md` section 3), for the
      vocabulary `IconButton` draws from. Each is one meaning, in `ICON_MEANINGS` below. */
@@ -107,7 +107,7 @@ const PATHS = {
      (Sales' own meaning) — a THIRD, deliberately different mark for a THIRD meaning. */
   sold: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 6v12 M15.5 8H10a1.75 1.75 0 0 0 0 3.5h4a1.75 1.75 0 0 1 0 3.5H8.5',
   /* A pencil: Edit or Rename. The body, the tip, the underline it is about to write. */
-  pencil: 'M4 20h4l11-11a2 2 0 0 0-3-3L5 17v3z M13 6l3 3',
+  pencil: 'M4 19.5h4l11 -11a2 2 0 0 0 -3 -3L5 16.5v3z M13 5.5l3 3',
   /* An eraser, angled, over the line it is about to remove: an undoable clear, never `trash`
      (which means gone for good). */
   eraser: 'M17 3l4 4-10.5 10.5H6L3 14z M11 6l7 7 M4 20h9',
