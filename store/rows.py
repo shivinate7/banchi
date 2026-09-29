@@ -117,6 +117,9 @@ class Rows(MutableMapping):
         # `select()` must re-check by hand after `_complete`, because the source's own index
         # cannot see an uncommitted change (D192, item 2's `__len__` fix).
         self._touched: set = set()
+        # Keys the LAST `where()` found in the source and `parse` refused. A caller for whom a
+        # missing row is a defect (a live claim) reads this and refuses; one that may skip reads nothing.
+        self.dropped: List[str] = []
         self._track = track
         for key, obj in (objects or {}).items():
             self._loaded[str(key)] = obj
@@ -264,6 +267,7 @@ class Rows(MutableMapping):
             }
             return [found[key] for key in sorted(found)]
         keys: set = set()
+        self.dropped = []
         for key, text in self.source.where(equals):
             key = str(key)
             if key in self._deleted:
@@ -276,6 +280,8 @@ class Rows(MutableMapping):
             # anyway made the return below a KeyError (found on `price_history`'s bogus range).
             if self._remember(key, text) is not None:
                 keys.add(key)
+            else:
+                self.dropped.append(key)
         for key in self._touched:
             if key in self._deleted or key not in self._loaded or key in keys:
                 continue

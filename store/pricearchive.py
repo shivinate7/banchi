@@ -313,7 +313,6 @@ class PriceArchive:
         `Rows`'s diff is baseline-based, so a bucket whose reading is byte-identical to what
         is already stored costs nothing in the transaction — only a new key or one whose
         reading actually changed reaches disk.
-
         """
         for key, bucket in buckets.items():
             self.entries[key] = bucket

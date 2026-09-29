@@ -72,6 +72,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
+from store.files import StoreError
 from store.rows import Rows, TableSpec
 
 # A claim is one of two things and there is no third. `live` holds cards; `released` is the
@@ -238,9 +239,9 @@ def _parse(key: str, record: dict) -> Optional["Submission"]:
     `Cache.parse`'s and `Queue.parse`'s rule, and it is a different trade here, so it is
     argued rather than copied. A cache row that will not parse costs a re-read; a CLAIM row
     that will not parse costs the protection it was written to provide. It is still skipped
-    rather than raised on, because the alternative is a store that cannot be opened at all —
-    and an unparseable row is reported: `Submissions.unreadable` counts what was skipped, the
-    route puts the figure on the wire, and the screen says so.
+    rather than raised on here, because the alternative is a store that cannot be opened at all —
+    but a LIVE one is never skipped silently: `Submissions.live` raises `StoreError` naming it,
+    and `Submissions.unreadable` lists the keys.
     """
     if str(key).startswith("_"):
         return None
@@ -294,7 +295,15 @@ class Submissions:
         it cannot become the full-table pass that `cli/resolve.py:_copies_out` was measured as.
         """
         found = self.entries.where(state=STATE_LIVE)
+        if self.entries.dropped:
+            raise StoreError(
+                f"A live submission claim will not parse and would stop protecting its cards: {', '.join(self.entries.dropped)}"
+            )
         return sorted(found, key=lambda sub: (sub.started_at or "", sub.receipt))
+
+    def unreadable(self) -> List[str]:
+        """Keys of live rows that will not parse, as of the last `live()` read."""
+        return list(self.entries.dropped)
 
     def overlap(self, keys: Iterable[str]) -> List[Tuple["Submission", List[str]]]:
         """Every live claim holding any of `keys`, with the cards it and this press share.

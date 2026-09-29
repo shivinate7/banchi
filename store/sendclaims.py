@@ -33,6 +33,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, Iterable, List, Optional, Tuple
 
+from store.files import StoreError
 from store.rows import Rows, TableSpec
 from store.submissions import holder_alive, proc_start
 
@@ -117,6 +118,11 @@ class SendClaims:
     def live(self) -> List[SendClaim]:
         """Every claim still holding SKUs, oldest first. One indexed read on `state`."""
         found = self.entries.where(state=STATE_LIVE)
+        if self.entries.dropped:
+            # A live claim that will not parse would stop protecting its SKUs: loud, never skipped.
+            raise StoreError(
+                f"A live send claim will not parse and would stop protecting its SKUs: {', '.join(self.entries.dropped)}"
+            )
         return sorted(found, key=lambda claim: (claim.started_at or "", claim.stamp))
 
     def get(self, stamp: str) -> Optional[SendClaim]:
