@@ -50,6 +50,9 @@
     "050-git-and-gh-cli-traps.md",
     "051-guard-or-probe-wrong-green.md",
     "052-multi-agent-worktree-traps.md",
-    "053-pricing-corpus-five-unlocked-writers.md"
+    "053-pricing-corpus-five-unlocked-writers.md",
+    "054-capture-undo-13th-row-flake.md",
+    "055-audit-self-test-no-node-modules.md",
+    "056-provision-selftest-race-case.md"
   ]
 }

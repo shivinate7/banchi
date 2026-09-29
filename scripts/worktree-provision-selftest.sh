@@ -67,6 +67,8 @@ install_serve_deps() {
   mkdir -p "$dest/scripts" "$dest/server" "$dest/store"
   cp "$ROOT/scripts/serve.py" "$dest/scripts/serve.py"
   cp "$ROOT/scripts/primary_sync.py" "$dest/scripts/primary_sync.py"
+  cp "$ROOT/scripts/reap_mark.py" "$dest/scripts/reap_mark.py"
+  cp "$ROOT/scripts/reap.py" "$dest/scripts/reap.py"
   cp "$ROOT/envfile.py" "$dest/envfile.py"
   cp "$ROOT/server/ports.py" "$dest/server/ports.py"
   cp "$ROOT/store/files.py" "$dest/store/files.py"
@@ -353,6 +355,42 @@ if [ -f "$tmp/wt/app/node_modules/left-pad.js" ]; then
   ok "a lock naming a live but UNRELATED process (recycled pid) is reclaimed, not trusted"
 else
   bad "a lock naming a live but unrelated process blocked the install forever"
+fi
+
+# ---------------------------------------- case 10: --foreground finishes the install
+#
+# `make worktree-setup` passes --foreground: npm ci must have RUN and the receipt must be
+# written by the time the script returns, with no waiting on a background child.
+
+fresh_fixture differ
+: > "$tmp/npm.log"
+cat > "$tmp/bin/npm" <<'NPM'
+#!/usr/bin/env bash
+if [ "$1" = "--prefix" ] && [ "$3" = "ci" ]; then
+  mkdir -p "$2/node_modules"
+  echo stub > "$2/node_modules/left-pad.js"
+  printf 'ran\n' >> "${STUB_LOG:?}"
+  exit 0
+fi
+exit 1
+NPM
+chmod +x "$tmp/bin/npm"
+( cd "$tmp/wt" && PATH="$tmp/bin:$PATH" STUB_LOG="$tmp/npm.log" bash "$SCRIPT" --foreground "$tmp/main" \
+    >"$tmp/out-fg.log" 2>&1 )
+if [ -f "$tmp/wt/app/node_modules/left-pad.js" ] \
+   && [ "$(cat "$tmp/wt/app/node_modules/.pkmnscan-lock" 2>/dev/null)" = "$(lock_digest "$tmp/wt/app/package-lock.json")" ] \
+   && [ ! -d "$tmp/wt/.serve/npm-install.lock" ]; then
+  ok "--foreground: npm ci finished, receipt written and lock released before return"
+else
+  bad "--foreground returned before the install and its receipt were complete"
+fi
+: > "$tmp/npm.log"
+( cd "$tmp/wt" && PATH="$tmp/bin:$PATH" STUB_LOG="$tmp/npm.log" bash "$SCRIPT" --foreground "$tmp/main" \
+    >"$tmp/out-fg2.log" 2>&1 )
+if [ -s "$tmp/npm.log" ]; then
+  bad "--foreground reran npm ci over a current install"
+else
+  ok "--foreground skips npm when the install is current"
 fi
 
 echo

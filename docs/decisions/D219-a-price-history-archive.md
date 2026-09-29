@@ -88,3 +88,16 @@ a schedule and the schedule is deferred, by the owner's own word
 (`docs/specs/revenue-plan.md` §4, `docs/specs/revenue-next.md` "The archive comes first"). A
 sweep firing on its own reverses D62's own statement. D62 says this reader cannot fire by
 itself. That reversal needs its own argument, which nobody has made yet.
+
+### Amended 2026-09-28: a stored summary for Holdings
+
+Owner's ruling, 2026-09-28. Holdings value took 8 to 11 s on the live server, because it
+loaded all 159,341 archive rows through `PriceArchive._index` (89% of the route). The fix is a
+table, not a cache, by D189's argument, and no RAM is held while Banchi idles.
+`price_history_summary` holds one row per `(sku, range)`, with that range's `(start, market,
+width_days)` points ascending. `PriceArchive.upsert` merges into it in the same
+`Store().write()` transaction as the buckets. Schema 14 builds it once, under the lock, from
+`price_history`. `PriceArchive.summary_for_sku` is the indexed read `pipeline/holdings.py` uses.
+Measured, 162k rows and 2,500 on-hand SKUs: 2288 ms to 242 ms, response byte-identical. The
+never-delete rule is unchanged: the merge only adds or replaces a start.
+The one-time build holds the store lock for about 1.4 s and the first open takes about 3.35 s on a 162k-row archive, so captures queue behind it and do not fail (30 s lock timeout); the build stays inside the lock by design.

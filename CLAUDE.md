@@ -51,7 +51,8 @@ evidence and are never rewritten to match a later tree.
 
 ```
 make hooks          # arm the git hooks from scripts/githooks/. Once per clone.
-make worktree-setup # in a fresh worktree: venv, T1's cache, this checkout's own port (D43).
+make worktree-setup # in a fresh worktree: venv, T1's cache, app/node_modules (npm ci, skipped
+                    #   when current), this checkout's own port (D43).
 make status         # where you are: next step, T1 score, branch.
 make map            # docs/map.py rendered (D80). ARGS=<package|path|D<n>|--stale|--decisions>.
                     #   ARGS="D<n> --full" prints that entry in full, verbatim.
