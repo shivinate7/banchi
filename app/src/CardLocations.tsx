@@ -344,8 +344,6 @@ function OwnerRows({
   className,
   head = true,
 }: Omit<CardLocationsProps, 'persona'>) {
-  const number = collectorNumber(group)
-
   /* WHICH COPIES ARE DRAWN, AND IN WHAT ORDER (D132). Rule 1 below used to say no copy is
      dropped for being sold; the owner amended that on 2026-09-10 — a sold copy is not a place
      a hand can go, and scrolling past them to find the live ones was the whole complaint. What
@@ -426,16 +424,8 @@ function OwnerRows({
      runs box, section and card as one line, so there is no second column for a wider key to
      widen and no name beside it that reservation was ever protecting. `--pos-slot-key` in
      `CardLocations.css` is retired with it, for the same reason and in the same commit. */
-  /* The machine strings — SKU, set code, number — in mono; the condition is a phrase and is
-     drawn beside them in the UI face. */
-  const meta =
-    group.sku === null
-      ? ['no SKU yet']
-      : [
-          `SKU ${group.sku}`,
-          ...(group.set_hint === null ? [] : [group.set_hint]),
-          ...(number === null ? [] : [number]),
-        ]
+  /* THE SKU, SET, NUMBER AND CONDITION LINE IS GONE (the owner's call): the card's header and
+     `CardHero.tsx`'s Details draw every one of those facts. */
 
   return (
     <section className={['card-locations', 'card-locations-owner', className ?? ''].filter(Boolean).join(' ')}>
@@ -522,16 +512,6 @@ function OwnerRows({
           ) : null}
         </div>
 
-        <p className="card-locations-meta">
-          <span className="card-locations-meta-mono">
-            {meta.map((part, at) => (
-              <span key={at}>{part}</span>
-            ))}
-          </span>
-          {group.condition === null ? null : (
-            <span className="card-locations-cond">{group.condition}</span>
-          )}
-        </p>
         {/* THE CEILING, SAID SO IT CANNOT BE READ AS A SECOND READING. `up to 3 may be live`
             sat two lines under `3 live on TCGplayer` and used the same figure to mean the
             other thing, so a reader could not tell whether three ARE live or three MAY be.

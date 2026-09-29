@@ -3,12 +3,12 @@ import { useEffect, useRef, useState } from 'react'
 import type { Place, SectionDetail } from './types'
 import {
   clamp,
-  graduationStep,
   nonEmptySections,
   sectionBlankSentence,
   sectionDepthOf,
   sentenceOf,
   sentencePartsOf,
+  rulerTicksOf,
   spansOf,
 } from './position'
 import { isDeparted } from './server'
@@ -82,27 +82,10 @@ export function PositionBar({
     : null
   const gone = isDeparted(place)
 
-  /* THE STRIP'S CAPTION IS THE SECTION AMONG THE BOX'S SECTIONS once the ruler above carries the
-     card's own count: one count per instrument, and section numbers throughout. Without the
-     ruler the caption is the card's own `Card 5 of 12`.
-
-     F9: THE DENOMINATOR IS THE HIGHEST NON-EMPTY SECTION NUMBER, NEVER A COUNT OF THEM. Section
-     numbers never renumber when an empty one hides (the owner's rule), so a middle section
-     hidden by a gap must not shrink `N` below a section this card panel still draws — `Section
-     10 of 9` would be worse than the stale `of 11` this amends. The highest surviving number is
-     always at least as large as any section still on screen. */
-  const sectionCount =
-    visibleSections !== undefined && visibleSections.length > 0
-      ? Math.max(...visibleSections.map((detail) => detail.section))
-      : null
-  const boxCaption =
-    sectionDepth && place.section !== null
-      ? sectionCount === null
-        ? /* No count of the box's sections to state, and the section caption above already names
-             this one: the line keeps only back and front. */
-          ''
-        : `Position ${place.section} of ${sectionCount}`
-      : parts.main
+  /* WITH THE RULER THE STRIP HAS NO CAPTION (the owner's call, D-position-ruler-ticks): the header
+     already says `Section N`, and the chips say the rest. Without the ruler the caption is the
+     card's own `Card 5 of 12`. */
+  const boxCaption = parts.main
   const boxDetail = sectionDepth ? null : parts.detail
 
   /* Drawn only when the server said where the card is. The clamp is for layout, not truth. */
@@ -179,15 +162,9 @@ export function PositionBar({
           track with `querySelector('.position-bar-track')`, and the section ruler carries that
           class too; only document order makes that selector return the strip. The visual order
           is done with CSS `order`. */}
-      {/* WITH THE RULER, THE CAPTION SHARES ITS LINE WITH \`back\` AND \`front\` (LOC-06), so saying which
-          end is card 1 costs the row no height: the copies row is sized to the fold (D118). */}
-      {sectionDepth ? (
-        <div className="position-bar-ends-row">
-          <span className="position-bar-end-back" aria-hidden="true">back</span>
-          <p className="position-bar-text position-bar-text-box">{boxCaption}</p>
-          <span className="position-bar-end-front" aria-hidden="true">front</span>
-        </div>
-      ) : (
+      {/* WITH THE RULER, `back` AND `front` ARE WRITTEN ONCE, under the card ruler at the foot
+          (D-position-ruler-ticks): both strips run the same way, so one pair says it for both. */}
+      {sectionDepth ? null : (
         <p className="position-bar-text position-bar-text-box">
           {boxCaption}
           {boxDetail === null ? null : <span className="position-bar-text-detail">{boxDetail}</span>}
@@ -252,11 +229,18 @@ export function PositionBar({
                     aria-hidden="true"
                   />
                 )}
-                <span
-                  className="position-bar-rule"
-                  style={{ ['--pb-marks' as string]: String(depth.of / graduationStep(depth.of)) }}
-                  aria-hidden="true"
-                />
+                {/* THE TICKS (D-position-ruler-ticks): every 5th card, every 10th darker and numbered. */}
+                {rulerTicksOf(depth.of).map((tick) => (
+                  <span
+                    key={tick.card}
+                    className="position-bar-tick"
+                    data-major={tick.major ? 'true' : undefined}
+                    style={{ left: `${tick.at}%` }}
+                    aria-hidden="true"
+                  >
+                    {tick.label ? <span className="position-bar-tick-num">{tick.card}</span> : null}
+                  </span>
+                ))}
                 {/* SECTION NUMBERS AT BOTH ENDS (LOC-04): card 1 at the back, the last card at the
                     front, the same count as the caption above. */}
                 <span className="position-bar-edge position-bar-edge-start" aria-hidden="true">{depth.firstCard}</span>
@@ -268,7 +252,16 @@ export function PositionBar({
               data-gone={depth?.marker == null ? 'true' : undefined}
               style={{ left: `${sectionAt}%` }}
               aria-hidden="true"
-            />
+            >
+              {/* THE CARD'S NUMBER, in a chip beside the pin (D-position-ruler-ticks). It rides the
+                  pin, so it eases and fades with it, and it flips to the pin's other side past the
+                  middle so it never meets the ruler's end. */}
+              {depth?.marker == null || place.card === null ? null : (
+                <span className="position-bar-chip" data-flip={depth.marker > 50 ? 'true' : undefined}>
+                  {place.card}
+                </span>
+              )}
+            </span>
           </div>
           {/* RETIRED, NEVER DRAWN (the owner's Direction-B build, 2026-09-25): every fact this
               caption ever stated — the section's name, the card's count — is now said once, on

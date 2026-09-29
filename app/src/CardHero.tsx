@@ -277,6 +277,11 @@ export function factGroupsOf(
         ...(readAs !== null ? [readAs] : []),
         { label: 'Game', value: gameWord(card) ?? 'not recorded' },
         { label: 'Set hint', value: card.set_hint ?? 'none', kind: 'mono' },
+        /* THE COPIES HEADER'S SKU AND CONDITION LINE IS GONE: these two are its facts, said here. */
+        ...(card.sku === null || card.sku.trim() === '' ? [] : [{ label: 'SKU', value: card.sku.trim(), kind: 'mono' as const }]),
+        ...(card.sku === null || listings[card.sku.trim()]?.condition == null
+          ? []
+          : [{ label: 'Condition', value: listings[card.sku.trim()]!.condition! }]),
       ],
     },
     {
