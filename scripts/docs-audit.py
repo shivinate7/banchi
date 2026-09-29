@@ -5727,9 +5727,9 @@ _SUBAGENT_OVERRIDE_KEYS = (_SUBAGENT_MODEL_KEY, _SUBAGENT_FORCE_KEY)
 # environment variable: it is a persistent artifact this repo can require to carry its own
 # proof of currency, the way D178 requires a `+` marker to be a claim WITH AN EXPIRY rather
 # than a bare assertion. So the override is legitimate exactly when it names the moment it
-# stops being current, and this is the sibling key that states it — read from the same `env`
-# block, alongside the two keys it governs.
-_SUBAGENT_UNTIL_KEY = "CLAUDE_CODE_SUBAGENT_MODEL_UNTIL"
+# stops being current, and this is the sibling key that states it — a top-level key of the same file
+# (the parent's `roles-override-carries-expiry` key), beside the `env` block that holds the two keys it governs.
+_SUBAGENT_UNTIL_KEY = "_subagentCapUntil"
 
 # Opus-shaped work is the parent rule's own phrase for what earns this override:
 # "long-horizon, whole-codebase, or many-hour autonomous work" — hours, named as hours, never
@@ -5748,7 +5748,7 @@ _SUBAGENT_SETTINGS_NAMES = ("settings.json", "settings.local.json")
 
 
 def _parse_subagent_until(value: object) -> Optional[datetime]:
-    """`CLAUDE_CODE_SUBAGENT_MODEL_UNTIL`'s value as an aware UTC datetime, or None.
+    """`_subagentCapUntil`'s value as an aware UTC datetime, or None.
 
     `None` covers both "absent" and "present but unreadable" on purpose — the caller reports
     them differently, but this function's only job is "can this be trusted as a clock
@@ -5829,12 +5829,12 @@ def _subagent_override_findings(
             ))
             continue
 
-        until_raw = env.get(_SUBAGENT_UNTIL_KEY)
+        until_raw = data.get(_SUBAGENT_UNTIL_KEY)
         until = _parse_subagent_until(until_raw)
         if until_raw is None:
             findings.append(Finding(
                 where,
-                f"its `env` block sets {detail} with no `{_SUBAGENT_UNTIL_KEY}`.\n"
+                f"its `env` block sets {detail} with no top-level `{_SUBAGENT_UNTIL_KEY}`.\n"
                 f"  An override with no stated expiry cannot be told apart from a forgotten "
                 f"one — which is exactly what sat here for hours on 2026-09-19. State when "
                 f"it stops being current (an ISO-8601 UTC timestamp), or remove the file.",
@@ -5925,7 +5925,7 @@ def check_subagent_override(report: Report) -> None:
 
     TAKEN: a required, self-stated expiry, on D178's own idiom — "a marker that could be left
     on would turn every proposal into a permanent exemption," read here for a settings key
-    instead of a `+` in a document. `CLAUDE_CODE_SUBAGENT_MODEL_UNTIL` alongside the override
+    instead of a `+` in a document. `_subagentCapUntil`, a top-level key beside the `env` block (the parent's key), alongside the override
     states when it stops being current; this row reads it, compares it to now, and stays quiet
     exactly while the stated window holds. A file with the override and no expiry, an expiry
     already past, an expiry that fails to parse, or an expiry so far out it reads as standing
