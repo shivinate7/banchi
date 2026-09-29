@@ -1,311 +1,13 @@
-# Iconography for Banchi wave 2
+# Iconography
 
-This is the map for the ICONOGRAPHY ruling (D288). It covers
-every press in the code at the time it was written, about 340 `<Button>` sites and 150 raw
-`<button>` sites. `D288.md` cites this file. Read that entry first for the ruling
-itself. This file is the detail: the rule, the icon set, and the risks.
+**Status: BUILT.** D288 (repeated actions are labeled icons) records the ruling. This file is
+the detail: the rule, the icon set, the collisions that were fixed, and the risks. `IconButton`
+and the icon vocabulary are in `app/src/kit/`, and `make kit-adoption` enforces the rule.
+Section numbers are stable ids, because code cites them.
 
-Key to the columns in every table below:
-- **Add** means that the kit lane must add the icon to `ICON`.
-- **yes** means that the icon is already in `ICON`.
-- **–** means that the press keeps its words.
-- A glyph arrow (for example `x → trash`) means that the press keeps its words. Its glyph
-  changes to fix a collision (section 3).
-
-## 1. Tables per lane
-
-Each row is one press in the code, as it stood when this map was written. A screen lane
-converts its own rows on `ux/kit-icons` merged in, per the wave-2 brief.
-
-### Kit (the `ux/kit-icons` lane converts these — they are kit files)
-| Press (visible text) | Component | Decision | Icon | In ICON? |
-|---|---|---|---|---|
-| Close | kit/overlay.tsx:OverlayFrame | ICON | x | yes |
-| {confirmLabel} | kit/overlay.tsx:ConfirmSheet | WORDS: the decision press | – | – |
-| Cancel | kit/overlay.tsx:ConfirmSheet | WORDS: decision pair | – | – |
-| Clear (inside "12 of 40, filtered by …") | kit/data.tsx:FilterCount | WORDS: inside a sentence | – | – |
-| Select face | kit/data.tsx:PickTrigger | WORDS: shows a value | – | – |
-| (x on a chip) "Clear {facet}" | kit/data.tsx:FacetChip | ICON (hand-rolled today) | x | yes |
-| Clear all | kit/data.tsx:FilterChips | WORDS: a clear for the whole bar names its scope | – | – |
-| Sort key select | kit/data.tsx:SortControl | WORDS: shows a value (UX-214) | – | – |
-| "Low to high" / "High to low" | kit/data.tsx:SortControl | ICON, one toggle; the glyph changes by state | sortAsc / sortDesc | Add |
-| Filters + count (compact bar) | kit/filters.tsx:FilterBar | ICON with a badge | filter | yes |
-| Hide X + count | kit/filters.tsx:HideToggle | WORDS: states a set and a count (UX-211) | – | – |
-| Column name + arrow | kit/filters.tsx:SortHeader | WORDS: the column name is the face | – | – |
-| {action.label} (for example Undo) | kit/toast.tsx:Toaster | WORDS: generic label, one action in a short-lived toast, no tooltip on touch | – | – |
-| Dismiss (x) | kit/toast.tsx:Toaster | ICON | x | yes |
-| Try again | kit/index.tsx:Retry | WORDS: recovery, alone | – | – |
-| Reload + R | kit/index.tsx:ReloadButton | ICON, key R in the tooltip (UX-056) | refresh | yes |
-| Segmented options | kit/index.tsx:Segmented | WORDS: values | – | – |
-| Chip | kit/index.tsx:Chip | WORDS: values | – | – |
-| Clear search (x) | SearchField.tsx:SearchField | ICON (hand-rolled today) | x | yes |
-| {submitLabel} | SearchField.tsx:SearchField | WORDS: form submit | – | – |
-
-### Shell
-| Press | Component | Decision | Icon | In ICON? |
-|---|---|---|---|---|
-| Open it again | App.tsx:focusScreen | WORDS: recovery, alone | – | – |
-| Reload this screen | App.tsx:focusScreen | WORDS: recovery, alone | – | – |
-| Show every screen's keys | App.tsx:KeysSheet | WORDS: link in a sheet | – | – |
-| Wordmark + chevron (collapse the sidebar) | App.tsx:Sidebar | Keep: the face is the wordmark, not an icon | – | – |
-| Go to ⌘K | App.tsx:Sidebar | WORDS: labelled row in the nav foot | – | – |
-| Light mode / Dark mode | App.tsx:Sidebar | WORDS: labelled row in the nav foot | – | – |
-| Go to (phone) | App.tsx:PhoneBar | ICON | search | yes |
-| More | App.tsx:TabBar | WORDS: tab item (UX-046) | – | – |
-| Theme row | App.tsx:Drawer | WORDS: drawer row | – | – |
-| Skip to the screen | App.tsx:App | WORDS: skip link | – | – |
-| Retry | App.tsx:App | WORDS: recovery, alone | – | – |
-
-### Home
-| Press | Component | Decision | Icon | In ICON? |
-|---|---|---|---|---|
-| Start capturing / Photograph the first box | Home.tsx:Home | WORDS: the only primary (D121 KEEP) | – | – |
-| Standing rows, box rows, run rows, "more" links | Home.tsx:Home | WORDS: links that name their target | – | – |
-
-### Capture
-| Press | Component | Decision | Icon | In ICON? |
-|---|---|---|---|---|
-| Picker rows, fields, options, track cells | CaptureScreen.tsx:Row/OpenField/Opt/Track | WORDS: values | – | – |
-| Resume captures | CaptureScreen.tsx:CaptureScreen | WORDS: only primary | – | – |
-| Open the camera (x2) | CaptureScreen.tsx:CaptureScreen | WORDS: only primary | – | – |
-| Reopen the camera (x2) | CaptureScreen.tsx:CaptureScreen | WORDS: recovery, alone | – | – |
-| Re-baseline (x2) | CaptureScreen.tsx:CaptureScreen | WORDS: not in the vocabulary; the face carries a fact | – | – |
-| Set aside | CaptureScreen.tsx:CaptureScreen | WORDS: not in the vocabulary | – | – |
-| Save trace + "N frames" | CaptureScreen.tsx:CaptureScreen | WORDS: the face carries a count | – | – |
-| Save note | CaptureScreen.tsx:CaptureScreen | ICON (move to IconButton) | check | yes |
-| Shutter | CaptureScreen.tsx:CaptureScreen | WORDS: only primary | – | – |
-| {blocker.fix.label} | CaptureScreen.tsx:CaptureScreen | WORDS: the fix names itself | – | – |
-| New section | CaptureScreen.tsx:CaptureScreen | WORDS: not in the vocabulary | – | – |
-| Identify {box} on Runs | CaptureScreen.tsx:CaptureScreen | WORDS: names the box; leads to a money press | – | – |
-| Undo strip thumbnail (U, 2, 3…) | CaptureScreen.tsx:CaptureScreen | Keep: the photo is the face | – | – |
-| Remove just this card (x) | CaptureScreen.tsx:CaptureScreen | ICON, danger tone, 40px target, glyph `x → trash` | trash | yes |
-| Cancel / Remove this card | CaptureScreen.tsx:CaptureScreen | WORDS: decision pair | – | – |
-| Ask again (x2) | CaptureScreen.tsx:CaptureScreen | WORDS: recovery, alone | – | – |
-| Rig disclosure | CaptureScreen.tsx:CaptureScreen | WORDS: disclosure | – | – |
-| Clear the setup | CaptureScreen.tsx:CaptureScreen | WORDS: not in the vocabulary, glyph `refresh → eraser` | eraser | Add |
-| Release N cards | SubmissionClaims.tsx:SubmissionClaims | WORDS: paid-reading claim, cannot be undone | – | – |
-
-### Sales
-| Press | Component | Decision | Icon | In ICON? |
-|---|---|---|---|---|
-| Value my stock | Revenue.tsx:Revenue | WORDS; dies when "On the shelf loads on arrival" lands | – | – |
-| Refresh (after the load) | Revenue.tsx:Revenue | ICON through ReloadButton hotkey={false} | refresh | yes |
-| Month bars | Revenue.tsx:Revenue | WORDS: data | – | – |
-| Clear (beside "Sep only") | Revenue.tsx:Revenue | ICON, "Clear the month" | x | yes |
-| Compare to today's market | Revenue.tsx:Revenue | WORDS: not in the vocabulary | – | – |
-| Sort headers | Revenue.tsx:Revenue | WORDS through the kit SortHeader | – | – |
-| Row expand chevron | Revenue.tsx:Revenue | ICON (hand-rolled today) | chevronRight / chevronDown | yes |
-| Show all (direction B, top N) | Revenue.tsx (new) | WORDS: the face carries a count | – | – |
-
-### Shipping
-| Press | Component | Decision | Icon | In ICON? |
-|---|---|---|---|---|
-| Forget this export (empty state) | OrdersShipStage.tsx:ShipStage | WORDS: alone in an empty state | – | – |
-| Forget (file card) | OrdersShipStage.tsx:ShipStage | ICON, danger tone, "Forget this file" (UX-108 risk) | trash | yes |
-| Read another file | OrdersShipStage.tsx:ShipStage | WORDS: the card's main action | – | – |
-| Fill / Refill pick locations | OrdersShipStage.tsx:ShipStage | WORDS: UX-108 wants a verb and its object | – | – |
-| Lane chips | OrdersShipStage.tsx:ShipStage | WORDS: values | – | – |
-
-### Library
-| Press | Component | Decision | Icon | In ICON? |
-|---|---|---|---|---|
-| Reload | Graveyard.tsx:Graveyard | ICON through ReloadButton | refresh | yes |
-| Try again (x2) | Graveyard.tsx:Graveyard | WORDS: recovery, alone | – | – |
-| Close | Codes.tsx:Sheet | ICON, through the kit Sheet | x | yes |
-| Reveal / Hide | Codes.tsx:CodeBlock | ICON, pressed state, glyph `lock → eyeOff` | eye / eyeOff | yes / Add |
-| Copy all / Copied | Codes.tsx:CodeBlock | ICON; the name stays and a status says "Copied" | copy | yes |
-| Download .txt | Codes.tsx:CodeBlock | ICON, "Download the codes" | download | yes |
-| Copy path / Copied | Codes.tsx:ManifestPath | ICON | copy | yes |
-| Dismiss | Codes.tsx:Codes | ICON | x | yes |
-| Reload | Codes.tsx:Codes | ICON through ReloadButton | refresh | yes |
-| Read a box | Codes.tsx:Codes | WORDS: only primary | – | – |
-| Try again (x2) | Codes.tsx:Codes | WORDS: recovery | – | – |
-| Go to capture | Codes.tsx:Codes | WORDS: empty-state door | – | – |
-| Review duplicates | Codes.tsx:Codes | WORDS: disclosure with a count | – | – |
-| Code + eye row toggle | Codes.tsx:Codes | Keep: the code is the face; glyph `lock → eyeOff` | eyeOff | Add |
-| Set the product | Codes.tsx:Codes | WORDS: only primary in the row | – | – |
-| Fix on Inventory | Codes.tsx:Codes | WORDS: names the destination | – | – |
-| Apply to N | Codes.tsx:Codes | WORDS: count | – | – |
-| Show fewer / Show all N | Codes.tsx:Codes | WORDS: count | – | – |
-| Codes / Lots tabs | Codes.tsx:Codes | WORDS: tabs | – | – |
-| Build a lot | Codes.tsx:Codes | WORDS: not in the vocabulary | – | – |
-| State and lane chips | Codes.tsx:Codes | WORDS: values | – | – |
-| Reveal codes / Hide codes | Codes.tsx:Codes | ICON, pressed state | eye / eyeOff | yes / Add |
-| Clear filters (x2) | Codes.tsx:Codes | WORDS: a clear for the whole bar | – | – |
-| Preview / Preview the {lane} lane | Codes.tsx:Codes | WORDS: sheet decision | – | – |
-| Read the box / Plan the lot | Codes.tsx:Codes | WORDS: only primary | – | – |
-| Reserve N codes — cannot be undone (x2) | Codes.tsx:Codes | WORDS: irreversible | – | – |
-| Listing / Packing slip / Manifest | Codes.tsx:Codes | WORDS: tabs | – | – |
-| Task tiles | Codes.tsx:TaskCard | WORDS: tiles | – | – |
-
-### Inventory
-| Press | Component | Decision | Icon | In ICON? |
-|---|---|---|---|---|
-| Mark sold (row, sm) | Inventory.tsx:Action | ICON | sold | Add |
-| Mark sold (phone bar, primary lg) | Inventory.tsx:Action | WORDS: only primary in its sector | – | – |
-| Retire (row, iconOnly today) | Inventory.tsx:Action | ICON (move to IconButton) | archive | yes |
-| Retire (phone bar) | Inventory.tsx:Action | ICON: secondary beside the primary | archive | yes |
-| Undo (row receipt, U) | Inventory.tsx:Action | ICON, U in the tooltip | undo | yes |
-| Undo (phone bar, beside "Marked sold.") | Inventory.tsx:Action | ICON: the sentence teaches | undo | yes |
-| Retire reasons | Inventory.tsx:RetirePanel | WORDS: the reason is the write | – | – |
-| Cancel | Inventory.tsx:RetirePanel | WORDS: decision pair | – | – |
-| Move (new per copy row, UX-244) | Inventory.tsx:Action | ICON | moveTo | Add |
-| Address "Walk to …" | CardLocations.tsx:OwnerRows | WORDS: the place is the face | – | – |
-| Mark sold (default row) | CardLocations.tsx:OwnerRows | ICON | sold | Add |
-| Variant tiles | BoxBrowse.tsx:VariantChooser | WORDS: photo and name | – | – |
-| Collapse / Expand the box rail | BoxBrowse.tsx:BoxBrowse | ICON (move to IconButton) | chevronLeft / chevronRight | yes |
-| Clear filter (rail) | BoxBrowse.tsx:BoxBrowse | WORDS: FilterBar clear | – | – |
-| Box rows, collapsed-rail tiles, phone box chip | BoxBrowse.tsx:BoxBrowse | WORDS: names | – | – |
-| Manage | BoxBrowse.tsx:BoxBrowse | ICON, "Manage this box" | settings | yes |
-| clear (ticks, "3 ticked · clear") | BoxBrowse.tsx:BoxBrowse | WORDS: inside a status line | – | – |
-| expand all / collapse all + N sections | BoxBrowse.tsx:BoxBrowse | WORDS: count | – | – |
-| tick shown / untick shown | BoxBrowse.tsx:BoxBrowse | WORDS: says the outcome | – | – |
-| Capture into box X / Capture a card / Capture your first card | BoxBrowse.tsx:BoxBrowse | WORDS: names the box, or only primary | – | – |
-| Clear the search / Clear the filter (empty states) | BoxBrowse.tsx:BoxBrowse | WORDS: alone in an empty state | – | – |
-| Section headers, walk rows | BoxBrowse.tsx:BoxBrowse | WORDS | – | – |
-| Try again | BoxBrowse.tsx:BoxBrowse | WORDS: recovery | – | – |
-| Search cards (phone) | BoxBrowse.tsx:BoxBrowse | ICON | search | yes |
-| Previous card / Next card | BoxBrowse.tsx:BoxBrowse | ICON (hand-rolled today) | chevronLeft / chevronRight | yes |
-| {label} re-shoot | BoxBrowse.tsx:ReshootControl | WORDS: not in the vocabulary | – | – |
-| Card actions | BoxBrowse.tsx:CardOps | ICON | more | yes |
-| Correct claims | BoxBrowse.tsx:CardOps | WORDS: menu item, glyph `wand → pencil` | pencil | Add |
-| Re-read the inventory / Bring this card back / Remove this card… | BoxBrowse.tsx:CardOps | WORDS: menu items | – | – |
-| Close | BoxBrowse.tsx:CardOps | ICON | x | yes |
-| Cancel / Remove this card and slide the box down | BoxBrowse.tsx:CardOps | WORDS: irreversible | – | – |
-| Op tiles (Rename, Edit sections, Name sections, Set claims, Move to box; Seal and Re-open removed by D299) | BoxOps.tsx:Op | WORDS: settings tiles carry a value; glyphs `tag → pencil`, `wand → pencil`, `package → moveTo` | pencil, moveTo | Add |
-| Close | BoxOps.tsx:BoxOps | ICON | x | yes |
-| Cancel / Save name / Move / Save names / Check this layout / Back / Save sections / Apply to {scope} | BoxOps.tsx | WORDS: form footers | – | – |
-| All settings | BoxOps.tsx:EditorFrame | WORDS: back with a destination | – | – |
-| Claim chips | BoxOps.tsx:ClaimEditor | WORDS: values | – | – |
-| TCGplayer holds none of these — release | BoxOps.tsx:ReleaseListings | WORDS: store write | – | – |
-| Delete N photographs / Delete box permanently | BoxOps.tsx:ReclaimPhotos/DeleteBox | WORDS: irreversible | – | – |
-| Photo | CardHero.tsx:PhotoPanel | Keep: the photo is the face | – | – |
-| Wrong card? | CardHero.tsx:ListingCorrection | WORDS: a question (UX-243) | – | – |
-| Close | CardHero.tsx:ListingCorrection | ICON | x | yes |
-| Close photo (inline svg) | InventoryOverlay.tsx:Overlay | ICON (it breaks DESIGN.md's no-inline-svg rule today) | x | yes |
-
-### Orders
-| Press | Component | Decision | Icon | In ICON? |
-|---|---|---|---|---|
-| Stop | Orders.tsx:FetchReceipt | WORDS: stops a TCGplayer fetch | – | – |
-| Fetch the rest / Fetch the next N | Orders.tsx:FetchReceipt | WORDS: count | – | – |
-| Count them again / Every status / Fetch these N | Orders.tsx:StatusPicker | WORDS: counts or only primary | – | – |
-| {statusSummary} | Orders.tsx:OrdersHub | WORDS: shows a value (becomes FilterBar) | – | – |
-| Read this paste / Fetch from TCGplayer / Fetch two years | Orders.tsx:OrdersHub | WORDS: TCGplayer reads, not in the vocabulary | – | – |
-| Stand down N orders (x2) | Orders.tsx:BacklogPrompt/ReconcileBacklogPanel | WORDS: irreversible; drop the `check` glyph | – | – |
-| Try again (x2) / Fetch from TCGplayer | Orders.tsx:PullStage/OrderDetail | WORDS: recovery or only primary | – | – |
-| Clear search / Show all open | Orders.tsx:PullStage | WORDS: alone in an empty state | – | – |
-| Tick shown / Untick shown | Orders.tsx:PullStage | WORDS: reword per UX-232 ("Walk all N buyers") | – | – |
-| Collapse / Expand the buyer rail | Orders.tsx:PullStage | ICON | chevronLeft / chevronRight | yes |
-| Sections toggle, buyer tiles, phone buyer chip, BuyerRow | Orders.tsx | WORDS: names, counts or values | – | – |
-| Read it again | Orders.tsx:PullStage | WORDS: inside a sentence | – | – |
-| Skip to cards | Orders.tsx:PullStage | WORDS: skip link | – | – |
-| Manage | Orders.tsx:OrderPanel | ICON, "Manage this buyer's orders" | settings | yes |
-| I already sent it / these N; final stand-down with the figure | Orders.tsx:LineStandDown | WORDS: stand down | – | – |
-| `It isn't shipping` | Orders.tsx:LineStandDown | WORDS; drop the `undo` glyph | – | – |
-| Sealed product | Orders.tsx:LineStandDown | WORDS | – | – |
-| Undo — not sealed | Orders.tsx:LineStandDown | ICON, "Undo: not sealed" | undo | yes |
-| Line unfold | Orders.tsx:OrderLineRow | WORDS: text face | – | – |
-| Order number chip | Orders.tsx:PickLine | WORDS: the face is the number | – | – |
-| Mark sold (x per pick) | Orders.tsx:PickLine | ICON, not primary tone; glyph `hand → sold`. Risk 4.1: the undo session must land first, and the owner accepted this risk | sold | Add |
-| Walk rows | OrdersWalkPane.tsx:WalkList | WORDS | – | – |
-| Mark sold | OrdersWalkPane.tsx:RowAction | ICON | sold | Add |
-| Undo | OrdersWalkPane.tsx:RowAction | ICON | undo | yes |
-
-### Review (the Runs files are here — Runs folds into Review)
-| Press | Component | Decision | Icon | In ICON? |
-|---|---|---|---|---|
-| Answer all N together (header and GroupConfirm) | ReviewQueue.tsx | WORDS: count; a write | – | – |
-| One at a time | ReviewQueue.tsx:GroupConfirm | WORDS: decision pair | – | – |
-| Re-check every waiting card / Re-check all | ReviewQueue.tsx:ReviewQueue | WORDS: not in the vocabulary | – | – |
-| Reload the queue (header) | ReviewQueue.tsx:ReviewQueue | ICON through ReloadButton | refresh | yes |
-| Queue N | ReviewQueue.tsx:ReviewQueue | WORDS: count | – | – |
-| Reason chips / Every reason / Show every reason | ReviewQueue.tsx:ReviewQueue | WORDS: values or a clear for the whole bar | – | – |
-| Clear skips | ReviewQueue.tsx:Tray | WORDS: inside a notice sentence | – | – |
-| Undo (receipt) | ReviewQueue.tsx:Tray | ICON, U in the tooltip | undo | yes |
-| Reload the queue (notice) | ReviewQueue.tsx:RefusalNotice | WORDS: recovery | – | – |
-| Dismiss | ReviewQueue.tsx:RefusalNotice | ICON | x | yes |
-| Undo (session rows) | ReviewQueue.tsx:SessionList | ICON | undo | yes |
-| N more | ReviewQueue.tsx:SessionList | WORDS: count | – | – |
-| Price the answers / Run another box | ReviewQueue.tsx:Done | WORDS: only primary, money path | – | – |
-| Skip | ReviewQueue.tsx:Card | WORDS: decision bar | – | – |
-| Search the export / Back to rows | ReviewQueue.tsx:Card | WORDS; glyph `undo → arrowLeft` | arrowLeft | yes |
-| Close (close the question) | ReviewQueue.tsx:Card | WORDS at every width; drop `x` and drop iconOnly on the phone | – | – |
-| Candidates / close reasons | ReviewQueue.tsx:CandidateButton/ClosePanel | WORDS: the answer is the write | – | – |
-| Cancel (x) | ReviewQueue.tsx:ClosePanel | ICON, "Close the panel" | x | yes |
-| Search | ReviewQueue.tsx:CatalogPanel | WORDS: submit | – | – |
-| Close the queue / Close | ReviewQueue.tsx:Waiting/QueueRefresh | ICON | x | yes |
-| Not now / Apply the refresh | ReviewQueue.tsx:QueueRefresh | WORDS: decision pair | – | – |
-| Reload boxes and runs | Runs.tsx:Runs | ICON through ReloadButton | refresh | yes |
-| Check what is live | Runs.tsx:Runs | WORDS; glyph `upload → refresh` | refresh | yes |
-| Identify cards / Identify a box / Spend $X and identify N / Stop asking under $X | Runs*.tsx | WORDS: money | – | – |
-| Copy / Copied | RunsLog.tsx:LogWell | ICON | copy | yes |
-| Log and preflight disclosures, stage steps, box and run rows | RunsLog/RunsComposer/RunPanel | WORDS | – | – |
-| Close / Dismiss (x3) | RunsComposer/RunPanel/RunRescue | ICON | x | yes |
-| The card before / after this one | RunsComposer.tsx:RunsComposer | ICON (move to IconButton) | chevronLeft / chevronRight | yes |
-| Go to capture / Go to inventory / Identify every box instead | RunsComposer.tsx | WORDS: doors | – | – |
-| Cancel / Next: photos / Cards / Check cost / Photos / Not now / Watch the run | RunsComposer.tsx | WORDS: wizard footer | – | – |
-| All runs / Rebind / Rebind these cards / Open that run / Open the new run | RunPanel/RunRescue | WORDS: destination or irreversible | – | – |
-| Try again / Preview / Join again | RunPanel.tsx:RunPanel | WORDS | – | – |
-| Fetch from TCGplayer | RunPanel.tsx:RunPanel | WORDS; glyph `download → refresh` | refresh | yes |
-| Options | RunPanel.tsx:RunPanel | ICON | settings | yes |
-
-### Pricing (b-pricing — product sheet files are here too)
-| Press | Component | Decision | Icon | In ICON? |
-|---|---|---|---|---|
-| Find by value / Mark down stale | Pricing.tsx:Pricing | Dies (value goes to Inventory sort; mark-down becomes the "Live" tab, WORDS) | – | – |
-| Clear typed | Pricing.tsx:Pricing | ICON, not danger; glyph `trash → eraser` | eraser | Add |
-| Runs N ▾ / Holding N | Pricing.tsx:Pricing | WORDS: count | – | – |
-| Reload | Pricing.tsx:Pricing | ICON through ReloadButton | refresh | yes |
-| Empty-state doors (Read a fresh export, Price my live listings, Go to Runs, See what you already own, Show everything unsent, Pick a run, Runs) | Pricing.tsx | WORDS: doors | – | – |
-| Re-read the pricing file, losing what is unsaved here | Pricing.tsx:Pricing | WORDS: loses work | – | – |
-| Undo U | Pricing.tsx:Pricing | ICON, fixed slot (UX-135), U in the tooltip | undo | yes |
-| Load trends / Compare | Pricing.tsx:Pricing | WORDS: UX-108 wants a verb and its object | – | – |
-| Price history (row) | Pricing.tsx:Pricing | ICON; glyph `history → chart` | chart | yes |
-| Hold / Release (row) | Pricing.tsx:Pricing | ICON, pressed state | lock / unlock | yes |
-| History / Photo drawer tabs | Pricing.tsx:Pricing | WORDS: tabs; glyph `history → chart` | – | – |
-| Close (drawer header, x2) | Pricing.tsx:Pricing | ICON | x | yes |
-| Close (drawer footer) | Pricing.tsx:Pricing | Delete: one Close per overlay | – | – |
-| Next copy | Pricing.tsx:Pricing | WORDS | – | – |
-| Send N … | Pricing.tsx / SendCard.tsx | WORDS: money | – | – |
-| Download the file instead | Pricing.tsx / SendCard.tsx | WORDS: the named alternative to a money press | – | – |
-| Cut-off panel presses (Price N under the line, Make them both $X, Pick a run, Give this run its own cut-off) | Pricing.tsx:CutoffPanel | WORDS: facts | – | – |
-| Follow the store again | Pricing.tsx:CutoffPanel | WORDS; drop the `undo` glyph | – | – |
-| Hold reasons / Cancel / Hold it | Pricing.tsx:HoldPanel | WORDS | – | – |
-| Dismiss | SendCard.tsx:TakenBackWarning | ICON | x | yes |
-| Take N copies back / Check what is live / Write the file | SendCard.tsx | WORDS: store write or unique job | – | – |
-| Markdown sheet presses | Markdown.tsx | Die with the sheet (Q6); Close is ICON x until then; "Discard staged" drops `undo` | – | – |
-| Close | LiveReconcile.tsx / ClearPrices.tsx | ICON | x | yes |
-| Fetch my live listings | LiveReconcile.tsx | WORDS; glyph `download → refresh` | refresh | yes |
-| Not now / Match the store / Cancel | LiveReconcile / ClearPrices | WORDS: decision pair | – | – |
-| Clear N typed prices | ClearPrices.tsx | WORDS: count; glyph `trash → eraser` | eraser | Add |
-| ValueBands presses | ValueBands.tsx | Die (they move to the Inventory sort) | – | – |
-| Try again | PriceHistory.tsx | WORDS | – | – |
-| Close | PriceHistory.tsx | ICON | x | yes |
-| Keep open | PriceHistory.tsx | WORDS; drop `pin` — `pin` names a pick location | – | – |
-| Open as page | ProductHistory.tsx:ProductSheet | ICON | external | yes |
-
-### Box map (new BoxShelf.tsx, from boxmap-deliberation.md)
-| Press | Component | Decision | Icon | In ICON? |
-|---|---|---|---|---|
-| Shelf / Walk view switch | Inventory.tsx | WORDS: segmented | – | – |
-| Section pick-up handle | BoxShelf:Compartment | ICON, "Move section {name}" | grip | Add |
-| Section menu | BoxShelf:Compartment | ICON | more | yes |
-| Move to… (menu item) | BoxShelf:Compartment | WORDS: menu item | – | – |
-| Destination box rows, + New box | BoxShelf | WORDS: names | – | – |
-| Put here / Cancel (touch bar) | BoxShelf | WORDS: decision pair | – | – |
-| Undo U (receipt) | BoxShelf:Receipt | ICON: the receipt sentence teaches | undo | yes |
-| Done (receipt) | BoxShelf:Receipt | WORDS | – | – |
-| Rename section | BoxShelf:Compartment | ICON | pencil | Add |
-
-### Fulfillment (the rule does not apply here)
-| Press | Component | Decision | Icon | In ICON? |
-|---|---|---|---|---|
-| Pull this card (x2) | Fulfillment.tsx | WORDS: Fulfiller | – | – |
-| Undo | Fulfillment.tsx | WORDS: Fulfiller (undo floor) | – | – |
-| Try again (x2) / Back to the cards / N more / Show all owed | Fulfillment.tsx | WORDS: Fulfiller | – | – |
-| Show every card (x in the search field, 44px) | Fulfillment.tsx | Keep: the field-clear pattern meets the 44px floor already | – | – |
-| PullConfirm | PullConfirm.tsx | WORDS: Fulfiller | – | – |
+Key: **WORDS** means that the press keeps its words. **ICON** means that it becomes an
+`IconButton` with a required label. A glyph arrow (for example `x → trash`) means that the press
+keeps its words and only its glyph changes.
 
 ## 2. The rule
 
@@ -400,10 +102,9 @@ files and Gallery, it refuses three things:
 
 The check reads `variant` statically. A dynamic variant, like Inventory's `primary ? …`, must
 split into two JSX branches before the check can prove it worded. The violations that exist
-today are on the shrinking offender list, under lane `icons`. Rule (c) is born on this branch.
-It may add keys under the only-shrinks exception `scripts/kit-adoption.mjs` already carries.
+are on the shrinking offender list, under lane `icons`.
 
-**Clause (c)'s declared exception** (the coordinator's ruling, 2026-09-25). A vocabulary-verb
+**Clause (c)'s declared exception.** A vocabulary-verb
 label with no provably worded variant has a second door. A literal `words="<reason>"` on the
 `Button` itself excuses it. Its values are `kit/index.tsx`'s `WordsReason` type, mirrored in
 `scripts/kit-adoption.mjs`'s `WORDS_REASONS`:
@@ -421,14 +122,11 @@ the code. It survives the press moving files, where an allow-list entry, keyed t
 not. `words` is read only by the check. It never reaches the DOM and changes nothing on
 screen. An unrecognized value excuses nothing.
 
-Found live, the day this door was built: Capture's "Clear the setup" (`not-in-vocabulary` —
-"Clear" matches the vocabulary's word, not its "clear typed values, undoable" meaning. It
-resets the whole rig) and SubmissionClaims' "Release N cards" (`irreversible` — a paid
-identification claim, cannot be undone). Shipping's "Forget this export" names the
-`only-primary` case: alone in an empty state. It had already moved to `danger-solid` only to
-pass the check, not because that variant fit. Gaming the variant proof is exactly what this
-door replaces. These three presses adopt `words` in their own lanes, once `ux/kit-tighten`
-merges. This branch names them here. It does not edit files those lanes own.
+Two presses use it today. Capture's "Clear the setup" is `not-in-vocabulary`, because "Clear" matches
+the vocabulary's word and not its "clear typed values, undoable" meaning. It resets the whole rig.
+SubmissionClaims' "Release N cards" is `irreversible`, because a paid identification claim cannot be
+undone. The door replaces gaming the variant proof, which is what moving a press to `danger-solid`
+just to pass the check would be.
 
 ### What IconButton carries, beyond the brief's first cut
 
@@ -438,7 +136,7 @@ merges. This branch names them here. It does not edit files those lanes own.
 - `badge`, a count.
 - An optional longer accessible `name`, apart from the tooltip `label` (UX-271).
 - An anchor form: `href` (plus `target`/`rel`) renders an `<a>` instead of a `<button>`, same
-  face, hit area, tooltip and accessible name (round 3, below).
+  face, hit area, tooltip and accessible name (section 6).
 - A visual face of 28px in dense rows, at a hit area of 40px or more, every width.
 - The tooltip on hover, on keyboard focus, and on a touch long-press.
 - Seven kit controls moved onto it: overlay Close, the Toaster dismiss, the FacetChip clear,
@@ -529,62 +227,23 @@ that owns the screen:**
 Rationale for the ruling itself, the words-vs-icon split, and the check's own build: see
 D288.
 
-## 5. Round 2: an independent review, and what it found
+## 6. The anchor form
 
-An Opus review of the built kit found real defects this map's own risks did not name. Its
-full report and probes are kept at `SD/review/kit-icons/`. D288
-has the built fix for each one:
-- the hit area moved off the visual box onto a `::before` pseudo-element (FLT-24, D118)
-- the tooltip's position moved to a viewport-clamped `position: fixed` (the overlay Close
-  clipping, and the viewport-edge case)
-- a long-press no longer also presses the button
-- the Fulfiller's overlay Close is now worded (spec rule 1)
-- clauses (b) and (c) of the kit check were rebuilt against a set of evasion fixtures, kept
-  as permanent self-tests
+The kit had no icon-only link. A screen that needed one reached for `window.open` in an `onClick`,
+which is a link wearing a button's clothes. It loses middle-click, and the browser's own
+right-click "Open link in new tab" and "Copy link".
 
-`app/tests/icon-button.spec.ts` is the new browser proof.
+The fix is a second form of the same primitive and not a second component. `IconButton` takes
+`href`, plus `target` and `rel`. When `href` is set, it renders an `<a>` and not a `<button>`.
+Both forms share these:
+the classes, the inline face size (`FACE_PX[size]`), the `::before` 40px hit area, the tooltip
+and the accessible name (`aria-label={name ?? label}`). `.bn-icon-btn` is a class selector, so one
+stylesheet rule covers both elements. No `transform` sits in the hit area or in the tooltip's
+positioning. The centering rule is keyed to a class and never to `button` or `a`. A native `<a href>` is already
+keyboard-operable, so no keydown handler exists. `type`, `disabled` and the other button-only
+attributes are spread only onto the `<button>` branch. The anchor form drops them silently, so
+none lands as an invalid DOM attribute.
 
-## 6. Round 3: the anchor form
-
-**The cause: the kit had no icon-only link.** The Orders review (`ux/kit-tighten`, round 2)
-found "Cards to pull" reaching for `window.open` in an `onClick`. It opens `#/fulfillment` in
-a new tab. `IconButton` rendered only a `<button>`. So the screen could not reach for a kit
-link. A real `<a href>` gives middle-click for free. It also gives the browser's own
-right-click "Open link in new tab" and "Copy link". `window.open` gives none of these. A
-`<button onClick={() => window.open(...)}>` is a link wearing a button's clothes. The loss is
-exactly that gap.
-
-**The fix is a second form of the same primitive, not a second component.** `IconButton` now
-takes `href`, plus `target` and `rel`. When `href` is set, it renders an `<a>`, not a
-`<button>`. Both forms share the same `classes`. Both share the same inline face size
-(`FACE_PX[size]`). Both share the same `::before` 40px hit area, the same tooltip, and the
-same accessible name (`aria-label={name ?? label}`). `.bn-icon-btn` is a class selector, not a
-tag selector. One stylesheet rule already covers both elements. No `transform` sits anywhere
-in the hit area or the tooltip's own positioning. The round-2 centering rule carries over to
-the anchor untouched. It is keyed to a class, never to `button` or `a`. A native `<a href>` is
-already keyboard-operable. Enter activates it on its own. No keydown handler was added.
-
-`type`, `disabled` and the other button-only attributes in `IconButtonProps`' `rest` are only
-spread onto the `<button>` branch. They mean nothing on an `<a>`. The anchor form drops them
-silently, rather than letting them land as invalid DOM attributes.
-
-`app/tests/icon-button.spec.ts` proves it against `#/gallery`'s new "the anchor form" specimen:
-`IconButton icon="external" label="Cards to pull" href="#/fulfillment" target="_blank" rel=
-"noreferrer"`. It renders an `<a>` carrying the given `href`, `target` and `rel`. Keyboard
-Enter follows it, read as a `page.context().waitForEvent('page')` popup. Its face, hit area
-and tooltip match the `Retire` button specimen, exactly.
-
-**`scripts/kit-adoption.mjs`'s `R2-icon-only-button` already accepted this, with no code
-change.** The rule scans hand-rolled `<button>` and `<a role="button">` elements. It also
-scans the kit's own `<Button iconOnly>` and vocabulary-verb shapes. It never scans the
-`<IconButton>` tag itself. That tag is the sanctioned primitive, whatever props it carries.
-What changed is a self-test naming the anchor form by name. A later edit to the rule cannot
-start flagging it by accident:
-`<IconButton icon="x" label="Open" href="#/y" target="_blank" rel="noreferrer" />` is now
-asserted green, beside the existing bare-button case.
-
-**Orders.tsx is untouched.** `app/src/Orders.tsx`'s "Cards to pull" is already a hand-rolled
-`<a className="bn-btn orders-handoff" href="#/fulfillment" target="_blank" rel="noopener">`.
-It carries real visible text — "Cards to pull" between two icons. It is a real link already,
-and not icon-only. So `R2-icon-only-button` never reached it either way. It was not this
-round's subject. The primitive was missing, and this round built the primitive.
+`app/tests/icon-button.spec.ts` proves the anchor form against `#/gallery`. `R2-icon-only-button`
+accepts it without a code change, because the rule never scans the `<IconButton>` tag itself. A
+self-test names the anchor form, so a later edit cannot flag it by accident.

@@ -654,19 +654,6 @@
         "behaviour"
       ]
     },
-    "docs/specs/audit-retirement.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "favours",
-        "generalises",
-        "generalises",
-        "judgement",
-        "judgement",
-        "judgement",
-        "normalise",
-        "normalise"
-      ]
-    },
     "docs/specs/capture-app.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -702,13 +689,6 @@
       "SPELLING": [
         "catalogue",
         "catalogue"
-      ]
-    },
-    "docs/specs/iconography.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "labelled",
-        "labelled"
       ]
     },
     "docs/specs/identity-follows-sku.md": {
@@ -821,26 +801,10 @@
         "neighbours"
       ]
     },
-    "docs/specs/revenue-next.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "labelled",
-        "labelled",
-        "labelled",
-        "normalises"
-      ]
-    },
     "docs/specs/revenue-plan.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "cancelled",
-        "modelled"
-      ]
-    },
-    "docs/specs/revenue.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "neighbouring"
+        "cancelled"
       ]
     },
     "docs/specs/stale-listings.md": {
