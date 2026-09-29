@@ -69,8 +69,10 @@ help:
 
 # `.venv` + requirements.txt. Idempotent — safe to re-run whenever
 # requirements.txt changes (VENV_GUARD is what notices and asks for the re-run).
+# VENV_PYTHON is the interpreter a fresh .venv is built from (3.12, owner's ruling 2026-09-28).
+VENV_PYTHON ?= python3.12
 venv: launch-config
-	@python3 -m venv .venv
+	@$(VENV_PYTHON) -m venv .venv
 	@.venv/bin/python -m pip install --quiet --upgrade pip
 	@.venv/bin/python -m pip install --quiet -r requirements.txt
 	@touch .venv/.deps-stamp

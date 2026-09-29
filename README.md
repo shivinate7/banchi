@@ -65,8 +65,8 @@ Only `identify` spends money. The app asks you to confirm before it spends.
 
 ## Quick start
 
-Banchi runs on a Mac. It needs `python3` (3.9 or later), Node.js and npm, `make` and `git`.
-CI proves it on Ubuntu with Python 3.11 and Node 22.
+Banchi runs on a Mac. It needs Python 3.12 (`python3.12` on the PATH; `make venv` builds `.venv` from it), Node.js and npm, `make` and `git`.
+CI proves it on Ubuntu with Python 3.12 and Node 22.
 
 ```sh
 git clone https://github.com/shivinate7/banchi.git pkmnscan

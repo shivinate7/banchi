@@ -82,7 +82,7 @@ jobs:
           # against a fixture export and builds a page — no QR decode, no camera, no Batch
           # API. So this picks a supported runtime rather than reproducing an EOL one, and
           # what a green run here means is "the demo builds", never "the rig is fine".
-          python-version: '3.11'
+          python-version: '3.12'
           cache: pip
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
