@@ -321,16 +321,27 @@ sheet now, it is reachable from the command palette (never the nav), and `make s
 renders it. `app/tests/fulfillment.spec.ts`'s pull-confirm describe block measures three of
 the Fulfillment floors on its pull-confirm specimens.
 
-## Spacing relations (F6, owner's word 2026-09-29)
+## Spacing relations (F6)
 
-Measured over `app/src/**/*.css` on 2026-09-29, 40 stylesheets: 359 spacing literals sat on a
-`--bn-*` rung and are now `var(--bn-*)` (same pixels). 96 sit on no rung and stay pinned. The
-scale is `--bn-0-5` 2, `--bn-0-75` 3, `--bn-1` 4, `--bn-1-5` 6, `--bn-2` 8, `--bn-3` 12,
-`--bn-4` 16, `--bn-5` 20, `--bn-6` 24, `--bn-7` 32, `--bn-8` 40, `--bn-9` 48, `--bn-10` 64.
+Each spacing literal in `app/src/**/*.css` is a `var(--bn-*)` or a deliberate value pinned
+below.
 
-Off the scale today, by value: 1px (24, hairline nudges), 10px (22), 5px (21), 7px (11),
-14px (4), 30px (4), 18px (2), and one each of 9, 19, 36, 60, 104, -9, -11, -12. Inline styles in
-`.tsx`: 3 spacing-shaped literals, measured and never gated.
+The scale is `--bn-0-5` 2, `--bn-0-75` 3, `--bn-1` 4, `--bn-1-5` 6, `--bn-2` 8, `--bn-3` 12.
+It continues with `--bn-4` 16, `--bn-5` 20, `--bn-6` 24, `--bn-7` 32, `--bn-8` 40, `--bn-9` 48
+and `--bn-10` 64.
+
+Deliberate values, pinned under `off_scale`:
+
+- 1px: hairline nudges and stacked-text gaps.
+- -9px and -11px: thumb-floor hit pads, D118 (stable press).
+- 104px: room reserved for a button inside a field.
+- 30px: a phone indent that matches a 30px icon.
+- 60px: the Fulfiller's search field, room for its icon.
+- 19px: `.bn-head-actions`, the eyebrow line plus its gap.
+
+Each other value snapped to the nearest rung. 5px went to 6. 7px and 9px went to 8. 10px went
+to 12, 14px to 16, 18px to 20, 30px to 32, 36px to 40 and 0.3em to 4. Inline styles in `.tsx`:
+3 spacing-shaped literals, measured and never gated.
 
 One rung per relation. A new rule picks the rung for its relation, never a nearby number:
 
@@ -344,10 +355,9 @@ One rung per relation. A new rule picks the rung for its relation, never a nearb
 | section to section | `--bn-6` | 24 |
 | optical nudge (a glyph, a badge) | `--bn-0-5`, `--bn-0-75` | 2, 3 |
 
-The rung a screen uses today is not always the rung its relation names (gap 6px is the most
-common today, 57 uses, far beyond icon-to-text). Moving one moves pixels, so it is a design
-pass on that screen, not a swap. That pass, and moving the off-scale values, waits for the
-final design review (owner's ruling, 2026-09-28). `make token-literal-check` fails a spacing literal on no rung
+The rung a screen uses is not always the rung its relation names (gap 6px is the most common,
+far beyond icon-to-text). Moving one moves pixels, so it is a design pass on that screen, not a
+swap. `make token-literal-check` fails a spacing literal on no rung
 (a `5px`, a `10px`), ratcheted per file in `scripts/token-literal-check.json` under
 `off_scale`, so the list only shrinks. A negative offset whose size is a rung (`-8px`) is on
 the scale. Fix an off-scale value by moving it to the relation's rung and looking at the screen.
