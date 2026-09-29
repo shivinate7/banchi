@@ -1,7 +1,7 @@
 // Protects: The Capture screen leaves no unused horizontal band inside its page frame at 1440 and 820.
 // Governs: D118, D195, D197
 import { expect, test } from '@playwright/test'
-import { sealEveryTest } from './shell'
+import { sealEveryTest, settleAnimations } from './shell'
 
 /* THE WIDTH THE VIEWFINDER GAVE UP MUST GO TO SOMETHING (owner, 2026-09-28; spec §5.7).
  * `fc90e00c` made the stage panel hug its 9:16 frame and handed the freed width to a `1fr` last
@@ -43,17 +43,7 @@ for (const theme of ['light', 'dark'] as const) {
       // the state every real session is in after the first capture; put the empty frame in it.
       await page.locator('.capture-last').evaluate((e) => e.setAttribute('data-has-last', 'true'))
       // Entrance animations move boxes; measure the settled layout.
-      // `finish()` settles a finite animation to its end state at once; awaiting `finished` can hang
-      // on a paused or idle one. A looping animation throws on finish() and is left running.
-      await page.evaluate(() => {
-        for (const a of document.getAnimations()) {
-          try {
-            a.finish()
-          } catch {
-            /* infinite: leave it */
-          }
-        }
-      })
+      await settleAnimations(page)
 
       const worst = await page.evaluate(
         ({ painted, step }) => {
