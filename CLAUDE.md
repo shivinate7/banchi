@@ -225,8 +225,8 @@ the browser. No second store. No auth. `app/src/server.ts` is the only client-ca
 ### The screens
 
 **Every screen and route lives in `app/src/App.tsx`'s `ROUTES` table — most are the owner's,
-one is the Fulfiller's.** Four routes are off-nav (the `aside` group — Kit, Cards to pull,
-the per-product view D227 added, and Runs since D291), so the nav itself draws ten rows.
+one is the Fulfiller's.** The `aside` group is off-nav: Kit, Cards to pull, the per-product
+view (D227) and Runs (D291). The nav draws every other row.
 `ROUTES` is the count. Recount from the table, never a sentence (see "the census" below).
 
 ```
@@ -283,10 +283,10 @@ stages, not two unrelated views.
 **`#/inventory` is the one owner-side view of stored cards** (D31). `#/boxes` and `#/pull` are
 not routes. Box operations live in its Manage box sheet.
 
-**Four routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen, the
+**The `aside` routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen, the
 kit, `#/product`, the per-product view (D227), and `#/runs` (D291). `#/product` is a deep link
 reached by SKU, never a destination anyone browses to cold. `#/runs` is a link target only: its
-content is Review's runs sheet. All four stay registered routes, reachable from elsewhere.
+content is Review's runs sheet. All stay registered routes, reachable from elsewhere.
 
 **The census.** Read the route or screen count from `ROUTES` itself, never from a number in
 prose (Q2, test-audit-2026-09-27: a hand-typed count that a table already gives is deleted,
