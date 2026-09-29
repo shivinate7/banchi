@@ -1300,7 +1300,7 @@ RESHOT = "reshot"
 #                `position` key — a box is not at a position, and `Inventory._log` draws
 #                the same line.
 RENUMBERED = "renumbered"
-BOX_DELETED = "box_deleted"
+BOX_DELETED = master.BOX_DELETED
 
 # THE TENTH ROUTE-WRITTEN EVENT (D134, 2026-09-11). `box_deleted` used to be refused
 # outright while any card in the box was sold, retired or moved — ruling 3's "history and

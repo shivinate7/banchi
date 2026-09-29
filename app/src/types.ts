@@ -4595,6 +4595,8 @@ export type SendsStatus = {
   due: boolean
   check_at: string | null
   now: string
+  /** Live send records the server could not read. Its list drew the rest. */
+  unreadable_claims: number
 }
 
 export type SendAnswer = { send: SendSummary; console: string }

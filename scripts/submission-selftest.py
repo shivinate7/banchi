@@ -823,7 +823,7 @@ def case_the_press_precheck_refuses_an_unreadable_claim() -> None:
         check(False, "_claim_conflict refuses over an unreadable claim (it returned instead)")
     except routes.PipelineRefusal as exc:
         check(
-            exc.status == HTTPStatus.CONFLICT and exc.code == "claim_unreadable" and "will not parse" in str(exc),
+            exc.status == HTTPStatus.CONFLICT and exc.code == "claim_unreadable" and str(exc) == routes.UNREADABLE_CLAIM_SENTENCE,
             f"_claim_conflict refuses with claim_unreadable: {exc}",
         )
 

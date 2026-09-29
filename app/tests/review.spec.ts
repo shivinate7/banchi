@@ -1614,14 +1614,14 @@ test('the Identify strip says why when the server refuses to count', async ({ pa
       body: JSON.stringify({
         error: {
           code: 'claim_unreadable',
-          message: 'A live submission claim will not parse and would stop protecting its cards: sub-1. A claim that cannot be read cannot say which cards it holds, so no send can start until it is fixed. Nothing in this send was started.',
+          message: 'Sending is paused because one saved record cannot be read. Nothing was sent.',
         },
       }),
     }),
   )
   await open(page)
   const notice = page.locator('.review-identify-refusal')
-  await expect(notice).toContainText('will not parse')
+  await expect(notice).toContainText('saved record cannot be read')
   await expect(page.locator('.review-identify-strip')).toHaveCount(0)
 })
 

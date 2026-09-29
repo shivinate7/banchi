@@ -115,15 +115,23 @@ class SendClaims:
         if not isinstance(self.entries, Rows):
             self.entries = Rows(SendClaims.ENTRIES, objects=dict(self.entries))
 
-    def live(self) -> List[SendClaim]:
-        """Every claim still holding SKUs, oldest first. One indexed read on `state`."""
+    def live(self, strict: bool = True) -> List[SendClaim]:
+        """Every claim still holding SKUs, oldest first. One indexed read on `state`.
+
+        `strict=False` is for a LIST that only draws (`server/send_routes.do_sends`): it skips
+        an unparseable row and `unreadable()` names it. Anything that writes or sends stays strict.
+        """
         found = self.entries.where(state=STATE_LIVE)
-        if self.entries.dropped:
+        if strict and self.entries.dropped:
             # A live claim that will not parse would stop protecting its SKUs: loud, never skipped.
             raise UnreadableClaim(
                 f"A live send claim will not parse and would stop protecting its SKUs: {', '.join(self.entries.dropped)}"
             )
         return sorted(found, key=lambda claim: (claim.started_at or "", claim.stamp))
+
+    def unreadable(self) -> List[str]:
+        """Keys of live rows that will not parse, as of the last `live()` read."""
+        return list(self.entries.dropped)
 
     def get(self, stamp: str) -> Optional[SendClaim]:
         return self.entries.get(str(stamp))
