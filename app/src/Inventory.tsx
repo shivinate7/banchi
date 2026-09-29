@@ -268,7 +268,7 @@ const MOVE_BUILT_ON = 'move_built_on'
  * disclosure to put a machine string behind, so it does not carry one. The server's own
  * sentence, already in `failure.message`, is what a person reads; `code` stays off-screen. */
 function report(failure: Failure): void {
-  toast({ kind: 'refusal', title: failure.message })
+  toast({ kind: 'refusal', tone: failureTone(failure), title: failure.message })
 }
 
 /* ONE OWNER-SIDE VIEW OF STORED CARDS (D31), SEEN TWO WAYS: the walk, card by card, and the

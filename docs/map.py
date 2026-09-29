@@ -9764,7 +9764,7 @@ COMPONENTS = [
                         "moves nothing outside `.browse-card` and changes neither the "
                         "document's scroll height nor its scroll position. EVERY ROUTE IS "
                         "STUBBED, the same rule: no write ever reaches a real store.",
-                "governed_by": ["D28", "D118", "D252"],
+                "governed_by": ["D28", "D118", "D252", "D269"],
                 "note": "NOT a harness test: it starts a browser, so it runs under "
                         "`make design-check`. The sweep is what caught the review-round "
                         "defect `ListingCorrection`'s own `Written.via`/`confirmable` fields "

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { describeFailure, getSubmissions, releaseSubmission, type Failure } from './server'
+import { describeFailure, getSubmissions, releaseSubmission, type Failure, refusalToast } from './server'
 import type { SubmissionClaim } from './types'
 import { usePoll } from './usePoll'
 import { Button, Notice, Pill } from './kit'
@@ -152,7 +152,7 @@ export function SubmissionClaims() {
               },
         )
       } catch (err) {
-        toast({ kind: 'refusal', title: 'That claim was not released', body: describeFailure(err).message })
+        toast({ ...refusalToast(err, 'That claim was not released') })
         // A refused release leaves the list as it was, so re-read rather than guess: the most
         // likely cause is a stale screen, and the list is what says so.
         await read()

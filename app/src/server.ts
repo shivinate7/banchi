@@ -352,6 +352,18 @@ export function failureTone(failure: { readonly code?: string | null }): 'warn' 
   return failure.code !== undefined && failure.code !== null && FAULT_CODES.has(failure.code) ? 'danger' : 'warn'
 }
 
+/** A refusal toast for a caught failure: amber for a refusal, red for a real fault, by the same
+ *  `failureTone` a Notice uses. With `title` given it is the headline and the server's sentence is the body. */
+export function refusalToast(err: unknown, title?: string) {
+  const f = describeFailure(err)
+  return {
+    kind: 'refusal' as const,
+    tone: failureTone(f),
+    title: title ?? f.message,
+    ...(title === undefined ? {} : { body: f.message }),
+  }
+}
+
 /**
  * Where a stored capture can be seen. D6's route, and the reason it exists.
  *

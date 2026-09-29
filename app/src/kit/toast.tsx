@@ -12,6 +12,8 @@ export type Toast = {
   readonly title: string
   readonly body?: string
   readonly icon?: IconName
+  /** A refusal toast is amber; `danger` makes it red for a real fault (`server.ts:failureTone`). */
+  readonly tone?: 'warn' | 'danger'
   readonly ttlMs: number
   readonly action?: { readonly label: string; readonly kbd?: string; readonly onPress: () => void }
   /** Dismissed and folding away; gone from the list one beat later. */
@@ -70,7 +72,7 @@ export function Toaster() {
   return (
     <div className="bn-toasts" aria-live="polite">
       {list.map((t) => (
-        <div key={t.id} className={`bn-toast bn-toast-${t.kind}`} role={t.kind === 'refusal' ? 'alert' : 'status'} data-leaving={t.leaving ? 'true' : undefined}>
+        <div key={t.id} className={`bn-toast bn-toast-${t.kind}${t.tone === 'danger' ? ' bn-toast-fault' : ''}`} role={t.kind === 'refusal' ? 'alert' : 'status'} data-leaving={t.leaving ? 'true' : undefined}>
           <Icon name={t.icon ?? ICONS[t.kind]} size={16} className="bn-toast-icon" />
           <div className="bn-toast-text">
             <div className="bn-toast-title">{t.title}</div>

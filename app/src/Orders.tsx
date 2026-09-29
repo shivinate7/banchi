@@ -85,6 +85,7 @@ import {
   undoPull,
   walkPlan,
   failureTone,
+  refusalToast,
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
@@ -1015,7 +1016,7 @@ async function undoFromToast(target: PullTarget, place: string, name: string): P
       toast({ kind: 'ok', icon: 'undo', title: 'Already undone', body: `${place} holds it, from somewhere else.` })
     } else {
       const trouble = describeFailure(err)
-      toast({ kind: 'refusal', title: 'The card was not put back', body: trouble.message })
+      toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
     }
   } finally {
     /* Clear `lastPull` only if this is still the pull it names — a later pull may already
@@ -1933,7 +1934,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         return { ok: true, refreshed: [] }
       }
       const trouble = describeFailure(err)
-      toast({ kind: 'refusal', title: 'The card was not put back', body: trouble.message })
+      toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
       return { ok: false }
     } finally {
       setHub((current) => ({ busy: null, lastPull: current.lastPull?.target.capture_id === target.capture_id ? null : current.lastPull }))
@@ -1975,7 +1976,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                   await undoFill(aim, done.moved)
                   touchHub()
                 } catch (err) {
-                  toast({ kind: 'refusal', icon: 'alert', title: describeFailure(err).message })
+                  toast({ ...refusalToast(err), icon: 'alert' })
                 }
               })()
             },
@@ -2045,7 +2046,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                   await reopenOrders(aim)
                   touchHub()
                 } catch (err) {
-                  toast({ kind: 'refusal', icon: 'alert', title: describeFailure(err).message })
+                  toast({ ...refusalToast(err), icon: 'alert' })
                 }
               })()
             },
@@ -2090,7 +2091,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                   await reopenOrders(done.closed)
                   touchHub()
                 } catch (err) {
-                  toast({ kind: 'refusal', icon: 'alert', title: describeFailure(err).message })
+                  toast({ ...refusalToast(err), icon: 'alert' })
                 }
               })()
             },
@@ -2133,7 +2134,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                   await reopenLines(aim)
                   touchHub()
                 } catch (err) {
-                  toast({ kind: 'refusal', icon: 'alert', title: describeFailure(err).message })
+                  toast({ ...refusalToast(err), icon: 'alert' })
                 }
               })()
             },

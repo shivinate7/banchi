@@ -412,3 +412,40 @@ test('"Read as" draws when the camera\'s read disputes the shown name/number', a
   await expect(readAs).toBeVisible()
   await expect(readAs.locator('dd')).toHaveText('Rell, Noxus 037/298')
 })
+
+/* RED MEANS SOMETHING BROKE, AMBER MEANS THE SERVER DECLINED (owner's ruling, 2026-09-28,
+ * `D269`). A refusal toast takes its colour from `server.ts:failureTone`, the classifier a
+ * Notice uses. The icon is compared against the token's own resolved colour, not a class name. */
+async function toastIconIs(page: Page, token: '--bn-danger' | '--bn-warn'): Promise<boolean> {
+  return page.evaluate((name) => {
+    const probe = document.createElement('span')
+    probe.style.color = `var(${name})`
+    document.body.appendChild(probe)
+    const want = getComputedStyle(probe).color
+    probe.remove()
+    const icon = document.querySelector('.bn-toast-refusal .bn-toast-icon')
+    return icon !== null && getComputedStyle(icon).color === want
+  }, token)
+}
+
+test('an unreachable server gives a red toast', async ({ page }) => {
+  await open(page)
+  await page.route(/\/inventory\/2\/1\/confirm$/, (route) => route.abort())
+  await page.getByRole('button', { name: 'The listing is right' }).click()
+  await expect(page.locator('.bn-toast-refusal', { hasText: 'The listing was not confirmed' })).toBeVisible()
+  expect(await toastIconIs(page, '--bn-danger')).toBe(true)
+})
+
+test('a refusal gives an amber toast', async ({ page }) => {
+  await open(page)
+  await page.route(/\/inventory\/2\/1\/confirm$/, (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'card_departed', message: 'That card has left the inventory. Reload the box.' } }),
+    }),
+  )
+  await page.getByRole('button', { name: 'The listing is right' }).click()
+  await expect(page.locator('.bn-toast-refusal', { hasText: 'The listing was not confirmed' })).toBeVisible()
+  expect(await toastIconIs(page, '--bn-warn')).toBe(true)
+})

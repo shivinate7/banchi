@@ -34,6 +34,7 @@ import {
   photoUrl,
   type Failure,
   failureTone,
+  refusalToast,
 } from './server'
 import type {
   DecisionsDocument,
@@ -2133,7 +2134,7 @@ export function Pricing() {
       })
     } catch (err) {
       const trouble = describeFailure(err)
-      toast({ kind: 'refusal', title: 'Not undone', body: trouble.message })
+      toast({ kind: 'refusal', tone: failureTone(trouble), title: 'Not undone', body: trouble.message })
     }
   }, [])
 
@@ -2192,7 +2193,7 @@ export function Pricing() {
                   body: restoreSkipBody(back.skipped),
                 })
               } catch (err) {
-                toast({ kind: 'refusal', title: describeFailure(err).message })
+                toast({ ...refusalToast(err) })
               }
             })()
           },

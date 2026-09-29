@@ -58,6 +58,7 @@ import {
   reviewCatalog,
   undoConfirmIdentity,
   undoCorrectAnswer,
+  refusalToast,
 } from './server'
 import type { BoxRecord, CandidateRow, CatalogLookup, InventoryCard, Listing, PricingPayload } from './types'
 import './CardHero.css'
@@ -699,7 +700,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
         })
       })
       .catch((err: unknown) => {
-        toast({ kind: 'refusal', title: 'The correction was not undone', body: describeFailure(err).message })
+        toast({ ...refusalToast(err, 'The correction was not undone') })
       })
   }
 
@@ -725,7 +726,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
         })
       })
       .catch((err: unknown) => {
-        toast({ kind: 'refusal', title: 'The card was not corrected', body: describeFailure(err).message })
+        toast({ ...refusalToast(err, 'The card was not corrected') })
       })
       .finally(() => setBusy(false))
   }
@@ -752,7 +753,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
         })
       })
       .catch((err: unknown) => {
-        toast({ kind: 'refusal', title: 'The confirmation was not undone', body: describeFailure(err).message })
+        toast({ ...refusalToast(err, 'The confirmation was not undone') })
       })
   }
 
@@ -777,7 +778,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
         })
       })
       .catch((err: unknown) => {
-        toast({ kind: 'refusal', title: 'The listing was not confirmed', body: describeFailure(err).message })
+        toast({ ...refusalToast(err, 'The listing was not confirmed') })
       })
       .finally(() => setConfirmBusy(false))
   }

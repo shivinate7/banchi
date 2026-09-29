@@ -12,4 +12,4 @@
 
 **The demo says one sentence.** Every refusal in `app/src/demoServer.ts` now says "Not in this demo." (TXT-46). The code still names the refusal, behind the disclosure.
 
-**Tone, 2026-09-28.** `failureTone` in `server.ts` makes a Notice red only for a real fault and amber for a refusal. A refusal toast is amber.
+**Tone, 2026-09-28.** Red means something broke and amber means the server declined. `failureTone` in `server.ts` decides for a Notice and, through `refusalToast`, for a refusal toast.

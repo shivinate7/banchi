@@ -37,6 +37,7 @@ import {
   undoRetire,
   undoStandDown,
   failureTone,
+  refusalToast,
 } from './server'
 import {
   Button,
@@ -833,7 +834,7 @@ export function ReviewQueue() {
       }
       setReloads((n) => n + 1)
     } catch (err) {
-      toast({ kind: 'refusal', title: 'Nothing was paid for', body: describeFailure(err).message })
+      toast({ ...refusalToast(err, 'Nothing was paid for') })
     } finally {
       spending.current = false
       setSpendBusy(false)

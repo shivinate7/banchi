@@ -1242,7 +1242,7 @@ export function BoxBrowse({
           setReshootBusy(null)
           const failed = describeFailure(err)
           setReshootFailure({ key: row.key, failure: failed })
-          toast({ kind: 'refusal', title: failed.message })
+          toast({ kind: 'refusal', tone: failureTone(failed), title: failed.message })
         })
     }
     reader.onerror = () => {
