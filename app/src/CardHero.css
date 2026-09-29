@@ -23,3 +23,18 @@
   font-size: var(--bn-fs-sm);
   color: var(--bn-ink-3);
 }
+
+/* THE ONE MISSING-PHOTOGRAPH PANEL (`AbsentPhotoNote`): an icon, a sentence, at most one action.
+ * The host frame sets `--absent-ink` where its ground is not a light surface (Review's dark
+ * well). Nothing here moves on press (D118): the action is the kit's own button. */
+.absent-photo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bn-3);
+  text-align: center;
+  min-width: 0;
+  color: var(--absent-ink-quiet, var(--bn-ink-3));
+}
+.absent-photo p { margin: 0; max-width: 26ch; font-size: var(--bn-fs-md); color: var(--absent-ink, var(--bn-ink-2)); }

@@ -442,6 +442,44 @@ export function noPhotoSentence(
   return `This card moved to ${typeof name === 'string' && name.trim() !== '' ? name : 'another box'}.`
 }
 
+/** What every screen says when the file is gone. */
+export const ABSENT_SENTENCE = "This card's photo is missing."
+
+/** THE ONE PANEL FOR A PHOTOGRAPH THAT IS NOT THERE — a plain sentence and, where the card can
+ *  be re-shot, one action. `#/inventory` and `#/orders` draw it through `PhotoPanel`, `#/review`
+ *  and `#/pricing` call it directly, so no screen words the absence itself and none prints an
+ *  address. `reshoot` is the caller's own control (Inventory re-shoots in place); without one, a
+ *  card with a place gets a link to it on Inventory, which is where a re-shoot happens. `at` is
+ *  that place, or null for a card with none. The host draws the frame, this draws what is in it. */
+export function AbsentPhotoNote({
+  sentence,
+  icon = 'image',
+  reshoot,
+  at = null,
+}: {
+  sentence: string
+  icon?: 'image' | 'alert' | 'check' | 'arrowRight'
+  reshoot?: ReactNode
+  at?: { box: number; cid?: string | null } | null
+}) {
+  const cid = at?.cid
+  const card = typeof cid === 'string' && cid !== '' && !isMovedCid(cid) ? `&card=${encodeURIComponent(cid)}` : ''
+  const href = at === null || at.box < 1 ? null : `#/inventory?box=${at.box}${card}`
+  return (
+    <div className="absent-photo">
+      <Icon name={icon} size={28} />
+      <p>{sentence}</p>
+      {reshoot ??
+        (href === null ? null : (
+          <a className="bn-btn bn-btn-sm" href={href}>
+            <Icon name="camera" size={14} />
+            Re-shoot
+          </a>
+        ))}
+    </div>
+  )
+}
+
 export type PhotoPanelProps = {
   row: Row
   label: string | null
@@ -469,10 +507,7 @@ export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoo
   if (row.card.photo === null) {
     return (
       <div className="bn-photo browse-absent">
-        <Icon name="image" size={28} />
-        <p>No photo was stored for this card.</p>
-        <span className="browse-machine">photo: null</span>
-        {reshoot}
+        <AbsentPhotoNote sentence="No photo was stored for this card." reshoot={reshoot} at={{ box: row.card.box, cid: row.card.cid }} />
       </div>
     )
   }
@@ -502,9 +537,12 @@ export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoo
   if (src === null) {
     return (
       <div className="bn-photo browse-absent">
-        <Icon name={isMovedCid(row.card.cid) ? 'arrowRight' : 'image'} size={28} />
-        <p>{noPhotoSentence(row.card.cid, row.card.moved_to, boxes)}</p>
-        {reshoot}
+        <AbsentPhotoNote
+          sentence={noPhotoSentence(row.card.cid, row.card.moved_to, boxes)}
+          icon={isMovedCid(row.card.cid) ? 'arrowRight' : 'image'}
+          reshoot={reshoot}
+          at={isMovedCid(row.card.cid) ? null : { box: row.card.box, cid: row.card.cid }}
+        />
       </div>
     )
   }
@@ -512,10 +550,7 @@ export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoo
   if (absent) {
     return (
       <div className="bn-photo browse-absent">
-        <Icon name="alert" size={28} />
-        <p>The record has a photo but the file is not on disk. The card is still at {where}.</p>
-        <span className="browse-machine">{src}</span>
-        {reshoot}
+        <AbsentPhotoNote sentence={ABSENT_SENTENCE} icon="alert" reshoot={reshoot} at={{ box: row.card.box, cid: row.card.cid }} />
       </div>
     )
   }

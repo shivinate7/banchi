@@ -67,7 +67,7 @@ import { SearchField } from './SearchField'
 import './ReviewQueue.css'
 import { isRetiredReason, reasonLabel } from './reasons'
 import { collectorNumber as sharedCollectorNumber } from './cardNumber'
-import { isMovedCid, noPhotoSentence } from './CardHero'
+import { ABSENT_SENTENCE, AbsentPhotoNote, isMovedCid, noPhotoSentence } from './CardHero'
 
 /* THE REVIEW QUEUE — the judgement screen. One card at a time: the photograph on a dark
  * stage, the question it poses, the evidence, and one row per answer with a keycap on it.
@@ -2578,9 +2578,15 @@ function Facts({ row }: { row: Row }) {
 /* D4: the stored capture beside the rows; the card never leaves its box. Four states in one
  * reserved frame (D28) so the rows never move: loaded, loading, failed, never existed. */
 function Photo(props: { row: Row; absent: boolean; onAbsent: () => void }) {
+  const { entry } = props.row
+  /* THE PLACE CHIP IS THE WELL'S SIBLING, NOT ITS CHILD: over the photograph on a desk, under it
+     where the column is too narrow to spare the card's lower third (F4, `.review-photoblock`). */
   return (
-    <div className="review-frame review-well">
-      <PhotoContent {...props} />
+    <div className="review-photoblock">
+      <div className="review-frame review-well">
+        <PhotoContent {...props} />
+      </div>
+      <PositionCaption label={entry.label} box={entry.box} cid={entry.cid} place={entry.place} />
     </div>
   )
 }
@@ -2591,27 +2597,12 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
 
   if (entry.box < 1) {
     return (
-      <AbsentPhoto
-        title="No position, so no photograph"
-        detail={
-          <span className="review-fact-multi">
-            <span>box {entry.box}</span>
-            <span>index {entry.index}</span>
-          </span>
-        }
-        label={entry.label}
-      >
-        This entry reached the queue before it was given a place in a box.
-      </AbsentPhoto>
+      <AbsentPhoto sentence="This card has no place in a box yet, so it has no photo." />
     )
   }
 
   if (entry.photo === null) {
-    return (
-      <AbsentPhoto title="No photograph was stored" detail="photo: null" label={entry.label} box={entry.box} cid={entry.cid} place={entry.place}>
-        The record carries no photograph at all.
-      </AbsentPhoto>
-    )
+    return <AbsentPhoto sentence={noPhotoSentence(entry.cid, null)} entry={entry} />
   }
 
   /* BY NAME WHEN THE ROUTE DECORATED THE ENTRY WITH ONE (D172): `_queue_row` adds `cid` for an
@@ -2621,19 +2612,11 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
 
   if (src === null) {
     return (
-      <AbsentPhoto title={isMovedCid(entry.cid) ? 'The card moved' : 'No photograph was stored'} detail="photo: null" label={entry.label} box={entry.box} cid={entry.cid} place={entry.place}>
-        {noPhotoSentence(entry.cid, null)}
-      </AbsentPhoto>
+      <AbsentPhoto sentence={noPhotoSentence(entry.cid, null)} entry={isMovedCid(entry.cid) ? undefined : entry} />
     )
   }
 
-  if (absent) {
-    return (
-      <AbsentPhoto title="The file is not on disk" detail={src} label={entry.label} box={entry.box} cid={entry.cid} place={entry.place}>
-        The entry has a photograph and nothing here can restore it. The card is still at its slot.
-      </AbsentPhoto>
-    )
-  }
+  if (absent) return <AbsentPhoto sentence={ABSENT_SENTENCE} icon="alert" entry={entry} />
 
   return (
     <>
@@ -2659,7 +2642,6 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
           aria-hidden="true"
         />
       )}
-      <PositionCaption label={entry.label} box={entry.box} cid={entry.cid} place={entry.place} />
       <span className="review-stage-hint" aria-hidden="true">
         <Icon name="scan" size={12} />
         Zoomed
@@ -2668,16 +2650,12 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
   )
 }
 
-function AbsentPhoto({ title, detail, label, box, cid, place, children }: { title: string; detail: ReactNode; label: string; box?: number; cid?: string | null; place?: Place; children: ReactNode }) {
+/* The shared panel (`CardHero.tsx:AbsentPhotoNote`) in the well's own frame. `entry` is the card
+   to re-shoot; none means there is no card to point at. */
+function AbsentPhoto({ sentence, icon, entry }: { sentence: string; icon?: 'image' | 'alert'; entry?: QueueEntryWire }) {
   return (
     <div className="review-absent">
-      <span className="review-absent-art">
-        <Icon name="image" size={22} />
-      </span>
-      <p className="review-absent-title">{title}</p>
-      <p className="review-absent-body">{children}</p>
-      <p className="review-code review-absent-detail">{detail}</p>
-      <PositionCaption label={label} box={box} cid={cid} place={place} />
+      <AbsentPhotoNote sentence={sentence} icon={icon} at={entry === undefined ? null : { box: entry.box, cid: entry.cid }} />
     </div>
   )
 }
@@ -2711,13 +2689,18 @@ function CaptionOrder({ place }: { place?: Place }) {
   return (
     <>
       <span className="review-caption-order" aria-hidden="true">
-        <span className="review-caption-end">back</span>
-        {back}
+        {/* AN END AND ITS NEIGHBOUR ARE ONE GROUP, so `front` never wraps onto a line alone (F3). */}
+        <span className="review-caption-grp">
+          <span className="review-caption-end">back</span>
+          {back}
+        </span>
         {back === null ? null : <Icon name="arrowRight" size={12} className="review-caption-arrow" />}
         <span className="review-caption-this">this card</span>
         {front === null ? null : <Icon name="arrowRight" size={12} className="review-caption-arrow" />}
-        {front}
-        <span className="review-caption-end">front</span>
+        <span className="review-caption-grp">
+          {front}
+          <span className="review-caption-end">front</span>
+        </span>
       </span>
       {parts === null ? null : <span className="bn-sr">{parts.said}</span>}
     </>
