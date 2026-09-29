@@ -41,8 +41,8 @@ function taperParts(x0,y0,aX,aY,r,w,tip,tlf){
    changed nothing else. So both ends come out at identical topology and a point-wise lerp is
    exact.
    IT LIVES HERE RATHER THAN IN ITS TWO CALLERS. `scripts/build-lockup.mjs` emits `RAIL_ARM` for
-   the app and `sheets/sidebar-morph.html` draws the filmstrip; a copy in each is the defect this
-   file keeps finding, and the sheet has already shipped an INVENTED rail bracket twice.
+   the app; a second copy elsewhere is the defect this file keeps finding, and a sheet once
+   shipped an INVENTED rail bracket twice.
    The path and the width are passed in, never named here -- they belong to `markGeometry.ts`,
    which is generated, and `make docs-audit`'s `rail mark` row reconciles the sheet's copies of
    them against it. */

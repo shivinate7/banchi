@@ -43,7 +43,7 @@ how section 9's small row flattered itself: shot at deviceScaleFactor 2, its "28
 <script>
 window.__sheetReady = false
 
-/* ---- the mark, lifted from locked-set.html --------------------------------------------------
+/* ---- the mark, the section 9 drawing --------------------------------------------------
    Identical geometry: SQ, taperParts and the parameter line are byte-identical across all ten
    committed sheets. What changed here is that the parameters are OPTIONS rather than consts,
    because a sweep cannot move a const — and the defaults are section 9's LOCKED values
@@ -72,8 +72,8 @@ function taperParts(x0,y0,aX,aY,r,w,tip,tlf){
   caps:[[pts[0].x,pts[0].y,pts[0].w/2],[pts[pts.length-1].x,pts[pts.length-1].y,pts[pts.length-1].w/2]]}}
 
 /* The same centreline as a REAL stroked path. Only valid with no taper (tip = 1), which is
-   exactly what the small cut asks for, and it is what banchi-icon.svg has always used. Two
-   hundred bytes against nine thousand — section 6 puts the two side by side. */
+   exactly what the small cut asks for, and it is what the shipped icons use. Two
+   hundred bytes against nine thousand. */
 function strokeBody(x0,y0,aX,aY,r){const f=function(v){return v.toFixed(3)}
  return 'M'+f(x0)+' '+f(y0+aY)+'V'+f(y0+r)+'A'+r+' '+r+' 0 0 1 '+f(x0+r)+' '+f(y0)+'H'+f(x0+aX)}
 

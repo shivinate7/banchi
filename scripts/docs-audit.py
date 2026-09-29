@@ -11213,7 +11213,7 @@ def _lockup_params() -> Row:
     if marker not in spec_section:
         return Row("lockup params", MECHANICAL, [Finding(
             rel(LOGO_SPEC),
-            "the settled-values table is gone. This row compares it against the sheet's holds; "
+            "the settled-values table is gone. This row compares it against the generated geometry; "
             "with it missing the row is not comparing anything, which is worse than failing.",
         )], "")
     tail = spec_section[spec_section.index(marker):]

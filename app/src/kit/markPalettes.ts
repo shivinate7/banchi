@@ -3,7 +3,7 @@
    SECTION 9 OF docs/specs/logo.md IS THE STORE OF RECORD FOR EVERY HEX BELOW, and
    `make docs-audit`'s `logo parity` row reconciles this file against it in both directions.
    These are NOT derived here: the ground rule, applied to the three gold prisms, produces the
-   espresso that section 8 rejected in favor of true black, so a build that re-derives them
+   espresso that section 9 rejected in favor of true black, so a build that re-derives them
    redraws marks the spec has eliminated.
 
    THIS IS THE ONE FILE IN app/ OUTSIDE tokens.css THAT MAY NAME A COLOR (D102). The mark is an
