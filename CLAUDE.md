@@ -394,7 +394,7 @@ not rendered — not focusable, not reachable by a screen reader).
 
 - `cd app && npx tsc --noEmit` prints nothing.
 - Look at it at 1440 and 820, in both themes. Look at 390 only when the owner reports a
-  phone problem (owner's ruling, 2026-09-28). The specs that assert phone layout stay in CI.
+  phone problem. Exception to the parent's every-size rule (owner's ruling, 2026-09-28). The specs that assert phone layout stay in CI.
 - Anything a thumb presses is 40px or more.
 - `make design-check` asserts `docs/DESIGN.md`'s Fulfillment floors in a real browser: 20px
   body, 32px position labels, 320px photograph, 44px targets, 7:1 contrast, no jargon, no
