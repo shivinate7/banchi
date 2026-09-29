@@ -25,15 +25,27 @@ const PAINTED = [
   '.capture-frame-last',
 ]
 
-/** Two 16px grid gaps, plus 24px for a frame's own padding and rounding. */
-const TOLERANCE = 56
+/** 24px for a frame's own padding and rounding, on top of the grid's two column gaps (read live). */
+const SLACK = 24
 
 for (const theme of ['light', 'dark'] as const) {
   for (const [width, height] of [
     [1440, 900],
     [820, 1100],
+    // The owner's real window: ~2000 wide, rail collapsed, where the page hits its 1600px cap.
+    [2000, 1300],
   ] as const) {
     test(`Capture leaves no unused horizontal band at ${width}, ${theme}`, async ({ page }) => {
+      if (width === 2000) {
+        await page.addInitScript(() => {
+          try {
+            /* eslint-disable-next-line no-restricted-syntax -- seeding the shell's own device key before first paint, as `wide.spec.ts:withRail` does. */
+            window.localStorage.setItem('banchi.rail', 'rail')
+          } catch {
+            /* unreadable storage reads as the sidebar, a real default */
+          }
+        })
+      }
       await page.setViewportSize({ width, height })
       await page.emulateMedia({ colorScheme: theme })
       await page.goto('/#/capture')
@@ -78,14 +90,18 @@ for (const theme of ['light', 'dark'] as const) {
               worstY = Math.round(y)
             }
           }
-          return { worstGap: Math.round(worstGap), worstY, shellWidth: Math.round(shell.width) }
+          const colGap = parseFloat(getComputedStyle(document.querySelector('.capture-shell')!).columnGap) || 0
+          // Nothing may sit between Last capture and the shell's right edge but a small margin.
+          const lastRight = document.querySelector('.capture-last')!.getBoundingClientRect().right
+          return { colGap, rightBand: Math.round(shell.right - lastRight), worstGap: Math.round(worstGap), worstY, shellWidth: Math.round(shell.width) }
         },
         { painted: PAINTED, step: 8 },
       )
       expect(
         worst.worstGap,
         `${worst.worstGap}px of the ${worst.shellWidth}px shell is unpainted at y=${worst.worstY}`,
-      ).toBeLessThanOrEqual(TOLERANCE)
+      ).toBeLessThanOrEqual(2 * worst.colGap + SLACK)
+      expect(worst.rightBand, `${worst.rightBand}px of empty shell right of Last capture`).toBeLessThanOrEqual(48)
     })
   }
 }
