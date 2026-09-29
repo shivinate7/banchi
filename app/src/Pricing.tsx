@@ -804,7 +804,7 @@ export function Pricing() {
   /** Which runs the worklist is over; EMPTY means "whatever still has work in it" (D86, D156). */
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set(runsInHash()))
   const [work, setWork] = useState<PricingWorklist | null>(null)
-  /** THE MARKDOWN STAMP ON THE HASH, and the table it names (D103). Null is the To send tab. */
+  /** THE MARKDOWN STAMP ON THE HASH, and the table it names (D103). Null is the Unsent tab. */
   const [stamp, setStamp] = useState<string | null>(() => markdownInHash())
   const [liveTab, setLiveTab] = useState<boolean>(() => liveInHash())
   const [sheet, setSheet] = useState<MarkdownTable | null>(null)
@@ -2378,7 +2378,7 @@ export function Pricing() {
         label="Which list"
         value={liveTab ? 'live' : 'send'}
         options={[
-          { value: 'send', label: 'To send' },
+          { value: 'send', label: 'Unsent' },
           { value: 'live', label: 'Live' },
         ]}
         onChange={goTab}
