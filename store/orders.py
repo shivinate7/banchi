@@ -116,7 +116,7 @@ WHAT THIS COSTS, NAMED HERE BECAUSE NOTHING ELSE WOULD SAY IT: `Store.write()` r
 four JSON files in sequence and the set is not atomic. Each is atomic alone —
 `files.write_atomic` stages beside the target and `os.replace`s — and nothing makes the
 four one transaction, so a kill between them leaves a torn store. This file is a FIFTH, and
-it widens that window by a fifth. D53 records the same exposure from the other end and
+it widens that window by a fifth. D138 records the same exposure from the other end and
 prices it: it is why the supervisor drains in-flight requests before it restarts a child,
 because the risk is already live at Ctrl-C frequency. The honest ordering does not close it
 either — this file is written LAST, after the four, so a torn write loses the ledger rather

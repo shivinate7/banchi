@@ -104,7 +104,7 @@ added the logical and scroll spacing longhands — see below). Three options wer
 2. **Land the sweep first, in this branch.** Refused by the brief this entry was written
    under. The sweep touches call sites other lanes are editing right now. Landing it here
    would collide with work already in flight.
-3. **Pin each file's current count as a ceiling, per file.** This is D229's own shape, moved
+3. **Pin each file's current count as a ceiling, per file.** This is D280's own shape, moved
    here from `docs-audit`'s prose ratchet. A file's count may only go DOWN from here. The
    sweep, whenever it lands, lowers pins. Nothing about the guard blocks it or requires it
    first.
@@ -114,7 +114,7 @@ Option 3 is what shipped. `scripts/token-literal-check.json` holds `{"files": {"
 person's own act. It is never the check itself. D18 says nothing that writes may gate a
 commit. A file the pin has never seen, but that now carries a finding, fails. This matches a
 raised count. A file whose count fell is accepted silently and printed. It is never a
-failure. Both are D229's own two non-failure states, carried over unchanged.
+failure. Both are D280's own two non-failure states, carried over unchanged.
 
 ### The allow-list, and what is in it today
 
@@ -146,5 +146,5 @@ design judgement about whether two close values should be reconciled.
 
 D18: a generator may write. Nothing that writes may gate a commit — the pin file and its
 `--pin` script. D173: a rule that can be enforced mechanically is enforced mechanically.
-D161: `make check` proves the product first, guard self-tests last. D229: the ratchet is
+D161: `make check` proves the product first, guard self-tests last. D280: the ratchet is
 pinned per file, moved here from the prose ratchet it was built for.

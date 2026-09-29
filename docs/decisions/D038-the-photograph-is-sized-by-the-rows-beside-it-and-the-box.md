@@ -69,9 +69,9 @@ The owner, 2026-08-29, asked for `TCG Market Price` on the card summary with a n
 
 **The store holds no price, and that is D8 rather than a gap.** Every figure comes from the Filtered Export and `store/master.py` has no field shaped like money — so *what is this card worth* was answerable on `#/pricing` and on no screen the operator is standing at when they ask. The eleven rows above are `asdict(card)`; this one is a join.
 
-**The edge is D46's, reused: card -> `run` -> that run's `pricing.json`.** `cli/cmd_join.py` writes that file on every join with each matched SKU's export row verbatim AND every position holding a copy, so a position resolves to a SKU and a Market cell with no new route, no new field on the wire and no schema change. `GET /pipeline/runs/<name>/pricing` is free and read-only.
+**The edge is D77's, reused: card -> `run` -> that run's `pricing.json`.** `cli/cmd_join.py` writes that file on every join with each matched SKU's export row verbatim AND every position holding a copy, so a position resolves to a SKU and a Market cell with no new route, no new field on the wire and no schema change. `GET /pipeline/runs/<name>/pricing` is free and read-only.
 
-**Keyed by position, never by `card.sku`** — the one decision here that could be silently wrong. That field is written by `emit`, so a sub-threshold card, a card withheld under D49 and every card in a run joined but never emitted all carry `null`. A SKU-keyed lookup would draw nothing for all of them and look correct on the rest. The position is on both sides and written by neither. `app/tests/inventory.spec.ts` prices a fixture card carrying `sku: null`.
+**Keyed by position, never by `card.sku`** — the one decision here that could be silently wrong. That field is written by `emit`, so a sub-threshold card, a card withheld under D86 and every card in a run joined but never emitted all carry `null`. A SKU-keyed lookup would draw nothing for all of them and look correct on the rest. The position is on both sides and written by neither. `app/tests/inventory.spec.ts` prices a fixture card carrying `sku: null`.
 
 **One read per run, cached by run name.** A real table is ~80KB for 50 SKUs and a box normally names one run, so walking a box costs one read — the argument `queued` beside it already makes. Keyed by RUN and not by box, because D33 scopes a run to a SELECTION inside a box, so two cards on one shelf can carry two tables read at two different moments.
 
@@ -104,7 +104,7 @@ The owner, 2026-08-29, asked for `TCG Market Price` on the card summary with a n
 
 **Beneath `Run` and above `Note`**, the placement `Confidence` gets for the same reason: the price is not a property of the card but what one join found in one export, so provenance reads down. Both rows would be inexplicable apart.
 
-**What this does not do: it does not put pricing on this screen.** No preset, no override, no snap, nothing writable — `#/pricing` is where a price is DECIDED (D49) and this is where one is READ. If this row grows controls it has acquired that screen's job.
+**What this does not do: it does not put pricing on this screen.** No preset, no override, no snap, nothing writable — `#/pricing` is where a price is DECIDED (D86) and this is where one is READ. If this row grows controls it has acquired that screen's job.
 
 **What would reopen this: a box whose cards span many runs.** The one-read-per-run cache is sized for a box identified in one go; a box assembled from a dozen ticked selections would fetch a dozen tables while the arrow keys walk it. The measurement is how many distinct `run` values one box's records carry — two today, across the whole store.
 

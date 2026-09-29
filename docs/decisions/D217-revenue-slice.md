@@ -144,9 +144,9 @@ wide at 390px. A bare SVG's flex `min-width` is 0. The header's `nowrap` text ga
 else to shrink to. The fix protects the icon's width. It also gives the table's own cells
 less padding at that width.
 
-See also. D214 is the counting rules this entry does not touch. D103 and D159 are the `?…=`
+See also. D214 is the counting rules this entry does not touch. D103 and D277 are the `?…=`
 lens mechanism this entry reuses, a third and fourth time. D201 is the query-stripped `path`
 this whole URL mechanism depends on. D50 and D118 are the interaction floors. The sort
-buttons and the drill-down inherit them free, as real `<button>` elements. D62 says a delta
+buttons and the drill-down inherit them free, as real `<button>` elements. D278 says a delta
 is a sign and a word. `compareLine` never colours "up" or "down". D193, D56 and D145 say an
 identity is not a label. This entry applies that to an order's key against its number.

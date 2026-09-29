@@ -1,7 +1,7 @@
 ## D289 — The walk list is the rail's main part, and 720 is a desk
 
 **The review's findings and the owner's rulings, 2026-09-23.** This entry amends the rail half
-of D40 (the screen is three columns: the box, the card, and where its copies are). D40 put the
+of D38 (the screen is three columns: the box, the card, and where its copies are). D38 put the
 box list, the box card and the walk in one column. It did not say which one gets the height.
 
 ### What the review measured
@@ -30,7 +30,7 @@ box list, the box card and the walk in one column. It did not say which one gets
 
 ### What this protects
 
-D40 protected a screen that shows the box, the card and its copies at once. That stays. This
+D38 protected a screen that shows the box, the card and its copies at once. That stays. This
 entry decides only which part of the rail gets the height.
 
 ### What is still open

@@ -27,7 +27,7 @@ The record is `docs/reviews/ux-2026-09-23/`, file `RULINGS.md`. The plan is
 
 ### The premises that no longer hold
 
-**D208 (Pricing states its verdict once).** D208 kept a four-word legend and a verdict sentence.
+**D277 (Pricing states its verdict once).** D277 kept a four-word legend and a verdict sentence.
 The header now reads "22 of 22 decided", so the legend explains words that are not beside it
 (TXT-06). The figures have their own lines, so the sentence repeats the heading (TXT-10). The
 sticky phone bar is 174px to 186px, a third of the screen (UX-007).
@@ -37,11 +37,11 @@ at 1440 and 1.4 screens down at 390. A row is 260px tall on a phone. The rule al
 most rows, and the screen draws every row at full weight. So the owner cannot see which rows
 need a hand.
 
-**D98 (the cheap-card figure is the control).** D98 made the cut-off figure a large input on its
+**D9 (the cheap-card figure is the control).** D9 made the cut-off figure a large input on its
 own panel. The panel costs the first screen. How often the owner changes the figure is
 unmeasured.
 
-**D159 (the band is copies, and the drawer is the first answer).** D159 put the value list on
+**D277 (the band is copies, and the drawer is the first answer).** D277 put the value list on
 Pricing as a lens. It prices nothing. It finds cards to pull, and each row already links to
 Inventory.
 
@@ -50,16 +50,16 @@ steps. The sheet opens with 92 words and a shell command (UX-017, UX-120).
 
 ### What each decision protected, and what protects it now
 
-- **D208** protects one statement of where pricing stands. The slim bar is that statement, and
+- **D277** protects one statement of where pricing stands. The slim bar is that statement, and
   the deck, the legend and the sentence go.
-- **D98** protects one figure for the cheap half, typed at display size, never a coupling to a
+- **D9** protects one figure for the cheap half, typed at display size, never a coupling to a
   moving floor. The figure stays the same input. It moves into the one "Change" sheet, beside
   the rule and a box's own cut-off. The line above the list says it in words.
-- **D159** protects a list of cards by value, to pull for bulk sale. It becomes a sort on
+- **D277** protects a list of cards by value, to pull for bulk sale. It becomes a sort on
   Inventory, where the cards are.
 - **D105** protects one place where prices are decided and sent. The Live tab keeps mark-downs
   on Pricing, with the same rows and the same Send.
-- **D49 and D86 (a missing price is unknown, not low).** A row with no price still cannot go.
+- **D86 (a missing price is unknown, not low).** A row with no price still cannot go.
   Q3 lets the other rows go without it.
 - **D156 (every unsent copy is one worklist).** Kept. The default is still everything unsent.
 - **D7 (duplicates aggregate by SKU).** Its per-send cap is removed from beside Send. Where the
@@ -80,3 +80,7 @@ BUILT, 2026-09-25, by the pricing lane. The entry with slug
 `pricing-rebuilt-to-the-reinterview` records what was built answer by answer, the calls the
 build made, and the send change for Q3. Q9's offer ("Make this the rule") is planned and not
 built. It waits on a read of the owner's store.
+
+Value is counted in copies, drawer first; nothing on hand is dropped.
+
+A typed price at the cut-off is not a drift; order is taken once per load.

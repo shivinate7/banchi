@@ -78,11 +78,11 @@ feeds the price archive. It does not feed a listing, so the risk there is lower.
 
 **D240's premise, corrected.** D240 says a number that resolves is never second-guessed.
 That holds for `_walk`. It does not hold for the join. `join_batch` runs `name_disputes`
-after `_walk` and queues a disputed card with both readings (D146). The rung D240 proposed
+after `_walk` and queues a disputed card with both readings (D23). The rung D240 proposed
 exists already, at 0.80, with the listing shape. The gap is the one the 45 above show: the
 check does not run on a card that another reason queued.
 
 **What this does not do.** It does not change `pipeline/join.py` or
 `pipeline/pricehistory.py`. It does not change a listing outcome.
 
-Cites D37, D146, D239, D240 and D242.
+Cites D37, D23, D239, D240 and D242.

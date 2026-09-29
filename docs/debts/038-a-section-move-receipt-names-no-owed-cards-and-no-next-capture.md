@@ -10,9 +10,9 @@ a moved card is owed to an order until the pull list shows it. After a move of a
 section, the owner does not see which section the next capture joins.
 
 **Why it is not fixed.** The box map lane deferred both lines to keep its slice to the move, the
-card list and undo. The lane recorded them under "Planned, not built" in D265's spec.
+card list and undo. The lane recorded them under "Planned, not built" in D294's spec.
 
 **The fix, not built.** Add both lines to the receipt that `POST /boxes/<box>/sections/move`
 answers, and draw them under the receipt on the Shelf.
 
-Cites D264 (a section moves whole) and D265 (a card's order key).
+Cites D264 (a section moves whole) and D294 (a card's order key).

@@ -7,7 +7,7 @@ can CAUSE money to be spent, by starting a child that spends it — and the temp
 that landed, was to keep the promise alive by qualifying it to "no socket TO ANTHROPIC",
 which is exactly the drift D16 exists to catch. It was rewritten instead.
 
-BOTH HALVES ARE NOW FALSE OF THIS MODULE OUTRIGHT (D64). `POST /pipeline/runs/<name>/export`
+BOTH HALVES ARE NOW FALSE OF THIS MODULE OUTRIGHT (D65). `POST /pipeline/runs/<name>/export`
 reads the TCGplayer session cookie out of `.env` and fetches the operator's own Filtered
 Export from `store.tcgplayer.com` — a secret, and a socket, in the file that used to be able
 to say it had neither. What replaces THAT promise is stated where the call lives
@@ -198,7 +198,7 @@ def warm_stock_images() -> None:
     it having run.
 
     `PKMNSCAN_STOCK_IMAGES_SYNC` JOINS THE THREADS THIS STARTS, BEFORE RETURNING —
-    `scripts/demo-record.py` sets it (D302). Nowhere else does: a LIVE
+    `scripts/demo-record.py` sets it (D301). Nowhere else does: a LIVE
     server must never make the first request after a restart wait on a disk read, however
     fast, which is the whole reason `warm()` is fire-and-forget. The demo recorder is a
     ONE-SHOT process that reads each route exactly once and never comes back — a cold
@@ -579,11 +579,11 @@ class Send:
     IT REPLACES `Leg`, AND THE DIFFERENCE IS THAT THERE IS EXACTLY ONE OF THEM. A `Leg` was an
     element of a list — `_resolve_legs` built one per box, `do_pipeline_identify` spawned a
     detached child per element, and every function between them took a `Sequence`. What that
-    bought was the ability to give each drawer its own reading, which D48 called the deciding
+    bought was the ability to give each drawer its own reading, which D180 called the deciding
     argument and which this entry measures as never used: 13 of 13 scope blocks on this store
     record `whole_box: True`, and 12 of 15 runs share one `max_edge`.
 
-    THE READING IS STILL PER PRESS, which is the half of D48 that survives. One selection gets
+    THE READING IS STILL PER PRESS, which is the half of D180 that survives. One selection gets
     one crop and one max edge, and an operator who wants box 3 read at 1200 and box 5 at 900
     presses twice — two presses, two runs, two readings, and no list shape on the wire to carry
     a combination nobody has ever sent.
@@ -1368,7 +1368,7 @@ def do_pipeline_preflight(payload: dict) -> dict:
     directories on the operator's checkout, every one named `-1-` because every one was the crop
     preview stepping a single card.
 
-    THE ANSWER IS ONE QUOTE, WHERE IT USED TO BE A LIST OF ONE OR MORE. D48's rule was that the
+    THE ANSWER IS ONE QUOTE, WHERE IT USED TO BE A LIST OF ONE OR MORE. D180's rule was that the
     shape must not change with the request, and that is exactly why a cart's response was always
     a list; with one selection per press there is one thing being quoted, and a one-element list
     would be the cart's ghost. The raw stdout is returned beside the figures and the screen shows
@@ -1686,7 +1686,7 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
 def _spawn(send: Send, captures) -> dict:
     """Create the run directory and start the detached child. Costs money. ONE child.
 
-    IT USED TO BE CALLED ONCE PER BOX IN A LOOP, and the loop is what `D48`'s cart was: one
+    IT USED TO BE CALLED ONCE PER BOX IN A LOOP, and the loop is what `D180`'s cart was: one
     detached child per drawer, each its own run, each its own reading. What replaces it is one
     child over one selection — so a pile spanning three drawers is one run and one invoice
     instead of three presses, and a press over the store is one process instead of five.
@@ -2782,7 +2782,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
     and vendored-Pokemon walk this resolves through, and D16 for why a route that can now
     reach `tcgcsv.com` says so here in as many words.
 
-    THE WORKLIST SPANS RUNS, AND SO DOES THE ANSWER. D48's resolution — a send is a cart of
+    THE WORKLIST SPANS RUNS, AND SO DOES THE ANSWER. D180's resolution — a send is a cart of
     boxes and a run is still one box, because a run carries a reading that is a property of
     what is in the drawer — stays true of the READING. What this route adds is a VIEW across
     runs; the answer is the corpus's (D86, amended), and there is one write, `PUT /pricing`,
@@ -3004,7 +3004,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
     written_at: Dict[str, int] = {}
     skipped: List[dict] = []
     # sku -> merged row. An `OrderedDict` because the ORDER IS THE HIERARCHY on this screen
-    # (D78) and the first run to mention a SKU is what seeds its place; the sort that decides
+    # (D277) and the first run to mention a SKU is what seeds its place; the sort that decides
     # the final order is the client's, over the same fields it already sorts one run by.
     merged: Dict[str, dict] = OrderedDict()
 
@@ -3043,7 +3043,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
                 # — `app/src/Pricing.tsx` draws sixteen export cells, a snap table, a presets
                 # map and a positions list off it, and a server that lifted "the fields the
                 # screen needs today" would be choosing what matters from the wrong file, the
-                # thing D49 wrote `row` verbatim to avoid. The aggregate fields below are the
+                # thing D86 wrote `row` verbatim to avoid. The aggregate fields below are the
                 # only ones that differ from a single run's, and each says why.
                 merged[sku] = dict(row)
                 merged[sku]["in"] = [leg]
@@ -3261,7 +3261,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
     # hotlinked CDN URL into `pricing.json`, a file this repo otherwise never rewrites, and
     # the whole point of a resolver with its own short TTL is that the answer can change
     # without a re-join. `row["row"]` is the export cell dict `sku_row` already put on the
-    # wire verbatim (D49); its own `Number` cell is what a photo is keyed on, same as the
+    # wire verbatim (D86); its own `Number` cell is what a photo is keyed on, same as the
     # join.
     for row in merged.values():
         row["image_url"] = (
@@ -3409,7 +3409,7 @@ def do_pipeline_price_now(skus: Sequence[str]) -> dict:
     one that has a price, rather than counted as this SKU's answer.
 
     A SKU NEITHER SOURCE HAS EVER PRICED IS SIMPLY ABSENT FROM THE RESULT, never a null or a
-    zero — D159's `no_reading` shape, which every reader of either table now inherits rather
+    zero — D277's `no_reading` shape, which every reader of either table now inherits rather
     than each inventing its own. `source` says which table answered (`archive` or `live`) —
     carried through rather than discarded, because the two ages mean different things: an
     archived bucket's `at` is the calendar day the bucket covers, and a `readings` row's `at`
@@ -3557,7 +3557,7 @@ def _value_rows(
     payload; every field this loop reads — `box`, `index`, `sku`, `state`, `name`,
     `set_hint`, `condition`, `game` — is an indexed column, so the whole loop runs over
     `inventory.cards.select(...)` instead. This is UNAVOIDABLY still O(cards) — an aggregate
-    over the whole store has to touch the whole store, and D159's "nothing on hand is
+    over the whole store has to touch the whole store, and D277's "nothing on hand is
     omitted" figures depend on that — what this removes is the per-row COST, not the pass.
 
     Returns `(copies, aggregates)`, UNSORTED — sorting is the caller's job, once, over
@@ -3657,7 +3657,7 @@ def _value_rows(
                 # WHAT THE OPERATOR DECIDED TO ASK, WHICH IS NOT WHAT THE CARD IS WORTH (D86).
                 # Round-tripped as the corpus holds it — a string, a number, or a
                 # `WithheldRecord` — because flattening that last shape would turn a
-                # deliberate hold (D49) into a missing price.
+                # deliberate hold (D86) into a missing price.
                 "answer": decided,
                 # HOW MANY COPIES OF THIS SKU TCGPLAYER HOLDS, NEVER WHETHER THIS COPY IS ONE.
                 # `live` is per-SKU and the store does not record which physical copy a push
@@ -3765,7 +3765,7 @@ def do_pipeline_holdings_value(range_: str) -> dict:
     MARKETPLACE'S MIRROR — `pipeline/holdings.py:on_hand_quantities`'s whole argument, this
     route's own copy of `do_pipeline_value`'s `Listing.live` warning.
 
-    THE SERIES SOURCE IS THE ARCHIVE (D219), ONE RANGE AT A TIME, NEVER MERGED (D62). `range`
+    THE SERIES SOURCE IS THE ARCHIVE (D219), ONE RANGE AT A TIME, NEVER MERGED (D278). `range`
     defaults to `month`, the finest range the archive keeps and the closest thing to a daily
     mark; the other three ranges answer to the same route, one call each, never combined into
     one series here or anywhere downstream.
@@ -3953,7 +3953,7 @@ def do_pipeline_value_page(
     them.
 
     THE AGGREGATES ARE COMPUTED OVER EVERY ON-HAND ROW REGARDLESS OF `band`/`box`/`after`/
-    `limit` — D159's "nothing on hand is omitted" figures never shrink to "what this page
+    `limit` — D277's "nothing on hand is omitted" figures never shrink to "what this page
     could see", and the `boxes`/`unrankable`/`totals` blocks are identical across all three
     band requests against the same store state (asserted in T7's `check_value_page`).
 
@@ -4311,7 +4311,7 @@ def do_queue_refresh(payload: dict) -> dict:
     }
 
 
-# ------------------------------------------------------------------------ the rescue, D165
+# ------------------------------------------------------------------------ the rescue, D145
 
 def _extract_rescue_report(text: str) -> Optional[dict]:
     """`cmd_rescue.run --json`'s own report line, read out of its stdout.
@@ -4345,7 +4345,7 @@ def _extract_rescue_report(text: str) -> Optional[dict]:
 
 
 def do_run_rescue(name: str, payload: dict) -> dict:
-    """`POST /pipeline/runs/<name>/rescue` — D165's repair, offered from the run it strands.
+    """`POST /pipeline/runs/<name>/rescue` — D145's repair, offered from the run it strands.
 
     FREE, PREVIEW BY DEFAULT, `write` GATED — `do_queue_refresh`'s shape, for the same reason:
     a rescue re-addresses every one of a stranded run's records at once, and a write nobody
@@ -5101,7 +5101,7 @@ def do_markdown_trends(stamp: str, skus: Sequence[str] = ()) -> dict:
     AN EXPLICIT LIST IS REQUIRED HERE AND OPTIONAL ON A RUN, and the difference is size rather
     than taste. The run route measured 46 SKUs at ~34s of courtesy delay; a survey of the
     owner's live inventory is 441 rows, which is about five and a half minutes at a free
-    public mirror for readings nobody asked for. D62's rule is that this is a press, and a
+    public mirror for readings nobody asked for. D278's rule is that this is a press, and a
     walk that big would make the press meaningless — so the client sends the rows the operator
     is actually looking at, filtered, in chunks.
     """
@@ -5417,7 +5417,7 @@ def _clearable_block(book: corpus.Corpus) -> dict:
     per-SKU ages lets it count by intersecting this list with the rows it drew — set
     arithmetic — where re-deriving *which answers are clearable* in TypeScript would be a
     second implementation of `corpus.clearable`, on the one file in this product that holds
-    money. That is the mistake D49 refused to make across two languages and D103 found
+    money. That is the mistake D86 refused to make across two languages and D103 found
     `preset_prices` making across two Python modules.
 
     IT IS ADVISORY, AND THE PRESS RE-DERIVES. `do_pricing_clear` never trusts this list: it
@@ -5464,7 +5464,7 @@ def do_pricing_corpus_write(payload: dict) -> dict:
     every key it does not understand, so a field a later version adds — or `_note`, which a
     person writes by hand — survives a client that has never heard of it.
 
-    IT VALIDATES THE POLICY AND NOT THE ANSWERS, which is the same line D49 drew. `Corpus.parse`
+    IT VALIDATES THE POLICY AND NOT THE ANSWERS, which is the same line D86 drew. `Corpus.parse`
     raises on a rule or basis outside the enum, and on a `threshold` that is not a positive
     price, because a screen could otherwise write a document that makes `emit` answer with a
     traceback an hour later. All three are `ValueError`s and the `except` below is what turns
@@ -5642,7 +5642,7 @@ def do_pricing_clear(payload: dict) -> dict:
     store carries.
 
     WHAT IT MAY REMOVE IS `corpus.clearable`'s, RE-DERIVED HERE FROM THE FILE. Holds are left
-    standing (D49 — a judgement with a reason, a watch and a note attached), `channel !=
+    standing (D86 — a judgement with a reason, a watch and a note attached), `channel !=
     "price"` answers are left standing (the ABSENCE of an answer, which `decisions.blocking`
     reads to refuse an `emit`), and an undated answer is left standing by an age filter that
     cannot place it. The response names all three, so the screen states the blast radius rather
@@ -5656,7 +5656,7 @@ def do_pricing_clear(payload: dict) -> dict:
     ratchet inverted by the undo of all things.
 
     IT IS ITS OWN ROUTE RATHER THAN A `PUT /pricing` OF NULLS. `Corpus.parse` does read `null`
-    as "drop this answer" (D49's rule, kept), so a client could clear by nulling keys — and
+    as "drop this answer" (D86's rule, kept), so a client could clear by nulling keys — and
     then the client would be deciding WHICH keys, which is `corpus.clearable` written a second
     time in TypeScript against money. The predicate stays in Python and the screen presses a
     button.
@@ -6124,7 +6124,7 @@ def market_cache_dir() -> Path:
 # write, so a fetch any of them made answers all the others with no network call.
 #
 # `PKMNSCAN_STOCK_IMAGES_SYNC` ALSO RAISES THE TTL TO `CATALOG_TTL_SECONDS`, a second
-# finding this same decision entry records (D302). `StockImages`'s default
+# finding this same decision entry records (D301). `StockImages`'s default
 # `TCGCSV_TTL_SECONDS` is one hour — right for a live server, where a stale answer costs one
 # more tcgcsv request. `_fetch_tcgcsv`'s
 # own disk read TREATS AN HOUR-OLD ENTRY AS A MISS, exactly like a cold one, and schedules a
@@ -6154,7 +6154,7 @@ def _history_user_agent() -> str:
     One knob, because there is no argument for wanting two different browsers' worth of
     disguise out of one operator's own `.env`.
 
-    `get_live`, NOT `get` — the same D64 judgement `tcg_export._agent()` already made: this
+    `get_live`, NOT `get` — the same D65 judgement `tcg_export._agent()` already made: this
     is exactly the kind of value an operator edits into a running process without a restart,
     and `get` cannot see the replacement once it has cached the name once.
 
@@ -6170,7 +6170,7 @@ def _history_row(directory: Path, sku: str) -> dict:
 
     THE EXPORT ROW IS WHAT THE READER NEEDS, AND THIS RUN ALREADY HOLDS IT VERBATIM.
     `cli/cmd_join.py:_pricing_table` writes every matched SKU's row unmodified under `row`,
-    for D49's reason — the screen shows what the CSV says — and that is exactly the five
+    for D86's reason — the screen shows what the CSV says — and that is exactly the five
     cells the catalog walk reads: `Product Line`, `Set Name`, `Number`, `Product Name` and
     `TCGplayer Id`. So there is no second source to keep in step and no re-parse of an
     export: the run that priced this card is the run that says what it is.
@@ -6289,7 +6289,7 @@ def do_pipeline_history(name: str, sku: str) -> dict:
     emphatic on this and the route is the place it could quietly stop being true: nothing
     here computes a listing price, writes `TCG Marketplace Price`, or reaches
     `inventory/prices.json`. It is a READING taken beside the export, on the screen where a hold is
-    set — D49 records that the `bullish` withhold and its `watch_above` threshold have been
+    set — D86 records that the `bullish` withhold and its `watch_above` threshold have been
     set against the operator's memory of what a card used to cost, and this is the fact that
     was missing. The day a listing price is allowed to depend on a trend, that is a change
     to D8 argued on its own terms and not a widening of this handler.
@@ -6510,7 +6510,7 @@ def _history_for_entry(entry: dict, wanted: str, source: dict) -> dict:
 def _history_spark(series) -> dict:
     """One range of one SKU, as a ROW draws it. Deliberately not `_history_series`.
 
-    THE LEAN SHAPE IS THE POINT, AND IT IS A DESIGN RULE RATHER THAN A SAVING. D62's panel
+    THE LEAN SHAPE IS THE POINT, AND IT IS A DESIGN RULE RATHER THAN A SAVING. D278's panel
     is where a reading's numbers live — the vwap at display size, its bound muted beneath,
     liquidity, spread, the export's own figure beside them. A row has space for a shape and
     one number, so this carries a shape and one number, and a row that wanted more would be
@@ -6519,7 +6519,7 @@ def _history_spark(series) -> dict:
     NO MONEY CROSSES THIS FUNCTION AND THAT IS THE SECOND REASON. The row already carries
     four dollar columns and the field a listing price is typed into; a fifth figure that is
     a READING rather than a price would sit inches from that field inviting the operator to
-    copy it in, which is the D8 reopening D62 refused in as many words. `fraction` is
+    copy it in, which is the D8 reopening D278 refused in as many words. `fraction` is
     dimensionless and `points` are drawn to a 44px box and never labelled.
 
     THE SIZE IS ALSO WHY. `_history_series` carries five fields per bucket; over 46 SKUs and
@@ -6547,18 +6547,18 @@ def _history_spark(series) -> dict:
 def do_pipeline_trends(name: str, skus: Sequence[str] = ()) -> dict:
     """`GET /pipeline/runs/<name>/trends` — the shape of many SKUs at once, for the row strip.
 
-    D62 NAMED THIS ROUTE AND THE CONDITION FOR BUILDING IT. Its closing paragraph: *"What
+    D278 NAMED THIS ROUTE AND THE CONDITION FOR BUILDING IT. Its closing paragraph: *"What
     would reopen this: the panel being opened on every card... the honest answer is a batched
     route — `readings_for_rows` already exists in the module and groups by productId — and a
     column on the row rather than a panel beside it. The measurement is whether the operator
     presses `T` more often than they press `H`."* The owner answered that measurement on
     2026-08-31 by asking for the graphs on every row. This is the route that entry specified,
-    built to the shape it specified, and D79 records what the answer cost.
+    built to the shape it specified, and D277 records what the answer cost.
 
-    IT IS STILL A PRESS AND THAT IS THE WHOLE OF D62 THAT SURVIVES INTACT. Nothing polls
+    IT IS STILL A PRESS AND THAT IS THE WHOLE OF D278 THAT SURVIVES INTACT. Nothing polls
     this and no render fires it: a screen that read it on mount would turn every visit to
     `#/pricing` into ~92 requests at a free public mirror for readings nobody asked for,
-    which is the one way D62 said this feature could become rude. What changed is the
+    which is the one way D278 said this feature could become rude. What changed is the
     GRANULARITY of the press — one for the list instead of one per card — and not whether
     there is one.
 
@@ -6930,7 +6930,7 @@ def _pricing_flags(payload: dict) -> List[str]:
 
 # ------------------------------------------------------------ the export, fetched not typed
 #
-# THE LAST MANUAL STEP IN `runs -> join`, AND WHAT REMOVING IT COSTS (D64). `identify` spawns
+# THE LAST MANUAL STEP IN `runs -> join`, AND WHAT REMOVING IT COSTS (D65). `identify` spawns
 # detached, `join`, `emit` and `reconcile` are free and re-runnable, and every artefact is
 # downloadable — so the one thing an operator still had to do by hand between a finished
 # batch and a joined run was open TCGplayer, press Export Filtered CSV, wait, and upload the
@@ -7744,11 +7744,11 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
     the fault is attributable to the fetch. The receipt then reports the last export this run
     was joined against beside this one, per game, and refuses nothing on that comparison —
     D65 names the scope, so what the file is checked for is what was asked, and a run's first
-    fetch has nothing earlier to be compared with by construction (D64, amended 2026-09-02).
+    fetch has nothing earlier to be compared with by construction (D65).
 
     A REFUSAL TEARS DOWN WHAT IT BUILT. The bytes are written first because
     `exports_for` reads files rather than buffers, and every refusal path unlinks them again —
-    the rule D48 states for a cart's scope directories, for the same reason: a run directory
+    the rule D180 states for a cart's scope directories, for the same reason: a run directory
     accumulating one dead export per mis-timed press is a run that stops explaining itself.
     """
     directory = _open_run(name)
@@ -7893,11 +7893,9 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
 
     # ------------------------------------ WHAT THE LAST JOIN USED, BESIDE WHAT ARRIVED
     #
-    # INFORMATION, AND NEVER A REFUSAL. D64's delta guard compared this file against the
-    # export the run was last joined with and refused a narrower one; it was retired
-    # 2026-09-02 (D64, amended) because D65 names the scope — so the check above is the
-    # whole guard — and because a run's FIRST fetch has nothing to compare with by
-    # construction, which made every run cost an acknowledgement. The figures stay on the
+    # INFORMATION, AND NEVER A REFUSAL. D65 names the scope, so the check above is the
+    # whole guard, and a run's FIRST fetch has nothing to compare with by construction: a
+    # narrower-file refusal would cost every run an acknowledgement. The figures stay on the
     # receipt so that a narrower file is visible to the operator who asked for it. Read off
     # `run.exports_by_game` directly: `baselines` above deliberately EXCLUDES the games this
     # file claims. A previous file that no longer parses is OMITTED rather than raised — a
@@ -7919,7 +7917,7 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
     # let the NEXT press answer out of an export this one was about to tear down.
     if fresh:
         _write_note(target, asked, len(body))
-        # identity-follows-sku.md §3.2, fill point 1: "A fetched Filtered Export (D64,
+        # identity-follows-sku.md §3.2, fill point 1: "A fetched Filtered Export (D65,
         # D166), in server/pipeline_routes._keep_export, in the same press that keeps the
         # file." `fresh` is the SAME condition `_keep_export` itself answers `True` for —
         # bytes nothing on disk carried before this press — so a REUSE (`fresh=False`, the

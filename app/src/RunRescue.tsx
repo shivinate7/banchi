@@ -7,7 +7,7 @@ import { boxTitle } from './kit/data'
 import { toast } from './kit/toast'
 import './RunRescue.css'
 
-/* D165's repair, offered from the run it strands (D210). A rescue re-addresses
+/* D145's repair, offered from the run it strands (D210). A rescue re-addresses
  * a stranded run's cards to the drawer they are actually in now, and writes that as a NEW run
  * — the source is never edited, so this sheet's own way back is always a link to it.
  *

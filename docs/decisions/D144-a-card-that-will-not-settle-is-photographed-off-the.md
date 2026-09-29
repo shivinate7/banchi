@@ -5,7 +5,7 @@
 captures all these edge cases"*, and the failure they were naming: *"it's really bad when the
 cards are coming a little slower or aren't landing perfectly, the engine is then bad at picking
 those up"*. Six traces came with it. This entry is the answer to the second sentence and the
-retirement of D130's second trigger, which arrived as a separate instruction the same evening.
+retirement of D144's second trigger, which arrived as a separate instruction the same evening.
 
 ### What was measured
 
@@ -97,7 +97,7 @@ ending in a fire; and "brighter than any card this session fired on" flags 6 of 
 names nothing. A verdict asserting `flare` would be `cardLumaFloor`'s mistake in a third
 costume. **The fix for glare is optical and stays optical.**
 
-**4. The cadence trigger is deleted, and D130 and D131 are amended rather than dropped.**
+**4. The cadence trigger is deleted, and D144 and D131 are amended rather than dropped.**
 A separate instruction the same evening: *"I dont want cadence and motion as
 separate triggers btw, get rid of cadence, if tehre's anything built from cadence we can take
 into motion great, else just get rid of it. motino is better. always."*
@@ -137,7 +137,7 @@ pinned as T9's fourth corpus. The cadence module and its spec are deleted, with 
 Trigger cell, the period pin and the beat's HUD spans.
 
 **RECORDED:** here, in `docs/specs/motion-trigger.md` §2 and §7, in the gates corpus's `T9` entry,
-and as amendments closing D130 and D131.
+and as amendments closing D144 and D131.
 
 **NEITHER — AND THIS IS THE HALF THAT MATTERS.**
 **No photograph taken under this rule has ever been looked at.** The replay proves the machine fires on more cards; that is arithmetic over

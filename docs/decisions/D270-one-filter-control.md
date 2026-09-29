@@ -77,7 +77,7 @@ has now seen the result. He dislikes it (gripe 3). The block holds four controls
 and two heights (FLT-24). Status opens the operating system's own menu. The kit's picker never
 does that.
 
-**D132 and D209's separate toggles.** D132 drew "Hide sold" as a pill with a count. D209 drew
+**D132 and D296's separate toggles.** D132 drew "Hide sold" as a pill with a count. D296 drew
 "Hide never-seen SKUs" as a plain checkbox with none. Two entries chose two shapes for one
 idea. That is FLT-16's own finding.
 

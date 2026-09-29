@@ -28,7 +28,7 @@ The number found five `R02` Commons across three sets. That is a `set_ambiguous`
 
 **The owner's ruling, on the suggestions (2026-09-24):** if both do not match even after that, the card can come for review. In review it should offer a name-match option, a number-match option, or both.
 
-D253 already built the name-match half of this, for a DISPUTED name (D146's `name_disputes`). `4/383`'s name was never disputed. The `R02` Commons carry the name `Calm Rune` too, so `name_disputes` stays silent. The rung that queues it, `set_ambiguous`, never asks the ladder at all. This amendment closes that gap: a card whose number found real rows, under a real name, but whose RARITY the claim rejects.
+D253 already built the name-match half of this, for a DISPUTED name (D23's `name_disputes`). `4/383`'s name was never disputed. The `R02` Commons carry the name `Calm Rune` too, so `name_disputes` stays silent. The rung that queues it, `set_ambiguous`, never asks the ladder at all. This amendment closes that gap: a card whose number found real rows, under a real name, but whose RARITY the claim rejects.
 
 **4. Rank — job (c), added this entry.** `pipeline/join.py:rank_by_claims` scores each candidate row. The score counts how many capture claims it agrees with: rarity, finish (`metadata_finish`), set hint. It orders the list best first.
 
@@ -38,6 +38,8 @@ This is presentation only. It cannot add a row that answers to nothing. It canno
 
 `server/capture_server.py:do_review_catalog`'s free-text search calls the SAME function. A claim scores once, for both the pipeline's own suggestions and a typed search.
 
-**Rung 0 stays exempt, unamended.** D146's own rule holds: *"a human who looked at the photograph beside the candidate rows outranks a claim about the stack it came from."* This holds by construction, not by a new check. A `HUMAN_ANSWERED` card resolves to one row before any candidate list is built. Ranking a list of one is always a no-op.
+**Rung 0 stays exempt, unamended.** D23's own rule holds: *"a human who looked at the photograph beside the candidate rows outranks a claim about the stack it came from."* This holds by construction, not by a new check. A `HUMAN_ANSWERED` card resolves to one row before any candidate list is built. Ranking a list of one is always a no-op.
 
 **The cutoff this widening exposed is recorded in `docs/specs/card-variants.md`.** Section 3c already reasoned about `4/383` and its nine-row limit. The owner's ruling on that limit, and the search's own before and after, are recorded there.
+
+A typed rarity is evidence, not fact: two agreeing signals release it; disagreement is a review reason.

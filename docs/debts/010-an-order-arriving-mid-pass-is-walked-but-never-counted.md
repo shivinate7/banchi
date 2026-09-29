@@ -1,7 +1,7 @@
 ## 10 — An order arriving mid-pass is walked but never counted, and a tab outlives its sitting
 
 `WalkView`'s figure counts the orders THIS PASS has completed — `OrdersHubStore.walkKeys`, frozen when
-the walk is entered and cleared by a fetch or by a capture-server restart (D96, amended 2026-09-04).
+the walk is entered and cleared by a fetch or by a capture-server restart (D97, amended 2026-09-04).
 Two things it still cannot say, both deliberate and both reachable on the owner's store. **A third —
 that a restarted server ends the pass — was one of them and is closed**; it is kept below because the
 three attempts it took are the useful part.

@@ -3,7 +3,7 @@
 **AMENDED, MERGED (`D258`, ruling 6).** This class read "the card's own
 stored name and number." Those are no longer the read, once a card is bound. So this class
 becomes empty by construction — the outcome it protected. `cards identity`, one report, reads
-`read_*` against the SKU table instead, and excludes any card a human bound. D255 merges into
+`read_*` against the SKU table instead, and excludes any card a human bound. D242 merges into
 the same report.
 
 **What this builds.** A SKU is one product in one condition. Two copies of it have no
@@ -94,6 +94,8 @@ here. Touch `pipeline/pricearchive.py`, `pipeline/pricehistory.py`, `store/numbe
 `pipeline/holdings.py`, per this task's own fence.
 
 Governs `pipeline/sku_number_contradictions.py`, `cli/cmd_sku_contradictions.py`, and
-`cli/cmd_cards.py`'s `contradictions` dispatch entry. Cites D146 (two agreeing signals
+`cli/cmd_cards.py`'s `contradictions` dispatch entry. Cites D23 (two agreeing signals
 release a claim — here three agree, which is stronger), D167, D173, D234, and the four
 approved stored-data checks, this entry's sibling, built as a separate PR.
+
+Two stored names on one SKU is a sibling class in the same report.

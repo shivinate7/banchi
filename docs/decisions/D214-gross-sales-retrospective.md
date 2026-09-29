@@ -82,7 +82,7 @@ is a sidebar tab, plainly, and nothing is added to any other screen for it.
 **So `#/revenue` is an eleventh nav row ON PURPOSE, the 37px cost accepted knowingly.**
 `app/tests/brand.spec.ts`'s two drawer-fit cases carry the arithmetic and the citation. What
 they give up is a TEST'S OWN stricter promise — every row on screen with
-nothing to scroll to reach it — never a decision: D204 already rules that the phone drawer's
+nothing to scroll to reach it — never a decision: D266 already rules that the phone drawer's
 nav scrolls in the space above its foot for any row count, so full-fit-without-scrolling was
 never a floor this product promises past this row. The Orders/Shipping detour is fully
 reverted — `app/src/Orders.tsx` is byte-for-byte main's again — and is kept here as the

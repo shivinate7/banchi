@@ -85,7 +85,7 @@ the constant untouched.
 **Claims rank the settled row, even with no row to start from.**
 `pipeline/join.py:name_alternatives` already resolves the name's own rows through the same
 ladder. That ladder is `variant.resolve`. It reads `metadata_finish`, `rarity_claim` and
-`detected_finish`. This is D23 and D146's existing machinery, not new machinery. What was
+`detected_finish`. This is D23's existing machinery, not new machinery. What was
 missing was a place to carry that answer back out. `NameSide` now carries the ladder's own
 `Resolution` over the settled row. `join_batch` reads its `stage` and `reason`, rather than
 the review reason it replaces. `rarity_claim_mismatch` has no finish decision of its own to
@@ -114,7 +114,7 @@ byte-identical by construction. One that did not settle is still `needs_review`.
 `pipeline/pricehistory.py:ProductIndex.find` against a premise its own docstring states.
 The premise reads: a number that resolves is never second-guessed. That premise was
 already false for the disputed-name path this entry fixes. `name_disputes` and
-`name_corroborates` (D146), plus D162's release, already second-guess a resolved number.
+`name_corroborates` (D23), plus D162's release, already second-guess a resolved number.
 They read the same evidence D240 asks for. D240's 134-of-2,636 gap is measured over
 `_walk`'s number-key resolution path directly. It is never measured over this queue-time
 cross-check. The two figures do not share a denominator. This entry does not close D240's
@@ -128,9 +128,9 @@ that replay.
 
 1. THE RARITY CLAIM WAS WAIVED. `name_alternatives` called `variant.resolve(...,
    name_corroborated=True)` HARD-CODED. That flag releases a claim contradicting every
-   candidate row (D146's own mechanism). Passing `True` unconditionally waived it on
+   candidate row (D23's own mechanism). Passing `True` unconditionally waived it on
    every settle. Finding a row BY the name is not a second signal independent of the
-   name. D146 needs two, and this call had one wearing two names.
+   name. D23 needs two, and this call had one wearing two names.
    Fixed: `name_corroborated=False`. A claim that contradicts every one of the
    name's own rows now queues, exactly as it would over the number's own rows.
 2. QUALIFIED NAMES WERE UNREACHABLE. `Catalog.__init__` indexed `_by_name` on the raw
@@ -148,7 +148,7 @@ runs over `variant.rarity_filter(named, card.rarity_claim)`. That is the rows th
 agrees with, never the whole unfiltered `named`. Where the claim narrows those rows to
 exactly one product, that counts as settled. The name narrowed the search to one card's
 every printing. The claim narrowed within that to one printing. Two agreeing signals is
-D146's own shape, applied one level up. Only the RARITY claim counts for this, never the
+D23's own shape, applied one level up. Only the RARITY claim counts for this, never the
 finish claim. Two prints of one name generally differ in rarity. Nothing here argues a
 finish claim ever tells two PRODUCTS apart — only two conditions of the same one. Where
 there is no rarity claim, this is `distinct_cards(named)` exactly as before, unchanged
@@ -180,7 +180,7 @@ a SKU the owner has disputed. None of the five still-unconfirmed entries gets gu
 at. Every one queues.
 
 **Cites** D35 (the fallback rung this one mirrors, and whose rule against listing a
-name-found card on its own D162 already amended once), D146 (the two-signal release the
+name-found card on its own D162 already amended once), D23 (the two-signal release the
 claim re-run inside `name_alternatives` depends on), D162 (the release rule this entry
 widens the reach of, never the rule itself), D167 (the queue-refresh precedent for
 re-resolving an already-queued entry against fresh evidence), D240 (the premise this closes

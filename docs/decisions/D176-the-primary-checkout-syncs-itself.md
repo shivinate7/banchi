@@ -1,7 +1,7 @@
 ## D176 — The primary checkout syncs itself, both parts, because the thing D42 was protecting is not the thing this moves
 
 **Settled 2026-09-12, on the owner's answer to a refuse-only proposal.** Asked whether the
-primary checkout — `/Users/shivinate/Developer/pkmnscan`, the one directory D53 keeps a capture
+primary checkout — `/Users/shivinate/Developer/pkmnscan`, the one directory D138 keeps a capture
 server alive out of at login over their real store — is mechanically kept on `main` at
 `origin/main`, and offered a guard that would only refuse, they said:
 
@@ -12,7 +12,7 @@ three moments something in this repository already knows main may have moved.
 
 ### The two parts are two defects and each has been observed alone
 
-**Part 1 — the tree stands on `main`.** D139's incident: that directory on
+**Part 1 — the tree stands on `main`.** D158's incident: that directory on
 `claude/env-key-rotation`, three live sessions in it. D158's: `claude/debts-citation-repair`,
 merged as #282 and already behind `origin/main`, with four.
 
@@ -82,7 +82,7 @@ hook ever refuses this file's move, that is a finding and not a thing to route a
 
 **This is CLAUDE.md's own rule applied to a settled decision's scope rather than its conclusion:**
 a settled decision is an argument, not an authority. D158's ceiling is named as reopened below, in
-the words D158 used to reopen D139's.
+the words D158 used to reopen D158's.
 
 ### The fast-forward-only test is this module's own, and rule 3 is not enough
 
@@ -129,7 +129,7 @@ re-read `serve.py` but not the module it decides with would be running half of o
 ### What it must never do, each one a refusal with a self-test arm
 
 - **A linked worktree is never the subject.** The test is `server/ports.py:is_linked_worktree`,
-  **called and not respelled** — D139's rule, which D158 restates, and for its reason: that
+  **called and not respelled** — D158's rule, which D158 restates, and for its reason: that
   question has exactly one answer in this repo, and a fourth spelling is a fourth place to write
   it backwards. Asserted from *inside* a worktree, which is where `make merge` and a SessionStart
   hook both reach this.

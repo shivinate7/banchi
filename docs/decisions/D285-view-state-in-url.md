@@ -28,21 +28,21 @@ select and its own search. Inventory kept only Hide sold. Pricing's run scope re
 newest run on every reload. Review, Graveyard and Shipping kept nothing at all.
 
 No single decision set this. D217 (Sales becomes a tool) made the URL that screen's own copy
-of its state. D209 put Orders' view in `localStorage`, on D142's own precedent — the setup
+of its state. D296 put Orders' view in `localStorage`, on D142's own precedent — the setup
 outlives the browser. Two rulings gave two mechanisms, on two screens. Five screens carried
 neither.
 
-### What D209's `localStorage` choice protected, and what protects it now
+### What D296's `localStorage` choice protected, and what protects it now
 
 D142 protects a capture setup across sessions, on one device: the box, the game, the set hint.
 That subject is a fact about the machine, not about one screen's current view. It is untouched
 here.
 
-D209 borrowed that same reasoning for Orders' own filter state. Filter state is a fact about
+D296 borrowed that same reasoning for Orders' own filter state. Filter state is a fact about
 what the owner is LOOKING AT, not about the device. A `localStorage` copy of it cannot be
 linked, and cannot be shared. It also fails a plainer test. A screen loads with the LAST
 SAVED filter, not the one in the URL the owner just opened. Moving that one screen's memory to
-the URL is this entry's own scope. D209's sort-toggle behavior, and its D132 fold timing, are
+the URL is this entry's own scope. D296's sort-toggle behavior, and its D132 fold timing, are
 both untouched.
 
 ### What is built

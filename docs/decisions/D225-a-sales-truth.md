@@ -20,13 +20,13 @@ For an already-sold name, the product table can show its last sale's price again
 
 **The real source is the price-history archive (D219, PR #416), tried first, with `readings` as the fallback.** `pkmnscan archive sweep` walks every SKU this store has ever recorded, sold or held, across four ranges. Sealed product is included. Unlike `readings`, the archive is filtered through neither on-hand inventory nor `#/pricing`'s own live-export walk. `do_pipeline_price_now` reads each SKU's newest `month`-range bucket. `month` is the finest range the archive keeps, so its newest bucket is the closest thing to a live quote. A bucket with no `market` is skipped in favor of an older one that has a price. Only where the archive has nothing does the route fall back to `readings`. `source` (`'archive'` or `'live'`) travels with the answer. The two ages mean different things: an archived bucket's age is the calendar day it covers. A `readings` row's age is the moment something last fetched or joined it.
 
-**The coverage is stated on the screen, not left for a reader to infer.** `revenue-market-note` reads *"N of M names have a price today, K do not"*. A reader seeing a low N knows that is what they are looking at. Nobody has to assume every row got an honest look. Until the archive's sweep has covered the store, most rows will show `no reading`. That is D159's own rule applied here, not a defect: never a zero standing in for an absent price.
+**The coverage is stated on the screen, not left for a reader to infer.** `revenue-market-note` reads *"N of M names have a price today, K do not"*. A reader seeing a low N knows that is what they are looking at. Nobody has to assume every row got an honest look. Until the archive's sweep has covered the store, most rows will show `no reading`. That is D277's own rule applied here, not a defect: never a zero standing in for an absent price.
 
 **Five rules, each checked by `app/tests/revenue.spec.ts`:**
 
 1. **Never a profit or a loss.** No label says gain, loss, performance, beat or missed. The card was sold and the money was taken. The screen's own words: *"above/below/even with what it sold for."*
 2. **Blind to cost, stated beside the figure.** `revenue-market-note` says so once, whenever a price has been fetched: *"Blind to what any of this cost you."* A card bought at two dollars and sold at eighteen against a twenty-dollar market is a large gain. This figure alone would draw it as a shortfall.
-3. **A sign and a word, never a color (D62).** `marketCompareOf` returns `above`, `below` or `even with`. The cell prepends `+` or `−`. Nothing about the row's color changes with direction.
+3. **A sign and a word, never a color (D278).** `marketCompareOf` returns `above`, `below` or `even with`. The cell prepends `+` or `−`. Nothing about the row's color changes with direction.
 4. **Today's price carries its own age, whichever table answered.** `ReadingAge`, already built for D189's other callers, draws beside the figure regardless of `source`.
 5. **No price draws no figure, never a zero.** A SKU neither table has priced renders `no reading`. The coverage count sits beside the total.
 

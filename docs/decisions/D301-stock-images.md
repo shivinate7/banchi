@@ -54,3 +54,7 @@ back to `url_for`/`url_for_product` for a SKU with no own photograph on hand. Se
 gains its own method, `url_for_product`, keyed by product name instead of a card number.
 Pokemon sealed product resolves through tcgcsv, because the vendored tree names singles
 only and carries no sealed row at all.
+
+Stock images cache in the archive's market-cache directory; no second cache.
+
+`PKMNSCAN_STOCK_IMAGES_SYNC` is set only by `scripts/demo-record.py`. It makes `warm_stock_images()` join its threads before the server accepts requests, so the recorder's first read is warm. The live server stays fire-and-forget.

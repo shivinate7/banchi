@@ -3,7 +3,7 @@
 **The owner's rulings, 2026-09-23, in the UX review interview.** Three rulings about when a list
 may change its order.
 
-1. **A sort press re-sorts at once** (FLT-01). This amends D209 (the buyer list leads with Ready
+1. **A sort press re-sorts at once** (FLT-01). This amends D296 (the buyer list leads with Ready
    to Ship, and a re-sort is a press). The freeze still stops a sale from re-ranking the list.
 2. **Nothing jumps** (FLT-22). A sold row stays in place, marked sold, until the next box load
    or refresh. Then it folds. D118 (a press changes what is on the screen, never where the rest
@@ -16,9 +16,9 @@ The record of the review is `docs/reviews/ux-2026-09-23/`, lens `filtering.md`.
 
 ### The premises that no longer hold
 
-**D209.** D209 rules that a changed sort only offers a "re-sort" chip, and that only the chip's
+**D296.** D296 rules that a changed sort only offers a "re-sort" chip, and that only the chip's
 press re-orders. It extends D181 (the order is taken once). But the sort toggle is itself an
-explicit press. D209's own title says a re-sort is a press. The lens measured the result on
+explicit press. D296's own title says a re-sort is a press. The lens measured the result on
 `#/orders`: "Oldest" shows pressed and the list does not move. A chip then says "Order is 6
 buyers stale, re-sort". So the toggle states an order the list does not have.
 
@@ -32,7 +32,7 @@ by the hand. So one store shows two orders (COH-11, UX-079).
 
 ### What each decision protected, and what protects it now
 
-**D209 and D181** protect a list that does not reshuffle under the hand because of something
+**D296 and D181** protect a list that does not reshuffle under the hand because of something
 the owner did not do. That stays. A sale, an arrival or a background refresh still never
 re-ranks the list. Only a press the owner makes on a sort or filter control re-orders it, and
 it re-orders at once.

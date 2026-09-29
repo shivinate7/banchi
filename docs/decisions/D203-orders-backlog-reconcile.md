@@ -18,7 +18,7 @@ line — and was placed before a cutoff the operator sees before pressing. Zero-
 bearing: an order the operator has part-pulled is live work and must never be swept into a bulk
 close alongside a two-year-old one. The 14 `Ready to Ship` orders also carry zero recorded
 copies and are also open, so a naive cutoff could sweep them too — the guard against that is not
-a hard-coded status exclusion (which would reintroduce the branching D114 already refused in the
+a hard-coded status exclusion (which would reintroduce the branching D91 already refused in the
 client, one layer up) but the breakdown itself: the preview groups candidates by the feed's own
 status string with counts, so a live order about to be swept is visible before the press.
 

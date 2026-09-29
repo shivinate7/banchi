@@ -65,7 +65,7 @@ Both are refused under the survey's own code, so the sentence on the row and the
 
 **A run-free `GET /pipeline/history` taking `?sku=` and the row's own cells was rejected.** It makes the *client* the source of a card's identity, where a mistyped `Set Name` resolves silently to a different real product — the failure `pipeline/join.py:number_index_key` exists to prevent after a 950-row silent zero-join — and it has no address to check, so `sku_not_in_run`'s real membership test would have nothing to test against.
 
-**The markdown strip requires an explicit `?sku=` list.** The run route measured 46 SKUs at ~34s of courtesy delay; a survey is the whole live inventory, so an unfiltered walk is **~5.5 minutes** at a free public mirror. D62's rule is that this is a press, and a walk that big makes the press meaningless rather than merely slow.
+**The markdown strip requires an explicit `?sku=` list.** The run route measured 46 SKUs at ~34s of courtesy delay; a survey is the whole live inventory, so an unfiltered walk is **~5.5 minutes** at a free public mirror. D278's rule is that this is a press, and a walk that big makes the press meaningless rather than merely slow.
 
 ### The upload comes from `edits`, materialised server-side
 
@@ -111,7 +111,7 @@ So the lens draws `CutoffPanel` itself — same component, same `policy.threshol
 
 **THE PRESETS ARE REAL ON THE LENS, AND THE PRESS MEANS THE OPPOSITE THING ON EACH DOOR.** The operator asked what "Match market" and "Market −5%" do there, and the answer was: nothing good. `asRow` shipped `presets: {}`, so every lens row had no per-SKU figure and the buttons filled NOTHING — while still writing `policy.rule` and `policy.basis` to `inventory/prices.json`, which is the store-wide setting every future joined run lists by. **Measured on a copy of the owner's store: pressing `Market −5%` on the lens left 387 fields untouched and flipped the store's rule from `match` to `undercut:5`.** Repricing a live book silently repriced the next box out of the camera, and nothing on screen said so — D101's defect on the money path.
 
-The figures are now computed server-side by `pipeline/pricing.py:preset_prices`, which is the SAME function a run's `pricing.json` uses, so two doors cannot compute a different number for one card. That table moved out of `cli/cmd_join.py` — a second copy of `Rule.apply` + `round_money` + `clamp_floor` is the thing D49 refused to have in two languages, and having it in two Python modules is the same bet at shorter odds. `make docs-audit`'s `pricing presets` row followed it and still reconciles; its resolver learned to read a bare `RULE_MATCH`, because inside `pricing.py` a `pricing.` prefix would be the module naming itself.
+The figures are now computed server-side by `pipeline/pricing.py:preset_prices`, which is the SAME function a run's `pricing.json` uses, so two doors cannot compute a different number for one card. That table moved out of `cli/cmd_join.py` — a second copy of `Rule.apply` + `round_money` + `clamp_floor` is the thing D86 refused to have in two languages, and having it in two Python modules is the same bet at shorter odds. `make docs-audit`'s `pricing presets` row followed it and still reconciles; its resolver learned to read a bare `RULE_MATCH`, because inside `pricing.py` a `pricing.` prefix would be the module naming itself.
 
 **And a preset writes ANSWERS on a lens where it writes a RULE on a run.** `emit` prices a run's unanswered rows by the standing rule at write time, so writing 300 per-SKU answers there would freeze a rule into figures — D54's staleness. `reprice apply` sends typed answers and nothing else, so on a lens the rule governs nothing and the press must write real answers or do nothing at all. It was doing exactly the wrong one of those. One act, one reversal, the same shape as the cut-off press.
 
@@ -152,6 +152,6 @@ The owner's words are in `docs/reviews/ux-2026-09-23/RULINGS.md`, 2026-09-26.
   with one undo, the presets' own shape. A row the owner priced away from its live price keeps
   the owner's price.
 - **Money to the cent.** A field shows two places. The export's `349.9900` is drawn `349.99`,
-  and what the field shows is what the press sends (D221, D267).
+  and what the field shows is what the press sends (D221).
 
 Proof: `app/tests/pricing-markdown.spec.ts`, the 2026-09-26 cases.

@@ -28,9 +28,9 @@ Before this entry, nothing protected the pattern once D41 shipped. Only the one 
 
 The sweep that removes the hits below is a separate task, one screen at a time. The owner named it explicitly. It is not this task's job.
 
-A row that failed on every existing hit would be red the day it landed. That teaches a session to ignore red, rather than trust it. D194's own header makes the same argument, for the word-count ceiling.
+A row that failed on every existing hit would be red the day it landed. That teaches a session to ignore red, rather than trust it. D284's own header makes the same argument, for the word-count ceiling.
 
-So this is a RATCHET, mirroring D194's `copy-budget.json` discipline exactly. `scripts/typed-interpunct.json` pins the count `node scripts/typed-interpunct-pin.mjs --pin` last measured. It is `make docs-audit`'s `typed interpunct` row, in `scripts/docs-audit.py:check_typed_interpunct`. D18 forbids it writing, since it sits on the commit path.
+So this is a RATCHET, mirroring D284's `copy-budget.json` discipline exactly. `scripts/typed-interpunct.json` pins the count `node scripts/typed-interpunct-pin.mjs --pin` last measured. It is `make docs-audit`'s `typed interpunct` row, in `scripts/docs-audit.py:check_typed_interpunct`. D18 forbids it writing, since it sits on the commit path.
 
 - A count at or below the pin is silent. The row prints it and passes. It asks no question of anyone who did not just add a dot.
 - A count above the pin fails. It names the rise, and every current hit, by file and line.
@@ -75,7 +75,7 @@ Two more items sit outside this table: `ReviewQueue.css` line 772 at `248b060c`,
 
 D41 is the worked example this rule generalises. The address string's dot was removed, not restyled, and the separator moved into CSS.
 
-D194 is the ratchet discipline this row's pin mirrors exactly. A ceiling only a person moves, never a cliff nobody can pass on day one.
+D284 is the ratchet discipline this row's pin mirrors exactly. A ceiling only a person moves, never a cliff nobody can pass on day one.
 
 D196 is the same extractor, `scripts/user-strings.mjs`, under the same discipline. A widened notion of "visible" stays off a rule that never asked for it. This row's two extractor flags stay off `no mechanism on screen`'s own call, by construction. D196's fixtures, and its `Notice`-`code` exemption, are untouched.
 

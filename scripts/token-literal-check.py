@@ -76,7 +76,7 @@ about it fails the check. A gate on TSX would need the same string/bracket-key d
 machinery `css-var-check.py` built for its own reason; this repo has not yet measured that a
 literal duplicate is common enough there to be worth it.
 
-THE GUARD IS A RATCHET, PINNED PER FILE (`scripts/token-literal-check.json`, D229's shape):
+THE GUARD IS A RATCHET, PINNED PER FILE (`scripts/token-literal-check.json`, D280's shape):
 main already carries many of these literals (the sweep that would remove them is a separate,
 already-planned lane, held behind other work in flight — see the decision entry), so landing
 this check GATED AT ZERO would fail on a clean `main`. Instead each file's CURRENT finding
@@ -569,7 +569,7 @@ def ratchet_verdict(
     counts: Dict[str, int], pin: Dict[str, int]
 ) -> Tuple[List[str], List[str]]:
     """(failures, accepted-lower-or-new-zero notes). A file with count 0 is never a failure and
-    never printed here, pinned or not — D229's 'a file the pin has never seen is accepted'."""
+    never printed here, pinned or not — D280's 'a file the pin has never seen is accepted'."""
     failures: List[str] = []
     notes: List[str] = []
     for path, count in sorted(counts.items()):

@@ -4,7 +4,7 @@
  * shape ("staleness is a filter and not a gate") landing here too, so nothing here ever removes
  * a group from `shownGroups` on its own — narrowing is only ever a person's press.
  *
- * THE STATUS OPTIONS ARE BUILT FROM THE FEED, NEVER FROM A LIST THIS FILE HOLDS (D114 —
+ * THE STATUS OPTIONS ARE BUILT FROM THE FEED, NEVER FROM A LIST THIS FILE HOLDS (D91 —
  * "there is no status vocabulary anywhere in `app/`"). `statusVocabulary` reads whatever
  * strings `GET /orders` actually returned, with counts, so a status this pipeline has never
  * seen is an option the day it arrives rather than a string this file would need to learn.
@@ -33,7 +33,7 @@ import type { SortValue } from './kit'
 export type StatusOption = { readonly status: string; readonly count: number }
 
 /** The distinct `status` strings the FEED itself sent, with how many orders carry each —
- *  never a hardcoded list (D114). Sorted by count desc so the busiest status leads the
+ *  never a hardcoded list (D91). Sorted by count desc so the busiest status leads the
  *  select, ties broken alphabetically so the option order is stable across a re-read that
  *  changed nothing. A null or blank status (a paste that never carried one) is not a status
  *  word and is not offered as one. */
@@ -70,12 +70,12 @@ function placedAtMs(placedAt: string | null): number {
 
 /* ---- the five sorts (`D296`, the owner's pick, 2026-09-25) -------------------------
  *
- * `placed` is the original D209 sort. The other four are the owner's own four picks, verbatim:
+ * `placed` is the original D296 sort. The other four are the owner's own four picks, verbatim:
  * "Dollar value, Card count, Buyer name, Fewest drawers to open". Each ranks BUYERS — the group,
  * never one order — by an aggregate over the group's OPEN orders (D193), matching every other
  * figure this screen already counts per buyer (`groupMissing`, `verdictOf`).
  *
- * THE READY-TO-SHIP LEAD IS A GROUPING, NOT A SORT, AND IS KEPT ACROSS EVERY KEY. D209 built it
+ * THE READY-TO-SHIP LEAD IS A GROUPING, NOT A SORT, AND IS KEPT ACROSS EVERY KEY. D296 built it
  * as a bucket the comparator checks BEFORE its own tiebreak, never as a special case of the
  * `placed` metric — `compareGroups` below still checks `ready` first, whichever key is asked
  * for, so a Ready-to-Ship buyer leads even under Dollar value or Buyer name. That is a finding,

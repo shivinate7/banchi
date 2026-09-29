@@ -238,7 +238,7 @@ than behaviourally, because a behavioural test would have to hang in order to fa
 later. Each file is atomic alone — `files.write_atomic` stages beside the target and
 `os.replace`s — and nothing makes the set atomic, so a kill between two calls leaves the store
 internally inconsistent. The exposure is live at Ctrl-C frequency rather than theoretical,
-which is why D53's supervisor drains in-flight requests before restarting a child, and it is
+which is why D138's supervisor drains in-flight requests before restarting a child, and it is
 why the Someday list refuses to put this store on a NAS.
 
 **The only mitigation is an ORDERING, and it is a preference among losses rather than a fix.**

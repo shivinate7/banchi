@@ -1,5 +1,5 @@
 /**
- * The shape of a price, inline on a pricing row — D79, the batched half of D62.
+ * The shape of a price, inline on a pricing row — D277, the batched half of D278.
  *
  * A shape and a sign, never money: the vwap, its bound, the liquidity and the spread all stay
  * on the history drawer, where there is room to draw the anchor at size. What this cell answers

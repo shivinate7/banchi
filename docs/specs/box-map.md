@@ -2,7 +2,7 @@
 
 **Status: BUILT.** D264 (a section is an object) records what shipped: the Map view on
 `#/inventory`, checked by `app/tests/boxmap.spec.ts` and harness test T7. D262 (a moved card
-keeps its price) and D265 (card order key) carry slice 0 and the key. Sections 5 to 7 are the
+keeps its price) and D294 (card order key) carry slice 0 and the key. Sections 5 to 7 are the
 design, not a description of the screen. Written 2026-09-23.
 
 ## 1. The ask, in the owner's words
@@ -93,7 +93,7 @@ do not.
 
 - **A move can lose a paid answer.** A card with a live paid reading can move. The batch then
   writes onto the tombstone, and the moved card stays unidentified. Read in code, not run.
-- **A moved card falls off its run.** `realign` looks only in the run's own boxes. D165 (a run binds to the box's true index) records
+- **A moved card falls off its run.** `realign` looks only in the run's own boxes. D145 (a run binds to the box's true index) records
   99 cards that lost their pricing surface this way.
 
 Both close in slice 0, before any screen change.
@@ -197,7 +197,7 @@ The rules for the receipt:
   "on your side" or "on the far side".
 - **The deliberation's example text is wrong on this point.** It said "go to the back" for the
   store's append, and the store's back is the end nearest the owner.
-- **Landmarks are card names.** A card with no name is not a landmark (D116, an unnamed card is not a landmark). Then the receipt
+- **Landmarks are card names.** A card with no name is not a landmark (D260, an unnamed card is not a landmark). Then the receipt
   counts cards.
 - **The renumber line.** A card's number counts within its section. So a section move changes
   no card number. It can change section numbers, and the receipt says which ones.

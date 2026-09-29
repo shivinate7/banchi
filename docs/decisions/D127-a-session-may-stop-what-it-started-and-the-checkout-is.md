@@ -6,7 +6,7 @@ servers the session had itself launched.
 1. `pkill -f "capture_server.py"`, meant for a scratch capture server started in a worktree. It
    is machine-wide, so it also matched
    `/Users/shivinate/Developer/pkmnscan/server/capture_server.py` — the owner's live capture
-   server on :8000 over their real 1,625-card store, the process **D53** exists to keep alive at
+   server on :8000 over their real 1,625-card store, the process **D138** exists to keep alive at
    login. The supervisor restored it 25 seconds later and **D88** meant the store itself survived,
    every write being one SQLite transaction; any request in flight was severed.
 2. `for p in $(lsof -ti tcp:5439); do kill $p; done`, meant for the session's own Vite server.
@@ -70,7 +70,7 @@ directory. Missing evidence is never read as absence of a problem; `janitor.py:_
 takes the same direction, and for the same asymmetry: a false refusal costs a session one extra
 sentence, a false permission costs the owner a process they were using.
 
-**The main checkout's supervisor and its children are refused even from inside it** — where the rule above would clear them. This is D53 written as a set of integers:
+**The main checkout's supervisor and its children are refused even from inside it** — where the rule above would clear them. This is D138 written as a set of integers:
 `scripts/serve.py` records each child's pid under `.serve/*.pid`, and the guard reads each
 `.pid` marker and walks down the process tree from them — down, because the supervisor re-execs and
 replaces its children, so a child can be running before the pidfile naming it is rewritten. The

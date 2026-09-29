@@ -100,7 +100,7 @@ class SelectionError(Exception):
 def _positives(raw: Any, term: str) -> Tuple[int, ...]:
     """`3` or `[3, 4, 5]` -> a tuple of drawer numbers, deduplicated and in order.
 
-    A BARE INTEGER READS AS A LIST OF ONE, which is D48's own read-side widening applied to the
+    A BARE INTEGER READS AS A LIST OF ONE, which is D180's own read-side widening applied to the
     thing that replaced it — every request ever written against `_resolve_scope` sent
     `{"box": 3}` and still means box 3, with no migration and no second spelling.
 
@@ -288,7 +288,7 @@ class Selection:
         # ALWAYS A LIST HERE, EVEN FOR ONE DRAWER, and that is the opposite of the input rule
         # one function up on purpose: `parse` widens so that no request has to be rewritten,
         # and this narrows so that no READER has to ask which shape it got before it can ask
-        # anything else. D48 made exactly that argument about its response shape and it is the
+        # anything else. D180 made exactly that argument about its response shape and it is the
         # half of that entry worth keeping.
         for term in ("box", "bid"):
             value = getattr(self, term)
@@ -607,7 +607,7 @@ def narrow(
         # counts to, which differs by the cards that have departed in front of this one. The
         # dividers editor speaks slots and `join.divider_index` maps it back; a selection over
         # PHOTOGRAPHS has no slot to speak, because a departed card still has a photograph.
-        # THE DIVIDERS ARE IN THE BOX'S ORDER (D265), so each index is read in that order.
+        # THE DIVIDERS ARE IN THE BOX'S ORDER (D294), so each index is read in that order.
         order = inventory.box_order(box)
         out = [
             c
@@ -680,7 +680,7 @@ def scope_block(
     reconstruct. A run over the whole store that happened to find only box 3 gets the same
     `scope` as a run over box 3 and a different `selection`.
 
-    `None` FOR TWO DRAWERS, exactly as before (D48's rule, and the one part of it this entry
+    `None` FOR TWO DRAWERS, exactly as before (D180's rule, and the one part of it this entry
     keeps). A scope block naming one of two boxes would be a claim about cards it is wrong
     about, and the two runs on this store whose path says one drawer while their cards are in
     another are what that costs. What CHANGED is that being wrong is now the only thing a
@@ -719,7 +719,7 @@ def scope_block(
         "whole_box": whole_box,
         "cards": None if whole_box else len(mine),
         # ABSENT-AS-None RATHER THAN WRONG where the registry has no entry for the box
-        # (D145/D165): a run with no id is read by the older rule, which is the arm that has
+        # (D145): a run with no id is read by the older rule, which is the arm that has
         # always worked.
         "bid": None if entry is None else master.int_or_none(entry.bid),
     }

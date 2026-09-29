@@ -12,7 +12,7 @@ owned. A person unpicked it, at the cost of two force-pushes.
 
 **The design is not what failed, and this entry changes none of it.** A branch writes an
 unclaimed slug. The number is allocated at the merge. No session renumbers another session's
-entry (D140, D182, D187). All three held that night. No branch guessed a number, and nothing
+entry (D140, D182). All three held that night. No branch guessed a number, and nothing
 of the other session's was touched.
 
 What failed is the ORDER around the claim, and the recovery path from a lost race.

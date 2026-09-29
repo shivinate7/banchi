@@ -10,9 +10,9 @@ Two branches each appended an entry; git cannot know they do not overlap.
 adding two files never conflict. That is the whole change; everything else here exists to
 keep the readers working across it.
 
-**The numbers did not move and nothing was reworded.** 159 entries went out as D1..D159 in
+**The numbers did not move and nothing was reworded.** 159 entries went out as D1..D277 in
 their own files, byte for byte, and the three sections that are not decisions — Deferred,
-Someday and the v1 bug table, which sat between D79 and D80 — went with them and still sit
+Someday and the v1 bug table, which sat between D277 and D80 — went with them and still sit
 there. A renumber would have been the worse half of this change by a wide margin: this tree
 carries around ten thousand `D<n>` citations across 242 files, and D80 records what a
 renumber costs when a stale id still resolves to a real entry that is not the one meant.

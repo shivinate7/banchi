@@ -97,4 +97,4 @@ boundary is. It stays what it is: the per-capture crop, not a gate.
 
 Governs `app/src/motion.ts`, `scripts/score-trace.py`, `harness/tests/t9_traces.py`,
 `app/tests/motion.spec.ts`. Amends the reading of D81 (presence is a distance — and a distance
-has a shape) and D84 (the hand's floor stands unchanged). Does not reopen D19, D130 or D131.
+has a shape) and D84 (the hand's floor stands unchanged). Does not reopen D19, D144 or D131.

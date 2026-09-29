@@ -42,7 +42,7 @@ vanishingly rare, and when it fails it usually fails into nothing — which is v
 **A collector number is three glyphs**, and a single bad digit lands on a real row for a real
 card, so its failure mode is a confident wrong answer that looks exactly like a right one.
 D35 saw this clearly and wrote it down: *"The name is the more reliable field, which is the
-argument for the whole rung."* D146 measured the same shape from the other side — box 1's
+argument for the whole rung."* D23 measured the same shape from the other side — box 1's
 `1/51` read `Irelia, Blade Dancer` at `190/221`, which is `Forgefire Cape`, `Epic`, exactly
 the rarity claimed, so nothing was flagged and the wrong card was listed.
 
@@ -157,7 +157,7 @@ half-building any of them would be worse than naming them.
 The box was the only handle the code had, so everything grabbed it — runs, joins, queue
 entries, exports — and none of those are about a drawer. Every finding above is one shape:
 **the pipeline collects evidence, discards it, asks a human to supply it again, cannot revisit its own answer when it learns better, and does not act on the answer when it gets one.** This entry is the concrete instance; the general fix is a separate pass and will
-reopen D48.
+reopen D180.
 
 ### Coverage
 

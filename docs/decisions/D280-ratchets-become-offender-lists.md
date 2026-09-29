@@ -1,11 +1,11 @@
 ## D280 — The typed-dot count and the prose ratio become lists of offenders, and no count is pinned
 
-**The rule.** On 2026-09-23 the owner retired D194's word ceiling, because he did not want to keep a "stagnant static pin". D284 carried out that ruling. On 2026-09-24 the owner extended the ruling to the two other pinned counts. This entry replaces both.
+**The rule.** On 2026-09-23 the owner retired D284's word ceiling, because he did not want to keep a "stagnant static pin". D284 carried out that ruling. On 2026-09-24 the owner extended the ruling to the two other pinned counts. This entry replaces both.
 
 - D218's typed-dot ratchet. `make docs-audit`'s `typed interpunct` row failed only when the COUNT of typed dots rose past a pinned number.
-- D229's per-file prose ratchet. `make docs-audit`'s `ste ratchet` row failed only when a file's error RATIO rose past its own pinned number. D229 amended D226, so the ratchet half of D226 goes too.
+- D280's per-file prose ratchet. `make docs-audit`'s `ste ratchet` row failed only when a file's error RATIO rose past its own pinned number. D280 amended D60, so the ratchet half of D60 goes too.
 
-This entry supersedes the ratchet parts of D218, D226 and D229. Each of those entries carries a "Superseded" note that names what stays.
+This entry supersedes the ratchet parts of D218, D60 and D280. Each of those entries carries a "Superseded" note that names what stays.
 
 ### What a count could not see
 
@@ -18,7 +18,7 @@ A pin also needs a person to move it. The old scripts wrote a new number on requ
 Each rule keeps its reader and gains a shrinking list of offenders. The shape is `scripts/kit-adoption-allow.json`'s: file, then rule, then entries, with the lane that owes the fix.
 
 - **Typed dots.** `scripts/typed-interpunct-allow.json` lists each offending string in each file, as `scripts/user-strings.mjs` extracts it. The rule key is `interpunct`. D218's two extractor widenings stay exactly as they were.
-- **Prose.** `scripts/ste-offenders.json` lists each offending sentence in each markdown file, under the rule it breaks. The rules are the four ERROR-severity codes of the vendored linter. D226's four exemption classes stay exactly as they were.
+- **Prose.** `scripts/ste-offenders.json` lists each offending sentence in each markdown file, under the rule it breaks. The rules are the four ERROR-severity codes of the vendored linter. D60's four exemption classes stay exactly as they were.
 
 **The key is the offender, never a number.** A typed-dot entry is `<scope>: <string>`. The scope is the named function, class, arrow binding or module-level constant around the string. A nested scope is named with the scope around it, as `Outer.helper`. So one entry excuses one string in one place, and a bare `·` typed in another component is a new offender. A prose entry is a hash of the sentence and a short label. The label helps the person who rewrites the sentence. Only the hash is compared. An offender that occurs twice in one file is listed twice. So a copy of a listed offender needs its own entry and cannot hide behind the first.
 
@@ -34,7 +34,7 @@ Typed-dot growth is counted PER FILE, by the string without its scope. A dot str
 
 ### A new file starts clean
 
-D229 accepted a new file at its own ratio. Its reason was cost: refusing the file forced a re-pin on every branch that added a document. There is no pin now, so that cost is gone.
+D280 accepted a new file at its own ratio. Its reason was cost: refusing the file forced a re-pin on every branch that added a document. There is no pin now, so that cost is gone.
 
 A new file is not in the list at the merge-base. So any entry for it is growth, and the row refuses it. For prose, the one exception is a sentence that left another file in the same branch. The author of a new document is writing it now, so the author can fix its prose at no extra cost. A new component with a typed dot has no exception. Dot growth is per file, so a dot fixed elsewhere excuses nothing in the new file. A file that git renamed is not new: its entries map back to the old path.
 
@@ -98,7 +98,7 @@ The rows read tracked files only. `markdown_files()` in `scripts/docs-audit.py` 
 
 ### The line-anchor pin becomes a list too
 
-The owner's ruling, later on 2026-09-24, was "convert both of the last pins". D245's `line anchor ratchet` row pinned a count of line anchors per file, in D229's shape. It is now the `line anchor offenders` row, over an offender list (deleted 2026-09-28, when the last anchor was converted).
+The owner's ruling, later on 2026-09-24, was "convert both of the last pins". D245's `line anchor ratchet` row pinned a count of line anchors per file, in D280's shape. It is now the `line anchor offenders` row, over an offender list (deleted 2026-09-28, when the last anchor was converted).
 
 - **An entry is the anchor as written**, `path:N` or `path:N-M`, once per occurrence. An edit elsewhere in the file, or a reflow, does not touch it.
 - **A claim moves nothing.** A decision entry's number is folded out of the document's own file key, as the prose list folds it. It is also folded out of an anchor's decision path, so both read `docs/decisions/*-<slug>.md`.
@@ -124,7 +124,7 @@ Each caller still decides what an identity is, and so whether growth is counted 
 
 Owner's ruling (test-audit plan, row 92, `docs/reviews/test-audit-2026-09-27/TIERS.md`):
 "Row 92, `ste offenders`, and its list `scripts/ste-offenders.json`: CUT. The write-time
-STE hook lints new prose. This needs dated amendments to D226, D229 and D280 (the prose
+STE hook lints new prose. This needs dated amendments to D60, D280 (the prose
 ratchet decisions) in the lane that cuts it." Lane L2 deletes the `ste offenders` row,
 `scripts/ste-offenders.json` and `scripts/docs-audit.py:check_ste_offenders`.
 
@@ -137,3 +137,5 @@ A third list joined the same day. The owner's later word, in the same review rou
 `scripts/markdown-spelling-allow.json` covers the `identifier spelling` row's markdown half
 (D60). It carries the same shape as the other two: file -> lane and SPELLING -> the British
 word, lower-cased, once per occurrence. `make offenders-prune` now covers all three lists.
+
+Offender lists, never a repo-wide count: a shared number is one every merge takes from somebody.

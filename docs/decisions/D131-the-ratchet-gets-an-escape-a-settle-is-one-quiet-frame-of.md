@@ -1,7 +1,7 @@
 ## D131 — The ratchet gets an escape, a settle is one quiet frame of three, and the beat is the backstop
 
 **Settled 2026-09-11, the owner refusing the claim that the settle trigger could not be**
-**fixed — and being right.** The claim in D130 rested on a sweep of one parameter under the
+**fixed — and being right.** The claim in D144 rested on a sweep of one parameter under the
 noise tracker's own thresholds; a sweep of the thresholds themselves reaches 94-101% of the
 same cards. Two more traces came with the refusal: a full run under the cadence trigger, and a
 run with the lamp dimmed on which the shipped settle trigger "worked better" at the cost of the
@@ -61,11 +61,11 @@ d 10 with `tLo` reaching 9-11.5 — about 97% where the shipped rule managed 17%
 the JPEGs), and a rig run of the dual, whose case is exactly the two or three sliding cards each
 run stalled on.
 
-### What D130 said that this corrects
+### What D144 said that this corrects
 
-D130 wrote that "no adaptation of a stillness detector answers a scene that is never still."
+D144 wrote that "no adaptation of a stillness detector answers a scene that is never still."
 The scene was still; the detector's idea of still was wrong, in the one direction its ratchet
-could not move. D130's cadence trigger stands as the backstop it has become.
+could not move. D144's cadence trigger stands as the backstop it has become.
 
 **THE DUAL WAS DELETED THE SAME EVENING, BEFORE IT EVER RAN AT A RIG, AND THIS ENTRY'S OTHER TWO RULINGS STAND.**
 The owner retired the cadence trigger outright — *"motion is better.

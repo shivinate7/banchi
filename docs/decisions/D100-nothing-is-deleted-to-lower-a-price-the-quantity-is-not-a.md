@@ -66,7 +66,7 @@ The markdown is off the operator's own live price, which is `TCG Marketplace Pri
 
 `apply --write` writes each new price into `inventory/prices.json` (D86). **Without it the next `emit` over another copy of the same card re-lists at the rule price and quietly undoes the markdown.** The marked-down price is the store's price for that SKU from then on, not a property of one file. `pipeline/corpus.py` is untouched: `Answer` already carries a value and a time, and nothing here needed a field it did not have.
 
-### It wanted a route on D49's precedent, and it is a modal on `#/runs` instead
+### It wanted a route on D86's precedent, and it is a modal on `#/runs` instead
 
 **It is a worklist the operator sits in over three presses, with a file leaving the machine in the middle of it and coming back** — which is exactly what earned `#/pricing` a route, and is not what `#/runs`' own lede describes when it names the four pipeline commands. So `#/markdown` was built, and then measured out.
 
@@ -99,7 +99,7 @@ The owner's words are in `docs/reviews/ux-2026-09-23/RULINGS.md`, 2026-09-26. Tw
   typed. The store's floor (`policy.threshold`) still holds for every price.
 - **No market price, no mark-down.** `plan` refuses a row with no `TCG Market Price` as
   `no_market`, before the rule prices it, on every basis. The asking-price basis could price it,
-  and that was the defect. A card nobody has priced is the owner's to price by hand (D49).
+  and that was the defect. A card nobody has priced is the owner's to price by hand (D86).
 
 Proof: T7 `check_live_markdown_guards`, each rule red under its own mutation.
 

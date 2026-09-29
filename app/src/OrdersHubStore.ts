@@ -118,7 +118,7 @@ export const BATCH_GONE_NOTICE =
   'The capture server restarted, so the export it was holding is gone. Read the file again.'
 
 onServerBoot(() => {
-  /* THE WALK NO LONGER HAS A FROZEN SET TO CLEAR HERE (§13 supersedes D96's own note): it is a
+  /* THE WALK NO LONGER HAS A FROZEN SET TO CLEAR HERE (§13 supersedes D97's own note): it is a
      live read of the selected order plus every ticked one, held in `Orders.tsx`'s own component
      state, and a server restart simply means its next `POST /orders/walk-plan` re-solves over
      whatever the store holds now — the same as any other re-read after a boot. */

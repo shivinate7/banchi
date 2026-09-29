@@ -1,6 +1,6 @@
 ## D278 — One product view, two frames, and the trap it had is fixed first
 
-**This amends D227 and D62.** The owner's ruling, 2026-09-23 interview: HYBRID. One product
+**This amends D227 and D278.** The owner's ruling, 2026-09-23 interview: HYBRID. One product
 view. It opens as a sheet from every product name. `#/product?sku=` stays as the page and the
 deep link. A deliberation, landed at `docs/reviews/ux-2026-09-23/product-deliberation.md`,
 laid out three options. A: link every name to the route. B: fold every view into one sheet,
@@ -14,11 +14,11 @@ capability is reachable from every screen that draws a product name. No route ch
 needed. D227's own argument for the address is kept: a pasteable link, a bookmark, an order
 line. The route stays, unchanged in what it answers.
 
-**What D62 protected, and what protects it now.** D62 drew the price-history panel beside the
+**What D278 protected, and what protects it now.** D278 drew the price-history panel beside the
 hold on `#/pricing`, not on `#/inventory`'s card panel. A read cost 1.3s, at a public mirror. A
 panel that fired on the pointer or the arrow keys would spend both, on every move. That
 premise moved for a swept SKU: `getProductHistory` reads the archive first (D219), and the
-read is local. What D62 still protects holds unchanged here: no request per arrow key, and a
+read is local. What D278 still protects holds unchanged here: no request per arrow key, and a
 press or a hold rather than follow-focus. `ProductHistoryView` fetches once per `sku`. It
 fetches on mount, or on a printing switch, never on a hover or a keystroke.
 

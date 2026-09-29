@@ -46,7 +46,7 @@ The first build settled `pushed` too, drawing it down by what the export account
 - **33 SKUs live at TCGplayer this store has never seen**, 61 copies: sealed product, accessories, and singles listed before pkmnscan. Reported and never touched.
 - **10 SKUs TCGplayer holds MORE of than were ever sent from here** — Brutalizer at 8 live against 5 copies ever captured. Left alone: this pipeline did not put them there.
 
-`seen` is deliberately **wider than the listing ledger** — every SKU any card carries. A withheld (D49) or not-yet-emitted card has a SKU and no listing, and judging against the ledger alone would accuse the operator of listing it outside pkmnscan the moment it went live.
+`seen` is deliberately **wider than the listing ledger** — every SKU any card carries. A withheld (D86) or not-yet-emitted card has a SKU and no listing, and judging against the ledger alone would accuse the operator of listing it outside pkmnscan the moment it went live.
 
 ### Reachable, and where
 

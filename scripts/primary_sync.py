@@ -10,7 +10,7 @@ would otherwise have to remember to type them.
 WHAT "BOTH PARTS" MEANS, because the two halves fail separately and each was a real state:
 
   part 1   the primary checkout stands on `main` rather than on a feature branch. The state
-           D139 and D158 were both written about: that one directory found on
+           D158 were both written about: that one directory found on
            `claude/env-key-rotation` with three live sessions in it, and on
            `claude/debts-citation-repair` — already merged as #282 — with four.
   part 2   `refs/heads/main` is at `refs/remotes/origin/main`. The state `make status` reported
@@ -349,7 +349,7 @@ def _sync(root: Path, confirm: bool, fetch: bool) -> Verdict:
         )
 
     # A LINKED WORKTREE IS NEVER THE SUBJECT, and the test is `server/ports.py`'s, CALLED
-    # rather than respelled — D139's rule, which D158 restates, and for its reason: the
+    # rather than respelled — D158's rule, for its reason: the
     # primary/linked question has exactly one answer in this repo and a fourth spelling of it
     # is a fourth place for it to be written backwards. ~30 of this machine's worktrees are
     # legitimately on feature branches and have their own stores and ports to be wrong on their

@@ -35,4 +35,6 @@ one-time two-year backfill means literally every status, and naming that in word
 guess this entry refuses. `do_order_fetch` still refuses a call naming neither `statuses` nor
 `all_statuses`, and now also one naming both.
 
-**What would reopen this: a status spelled two ways between the summary and the detail, `Custom` captured off the wire, or orders arriving faster than a person presses.** The first is the delta re-detailing an order every press; the second gives the window a date and makes the status table smaller; the third is an unattended fetch, which is its own entry with its own argument about a cookie that expires under D53's supervisor with nobody watching the refusal.
+**What would reopen this: a status spelled two ways between the summary and the detail, `Custom` captured off the wire, or orders arriving faster than a person presses.** The first is the delta re-detailing an order every press; the second gives the window a date and makes the status table smaller; the third is an unattended fetch, which is its own entry with its own argument about a cookie that expires under D138's supervisor with nobody watching the refusal.
+
+The fetch's status tick is remembered on the device (banchi.orders.fetch-filter); the first-press ask is gone (D193).

@@ -3,7 +3,7 @@
 (`D236`).
 
 Protects: The holdings reader answers correctly over in-memory inventory, archive and ledger fixtures.
-Governs: D236, D247, D250
+Governs: D236, D247
 
 NO STORE ON DISK. NO NETWORK. Every fixture below is a plain `Inventory`, `PriceArchive` or
 `Ledger` built in memory — the same dataclasses `store/session.py:Snapshot` carries, never a
@@ -19,7 +19,7 @@ PATH GATED, THE EIGHTEENTH (D247, owner's word 2026-09-23, on the same ground as
 `pricearchive-selftest`'s sixteenth entry): `make holdings-selftest`, wired into `make check`
 and `make ci-check` through `scripts/guard-scope.py`. This file is no longer the exception it
 was when written — the sentence that used to sit here ("no caller reachable from a screen
-yet") described a state D250 already ended: `GET /pipeline/holdings-value`
+yet") described a state D236 already ended: `GET /pipeline/holdings-value`
 (`server/pipeline_routes.py:do_pipeline_holdings_value`) is called by `app/src/Revenue.tsx`'s
 `getHoldingsValue`, wired to `#/revenue`'s "Value my stock" panel. Once it's done, it only
 needs to be tested when touched.
@@ -153,7 +153,7 @@ def test_range_gap_breaks_the_line() -> None:
 
 
 def test_priced_none_bucket_carries_no_value() -> None:
-    """A bucket the source answered with NO price (D159's no-reading shape, stored as
+    """A bucket the source answered with NO price (D277's no-reading shape, stored as
     `market=None`) keeps its own row, at its own real calendar date, and carries no value —
     it never stands in for a zero and never gets skipped as though the archive had not
     reached that day at all. `gap_before` is a CALENDAR test, not a price test: a

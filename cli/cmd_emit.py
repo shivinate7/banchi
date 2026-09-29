@@ -115,7 +115,7 @@ def _withhold_disputed(resolved, snapshot) -> List[dict]:
     store-write loop, after `set_state`, the CSV row and `Listing.bump(PUSHED)` had already
     happened for that position — a real TCGplayer listing behind a card still wearing
     `sku=None`, invisible to search. `CLAUDE.md`'s rule ("never silently drop a card") and
-    D49's withhold are both about deciding BEFORE a write, not undoing one after — so this
+    D86's withhold are both about deciding BEFORE a write, not undoing one after — so this
     function is now the FIRST thing that touches `resolved` after it is built, and nothing
     downstream (pricing, the CSV, the store loop) ever sees a disputing position at all.
 
@@ -162,7 +162,7 @@ def _withhold_disputed(resolved, snapshot) -> List[dict]:
     with nothing behind it, it is a row this run no longer has anything left to say about.
     """
     # NAMED `disputed_positions`, NOT `withheld` — `run()` already binds `withheld` to
-    # D49's corpus-level SKU set (`set(choice.withheld())`) a little further down, and this
+    # D86's corpus-level SKU set (`set(choice.withheld())`) a little further down, and this
     # function's own return value must survive past that assignment. The two concepts share
     # a word in English ("held back") and nothing else: one is a whole SKU an operator
     # chose to hold, the other is one position this run's own evidence disagrees with — so
@@ -274,7 +274,7 @@ def _refuse_unheld(run_name, unheld, say) -> None:
 
 
 def _report_withheld(withheld: List[dict], say) -> None:
-    """The heading the review asked for: named by position, the way a D49 hold is, rather
+    """The heading the review asked for: named by position, the way a D86 hold is, rather
     than folded into the ordinary "no room" count — this is not a room problem, it is a
     card this SKU's own evidence disagrees with."""
     if not withheld:
@@ -785,7 +785,7 @@ def _game_only(report, priced):
 
     THREE THINGS DROP A SKU AFTER THIS POINT AND THIS FUNCTION USED TO KNOW ABOUT ONE:
 
-      - it is WITHHELD (D49) — `prices_for` leaves it out of the price mapping. Subtracted
+      - it is WITHHELD (D86) — `prices_for` leaves it out of the price mapping. Subtracted
         here since 2026-08-29, which is the version of this docstring D54 replaces.
       - it is `no_market_data` ANSWERED `"unlisted"` — `prices_for` drops it too, and
         nothing subtracted it. LIVE ON A FIRST EMIT for a game whose only above-threshold
@@ -1169,7 +1169,7 @@ def run(args, say) -> int:
     # must never reach `book.scoped_to`, or a corpus disposition already on file for that
     # SKU reads as "sku_dispositions names SKUs not in this batch" over a SKU this batch
     # no longer holds at all). NAMED `disputed_positions`, NOT `withheld` — `book.withheld()`
-    # a few lines down is D49's corpus-level SKU set, and reusing the name would silently
+    # a few lines down is D86's corpus-level SKU set, and reusing the name would silently
     # shadow this one (`_withhold_disputed`'s own docstring explains the naming).
     disputed_positions = _withhold_disputed(resolved, snapshot)
     unheld = _unheld_positions(resolved, snapshot)
@@ -1504,7 +1504,7 @@ def _stamp_single(writable, resolved, emitted, priced_flat, run_dir, sku_game, s
         #
         # This was one `continue` doing two jobs, and it was right for exactly as long as
         # "reached an import file" and "we know what this card is" meant the same thing.
-        # A withhold (D49) splits them for the first time: the join resolved the card to a
+        # A withhold (D86) splits them for the first time: the join resolved the card to a
         # catalog row, so the identity is known — and nothing was pushed, so the count must
         # not move. Skipping both left a held card wearing `state: captured` with no `sku`,
         # invisible to `GET /search` and every SKU-keyed surface until the hold was lifted
@@ -1870,7 +1870,7 @@ def _run_merged(args, say) -> int:
     # LIVE store the moment they are resolved — `_withhold_disputed`'s docstring covers why
     # this has to happen before `merge.plan` ever reads `report.matches` (review finding,
     # HIGH, on 1b5c90e5). NAMED `disputed_positions`, never `withheld` — `run`'s own
-    # docstring above says why the word is reserved for D49's corpus-level SKU set.
+    # docstring above says why the word is reserved for D86's corpus-level SKU set.
     disputed_positions: List[dict] = []
     for run_dir in dirs:
         resolved = _resolve_one(run_dir, book, say, args)

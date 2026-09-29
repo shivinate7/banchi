@@ -66,5 +66,6 @@ The second half is the design, and it is stated more precisely than a specificat
 
 **A second drawer wearing one number at the same time.** Everything here assumes the number is unique among LIVE boxes and only ambiguous across time. If boxes ever became per-shelf or per-location — two `Box 1`s on two shelves — the id would be the right address for a route, and the ruling that it stays invisible would need re-asking.
 
-**A run over more than one box.** `_run_box_id` reads one id out of a scope block that names one box, because D48 keeps a run to one box. A cart-shaped run would need a list, and `refuse_reallocated` already loops over boxes in a way that anticipates it.
+**A run over more than one box.** `_run_box_id` reads one id out of a scope block that names one box, because D180 keeps a run to one box. A cart-shaped run would need a list, and `refuse_reallocated` already loops over boxes in a way that anticipates it.
 
+A run binds to the box's bid; a reused number is refused by comparing ids, never timestamps.

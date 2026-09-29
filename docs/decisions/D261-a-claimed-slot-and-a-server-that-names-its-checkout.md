@@ -1,6 +1,6 @@
 ## D261 — A checkout claims its port slot once, and a reused server must name its checkout
 
-**Amends D43, the port follows the store, and D268, a copied tree never gets the live port.** D43 promised that every checkout has its own ports. It delivered a hash of the path into 300 slots. A hash does not know which slots other checkouts hold. Now two things are true. A linked checkout CLAIMS a slot once, in one machine-wide registry, and keeps it. And a test run that reuses a dev server refuses to run unless that server names THIS checkout. The primary checkout is unchanged: it keeps 8000 and 5173 and claims nothing.
+**Amends D43, the port follows the store, and D261, a copied tree never gets the live port.** D43 promised that every checkout has its own ports. It delivered a hash of the path into 300 slots. A hash does not know which slots other checkouts hold. Now two things are true. A linked checkout CLAIMS a slot once, in one machine-wide registry, and keeps it. And a test run that reuses a dev server refuses to run unless that server names THIS checkout. The primary checkout is unchanged: it keeps 8000 and 5173 and claims nothing.
 
 **The incident, 2026-09-24.** Two live worktrees, `jovial-banach-362f31` and `agent-a591036a4885f7533`, both derived dev port 5218 and the same capture port. A lane in one tree ran `make design-check`. Playwright's `webServer` found 5218 already serving the OTHER tree's Vite. It reused that server (`reuseExistingServer: true`) and tested the wrong code. The run was green. `app/playwright.config.ts` said reuse was "safe only because the port is per-checkout". That premise was false.
 
@@ -45,3 +45,5 @@
 - Two throwaway trees run the real `launch-config.py` over a registry that gives each tree's hash slot to another checkout. One run is as the SessionStart hook calls it, and one is as `make launch-config` calls it. Then the tree claims, and `launch-config.py --check` must say `current` at the claimed port. With the claim after the write, as it was, both arms are red.
 
 `make port-agreement` also compares both languages over one temporary registry. The registry holds a claimed entry, a damaged file, a decimal, an exponent, a fractional slot and a `NaN`. Before `app/devPort.ts` read the written text, the decimal and exponent cases were red, and before `server/ports.py` refused `NaN`, that case was red.
+
+A tree without a .git directory never takes the live port 8000.

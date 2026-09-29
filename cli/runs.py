@@ -35,7 +35,7 @@ DECISIONS = "decisions.json"
 # change, which is the whole reason it is a suffix and not a directory.
 DECISIONS_ADOPTED = DECISIONS + ".adopted"
 REPORT = "report.txt"
-# The per-SKU pricing table `join` writes beside the report (D49). Data rather than prose,
+# The per-SKU pricing table `join` writes beside the report (D86). Data rather than prose,
 # because a screen reads it: `report.txt` is written for a person and cannot be parsed back
 # without inventing a format nothing owns. `_DOWNLOADABLE` already matches `.json`, so it
 # also appears in the run panel's file list with no route change.
@@ -227,7 +227,7 @@ class Run:
 
         `pushed` accumulates because it is a quantity of copies and quantities sum.
         `pushed_skus` is DERIVED from the lists rather than accumulated beside them, so it
-        cannot come to disagree with them — D49 Part One's rule applied to this record.
+        cannot come to disagree with them — D86 Part One's rule applied to this record.
         """
         record = self.emitted
         merged_listed = list(record.get("listed") or [])

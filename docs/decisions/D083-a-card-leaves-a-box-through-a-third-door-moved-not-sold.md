@@ -114,10 +114,10 @@ box's on-hand count exactly as Set Claims is, taking a typed destination box num
 uses); a dedicated section-move affordance that reads a section's own name and carries it to
 a fresh divider at the destination (`Box.section_names` exists on the record but has no
 write path yet — sections move as plain index lists, unnamed); a dedicated split-box route
-(reachable today as create-a-box-then-move-into-it, two requests rather than one); and D48's
+(reachable today as create-a-box-then-move-into-it, two requests rather than one); and D180's
 reopening — an operator-chosen `combine` flag letting one identification run span several
 boxes. All four are compositions of, or thin additions beside, what this entry built rather
-than architectural gaps in it, and D48 in particular is unchanged and ungoverned by this
+than architectural gaps in it, and D180 in particular is unchanged and ungoverned by this
 entry: the cart still spawns one run per box, and an operator who wants one ruling across
 boxes has no way to ask for it yet.
 

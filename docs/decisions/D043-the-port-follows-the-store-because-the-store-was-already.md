@@ -17,7 +17,7 @@ The second is unrecoverable and silent. Nothing on either screen says which proc
 
 `sha256` of the checkout's canonical path, first four bytes, modulo 300. Dev is `5200 + slot`, capture is `8100 + slot`, so a tree reads as a pair — 5276 beside 8176 — and there is one number to recognize rather than two unrelated ones. **The main working tree keeps 5173 and 8000**, so every doc, the Makefile's help and `scripts/views.txt` stay true and the ordinary single-checkout workflow is untouched.
 
-**AMENDED 2026-09-23 by D268, a copied tree never gets the live port.** "The main working tree" is now a tree whose `.git` is a DIRECTORY. A tree with no `.git` used to keep 8000, and a scratch copy of main called the owner's live server from it. It now takes a slot from its path, as a linked worktree does.
+**AMENDED 2026-09-23 by D261, a copied tree never gets the live port.** "The main working tree" is now a tree whose `.git` is a DIRECTORY. A tree with no `.git` used to keep 8000, and a scratch copy of main called the owner's live server from it. It now takes a slot from its path, as a linked worktree does.
 
 **AMENDED 2026-09-24 by D261, a checkout claims its port slot once.** A hash into 300 slots put two live worktrees on one port, and a design-check in one tested the other's code, green. A linked checkout now claims its slot once in a machine-wide registry, and the derivation reads that slot before the hash. A test run also refuses a reused dev server that does not name this checkout.
 

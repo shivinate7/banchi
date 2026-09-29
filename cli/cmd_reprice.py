@@ -100,7 +100,7 @@ PUBLISH_LAG_S = 15 * 60
 def published_recently(now: Optional[datetime] = None, window_s: int = PUBLISH_LAG_S) -> Dict[str, str]:
     """SKUs published to TCGplayer inside the window, mapped to when.
 
-    WHY THIS EXISTS. `Export From Live` is not read-your-writes (D106, measured): after a
+    WHY THIS EXISTS. `Export From Live` is not read-your-writes (D273, measured): after a
     confirmed publish it goes on serving the OLD price for a while. `reconcile --live` writes
     the store's `live` field off that export and dates the reading by the FILE'S mtime — which
     is the fetch time, and so looks fresh. The content is stale and the timestamp says

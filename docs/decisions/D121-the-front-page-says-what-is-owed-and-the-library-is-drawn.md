@@ -89,3 +89,7 @@ keeps the rule, so the empty-state deck stays inert; `a.home-deck` restores it f
 **What retires this:** a second reader of the standing line's rank. It is a policy with one
 consumer today, and the moment a second screen wants "what is owed" the ranking should move to
 the server rather than being derived twice.
+
+A Home figure equals the total its destination screen draws.
+
+Home counts only orders that read open.

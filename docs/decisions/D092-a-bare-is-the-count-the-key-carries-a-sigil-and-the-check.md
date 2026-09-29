@@ -32,7 +32,7 @@
 
 **It found three sites nobody had looked at, on its first run** — `BoxOps.tsx`'s machine receipt naming skipped terminal rows, and `RunPanel.tsx` twice over a capture-directory preview. All three are legitimate: a departed record is in no slot, and `CropSample` carries no slot at all because nothing there has consulted the store. Each carries a `sigil-ok:` marker with its reason. That is the check's real value — not the violations it refuses, but the renders nobody had asked the question about.
 
-**Two prose statements of these facts were the exact reverse of the truth.** `types.ts` told every reader the neighbor index "is a slot a hand can count to, not a store key". `t7_store_and_seams.py` said `Card 17` "IS THE SEVENTEENTH SLOT, NOT THE SEVENTEENTH CARD YOU CAN COUNT" — true when D30 wrote it, made false by D58. `server.ts` had it right one screen away. A comment that is confidently backwards is worse than none: it answers the question a reader came with.
+**Two prose statements of these facts were the exact reverse of the truth.** `types.ts` told every reader the neighbor index "is a slot a hand can count to, not a store key". `t7_store_and_seams.py` said `Card 17` "IS THE SEVENTEENTH SLOT, NOT THE SEVENTEENTH CARD YOU CAN COUNT" — true when D58 wrote it, made false by D58. `server.ts` had it right one screen away. A comment that is confidently backwards is worse than none: it answers the question a reader came with.
 
 ### Two things this deleted, and one it fixed by accident
 

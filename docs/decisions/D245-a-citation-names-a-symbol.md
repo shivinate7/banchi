@@ -49,7 +49,7 @@ named lines 5 to 7 of `docs/GATES.md`. The other named lines 11 to 15 of `docs/D
 Both landed on real lines holding unrelated text, because the stubs are longer than the
 anchors.
 
-**Clause C — a per-file ratchet.** It counts anchors per citing file, in D229's shape,
+**Clause C — a per-file ratchet.** It counts anchors per citing file, in D280's shape,
 because a repo-wide number is one every merge takes from somebody. Every anchor counts,
 resolving or not. The owner's ruling was "leave nothing alone".
 

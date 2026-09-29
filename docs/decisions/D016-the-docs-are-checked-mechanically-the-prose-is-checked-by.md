@@ -18,7 +18,7 @@
 
    **What a duplicate costs is worse than an untidy file, which is why this blocks.** `governed_by` in `docs/map.py`, D17's decision-context hook and every `(D50)` in a comment all resolve an id to an ENTRY, and with three candidates they resolve to whichever is found first — a citation that is wrong in no way anything can see, because it points at a real heading, just not the intended one. Two headings carrying one id is provably wrong however the file got that way, which is this entry's own test for mechanical.
 
-   **The three were renumbered by POSITION IN THE FILE rather than by who landed first**, so `docs/DECISIONS.md` stays ascending and no entry's 200-line block had to move: the first keeps D50, and the others became D51, D52 and D53. That also left the most-cited of them untouched, which is the smaller half of the reason and the one that made the change reviewable.
+   **The three were renumbered by POSITION IN THE FILE rather than by who landed first**, so `docs/DECISIONS.md` stays ascending and no entry's 200-line block had to move: the first keeps D50, and the others became D51, D183 and D138. That also left the most-cited of them untouched, which is the smaller half of the reason and the one that made the change reviewable.
 
 2. **Coupling** — the same script, `--staged`: code changed under `pipeline/`, and `docs/specs/batch-script.md` did not. **Exit 2 prints and allows.** Fires only above 20 staged lines, so a typo fix stays quiet.
 3. **Semantic** — `/docs-audit`, a model reading prose against the diff. Never a gate: it costs money, it is not reproducible, and this project does not let a non-deterministic thing decide whether work is done.

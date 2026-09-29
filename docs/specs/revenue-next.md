@@ -7,7 +7,7 @@ general-branch defect is fixed in `app/src/Revenue.tsx:compareLine` — see its 
 below for what landed and what did not. Every other finding here is still open. Nothing here
 is approved, except where it says so.
 
-Read D214 for why the screen exists. Read D217 for what made it interactive. Read D62 for the
+Read D214 for why the screen exists. Read D217 for what made it interactive. Read D278 for the
 price history rules that every future chart inherits. Read D216 for why that reader needed a
 repair.
 
@@ -64,7 +64,7 @@ September's daily rate is in fact the higher of the two.
 ### Percent change has a zero guard but no floor
 
 The guard fires only at exactly zero. A prior period of five cents against a current fifty dollars
-renders as a five figure percentage. It is drawn at the same weight as any other figure. D62 set
+renders as a five figure percentage. It is drawn at the same weight as any other figure. D278 set
 the house convention for this. An anchor carries one weight and a bound carries another. This
 screen does not carry that convention over.
 
@@ -246,12 +246,12 @@ a deliberate press that fills it, and an accounting of what each pass read.
 
 Buckets must be keyed by bucket width, as well as by product and start date. The ranges overlap.
 One day appears as a one day bucket in one range. The same day sits inside a seven day bucket in
-another. Those are two different facts. They must never be merged. D62 forbids joining ranges and
+another. Those are two different facts. They must never be merged. D278 forbids joining ranges and
 that rule survives into storage.
 
 A sweep across the names the owner has sold or holds was measured at about one second per cold
 name. The owner chose a scheduled sweep. The schedule is deferred and the sweep comes first. The
-timer reverses D62's statement that this reader cannot fire on its own. That reversal needs its
+timer reverses D278's statement that this reader cannot fire on its own. That reversal needs its
 own argument.
 
 ### The per product view comes second
@@ -267,10 +267,10 @@ These are two different kinds of observation. Every rule below descends from tha
 
 - The market series and the owner's fills may never be drawn as one continuous series. Use
   different marks and a legend. Never use the same line.
-- The aggregate's own spread must be carried and not discarded. D62 measured a band 48 percent of
+- The aggregate's own spread must be carried and not discarded. D278 measured a band 48 percent of
   the estimate wide on a real card. A single number comparing a fill to a bucket states a
   precision that the source refuses to claim.
-- Direction is a sign and a word, and never a color. This is D62's rule. The palette holds no red
+- Direction is a sign and a word, and never a color. This is D278's rule. The palette holds no red
   and no green, deliberately. Coloring a fill as beating or missing the market is exactly where
   this would break.
 - A bucket with no price breaks the line. It is never interpolated across. That rule already

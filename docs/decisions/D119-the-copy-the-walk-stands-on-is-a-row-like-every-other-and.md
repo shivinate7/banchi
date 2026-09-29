@@ -58,7 +58,7 @@ the measured thing.
 
 A sale's undo — the draining twenty-second clock and the `Undo` — was the hero's alone; the row got a bare `Undo` with no clock. With the hero gone the row is where a sale is taken back, so the clock came with it (the owner: *"it'd be a shame to lose that animation work"*).
 
-**What could not come with it is the panel, and D118 is why.** That entry reserved `.card-locations-action` at the button pair's own 137x28 precisely so a press cannot resize the slot it lands in. The kit's `.bn-receipt` is ~268px wide and 36px tall and fits neither way, and both were measured on this branch rather than reasoned about: **given a grid row of its own it grew the row from 175px to 213px on the press** — main's own stability case caught it by name — and put in the action cell it grows the cell and shoves the address, which `CardLocations.css` forbids against D40's 231px wrap point.
+**What could not come with it is the panel, and D118 is why.** That entry reserved `.card-locations-action` at the button pair's own 137x28 precisely so a press cannot resize the slot it lands in. The kit's `.bn-receipt` is ~268px wide and 36px tall and fits neither way, and both were measured on this branch rather than reasoned about: **given a grid row of its own it grew the row from 175px to 213px on the press** — main's own stability case caught it by name — and put in the action cell it grows the cell and shoves the address, which `CardLocations.css` forbids against D38's 231px wrap point.
 
 **So the row draws the clock and the button, at the size the buttons already were.** The sentence is not lost and is not duplicated: the state pill two cells to its left already reads `Sold`, and the toast this sale posted carries `Marked sold.` with the same clock and the same `Undo`. The drain's track is a **token** here where `kit.css` paints it as a white alpha — correct on an inverted panel, invisible on a row sitting on `--bn-surface`.
 
@@ -70,17 +70,17 @@ A sale's undo — the draining twenty-second clock and the `Undo` — was the he
 
 The right column loses roughly 235px flat: the hero's ~300px and its gap come out, and the
 current row gains ~81px back from the bar it now draws. The photograph is unchanged. **No balance fix was taken.** Shrinking the photo column is what D32 and D38 spend the pixel budget
-against — D38 *raised* it on the owner's own ask — and padding the void is the defect D40
+against — D38 *raised* it on the owner's own ask — and padding the void is the defect D38
 measured at 41.99%. The visible consequence is a ragged bottom under a one-copy card at a pane
 of 560px or more, which is the honest cost of removing content rather than a thing to fill.
 
-### What D71 loses, and where it went instead
+### What D41 loses, and where it went instead
 
 `.inventory-location-label` was one of `PositionLabel`'s site rules and **the last renderer in the product of `lead='path'` with a `.position-void`** — the combination its re-rank fires
 under. The copies list, the order picker and the walk are all `lead='slot'`. Re-pointing that
 assertion at the row would have compared 11px against 11px and passed for the wrong reason, so
 it moved to `app/tests/gallery.spec.ts`, where the two specimens sit side by side and the kit
-sheet is now the rule's only renderer. **D71 itself is not edited**: its "five sites" is a
+sheet is now the rule's only renderer. **D41 itself is not edited**: its "five sites" is a
 2026-08-30 measurement, and measurements are not rewritten to match a later tree.
 
 **Moving it found the sheet had never drawn the rule.** `.kit-poslabel` set `--pos-slot` without

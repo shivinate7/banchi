@@ -21,13 +21,13 @@ Twelve joined runs, 2,535 cards, 492 listings. Two of the runs are over a drawer
 | runs closed while still holding unsent copies | **5**, holding **381** | 0 |
 | SKUs whose every unsent copy was in a closed run | **91**, 262 copies | 0 |
 
-Sixty of the 660 are under a deliberate hold (D49) and sink to the held tier as before; the press drops them by name. **The press's own plan over the same six runs — `merge.plan` off `resolve.load`, what `emit` writes — offers 600, and the route offers 600.** That agreement is the load-bearing fact of this entry and the harness case pins it: seven copies, a capped emit of four, the route says three, the next emit writes three.
+Sixty of the 660 are under a deliberate hold (D86) and sink to the held tier as before; the press drops them by name. **The press's own plan over the same six runs — `merge.plan` off `resolve.load`, what `emit` writes — offers 600, and the route offers 600.** That agreement is the load-bearing fact of this entry and the harness case pins it: seven copies, a capped emit of four, the route says three, the next emit writes three.
 
 The five runs the old rule had closed: `2026-08-24-box2-01` holding 148 unsent copies, `2026-09-01-box3-01` holding 150, `2026-09-11-box4-04` 47, `2026-09-11-box4-03` 32, `2026-08-31-box3-01` 4. Box 2 is the Pokemon bulk that was emitted once under the cap on 2026-08-24 and never looked at again.
 
 ### The four questions, answered
 
-**Where it lives: `#/pricing`, and it is not a third door but the first one widened.** The operator's *"runs more unified"* is answered by a view that is not run-scoped at all, which is the opposite of putting it on `#/runs` — that screen is the run log and the money gate, and a run there is one box (D48). `#/inventory` is where cards ARE and never sends (D31). The ship bar, the cut-off, the cap field, the per-card quantity, the holds and the rule strip are all on `#/pricing`, and D105's rule decides it: a markdown lives where prices are decided, and so does a send. What changed is one word in the definition of *open* — a run is open while it owes something OR holds an unsent copy — and the default landing, which asks for the open runs, became the unsent worklist by that definition alone. `roster[].unsent` is the count; `owes` is untouched, so Home's *runs to price* still means what it meant.
+**Where it lives: `#/pricing`, and it is not a third door but the first one widened.** The operator's *"runs more unified"* is answered by a view that is not run-scoped at all, which is the opposite of putting it on `#/runs` — that screen is the run log and the money gate, and a run there is one box (D180). `#/inventory` is where cards ARE and never sends (D31). The ship bar, the cut-off, the cap field, the per-card quantity, the holds and the rule strip are all on `#/pricing`, and D105's rule decides it: a markdown lives where prices are decided, and so does a send. What changed is one word in the definition of *open* — a run is open while it owes something OR holds an unsent copy — and the default landing, which asks for the open runs, became the unsent worklist by that definition alone. `roster[].unsent` is the count; `owes` is untouched, so Home's *runs to price* still means what it meant.
 
 **A row is a SKU, and its copies are on it.** The import file thinks in SKUs with a quantity (D7), and the row already draws every box a card sits in and the positions the photograph is addressed by. The Qty field's placeholder is the copies that can still go and its title says how many of the rest are already at TCGplayer. A per-copy row would draw seven rows for one line of the spreadsheet.
 
@@ -55,6 +55,6 @@ The five runs the old rule had closed: `2026-08-24-box2-01` holding 148 unsent c
 
 A marker that a copy reached an import file (D59, D147) — the committed set would then be READ and the ledger would stop inferring it. A `sku` index on `store/rows.py:Rows` — the 2.8s. A seventeenth open run. And realigning on the route, if the one-copy residual ever becomes a sentence somebody reads.
 
-### Amendment, `D208` (2026-09-13)
+### Amendment, `D277` (2026-09-13)
 
 The per-run box/run span shown on an ordinary row is disclosure-gated behind a per-table Compare toggle as of this date; a row whose copies are over the cap keeps its warning regardless of the toggle, because that is the "what cannot go is named on the deck, with a door each" case this entry already promises stays named. Nothing about the counts above changes — the ledger, the figures and what the worklist offers are untouched — only whether the per-row provenance text is always drawn.

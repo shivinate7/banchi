@@ -9,13 +9,13 @@ range, ever. Nothing in this repo captured a bucket before it aged out until thi
 what it found; `cli/cmd_pricearchive.py` is the press that runs the walk and writes here.
 
 THE KEY CARRIES THE RANGE, NOT THE WIDTH, AND THAT IS THE ONE ARGUMENT THIS MODULE HAS TO
-MAKE (D62). Buckets from different ranges overlap on the calendar: one calendar day is a
+MAKE (D278). Buckets from different ranges overlap on the calendar: one calendar day is a
 one-day bucket in `month` and the same day sits inside a seven-day bucket in `annual`. Those
-are two different facts about that day and D62 forbids merging them. A key built from
+are two different facts about that day and D278 forbids merging them. A key built from
 `(sku, width_days, start)` looks like it would tell them apart, until you notice
 `semiannual` and `annual` are BOTH SEVEN-DAY BUCKETS (`pipeline/pricehistory.py`) — a
 width-keyed table would silently fold a semiannual bucket and an annual bucket that happen to
-start on the same date into one row, exactly the D62 collision this table exists to prevent,
+start on the same date into one row, exactly the D278 collision this table exists to prevent,
 and it would do it precisely on the boundary where the two ranges' coverage overlaps most.
 `range` is the one field the endpoint itself uses to keep these two apart, so this table keys
 on it directly: `(sku, range, start)`. `product_id` and `width_days` are stored as columns

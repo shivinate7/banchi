@@ -21,7 +21,7 @@ into an actual line. `pipeline/holdings.py:sku_series` reads
 `store/pricearchive.py:PriceArchive.for_sku`. It filters to one requested range. It
 multiplies each bucket's own `market` by the SKU's current on-hand quantity.
 
-**RANGES ARE NEVER MERGED.** D62 sets this rule. This feature answers four separate
+**RANGES ARE NEVER MERGED.** D278 sets this rule. This feature answers four separate
 questions, not one. `GET /pipeline/holdings-value?range=<month|quarter|semiannual|annual>`
 answers exactly one range per call. Nothing here offers a combined series. The four ranges
 overlap on the calendar. Adding them would double-count. `month` is the default. It is the
@@ -60,7 +60,7 @@ sentence that makes it honest. The ledger widening that landed today only tells 
 about sealed product the owner sold. It adds no on-hand quantity anywhere. The count above is
 still the only honest answer to how much sealed stock sits on the shelf.
 
-**AN UNPRICED NAME IS COUNTED, NEVER SHOWN AS ZERO.** D159 sets this rule and it is
+**AN UNPRICED NAME IS COUNTED, NEVER SHOWN AS ZERO.** D277 sets this rule and it is
 inherited here. `unmarked.names` is the on-hand SKU count minus however many of them
 `archive.for_sku` answers anything for, in any range. A SKU the sweep has visited under
 `quarter` but not yet under `month` is a coverage fact about the sweep. It is not an absent
@@ -184,3 +184,5 @@ package with no caller reachable from a screen yet.
 This entry does not freeze a coverage number measured against the owner's real store. Such a
 number goes stale the moment the next sweep runs. The PR body carries what was measured once,
 read-only, at build time.
+
+Unsold stock is a fourth Sales section and never touches sold's figure.

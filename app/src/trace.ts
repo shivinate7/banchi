@@ -56,7 +56,7 @@ function quantize(cells: Float32Array): Uint8Array {
   return out
 }
 
-/** Which machine recorded this. ONE VALUE AGAIN AS OF 2026-09-11: the cadence trigger D130
+/** Which machine recorded this. ONE VALUE AGAIN AS OF 2026-09-11: the cadence trigger D144
  *  added is deleted and nothing writes `'cadence'` any more.
  *
  *  THE FIELD STAYS, AND SO DOES THE OTHER VALUE IN THE FILES. `harness/traces/` banks one
@@ -131,7 +131,7 @@ export class MotionTrace {
          `scripts/score-trace.py` branches on this field. */
       version: 2,
       kind: 'pkmnscan-motion-trace',
-      /* SINCE D130. Absent in every trace recorded before it, which the scorer reads as
+      /* SINCE D144. Absent in every trace recorded before it, which the scorer reads as
          `motion` — the only machine there was. */
       trigger: this.trigger,
       recorded_at: new Date().toISOString(),

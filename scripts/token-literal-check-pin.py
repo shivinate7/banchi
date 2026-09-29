@@ -3,7 +3,7 @@
 
     python3 scripts/token-literal-check-pin.py --pin
 
-D229's own discipline, mirrored exactly (D18 says why a generator is the one thing allowed to
+D280's own discipline, mirrored exactly (D18 says why a generator is the one thing allowed to
 write this file): `make token-literal-check`'s row
 only ever READS the pin — D18 forbids it writing, since it runs on the commit path (`make
 check`) — and this script is the one thing that may, run by a person choosing, on purpose, to
@@ -11,12 +11,12 @@ accept today's count as the new ceiling. Never pin quietly: `git diff
 scripts/token-literal-check.json` is the receipt.
 
 Only files with at least one finding, AFTER the allow-list is applied, get a key — a file at
-zero needs no ceiling (D229: "a file the pin has never seen is accepted"), and a stale key for
+zero needs no ceiling (D280: "a file the pin has never seen is accepted"), and a stale key for
 a file that fell to zero is left in place rather than pruned here; nothing gates on it either
-way until a person chooses to clean it, the same tolerance D229 states for the prose ratchet.
+way until a person chooses to clean it, the same tolerance D280 states for the prose ratchet.
 
 Writes `scripts/token-literal-check.json` as `{"files": {"<path>": <count>}}` — a flat map,
-D229's shape, never a repo-wide scalar.
+D280's shape, never a repo-wide scalar.
 """
 
 from __future__ import annotations

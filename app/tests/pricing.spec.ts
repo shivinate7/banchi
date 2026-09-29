@@ -1,5 +1,5 @@
 // Protects: Pricing shows every unsent copy, writes only what the owner sets, and sends only what the Send bar says.
-// Governs: D49, D59, D62, D79, D86, D118, D218, D277
+// Governs: D86, D59, D278, D277, D118, D218
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { settleMotion } from './motionSettled'
@@ -189,7 +189,7 @@ async function open(
     history?: unknown | 'refuse'
     /** The stored `at` of an answer in `decisions`, by SKU — the first date a release keeps. */
     answerAt?: Record<string, string>
-    /** What `GET .../trends` answers for the SKUs a chunk asks about — D79. A function, not a
+    /** What `GET .../trends` answers for the SKUs a chunk asks about — D277. A function, not a
      *  payload, because the client CHUNKS the walk and the interesting cases are about which
      *  SKUs each request carries. */
     trends?: (skus: string[]) => unknown
@@ -355,12 +355,12 @@ async function open(
     })
   })
 
-  /* THE PRICE HISTORY (D62). Registered among the specific patterns for the reason the
+  /* THE PRICE HISTORY (D278). Registered among the specific patterns for the reason the
      comment above gives — Playwright matches most-recent-first, so `[^/]+$` must not get
      there first. Every case that presses `T` reads `wire` to count how many times this was
      asked, because the load-bearing property of that panel is that it does NOT fire on a
      walk. */
-  /* D79's batched read. Registered BEFORE `/history` so Playwright's most-recent-first
+  /* D277's batched read. Registered BEFORE `/history` so Playwright's most-recent-first
      matching puts the more specific pattern first — `/history`'s regex is unanchored and
      would not match `/trends` in any case, but the ordering rule this file states above is
      kept true rather than relied on to be harmless. */
@@ -803,7 +803,7 @@ function history(over: Partial<PriceHistoryPayload> = {}): PriceHistoryPayload {
   }
 }
 
-/** What the batched route answers for one chunk — D79.
+/** What the batched route answers for one chunk — D277.
  *
  *  IT ANSWERS ONLY WHAT IT WAS ASKED, which is the property the cases about chunking turn
  *  on: the client walks the open rows eight at a time, and a stub that answered every SKU to
@@ -845,7 +845,7 @@ const field = (page: Page) => page.getByRole('textbox', { name: /^Price for / })
  *
  *  ONE SHAPE READ IN ONE PLACE. Every case below used to reach into `body.decisions.overrides`
  *  by hand; the answers moved into the corpus (D86, amended) and nineteen assertions would
- *  otherwise each have learned the new path. The values are D49's own shapes, unchanged — a
+ *  otherwise each have learned the new path. The values are D86's own shapes, unchanged — a
  *  string for a price, an object for a hold — so what a case asserts is what it always did. */
 function sentAnswers(wire: Wire[]): Record<string, unknown> {
   const put = wire.filter((row) => row.method === 'PUT').pop()?.body as {
@@ -881,7 +881,7 @@ test('the run picker leads with the box, and the directory is what tells two run
      already applies to its reason codes, pointed at a picker. */
   await open(page, {
     runs: [
-      /* ONE SITTING OVER TWO DRAWERS, WHICH IS D48's CART AS IT ACTUALLY LANDS — the owner's
+      /* ONE SITTING OVER TWO DRAWERS, WHICH IS D180's CART AS IT ACTUALLY LANDS — the owner's
          2026-09-01 send joined three boxes in the same SECOND, so `created_at` cannot separate
          them and the box number is what orders them. Given here out of order deliberately: the
          server answers in directory order and the strip is what puts them on a shelf. */
@@ -2688,7 +2688,7 @@ test('a preset writes the rule and the basis, which is what the pipeline reads',
      suggestions on screen moved and nothing `emit` reads did. Measured on the owner's
      riftbound run: that dead key beside `rule: match`, 2 overrides across 50 SKUs, 48 cards
      about to list at a price nobody chose. The rule at layer 4 is the thing that has to
-     move, because D49 correctly refuses to write the suggestions as overrides at layer 1. */
+     move, because D86 correctly refuses to write the suggestions as overrides at layer 1. */
   expect(sentPolicy(wire).rule).toBe('undercut:5')
   expect(sentPolicy(wire).basis).toBe('market')
   expect(sentPolicy(wire)).not.toHaveProperty('preset')
@@ -2738,15 +2738,15 @@ test('a hand-typed rule lights no chip rather than a stale one', async ({ page }
 })
 
 
-// ------------------------------------------------------------------ the trend strip (D79)
+// ------------------------------------------------------------------ the trend strip (D277)
 
 test('the strip draws nothing until it is asked for, and the press is what asks', async ({
   page,
 }) => {
-  /* D62 MADE THE READ A PRESS AND D79 KEPT IT ONE. The batch is ~92 requests at two free
+  /* D278 MADE THE READ A PRESS AND D277 KEPT IT ONE. The batch is ~92 requests at two free
      public mirrors, 37.7s cold — batching makes that one decision instead of fifty, not
      cheap. A screen that read it on arrival would spend the walk on every visit for readings
-     nobody asked for, which is the rudeness D62 closed structurally. THE ASSERTION THAT
+     nobody asked for, which is the rudeness D278 closed structurally. THE ASSERTION THAT
      MATTERS IS THE WIRE ONE: an empty cell could equally be a request that answered nothing,
      and this is a case about no request being made. */
   const wire = await open(page)
@@ -2763,7 +2763,7 @@ test('the strip carries a shape and a sign, and no money at all', async ({ page 
   /* THE D8 GUARD AS A TEST RATHER THAN A PARAGRAPH, and the one case here most worth having.
      The row already has four dollar columns and the field a listing price is typed into, so a
      reading denominated in money would sit one column from that field and be one keystroke
-     from becoming a price — the reopening D62 refused by name. The vwap, its bound, the
+     from becoming a price — the reopening D278 refused by name. The vwap, its bound, the
      liquidity and the spread all stay on the panel; a later session widening the strip's
      payload to carry one of them fails here. */
   await open(page)
@@ -3019,7 +3019,7 @@ test('the standing policy is on the multi-run landing, and one press writes it o
      that account lives once on the headline's `.pricing-verdict`, computed over the same
      union of every run on screen regardless of which bar is showing. */
 
-  /* THE CONTROL IS THE CUT-OFF FIELD, AND THE FLOOR PRESS IT REPLACED IS RETIRED (D98). Main
+  /* THE CONTROL IS THE CUT-OFF FIELD, AND THE FLOOR PRESS IT REPLACED IS RETIRED (D9). Main
      asserted a segmented row here offering "a flat price" or "the $0.40 floor"; the owner had
      the row deleted and the figure itself made the control, so stating the floor is typing the
      floor's own number. What the case is FOR is unchanged and is the reason it survived the
@@ -3050,7 +3050,7 @@ test('an undo returns the card to what it was, including to having no answer', a
   await expect.poll(() => sentAnswers(wire)['9191210']).toBe('12.00')
 
   /* `u` ON THE ROW, which is this screen's own undo — the price field's alphabet is closed to
-     `[0-9.]` precisely so a letter can be a command (D49), and that closure is the whole safety
+     `[0-9.]` precisely so a letter can be a command (D86), and that closure is the whole safety
      argument for it.
 
      THE ROW HAD NO ANSWER BEFORE, so undoing must DELETE the key and return it to its
@@ -3372,7 +3372,7 @@ test('what the clear leaves alone is on the screen, not in a tooltip', async ({ 
   await page.getByRole('button', { name: 'Clear typed prices' }).click()
 
   /* THE HOLDS AND THE UNPRICED ROWS ARE NAMED BY COUNT. An operator asking "does this touch my
-     holds" has to be able to answer it without pressing anything — D49's holds carry a reason
+     holds" has to be able to answer it without pressing anything — D86's holds carry a reason
      and a watch, and removing one puts the card back into the next emit. */
   const spares = page.locator('.clearprices-spares')
   await expect(spares).toContainText('2')

@@ -11,7 +11,7 @@ occurs nowhere else in the tree (measured: zero tokens of either shape existed t
 vocabulary was chosen), so the substitution is exhaustive text replacement and there is no
 judgement in it anywhere. That is the entire argument for doing it at merge time rather than
 by hand — a hand renumber is the same edit with a human deciding which occurrences count, and
-D72 records what that costs thirteen times over.
+D140 records what that costs thirteen times over.
 
 `max + 1`, NEVER THE LOWEST FREE ID. D80 culled step 12 and rules that the hole is correct;
 reusing it would resurrect every `step 12` in the tree onto a step that is not the one meant.

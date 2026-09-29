@@ -22,7 +22,7 @@ import { Button, cropStyle, Icon, Kbd, Loading, Page, type IconName } from './ki
 import { boxTitle } from './kit/data'
 import { dayMonth, weekdayDate } from './dates'
 import { pricingTileNote, runsOwingPrice, sendCounts, standing, type Standing } from './standing'
-import { DEMO_HISTORY_SCALE, inflate, photographed, ribbon, sittings, type Ribbon } from './storeHistory'
+import { photographed, ribbon, sittings, type Ribbon } from './storeHistory'
 import { StagePill, stageOf, whenLabel } from './RunsStage'
 import { placeWordsOf } from './position'
 import { runBoxLabel } from './runScope'
@@ -286,7 +286,7 @@ function HistoryFoot({
   readonly shelf: Record<string, InventoryCard> | null
   readonly live: boolean
 }) {
-  const plot: Ribbon | null = useMemo(() => ribbon(inflate(sittings(shelf))), [shelf])
+  const plot: Ribbon | null = useMemo(() => ribbon(sittings(shelf)), [shelf])
   if (status === null) return <div className="home-foot" />
   const realTotal = photographed(status)
   if (realTotal === 0) {
@@ -304,26 +304,12 @@ function HistoryFoot({
   const retired = status.states.retired ?? 0
   const onHand = realTotal - (status.states.sold ?? 0) - retired
 
-  /* THE DEMO INFLATES ITS OWN HISTORY, AND ONLY ITS HISTORY — `storeHistory.ts`'s
-     `DEMO_HISTORY_SCALE` carries the whole argument and the trade the owner took. Cards ever
-     photographed and cards ever sold move with the sittings so this sentence stays true to
-     ITSELF; `onHand` and the box count are deliberately left real, because the boxes panel a
-     few inches below draws those same two figures from the same store and they may not
-     disagree on one screen. The cards that have left are then whatever the sentence needs to
-     balance — derived rather than scaled, so `photographed − on hand − retired − sold` is
-     still zero at any multiplier. Folded away entirely in every non-demo build. */
-  let total = realTotal
-  let everSold = sold
-  if (__BN_DEMO__) {
-    total = realTotal * DEMO_HISTORY_SCALE
-    everSold = total - onHand - retired * DEMO_HISTORY_SCALE
-  }
   const since = plot?.from ? dayMonth(plot.from) : null
   const newest = plot?.blocks[plot.blocks.length - 1]?.sitting ?? null
   return (
     <div className="home-foot">
       <p className="home-foot-sum">
-        <b>{total.toLocaleString()}</b> photographed
+        <b>{realTotal.toLocaleString()}</b> photographed
         {plot === null ? null : (
           <>
             {' over '}
@@ -337,7 +323,7 @@ function HistoryFoot({
             not a sum, so the clause degrades and the sentence does not. */}
         <b>{onHand.toLocaleString()}</b> stored
         {boxes === null ? null : <> in <b>{boxes}</b> {boxes === 1 ? 'box' : 'boxes'}</>}
-        {everSold === null || everSold === 0 ? null : (
+        {sold === null || sold === 0 ? null : (
           <>
             <i aria-hidden="true" />
             {/* THIS STORE'S OWN COUNT, NOT SALES' (UX-019): Sales totals the order ledger,
@@ -345,7 +331,7 @@ function HistoryFoot({
                 different universes on purpose — the link is the way to the one that reasons
                 about money. Also Home's one link into the loop's last stage (UX-032). */}
             <a className="home-foot-sold" href="#/revenue">
-              <b>{everSold.toLocaleString()}</b> sold
+              <b>{sold.toLocaleString()}</b> sold
             </a>
           </>
         )}
@@ -505,7 +491,7 @@ export function Home() {
   /* Same join `standing.ts` makes, for the same reason: `resolution.orders` is already a
      subset of the open orders (`do_orders`'s own `open_keys`, D63 amended), and this counts
      a resolved line only where ITS order reads `open: true` here too, rather than trusting
-     that upstream shape blind. See `## D202`. */
+     that upstream shape blind. See `## D121`. */
   const openKeys = openRows === null ? null : new Set(openRows.map((o) => o.key))
   const unfindable =
     orders.state === 'ready' && openKeys !== null

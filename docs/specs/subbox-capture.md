@@ -212,7 +212,7 @@ holds cards.
   the box-level count moves. That is D58's `slot` (a number counts cards, not slots). No screen
   shows it as a card number.
 - **The stored index.** It is still the high-water mark (D10, positions are never
-  renumbered). It is the card's identity, not its place (D265, the order key is apart from the
+  renumbered). It is the card's identity, not its place (D294, the order key is apart from the
   index). A card captured mid-box has the highest index and a middle order key.
 - **S in the middle.** If S puts a new divider after section 2 (the owner's Q1 ruling), the
   old sections 3 and 4 become 4 and 5. Their card numbers do not change. This is the one
@@ -471,7 +471,7 @@ Measured 2026-09-26 on a `.backup` copy of the owner's store, never the live one
 
 | Lane | Owns | State |
 |---|---|---|
-| A | `store/master.py`, `server/capture_server.py`, `harness/tests/t7_box_map.py`, the decision entry and the amendments to D10, D265, capture-app.md 5.6 and undo.md 11.1 | BUILT |
+| A | `store/master.py`, `server/capture_server.py`, `harness/tests/t7_box_map.py`, the decision entry and the amendments to D10, D294, capture-app.md 5.6 and undo.md 11.1 | BUILT |
 | B | `CaptureScreen.tsx`, `deviceMemory.ts`, `server.ts`, `types.ts`, `App.tsx` `CAPTURE_KEYS`, `demoServer.ts`, the capture specs | BUILT on `ux/subbox-capture` |
 | C | The Move-to-box section choice on `#/inventory` | BUILT |
 

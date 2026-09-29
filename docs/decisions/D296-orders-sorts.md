@@ -20,13 +20,13 @@ The owner then picked all four suggestions offered back to him: **Dollar value, 
    is the count of distinct physical boxes the walk planner's own solve says hold this
    buyer's copies.
 
-2. **The Ready-to-Ship lead (D209) is a GROUPING, kept across every key.** It is not a
+2. **The Ready-to-Ship lead (D296) is a GROUPING, kept across every key.** It is not a
    special case of the `placed` sort. This is a finding, read off `orderView.ts:
    compareGroups`: the ready-bucket check runs BEFORE the picked key's own comparison, for
    every key, never inside a `case 'placed':` arm. So a Ready-to-Ship buyer still leads
    under Dollar value, Card count, Buyer name or Fewest drawers. The alternative — scoping
    the lead to `placed` alone — is the one this entry declines. Nothing in the owner's
-   request, or in D209's own text, says the lead belongs to that one sort.
+   request, or in D296's own text, says the lead belongs to that one sort.
 
 3. **Ties break by placed date, newest first, on every key.** This is the owner's own words
    for this task, read as the one tiebreak all five keys share.
@@ -78,3 +78,5 @@ and a live re-price is a different figure `#/pricing` already owns (D86).
 
 No settings for the tiebreak. Ties always break by placed date, newest first, on every key.
 This matches the owner's own words for this task, rather than a per-screen preference.
+
+A sort orders and hides nothing; Ready to Ship leads, other statuses stay reachable.

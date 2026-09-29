@@ -1266,7 +1266,7 @@ export function ReviewQueue() {
      either prop would be a second reading of the store on the same opening. */
   const closeRecheck = useCallback(() => setRecheckOpen(false), [])
 
-  /* D46/D77: the export's rows, unasked for a zero-candidate card and on `L` for one with rows. */
+  /* D77: the export's rows, unasked for a zero-candidate card and on `L` for one with rows. */
   const looking = current !== null && lookingAt === current.key
   const showCatalog = current !== null && (current.entry.candidates.length === 0 || looking)
   const lookupFor = showCatalog ? current : null
@@ -2274,7 +2274,7 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
           {/* "Claimed" alone did not say claimed WHAT — the walkthrough's "CLAIMED · Showcase"
               reads as a verdict rather than a fact about the rarity, unlike "Sorted as" and
               "Photo" beside it, which both name their subject. "Rarity" matches that pattern
-              at the SAME word count (D194's ratchet forbids a route's words rising), and the
+              at the SAME word count (D284's ratchet forbids a route's words rising), and the
               `title` above still spells the whole sentence out for a hover. */}
           <span className="review-chip-key">Rarity</span>
           <span className="review-chip-value">
@@ -2424,7 +2424,7 @@ export type CatalogPanelProps = {
   busy: boolean
 }
 
-/* D46 — rows out of the export, drawn through the same row and answered on the same digits.
+/* D77 — rows out of the export, drawn through the same row and answered on the same digits.
  * The search heads the list; the mode line says whose rows these are.
  *
  * EXPORTED FOR `CardHero.tsx`'s LISTING-CORRECTION CONTROL, this file's own header rule:

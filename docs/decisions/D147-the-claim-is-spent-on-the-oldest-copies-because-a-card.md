@@ -60,4 +60,4 @@ That guard is load-bearing, not defensive — D59 records that dropping it takes
 
 **A marker that a copy actually reached an import file.** D59 names it — one field on `Card`, written by `cmd_emit`'s push loop beside the `sku` stamp. With it, the committed set is READ rather than inferred and this ordering becomes a fallback for records written before it. It is worth more now than when D59 recorded it, because this entry is the second defect to turn on not having it.
 
-**A run over more than one box** (D48). The argument here is about capture time and not about boxes, so it survives — but the fixture that guards it would need a shape where one run spans two sittings.
+**A run over more than one box** (D180). The argument here is about capture time and not about boxes, so it survives — but the fixture that guards it would need a shape where one run spans two sittings.

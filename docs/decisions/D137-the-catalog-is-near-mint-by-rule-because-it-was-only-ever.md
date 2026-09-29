@@ -85,9 +85,9 @@ account for is a number the next person deletes the filter to explain.
 
 **`ConditionIds` stays unpopulated and `STANDING_FILTERS` does not grow.** This is D76's last
 paragraph amended rather than repealed, and the amendment is narrow: that paragraph left the
-condition axis unspent citing D64's finding that "a condition filter thins a number's rows and
-D3 rung 2 then decides a card from whichever row survived" — which is D64's measurement of the
-**printing** axis, not the condition one. D64 itself says so in as many words two sections
+condition axis unspent citing D65's finding that "a condition filter thins a number's rows and
+D3 rung 2 then decides a card from whichever row survived" — which is D65's measurement of the
+**printing** axis, not the condition one. D65 itself says so in as many words two sections
 earlier: *"Play conditions are not finishes… all 153 numbers read as thinned and not one had
 lost a finish."* Re-measured here on the owner's own export:
 **0 of 1,246 numbers lose a finish**, because each finish keeps its own Near Mint row.
@@ -126,7 +126,7 @@ they really are wide, because without that every assertion under it passes by ac
 Mutation-tested in three arms, each killed by a different assertion and no assertion
 redundant: the predicate deleted (rung 2 and the play-grade and refusal checks go red), sealed
 dropped from the keep set (only the four sealed checks), and the set narrowed to one condition
-so a foil finish is thinned (only the finish-preservation check — D64's real worry, caught).
+so a foil finish is thinned (only the finish-preservation check — D65's real worry, caught).
 
 **The first draft of the rung-2 assertion survived arm 1 and had to be rewritten.** It counted
 distinct *finishes* per number, and a set of finishes collapses the exact multiplicity the bug

@@ -85,3 +85,5 @@ it, "Show all" below the podium. Built in `app/src/Revenue.tsx`/`Revenue.css`, s
 shape: every printing, still sortable, still the drill-down into an order. It no longer
 carries the whole screen. The podium answers the owner's "it is just an excel sheet" gripe.
 The table stays for the full list.
+
+Sales leads with a summary band and best sellers; "On the shelf" loads on arrival.

@@ -31,7 +31,7 @@ structural reason, and nothing ever came back to ask again.
 already being gone, and nothing re-checks. The merge waits on the tree. The tree waits on the
 session. The session ends with no teardown — `.claude/settings.json` wires `SessionStart`,
 `PreToolUse`, `PostToolUse` and `Stop`, and `Stop` fires at TURN end, so it is a gate and not a
-teardown. The supervisor waits on nobody, because D53 makes it outlive the session on purpose.
+teardown. The supervisor waits on nobody, because D138 makes it outlive the session on purpose.
 Every link is individually defensible, which is why this never looked like a bug.
 
 **So the fix is a sweep and not another hook on the merge.** Only something re-runnable at an
@@ -75,10 +75,10 @@ deliberately rather than reinvented, and D18 keeps this off the gate for D44's r
 **WHAT IT NEVER TOUCHES**, and these are refusals rather than defaults: the default branch; any
 branch that is unmerged AND on no remote — that day it was `backup/logo-lockup-prerebase`, 47
 commits that existed on no other disk; a tree with a live session, including its own; a tree
-with uncommitted work; and the main checkout's server, which **D53 means to outlive every session**
+with uncommitted work; and the main checkout's server, which **D138 means to outlive every session**
 and which was serving the owner's real inventory throughout.
 
-**Identity is an absolute path — never a pid, never a port.** Pids churn: D53's re-exec
+**Identity is an absolute path — never a pid, never a port.** Pids churn: D138's re-exec
 replaced this repo's two server pids inside twenty minutes while this was being written, and
 `started_at` in a pidfile is rewritten by that re-exec, so it is not process age. The port
 cannot be inverted, being `sha256(path)[:4] % 300` over 300 colliding slots. And every path

@@ -23,7 +23,7 @@ The record of the review is `docs/reviews/ux-2026-09-23/`. The plan is
 
 ### The premise that no longer holds
 
-D106 (the push and the publish are two presses) says a single button "would spend that margin
+D273 (the push and the publish are two presses) says a single button "would spend that margin
 for one saved click". The margin is the gap between Import to Staged and Move to Live.
 
 The flow review counted the real cost of the hand path. From capture to live, the owner makes
@@ -39,11 +39,11 @@ Of 9 steps, 5 hold a real choice. The review also found three hazards in the cod
 
 The review recommended two presses. The owner chose one.
 
-### What D106 protected, and what protects it now
+### What D273 protected, and what protects it now
 
-D106 protects one outcome: a buyer never sees a price the owner did not mean to publish. The
+D273 protects one outcome: a buyer never sees a price the owner did not mean to publish. The
 Staged margin was that protection. For the listing file, the margin is gone, and the owner
-accepted that cost. These protections stay, and they are D106's own promises:
+accepted that cost. These protections stay, and they are D273's own promises:
 
 - The move is scoped to one upload. `SCOPE_THIS_UPLOAD` is a constant, never a parameter.
 - The upload id comes off disk, never off the request.
@@ -70,7 +70,7 @@ already hold. A send that would double a quantity is refused or trimmed, and the
 what it trimmed. When the live check cannot run, because the owner is signed out or TCGplayer
 is slow, Send refuses. It says why and offers "Try again". It never sends blind.
 
-This amends D106 further: its two presses were one margin, and this read is another. It amends
+This amends D273 further: its two presses were one margin, and this read is another. It amends
 D87 (the reconcile is store-wide): the reconcile is no longer only a check after the fact. It
 is a gate in front of every send. The guard must go red on a double send before any listing
 file uses the transport.
@@ -163,7 +163,7 @@ deleted to lower a price, and the quantity is not a variable.
   goes, and the "Check what is live" press sits on the Live tab (Q7).
 - **D156 (every unsent copy is one worklist).** A run's status names its real next step, for
   example "Ready to write", never "Needs pricing" once pricing is answered.
-- **The export fetch and its scope (D64, D65, D76, D166, D170).** The rules stay. The fetch now
+- **The export fetch and its scope (D65, D76, D166, D170).** The rules stay. The fetch now
   starts when a reading finishes. A refusal becomes the run's next step.
 - **D174 (a press claims the cards it is about to buy).** Unchanged for a read. A send now
   claims its SKUs in the same shape (`store/sendclaims.py`, below).
@@ -210,7 +210,7 @@ The pricing lane follows, with the rest of the screen and the Live tab.
 ### The review rounds
 
 Rounds 2 to 6 of the adversarial review, each finding and its fix, are the entry
-`D283` (the send press's review record). Round 5 built the mixed send above.
+`D273` (the send press's review record). Round 5 built the mixed send above.
 It also ordered two presses in one second by press time, and it folded the taken-back warning
 to one line on a phone. Round 6 limited the price rows to the prices the screen named.
 
@@ -244,3 +244,5 @@ live price. The bar names each such card and its old and new price before the pr
 price the button did not name is never sent. A lower earlier price goes only when the owner
 writes it again on this visit. `reprice apply` refuses it otherwise (`earlier_lower`). The
 dollar cap is the rule's only (the owner: "Rule only").
+
+A publish moves one upload, scoped by the receipt's id; reconcile skips SKUs published inside the lag window.

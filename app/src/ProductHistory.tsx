@@ -1,6 +1,6 @@
 /**
  * `#/product` — one product's own view: what it has been selling for, with the owner's own
- * sales marked on it (D227, D62, `D278`, `docs/specs/revenue-plan.md`
+ * sales marked on it (D227, D278, `docs/specs/revenue-plan.md`
  * section 3).
  *
  * ONE VIEW, TWO FRAMES (`D278`, the owner's HYBRID ruling, 2026-09-23).
@@ -188,7 +188,7 @@ function ProductChart({ range, fills, w = 640, h = 160 }: { range: ProductHistor
       aria-label={`${RANGE_LABEL[range.range] ?? range.range} market buckets, with the owner's own sales marked`}
     >
       {/* THE SPREAD, CARRIED PER BUCKET — a thin vertical tick from low to high, never
-          collapsed into one number across the whole series (D62's own rule, restated for a
+          collapsed into one number across the whole series (D278's own rule, restated for a
           per-bucket reading rather than a whole-series bound). */}
       {range.points.map((p, i) => {
         if (p.at === null || p.low === null || p.high === null) return null

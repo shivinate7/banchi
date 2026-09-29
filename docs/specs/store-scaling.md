@@ -205,9 +205,9 @@ same PR.** Proof: the 185 ms → 3,465 ms table above, re-run.
 a `GROUP BY sku` over the boxes' live copies; `box_views` reads per box through
 `records_in`; `do_pipeline_value` ranks over a `select` of the columns it ranks on rather
 than over built card objects, **and the row list is paginated** — the owner's word, "as
-long as it's well planned": every aggregate D159 draws (the drawer totals, the three
+long as it's well planned": every aggregate D277 draws (the drawer totals, the three
 unpriced causes, "nothing on hand is dropped") is computed server-side over all rows as a
-column select, and only the ranked row list pages, by a cursor stable across pages. D159's
+column select, and only the ranked row list pages, by a cursor stable across pages. D277's
 figures stay whole; the list stops being one 50,000-row response. Five allowlist entries
 go (`_box_names` and `_on_hand_by_run` beside the three named).
 
@@ -329,12 +329,12 @@ have been machinery. The premise was the size.
   partially built, and a schema migration plus ~19 client call sites. Not a quick win and
   not what is slow.
 - **A hosted, multi-tenant deployment.** Two of the owner's devices on one LAN against one
-  server is already the shape (D53, D138) and needs no project. Auth, a multi-writer
+  server is already the shape (D138) and needs no project. Auth, a multi-writer
   database, TLS and object storage for photographs are absent and are one effort, never
   folded into this one.
 - **The codes ledger** — a full file parse per request, self-documented as breaking past
   ~100,000 *code* entries. A different axis from the card count; it gets its own measurement
   when the code-card track has a real card through it (`docs/specs/code-cards.md` §8).
-- **Photo cache headers.** `Cache-Control: no-cache` with ETag is D52's deliberate answer to
+- **Photo cache headers.** `Cache-Control: no-cache` with ETag is D183's deliberate answer to
   a URL that names a mutable slot, and going further reopens the stale-photo defect that
   entry fixed.

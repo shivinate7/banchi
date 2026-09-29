@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""D302: `StockImages` answers Riftbound offline from a pre-warmed disk
+"""D301: `StockImages` answers Riftbound offline from a pre-warmed disk
 cache, and answers `None` with no cache at all — never a network call either way (`Market`
 here is given no `fetcher`, so a miss that were to reach the network raises, which this test
 would surface as a crash rather than a silent pass).
 
 Protects: Stock images answer offline from a warmed disk cache and answer nothing, with no network call, when the cache is empty.
-Governs: D302
+Governs: D301
 
 Proves the one fact the demo mirror depends on: `pipeline/stockimages.py`'s own disk cache
 slug (`tcgcsv/<category>/<group>/products`) is the SAME one

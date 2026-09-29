@@ -10,7 +10,7 @@
 
 ### The box number is wrong in both directions
 
-**TOO WIDE.** Two live runs over disjoint selections in one drawer are refused. `_busy_run` says so in as many words — *"It narrows what is allowed, deliberately"* — and D48 records that narrowing as accepted for want of a card-level vocabulary. Nothing was ever going to be double-billed there: the two presses are buying different cards.
+**TOO WIDE.** Two live runs over disjoint selections in one drawer are refused. `_busy_run` says so in as many words — *"It narrows what is allowed, deliberately"* — and D180 records that narrowing as accepted for want of a card-level vocabulary. Nothing was ever going to be double-billed there: the two presses are buying different cards.
 
 **Too narrow, and this is the half that costs money.** `_run_box` answers `None` for a run whose captures span more than one box: `cli/cmd_identify.py:_scope_for` returns no scope block when the sidecars name two boxes (*"A run whose captures name two boxes gets NO scope rather than a guessed one"*), and the capture directory's name does not parse as `boxN` either. So a run over a multi-box pile is **invisible to the guard in both directions** — a box press and that run do not see each other, and the overlap is billed twice.
 

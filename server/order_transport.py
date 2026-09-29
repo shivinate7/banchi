@@ -8,7 +8,7 @@ outbound call lives in a module of its own, names one host, reads its credential
 and never lets the credential into a return value. Every one of those holds here. A second
 host does not weaken any of them; a second host reached from `capture_server.py` would.
 
-WHAT THIS IS FOR (D66, T3). `pipeline/orders.py` resolves an order line to the physical copies
+WHAT THIS IS FOR (D69, T3). `pipeline/orders.py` resolves an order line to the physical copies
 that fill it, and it is transport-independent by construction: its input is domain objects.
 Until now the only way an order got into the process was a human pasting JSON. This module is
 the fetch that replaces the paste, behind a control that the order screen already draws. It
@@ -579,7 +579,7 @@ def _cookie() -> str:
     READ THROUGH `envfile.get_live` AND NOT `envfile.get`, WHICH IS NOT A DETAIL. The session
     EXPIRES; `order_session_expired` tells the operator to sign in again and replace the value
     in `.env`; and `get` caches per process and cannot replace a value it already lifted out of
-    the file. Under D53's supervisor, which runs for days and does not watch `.env`, that
+    the file. Under D138's supervisor, which runs for days and does not watch `.env`, that
     printed remedy would not have worked and the refusal would have repeated forever over a
     cookie the operator had already fixed.
 

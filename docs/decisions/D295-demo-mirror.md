@@ -72,7 +72,7 @@ ledger holds 834 orders, measured 2026-09-26. Recording every subset of that is 
 target to raise. It is a different shape of problem. `sweep_coverage` now reads only the
 OPEN orders the recorded `/orders` GET returned. Every caller of `walkPlan` sends open
 keys alone: `Fulfillment.tsx` filters `order.open`, and `Orders.tsx` walks
-`walkableKeysAll` (D96, D220). A set holding a closed order is a question no screen ever
+`walkableKeysAll` (D97, D220). A set holding a closed order is a question no screen ever
 asks. The recorder still refuses outright past `WALK_PLAN_ORDERS` open orders. A mirror
 whose open-order count exceeds that needs a different recording strategy, not a raised
 constant. That is left as an open question below.

@@ -10,7 +10,7 @@ Five things, and four of them were already true or one click away:
 - **Its own window, no browser chrome.** Measured on this machine in a throwaway profile: an app-mode window reports `display-mode: standalone`, `outerWidth === innerWidth` (no side chrome at all) and a 32px frame, which is the title bar and nothing else.
 - **It remembers its size.** Measured: resized to 1512x780, Chrome quit, relaunched — 1512x780 came back. Position is remembered too, clamped to the screen.
 - **The camera.** Unchanged, because the engine is unchanged. This is the whole argument and it is in the next section.
-- **Always live.** `make launch-agent` already does this and D53 argued the shape. Nothing here touches it.
+- **Always live.** `make launch-agent` already does this and D138 argued the shape. Nothing here touches it.
 
 ### The camera is why this is not an open question
 
@@ -29,11 +29,11 @@ It produces the same thing — a real bundle, own icon, own window — and it is
 
 **Neither was built and neither should be without a reason this entry does not have.** What would reopen it: wanting the app when Chrome is uninstalled, wanting a signed artifact to hand to a second person, or the page needing something a browser will not give it.
 
-### The server stays a launch agent, and a wrapper owning it would be D53's own defect
+### The server stays a launch agent, and a wrapper owning it would be D138's own defect
 
-**A wrapper that also starts the capture server is a second answer to a solved problem, and this repo has already measured what that costs.** D53 records it: `make launch-agent` bootstrapped a second supervisor whose capture child could not bind, gave up after five retries, and overwrote `supervisor.pid` with its own pid — *"Two supervisors: one serving, one supervising nothing, and the pidfile naming the wrong one."* A wrapper process holding a third opinion about who owns `:8000` would reproduce that with a GUI in front of it. The dock app is a **client**. It opens a URL; the launch agent keeps the URL answering.
+**A wrapper that also starts the capture server is a second answer to a solved problem, and this repo has already measured what that costs.** D138 records it: `make launch-agent` bootstrapped a second supervisor whose capture child could not bind, gave up after five retries, and overwrote `supervisor.pid` with its own pid — *"Two supervisors: one serving, one supervising nothing, and the pidfile naming the wrong one."* A wrapper process holding a third opinion about who owns `:8000` would reproduce that with a GUI in front of it. The dock app is a **client**. It opens a URL; the launch agent keeps the URL answering.
 
-**What that leaves honest: if the supervisor is down, the dock icon opens Chrome's error page.** The window is the app's, the error is the browser's, and there is nothing in the product to say so. That is the one place this shape is visibly a web app, and it is accepted rather than unnoticed — `KeepAlive` makes it rare and D53's fast-failure cap makes it possible.
+**What that leaves honest: if the supervisor is down, the dock icon opens Chrome's error page.** The window is the app's, the error is the browser's, and there is nothing in the product to say so. That is the one place this shape is visibly a web app, and it is accepted rather than unnoticed — `KeepAlive` makes it rare and D138's fast-failure cap makes it possible.
 
 ### What actually changed in the repo
 

@@ -57,7 +57,7 @@ Amended a third time, 2026-09-25, on the owner's word (option c, verbatim): "New
 copy' filter". The build now:
 
 - One rule, `orderBuyers.ts`'s `groupMissing`: a buyer's missing copies are the `outstanding`
-  copies on its open orders (D202), and its missing orders are the open orders with any.
+  copies on its open orders (D121), and its missing orders are the open orders with any.
 - Home's sentence sums that rule over every buyer (`missingCopies`). It counts every missing
   copy, and only the open orders that miss one.
 - Orders' "Show" facet gains a value, `missing`, labelled "Missing a copy". It lists every buyer

@@ -87,3 +87,5 @@
 **A second person at a second rig.** Every argument here assumes one operator with one hand and one desk — the shared recency store most of all. Two people feeding two rigs from one browser profile would make "most recently reached for" a question with two answers, and the right shape then is probably per-rig rather than per-device.
 
 **A box whose name is not the word the operator uses.** The rendering assumes the name is what they recognise. If drawers start being named by content and referred to by position, the number comes back.
+
+Capture asks for a box on a fresh device ("No box yet") and Home's tile says so.

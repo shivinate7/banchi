@@ -117,7 +117,7 @@ a null set. It appears in its own bucket, described below.
 ### Rarity is the catalogue's, and the claim is kept beside it
 
 Two sources disagree, and both are real. `rarity_claim` is the operator's claim at the shutter, a
-list (D23, D146). The catalogue `Rarity` column is what TCGplayer calls the product.
+list (D23). The catalogue `Rarity` column is what TCGplayer calls the product.
 
 The owner ruled for the catalogue, reasoning that data sitting in inventory after identification is
 the cleanest data available. The filter reads the catalogue rarity. The same write stores it

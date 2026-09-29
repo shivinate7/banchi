@@ -18,8 +18,7 @@ import type {
 
 /* THE BUILDER FUNCTIONS `run-panel.spec.ts`, `orders.spec.ts` AND `shipping.spec.ts` ALREADY
  * WROTE, MOVED HERE SO A FOURTH AND FIFTH FILE CAN REUSE THEM RATHER THAN INVENT A COMPETING
- * SHAPE (a gap D194 closed in the PR that named it; D194 is superseded by
- * `D284`, and this module's job did not go with it).
+ * SHAPE (D284: the sweep needs one shared fixture set).
  *
  * `app/tests/text-shape.spec.ts` and `app/tests/machine-words.spec.ts` render `#/runs`,
  * `#/orders`, `#/shipping`, `#/codes` and `#/graveyard` off `sealEveryTest({ store: true,
@@ -824,7 +823,7 @@ function catalogRow(sku: string, overrides: Record<string, unknown> = {}) {
 /** Replaces `shell.ts:stubStore`'s own EMPTY catalog answer for the same zero-candidate
  *  entry that stub already seeds, with a WIDE one — D23's own review finding:
  *  `routeSweep.ts:sweepEveryRoute`'s one sweep already visits `#/review` with the catalog
- *  open (`showCatalog` is true whenever an entry carries no candidates, D46), but every
+ *  open (`showCatalog` is true whenever an entry carries no candidates, D77), but every
  *  route through this fixture answered zero rows, so "Show N more" and the truncation
  *  notice `CatalogPanel` draws for a wide result never rendered anywhere the sweep's own
  *  text checks (`text-shape.spec.ts`, `machine-words.spec.ts`, `money-face.spec.ts`) could

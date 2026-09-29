@@ -33,7 +33,7 @@ for the same fact would be a second word this repo would then have to keep in st
 
 ### The measurement, read-only against the owner's real store
 
-**The 15 subjects from `D237` match 16 physical cards.**
+**The 15 subjects from `D239` match 16 physical cards.**
 One subject, `Heart of the Tempest`, matches two copies that share the identical
 blank identification. Every one of the 16 carries a photograph. This count is not
 "far more than 16." It is the expected count.
@@ -93,6 +93,6 @@ guard — is shown to duplicate and re-open an answered entry, proving the real 
 of primitive is load-bearing.
 
 Governs: `cli/archive_review.py`, `cli/cmd_pricearchive.py`. Cites D167 (the queue's own
-refresh precedent and its refusal to re-ask an answered entry), D233 and D234 (this
+refresh precedent and its refusal to re-ask an answered entry), D231 and D234 (this
 archive's own two prior mechanism rounds), D28 (the undo window this build does not use),
-and `D237` (this session's sibling analysis).
+and `D239` (this session's sibling analysis).

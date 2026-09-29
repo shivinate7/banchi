@@ -49,7 +49,7 @@ def _card_counts(inventory):
     """Per SKU: copies marked sold, copies still on hand, and every SKU ever seen.
 
     `seen` IS WIDER THAN THE LISTING LEDGER AND HAS TO BE. A card can carry a SKU that was
-    never pushed — withheld (D49), sub-threshold and not yet emitted, or simply queued. Judging
+    never pushed — withheld (D86), sub-threshold and not yet emitted, or simply queued. Judging
     "listed outside pkmnscan" against the ledger alone would accuse the operator of every one
     of them the moment it showed up live.
     """
@@ -171,7 +171,7 @@ def run_live(args, say) -> int:
     # THE READING'S TIME IS THE FILE'S, and the preview and the write are computed by one
     # local so they cannot disagree about which rows the store outranks.
     as_of = str(source["mtime"])
-    # WHAT THIS PIPELINE PUBLISHED TOO RECENTLY FOR THE EXPORT TO KNOW ABOUT (D106), read
+    # WHAT THIS PIPELINE PUBLISHED TOO RECENTLY FOR THE EXPORT TO KNOW ABOUT (D273), read
     # BEFORE the preview and not just before the write. `_settlement`'s own docstring says the
     # preview and the write are computed from one rule so the preview "cannot promise a
     # correction the write then refuses" — a skip applied only on the write path would break
@@ -249,7 +249,7 @@ def run_live(args, say) -> int:
     caught_up_count = 0
     sighted = 0
     recorded = 0
-    # WHAT THIS PIPELINE PUBLISHED TOO RECENTLY FOR THE EXPORT TO KNOW ABOUT (D106). Read
+    # WHAT THIS PIPELINE PUBLISHED TOO RECENTLY FOR THE EXPORT TO KNOW ABOUT (D273). Read
     # before the write opens, because it walks the markdown receipts on disk and the store
     # lock is not the place to do that.
     with store.write() as writable:

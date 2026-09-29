@@ -86,5 +86,7 @@ and archived exactly once.
 The schema and the key stay `(sku, range, start)` (D219). The
 never-delete rule is unchanged. A chunk commits with `PriceArchive.upsert()`, the same
 method, called more often on smaller inputs. No timer, cron or launch agent is added. The
-sweep is still a press a person runs, one invocation or several. D62's statement that this
+sweep is still a press a person runs, one invocation or several. D278's statement that this
 reader cannot fire by itself is untouched.
+
+A sweep resumes within six days, not one hour.

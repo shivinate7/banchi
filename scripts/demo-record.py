@@ -241,7 +241,7 @@ class Server:
         env = dict(os.environ)
         env["PKMNSCAN_HOME"] = str(self.home)
         env["PKMNSCAN_PORT"] = str(self.port)
-        # THE RECORDER NEVER COMES BACK (D302). `server/pipeline_routes.py:
+        # THE RECORDER NEVER COMES BACK (D301). `server/pipeline_routes.py:
         # warm_stock_images` fires its background threads and returns at once for a LIVE
         # server on purpose — a real user's first request after a restart must never wait
         # on a disk read. This sweep reads every route exactly once and bakes whatever it
@@ -646,7 +646,7 @@ def sweep(server: Server, space: Dict[str, List[str]], work: "WorkArea"):
                 stats["new"] += 1
 
     # ---------------------------------------------------------------- price history
-    # D62's reading, per SKU: hold `t` over a row on `#/pricing` and this is what appears.
+    # D278's reading, per SKU: hold `t` over a row on `#/pricing` and this is what appears.
     # Recorded for EVERY SKU in each run's pricing table, because the hold follows the
     # pointer and a sample would answer for the sampled rows and refuse the rest.
     #
@@ -699,7 +699,7 @@ def sweep_coverage(server: Server, space: Dict[str, object], recorded: Dict[str,
     for combo in facet_combos(facets):
         take("/boxes?%s" % urllib.parse.urlencode(sorted(combo.items())))
 
-    # ------------------------------------------------------------ the value bands (D159)
+    # ------------------------------------------------------------ the value bands (D277)
     # Recorded WHOLE per band and box, and paged in the browser — see `VALUE_ALL`.
     boxes: List[Optional[str]] = [None] + list(space["boxes"])  # type: ignore[arg-type]
     for band in VALUE_BANDS:
@@ -994,7 +994,7 @@ def copy_photos(home: Path, out: Optional[Path] = None) -> int:
     because the whole object of the exercise is a build with no server behind it.
 
     Named by the STORE index, undecorated — `photoUrl` composes `demo/photos/3/17.jpg`, and
-    a zero-padded stem would need the client to know the padding. D52: the URL names a
+    a zero-padded stem would need the client to know the padding. D183: the URL names a
     photograph, and the demo keeps that exact contract.
 
     ALL OR NOTHING. The directory is written to a sibling and swapped in only when every

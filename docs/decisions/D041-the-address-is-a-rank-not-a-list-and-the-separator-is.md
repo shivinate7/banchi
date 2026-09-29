@@ -6,7 +6,7 @@
 
 `Box 2 · Section 1 · Card 14` is 27 cells at Martian Mono's measured 0.70em advance = **453.6px**, in a track that is 448.8px at 1440 and **387.1px** at 1280. It overflowed by 4.8px and wrapped. Of those 27 cells only **four are digits** — 67.2px, **14.8%** — while the words, dots and spaces are **386.4px, 85.2%**. The chrome alone is larger than the entire 1280 track. Shrinking to fit needs **17px**, and `CardLocations` prints the same string at 13px seven rows below on the same screen, so the fix the owner pre-emptively refused would have made the answer 4px louder than its own footnotes.
 
-**The comment justifying the old size had already been falsified by a layout change.** `BoxBrowse.css` read that the worst realistic label — `Box 100 · Section 12 · Card 543` — draws 521px inside a 630px track, so nothing reflows. The px figure is right (520.8). **The 630px track no longer exists**: D40 made it 448.8px. A later change deleted the premise and left the conclusion standing, which is exactly the failure `docs/DESIGN.md` and D16 are both written against. Recorded here rather than quietly corrected, because the class matters more than the instance.
+**The comment justifying the old size had already been falsified by a layout change.** `BoxBrowse.css` read that the worst realistic label — `Box 100 · Section 12 · Card 543` — draws 521px inside a 630px track, so nothing reflows. The px figure is right (520.8). **The 630px track no longer exists**: D38 made it 448.8px. A later change deleted the premise and left the conclusion standing, which is exactly the failure `docs/DESIGN.md` and D16 are both written against. Recorded here rather than quietly corrected, because the class matters more than the instance.
 
 **The three parts are not equal, and the old rendering claimed they were.** `Box 2` is the drawer you walk to, `Section 1` narrows it, `Card 14` is the slot. On THIS screen the first two are already answered everywhere the eye lands — the box strip, the identity block, every section header, every copies row — and the literal string `Box 2` renders nine times in the document. `Card N` is the only part this panel uniquely supplies, so it is the only part drawn at size: the path becomes an 11px muted two-line stack and the slot a **44px** figure. The payload goes 24px to 44px, **+83%**, on a screen whose whole question is *where is this card*.
 
@@ -18,7 +18,7 @@
 
 ### The sidebar is the same complaint with the scarce axis inverted
 
-`cards 543 · sold 0 · fill 543 · next index 544` is 46 cells = **354.2px** in a track D40 narrowed to 299px at 1440 and 285px at 1280. It is **not** a digit-count problem — box 1's four-characters-shorter line wraps identically — it is four label words and three interpuncts, **277.2px of chrome against 77.0px of digits**. Here horizontal is fixed and **vertical is ~290px of unused height** under the column in D31's resting state, so the block flows DOWN instead of across: three census figures at 16px in a row, `next index` on its own line at the muted register.
+`cards 543 · sold 0 · fill 543 · next index 544` is 46 cells = **354.2px** in a track D38 narrowed to 299px at 1440 and 285px at 1280. It is **not** a digit-count problem — box 1's four-characters-shorter line wraps identically — it is four label words and three interpuncts, **277.2px of chrome against 77.0px of digits**. Here horizontal is fixed and **vertical is ~290px of unused height** under the column in D31's resting state, so the block flows DOWN instead of across: three census figures at 16px in a row, `next index` on its own line at the muted register.
 
 **`next index` leaves the row because it is not a fourth statistic.** `cards`, `sold` and `fill` describe what is in the box; `next index` is D10's high-water mark — what the allocator will hand out next. Four peers joined by dots was a false claim about them, and the structure is now the distinction rather than a sentence explaining it.
 
@@ -34,7 +34,7 @@
 
 The owner reopened it in those words. The paragraph this replaces named `.review-position` and `.card-locations-label` and said taking the treatment to them was a decision about all three sites — **and the count was wrong**: the capture screen draws the address in **five** more places, three of them inside running sentences. Six owner sites, not three.
 
-**The structure is universal and the size is per site**, which is what the old paragraph's warning buys. It predicted that a 44px figure repeated seven times in a list would be a different and worse defect, and that is now measured: at 44px the copies row goes 114.17 to **126.48px**, +86px on a seven-copy list, and copies visible on landing drop 4 to 3 — on the screen whose recorded complaint (D38 twice, D40 again) is that the copies scroll away. So what is shared is the RANK — muted stacked path, no separator, the slot as the only thing drawn at size — and each site sets its own figure.
+**The structure is universal and the size is per site**, which is what the old paragraph's warning buys. It predicted that a 44px figure repeated seven times in a list would be a different and worse defect, and that is now measured: at 44px the copies row goes 114.17 to **126.48px**, +86px on a seven-copy list, and copies visible on landing drop 4 to 3 — on the screen whose recorded complaint (D38 twice, D38 again) is that the copies scroll away. So what is shared is the RANK — muted stacked path, no separator, the slot as the only thing drawn at size — and each site sets its own figure.
 
 **One component, `app/src/PositionLabel.tsx`, and one declaration per site.** `--pos-slot` is the figure and `.position-num` is `1em`, so a site's whole register is one line in its own stylesheet. The key is `clamp(var(--pos-path), 0.295em, 13px)` — 12.98px at a 44px figure and 11px at 32, 28 and 20 — so `#/inventory` keeps its shipped key to within 0.02px and no other site declares one.
 
@@ -58,6 +58,8 @@ The owner reopened it in those words. The paragraph this replaces named `.review
 
 **What would reopen this: a two-part label, or a box with no name.** Both collapse a measurement this rests on — the first ends the 32.3px free plateau, the second costs the copies list 17px a row. Neither is hypothetical: D24 pools cards without positions and D20 leaves names optional.
 
-**The mechanism was reused on the sentence under the label — see D30 (2026-08-30), which owns that argument.** Named here only so the trail exists; the one thing it does not share is that its payload takes position rather than size, two thirty-character names being unable to carry a 44px figure.
+**The mechanism was reused on the sentence under the label — see D58 (2026-08-30), which owns that argument.** Named here only so the trail exists; the one thing it does not share is that its payload takes position rather than size, two thirty-character names being unable to carry a 44px figure.
 
 ---
+
+A slotless card ranks like every card, its number column empty.

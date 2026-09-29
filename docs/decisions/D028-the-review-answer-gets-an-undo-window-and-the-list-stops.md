@@ -18,3 +18,5 @@ Pressing a digit writes a SKU and a condition onto a real card. `store/queues.py
 ### Amended 2026-09-25: the answer's undo has no clock
 
 The owner's ruling of 2026-09-25, verbatim: "Switch all five (Recommended)". The "twenty-second undo" no longer limits anything. The receipt may still fade. The undo lasts until the answer is built on. That is when its SKU is in a written listing file or holds a listing hold (`undo_too_late`). `docs/specs/undo.md` section 11 is the plan.
+
+The photo reserve shrinks below the rail breakpoint so answers stay above the fold; the closing act is called Closed. 0 cites

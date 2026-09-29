@@ -18,10 +18,10 @@ route tall enough to prove the fix rather than merely fit the clamp.
 `currentPath()`, which strips the query string before it is ever compared — `currentPath`
 splits on `?` and drops everything after it — so a `useEffect` with `[path]` as its
 dependency array fires on `#/capture` -> `#/runs` and does NOT fire on `#/pricing` ->
-`#/pricing?band=top`. That second case is D159's own lens: `?band=top|bottom` is a filter
+`#/pricing?band=top`. That second case is D277's own lens: `?band=top|bottom` is a filter
 over the same screen, not a different screen, and staleness there is something the operator
 dismisses rather than something a navigation clears out from under them. A scroll reset keyed
-on the full hash (path + query) would have re-broken exactly the thing D159 built — the
+on the full hash (path + query) would have re-broken exactly the thing D277 built — the
 click that opens the band view landing the operator back at the top of a list they were
 already reading. Keying on the query-stripped `path` gets both halves of the rule from the
 one array `App.tsx` was already using for the drawer/palette/keys-sheet dismissal effect two

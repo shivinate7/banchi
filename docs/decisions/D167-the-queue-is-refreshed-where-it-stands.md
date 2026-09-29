@@ -90,7 +90,7 @@ The owner's words: *"and then after finishing review queue having to do 'join' a
 
 **`detected_finish` is None on all 2,535 of the owner's existing cards** and will stay so until each is identified again. The refresh is then exactly as conservative as a card with no detected finish has always been — it does not invent one — but rung 3's cross-check is absent for them, and a backfill from the run records is a real option this entry declines rather than overlooks: the newest run record for a position is not always the reading the store holds, which is the same mixing the field was added to end.
 
-**The refresh releases an entry the ladder now settles, and does not re-price it.** The card lists on the next `emit` exactly as a re-joined card would; nothing here writes a price, and D49 keeps `#/pricing` the one press that answers one.
+**The refresh releases an entry the ladder now settles, and does not re-price it.** The card lists on the next `emit` exactly as a re-joined card would; nothing here writes a price, and D86 keeps `#/pricing` the one press that answers one.
 
 **A refresh cannot reach a run over a reallocated drawer (D36), and neither can the fold.** Such a run is excluded by name — its positions are another drawer's cards now — and the fix is not in this entry: it is D145's `bid`, which is where a record that outlives its box binds.
 

@@ -52,8 +52,8 @@ already answered: `store/queues.py:Queue.upsert` refuses to re-queue a position 
 what to do with. Proposing the correct number is as far as this module goes — a repair is a
 separate press and a separate decision, and nothing here performs one.
 
-Cites D146 (two agreeing signals release a claim; here, three sources — two stored reads
-and the catalogue's own name record — agree, which is stronger than the two D146 asks
+Cites D23 (two agreeing signals release a claim; here, three sources — two stored reads
+and the catalogue's own name record — agree, which is stronger than the two D23 asks
 for), D173, D167, and the four approved stored-data checks built as a separate, sibling PR.
 """
 

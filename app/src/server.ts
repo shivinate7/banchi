@@ -146,7 +146,7 @@ import type {
  * address later, which is the one thing the capture-app spec leaves open (section 11).
  *
  * VITE_CAPTURE_DEFAULT is THIS CHECKOUT'S server, derived in `app/devPort.ts` from the same
- * slot as the Vite port and injected by `vite.config.ts` (D46). It replaced a hardcoded
+ * slot as the Vite port and injected by `vite.config.ts` (D77). It replaced a hardcoded
  * `http://localhost:8000`, which was wrong in every tree but one: `store/files.py:home()`
  * gives each checkout its own inventory, so a shared port meant this UI could be answered by
  * another tree's server over another tree's store — in one direction driving the owner's real
@@ -156,7 +156,7 @@ import type {
  * A bundle built without that define — a bare `tsc`, a test harness, an editor's type server,
  * a bundler that never read `vite.config.ts` — cannot know its tree's port: the browser cannot
  * hash a path. It used to guess `http://localhost:8000`, the primary checkout's LIVE server,
- * which is the guess that must never be made (D268, a copied tree never gets
+ * which is the guess that must never be made (D261, a copied tree never gets
  * the live port). It now has NO address. `about:invalid` opens no socket, so a photo or file
  * link built on it loads nothing, and `request` refuses by name before any fetch.
  *
@@ -381,7 +381,7 @@ export function refusalToast(err: unknown, title?: string) {
  * like a missing photo. This is the only way to display a capture.
  *
  * THE HAZARD THAT SHAPED THIS FUNCTION IS ANSWERED BY THE ADDRESS NOW (D172), AND THE
- * MEASUREMENT THAT PROVED IT STAYS. What D52 recorded is not rewritten: the owner reported a
+ * MEASUREMENT THAT PROVED IT STAYS. What D183 recorded is not rewritten: the owner reported a
  * delete that "doesn't kick in super quickly ... it makes you think you need to delete more",
  * and measured against a copy of their store, deleting box 2's card 180 shifted 363 cards in
  * 288 ms while the screen went on drawing the DELETED card's photograph at `transferSize: 0`
@@ -437,7 +437,7 @@ export function photoUrl(
    * subdirectory (`/banchi/` on GitHub Pages), and an absolute path would 404 on every
    * photograph there while working perfectly at the root — the failure that only appears
    * once it is published. `.jpg` is appended here and nowhere else; the seed writes the
-   * store index undecorated, so this stays D52's contract exactly.
+   * store index undecorated, so this stays D183's contract exactly.
    *
    * THE CID IS IGNORED HERE, DELIBERATELY AND FIRST. `scripts/demo-seed.py` writes
    * `demo/photos/<box>/<index>.jpg` and nothing else, so addressing a name in the demo would
@@ -510,7 +510,7 @@ export function isDeparted(place?: { located?: boolean; slot?: number | null; la
   }) !== null
 }
 
-/** D30's neighbours, as records rather than as substrings of an English sentence.
+/** D58's neighbours, as records rather than as substrings of an English sentence.
  *
  * `Card 19` is the nineteenth card in the box, and the neighbours are what let a hand count
  * to it without anyone learning that rule. `prev` is the card toward the BACK of the box (the
@@ -539,18 +539,18 @@ export function isDeparted(place?: { located?: boolean; slot?: number | null; la
  * omits the phrase at zero". It is not zero — `_company` counts the terminal records between
  * the section's bounds — so box 1, which has sold two, drew the clause on EVERY card in it.
  * Under D58 the box closes up, so `Card 19` really is the nineteenth card a hand can count
- * to, and the clause's one stated job in D30 — saying why a hand-count came out short — is
+ * to, and the clause's one stated job in D58 — saying why a hand-count came out short — is
  * void. Measured on the owner's store before it went: it cost 15px on every copy row in a box
  * that had ever had a sale, and it was the reason the line wrapped to three lines at all.
  *
- * A NEIGHBOUR NOTHING HAS IDENTIFIED was drawn as its slot (`#41`) until D116, and the owner
- * read that figure as a sold card leaking into the ladder. D116 then walked past it to a
+ * A NEIGHBOUR NOTHING HAS IDENTIFIED was drawn as its slot (`#41`) until D260, and the owner
+ * read that figure as a sold card leaking into the ladder. D260 then walked past it to a
  * named card, which dropped a real card from the sentence (UX-264).
  *
  * AN UNREAD CARD IS A NEIGHBOUR AGAIN (the owner's ruling, 2026-09-24, LOC-28, amending
- * D116). The server sends the ADJACENT card on each side, named or not, and `unread` is the
+ * D260). The server sends the ADJACENT card on each side, named or not, and `unread` is the
  * run of unread cards starting there. So a side reads "an unread card" or "3 unread cards",
- * never a bare figure (D116's complaint) and never a name further along (UX-264's).
+ * never a bare figure (D260's complaint) and never a name further along (UX-264's).
  *
  * `said` CARRIES BOTH NEIGHBOURS, BACK THEN FRONT (UX-186). It read "between X and Y", which
  * never said which neighbour stands at the back, then "It sits in front of X and behind Y."
@@ -643,9 +643,8 @@ function errorEnvelope(body: unknown): { code: string; message: string; data?: u
 
 /* WHICH PROCESS IS ANSWERING, observed on traffic the app is already making (D73).
  *
- * D73 AND NOT D53, WHICH IS THE ENTRY THIS COMMENT CITED UNTIL 2026-08-30. D53 is the
- * supervisor, the watcher and the restart — the thing this header lets you SEE. It never
- * ruled on the header, and D73 checked that three ways before repointing seven comments.
+ * D73 rules on the header. D138 is the supervisor, the watcher and the restart — the thing
+ * this header lets you SEE — and never ruled on the header.
  *
  * `make up` restarts the capture server on every Python edit, and a restart is otherwise
  * invisible from here — same port, same store. The alternative was a component polling
@@ -1203,7 +1202,7 @@ export async function getQueues(): Promise<QueueSnapshot> {
 export async function answerReview(answer: ReviewAnswer): Promise<AnswerResult> {
   const { box, index, sku, condition, fromCatalog } = answer
   // `from_catalog` is sent only when it is true. The route allowlists the field either way,
-  // but an ordinary answer that carried `from_catalog: false` would put a flag about D46 on
+  // but an ordinary answer that carried `from_catalog: false` would put a flag about D77 on
   // every one of the thousands of answers that have nothing to do with it.
   return answerCall(
     box,
@@ -1213,7 +1212,7 @@ export async function answerReview(answer: ReviewAnswer): Promise<AnswerResult> 
 }
 
 /**
- * What this card COULD be, out of the export it was actually joined against (D46).
+ * What this card COULD be, out of the export it was actually joined against (D77).
  *
  * FREE, READ-ONLY, AND IT ANSWERS THE DEAD END. A queue entry with no candidate rows could
  * not be answered at all — the route refuses it as `no_candidates` — so the only moves were
@@ -1357,7 +1356,7 @@ export function undoAnswer(box: number, index: number): Promise<AnswerResult> {
  * gone out — pushed, staged or live — which for a real mistake is usually already true. This
  * route rewrites an identified card's SKU to a different catalog row regardless of the queue,
  * and the server never takes `sku` on the wire's word: it is re-read from the card's own
- * export, exactly as a D46 `fromCatalog` answer's row is.
+ * export, exactly as a D77 `fromCatalog` answer's row is.
  *
  * THE OLD SKU IS RELEASED BY ONE COPY, `released` says by which stage, and nothing here
  * touches TCGplayer — the next live reconcile is what tells the operator what to go and
@@ -2844,7 +2843,7 @@ export async function markdownHistory(stamp: string, sku: string): Promise<Price
  *
  * A survey is the whole live inventory. The run route measured 46 SKUs at ~34s of courtesy
  * delay, so an unfiltered walk over 441 rows is about five and a half minutes at a free public
- * mirror — which would make D62's press meaningless rather than merely slow. Send the rows the
+ * mirror — which would make D278's press meaningless rather than merely slow. Send the rows the
  * operator is actually looking at, in chunks.
  */
 export async function markdownTrends(stamp: string, skus: string[]): Promise<TrendsPayload> {
@@ -3012,7 +3011,7 @@ export async function restoreLastClear(
 }
 
 /**
- * Replace the corpus. Wholesale, for D49's reason: the screen round-trips every key it does
+ * Replace the corpus. Wholesale, for D86's reason: the screen round-trips every key it does
  * not understand, so a hand-written `_note` survives a client that never heard of it. This is
  * the ONE pricing write in the app — the per-run `PUT .../decisions` it replaced is deleted
  * (D86, amended 2026-09-02).
@@ -3112,7 +3111,7 @@ export async function getPricingWorklist(runs: readonly string[] = []): Promise<
  * caller, but this client never asks for that shape any more: the row list pages by a VALUE
  * CURSOR (never an offset, so a concurrent sale or capture cannot skip or repeat a row) and
  * the aggregates — `boxes`, `unrankable`, `totals`, `sources` — are computed server-side over
- * EVERY on-hand row regardless of which page is open, so D159's "nothing on hand is omitted"
+ * EVERY on-hand row regardless of which page is open, so D277's "nothing on hand is omitted"
  * never shrinks to "what this page could see". At 2,535 cards the old shape measured ~739KB
  * in one response; a page is bounded by `limit` instead.
  */
@@ -3225,17 +3224,17 @@ export async function getProductHistory(sku: string): Promise<ProductHistoryPayl
 /**
  * The same reading for MANY SKUs at once — a shape and a sign each, for the strip on the row.
  *
- * D62 NAMED THIS CALL AND THE CONDITION FOR MAKING IT. That entry made the history a press
+ * D278 NAMED THIS CALL AND THE CONDITION FOR MAKING IT. That entry made the history a press
  * per card precisely so a walk down fifty rows could not fire fifty requests, and it named
  * what would reopen the question: the panel being wanted on every card, answered by a
  * BATCHED route and a column on the row. The owner asked for exactly that on 2026-08-31, and
- * D79 is the answer.
+ * D277 is the answer.
  *
  * SO IT IS STILL A PRESS AND MAY NEVER BECOME AN EFFECT. Nothing about this being one call
  * instead of forty-six makes it cheap: it is ~92 requests at two free public mirrors, 37.7s
  * cold and 0.15s warm, measured on `2026-08-31-box3-01`. A `useEffect` that fired it on mount
  * would spend that on every visit to `#/pricing` for readings nobody asked for, which is the
- * one way D62 said this feature could become rude — and the reason it is rude has nothing to
+ * one way D278 said this feature could become rude — and the reason it is rude has nothing to
  * do with how many HTTP calls the browser makes.
  *
  * `skus` IS THE CHUNK AND IT IS WHY THE STRIP FILLS IN WAVES. With none, the route walks the
@@ -3264,7 +3263,7 @@ export async function getPriceTrends(run: string, skus: string[] = []): Promise<
 export type SoldPriceEntry = { market: string; at: number; source: 'archive' | 'live' }
 
 /** `sku -> SoldPriceEntry`, for exactly the SKUs asked. A SKU neither table has ever priced
- *  is simply ABSENT, never a `null` — `do_pipeline_price_now`'s own contract, D159's
+ *  is simply ABSENT, never a `null` — `do_pipeline_price_now`'s own contract, D277's
  *  `no_reading` shape carried over. */
 export type SoldPricesLookup = Record<string, SoldPriceEntry>
 
@@ -3276,7 +3275,7 @@ export type SoldPricesLookup = Record<string, SoldPriceEntry>
  * most of it (measured; see `do_pipeline_price_now`'s own header for the numbers).
  *
  * A PLAIN READ, UNLIKE `getPriceHistory`/`getPriceTrends` ABOVE: neither table leaves the
- * machine, so D62's cost argument for gating those behind a press does not apply here on its
+ * machine, so D278's cost argument for gating those behind a press does not apply here on its
  * own terms — the reason THIS call is still a press and not an effect is `#/revenue`'s own
  * ruling: both tables are caches, however cheap the read is, and a screen that fetched on
  * mount would draw a number that looks live and is not (D225).
@@ -3372,21 +3371,20 @@ export async function getRun(name: string): Promise<RunDetail> {
  * it again. An empty array is refused rather than read as that, because a selection that
  * failed to send must not silently become "use the old file".
  *
- * `fetched` names files this run already holds, put there by `fetchExport` (D64). A name
+ * `fetched` names files this run already holds, put there by `fetchExport` (D65). A name
  * rather than a re-upload: the server has the bytes. The two compose, which is what a
  * mixed-game run needs — one game fetched beside another uploaded.
  */
 /**
  * Fetch this run's Filtered Export from TCGplayer instead of downloading and uploading it
- * (D64). Free: it spends nothing, and `POST /pipeline/identify` is still the only route that
+ * (D65). Free: it spends nothing, and `POST /pipeline/identify` is still the only route that
  * can. Reported separately from the join so a failure is attributable to one or the other.
  *
  * EVERY REFUSAL IS A SENTENCE WITH NOTHING TO PRESS. `tcg_cookie_missing`,
  * `tcg_session_expired`, `tcg_blocked`, `export_wrong_game` and `export_scope_incomplete`
  * each arrive as a `ServerError` carrying a sentence to read, and each is fixed somewhere
  * other than this screen. The two acknowledgements this once took — `acceptUnverified` and
- * `acceptNarrower` — went with the delta guard they answered (D64, amended 2026-09-02): D65
- * names the scope, so the file is checked for what was asked, and the receipt's `previous`
+ * `acceptNarrower` — went with the delta guard they answered (D65 names the scope, so the file is checked for what was asked, and the receipt's `previous`
  * says what the last join used beside what arrived.
  */
 /**
@@ -3517,7 +3515,7 @@ export async function runStep(
 }
 
 /**
- * The repair for a run D36 refuses (D165): re-address a stranded run's cards to the drawer
+ * The repair for a run D36 refuses (D145): re-address a stranded run's cards to the drawer
  * they are actually in now, and write that as a NEW run — the source is never edited.
  *
  * FREE, PREVIEW BY DEFAULT — `refreshQueues`'s shape. `{ write: true }` only after a preview

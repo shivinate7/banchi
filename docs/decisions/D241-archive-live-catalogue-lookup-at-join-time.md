@@ -1,6 +1,6 @@
 ## D241 — Recorded, not built: ask the catalogue earlier than the archive does
 
-**What this records.** D237 measured a gap. 8 of 15
+**What this records.** D239 measured a gap. 8 of 15
 identification errors behind the archive's own 16 refusals cannot be caught from stored
 data by any rule. This store carries no independent source of truth for a set's real card
 list. D15 vendors the Pokemon catalogue locally. Riftbound and the newest Pokemon sets have
@@ -50,4 +50,4 @@ this is future work, gated on the owner's word.
 
 Cites D1 (why capture stays offline), D15 (the vendored catalogue's own limits), D222 (the
 price-history host's own throttle, not the catalogue's), DEBT34 (the catalogue's own
-never-expiring cache and why), and D237 (the 8-of-15 measurement this entry answers).
+never-expiring cache and why), and D239 (the 8-of-15 measurement this entry answers).

@@ -671,7 +671,7 @@ after — the count must be identical.
   `_readings()` call, `box_views`, `_release_plan`) — this item only touches the lines shown
   in step 4.
 - `app/src/types.ts` / `ValueTable` / `ValueCopy` — no wire shape change. `ValueCopy.
-  read_at` / `.source` and `ValueTable.sources` already exist (D79/D189) and already draw
+  read_at` / `.source` and `ValueTable.sources` already exist (D277/D189) and already draw
   the reading's own age; this item makes what they draw fresher, not different.
 
 ## Measure

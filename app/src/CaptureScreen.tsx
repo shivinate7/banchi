@@ -614,7 +614,7 @@ function describe(err: unknown): Note {
  * the server's high-water mark minus one and carries no record at all (see `undoStack`), so
  * `photoUrl` has nothing to address it by and falls back to the slot. Spending the nonce on a
  * by-card URL would be worse than useless — that response is `immutable` for a year, and a URL
- * that changed on every undo would re-fetch the 1.9 MB per photograph D52 measured to show the
+ * that changed on every undo would re-fetch the 1.9 MB per photograph D183 measured to show the
  * same bytes back.
  *
  * THE TEST IS WHETHER THE NAME CHANGED THE ADDRESS, never whether a cid was passed. `photoUrl`
@@ -714,7 +714,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 /** A field at rest: keycap · label · current value · chevron. A button, because the whole
  *  line is the control that opens it. */
 /** Which implementation is behind the trigger seam: the key and the settle machine. TWO
- *  AGAIN AS OF 2026-09-11 — the beat-locked cadence trigger D130 added is deleted, on the
+ *  AGAIN AS OF 2026-09-11 — the beat-locked cadence trigger D144 added is deleted, on the
  *  owner's word after the settle machine's rescue reached its cards without it. Never
  *  persisted — arming is an act (D19). */
 type TriggerMode = 'manual' | 'motion'
@@ -1001,7 +1001,7 @@ export function CaptureScreen() {
      render and never again. That was already the rule for the per-key readers this replaced,
      and it matters more now that one read serves six values.
 
-     A FRESH DEVICE ALWAYS ASKS (D286, amends D142): `storedCaptureSetup`
+     A FRESH DEVICE ALWAYS ASKS (D142): `storedCaptureSetup`
      reads `restored.box` as `null` when this device has never written `banchi.capture.setup`,
      and nothing below seeds it from anywhere else — not Home's own figure, not
      `banchi.box-recency`'s top entry, not the store's highest-numbered box. The Box row opens

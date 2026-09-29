@@ -88,7 +88,7 @@ undoing #231 on five files (D125 amended, DEBT7 reopened); #222 removing the
 `cap_the_store` helper #216 had added to T7 (`policy.live_cap` was deleted, D7); #176 removing
 `RailMark`'s export while deleting `RailMark.tsx` itself; #164 removing four
 `docs-audit-allow.txt` lines that each said "delete when built"; #145 moving `review.spec.ts`'s
-`/status` stub into the shared seal; #114's overhaul removing the T6 order walk (D96) and
+`/status` stub into the shared seal; #114's overhaul removing the T6 order walk (D97) and
 retiring comments whose code fixes survive — `Pricing.tsx` still reads the hash in its
 `useState` initialiser; and six pre-PR commits where one author iterated on their own previous
 commit, all of whose reversals were later re-applied or were D31's own deletions.
@@ -151,11 +151,11 @@ answer recorded is *nothing*, against a weaker second copy (#145); the Codes scr
 stays as the redesign wrote it (#136); the "Fetch anyway" buttons stay as rebuilt (#110); the
 iCloud-era `node_modules` shortcut stays untracked (#9); the six pre-PR self-reworks stand.
 
-**Kept, with the owner correcting this record's framing of it (#114, D96).** This entry and
-D96 describe the retired order walk as "the walk picking for me" and its replacement as one
+**Kept, with the owner correcting this record's framing of it (#114, D97).** This entry and
+D97 describe the retired order walk as "the walk picking for me" and its replacement as one
 copy at a time. Their words on 2026-09-11: *"It's still a guided walk, it's just I get to pick
 from all the copies rather than just spoonfed one specific copy to go find."* The walk through
-the boxes on `#/orders` IS guided; what changed is who chooses the copy. Read D96 with that
+the boxes on `#/orders` IS guided; what changed is who chooses the copy. Read D97 with that
 sentence beside it.
 
 **Kept, and it surfaced a loss the walk did not find (#222, D7).** The standing cap's removal

@@ -420,7 +420,7 @@ def case_the_four_column_rosters_agree() -> None:
           ["idx", "number_display", "number_key", "ord"],
           "and every other one of them is a declared field on `Card` — `idx` and `ord` are "
           "the two named aliases, for `index` (a Python builtin's name in every other "
-          "context) and for `order` (a SQL keyword, D265), and `number_key`/`number_display` (store-scaling item 8) are the two "
+          "context) and for `order` (a SQL keyword, D294), and `number_key`/`number_display` (store-scaling item 8) are the two "
           "DERIVED columns `_card_columns` composes from `number`/`printed_total` through "
           "`pipeline/join.py` rather than reading off a `Card` field of their own name — "
           "there is no `Card.number_key`, on purpose, because the composed form has no "

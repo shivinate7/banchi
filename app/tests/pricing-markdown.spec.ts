@@ -1,5 +1,5 @@
 // Protects: The Pricing Live tab reprices live TCGplayer listings and leaves the run-based Pricing flow untouched.
-// Governs: D28, D62, D103, D107, D118, D218, D273, D277
+// Governs: D28, D278, D103, D107, D118, D218, D273, D277
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleMotion } from './motionSettled'
@@ -322,7 +322,7 @@ test('the trends press asks about the rows on screen, not about the whole survey
     .filter((row) => row.path.includes('/trends'))
     .flatMap((row) => new URLSearchParams(row.path.split('?')[1] ?? '').getAll('sku'))
   /* ONE SKU AND NOT TWO. The run route measured 46 SKUs at ~34s of courtesy delay; a real
-     survey is ~441 rows, about five and a half minutes at a free public mirror. D62's rule is
+     survey is ~441 rows, about five and a half minutes at a free public mirror. D278's rule is
      that this is a PRESS, and a walk that big would make the press meaningless. */
   expect(asked).toEqual(['8608859'])
 })
@@ -507,7 +507,7 @@ test('an untouched lens field ghosts the price the listing is live at', async ({
   await open(page, { skus: [live({ sku: '8608859', asking: '20.0000' })] })
   const field = page.locator('.pricing-input').first()
   await expect(field).toHaveValue('')
-  /* TO THE CENT (D221, D267): the export's `20.0000` is drawn `20.00`, never four places. */
+  /* TO THE CENT (D221): the export's `20.0000` is drawn `20.00`, never four places. */
   await expect(field).toHaveAttribute('placeholder', '20.00')
 })
 
@@ -752,7 +752,7 @@ test('the Live tab with no read yet says so and offers the read, and nothing is 
   await page.goto('/#/pricing?live')
   await expect(page.getByText('Empty').first()).toBeVisible()
   await expect(page.locator('.pricing-tabs').getByRole('button', { name: 'Live' })).toHaveAttribute('aria-pressed', 'true')
-  /* THE READ IS A PRESS (D62's rule for anything that asks a remote host): opening the tab
+  /* THE READ IS A PRESS (D278's rule for anything that asks a remote host): opening the tab
      asks TCGplayer for nothing. */
   expect(wire).toHaveLength(0)
   /* F5 verbiage cut (row 102): unified to the one word "Refresh", the same as the To-send

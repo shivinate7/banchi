@@ -1406,7 +1406,7 @@ def make_target_refs(text: str):
     `` `docs/GATES.md` `` beside `` `make icloud-sweep` `` still finds the second and not a
     target named `docs`. Real references this reads that the first cut of S4 missed:
     `` `Bash(make check)` ``, `` `time make harness` ``, `` `zsh -c '… make server …'` `` and
-    `` `Rebuild it with make demo.` `` (quoted screen copy, D248, D169, and the review's own
+    `` `Rebuild it with make demo.` `` (quoted screen copy, D248, D305, and the review's own
     copy sheets).
     """
     fenced = False
@@ -2362,7 +2362,7 @@ def check_evidence_freshness(report: Report, staged_only: bool) -> None:
 # that as a triggered debt from 2026-08-30 until this landed; the trigger fired at the
 # ninetieth entry and the file reached D92 before anyone discharged it. The entry is gone from
 # that file rather than rewritten as closed — its own preamble sends closure narrative to git,
-# and D72 carries what a reader needs.
+# and D140 carries what a reader needs.
 #
 # PROVED RATHER THAN ASSUMED, which is what the debt entry demanded and why it stayed open:
 # a three-digit heading appended to docs/decisions/ left `decision ids` reporting 92 D
@@ -2378,12 +2378,12 @@ def check_evidence_freshness(report: Report, staged_only: bool) -> None:
 #
 # A CEILING IN THIS PROSE IS SPELLED AS A WORD AND NEVER AS AN ID. `_DECISION_RE` scans this
 # file, so "the hundredth entry" written the other way is a citation of an entry that does not
-# exist and `decision ids in code` reports it. That is not hypothetical: D72's reopening
+# exist and `decision ids in code` reports it. That is not hypothetical: D140's reopening
 # condition opened with the id, invisibly, for as long as these patterns could not read three
 # digits — and failed the audit the moment they could.
 _ID_DIGITS = r"[1-9][0-9]{0,2}"
 
-# AND AN ID IS A SLUG WHILE THE BRANCH THAT WRITES IT IS OPEN (D72, rewritten 2026-09-11).
+# AND AN ID IS A SLUG WHILE THE BRANCH THAT WRITES IT IS OPEN (D140, rewritten 2026-09-11).
 # A number cannot be allocated on a branch, because the allocation's whole input — what main
 # has taken — is not knowable until the merge. So a branch writes its heading as a slug and
 # cites it that way, `scripts/claim-ids.py` substitutes the number at merge time, and the
@@ -2669,7 +2669,7 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
 
     scan(docs, in_docs)
     in_code: List[Finding] = []
-    # THE APP WAS NOT SCANNED AT ALL UNTIL 2026-08-30 (D72). `python_files()` is every `.py`
+    # THE APP WAS NOT SCANNED AT ALL UNTIL 2026-08-30 (D140). `python_files()` is every `.py`
     # in the tree, and the row below said "citations in .py all resolve" — accurately, and
     # over half the citations. `app/` holds hundreds more in `.ts`, `.tsx` and `.css`
     # comments, and a dangling id in one of them resolved to nothing and was reported by
@@ -2747,14 +2747,14 @@ def gates_text() -> str:
 # A BRANCH DOES NOT TAKE A NUMBER (D140). The allocation's only input is what main
 # has taken, and a branch cannot have that: every renumber in this repo's history is one
 # branch reading `origin/main`, taking the next free id, and being wrong the moment another
-# branch merged first. Thirteen of those are recorded in D72, and D16 carries three entries
+# branch merged first. Thirteen of those are recorded in D140, and D16 carries three entries
 # numbered `## D50` at once. So a branch writes a SLUG and `scripts/claim-ids.py` substitutes
 # the number inside `make merge`, against main as it stands then.
 #
 # THIS ROW REPLACED `renumbered ids` AND `vacated ids`, WHICH ARE DELETED. Both existed to
 # repair a renumber — the first named every site and blocked none of them, the second blocked
 # the half that was provably the branch's own line. A branch that never takes a number never
-# vacates one, so both guarded a path that no longer exists. D72 keeps its account of the
+# vacates one, so both guarded a path that no longer exists. D140 keeps its account of the
 # incidents, which is evidence and is not rewritten to match a later tree; what it stops being
 # is a live mechanism.
 #
@@ -2801,7 +2801,7 @@ def is_main(ref_name: str, named: str, head: str, origin_main: str) -> bool:
     a worktree commonly has no local `main` at all (D42's merge discipline keeps it checked
     out elsewhere), and `GITHUB_REF_NAME` exists only in Actions.
 
-    COMMIT EQUALITY IS THE DETACHED-HEAD RULE AND NOTHING ELSE (D143). A NAMED
+    COMMIT EQUALITY IS THE DETACHED-HEAD RULE AND NOTHING ELSE (D148). A NAMED
     branch is not main however recently it was cut, and this is where a false YES came from: a
     branch cut from main and not yet committed to sits AT origin/main, so equality called it
     main. `id claims` then refused its FIRST commit — the one commit that introduces the slug —
@@ -6173,7 +6173,7 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
 
 GAMES_MODULE = ROOT / "pipeline" / "games.py"
 
-# The one module allowed to build the export request (D64/D65), and the three fields of it
+# The one module allowed to build the export request (D65), and the three fields of it
 # that are a standing instruction rather than a transcription of the portal's own form.
 #
 # THE REASON EACH ONE HOLDS IS CARRIED HERE RATHER THAN LEFT TO THE READER, because the person
@@ -6214,7 +6214,7 @@ EXPORT_STANDING = (
         "Exclude listings with photos — the owner's standing instruction (2026-08-31, D76). "
         "It holds on the owner's word: what the flag changes in the file is NOT measured, "
         "because the axis leaves no trace in it. NOTHING DOWNSTREAM CAN CATCH A WRONG VALUE: "
-        "D64 measured `Photo URL` empty in every export, filtered and unfiltered, so a wrong "
+        "D65 measured `Photo URL` empty in every export, filtered and unfiltered, so a wrong "
         "value gives a clean join and a green `make check` forever. Do not flip this on a "
         "reading of the field name — take it back to the owner.",
     ),
@@ -6898,7 +6898,7 @@ def check_map_sections(report: Report) -> None:
 #   a `0.` marker, then the slug in backticks after the word `step`, then the title.
 #
 # D80's ruling that `n` is STABLE and never renumbered is untouched by this and is the reason
-# for it: what that entry fears is D72's citation drift over 218 references to `step <n>`, and
+# for it: what that entry fears is D140's citation drift over 218 references to `step <n>`, and
 # a number claimed at the merge cannot collide, so nothing is ever renumbered to resolve one.
 _GATES_STEP = re.compile(r"^(\d+)\.\s", re.M)
 _GATES_STEP_SLUG = re.compile(r"^0\.\s+`step (" + _STEP_SLUG + r")`", re.M)
@@ -7892,7 +7892,7 @@ def check_supervisor_self_watch(report: Report) -> None:
     absent from `SELF_FILES` still restarts the capture CHILD — visibly, in the log, looking
     like the change landing — while the supervisor goes on running the module it imported at
     boot, because Python caches it. Something restarts, so nothing looks wrong. That is how
-    `server/ports.py` behaved before D53's amendment.
+    `server/ports.py` behaved before D138's amendment.
 
     Provably wrong when it fires, and no judgement to defer: the import is right there in the
     same file as the list that fails to mention it.
@@ -7954,7 +7954,7 @@ def check_supervisor_self_watch(report: Report) -> None:
 def _withhold_reasons() -> Row:
     """The three withhold reasons, reconciled across the two languages that declare them.
 
-    D49 gives `overrides` a second kind of answer — a SKU the operator is deliberately not
+    D86 gives `overrides` a second kind of answer — a SKU the operator is deliberately not
     listing, carrying a reason — and the reason vocabulary is authored in `pipeline/
     decisions.py` and offered by `app/src/holds.ts`. That is two independent declarations of
     one closed set, which is exactly the shape `check_reason_codes` above exists for and
@@ -8302,7 +8302,7 @@ def _pricing_presets() -> Row:
     `pipeline/pricing.py:PRESETS` is `(key, rule, basis)` and prices every SKU under every preset
     so the client performs no arithmetic on money. `app/src/Pricing.tsx:PRESETS` is what a
     press on the pricing screen writes into `inventory/prices.json` — and it has to write the RULE,
-    because D49 refuses to write the suggestions themselves: an override is layer 1 of
+    because D86 refuses to write the suggestions themselves: an override is layer 1 of
     `prices_for` and would beat the rule at layer 4, producing a run where changing the preset
     silently changed nothing.
 
@@ -8876,7 +8876,7 @@ def check_export_request(report: Report) -> None:
     something.
 
     **WHY A BLOCKING ROW AND NOT A COMMENT, WHICH IS WHAT IT ALREADY HAD.** All three are
-    invisible downstream. `ExcludeListos` is the worst of them: D64 measured `Photo URL`
+    invisible downstream. `ExcludeListos` is the worst of them: D65 measured `Photo URL`
     empty in all eleven exports, filtered AND unfiltered, so the axis leaves no trace in the
     file it narrows. A wrong value produces a clean join, a clean reconcile, a green
     `make check` and a mispriced listing, indefinitely — there is no run, no report and no
@@ -12294,8 +12294,8 @@ def check_no_mechanism_on_screen(report: Report) -> None:
 
 # ------------------------------------------ shrinking offender lists (D280)
 #
-# THE OWNER'S RULING, 2026-09-24: no pinned count survives. D194's word ceiling went first
-# (D284). D218's typed-dot count and D229's per-file prose ratio follow it
+# THE OWNER'S RULING, 2026-09-24: no pinned count survives. D284's word ceiling went first
+# (D284). D218's typed-dot count and D280's per-file prose ratio follow it
 # here. Each is replaced by a RULE check and a SHRINKING OFFENDER LIST in the shape
 # `scripts/kit-adoption-allow.json` set: file -> rule -> entries, with the lane that owes the
 # fix. Three things fail, and a count is none of them:
@@ -13436,7 +13436,7 @@ DELETION_SUFFIXES: Tuple[str, ...] = (".ts", ".tsx", ".css", ".py")
 # out silently, because "not in the table" and "deliberately not in the table" are the same
 # absence to a reader, and the next session to widen this row would add them straight back.
 #
-#   `do_order_fill`, `POST /orders/fill`   D96 deleted D90's envelope fill; D113 REBUILT a
+#   `do_order_fill`, `POST /orders/fill`   D97 deleted D90's envelope fill; D113 REBUILT a
 #       route and a handler under both names for a different job — closing copies of a line
 #       with no card behind them. Both exist today (server/capture_server.py, app/src/
 #       server.ts, app/src/types.ts) and both are correct. A name is not a capability.
@@ -13450,7 +13450,7 @@ DELETION_SUFFIXES: Tuple[str, ...] = (".ts", ".tsx", ".css", ".py")
 RECORDED_DELETIONS: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
     # (decision, what it deleted, the strings whose presence in the scanned code contradicts it)
     ("D119", "the `#/inventory` location card", ("LocationCard", "inventory-location")),
-    ("D96", "D90's envelope fill — the walk, its banner and its harness case",
+    ("D97", "D90's envelope fill — the walk, its banner and its harness case",
      ("orderWalk", "OrderWalkBanner", "check_order_fill")),
     ("D132", "`PositionLabel`'s `indexNote`", ("indexNote",)),
     ("D155", "the segment reader that computed edges from card counts", ("lensOf",)),
@@ -13461,8 +13461,6 @@ RECORDED_DELETIONS: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
     ("D144", "the beat-locked cadence trigger, its module and its period pin",
      ("cadenceTrigger", "CadenceMachine", "DEFAULT_CADENCE", "periodPin", "pinPeriod",
       "cadence.ts")),
-    ("D200", "scripts/coordinator.py and scripts/heartbeat.py and their make targets",
-     ("coordinator.py", "heartbeat.py", "make coordinator", "make heartbeat")),
 )
 
 
@@ -13472,7 +13470,7 @@ def _prose_blanked(path: Path, text: str) -> str:
     OFFSETS AND LINE NUMBERS SURVIVE, so a hit found here reports the line it is really on.
 
     WHY THIS EXISTS: `server/capture_server.py`'s docstring NARRATES one of these
-    deletions — "`/orders/fill`, which D96 deleted rather than wired up" — and reading that
+    deletions — "`/orders/fill`, which D97 deleted rather than wired up" — and reading that
     as the symbol existing would make the row red for the prose that is doing its job.
     Prose about a deletion is the record of it; executable code is the contradiction.
 
@@ -13543,7 +13541,7 @@ def check_recorded_deletions(report: Report) -> None:
 
     **PROSE IS NOT A RESURRECTION.** A hit inside a comment or a docstring is the deletion
     being narrated and is counted in the summary rather than raised: `capture_server.py`
-    carries exactly such a sentence about D96. The count is printed so a needle that lives
+    carries exactly such a sentence about D97. The count is printed so a needle that lives
     only in prose can be told from one with no hits at all — and it is deliberately NOT an
     advisory finding, because `exit 2` in this repo already stands permanently lit and one
     more standing question would teach the next reader to skip the code entirely.
@@ -16569,7 +16567,7 @@ _ARGUMENT_MIN_WORDS = 12
 # `_on_hand_by_run` are genuinely gone — each now reads through an indexed `equals` filter
 # (`box=`, `sku=` or `run=`) with no unscoped call left in the function at all.
 # `do_pipeline_value` and `cli/resolve.py:box_views`, by contrast, each front a genuinely
-# STORE-WIDE aggregate that D159 requires (a percentile/cut-off ranking over every on-hand
+# STORE-WIDE aggregate that D277 requires (a percentile/cut-off ranking over every on-hand
 # card; a box-coordinate walk with no bound to offer) — moving the per-row cost off `Card`
 # construction and onto a column-only `select()` does not remove the unscoped CALL, it only
 # renames the (function, shape) tuple the scanner reports: `do_pipeline_value`'s walk moved
@@ -16587,7 +16585,7 @@ UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("server/capture_server.py", "do_inventory", "to_payload"),   # kept permanently — owner's word
     ("server/capture_server.py", "_boxes_named", "distinct"),
     ("server/capture_server.py", "do_boxes", "distinct"),
-    ("server/pipeline_routes.py", "_value_rows", "select"),   # store-scaling item 7 — renamed from `do_pipeline_value`'s `.values()`; the aggregate pass is unavoidably store-wide (D159), so the CALL survives, only its shape and enclosing function change
+    ("server/pipeline_routes.py", "_value_rows", "select"),   # store-scaling item 7 — renamed from `do_pipeline_value`'s `.values()`; the aggregate pass is unavoidably store-wide (D277), so the CALL survives, only its shape and enclosing function change
     ("store/master.py", "to_payload", "items"),
     ("store/master.py", "counts", "select"),
     ("store/master.py", "next_box_number", "distinct"),   # kept permanently — one indexed column, cheap; missed by the hand census
@@ -17169,8 +17167,8 @@ def self_test() -> int:
 
     # A RENUMBER IS A TITLE THAT KEPT ITS NAME AND CHANGED ITS ID, and this is the reader of
     # that. The git walk around it needs a repository; this does not, and it is where the
-    # logic that could be wrong lives (D72).
-    # WHICH TREE AM I, asked without a repository (D143). The case that was
+    # logic that could be wrong lives (D140).
+    # WHICH TREE AM I, asked without a repository (D148). The case that was
     # wrong is the third: a NAMED branch sitting at origin/main, which is every branch between
     # `git checkout -b` and its first commit.
     print("\nwhich checkout is main, over the four readings that can say so")
@@ -17387,7 +17385,7 @@ def self_test() -> int:
         ok(both == ["D9", unclaimed],
            "the heading roster reads a number and a slug out of one file", str(both))
 
-    cited = _DECISION_RE.findall(f"this cites D72 and {past_end} in one line")
+    cited = _DECISION_RE.findall(f"this cites D140 and {past_end} in one line")
     ok(cited == ["72", "100"], "a two-digit citation still resolves, beside a three-digit one", str(cited))
     ok(not _DECISION_RE.findall(f"{four_digits} is not an id"), "four digits is not a citation")
     codes = _CODES_DECISION_RE.findall(f"the code track cites C7 and {codes_past_end}")
@@ -17424,17 +17422,17 @@ def self_test() -> int:
         module.write_text(
             "from server import ports  # noqa: E402\n"
             "def redirect_request(self):  # noqa: D102\n"
-            "    return None  # the renumber rule is D72's\n",
+            "    return None  # the renumber rule is D140's\n",
             encoding="utf-8",
         )
-        ok(cited_decisions(module) == {"D72"},
+        ok(cited_decisions(module) == {"D140"},
            "`governed_by`'s reader excludes suppressions too — the row it feeds is MECHANICAL",
            str(cited_decisions(module)))
 
-    kept = without_noqa("    except Exception as exc:  # noqa: BLE001 — 500 is for bugs, see D72")
+    kept = without_noqa("    except Exception as exc:  # noqa: BLE001 — 500 is for bugs, see D140")
     ok(_DECISION_RE.findall(kept) == ["72"],
        "a citation in the prose AFTER a suppression survives", repr(kept))
-    ok(without_noqa("no directive here, just D72") == "no directive here, just D72",
+    ok(without_noqa("no directive here, just D140") == "no directive here, just D140",
        "a line with no suppression is returned unchanged")
 
     # THE SIBLING READERS, which the rows above depend on and which cannot report for

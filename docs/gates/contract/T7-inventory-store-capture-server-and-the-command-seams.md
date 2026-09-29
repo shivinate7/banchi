@@ -246,7 +246,7 @@ at a temporary directory, so nothing here touches the real inventory.
   than an absent one.** A case that only goes red when the whole feature is deleted does
   nothing to stop somebody clearing `pushed` the moment an export reports a live copy, which
   is the one thing this negative case exists to refuse.
-- **D64's export fetch is covered as of 2026-08-30, aimed at a local socket and never at
+- **D65's export fetch is covered as of 2026-08-30, aimed at a local socket and never at
   TCGplayer.** `POST /pipeline/runs/<name>/export` downloads the Filtered Export with the
   session cookie from `.env` instead of the operator downloading and uploading it.
   `check_export_fetch` has its own `isolated_home` AND its own environment — the first
@@ -261,7 +261,7 @@ at a temporary directory, so nothing here touches the real inventory.
   joins against, recorded in the manifest — which is the seam a route that fetched a file
   nobody used would pass without.
 
-  **Three cases called `_coverage` directly, and the figures they carried are D64's evidence
+  **Three cases called `_coverage` directly, and the figures they carried are D65's evidence
   that a content-inspection guard is hard to get right.** All three REFUSED, and what differed
   was whether the refusal claimed a FINISH was lost — invisible from outside the route. They
   pinned two defects that shipped in the guard's first build and were found by measuring
@@ -270,7 +270,7 @@ at a temporary directory, so nothing here touches the real inventory.
   had lost a finish), and a key carrying `Product Name` (measured, 550 multi-finish riftbound
   numbers keyed `(set, number)` against 522 with the name, so 28 real cases were invisible to
   the check written to find them). Both mutations were observed failing, each on one case.
-  **The guard those measurements justified was retired 2026-09-02** (D64, amended): D65 names
+  **The guard those measurements justified is retired** (D65): D65 names
   the scope, so the positive check `export_scope_incomplete` is the whole guard, and the
   delta's first-fetch refusal cost every run an acknowledgement and a second download. The
   three cases went with it. What the section proves instead is that a re-fetch of identical
@@ -280,7 +280,7 @@ at a temporary directory, so nothing here touches the real inventory.
   **What it CANNOT prove, said here so a green run is not misread**: whether TCGplayer's WAF
   accepts this client when the request carries a real session. Measured unauthenticated, the
   stdlib default User-Agent reaches the endpoint unblocked — which is not evidence about an
-  authenticated one. That is one live fetch by the owner and D64 records it as owed.
+  authenticated one. That is one live fetch by the owner and D65 records it as owed.
 - **The order ledger is covered as of 2026-08-30, in its own isolated home (D63).**
   `store/orders.py` persists what `pipeline/orders.py` deliberately does not, and the
   cases work hardest on the two rules that make it safe to re-run. **Idempotence is

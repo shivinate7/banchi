@@ -185,7 +185,7 @@ scripts/checks.py and `make help` updated so `check registry` and `check census`
 **What it catches.** A suite that cannot tell "the rest passed" from "the rest never ran". With
 `reap-selftest` a standing red at slot 20 of 23, `suite-lock-selftest`, `serve-selftest` and
 `verdict-selftest` never execute and the output reads as one failing test — and verdict-selftest
-is D129's only guard. harness/run.py already writes the rule down for its own nine tests ("A
+is the only guard on the reporter's line numbers. harness/run.py already writes the rule down for its own nine tests ("A
 runner that stops at the first failure hides the state of everything behind it, which is the
 opposite of what a status signal is for"); the target that decides whether the tree is sound
 does the opposite.
@@ -384,9 +384,9 @@ through `make merge` from the wrong TREE, so the tree is the subject.
 reaching main as raw slugs (PR #270 repaired by #273, #280 by #285), three PRs merged while
 their claim commit's checks were still in_progress (#275, #277, #278 — #275's merge printed job
 URLs belonging to the PRE-claim commit's run while the claim commit's own run was still going),
-and one merge run from `main` itself (D143).
+and one merge run from `main` itself (D148).
 
-**Evidence it happened.** D151 measured 24 of 30 worktrees on this machine BEHIND the merge
+**Evidence it happened.** D140 measured 24 of 30 worktrees on this machine BEHIND the merge
 surface and 16 missing the commit that introduced the claimer at all. That is the state in which
 all six incidents happened.
 
@@ -992,7 +992,7 @@ rubber stamp. Each entry says what a machine would have to be able to SEE.
 
 - **Whether an entry's argument still holds — has the premise gone, and does anything still protect what it was protecting.**
   A machine would need: What an entry was protecting and whether anything still protects it: a
-  judgement about purpose, which no artifact in this tree carries. D48's two dead premises were
+  judgement about purpose, which no artifact in this tree carries. D180's two dead premises were
   both DANGLING ARTIFACT CITATIONS, which is the checkable shadow of the rule — but the rule
   itself is about an argument outliving its reason.
   Nearest partial: Requiring a REOPENING CONDITION on a newly added entry only, git-diff-scoped
@@ -1034,7 +1034,7 @@ work, one that could not fail, or one that would have a gate write to the tree (
 - **A pre-commit PII ratchet over added lines (emails, address headers, tracking numbers)** — Never measured — marked unknowable, and the strongest thing said for it is that the material exists. Against that, the downside IS measured: scripts/guard-opsec.sh was switched off on 2026-08-03 for two blocked writes in one session, and a pre-commit false alarm buys --no-verify, which disarms the image rule and the printed-code-layout rule in the same hook. A speculative pattern there risks the two rules in this repo that guard a bearer instrument.
 - **A +make icloud-selftest proving the sweep deletes only byte-identical conflict copies** — Zero incidents in the tool's whole life, and the hazard class can no longer occur: the checkout moved to ~/Developer/pkmnscan on 2026-08-29 and the iCloud originals were deleted — the owner's own memory says "hazards retired, guards kept". iCloud conflict copies are produced by iCloud Drive; a tree outside it produces none. The argument offered was symmetry with `make reap` and `make janitor`, and both of those earned their arms from measured incidents. Symmetry is not evidence. (If the tree ever returns to iCloud, this is the first thing to build.)
 - **Refusing `git add -A` / `git add --all`** — It is a correct everyday command, and the incident it is aimed at had a different cause — a bare `ln -s` into an existing path nested a second `images` link inside `harness/images`, and the staging command merely carried the result. The existence test on `ln -s` (build_now rank 12) catches it AT the cause, and pre-commit independently refuses a staged symlink by index mode 120000. A refusal on a command typed several times a day is the clause most likely to put the whole hook's hatch in a shell profile.
-- **A PreToolUse Bash hook refusing a bare `gh pr merge` unless an env marker from scripts/merge-pr.py is present** — The proposed door is not the door that failed, and the refusal fires hardest where it is least justified. All six measured incidents — two unclaimed ids, three merges over in-progress checks, one merge run from main — went through `make merge` from the wrong TREE; the hand-typed bypass is untested. Meanwhile D151 measured 24 of 30 worktrees behind the merge surface, so the tree that most needs to land work by hand is the tree whose wrapper is stale, and there the guard refuses the only available path — the highest-consequence refusal on the board. CLAUDE.md also keeps the raw commands written out "on purpose" so the wrapper never becomes the only thing anybody knows; a hook forbidding them repeals that decision as a side effect. Guard the SURFACE instead: build_now rank 28.
+- **A PreToolUse Bash hook refusing a bare `gh pr merge` unless an env marker from scripts/merge-pr.py is present** — The proposed door is not the door that failed, and the refusal fires hardest where it is least justified. All six measured incidents — two unclaimed ids, three merges over in-progress checks, one merge run from main — went through `make merge` from the wrong TREE; the hand-typed bypass is untested. Meanwhile D140 measured 24 of 30 worktrees behind the merge surface, so the tree that most needs to land work by hand is the tree whose wrapper is stale, and there the guard refuses the only available path — the highest-consequence refusal on the board. CLAUDE.md also keeps the raw commands written out "on purpose" so the wrapper never becomes the only thing anybody knows; a hook forbidding them repeals that decision as a side effect. Guard the SURFACE instead: build_now rank 28.
 - **A `governed_by` non-empty branch in check_map** — Presented as free (266 of 266 green) and the cost is not a blocked commit — it is a corrupted field. The requirement is satisfied by any D number that resolves, so during an ordinary file split the cheapest compliance is pasting the nearest plausible one; and `governed_by` is the field scripts/decision-context.py reads to tell the NEXT session what governs the file they are editing, plus the field `tested_by reach` and `decision ids in code` key on. Nothing downstream can tell a real citation from a plausible one. Second, the effective field INHERITS from the component, so the case the rule exists for — a new file under an existing package — arrives already governed and the row can never fire on it. If taken at all: accept `governed_by: []` WITH a `why` string and fail only an entry that has neither, so the visible act is an honest declaration rather than a misdirecting citation.
 - **A `sole writer` row counting import-CSV writers and refusing any count but one** — A count of one is preserved by substitution — delete pipeline/join.py:emit_import and add a writer that never raises OutputSuppressed and the row is still green with the rule gone. It also says nothing about the PROPERTY (both directions reported before a byte is written), and its key is a filename heuristic, so a writer whose destination is computed is outside the denominator. Rework: pin the ROSTER of modules that write an import file and require each to raise OutputSuppressed, folded into the existing `sole reader` row, which already holds a counted-sentence claim of this shape.
 - **An `arm census` row reconciling published "N arms" sentences against len(ARMS)** — An arm COUNT cannot see a DEAD arm, and a dead arm is the failure measured three times here: T7's zombie-pid arm survived because the fixture handed itself the handle, so the arm deleting the entire defect stayed green; D167 names a surviving arm today; DEBTS §11 carried a sentence about two observed mutation failures that were false on both counts. A row proving the number matches is satisfied while every arm has stopped killing. Rework: count KILLS — the selftest declares its arms as data, RUNS each one (apply, require failure, restore from a .bak copy, never `git checkout <path>`), and publishes the kill count, which the doc sentence then reconciles against. It writes, so `make check` and never the git hook. And every declared arm list must carry at least one `allow:` arm — a named case proving honest work passes — because the allow arm is the one that actually costs this repo time (reap-selftest's own-process arm went red four times against an unmodified reap.py, and guard-opsec was switched off wholesale for refusing two honest writes).
@@ -1091,8 +1091,7 @@ part I did verify. I did not verify that `check` is a required GitHub status con
 rank 1 and 39 lean on it); that is a surface reader's claim about branch protection, read from
 the API by them and not by me. SURFACES READ BY THE TEN READERS, WITH THE HOLES NAMED. Fully
 covered: CLAUDE.md's Hard rules (11 bullets), Working agreement, Commands block and "Things you
-will get wrong"; all 174 files under docs/decisions/ across four quarters (D1-D169 plus 11
-C-entries, with D42 double-read); docs/debts/'s 23 live sections; the enforcement surface
+will get wrong"; every file under docs/decisions/ as it then stood, across four quarters; docs/debts/'s 23 live sections; the enforcement surface
 itself (79+1 docs-audit rows, 8 hooks in each of two rosters, 5 githooks, 23 check targets
 against scripts/checks.py, harness/run.py's TESTS, app/eslint.config.js's four families,
 ruff.toml, check.yml's five jobs); all 70 files in the owner's memory directory; and one

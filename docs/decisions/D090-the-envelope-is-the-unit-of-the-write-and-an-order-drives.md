@@ -44,7 +44,7 @@
 
 ### The URL is the handoff, because the order key has one source of truth
 
-**Entry is `#/inventory?order=<key>` or `#/inventory?orders=open`, and not `app/src/runHandoff.ts`.** That `sessionStorage` handoff exists, is D27's carve-out rather than a new one, and would have worked. D49's argument for `#/pricing?run=` is taken here verbatim: the key has one source of truth — the ledger — and a copy of it in a second store is a second thing with its own clearing rules, its own staleness and its own way of disagreeing with the address bar.
+**Entry is `#/inventory?order=<key>` or `#/inventory?orders=open`, and not `app/src/runHandoff.ts`.** That `sessionStorage` handoff exists, is D27's carve-out rather than a new one, and would have worked. D86's argument for `#/pricing?run=` is taken here verbatim: the key has one source of truth — the ledger — and a copy of it in a second store is a second thing with its own clearing rules, its own staleness and its own way of disagreeing with the address bar.
 
 **What that buys is T6's own open question answered.** That section closed with *"Whether the queue survives a reload"* and declined to settle it, noting the argument is stronger here than for a run handoff because a pull walk is minutes at a drawer rather than seconds between two screens. It survives: the ask is read out of the hash, the key is validated against the payload on every read, and a reload lands on the first REMAINING stop rather than on nothing or on one already filled. The colon in `source:number` is why the key is encoded.
 

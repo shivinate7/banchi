@@ -1,8 +1,8 @@
 ## D140 — The number is claimed at the merge, because what main has taken is not knowable before it
 
-**Ruled by the owner 2026-09-11, the same day D72's repair half was built.** That work made the provable half of a renumber block the commit. This entry is the owner's answer to why a renumber happens at all: *"rework the decision system so that branches claim decision numbers only at merge time"*. A branch no longer takes a number. It writes a SLUG, and `scripts/claim-ids.py` substitutes the number at the moment the merge knows what main has taken.
+**Ruled by the owner 2026-09-11, the same day D140's repair half was built.** That work made the provable half of a renumber block the commit. This entry is the owner's answer to why a renumber happens at all: *"rework the decision system so that branches claim decision numbers only at merge time"*. A branch no longer takes a number. It writes a SLUG, and `scripts/claim-ids.py` substitutes the number at the moment the merge knows what main has taken.
 
-**The allocation's only input is what main holds, and a branch cannot have that.** Every renumber in this repo's history is that one sentence: a branch reads `origin/main`, takes the next free id, and is wrong the moment another branch merges first. Thirteen renumber events are recorded in D72, and the collisions are structural rather than careless — D16 carries three entries numbered `## D50` at once, written by three sessions that each took the next free number against the same base and all merged. **A guess made at the wrong time cannot be made more carefully.**
+**The allocation's only input is what main holds, and a branch cannot have that.** Every renumber in this repo's history is that one sentence: a branch reads `origin/main`, takes the next free id, and is wrong the moment another branch merges first. Thirteen renumber events are recorded in D140, and the collisions are structural rather than careless — D16 carries three entries numbered `## D50` at once, written by three sessions that each took the next free number against the same base and all merged. **A guess made at the wrong time cannot be made more carefully.**
 
 ### The vocabulary is a slug, and two segments is what keeps it out of prose
 
@@ -20,11 +20,11 @@
 
 **The two it was chosen over are recorded because they will be proposed again.** Claiming by an explicit press before asking for the merge leaves a race — narrow, minutes rather than days, but a race — and claiming on main *after* merging puts a substitution nothing verified onto the protected branch, recoverable only by another pull request. The wait costs one CI run per merge. That is the whole price, and it is paid once per entry rather than once per collision.
 
-**The allocation is `max + 1` and never the lowest free id.** `store/master.py:next_box_number` allocates lowest-free and is right to, because a box number is a label on a drawer that has been emptied. An id here is CITED: D80 culled step 12 and says the hole is correct, and reusing 12 would resurrect every `step 12` in the tree onto a step that is not the one meant — D72's citation drift, arriving through the allocator instead of through a rename. **`max + 1` also keeps a sorted list sorted**, so a slug appended to the end of a `governed_by` list is in the right place before and after the claim.
+**The allocation is `max + 1` and never the lowest free id.** `store/master.py:next_box_number` allocates lowest-free and is right to, because a box number is a label on a drawer that has been emptied. An id here is CITED: D80 culled step 12 and says the hole is correct, and reusing 12 would resurrect every `step 12` in the tree onto a step that is not the one meant — D140's citation drift, arriving through the allocator instead of through a rename. **`max + 1` also keeps a sorted list sorted**, so a slug appended to the end of a `governed_by` list is in the right place before and after the claim.
 
 ### What it retires
 
-**`renumbered ids` and `vacated ids` are deleted, and D72's mechanism with them.** Both rows exist to repair a renumber; a branch that never takes a number never vacates one. D72 keeps its account of the incidents — those are evidence and are never rewritten to match a later tree — and stops being a live mechanism. The convention *renumber your own, never another's* is retired in the same breath, having been a rule about who loses a race that no longer runs.
+**`renumbered ids` and `vacated ids` are deleted, and D140's mechanism with them.** Both rows exist to repair a renumber; a branch that never takes a number never vacates one. D140 keeps its account of the incidents — those are evidence and are never rewritten to match a later tree — and stops being a live mechanism. The convention *renumber your own, never another's* is retired in the same breath, having been a rule about who loses a race that no longer runs.
 
 **What replaces them is one row that cannot be satisfied by accident.** `id claims` reads every slug in the tree: each resolves to a slug heading, each heading's slug is unique, each is well-formed — and **main carries none**, which is the invariant the whole design rests on and the only one that catches a claim that half-landed.
 
@@ -42,7 +42,7 @@
 
 **This removes the treadmill, not the collision, and the distinction is the whole of what it is worth.** The claim reads main at claim time, so it cannot see a number held by a pull request that has not merged yet. Two open branches can still be allocated the same id, and whichever merges second is wrong.
 
-**Both halves were measured on one evening, 2026-09-11, which is why this paragraph can be exact.** A branch renumbered **three times in one session** — D132 to D135 to D137 to D138 — each one a hand-audited sweep across a dozen files where a stale citation still resolves and nothing mechanical separates it from a real reference to the number's new occupant; **three sites were missed on the first pass** and found afterwards by a separate audit. That same evening this entry's own branch was allocated D139, another open pull request merged first and took it, and the repair was **one command over ten files** with a row asserting that no slug survived it. Same class of event. Two very different costs.
+**Both halves were measured on one evening, 2026-09-11, which is why this paragraph can be exact.** A branch renumbered **three times in one session** — D132 to D135 to D137 to D138 — each one a hand-audited sweep across a dozen files where a stale citation still resolves and nothing mechanical separates it from a real reference to the number's new occupant; **three sites were missed on the first pass** and found afterwards by a separate audit. That same evening this entry's own branch was allocated D158, another open pull request merged first and took it, and the repair was **one command over ten files** with a row asserting that no slug survived it. Same class of event. Two very different costs.
 
 **The residual collision is deliberately not closed, and this is the reasoning rather than an oversight.** Reading open pull requests at claim time would put the network and `gh` on the path of `make merge`, for a failure that is already LOUD: `decision index` reconciles `CLAUDE.md`'s index against the headings IN ORDER, so the second merge fails its own commit rather than landing quietly. A guess that is caught is not the same defect as a guess that resolves, and it is the second kind this entry was written for. **Closing it would trade a loud, cheap, mechanical failure for a network dependency in the one command that moves main.**
 
@@ -79,3 +79,11 @@
 ### What it does not decide
 
 **Not whether an id may ever be typed as a number again.** A session amending an existing entry cites it by its number, as it always has; the slug is for an entry that does not have a number YET. **Not the commit messages** — a message written on the branch names the slug and cannot be rewritten after a push, so the claim commit's own message is where the pair is recorded. **And not D80's stable-id ruling**, which this strengthens rather than reopens: that entry forbids renumbering an EXISTING step because 218 references would silently follow the number instead of the step, and a number claimed at the merge cannot collide, so nothing is ever renumbered to resolve one.
+
+Thirteen renumbers happened; a number is allocated only where main is known, at merge.
+
+make merge asks its checkout whether it is current and reads main for a slug when it moves.
+
+A claim checks whether main already resolved this slug, not only whether the number is free.
+
+A refusal's remedy must be a real command (--unclaim --to-slug).

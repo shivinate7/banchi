@@ -100,7 +100,7 @@ OVERRIDE"*, and the line beneath it writes `preset: key`. **`preset` appears now
 `sub_threshold`, `overrides` and `no_market_data`, and drops unknown keys. `cli/cmd_join.py`
 writes preset *prices* into `pricing.json` and never reads a chosen preset back.
 
-The consequence is a silent mispricing, and it is D49's own stated failure arriving by the other
+The consequence is a silent mispricing, and it is D86's own stated failure arriving by the other
 road. That entry makes an untouched row write no key on purpose — *"a screen that wrote its
 hundred suggestions would produce a run where changing the preset silently changed nothing"* —
 which is correct only if the preset moves `rule`/`basis` instead. It does not. So an operator who
@@ -265,7 +265,7 @@ step's console, and the controls are already conditional on `detail !== null`.
 - **Emit refusals turn out to be the common case rather than the tail.** Measure how many emit
   presses per box return `ok: false`. If the median box needs two or more, the refusal loop
   dominates the session and emit belongs where its remedy is.
-- **D49's premise holds** — *"almost everything coming next is all above 0.40"*. Then
+- **D86's premise holds** — *"almost everything coming next is all above 0.40"*. Then
   `blocking`'s first reason stops firing, and item 2 matters much less than it does today.
 - **The emit→reconcile gap turns out to be days on a real listing box.** Today: n=1, 6m44s,
   13 SKUs, the smallest box. If it lands in days, reconcile is genuinely a different sitting and

@@ -81,7 +81,7 @@ def sku_row(match, game: str, bucket: str, listing: Optional[dict]) -> dict:
     return {
         "sku": match.sku,
         "game": game,
-        # VERBATIM, every cell, unmodified. D49's whole premise is the owner's
+        # VERBATIM, every cell, unmodified. D86's whole premise is the owner's
         # "I want all the data from the CSV shown when I make the decision".
         "row": dict(match.row),
         "bucket": bucket,

@@ -155,17 +155,6 @@
         "cancelled"
       ]
     },
-    "docs/decisions/*-a-card-nobody-has-named-is-not-a-landmark-and-the.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "neighbour",
-        "neighbour",
-        "neighbour",
-        "neighbour",
-        "neighbour",
-        "recognise"
-      ]
-    },
     "docs/decisions/*-a-card-that-will-not-settle-is-photographed-off-the.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -268,12 +257,6 @@
         "recognises"
       ]
     },
-    "docs/decisions/*-a-loop-nobody-is-listening-to.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "signalling"
-      ]
-    },
     "docs/decisions/*-a-name-tolerance-fit.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -308,12 +291,6 @@
         "licence"
       ]
     },
-    "docs/decisions/*-a-ratchet-per-file.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "honoured"
-      ]
-    },
     "docs/decisions/*-a-refusal-that-reaches-nobody.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -323,13 +300,6 @@
         "honoured",
         "neighbouring",
         "serialise"
-      ]
-    },
-    "docs/decisions/*-a-renumbered-entry-takes-its-citations-with-it-and-the.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "judgement",
-        "judgement"
       ]
     },
     "docs/decisions/*-a-row-that-examined-nothing-says-so.md": {
@@ -345,13 +315,6 @@
         "mechanised",
         "mechanised",
         "mechanised"
-      ]
-    },
-    "docs/decisions/*-a-runs-reason-for-adding-nothing-is-a-heading-the-rows.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "travelling",
-        "travelling"
       ]
     },
     "docs/decisions/*-a-sealed-ledger-archive-subjects.md": {
@@ -370,16 +333,6 @@
       "lane": "docs-sweep",
       "SPELLING": [
         "neighbouring"
-      ]
-    },
-    "docs/decisions/*-a-ste-ratchet.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "catalogue",
-        "judgement",
-        "recogniser",
-        "recogniser",
-        "recognisers"
       ]
     },
     "docs/decisions/*-a-tracked-symlink-is-a-path-baked-into-the-tree-and-a.md": {
@@ -441,14 +394,6 @@
         "catalogue",
         "catalogue",
         "honours"
-      ]
-    },
-    "docs/decisions/*-capture-always-asks.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behaviour",
-        "behaviour",
-        "relabelling"
       ]
     },
     "docs/decisions/*-demo-mirror.md": {
@@ -568,14 +513,6 @@
         "neighbours"
       ]
     },
-    "docs/decisions/*-one-link-always-live-and-the-restart-discipline-becomes.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "acknowledgement",
-        "signalled",
-        "signalling"
-      ]
-    },
     "docs/decisions/*-page-scaffold.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -602,12 +539,6 @@
         "behaviour"
       ]
     },
-    "docs/decisions/*-pricing-rebuilt-to-the-reinterview.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "judgement"
-      ]
-    },
     "docs/decisions/*-readings-table.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -620,12 +551,6 @@
         "colours"
       ]
     },
-    "docs/decisions/*-run-binds-to-bid.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "favour"
-      ]
-    },
     "docs/decisions/*-shell-mistakes.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -634,12 +559,6 @@
         "honoured",
         "honoured",
         "judgement"
-      ]
-    },
-    "docs/decisions/*-sku-name-contradictions.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "modelled"
       ]
     },
     "docs/decisions/*-sku-number-contradictions.md": {
@@ -677,12 +596,6 @@
         "judgement"
       ]
     },
-    "docs/decisions/*-the-band-is-copies-rather-than-skus-the-drawer-is-the.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "artefacts"
-      ]
-    },
     "docs/decisions/*-the-boot-header-says-the-code-changed-nothing-says-the.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -711,26 +624,6 @@
         "judgement"
       ]
     },
-    "docs/decisions/*-the-corner-is-settled-by-geometry-and-a-variable-nothing.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "centre"
-      ]
-    },
-    "docs/decisions/*-the-demo-inflates-its-own-history-and-the-present-is-left.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "relabelled"
-      ]
-    },
-    "docs/decisions/*-the-drawer-scrolls-above-its-foot.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "centre",
-        "centre",
-        "centre"
-      ]
-    },
     "docs/decisions/*-the-export-is-a-property-of-the-game.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -743,13 +636,6 @@
       "lane": "docs-sweep",
       "SPELLING": [
         "licence"
-      ]
-    },
-    "docs/decisions/*-the-filtered-export-is-fetched-and-completeness-is-a.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "acknowledgement",
-        "acknowledgements"
       ]
     },
     "docs/decisions/*-the-fixture-carries-a-per-run-name-because-the-process.md": {
@@ -809,20 +695,6 @@
         "recognising",
         "recognising",
         "serialised"
-      ]
-    },
-    "docs/decisions/*-the-order-screen-comes-before-the-transport-and-the.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "organised",
-        "organising",
-        "organising"
-      ]
-    },
-    "docs/decisions/*-the-photo-url-names-a-photograph-because-a-slots-occupant.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "judgement"
       ]
     },
     "docs/decisions/*-the-photograph-is-cropped-to-the-card-the-focus-is.md": {
@@ -888,12 +760,6 @@
       "lane": "docs-sweep",
       "SPELLING": [
         "favours"
-      ]
-    },
-    "docs/decisions/*-the-reading-goes-on-every-row-because-the-operator.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "optimised"
       ]
     },
     "docs/decisions/*-the-reconcile-is-store-wide-and-what-it-writes-is-live.md": {
@@ -985,14 +851,6 @@
         "judgement"
       ]
     },
-    "docs/decisions/*-the-status-requirement-is-answered-by-a-remembered-tick.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behaviour",
-        "materialises",
-        "recognised"
-      ]
-    },
     "docs/decisions/*-the-store-of-record-is-sqlite-and-a-write-is-one.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -1005,13 +863,6 @@
         "cancelled",
         "cancelled",
         "honours"
-      ]
-    },
-    "docs/decisions/*-the-sweep-asks-what-the-verdict-answers.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "judgement",
-        "signalled"
       ]
     },
     "docs/decisions/*-the-tab-bar-has-one-height.md": {
@@ -1061,26 +912,10 @@
         "recognised"
       ]
     },
-    "docs/decisions/*-two-agreeing-signals-release-the-rarity-claim-and-the.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "catalogue"
-      ]
-    },
     "docs/decisions/*-worktree-node-modules.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "behaviour"
-      ]
-    },
-    "docs/decisions/_someday-worth-doing-blocking-nothing.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "generalise",
-        "judgement",
-        "realised",
-        "realised",
-        "realised"
       ]
     },
     "docs/specs/audit-retirement.md": {

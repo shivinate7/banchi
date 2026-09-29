@@ -3,7 +3,7 @@
 **Settled 2026-09-11.** OpenAI Codex was installed in this repository on 2026-09-09 and left
 three untracked paths in the main checkout: a 117 KB `AGENTS.md` that is `sed
 's/AGENTS\.md/CLAUDE.md/g' AGENTS.md | diff - CLAUDE.md` away from `CLAUDE.md` — 139 lines of
-drift, missing `make reap`, D129, the eight-key storage roster and D132 — a byte-identical copy
+drift, missing `make reap`, the eight-key storage roster and D132 — a byte-identical copy
 of `.claude/skills/tcgplayer-csv/SKILL.md` at the equivalent path under a separate,
 untracked `.agents/skills/` directory, and
 `.codex/` holding `config.toml` (a shell-environment policy, machine-local) and `hooks.json`

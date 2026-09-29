@@ -287,8 +287,8 @@ map:
 # scripts/checks.py is a PARALLEL DECLARATION and deliberately does not drive the recipe.
 # A registry that drove the suite could silently stop running a check; this one can only lie,
 # and `make docs-audit` has two rows that catch it lying — `check registry` against the
-# recipe and the published prose, and `commit path writes`, which asserts
-# D18 mechanically by refusing any writing check on the commit path.
+# recipe and the published prose. D18 (a generator may write, a gate may not) has no row
+# yet that refuses a writing check on the commit path.
 #
 # python3, not $(PYTHON): a step-away tool that needs `make venv` first is not a step-away
 # tool. Same rule as `status`, `map` and `docs-audit`.
@@ -342,10 +342,9 @@ map-fix-selftest:
 # file that git's rename detection says moved. It never adds an entry. It reads with the rows'
 # own functions, imported, so the pruner and the gates cannot disagree about what is stale.
 # Previews. ARGS=--write applies.
-# A fourth list, scripts/ste-offenders.json, was cut 2026-09-27 (test-audit plan): the
-# write-time STE hook already lints new prose, so the `ste offenders` row was retired with it
-# (D226; D229; D280 amended). scripts/markdown-spelling-allow.json joined the same day (owner's
-# ruling: "Shrinking offender list now"), over the `identifier spelling` row's markdown half.
+# The write-time STE hook lints new prose, so no `ste offenders` list exists (D60, D280).
+# scripts/markdown-spelling-allow.json is a shrinking offender list over the `identifier
+# spelling` row's markdown half (D280).
 #
 # NOT A PREREQUISITE OF ANYTHING, never wired to a hook, and its self-test is not in
 # `make check`, on `map-fix`'s precedent above: the rows that read these lists already run on
@@ -358,7 +357,7 @@ offenders-prune:
 offenders-prune-selftest:
 	@python3 scripts/offenders-prune.py --selftest
 
-# THE THIRD PIECE OF THE OWNER'S 2026-09-23 RULING (D-text-shape-checks, supersedes D194): a
+# THE THIRD PIECE OF THE OWNER'S 2026-09-23 RULING (D-text-shape-checks, supersedes D284): a
 # REPEATABLE, ON-DEMAND density pass that prints a CUT TABLE, never a gate (D18: it writes one
 # receipt, `.serve/text-density.json`, gitignored). NOT A PREREQUISITE OF ANYTHING and never
 # wired to a hook, `map-fix`'s own standing. It runs `app/tests/text-shape.spec.ts` with
@@ -712,7 +711,7 @@ hand-search-selftest:
 # means nothing here stops the two diverging the next time the scale moves. `css-var-check`'s
 # sibling, opposite direction: that one catches a `var()` pointed at nothing, this one catches
 # a value that should have BEEN a `var()`. Reads `tokens.css` itself on every run — no copied
-# list. RATCHETED PER FILE (D-token-literals-are-pinned, D229's shape): main already carries
+# list. RATCHETED PER FILE (D-token-literals-are-pinned, D280's shape): main already carries
 # many of these, so the gate is a ceiling on each file's OWN count, not zero. Writes nothing;
 # `token-literal-check-pin.py --pin` is the one thing that may (D18). In `make check`, not the
 # git hook — same reasons as `css-var-check` immediately above.
@@ -1341,7 +1340,7 @@ skus-selftest:
 identity-store-selftest:
 	@$(PYTHON) scripts/identity-store-selftest.py
 
-# THE MIGRATION'S CLASSIFIER AND THE MERGED D242/D255 REPORT, PROVED AGAINST LITERAL
+# THE MIGRATION'S CLASSIFIER AND THE MERGED D242 REPORT, PROVED AGAINST LITERAL
 # FIXTURES (identity-follows-sku.md §5.5, §7, lane 2). Every class T1-T6 and `sku_unknown`,
 # in §7.2's own order; the human-bound exclusion §5.5 requires (`answer`/`group_answer`/
 # `correction`/`confirm` never re-flagged); both report halves (§4.3's three audit failures,
@@ -1530,7 +1529,7 @@ lan-check:
 #
 # `up` takes them too, for `--no-watch` and for `--restart`, which is the bounce now.
 #
-# WILL NOT SERVE A PRIMARY CHECKOUT OFF MAIN (D158, D53). `PKMNSCAN_SERVE_MAIN=off` overrides,
+# WILL NOT SERVE A PRIMARY CHECKOUT OFF MAIN (D158, D138). `PKMNSCAN_SERVE_MAIN=off` overrides,
 # printed in every refusal.
 up:
 	$(PORT_CLAIM)

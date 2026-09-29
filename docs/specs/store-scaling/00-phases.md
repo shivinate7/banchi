@@ -77,7 +77,7 @@ where it was has removed nothing.
 |---|---|---|
 | Phase 0 | 13 (§4 of the spec, twelve sites; `do_inventory` and `to_payload` stay by the owner's word; PLUS `store/master.py:next_box_number`, a real, currently-existing `.distinct("box")` call the hand census in §4 missed — found by item 1's own scanner on its first end-to-end run against the real tree, and permanent for the same reason `do_boxes`/`counts` are) | — |
 | Phase 1 | 13 | **corrected 2026-09-12 by item 2**: `_boxes_named`'s only caller is `do_status`, which item 2 does not touch, so it cannot close that row — item 2 removes NOTHING from the allowlist (see D192). Item 4 REPLACES `_unsent_ledger`'s `distinct("sku")` with its own one-pass `select`, argued, so it nets zero. Count stays at 13 |
-| Phase 2 | 9 | **as landed 2026-09-13**: item 7 (#344) removed `_release_plan`, `_box_names`, `_on_hand_by_run` and RENAMED the entries for `do_pipeline_value` (now `_value_rows`, one `select` of indexed columns — the D159 aggregate is over every on-hand row by the owner's own ruling and cannot be scoped) and `box_views`'s unbounded branch (its one caller ranks every box); item 8 (#343) removed `do_search`. 13 − 3 − 1 = 9 |
+| Phase 2 | 9 | **as landed 2026-09-13**: item 7 (#344) removed `_release_plan`, `_box_names`, `_on_hand_by_run` and RENAMED the entries for `do_pipeline_value` (now `_value_rows`, one `select` of indexed columns — the D277 aggregate is over every on-hand row by the owner's own ruling and cannot be scoped) and `box_views`'s unbounded branch (its one caller ranks every box); item 8 (#343) removed `do_search`. 13 − 3 − 1 = 9 |
 
 The nine that remain — `do_inventory`, `to_payload`, `do_boxes`, `counts`,
 `next_box_number`, `_boxes_named` (`do_status`'s, one indexed column), item 4's
@@ -113,7 +113,7 @@ The owner's rulings of 2026-09-12, recorded here so an implementer does not re-a
 - **Search is FTS5, not `LIKE`** — chosen for multi-word any-order matching and best-match
   ranking, having been told mid-word matching is lost. Item 8 adds prefix matching so a
   partial word still hits. The walk is deleted, not kept as a fallback.
-- **`GET /pipeline/value` paginates** — "as long as it's well planned": every aggregate D159
+- **`GET /pipeline/value` paginates** — "as long as it's well planned": every aggregate D277
   draws is computed over all rows server-side; only the row list pages, by a value cursor
   rather than an offset so a concurrent sale cannot skip or repeat a row.
 - **The order** — guard first, the systemic per-box read immediately after, search included

@@ -11,13 +11,13 @@ new. `pipeline/pricehistory.py`'s own fetching and parsing are untouched.
 
 ### Why the key carries `range` and not `width_days`
 
-D62 already settled the underlying fact. The four ranges overlap on the calendar.
+D278 already settled the underlying fact. The four ranges overlap on the calendar.
 Concatenating them double-counts. One calendar day is a one-day bucket in `month`. The same
-day sits inside a wider bucket in a broader range. Those are two different facts. D62
+day sits inside a wider bucket in a broader range. Those are two different facts. D278
 forbids merging them.
 
 The naive fix looks safe at first. Key a stored bucket on `(sku, width_days, start)` instead
-of on the range name. That looks like it satisfies D62, until you read
+of on the range name. That looks like it satisfies D278, until you read
 `pipeline/pricehistory.py`'s own table of ranges (line 41):
 
 ```
@@ -30,7 +30,7 @@ annual       52 x 7 days          357 days
 
 `semiannual` and `annual` are **both seven-day buckets**. A width-keyed table would fold a
 semiannual bucket and an annual bucket into one row. That happens whenever the two start on
-the same date. It is the exact D62 collision this table exists to prevent. It would happen on
+the same date. It is the exact D278 collision this table exists to prevent. It would happen on
 the most recent 175 days. Every sweep touches that span every time.
 
 So the key is `(sku, range, start)`. `product_id` and `width_days` are stored as plain
@@ -86,7 +86,7 @@ No route. No client function. No screen. `pipeline/pricehistory.py`'s fetching a
 are unchanged. No timer, cron or launch agent runs this sweep on its own. The owner asked for
 a schedule and the schedule is deferred, by the owner's own word
 (`docs/specs/revenue-plan.md` §4, `docs/specs/revenue-next.md` "The archive comes first"). A
-sweep firing on its own reverses D62's own statement. D62 says this reader cannot fire by
+sweep firing on its own reverses D278's own statement. D278 says this reader cannot fire by
 itself. That reversal needs its own argument, which nobody has made yet.
 
 ### Amended 2026-09-28: a stored summary for Holdings

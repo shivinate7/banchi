@@ -2,7 +2,7 @@
 
 **`geometry.detect_card` answers "not found" honestly and has no way to answer "found the wrong thing", so the crop path asks the frame instead: a crop under 30% of it that keeps under half its detail is not cut, and the whole frame is sent.** Ruled 2026-08-31, from the owner's own screenshot of `#/runs` drawing a crop rectangle over a card's rules-text panel and reporting it as the payload.
 
-**Numbered D75 because D74 was taken while this branch was open** — `origin/main` carries "a document is checked as a document" at that number, merged 2026-08-30. D72's rule applies to a renumbering, and this is not one: nothing was published at D74 here to move.
+**Numbered D75 because D74 was taken while this branch was open** — `origin/main` carries "a document is checked as a document" at that number, merged 2026-08-30. D140's rule applies to a renumbering, and this is not one: nothing was published at D74 here to move.
 
 ### What was measured
 

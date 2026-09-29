@@ -15,7 +15,7 @@ The owner's answers to the plan's three questions, verbatim:
 ### The premise that no longer holds
 
 D10 (the inventory model) said the next captured card goes on the end of the stack. That was
-the only way a card entered a box at capture. D265 (a card's place is an order key apart from
+the only way a card entered a box at capture. D294 (a card's place is an order key apart from
 its index) already let a placement put a card between two others. This entry lets a capture do
 the same thing, into the section the owner picks.
 

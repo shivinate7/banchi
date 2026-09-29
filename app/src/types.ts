@@ -293,7 +293,7 @@ export type CardSummary = {
 /** `GET /status`. Counts, the next index per box, and whether the store is healthy. */
 export type ServerStatus = {
   /** WHICH PROCESS ANSWERED. `make up` restarts the capture server whenever a watched Python
-   *  file changes (D53), and a restart is otherwise invisible from here — same port, same
+   *  file changes (D138), and a restart is otherwise invisible from here — same port, same
    *  store, and the only symptom of NOT having restarted is the one `docs/GATES.md` records:
    *  whole-second timestamps written two hours after the millisecond fix landed, because the
    *  process predated it.
@@ -1198,7 +1198,7 @@ export type ReviewAnswer = {
   index: number
   sku: string
   condition: string
-  /** D46 — this SKU came out of the catalog lookup, not out of the entry's offered rows.
+  /** D77 — this SKU came out of the catalog lookup, not out of the entry's offered rows.
    *
    *  Only ever true for an entry with NO candidates. The server re-reads the row out of the
    *  export the card was joined against and takes the condition from there, so this flag
@@ -1207,7 +1207,7 @@ export type ReviewAnswer = {
   fromCatalog?: boolean
 }
 
-/** One catalog row offered by `GET /review/<box>/<index>/catalog` (D46).
+/** One catalog row offered by `GET /review/<box>/<index>/catalog` (D77).
  *
  *  DELIBERATELY THE SAME SHAPE AS `CandidateRow`, because the screen draws both through one
  *  component: a row the pipeline found and a row a person went and found look identical once
@@ -1307,7 +1307,7 @@ export type AnswerResult = {
  *  has gone out — pushed, staged or live — which for a real mistake is usually already true.
  *  This route rewrites an identified card's SKU to a different catalog row REGARDLESS of the
  *  queue, and it never trusts the wire for the row: the server re-reads it from the card's
- *  own export, exactly as a D46 `fromCatalog` answer does.
+ *  own export, exactly as a D77 `fromCatalog` answer does.
  *
  *  `released` IS WHAT THE OLD SKU GAVE UP, through `Listing.release` (D34) — the count the
  *  next live reconcile reads as over-listed. Read it for the receipt's own words, never to
@@ -1487,7 +1487,7 @@ export type Place = {
 
   box: number
 
-  /** Where the card stands in its box, 1 at the far back (D265). The sort key a walk orders
+  /** Where the card stands in its box, 1 at the far back (D294). The sort key a walk orders
    *  by. It equals `index` until a section is placed into the box. Never drawn. Optional
    *  because an older server omits it: then `index` is the order. */
   order?: number
@@ -1533,12 +1533,12 @@ export type Place = {
   fraction: number | null
 
   /** The ADJACENT records that are still physically in the box on either side of this
-   *  one — D30's digital half. `Card 17` is the seventeenth SLOT, not the seventeenth card you
+   *  one — D58's digital half. `Card 17` is the seventeenth SLOT, not the seventeenth card you
    *  can count, and once a section has holes those two stop being the same number; the
    *  neighbours are what make the label countable by hand again. Sold and retired records are
    *  passed over, never named — a departed card cannot be the thing you count from. An
    *  on-hand card nothing has named IS a neighbour (the owner's ruling, 2026-09-24, LOC-28,
-   *  amending D116), said as "an unread card"; `PlaceNeighbor.unread` counts the run.
+   *  amending D260), said as "an unread card"; `PlaceNeighbor.unread` counts the run.
    *  `prev` (toward the back) and `next` (toward the front) are null past the box's ends.
    *
    *  THE WHOLE FIELD IS NULL WHEN THE SERVER DEGRADED IT — a record in the store whose
@@ -1549,7 +1549,7 @@ export type Place = {
   neighbors?: { prev: PlaceNeighbor | null; next: PlaceNeighbor | null } | null
 
   /** How many indices inside this card's own section bounds hold a sold or retired record —
-   *  the permanent gaps (D10), and the other half of D30's sentence: the count says why a
+   *  the permanent gaps (D10), and the other half of D58's sentence: the count says why a
    *  hand-count of the section comes out short. An unallocated tail index is not a gap; the
    *  server counts terminal RECORDS, so that is true by construction. Null when the walk
    *  degraded (see `neighbors` — the two null together), absent on an older server, and NULL
@@ -2084,7 +2084,7 @@ export type RunPhase =
   | 'reconcile'
   | 'done'
 
-/* ------------------------------------------------------------------- pricing (D49)
+/* ------------------------------------------------------------------- pricing (D86)
  *
  * The per-SKU table `cli/cmd_join.py` writes beside `report.txt`, served with this run's
  * answers by `GET /pipeline/runs/<name>/pricing`. Field names are the server's own, in the
@@ -2246,7 +2246,7 @@ export type ProductHistoryPayload = {
 /** ONE RANGE'S NAMES — `GET /pipeline/holdings-value?range=<range>`, D236. UNSOLD STOCK, never
  *  sold-then-against-now (that is D225's `SoldPricesLookup`, a different figure this must
  *  never merge with). The four ranges overlap on the calendar and are NEVER merged or
- *  concatenated (D62) — one range per call, one range on screen at a time. */
+ *  concatenated (D278) — one range per call, one range on screen at a time. */
 export type HoldingsRange = 'month' | 'quarter' | 'semiannual' | 'annual'
 
 /** ONE BUCKET OF ONE SKU'S HOLDING. `value` is `market` times the SKU's TODAY quantity —
@@ -2318,11 +2318,11 @@ export type HoldingsValuePayload = {
 
 /** ONE RANGE OF ONE SKU AS A ROW DRAWS IT — a shape and a sign, and deliberately no money.
  *
- *  IT IS NOT A SMALLER `HistoryRange` AND MUST NOT GROW INTO ONE. D62's panel is where a
- *  reading's figures live; D79 gives the row a strip and gives it exactly what a 90px cell
+ *  IT IS NOT A SMALLER `HistoryRange` AND MUST NOT GROW INTO ONE. D278's panel is where a
+ *  reading's figures live; D277 gives the row a strip and gives it exactly what a 90px cell
  *  can carry honestly. The row already has four dollar columns and the field a listing price
  *  is typed into, so a fifth figure — a READING rather than a price — would sit inches from
- *  that field inviting a copy across, which is the D8 reopening D62 refused by name. Anything
+ *  that field inviting a copy across, which is the D8 reopening D278 refused by name. Anything
  *  added here that is denominated in dollars is that refusal being spent.
  *
  *  `points` IS ASCENDING and `null` MEANS NO PRICE AT ALL. The client BREAKS the line at a
@@ -2342,7 +2342,7 @@ export type TrendRange = {
   points: (string | null)[]
 }
 
-/** Many SKUs' shapes in one read — D79, the batched half of D62.
+/** Many SKUs' shapes in one read — D277, the batched half of D278.
  *
  *  BOTH DIRECTIONS, WHICH IS `CLAUDE.md`'s HARD RULE AND VISIBLE IN THIS TYPE. Every SKU the
  *  route was asked about comes back in `skus` or in `refused`, never absent, and `skipped`
@@ -2550,7 +2550,7 @@ export type MergedSku = PricingSku & {
 
 /** `GET /pipeline/pricing` — one worklist over several runs.
  *
- *  `decisions` IS KEYED BY RUN AND STAYS THAT WAY. D48 rules that a run's answer file is a
+ *  `decisions` IS KEYED BY RUN AND STAYS THAT WAY. D180 rules that a run's answer file is a
  *  property of what is in the drawer; this route merges the VIEW and never the file, and one
  *  answer to a merged row is one `PUT` per run in that row's `in`. */
 export type RosterRun = RunSummary & {
@@ -2625,7 +2625,7 @@ export type Unreachable = {
   }[]
 }
 
-/** One card's answer as the corpus stores it — D49's shapes, with provenance beside them. */
+/** One card's answer as the corpus stores it — D86's shapes, with provenance beside them. */
 export type CorpusAnswer = {
   value: string | number | WithheldRecord | null
   at?: string
@@ -2672,7 +2672,7 @@ export type PricingCorpus = {
  *  time in TypeScript, on the one file in this product that holds money.
  *
  *  WHAT IS ABSENT FROM `days` IS THE POINT AS MUCH AS WHAT IS IN IT. A hold is a judgement
- *  with a reason, a watch and a note attached (D49) and is never clearable; a `channel` other
+ *  with a reason, a watch and a note attached (D86) and is never clearable; a `channel` other
  *  than `"price"` is the ABSENCE of an answer, which `emit` reads to refuse. Both are counted
  *  so the sheet can say what it is leaving alone rather than leaving it to be discovered. */
 export type PricingClearable = {
@@ -2777,7 +2777,7 @@ export type RunScope = {
  *
  *  `box` AND `bid` ARE ALWAYS ARRAYS HERE, EVEN FOR ONE DRAWER, and the request may send either
  *  shape. One press on this store has named three drawers, so the term is list-valued; a reader
- *  asking which shape it got before it can ask anything else is what D48 argued against for its
+ *  asking which shape it got before it can ask anything else is what D180 argued against for its
  *  own response, and that half of the argument is kept. */
 export type RunSelection = {
   paths?: string[]
@@ -2912,7 +2912,7 @@ export type RunDetail = RunSummary & {
  *  computed from the bytes each card is sent as, and those two decide them — so the reading was
  *  already inside the thing being quoted.
  *
- *  IT IS ONE READING FOR THE PRESS, WHERE IT USED TO BE ONE PER BOX. D48 gave each leg of a
+ *  IT IS ONE READING FOR THE PRESS, WHERE IT USED TO BE ONE PER BOX. D180 gave each leg of a
  *  cart its own crop and max edge and called that the deciding argument for a cart at all.
  *  Measured on this store: 12 of 15 runs share one `max_edge`, the three that differ are three
  *  separate presses on three days, and the one multi-drawer press there has ever been gave all
@@ -3058,7 +3058,7 @@ export type RunPreflightTotal = {
   cards: number
 }
 
-/** ONE QUOTE, where it used to be a list of one or more. D48's rule was that the response shape
+/** ONE QUOTE, where it used to be a list of one or more. D180's rule was that the response shape
  *  must not change with the request, which is exactly why a cart's answer was always a list;
  *  with one selection per press there is one thing being quoted and a one-element list would be
  *  the cart's ghost. */
@@ -3124,7 +3124,7 @@ export type RunStepResult = {
   summary: RunSummary
 }
 
-/** `POST /pipeline/runs/<name>/rescue` (D165) — a stranded run's cards, re-addressed to where
+/** `POST /pipeline/runs/<name>/rescue` (D145) — a stranded run's cards, re-addressed to where
  *  they are now.
  *
  *  DELIBERATELY NOT `RunStepResult`'S SHAPE, AND THAT IS THE WHOLE POINT: there is no
@@ -3184,7 +3184,7 @@ export type RescueResult = {
 export type CsvUpload = { name: string; content: string; modified?: number }
 
 /** What `POST /pipeline/runs/<name>/export` fetched, in the terms the operator filters the
- *  portal in (D64). Free: it downloads the owner's own Filtered Export and spends nothing.
+ *  portal in (D65). Free: it downloads the owner's own Filtered Export and spends nothing.
  *
  *  `file` is the name the join is then handed. It is a name and not the bytes: the server
  *  already holds them, and sending a megabyte back through the browser to arrive at them is
@@ -3582,7 +3582,7 @@ export type OrderRow = {
   open: boolean
   /** The MARKETPLACE's own word that this order is finished — `server/capture_server.py:
    *  _order_row` emits `order_store.is_terminal_status(record.status)` unconditionally, never
-   *  the `status` string itself (D114). Distinct from `open`, which is the LEDGER's answer to
+   *  the `status` string itself (D91). Distinct from `open`, which is the LEDGER's answer to
    *  "does this still owe copies": a `terminal` order can still owe copies when TCGplayer
    *  reports it shipped before every line was pulled here, which is exactly the case `open`
    *  alone cannot tell a screen about. */
@@ -3694,7 +3694,7 @@ export type WalkPlanCopy = {
  *
  *  `copies` ORDER IS LOAD-BEARING AND THE CLIENT MUST NOT RE-SORT: (1) copies with `here: true`,
  *  in the solver's own order (densest first, as before); (2) every other copy, in box-walk
- *  order: by box, then by the card's order key (D265). D212: all of them are pressable. D93:
+ *  order: by box, then by the card's order key (D294). D212: all of them are pressable. D93:
  *  none is hidden. */
 export type WalkPlanTake = {
   sku: string
@@ -4353,7 +4353,7 @@ export type ValueCopy = {
   market: string | null
   /** What the operator DECIDED to ask for this SKU, which is a different fact from what the
    *  card is worth (D86). Round-tripped as the corpus holds it — a string, a number, or a
-   *  `WithheldRecord` — because flattening the last shape would turn a deliberate hold (D49)
+   *  `WithheldRecord` — because flattening the last shape would turn a deliberate hold (D86)
    *  into a missing price. */
   answer: string | number | WithheldRecord | null
   /** How many copies of this SKU TCGplayer is holding, NEVER whether this copy is one of

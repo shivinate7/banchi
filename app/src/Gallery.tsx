@@ -74,7 +74,7 @@ const CLOSED_BOX = place({})
 const OPEN_BOX = place({ label: 'Box 7 · Section 1 · Card 12', box: 7, index: 12, slot: 12, section: 1, card: 12, box_name: null, section_start: 1, section_end: null, box_total: 62, fraction: 12 / 62 })
 const SINGLE_SECTION = place({ label: 'Box 9 · Section 1 · Card 4', box: 9, index: 4, slot: 4, section: 1, card: 4, box_name: 'Bulk, unsorted', section_start: 1, section_end: null, box_total: 80, fraction: 0.05 })
 const NO_FRACTION = place({ label: 'Box 4 · Section 1 · Card 1', box: 4, index: 1, slot: 1, section: 1, card: 1, box_name: null, section_start: 1, section_end: null, box_total: 0, fraction: null })
-/* A COPY THAT HAS LEFT ITS BOX (D58, D68, D71), which is a ROW SHAPE and not a variation on a
+/* A COPY THAT HAS LEFT ITS BOX (D58, D68, D41), which is a ROW SHAPE and not a variation on a
    located one: `slot`, `section` and `card` are all null, because a card that has left is in no
    slot, and `join.departed_label` is what the server sends where a position label would be — the
    place it left (the fixture below keeps the older dotted form, which the label reader still

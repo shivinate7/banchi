@@ -50,9 +50,9 @@ A **playmat cannot go in an envelope whatever it cost**, and a **$600 single may
 
 **No length is enforced on a stamp, because nobody has measured one** — truncating at an invented number cuts the end off a pick instruction, and a wrong shelf reads as a right one. Too many stamps refuses, because *that* is knowable from the format.
 
-### Three things the emitter may never do, and all three are D49 in another lane
+### Three things the emitter may never do, and all three are D86 in another lane
 
-D49 states it as *"nothing here is ever defaulted on your behalf — that is the entire point"*.
+D86 states it as *"nothing here is ever defaulted on your behalf — that is the entire point"*.
 
 - **It never selects insurance.** An insurance-shaped column **raises** rather than being dropped, matched folded and stripped so a differently-spelled header cannot slip past. Dropping it silently is an operator who believes they asked for insurance and did not; it is a per-order judgement made inside Pirate Ship, looking at the card.
 
@@ -89,3 +89,5 @@ No route, no client function in `app/src/server.ts`, and no screen reaches eithe
 Taken as D61, free now that the number below it has merged; it was contested by two unmerged branches when this was written, which is the heading collision D16 records, in progress again. **The owner's rule, given when asked: always renumber YOUR OWN branch, never another's.** That is narrower than D16's renumber-by-position rule and does not conflict with it — D16 settles headings that have **already** landed, and this settles who yields **before** they do: the incoming branch, always. The alternative is each session moving whichever entry it finds easiest, which is how a cited id comes to point at a different entry.
 
 ---
+
+Lane order stays; phones open every lane folded; the rule is said once.

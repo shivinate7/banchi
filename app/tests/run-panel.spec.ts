@@ -1,5 +1,5 @@
 // Protects: The pipeline (identify, join, emit, reconcile) is reachable from a screen, and the button that spends money does not exist until the free preview answers.
-// Governs: D32, D33, D36, D56, D64, D174, D180, D291
+// Governs: D32, D33, D36, D56, D65, D174, D180, D291
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { runRow } from './routeFixtures'
@@ -206,7 +206,7 @@ async function open(
      *  `undefined` means "the ordinary one-run fixture". */
     runs?: unknown[]
     /** Boxes whose child could not be spawned, in the shape `POST /pipeline/identify` answers
-     *  with. A partial send is the one failure no validation can pre-empt (D48), so it is the
+     *  with. A partial send is the one failure no validation can pre-empt (D180), so it is the
      *  one the screen has to draw rather than swallow. */
     failed?: { code: string; message: string }[]
     /** A live submission already holding cards in this press (D174). Null by default: it is
@@ -1471,14 +1471,14 @@ test('a run that names no drawer at all draws none, rather than a number off a f
 
 // ------------------------------------------------------------------- several drawers
 //
-// THE CART IS GONE AND THE CAPABILITY IS NOT (D180, overtaking D48). That
+// THE CART IS GONE AND THE CAPABILITY IS NOT (D180). That
 // entry made a send a cart of boxes, one detached child per drawer, each with its own reading.
 // It also named its own reopening condition — *"a cart that is never used with more than one
 // box"* — and the measurement does NOT meet it: on 2026-09-01 the operator sent boxes 3, 4 and
 // 5 in ONE press, three run directories created in the same second.
 //
 // SO `box` IS A LIST-VALUED TERM AND THAT PRESS IS ONE SELECTION. What went is the per-drawer
-// READING, which is the argument D48 actually rested on and which no press has ever used: all
+// READING, which is the argument D180 actually rested on and which no press has ever used: all
 // three legs of that press carried `max_edge` 1200, and 12 of 15 runs on this store share it.
 // These cases hold that the screen sends what it drew, that the confirm is gated on the TOTAL,
 // and that one reading reaches the whole selection.
@@ -1772,7 +1772,7 @@ test('#/runs?state=captured opens the composer on its default scope, the way sta
   expect(body.box).toBeUndefined()
 })
 
-// ----------------------------------------- the export, fetched rather than downloaded (D64)
+// ----------------------------------------- the export, fetched rather than downloaded (D65)
 
 /** The control that fetches. A helper because several cases press it. */
 function fetchButton(page: Page) {
@@ -1932,7 +1932,7 @@ test('a refusal an operator cannot answer draws a sentence and nothing to press'
 })
 
 
-/* PORTED FROM MAIN, AGAINST THIS BRANCH'S RECEIPT. D64's delta guard is retired on both
+/* PORTED FROM MAIN, AGAINST THIS BRANCH'S RECEIPT. D65's delta guard is retired on both
    branches — a fetch no longer asks a question the operator has to press past — and what the
    guard used to compare is drawn as a receipt instead. Main asserted it against `.run-fetched`
    and raw digits; this branch draws it in `.run-receipt-was` and formats row counts with
@@ -1975,7 +1975,7 @@ test('a first fetch says there is nothing earlier to set beside it', async ({ pa
  * registry. Neither is fixed on this screen, so a button here would be offering to wave
  * through a refusal the screen does not understand. The two refusals that once drew one —
  * `export_unverified` and `export_narrower` — are gone with the delta guard they answered
- * (D64, amended 2026-09-02), so the absence is asserted over EVERY refusal rather than over
+ * (D65, amended 2026-09-02), so the absence is asserted over EVERY refusal rather than over
  * the ones a list happened to omit. */
 for (const refusal of [
   {
@@ -2041,7 +2041,7 @@ test('the receipt says what was asked for, not only what arrived', async ({ page
 /* TWO CASES DELETED HERE, BOTH WITH THE THING THEY ASSERTED.
 
    `the fetch answers both acknowledgements itself rather than asking` sent `accept_unverified`
-   and `accept_narrower` on every fetch, because the server refused without them. D64's
+   and `accept_narrower` on every fetch, because the server refused without them. D65's
    amendment RETIRED the delta guard and deleted both fields from the wire, so the case now
    asserts a request shape no route reads — and the workaround it was defending (answering the
    two questions up front so the operator never sees them) has nothing left to answer.
@@ -2138,7 +2138,7 @@ test('the routing lever reaches join', async ({ page }) => {
   await page.getByRole('button', { name: 'Join again' }).click()
 
   /* `--review-below-confidence` was reachable only from a terminal. `--rule` and `--basis`
-     are deliberately NOT here: D49 makes `inventory/prices.json` the one place a pricing answer is
+     are deliberately NOT here: D86 makes `inventory/prices.json` the one place a pricing answer is
      written, and a second place to say `rule` already cost 48 cards a price nobody chose. */
   const join = wire.filter((row) => row.path.endsWith('/join')).pop()
   expect(join?.body).toMatchObject({ review_below_confidence: 'medium' })
@@ -2836,7 +2836,7 @@ test('a failed poll elsewhere flips the offline banner before the next status ch
   await expect(page.locator('.bn-banner[role="alert"]')).toHaveCount(0)
 })
 
-// ------------------------------------------------------------------------- D165's rescue
+// ------------------------------------------------------------------------- D145's rescue
 
 /* THE REPAIR, REACHED FROM THE ROW IT STRANDS (D210). `box_former` is the same
  * flag `runBoxLabel` already draws `Box 1 (deleted)` off — this asserts the control that sits

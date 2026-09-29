@@ -61,12 +61,12 @@ compaction of the session that started it — racing that session's own hand-mer
 re-resolving branches it was resolving. It ended because a person noticed a four-hour bash in
 their own window.
 
-**D175 is the other half of that incident and this clause does not duplicate it.** That entry
+**D305 is the other half of that incident and this clause does not duplicate it.** That entry
 teaches the sweep to ask whether anything still OWNS a process, so a loop whose session is gone
 is offered up rather than read as busy.
-**This clause refuses the loop at the moment it is created**; D175 finds the one already
+**This clause refuses the loop at the moment it is created**; D305 finds the one already
 running. Neither makes the other redundant — a poller
-started before this hook existed is D175's, and a poller this hook refuses never becomes
+started before this hook existed is D305's, and a poller this hook refuses never becomes
 anybody's to find.
 
 ### The predicate is resolution, and that is the whole design

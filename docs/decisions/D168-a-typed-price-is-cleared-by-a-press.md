@@ -20,7 +20,7 @@ Taken read-only from a copy of the owner's `inventory/prices.json`, 2026-09-12, 
 | answered 2026-09-12 | 26 |
 | carrying no `at` at all | **20** |
 
-**66% of every typed price in the store was five days old and still pre-filling its field.** D49 is explicit that an untouched row writes no key — the rule's suggestion is a ghost that writes nothing — so what was pre-filling those fields was not a suggestion. It was 269 real answers, each one a figure the operator typed once, each one about to be what `emit` wrote.
+**66% of every typed price in the store was five days old and still pre-filling its field.** D86 is explicit that an untouched row writes no key — the rule's suggestion is a ghost that writes nothing — so what was pre-filling those fields was not a suggestion. It was 269 real answers, each one a figure the operator typed once, each one about to be what `emit` wrote.
 
 **The removal was per-row and only per-row**: select the field, delete the digits, three hundred times. Nothing in the product removed more than one.
 
@@ -30,7 +30,7 @@ The safety of a mass-delete over the one file in this product that holds money i
 
 The three things it never touches, and how each one fails differently:
 
-**A HOLD IS NOT A PRICE, AND THIS IS THE ONE I WOULD HAVE GOT WRONG BY DEFAULT.** D49 built `withheld` to carry a reason, a `watch_above` and a note — *"a way of flagging that the hold is intentional"* — and its own vocabulary section spends a paragraph keeping the word disjoint from two others so the three cannot be confused. Clearing one does not return a row to a blank field with a suggestion behind it: **it puts the card back into the next `emit`**, which is a money consequence in the direction that costs. The owner's 23 are all `bullish`, which is a claim about where a price is going, not an answer about where it is. `stamp_answers` rule 3 already says *"a hold is not a price"* in as many words; this is that rule pointed at deletion. **No control in the sheet reaches them, and the sheet says the figure** rather than leaving it to be discovered.
+**A HOLD IS NOT A PRICE, AND THIS IS THE ONE I WOULD HAVE GOT WRONG BY DEFAULT.** D86 built `withheld` to carry a reason, a `watch_above` and a note — *"a way of flagging that the hold is intentional"* — and its own vocabulary section spends a paragraph keeping the word disjoint from two others so the three cannot be confused. Clearing one does not return a row to a blank field with a suggestion behind it: **it puts the card back into the next `emit`**, which is a money consequence in the direction that costs. The owner's 23 are all `bullish`, which is a claim about where a price is going, not an answer about where it is. `stamp_answers` rule 3 already says *"a hold is not a price"* in as many words; this is that rule pointed at deletion. **No control in the sheet reaches them, and the sheet says the figure** rather than leaving it to be discovered.
 
 **A `channel != "price"` ANSWER IS THE ABSENCE OF ONE.** `cli/cmd_join.py` seeds `Answer(value=None, channel="unknown")` for every card the catalogue could not price, and `pipeline/decisions.py:blocking` reads that table to decide whether `emit` must refuse. Clearing one makes an unpriced card read as though nothing were owed on it — the direction that costs money again, and invisibly. `Answer.channel`'s own docstring records this gate being broken once before by dropping the field.
 
@@ -65,7 +65,7 @@ The remedy is that the count sits ON the option, before the press. An empty wind
 
 **THIS IS THE THIRD AND FOURTH WRITER OF THAT FILE AND THE GUARD IS WHY THAT IS ALLOWED.** That amendment is blunt — *"ONE FILE MEANS TWO WRITERS, AND THE SECOND ONE WAS SILENTLY REVERTING THE FIRST"* — and D105 states the rule as *"one file may not have two unguarded writers"*. **Unguarded is the operative word**: `pkmnscan reprice apply` is already a second writer and is admitted by carrying `--corpus-revision`. An absent revision still lands, verbatim as the PUT has it, because absent means *did not read one* and that is the terminal user.
 
-**A clear is its own route rather than a `PUT /pricing` of nulls.** `Corpus.parse` does read `null` as *drop this answer* (D49's rule, untouched), so a client could clear by nulling keys — and then the CLIENT would be deciding which keys, which is `corpus.clearable` written a second time in TypeScript against money. That is what D49 refused across two languages and what D103 found happening across two Python modules with `preset_prices`. **The predicate stays in Python and the screen presses a button.**
+**A clear is its own route rather than a `PUT /pricing` of nulls.** `Corpus.parse` does read `null` as *drop this answer* (D86's rule, untouched), so a client could clear by nulling keys — and then the CLIENT would be deciding which keys, which is `corpus.clearable` written a second time in TypeScript against money. That is what D86 refused across two languages and what D103 found happening across two Python modules with `preset_prices`. **The predicate stays in Python and the screen presses a button.**
 
 **The client's SKU list is a SCOPE and never a predicate.** The route re-derives membership from the file as it stands on every call, so a list that went stale between the read and the press removes *fewer* answers than the label said, never a different set — and a screen cannot name a hold into being clearable. `check_pricing_clear` presses exactly that: a scope naming only a hold and an `unknown` seed clears nothing, and **a build that trusted the client's list would delete both while every other assertion in that case still passed.**
 
@@ -103,6 +103,6 @@ Not adopting them is also the honest reading. What the fold produced *is* the do
 
 *An operator who clears the same window every week*, which would mean the expiry rule was the right answer after all and the press is a ritual. The measurement is whether two consecutive sittings clear at the same window with no other pricing in between.
 
-*A hold nobody can lift in bulk*, if holds ever accumulate the way typed prices did. D49's own reopening measurement watches the neighbouring case.
+*A hold nobody can lift in bulk*, if holds ever accumulate the way typed prices did. D86's own reopening measurement watches the neighbouring case.
 
 *A worklist scope that is never used.* If every press is `Everywhere`, the scope control is ceremony and the honest simplification is one press with the figure on it. The measurement is the scope each clear is sent with.

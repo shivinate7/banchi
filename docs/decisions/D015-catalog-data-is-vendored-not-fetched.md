@@ -15,3 +15,5 @@ The pokemontcg.io dataset is a committed snapshot of the maintainer's own `Pokem
 **Upstream publishes no license file.** Private, single-operator use only. Recorded so no later session assumes redistribution rights that were never granted.
 
 **A defect this erases.** The current fetch requests `pageSize=250` with no pagination loop, but sv1 has 258 cards, sv4 266, sv8 252 — and the banked `sv1.json` holds exactly 250 records, so sv1 is truncated today. Low severity: the manifest pins the selection, so committed scores stay reproducible and the effect is sampling bias rather than a wrong number. A local file has no page size.
+
+The vendored catalog stays public with no upstream license; reopen on a license or takedown; image mirror stays dry-run.

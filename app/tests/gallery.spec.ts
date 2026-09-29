@@ -1,5 +1,5 @@
 // Protects: The Kit sheet draws every row shape the product can draw, so no specimen is unreachable there.
-// Governs: D24, D68, D71, D118, D119, D269, D272
+// Governs: D24, D68, D41, D118, D119, D269, D272
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { createRequire } from 'node:module'
 import { sealEveryTest } from './shell'
@@ -146,7 +146,7 @@ test('the current row is drawn, and it is a row like every other', async ({ page
 /** A path-led specimen on the kit sheet — the flow `PositionLabel.css`'s re-rank fires under. */
 const PATH_LED = ".kit-poslabel:has(.position-parts[data-lead='path'])"
 
-test('a label with no figure re-ranks its path, and a live one does not (D71)', async ({ page }) => {
+test('a label with no figure re-ranks its path, and a live one does not (D41)', async ({ page }) => {
   /* THE SITE THIS MOVED FROM IS GONE. It was asserted on `#/inventory`'s location card until
      D119 deleted that card, and after the deletion NO screen in this product renders a
      `lead='path'` label with a void in it — the copies list, the order picker and the walk are

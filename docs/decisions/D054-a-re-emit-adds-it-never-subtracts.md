@@ -6,7 +6,7 @@
 
 **Three things drop a SKU after `_game_only` and it knew about one:**
 
-1. a **withheld** SKU (D49) — subtracted since 2026-08-29, which is the instance D49 closed;
+1. a **withheld** SKU (D86) — subtracted since 2026-08-29, which is the instance D86 closed;
 2. a **`no_market_data` SKU answered `"unlisted"`** — `prices_for` drops it and nothing subtracted it. **This one fires on a FIRST emit**, for a game whose only above-threshold entries are unpriced-and-unlisted;
 3. **`add_to_quantity == 0`**, every copy already committed — which is every SKU on a re-emit, and is the one that destroyed the file.
 
@@ -24,7 +24,7 @@ A fix that special-cased the third would have left the second standing. **So the
 
 **`emitted` is a union across emits, via a named `Run.record_emit`.** `Run.set` stays replace-not-merge — `set(collected=…)`, `set(joined=…)` and `set(batch_ids=…)` all depend on that, and a global merge would be a wide silent change for one field's problem.
 
-**The union is not tidiness, and `reconcile` is why.** It passes these SKUs to `join.reconcile_import`, which reports in **both directions** — so after emit → import → re-emit → import, a record holding only the last delta puts every SKU from the first import into `rows_without_cards`, and reconcile prints *"something else wrote it"* about rows it wrote itself. `pushed` accumulates because it is a quantity of copies and quantities sum; **`pushed_skus` is DERIVED from the lists rather than accumulated beside them**, so it cannot come to disagree with them — D49 Part One's rule applied to this record. A SKU withheld *after* being emitted stays in the union, deliberately: it was sent, its copies are at `pushed`, and the staged export will carry it.
+**The union is not tidiness, and `reconcile` is why.** It passes these SKUs to `join.reconcile_import`, which reports in **both directions** — so after emit → import → re-emit → import, a record holding only the last delta puts every SKU from the first import into `rows_without_cards`, and reconcile prints *"something else wrote it"* about rows it wrote itself. `pushed` accumulates because it is a quantity of copies and quantities sum; **`pushed_skus` is DERIVED from the lists rather than accumulated beside them**, so it cannot come to disagree with them — D86 Part One's rule applied to this record. A SKU withheld *after* being emitted stays in the union, deliberately: it was sent, its copies are at `pushed`, and the staged export will carry it.
 
 **`_phase` is hardened independently, and that is belt to this braces.** It tested the `emitted` dict for truthiness, and `{"listed": [], ...}` is a truthy dict — so a run whose record had been blanked read `reconcile` on the panel while `reconcile` itself refused. It now asks whether the record names a SKU, through `Run.emitted_skus`. **No run on disk was ever in the corrupted state, so there is no migration** — but a hand-edited manifest, or one written by an older checkout, must not send the operator to a step that will turn them away.
 

@@ -11,7 +11,7 @@ A BOX NUMBER IS THE WRONG THING TO SEE, IN BOTH DIRECTIONS.
 
   TOO WIDE.  Two live runs over DISJOINT selections in one drawer are refused, and
              `_busy_run`'s own docstring records that narrowing as accepted for want of a
-             card-level vocabulary — D48's note. Nothing was ever going to be double-billed
+             card-level vocabulary — D180's note. Nothing was ever going to be double-billed
              there: the two presses are buying different cards.
   TOO NARROW. `_run_box` answers `None` for a run whose captures span more than one box —
              `cli/cmd_identify.py:_scope_for` writes no scope block for such a run, and the

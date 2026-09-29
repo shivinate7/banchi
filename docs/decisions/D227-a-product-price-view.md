@@ -58,7 +58,7 @@ contribution is where that split falls on the READ side, given the archive
   never deletes a row. This is a complete answer, not a stale one, for as long as a press
   has kept the archive current.
 - A SKU the archive has never swept falls through to `pipeline/pricehistory.py:Market` —
-  the same live reader `#/pricing`'s own panel already calls (D62). One reader, two callers,
+  the same live reader `#/pricing`'s own panel already calls (D278). One reader, two callers,
   never a second implementation.
 - Neither path writes. `pkmnscan archive sweep` stays the one press that folds a live read
   back into the table. That is `D219`'s own ruling, restated rather
@@ -68,7 +68,7 @@ The screen never merges the two kinds of observation into one number or one line
 market series draws as a broken polyline. It gaps at any bucket with no price, inherited
 from `PriceHistory.tsx:sparkSegments` rather than rebuilt. The owner's own fills draw as
 individual marks, at their own true date and price, in the one accent this design system
-allows. A fill is never colored by whether it beat or missed the market. D62 already rules
+allows. A fill is never colored by whether it beat or missed the market. D278 already rules
 direction a sign and a word, never a color. A fill against a bucket is not even a
 direction. It is two facts placed near each other. A caption beside every chart states the
 bucket width now in force. That width is a property of when the report is read, not of the

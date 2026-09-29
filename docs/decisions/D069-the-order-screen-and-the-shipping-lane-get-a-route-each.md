@@ -1,12 +1,12 @@
 ## D69 — The order screen and the shipping lane get a route each, and the transport was measured before it was written
 
-**Built 2026-08-30.** `#/orders` answers *which copies does this buyer get, and where in the boxes are they*, out of D63's ledger. `#/shipping` answers *which envelope does this order go in*, out of TCGplayer's own `Orders → Export Shipping` file. Two routes, not one screen with two modes. `app/src/App.tsx` now carries NINE routes — eight the owner's and one the Fulfiller's — and D66's build order is discharged: the screens exist, so the transport had somewhere to arrive.
+**Built 2026-08-30.** `#/orders` answers *which copies does this buyer get, and where in the boxes are they*, out of D63's ledger. `#/shipping` answers *which envelope does this order go in*, out of TCGplayer's own `Orders → Export Shipping` file. Two routes, not one screen with two modes. `app/src/App.tsx` now carries NINE routes — eight the owner's and one the Fulfiller's — and D69's build order is discharged: the screens exist, so the transport had somewhere to arrive.
 
 ### Two routes, because they are two questions asked at two moments
 
 **Their inputs do not touch.** The order screen reads `inventory/orders.json` and `inventory/inventory.json` through one store snapshot. The shipping screen reads a CSV the operator uploads, which carries no line items at all — `pipeline/shipping.py:Shipment` says so in its own docstring — and which the ledger has never seen. Neither can be derived from the other, and a screen that drew both would have to explain to the operator why half of it went stale when the other half was refreshed.
 
-**D66 named the collision this avoids and offered exactly these two options.** *"If the lane badge and the download draw on the order screen, two branches revise one file, which this repo has already paid for twice. Sequence them, or give the lane its own surface."* The lane got its own surface. That is the second option taken, not a new argument.
+**D69 named the collision this avoids and offered exactly these two options.** *"If the lane badge and the download draw on the order screen, two branches revise one file, which this repo has already paid for twice. Sequence them, or give the lane its own surface."* The lane got its own surface. That is the second option taken, not a new argument.
 
 **The order screen therefore draws NO postage lane, and this is a prohibition rather than an omission to fill in later.** There is no `ships_in_an_envelope` field on the wire, no lane span in the markup, and adding one would not be an enhancement — it would put a second answer to D61's question on a screen with none of D61's inputs, computed from data that cannot answer it. D61 rules on the lanes, the abstention, the weight, the insurance and the PII, and this entry reopens none of it.
 
@@ -42,7 +42,7 @@
 
 **The order host is a COOKIE SESSION and NOT a Bearer challenge.** `order-management-api.tcgplayer.com` authenticates with `credentials: 'include'` and the `TCGAuthTicket_Production` cookie — the same `.tcgplayer.com` cookie `server/tcg_export.py:_cookie()` already names, so ONE account session serves both hosts. No `www-authenticate` header appeared on any path probed, the portal's own XHR sets no `Authorization` header, and the bridge extension authenticates purely by cookie.
 
-**This repo recorded the opposite in three places and repeated it in a fourth**: `server/tcg_export.py`'s docstring, D64's probe table, D66's exclusion paragraph, and `docs/specs/order-pipeline.md`'s T0. All four are amended in place rather than deleted, because sound reasoning that reached a wrong conclusion is worth being able to find again — the same treatment D64 gave its own price-history correction.
+**This repo recorded the opposite in three places and repeated it in a fourth**: `server/tcg_export.py`'s docstring, D65's probe table, D69's exclusion paragraph, and `docs/specs/order-pipeline.md`'s T0. All four are amended in place rather than deleted, because sound reasoning that reached a wrong conclusion is worth being able to find again — the same treatment D65 gave its own price-history correction.
 
 **What genuinely does NOT transfer between the two hosts is the BODY CONVENTION, not the auth.** The admin host needs Knockout's `postJson` form — `model=<json>`, form-urlencoded, which is D65's shape — and the order host takes a PLAIN JSON document. A client carrying D65's form here fails, and it fails in a way that reads like an auth problem.
 
@@ -54,7 +54,7 @@
 
 ### What this does not decide
 
-**Not the lanes, the abstention or the PII rule** — D61. **Not the ledger's two maps or the sync's one-map write** — D63. **Not whether a browser extension is ever the transport** — D66 recorded that cost and this entry does not spend it: what landed is stdlib `urllib` in one module naming one host. **And not the two write endpoints seen on the wire and deliberately not built**, `POST /orders/status-updates` and `POST /orders/<number>/tracking`, which are steps 13 and 14 and are somebody else's decision.
+**Not the lanes, the abstention or the PII rule** — D61. **Not the ledger's two maps or the sync's one-map write** — D63. **Not whether a browser extension is ever the transport** — D69 recorded that cost and this entry does not spend it: what landed is stdlib `urllib` in one module naming one host. **And not the two write endpoints seen on the wire and deliberately not built**, `POST /orders/status-updates` and `POST /orders/<number>/tracking`, which are steps 13 and 14 and are somebody else's decision.
 
 ### What would reopen this
 

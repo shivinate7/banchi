@@ -1,7 +1,7 @@
 /* THE ONE MEASUREMENT `text-shape.spec.ts` READS, kept in its own module so the function
  * handed to `page.evaluate` stays a single, self-contained closure — Playwright serialises it
  * by `toString()`, so it may not read anything from this file's outer scope, only from its own
- * nested helpers and the live DOM. See D284, which supersedes D194.
+ * nested helpers and the live DOM. See D284.
  *
  * TWO CHECKS, FOUR SIGNALS. The owner's ruling, 2026-09-23: kill the pinned word-count
  * ceilings ("I don't like keeping a stagnant static pin") and replace them with a repetition

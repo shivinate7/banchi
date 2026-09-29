@@ -32,7 +32,7 @@ an element that does not exist.
 
 The consequence, measured on `#/pricing` at a 1920 viewport with the sidebar open: nine of the
 row's ten tracks are fixed, so every pixel the page gains lands in one cell.
-**The card identity was 924px wide while the price field it decides — the hero of the row (D49) — was 68px, at the far end of that gap.**
+**The card identity was 924px wide while the price field it decides — the hero of the row (D86) — was 68px, at the far end of that gap.**
 The ink in that cell reaches 257px at the median and 430px at the 90th percentile across 67
 rows.
 

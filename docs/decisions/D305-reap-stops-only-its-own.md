@@ -38,7 +38,7 @@ sketch assumed about an older macOS. So a tag cannot be read back from the proce
 the fact, here, at all.
 
 **The working mechanism needed no new primitive.** It only needed `scripts/reap.py`'s own
-pattern, one register down. `protected_pids` already solves this shape for D53's one
+pattern, one register down. `protected_pids` already solves this shape for D138's one
 supervisor. It uses a marker FILE under `.serve/`, holding a pid. `_descendants` walks DOWN
 from it, to reach children spawned after the marker was written. `scripts/reap_mark.py`
 generalizes that from "the one supervisor" to "whichever session's launcher wrote it". It
@@ -64,10 +64,10 @@ recorded.
 
 **The owner is `CLAUDE_CODE_SESSION_ID`, read directly.** It is a primitive Claude Code already
 sets. Every child already inherits it, by ordinary fork and exec. That is not the `ps -E`
-read-back the sketch assumed, and this file measured that read-back does not work. **D175**
+read-back the sketch assumed, and this file measured that read-back does not work. **D305**
 solved a neighboring "whose is this" question with a Bash-wrapper argv fragment, because no
 per-session id existed on this machine in 2026-09-12. That fragment answers ANY session, never
-WHICH session. This entry does not replace it. It answers a question D175 never asked.
+WHICH session. This entry does not replace it. It answers a question D305 never asked.
 
 ### Every launcher, found by reading the code
 
@@ -180,3 +180,7 @@ alone is enough for it, and for the CLI, to see a project's own marks. But `make
 janitor-install` copies `reap.py` byte for byte. A stale installed copy keeps judging by
 checkout alone. It never sees a mark this way. Run `make janitor-install` again on this
 machine, once, after this change lands.
+
+Reap's "under this checkout" is the verdict's own test; a nested worktree is another checkout.
+
+A process whose session is gone is offered, never reaped.

@@ -39,7 +39,7 @@ Nothing in this repo has sent it. `["0"]` is how the portal spells "all of them"
 | **C-4654187** | 1 | **$7,000.00** | **Kai'Sa, Daughter of the Void (Signature)** |
 | C-4619603 | 37 | $11.39 | Spiritforged - Booster Pack |
 
-**`True` would make the lens silently omit the most valuable listing in the store**, and a 37-copy line beside it. D64's finding that `Photo URL` is empty in all eleven *catalogue* exports is what would make it permanent — this is that same fact from the other side, and it is why the eleven-export measurement does not transfer to this document.
+**`True` would make the lens silently omit the most valuable listing in the store**, and a 37-copy line beside it. D65's finding that `Photo URL` is empty in all eleven *catalogue* exports is what would make it permanent — this is that same fact from the other side, and it is why the eleven-export measurement does not transfer to this document.
 
 **The audit row asserts the disagreement, on both fields.** `STANDING_FILTERS` and `LIVE_FILTERS` must differ on `MyInventory` and on `ExcludeListos`; agreement means one request has taken the other's instruction, and no single-dict loop could catch it.
 

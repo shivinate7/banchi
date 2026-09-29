@@ -95,7 +95,7 @@ the new symlink, to the folded content. Nothing in `TRACKS` needed editing for t
 true.
 
 **THE FOLDED PROSE WAS REWRITTEN, NOT PASTED, TO KEEP THE FILE'S OWN ZERO-ERROR FLOOR.**
-`scripts/ste-ratchet.json` pins root `CLAUDE.md` at zero STE errors (D226). The original
+`scripts/ste-ratchet.json` pins root `CLAUDE.md` at zero STE errors (D60). The original
 `code-card-fork/CLAUDE.md` carried nine, mostly semicolons and one run-on sentence. Six
 sentences were split, and every semicolon was removed, before the content moved. Every
 rule and every measured number carried over unchanged.

@@ -2,11 +2,11 @@
 
 **The export request names what it wants, so completeness stops being an inference.** Built 2026-08-30.
 
-D64 fetched whatever the portal's saved filter last produced and then tried to judge it. This names a category and a set in the request, so the file is complete within that scope by construction.
+D65 fetched whatever the portal's saved filter last produced and then tried to judge it. This names a category and a set in the request, so the file is complete within that scope by construction.
 
-### D64 shipped against the wrong endpoint
+### D65 shipped against the wrong endpoint
 
-**`/Admin/Pricing/DownloadMyExportCSV` ignores every parameter, measured across eight spellings that returned byte-identical output.** It is a different, unscoped endpoint that serves the saved filter. It entered D64 as a verified fact, it does return a CSV, and that is how it survived.
+**`/Admin/Pricing/DownloadMyExportCSV` ignores every parameter, measured across eight spellings that returned byte-identical output.** It is a different, unscoped endpoint that serves the saved filter. It entered D65 as a verified fact, it does return a CSV, and that is how it survived.
 
 **What the Export Filtered CSV button sends is `POST /admin/pricing/downloadexportcsv`**, captured off the wire in the owner's browser. The scope travels in the body, which is why every query string was ignored.
 
@@ -28,11 +28,11 @@ D64 fetched whatever the portal's saved filter last produced and then tried to j
 
 ### The guard flips from a delta to a positive check
 
-**D64 compared a fetch against the run's previous export because nothing better was available.** Three filters narrow an export independently and one leaves no trace in it, so completeness could not be read off the contents.
+**D65 compared a fetch against the run's previous export because nothing better was available.** Three filters narrow an export independently and one leaves no trace in it, so completeness could not be read off the contents.
 
 **A scope this process named can be checked against what arrived.** The question becomes "did I get the sets I asked for", which the file answers. `export_scope_incomplete` refuses rather than warns: a set asked for and absent means every card in it queues as `no_catalog_row`, a whole box silently, from a fetch that reported success.
 
-**There never was a delta guard on the upload path, and the fetch path's was retired 2026-09-02** (D64, amended): the positive check is the whole guard.
+**There never was a delta guard on the upload path, and the fetch path's was retired 2026-09-02** (D65, amended): the positive check is the whole guard.
 
 ### The scope is the claims the operator already made
 
@@ -50,7 +50,7 @@ D64 fetched whatever the portal's saved filter last produced and then tried to j
 
 ### A refusal that blamed the operator's credential
 
-**The portal answers a malformed request with HTTP 200 carrying an HTML page titled `System Error`, and D64 read any HTML as a login page.** Five different bad bodies were each reported as `tcg_session_expired`, which sends the operator to re-copy a cookie that was working. `tcg_request_rejected` now says the session is fine and the defect is here.
+**The portal answers a malformed request with HTTP 200 carrying an HTML page titled `System Error`, and D65 read any HTML as a login page.** Five different bad bodies were each reported as `tcg_session_expired`, which sends the operator to re-copy a cookie that was working. `tcg_request_rejected` now says the session is fine and the defect is here.
 
 ### What it costs
 
@@ -125,3 +125,7 @@ D64 fetched whatever the portal's saved filter last produced and then tried to j
 
 **One wrong answer does exist, and it is older than the abbreviation rule.** `SP` is Riftbound's Special collection, TCGplayer lists no such set, and `SP` resolves to `Spiritforged` by the PREFIX rule — which has answered that way since `match_sets` shipped. It is left alone: narrowing prefix would take `UNL` and `VEN` with it, and both are real codes for sets TCGplayer does list.
 ---
+
+One press fetches the export and joins; name its scope, never judge a fetched file.
+
+A spawned child sees a rotated key or cookie because `PKMNSCAN_ENV_FROM_FILE` carries the names lifted from the environment file across the spawn, names only and never values.

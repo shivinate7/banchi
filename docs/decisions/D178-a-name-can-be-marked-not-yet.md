@@ -10,7 +10,7 @@
 
 **An allowlist line per reference.** `scripts/docs-audit-allow.txt` already accepts *"named before it is built"* as a reason and is self-cleaning — its own row fails when a listed path exists — so this would have worked correctly. It was declined on two counts. It puts a name's status two directories from the sentence that uses it, so a reader learns nothing from the reference itself. And it is an **exact-match roster that every branch edits**: one shelf document naming twenty-one unbuilt mechanisms would have added twenty-one lines to a live conflict surface, on a day when five PRs were already colliding in two shared files.
 
-**The allowlist keeps the job it is actually for, and the distinction is worth two mechanisms.** A path listed there is meant to be unresolvable FOREVER — `app/src/orderWalk.ts` is deleted and its references record the deletion (D96). **A `+` says *not yet*, which is a claim with an expiry.**
+**The allowlist keeps the job it is actually for, and the distinction is worth two mechanisms.** A path listed there is meant to be unresolvable FOREVER — `app/src/orderWalk.ts` is deleted and its references record the deletion (D97). **A `+` says *not yet*, which is a claim with an expiry.**
 
 ### It expires by itself, and that is the load-bearing half
 

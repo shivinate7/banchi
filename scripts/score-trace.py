@@ -274,7 +274,7 @@ def summary(paths: list[str]) -> None:
         trace = _load(path)
         rows = _rows(trace)
         params = trace["params"]
-        # A cadence trace (D130) nests the settle machine's parameters under `motion`; the
+        # A cadence trace (D144) nests the settle machine's parameters under `motion`; the
         # replay below is the SETTLE rule's and says so, so a cadence trace's live verdicts
         # and the replayed ones are two different machines' opinions of the same frames.
         trigger = trace.get("trigger", "motion")

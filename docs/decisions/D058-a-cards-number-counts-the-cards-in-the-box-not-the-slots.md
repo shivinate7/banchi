@@ -2,9 +2,9 @@
 
 **A card's number counts the cards in the box, so selling one makes the card behind it take that number on every screen.** Built 2026-08-30 on the owner's instruction: when cards are marked sold, the slot is not left empty — the cards before it move up one.
 
-**It is the answer to D30, which had been waiting on the owner since 2026-08-23.** That entry states the problem in the sentence this one deletes: `Card 17` is the **seventeenth slot**, not the seventeenth card you can count, and once a section has holes those two stop being the same number and every label in that section becomes uncountable by hand.
+**It is the answer to D58, which had been waiting on the owner since 2026-08-23.** That entry states the problem in the sentence this one deletes: `Card 17` is the **seventeenth slot**, not the seventeenth card you can count, and once a section has holes those two stop being the same number and every label in that section becomes uncountable by hand.
 
-D30 answered it with `neighbors` and `section_gaps` — built, and both kept — and with a physical marker for the emptied slot, which was the owner's open item and is now moot: there is no gap left to mark. Its box-audit paragraph gets easier for the same reason, because what is in the section and what the record says are the same count again.
+D58 answered it with `neighbors` and `section_gaps` — built, and both kept — and with a physical marker for the emptied slot, which was the owner's open item and is now moot: there is no gap left to mark. Its box-audit paragraph gets easier for the same reason, because what is in the section and what the record says are the same count again.
 
 ### Two things are wider than the ask, and both are the owner's
 
@@ -13,7 +13,7 @@ D30 answered it with `neighbors` and `section_gaps` — built, and both kept —
 - **`do_remove_card` deletes its target and a sale must not**, so a sold record's index has nowhere to go once the survivor above slides into it. Every answer is a v3 schema, rewriting `next_index`, `box_fill`, `copies_on_hand`, `positions_for_sku`, `_walk`, `_release_plan`, the box-delete gate and the migration.
 - **The Fulfiller's twenty-second undo would aim at the wrong card.** `undoSale` posts to `/inventory/<box>/<index>/sold` — a POSITION, with `SOLD_FIELDS = ("undo",)` and no aim check — and after a shift that position holds his next card.
 - **D28's answer-undo and D37's stand-down reversal would stop working.** `_answer_before` and `_clearing_event` treat a `renumbered` history line as a hard stop, and every sale would write one.
-- **D52 would gain a fourth occupant-changing operation**, on six screens whose `photoUrl` callers rest on the element re-keying when a card moves.
+- **D183 would gain a fourth occupant-changing operation**, on six screens whose `photoUrl` callers rest on the element re-keying when a card moves.
 
 **Sealed boxes consolidate too, so there is no open/sealed distinction at all.** The ask gated this on the lid; the owner dropped the gate when shown that the alternative makes every label jump the moment a box with sold cards is sealed. What it costs is named in D20 below: a sealed box's denominator moves now, which that entry froze `capacity` to prevent.
 
@@ -112,8 +112,8 @@ Box 1 holds 133 records with 18 sold, box 3 holds 39 with 24, and neither declar
 
 - **`next_index`, `box_fill`, `allocate_capture` and the store schema.** No migration. D10's permanent gap survives intact in the one place it was ever load-bearing — the allocator — which is why T7's two hardest cases, `check_allocator`'s and `check_mark_sold`'s, are untouched.
 - **`renumber_blocked`.** Its sold/retired clause's stated reason weakens — the box already closes up over a departure, so there is no gap left to close — but relaxing a refusal is its own decision, and this one would let the mid-box delete shift indices across records that are history and commitments. The refusal stands; the copy on `BoxBrowse` that recited the old reason is corrected, because a refusal explaining itself with something nobody can check any more teaches an operator to read past it.
-- **D52, `photoUrl` and `?card=`.** No index moves, so there is no fourth occupant-changing operation.
-- **D30's `neighbors`.** Kept, and still worth having for confirming a slot. `section_gaps` is structurally zero for a consolidated box and `placeSentence` already omits the phrase at zero.
+- **D183, `photoUrl` and `?card=`.** No index moves, so there is no fourth occupant-changing operation.
+- **D58's `neighbors`.** Kept, and still worth having for confirming a slot. `section_gaps` is structurally zero for a consolidated box and `placeSentence` already omits the phrase at zero.
 
 ### What it costs
 

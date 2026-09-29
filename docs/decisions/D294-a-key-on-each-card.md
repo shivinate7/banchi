@@ -1,8 +1,8 @@
 ## D294 — Every card carries its own order key, a fraction that starts at its index
 
-**The owner's ruling, 2026-09-25, on D265's open question.** Asked the form of the order key,
+**The owner's ruling, 2026-09-25, on D294's open question.** Asked the form of the order key,
 the owner answered: "A key on each card". The owner did not choose runs of indices on the box
-record, which the first build (`ux/boxmap`, 2026-09-25) had used. D265 (a card's place in its
+record, which the first build (`ux/boxmap`, 2026-09-25) had used. D294 (a card's place in its
 box is an order key apart from its stored index) points here for the form.
 
 ### The form
@@ -98,3 +98,5 @@ that start in the editor, and the save removes the divider.
   The cards in front of a divider can have left. Then the editor's number maps to the first
   card on hand, and a save of that edited start lands after the departed records. Not fixed
   here.
+
+A card's place is an order key apart from its stored index.

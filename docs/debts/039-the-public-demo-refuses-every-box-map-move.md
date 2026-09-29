@@ -13,4 +13,4 @@ what the published page refuses, and a refused write is its normal shape.
 **The fix, not built.** Record a move and its undo in the demo bundle, the way `make demo-record`
 records the other routes. Or name the refusal on the Shelf in the demo build.
 
-Cites D264 (a section moves whole) and D126 (the demo inflates its own history).
+Cites D264 (a section moves whole) and D295 (the demo inflates its own history).

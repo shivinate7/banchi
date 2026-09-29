@@ -3,7 +3,7 @@
 (D15, build-order step 9, piece 2's guard).
 
 Protects: The catalog index builder and reader answer correctly over a small synthetic vendor tree.
-Governs: D15, D18, D206
+Governs: D15, D18
 
 RED FIRST: every case here failed before `scripts/catalog-index.py` and `pipeline/catalog.py`
 existed — there was no index to build and no reader to open one. Run against a small,
@@ -20,7 +20,7 @@ Cases:
   - the composed join_key matches `number_index_key` applied by hand, so the two paths this
     entry's decision argues can never drift are asserted to agree rather than assumed to
 
-Never in the git hook (D18 — it writes a temp tree). Not wired into `make check` (D206).
+Never in the git hook (D18 — it writes a temp tree). Not wired into `make check` (D15).
 """
 
 from __future__ import annotations

@@ -63,3 +63,5 @@ worse than the admission above.
 The type paragraph itself, CLAUDE.md's "Type has three roles" sentence, carries the same
 `**NOT MECHANIZED:**` admission inline. D173 requires a rule to name its enforcement or argue
 why none exists.
+
+Every dollar figure takes mono, inputs and chips too; a spec reads the rendered text.

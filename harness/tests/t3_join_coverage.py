@@ -1356,8 +1356,8 @@ def _check_condition_scope(c) -> None:
 
       1. no play grade survives — the operator is never offered `Damaged Foil` for a card
          D12 says this product sells at Near Mint, and `_answer_target` cannot be handed one;
-      2. NO NUMBER LOSES A FINISH — the one that separates this from D64's variant-thinning
-         worry, and the one that must never be weakened. D64 measured it in as many words:
+      2. NO NUMBER LOSES A FINISH — the one that separates this from D65's variant-thinning
+         worry, and the one that must never be weakened. D65 measured it in as many words:
          "all 153 numbers read as thinned and not one had lost a finish";
       3. D3 rung 2 is alive — a number stocked in ONE finish resolves `catalog_forced` rather
          than queueing. The wide file had killed it outright: zero of the owner's 1,246
@@ -1418,7 +1418,7 @@ def _check_condition_scope(c) -> None:
         c.equal(
             sorted(k for k in before if before[k] != after.get(k)),
             [],
-            f"{label}: NOT ONE number loses a finish — a play grade is not a finish (D64), "
+            f"{label}: NOT ONE number loses a finish — a play grade is not a finish (D65), "
             f"and this is the assertion that keeps the narrowing honest",
         )
 
@@ -2240,9 +2240,9 @@ def run() -> Result:
     # first CRITICAL finding, 2026-09-23. `name_alternatives` passed `name_corroborated=
     # True` HARD-CODED from 2026-09-12 until this fix: the argument was that a row
     # `rows_for_name` found BY the name already "agrees" with it, so a contradicting
-    # rarity claim could be waived exactly as D146 waives one the NUMBER's own row
+    # rarity claim could be waived exactly as D23 waives one the NUMBER's own row
     # corroborates. That argument is circular — finding a row by name is not a SECOND
-    # signal independent of the name, and D146 needs two. Measured cost: this exact
+    # signal independent of the name, and D23 needs two. Measured cost: this exact
     # shape (`Billy & O'Nare`'s rows are Common, the claim says `Rare`) auto-released
     # onto `Billy & O'Nare` before the fix. Real case: `4/442` read "Pyke, Returned",
     # `rarity_claim=['Showcase']`, auto-released onto the BASE print (Rare) — the owner
@@ -2345,7 +2345,7 @@ def run() -> Result:
         list(alt_art.matches),
         [QUALIFIER_ALT_SKU],
         "THE CLAIM PICKS THE ALT-ART PRINT, and the card lists on it — TWO agreeing "
-        "signals, D146's own shape: the name narrows every printing to one CARD, "
+        "signals, D23's own shape: the name narrows every printing to one CARD, "
         "`Showcase` narrows within that to the one PRINTING it names. Before both "
         "fixes this queued, or worse, released onto the base (Rare) print",
     )

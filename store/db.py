@@ -154,7 +154,7 @@ PHOTOS_RELOCATED = "photos_relocated"
 # older has, so there is nothing to backfill, and an empty claim table is the correct state
 # for an upgraded store because a claim protects a press that is happening NOW.
 #
-# THIRTEEN, FOR THE ORDER KEY (D265, the owner's ruling "A key on each card"). `_add_card_order`
+# THIRTEEN, FOR THE ORDER KEY (D294, the owner's ruling "A key on each card"). `_add_card_order`
 # adds `cards.ord`, a REAL, and gives every card the key its index already is, in the column
 # and in the payload. So every box reads in today's order, and every stored divider (an index)
 # is already a key. Idempotent: a card that has a key keeps it.
@@ -201,7 +201,7 @@ TABLES: Dict[str, Tuple[str, ...]] = {
         # (`evidence`) — inert until a later lane's `Inventory.bind_sku` writes it. See
         # `_add_skus`'s comment above `SCHEMA_VERSION`.
         "identity_source",
-        # D265: the card's order key in its box. REAL, see `_REAL`.
+        # D294: the card's order key in its box. REAL, see `_REAL`.
         "ord",
     ),
     # No `state` since `D299`. A store made before keeps the column,
@@ -250,7 +250,7 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     ),
 }
 
-# Columns stored as REAL. `ord`, the order key (D265), is a fraction, and TEXT affinity would
+# Columns stored as REAL. `ord`, the order key (D294), is a fraction, and TEXT affinity would
 # store it as a string and sort `10.0` before `9.0`.
 _REAL = {"ord"}
 
@@ -533,7 +533,7 @@ def _upgrade(
                 _add_skus(conn)
                 _add_send_claims(conn)       # D273
             if stored < 13:
-                _add_card_order(conn)        # D265, the order key
+                _add_card_order(conn)        # D294, the order key
                 _open_every_box(conn)        # D299
             if stored < 14:
                 _add_price_history_summary(conn)  # D219, amended 2026-09-28
@@ -1216,7 +1216,7 @@ _SET_HINT_SWEEP = {"UNL": "Unleashed"}
 
 
 def _add_card_order(conn: sqlite3.Connection) -> None:
-    """Schema 13: `cards.ord`, every card's order key in its box (D265).
+    """Schema 13: `cards.ord`, every card's order key in its box (D294).
 
     THE OWNER'S RULING, 2026-09-25: "A key on each card". The key is a number apart from the
     stored index, which never moves (D10, D58). A placement between two cards takes a key

@@ -3,7 +3,7 @@
 (D219).
 
 Protects: The price-history archive sweeps, stores and reads back correctly with a fake market and no network call.
-Governs: D62, D219, D223, D247
+Governs: D278, D219, D231, D247
 
 NO NETWORK CALL. `FakeMarket` below is a stand-in for `pipeline/pricehistory.py:Market`,
 duck-typed to the one method `pipeline/pricearchive.py:sweep` calls
@@ -11,7 +11,7 @@ duck-typed to the one method `pipeline/pricearchive.py:sweep` calls
 `pipeline/pricehistory.py:Bucket`/`Series`/`Reading` objects built in this file — the same
 dataclasses the real `Market` returns, never a second, drifting shape.
 
-THE ARM THIS FILE EXISTS FOR proves the D62 argument this branch's own decision entry makes
+THE ARM THIS FILE EXISTS FOR proves the D278 argument this branch's own decision entry makes
 (D219): archiving the SAME calendar day out of `semiannual` and
 `annual` — both seven-day-wide ranges — must leave TWO rows, because the two are independent
 observations
@@ -24,7 +24,7 @@ PATH GATED, THE SIXTEENTH (D247, owner's word 2026-09-23): `make pricearchive-se
 wired into `make check` and `make ci-check` through `scripts/guard-scope.py`, exactly like
 `cid-selftest` right beside it in both recipes. This file is no longer the exception it was
 when written — `pkmnscan archive sweep --write` runs `pipeline/pricearchive.py` against the
-owner's real store, D223, and the sentence that used to sit here ("no caller yet reachable
+owner's real store, D231, and the sentence that used to sit here ("no caller yet reachable
 from a screen") had gone stale under it. The owner's own words for the fix: "once it's
 done, it only needs to be tested when touched" — never on every commit, only when this
 file's own derived subjects change (`scripts/guard-scope.py:derive_subjects`, read from this
@@ -183,7 +183,7 @@ def main() -> int:
     print("price-history archive self-test\n")
 
     # ---------------------------------------------------------------- store-level: the key
-    print("-- store/pricearchive.py: the key argument (D62) --")
+    print("-- store/pricearchive.py: the key argument (D278) --")
     archive = PriceArchive()
     same_day = date(2026, 1, 1)
     semiannual = Bucket(
@@ -784,7 +784,7 @@ def main() -> int:
 
         # ---------------------------------- card row refuses -> retry the ledger's own row
         print("\n-- pipeline/pricearchive.py: sweep() retries the ledger row when the card "
-              "row refuses (D233) --")
+              "row refuses (D231) --")
 
         class ResolvingMarket:
             """Resolves EXACTLY the way `pipeline/pricehistory.py:Market.readings_for_rows`
@@ -899,7 +899,7 @@ def main() -> int:
         # A DIRECT-RESOLUTION ARM, NOT A FALLBACK ONE (D234): a
         # glued-on set code (`OGN • 200/298`) is repaired by `ProductIndex.find` itself,
         # from the card row alone, with no ledger fallback offered at all — the mechanism
-        # this task adds, proven distinct from D233's own fallback.
+        # this task adds, proven distinct from D231's own fallback.
         glued_row = {
             "SKU-B": _row("SKU-B", "Twisted Fate", "OGN • 200/298", "Origins"),
         }
@@ -1240,7 +1240,7 @@ def main() -> int:
 
         # ---------------------------------------------------- ranking: sold value first
         print("\n-- pipeline/pricearchive.py: revenue_by_sku and rank_by_revenue "
-              "(D223) --")
+              "(D231) --")
         with Store().write() as snapshot:
             # "444" sells for $10.00 once (a real reading). "555" never sells (already
             # sold=state above, but no ORDER line — on-hand-or-sold is not the same fact as
@@ -1301,7 +1301,7 @@ def main() -> int:
            "order is preserved from the caller's own ranking, not re-sorted here", needs)
 
         # -------------------------------------------------------------- chunk_rows
-        # ------------------------------------------- resume window (D230)
+        # ------------------------------------------- resume window (D224)
         print("\n-- pipeline/pricearchive.py: RESUME_TTL_SECONDS, mutation-tested --")
         five_hours_ago = 100_000 - 5 * 3600
         resume_window_existing = [

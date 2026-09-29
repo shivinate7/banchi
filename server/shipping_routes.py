@@ -31,7 +31,7 @@ three Rubber Stamp columns from the order ledger, so the label in the operator's
 pick instruction. Both of the reasons this header gave for there being no code here are
 spent: the `store.orders.OrderRecord -> pipeline.orders.Order` adapter the order branch also
 needed is `server/capture_server.py:_engine_order`, whose own docstring calls itself THE ONLY
-ADAPTER, so the two-branches-one-file collision D66 warned of cannot happen any more; and
+ADAPTER, so the two-branches-one-file collision D69 warned of cannot happen any more; and
 D63's maps stopped being empty on 2026-09-02, when twenty real orders with real SKUs were
 fetched into the owner's ledger, so the control has something to answer.
 

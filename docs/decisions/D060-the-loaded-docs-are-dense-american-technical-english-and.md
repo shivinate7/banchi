@@ -102,3 +102,5 @@ This amendment does not touch the conversational-path argument above it. It touc
 own premise: the index is now a command, not a paragraph in this file.
 
 ---
+
+Prose is measured in errors per 1,000 words, never bytes; the linter is vendored, not symlinked.

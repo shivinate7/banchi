@@ -303,7 +303,7 @@ class Disposition:
                    THE FLOOR IS THE STORE'S CUT-OFF, so `resolve` takes it as an argument
                    rather than reading the module constant — `pipeline/join.py:prices_for`
                    passes each match's own `threshold`. Retired as an answer anybody may
-                   CHOOSE (D9 amended 2026-09-03, D98) and still reachable, because a
+                   CHOOSE (D9) and still reachable, because a
                    corpus written before that day may hold `"floor"`.
       flat_price   a number chosen for this run
 
@@ -348,7 +348,7 @@ def flat_price(price, allow_below_floor: bool = False, floor: Decimal = FLOOR) -
 
 
 # The three presets the pricing screen offers, priced HERE so this module runs once and in
-# Python (D49). The owner picked these three and their numbers in an interview: match market,
+# Python (D86). The owner picked these three and their numbers in an interview: match market,
 # undercut market by 5, undercut TCG Low by 1. A fourth is a change to this tuple and to
 # `app/src/Pricing.tsx`'s labels, and to nothing else.
 #

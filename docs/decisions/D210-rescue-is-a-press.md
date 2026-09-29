@@ -1,6 +1,6 @@
 ## D210 — `pkmnscan rescue` is reached from a press, and its report is never shown verbatim
 
-**DEBTS §28 named the gap: `pkmnscan rescue` (D165) had been reachable from no screen.**
+**DEBTS §28 named the gap: `pkmnscan rescue` (D145) had been reachable from no screen.**
 `cli/cmd_rescue.py:run` — the one-time repair for a run D36 refuses, over a drawer D20 has
 since handed to another box — existed with full T7 coverage and a tooltip on `#/pricing` that
 NAMED the command in backticks. Nobody could press it: the tooltip's own sentence was the
@@ -86,5 +86,5 @@ proving it is caught, red-first against the un-widened row.
 
 ### Not reopened
 
-D165 (the CLI itself), D36 and D145 (what makes a run stranded and how it is repaired) are
+D145 (the CLI itself), D36 and D145 (what makes a run stranded and how it is repaired) are
 read and cited, not revisited — this entry is the client half of an already-settled server.

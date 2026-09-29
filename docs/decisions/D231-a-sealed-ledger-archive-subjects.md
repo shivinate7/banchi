@@ -4,7 +4,7 @@
 Together they total $66,334.71 gross (canceled excluded, D214's own rule). 270 of them
 carry no row in `cards` at all. Those 270 total $61,655.49 — 92.9% of gross.
 `pipeline/pricearchive.py:rows_from_store` built its subject dict from `cards` alone. That
-is why the archive covered 0.4% of gross before this entry. This closes the gap D223 named and left unsolved.
+is why the archive covered 0.4% of gross before this entry. This closes the gap D231 named and left unsolved.
 
 The owner's own word: *"given you have my sealed's export data too with price sold and
 what item/sku, you can literally bring just as informative history information on them
@@ -12,13 +12,13 @@ despite not having seen them come through the front door."*
 
 ### The stale premise, named rather than repealed
 
-D223 argued the subject list is `cards.sku`, by D219's own settled argument. It argued no
+D231 argued the subject list is `cards.sku`, by D219's own settled argument. It argued no
 ranking of that list can put a SKU on it that was never there. That premise held for every
 SKU a physical card was ever photographed against. It went stale the moment the owner's
-ten biggest sellers turned out to be SKUs with no photograph at all. D223 measured this
+ten biggest sellers turned out to be SKUs with no photograph at all. D231 measured this
 itself. It proposed two fixes and built neither: give `OrderLine` a `set_name` the feed
 already sends, or build a separate resolver for sealed product. This entry takes the
-second path. `OrderLine` is untouched — D223's own reason still holds, that adding a
+second path. `OrderLine` is untouched — D231's own reason still holds, that adding a
 column nothing else reads is a schema change past one task's fence. Instead, the `name`
 `OrderLine` already carries is parsed.
 
@@ -75,7 +75,7 @@ no re-fetch of the archived buckets themselves, commit-per-chunk, resumable.
 ### What this does not touch
 
 `rank_by_revenue`'s own ranking logic is unchanged. It was already handed every key
-`revenue_by_sku` can answer for (D223's own note). Widening the
+`revenue_by_sku` can answer for (D231's own note). Widening the
 subject set only stops most of those keys from being discarded before they reach it.
 `chunk_rows` is unchanged. `pipeline/` still imports nothing new from `store/` beyond what
 `pricearchive.py` already imported. `fixtures/` is untouched.
@@ -85,7 +85,7 @@ subject set only stops most of those keys from being discarded before they reach
 This was measured read-only against the owner's real store, 2026-09-20. Nothing was
 written. No `pkmnscan archive` command was run — a live sweep was in progress against the
 same store, and only `ledger_subject_rows` was called, never `sweep`. 287 SKUs in the
-ledger carry no `cards` row today (D223's own count of 270 was taken a day earlier, over a
+ledger carry no `cards` row today (D231's own count of 270 was taken a day earlier, over a
 store that has since sold more). 281 of the 287 resolve to a row. The remaining 6 all
 share one reason: an uncatalogued product line this repo does not track at all — `YuGiOh`,
 `Card Sleeves`, `Playmats`.
@@ -137,3 +137,7 @@ only means tcgcsv answers a category query for it.
 refuses, with the mirror's own reason. It is mutation-tested: the old `games.py` gate is
 reinstated inline and shown to refuse the same YuGiOh line again. The fix above is then
 shown to resolve it.
+
+The archive ranks subjects by sold value first.
+
+A card row that refuses retries the ledger's own row.
