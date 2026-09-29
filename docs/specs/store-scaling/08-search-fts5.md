@@ -831,12 +831,12 @@ numbers sit beside the plan's other measured rows for the next session that read
 ## Risks
 
 - **FTS5 availability on CI's Linux Python.** `.github/workflows/check.yml` installs
-  Python 3.11 via `actions/setup-python@v5` on `ubuntu-latest`. This playbook's Step 1
+  Python 3.12 via `actions/setup-python@v5` on `ubuntu-latest`. This playbook's Step 1
   confirms FTS5 on the rig's own `.venv` (macOS, sqlite 3.54.0) but that says nothing about
   the CI runner's interpreter, which is a *different* build of Python with its own bundled
   or system-linked SQLite. **Before merging, add the same one-line probe as an explicit CI
   step** (not buried inside T7, so a future Python-version bump on this workflow's pinned
-  3.11 re-verifies automatically): `CREATE VIRTUAL TABLE ... USING fts5(x)` against an
+  3.12 re-verifies automatically): `CREATE VIRTUAL TABLE ... USING fts5(x)` against an
   in-memory connection, failing loud with a clear message ("this Python's SQLite has no
   FTS5; `do_search` cannot run") rather than letting `_add_search_index` raise an opaque
   `sqlite3.OperationalError: no such module: fts5` three functions deep inside a schema

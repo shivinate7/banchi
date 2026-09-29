@@ -16356,8 +16356,18 @@ def spelling_findings(text: str, suffix: str) -> List[Tuple[int, str, str, str]]
             tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
         except (tokenize.TokenError, SyntaxError, IndentationError):
             tokens = []
+        # 3.12 (PEP 701) tokenizes an f-string's `{expr}` into real NAME tokens; 3.9 emits the
+        # whole f-string as one STRING. Skip everything inside FSTRING_START..FSTRING_END so the
+        # verdict is the same on both (getattr: the names do not exist before 3.12).
+        f_start = getattr(tokenize, "FSTRING_START", None)
+        f_end = getattr(tokenize, "FSTRING_END", None)
+        in_fstring = 0
         for tok in tokens:
-            if tok.type == tokenize.NAME and not keyword.iskeyword(tok.string):
+            if f_start is not None and tok.type == f_start:
+                in_fstring += 1
+            elif f_end is not None and tok.type == f_end:
+                in_fstring -= 1
+            elif in_fstring == 0 and tok.type == tokenize.NAME and not keyword.iskeyword(tok.string):
                 hit = british_spelling(tok.string)
                 if hit:
                     found.append((tok.start[0], tok.string, hit[0], hit[1]))
