@@ -9,7 +9,7 @@ import type { OrderLineProgress, OrderLineWire, OrderRow, OrdersPayload } from '
  * (`D217`), over the same `GET /orders` payload D214 already reshapes. Nothing here
  * touches what counts as revenue: D214's counting rules (gross only, Canceled dropped, no
  * sealed/singles split) are unchanged and this file does not re-test them — `docs/specs/
- * revenue.md` is where that argument lives.
+ * sales-screen.md` is where that argument lives.
  *
  * THE CLOCK IS FAKE AND FIXED, everywhere in this file. `windowsOf` and the in-progress bucket
  * both read the real wall clock (`now`) on purpose — a store that sold nothing this week still

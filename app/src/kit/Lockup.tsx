@@ -73,7 +73,7 @@ function draw(n: number[]): string {
  *
  * The measurement is 番's own density — the tenth percentile of its interior whites, which
  * reads 1.07 at 32 and 0.87 at 26, so the counters close before the bracket does. §11 settles
- * the floor and §15 asked for this guard in as many words ("`app/tests/brand.spec.ts` gains the
+ * the floor and §13 asked for this guard in as many words ("`app/tests/brand.spec.ts` gains the
  * floor — a lockup below kanji 32 must not render"); it was never built until 2026-09-07.
  *
  * IT REFUSES RATHER THAN SHRINKING, and that is the safe direction here: every call site in the

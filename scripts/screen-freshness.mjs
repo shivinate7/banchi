@@ -200,7 +200,7 @@ const RECORDED = {
     // strip re-addressed at a stamp instead of a run.
     'getMarkdownTable', 'markdownHistory', 'markdownTrends',
     // The band lens's whole input (D277): every card on hand, ranked, one row per copy.
-    // Split in two by store-scaling item 7 — `getValueAggregates` (the store-wide totals,
+    // Split in two — `getValueAggregates` (the store-wide totals,
     // boxes and unrankable counts) and `getValuePage` (one band's rows, cursor-paginated) —
     // where `getValueTable` used to fetch the whole unpaginated shape in one call.
     'getValueAggregates', 'getValuePage',
@@ -215,7 +215,7 @@ const RECORDED = {
     // plain read, unlike `getPriceHistory`/`getPriceTrends` above, so its "no boot
     // subscription needed" answer is the same read-only shape as every other entry here.
     'getSoldPrices',
-    // D192 (store-scaling item 2): the per-box read replacing the whole-store
+    // D192: the per-box read replacing the whole-store
     // `getInventory` on `#/inventory`, and the lean top-K deck read for Home's hero.
     'getInventoryBox', 'getRecentCards',
     // The per-product view's own read (D227): archive-first, live

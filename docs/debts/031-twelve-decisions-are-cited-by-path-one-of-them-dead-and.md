@@ -8,7 +8,7 @@ finding that is lost.
 
 **What was measured.** Two shapes exist. Only the first is this repo's defect.
 
-One slug-form path citation, and it is the worked example. `docs/specs/revenue-plan.md`, line 139,
+One slug-form path citation, and it is the worked example. `docs/specs/sales-plan.md`, line 139,
 carried a path naming the price-history archive entry. That entry was still an unclaimed
 slug. The claim ran on 2026-09-19 and allocated D219. The claim step rewrote the path by
 substituting the token. That produced a path to a file that does not exist. The real file
@@ -16,17 +16,15 @@ keeps its slug tail after the number. The audit refused the claim commit and the
 stopped. A person repaired that one line by hand, to cite D219 as an id. PR #424 fixes the
 cause, so the next claim writes an id rather than a broken path.
 
-TWELVE already-claimed, numbered-path citations sit across six files. This is a different,
+FOUR already-claimed, numbered-path citations sit across four files (six more sat in two records since deleted). This is a different,
 older style. It names a real entry by its full `D<n>-<slug>.md` filename, not by its bare id:
 
     docs/specs/stable-card-id.md, line 764
-    docs/specs/store-scaling/05-readings-writer.md, lines 27, 41, 58, 490
-    docs/specs/store-scaling/08-search-fts5.md, lines 87, 93
     scripts/docs-audit.py, line 11689
     store/orders.py, line 181
     store/numbers.py, line 5
 
-Eleven of these resolve. ONE IS DEAD. `scripts/docs-audit.py`, line 11689, cites
+Three of these resolve. ONE IS DEAD. `scripts/docs-audit.py`, line 11689, cites
 `docs/decisions/D218.md`. That file does not exist. The real one is
 `docs/decisions/D218-a-typed-dot-is-a-defect.md`. The citation dropped the descriptive
 tail, the same shape PR #424's defect added one where none belonged, in reverse.
@@ -48,7 +46,7 @@ the path around it. A path-shaped citation is a different question it does not a
 **What closes this.** Two things. Neither is built here. This entry is the record. The work
 is the owner's to schedule.
 
-1. The twelve citations become id citations. PR #424 taught the claim step this same
+1. The four citations become id citations. PR #424 taught the claim step this same
    rewrite, for the future. This is the same rewrite, done once by hand, or by a small
    script, over the existing tree. It matches the rule this repo already holds: "Give each
    record its own file, one folder per kind. Cite by id, never by path."

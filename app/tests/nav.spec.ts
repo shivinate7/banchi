@@ -114,7 +114,7 @@ async function stub(page: Page, cards: unknown[] = []) {
   }
 
   await page.route(/\/inventory$/, (route) => json(route, { version: 2, cards, boxes: {}, listings: {} }))
-  /* D192 (store-scaling item 2): Home (`#/`) no longer calls the bare `/inventory`
+  /* D192: Home (`#/`) no longer calls the bare `/inventory`
    * above — it calls `getRecentCards`, `GET /inventory/recent?limit=N`. Empty, matching this
    * ring's own `cards` default of `[]`: nothing here asserts on the hero deck's contents. */
   await page.route(/\/inventory\/recent(\?|$)/, (route) => json(route, { cards: {} }))

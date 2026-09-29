@@ -43,7 +43,7 @@ THREE GROUPS OF CASES, in the order this file was built:
      multi-`text` row (the store's own `condition` field, likewise client-only), and a
      blank-query row (`do_search` refuses an empty `q` by contract, `_require_query`).
      `ventor` (rule 7's mid-word substring, `"izard"` finding `"Charizard"` in T7's own
-     words) is read and reported, never asserted, because store-scaling item 8 measured
+     words) is read and reported, never asserted, because the FTS5 step measured
      that loss and the owner took it explicitly — `check_search_fts5` in
      `harness/tests/t7_store_and_seams.py` is the test that already protects it, and
      "fixing" `do_search` to find `ventor` would break that settled trade-off, not close
@@ -486,7 +486,7 @@ def case_do_search_finds_a_hyphenated_name() -> None:
 # a stale reason cover the wrong row.
 # EMPTY AS OF MID-WORD (the owner's ruling, 2026-09-25). Case 16 ("mid-word text still
 # matches", `ventor` finding `Inventor`) used to sit here: FTS5's prefix-only candidate
-# step could never surface a mid-word fragment, and store-scaling item 8's own trade-off
+# step could never surface a mid-word fragment, and the FTS5 step's own trade-off
 # said not to chase it. The owner reversed that trade-off ("Add mid-word search").
 # `_fts_substring_candidates` gets the candidate there now, measured first on a synthetic
 # 2,500-card store (`docs/decisions/D271-every-search-uses-one-matcher.md` carries the

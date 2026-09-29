@@ -53,7 +53,7 @@ Any other edit to an offending sentence gives it a new identity. So a lane that 
 Both lists were seeded from the offenders on the integration branch on 2026-09-24, measured, not typed.
 
 - **Typed dots:** 47 strings in 3 files. `Gallery.tsx` holds 45, owned by `kit-frame`. `PositionBar.tsx` holds 1, owned by `locating`. `RunsComposer.tsx` holds 1, owned by `b-runs`. Each was keyed again with its scope on the day the scope joined the key. The 47 strings are the same.
-- **Prose:** 11,387 sentences in 358 files, all owned by `docs-sweep`. The row still prints the repo-wide ratio beside the survey's floor from `docs/specs/ste-false-positives.md`, and gates neither.
+- **Prose:** 11,387 sentences in 358 files, all owned by `docs-sweep`. The row still prints the repo-wide ratio beside the survey's floor (below), and gates neither.
 
 The prose list was seeded again on the day the code-span join landed. The first seed held 11,399 sentences in 357 files. The join changed 50 files. Some sentences lost a finding that sat inside a code span. Others found a finding the per-line mask had hidden. One file gained its first listed sentence. The seed count is the finding count: `ste_measure.measure` over the tracked markdown names 11,387 offenders, and the list holds 11,387 entries.
 
@@ -138,3 +138,18 @@ A third list joined the same day. The owner's later word, in the same review rou
 word, lower-cased, once per occurrence. `make offenders-prune` now covers all three lists.
 
 Offender lists, never a repo-wide count: a shared number is one every merge takes from somebody.
+
+### What the STE ruler rests on
+
+The survey behind the printed floor classified a stratified sample of the linter's own findings over the tracked markdown, by hand, against a rule stated before judging. It measured 10,077 findings in 610,723 words (STE001 7,162, STE006 2,638, STE007 130, STE008 147), 16.50 per thousand words unfiltered.
+
+- **The measured gotcha, checked.** Passing several files to the linter in one call does NOT drop the per-finding `path` key. Every finding carries it. The measure still runs one file per call, because the per-finding source line is needed.
+- **The classification rule.** A finding is GENUINE when a person rewriting the prose would fix it with no loss of information. It is ARTIFACT when the writer cannot change the construct without deleting information or misquoting a source: (a) a table cell or row; (b) a verbatim quotation of the owner or of a cited source; (c) an enumeration whose length is the list's; (d) decision-citation shorthand such as `(D31; ...)`; (e) a false match on a proper noun containing the trigger (`VS Code` against `vs`); (f) an under-fenced shell example. It is BORDERLINE when defensible either way: `via` and bare `vs` in ordinary prose.
+- **The floor.** Extrapolated from the sample, no density threshold below about 2.24 findings per thousand words (about 2.71 with the borderline calls counted against the writer) can be met on this corpus, because that many findings are not prose defects. STE008 is the starkest: at least 93% of its sampled findings sit inside quotations of the owner's own words.
+- **The exemption classes worth building, and the four that are.**
+  1. A markdown table row, exempt for STE006, STE007 and STE008 as the linter already exempts it for the sentence-level rules.
+  2. A verbatim quotation of a person's words: a blockquote line, or a span wrapped in `*"..."*`. About 89% of the STE008 sample.
+  3. Decision-citation shorthand: a parenthetical whose first token matches `\(D\d+[,;]`.
+  4. An enumeration collapsed into one paragraph: three or more semicolons, or three or more comma-separated items after a colon. This is a proxy and not a recognition, so it is flagged and never auto-exempted, because some long enumerations should still become bullet lists. It stays a named gap.
+  5. A false match on a two-word proper noun (`VS Code`). A pure bug, not a judgment.
+- **Fenced code, frontmatter, bare URLs, links and backtick spans are already exempt in the linter.** A backtick span still counts as one word toward sentence length, so a long run of short identifiers can trip STE001. Indented code, list items and blockquotes are linted like prose.

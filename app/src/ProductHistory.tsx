@@ -1,6 +1,6 @@
 /**
  * `#/product` — one product's own view: what it has been selling for, with the owner's own
- * sales marked on it (D227, D278, `docs/specs/revenue-plan.md`
+ * sales marked on it (D227, D278, `docs/specs/sales-plan.md`
  * section 3).
  *
  * ONE VIEW, TWO FRAMES (`D278`, the owner's HYBRID ruling, 2026-09-23).

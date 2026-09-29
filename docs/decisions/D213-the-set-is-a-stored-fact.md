@@ -20,7 +20,7 @@ widened it: *"what if I want to see just my riftbound inventory, what about just
 inventory within riftbound."*
 
 This entry settles where a card's set and rarity live. The name-to-printing navigation it was found
-through is `docs/specs/card-variants.md`.
+through is `docs/specs/card-printings.md`.
 
 ### The store has never held a set, and the surprise is the finding
 
@@ -169,4 +169,4 @@ is a figure the operator sets (D99). Neither is built here.
 folds the query through `name_index_key` and compares it to product names only. A set word narrows
 nothing, and a rarity word narrows nothing. The queue candidate rows are also not filtered to Near
 Mint the way the catalogue lookup is. Twelve rows nobody would pick therefore eat the nine digit
-slots. That is `docs/specs/card-variants.md` section 3.
+slots. That is `docs/specs/card-printings.md` section 3.

@@ -144,7 +144,7 @@ def _export_row(
     (D234), AND THE PRIMITIVE ALREADY EXISTED — it was never
     called from here. `cards.number` is stored bare by design (measured: 542 of 542
     Pokemon cards with a SKU carry a number with no `/` in it), but `store/master.py`'s
-    own write path (`_card_columns`, store-scaling item 8) already composes and STORES
+    own write path (`_card_columns`) already composes and STORES
     `join_key(card.number, card.printed_total)` as `number_key` on every write, for the
     FTS5 search index to read without re-deriving the rule. A real TCGplayer export's own
     `Number` cell carries exactly that composed `zfill(3)(number) + "/" + printedTotal`
@@ -588,7 +588,7 @@ def rows_from_store(
 
     THE SUBJECT SET IS TWO SOURCES, `cards` FIRST. A FULL-TABLE `select`, NOT `.values()` —
     `select` hands back only the six columns this needs as plain tuples, never a `Card`
-    object per row (`store-scaling` item 2's own complaint about a table-wide walk, avoided
+    object per row (a per-row `Card` object over a table-wide walk is the cost, avoided
     the same way `cli/cmd_reprice.py` and `cli/resolve.py` already avoid it elsewhere in
     this package). The LAST row this loop sees for a SKU wins — `cards.select` has no
     declared order, so a SKU captured under two slightly different set-hint spellings over
@@ -787,8 +787,8 @@ def format_refusals(refusals: Dict[str, str]) -> List[str]:
 
 def freshness_index(existing: Iterable[Bucket]) -> Dict[str, Dict[str, int]]:
     """`sku -> {range: latest 'at' this archive holds}`, built in ONE pass over the whole
-    table — never once per subject SKU. `store-scaling` item 2's own complaint about a
-    full-table walk repeated per row (measured on `cli/resolve.py:_copies_out`, ~1s per
+    table — never once per subject SKU. a
+    full-table walk repeated per row (the cost that made the per-box read necessary; measured on `cli/resolve.py:_copies_out`, ~1s per
     call on the owner's real store) is exactly the mistake this function exists to avoid:
     `PriceArchive.for_sku` is one indexed read per SKU, but this pass needs EVERY SKU's `at`,
     so one walk of the whole table beats 900 indexed reads of a table this same pass keeps

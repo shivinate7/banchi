@@ -475,12 +475,6 @@
         "generalised"
       ]
     },
-    "docs/decisions/*-fonts-are-vendored-the-suite-allows-two-ports.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "licence"
-      ]
-    },
     "docs/decisions/*-home-states-what-is-owed.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -660,28 +654,6 @@
         "behaviour"
       ]
     },
-    "docs/specs/audit-retirement.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "favours",
-        "generalises",
-        "generalises",
-        "judgement",
-        "judgement",
-        "judgement",
-        "normalise",
-        "normalise"
-      ]
-    },
-    "docs/specs/box-drawings.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "artefact",
-        "defence",
-        "labelled",
-        "summarising"
-      ]
-    },
     "docs/specs/capture-app.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -695,14 +667,6 @@
         "generalises",
         "labelled",
         "serialise"
-      ]
-    },
-    "docs/specs/card-variants.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "catalogue",
-        "catalogue",
-        "catalogue"
       ]
     },
     "docs/specs/code-cards.md": {
@@ -719,20 +683,6 @@
         "catalogue"
       ]
     },
-    "docs/specs/emit-reconcile-placement.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "neighbouring",
-        "totalling"
-      ]
-    },
-    "docs/specs/iconography.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "labelled",
-        "labelled"
-      ]
-    },
     "docs/specs/identity-follows-sku.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -743,23 +693,7 @@
     "docs/specs/logo.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "centre",
-        "centre",
-        "centre",
-        "centreline",
-        "colours",
-        "favour",
-        "grey",
-        "greys",
-        "honoured",
-        "honoured",
-        "judgement",
-        "judgement",
-        "judgement",
-        "judgement",
-        "labelled",
-        "labelled",
-        "optimises"
+        "greys"
       ]
     },
     "docs/specs/mechanization-backlog.md": {
@@ -859,26 +793,10 @@
         "neighbours"
       ]
     },
-    "docs/specs/revenue-next.md": {
+    "docs/specs/sales-plan.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "labelled",
-        "labelled",
-        "labelled",
-        "normalises"
-      ]
-    },
-    "docs/specs/revenue-plan.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "cancelled",
-        "modelled"
-      ]
-    },
-    "docs/specs/revenue.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "neighbouring"
+        "cancelled"
       ]
     },
     "docs/specs/stale-listings.md": {
@@ -888,66 +806,6 @@
         "catalogue",
         "honour",
         "materialises"
-      ]
-    },
-    "docs/specs/store-scaling.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "materialises",
-        "modelled"
-      ]
-    },
-    "docs/specs/store-scaling/00-phases.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "finalised"
-      ]
-    },
-    "docs/specs/store-scaling/01-guard.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "materialise",
-        "modelled",
-        "modelled"
-      ]
-    },
-    "docs/specs/store-scaling/02-per-box-read.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "materialised",
-        "materialises",
-        "parameterisation",
-        "serialises",
-        "serialises"
-      ]
-    },
-    "docs/specs/store-scaling/03-history.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "denormalised",
-        "optimiser"
-      ]
-    },
-    "docs/specs/store-scaling/04-copies-out.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "honoured",
-        "materialised"
-      ]
-    },
-    "docs/specs/store-scaling/07-value-and-aggregates.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "materialise",
-        "materialises"
-      ]
-    },
-    "docs/specs/store-scaling/08-search-fts5.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "materialises",
-        "modelled",
-        "modelled"
       ]
     },
     "docs/specs/subbox-capture.md": {

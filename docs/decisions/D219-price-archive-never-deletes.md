@@ -85,7 +85,7 @@ into one.
 No route. No client function. No screen. `pipeline/pricehistory.py`'s fetching and parsing
 are unchanged. No timer, cron or launch agent runs this sweep on its own. The owner asked for
 a schedule and the schedule is deferred, by the owner's own word
-(`docs/specs/revenue-plan.md` §4, `docs/specs/revenue-next.md` "The archive comes first"). A
+(`docs/specs/sales-plan.md` §4). A
 sweep firing on its own reverses D278's own statement. D278 says this reader cannot fire by
 itself. That reversal needs its own argument, which nobody has made yet.
 

@@ -1427,7 +1427,7 @@ export function BoxBrowse({
        otherwise. With nothing live anywhere the old rule stands, so a sold-out card still
        shows where its copies were.
 
-       D192 (store-scaling item 2): off `results` rather than `inQuery`, for the
+       D192: off `results` rather than `inQuery`, for the
        same reason `order`'s own tally above is — `inQuery` is this box's own matched rows
        now, and a candidate shelf other than the one on screen would never appear in it, which
        silently made every OTHER box read as holding no live match at all.
@@ -1903,7 +1903,7 @@ export function BoxBrowse({
   /* Walk to the card something outside asked for: the box, the fold, the mark and the scroll
    * in one batch. A query that hides the target is dropped rather than the jump.
    *
-   * D192 (store-scaling item 2): `rows` now holds only the CURRENT box's cards, so
+   * D192: `rows` now holds only the CURRENT box's cards, so
    * a jump to a copy in a DIFFERENT box can no longer find it there by scanning `rows` the way
    * it used to when `rows` held the whole store. `goTo.box` (carried by the caller, which
    * already knows it — `Inventory.tsx`'s `walkTo` reads it off the `SearchCopy` the press
