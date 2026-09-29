@@ -39,7 +39,7 @@ longer blocks the delete — it is **buried** first.
 3. **The photographs go, on the owner's word.** Every departed record's photo and sidecar
    are unlinked in the same loop that unlinks an on-hand junk card's — D10's "files inside
    the block, photo before sidecar" rule, unchanged. This is a real loss and it is
-   deliberate: `docs/DEBTS.md`-style, named here rather than discovered later. What is kept
+   deliberate: debt-style, named here rather than discovered later. What is kept
    is the digest, not the bytes — the same trade D89 already made for a sold card's
    photograph, now made for every door a card can leave a deleted box through.
 
@@ -135,7 +135,6 @@ store writes.
    gone. That is the same honest fallback `Graveyard.tsx`'s own `movedToName` already used
    for `moved_to`.
 4. **`docs/specs/` and this entry are the record of the narrowing.**
-   `docs/reviews/ux-2026-09-23/RULINGS.md` quotes the owner's own words verbatim.
 
 **What is unchanged:** a moved tombstone is still buried. It still keeps its digest and
 still loses its photograph — points 2 and 3 above are untouched. The only door D134 no

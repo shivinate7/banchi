@@ -3,8 +3,8 @@
 Bulk-list pre-sorted TCG singles on TCGplayer with zero attention per card, and know where
 every card physically is.
 
-Code cards are a feature of this product, not a second track (D248, code cards fold into one
-rules file). The feature is DORMANT. See "Code cards (dormant feature)" below.
+Code cards are a feature of this product, not a second track (D248, turn end never runs the harness, and code cards
+share one rules file). The feature is DORMANT. See "Code cards (dormant feature)" below.
 D14 (two tracks, one rig) still stands in structure. `codes/` is its own package. `docs/map.py`
 carries a `TRACKS` tuple. `scripts/decision-context.py` prints a track banner. Repeal needs the
 owner's word.
@@ -228,7 +228,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   `banchi.orders.last-check`.
   `app/eslint.config.js` bans `localStorage` outside `useCamera.ts` and `deviceMemory.ts`.
 
-  `sessionStorage` is a separate store. It holds `banchi.session.captureId` and `banchi.run-scope` (D39, the pipeline gets a route).
+  `sessionStorage` is a separate store. It holds `banchi.session.captureId` and `banchi.run-scope` (D39, a run's scope is a selection handed off).
   The `storage keys` row of `make docs-audit` reconciles this roster (D27, session state is device-local).
 - **No duplicate SKU rows in an import file.** Aggregate by SKU. `Add to Quantity` equals the copy count. There is no standing
   cap (D7, duplicates aggregate by SKU). A send may ask for one (`emit --cap N`) or for a quantity (`emit --quantity SKU=N`).

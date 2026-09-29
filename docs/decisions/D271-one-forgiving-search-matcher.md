@@ -10,8 +10,6 @@ matches:
 
 The rule covers the server's FTS5 candidate step too, not only the screens.
 
-The record of the review is `docs/reviews/ux-2026-09-23/`, lens `filtering.md`.
-
 ### The premise that no longer holds
 
 No decision set one matching rule for the app. Each screen made its own. The store-scaling work
@@ -763,8 +761,7 @@ the `match.py` mutation above are what prove the rule itself.
 Seeded fuzz re-run after every fix: 0 false positives, 640 queries (`_FUZZ_QUERIES`
 plus 200 card-sampled).
 
-**ROUND 12, INVENTORY PASS, LANE `ux/pr4-search`, 2026-09-26.** Briefed to close the gaps
-`docs/reviews/ux-2026-09-23/RULINGS.md` still names as open: "`#` forms, composed forms
+**ROUND 12, INVENTORY PASS, LANE `ux/pr4-search`, 2026-09-26.** Briefed to close the gaps still open: "`#` forms, composed forms
 with a letter or an extra zero, and a digit word in name text," and N4 (`B.F` and `bf`
 disagreeing on the 1-2 character floor). Verified each against the code and a run, per the
 brief's own instruction, never trusting the prose alone.

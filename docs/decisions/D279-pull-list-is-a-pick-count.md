@@ -5,9 +5,6 @@ by outcome. Copies are fungible. When an order wants 2 of card X and the store h
 screen says "pick 2 of X". It then shows where every copy is. It never shows 2 copies that
 the app chose.
 
-The record of the review is `docs/reviews/ux-2026-09-23/`. The finding is UX-001, the one S1
-on the Fulfiller's screen. The locating lens found the same state again as LOC-02.
-
 ### The premise that no longer holds
 
 D212 (every copy is fungible, so no order claims one) took the claim out of the resolution.
@@ -51,10 +48,7 @@ The owner also ruled on the Fulfiller's screen, and called it "not a big rock". 
 
 ### What is built, and who builds it
 
-NOT BUILT. The fulfillment lane of the 2026-09-23 overhaul builds it (UX-001, UX-013, UX-089,
-UX-101). `docs/specs/ux-overhaul-2026-09-23.md` holds the lane plan. Round two widened the
-lane with LOC-01, LOC-02 and LOC-15. It also made UX-013 an S1, because the Fulfiller was sent
-to pull a card that had left the box.
+NOT BUILT. The fulfillment lane of the 2026-09-23 overhaul builds it. The Fulfiller was once sent to pull a card that had left the box.
 
 ### What protects the outcome once built
 

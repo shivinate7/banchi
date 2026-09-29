@@ -7,8 +7,7 @@
 - Orders and Shipping become two sidebar rows. The tab strip between them goes.
 
 This amends the layout half of D220. It also amends one note in CLAUDE.md: "`#/orders` and
-`#/shipping` are two stages of one screen and two routes." The record of the review is
-`docs/reviews/ux-2026-09-23/`, file `held-orders-review.md`.
+`#/shipping` are two stages of one screen and two routes."
 
 ### The premise that no longer holds
 

@@ -2,8 +2,7 @@
 
 **This amends D227 and D278.** The owner's ruling, 2026-09-23 interview: HYBRID. One product
 view. It opens as a sheet from every product name. `#/product?sku=` stays as the page and the
-deep link. A deliberation, landed at `docs/reviews/ux-2026-09-23/product-deliberation.md`,
-laid out three options. A: link every name to the route. B: fold every view into one sheet,
+deep link. A deliberation laid out three options. A: link every name to the route. B: fold every view into one sheet,
 and retire the route. H: one component, two frames. It recommended H. The owner picked it.
 
 **What D227 protected, and what protects it now.** D227's sentence: "The capability exists and

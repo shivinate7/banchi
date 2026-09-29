@@ -1,10 +1,8 @@
 ## D304 — The Orders walk reuses Inventory's own rows, and the rail keeps its own scroll
 
-The owner's answers, 2026-09-27, to the questions `docs/reviews/ux-2026-09-23/orders-a/
-PLAN.md` raised. That file carries the argument: the drift findings against D220 (Orders is
+The owner's answers, 2026-09-27, to the drift findings against D220 (Orders is
 inventory's screen with orders in the rail, and the walk is a mode of it) and D274 (Orders
-and Shipping are two sidebar rows with no tabs, and the walk gets the full height), the
-mockups, and the lane plan. This entry records only what was decided.
+and Shipping are two sidebar rows with no tabs, and the walk gets the full height). This entry records only what was decided.
 
 **Q1, the desk layout.** Layout R: three columns at 1000px of column and up. Inventory's
 rail frame holds the buyers, sticky, fit to the window. The walk column holds the order
@@ -49,10 +47,7 @@ This keeps D274's amendment. The card's details table stays on `#/inventory` alo
 
 **Q7, the mockups.** The PNGs stay outside the repository. `scripts/githooks/pre-commit`
 refuses any image outside the demo photo folders. A code-card photo is a bearer instrument,
-and the guard carves out no exception for a review mockup. The record inside the repository
-is `docs/reviews/ux-2026-09-23/orders-a/desk.html`, `desk-walk-in-rail.html`, `phone.html`
-and `render.cjs`, built from the real Inventory DOM. A session that needs the pictures runs
-`render.cjs` again. It needs no store and reads no secret.
+and the guard carves out no exception for a review mockup.
 
 **Hide picked, lane E's own ruling, folded in here because lane A builds on top of it.** The
 owner's own words:

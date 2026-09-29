@@ -4,8 +4,6 @@
 list. The footer goes. This amends D266 (the phone drawer's nav scrolls in the space above its
 foot).
 
-The record of the review is `docs/reviews/ux-2026-09-23/`. The finding is UX-037 (ACC-05).
-
 ### The premise that no longer holds
 
 D266 proved that Codes can be tapped after a scroll, at 13 phone heights and in two engines. It

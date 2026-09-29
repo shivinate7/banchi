@@ -105,7 +105,7 @@ judgement it deliberately leaves to a person, and it is why the sentinel's argum
 written out rather than ticked.
 
 **And it governs one surface.** `CLAUDE.md`'s Working agreement, its Commands prose, the
-~170 entries under `docs/decisions/`, `docs/DEBTS.md`, and the owner's standing instructions in
+~170 entries under `docs/decisions/`, the debts record, and the owner's standing instructions in
 the memory directory are all rule surfaces and none is read here yet. A full audit of those
 surfaces is the work this entry begins rather than completes.
 

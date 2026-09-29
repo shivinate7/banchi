@@ -19,8 +19,6 @@ the place of a card as the hand uses it.
    throughout. It shows the sections before and after. This amends D155 (the section is the
    ruler and the box is the margin note).
 
-The record of the review is `docs/reviews/ux-2026-09-23/`, lens `locating.md`.
-
 ### The premises that no longer hold
 
 **D58's display half.** D58 numbers a card by its count in the box. The owner counts from a

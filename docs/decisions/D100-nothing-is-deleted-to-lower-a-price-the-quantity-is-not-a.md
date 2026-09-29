@@ -88,7 +88,7 @@ The markdown is off the operator's own live price, which is `TCG Marketplace Pri
 
 ### Amended 2026-09-26: a dollar cap on the rule, and no mark-down without a market price
 
-The owner's words are in `docs/reviews/ux-2026-09-23/RULINGS.md`, 2026-09-26. Two rules change.
+Two rules change.
 
 - **A dollar cap.** A read can carry a cap (`reprice list --cap`, the Live tab's Change sheet).
   The rule then takes P% off, but never more than the cap off one copy. `pipeline/reprice.py:plan`

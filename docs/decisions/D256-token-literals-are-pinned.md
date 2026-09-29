@@ -1,12 +1,11 @@
 ## D256 — A literal that duplicates a token is caught by family, and the ratchet is pinned per file
 
-`docs/reviews/ux-2026-09-20/RANKING.md` section 4 names a defect class. It is "literals that
+A defect class exists. It is "literals that
 duplicate a token exactly". `css-var-check.py` cannot see it. That checker catches a `var()`
 pointed at nothing. This defect is the opposite shape: a plain value where a `var()` belongs.
 `font-size: 22px` sits where `var(--bn-fs-2xl)` belongs. `transition: ... 480ms` sits where
 `var(--bn-t-draw)` belongs. The pixel is identical today. It stops being identical the moment
-the token moves. Nothing today says so. `docs/reviews/ux-2026-09-20/system.md`'s inventories
-are the measured count this entry builds against. `scripts/token-literal-check.py` is the
+the token moves. Nothing today says so. `scripts/token-literal-check.py` is the
 guard. This entry is its argument.
 
 **THE SWEEP THAT WOULD REMOVE THESE LITERALS IS NOT THIS BRANCH'S WORK.** It is a separate

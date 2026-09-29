@@ -10,8 +10,7 @@ something wider.
 ### The measurement, and why the obvious guard is the wrong one
 
 **Thirteen visible.** 713 line anchors were in the staged documents, and 13 pointed past
-their target's end. Three of those targets are now index stubs of 38, 92 and 66 lines. They
-are `docs/DECISIONS.md`, `docs/DEBTS.md` and `docs/GATES.md`, their records split into one
+their target's end. Three of those targets are now index stubs of 38, 92 and 66 lines. They are the decisions, debts and gates index files, their records split into one
 file each. The 13 are visible only because those three files got SHORTER.
 
 **The disease is far wider.** Of 443 anchors into code, 313 name an identifier in the same
@@ -45,7 +44,7 @@ Hard fail.
 **Clause B — no anchor into a split-record stub.** The roster is derived from which corpus
 module reads a directory rather than the file. It is never typed. This clause catches two
 citations Clause A is structurally blind to, both in `docs/specs/capture-server.md`. One
-named lines 5 to 7 of `docs/GATES.md`. The other named lines 11 to 15 of `docs/DEBTS.md`.
+named lines 5 to 7 of the gates index. The other named lines 11 to 15 of the debts index.
 Both landed on real lines holding unrelated text, because the stubs are longer than the
 anchors.
 
@@ -90,9 +89,9 @@ scores not-checkable.
 
 ### The exemption, and why it is four lines and not a file-level pass
 
-D149 names four addresses in the file `docs/DECISIONS.md` used to be. Those are a RECORD of
+D149 names four addresses in the file the decisions once were. Those are a RECORD of
 where wrong citations stood when that file was one document. Rewriting them falsifies the
-record. Since 2026-09-28 they read as words ("`docs/DECISIONS.md`, line 9522"), which no
+record. Since 2026-09-28 they read as words ("the old decisions file, line 9522"), which no
 line-anchor shape matches, so no exemption list is needed.
 
 **A file-level exemption was proposed and rejected.** Its subject was
@@ -108,7 +107,7 @@ is the durable form. All 19 of its anchors were converted.
 `docs/GATES.md` sentence that appears nowhere in this tree. The rule survives in CLAUDE.md's
 working agreement, already cited in the same passage. So the dead pointer was dropped rather
 than re-aimed at a nearby record, which would manufacture a source. The other named a
-`docs/DEBTS.md` framing rewritten away before the split. That sentence now says so, instead
+debts framing rewritten away before the split. That sentence now says so, instead
 of naming an address no reader can use.
 
 ### A measured tension, recorded and not acted on

@@ -18,8 +18,7 @@ So:
    name, so it never renumbers. When that name is taken, the next free one is used. D20 (a box
    is an object) keeps names unique.
 
-This overrides the orchestrator's earlier call on the box label ("Mixed Singles, Box 4"). The
-record is `docs/reviews/ux-2026-09-23/`, file `RULINGS.md`.
+This overrides the orchestrator's earlier call on the box label ("Mixed Singles, Box 4").
 
 ### The premises that no longer hold
 

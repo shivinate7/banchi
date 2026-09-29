@@ -5,9 +5,6 @@ owner asked for an agent to review the whole flow in depth, not for a multiple-c
 The agent's report put eight questions (Q1 to Q8). The owner answered each one. This entry
 records the answers and the decisions they amend.
 
-The record of the review is `docs/reviews/ux-2026-09-23/`. The plan is
-`docs/specs/ux-overhaul-2026-09-23.md`.
-
 ### The eight answers
 
 | Q | Question | Ruling |
@@ -216,8 +213,7 @@ to one line on a phone. Round 6 limited the price rows to the prices the screen 
 
 ### Amended 2026-09-26: the mark-down press requires a fresh read, and checks each price
 
-The owner's words are in `docs/reviews/ux-2026-09-23/RULINGS.md`, 2026-09-26 ("Require a fresh
-read"). Before this, the mark-down press read what is live and then pushed a file judged against
+The owner's word was "Require a fresh read". Before this, the mark-down press read what is live and then pushed a file judged against
 the survey, however old. On the owner's screen that survey was 17 days old.
 
 - **A day.** A read older than `pipeline/reprice.py:READ_FRESH_S` (24 hours) sends nothing. The

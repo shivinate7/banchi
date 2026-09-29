@@ -64,8 +64,6 @@ D189 is not adopted here. It puts the market reading in a table. This amendment 
 ### Amended 2026-09-27: the pane and the row drifted, and the owner's answers are recorded elsewhere
 
 The built screen did not keep point 3 (full location detail on every pick row). It did not
-keep the walk-only pane point 4 asked to reuse. `docs/reviews/ux-2026-09-23/orders-a/
-PLAN.md` names the drift. D304 records the owner's answers that
-fix it. Full `CardLocations` rows, the hero head with every on-hand copy below it, and a
+keep the walk-only pane point 4 asked to reuse. D304 records the owner's answers that fix the drift. Full `CardLocations` rows, the hero head with every on-hand copy below it, and a
 density-first sort with box name as the tie-break. The last of these replaces this entry's
 own `walk_order` reading.

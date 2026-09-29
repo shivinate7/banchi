@@ -122,15 +122,6 @@
         "relabelled"
       ]
     },
-    "docs/decisions/*-a-branch-is-judged-by-what-it-lands-and-a-file-put-back.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "honoured",
-        "initialiser",
-        "neighbouring",
-        "standardise"
-      ]
-    },
     "docs/decisions/*-a-card-is-counted-in-its-section.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -143,42 +134,16 @@
         "neighbours"
       ]
     },
-    "docs/decisions/*-a-card-leaves-a-box-through-a-third-door-moved-not-sold.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "generalised"
-      ]
-    },
     "docs/decisions/*-a-card-leaves-inventory-by-a-state-retired-and-a-bad.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "cancelled"
       ]
     },
-    "docs/decisions/*-a-card-that-will-not-settle-is-photographed-off-the.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "centre",
-        "centre",
-        "neighbours"
-      ]
-    },
     "docs/decisions/*-a-citation-names-a-symbol.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "honour"
-      ]
-    },
-    "docs/decisions/*-a-claim-a-screen-names-is-a-claim-a-screen-can-fix-and.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "labelled"
-      ]
-    },
-    "docs/decisions/*-a-claim-on-the-cards.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "synchronise"
       ]
     },
     "docs/decisions/*-a-claim-race-order.md": {
@@ -207,14 +172,6 @@
         "judgement"
       ]
     },
-    "docs/decisions/*-a-gain-step-is-the-stand-rescaled.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "judgement",
-        "labelled",
-        "quantisation"
-      ]
-    },
     "docs/decisions/*-a-generator-may-write-nothing-that-writes-may-gate-a.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -228,20 +185,6 @@
       "lane": "docs-sweep",
       "SPELLING": [
         "catalogue"
-      ]
-    },
-    "docs/decisions/*-a-hover-is-an-alpha-because-the-same-paint-over-three.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "colour",
-        "generalise",
-        "grey"
-      ]
-    },
-    "docs/decisions/*-a-janitor-autonomy.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "judgement"
       ]
     },
     "docs/decisions/*-a-join-time-name-cross-check.md": {
@@ -294,18 +237,7 @@
     "docs/decisions/*-a-refusal-that-reaches-nobody.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "defence",
-        "generalises",
-        "honoured",
-        "honoured",
-        "neighbouring",
-        "serialise"
-      ]
-    },
-    "docs/decisions/*-a-row-that-examined-nothing-says-so.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "generalised"
+        "defence"
       ]
     },
     "docs/decisions/*-a-rule-with-no-reader-is-advice.md": {
@@ -335,27 +267,10 @@
         "neighbouring"
       ]
     },
-    "docs/decisions/*-a-tracked-symlink-is-a-path-baked-into-the-tree-and-a.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "cancelled",
-        "recognised"
-      ]
-    },
     "docs/decisions/*-a-typed-price-is-cleared-by-a-press.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "catalogue",
-        "judgement",
-        "labelled",
-        "neighbouring",
-        "recognise"
-      ]
-    },
-    "docs/decisions/*-above-the-desk-a-screen-asks-its-column-and-browser-zoom.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "rasterises"
+        "judgement"
       ]
     },
     "docs/decisions/*-an-interactive-elements-feedback-is-the-products-not-each.md": {
@@ -428,12 +343,6 @@
         "judgement"
       ]
     },
-    "docs/decisions/*-hash-before-decode.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behaviour"
-      ]
-    },
     "docs/decisions/*-history-scoped-to-box.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -446,21 +355,6 @@
         "labelled",
         "relabelled",
         "relabelled"
-      ]
-    },
-    "docs/decisions/*-icon-buttons.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "centre",
-        "centred",
-        "centred",
-        "colour"
-      ]
-    },
-    "docs/decisions/*-merge-hang-two-causes.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "recognised"
       ]
     },
     "docs/decisions/*-money-stays-mono.md": {
@@ -495,12 +389,6 @@
       "lane": "docs-sweep",
       "SPELLING": [
         "judgement"
-      ]
-    },
-    "docs/decisions/*-one-filter-control.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behaviour"
       ]
     },
     "docs/decisions/*-one-forgiving-search-matcher.md": {
@@ -584,12 +472,6 @@
         "synthesising"
       ]
     },
-    "docs/decisions/*-tcg-price-history-user-agent-block.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "judgement"
-      ]
-    },
     "docs/decisions/*-text-shape-checks.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -599,15 +481,7 @@
     "docs/decisions/*-the-boot-header-says-the-code-changed-nothing-says-the.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "acknowledgements",
-        "generalises",
-        "travelling"
-      ]
-    },
-    "docs/decisions/*-the-cameras-automatic-functions-are-inputs-to-the.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "stabilisation"
+        "acknowledgements"
       ]
     },
     "docs/decisions/*-the-catalog-is-near-mint-by-rule-because-it-was-only-ever.md": {
@@ -616,12 +490,6 @@
         "judgement",
         "neighbours",
         "travelled"
-      ]
-    },
-    "docs/decisions/*-the-claim-is-spent-on-the-oldest-copies-because-a-card.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "judgement"
       ]
     },
     "docs/decisions/*-the-export-is-a-property-of-the-game.md": {
@@ -638,12 +506,6 @@
         "licence"
       ]
     },
-    "docs/decisions/*-the-fixture-carries-a-per-run-name-because-the-process.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "signalling"
-      ]
-    },
     "docs/decisions/*-the-front-page-says-what-is-owed-and-the-library-is-drawn.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -653,9 +515,6 @@
     "docs/decisions/*-the-live-export-is-fetched-and-the-second-standing.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "catalogue",
-        "catalogue",
-        "catalogue",
         "catalogue"
       ]
     },
@@ -663,12 +522,6 @@
       "lane": "docs-sweep",
       "SPELLING": [
         "judgement"
-      ]
-    },
-    "docs/decisions/*-the-number-a-screen-draws-is-composed-once-and-the-set.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "normalising"
       ]
     },
     "docs/decisions/*-the-number-is-claimed-at-the-merge-because-what-main-has.md": {
@@ -683,38 +536,6 @@
       "SPELLING": [
         "behaviour",
         "behaviours"
-      ]
-    },
-    "docs/decisions/*-the-order-ledger-is-two-maps-and-the-sync-writes-only-one.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behavioural",
-        "behaviourally",
-        "cancelled",
-        "recognises",
-        "recognising",
-        "recognising",
-        "serialised"
-      ]
-    },
-    "docs/decisions/*-the-photograph-is-cropped-to-the-card-the-focus-is.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behaviour",
-        "centre"
-      ]
-    },
-    "docs/decisions/*-the-pipelines-rows-can-be-the-wrong-card-so-the-export-is.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "honours"
-      ]
-    },
-    "docs/decisions/*-the-pixel-budget-is-spent-on-the-card-not-the-desk.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "judgement",
-        "travelling"
       ]
     },
     "docs/decisions/*-the-presence-gate-is-a-distance-from-this-sessions-own.md": {
@@ -739,27 +560,10 @@
         "neighbour"
       ]
     },
-    "docs/decisions/*-the-qr-is-the-whole-identification-the-product-is-a-claim.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "realised"
-      ]
-    },
     "docs/decisions/*-the-queue-is-refreshed-where-it-stands.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "artefact",
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "normalises",
-        "recognisable"
-      ]
-    },
-    "docs/decisions/*-the-rarity-claim-does-three-jobs-and-one-of-them-pays-for.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "favours"
+        "artefact"
       ]
     },
     "docs/decisions/*-the-reconcile-is-store-wide-and-what-it-writes-is-live.md": {
@@ -790,19 +594,6 @@
         "acknowledgement",
         "acknowledgement",
         "travelling"
-      ]
-    },
-    "docs/decisions/*-the-rule-only-ever-marks-down-the-operator-may-point.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behaviour",
-        "honour"
-      ]
-    },
-    "docs/decisions/*-the-sale-is-one-press-and-the-button-becomes-the-way-back.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "acknowledgement"
       ]
     },
     "docs/decisions/*-the-section-is-the-ruler-and-the-box-is-the-margin-note.md": {
@@ -904,12 +695,6 @@
       "SPELLING": [
         "colour",
         "judgement"
-      ]
-    },
-    "docs/decisions/*-turn-end-drops-the-harness-and-code-cards-fold-in.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "recognised"
       ]
     },
     "docs/decisions/*-worktree-node-modules.md": {

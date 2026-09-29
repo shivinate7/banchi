@@ -6,8 +6,7 @@ proposal and put ten questions (Q1 to Q10). The owner answered all ten. The owne
 the double-send guard and the refusal when the live check cannot run. The send entry records
 those two.
 
-The record is `docs/reviews/ux-2026-09-23/`, file `RULINGS.md`. The plan is
-`docs/specs/ux-overhaul-2026-09-23.md`. The send itself is the entry with slug
+The send itself is the entry with slug
 `one-press-sends-and-makes-live`.
 
 ### The answers

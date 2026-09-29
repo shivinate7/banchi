@@ -34,7 +34,7 @@ ORDER — is copied from that response verbatim.
 
 **A re-cut from upstream, or an `@fontsource` package, would have been a different binary**,
 and every type assertion in `app/tests/` would have been re-litigating itself against a
-face nobody had compared. `docs/DEBTS.md` would have gained a section instead of losing one.
+face nobody had compared. The debts record would have gained a section instead of losing one.
 
 **Measured rather than asserted.** 55 advance widths — three families, every weight each family
 ships, five samples including a `latin-ext` string and a CJK-fallback string — read in one
@@ -104,7 +104,7 @@ it reads `../../../app/src/fonts.css` now — no bytes, no second copy. Checked 
 URL, which is how a person opens it and is not the same as an https fetch: every face resolves
 locally and no request leaves.
 
-**`docs/design-refs/` and `docs/specs/logo/sheets/` do not.** The first wants ten families —
+**The design references and `docs/specs/logo/sheets/` do not.** The first wants ten families —
 782 KB of `latin`+`latin-ext` over 26 files, plus Cabinet Grotesk from Fontshare, a second CDN
 under a non-OFL licence — for archived drawings of a palette this product no longer paints. The
 second wants a CJK face. Real weight in the repo, for documents on no gate.

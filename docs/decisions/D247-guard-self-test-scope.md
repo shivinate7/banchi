@@ -26,7 +26,7 @@ with `serve-selftest` already skipping. Fifteen guard self-tests cost 76.6s of t
 
 The ten-test product harness covers the actual product for 21.75s. This session measured
 it again, on a different tree, at 24.4s. Both figures are real.
-`docs/specs/verification-cost.md`'s table now carries the newer one. Four self-tests alone
+the verification-cost spec's table now carries the newer one. Four self-tests alone
 cost more than double the whole harness.
 
 **WHAT A GUARD SELF-TEST CAN CATCH, AND WHAT IT CANNOT.** Every one of these fifteen proves
@@ -45,7 +45,7 @@ own header already made about `serve-selftest` alone.
 every target in `scripts/checks.py:CHECKS` was read against the incident or code path its
 own comment cites. Every one of the thirty-eight names a real defect or a real regression.
 Or it names a real code path it alone stands in front of. The fifteen here are no
-exception. `revert-guard`'s own accounting in `docs/specs/verification-cost.md` §4 makes
+exception. `revert-guard`'s own accounting in the verification-cost spec §4 makes
 the point sharply. It has zero mentions in 200 commits. It stays anyway. The one thing it
 guards against happened once, before the guard existed. A hand-walk found it, nothing else.
 **This entry is a placement change, not a pruning.** Nothing here argues any of the fifteen
@@ -59,7 +59,7 @@ self-test's own source. It reads every local-package import — `store`, `cli`, 
 `identify`, `geometry`, `codes`, `server`. It reads every `Path`-style `A / "b" / "c.py"`
 chain. For the four shell scripts it reads the same shapes with a regex. It resolves every
 hit against the real filesystem. A hand-typed list beside each self-test would be the exact
-rot this workstream exists to close. `docs/specs/verification-cost.md` was itself opened
+rot this workstream exists to close. the verification-cost spec was itself opened
 over one such case. `scripts/docs-audit.py`'s `governed_by` bookkeeping asks a human to
 retype, by hand, a set. A regular expression already computes that same set. This entry
 does not repeat that mistake next to fifteen new targets. `serve-scope.py`'s own `SCOPE` is

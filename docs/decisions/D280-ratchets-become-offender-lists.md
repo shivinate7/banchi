@@ -122,7 +122,7 @@ Each caller still decides what an identity is, and so whether growth is counted 
 
 ### Amended 2026-09-27 — the prose list is CUT, and a new one joins the same day
 
-Owner's ruling (test-audit plan, row 92, `docs/reviews/test-audit-2026-09-27/TIERS.md`):
+Owner's ruling (test-audit plan, row 92):
 "Row 92, `ste offenders`, and its list `scripts/ste-offenders.json`: CUT. The write-time
 STE hook lints new prose. This needs dated amendments to D60, D280 (the prose
 ratchet decisions) in the lane that cuts it." Lane L2 deletes the `ste offenders` row,
@@ -132,8 +132,7 @@ Two offender lists remained right after the cut: `scripts/typed-interpunct-allow
 the line-anchor list (deleted 2026-09-28). `scripts/only_shrinks.py` and `_offender_list_shape`/
 `_offender_diff`/`_offender_growth` still serve both, unchanged by the cut.
 
-A third list joined the same day. The owner's later word, in the same review round
-(`docs/reviews/test-audit-2026-09-27/TIERS.md`): "Shrinking offender list now."
+A third list joined the same day. The owner's later word, in the same review round: "Shrinking offender list now."
 `scripts/markdown-spelling-allow.json` covers the `identifier spelling` row's markdown half
 (D60). It carries the same shape as the other two: file -> lane and SPELLING -> the British
 word, lower-cased, once per occurrence. `make offenders-prune` now covers all three lists.

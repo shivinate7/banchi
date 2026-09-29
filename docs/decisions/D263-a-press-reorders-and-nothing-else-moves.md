@@ -12,8 +12,6 @@ may change its order.
    Capture picker, Home and Cards to pull. This extends D132's rail order and D142 (the box
    list is ordered by the hand) to the two screens that order by number today.
 
-The record of the review is `docs/reviews/ux-2026-09-23/`, lens `filtering.md`.
-
 ### The premises that no longer hold
 
 **D296.** D296 rules that a changed sort only offers a "re-sort" chip, and that only the chip's

@@ -123,8 +123,6 @@ The figures are now computed server-side by `pipeline/pricing.py:preset_prices`,
 
 ### Amended 2026-09-26: Singles and Sealed, counts that add up, and a press for the rule
 
-The owner's words are in `docs/reviews/ux-2026-09-23/RULINGS.md`, 2026-09-26.
-
 - **Singles and Sealed.** The Live tab filters on its own by kind, in the URL (`?kind=singles`
   or `?kind=sealed`, D285). A row is sealed when its condition is `Unopened`
   (`pipeline/reprice.py:is_sealed`, `tcgcsv.SEALED_CONDITION`). No sales-lane rule existed to

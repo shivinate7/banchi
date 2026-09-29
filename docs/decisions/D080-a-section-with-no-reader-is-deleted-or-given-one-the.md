@@ -11,7 +11,7 @@
 | `GATES` | the audit, reconciled against `docs/GATES.md` | correct |
 | `TRACKS` | **nothing** | wrong twice, for three weeks |
 
-`TRACKS` said `C1-C7` after `docs/CODES-DECISIONS.md` had reached C11, and said the codes track's delivery automation was **"gated on singles Gate B"** — a gate that passed 2026-08-22, in a gating system retired outright on 2026-08-23. Both false for over three weeks in the file whose entire argument, D17, is that it is audited exactly as hard as it is trusted.
+`TRACKS` said `C1-C7` after the codes decisions record had reached C11, and said the codes track's delivery automation was **"gated on singles Gate B"** — a gate that passed 2026-08-22, in a gating system retired outright on 2026-08-23. Both false for over three weeks in the file whose entire argument, D17, is that it is audited exactly as hard as it is trusted.
 
 **A section with no consumer is worse than a section that is wrong.** Wrong-with-a-reader is found the first time somebody runs the reader. Wrong-with-no-reader is a claim the repo makes about itself that has no way of ever being contradicted, and it decays silently while looking exactly like the sections that work. So the rule is: **give it a job or delete it**, and `make docs-audit`'s `map sections` row fails the commit that adds a top-level name nothing reads.
 

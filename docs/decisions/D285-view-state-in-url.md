@@ -18,8 +18,6 @@ filter picked, a column sorted, or a letter typed into search, is not a new plac
 is the screen the owner already has open, filled in further. Pushing a history entry per
 keystroke would make the Back button retype the owner's own search, one character at a time.
 
-The record of the review is `docs/reviews/ux-2026-09-23/`, lens `filtering.md`.
-
 ### The premise that no longer holds
 
 FLT-11 found five different answers, on seven screens. Sales kept everything in the URL.
