@@ -21,7 +21,7 @@ under a bright lamp — two on which the shipped settle trigger fired five times
 and ~34 cards, one with the lamp dimmed, and one run LIVE under
 D131's rule (51 fires, two stalls, no double) — the sessions that convicted the
 noise tracker's ratchet (D131) and then confirmed its repair at the rig, and THREE MORE that
-evening: the corpus the rescue was built on, 122 live photographs against 20 stalls, with the
+evening: the corpus the rescue was built on, 122 live photographs against 11 stalls, with the
 last of them recorded after the owner changed the lighting and reported the run as working
 well. Each carries every frame's `(t, d, luma)`, v2
 adding `dBase`, and the exact watch-region pixels of every verdict, which is what makes a

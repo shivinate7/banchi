@@ -13,7 +13,7 @@ recordings alone, with what that does and does not prove written down.
 normalize each frame against a reference region OUTSIDE the watch region, so a global gain
 cancels and only local change survives. Every banked trace in `harness/traces/` stores the watch
 region and not one pixel outside it — 1,064 cells at 38×28, keyframes and verdict frames alike —
-and a scan of every consecutive keyframe pair across twenty sessions found no observed global
+and a scan of every consecutive keyframe pair across every banked session found no observed global
 gain change (the three candidates at a 6% ratio are quantisation on a dark plate). The
 **8.5–22.5 luma** figure in the spec's exposure row is a DERIVATION on the baseline under a
 multiplicative model, not a frame anybody recorded; it still stands, and it is now labelled.
@@ -21,7 +21,7 @@ multiplicative model, not a frame anybody recorded; it still stands, and it is n
 **The surround was measured from the owner's photographs instead**, read-only: 2,535 stored
 4K frames across five boxes, the stored rotation undone and the frame downsampled to the
 machine's own 64×36 grid. The mapping is proven rather than assumed — every one of the
-2026-09-11 22:12 session's 51 fires matches its photograph's watch region in order (50 of 50
+2026-09-11 evening session's 51 fires matches its photograph's watch region in order (50 of 50
 consecutive, median correlation 0.86), under one rotation and not the other. What the surround
 does across a card swap: on the reference rig the corners are still to 0.6–1.3 luma over 543
 swaps; on the feeder rig the left third moves 27–47 luma every cycle (the tray) and the right
@@ -44,12 +44,12 @@ baseline over the cells both frames hold between a toe and a shoulder, scale the
 `k`, and read the mean absolute residual in the frame's own units. A gain step leaves the plate's
 noise; a card leaves its pattern. The bound is `presenceK` × the session's own still-frame
 difference — the multiple the presence floor already rides — so no threshold moved and no new
-constant decides anything. Measured on every fired frame in the corpus (748 that clear the
-floor, twenty sessions): the smallest residual on every session is **3.0× the bound or more**,
+constant decides anything. Measured on every fired frame in the corpus (353 that clear the
+floor, ten sessions): the smallest residual on every session is **4.1× the bound or more**,
 5.3× on the 85/85 run; the one frame under it, 03:25 at 74.0 s (4.0 against 4.56), is the plate's
 own dark disc displaced and not a card — the contact sheet says so, and T9 pins it by time. A
 synthetic 1/3, 1/2 and 1 EV step on every baseline is uniform or under the floor; 1.5 EV is
-declined on six bright plates where it clips three quarters of the region, and declined is the
+declined on three bright plates where it clips three quarters of the region, and declined is the
 machine as it was. The hand D84 photographed the stand with reads 7.61 and 8.68 against 7.41 and
 8.09 — not uniform, and refused by the floor as before. Consecutive fires, scaled the same way,
 stay 5.2 or more apart against `tNovel` 4.0.
@@ -64,7 +64,7 @@ noisier session away from refusing real cards. Scaling the baseline up leaves th
    **and the frame becomes the baseline.** This is the one place the machine
    re-baselines on its own, and `MotionControls.rebaseline`'s rule — no re-baseline on the
    machine's judgement of what is on the stand — stands: this is a proof that nothing on the
-   stand changed, and zero of 748 fired frames pass it. Adopting the frame is what keeps a hand
+   stand changed, and zero of 353 fired frames pass it. Adopting the frame is what keeps a hand
    under the floor after a step; judged against the old baseline it would carry the step on top.
 2. **The novelty gate asks the same question of the last fired frame**, so a step over a card
    already photographed is `suppressed:unchanged` and not a second photograph.

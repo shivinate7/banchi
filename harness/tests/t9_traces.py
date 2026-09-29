@@ -538,7 +538,7 @@ def run() -> Result:
     # every trace in this directory, the way `rescueAfter` was chosen.
     checks.equal(
         (live_total, adaptive_total, rescue_total, stall_total), (122, 136, 16, 6),
-        f"over the three evening sessions: {live_total} photographs and 20 stalls become "
+        f"over the three evening sessions: {live_total} photographs and 11 stalls become "
         f"{adaptive_total} and {stall_total}, {rescue_total} of them taken under the bar",
     )
 
@@ -623,8 +623,8 @@ def run() -> Result:
                 f"step on top ({'declined' if stepped is None else f'{stepped:.1f}'} against {bound:.2f})",
             )
         if margins:
-            # 3.0x IS THE PINNED FLOOR AND 3.65x IS THE MEASUREMENT: the closest real card on any
-            # session (2026-09-01 03:06, 22.5 s); the reference rig's 85 sit at 5.3x.
+            # 3.0x IS THE PINNED FLOOR AND 4.1x IS THE MEASUREMENT: the closest real card on any
+            # session (2026-09-01 21:14); the reference rig's 85 sit at 5.3x.
             checks.ok(
                 min(margins) >= 3.0,
                 f"{_label(name)}: every real card clears the uniformity bound by 3x or more "
@@ -674,7 +674,7 @@ def run() -> Result:
         f"the room a real step's noise has to fit in",
     )
     checks.ok(
-        novelty_min >= 5.0,  # measured 5.28
+        novelty_min >= 5.0,  # measured 6.89
         f"the novelty gate, scaled the same way, still separates every consecutive pair of fires "
         f"in the corpus (closest {novelty_min:.2f} against tNovel {score.T_NOVEL:.1f})",
         "under 4.0 a real card would be suppressed as the previous one",

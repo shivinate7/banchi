@@ -84,7 +84,7 @@ export const CARD_QUANTILE = 0.9
  * four traces the owner has saved, the bright-quantile of the watch region reads:
  *
  *     EMPTY STAND, reference rig (2026-08-23)            57
- *     CARD,        under-lit rig (2026-08-29 21:34)   61-134
+ *     CARD,        under-lit rig (2026-08-29)        61-134
  *     CARD,        2026-09-01                         77-171
  *     CARD,        reference rig (2026-08-23)        196-244
  *
@@ -97,7 +97,7 @@ export const CARD_QUANTILE = 0.9
  * them would STILL be refused: the 2026-08-29 quantile change rescued one session of three
  * and left the other two broken, which is the clearest statement available that a better
  * constant was never going to be the fix. `harness/tests/t9_traces.py` asserts both.
- * The bill: 20 of 20 cards refused on 2026-08-29 21:34, 13 of 15 on 21:38, 5 of 24 on
+ * The bill: 20 of 20 cards refused on 2026-08-29, 13 of 15 the same evening, 5 of 24 on
  * 2026-09-01 — 38 real cards called an empty stand, silently, against ONE correct refusal
  * (the genuinely empty stand at arm time on 2026-08-23). Moving 90 to some other number
  * moves which sessions it ruins. The quantile fix of 2026-08-29 was the same mistake one
@@ -174,9 +174,8 @@ export type MotionParams = {
    *  sign flipped. When the frames the machine calls still fall below this FRACTION of the
    *  window, its idea of still is wrong, and `dTypical` is taken instead from `restQuantile`
    *  of ALL the window's frames. 0.30: every earlier session keeps 46-83%
-   *  of its frames under tLo and never trips this; the three bright-lamp sessions sit at
-   *  9-18% and trip it at once. Measured in both directions — 0 quantile-mode refreshes on
-   *  the old corpus, 100/95/94% coverage on the new. */
+   *  of its frames under tLo and never trips this; the bright-lamp sessions sit at
+   *  9-18% and trip it at once. */
   stillFractionMin: number
   /** Which quantile of ALL window frames stands in for the still level when the ratchet
    *  has lost it. 0.25: on the bright-lamp sessions the rest phase is the lowest quarter of
@@ -259,7 +258,6 @@ export type MotionParams = {
    *  old — and three fresh traces did not reproduce that. An undisturbed stand does not
    *  creep at all; per-second worst dBase, plate only:
    *
-   *      21:10 run   0s 2.45  1s 2.26  2s 2.53 … 9s 2.36 │ 10s 8.12  11s 14.14  12s 17.91
    *      21:16 run   0s 2.13  1s 2.19  2s 2.20 … 5s 2.79 │  6s 6.81   7s 14.66   8s 11.64
    *                                                      ^ the operator's hand, arriving
    *
@@ -308,9 +306,8 @@ export type MotionParams = {
    *  the transit can no longer be happening, and the episode's own age is the machine's
    *  only word for that.
    *
-   *  0.60 IS WHERE TWO PLATEAUX MEET. Swept from 0.50 to 0.80 at 0.02: yield is FLAT at 295
-   *  fires and 7 stalls over the six new sessions from 0.50 to 0.60 and falls away above it
-   *  (280 and 21 by 0.80); the earlier sessions are untouched from 0.60 up and gain a
+   *  0.60 IS WHERE TWO PLATEAUX MEET. Swept from 0.50 to 0.80 at 0.02: yield is FLAT
+   *  over the evening sessions from 0.50 to 0.60 and falls away above it; the earlier sessions are untouched from 0.60 up and gain a
    *  fire and a double at 0.58 and below — 21:14's 6.21 s rescue lands 290 ms before its own
    *  6.50 s fire. Below 0.60 costs a session nobody re-measured; above it costs cards. */
   rescueAfter: number

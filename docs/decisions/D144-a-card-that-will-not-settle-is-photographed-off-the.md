@@ -154,7 +154,7 @@ are a new card rather than an existing fire taken a frame sooner, five land with
 a stored keyframe or event. Drawn at 38x28 beside the two nearest ordinary fires of the same
 session:
 **each holds a card-shaped object with structure, none obviously worse than its neighbours** —
-the 03:20 rescue at 101.29 s is cleaner than the ordinary fire
+one rescue at 101.29 s is cleaner than the ordinary fire
 0.13 s after it, which is a blown-out flare. One, 21:54 at 19.36 s, is noticeably dimmer than
 the ordinary fire beside it, which is consistent with a card not yet fully down.
 **That is a sanity check and it is not the measurement.** 1,064 cells averaging ~3,600 sensor
