@@ -5,10 +5,10 @@ says it exactly. A status date ("DORMANT as of ...") goes stale with no reader t
 Prose is rewritten in place and holds only what is true now.
 
 **What follows.** New prose carries no date. CLAUDE.md carries none. An existing date goes when its
-file is next rewritten. There is no sweep now: a sweep spends review on text nobody is editing.
+file is next rewritten. Never in a sweep: a sweep spends review on text nobody is editing.
 
-**A decision entry is a record, and old entries keep the dates they hold.** A new entry does not add one.
-Git dates the commit.
+**A decision entry is no exception.** It loses its dates when it is next edited, like any other file.
+A new entry adds none. Git dates the commit.
 
 **Fact that would date this entry.** A prose date that a reader needs and git cannot supply, such as
 a vendor's release date. Name that source, and the source dates itself.

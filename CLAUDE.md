@@ -89,13 +89,14 @@ make catalog-mirror # dry run only. ARGS=--dry-run samples over HTTP HEAD.
                                    #   No standing cap: every unsent copy goes out unless a send bounds it.
                                    #   --cap N holds a SKU to N copies LIVE. It refuses while a sent copy is
                                    #   pending, so run reconcile --live first. --quantity SKU=N sends N copies.
-                                   #   --listed-only, --split-threshold, --split-games as named.
+                                   #   --listed-only sends above-threshold rows only. --split-threshold writes
+                                   #   import-listed.csv and import-subthreshold.csv. --split-games writes one file per game.
                                    #   --live-guard FILE trims rows so TCGplayer never holds more copies than
                                    #   are here. --reprice-live F adds a price-only row per live card F names.
 ./pkmnscan cards    name | audit [--verbose] | photos [--write] [--limit N] | identity [--write]
                                    # stable card names. `make cid-audit` runs the audit.
 ./pkmnscan prices   adopt [--write] | show [--held]  # the price corpus. Adopt folds legacy decisions.json in.
-./pkmnscan readings adopt [--write] | show           # the market-reading table.
+./pkmnscan readings adopt [--write] | show           # the market-reading table. --write fully replaces both tables.
 ./pkmnscan skus     adopt [--write]                  # the store-owned SKU table. Never a full replace.
 ./pkmnscan archive  sweep [--write] | show [--sku ID]  # price-history archive. Previews with no network.
 ./pkmnscan queue    refresh [--export <file.csv>] [--write]  # re-resolve every open queue entry.
@@ -128,7 +129,7 @@ it. `#/fulfillment` is the Fulfiller's whole product, with no shell (D5, two per
   may not re-rank it (D181, the order is taken once).
 - `#/runs` is off-nav and opens Review's runs sheet (D291, the fold).
 - `#/product` is off-nav and deep-linked by SKU (D227, a route not a lens).
-- `#/revenue` is an eleventh nav row on purpose (D214, gross-revenue retrospective). It is gross only, leaves out canceled orders and never claims profit.
+- `#/revenue` is a nav row on purpose (D214, gross-revenue retrospective). It is gross only, leaves out canceled orders and never claims profit.
 
 ### The design system
 
@@ -161,7 +162,7 @@ The legacy aliases at the foot of tokens.css are dead. A new rule may not read o
   property. `background-image` cannot animate, so use an inset `box-shadow`. The press dip is `translate`.
   A screen's own emphasis is `transform: scale()`, never `translateY`. A control may not ease its own `:active` movement.
 - **Motion is tokens.** Durations and easing are tokens. List rows stagger off `--bn-stagger`.
-  `prefers-reduced-motion` is honored.
+  `prefers-reduced-motion` is honored. Only loops that carry meaning keep turning.
 
 ### The shell
 
@@ -236,7 +237,8 @@ you build here. Rationale and open questions live in `docs/CODES-DECISIONS.md`.
   renders `pipeline/join.departed_label`.
 - **A set hint on some cards narrows nothing** (D76, how wide to ask is per game). Widening needs every card hinted and
   every hint resolved. A Pokemon run that would widen is refused (`export_needs_hint` in `pipeline/games.py`, D170, a widening is safe only while the category fits)
-  unless the operator named `set_ids` or `scope`.
+  unless the operator named `set_ids` or `scope`. A widening is never silent: every fetch carries a `width` block.
+  Fix an unhinted card in Manage box, under Set claims.
 - **The catalog export belongs to the game, not the drawer** (D166, the catalog export is a property of the game). It lands in `inventory/.exports/<game>/`.
   A covering export under 900s old is reused. `refresh: true` forces a new one.
 - **The pricing answer is one file, keyed by SKU** (D86, one file for the store): `pipeline/corpus.py` over
@@ -283,12 +285,12 @@ you build here. Rationale and open questions live in `docs/CODES-DECISIONS.md`.
   `docs/map.py` first. **NOT MECHANIZED:** a machine cannot read a sentence to a person and decide whether
   this repo can already do it.
 - **No date in repo prose.** History is git's. Rewrite a claim in place, and keep only what is true now.
-  Old dates go when their file is next rewritten. See D-no-dates-in-repo-prose (no dates in repo prose).
+  Old dates go when their file is next rewritten. Never in a sweep. See D-no-dates-in-repo-prose (no dates in repo prose).
   **NOT MECHANIZED:** a machine cannot tell a date from a version number, a port or a test fixture without intent.
 - **Opsec.** A live unredeemed code card is a bearer instrument. No code-card photo in a listing, README,
   screenshot or commit. `scripts/githooks/pre-commit` enforces it, armed by `make hooks`.
 - **Nine shell mistakes are refused before they run** by `scripts/guard-shell.py --hook` on Bash and Write/Edit (D135, Codex reads the same rules).
-  Each clause has an escape hatch that its refusal names: `PKMNSCAN_CHECKOUT`, `PKMNSCAN_TREE`, `PKMNSCAN_GH`,
+  Each clause fails open on its own bugs. Each has an escape hatch that its refusal names: `PKMNSCAN_CHECKOUT`, `PKMNSCAN_TREE`, `PKMNSCAN_GH`,
   `PKMNSCAN_LINK`, `PKMNSCAN_WAIT`, `PKMNSCAN_PUSH`, `PKMNSCAN_STASH`, `PKMNSCAN_RESET`, `PKMNSCAN_NARRATE`
   (D235, the heartbeat is refused a pipe). The ninth clause names its subjects, a short per-incident roster
   that the self-test reconciles. The other eight resolve what a command would do. `make guard-shell-selftest` proves each one in a throwaway repo.
@@ -334,7 +336,8 @@ Use bold labels in one quoted block, never a code fence. Start with the point. N
 - **Name the rendering component and the state that selects it.** Run `make orient ARGS=app/src/Orders.tsx --name CopyMapView`
   before the brief. It prints which component draws it.
 - **Never ask an agent to rebuild a state it has left.** Capture a "before" image before the edit, or not at all.
-  `PKMNSCAN_STASH` refuses a bare stash. **NOT MECHANIZED:** a machine cannot tell that a sentence requires undoing work.
+  Wanting a "before" image afterwards is the orchestrator's job, in a separate clean checkout. It is never the
+  working agent's, and never in a shared tree. `PKMNSCAN_STASH` refuses a bare stash. **NOT MECHANIZED:** a machine cannot tell that a sentence requires undoing work.
 - **State a fence by intent and name the exception.** Example: "Do not change which cards a walk holds. Rendering
   changes inside `WalkView` are in scope." **NOT MECHANIZED:** a machine cannot tell a fence around
   behavior from one around files.

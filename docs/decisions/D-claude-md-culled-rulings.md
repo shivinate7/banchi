@@ -47,7 +47,7 @@ Review the built screen against that pass before you call it done.
 **390px is checked only on an owner phone report.** Verify a screen at 1440 and 820, in both themes.
 The specs that assert phone layout stay in CI.
 
-**The Sales screen is an eleventh nav row on purpose.** The owner saw the cost of 37px past the fold at 390x754.
+**The Sales screen is a nav row on purpose.** The owner saw the cost of 37px past the fold at 390x754.
 The owner chose the sidebar tab anyway. D214 holds the retrospective itself.
 
 **The route and screen count is read from `ROUTES`, never from prose.**
