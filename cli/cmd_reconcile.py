@@ -367,9 +367,9 @@ def run_live(args, say) -> int:
 # and published copies for them. A GHOST is a card whose box has no row. This report lists
 # what TCGplayer holds beyond what is really on hand, per SKU the ghosts carry.
 #
-# NO CSV ROUTE LOWERS A QUANTITY (D100, `Add to Quantity` is a delta, `Total Quantity` is not
-# writable), and no other command here lowers one. So this writes a plain worklist for the
-# seller portal, never an import file.
+# A NEGATIVE `Add to Quantity` LOWERS A LIVE QUANTITY (D100, measured 2026-09-29), but the
+# import writer's `_check` still refuses negatives (owner's decision). So this writes a plain
+# worklist, never an import file.
 WORKLIST_HEADER = (
     "SKU", "Product Name", "Condition", "Live", "Real", "Excess", "Sold Since Export",
 )
@@ -430,7 +430,7 @@ def run_phantoms(args, say) -> int:
     for w in work:
         say(f"  {w[0]}  live {w[3]}  real {w[4]}  excess {w[5]}  {w[1]} ({w[2]})")
     say("")
-    say("No import can lower a quantity (D100). Lower these by hand in the seller portal.")
+    say("Worklist only: lower these in the seller portal, or by a negative Add to Quantity the owner approves (D100).")
     if args.out:
         with open(args.out, "w", newline="") as handle:
             writer = csv.writer(handle)
