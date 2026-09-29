@@ -336,6 +336,12 @@ def wait_until(predicate, seconds: float = 30.0, step: float = 0.25) -> bool:
     return False
 
 
+def build_logged(tree: Path) -> bool:
+    """Has the last build the supervisor started logged its finish?"""
+    text = supervisor_log(tree)
+    return text.rfind("app built in") > text.rfind("rebuilding")
+
+
 def supervisor_log(tree: Path) -> str:
     try:
         return (tree / ".serve" / "supervisor.log").read_text("utf-8")
@@ -522,10 +528,25 @@ def main() -> int:
                 "there is no window in which `dist/` is empty",
             )
             check((200, True) in seen, "and the new bundle lands when the build finishes")
+            # THE LOOP ABOVE CAN EXIT ON THE STARTUP BUILD, not the edit's. That build reads
+            # `generation` when it ends, so it can serve "5" while the `.tsx` edit is still owed
+            # its own build; and a bundle serves BEFORE its build logs "app built in". Count
+            # builds from there and the owed build lands inside the next step's window, and is
+            # read as a server edit rebuilding. So wait for the bundle to be current AND for the
+            # last build the log started to have logged its finish.
+            check(
+                wait_until(
+                    lambda: report(tree).get("app_stale") is False and build_logged(tree),
+                    seconds=60,
+                ),
+                "and every build owed to that edit has finished and said so, so the next step "
+                "starts from a settled baseline",
+            )
 
             # ------------------------------------------------- a python edit is the other track
             print("\n  a Python edit restarts the server and does not build")
             builds = supervisor_log(tree).count("app built in")
+            edit_mark = len(supervisor_log(tree))
             pid_before = report(tree).get("capture_pid")
             marker = tree / "server" / "ports.py"
             marker.write_text(marker.read_text("utf-8") + "\n# selftest\n", "utf-8")
@@ -533,6 +554,20 @@ def main() -> int:
                 lambda: report(tree).get("capture_pid") not in (None, pid_before), seconds=60
             )
             check(changed, "the capture child restarts for a Python change")
+            # A REBUILD AFTER A RESTART IS LOGGED JUST AFTER "capture server ready", and a pid
+            # change alone is read before either. So a server edit that DID rebuild passed this
+            # check. Wait for the restarted child to be ready, and for any build that then
+            # started (its "rebuilding" line) to have logged its finish.
+            def restart_settled() -> bool:
+                since = supervisor_log(tree)[edit_mark:]
+                return "capture server ready" in since and since.rfind("app built in") >= since.rfind(
+                    "rebuilding"
+                )
+
+            check(
+                wait_until(restart_settled, seconds=60),
+                "and the restart has run to the end, so the count below cannot read too early",
+            )
             check(
                 supervisor_log(tree).count("app built in") == builds,
                 "AND NOTHING WAS REBUILT — the reverse of the arm above, and the pair is what "
