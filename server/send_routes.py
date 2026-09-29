@@ -693,8 +693,8 @@ def _sold_by_sku(skus) -> Dict[str, int]:
     """Copies marked sold, per named SKU, now. The check subtracts the sales made after a send.
 
     ONE INDEXED READ PER SKU (`Inventory.positions_for_sku`), never a walk of every card: the
-    send names its SKUs, and `docs/specs/store-scaling.md` §0 is why a full-table read is not
-    free here.
+    send names its SKUs, and a full-table read is not
+    free here (it materialises every card).
     """
     inventory = Store().read().inventory
     return {

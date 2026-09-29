@@ -349,12 +349,8 @@ a gate. `--facts` is on no gate either — it needs a BEFORE, which exists only 
 in flight. The two rows that DO gate, `decision structure` and `entry budget`, check the tree as
 it stands and cannot see what a change removed.
 
-### Two documents outran the code
+### A command file outran the code
 
-- `docs/specs/audit-retirement.md` restates a check roster and a count the shipped registry no
-  longer matches, and `CLAUDE.md` tells sessions to read specs as settled. It needs a status
-  line naming which premises failed under execution — **not** a corrected number, which would
-  only reset the clock: the restatement is the defect.
 - `.claude/commands/docs-audit.md` says exit 2 means the coupling question, but the command it
   prints in step 1 runs without `--staged`, and coupling only runs under `--staged`.
 

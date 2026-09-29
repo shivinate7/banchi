@@ -2309,7 +2309,7 @@ test('the position label does not wrap to three lines at 768px', async ({ page }
  * "Verifying a screen" section names, and a first attempt at this fix moved the breakpoint to
  * exactly 820px -- which measured fine on the store's ORDINARY labels and still wrapped to
  * three lines on the longest one the store can emit ("Box 9999, Section 99, Card 50000":
- * docs/specs/store-scaling.md's 50,000-card target, in one undeclared box with no dividers,
+ * a 50,000-card target, in one undeclared box with no dividers,
  * D10 -- so a single section holding that many cards is a real shape and not a fabricated
  * string). The breakpoint moved again, to 900 -- the ladder's own "a two-column body becomes
  * one" step -- specifically because 900 clears this label at two lines where 820 did not. */

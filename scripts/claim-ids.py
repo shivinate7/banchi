@@ -972,7 +972,7 @@ def rewrite_decision_paths(text: str, claims: Sequence[Claim]) -> str:
     """Turn a PATH citation of a decision's own slug-named file into a bare id citation.
 
     THE THIRD EDIT THAT IS NOT A TOKEN SUBSTITUTION, and it is the one that was missing on
-    2026-09-19: `docs/specs/revenue-plan.md` cited a still-unclaimed entry as
+    2026-09-19: `docs/specs/sales-plan.md` cited a still-unclaimed entry as
     `` `docs/decisions/D-<slug>.md` `` — a real path, true the day it was written, because the
     unclaimed file really is named after its bare slug. `apply_to_text` alone substitutes only
     the TOKEN inside that path, `D-<slug>` -> `D<n>`, and leaves `` `docs/decisions/D<n>.md` ``

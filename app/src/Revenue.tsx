@@ -27,7 +27,7 @@ import './Revenue.css'
  *
  * GROSS ONLY, NEVER PROFIT. There is no cost basis anywhere in this repo, and
  * `server/order_transport.py`'s `project_order` allowlist drops `transaction` and `refunds`
- * at parse — no fee, shipping or refund figure ever reaches this wire. `docs/specs/revenue.md`
+ * at parse — no fee, shipping or refund figure ever reaches this wire. `docs/specs/sales-screen.md`
  * argues this at length; the word "gross" stays on screen so the figure is never read as
  * profit.
  *
@@ -161,7 +161,7 @@ type Sale = {
 /** `true` where the OPERATOR closed this line as never shipping — a refund or a
  *  cancellation, `store/orders.CLOSE_NOT_SHIPPING`'s own words for `not_shipping` — during fulfilment,
  *  matched by SKU against the same order's `OrderLineProgress` list (D225,
- *  `docs/specs/revenue-plan.md` §2). `closed_reason` rides on every order's `progress`
+ *  `docs/specs/sales-plan.md` §2). `closed_reason` rides on every order's `progress`
  *  already; this screen was simply never reading it. NOT THE MARKETPLACE'S WORD: the value
  *  is recorded by a person during fulfilment, so a line can be a real refund the operator
  *  never got around to closing, and this can only ever undercount, never overcount. */

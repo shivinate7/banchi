@@ -54,7 +54,7 @@ cause" rule one register up.
 **A string reached only through a helper function.** `{formatStatus(x)}` cannot be traced back
 to the literal `formatStatus` returns without data-flow analysis the AST alone does not carry,
 so the count this row prints is a floor and not a census — the same word
-`docs/specs/corpus-pruning.md` uses for its own undercount, for the identical reason: what is
+D177's prune measurement uses for its own undercount, for the identical reason: what is
 missed understates the defect, never invents one.
 
 Reasoning stays in the decision, screens state facts; a note about zero does not draw.

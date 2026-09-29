@@ -78,7 +78,7 @@ from typing import (
 
 from pipeline import games, pricing, routing, setnames, tcgcsv, variant
 # THE COMPOSITION/SCREEN/STRIP TRIO LIVES IN `store/numbers.py` NOW, RE-EXPORTED HERE UNDER
-# THE SAME NAMES (store-scaling item 8, fixing a `store/` -> `pipeline/` cycle a reviewer
+# THE SAME NAMES (fixing a `store/` -> `pipeline/` cycle a reviewer
 # caught). `store/` may not import `pipeline/` (D63: "store/ imports nothing from
 # pipeline/, so there is no cycle" — the arrow runs the other way, `pipeline/orders.py` and
 # friends import `store`), and `store/master.py`/`store/db.py` both need these three pure
@@ -1475,7 +1475,7 @@ def _key_number_and_printed_total(card: "IdentifiedCard") -> Optional[str]:
 
 
 # THE SHAPE ITSELF (`_SET_CODE_PREFIX`, `strip_set_code`) LIVES IN `store/numbers.py` NOW
-# (store-scaling item 8) AND IS IMPORTED BACK ABOVE -- `store/` may not import `pipeline/`
+# AND IS IMPORTED BACK ABOVE -- `store/` may not import `pipeline/`
 # (D63), so the leaf functions moved to where both sides could reach them without crossing
 # that edge. `_repair_set_code` below is the LADDER's own reader of the shape and stays
 # here: it is candidate-or-None, asked only on a miss, which is a `pipeline/`-specific
@@ -1518,7 +1518,7 @@ def _repair_set_code(key: str) -> Optional[str]:
     return out if out and out != key.strip() else None
 
 
-# `strip_set_code` moved to `store/numbers.py` (store-scaling item 8) and is imported back
+# `strip_set_code` moved to `store/numbers.py` and is imported back
 # above under the same name; every caller here (`_repair_set_code` above) is unaffected.
 
 
@@ -1918,7 +1918,7 @@ class Catalog:
         # SEALED PRODUCT SURVIVES and is not an exception to the rule so much as outside it —
         # see `tcgcsv.SEALED_CONDITION`, which carries the argument and the measurement.
         # `games.near_mint_conditions`, not restated here — see its own docstring
-        # (docs/specs/card-variants.md section 3b) for why this expression now lives in
+        # (docs/specs/card-printings.md section 3b) for why this expression now lives in
         # exactly one place rather than three.
         conditions = games.near_mint_conditions(game)
         conditions.add(tcgcsv.SEALED_CONDITION)

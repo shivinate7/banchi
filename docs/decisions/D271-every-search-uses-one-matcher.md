@@ -13,7 +13,7 @@ The rule covers the server's FTS5 candidate step too, not only the screens.
 ### The premise that no longer holds
 
 No decision set one matching rule for the app. Each screen made its own. The store-scaling work
-added an FTS5 candidate step to the server search (`docs/specs/store-scaling.md`, item 8). The
+added an FTS5 candidate step to the server search. The
 comment on `do_search` names the split of `4/102` into two tokens, and accepts it. Before that
 step, a substring walk found `54/132` inside `054/132`.
 
@@ -119,9 +119,9 @@ The two implementations agree on every mark, spacing or not. `scripts/match-self
 code and green on the new one.
 
 **MID-WORD SEARCH IS ADDED, the owner's ruling, 2026-09-25, verbatim: "Add mid-word search."** The owner set one condition. Mid-word ships "only if a measurement... says
-search stays fast." This entry wins over store-scaling item 8's own prefix-only trade-off. That
-item is now SUPERSEDED on this one point (below). `do_search("izard")` now finds
-"Charizard", the exact case store-scaling item 8 measured and traded away.
+search stays fast." This entry wins over the FTS5 step's own prefix-only trade-off. That
+trade-off is now SUPERSEDED on this one point (below). `do_search("izard")` now finds
+"Charizard", the exact case the FTS5 step measured and traded away.
 
 `server/capture_server.py:_fts_substring_candidates_for_term` is a fourth candidate
 source, one term at a time (R1, round-4 Opus review, 2026-09-25 — see below). It folds

@@ -153,8 +153,8 @@ export function InventorySets({ reloadToken = 0 }: { readonly reloadToken?: numb
   /* THE MARKET FIGURE ON EACH TILE (D221: money stays mono, via `Money`) — the same
    *  `readings`/price-history reading `do_pipeline_value`'s own `market` field already draws
    *  for an on-hand card, reached through the NAMED-SKU route (`GET /pipeline/price-now`,
-   *  `getSoldPrices`) rather than the whole-store `ValueTable` shape, which store-scaling
-   *  item 7 measured at ~739KB and deliberately never fetches unpaginated any more. Scoped to
+   *  `getSoldPrices`) rather than the whole-store `ValueTable` shape, which was measured
+   *  at ~739KB and deliberately never fetches unpaginated any more. Scoped to
    *  the SET ON SCREEN, not the whole store, so a switch never asks for more than this grid
    *  is about to draw. */
   useEffect(() => {

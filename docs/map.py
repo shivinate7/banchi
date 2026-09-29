@@ -733,7 +733,7 @@ COMPONENTS = [
                                    "for every sale of the SKU, and a reading of nothing "
                                    "vouches for exactly the sales it was taken AFTER "
                                    "(D150). `_cards_by_sku` reads every card's SKU, state and "
-                                   "position in ONE `Rows.select()` (store-scaling item 4), so "
+                                   "position in ONE `Rows.select()`, so "
                                    "`_copies_out` and `_committed_keys` read a shared in-memory "
                                    "dict instead of one `Rows.where(sku=sku)` per listing — "
                                    "measured at 0.9s over 492 listings before the rewrite "
@@ -1339,7 +1339,7 @@ COMPONENTS = [
                                         "product-history-selftest`, PATH GATED and IN "
                                         "`make check` as of D247's twenty-first entry "
                                         "(owner's word, 2026-09-23)."},
-            # UNSOLD STOCK, VALUED OVER TIME (`docs/specs/revenue-plan.md` section 1,
+            # UNSOLD STOCK, VALUED OVER TIME (`docs/specs/sales-plan.md` section 1,
             # second half; `D236`). The position is the SKU
             # (D212); quantity is the `cards` table's own state, never the marketplace
             # mirror. The series source is the archive (D219), one range at a time,
@@ -1774,7 +1774,7 @@ COMPONENTS = [
             "numbers.py": {"does": "a card's number, composed (`join_key`), screen-drawn "
                                    "(`display_number`) and stripped of a glued set code "
                                    "(`strip_set_code`) — a LEAF module with no imports beyond the "
-                                   "stdlib (store-scaling item 8, D63): `store/` may not import "
+                                   "stdlib (D63): `store/` may not import "
                                    "`pipeline/`, so these three pure functions moved out of "
                                    "`pipeline/join.py` to where both `store/master.py` and "
                                    "`pipeline/join.py` (which imports them back and re-exports "
@@ -3912,16 +3912,15 @@ COMPONENTS = [
                 # link this repo's own history ever produced.
                 "governed_by": ["D1", "D2", "D3", "D6", "D7", "D8", "D9", "D10", "D11", "D12",
                                 "D16", "D17", "D18", "D22", "D23", "D24", "D26", "D27", "D31",
-                                "D33", "D39", "D41", "D43", "D44", "D47", "D86", "D50", "D51",
-                                "D138", "D60", "D63", "D65", "D67", "D69", "D70", "D140",
-                                "D74", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
-                                "D88", "D90", "D92", "D94", "D97", "D101", "D102", "D104", "D110",
-                                "D111", "D113", "D119", "D122", "D123", "D127", "D132", "D134",
-                                "D135", "D136", "D141", "D142", "D148", "D144",
-                                "D149", "D155", "D277", "D160", "D161", "D305", "D173", "D174",
-                                "D178", "D181", "D182", "D185", "D191", "D192", "D284", "D196",
-                                "D210", "D213", "D215", "D218", "D280", "D245",
-                                "D247", "D248"],
+                                "D33", "D39", "D41", "D43", "D44", "D47", "D50", "D51", "D60",
+                                "D63", "D65", "D67", "D69", "D70", "D74", "D75", "D76", "D80",
+                                "D81", "D83", "D84", "D86", "D87", "D88", "D90", "D92", "D94",
+                                "D97", "D101", "D102", "D104", "D110", "D111", "D113", "D119",
+                                "D122", "D123", "D127", "D132", "D134", "D135", "D136", "D138",
+                                "D140", "D141", "D142", "D144", "D148", "D149", "D155", "D160",
+                                "D161", "D173", "D174", "D177", "D178", "D181", "D182", "D185",
+                                "D191", "D192", "D196", "D210", "D213", "D215", "D218", "D245",
+                                "D247", "D248", "D277", "D280", "D284", "D305"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "

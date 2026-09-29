@@ -892,7 +892,7 @@ async function open(
     })
   })
 
-  /* PUT ONLY — box-level claims apply. D192 (store-scaling item 2) put a real GET
+  /* PUT ONLY — box-level claims apply. D192 put a real GET
    * on this same path (`getInventoryBox`, called on every mount of this screen), and this
    * handler answered EITHER method before that route existed, silently returning the claims
    * shape for a card-map read. `route.fallback()` on a non-PUT request lets it cascade to
@@ -1001,7 +1001,7 @@ async function open(
     })
   })
 
-  /* D192 (store-scaling item 2): `BoxBrowse.tsx` no longer calls the bare
+  /* D192: `BoxBrowse.tsx` no longer calls the bare
    * `/inventory` above at all — it calls `getInventoryBox(shelf)` for whichever box is on
    * screen, on every mount and every shelf switch. The `/\/inventory\/\d+$/` PUT stub above
    * (box claims) already falls back for a non-PUT method; this is what it falls back TO. */

@@ -91,23 +91,10 @@ two `woff2` requests behind it.
 
 ### What this does not touch
 
-**Two of the three doc-sheet groups still fetch from Google.** The line is whether anything
+**The two logo working files still fetch from Google.** The line is whether anything
 RENDERS them, and that was verified rather than assumed: `scripts/build-mark.mjs` reads `small-cut.html` as
-TEXT and evaluates its drawing block against a `window` stub, `build-lockup.mjs` reads a `.js`,
-and `docs-audit`'s `lockup params` compares declared holds as text. Nothing in this repo opens
-any of them in a browser, so a slow CDN cannot move a verdict — it can only show a person a
-fallback face, which is visible and self-correcting. That is the whole difference from the suite.
-
-**`docs/specs/box-drawings/sheet.html` came along anyway, because it cost nothing.** It wanted the
-same three families at the same weights and already `<link>`ed `../../../app/src/tokens.css`, so
-it reads `../../../app/src/fonts.css` now — no bytes, no second copy. Checked from a `file://`
-URL, which is how a person opens it and is not the same as an https fetch: every face resolves
-locally and no request leaves.
-
-**The design references and `docs/specs/logo/sheets/` do not.** The first wants ten families —
-782 KB of `latin`+`latin-ext` over 26 files, plus Cabinet Grotesk from Fontshare, a second CDN
-under a non-OFL licence — for archived drawings of a palette this product no longer paints. The
-second wants a CJK face. Real weight in the repo, for documents on no gate.
+TEXT and evaluates its drawing block against a `window` stub, and `build-lockup.mjs` reads `lockup-core.js`.
+Nothing in this repo opens either in a browser, so a slow CDN cannot move a verdict. That is the whole difference from the suite.
 
 **`font-display: swap` is kept**, so `fontsReady.ts` keeps its job. Self-hosting does not close
 the swap window — it makes the thing being waited for local.

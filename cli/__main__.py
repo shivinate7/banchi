@@ -620,7 +620,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # ------------------------------------------------------------------------- archive
     #
-    # THE PRICE-HISTORY ARCHIVE (D219, `docs/specs/revenue-plan.md` §4).
+    # THE PRICE-HISTORY ARCHIVE (D219, `docs/specs/sales-plan.md` §4).
     # The source endpoint's window is 357 days and slides; `sweep` is the one press that
     # reads it and keeps what it found past that ceiling. Previews by default, like
     # `readings adopt`, though for the same weaker reason: nothing here overrides an

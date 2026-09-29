@@ -50,8 +50,8 @@ DELIBERATELY LEFT OUT, AND WHY (read before adding either back):
     three candidate definitions while building this registry — a bare `step \\d+` scan across
     tracked markdown alone (241), the same scan restricted to numbers that are actually valid
     `n` ids in docs/map.py (391, across the whole tracked tree) — and none of them lands
-    anywhere near 218, because "step" is ordinary English: `docs/specs/store-scaling/
-    02-per-box-read.md` alone numbers its OWN 27 unrelated steps, and motion-trigger prose
+    anywhere near 218, because "step" is ordinary English: a per-item build playbook
+    could number its OWN 27 unrelated steps, and motion-trigger prose
     uses "step" as a capture stage. There is no citation registry in this tree that marks a
     "step N" as a build-order reference versus a spec's own numbered list, so no regex can
     honestly tell them apart. Left out rather than invented; a real fix is a citation

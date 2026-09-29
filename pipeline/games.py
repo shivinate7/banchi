@@ -1000,7 +1000,7 @@ def require(key: str) -> Dict[str, object]:
 def near_mint_conditions(key: str) -> Set[str]:
     """The `Condition` strings this game's Near Mint rows carry (D12 hardcodes Near Mint).
 
-    THE ONE PLACE THIS SET IS COMPUTED, per docs/specs/card-variants.md section 3b: it was
+    THE ONE PLACE THIS SET IS COMPUTED, per docs/specs/card-printings.md section 3b: it was
     inlined twice — `pipeline/join.py:Catalog.from_export` (D137) and
     `server/capture_server.py:_near_mint_conditions` — and a THIRD inline copy in the review
     queue's own candidate builder is exactly the drift D137's own docstring warns against

@@ -7,7 +7,7 @@ not import `pipeline/` — D63's own argument (`docs/decisions/D063-…md`, and
 there is no cycle") — because the arrow runs the other way: `pipeline/orders.py`,
 `pipeline/readings.py` and `pipeline/selection.py` all import `store`, and a cycle through
 `store -> pipeline -> store` would be exactly the shape that rule exists to forbid.
-`store/master.py:_card_columns` and `store/db.py:_add_search_index` (store-scaling item 8)
+`store/master.py:_card_columns` and `store/db.py:_add_search_index`
 both need `join_key`/`display_number` to populate the `number_key`/`number_display`
 columns without re-deriving the zfill/set-code-strip rules a third time — CLAUDE.md's "one
 fold, both sides" (D55/D67) — so the fold itself moves to where both sides can reach it

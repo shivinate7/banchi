@@ -50,7 +50,7 @@ never an hour of them.
 Committing per chunk only helps if the next run does not throw the work away by
 re-fetching it. `freshness_index` builds `sku -> {range: latest 'at'}` in one pass over the
 whole archive table. It never walks the table once per subject — the mistake
-`store-scaling` item 2 already named and `cli/resolve.py:_copies_out` already paid for.
+the per-box inventory read (D192) already named and `cli/resolve.py:_copies_out` already paid for.
 `split_by_freshness` then asks, per SKU: does every range this pass wants already have a
 bucket read within `pipeline/pricehistory.py:HISTORY_TTL_SECONDS` (one hour) of now?
 
