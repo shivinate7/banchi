@@ -4395,10 +4395,11 @@ test('F3: the name search finds a card by any words of it, in any order, and by 
 test('F3: the price sort orders within each heading, and a row with no price goes last', async ({ page }) => {
   await open(page, { skus: FILTER_SKUS })
   await pickFilter(page, 'Sort', /^Market price/)
-  /* HIGH TO LOW is the first pick. Poro Snax has no market price, so it sits under "Needs you";
-     the sort never crosses that line. */
-  const names = await page.locator('.pricing-row').allInnerTexts()
-  expect(firstWords(names.map((text) => text.replace(/^\s*/, '')))).toEqual(['Poro', 'Articuno', 'Annie', 'Dunsparce'])
+  /* HIGH TO LOW is the first pick. "Needs you" holds Articuno and Poro Snax and "Ready" the other
+     two; the sort runs inside each, so it never crosses that line, and Poro Snax (no market
+     price) goes last in its own group. */
+  const names = await page.locator('.pricing-row .pricing-name').allInnerTexts()
+  expect(firstWords(names)).toEqual(['Articuno', 'Poro', 'Annie', 'Dunsparce'])
   await expect(page.locator('.pricing-group-head .pricing-group-why').first()).toHaveText('Needs you')
 })
 
