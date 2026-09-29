@@ -7511,7 +7511,7 @@ COMPONENTS = [
                                          "`Graveyard.tsx`'s own `movedToName` does when the old "
                                          "box is gone (D259).",
                                  "governed_by": ["D6", "D26", "D28", "D31", "D34", "D46", "D52",
-                                                 "D67", "D89", "D96", "D118", "D134", "D172",
+                                                 "D67", "D83", "D89", "D96", "D118", "D134", "D172",
                                                  "D195", "D218", "D252", "D259"]},
             "src/CardHero.css": {"does": "the listing-correction control's own spacing. Everything "
                                          "else it draws with is reused rather than restyled: "

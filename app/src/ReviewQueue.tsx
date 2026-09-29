@@ -67,6 +67,7 @@ import { SearchField } from './SearchField'
 import './ReviewQueue.css'
 import { isRetiredReason, reasonLabel } from './reasons'
 import { collectorNumber as sharedCollectorNumber } from './cardNumber'
+import { isMovedCid, noPhotoSentence } from './CardHero'
 
 /* THE REVIEW QUEUE — the judgement screen. One card at a time: the photograph on a dark
  * stage, the question it poses, the evidence, and one row per answer with a keycap on it.
@@ -1956,7 +1957,10 @@ function GroupConfirm({
       <ul className="review-group-grid">
         {offer.rows.map((row, at) => (
           <li key={row.key} className="review-group-cell" style={{ animationDelay: `${Math.min(at, 24) * 25}ms` }}>
-            {row.entry.box < 1 || row.entry.photo === null || absent.has(row.key) ? (
+            {row.entry.box < 1 ||
+            row.entry.photo === null ||
+            photoUrl(row.entry.box, row.entry.index, row.entry) === null ||
+            absent.has(row.key) ? (
               <span className="review-group-absent">
                 <Icon name="image" size={18} />
                 no photo
@@ -1965,7 +1969,7 @@ function GroupConfirm({
               <img
                 className="review-group-photo"
                 /* By name (D172); the slot route only for an entry with no cid. */
-                src={photoUrl(row.entry.box, row.entry.index, row.entry)}
+                src={photoUrl(row.entry.box, row.entry.index, row.entry) ?? undefined}
                 alt={`The card photographed at ${row.entry.label}`}
                 loading="lazy"
                 onError={() =>
@@ -2602,6 +2606,14 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
      addressable slot, so a revisit costs no request. An entry with none (box 0, no card at
      the slot) keeps the slot route, whose digest ETag stays honest while the box shifts. */
   const src = photoUrl(entry.box, entry.index, entry)
+
+  if (src === null) {
+    return (
+      <AbsentPhoto title={isMovedCid(entry.cid) ? 'The card moved' : 'No photograph was stored'} detail="photo: null" label={entry.label} box={entry.box} cid={entry.cid} place={entry.place}>
+        {noPhotoSentence(entry.cid, null)}
+      </AbsentPhoto>
+    )
+  }
 
   if (absent) {
     return (

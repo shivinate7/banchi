@@ -815,7 +815,11 @@ function FulfillerCard({
       <ul className="card-locations-copies">
         {group.copies.map((copy) => {
           const sold = isSold(copy, soldKeys)
-          const noPhoto = !copy.has_photo || missing.includes(copy.key)
+          /* BY NAME (D172): `_copy_row` puts the card's own `cid` on every `SearchCopy`, so
+             this thumbnail is THIS copy, not whatever occupies its slot by the time the
+             picture loads. A name that is no photograph's gives no address, and no request. */
+          const src = photoSrc === undefined ? photoUrl(copy.place.box, copy.place.index, copy) : photoSrc(copy)
+          const noPhoto = !copy.has_photo || src === null || missing.includes(copy.key)
           const where = copy.place.label
           /* D218: the alt text is a sentence built AROUND the label ("The card in X"), where
              `where` below is drawn whole as its own line — `PositionLabel.tsx`'s own header
@@ -835,15 +839,7 @@ function FulfillerCard({
                   <img
                     key={copy.key}
                     className="card-locations-photo"
-                    src={
-                      photoSrc === undefined
-                        ? /* BY NAME (D172): `_copy_row` puts the card's own `cid` on every
-                             `SearchCopy`, already filtered to a name that really is a
-                             photograph's — so this thumbnail is THIS copy, not whatever
-                             occupies its slot by the time the picture loads. */
-                          photoUrl(copy.place.box, copy.place.index, copy)
-                        : photoSrc(copy)
-                    }
+                    src={src ?? undefined}
                     alt={whereSpoken === null ? 'The card' : `The card in ${whereSpoken}`}
                     onError={() =>
                       setMissing((held) => (held.includes(copy.key) ? held : [...held, copy.key]))

@@ -935,7 +935,7 @@ export function Codes() {
                                    name. NOR IS ITS `photo_sha256` ONE: that is the digest of
                                    the file as it stands, which a re-shoot moves, where a
                                    `cid` is frozen at issue and does not. */
-                                href={photoUrl(p.box, p.index)}
+                                href={photoUrl(p.box, p.index) ?? undefined}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="codes-dup-link"
@@ -1319,7 +1319,7 @@ export function Codes() {
                                     <a
                                       /* The slot route, for the duplicate list's reason
                                          above: the ledger carries no `cid`. */
-                                      href={photoUrl(e.box, e.index)}
+                                      href={photoUrl(e.box, e.index) ?? undefined}
                                       target="_blank"
                                       rel="noreferrer"
                                       className="codes-photo-link"

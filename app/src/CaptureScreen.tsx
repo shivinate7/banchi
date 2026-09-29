@@ -618,10 +618,11 @@ function describe(err: unknown): Note {
  * same bytes back.
  *
  * THE TEST IS WHETHER THE NAME CHANGED THE ADDRESS, never whether a cid was passed. `photoUrl`
- * ignores one in the demo build and refuses a `moved:`/`nophoto:` name, and both of those land
- * back on the slot route, where the nonce is still owed. */
-function photoSrc(box: number, index: number, ref: PhotoRef, revision: number): string {
+ * ignores one in the demo build, where the nonce is still owed, and answers null for a
+ * `moved:`/`nophoto:` name, which draws no image at all. */
+function photoSrc(box: number, index: number, ref: PhotoRef, revision: number): string | undefined {
   const url = photoUrl(box, index, ref)
+  if (url === null) return undefined
   return url.includes('?') ? url : `${url}?v=${revision}`
 }
 
