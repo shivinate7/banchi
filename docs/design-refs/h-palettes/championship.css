@@ -1,0 +1,113 @@
+/* Championship — A pro-play victory screen: molten gold trim and arcane teal magic cut across void-purple armor plating. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bn-bg: #0a0714;
+  --bn-surface: #150f24;
+  --bn-surface-2: #08050f;
+  --bn-surface-3: #20172f;
+  --bn-surface-glass: rgba(21, 15, 36, 0.72);
+  --bn-hover: rgba(247, 241, 255, 0.05);
+
+  --bn-ink: #f7f1ff;
+  --bn-ink-2: #d3c4ee;
+  --bn-ink-3: #a794ce;
+  --bn-ink-4: #8877ab;
+
+  --bn-line: rgba(230, 210, 255, 0.10);
+  --bn-line-strong: rgba(230, 210, 255, 0.20);
+  --bn-line-focus: rgba(255, 176, 46, 0.6);
+
+  --bn-accent: #ffb02e;
+  --bn-accent-hover: #ffc65c;
+  --bn-accent-press: #e69518;
+  --bn-accent-tint: rgba(255, 176, 46, 0.16);
+  --bn-accent-tint-2: rgba(255, 176, 46, 0.26);
+  --bn-on-accent: #1a0f00;
+
+  --bn-live: #ff3b57;
+  --bn-live-tint: rgba(255, 59, 87, 0.18);
+
+  --bn-ok: #1be8b5;
+  --bn-ok-tint: rgba(27, 232, 181, 0.16);
+  --bn-warn: #ffd83f;
+  --bn-warn-tint: rgba(255, 216, 63, 0.16);
+  --bn-danger: #ff5c8a;
+  --bn-danger-tint: rgba(255, 92, 138, 0.16);
+  --bn-money: #ffd166;
+
+  --bn-pill-ink-accent: #ffc65c;
+  --bn-pill-ink-ok: #1be8b5;
+  --bn-pill-ink-warn: #ffd83f;
+  --bn-pill-ink-danger: #ff5c8a;
+  --bn-pill-ink-live: #ff3b57;
+
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(255, 176, 46, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(255, 59, 87, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(255, 176, 46, 0.65);
+
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #20172f;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  /* the camera/photo stage keeps its own accent apart from the UI's, so the
+     capture screen clashes on purpose against the shell around it */
+  --bn-stage-accent: #4fd6ff;
+  --bn-stage-accent-hover: rgba(79, 214, 255, 1);
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-stage-danger: #ff5c5c;
+  --bn-stage-live: #ff6a58;
+
+  /* text glow, cyberpunk sign-off */
+  text-shadow: none;
+}
+
+/* ---- nav groups: each rail section takes its own hue (D-less, color only) ---- */
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(2) .bn-nav-group-label { color: #1be8b5; }
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(2) .bn-nav-link[aria-current='page'] {
+  color: #1be8b5;
+  background: rgba(27, 232, 181, 0.14);
+  box-shadow: inset 2px 0 0 #1be8b5;
+}
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(2) .bn-nav-link:hover { color: #1be8b5; }
+
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(3) .bn-nav-group-label { color: #ff3b57; }
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(3) .bn-nav-link[aria-current='page'] {
+  color: #ff3b57;
+  background: rgba(255, 59, 87, 0.14);
+  box-shadow: inset 2px 0 0 #ff3b57;
+}
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(3) .bn-nav-link:hover { color: #ff3b57; }
+
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(4) .bn-nav-group-label { color: #c084ff; }
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(4) .bn-nav-link[aria-current='page'] {
+  color: #c084ff;
+  background: rgba(192, 132, 255, 0.14);
+  box-shadow: inset 2px 0 0 #c084ff;
+}
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(4) .bn-nav-link:hover { color: #c084ff; }
+
+/* Home link (ungrouped, index 1) keeps the primary accent as its own job */
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(1) .bn-nav-link[aria-current='page'] {
+  color: #ffb02e;
+  background: var(--bn-accent-tint);
+  box-shadow: inset 2px 0 0 #ffb02e;
+}
+
+/* segmented tabs (Pricing's To send / Live, etc.) alternate two clashing hues */
+:root[data-theme='dark'] .bn-seg-item[aria-selected='true'],
+:root[data-theme='dark'] .bn-seg-item.active {
+  color: #1a0f00;
+  background: #ffb02e;
+}
+:root[data-theme='dark'] .bn-seg-item:nth-of-type(2)[aria-selected='true'],
+:root[data-theme='dark'] .bn-seg-item:nth-of-type(2).active {
+  background: #ff3b57;
+}
+
+/* the "Live" / server-online dot and any live badge reads the live hue already via
+   --bn-live; the "Server online" status dot picks up bn-ok already through tokens */
