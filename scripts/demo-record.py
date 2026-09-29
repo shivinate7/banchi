@@ -819,7 +819,7 @@ def default_view_walkable_orders(listed: Sequence[dict], resolution: Optional[di
     landing since 2026-09-28 (`Orders.tsx`'s `groupPullable`: a buyer with an open order whose
     line still owes a copy that is on hand, `owed - outstanding > 0`). Without it, every buyer
     with an open order, the view with Hide unpullable off. Measured on the committed mirror:
-    35 of 70 buyers, 39 orders, the set "Walk 35" sends (DEBT-demo-walk-recording)."""
+    35 of 70 buyers, 39 orders, the set "Walk 35" sends (DEBT60)."""
     lines_of = {
         str(one.get("key")): one.get("lines") or []
         for one in ((resolution or {}).get("orders") or [])

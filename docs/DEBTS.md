@@ -136,4 +136,5 @@ DEBT56 the worktree-provision selftest's race case fails
 DEBT57 an emit over a buried box made ghost cards and phantom copies
 DEBT58 the Lane H palette record is on a branch, not in main
 DEBT59 an unreadable live claim has no way out on screen
+DEBT60 the demo builds with Hide unpullable forced off
 ```

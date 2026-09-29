@@ -1,4 +1,4 @@
-## DEBT-demo-walk-recording — the demo builds with Hide unpullable forced off
+## DEBT60 — the demo builds with Hide unpullable forced off
 
 **Symptom.** Orders' landing view hides buyers with nothing on hand to pull (owner's ruling,
 2026-09-28), so "Walk N" ticks the pullable set: 35 of 70 buyers, 39 orders on the committed
