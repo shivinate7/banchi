@@ -212,17 +212,7 @@ def summaries_of(buckets) -> Dict[str, Summary]:
 class PriceArchive:
     entries: "Rows" = field(default_factory=lambda: Rows(PriceArchive.ENTRIES))
     sources: "Rows" = field(default_factory=lambda: Rows(PriceArchive.SOURCES))
-    # A PER-SKU INDEX, BUILT ONCE, NEVER SERIALIZED (the review round, 2026-09-27):
-    # `for_sku` used to scan every row this archive holds, ON EVERY CALL — measured at 10.8s
-    # for 300 SKUs against ~159k rows, because `do_pipeline_price_now` calls it once per named
-    # SKU over the SAME `PriceArchive` instance. `None` until the first `for_sku` (or the
-    # first `upsert`, if that runs first) needs it. `store/rows.py:Rows` is untouched — every
-    # OTHER reader of `entries` (`__iter__`, `values()`, `sources_payload`) is unaffected, and
-    # `entries` stays the one thing this table persists.
     summary: "Rows" = field(default_factory=lambda: Rows(PriceArchive.SUMMARY))
-    _by_sku: Optional[Dict[str, Dict[Tuple[str, str], "Bucket"]]] = field(
-        default=None, init=False, repr=False, compare=False,
-    )
 
     ENTRIES = TableSpec(
         "price_history",
@@ -286,28 +276,18 @@ class PriceArchive:
         rows.sort(key=lambda row: row["at"], reverse=True)
         return rows
 
-    def _index(self) -> Dict[str, Dict[Tuple[str, str], Bucket]]:
-        """Build the per-SKU index on first use — the ONE full walk of `entries`, ever, per
-        instance. Every subsequent `for_sku` or `upsert` call reads or updates this dict
-        directly and never re-scans."""
-        if self._by_sku is None:
-            index: Dict[str, Dict[Tuple[str, str], Bucket]] = {}
-            for bucket in self.entries.values():
-                index.setdefault(bucket.sku, {})[(bucket.range, bucket.start)] = bucket
-            self._by_sku = index
-        return self._by_sku
-
     def for_sku(self, sku: str) -> List[Bucket]:
         """Every bucket this archive holds for one SKU, across every range — ASCENDING by
         `(range, start)` so a caller can print or chart one range's own run of buckets by
         slicing on `range` without a second sort.
 
-        READS THE PER-SKU INDEX, NEVER A FULL SCAN (the review round, 2026-09-27) —
-        `do_pipeline_price_now` calls this once per named SKU over the same instance, and
-        the scan this replaced cost 10.8s over 300 SKUs against ~159k rows. Same filter,
-        same sort, same answer — `scripts/pricearchive-selftest.py` proves it identical
-        against the scan it replaces."""
-        found = list(self._index().get(str(sku), {}).values())
+        ONE INDEXED READ OF `price_history` (`store/db.py`'s `price_history.sku` index) THROUGH
+        `Rows.where`, NEVER A WALK OF `entries`. The per-instance dict this replaced was built
+        by a full walk on its first call, and every request opens a fresh snapshot, so
+        `do_pipeline_price_now` and `do_product_history` each paid that whole walk (measured
+        ~530ms over 150k rows) for one SKU's few hundred rows. `Rows.where` also sees a bucket
+        `upsert` just wrote to this instance, so no second structure has to be kept in step."""
+        found = self.entries.where(sku=str(sku))
         found.sort(key=lambda b: (b.range, b.start))
         return found
 
@@ -333,15 +313,9 @@ class PriceArchive:
         `Rows`'s diff is baseline-based, so a bucket whose reading is byte-identical to what
         is already stored costs nothing in the transaction — only a new key or one whose
         reading actually changed reaches disk.
-
-        KEEPS THE PER-SKU INDEX IN STEP, when one has already been built — never a rebuild,
-        just the same `(range, start)`-keyed replace `_index` itself does, so a `for_sku`
-        called on THIS instance after a write sees it without re-scanning `entries`.
         """
         for key, bucket in buckets.items():
             self.entries[key] = bucket
-            if self._by_sku is not None:
-                self._by_sku.setdefault(bucket.sku, {})[(bucket.range, bucket.start)] = bucket
         # THE SUMMARY IS MERGED IN THE SAME CALL, SO IT FLUSHES IN THE SAME `Store.write()`
         # TRANSACTION AS THE BUCKETS (`Snapshot.tables` lists both). Never a clear, like the
         # buckets: a start this call does not mention stays in its row.

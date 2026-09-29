@@ -769,7 +769,40 @@ def case_one_transaction_wins_the_race() -> None:
     )
 
 
+def case_an_unparseable_live_row_is_refused_not_skipped() -> None:
+    """A LIVE CLAIM THAT WILL NOT PARSE MUST STOP THE PRESS, NOT STOP COUNTING. `Rows.where`
+    skips a row `parse` refuses; if `live()` passed that on silently, the claim's cards would
+    read as free and go out twice."""
+    fresh_store()
+    import sqlite3
+    from store import db, files
+    from store.session import Store
+
+    first, _ = claim(["6/1"])
+    with Store().write() as session:
+        session.send_claims.claim("stamp-1", "markdown", {"S1": 1})
+    conn = sqlite3.connect(str(db.path(files.inventory_dir())))
+    conn.execute("UPDATE submissions SET payload = '{\"keys\": 7}' WHERE key = ?", (first["receipt"],))
+    conn.execute("UPDATE send_claims SET payload = '{\"kind\": \"bogus\"}' WHERE key = 'stamp-1'")
+    conn.commit()
+    conn.close()
+    for label, read in (
+        ("Submissions.live", lambda snap: snap.submissions.live()),
+        ("SendClaims.live", lambda snap: snap.send_claims.live()),
+    ):
+        try:
+            read(Store().read())
+            check(False, f"{label} refuses an unparseable live row (it returned instead)")
+        except files.StoreError as exc:
+            check("will not parse" in str(exc), f"{label} raises StoreError naming it: {exc}")
+    snap = Store().read()
+    with contextlib.suppress(files.StoreError):
+        snap.submissions.live()
+    check(snap.submissions.unreadable() == [first["receipt"]], "unreadable() names the key")
+
+
 CASES = (
+    case_an_unparseable_live_row_is_refused_not_skipped,
     case_disjoint_in_one_drawer,
     case_overlap_in_one_drawer,
     case_store_wide_against_a_box,
