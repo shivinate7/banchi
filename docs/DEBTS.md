@@ -134,4 +134,6 @@ DEBT54 the 13th-row undo walk times out under load
 DEBT55 the audit self-test crashes when app/node_modules is missing
 DEBT56 the worktree-provision selftest's race case fails
 DEBT57 an emit over a buried box made ghost cards and phantom copies
+DEBT58 the Lane H palette record is on a branch, not in main
+DEBT59 an unreadable live claim has no way out on screen
 ```

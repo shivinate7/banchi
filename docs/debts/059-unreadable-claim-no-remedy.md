@@ -1,4 +1,4 @@
-## DEBT-unreadable-claim-no-remedy — an unreadable live claim has no way out on screen
+## DEBT59 — an unreadable live claim has no way out on screen
 
 **Symptom.** A live send claim or submission whose row will not parse makes `SendClaims.live`
 and `Submissions.live` raise `StoreError`. That is correct: a money path must not skip a live

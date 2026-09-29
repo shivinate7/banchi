@@ -1,4 +1,4 @@
-## DEBT-h-palettes-unlanded — the Lane H palette record is on a branch, not in main
+## DEBT58 — the Lane H palette record is on a branch, not in main
 
 **Symptom.** The Lane H record lives only on branch `ux/h-record` at e7c8358a. Main does not
 hold it. It is eight dark palettes, 32 JPEG screenshots under a `design-refs` folder,
