@@ -830,7 +830,7 @@ export function ReviewQueue() {
         openRuns(false, first.run)
       } else {
         const failed = answer.failed[0]
-        toast({ kind: 'refusal', title: 'Nothing was paid for', body: failed?.sentence ?? failed?.message ?? 'The run did not start.' })
+        toast({ kind: 'refusal', tone: failed === undefined ? 'warn' : failureTone(failed), title: 'Nothing was paid for', body: failed?.sentence ?? failed?.message ?? 'The run did not start.' })
       }
       setReloads((n) => n + 1)
     } catch (err) {

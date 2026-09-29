@@ -449,3 +449,21 @@ test('a refusal gives an amber toast', async ({ page }) => {
   await expect(page.locator('.bn-toast-refusal', { hasText: 'The listing was not confirmed' })).toBeVisible()
   expect(await toastIconIs(page, '--bn-warn')).toBe(true)
 })
+
+/* A NAMED 500 IS A FAULT TOO: `failureTone` reads the status as well as the code, the same
+ * 5xx rule `failureKind` uses, so a code the client has never heard of still goes red. */
+for (const code of ['pkmnscan_missing', 'spawn_failed', 'a_code_nobody_listed']) {
+  test(`a named 500 (${code}) gives a red toast`, async ({ page }) => {
+    await open(page)
+    await page.route(/\/inventory\/2\/1\/confirm$/, (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code, message: 'The step could not run. Set the app up again on the Mac.' } }),
+      }),
+    )
+    await page.getByRole('button', { name: 'The listing is right' }).click()
+    await expect(page.locator('.bn-toast-refusal', { hasText: 'The listing was not confirmed' })).toBeVisible()
+    expect(await toastIconIs(page, '--bn-danger')).toBe(true)
+  })
+}

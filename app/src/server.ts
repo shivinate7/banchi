@@ -283,6 +283,8 @@ export type Failure = {
    *  server was not reached, it failed inside, or it was busy. `refusal` is a "no" that the
    *  same press will get again. Optional, so a failure a screen builds by hand still types. */
   kind?: 'refusal' | 'retry'
+  /** The HTTP status when a response arrived, so a tone can tell a server fault (>= 500) from a refusal. */
+  status?: number
   /** What the refusal carries beside its sentence, when it carries any (round 7). */
   data?: unknown
 }
@@ -290,9 +292,12 @@ export type Failure = {
 /** The codes a second press can clear: nothing answered, or the store was mid-write. */
 const RETRY_CODES: ReadonlySet<string> = new Set(['unreachable', 'bad_response', 'store_busy'])
 
+/** ONE RULE FOR "THE SERVER BROKE": a 5xx. `failureKind` and `failureTone` both read it. */
+const isServerFault = (status: number | undefined): boolean => status !== undefined && status >= 500
+
 function failureKind(code: string, status: number): 'refusal' | 'retry' {
   if (RETRY_CODES.has(code)) return 'retry'
-  if (status >= 500 || status === 429 || status === 423) return 'retry'
+  if (isServerFault(status) || status === 429 || status === 423) return 'retry'
   return 'refusal'
 }
 
@@ -324,7 +329,7 @@ function failureKind(code: string, status: number): 'refusal' | 'retry' {
  * "finish the job" by wiring this into it.
  */
 export function describeFailure(err: unknown): Failure {
-  if (err instanceof ServerError) return { code: err.code, message: err.message, kind: failureKind(err.code, err.status), data: err.data }
+  if (err instanceof ServerError) return { code: err.code, message: err.message, kind: failureKind(err.code, err.status), status: err.status, data: err.data }
   console.error('The app failed before the server could answer.', err) // the detail belongs in the console, never on screen
   return {
     kind: 'refusal',
@@ -346,9 +351,13 @@ const FAULT_CODES: ReadonlySet<string> = new Set([
   'client_bug',
   'server_error',
   'store_unavailable',
+  // Named 500s a run start reports inside a 200, where no status reaches the screen.
+  'spawn_failed',
+  'pkmnscan_missing',
 ])
 
-export function failureTone(failure: { readonly code?: string | null }): 'warn' | 'danger' {
+export function failureTone(failure: { readonly code?: string | null; readonly status?: number }): 'warn' | 'danger' {
+  if (isServerFault(failure.status)) return 'danger'
   return failure.code !== undefined && failure.code !== null && FAULT_CODES.has(failure.code) ? 'danger' : 'warn'
 }
 
