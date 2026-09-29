@@ -16689,9 +16689,10 @@ def argued_exemption(block: str) -> Tuple[bool, int]:
 
 
 _BARE_ID_RE = re.compile(r"\b(DEBT|D)(\d+)(?:-D(\d+))?\b")
-_GLOSS_STOPWORDS = frozenset(
-    "the and for not one its are was but who has had can may his her that this with from "
-    "into what when than then them they their there where which while will would".split())
+_GLOSS_STOPWORDS = frozenset((
+    "the", "and", "for", "not", "one", "its", "are", "was", "but", "who", "has", "had", "can",
+    "may", "his", "her", "that", "this", "with", "from", "into", "what", "when", "than", "then",
+    "them", "they", "their", "there", "where", "which", "while", "will", "would"))
 
 
 def _entry_heading(kind: str, number: int) -> Optional[str]:
@@ -16736,7 +16737,6 @@ def bare_id_findings(text: str) -> List[Finding]:
     """
     found: List[Finding] = []
     seen: Set[str] = set()
-    offset = 0
     for number, line in enumerate(text.split("\n"), 1):
         if not line.strip() or re.match(r"\s*[-*] ", line):
             seen = set()
