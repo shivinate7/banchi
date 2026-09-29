@@ -801,7 +801,32 @@ def case_an_unparseable_live_row_is_refused_not_skipped() -> None:
     check(snap.submissions.unreadable() == [first["receipt"]], "unreadable() names the key")
 
 
+def case_the_press_precheck_refuses_an_unreadable_claim() -> None:
+    """THE COURTESY READ MUST NOT SWALLOW THE STORE'S REFUSAL. `_claim_conflict` once turned
+    the StoreError into "no conflict", so a send passed the pre-check over a claim it could not read."""
+    fresh_store()
+    import sqlite3
+    from http import HTTPStatus
+    from server import pipeline_routes as routes
+    from store import db, files
+
+    first, _ = claim(["6/1"])
+    conn = sqlite3.connect(str(db.path(files.inventory_dir())))
+    conn.execute("UPDATE submissions SET payload = '{\"keys\": 7}' WHERE key = ?", (first["receipt"],))
+    conn.commit()
+    conn.close()
+    try:
+        routes._claim_conflict([])
+        check(False, "_claim_conflict refuses over an unreadable claim (it returned instead)")
+    except routes.PipelineRefusal as exc:
+        check(
+            exc.status == HTTPStatus.CONFLICT and exc.code == "claim_unreadable" and "will not parse" in str(exc),
+            f"_claim_conflict refuses with claim_unreadable: {exc}",
+        )
+
+
 CASES = (
+    case_the_press_precheck_refuses_an_unreadable_claim,
     case_an_unparseable_live_row_is_refused_not_skipped,
     case_disjoint_in_one_drawer,
     case_overlap_in_one_drawer,
