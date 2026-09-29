@@ -1,4 +1,4 @@
-## DEBT-demo-assets-lfs — the demo photos are 171 MB of plain git, and the owner wants them in Git LFS
+## DEBT62 — the demo photos are 171 MB of plain git, and the owner wants them in Git LFS
 
 **Symptom.** `demo-assets/` holds 3,707 tracked files, 171,512,961 bytes (measured with `stat`
 over the tracked file list). All tracked files together are 244,906,619 bytes, so the demo
