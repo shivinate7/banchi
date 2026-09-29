@@ -244,9 +244,9 @@
 }
 /* A COLUMN TOO NARROW FOR THE ADDRESS BESIDE THE ACTION CELL. The cell reserves 169px (D118), so in
    the walk's 220px column the `1fr` track was left 3px and the box name drew as `I` (screen
-   pass F5). Below 340px the cell takes its own row under the address instead; the reservation
+   pass F5). Below 300px the cell takes its own row under the address instead; the reservation
    stays, so a press still moves nothing. */
-@container copies (max-width: 339px) {
+@container copies (max-width: 299px) {
   .card-locations-owner .card-locations-row {
     grid-template-areas:
       'place place'
