@@ -251,12 +251,35 @@
   left: 0;
   right: 0;
   height: var(--bn-1-5);
-  background: var(--bn-line);
+  background: var(--bn-line-strong);
 }
 .position-bar-tick[data-major]::after {
   height: var(--bn-3);
   background: var(--bn-ink-3);
 }
+/* The card's number beside the pin: accent ground, `--bn-on-accent` ink, which flips with the
+   theme so both clear contrast. Mid-height, below the tick numbers' top band. It flips to the
+   pin's left past the ruler's middle. */
+.position-bar-chip {
+  position: absolute;
+  top: 62%;
+  left: calc(100% + var(--bn-1));
+  translate: 0 -50%;
+  padding: 0 var(--bn-1);
+  border-radius: var(--bn-r-xs);
+  background: var(--bn-accent);
+  color: var(--bn-on-accent);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--bn-4);
+  white-space: nowrap;
+}
+.position-bar-chip[data-flip] {
+  left: auto;
+  right: calc(100% + var(--bn-1));
+}
+
 .position-bar-tick-num {
   position: absolute;
   top: var(--bn-0-75);

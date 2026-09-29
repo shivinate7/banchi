@@ -7420,8 +7420,8 @@ COMPONENTS = [
                                         "no outside caller, because where a card sits said three ways "
                                         "is one concept. Nothing here decides where a divider is; every "
                                         "bound is a card COUNT and not a stored index (D58). Also "
-                                        "`graduationStep`, the ruler's 1-2-5 pitch ladder capped at 24 "
-                                        "teeth, and `sectionBlankSentence`, the caption for the two "
+                                        "`rulerTicksOf`, the card ruler's ticks (every 5th card, every "
+                                        "10th numbered), and`sectionBlankSentence`, the caption for the two "
                                         "states `sectionDepthOf` cannot answer — a record with no "
                                         "section, and a box the server could not size. `SectionDepth` "
                                         "hands the caption over as `head`/`tail` FIELDS, never as a "
@@ -8862,8 +8862,7 @@ COMPONENTS = [
                         "Review's pill links to the card and reads as a sentence. Its fixture is "
                         "`pipeline/join.py:Position`'s arithmetic written out. Run by "
                         "`make design-check`.",
-                "governed_by": ["D58", "D260", "D155", "D218", "D259",
-                                ],
+                "governed_by": ["D58", "D155", "D218", "D259", "D260", "D-position-ruler-ticks"],
             },
             "tests/section-ruler.spec.ts": {
                 "does": "the section ruler never passes its card (the owner's report, "
@@ -9701,12 +9700,12 @@ COMPONENTS = [
                         "the screen behind its error boundary, and six cases here spending "
                         "thirty seconds each on a switch that had been detached. AND THE HASH'S OWN BOX SINCE 2026-09-05: `#/inventory?box=<n>` was honoured only for a box that already had ROWS, because the shelf list is built from the rows first and the registry second and the ref was consumed on the first list — so every box of code cards, which D24 pools and which therefore has none, was unreachable by the one link that aims at one. Two cases, with `GET /boxes` held back so the ordering is the defect's rather than a race.",
                 "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D21", "D22", "D23",
-                                "D24", "D26", "D27", "D28", "D58", "D31", "D33", "D34", "D37",
-                                "D38", "D41", "D43", "D45", "D86", "D55", "D57",
-                                "D63", "D67", "D68", "D83", "D89", "D92", "D101", "D115",
-                                "D260", "D117", "D118", "D119", "D124", "D125", "D132", "D134",
-                                "D136", "D142", "D155", "D277", "D172", "D181", "D192", "D284",
-                                "D196", "D213", "D218", "D259", "D288", "D299", "D300"],
+                                "D24", "D26", "D27", "D28", "D31", "D33", "D34", "D37", "D38",
+                                "D41", "D43", "D45", "D55", "D57", "D58", "D63", "D67", "D68",
+                                "D83", "D86", "D89", "D92", "D101", "D115", "D117", "D118", "D119",
+                                "D124", "D125", "D132", "D134", "D136", "D142", "D155", "D172",
+                                "D181", "D192", "D196", "D213", "D218", "D259", "D260", "D277",
+                                "D284", "D288", "D299", "D300", "D-position-ruler-ticks"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

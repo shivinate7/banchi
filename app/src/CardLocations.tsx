@@ -426,16 +426,14 @@ function OwnerRows({
      runs box, section and card as one line, so there is no second column for a wider key to
      widen and no name beside it that reservation was ever protecting. `--pos-slot-key` in
      `CardLocations.css` is retired with it, for the same reason and in the same commit. */
-  /* The machine strings — SKU, set code, number — in mono; the condition is a phrase and is
-     drawn beside them in the UI face. */
+  /* THE SET CODE IS GONE FROM THIS LINE (the owner's call): the card's header above the panel
+     already draws it. The SKU and the condition are said nowhere else on the panel, so they
+     stay. The NUMBER stays too: the header draws the card's own number, and a group whose
+     copies spell it three ways has none there, so this line is where the group's agreed number
+     lands (`inventory.spec.ts`, "spell one number three ways"). The SKU and number are machine
+     strings, in mono; the condition is a phrase, drawn beside them in the UI face. */
   const meta =
-    group.sku === null
-      ? ['no SKU yet']
-      : [
-          `SKU ${group.sku}`,
-          ...(group.set_hint === null ? [] : [group.set_hint]),
-          ...(number === null ? [] : [number]),
-        ]
+    group.sku === null ? ['no SKU yet'] : [`SKU ${group.sku}`, ...(number === null ? [] : [number])]
 
   return (
     <section className={['card-locations', 'card-locations-owner', className ?? ''].filter(Boolean).join(' ')}>

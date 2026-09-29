@@ -252,10 +252,9 @@ for (const size of SIZES) {
          ruler" — D260 stands). The section ruler's own pair lives in `.position-bar-ends-row`;
          the card ruler's own lives in `.position-bar-zoom-ends`, added this round so both
          instruments orient on their own rather than sharing one row between them. */
-      const sectionEnds = bar.locator('.position-bar-ends-row')
-      const back = await sectionEnds.locator('.position-bar-end-back').boundingBox()
-      const front = await sectionEnds.locator('.position-bar-end-front').boundingBox()
-      expect(back && front && back.x < front.x, 'back is drawn before front').toBe(true)
+      /* ONE PAIR, UNDER THE CARD RULER (D-position-ruler-ticks): the section strip draws none. */
+      await expect(bar.locator('.position-bar-ends-row')).toHaveCount(0)
+      await expect(bar.locator('.position-bar-end-back')).toHaveCount(1)
 
       const cardEnds = bar.locator('.position-bar-zoom-ends')
       const cardBack = await cardEnds.locator('.position-bar-end-back').boundingBox()
