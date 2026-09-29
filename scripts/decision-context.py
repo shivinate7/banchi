@@ -233,12 +233,7 @@ def render(relative: str, entry: Dict[str, object]) -> str:
         lines.append(f"Covered by: {', '.join(tested)}. Run `make harness` before claiming it works.")
     track = track_for(relative)
     if track:
-        # BANDAID: `docs/map.py`'s TRACKS still names the deleted codes decisions file, and the
-        # map was outside the prune's fence. The C entries are sections of the codes spec now.
-        # The cause is that one TRACKS line. Delete this fallback once the map names the spec.
         track_file = ROOT / str(track.get("decisions"))
-        if not track_file.exists() and track.get("name") == "codes":
-            track_file = ROOT / "docs" / "specs" / "code-cards.md"
         lines.append(
             f"TRACK: {track.get('name')} (D14, two tracks one rig). The decisions above are "
             f"the shared rig's; this path ALSO answers to {track_file.relative_to(ROOT)} and to "
