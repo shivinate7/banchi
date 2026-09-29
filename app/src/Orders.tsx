@@ -2863,9 +2863,9 @@ function PullStage({
      (39 orders on the mirror) that the recording holds no plan for, and the demo refuses any
      other ticked set, so the walk drew "Could not read where the copies are". The recording
      has the walk-all set of every open buyer, so the demo lands with the toggle off. The cause
-     is `scripts/demo-record.py:default_view_walkable_orders`, which still mirrors the old
-     landing; recording the pullable set needs the owner's `make demo-mirror`, after which this
-     line goes. Module-local, like `OrdersShipStage.tsx`'s own, so an ordinary build folds it. */
+     is `scripts/demo-record.py:default_view_walkable_orders`, now fixed; the committed mirror
+     still lacks the plan until the owner's `make demo-mirror` (DEBT-demo-walk-recording,
+     the pullable set is not recorded), after which this line goes. Module-local, like `OrdersShipStage.tsx`'s own, so an ordinary build folds it. */
   const IS_DEMO = __BN_DEMO__
   const [pullableAtRest] = useState(() => !IS_DEMO && !['show', 'status', 'buyer', 'order', 'q', 'unknown'].some((key) => viewQuery.has(key)))
   const [hideUnpullable, setHideUnpullable] = useViewFlag('pullable', pullableAtRest)
