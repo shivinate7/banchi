@@ -10701,7 +10701,7 @@ def check_inventory_box_route(checks: Checks) -> None:
 
 def check_rows_scoped_after_full_load(checks: Checks) -> None:
     """D192/item 2: `where()`/`select()` cost what the index costs, even after this
-    session's own `Rows` has been fully materialised. The mechanism is `rows.py:177`'s own
+    session's own `Rows` has been fully materialised. The mechanism is `store/rows.Rows`'s `__len__` own
     citation in docs/specs/store-scaling.md; this pins it so a later change to `Rows` cannot
     reopen it silently.
     """
@@ -10754,7 +10754,7 @@ def check_rows_scoped_after_full_load(checks: Checks) -> None:
 
         # --- a session that WRITES, then queries, must still see its own write -----------
         # VERIFIED AGAINST THE TREE, CORRECTING THE PLAYBOOK'S OWN SKETCH: `Card.key` is a
-        # COMPUTED PROPERTY of `(box, index)` (`store/master.py:523-525`), so moving "2/1"
+        # COMPUTED PROPERTY of `(box, index)` (`store/master.Card`'s `key`), so moving "2/1"
         # into box 1 while keeping its index at 1 makes its `.key` recompute to "1/1" —
         # colliding with box 1's own real card at index 1, which is why the playbook's
         # original sketch (assert `"2/1" in moved_in`) can never pass: nothing in `_loaded`
@@ -15756,7 +15756,7 @@ def check_identify_preflight_stage(checks: Checks) -> None:
     site wrote `prepared.sha256` into the run payload. Hash-first makes a CACHE HIT
     unprepared too, so a reorder that left that test alone would have reported every
     healthy cached card as unreadable, counted it as neither hit nor miss, and written
-    `photo_sha256: null` onto its record — where `cli/resolve.py:1108` reads a missing
+    `photo_sha256: null` onto its record — where `cli/resolve.realign` reads a missing
     digest as `blind` and D36's realign can no longer re-bind the card to a slot. That is
     `CLAUDE.md`'s "Never silently drop a card", four different ways.
 
@@ -18731,7 +18731,7 @@ def check_pricing_authority(checks: Checks) -> None:
     decisions.json — your edits are kept"*. `join` is free and re-runnable and is re-run
     routinely, so an edited rule survived until the next join and then silently was not there.
 
-    T5 asserts `decisions.json` CARRIES a rule (`:305-306`) and passed throughout — carrying it
+    T5 asserts `decisions.json` CARRIES a rule and passed throughout — carrying it
     was never the question. These cases assert that it REACHES A PRICE, which is a fact about
     the command seam and belongs here.
 

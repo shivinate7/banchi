@@ -114,7 +114,7 @@
 
 .graveyard-mono { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
 /* INK-3, NOT INK-4 (UX review, 2026-09-20): a card's condition is a line a person reads, the
-   same case CardLocations.css:130 already argued — ink-4 measures 3.34:1 here in light theme,
+   same case `CardLocations.css`'s `.card-locations-owner .card-locations-meta` already argued — ink-4 measures 3.34:1 here in light theme,
    under the 4.5:1 body-text floor. */
 .graveyard-condition {
   display: block;

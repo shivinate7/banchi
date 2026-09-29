@@ -76,14 +76,14 @@ drawn at the confidence of a closed month.
 
 ### Three house rules are not followed
 
-**Numbers in a table are set in mono.** `CLAUDE.md:321` states that numbers in tables are the user
-face with tabular figures, and not mono. The `bn-money` class is mono. `Revenue.tsx:811` and
-`Revenue.tsx:832` apply it inside a table cell. The order number beside it is correctly mono,
+**Numbers in a table are set in mono.** `CLAUDE.md` line 321 at `b26e4e1c` states that numbers in tables are the user
+face with tabular figures, and not mono. The `bn-money` class is mono. `Revenue.tsx` and
+`Revenue.tsx` apply it inside a table cell. The order number beside it is correctly mono,
 because an order number is a machine string. Two different kinds of information now share one
 register.
 
 **The rule and the primitive disagree, which is the deeper finding.** A comment at
-`RunPanel.tsx:226` argues that `bn-money` is the treatment a column of dollar amounts needs. One
+`app/src/RunPanel.tsx`'s `StepCard` argues that `bn-money` is the treatment a column of dollar amounts needs. One
 of those two statements has to give way. That is a repository level question and not a screen
 level one.
 
@@ -297,7 +297,7 @@ These are two different kinds of observation. Every rule below descends from tha
 2. Whether a refund disclosure goes on the screen now, given that no refund data exists.
 3. Whether an export is built, and of what.
 4. Whether the chart is deleted, repaired or left alone.
-5. Whether the mono treatment for money in a table follows `CLAUDE.md:321` or follows the kit's
+5. Whether the mono treatment for money in a table follows `CLAUDE.md` line 321 at `b26e4e1c` or follows the kit's
    own comment. One of the two has to give way.
 6. Whether cost basis is ever captured, and at what grain. The reviews agree that unknown basis
    must be labelled and never blended, whatever grain is chosen.

@@ -33,10 +33,10 @@ them opens — otherwise a PR that adds a walk while removing one is invisible.
 
 | Item | `server/capture_server.py` | `server/pipeline_routes.py` | `store/` | `cli/` | `app/src` |
 |---|---|---|---|---|---|
-| 2 | `do_inventory` (~3056), `_Places` (~2029), a new `do_inventory_box` on the unused `_INVENTORY_BOX_RE` (`:546`), a new `do_inventory_recent`, the router table | — | `rows.py`: `where`/`select`/`__setitem__`/`flushed` (the `_touched` set) | — | `server.ts`, `BoxBrowse.tsx`, `Inventory.tsx`, `Home.tsx`, `Fulfillment.tsx`, `Orders.tsx` |
-| 3 | `_sell`/`_sale_origin` (~7199–7232), `do_retire` (~7508), `_answer_origin` (~5461), `_reverse_stand_down` (~6478), `_origin` (~7185), the prose comment at ~980 | — | `db.py`: `history` gains a box scope; `session.py` passes it. **No schema step** — `events_position` exists (`db.py:139`) | — | — |
-| 4 | — | `_unsent_ledger` (~2370–2405): the call site only | — | `resolve.py`: `_copies_out` (~487), `_committed_keys` (~676), and the helpers they stop calling | — |
-| 5 | — | `do_live_export` (~3550) | `readings.py`: `Readings.replace_source` | `cmd_join.py` (~685); `pipeline/readings.py`: `collect` split into per-source readers | — |
+| 2 | `do_inventory`, `_Places`, a new `do_inventory_box` on the unused `_INVENTORY_BOX_RE`, a new `do_inventory_recent`, the router table | — | `rows.py`: `where`/`select`/`__setitem__`/`flushed` (the `_touched` set) | — | `server.ts`, `BoxBrowse.tsx`, `Inventory.tsx`, `Home.tsx`, `Fulfillment.tsx`, `Orders.tsx` |
+| 3 | `_sell`/`_sale_origin`, `do_retire`, `_answer_origin`, `_reverse_stand_down`, `_origin`, the prose comment | — | `db.py`: `history` gains a box scope; `session.py` passes it. **No schema step** — `events_position` exists (in `store/db.py`'s index roster) | — | — |
+| 4 | — | `_unsent_ledger`: the call site only | — | `resolve.py`: `_copies_out`, `_committed_keys`, and the helpers they stop calling | — |
+| 5 | — | `do_live_export` | `readings.py`: `Readings.replace_source` | `cmd_join.py`; `pipeline/readings.py`: `collect` split into per-source readers | — |
 
 Two things to know inside the phase:
 
@@ -62,9 +62,9 @@ the phase they are disjoint:
 
 | Item | `server/capture_server.py` | `server/pipeline_routes.py` | `store/` | `cli/` | `app/src` + `app/tests` |
 |---|---|---|---|---|---|
-| 6 | `do_orders` (~9027), `_order_stamps` (~8751, its `_Places` at ~8829), a new `_Places.for_keys` | — | `master.py`: a new `Inventory.occupied_indices` beside `_positions_in` (~1492) | — | — |
-| 7 | `_release_plan` (~4526) | `do_pipeline_value` (~3117), a new `do_pipeline_value_page`, `_box_names` (~838), `_on_hand_by_run` (~2444) | — | `resolve.py:box_views` (~372, gains `boxes=`) | `server.ts`, `ValueBands.tsx` (`stacks`/`pulls` move server-side), `value-bands.spec.ts` (its `/\/pipeline\/value$/` route regex breaks the moment a query string is added — all 18 tests) |
-| 8 | `do_search` (~7929), `_match_rank` (~7814) | — | `db.py`: `_upgrade` step 6, FTS5 DDL, three triggers; `scripts/cid-selftest.py:table_bytes` carves out `cards_fts*` | — | `inventory.spec.ts` if ordering is pinned |
+| 6 | `do_orders`, `_order_stamps` (with its `_Places`), a new `_Places.for_keys` | — | `master.py`: a new `Inventory.occupied_indices` beside `_positions_in` | — | — |
+| 7 | `_release_plan` | `do_pipeline_value`, a new `do_pipeline_value_page`, `_box_names`, `_on_hand_by_run` | — | `resolve.py:box_views` (gains `boxes=`) | `server.ts`, `ValueBands.tsx` (`stacks`/`pulls` move server-side), `value-bands.spec.ts` (its `/\/pipeline\/value$/` route regex breaks the moment a query string is added — all 18 tests) |
+| 8 | `do_search`, `_match_rank` | — | `db.py`: `_upgrade` step 6, FTS5 DDL, three triggers; `scripts/cid-selftest.py:table_bytes` carves out `cards_fts*` | — | `inventory.spec.ts` if ordering is pinned |
 
 ## The goal function, per phase
 

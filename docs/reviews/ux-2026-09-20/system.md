@@ -93,7 +93,7 @@ Dark theme:
 Severity: medium (narrow miss, but it's the SYSTEM token failing its own documented contract, not a one-off screen bug — every caller who follows the rule correctly still fails).
 Fix: darken `--bn-ink-3` slightly (light theme) — e.g. from `#6b7280` to something ≥`#5f6672`-equivalent — to clear 4.5:1 on both `--bn-bg` and `--bn-surface-2`.
 
-**Finding: `.bn-menu-label` (kit.css:785) sets `color: var(--bn-ink-4)` for real, small (10px), all-caps text** — directly contradicting the token's own comment two lines above its definition in `tokens.css`: "Data-bearing text reads ink-3; this is the floor a word may sit at, never a caption." A menu-group label ("BOX" as a section label inside a dropdown) is exactly a caption. Measured contrast for `ink-4` on `--bn-surface` is 3.64:1 (light) — below the 4.5:1 a 10px caption needs.
+**Finding: `.bn-menu-label` (kit.css line 785) sets `color: var(--bn-ink-4)` for real, small (10px), all-caps text** — directly contradicting the token's own comment two lines above its definition in `tokens.css`: "Data-bearing text reads ink-3; this is the floor a word may sit at, never a caption." A menu-group label ("BOX" as a section label inside a dropdown) is exactly a caption. Measured contrast for `ink-4` on `--bn-surface` is 3.64:1 (light) — below the 4.5:1 a 10px caption needs.
 Where: `app/src/kit.css` (`.bn-menu-label`).
 Severity: medium — low-vision users will struggle to read menu section labels, and it is the kit itself violating a rule written two lines above the color's own definition.
 Fix: change `.bn-menu-label` to `var(--bn-ink-3)`.
@@ -138,7 +138,7 @@ Reduced-motion is handled centrally and correctly in `base.css` (crushes all dur
 
 ## Duplicates (components hand-rolled where the kit already provides one)
 
-1. **`.ff-empty-art` (Fulfillment.css:391-399, 72×72px, `--bn-r-2xl`, `--bn-accent-tint`/`--bn-accent`) vs `.bn-empty-art` (kit.css:653-662, 56×56px, `--bn-r-xl`, identical color pair).** Same shape, same color logic, different hardcoded size — should be a kit size modifier, not a screen-local reinvention. (Also logged in `fulfillment.md`.)
+1. **`.ff-empty-art` (Fulfillment.css lines 391-399, 72×72px, `--bn-r-2xl`, `--bn-accent-tint`/`--bn-accent`) vs `.bn-empty-art` (kit.css lines 653-662, 56×56px, `--bn-r-xl`, identical color pair).** Same shape, same color logic, different hardcoded size — should be a kit size modifier, not a screen-local reinvention. (Also logged in `fulfillment.md`.)
 2. **`.review-key` vs `.bn-kbd`** — the kit's own gallery text admits this is "a candidate for promotion," i.e., a second keycap implementation living outside the kit that the system's own authors already flagged as needing consolidation. (Also logged in `kit.md`.)
 3. **`font-weight: 650` vs `700`** — not a component duplicate in the traditional sense, but functionally the same defect pattern: two spellings for one rendered result, one of which (650) is dead weight in every sense of the phrase.
 4. **The 18px "unnamed radius step"** (9 uses, see Radii section above) functions as a duplicate of the gap between `--bn-r-xl` (16) and `--bn-r-2xl` (22) — every one of those 9 call sites made an independent, uncoordinated decision to split that gap the same way, which is really one design decision expressed 9 times without ever being named.

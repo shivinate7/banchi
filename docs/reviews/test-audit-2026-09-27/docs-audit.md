@@ -1437,7 +1437,7 @@ One short section per row, in the order the audit runs them.
 
 **Product or docs:** PRODUCT
 
-**Origin / incident:** D123 directly, and the row currently has two live, real findings (CaptureScreen.css:1317, RunPanel.css:13). This is an ADVISORY row that is actively catching something today.
+**Origin / incident:** D123 directly, and the row currently has two live, real findings (CaptureScreen.css line 1317, RunPanel.css line 13). This is an ADVISORY row that is actively catching something today.
 
 **False positives:** None found.
 
@@ -1613,7 +1613,7 @@ One short section per row, in the order the audit runs them.
 
 **Product or docs:** PROCESS (test/CI meta)
 
-**Origin / incident:** CLAUDE.md's own comment at Makefile line ~545 says this directly. An earlier compressed description of `make check` 'WAS WRONG' and this row (plus `check census`) is what would have caught it.
+**Origin / incident:** CLAUDE.md's own comment at the Makefile's `check` target says this directly. An earlier compressed description of `make check` 'WAS WRONG' and this row (plus `check census`) is what would have caught it.
 
 **False positives:** None found — but the row's own history (the comment) is itself a documented near-miss that shipped before the row existed.
 

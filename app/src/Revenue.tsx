@@ -159,7 +159,7 @@ type Sale = {
 }
 
 /** `true` where the OPERATOR closed this line as never shipping — a refund or a
- *  cancellation, `store/orders.py:174`'s own words for `not_shipping` — during fulfilment,
+ *  cancellation, `store/orders.CLOSE_NOT_SHIPPING`'s own words for `not_shipping` — during fulfilment,
  *  matched by SKU against the same order's `OrderLineProgress` list (D225,
  *  `docs/specs/revenue-plan.md` §2). `closed_reason` rides on every order's `progress`
  *  already; this screen was simply never reading it. NOT THE MARKETPLACE'S WORD: the value

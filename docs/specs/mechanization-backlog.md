@@ -213,11 +213,11 @@ must print `not a gate` rather than `pass` — see rank 27.
 
 **Cost:** small.
 
-**Mechanism.** scripts/score-detect.py already HOLDS the names (Photo.name at :205-239) and
+**Mechanism.** scripts/score-detect.py already HOLDS the names (`Photo.name` in `_score`) and
 `_summarize` discards them. Have it write `declined_frames: [{box, filename, area, detail}]`
 beside the count, and add one entry to _DETECT_CLAIMS asserting `len(declined_frames) ==
 overall.declined`. A score file predating the key must read as "re-run the scan" — the row
-already has exactly that finding shape at docs-audit.py:2530 — never as a wrong figure.
+already has exactly that finding shape at scripts/docs-audit.check_claim_clients — never as a wrong figure.
 
 **Where.** scripts/score-detect.py (the writer) + a new pin in scripts/docs-audit.py's
 _DETECT_CLAIMS / `detector standing` row
@@ -232,7 +232,7 @@ cannot start from the file it named. That eye pass is the ONLY thing that can se
 ACCEPT, the dangerous direction. `detector standing` pins five numbers next to it anyway, and
 prints ok.
 
-**Evidence it happened.** Read both: score-detect.py:286 writes `sum(1 for p in small if
+**Evidence it happened.** Read both: scripts/score-detect._summarize writes `sum(1 for p in small if
 p.detail < images.MIN_CROP_DETAIL)`; detect.json's keys are boxes_scanned, constants,
 detector_files, detector_fingerprint, generated_at, image_count, not_measured, overall, per_box,
 source — no filenames anywhere.
@@ -304,7 +304,7 @@ every advisory row advisory — do NOT promote severity (see rejected).
 
 **Where.** scripts/docs-audit.py — a new `advisory standing` row plus the pin file
 
-**What it catches.** A permanently-lit advisory, which docs-audit.py:1367 forbids in its own
+**What it catches.** A permanently-lit advisory, which scripts/docs-audit.check_criteria_evidence forbids in its own
 words ("A permanently-lit advisory would have taught us to skip exit 2 everywhere") and which
 has a MEASURED consequence: memory/d-number-collisions.md records `renumbered ids` listing three
 stale citations for an entire session while the session pushed anyway, "because `make check` was
@@ -313,12 +313,12 @@ green and the row is advisory."
 **Evidence it happened.** Ran it: `python3 scripts/docs-audit.py --json` on main returns 79
 rows, exit 2, 23 advisory findings — entry budget 13, breakpoint columns 4, views exposure 4,
 game coverage 2 — printed by pre-commit on every commit in this repo (scripts/githooks/pre-commit
-:281 echoes and ALLOWS).
+scripts/docs-audit._walk's echo ALLOWS).
 
 **Must keep passing.** All 23 standing findings pass once pinned. They are deliberate: the 13
 oversized entries (D60 rules size is a report, not a gate, and all ten were read innocent),
 one_piece's authored matrix superset (D22/D23 — narrowing it would make two Pokemon eras
-unclaimable), the two column-blind capture breakpoints (RunPanel.css:55 sets max-height:
+unclaimable), the two column-blind capture breakpoints (app/src/RunPanel.css's .runs-master sets max-height:
 calc(100vh - …), which no container query can answer), the four views-exposure notes.
 
 **Mutation arm.** Introduce a new breakpoint above 1024 — red (unpinned); pin it with a reason —
@@ -419,7 +419,7 @@ that ran design-check about eight times against the owner's live server while al
 from hand-rolled Playwright scripts, then killed the server mid-write.
 
 **Evidence it happened.** The `suite lock` row reads Makefile recipe lines and app/package.json
-scripts (docs-audit.py:10467-10529) and cannot see a shell.
+scripts (scripts/docs-audit.check_commit_path) and cannot see a shell.
 
 **Must keep passing.** `npx playwright install`, `--list`, `show-report` (the named workaround
 for the runner red), `codegen`, and a single-spec run while nobody holds the lock.
@@ -604,7 +604,7 @@ already wrong when written.
 **Must keep passing.** The three legitimate sites the check found on its first run (BoxOps.tsx's
 machine receipt, RunPanel.tsx twice over a capture-directory preview) carry `sigil-ok:` and must
 keep passing; the helper-following version needs the same marker escape AT the helper.
-Pricing.tsx:2641 and Orders.tsx:1205 name the index AS the index in prose and are deliberately
+Pricing.tsx and app/src/Orders.tsx's buildWalkPlan name the index AS the index in prose and are deliberately
 untouched.
 
 **Mutation arm.** Re-introduce a same-file helper returning the raw index behind a `#{}` — must
@@ -625,9 +625,9 @@ row's three existing protections verbatim — historical prose excluded (the "sa
 form), sets not order, and a bullet carrying no readable claim reported as UNWATCHED rather than
 passing.
 
-**Where.** scripts/docs-audit.py — the existing `work item standing` row (docs-audit.py:2902)
+**Where.** scripts/docs-audit.py — the existing `work item standing` row
 
-**What it catches.** Two live contradictions. (1) CLAUDE.md:2069 says docs/specs/one-process.md
+**What it catches.** Two live contradictions. (1) CLAUDE.md line 2069 at `a906af27` says docs/specs/one-process.md
 is "SPECIFIED 2026-09-11, NOT BUILT"; that spec's status line says "specified and BUILT 2026-09-11",
 D138 merged the same day, and CLAUDE.md's own `make up` block says "ONE PROCESS AS OF 2026-09-11
 (D138)". The row prints ok because it is scoped to order-pipeline.md alone. (2)
@@ -668,7 +668,7 @@ taking the whole browser suite green with it. These floors serve a real second p
 keeps the spec unweakened as a rule with no reader.
 
 **Evidence it happened.** Values still agree (20, 32, 320, 44). The WORDING has already drifted:
-fulfillment.spec.ts:33 says "Card photo in pull modal" where DESIGN.md:1009 says "Card
+app/tests/fulfillment.spec.ts's PHOTO_FLOOR says "Card photo in pull modal" where docs/DESIGN.md's Fulfillment view — hard constraints, assert these in a test says "Card
 photograph … at desktop and at phone width" — the table's sentences sit beside the constants as
 COMMENTS with nothing comparing them.
 
@@ -734,7 +734,7 @@ is intact and well-guarded by `commit path`; its LIST is the part bypassed exact
 predicted, quietly, while implementing something else.
 
 **Evidence it happened.** Verified the generator's three writes go through `resolve(ROOT,
-'app/src/kit/markGeometry.ts')` at :104, :158 and :286 — literal by luck rather than by rule,
+'app/src/kit/markGeometry.ts')` at three sites — literal by luck rather than by rule,
 which is why the unresolvable case must be loud. `grep -n D18 scripts/docs-audit.py` shows
 eleven rows citing D18 and not one reading the list.
 
@@ -780,7 +780,7 @@ caller while `moveCards` (app/src/server.moveCards) IS imported and called by ap
 sheet. The finding resolves by DELETING eleven dead lines, not by building a screen. Take the
 floor for the vacuous green it repairs, not for a reachability harm it has yet to demonstrate.
 
-**Must keep passing.** Six named families, all measured green: photoUrl() at server.ts:312
+**Must keep passing.** Six named families, all measured green: photoUrl() at server.ts
 builds an `<img src>` and never a request(), so the extractor must read ALL path literals; the
 three download-href builders (markdownFileUrl:2187, runFileUrl:2640, shippingFileUrl:3124);
 reviewCatalog:991, which composes its path into a local `at`; the code-card track's five
@@ -794,7 +794,7 @@ version prints ok.
 
 **Why it is not vacuous.** Fix the self-test's last case in the same commit:
 `ok(quiet.findings.length === 0 && quiet.covered.length === 0, 'no write sites, no findings')`
-at screen-freshness.mjs:1860 asserts the OPPOSITE of the new floor.
+at scripts/screen-freshness.mjs's selfTest asserts the OPPOSITE of the new floor.
 
 **Escape hatch.** None — a make target.
 
@@ -813,16 +813,16 @@ FACING_MODE_RULES / SPLIT_COMMA_RULES / TWO_ARG_THEN_RULES / LOCAL_STORAGE_RULES
 in each config block, as that file's convention requires)
 
 **What it catches.** A key press answering to the render before the one on screen. D128 changed
-exactly two sites and four more of the same shape remain: App.tsx:175 (deps [enabled, arm]
-reading `arm`), App.tsx:220 (deps [enabled, path] reading `path`), ReviewQueue.tsx:1263 (deps
-[queueOpen] reading `queueOpen`), Pricing.tsx:2164.
+exactly two sites and four more of the same shape remain: app/src/App.tsx's useLeader (deps [enabled, arm]
+reading `arm`), app/src/App.tsx's useRouteStep (deps [enabled, path] reading `path`), ReviewQueue.tsx (deps
+[queueOpen] reading `queueOpen`), Pricing.tsx.
 
 **Evidence it happened.** Measured: 22 keydown registrations across 15 files in app/src, 17
 still in useEffect; only three files contain a useLayoutEffect at all. The correct alternative
-already exists beside the defect — ReviewQueue.tsx:1252 uses the handlerRef + `[]` form and
+already exists beside the defect — ReviewQueue.tsx uses the handlerRef + `[]` form and
 passes the selector by construction.
 
-**Must keep passing.** ReviewQueue.tsx:1252's ref form; any listener whose deps are all refs or
+**Must keep passing.** ReviewQueue.tsx's ref form; any listener whose deps are all refs or
 constants. DO NOT LAND until every site converts: a rule whose first commit needs seventeen
 exemptions is measuring the codebase, not guarding it.
 
@@ -1024,7 +1024,7 @@ work, one that could not fail, or one that would have a gate write to the tree (
 
 - **Stop hook blocking a turn whose final text claims the harness is green when no harness run happened in this session** — SELF-REFUTING. scripts/stop-gate.sh runs `make harness` unconditionally whenever the gate is armed, BEFORE anything else in the hook can execute — so a claim check bolted on runs after that run and would block a claim its own gate had just made true. The 41 measured no-run claims are coordinator turns relaying a fleet member's run, and this project's fleets are separate SESSIONS (0 of 129,119 messages carry isSidechain), each with its own armed gate, so a coordinator can never comply. The proposal's own pin list requires that a turn relaying CI or quoting a past run must PASS, which is the same population. Cost of the rule being unenforced: a session is occasionally accidentally right. Cost of the guard: PKMNSCAN_GATE=off in a shell profile, which disarms the real harness gate. KEEP ONLY the trivial sibling — print the harness summary line (with a run id) to stderr on success, which the gate already holds and throws away; that makes the claim checkable by a reader and refuses nothing.
 - **Stop hook requiring a render newer than the turn's app/src writes plus a Read of that PNG** — Three unboundable false-positive families, an inverted escape, and it would LAUNDER a wrong image. Most app/src writes carry no appearance claim (types.ts, server.ts, standing.ts, a comment edit, a revert); a turn that ran the Playwright suite has stronger evidence and would still be refused; and the escape — pass when nothing listens on the dev port — inverts where it matters, because on the MAIN checkout a server IS listening, so the gate would demand a render against the owner's live app over their real store. The evidence is also unobtainable through the repo's own tool: scripts/screenshot.sh hard-codes VIEWPORT=1280,900 and screenshot.mjs has no theme flag, so the three widths and two themes the rule names have never been renderable. And with views.txt's `capture` line pointing at `#/`, a satisfied gate would certify that a session opened the HOME screen as verification of the capture screen. Fix the manifest (build_now rank 3) instead of policing the session.
-- **Stop hook requiring one of BUILT / RECORDED / NEITHER / SPECIFIED / VALIDATED in a wrap-up** — 84% of measured wrap-ups would fire (1,943 of 2,310), and the proposal concedes the escape is typing the word. That is actively harmful, not weakly useful: it trains sessions to paste a boilerplate bucket block, which makes a WRONG bucket harder to spot and turns CLAUDE.md:1544's corollary unfalsifiable. A per-turn exit 2 on the majority of write turns is precisely the rate docs-audit.py:1367 says teaches a reader to skip exit 2 — and in the git hook the same reflex takes the three opsec rules down with it. Build the two rows that make a BUILT claim checkable (build_now ranks 2 and 39); an unchecked vocabulary word is worth less than silence.
+- **Stop hook requiring one of BUILT / RECORDED / NEITHER / SPECIFIED / VALIDATED in a wrap-up** — 84% of measured wrap-ups would fire (1,943 of 2,310), and the proposal concedes the escape is typing the word. That is actively harmful, not weakly useful: it trains sessions to paste a boilerplate bucket block, which makes a WRONG bucket harder to spot and turns CLAUDE.md line 1544 at `a906af27`'s corollary unfalsifiable. A per-turn exit 2 on the majority of write turns is precisely the rate scripts/docs-audit.check_criteria_evidence says teaches a reader to skip exit 2 — and in the git hook the same reflex takes the three opsec rules down with it. Build the two rows that make a BUILT claim checkable (build_now ranks 2 and 39); an unchecked vocabulary word is worth less than silence.
 - **Stop hook comparing files named in a wrap-up against the turn's own write targets** — Unmeasured, and its own author said so: "Not measured — I will not assert a number I did not compute." A mechanism whose proposer could not find an instance, for a rule whose violation costs a reader one `git status`.
 - **A PreCompact hook injecting the fixture facts, make targets and modified-file list** — broken is unobservable by construction — a compaction leaves no artifact in the tree AND none in the transcript, so no instance has ever been or can be seen. And it collides with the one roster reconciliation that has never been bypassed: D135's `codex hooks` row compares the full event/matcher/command triple in both directions, and whether Codex has a PreCompact event is not answerable from this tree.
 - **Registering scripts/stop-gate.sh on SubagentStop** — Measured at 0 of 129,119 assistant messages carrying isSidechain — the path is unexercised. And the arm has a harm of its own: the gate runs the full nine-test harness, so arming it on subagents spends the owner's CPU at every read-only research turn on the machine their rig and live capture server run on — the collapse §11 measured. Cheap and pointed at nothing.
@@ -1046,7 +1046,7 @@ work, one that could not fail, or one that would have a gate write to the tree (
 - **Deriving `recorded deletions`' needle table by harvesting backticked symbols from deletion sentences** — D149's declined class, measured there: the attributed-form proxy scored 1 catch against 3 false alarms over 38 citations and the containment cousin produced 79 coincidences on this history. The needles here are ordinary words — Position, label, live, staged, bid — and a deliberate reuse is an expensive false positive no wording rule resolves: D113 rebuilt `POST /orders/fill` and `do_order_fill` under the same names for a different purpose, so the derived row would refuse a correct tree and send a session to amend a sentence about a different feature. Nobody has dry-run it over 169 entries. Take arm (a) — the scope widening — alone.
 - **An import-edge scan proving the undo / spend client is imported only by named modules (D19, D39)** — The guard's subject is orthogonal to the rule's. The rule is about whether a human event precedes the call; an import-edge scan answers which module imports the function and is green either way. A `setInterval(() => undoCapture(top))` inside the very component that draws the undo control passes, and so does a callback drilled down as a prop; the spend variant additionally goes blind to a barrel re-export, which the proposal concedes. Rework: an eslint no-restricted-syntax selector refusing the undo (or spend) client inside a setInterval/setTimeout callback, inside an effect whose dependency chain contains no user event, and inside the trigger modules by name — the same family as D128's keydown selector.
 - **An `advisory roster` row freezing the set of ADVISORY labels** — Green today and changes nothing about what is broken: 23 standing findings teach sessions that exit 2 means nothing, and freezing the LABEL set prevents a new advisory row while leaving the standing state intact. It is also the wrong shape for the silent direction — a MECHANICAL row demoted to advisory changes one keyword and grows the advisory label roster by one, which the frozen literal is edited to accept in the same commit. Adopt the per-FINDING pin (build_now rank 25); let a label freeze ride on top once the tree is at zero.
-- **Promoting `breakpoint columns` and `entry budget` to MECHANICAL** — The severity promotion's first act is to refuse two correct things. Blocking on `entry budget` refuses a commit for writing a long decision entry, which D60 rules is a report and not a gate and which a read of all ten oversized entries found innocent. Blocking on `breakpoint columns` refuses correct CSS: RunPanel.css:55 sets `max-height: calc(100vh - …)`, which no container query can answer, and converting it would make the element a containing block for position:fixed descendants (Review and Inventory must never become containers). The argued exceptions then need a dial, which D133 already ruled gets turned until the gate is quiet.
+- **Promoting `breakpoint columns` and `entry budget` to MECHANICAL** — The severity promotion's first act is to refuse two correct things. Blocking on `entry budget` refuses a commit for writing a long decision entry, which D60 rules is a report and not a gate and which a read of all ten oversized entries found innocent. Blocking on `breakpoint columns` refuses correct CSS: app/src/RunPanel.css's .runs-master sets `max-height: calc(100vh - …)`, which no container query can answer, and converting it would make the element a containing block for position:fixed descendants (Review and Inventory must never become containers). The argued exceptions then need a dial, which D133 already ruled gets turned until the gate is quiet.
 - **A `width coverage` row asserting the VISIT of each route at 390 and in dark** — "Assert the visit" is satisfiable by a `page.goto` at 390 with no assertion whose subject is on screen — the most-measured failure class in this tree, written into its own memory: phone.spec.ts went green four times before it was worth anything (the fixture never drew the ship bar; the sweep only measured the fold; a modal scrim covered every probe; the fixture was too small to fail). Rework: credit a route at a width only where a spec makes at least one assertion against an element it has PROVED is rendered at that width, publish the per-route SUBJECT count with a floor, and reuse phone.spec.ts's existing hit-area sweep as the 390 proof.
 - **A ruff/AST ban on `input()`, getpass, webbrowser.open and stdin reads in the mapped packages** — Zero findings over 64 files with zero exemptions and no instance in the repo's history — an empty subject being read as strength. It is also self-defusing: every confirmation in this product is a `--confirm` FLAG (make down, make reap, make merge, prices adopt), so a session reaching for a prompt would be inventing a convention the tree does not have. And the rule's actual shape — a pipeline step needing a human inside somebody else's UI — is a judgement the ban cannot make; the tree carries one legally today (the operator uploads reprice's import.csv through My Pricing). If taken at all, take it as one line in the existing ruff.toml slice and describe it honestly as "no module in the mapped packages blocks on stdin" — which pre-commit independently needs, since a hook run from an agent session has no tty — not as enforcement of the rule.
 - **The waiter-loop hook's second clause (refuse launching a script that already has a live process under this checkout)** — Its resolver is the machine-wide pgrep that has already reddened `make reap-selftest` four times against a reap.py byte-identical to main, and D157's whole ruling is that a per-run subject must be made unable to COLLIDE rather than made to take turns. Two legitimate concurrent copies of a per-worktree script, or a deliberate second instance on a different port, are both refused — and the refusal lands on the session's own launch, the one thing it cannot work around except by the hatch. Ship clause (a) alone: build_now rank 19.
@@ -1061,20 +1061,20 @@ WHAT I VERIFIED MYSELF, in /Users/shivinate/Developer/pkmnscan at main (the audi
 is at ac2e382/df6ec79; I read the main checkout read-only): cli/cmd_identify.py contains ZERO
 occurrences of `pid` while `running.pid` is written only at server/pipeline_routes._spawn;
 `--self-test` for screen-freshness appears in no Makefile recipe, no hook roster and no workflow
-(checks.py:177 carries the bare command); check_criteria_evidence's substring test and silent
-`continue` at docs-audit.py:1329-1344; scripts/views.txt's eight lines with `capture` pointing
+(scripts/checks.CHECKS carries the bare command); check_criteria_evidence's substring test and silent
+`continue` at docs-audit.py lines 1329-1344 at `a906af27`; scripts/views.txt's eight lines with `capture` pointing
 at `#/` and views.txt:108-120 recording the DELIBERATE removal of the `#/inventory` line on
-2026-09-05; Report.render's unconditional `ok` for an empty findings list (docs-audit.py:173);
+2026-09-05; Report.render's unconditional `ok` for an empty findings list (docs-audit.py);
 .claude/settings.json's deny list is exactly three entries and `.env` is guarded only against
-the Read tool; `_ESTIMATE` at pipeline_routes.py:344 against cmd_identify.py:772 with ZERO
+the Read tool; `_ESTIMATE` at pipeline_routes.py against cli/cmd_identify.run with ZERO
 references in docs-audit.py; the `check:` recipe's 23 fail-fast lines and both published lists
 in the pre-D161 order; ADD_TO_QUANTITY's two call sites; harness/run.py's docstring saying eight
 three times against nine in TESTS; `grep -c ci-check scripts/docs-audit.py` = 0; guard-opsec.sh
 has zero self-test occurrences and no make-target caller; a live `python3 scripts/docs-audit.py
 --json` returning 79 rows, exit 2, 23 advisory findings across four rows; `moveCard` uncalled
 while `moveCards` is called from BoxOps.tsx; detect.json's `declined: 59` as an integer
-with no filenames anywhere; policy.live_cap refused by name at corpus.py:228 with no
-policy.floor equivalent; both PW_ARGS expansions unquoted at Makefile:859 and :875; stop-gate.sh
+with no filenames anywhere; policy.live_cap refused by name at pipeline/corpus.Corpus's parse with no
+policy.floor equivalent; both PW_ARGS expansions unquoted at two `Makefile` sites; stop-gate.sh
 registered in both rosters with `--status` called by nothing. TWO SURFACE/CRITIQUE CLAIMS I
 CORRECTED RATHER THAN PASSED THROUGH. (1) Two critiques and one surface reader assert that `make
 check`'s standing reap-selftest red leaves lint, vale, typecheck and eight more targets unrun.

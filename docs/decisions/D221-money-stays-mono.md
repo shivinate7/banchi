@@ -54,7 +54,7 @@ One narrower signature was considered and rejected as a false promise: flagging 
 outside `.bn-money` that combines `var(--bn-font-mono)` with `var(--bn-money)`'s colour
 token. That would catch a literal copy of `.bn-money`'s four properties. It would not catch a
 hand-rolled treatment that reuses mono and tabular figures with any other text colour.
-`ReviewQueue.css:463` and `Pricing.css:112` already show that exact shape for non-money mono
+`ReviewQueue.css` line 463 and `Pricing.css` line 112 at `548e8375` already show that exact shape for non-money mono
 text. A reader built to that signature would pass real violations and print `ok`. That is
 worse than the admission above.
 

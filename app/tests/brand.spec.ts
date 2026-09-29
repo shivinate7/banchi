@@ -596,7 +596,7 @@ for (const rail of [
 /* ---- the phone chrome (logo.md section 19) -------------------------------------------------
  *
  * THE SHELL SPOKE TWO BRANDS UNTIL 2026-09-07, and nothing here could tell. Every case above
- * sets a desktop viewport, `nav.spec.ts:35` scopes itself to `.bn-side` on purpose, and
+ * sets a desktop viewport, `nav.spec.ts` scopes itself to `.bn-side` on purpose, and
  * `cursor.spec.ts` harvests its routes from `.bn-side a.bn-nav-link` — which is `display: none`
  * below 768, so that file cannot run at a phone width even in principle. The result was that the
  * desktop shell drew the lockup, the phone drew a `Logo` tile with a wordmark and a tagline

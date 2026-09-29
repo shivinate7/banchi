@@ -25,7 +25,7 @@
 //   the defect did not reproduce   a rotated element below the fold renders correctly under
 //                                  `--full-page`, synthetically and on `#/`'s own deck, whose
 //                                  three cards carry rotate(-9deg)/(-4deg)/(3deg)
-//   the remedy breaks this app     the shell is `min-height: 100dvh` (App.css:8), so growing
+//   the remedy breaks this app     the shell is `min-height: 100dvh` (`App.css`'s `.bn-shell`), so growing
 //                                  the viewport GROWS THE DOCUMENT: `#/` 944 -> 988, `#/capture`
 //                                  1101 -> 1189, `#/gallery` 18810 -> 18854. A shot sized to the
 //                                  pre-resize height then crops the bottom 44px, silently —

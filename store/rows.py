@@ -115,7 +115,7 @@ class Rows(MutableMapping):
         # mutated after `_remember` loaded it from the source. Bounded by what this request
         # touched, never by the size of a prior full load: this is the set `where()`/
         # `select()` must re-check by hand after `_complete`, because the source's own index
-        # cannot see an uncommitted change (D192, item 2's `rows.py:177` fix).
+        # cannot see an uncommitted change (D192, item 2's `__len__` fix).
         self._touched: set = set()
         self._track = track
         for key, obj in (objects or {}).items():

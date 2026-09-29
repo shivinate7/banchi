@@ -1197,7 +1197,7 @@ function drops(page: Page) {
  * "there's currently no way to undo an image that's in the middle of the capturings without
  * losing all the subsequent capturings from that session." `removeCardInPlace` is D10 ruling
  * 1's OTHER route: it deletes one card anywhere in a box and slides every higher card down
- * one, and it already exists (`BoxBrowse.tsx:2418`). This is reach, not a build — a second
+ * one, and it already exists (`BoxBrowse.tsx`'s `CardOps`). This is reach, not a build — a second
  * control on each row, beside the one `undoBack` already owns. `U` and a whole-row click are
  * untouched by every case below.
  * ════════════════════════════════════════════════════════════════════════════════════════ */

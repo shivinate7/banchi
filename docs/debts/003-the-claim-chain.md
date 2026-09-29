@@ -79,10 +79,10 @@ must resolve to the AST node its comment claims. Classification uses the "RULE 1
 
 **Proved red on the defect it was built to catch, before anything was fixed.** At the time
 this entry closed, three citations in `readiness.ts` pointed at the wrong code. Two claimed
-`:332`, which is `to_payload`'s `overrides` dict. One claimed `:325`, five lines above the
+line 332, which is `to_payload`'s `overrides` dict. One claimed line 325 at `c94f5975`, five lines above the
 actual `unanswered` property. This is D149's disease: a line citation that still resolves and
 still reads clean. The reader named those three and exited 1. The citations were then
-corrected to `:357` (the first `reasons.append`, RULE 1) and `:350` (`unanswered`'s own `def`
+corrected to line 357 (the first `reasons.append`, RULE 1) and line 350 at `c94f5975` (`unanswered`'s own `def`
 line). The reader now reports 10 of 10 subjects green. `--self-test` runs 9 mutation arms
 against its own logic (`SELF_TEST_ARM_COUNT` in the script). One arm reproduces this exact
 stale-citation shape generically.
@@ -135,8 +135,8 @@ happened to run the browsers.
 
 After it: **111 of 111 across the four spec files, then 163 of 163 across six.**
 
-**What is NOT closed.** Two `/games` stubs remain untyped inline literals — `nav.spec.ts:114`
-and `run-panel.spec.ts:411`, both `{ games: [] }` — and they are left that way on purpose:
+**What is NOT closed.** Two `/games` stubs remain untyped inline literals — `nav.spec.ts` line 114 at `b61ffa32`
+and `run-panel.spec.ts` line 411 at `b61ffa32`, both `{ games: [] }` — and they are left that way on purpose:
 their point is a registry that answered nothing, which is a state worth stubbing, and the
 `?? []` above is what makes it safe.
 

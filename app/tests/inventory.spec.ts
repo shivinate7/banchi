@@ -696,7 +696,7 @@ const SALE: SaleStub = (box, index, undo) => ({
  *  re-reads again — so the assertion retries a STABLE wrong answer until it times out. No wait
  *  and no retry can fix that, because nothing is in flight to wait for.
  *
- *  MEASURED, NOT ARGUED. `inventory.spec.ts:5074` lost this race on CI four runs in five while
+ *  MEASURED, NOT ARGUED. the D132 case in `inventory.spec.ts` lost this race on CI four runs in five while
  *  passing on a Mac every time, and was carried as a design-check flake for a day; its trace
  *  (job 103412668362) holds the post-sale `GET /inventory` still answering all three cards
  *  `identified`. Inserting a 300ms wait between a click and its mutation reproduces it here on

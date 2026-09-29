@@ -74,7 +74,7 @@ writing the number down.
 **The same shape in the docs, and `doc hygiene` sees only its provable half.** Docs carry 52
 resolvable `path:line` citations. D74's row catches one failure — a number past the end of its
 file — and there are none today. **The common case is invisible**: a citation whose file is
-long enough but whose line has moved, which is exactly what `ReviewQueue.css:47` became when
+long enough but whose line has moved, which is exactly what `ReviewQueue.css` line 47 at `b61ffa32` became when
 the comment it named slid to line 57. Nothing distinguishes that from a correct citation
 without knowing what the line should say. **The remedy is the same one this entry already
 gives** — cite the identifier, not the number — and the 2026-08-30 prose sweep applied it
@@ -106,7 +106,7 @@ select, and the rate at that width is 16%.** See the survey below, which reprodu
 **D128 did not close it.** That entry found one real defect — a `keydown` listener a render behind
 the screen — and fixed it, and its own last section declined to promise a green CI. The promise
 would have been wrong: on 2026-09-11, with D128 merged, PR #245's `design-check` job went red on
-`capture-claims.spec.ts:264` at the helper's own line 191, `toHaveCount(0)` polled nineteen times
+`capture-claims.spec.ts` line 264 at `b61ffa32` at the helper's own line 191, `toHaveCount(0)` polled nineteen times
 at 3 — the same locator, the same shape, the same fifteen seconds as the two instances D128
 attributed to the closure. The re-run was green. So the shape D128 named survives its fix, and the
 mechanism is not known.
@@ -121,8 +121,8 @@ mechanism is not known.
 Never more than one test per run except the job's first, which had three — two of them the D118
 platform difference `check.yml` records, fixed the same day and not counted below. **The five
 that remain are one shape: the assertion right after a `keyboard.press('Escape')`** —
-`capture-claims.spec.ts` three times (lines 264, 314, 816), `live-reconcile.spec.ts:236`,
-`markdown.spec.ts:539`. The failing case never runs slow: today's began its fifteen-second wait
+`capture-claims.spec.ts` three times (lines 264, 314, 816), `live-reconcile.spec.ts` line 236 at `b61ffa32`,
+`markdown.spec.ts` line 539 at `b61ffa32`. The failing case never runs slow: today's began its fifteen-second wait
 1.4s into the test, and the two earlier capture instances 0.8s and 0.6s in — page load, the `f`
 press and the track drawing all landed inside a second, and then one Escape was not honoured for
 fifteen. **The three capture instances began between 111 and 121 seconds after the run's first
@@ -140,7 +140,7 @@ it is written down because it is the only regularity in the set.
   PR's own job — produced no Escape-shaped failure at all. What those five runs did produce, each
   with a trace, was that afternoon's main: the location card PR #244's merge had brought back
   (4 of 4 on `inventory.spec.ts`'s D118 case, gone once D119 was re-applied) and PR #246's
-  `Open the review queue` link under the thumb floor at 390 (`phone.spec.ts:206`, which main's
+  `Open the review queue` link under the thumb floor at 390 (`phone.spec.ts` line 206 at `b61ffa32`, which main's
   own untraced run fails identically). The instrument's first catch was somebody else's defect,
   which is what an instrument is for.
 

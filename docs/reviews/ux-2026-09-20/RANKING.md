@@ -38,7 +38,7 @@ landed. It is a small script and it never needs looking at again.
 - `.bn-menu-label` (`app/src/kit.css`) sets 10px all-caps text in `--bn-ink-4`, 3.64:1,
   two lines below that token's own comment saying it may never be a caption.
 - `.graveyard-condition` (`app/src/Graveyard.css`) puts card condition prose in
-  `--bn-ink-4` at 3.34:1. `CardLocations.css:130` forbids this exact usage in a comment.
+  `--bn-ink-4` at 3.34:1. `CardLocations.css` line 130 forbids this exact usage in a comment.
 
 ### 3. The sidebar decides collapsed or expanded once, at mount
 
@@ -87,20 +87,20 @@ ordinary bold.
 
 Ordered by how badly each one reads, not by cost.
 
-1. **A permanent ledger row with no identity.** `Graveyard.tsx:234` falls back with `??`,
+1. **A permanent ledger row with no identity.** `Graveyard.tsx` line 234 falls back with `??`,
    which does not fire on an empty string. One live row renders with no card name at all,
    on the one screen whose entire job is recording what left.
-2. **Sales money does not line up.** `Revenue.css:81` gives every month row its own grid, so
+2. **Sales money does not line up.** `Revenue.css` line 81 gives every month row its own grid, so
    the Gross figure's left edge drifts up to 13px row to row — measured 1084.15 to 1097.30px
    over five rows. A stacked column of dollar figures that is not a column.
-3. **Product history labels collide.** `ProductHistory.tsx:205` wraps the heading in an
+3. **Product history labels collide.** `ProductHistory.tsx` line 205 wraps the heading in an
    unstyled `div` that shrink-wraps inside a flex row, so the range tag drops to a cramped
    second line 5px below instead of sitting beside it. All four panels, both widths.
 4. **The Fulfiller's primary action is styled as secondary.** `.ff-step` is the largest
    element on the card panel and uses the quiet outline variant. On the one screen built for
    someone working fast, the button to press does not look like the button to press.
 5. **Review prints its own internal reason code** next to the human sentence it already
-   wrote (`ReviewQueue.tsx:1685` and `:1846`).
+   wrote (`ReviewQueue.tsx` line 1685 and line 1846).
 6. **Three disabled opacities** — 0.4, 0.45 and 0.5 — can appear side by side on Inventory,
    so "faded means disabled" stops being a reliable signal.
 7. **Duplicated primitives.** `.ff-empty-art` against the kit's `.bn-empty-art` (same shape,

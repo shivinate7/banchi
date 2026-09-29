@@ -36,7 +36,7 @@
 }
 /* Thumb sizes on phones. The kit's phone bump for `.bn-seg-item` is dead — kit.css sets 36px
    inside its phone block and then the base rule's 28px comes later in the same file at equal
-   specificity and wins — so every screen carrying a Segmented lifts it locally (Runs.css:30,
+   specificity and wins — so every screen carrying a Segmented lifts it locally (`Runs.css`'s `.runs` rule,
    Pricing.css, Codes.css, Orders.css). This screen's is the scope picker in the Options well.
    The figures strip's two links are the other case: their pressable area was the digit alone,
    13x30px, which is the smallest target on the screen and routes off to the review queue. */

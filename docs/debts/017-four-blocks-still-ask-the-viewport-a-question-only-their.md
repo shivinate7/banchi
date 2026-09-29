@@ -11,13 +11,13 @@ Four blocks are over that line today:
 
 | where | what it does | the two columns it cannot tell apart |
 |---|---|---|
-| `RunPanel.css:13` | splits the run list into master and detail | 788px / 960px |
-| `RunPanel.css:55` | makes the master sticky, with a `100vh` max-height | 788px / 960px |
-| `CaptureScreen.css:964` | lifts the eyebrow above the title, raises `--cap-head-h` | 1044px / 1216px |
-| `CaptureScreen.css:972` | squeezes the two capture rails on a narrow desktop | 1044px / 1216px |
+| `RunPanel.css` line 13 at `b61ffa32` | splits the run list into master and detail | 788px / 960px |
+| `RunPanel.css` line 55 at `b61ffa32` | makes the master sticky, with a `100vh` max-height | 788px / 960px |
+| `CaptureScreen.css` line 964 at `b61ffa32` | lifts the eyebrow above the title, raises `--cap-head-h` | 1044px / 1216px |
+| `CaptureScreen.css` line 972 at `b61ffa32` | squeezes the two capture rails on a narrow desktop | 1044px / 1216px |
 
 **Why it is ADVISORY rather than blocking, and this is the row's shape and not its confidence.**
-Whether a `min-width` is asking the wrong thing depends on what the rule DOES. `RunPanel.css:55`
+Whether a `min-width` is asking the wrong thing depends on what the rule DOES. `RunPanel.css` line 55 at `b61ffa32`
 is half viewport question already — it sets `max-height: calc(100vh - ...)`, which no container
 query can answer — and the capture screen is `min-height: 100dvh` with a viewfinder sized by
 `container-type: size` against the window. A script can see the width and not the intent, so it
@@ -32,8 +32,8 @@ converted in the change that found them: `container-type: inline-size` computes 
 `contain: layout style inline-size`, and `contain: layout` makes the element **a containing block
 for its `position: fixed` descendants**. `.runs-detail` is already a container, so `.runs-body`
 becoming one is probably safe; the capture screen was not audited for it. Verified casualties if
-containment were applied naively higher up: `ReviewQueue.css:797`/`:819` (`.review-rail` as a
-fixed sheet), `ReviewQueue.tsx:1705`/`:1900` (scrim and dialog), `BoxBrowse.css:649`
+containment were applied naively higher up: `ReviewQueue.css` line 797/line 819 at `b61ffa32` (`.review-rail` as a
+fixed sheet), `ReviewQueue.tsx` line 1705/line 1900 (scrim and dialog), `BoxBrowse.css` line 649 at `b61ffa32`
 (`.browse-actionbar`). **Review and Inventory must never become containers.**
 
 **Not a build-order step**, for §15's reason: there is no deliverable to schedule, and the row

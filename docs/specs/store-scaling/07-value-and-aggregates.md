@@ -42,7 +42,7 @@ the actual code below:
 3. Percentile bands (top/bottom 1%/5%/10%) and the cut-off band do **not** need the row list
    to compute their counts — every count they need is already arithmetic over the aggregate
    figures (`totals.valued`, and the per-box `under_cutoff`/`at_or_over` this route already
-   computes, `:3245-3253`). Only the **rows to display** need paging. This is the load-bearing
+   computes). Only the **rows to display** need paging. This is the load-bearing
    finding of this playbook (§"Read first" below) and it is what keeps the client's percentile
    math correct without shipping the whole store.
 
@@ -74,7 +74,7 @@ step this playbook is doing on the implementer's behalf.
 **Done-when:**
 1. `GET /pipeline/value` with no query string still returns exactly today's shape — full
    `copies`, `boxes`, `unrankable`, `totals`, `threshold`, `sources` — so `harness/tests/
-   t7_store_and_seams.py:check_value_table` (`:26343`, calling `pipeline_routes.
+   t7_store_and_seams.py:check_value_table` (calling `pipeline_routes.
    do_pipeline_value()` with zero arguments) passes unmodified.
 2. `GET /pipeline/value?band=top|bottom|gaps&box=<n>&after=<cursor>&limit=N` returns
    `{rows, next, total, ...aggregates}` per the wire shape in "Steps" below, and the
@@ -109,9 +109,9 @@ step this playbook is doing on the implementer's behalf.
   `cli/resolve._copies_out` and the two per-SKU helpers beside it, this item touches
   `cli/resolve.box_views` (`box_views`). Different functions in the same file; a merge
   conflict is likely if both land as concurrent branches (adjacent line ranges), not a
-  logical conflict. `do_pipeline_value` (`:3117`) calls `_readings()` (`:2975`), which itself
+  logical conflict. `do_pipeline_value` calls `_readings()`, which itself
   calls `run_resolve._copies_out` indirectly through `_committed_keys`/`_copies_out` in
-  `do_pipeline_worklist`'s neighborhood (`:3178-3183` calls `run_resolve.box_views`, not
+  `do_pipeline_worklist`'s neighborhood (which calls `run_resolve.box_views`, not
   `_copies_out`, directly) — confirm at implementation time with
   `grep -n "_copies_out\|_committed_keys" server/pipeline_routes.py` that item 4's rewrite of
   `_copies_out` has not changed its call signature before this item's code lands on top of
@@ -127,7 +127,7 @@ step this playbook is doing on the implementer's behalf.
   /inventory/<box>` and touches `store/rows.Rows`'s "materialise-then-filter" fallback.
   This item's `box_views` change does not depend on that fallback being fixed — the per-box
   branch here calls `Inventory.records_in`, which is `self.cards.where(box=box)`
-  (`store/master.Inventory`), an indexed query regardless of whether `rows.py:177`'s
+  (`store/master.Inventory`), an indexed query regardless of whether `store/rows.Rows`'s `__len__`
   degrade-to-Python-filtering bug is fixed. If item 2 lands first, nothing here needs
   re-testing; if it lands after, nothing here needs to wait for it.
 - **No conflict with item 6** (`do_orders`, `docs/specs/store-scaling/06-orders.md`) — that
@@ -170,14 +170,14 @@ grep -n "box_views(" cli/resolve.py server/pipeline_routes.py harness/tests/*.py
 ```
 
 **The finding that makes pagination NOT break the percentile bands**: `app/src/
-ValueBands.tsx:176` computes a percentile band's row count as
+ValueBands.tsx`'s `slice` computes a percentile band's row count as
 `Math.round((rows.length * SHARES[cut]) / 100)` where `rows` is `pool` — the full list of
-priced rows for the current `end`/`box` scope (`:150-155`, `:369`). `pool.length` is exactly
+priced rows for the current `end`/`box` scope (`ordered` and `ValueBands`). `pool.length` is exactly
 the count of priced cards in scope, which the aggregates block already reports: store-wide as
 `totals.valued` (`server/pipeline_routes._open_markdown`, `"valued": valued`) and per-box as
-`ValueBox.valued` (`:3319`, `"valued": seat["valued"]`). The cut-off band's count is likewise
+`ValueBox.valued` (`"valued": seat["valued"]`). The cut-off band's count is likewise
 already computed store-wide as the sum of every box's `at_or_over`/`under_cutoff`
-(`:3247-3253`) — this playbook adds two convenience totals (`totals.under_cutoff`,
+— this playbook adds two convenience totals (`totals.under_cutoff`,
 `totals.at_or_over`) rather than making the client sum `boxes[]` itself, since a box-scoped
 request already gets its per-box figures for free from `ValueBox`. **No band's chip count
 ever needs a row.** Only the rows a human is about to look at do.
@@ -268,7 +268,7 @@ paginated sibling below).
 `do_pipeline_value`
 
 ```python
-_VALUE_PAGE_DEFAULT = 200  # matches app/src/ValueBands.tsx's PAGE constant, `:66`
+_VALUE_PAGE_DEFAULT = 200  # matches app/src/ValueBands.tsx's PAGE constant
 
 
 def _value_cursor_encode(row: Optional[dict]) -> Optional[str]:
@@ -381,7 +381,7 @@ itself negates market (`-(_market_of(...) or Decimal("0"))`) but with box/index 
 instead of ascending, so `bottom`'s tie-break is a real independent ascending-by-cheapness
 order and not a `list.reverse()` of `top`'s array (which would silently reverse tie order
 too — a deliberate, documented behavior refinement over today's `app/src/
-ValueBands.tsx:154` `[...priced].reverse()`; call this out in the PR description as an
+ValueBands.tsx`'s `ordered` `[...priced].reverse()`; call this out in the PR description as an
 intentional small change, not an oversight, since a mutation test might catch the old
 reversed-tie-order as "removed" behavior). Write `_value_sort_key_reversed` explicitly rather
 than deriving it by negating `_value_sort_key`'s output, so a reader sees the actual
@@ -442,15 +442,14 @@ export async function getValuePage(options: {
 }
 ```
 
-Add `ValueAggregates`/`ValuePage` to `app/src/types.ts` beside `ValueTable`
-(`:3421-3445`), and add the two new `totals` fields (`under_cutoff`, `at_or_over`) to
+Add `ValueAggregates`/`ValuePage` to `app/src/types.ts` beside `ValueTable`, and add the two new `totals` fields (`under_cutoff`, `at_or_over`) to
 `ValueTable` itself too, since `do_pipeline_value()`'s no-args response now carries them as
 well (§A1) — keep the two response shapes' `totals` field lists in sync so a future reader
 does not have to remember which route has which fields.
 
 **`app/src/ValueBands.tsx`** — the rewrite is real work, not a one-line swap, because the
 component currently treats `table.copies` as a single in-memory array it filters/sorts/slices
-four different ways (`ordered`, `slice`, `stacks`, `pulls`, all `:121-192`). Restructure
+four different ways (`ordered`, `slice`, `stacks`, `pulls`). Restructure
 around **two fetches**:
 
 1. On mount and whenever `end`/`cut`/`price`/`box` change, fetch aggregates alone — a
@@ -489,10 +488,10 @@ around **two fetches**:
   itself (not `pipeline_routes.py`). Read each before touching anything: if either resolves a
   bounded set of boxes (a single run's positions, a single reconcile's SKUs), it is a THIRD
   candidate for the `boxes=` parameter and should take it for the same reason `pipeline_
-  routes.py:2020`/`:2732` do; if either is genuinely store-wide (e.g. a full-store report
+  routes.py`'s other `boxes=` call sites do; if either is genuinely store-wide (e.g. a full-store report
   command run from the CLI, where "slow" is acceptable because it is not on a polled screen),
   leave it on the no-args path. This playbook does not pre-judge which, because it did not
-  read the surrounding function bodies at `:785` and `:1923` in full — do that first.
+  read the surrounding function bodies in full — do that first.
 - `server/pipeline_routes._relabel_positions` — `_relabel_positions`'s `views = ... run_resolve.
   box_views(inventory)`. Before this call, collect `{at.get("box") for entry in
   table.get("skus") or () for at in entry.get("positions") or () if isinstance(at, dict)}`
@@ -504,19 +503,19 @@ around **two fetches**:
 - `server/pipeline_routes.do_pipeline_value` (inside `do_pipeline_value`) and the equivalent line inside
   the new `do_pipeline_value_page` (§A2) — `views = run_resolve.box_views(inventory)`. **No**
   `boxes=` argument — this caller genuinely needs every box.
-- `server/capture_server.do_box_listings` (`do_box_listings`) and `:4714`
-  (`do_release_box_listings`) — both call `_release_plan(inventory, box)`. Signature
+- `server/capture_server.do_box_listings` (`do_box_listings`) and `do_release_box_listings`
+  — both call `_release_plan(inventory, box)`. Signature
   unchanged; only `_release_plan`'s body changes (§C below).
 - `server/pipeline_routes.do_pipeline_runs` (inside `do_pipeline_runs`, `names = _box_names()`) and
-  `:2564` (inside `do_pipeline_worklist`, before the run loop, `names = _box_names()` —
-  confirm exact line at implementation time; it is the call immediately preceding `for entry
-  in sorted(root.iterdir())` around `:2564-2584`) — both unaffected by signature; `_box_names`'
+  the same call (inside `do_pipeline_worklist`, before the run loop, `names = _box_names()` —
+  confirm at implementation time; it is the call immediately preceding `for entry
+  in sorted(root.iterdir())`) — both unaffected by signature; `_box_names`'
   body changes (§C below) to scope its walk to the box registry's own (small) key set instead
   of scanning every card.
 - `server/pipeline_routes.do_pipeline_worklist` — `on_hand = None if snapshot is None else
   _on_hand_by_run(snapshot.inventory)`. Signature changes: `_on_hand_by_run(inventory, runs)`
   — the caller must collect the joined run names it is about to loop over BEFORE this line
-  (the loop starting at `:2584`, `for entry in sorted(root.iterdir())`, already filters
+  (the loop `for entry in sorted(root.iterdir())` already filters
   `manifest.get("joined")`; hoist that filter into a first pass that just collects names,
   then pass the resulting list here, then reuse the parsed manifests in the main loop rather
   than re-reading them — check whether `_manifest(entry)` is cheap enough to call twice per
@@ -567,31 +566,31 @@ around **two fetches**:
 - **`check_pricing_labels`** (`:15968`, exercises `_relabel_positions` via `resolve.
   box_views(inventory)` calls at `:15955`, `:15965`) — unmodified calls (no `boxes=` argument)
   must still pass, since this test calls `box_views` directly rather than through
-  `pipeline_routes.py:2020`'s new `boxes=`-passing call site. Confirm this test does NOT
+  `server/pipeline_routes._relabel_positions`'s new `boxes=`-passing call site. Confirm this test does NOT
   itself need updating — it exercises the function's default no-`boxes` behavior, which this
   playbook does not change.
 - **New**: a `box_views(inventory, boxes={...})` case beside `check_pricing_labels` or
-  `check_consolidated_numbering` (`:8543`) asserting: (a) the bounded call agrees with the
+  `check_consolidated_numbering` asserting: (a) the bounded call agrees with the
   unbounded call on the SAME boxes, on a store with several boxes, when `boxes` names only a
   subset; (b) a box NOT in `boxes` is absent from the bounded result even though the
   unbounded call would include it; (c) a box in `boxes` that has been deleted (D10 ruling 3)
   degrades to that ONE box being absent, never to every other requested box degrading too —
   a genuine deviation from the store-wide branch's all-or-nothing degrade (§B below), and it
   needs its own assertion.
-- **`check_listing_release`** (`:3422`) exercises `_release_plan` through `do_box_listings`/
+- **`check_listing_release`** exercises `_release_plan` through `do_box_listings`/
   `do_release_box_listings`. Every existing assertion (the SHARED/OWNED/SOLDCOPY layout,
-  `:3448-3456`, and whatever `checks.equal` calls follow through the rest of that function —
+  and whatever `checks.equal` calls follow through the rest of that function —
   read the whole function, not just its header, before changing `_release_plan`) must pass
   unmodified against the rewritten two-pass implementation.
 - **New**: a `_release_plan` case with a SKU spread across three-plus boxes, asserting
   `elsewhere` reports every one of them (the rewritten per-SKU `select(sku=...)` pass must
   not stop early or miss a box just because it wasn't the box a shallower fix would have
   checked).
-- **`check_box_names`** (`:7547`) exercises `server/pipeline_routes._box_names`'s call.
+- **`check_box_names`** exercises `server/pipeline_routes._box_names`'s call.
   Every existing assertion must pass unmodified against the box-registry-scoped rewrite.
-- The `_on_hand_by_run` case around `:11964` (function name from the grep at the top of this
+- The `_on_hand_by_run` case (function name from the grep at the top of this
   file's research — re-confirm at implementation time) must pass unmodified against the
-  signature change (`runs` parameter); update the call at `:11964` to pass the run-name list
+  signature change (`runs` parameter); update the call to pass the run-name list
   the surrounding test builds, matching the new signature.
 
 ### `app/tests/value-bands.spec.ts`
@@ -645,7 +644,7 @@ builder (`:65-77`) needs to change — the reshaping happens entirely inside the
 - Any test asserting `"They sit in N separate spots across M drawers"` (`pulls()`'s output,
   `app/src/ValueBands.tsx`) needs its fixture to carry the new server-side `reach` field
   (§A3 point 5).
-- Read the remaining tests (`:193-374`) individually — several assert chip counts
+- Read the remaining tests individually — several assert chip counts
   (`counts.p1` etc.) that after this rewrite come from the aggregates block rather than from
   `slice(pool, ...).length`; confirm each fixture supplies the right aggregate figures
   (`valued`, `under_cutoff`, `at_or_over`).
@@ -905,7 +904,7 @@ a number). Replace the comment rather than leaving it beside code it no longer d
   walk changes; its return value (`Tuple[List[dict], dict]`, same two shapes) does not.
 - **`app/src/PositionLabel.tsx`, `app/src/pricingSource.ts:bandInHash`.** Neither is touched;
   the hash-routing and label-rendering machinery around `ValueBands` stays as-is.
-- **`pricing.spec.ts`** — the file header comment in `value-bands.spec.ts` (`:8-11`) is
+- **`pricing.spec.ts`** — the file header comment in `value-bands.spec.ts` is
   explicit that this suite is deliberately separate from the worklist suite so that a case
   added to prove the two lenses don't interfere lives in exactly one file. Do not add a
   value-bands case to `pricing.spec.ts` or vice versa.

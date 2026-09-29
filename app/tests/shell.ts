@@ -588,7 +588,7 @@ async function stubStore(page: Page): Promise<void> {
   /* THE ORDER OF THESE TWO IS THE MECHANISM, NOT A TIDY-UP. `/\/pricing$/` matches
      `…/pipeline/pricing` as happily as `…/pricing`, and Playwright takes the NEWEST handler
      first — so registering the corpus last answered the WORKLIST with a corpus, `roster` came
-     back undefined, and `Home.tsx:241` took the whole screen down behind its route boundary
+     back undefined, and `Home.tsx`'s `Home` took the whole screen down behind its route boundary
      with `undefined.filter`. The narrower route is registered second and therefore wins. D86
      is why there are two at all: the corpus is the store's one pricing answer and the worklist
      is which cards are in front of the operator. */
