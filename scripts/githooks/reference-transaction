@@ -29,6 +29,7 @@
 #      was ever on your main. It cannot be forged by a local session, because a local commit
 #      is not on origin until something pushes it — and pushing to main is what the pre-push
 #      hook beside this one refuses.
+#   3a. Packing (`pack-refs`, `gc`): dropping a loose main whose value is unchanged. main does not move. See the block at the deletion test.
 #   4. PKMNSCAN_MAIN=off, the visible escape hatch, spelled the way PKMNSCAN_GATE=off and
 #      PKMNSCAN_DOCS=off already are in this repo.
 #
@@ -161,6 +162,17 @@ while IFS=' ' read -r _old new ref rest; do
   # Deletion. Tested first and on `new` alone, because a delete and a no-op are the same
   # bytes on the wire — see the header.
   if zero_oid "$new"; then
+    # PACKING IS NOT A DELETION (measured, git 2.39.3, `pack-refs --all`, `gc`). Packing first
+    # writes packed-refs (`0000 <sha> refs/heads/main`, allowed above as a no-op), then deletes
+    # the LOOSE ref in a second transaction that states the old value: `<sha> 0000 main`. A real
+    # delete (`update-ref -d`, `branch -D`, with or without a stated old, loose, packed or both)
+    # sends zeros in its first call, so a nonzero `old` equal to main's value, with a loose file
+    # to drop, is packing. A packed-refs value check was tried and REMOVED: with it stripped
+    # every real-delete leg still refused (selftest, 2026-09-28), so it was redundant.
+    if ! zero_oid "$_old" && [ "$_old" = "$current" ]; then
+      cdir="$(git rev-parse --git-common-dir 2>/dev/null)" || cdir=""
+      [ -n "$cdir" ] && [ -f "$cdir/refs/heads/main" ] && continue
+    fi
     echo "" >&2
     echo "REFUSED: this would DELETE refs/heads/main." >&2
     echo "" >&2

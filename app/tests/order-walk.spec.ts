@@ -314,7 +314,7 @@ async function open(page: Page, options: { plan?: WalkPlan; orders?: OrdersPaylo
     })
   })
 
-  await page.goto(VIEW_ROUTE)
+  await page.goto(`${VIEW_ROUTE}?pullable=0`)
   await expect(page.locator(VIEW)).toBeVisible()
   return wire
 }

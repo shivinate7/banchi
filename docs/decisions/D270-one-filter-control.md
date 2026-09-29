@@ -180,3 +180,21 @@ of a header's actions are `IconButton`s or a More menu. `make kit-adoption`'s
 by hand from `SearchField` and a facet control, in place of `FilterBar`
 (`scripts/kit-adoption.mjs`). Current offenders are listed in `scripts/kit-adoption-allow.json`,
 keyed to the lane that owns each screen.
+
+## Amendment, 2026-09-28 — Orders: several Show picks, short words, a pullables landing
+
+**Owner's rulings.**
+- "Show" is multi-choice. A group passes on ANY picked value (OR within a facet, AND across
+  facets). "Done" reads the closed groups and every other value the open ones, so Done plus
+  another pick is the union. Each option still counts under the OTHER facets. Picks round-trip
+  in the URL (`?show=a&show=b`).
+- One state, one name. The facet, the row pills and the sort read the same short words: "Check",
+  "Unresolved", "Missing", "Status", "Hide unknown"; sorts "Value", "Cards", "Buyer", "Fewest
+  drawers".
+- The landing view is the pullables: "there should be a default filtered view of pullables in a
+  sense upon landing". `FilterBar`'s `hide` now takes several toggles. Orders draws "Hide
+  unpullable", ON AT REST like Hide sold (D132). It hides open buyers with no card on hand to
+  pull. A toggle, not a Show pick, because a Show pick is a state a buyer is in, and this is a
+  cut across states. It is named in the "N of M" line, one click widens it, its badge counts only
+  a move away from rest, and `?pullable=0` survives a reload. No device key: the URL is the memory.
+  A link that names a state, status, buyer, order or search opens with it off, read once at mount.
