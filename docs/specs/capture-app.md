@@ -562,6 +562,11 @@ what `docs/DESIGN.md` refuses in as many words.
   photo (desktop) and the run and last cards (tablet). The phone keeps a full-width panel: its
   height budget pins the shutter above the tab bar. Layout only: capture, motion trigger and
   rotation are untouched. Width only. §5.1's order is unchanged.
+- **Phone (390, 375, 430): the panel hugs the frame and sits BESIDE the last capture**
+  (owner's ruling, 2026-09-28, picked from a mockup). One row, both frames at the stage's
+  height budget, so the shutter stays above the tab bar. Panel width follows its height as
+  above (`--cap-stage-w`, phone constants 101px and 26px). The last-capture receipt scrolls
+  inside its panel. Layout only. §5.1's order is unchanged.
 
 ## 6. trigger-seam
 
