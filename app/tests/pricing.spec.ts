@@ -4423,14 +4423,25 @@ test('F3: a price band keeps the rows in it, and "No market price" is a band of 
   await expect(page.locator('.pricing-row')).toContainText('Poro Snax')
 })
 
-test('F3: a filter narrows the view only, and the Send bar still counts every row', async ({ page }) => {
-  await open(page, { skus: FILTER_SKUS })
-  const says = page.locator('.pricing-bar-says')
-  const before = await says.innerText()
-  await page.getByRole('searchbox', { name: 'Search this list' }).fill('dunsparce')
-  await expect(page.locator('.pricing-row')).toHaveCount(1)
-  await expect(page.locator('.pricing-filter-note')).toBeVisible()
-  await expect(says).toHaveText(before)
+test('F3: a filter narrows the view only, and the Send press carries every row', async ({ page, context }) => {
+  /* THE UNFILTERED PRESS FIRST, on its own page: the button's words and the body it posts. */
+  const plain = await open(page, { skus: FILTER_SKUS })
+  const label = await sendPress(page).innerText()
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(plain).length).toBe(1)
+  const expected = sendPosts(plain)[0]?.body
+
+  const other = await context.newPage()
+  const wire = await open(other, { skus: FILTER_SKUS })
+  await other.getByRole('searchbox', { name: 'Search this list' }).fill('dunsparce')
+  await expect(other.locator('.pricing-row')).toHaveCount(1)
+  await expect(other.locator('.pricing-filter-note')).toBeVisible()
+  /* THE BUTTON AND THE REQUEST UNDER A FILTER EQUAL THE UNFILTERED ONES. A send fed the drawn
+     rows would name fewer copies and carry a narrower body. */
+  await expect(sendPress(other)).toHaveText(label)
+  await sendPress(other).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  expect(sendPosts(wire)[0]?.body).toEqual(expected)
 })
 
 test('F3: the held count on the button and in the bar are one number, a sent row included', async ({ page }) => {

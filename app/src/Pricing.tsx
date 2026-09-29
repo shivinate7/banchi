@@ -2795,7 +2795,7 @@ export function Pricing() {
               sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
             />
           )}
-          {filtering && !liveTab ? <p className="pricing-filter-note">Filters change what you see. Send still covers every row.</p> : null}
+          {filtering ? <p className="pricing-filter-note">Filters change what you see. Send still covers every row.</p> : null}
           {filtering && drawn.length === 0 ? (
             <EmptyState icon="search" title="Nothing matches" body="Loosen the search or a filter to see more rows." />
           ) : null}
