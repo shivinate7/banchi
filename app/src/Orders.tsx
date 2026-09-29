@@ -2621,7 +2621,9 @@ function OrderPickPane({
   owedBySku,
   showBuyers,
   sections,
+  boxes,
 }: {
+  readonly boxes: readonly BoxRecord[]
   readonly walk: OrderWalk
   readonly owedBySku: ReadonlyMap<string, number>
   readonly showBuyers: boolean
@@ -2708,6 +2710,7 @@ function OrderPickPane({
           nonce: null,
           onZoom: () => setZoomed(true),
           reshoot: null,
+          boxes,
         }}
         detail={
           <>
@@ -3767,7 +3770,7 @@ function PullStage({
               and up the pane goes back to its usual sticky column beside the walk. */}
           {narrow ? null : (
             <div className="orders-cardcol">
-              <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} sections={sections} />
+              <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} sections={sections} boxes={boxRecords} />
             </div>
           )}
         </div>
@@ -3779,7 +3782,7 @@ function PullStage({
           title={walk.currentRow?.take.name ?? 'The card'}
           className="orders-card-sheet"
         >
-          <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} sections={sections} />
+          <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} sections={sections} boxes={boxRecords} />
         </Sheet>
       )}
 

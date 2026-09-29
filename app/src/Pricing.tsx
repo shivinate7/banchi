@@ -103,6 +103,7 @@ import {
 import { toast } from './kit/toast'
 import './Pricing.css'
 import { SendCard } from './SendCard'
+import { noPhotoSentence } from './CardHero'
 
 /* #/pricing — THE HAND-PRICING WORKLIST (D49, D86), REBUILT TO THE OWNER'S RE-INTERVIEW (D277).
  *
@@ -3521,7 +3522,7 @@ function PhotoSheet({ sku, at, onNext, onClose }: { sku: MergedSku | null; at: n
         <div className="pricing-photo">
           <div className="pricing-photo-frame">
             {photoUrl(place?.box ?? 0, place?.index ?? 0, place) === null ? (
-              <p className="pricing-photo-caption">This card was never photographed.</p>
+              <p className="pricing-photo-caption">{noPhotoSentence(place?.cid, null)}</p>
             ) : (
               <img src={photoUrl(place?.box ?? 0, place?.index ?? 0, place) ?? undefined} alt={sku.name} />
             )}

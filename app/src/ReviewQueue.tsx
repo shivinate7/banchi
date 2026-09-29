@@ -67,6 +67,7 @@ import { SearchField } from './SearchField'
 import './ReviewQueue.css'
 import { isRetiredReason, reasonLabel } from './reasons'
 import { collectorNumber as sharedCollectorNumber } from './cardNumber'
+import { isMovedCid, noPhotoSentence } from './CardHero'
 
 /* THE REVIEW QUEUE — the judgement screen. One card at a time: the photograph on a dark
  * stage, the question it poses, the evidence, and one row per answer with a keycap on it.
@@ -2608,8 +2609,8 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
 
   if (src === null) {
     return (
-      <AbsentPhoto title="No photograph was stored" detail="photo: null" label={entry.label} box={entry.box} cid={entry.cid} place={entry.place}>
-        The record carries no photograph at all.
+      <AbsentPhoto title={isMovedCid(entry.cid) ? 'The card moved' : 'No photograph was stored'} detail="photo: null" label={entry.label} box={entry.box} cid={entry.cid} place={entry.place}>
+        {noPhotoSentence(entry.cid, null)}
       </AbsentPhoto>
     )
   }

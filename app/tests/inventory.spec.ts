@@ -3991,6 +3991,23 @@ test('a card that never had a photograph asks for none and says so, not that a f
   expect(asked, 'no photo request for a card with no photograph').toEqual([])
 })
 
+test('a moved card names the box it went to, by name', async ({ page }) => {
+  const cards = {
+    ...CARDS,
+    '2/4': {
+      ...card({
+        index: 4, state: 'identified', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1,
+        sectionEnd: 3, cid: `moved:${'ab'.repeat(32)}`,
+      }),
+      moved_to: '2/6',
+    },
+  } as Cards
+  await open(page, BOXES, { ...STORE, cards })
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
+  await expect(page.locator('.browse-absent')).toContainText('This card moved to ME01 commons.')
+})
+
 test('a listing hold is named on the delete panel rather than discovered by pressing it', async ({
   page,
 }) => {

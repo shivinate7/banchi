@@ -422,6 +422,26 @@ export function photoSrc(row: Row, nonce: string | null): string | null {
   return photoUrl(row.card.box, row.card.index, row.card, nonce)
 }
 
+/** A `moved:` name is the tombstone a move left (D83). */
+export function isMovedCid(cid: string | null | undefined): boolean {
+  return typeof cid === 'string' && cid.startsWith('moved:')
+}
+
+/** THE ONE SENTENCE FOR A CARD WHOSE NAME IS NO PHOTOGRAPH'S (`photoUrl` gives it no address).
+ *  A moved card lives on elsewhere with its photograph, so it says where it went, by box name
+ *  (D259) and never the digits, and never "never photographed". Every view that draws a photo
+ *  calls this, so no view words the case itself. `movedTo` is the tombstone's `"box/index"`. */
+export function noPhotoSentence(
+  cid: string | null | undefined,
+  movedTo: string | null | undefined,
+  boxes: readonly BoxRecord[] = [],
+): string {
+  if (!isMovedCid(cid)) return 'This card was never photographed.'
+  const boxN = Number(movedTo?.split('/')[0])
+  const name = Number.isFinite(boxN) ? boxes.find((b) => b.box === boxN)?.name : undefined
+  return `This card moved to ${typeof name === 'string' && name.trim() !== '' ? name : 'another box'}.`
+}
+
 export type PhotoPanelProps = {
   row: Row
   label: string | null
@@ -479,24 +499,11 @@ export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoo
 
   /* The card's own name says it never had a photograph, so there is no file to ask for and
      nothing to call missing. */
-  if (src === null && row.card.cid?.startsWith('moved:')) {
-    /* A `moved:` name is the tombstone a move left: the card lives on at another place, with
-       its photograph, so this is not a card that was never photographed. */
-    const boxN = Number(row.card.moved_to?.split('/')[0])
-    const name = Number.isFinite(boxN) ? boxes.find((b) => b.box === boxN)?.name : undefined
-    return (
-      <div className="bn-photo browse-absent">
-        <Icon name="arrowRight" size={28} />
-        <p>This card moved to {typeof name === 'string' && name.trim() !== '' ? name : 'another box'}.</p>
-      </div>
-    )
-  }
-
   if (src === null) {
     return (
       <div className="bn-photo browse-absent">
-        <Icon name="image" size={28} />
-        <p>This card was never photographed. It is at {where}.</p>
+        <Icon name={isMovedCid(row.card.cid) ? 'arrowRight' : 'image'} size={28} />
+        <p>{noPhotoSentence(row.card.cid, row.card.moved_to, boxes)}</p>
         {reshoot}
       </div>
     )
