@@ -12,6 +12,11 @@
 # provisioning, not a gate (D18 already keeps both callers off the commit path; this
 # script does not change that).
 #
+# BACKGROUND OR FOREGROUND. With no flag, a real `npm ci` is BACKGROUNDED (the SessionStart hook
+# must never block a session on a network step). `--foreground`, which `make worktree-setup`
+# passes, runs it in the foreground under the same lock and returns with app/node_modules
+# installed and its receipt written: a person who asked for setup wants a finished setup.
+#
 # --prefix TEXT prepends TEXT to every line this script prints, so each caller keeps its
 # own voice — scripts/worktree-guard.sh's lines all read "worktree-guard: ...", `make
 # worktree-setup`'s do not — without duplicating the eleven messages themselves.
@@ -19,11 +24,15 @@
 set -uo pipefail
 
 prefix=""
-if [ "${1:-}" = "--prefix" ]; then
-  prefix="${2:-}"
-  shift 2
-fi
-main="${1:?usage: worktree-provision.sh [--prefix TEXT] <main-worktree-path>}"
+foreground=0
+while [ $# -gt 1 ]; do
+  case "$1" in
+    --prefix) prefix="${2:-}"; shift 2 ;;
+    --foreground) foreground=1; shift ;;
+    *) break ;;
+  esac
+done
+main="${1:?usage: worktree-provision.sh [--prefix TEXT] [--foreground] <main-worktree-path>}"
 
 say() { printf '%s%s\n' "$prefix" "$1"; }
 
@@ -119,7 +128,8 @@ fi
 # other exception all answer "unknown" — never "not owed" — because a false "current" is the
 # exact bug this exists to fix (the owner's stale-node_modules trap: a confusing Playwright-
 # version error instead of a plain "reinstall").
-npm_owed="$(python3 - <<'PY' 2>/dev/null
+npm_owed_now() {
+  python3 - <<'PY' 2>/dev/null
 import sys
 sys.path.insert(0, "scripts")
 try:
@@ -128,7 +138,8 @@ try:
 except Exception:
     print("unknown")
 PY
-)"
+}
+npm_owed="$(npm_owed_now)"
 
 # Written after EITHER path below succeeds, so `make up`'s own supervisor (which reads this
 # same file) sees this provisioning as a real, current install rather than reinstalling it.
@@ -268,12 +279,51 @@ PY
       disown 2>/dev/null || true
     }
 
+    # A BLOCKING WAIT, NO POLLING LOOP: kqueue's EVFILT_PROC/NOTE_EXIT parks the process until
+    # the recorded pid exits (macOS only, which this script's `cp -c` already assumes). Any
+    # failure returns at once, and the caller then re-reads the staleness answer.
+    wait_for_running_install() {
+      python3 - <<'PY' 2>/dev/null
+import select, sys
+sys.path.insert(0, "scripts")
+try:
+    import serve
+    pid = serve.live_pid(serve.Child("npm-install", "npm-install.pid", "npm-install.log"))
+    if pid is not None:
+        kq = select.kqueue()
+        ev = select.kevent(pid, select.KQ_FILTER_PROC, select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
+                           select.KQ_NOTE_EXIT)
+        kq.control([ev], 1, None)
+except Exception:
+    pass
+PY
+    }
+
     if [ -d "$npm_lock_dir" ] && [ "$(npm_lock_holder_alive)" = "alive" ]; then
-      say "an install is already running — log at $npm_log. Starting nothing."
+      if [ "$foreground" = 1 ]; then
+        say "an install is already running — waiting for it (log at $npm_log)."
+        wait_for_running_install
+        if [ "$(npm_owed_now)" = "current" ]; then
+          say "app/node_modules is installed and current."
+        else
+          say "that install did not leave app/node_modules current — re-run \`make worktree-setup\`."
+        fi
+      else
+        say "an install is already running — log at $npm_log. Starting nothing."
+      fi
     else
       [ -d "$npm_lock_dir" ] && { rm -rf "$npm_lock_dir" 2>/dev/null; npm_child_clear; }   # stale: reclaim it
       if mkdir "$npm_lock_dir" 2>/dev/null; then
-        if command -v npm >/dev/null 2>&1; then
+        if command -v npm >/dev/null 2>&1 && [ "$foreground" = 1 ]; then
+          say "app/ dependencies are missing or stale (no trustworthy install to clone from $main) — running \`npm --prefix app ci\` now (~80 MB, network). Log: $npm_log."
+          if npm --prefix app ci >"$npm_log" 2>&1; then
+            write_npm_receipt
+            say "app/node_modules installed — tsc, lint and design-check are ready."
+          else
+            say "\`npm --prefix app ci\` FAILED — see $npm_log. app/node_modules is not usable."
+          fi
+          rm -rf "$npm_lock_dir"
+        elif command -v npm >/dev/null 2>&1; then
           launch_npm_ci
           say "app/ dependencies are missing or stale (no trustworthy install to clone from $main) — running \`npm --prefix app ci\` in the BACKGROUND (~80 MB, network). Log: $npm_log. lint, typecheck and design-check will fail until it finishes; re-run \`make worktree-setup\` or check the log."
         else
