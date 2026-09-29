@@ -5,7 +5,15 @@
 /* THE HERO IS `Page`'S OWN HEADER NOW (kit-adoption R1): the greeting is `Page`'s one h1, the
    date is its lede, and the deck is its actions slot — the same three-part shape every other
    screen's header has, carrying this screen's own look through the rules below. */
-.home .bn-page-head { gap: var(--bn-8); }
+.home .bn-page-head { gap: var(--bn-8); position: relative; }
+/* THE DECK IS OUT OF FLOW. In the actions slot it set the header's height (310px), leaving an empty
+   band between the greeting and the verdict; the old hero drew it top-right BESIDE the text. So the
+   slot floats top-right over the page's inset and the text under the greeting keeps clear of it
+   (the deck's own 220px + its 24px right padding + the old hero's 32px gap). */
+.home .bn-head-actions { position: absolute; top: 0; right: 0; width: auto; }
+@media (min-width: 768px) {
+  .home .bn-page-body > .home-hero-body { padding-right: calc(220px + var(--bn-6) + var(--bn-8)); }
+}
 /* The date sits ABOVE the greeting, as it always has — `Page` draws the lede after the h1,
    so this moves it back with `order` alone; the DOM order (h1 then lede) is unchanged. */
 .home .bn-lede { order: -1; font-size: inherit; color: inherit; max-width: none; }
@@ -17,10 +25,7 @@
   letter-spacing: -0.035em;
   line-height: 1;
 }
-/* The verdict block and the deck sit side by side UNDER the greeting, as before 1e4c5346 — the
-   deck was in the header's actions slot, which stretched the header to its 310px. */
-.home-hero-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--bn-8); }
-.home-hero-text { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; }
+.home-hero-body { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; }
 /* ── THE STANDING LINE ─────────────────────────────────────────────────────────────────
    One sentence naming what the store is waiting on, ranked by `standing.ts`. The emphasis
    floor is a TINT and never a fill: an accent fill spends the element's only colour channel,
@@ -227,7 +232,6 @@ a.home-deck { pointer-events: auto; }
   /* Hidden WITHOUT `display: none`: Chromium's full-page capture matches this media query for
      a frame, and a display toggle restarts the deck's enter animations — so every screenshot
      of this screen at 1440 showed an empty hero. A zero-height, invisible block toggles nothing. */
-  .home-hero-body { grid-template-columns: 1fr; gap: 0; }
   .home-hero-art { height: 0; overflow: hidden; visibility: hidden; margin: 0; padding: 0; }
   .home-actions { flex-direction: column; margin-top: var(--bn-2); }
   .home-actions .bn-btn { width: 100%; }

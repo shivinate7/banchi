@@ -716,9 +716,9 @@ export function Home() {
       className="home"
       title={<>{greeting()}.</>}
       lede={<span className="bn-eyebrow">{weekdayDate(new Date())}</span>}
+      actions={deckArt}
     >
       <div className="home-hero-body">
-       <div className="home-hero-text">
         <StandingLine standing={say} />
         <div className="home-actions">
           <Button
@@ -732,8 +732,6 @@ export function Home() {
           </Button>
         </div>
         <HistoryFoot status={status.state === 'ready' ? status.value : null} boxes={boxCount} sold={sold} shelf={shelf.state === 'ready' ? shelf.value : null} live={say?.running ?? false} />
-       </div>
-        {deckArt}
       </div>
 
       <section className="home-spine bn-stagger" aria-label="The workflow">
