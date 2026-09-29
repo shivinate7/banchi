@@ -27,7 +27,7 @@ Static files on its own port, beside the API. `app/dist/` is served for any path
 and an unknown path serves `index.html` so the hash router works. The port is the one the tree
 already has — `:8000` in the main checkout, the slot's own in a worktree — so D43's property
 holds with nothing new: the bundle bakes only the capture port and resolves the host from the
-address bar (D138's LAN change), and when the page and the API come from one origin that
+address bar, and when the page and the API come from one origin that
 composition is trivially right.
 
 **Vite compiles and never serves at run time.** That is the answer to the owner's question about
@@ -40,10 +40,9 @@ compiler stays, and `make dev` keeps it on its own port with hot reload exactly 
 
 **The supervisor loses its app child and gains a build.** It watches `app/src` alongside the
 Python packages; when a source file is newer than `dist/` it runs `vite build` and serves the old
-bundle until the new one lands. That is the one thing D138 held against this shape — *"a built
+bundle until the new one lands. That is the one thing an earlier design held against this shape — *"a built
 bundle has to be rebuilt; it would ADD a step to remember in exchange for removing one"* — and
-the owner's answer removes the step by giving it to the process that already watches files. D138's
-rejection is reopened here and reversed on exactly that ground, and nothing else in D138 moves:
+the owner's answer removes the step by giving it to the process that already watches files. That rejection is reversed on exactly that ground, and nothing else moves:
 the drain, the parse pre-check, the fast-failure cap, the self-watch and the launch agent all
 carry over to a supervisor with one child instead of two.
 
@@ -67,7 +66,7 @@ manifest is already relative (D108) and needs no edit; the reinstall is one pres
   complaint, and it does not touch that.
 - **Keeping Vite's dev server inside the package, hidden.** Two processes behind one icon is
   the current shape with the lid on. It keeps Node as a run-time requirement and keeps every
-  failure mode D138 measured.
+  failure mode this entry measured.
 - **Dropping start-at-login.** Asked twice; "always just there" won over "one icon, quit when
   done" once the reboot case was named.
 
@@ -78,7 +77,7 @@ manifest is already relative (D108) and needs no edit; the reinstall is one pres
   the last bundle serving, which is the parse pre-check's rule applied to the other language.
 - **Node stays a build-time requirement on the operating machine**, and the launch agent's
   baked `PATH` still has to find it. What goes away is Node as a run-time process.
-- **`make dev` must coexist with the supervisor rather than refuse it.** D138's guard refuses
+- **`make dev` must coexist with the supervisor rather than refuse it.** The guard refuses
   a foreground `make dev` while this checkout's supervisor holds `:5173`; with the supervisor no
   longer holding it, the guard is wrong and must narrow to `make server` alone. The dev app then
   talks to the live `:8000`, which is the same store it talks to today.
@@ -101,7 +100,7 @@ list under one id. In order, and each one a PR:
    `app/index.html` and the Vite config; build when stale, log the build, serve the old bundle
    until it lands. Relax `make dev`'s refusal. `make up` prints one link, on the capture port.
 3. **The dock app and the docs.** Reinstall the Chrome app at `:8000`; amend the `make up`
-   block in `CLAUDE.md`, `README.md`, D138 and D108 by pointer to here; `make status` reports
+   block in `CLAUDE.md`, `README.md` and D108 by pointer to here; `make status` reports
    `dist/` staleness beside the ports.
 
 Unaffected and checked before writing this: `make demo-record` spawns its own capture server
@@ -112,6 +111,6 @@ port, which does not move.
 ### What is BUILT, RECORDED, and NEITHER
 
 **BUILT:** nothing. **RECORDED:** this entry, `docs/specs/one-process.md`, step 22 in both
-build-order lists, and the D138 line in `CLAUDE.md`'s index. **NEITHER:** every line of the plan above.
+build-order lists, and the entry's line in `CLAUDE.md`'s index. **NEITHER:** every line of the plan above.
 
 A restart discipline is a memo, not a guard: `make up` reloads on source change.

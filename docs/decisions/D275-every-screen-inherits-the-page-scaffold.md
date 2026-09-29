@@ -62,7 +62,7 @@ with the same CSS declarations. A screen outside the kit may not write a kit-res
 classes back into `Fulfillment.css` follows that ruling, rather than working around it.
 
 The `R1`, `R2-class` and `page` entries are deleted from `scripts/kit-adoption-allow.json`, in
-the same commit as the fix. That is D275's own rule.
+the same commit as the fix. That is its own rule.
 
 *Capture's top gap.* `#/capture` also carried a `top` entry. The screen keeps its own page pad
 smaller than the kit's, so the viewfinder stays above the fold. A layout exists that keeps

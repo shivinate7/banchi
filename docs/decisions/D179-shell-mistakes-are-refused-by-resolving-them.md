@@ -160,7 +160,7 @@ hatch is not needed for it."*
 
 The coordinator running this session's own merge queue ran `git checkout origin/main -- .` to
 inspect a stray file on another ref, in a worktree whose tracked files happened to be clean at
-that instant. It passed — the clause's own design, unchanged since D179. Had that tree carried
+that instant. It passed — the clause's own design, unchanged since this entry. Had that tree carried
 a single uncommitted edit, the command would have discarded it with no refusal and no
 diffstat, for exactly the reason the "thin" note above already flagged for `HEAD` and never
 checked for any other source.
@@ -170,7 +170,7 @@ original argument treated "known replacement" and "safe to overwrite" as the sam
 are not — a known replacement can still destroy an unknown loss.
 
 **What protected the owner's work that day was luck — a clean tree — not the guard.** That is
-the same shape D179's own opening section names for why a hook exists at all: *"a rule
+the same shape its own opening section names for why a hook exists at all: *"a rule
 enforced by memory is a rule that gets bypassed under exactly the conditions it exists for."*
 
 **The fix.** `_read_restore` no longer treats a named source as an automatic pass. It resolves
@@ -220,7 +220,7 @@ branch does not track (a fork workflow), and `--all`/`--mirror`/`--tags`/`--dele
 something other than "this branch under its own name". `PKMNSCAN_PUSH=off` is its hatch,
 honoured in both forms like the other five.
 
-**Reproduced rather than argued, D179's own standard.** `scripts/guard-shell-selftest.sh`
+**Reproduced rather than argued, its own standard.** `scripts/guard-shell-selftest.sh`
 builds a real bare origin, pushes a branch under one name while its tracking is configured to
 a differently-named branch on it — the identical mechanism the incident used
 (`git push -u origin <local>:<remote>`) — and asks the guard about the resulting mismatch for
@@ -273,7 +273,7 @@ asked first and the local guess is what runs only when that ref was never writte
 own throwaway fixtures, and any `git init`-then-`push` clone that never ran `git clone` or
 `git remote set-head`).
 
-**Reproduced red-first, D179's own standard.** Before this fix, in a real throwaway repo: a
+**Reproduced red-first, its own standard.** Before this fix, in a real throwaway repo: a
 branch made with `git switch -c feature-x origin/main`, pushing `git push -u origin HEAD`, was
 refused (`exit 2`) with the remedy above naming `HEAD:main`. After the fix the identical command
 sequence exits `0`. `scripts/guard-shell-selftest.sh` poses both directions for real: the fixture

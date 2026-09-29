@@ -2,9 +2,9 @@
 
 **A card's number counts the cards in the box, so selling one makes the card behind it take that number on every screen.** Built 2026-08-30 on the owner's instruction: when cards are marked sold, the slot is not left empty — the cards before it move up one.
 
-**It is the answer to D58, which had been waiting on the owner since 2026-08-23.** That entry states the problem in the sentence this one deletes: `Card 17` is the **seventeenth slot**, not the seventeenth card you can count, and once a section has holes those two stop being the same number and every label in that section becomes uncountable by hand.
+**It answers the earlier open question about a gap.** The problem was stated in the sentence this one deletes: `Card 17` is the **seventeenth slot**, not the seventeenth card you can count, and once a section has holes those two stop being the same number and every label in that section becomes uncountable by hand.
 
-D58 answered it with `neighbors` and `section_gaps` — built, and both kept — and with a physical marker for the emptied slot, which was the owner's open item and is now moot: there is no gap left to mark. Its box-audit paragraph gets easier for the same reason, because what is in the section and what the record says are the same count again.
+The earlier design answered it with `neighbors` and `section_gaps` — built, and both kept — and with a physical marker for the emptied slot, which was the owner's open item and is now moot: there is no gap left to mark. Its box-audit paragraph gets easier for the same reason, because what is in the section and what the record says are the same count again.
 
 ### Two things are wider than the ask, and both are the owner's
 
@@ -80,7 +80,7 @@ It becomes `Card 29` only when 180 sells, which is a card in its own section and
 
 **D56 states the fix for exactly this shape one register up**, about a run's box name: never write down an answer nobody can correct; join it when it is read. `do_queues` re-renders the label from the live inventory through the same `_Places` every other screen uses. The stored field keeps its value on disk so nothing already written moves, and no route serves it.
 
-**And `cli/resolve.py` built every `Position` with no layout at all**, which is older than D58 and is fixed with it: a box-2 queue entry was written as `Section 1 · Card 300` where the app rendered `Section 4 · Card 48`. Two renderers, two answers, and nothing had ever compared them. `box_views` is that walk, and **T7 asserts the two spell one address on a real card** — the same shape `make port-agreement` uses for the other pair that has to agree.
+**And `cli/resolve.py` built every `Position` with no layout at all**, which is older than this entry and is fixed with it: a box-2 queue entry was written as `Section 1 · Card 300` where the app rendered `Section 4 · Card 48`. Two renderers, two answers, and nothing had ever compared them. `box_views` is that walk, and **T7 asserts the two spell one address on a real card** — the same shape `make port-agreement` uses for the other pair that has to agree.
 
 ### The same defect at a second site — `pricing.json` (amendment, 2026-08-30)
 
@@ -113,7 +113,7 @@ Box 1 holds 133 records with 18 sold, box 3 holds 39 with 24, and neither declar
 - **`next_index`, `box_fill`, `allocate_capture` and the store schema.** No migration. D10's permanent gap survives intact in the one place it was ever load-bearing — the allocator — which is why T7's two hardest cases, `check_allocator`'s and `check_mark_sold`'s, are untouched.
 - **`renumber_blocked`.** Its sold/retired clause's stated reason weakens — the box already closes up over a departure, so there is no gap left to close — but relaxing a refusal is its own decision, and this one would let the mid-box delete shift indices across records that are history and commitments. The refusal stands; the copy on `BoxBrowse` that recited the old reason is corrected, because a refusal explaining itself with something nobody can check any more teaches an operator to read past it.
 - **D183, `photoUrl` and `?card=`.** No index moves, so there is no fourth occupant-changing operation.
-- **D58's `neighbors`.** Kept, and still worth having for confirming a slot. `section_gaps` is structurally zero for a consolidated box and `placeSentence` already omits the phrase at zero.
+- **`neighbors`.** Kept, and still worth having for confirming a slot. `section_gaps` is structurally zero for a consolidated box and `placeSentence` already omits the phrase at zero.
 
 ### What it costs
 

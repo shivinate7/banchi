@@ -1,6 +1,6 @@
 ## D180 — A press names the cards it covers
 
-**The box stops being the unit of work. `POST /pipeline/identify` and `pkmnscan identify` take ONE SELECTION — a set of terms, each of which narrows a set of cards — and the drawer is a term in it rather than the thing a run is made of.** Built 2026-09-12. **This OVERTAKES D180**, on the owner's word, and the rot in that entry is documented below rather than deleted.
+**The box stops being the unit of work. `POST /pipeline/identify` and `pkmnscan identify` take ONE SELECTION — a set of terms, each of which narrows a set of cards — and the drawer is a term in it rather than the thing a run is made of.** Built 2026-09-12. **This OVERTAKES this entry**, on the owner's word, and the rot in that entry is documented below rather than deleted.
 
 ### What stood, and the sentence it rested on
 
@@ -8,13 +8,13 @@
 
 > *"Send a positive integer `box`. A run is always scoped to one box."*
 
-That is the thesis stated as a 400. `pkmnscan identify` took exactly one directory, `_scope_dir` symlinked a ticked selection into `.scopes/box3-<n>-<stamp>` so that a subset could be expressed as the one thing the command accepted — a path — and D180 made a SEND a cart of those, one detached child per drawer.
+That is the thesis stated as a 400. `pkmnscan identify` took exactly one directory, `_scope_dir` symlinked a ticked selection into `.scopes/box3-<n>-<stamp>` so that a subset could be expressed as the one thing the command accepted — a path — and this entry made a SEND a cart of those, one detached child per drawer.
 
 **So "identify everything that still needs it" was not a sentence this product could be asked**, and a pile spanning two drawers was two presses however few cards it held.
 
-### D180's deciding sentence, and which part of it rotted
+### this entry's deciding sentence, and which part of it rotted
 
-D180 did not rest on convenience. It was the owner's own correction of a worse proposal, and its deciding sentence is this:
+This entry did not rest on convenience. It was the owner's own correction of a worse proposal, and its deciding sentence is this:
 
 > *"a run carries a **reading**, a `--bypass` ruling and a `decisions.json`, and all three are properties of what is IN the drawer — so one run across three boxes forces one answer to three questions that deserve three."*
 
@@ -26,19 +26,19 @@ That argument was right when it was written. **All three supports are gone, and 
 
 **One of the three is therefore still true as code and false as an argument.** The reading IS per run; what it is not is a reason to carry a LIST on the wire, because nothing has ever sent two readings in one press.
 
-### What D180 was protecting, and what protects it now
+### What this entry was protecting, and what protects it now
 
 It was protecting **the operator's ability to give a bulk drawer and a collector drawer different readings** — D32's cost-against-sharpness frontier, decided per drawer. That is a real want and it is not dismissed here.
 
 **It is protected by pressing twice.** One selection gets one reading; two readings is two presses, two runs, two receipts. What is given up is doing that in ONE press, which no press has ever done.
 
-### D180 NAMED ITS OWN REOPENING CONDITION, AND THE MEASUREMENT DOES NOT MEET IT
+### This entry NAMED ITS OWN REOPENING CONDITION, AND THE MEASUREMENT DOES NOT MEET IT
 
 > *"What would reopen this: a cart that is never used with more than one box... The measurement is whether any `POST /pipeline/identify` carries more than one scope."*
 
 **It has been.** On **2026-09-01T21:50:52** the operator sent boxes **3, 4 and 5** in one press: three run directories created in the same second, all `started_by: app`. So the cart was used, once, and a selection that could name only one drawer would have taken a capability away.
 
-**So `box` is list-valued, and that is this entry's answer to D180's condition rather than a dodge around it.** `{"box": [3, 4, 5]}` is one selection over 1,670 cards — verified by running it — and it produces **one run where that press produced three**, which is one join, one export fetch and one emit instead of three of each. A filter naming three values is still one filter.
+**So `box` is list-valued, and that is this entry's answer to this entry's condition rather than a dodge around it.** `{"box": [3, 4, 5]}` is one selection over 1,670 cards — verified by running it — and it produces **one run where that press produced three**, which is one join, one export fetch and one emit instead of three of each. A filter naming three values is still one filter.
 
 **What the measurement does NOT support is the per-leg reading**: all three legs of that press carried `max_edge` 1200. The cart survives as a list-valued filter; the per-drawer reading does not.
 
@@ -152,4 +152,4 @@ Asked whether a store-wide press wants a standing spend ceiling, 2026-09-12:
 
 **A selection term nobody uses.** Each is a name the store already has, but that is an argument for coherence rather than evidence of use. The measurement is `selection` blocks in `runs/*/manifest.json`: a term that appears in none of them after a month of real presses is surface area with no reader, and D80's rule applies to it.
 
-**A press that genuinely wants two readings.** If the operator asks for one drawer at 1200 and another at 900 in one act, D180's deciding sentence is live again for the one support that has not rotted, and the honest answer is a cart of readings — not a cart of boxes.
+**A press that genuinely wants two readings.** If the operator asks for one drawer at 1200 and another at 900 in one act, this entry's deciding sentence is live again for the one support that has not rotted, and the honest answer is a cart of readings — not a cart of boxes.

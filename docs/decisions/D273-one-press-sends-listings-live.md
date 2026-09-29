@@ -20,7 +20,7 @@ records the answers and the decisions they amend.
 
 ### The premise that no longer holds
 
-D273 (the push and the publish are two presses) says a single button "would spend that margin
+This entry (the push and the publish are two presses) says a single button "would spend that margin
 for one saved click". The margin is the gap between Import to Staged and Move to Live.
 
 The flow review counted the real cost of the hand path. From capture to live, the owner makes
@@ -36,11 +36,11 @@ Of 9 steps, 5 hold a real choice. The review also found three hazards in the cod
 
 The review recommended two presses. The owner chose one.
 
-### What D273 protected, and what protects it now
+### What this entry protected, and what protects it now
 
-D273 protects one outcome: a buyer never sees a price the owner did not mean to publish. The
+This entry protects one outcome: a buyer never sees a price the owner did not mean to publish. The
 Staged margin was that protection. For the listing file, the margin is gone, and the owner
-accepted that cost. These protections stay, and they are D273's own promises:
+accepted that cost. These protections stay, and they are its own promises:
 
 - The move is scoped to one upload. `SCOPE_THIS_UPLOAD` is a constant, never a parameter.
 - The upload id comes off disk, never off the request.
@@ -67,7 +67,7 @@ already hold. A send that would double a quantity is refused or trimmed, and the
 what it trimmed. When the live check cannot run, because the owner is signed out or TCGplayer
 is slow, Send refuses. It says why and offers "Try again". It never sends blind.
 
-This amends D273 further: its two presses were one margin, and this read is another. It amends
+This amends the earlier form further: its two presses were one margin, and this read is another. It amends
 D87 (the reconcile is store-wide): the reconcile is no longer only a check after the fact. It
 is a gate in front of every send. The guard must go red on a double send before any listing
 file uses the transport.

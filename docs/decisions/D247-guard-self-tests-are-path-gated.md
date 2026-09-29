@@ -106,7 +106,7 @@ a different Mac. Both are real. Neither restates the other. A commit touching on
 script, such as `scripts/reap.py`, still runs that one self-test. It skips the other
 fourteen.
 
-**AMENDMENT, 2026-09-27.** D247 argued the gate for guard self-tests only. The owner ruled
+**AMENDMENT, 2026-09-27.** This entry argued the gate for guard self-tests only. The owner ruled
 (test-audit plan Q3, 2026-09-27): `match-selftest`, a product test, may join. It is
 deterministic over what it imports. A docs or app-only branch cannot change its verdict. The
 twenty-third entry is now on the roster.

@@ -1,6 +1,6 @@
 ## D97 — Copy map ranks, never picks
 
-**An order line draws every box that holds the ordered card, ranked by how many free copies each holds, and it recommends without ever making the choice.** Built 2026-09-03 on `#/orders`, from the owner's own design: *"a map is good, with the highest option being basically the option that has the most of the unit in one box, and if within one box already then within one section"*, under the constraint quoted in D97 — the walk does not pick.
+**An order line draws every box that holds the ordered card, ranked by how many free copies each holds, and it recommends without ever making the choice.** Built 2026-09-03 on `#/orders`, from the owner's own design: *"a map is good, with the highest option being basically the option that has the most of the unit in one box, and if within one box already then within one section"*, under the constraint quoted in this entry — the walk does not pick.
 
 **The rank is over free copies, not over copies held.** A box holding three of which two are already recorded against somebody is a worse stop than a box holding two nobody is counting on, and a recommendation that walked you to the first would be recommending a wasted trip. The held count is still drawn on the block, because it is a true thing about that drawer; it simply gets no vote. Ties break to the lower box number, and sections inside the leading box rank by the same rule one register down.
 

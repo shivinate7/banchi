@@ -1,6 +1,6 @@
 ## D284 — Three checks replace the word ceiling
 
-**The rule.** The owner, 2026-09-23: kill the pinned word ceilings. His own words: "I think we need to kill ceilings and instead just use a different way." He did not want a stagnant static pin. This entry supersedes D284 and its mechanism, `app/tests/copy-budget.spec.ts`. See D284's own "Superseded" note for what carries over.
+**The rule.** The owner, 2026-09-23: kill the pinned word ceilings. His own words: "I think we need to kill ceilings and instead just use a different way." He did not want a stagnant static pin. This entry replaces the pinned ceiling and its mechanism, `app/tests/copy-budget.spec.ts`. See its own "Superseded" note for what carries over.
 
 **Three things replace it. None of them counts words.** A repetition check. A sentence-shape check. A density pass that a session runs on demand. The pass prints a cut table and is never a gate (D18: it writes).
 

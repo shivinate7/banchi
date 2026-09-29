@@ -137,7 +137,7 @@ store writes.
 4. **`docs/specs/` and this entry are the record of the narrowing.**
 
 **What is unchanged:** a moved tombstone is still buried. It still keeps its digest and
-still loses its photograph — points 2 and 3 above are untouched. The only door D134 no
+still loses its photograph — points 2 and 3 above are untouched. The only door this entry no
 longer counts as "a departure the graveyard shows" is the one that was never a departure
 at all.
 

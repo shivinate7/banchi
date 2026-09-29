@@ -1,7 +1,6 @@
 ## D158 — Refuse where the damage is
 
-**Settled 2026-09-12, on the owner reopening D158 in as many words.** That entry was written the
-day before, after `/Users/shivinate/Developer/pkmnscan` — the primary checkout, the one D138 keeps
+**The primary checkout is where the damage lands, so the refusal is on serving there and not on the git command.** An earlier design, written after `/Users/shivinate/Developer/pkmnscan` — the primary checkout, the one D138 keeps
 a supervisor alive out of over the owner's real store — was found standing on
 `claude/env-key-rotation` with three live sessions in it. It shipped three readers of that fact
 and ruled that **a warning is the ceiling**.
@@ -12,7 +11,7 @@ about it, the owner said: *"i literally thought we had a guard in place that ENS
 checkout IS ALWAYS MAIN"*. That sentence is the reopening, and what it reopens is the ceiling —
 not the three readers, which stand and are untouched.
 
-### D158 was right about git and wrong about where the guard goes
+### The guard goes at the damage, not at the git command
 
 Its argument was: git has no `pre-checkout` hook, `post-checkout` runs after the switch has
 already happened, therefore nothing can refuse. Every clause of that is true and the conclusion
@@ -25,7 +24,7 @@ real store and which screens the owner is looking at while it happens. A person 
 branch to *read* it does no harm at all.
 **A guard that refuses to SERVE puts the refusal on the damage and frees the checkout entirely**,
 which is both stricter where it matters and
-looser where D158 was right that a session working in that directory is normal.
+looser where it is right that a session working in that directory is normal.
 
 ### The two mechanisms that could not work, and one of them is measured
 
@@ -45,7 +44,7 @@ git update-ref refs/heads/zzz  fires (the control)
 So a guard built there would have been **silent through both observed incidents** — each was a
 switch to an existing named branch — while firing on `checkout --detach`, which is neither of
 them. It is not merely the wrong place; it is blind to the case and noisy on the one that has
-never happened. D158 rejected this hook for a different reason (that it would catch legitimate
+never happened. An earlier design rejected this hook for a different reason (that it would catch legitimate
 worktree moves, which the primary/linked test disposes of); that reason was weak and the real
 one is stronger.
 
@@ -89,10 +88,10 @@ is. That asymmetry is the entire reason for a second half, and it is
 D140's argument one register over:
 **a guard living only in the thing being guarded is absent from the checkout that needs it.**
 
-So the hook, at the moment of the switch, now reads two facts D158 asserted without checking:
+So the hook, at the moment of the switch, now reads two facts a warning once asserted without checking:
 whether a supervisor is actually live here, and whether the branch just checked out carries the
 guard. It says the server will refuse — or, where the branch predates the guard,
-**that it will not**, and names `make down ARGS=--confirm`. D158's warning claimed the live
+**that it will not**, and names `make down ARGS=--confirm`. The old warning claimed the live
 capture server "now
 runs THIS branch's code" whether or not one was running at all; that sentence is gone.
 
@@ -125,8 +124,7 @@ reads and prints nothing. It fires **only** while that one directory stands on s
 which is the defect, in both of the states it has actually been observed in. A linked worktree is
 silent whatever branch it holds: ~30 of them on this machine are legitimately on feature branches,
 they have their own stores and their own ports to be wrong on their own (D43), and the test is
-`server/ports.py:is_linked_worktree`, **called and not respelled**, because D158 is right that
-that question must have exactly one answer in this repo.
+`server/ports.py:is_linked_worktree`, **called and not respelled**, because that question must have exactly one answer in this repo.
 
 Three states that look like violations and are not, all silent, all asserted: a repository whose
 trunk is called something else; a tree with no `.git` at all; and **CI** — where the checkout is
@@ -164,8 +162,7 @@ now and the sixth is deleted. Two findings are worth keeping:
 - **A `git_dir.is_dir()` test was written and is deleted.** The sweep showed it could not change
   a verdict in any arm — a linked worktree has already returned above it, and a tree with no
   `.git` reaches `_has_local_main`, which finds neither a loose ref nor a readable `packed-refs`.
-  A line that cannot decide anything is a sentence about a guard rather than one, and D158's own
-  sweep is the precedent for recording that rather than leaving it to be found.
+  A line that cannot decide anything is a sentence about a guard rather than one, and a sweep is the precedent for recording that rather than leaving it to be found.
 
 The packed-refs survivor is the one that would have bitten in production: `git gc` moves `main`
 out of `refs/heads/` on its own schedule, and a loose-refs-only reader would have gone quiet on
@@ -186,8 +183,8 @@ larger change than the defect currently justifies.
 **A branch that differs from main in nothing the supervisor watches is served, and correctly so.**
 The arms fire where code is adopted, so a branch differing only under `docs/` never reaches one —
 and what is serving is main's code, byte for byte, for everything that runs. The *tree* is still
-wrong, and D158's three readers are the ones whose subject that is.
-**This entry's subject is the code; theirs is the branch.**
+wrong, and the three readers are the ones whose subject that is.
+**The refusal's subject is the code; theirs is the branch.**
 Neither subsumes the other, which is why all four now exist.
 
 **And it does not decide that the tree should be put back.** `scripts/worktree-guard.sh` reports

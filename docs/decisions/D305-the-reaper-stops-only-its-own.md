@@ -64,10 +64,10 @@ recorded.
 
 **The owner is `CLAUDE_CODE_SESSION_ID`, read directly.** It is a primitive Claude Code already
 sets. Every child already inherits it, by ordinary fork and exec. That is not the `ps -E`
-read-back the sketch assumed, and this file measured that read-back does not work. **D305**
+read-back the sketch assumed, and this file measured that read-back does not work. **The reaper's older method**
 solved a neighboring "whose is this" question with a Bash-wrapper argv fragment, because no
 per-session id existed on this machine in 2026-09-12. That fragment answers ANY session, never
-WHICH session. This entry does not replace it. It answers a question D305 never asked.
+WHICH session. That method is not replaced. This entry answers a question it never asked.
 
 ### Every launcher, found by reading the code
 

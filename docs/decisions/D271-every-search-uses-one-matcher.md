@@ -119,7 +119,7 @@ The two implementations agree on every mark, spacing or not. `scripts/match-self
 code and green on the new one.
 
 **MID-WORD SEARCH IS ADDED, the owner's ruling, 2026-09-25, verbatim: "Add mid-word search."** The owner set one condition. Mid-word ships "only if a measurement... says
-search stays fast." D271 wins over store-scaling item 8's own prefix-only trade-off. That
+search stays fast." This entry wins over store-scaling item 8's own prefix-only trade-off. That
 item is now SUPERSEDED on this one point (below). `do_search("izard")` now finds
 "Charizard", the exact case store-scaling item 8 measured and traded away.
 
@@ -512,7 +512,7 @@ the mutations it was given a definition for, rather than guessing at the rest.
 **ROUND 9, OPUS DELTA REVIEW, 2026-09-25, ON 28d233b2.** Three blocking items, one doc
 item. All four closed here.
 
-**F1 IS THE FOUR-SHAPE FIX ABOVE (item 5).** Round 8's own D271 text was wrong about it,
+**F1 IS THE FOUR-SHAPE FIX ABOVE (item 5).** Round 8's own text was wrong about it,
 also corrected above.
 
 **F2: `rows_walked` COULD NOT SEE A SECOND CONNECTION.** Round-8's own claim — "no

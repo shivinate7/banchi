@@ -199,7 +199,7 @@ not merely to have gone stale.
 assertion polls until it is true or times out. A false claim that clears itself the moment
 the delayed `GET /inventory/7` lands would let the assertion settle AFTER the fact. That
 proves the DOM healed. It never proves the false state was drawn at all — the identical
-trap D118's frame-watch above exists to avoid.
+trap this entry's frame-watch above exists to avoid.
 
 `inventory.spec.ts`'s `a press to another drawer never draws its predecessor's card while
 the fetch is in flight` takes one `page.evaluate`. It is called right after the click, before

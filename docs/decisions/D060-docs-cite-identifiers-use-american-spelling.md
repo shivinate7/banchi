@@ -6,7 +6,7 @@
 
 **The `@`-references are gone, and that is the amendment.** They stayed at first, on the owner's call and against the alternative of an index. What changed is the measurement: rewriting twenty entries moved the four docs 635,411 -> 627,725 bytes, about 2,000 tokens, because these files are ~85% identifiers, paths, measurements and dates and only ~15% rhetorical framing. Dropping the prefix moves the same figure to **~7,700 tokens**, and the two are not close enough to argue about.
 
-**What replaces the load, because a session must not fly blind.** `scripts/decision-context.py` already names the governing decisions before any edit under the mapped directories, and D60's own reflow is what made it see every bold in the file. That covers the edit path. The conversational path — an architecture question with no file open — is covered by the index in `CLAUDE.md`: 60 lines, 3,929 bytes, one line per entry.
+**What replaces the load, because a session must not fly blind.** `scripts/decision-context.py` already names the governing decisions before any edit under the mapped directories, and its own reflow is what made it see every bold in the file. That covers the edit path. The conversational path — an architecture question with no file open — is covered by the index in `CLAUDE.md`: 60 lines, 3,929 bytes, one line per entry.
 
 **The index is a table of contents and never a substitute for the entry.** `CLAUDE.md` still says to read the entry itself before proposing an architecture change, and that instruction now costs a `Read` where it used to cost nothing. That is the trade, stated plainly: the file is one tool call away rather than already present.
 
@@ -88,7 +88,7 @@ on the owner. Until L2 lands, markdown prose has no spelling reader at all.
 ### Amended 2026-09-27 — the index is rendered, not hand-typed
 
 **CLAUDE.md's hand-typed index is retired. `make map ARGS=--decisions` replaces it.** The
-paragraph above measured the index at 60 lines, 3,929 bytes, the day D60 landed. It grew
+paragraph above measured the index at 60 lines, 3,929 bytes, the day this entry landed. It grew
 with the corpus and was never re-measured. On 2026-09-27 it read 301 lines, 26,420 bytes —
 over six times its own stated size, and `docs/decisions/` had grown from 60 entries to 301.
 

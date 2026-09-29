@@ -77,17 +77,17 @@ BUILT in the locating lane:
   and its accessible name is `Was between ...`.
 - `app/tests/locating.spec.ts` asserts it at 1440, 820, 720 and 390, in both themes.
 
-### An unread card is a neighbour (amends D260)
+### An unread card is a neighbour
 
 **The owner's ruling, 2026-09-24 (LOC-28):** unread cards count as neighbours, said as
 "an unread card" or "N unread cards".
 
-**The premise that no longer holds.** D260 (a card nobody has named is not a landmark) walked
+**The premise that no longer holds.** This entry (a card nobody has named is not a landmark) walked
 past an unnamed card to the nearest named one, because the bare `#270` it drew read as a sold
 card. The walk dropped a real card from the sentence (UX-264): "after Galio" named a card
 three along.
 
-**What D260 protected, and what protects it now.** D260 protected a sentence with no bare
+**What this entry protected, and what protects it now.** This entry protected a sentence with no bare
 figure in it. The words "an unread card" keep that. D58 protected a sentence that never sends a
 hand to the wrong card. The adjacent card is now always the neighbour, so nothing is skipped.
 

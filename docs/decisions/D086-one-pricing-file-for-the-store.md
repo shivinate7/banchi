@@ -13,7 +13,7 @@ The second half is what a price *is*. TCGplayer prices per SKU globally, D7 stat
 
 **`pipeline/corpus.py` is the home, and `inventory/prices.json` is the file.** Keyed by SKU, holding the policy too on the owner's instruction, with a per-run policy override kept for the lot that genuinely differs — which is D180's argument surviving in the one place it is actually about. `Corpus.for_run`/`scoped_to` project it into a `Decisions`, so `join`, `emit` and `prices_for` never learned that answers moved: the property D180 spends its length protecting, applied to this move.
 
-**D86 AND D278 BOTH NAMED THIS GAP AND NEITHER CLOSED IT.** D86: *"no durable home for a hold outside the run directory; no cross-run view of what is being held."* D278: *"No cross-run view."* `pkmnscan prices show --held` is one line now.
+**THE PRICING FILE'S DESIGN AND THE PRICE HISTORY BOTH NAMED THIS GAP AND NEITHER CLOSED IT.** The design:  *"no durable home for a hold outside the run directory; no cross-run view of what is being held."* D278: *"No cross-run view."* `pkmnscan prices show --held` is one line now.
 
 **What the amendment DELETED, which is the useful part.** The first build answered the duplication with machinery: a fan-out write into N files, conflict detection on every row, and an agreement refusal before a merged file could be written. All of it existed only to reconcile a duplication. `pipeline/merge.py`'s first version carried a `PriceDisagreement` and, run against three real runs, **refused on 66 SKUs — almost every one of them the market having moved between two joins rather than any disagreement at all**. Reporting a defect is worth less than making it unrepresentable.
 
@@ -35,7 +35,7 @@ The second half is what a price *is*. TCGplayer prices per SKU globally, D7 stat
 
 **~~One answer to a merged row is one `PUT` per run holding that SKU.~~ RETIRED.** There is one document and one write. The sentence stood for about four hours.
 
-**Nothing in D86 argued for the single-select this replaces.** That entry defends where the run comes from — *"a picker here cannot disagree with anything"*, because `GET /pipeline/runs` is the single source — and says nothing about how many may be picked. A set over that same single source has the identical property. D39's one-mass-select rule is about **cards** and is untouched; `#/inventory` still owns the only one. `useState<string | null>` was the cheapest thing to write on 2026-08-30 and no entry defended it.
+**Nothing argued for the single-select this replaces.** The design defends where the run comes from — *"a picker here cannot disagree with anything"*, because `GET /pipeline/runs` is the single source — and says nothing about how many may be picked. A set over that same single source has the identical property. D39's one-mass-select rule is about **cards** and is untouched; `#/inventory` still owns the only one. `useState<string | null>` was the cheapest thing to write on 2026-08-30 and no entry defended it.
 
 ### What it costs today, measured rather than argued
 
@@ -47,9 +47,9 @@ Across the eight runs in `runs/` on 2026-09-01, **78 of 423 SKUs sit in more tha
 | 9405228 | Death Mark | box3 08-31 `{withheld: bullish}` | box3 09-01 `"2.29"` |
 | 9422429 | Public Execution | box3 08-31 `{withheld: bullish}` | box3 09-01 `"2.29"` |
 
-LeBlanc was held bullish above $5 out of one drawer and listed at $3.45 out of another the next day, below the operator's own watch. That row drew as an ordinary listable one — `at_cap: false`, `nothing_to_add: null`, no note anywhere — because a hold lives in its run and dies with it (D86) and no screen had ever read two runs at once.
+LeBlanc was held bullish above $5 out of one drawer and listed at $3.45 out of another the next day, below the operator's own watch. That row drew as an ordinary listable one — `at_cap: false`, `nothing_to_add: null`, no note anywhere — because a hold lives in its run and dies with it (this entry) and no screen had ever read two runs at once.
 
-**D86's stated reopening measurement was the other direction and has never fired.** It watched for *"the same SKU withheld in two runs over one box"*; that count is zero. It is the asymmetric case that bites, and **this entry replaces the measurement rather than repealing it**: what to watch is a hold in one run answered with a price in another.
+**The stated reopening measurement was the other direction and has never fired.** It watched for *"the same SKU withheld in two runs over one box"*; that count is zero. It is the asymmetric case that bites, and **this entry replaces the measurement rather than repealing it**: what to watch is a hold in one run answered with a price in another.
 
 **Four of the eight pairs were not disagreements at all** — `0.5` against `.5`, the same figure typed with and without its leading zero. `_same_price` compares as `Decimal`, so the flag means something when it fires.
 
@@ -66,16 +66,16 @@ D59 fixed per-**box** capping inside one join and this survived per-**run** acro
 
 ### What the picker became
 
-**A filter over the list rather than a gate in front of it**, and it draws a **remainder**. `counts.skus` is the size of a job and never the job — box 2's 109 SKUs are one `floor` press and box 3's 199 are 117 real decisions. `counts.sub_threshold` and `counts.no_market_data` had ridden every poll since the manifest gained them and were read by nothing; the roster asks `Decisions.blocking`, the Python that actually refuses an emit, so the chip cannot claim a refusal Python does not make (D86's rule over `readiness.ts`, applied to the server).
+**A filter over the list rather than a gate in front of it**, and it draws a **remainder**. `counts.skus` is the size of a job and never the job — box 2's 109 SKUs are one `floor` press and box 3's 199 are 117 real decisions. `counts.sub_threshold` and `counts.no_market_data` had ridden every poll since the manifest gained them and were read by nothing; the roster asks `Decisions.blocking`, the Python that actually refuses an emit, so the chip cannot claim a refusal Python does not make (this entry's rule over `readiness.ts`, applied to the server).
 
-**The terminal state D86 predicted and the screen never got.** That entry read the history and said the honest reading was *"a screen whose job is to report there is nothing to do"*. It could never say it: the only empty state fired when NO run had ever been joined, so eight fully-answered runs drew eight chips and cost ~909KB and sixteen round trips to discover they owed nothing.
+**The terminal state this entry predicted and the screen never got.** That entry read the history and said the honest reading was *"a screen whose job is to report there is nothing to do"*. It could never say it: the only empty state fired when NO run had ever been joined, so eight fully-answered runs drew eight chips and cost ~909KB and sixteen round trips to discover they owed nothing.
 
 **Boxes ascending inside a sitting.** `GET /pipeline/runs` sorts by directory name reversed, so within one day the picker drew box 5, box 4, box 3 — backwards against the rule `Runs.tsx` states for the same choice, *"the order they sit on a shelf"*. Two screens ordering the same drawers two ways is drift; it is pinned now because it is otherwise invisible.
 
 ### Three defects found on the way, two of them live before this entry
 
 - **`inFlight` became a `Set` and an empty `Set` is truthy.** The emit guard read `if (dirty || saving || inFlight.current) return`, written against a boolean, and so became *always return* — the press silently did nothing. Caught by four cases already in `app/tests/pricing.spec.ts`.
-- **The hash was read in an effect, so mount fired two loads.** Whichever landed last won `docs`, but `savedDocs` is a ref written outside React's batching, so a render could see the first load's documents against the second's saved marker: `dirty` went true with nothing typed and the screen PUT a document the operator never touched — **the one write D86 calls the load-bearing absence of the whole screen**. The hash is now read in the `useState` initialiser and a generation guard drops a stale response.
+- **The hash was read in an effect, so mount fired two loads.** Whichever landed last won `docs`, but `savedDocs` is a ref written outside React's batching, so a render could see the first load's documents against the second's saved marker: `dirty` went true with nothing typed and the screen PUT a document the operator never touched — **the one write this entry calls the load-bearing absence of the whole screen**. The hash is now read in the `useState` initialiser and a generation guard drops a stale response.
 - **`unsaved` must not be memoised.** `savedDocs` is a ref, so a `useMemo` keyed on `[loaded, docs]` never recomputes when a write *lands*; the save loop oscillated unsaved → saving… → unsaved forever.
 
 ### Three: the threshold and the cheap-card price are ONE figure
@@ -210,7 +210,7 @@ writes.
 
 **Found by another branch rather than by this one**, on `claude/great-nightingale-37cf84`, where a
 markdown re-prices every stale SKU at once and made the hazard acute — a stale PUT would have
-undone the whole sweep. The bug is D86's own, not that feature's: it exists the moment the answer
+undone the whole sweep. The bug is in the answer, not that feature's: it exists the moment the answer
 became one file with one wholesale write.
 
 **What is still NOT built.** The reconcile is per run: `cli/cmd_reconcile.py` scopes its diff to one run's `emitted_skus`, while the thing it diffs against — `store/master.py`'s `Listing` — is already per SKU across every box and run. The owner named the consequence: a full live TCGplayer export should reconcile across every emit, box and date at once, and report **both directions**, which is that command's own rule. It would be the first thing able to see the two SKUs this entry measured at `pushed: 6` against a cap of 4. Not built here.
@@ -218,3 +218,8 @@ became one file with one wholesale write.
 ---
 
 A hold is a stated reason, never a zero price; a suggestion writes nothing until typed.
+
+- A hold is absent from `dispositions()`. `emit` and `prices_for` refuse a run when that mapping names a SKU the batch does not hold, and a withheld SKU is the one most likely to go stale, so a hold in it would break `emit` for the whole run with nothing able to clear it.
+- A preset writes `rule` and `basis` and never an override, since an override beats the rule. It prices what it can and names what it could not. `cli/cmd_join.py:PRESETS` and `app/src/Pricing.tsx:PRESETS` agree on key, rule and basis, and the `pricing presets` row of `make docs-audit` checks it.
+- The active preset chip is derived from `rule` and `basis` and never stored. A remembered chip would say which rule is live while the run says another.
+- `withheld` means this SKU is held out of the import (`pipeline/decisions.py`). `held` means copies TCGplayer holds (`store/master.py:Listing.held`), the opposite direction. A box that may not be deleted for a listing is a third thing, `_listing_hold`. Keep the words apart.

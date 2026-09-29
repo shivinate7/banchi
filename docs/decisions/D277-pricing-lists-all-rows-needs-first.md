@@ -26,7 +26,7 @@ The send itself is the entry with slug
 
 ### The premises that no longer hold
 
-**D277 (Pricing states its verdict once).** D277 kept a four-word legend and a verdict sentence.
+**The verdict is stated once.** It kept a four-word legend and a verdict sentence.
 The header now reads "22 of 22 decided", so the legend explains words that are not beside it
 (TXT-06). The figures have their own lines, so the sentence repeats the heading (TXT-10). The
 sticky phone bar is 174px to 186px, a third of the screen (UX-007).
@@ -40,7 +40,7 @@ need a hand.
 own panel. The panel costs the first screen. How often the owner changes the figure is
 unmeasured.
 
-**D277 (the band is copies, and the drawer is the first answer).** D277 put the value list on
+**The band is copies, and the drawer is the first answer.** It put the value list on
 Pricing as a lens. It prices nothing. It finds cards to pull, and each row already links to
 Inventory.
 
@@ -49,12 +49,12 @@ steps. The sheet opens with 92 words and a shell command (UX-017, UX-120).
 
 ### What each decision protected, and what protects it now
 
-- **D277** protects one statement of where pricing stands. The slim bar is that statement, and
+- **This entry** protects one statement of where pricing stands. The slim bar is that statement, and
   the deck, the legend and the sentence go.
 - **D9** protects one figure for the cheap half, typed at display size, never a coupling to a
   moving floor. The figure stays the same input. It moves into the one "Change" sheet, beside
   the rule and a box's own cut-off. The line above the list says it in words.
-- **D277** protects a list of cards by value, to pull for bulk sale. It becomes a sort on
+- **This entry** protects a list of cards by value, to pull for bulk sale. It becomes a sort on
   Inventory, where the cards are.
 - **D105** protects one place where prices are decided and sent. The Live tab keeps mark-downs
   on Pricing, with the same rows and the same Send.
