@@ -17,7 +17,7 @@ the inventory says it is not, discovered weeks later by a person opening the wro
 Pass: positions never collide and a replay burns none; the sidecar round-trips through the reader identify uses; every refusal answers in its own code; command seams read the columns they name, and commands refuse rather than prompt
 
 TWO CASES HERE ARE REGRESSION TESTS, NOT NEW COVERAGE. Both were live bugs that passed
-every gate in the repo on the day they shipped, and both are recorded in docs/DEBTS.md:
+every gate in the repo on the day they shipped, and both are recorded in docs/debts/:
 
   the PUT that never reached the sidecar   `cli/cmd_identify.py` builds its card from the
                                            sidecar, not from `inventory.json`, so a
@@ -76,7 +76,7 @@ because `GET /photo` is loaded by an `<img>`, which sends no `Origin` either.
 
 `check_history` LANDED ON 2026-08-13 WITH THE LINES IT ASSERTS. Three routes here write
 without moving a card between states — the PUT correction, the undo and the review answer —
-and until that day none of them appended anything to `history.jsonl`, which `docs/DEBTS.md`
+and until that day none of them appended anything to `history.jsonl`, which `docs/debts/`
 carried as a known gap. The section asserts the part that cannot be recovered afterwards: the
 value a correction replaced, the boundary between two physical cards at one reused position,
 and which queue's offer a human chose from. It also asserts the two properties that make the
@@ -87,7 +87,7 @@ THREE SECTIONS LANDED ON 2026-08-23 FOR THE MULTI-GAME FOUNDATION (D20-D25), and
 named by the work that shipped the code rather than invented here:
 
   `check_capture_claim_chain`   `store/master.py:CAPTURE_CLAIM_FIELDS` against `Card`, and
-                                the two hops docs/DEBTS.md says fail SILENTLY — the reload
+                                the two hops docs/debts/ says fail SILENTLY — the reload
                                 filter and the re-record upsert. Asserted over the tuple, so
                                 it grows with it; naming today's claims would pass on the day
                                 a fifth is added and dropped.
@@ -570,7 +570,7 @@ def _spawn_server(httpd) -> threading.Thread:
     only sets a flag — the `serve_forever` loop notices it on its NEXT poll tick, so each of
     the two dozen servers here idled up to half a second on teardown for zero coverage. That
     idle time was 30s of T7's own 99.9s wall clock, measured before this helper existed
-    (S1, docs/reviews/test-audit-2026-09-27/PLAN.md). One helper, one short poll, so a
+    (S1 of the test-audit plan). One helper, one short poll, so a
     `shutdown()` call anywhere in this file is answered almost at once.
     """
     thread = threading.Thread(target=httpd.serve_forever, args=(0.02,), daemon=True)
@@ -1125,7 +1125,7 @@ def check_next_index_sql(checks: Checks) -> None:
 
 
 def check_allocator(checks: Checks) -> None:
-    """The seventeen cases `docs/DEBTS.md` enumerates, plus the coercion that caused them.
+    """The seventeen cases `docs/debts/` enumerates, plus the coercion that caused them.
 
     `allocate_capture` is the one piece of step-5 logic Gate B exercised 53 times in a
     row on 2026-08-22, and it is the only place in the project that decides where a physical
@@ -6914,7 +6914,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
                     raise
         raise AssertionError(f"corpus_moved kept refusing {sku} after {attempts} attempts")
 
-    # ------------------------------------------------ T7-RACE (DEBT53): the restore lost-update race
+    # ------------------------------------------------ T7-RACE (pricing-corpus lock): the restore lost-update race
     # `do_pricing_restore`, `PUT /pricing`, `POST /pricing/clear` and both CLI writers
     # (`cli/cmd_join.py`, `cli/cmd_reprice.py`) now share ONE lock, `store/files.py:exclusive`,
     # around their whole read-modify-write. Before this fix, none of them took it, so a
@@ -6966,14 +6966,14 @@ def check_undo_until_built_on(checks: Checks) -> None:
         final = corpus.Corpus.read().answers
         checks.ok(
             "7501" in final and final["7501"].value == "3.25",
-            "T7-RACE (DEBT53): PUT /pricing's edit survives a concurrent restore",
+            "T7-RACE (pricing-corpus lock): PUT /pricing's edit survives a concurrent restore",
         )
         checks.ok(
             "7500" in final and final["7500"].value == "1.00",
             "and the restore's own answer still lands",
         )
 
-    # ------------------------------------------------ T7-RACE (DEBT53): the same race, over a real join
+    # ------------------------------------------------ T7-RACE (pricing-corpus lock): the same race, over a real join
     # The identical hazard, over `cli/cmd_join.py`'s own writer (D105's second unguarded
     # writer). `join` reads the corpus TWICE: once at the top, read-only, for the threshold
     # that shapes matching; once again, fresh, right before the write this lane put under the
@@ -7045,10 +7045,10 @@ def check_undo_until_built_on(checks: Checks) -> None:
         final = corpus.Corpus.read().answers
         checks.ok(
             "8888" in final and final["8888"].value == "4.50",
-            "T7-RACE (DEBT53): PUT /pricing's edit survives a concurrent join",
+            "T7-RACE (pricing-corpus lock): PUT /pricing's edit survives a concurrent join",
         )
 
-    # ------------------------------------------------ T7-RACE (DEBT53): reprice apply's own
+    # ------------------------------------------------ T7-RACE (pricing-corpus lock): reprice apply's own
     # revision check, read again inside the lock
     # `cli/cmd_reprice.py:_apply`'s `--corpus-revision` guard used to run once, before the
     # import CSV was built and before the `Store().write()` block for the sale posting — both
@@ -7123,7 +7123,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
         )
         checks.equal(
             code, 1,
-            "T7-RACE (DEBT53): reprice apply refuses when the revision moves during the run, "
+            "T7-RACE (pricing-corpus lock): reprice apply refuses when the revision moves during the run, "
             "not only when it has already moved at the start",
         )
         checks.ok(
@@ -7134,13 +7134,13 @@ def check_undo_until_built_on(checks: Checks) -> None:
             DUNSPARCE_SKU not in corpus.Corpus.read().answers,
             "and the markdown's own answer is never written on top of the stale premise",
         )
-        # LANE B3 (DEBT53's own nesting risk, closed): the corpus check and the corpus write,
+        # LANE B3 (the pricing-corpus lock's own nesting risk, closed): the corpus check and the corpus write,
         # the posting, and `import.csv` now share ONE `Store().write()` hold. A refusal inside
         # it runs before any of the three exists, never after two of them are already on disk.
         target = directory / cmd_reprice.IMPORT
         checks.ok(
             not target.is_file(),
-            "T7-RACE (DEBT53): and import.csv is never written on that same stale premise",
+            "T7-RACE (pricing-corpus lock): and import.csv is never written on that same stale premise",
         )
         conn = db.connect(files.inventory_dir())
         try:
@@ -7168,7 +7168,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
             )
         said2 = said_buf2.getvalue()
         checks.equal(
-            code2, 0, "T7-RACE (DEBT53): the ordinary apply, with no race, succeeds",
+            code2, 0, "T7-RACE (pricing-corpus lock): the ordinary apply, with no race, succeeds",
         )
         checks.ok(
             "wrote" in said2 and str(target) in said2,
@@ -7189,7 +7189,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
             conn.close()
         checks.ok(landed_postings, "and writes the posting row")
 
-    # ------------------------------------------------ T7-RACE (DEBT53): reprice apply's own
+    # ------------------------------------------------ T7-RACE (pricing-corpus lock): reprice apply's own
     # write, split the other way — a failure between the temp CSV and the corpus write
     # Round 1 (above) closed the revision race. Re-review found round 1's OWN write order
     # unsafe: `import.csv` went to its final name FIRST, then the corpus, both inside the
@@ -7227,7 +7227,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
         real_write_csv = tcgcsv.write_csv
 
         def raising_write_csv(path, header, rows):
-            raise OSError("T7-RACE (DEBT53): simulated write failure")
+            raise OSError("T7-RACE (pricing-corpus lock): simulated write failure")
 
         from cli import __main__ as cli_entry
 
@@ -7251,7 +7251,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
 
         checks.ok(
             raised is None,
-            "T7-RACE (DEBT53): a write failure between the temp CSV and the corpus write "
+            "T7-RACE (pricing-corpus lock): a write failure between the temp CSV and the corpus write "
             "refuses cleanly, never a raw crash", repr(raised),
         )
         checks.equal(
@@ -7284,7 +7284,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
             conn.close()
         checks.ok(not exc_postings, "and no posting row lands")
 
-    # ------------------------------------------------ T7-RACE (DEBT53): reprice apply's own
+    # ------------------------------------------------ T7-RACE (pricing-corpus lock): reprice apply's own
     # write, round 3 — a failure landing the file, AFTER the corpus already held the price
     # Round 2 (above) moved `import.csv`'s own write to a temp name, but still renamed it
     # into place LAST, after the corpus write, on the reasoning that `os.replace` on one
@@ -7331,7 +7331,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
         # temp name reproduces the reviewer's exact call.
         def raising_replace(src, dst):
             if Path(src).name.startswith(f".{cmd_reprice.IMPORT}."):
-                raise OSError("T7-RACE (DEBT53): simulated rename failure")
+                raise OSError("T7-RACE (pricing-corpus lock): simulated rename failure")
             return real_os_replace(src, dst)
 
         from cli import __main__ as cli_entry
@@ -7356,7 +7356,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
 
         checks.ok(
             raised_r3 is None,
-            "T7-RACE (DEBT53): a failure landing import.csv, after the corpus write, still "
+            "T7-RACE (pricing-corpus lock): a failure landing import.csv, after the corpus write, still "
             "refuses cleanly, never a raw crash", repr(raised_r3),
         )
         checks.equal(
@@ -7390,7 +7390,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
             conn.close()
         checks.ok(not replace_postings, "and no posting row lands")
 
-    # ------------------------------------------------ T7-RACE (DEBT53): reprice apply's own
+    # ------------------------------------------------ T7-RACE (pricing-corpus lock): reprice apply's own
     # write, round 4 — undo by restoring the corpus, never by deleting a file
     # Round 3 renamed the CSV into place FIRST, so a later corpus-write failure could "undo"
     # by unlinking `target`. Re-review found two holes. (a) `target` is a fixed name — a
@@ -7434,7 +7434,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
         )
         with quiet():
             first_code = cli_entry.main(["reprice", "apply", str(worklist_path), "--write"])
-        checks.equal(first_code, 0, "T7-RACE (DEBT53) round 4: the first, real apply succeeds")
+        checks.equal(first_code, 0, "T7-RACE (pricing-corpus lock) round 4: the first, real apply succeeds")
         earlier_bytes = earlier_target.read_bytes()
         earlier_corpus = dict(corpus.Corpus.read().answers)
 
@@ -7451,7 +7451,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
 
         def raising_replace_r4(src, dst):
             if Path(src).name.startswith(f".{cmd_reprice.IMPORT}."):
-                raise OSError("T7-RACE (DEBT53) round 4: simulated rename failure")
+                raise OSError("T7-RACE (pricing-corpus lock) round 4: simulated rename failure")
             return real_os_replace(src, dst)
 
         os.replace = raising_replace_r4
@@ -7471,7 +7471,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
 
         checks.ok(
             raised1 is None,
-            "T7-RACE (DEBT53) round 4, case 1: a final-replace failure, over an EARLIER "
+            "T7-RACE (pricing-corpus lock) round 4, case 1: a final-replace failure, over an EARLIER "
             "real import.csv, still refuses cleanly", repr(raised1),
         )
         checks.equal(code_r4a, 1, "and exits non-zero")
@@ -7502,7 +7502,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
         real_corpus_write = corpus.Corpus.write
 
         def raising_corpus_write(self, path=None):
-            raise OSError("T7-RACE (DEBT53) round 4: simulated corpus write failure")
+            raise OSError("T7-RACE (pricing-corpus lock) round 4: simulated corpus write failure")
 
         corpus.Corpus.write = raising_corpus_write
         raised2 = None
@@ -7521,7 +7521,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
 
         checks.ok(
             raised2 is None,
-            "T7-RACE (DEBT53) round 4, case 2: a corpus-write failure, before the replace "
+            "T7-RACE (pricing-corpus lock) round 4, case 2: a corpus-write failure, before the replace "
             "is attempted, still refuses cleanly", repr(raised2),
         )
         checks.equal(code_r4b, 1, "and exits non-zero")
@@ -7550,7 +7550,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
 
         def raising_unlink_r4(self, *a, **kw):
             if self.name.startswith(f".{cmd_reprice.IMPORT}."):
-                raise OSError("T7-RACE (DEBT53) round 4: simulated unlink failure")
+                raise OSError("T7-RACE (pricing-corpus lock) round 4: simulated unlink failure")
             return real_unlink(self, *a, **kw)
 
         os.replace = raising_replace_r4
@@ -7572,7 +7572,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
 
         checks.ok(
             raised3 is None,
-            "T7-RACE (DEBT53) round 4, case 3: the replace AND the cleanup unlink both "
+            "T7-RACE (pricing-corpus lock) round 4, case 3: the replace AND the cleanup unlink both "
             "fail, still no raw crash", repr(raised3),
         )
         checks.equal(code_r4c, 1, "and exits non-zero")
@@ -8583,7 +8583,7 @@ def check_history(checks: Checks) -> None:
 
     THE ONLY APPEND-ONLY FILE IN THE STORE, which is what makes this worth a section. Every
     other file here is replaced whole on every write, so each of them answers "what does this
-    card say now" and none of them can answer "what did it say in August". `docs/DEBTS.md`
+    card say now" and none of them can answer "what did it say in August". `docs/debts/`
     carried the omission for two months on the grounds that the store logs state transitions
     and a correction, a deletion and an answer are none of them — true about the store's
     vocabulary, and never an argument about the audit trail.
@@ -8621,7 +8621,7 @@ def check_history(checks: Checks) -> None:
         checks.equal(
             [e.get("event") for e in corrections],
             [master.CAPTURED, capture_server.CORRECTED],
-            "a PUT correction appends one event — the gap docs/DEBTS.md recorded from "
+            "a PUT correction appends one event — the gap docs/debts/ recorded from "
             "2026-06 to 2026-08-13",
         )
 
@@ -9348,7 +9348,7 @@ def check_sidecar_seam(checks: Checks) -> None:
 def check_capture_claim_chain(checks: Checks) -> None:
     """`store/master.py:CAPTURE_CLAIM_FIELDS` — the tuple, and the two silences it closed.
 
-    `docs/DEBTS.md` names ten hops between the control on the capture screen and the
+    `docs/debts/` names ten hops between the control on the capture screen and the
     consumer that finally reads a claim, and says TWO OF THEM FAIL SILENTLY. Both are here,
     because both are the same shape: the value is written, the response is correct, the file
     on disk carries it, and something later hands back a card that never had it.
@@ -9550,7 +9550,7 @@ def check_game_and_note_seam(checks: Checks) -> None:
 
         # THE CORRECTION ROUTE IS THE ONLY WAY A NOTE ARRIVES, and it rewrites the sidecar
         # from the RECORD rather than from the request body — so a PUT naming one claim must
-        # leave the others standing. That is the failure `docs/DEBTS.md` calls the harder one
+        # leave the others standing. That is the failure `docs/debts/` calls the harder one
         # to see: it works until the operator corrects a card.
         capture_server.do_put_card(6, 1, {"note": "  bent corner, top left  "})
         checks.equal(

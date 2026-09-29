@@ -19,5 +19,5 @@ checks both directions, so adding or culling a step is a two-file edit a machine
 deferred list"*, named no deliverable, and its *"only then"* pointed at the gating system
 retired on 2026-08-23. It then spent a week `blocked` on step 9, a dependency invented on its
 behalf so it would not have to claim a blocker that no longer existed. The deferred list it
-named lives in `docs/DECISIONS.md` and is that file's to open or close.
+named lives in `docs/decisions/` and is that file's to open or close.
 

@@ -15,12 +15,6 @@
     "contract/T8-code-cards-qr-decode-product-tier-ledger-and-the-channel.md",
     "contract/T9-motion-trigger-against-twenty-recorded-rig-sessions.md",
     "contract/T11-the-order-walk-plan.md",
-    "gate-runs/_gates.md",
-    "gate-runs/GateA-tcgplayer-seam-passed-2026-07-26.md",
-    "gate-runs/GateB-20-card-end-to-end-smoke-test-passed-2026-08-22.md",
-    "gate-runs/GateB-note1-box-2-544-cards-and-the-first-ground-truth-about-finish.md",
-    "gate-runs/GateC-feeder-integration-passed-2026-08-22.md",
-    "gate-runs/GateC-note1-the-per-run-reading-900-against-1200-priced-and-powered.md",
     "steps/_what-shipped.md",
     "steps/step001-repo-init-fixtures-committed-git-from-commit-zero-done.md",
     "steps/step002-scaffolding-makefile-claude-settings-json-hooks-scripts.md",
@@ -59,13 +53,7 @@
     "T9",
     "T11"
   ],
-  "runs": [
-    "GateA",
-    "GateB",
-    "GateB-note1",
-    "GateC",
-    "GateC-note1"
-  ],
+  "runs": [],
   "steps": {
     "shipped": [
       "step001",

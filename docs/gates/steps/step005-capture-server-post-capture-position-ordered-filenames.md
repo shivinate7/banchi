@@ -5,7 +5,7 @@
    of 2026-08-13**: every route, every named refusal, and the sidecar seam read back through
    the reader `identify` uses. This line said the opposite for two days — the step shipped
    with nothing under `harness/tests` importing `server`, `store` or `cli` — and the claim
-   outlived the gap it described. What T7 still does not assert is in `docs/DEBTS.md`, and
+   outlived the gap it described. What T7 still does not assert is in `docs/debts/`, and
    is now three named cases rather than a whole package.
    The server has grown well past the five routes this line was written about: `DELETE
    /inventory/<box>/<index>` arrived with step 7a's undo; `GET /queues`, `POST

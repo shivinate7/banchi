@@ -29,7 +29,7 @@ which is why this prints and does not block, and why it is not an audit row.
 Stdlib only, and the map is read with `ast.literal_eval` rather than imported — the same
 rule `scripts/docs-audit.py` and `scripts/status.py` follow, for the same reason: a tool
 that describes the project must not run the project. `decision_gists` is imported from
-`scripts/decision-context.py` rather than reimplemented; one lift of docs/DECISIONS.md,
+`scripts/decision-context.py` rather than reimplemented; one lift of docs/decisions/,
 one place to break.
 """
 
@@ -165,7 +165,7 @@ def decisions(ids: Sequence[str], resolved: Dict[str, Tuple[str, List[str]]],
               rulings: bool = False) -> List[str]:
     out: List[str] = []
     for name in sorted(ids, key=lambda d: (d[0], int(re.sub(r"\D", "", d) or 0))):
-        title, said = resolved.get(name, ("(no entry in docs/DECISIONS.md)", []))
+        title, said = resolved.get(name, ("(no entry in docs/decisions/)", []))
         out += wrap(f"{name:<5} {title}", 4)
         if rulings:
             for said_one in said[:2]:
@@ -263,11 +263,11 @@ def by_decision(name: str, data: Dict[str, object],
         if path is None:
             return rule(f"{name} — no file") + wrap(
                 "No entry file holds this id. The codes track (`C<n>`) lives in "
-                "docs/CODES-DECISIONS.md as sections of one file, so it has no file to "
+                "docs/specs/code-cards.md as sections of one file, so it has no file to "
                 "print. Read it there. For a `D<n>`, check that the id exists at all.", 2)
         return path.read_text(encoding="utf-8").rstrip("\n").split("\n")
 
-    title, said = resolved.get(name, ("(no entry in docs/DECISIONS.md)", []))
+    title, said = resolved.get(name, ("(no entry in docs/decisions/)", []))
     out = rule(f"{name} — {title}")
     for one in said[:3]:
         out += wrap(one, 2)

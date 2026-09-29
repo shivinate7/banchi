@@ -26,8 +26,8 @@ the next screen at the moment it is written rather than two days later on a real
 
 WHAT IT CANNOT DO, stated plainly so a green run is not read as more than it is: it matches
 text, so a renamed local (`const n = side.index` then `#{n}`) walks straight past it. That is
-the known ceiling. It is recorded in docs/DEBTS.md rather than papered over — the alternative
-is a check whose limits nobody wrote down, which is the failure `docs/DEBTS.md` exists for.
+the known ceiling. It is recorded in docs/debts/ rather than papered over — the alternative
+is a check whose limits nobody wrote down, which is the failure `docs/debts/` exists for.
 
 COMMENTS AND STRINGS ARE STRIPPED FIRST, and that is load-bearing rather than tidiness. The
 prose explaining this very rule contains `#{side.index}` as an example, in three files. A

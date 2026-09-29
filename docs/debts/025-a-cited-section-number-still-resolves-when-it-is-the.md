@@ -34,7 +34,7 @@ section is about*, and deciding what a sentence is about is semantics. The neare
 proxy is the one this file's own section 1 already establishes for `server concurrency`: require
 an ATTRIBUTED form — compare a phrase the citation quotes against the section it names, rather
 than asking whether a bare number appears somewhere in it. **Measured over all 38 citations of a
-`docs/DEBTS.md` section in this tree, across 15 files and 11 distinct sections:**
+`docs/debts/` section in this tree, across 15 files and 11 distinct sections:**
 
 | | count |
 |---|---|

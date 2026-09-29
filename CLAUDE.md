@@ -26,8 +26,8 @@ fixtures, `docs/` and `make`. Renaming any of these is a defect.
 - GitHub Pages follows the repository name. `.github/workflows/demo.yml` derives `DEMO_BASE` from it.
 - The front-end rename reaches `app/index.html`, the brand block in `app/src/App.tsx`, the document
   title, `banchi.*` keys and on-screen copy. It reaches nothing on the wire.
-- No gate is current. Gate A, B and C passed. `docs/GATES.md` records runs, never a schedule.
-  A gate record's numbers are never rewritten to match a later tree.
+- No gate is current. Gate A, B and C passed, and their run records are deleted. History lives in
+  version control.
 
 ## Commands
 
@@ -39,6 +39,7 @@ make map            # docs/map.py rendered. ARGS=<package|path|D<n>|--stale|--de
                     #   ARGS="D<n> --full" prints that entry verbatim.
 make explain        # what `make check` runs, and what each row is worth. ARGS=<target>.
 make serve-scope    # first path gate, read by `make serve-selftest`. ARGS=list | "classify --base <rev>".
+                    #   PKMNSCAN_SERVE_SCOPE=off runs it anyway.
 make guard-scope    # second path gate, read by each gated self-test. ARGS=list | classify.
 make orient         # ARGS=<file.tsx> [--name <C>]: which component draws it. Run before briefing a screen.
 make map-fix        # adds a file's cited decision ids to docs/map.py. Previews. ARGS=--write.
@@ -189,7 +190,7 @@ Fulfiller's. The shell has these parts:
 DORMANT means that the owner has not run this feature. No session treats it as active work unless the
 owner names it. `codes/`, `#/codes`, harness test T8 and the QR decode stay in the build. This is
 the one place that marks the dormancy. `docs/specs/code-cards.md` is the spec. Read it before
-you build here. Rationale and open questions live in `docs/CODES-DECISIONS.md`.
+you build here. The track's settled decisions, C1 to C11, are sections of that spec.
 
 - Never guess a code. No decode goes to the paid vision read, then a human.
 - A QR that does not decode is a stop.
@@ -351,8 +352,9 @@ Use bold labels in one quoted block, never a code fence. Start with the point. N
 - Build order is `SHIPPED` and `OPEN` (D80, a section with no reader). `n` is a stable id.
 - `docs/decisions/` holds settled decisions, one file each. It is never `@`-loaded (D60, the @-loaded docs are dense).
   `scripts/decision-context.py` names the governing ones.
-- `docs/GATES.md` indexes `docs/gates/`. `make gates-selftest` proves the set is complete.
-- `docs/DEBTS.md` indexes `docs/debts/`, cited as `DEBT<n>`. Each is a known gap, deliberately unfixed.
+- `docs/GATES.md` points at `docs/gates/`: the harness contract and the build order.
+  `make gates-selftest` proves the set is complete.
+- `docs/debts/README.md` indexes `docs/debts/`, cited as `DEBT<n>`. Each is a known gap, deliberately unfixed.
   Read one before you treat a green `docs-audit` as coverage.
 - `docs/specs/` holds each feature's spec, with its build status in its own headings.
 - `docs/DESIGN.md` holds the Fulfillment constraints and the `--bn-*` token block.

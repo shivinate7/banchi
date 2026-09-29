@@ -365,9 +365,8 @@ it stands and cannot see what a change removed.
 `#ffffff` in `app/src/PullConfirm.css` that survived a design review and two integration passes.
 What is left is a document disagreeing with itself: step 6's three button states restate five of
 these hexes in a second fence nothing reads. Left out because D18's instinct is that deleting a
-restatement may be the right answer, and that argument belongs in `docs/DESIGN.md`. The sheets
-in `docs/design-refs/` stay unchecked for a settled reason — they are drawings of the spec and
-are allowed to lose to it.
+restatement may be the right answer, and that argument belongs in `docs/DESIGN.md`. The static
+drawing sheets that once sat beside it were deleted, so nothing is left to stay unchecked.
 
 ### `design tokens` locks names for every token and values for only the hexes
 

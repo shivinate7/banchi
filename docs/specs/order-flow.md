@@ -4,7 +4,7 @@ Written 2026-08-23, after the code, which is the wrong order and is said plainly
 disguised. `docs/specs/capture-server.md` and `docs/specs/capture-app.md` were both written
 before their step and read forward; this one was written behind a step already half-landed,
 because `docs/GATES.md` named step 13 and pointed at nothing. What that costs is that no
-decision below was *made* here — every one was made in `docs/DECISIONS.md` or at a keyboard —
+decision below was *made* here — every one was made in `docs/decisions/` or at a keyboard —
 and what it buys is that the arguments are recorded while the evidence for them is still
 warm. Read it as a spec in the sense the other two are: the reasoning, the rejected
 alternative, and what a later session must not undo.

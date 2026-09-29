@@ -13,7 +13,7 @@ before and after every commit in this plan.
 
 - **D18 does not exist until the first commit lands it.** This file cites D18 throughout,
   and the decision ids row blocks on a citation with no heading. The first commit
-  therefore lands this file AND the D18 entry (section 5) into docs/DECISIONS.md
+  therefore lands this file AND the D18 entry (section 5) into docs/decisions/
   together, plus the one-line governed_by addition to docs/map.py. Committed separately,
   the audit blocks either way.
 - **Future names are deliberately never written here as paths or backticked make
@@ -234,7 +234,7 @@ is why (a) reads the JSON.
 
 ## 5. d18-and-spec
 
-The entry below goes into docs/DECISIONS.md verbatim, after D17. Mechanical
+The entry below goes into docs/decisions/ verbatim, after D17. Mechanical
 consequences: the new heading satisfies the decision ids row; docs/map.py's scripts
 entry adds D18 to governed_by in the same commit; D16's own text is untouched by this
 commit — its count sentence changes in count-deletion, where code and docs move
@@ -547,7 +547,7 @@ every row is named there, and each says whether it blocks or allows. **This para
 to restate the count — "17 rows whole-tree" — beside the sentence saying nothing restates
 it (D16).** It was 36 whole-tree rows by 2026-08-30 and had been wrong for most of the
 interval. The restatement was the defect, not the number: a corrected figure only resets
-the clock, which is why none is written here. `docs/DEBTS.md` recorded the finding.
+the clock, which is why none is written here. `docs/debts/` recorded the finding.
 
 **What changed, by name:**
 

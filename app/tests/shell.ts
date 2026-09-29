@@ -30,7 +30,7 @@ import { CAPTURE_PORT, DEV_PORT } from '../devPort'
  * is what failed `the box lives in the walk's column` and `answering a card costs no
  * scrolling` on 2026-09-05, as a bare pixel count that named neither the banner nor the
  * missing stub. A design floor whose verdict depends on a process outside the test is the
- * defect D43 exists about, one level up. `docs/DEBTS.md` carried this as its section 13 until
+ * defect D43 exists about, one level up. `docs/debts/` carried this as its section 13 until
  * this file discharged it; the measurements are here and in `docs/map.py`'s entry now, which is
  * where a claim with a reader belongs.
  *
@@ -216,7 +216,7 @@ const CARDS = {
  *  be satisfied by the next person reaching for jsdelivr. What the suite is entitled to talk
  *  to is knowable and short — the Vite server the page came off, and the capture port
  *  `sealCapture` already owns — so the rule is stated as those two and everything else is
- *  refused. `docs/DEBTS.md` carries this repo's own receipt for the other shape: a dry-run
+ *  refused. `docs/debts/` carries this repo's own receipt for the other shape: a dry-run
  *  guard built as a block-list of guessed endpoint names let a real TCGplayer import through.
  *
  *  THE PORT IS THE WHOLE TEST, for the reason `CAPTURE_ORIGIN` above gives: `server.ts`
@@ -224,11 +224,11 @@ const CARDS = {
  *  a different host on the same two ports, and both are still this Mac. A hostname allow-list
  *  would have to guess at that set; the ports are derived from this checkout (D43).
  *
- *  `allowHosts` IS PER-SPEC, NEVER A SECOND DEFAULT HERE (DEBT47). One real outside host is
+ *  `allowHosts` IS PER-SPEC, NEVER A SECOND DEFAULT HERE. One real outside host is
  *  intended production traffic since D301: `pipeline/stockimages.py` hotlinks stock images
  *  from `tcgplayer-cdn.tcgplayer.com`, and `demo-coverage.spec.ts` reads the BUILT demo
  *  artifact, so stubbing that host there would test a rule the shipped page does not follow.
- *  Widening the DEFAULT here instead — the fix DEBT47 explicitly declined — would weaken the
+ *  Widening the DEFAULT here instead — the fix the demo network guard finding explicitly declined — would weaken the
  *  seal for every OTHER spec that imports this file, the same reasoning that keeps the two
  *  ports themselves off a guessed name. So the exception is an argument each caller states for
  *  itself, through `sealEveryTest({ allowOutside: [...] })`, and every host not named there is
@@ -788,7 +788,7 @@ async function stubStore(page: Page): Promise<void> {
  *  Leave it off and the spec gets the seal and `/status` only, which is what makes a missing
  *  fixture fail by name.
  *
- *  `allowOutside` names hosts `sealOutside` lets through for THIS SPEC ONLY (DEBT47) — see
+ *  `allowOutside` names hosts `sealOutside` lets through for THIS SPEC ONLY — see
  *  `isOutside`'s own header for why this is never a second default here. Every host not
  *  named is still refused, for this spec exactly as for every other. */
 export function sealEveryTest(opts?: { store?: boolean; cards?: number; allowOutside?: readonly string[] }): void {

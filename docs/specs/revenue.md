@@ -99,8 +99,8 @@ rule `docs/GATES.md` states for its own run records.
 
 ## Review round, owner's preview, 2026-09-26
 
-Nine findings from a screenshot round, fixed together (`docs/reviews/ux-2026-09-23/
-RULINGS.md`, "Sales preview review, round 2").
+Nine findings from a screenshot round, fixed together (the ux-2026-09-23 review's
+"Sales preview review, round 2").
 
 - **The board's value bar gets its own grid column, never shared with the price.** A bar
   width plus a long dollar figure used to sit in one flex row. A flex item's default

@@ -215,7 +215,7 @@ Absent is not refused. Absent is a sidecar written before the field existed.
 
 ### 3.3 — Ten hops, and the tuple that now binds three of them
 
-`docs/DEBTS.md` recorded, while this work was being planned, that a capture-time claim crosses ten
+`docs/debts/` recorded, while this work was being planned, that a capture-time claim crosses ten
 independent restatements between the control and the consumer, and that **two of them fail
 silently**: `Inventory.parse` filters on the card dataclass's annotations, so an undeclared field is
 dropped on reload; and `record_capture`'s upsert copied a literal three-name tuple, so a fourth
@@ -512,7 +512,7 @@ free and a manufactured claim would make rung 2 unreachable for every card this 
 `--export` becomes repeatable. **Never infer the game from a filename**: read each file's `Product
 Line` column, map file → games, then invert to game → files, which must be exactly one.
 
-**This corrects a claim `docs/DECISIONS.md` used to make.** The Deferred list said the catalog join
+**This corrects a claim `docs/decisions/` used to make.** The Deferred list said the catalog join
 was "product-line-agnostic". Measured, it was product-line **blind** — the column was declared in the
 canonical header and read by nothing, so two exports concatenated would have cross-joined in silence.
 Blind is not agnostic.

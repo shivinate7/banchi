@@ -59,10 +59,10 @@ GATES_PENDING = re.compile(r"^0\.(\s+`step " + SLUG + r"`)", re.M)
 GATES_NUMBERED = re.compile(r"^([1-9][0-9]*)\.\s", re.M)
 
 DECISIONS = "docs/DECISIONS.md"
-CODES_DECISIONS = "docs/CODES-DECISIONS.md"
+CODES_DECISIONS = "docs/specs/code-cards.md"
 MAP = "docs/map.py"
 GATES = "docs/GATES.md"
-DEBTS = "docs/DEBTS.md"
+DEBTS = "docs/debts/README.md"
 
 # DEBTS JOINED THE CLAIM PATH ON THE OWNER'S WORD ("they just get assigned numbers upon
 # merge with CI"), REUSING THE DECISION MACHINERY RATHER THAN A SECOND ONE. A debt is a
@@ -70,7 +70,7 @@ DEBTS = "docs/DEBTS.md"
 # recording order) — the two differ only in TWO SPELLINGS, both handled as data rather than
 # as a second code path: the CLAIMED heading a decision writes IS its citation form (`## D188`
 # cites as `D188`), while a debt's citation has always carried a prefix its heading did not
-# (`docs/DEBTS.md`: "CITE BY ID, DEBT<n>... never a bare §<n>", while the ~50 real entries
+# (`docs/debts/README.md`: "CITE BY ID, DEBT<n>... never a bare §<n>", while the ~50 real entries
 # under `docs/debts/` head themselves bare — `## 11`, not `## DEBT11`). Rather than migrate
 # every existing file, a NEWLY CLAIMED entry's heading matches its citation (`## DEBT<n>`),
 # and `DEBT_HEADING` below — and `scripts/debts_corpus.py`'s own `HEADING_RE` — read EITHER
@@ -113,14 +113,14 @@ class DirKind(NamedTuple):
     filename_letter: str
     index_stub: str   # the file carrying the rendered INDEX BLOCK, never the corpus's own
                        # pointer stub — a decision's index lives in CLAUDE.md, a debt's in
-                       # its own `docs/DEBTS.md` (the two coincide for debt, not for decision)
+                       # its own `docs/debts/README.md` (the two coincide for debt, not for decision)
 
 
 DIR_KINDS = {
     "decision": DirKind("decision", "docs/decisions",
                         "docs/decisions/ORDER.json", DECISIONS, "D", "D", "CLAUDE.md"),
     "debt": DirKind("debt", "docs/debts", "docs/debts/ORDER.json", DEBTS, "DEBT", "",
-                    "docs/DEBTS.md"),
+                    "docs/debts/README.md"),
 }
 
 # EVERY DIRECTORY-CORPUS KIND KEEPS ITS SLUG SOMEWHERE ONCE CLAIMED — its entry's own
@@ -437,7 +437,7 @@ def corpus_order(root: Path, directory: str = DECISIONS_DIR,
     listed = json.loads(read(manifest_path))["order"]
     known = set(listed)
     extra = sorted(p.name for p in (root / directory).glob("*.md")
-                   if p.name not in known)
+                   if p.name not in known and p.name != "README.md")
     return listed + extra
 
 
@@ -478,7 +478,8 @@ def corpus_order_at(rev: str, cwd: Optional[str] = None, directory: str = DECISI
     """
     manifest_text = git("show", f"{rev}:{manifest}", cwd=cwd)
     listing = git("ls-tree", "-r", "--name-only", rev, "--", directory, cwd=cwd)
-    on_disk = sorted(Path(p).name for p in listing.splitlines() if p.endswith(".md"))
+    on_disk = sorted(Path(p).name for p in listing.splitlines()
+                     if p.endswith(".md") and Path(p).name != "README.md")
     if not manifest_text.strip():
         return on_disk
     try:
@@ -534,7 +535,7 @@ def pending_at(rev: str, cwd: Optional[str] = None) -> Dict[str, List[str]]:
     CARRIES, and it exists because the invariant the whole design rests on — main carries no
     slug — is a claim about main's own trees and not about anybody's working directory. A
     file missing at that commit reads as empty, which is right: a repository with no
-    docs/CODES-DECISIONS.md has no unclaimed code-card id in it.
+    docs/specs/code-cards.md has no unclaimed code-card id in it.
     """
     debt = DIR_KINDS["debt"]
     return pending_in(
@@ -985,7 +986,7 @@ def rewrite_decision_paths(text: str, claims: Sequence[Claim]) -> str:
     THE FIX IS NOT A BETTER PATH. The global rule this repo already holds
     (`~/Developer/claude-settings/CLAUDE.md`: "Give each record its own file, one folder per
     kind. Cite by id, never by path.") is D160's own argument applied a second time
-    (`docs/DEBTS.md`'s header cites it for `DEBT<n>` the same way) — a decision is cited by
+    (`docs/debts/README.md`'s header cites it for `DEBT<n>` the same way) — a decision is cited by
     its bare `D<n>`, the form `Claim.becomes` already carries, and the path is dropped
     entirely rather than repaired. No new formatter is built for this: `claim.becomes` is
     already the exact citation form the rest of this file uses everywhere else.
@@ -996,9 +997,9 @@ def rewrite_decision_paths(text: str, claims: Sequence[Claim]) -> str:
     of the same token elsewhere in the file.
 
     DIRECTORY KINDS ONLY (`decision`, `debt`). A codes id and a build step have no file of
-    their own to be pointed at — `docs/CODES-DECISIONS.md` and `docs/GATES.md` are one shared
+    their own to be pointed at — `docs/specs/code-cards.md` and `docs/GATES.md` are one shared
     file apiece, never a directory with one file per entry — so there is no path shape for
-    either to produce, and none is built here for a citation that cannot exist. `docs/DEBTS.md`
+    either to produce, and none is built here for a citation that cannot exist. `docs/debts/README.md`
     carries the identical "cite by id, never by path" rule for `DEBT<n>`, so a debt's own
     unclaimed path (`` `docs/debts/DEBT-<slug>.md` ``) is the same defect one namespace over.
     """
@@ -1135,7 +1136,7 @@ def settle_corpus(root: Path, write: bool) -> List[str]:
 
     CLAUDE.md'S DECISION INDEX IS RETIRED (D60 amended). `make map ARGS=--decisions` renders
     the same id-and-title list off the corpus itself, on demand, never a stored copy — so
-    nothing here writes CLAUDE.md, and nothing ever will again. `docs/DEBTS.md` KEEPS ITS
+    nothing here writes CLAUDE.md, and nothing ever will again. `docs/debts/README.md` KEEPS ITS
     WRITTEN INDEX — no rendered view has replaced it — so the debt kind's own stub still gets
     regenerated here, the one asymmetry between the two `IndexSpec`s
     (`scripts/index-decisions.py`). `debt` reused decisions' own scheme (the owner's word:
@@ -1158,12 +1159,12 @@ def settle_corpus(root: Path, write: bool) -> List[str]:
         return [f"(index generator not runnable: {exc})"]
     # CLAUDE.md NEVER APPEARS HERE. `index.DECISION_SPEC`'s manifest is folded (below), and its
     # `rewrite_index` is never called — that half is retired along with the stub it used to
-    # write. `index.DEBT_SPEC` is the one kind whose stub (`docs/DEBTS.md`) still gets
+    # write. `index.DEBT_SPEC` is the one kind whose stub (`docs/debts/README.md`) still gets
     # regenerated, because nothing renders that index yet.
     for kind_spec, manifest, rewrite, stub_label in (
         (index.DECISION_SPEC, DECISIONS_MANIFEST, False, None),
         (index.DEBT_SPEC, DIR_KINDS["debt"].manifest, True,
-         "docs/DEBTS.md (debt index regenerated)"),
+         "docs/debts/README.md (debt index regenerated)"),
     ):
         try:
             appended = index.normalize(root, write, kind_spec)
@@ -1198,7 +1199,7 @@ def settle_corpus(root: Path, write: bool) -> List[str]:
 # is not a shortcut taken here — it is already true of the forward direction. A decision's
 # entry is a FILE, and `rename_claimed_entries` renames it rather than deleting it, so the
 # slug survives in the filename after the heading itself has been overwritten with a number.
-# `docs/CODES-DECISIONS.md` is one file for the whole codes corpus and `docs/GATES.md`'s build
+# `docs/specs/code-cards.md` is one file for the whole codes corpus and `docs/GATES.md`'s build
 # order is one file for every step; neither gets a rename, so the substitution that turns
 # `C-<slug>` or `step <slug>` into a number is TOTAL — nothing anywhere in the tree still spells
 # the slug once it commits. So a decision's slug is derived automatically from its own file;
@@ -1648,7 +1649,7 @@ def perform_unclaim(root: Path, u: Unclaim, write: bool,
     touched: Dict[str, int] = {}
     manifest_paths = {root / d.manifest for d in DIR_KINDS.values()}
     # THE INDEX FILE FOR *THIS* UNCLAIM, ONLY — never every kind's, matching `is_index_line`/
-    # `unindex`'s own `u.kind` check. A debt's index lives in `docs/DEBTS.md`; a decision's in
+    # `unindex`'s own `u.kind` check. A debt's index lives in `docs/debts/README.md`; a decision's in
     # `CLAUDE.md` (`DirKind.index_stub`).
     index_path = root / DIR_KINDS[u.kind].index_stub if u.kind in DIR_KINDS else None
     guard = guard or {}

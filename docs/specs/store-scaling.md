@@ -109,7 +109,7 @@ re-derive the original list from the investigation's own journal.
   be answered by `where(box=…)`. `box_views` (`cli/resolve.box_views`) can. And `do_status` is
   not a scoped precedent either: `Inventory.counts()` (`store/master.Inventory`) is an
   unfiltered column scan, cheap per row and full-table.
-- **There is no `docs/DEBTS.md` entry about `_copies_out`'s cost, and the investigation's
+- **There is no `docs/debts/` entry about `_copies_out`'s cost, and the investigation's
   "documented in-repo" figure came from a session's memory note.** DEBTS §24 mentions the
   function about a stuck claim's arithmetic, never its speed. The note asked for a `sku`
   index; `cards_sku` exists (`store/db._INDEXES`, the `_INDEXES` tuple) and `where(sku=…)`

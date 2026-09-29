@@ -45,7 +45,7 @@ Two owner constraints, settled. Neither is a preference.
 
 **0.1 — Nothing in this plan edits `scripts/docs-audit.py`. Ever.** If the audit blocks,
 the fix is the map or the doc it names, never the auditor. If a finding is a false
-positive, record it in `docs/DEBTS.md` and work around it. The reason is on the record in
+positive, record it in `docs/debts/` and work around it. The reason is on the record in
 D16: an agent that can edit the docs to satisfy its own gate will do exactly that, and
 each edit will look reasonable. The generalisation is D18. This session is the first in
 the project's history to touch the auditor's subject matter without touching the auditor,
@@ -221,7 +221,7 @@ Three edits:
   ```python
   "note": "no harness test reaches this package — nothing under harness/ imports "
           "store. `built` above means the code exists, not that it is covered; "
-          "docs/DEBTS.md records why that is not being fixed before step 5.",
+          "docs/debts/ records why that is not being fixed before step 5.",
   ```
 
   > **Status, 2026-08-13:** that note was written and has since been replaced. T7 reaches
@@ -281,12 +281,12 @@ there is no duplicate to reconcile.
 such note keys already. The debts entry below is the single record, and keeping it single
 is what makes its own claim checkable.
 
-### 4.2 — Two entries for `docs/DEBTS.md`
+### 4.2 — Two entries for `docs/debts/`
 
 Match the file's voice: heading, body, a **Cost** line, a **Why not fixed** line. Widen the
 file's framing first — its opening scoped it to the audit-retirement review. A second
-sentence in `docs/DEBTS.md` at the time this was written re-pinned that scope harder
-still. Both needed the widening, or neither did. **Both sentences are gone.** `docs/DEBTS.md`
+sentence in `docs/debts/` at the time this was written re-pinned that scope harder
+still. Both needed the widening, or neither did. **Both sentences are gone.** `docs/debts/`
 reads as a general framing now, in the file this session saw and in the `docs/debts/` stub
 split from later. The instruction stands as the record of what this session meant to widen.
 The two entries below still come from step-5 spec work instead.

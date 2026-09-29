@@ -724,7 +724,7 @@ Two numbers, both taken on a copy of the owner's real store (`sqlite3 .backup`, 
   more lock-free connection per fetch, reading only `readings_sources` (small). If this ever
   shows up in a profile, the fetch's own earlier response payload could carry the previous
   fetch's name from a module-level cache instead — not needed at today's scale, and adding
-  it now would be exactly the kind of premature optimization `docs/DEBTS.md` warns against
+  it now would be exactly the kind of premature optimization `docs/debts/` warns against
   recording as a real cost without measuring it first.
 - **`live_export_at` returning `None`.** Documented in step 4 as effectively unreachable for
   a name this function just built, but if `datetime.now(timezone.utc).strftime(...)` output

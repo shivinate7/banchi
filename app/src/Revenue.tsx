@@ -627,7 +627,7 @@ function revenueQuery(): URLSearchParams {
 }
 
 /** `singles`/`sealed`/`all` — item 5, the owner's ruling verbatim: "singles sealed switch
- *  with default to singles" (`docs/reviews/ux-2026-09-23/RULINGS.md`). Kept in the URL like
+ *  with default to singles". Kept in the URL like
  *  every other lens on this screen (D285). */
 type ProductView = 'singles' | 'sealed' | 'all'
 const PRODUCT_VIEWS: readonly { readonly value: ProductView; readonly label: string }[] = [

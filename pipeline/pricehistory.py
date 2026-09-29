@@ -15,7 +15,7 @@ client function and a control, and that is a separate piece of work with a decis
 --------------------------------------------------------------------------------------
 WHAT IS ACTUALLY PUBLIC, MEASURED RATHER THAN ASSUMED
 
-`docs/DECISIONS.md`'s Someday entry stated twice that this data does not exist. Both
+`docs/decisions/`'s Someday entry stated twice that this data does not exist. Both
 statements were false and the entry is corrected; what follows is what was measured.
 
   infinite-api.tcgplayer.com/price/history/<productId>/detailed?range=<r>

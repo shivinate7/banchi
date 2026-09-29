@@ -27,7 +27,7 @@ import { settleMotion } from './motionSettled'
  * test is `isDeparted(place) && state === 'sold'` resolved by React against a TypeScript fixture.
  * A Python row could only re-implement that predicate over the literal in `Gallery.tsx` — and it
  * would then go green over a fixture that renders nothing at all, which is exactly the vacuous
- * green docs/DEBTS.md warns about. Only the DOM can say the shell was drawn.
+ * green docs/debts/ warns about. Only the DOM can say the shell was drawn.
  *
  * OBSERVED RED BEFORE IT WAS KEPT. Mutation: give `Gallery.tsx`'s `DEPARTED` fixture a numeric
  * `slot`. `isDeparted` goes false, `noBar` goes false, both classes drop, and the first case

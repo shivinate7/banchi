@@ -42,21 +42,20 @@
     "041-pricing-never-offers-make-this-the-rule.md",
     "043-the-merge-speed-guard-cannot-see-python-work.md",
     "044-pokemontcg-io-is-deprecated-and-this-repo-does-not-call-it.md",
-    "045-no-page-lists-what-each-test-protects.md",
     "046-a-search-with-a-typo-finds-nothing.md",
-    "047-the-demo-network-guard-blocks-the-images-it-should-allow.md",
     "048-code-side-mechanization-left-open.md",
     "049-copies-out-full-table-pass-per-call.md",
     "050-git-and-gh-cli-traps.md",
     "051-guard-or-probe-wrong-green.md",
     "052-multi-agent-worktree-traps.md",
-    "053-pricing-corpus-five-unlocked-writers.md",
     "054-capture-undo-13th-row-flake.md",
     "055-audit-self-test-no-node-modules.md",
     "056-provision-selftest-race-case.md",
     "057-emit-buried-box.md",
     "058-h-palettes-unlanded.md",
     "059-unreadable-claim-no-remedy.md",
-    "060-demo-walk-recording.md"
+    "060-demo-walk-recording.md",
+    "061-advances-carryover.md",
+    "062-demo-assets-lfs.md"
   ]
 }

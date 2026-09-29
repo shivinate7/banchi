@@ -555,7 +555,7 @@ def place_within_box(view: "BoxView", box, index) -> str:
 
 # --------------------------------------------------------------- pooled, not located
 #
-# The owner's ruling ("Code cards are pooled inventory, not located", docs/DECISIONS.md):
+# The owner's ruling ("Code cards are pooled inventory, not located", docs/decisions/):
 # a code card has no box, section or card position — it is a count. The index survives as
 # a KEY, because the photo and sidecar are named after it, but `Position.label` is never
 # rendered for one: a label names a slot somebody carries to a shelf, and there is no slot.

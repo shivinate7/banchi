@@ -2,11 +2,11 @@
 """The debts corpus, read as one text or as one entry.
 
 THE CORPUS IS A DIRECTORY AND WAS ONE FILE. `docs/debts/` holds one markdown file per
-finding; `docs/DEBTS.md` is a stub that points at it and is read by nothing. This module is
-the seam: every reader that used to open that path calls `text()` instead and gets the same
-bytes, exactly as `scripts/decisions_corpus.py` already does for `docs/DECISIONS.md` (D160).
+finding; `docs/debts/README.md` points at it and carries the index. This module is
+the seam: every reader that used to open the old single file calls `text()` instead and gets
+the same bytes, exactly as `scripts/decisions_corpus.py` already does for `docs/decisions/` (D160).
 
-IDS ARE `§<n>` INSIDE THE CORPUS AND `DEBT<n>` EVERYWHERE ELSE (`docs/DEBTS.md`'s own "cite
+IDS ARE `§<n>` INSIDE THE CORPUS AND `DEBT<n>` EVERYWHERE ELSE (`docs/debts/`'s own "cite
 by id" rule). A NUMBER IS NOW CLAIMED AT THE MERGE, REUSING THE DECISION MACHINERY (D140):
 a branch writing a new finding gives it a slug heading, `## DEBT-<slug>`, in its own file
 `docs/debts/DEBT-<slug>.md`, and cites it as `DEBT-<slug>`. `scripts/claim-ids.py` allocates
@@ -35,7 +35,7 @@ from typing import Dict, List, Optional
 ROOT = Path(__file__).resolve().parent.parent
 DIRECTORY = ROOT / "docs" / "debts"
 MANIFEST = DIRECTORY / "ORDER.json"
-STUB = ROOT / "docs" / "DEBTS.md"
+STUB = ROOT / "docs" / "debts" / "README.md"
 
 # OPTIONAL `DEBT`: a real entry heads itself bare (`## 11`), and one claimed through
 # `scripts/claim-ids.py`'s scheme heads itself `## DEBT<n>` (its heading matches its
@@ -59,7 +59,8 @@ def order() -> List[str]:
     if "order" not in _cache:
         listed = json.loads(MANIFEST.read_text(encoding="utf-8"))["order"]
         known = set(listed)
-        extra = sorted((p.name for p in DIRECTORY.glob("*.md") if p.name not in known),
+        extra = sorted((p.name for p in DIRECTORY.glob("*.md")
+                        if p.name not in known and p.name != "README.md"),
                        key=_rank)
         _cache["order"] = listed + extra
     return list(_cache["order"])
@@ -67,7 +68,8 @@ def order() -> List[str]:
 
 def unregistered() -> List[str]:
     listed = set(json.loads(MANIFEST.read_text(encoding="utf-8"))["order"])
-    return sorted((p.name for p in DIRECTORY.glob("*.md") if p.name not in listed), key=_rank)
+    return sorted((p.name for p in DIRECTORY.glob("*.md")
+                   if p.name not in listed and p.name != "README.md"), key=_rank)
 
 
 def files() -> List[Path]:
@@ -77,7 +79,7 @@ def files() -> List[Path]:
 def text() -> str:
     """The whole corpus as the single document it used to be.
 
-    Byte-identical to the pre-split `docs/DEBTS.md`, asserted by
+    Byte-identical to the pre-split `docs/debts/`, asserted by
     `scripts/split-debts.py --verify` and re-run by `scripts/split-debts.py --selftest`
     (not yet wired into `make`).
     """

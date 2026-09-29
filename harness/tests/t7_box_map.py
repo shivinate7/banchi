@@ -818,7 +818,7 @@ def check_merge_speed(checks: Checks) -> None:
 
     CRIES WOLF ON WALL TIME ALONE, so wall time is no longer what this asserts (owner's
     ruling: "Trust a guard only once it goes red on the defect it guards. A guard that goes
-    red when nothing is wrong is spent"; `docs/reviews/ux-2026-09-23/RULINGS.md`: "Timing
+    red when nothing is wrong is spent"; the ux-2026-09-23 review: "Timing
     guards must count work, not wall time alone"). The old `took < 1.0` failed three times
     in one day at 1.01-1.31 s under machine load 13-27, with `do_move_sections`/`_cross`/
     `_move_one` unchanged, and passed on every rerun — the machine's mood, not the merge.

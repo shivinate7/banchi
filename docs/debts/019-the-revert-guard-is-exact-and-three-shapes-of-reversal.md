@@ -11,7 +11,7 @@ deliberate choice. What that leaves open:
 - **Re-wording.** A restored block with one line altered is a new edit to the guard. A
   similarity threshold was declined: a dial on a gate is turned until the gate is quiet.
 - **A widened hunk.** A reversal on lines adjacent to a real edit shares that edit's hunk and
-  stops being the reverse of anything — how #221's `docs/map.py` and `docs/DEBTS.md` rows
+  stops being the reverse of anything — how #221's `docs/map.py` and `docs/debts/` rows
   escaped. A containment test was measured at seventy-nine coincidences over this history and
   zero of the rows it was written for, and was not kept.
 

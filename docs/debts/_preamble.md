@@ -5,7 +5,7 @@ not fixed. This file exists so a green `make docs-audit` is not read as "the aud
 complete" — it means the checks that exist, passed.
 
 Not a backlog to burn down on sight. An entry leaves when someone argues it should, the way
-`docs/DECISIONS.md` entries are argued.
+`docs/decisions/` entries are argued.
 
 **Section 15 left 2026-09-07, and its number is not reused.** It recorded that the lockup does not
 fit the 52px phone top bar, that the bar therefore kept `Logo` at 26 beside a "Banchi" title, and

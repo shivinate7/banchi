@@ -28,7 +28,7 @@ would be the exact failure that rule is written against.
 WHAT NEITHER MODE CAN SEE: a dropped ARGUMENT. Both compare tokens — paths, identifiers,
 decision ids, measurements, dates. A rewrite that keeps every backtick and loses the reason
 the entry exists passes both, silently and completely. That is the residual risk of the
-whole exercise and it is recorded in docs/DEBTS.md rather than papered over here.
+whole exercise and it is recorded in docs/debts/ rather than papered over here.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Dict, List, NamedTuple, Sequence, Set, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
-DECISIONS = ROOT / "docs" / "DECISIONS.md"
+DECISIONS = sorted((ROOT / "docs" / "decisions").glob("D*.md"))[0]  # any one entry file
 
 EXIT_OK = 0
 EXIT_FINDINGS = 1
@@ -319,7 +319,7 @@ def main(argv: Sequence[str]) -> int:
         nargs="?",
         const=str(DECISIONS),
         metavar="FILE",
-        help="assert what scripts/decision-context.py needs (default: docs/DECISIONS.md)",
+        help="assert what scripts/decision-context.py needs (default: the first entry file)",
     )
     parser.add_argument(
         "--budget",

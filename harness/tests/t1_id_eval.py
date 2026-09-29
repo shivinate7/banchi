@@ -50,7 +50,7 @@ claim). Each writes its own results file; see RARITY_ENV below for the both-dire
 warning a claimed run must be read under.
 
 Below the floor, tune the prompt directly — nothing external gates that (changed
-2026-08-03; the Scan & Identify comparison is parked in DECISIONS.md's Someday list). The
+2026-08-03; the Scan & Identify comparison is parked in docs/decisions/'s Someday list). The
 one discipline that does apply: never tune against the cards you then score on. Fixing the
 specific images that failed and re-measuring on the same set produces a number that says
 nothing about the next card, which is the only thing the number is for.
@@ -108,7 +108,7 @@ SET_HINT_ENV = "PKMNSCAN_T1_SET_HINT"
 # record, a one-element list — a perfectly sorted stack, the best case the feature can
 # ever see. The default run stays claimless, so the gate keeps scoring the floor.
 #
-# WATCH BOTH DIRECTIONS (DECISIONS.md, Someday): a clause that raises accuracy but also
+# WATCH BOTH DIRECTIONS (docs/decisions/, Someday): a clause that raises accuracy but also
 # raises confidence on wrong answers is a bad trade, because it converts review-queue
 # taps into silently mislisted cards. That is why a claimed run's results file records
 # `miss_confidence` beside its accuracy — the second number is the price of the first.
@@ -214,7 +214,7 @@ def _image_requests(cards, hint_mode: str, rarity_on: bool) -> List[batch.ImageR
 def _miss_confidence(scores: List[Score]) -> Dict[str, int]:
     """How confident the model was on the cards it got WRONG. The second axis of the
     rarity A/B: an accuracy gain paid for with more high-confidence misses is the trade
-    DECISIONS.md's Someday entry warns about, and it is invisible in the accuracy alone."""
+    docs/decisions/'s Someday entry warns about, and it is invisible in the accuracy alone."""
     counter = Counter(
         score.outcome.identification.confidence
         if score.outcome.identification

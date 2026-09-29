@@ -4209,7 +4209,7 @@ test('the box lives in the walk\'s column, and it is the only thing in that head
 
   /* THE RUN STATUS LINE (`BoxRuns.tsx`) IS DELETED, on the owner's word ("Remove it").
      Inventory no longer mentions runs at all — a card is identified from Review's own
-     identify strip instead. `docs/reviews/ux-2026-09-23/RULINGS.md` records the ruling. What
+     identify strip instead. What
      is left to assert is that its slot leaves no hole: the box's own header holds only its
      identity strip and the Manage control now. */
   /* AND THE SCREEN CLEARS `docs/DESIGN.md`'s OWN FIRST-CONTENT FLOOR: "the first row of real
@@ -5830,7 +5830,7 @@ test('the address holds one line at both widths, including the longest label the
      FLAKE — that one was diagnosed properly on the branch that landed as `6c70d55`, by loading
      the rig and CAPTURING the error text: 9 of 80 loaded repeats failed in `open()` on a
      `toBeVisible()` timeout, none on an assertion, and the geometry case that remained was a
-     case subtracting two layouts rather than a screen that moves. `docs/DEBTS.md` carries that
+     case subtracting two layouts rather than a screen that moves. `docs/debts/` carries that
      reading; this comment does not restate it.
 
      WHY THIS AWAIT IS STILL WORTH ITS LINE. Every number this case asserts is an advance width

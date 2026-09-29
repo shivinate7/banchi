@@ -451,7 +451,7 @@ def _origins_env_name(root: Path = REPO_ROOT) -> str:
     Two rules meet here. This file may not import `capture_server` — the supervisor would then
     hold a copy of the code it supervises, and would itself need restarting to pick up a change
     it exists to apply to something else. And a second hand-written spelling of an environment
-    variable is the drift `docs/DECISIONS.md` D16 is about: the two would agree until the day
+    variable is the drift `docs/decisions/` D16 is about: the two would agree until the day
     one moved, and the symptom would be writes silently 403ing from the LAN.
 
     So it is read with `ast`, which is this repo's own answer to exactly this — the docs audit
@@ -1775,7 +1775,7 @@ def refuse_unconfirmed(args: argparse.Namespace, verb: str) -> bool:
     print("  may be mid-request against it right now. Stopping it drains for")
     print(f"  {DRAIN_GRACE_SECONDS:.0f}s and then KILLS whatever is still in flight.")
     print()
-    print("  If it stopped answering under load, that is section 11 of docs/DEBTS.md and a")
+    print("  If it stopped answering under load, that is section 11 of docs/debts/ and a")
     print("  restart is not the repair — it is how the write gets cut.")
     print()
     print(f"  make {verb} ARGS=--confirm     do it anyway")

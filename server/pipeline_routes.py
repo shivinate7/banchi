@@ -5475,7 +5475,7 @@ def do_pricing_corpus_write(payload: dict) -> dict:
     # THE STALE-WRITE REFUSAL. Absent means "did not read one", which is the terminal user
     # editing the file and PUTting it back, and it is allowed — the guard is for a client that
     # DID read a revision and is now behind, which is the only case that can silently destroy
-    # somebody else's write. CHECKED AGAIN BELOW, INSIDE THE LOCK (DEBT53): a check made here,
+    # somebody else's write. CHECKED AGAIN BELOW, INSIDE THE LOCK (pricing-corpus lock): a check made here,
     # before this call waits for another writer's lock, reads a revision that is about to go
     # stale the moment it waits — the check would pass, the wait would happen, and the write
     # would still land on top of whatever the lock-holder just wrote.
@@ -5513,7 +5513,7 @@ def do_pricing_corpus_write(payload: dict) -> dict:
     # replaces it — the same posture `do_pipeline_worklist` takes. Every answer then reads as
     # new and is stamped, which is the honest answer when there is no `before` to compare
     # against.
-    # THE STORE LOCK, THE ONE PRIMITIVE, AROUND THE WHOLE READ-MODIFY-WRITE (DEBT53). `book`
+    # THE STORE LOCK, THE ONE PRIMITIVE, AROUND THE WHOLE READ-MODIFY-WRITE (pricing-corpus lock). `book`
     # above is a document this call already parsed from whatever was on disk a moment ago; the
     # "before" read that decides what gets stamped, and the write that replaces the file, must
     # happen as one unit or a concurrent writer's edit — `POST /pricing/clear`, `POST
@@ -5664,7 +5664,7 @@ def do_pricing_clear(payload: dict) -> dict:
     scope = _clear_scope(payload)
     window = _clear_window(payload)
 
-    # THE STORE LOCK, AROUND THE WHOLE READ-MODIFY-WRITE (DEBT53): the corpus read that
+    # THE STORE LOCK, AROUND THE WHOLE READ-MODIFY-WRITE (pricing-corpus lock): the corpus read that
     # decides what is clearable, the write that removes it, and the clears file that records
     # the undo, as one unit — the same primitive `PUT /pricing` and `POST /pricing/restore`
     # now take, never a second lock. `_clear_revision_guard` runs INSIDE it, checked against
@@ -5761,7 +5761,7 @@ def do_pricing_restore(payload: dict) -> dict:
     """
     answers = payload.get("answers")
     stored = None
-    # THE STORE LOCK, AROUND THE WHOLE READ-MODIFY-WRITE (DEBT53): resolving which clear is
+    # THE STORE LOCK, AROUND THE WHOLE READ-MODIFY-WRITE (pricing-corpus lock): resolving which clear is
     # meant, the corpus read, the per-SKU decision, the write, and the drop, as one unit — the
     # same primitive `PUT /pricing` and `POST /pricing/clear` now take, never a second lock.
     # `_clear_revision_guard` runs INSIDE it, for the same reason `do_pricing_clear` moved it

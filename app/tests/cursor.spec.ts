@@ -134,8 +134,7 @@ sealEveryTest({ store: true })
 
 /* THREE FLOORS, ONE WALK (test-audit L7, M2, 2026-09-28). This file used to pay for the route
  * walk three times — once per floor below — because each floor was its own `test()` with its
- * own `for (const route of await routesFromNav(page))` loop. `docs/reviews/test-audit-2026-09-27/
- * PLAN.md`'s M2 is `app/tests/routeSweep.ts`'s own argument applied here: keep every assertion,
+ * own `for (const route of await routesFromNav(page))` loop. the test-audit plan's M2 is `app/tests/routeSweep.ts`'s own argument applied here: keep every assertion,
  * pay for the navigation once. The three comments below are UNCHANGED from when each floor had
  * its own test — they still describe what each check asks and why, only "the case below" now
  * means a phase of the loop rather than a separate `test()`.

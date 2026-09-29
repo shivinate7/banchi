@@ -476,7 +476,7 @@ function numberSuffix(number: string): RegExp | null {
  *  depending on which name happened to already hold it). The meta line always draws the
  *  number when the row has one; this strips a trailing repeat off the DISPLAYED name only —
  *  the stored name is never touched. */
-/* F3 (the owner's word, 2026-09-29): THE FILTERS ARE VIEW-ONLY. `docs/reviews/ux-2026-09-23/F3-pricing-filters.md`
+/* F3 (the owner's word, 2026-09-29): THE FILTERS ARE VIEW-ONLY. the ux-2026-09-23 review's F3
    is the design. Price bands read the MARKET cell and nothing else. A row with no market price is
    its own band (D49: a missing price is unknown, never low). */
 const BANDS = [
@@ -804,7 +804,7 @@ export function Pricing() {
   /** Which runs the worklist is over; EMPTY means "whatever still has work in it" (D86, D156). */
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set(runsInHash()))
   const [work, setWork] = useState<PricingWorklist | null>(null)
-  /** THE MARKDOWN STAMP ON THE HASH, and the table it names (D103). Null is the To send tab. */
+  /** THE MARKDOWN STAMP ON THE HASH, and the table it names (D103). Null is the Unsent tab. */
   const [stamp, setStamp] = useState<string | null>(() => markdownInHash())
   const [liveTab, setLiveTab] = useState<boolean>(() => liveInHash())
   const [sheet, setSheet] = useState<MarkdownTable | null>(null)
@@ -2378,7 +2378,7 @@ export function Pricing() {
         label="Which list"
         value={liveTab ? 'live' : 'send'}
         options={[
-          { value: 'send', label: 'To send' },
+          { value: 'send', label: 'Unsent' },
           { value: 'live', label: 'Live' },
         ]}
         onChange={goTab}

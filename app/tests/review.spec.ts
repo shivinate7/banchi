@@ -43,8 +43,7 @@ import { runRow } from './routeFixtures'
 const VIEW_ROUTE = '/#/review'
 const VIEW = 'main.review'
 
-/** The measurement viewport. Every number in `docs/specs/ui-redesign-options.md` and in the
- *  split's own commit was taken here, so this is where they are checked. */
+/** The measurement viewport. Every number in the split's own commit was taken here, so this is where they are checked. */
 const DESK = { width: 1440, height: 900 }
 
 /** Below `ReviewQueue.css`'s 900px breakpoint, where the screen returns to the single column
@@ -300,7 +299,7 @@ test('the photograph is the largest thing on the screen', async ({ page }) => {
   expect(photo).not.toBeNull()
 
   /* 23%, NOT THE 25% FIRST WRITTEN, and the difference is an aspect ratio rather than a
-     compromise. `docs/specs/ui-research.md` computed its target from a bare card's 63:88;
+     compromise. the first UI research pass computed its target from a bare card's 63:88;
      the served frame is 9:16, so the reachable ceiling with the header intact is 23.6%.
      Measured before the split: 244x432 = 8.1%.
 

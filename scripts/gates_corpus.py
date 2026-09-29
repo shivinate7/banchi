@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """The gates corpus, read as one text — `scripts/decisions_corpus.py`'s twin.
 
-`docs/gates/` holds one markdown file per record, in THREE kind folders (`contract/` for the
-harness's own `Tn` thresholds, `gate-runs/` for the Gate A/B/C run records and their addenda,
-`steps/` for the build-order's SHIPPED and OPEN lists); `docs/GATES.md` is a stub that points
+`docs/gates/` holds one markdown file per record, in TWO kind folders (`contract/` for the
+harness's own `Tn` thresholds, `steps/` for the build-order's SHIPPED and OPEN lists; the Gate
+A/B/C run records were deleted, and history lives in version control); `docs/GATES.md` is a stub that points
 at it and is read by nothing. This module is the seam: every reader that used to open that
 path calls `text()` instead and gets the same bytes, so the split changed where the corpus
 LIVES without changing what any checker parses — `scripts/docs-audit.py`'s `gates_sections()`,
@@ -11,8 +11,8 @@ LIVES without changing what any checker parses — `scripts/docs-audit.py`'s `ga
 reading `text()` in place of the file.
 
 ORDER IS THE MANIFEST'S, NOT THE FILESYSTEM'S — the same rule `decisions_corpus.py` states
-for the same reason. Four container chunks (the whole-file preamble, and the intro prose
-under each of `## The harness is the contract`, `## Gates`, `## What shipped` and
+for the same reason. Container chunks (the whole-file preamble, and the intro prose
+under each of `## The harness is the contract`, `## What shipped` and
 `## What is open`) sit interleaved with the entries and are not entries themselves; sorting
 by filename would not reproduce the interleaving, so `ORDER.json`'s flat `order` list is what
 `text()` concatenates.
@@ -83,11 +83,6 @@ def text() -> str:
 def tests() -> List[str]:
     """Every harness-contract id (`T1` .. `T9`), in corpus order."""
     return list(_manifest().get("tests") or [])
-
-
-def runs() -> List[str]:
-    """Every gate-run id (`GateA`, `GateB`, `GateB-note1`, ...), in corpus order."""
-    return list(_manifest().get("runs") or [])
 
 
 def steps(list_name: Optional[str] = None) -> List[str]:

@@ -151,7 +151,7 @@ export function carriedScope(): CarriedScope | null {
 }
 
 /** THE WRITER, `carryScope`, IS RETIRED — its one caller, `BoxRuns.tsx`, is deleted (the
- *  owner's word, ux-2026-09-23 review: "Remove it"; `docs/reviews/ux-2026-09-23/RULINGS.md`).
+ *  owner's word, ux-2026-09-23 review: "Remove it").
  *  Nothing on `#/inventory` writes a handoff any more; a card is identified from Review's own
  *  identify strip instead. The READERS below stay: `carriedScope`/`carriedByBox`/`parseKey`
  *  still have callers (`Runs.tsx`, `RunsComposer.tsx`, `ReviewQueue.tsx`), and `#/runs` reads

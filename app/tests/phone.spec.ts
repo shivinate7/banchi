@@ -165,7 +165,7 @@ const auditSource = (mode: Mode) => `(() => {
        land on .browse-mobilebar, its parent, so the sweep reports nothing. Measured 2026-09-11
        against BOTH this file and the copy that predates the chrome entry above — the arm is
        silent in each, so naming that bar as chrome did not cause it and removing the name would
-       not fix it. Recorded in docs/DEBTS.md rather than repaired here: this clause is what lets
+       not fix it. Recorded in docs/debts/ rather than repaired here: this clause is what lets
        a 22px tick answer at 46 through a wrapper, and narrowing it wants its own measurement. */
     const owns = (n) => n !== null && (t.contains(n) || n.contains(t) || chrome(n))
     /* A CONTROL WHOSE OWN CENTRE PAINTS UNDER FIXED CHROME IS NOT BRUSHING PAST IT, IT IS SITTING

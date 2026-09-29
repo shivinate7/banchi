@@ -2697,7 +2697,7 @@ def queue_entry(queued: join.QueuedCard) -> queues.QueueEntry:
             # this dict is written to `review.json` — and None when nobody claimed anything,
             # which the screen says in those words rather than drawing an empty chip.
             #
-            # `docs/DECISIONS.md` recorded naming these as needing a schema change, on the
+            # `docs/decisions/` recorded naming these as needing a schema change, on the
             # ground that `QueueEntry` carries the read and the candidates and not the
             # claim. It is a schema change: this key, and `rarity` on each candidate row.
             # Both are additive and neither moves a byte of what was already there.

@@ -255,27 +255,9 @@ filter — did not.
 | file | state |
 | --- | --- |
 | `logo/banchi-icon.svg` | committed, and **stale** against section 3 |
-| `logo/pass-gold-silver-on-black.png` | committed, still accurate as a record |
-| `logo/pass-brackets.png` | committed, still accurate as a record |
-| `logo/pass-ground-per-prism.png` | the ground derived per prism, and the two null rows |
-| `logo/pass-ground-bisect.png` | 0.23 → 0.70 bisected, where each wall is |
-| `logo/pass-ground-matrix.png` | the 5 x 4 ground x sheen cross on bluesteel |
-| `logo/pass-ground-choice.png` | the forced choice that settled the L pair, with the two rejections shown |
-| `logo/pass-family.png` | **both families, all five prisms, on the settled parameters** |
-| `logo/pass-gray-prisms.png` | the seven asserted grounds each for `warmer` and `quieter` |
-| `logo/pass-black-and-gold.png` | **section 8** — nine golds, five blacks, five brackets |
-| `logo/pass-white-and-rose-gold.png` | white gold and rose gold on the locked black, one pass each |
-| `logo/pass-locked-set.png` | **section 9 — the six locked marks**, at 200px and at 48/28px |
-| `logo/pass-small-cut.png` | **§11 — the small cut swept**, rasterized at the sizes the app draws |
-| `logo/pass-light-ground.png` | **§12 — the light ground**, derived and rejected |
+| `logo/pass-*.png` | **deleted.** Draft renders of the passes below. Every sheet in `logo/sheets/` re-renders its own |
 | `logo/sheets/*.html` | **the generators.** Self-contained; render with `sheets/shot.mjs` |
 | `logo/sheets/grounds.py` | **the ground rule, and the only implementation of it.** Self-checks against every published stop |
-
-**Every PNG here went in past the pre-commit image guard, on the owner's word each time.** That
-guard has no `PKMNSCAN_*=off` hatch — unlike the dupes, links, docs and sigil guards — because a
-photograph is the one staged file that can carry a live code. `--no-verify` is the only way past
-it and it takes every other guard down with it, so the rule is: ask, stage nothing but the
-images, and say so in the message.
 
 **No asset matches section 3.** The committed icon predates the corrections in sections 5 and 6
 and carries the old stroke, arm, card radius, gap, sheen, displacement and seed. It is kept
@@ -493,12 +475,12 @@ and marbling at that chroma reads as coral. **This is a limit of the holo treatm
 palette**, so sweeping more pinks will not fix it; the fix, if it is wanted, is a different
 surface for that one variant, and that is a bigger change than a color.
 
-Sheet: `logo/pass-white-and-rose-gold.png`. Generator: `logo/sheets/white-and-rose-gold.html`.
+Sheet: `logo/sheets/white-and-rose-gold.html`.
 
 ## 9. The locked set
 
 **Six marks, locked 2026-09-05 on the owner's instruction — *"lock all on #5; we'll have the
-bluesteel one be the default"*.** Row 5 of `logo/pass-white-and-rose-gold.png` is the definition,
+bluesteel one be the default"*.** Row 5 of `logo/sheets/white-and-rose-gold.html`'s render is the definition,
 and this table is that row written out. Geometry, sheen and the L pair are section 3's and do not
 vary across the set.
 
@@ -534,7 +516,7 @@ colors and neither is derived from the other. In the generators they live in sep
 (`BRK` and `PRISMS`) so nothing breaks, but a sentence that says "rose" without saying which is
 ambiguous, and this table is the place that disambiguates.
 
-Sheet: `logo/pass-locked-set.png` — the six at 200px, and again at 48px and 28px.
+Sheet: `logo/sheets/locked-set.html` — the six at 200px, and again at 48px and 28px.
 
 **At 28px the brackets are essentially gone.** That row is not a decision, it is the evidence for
 section 3's *small* optical cut, which §11 has now drawn and swept at 4.2. **Six marks were
@@ -567,8 +549,7 @@ is 28px.
 ## 11. The small cut, drawn
 
 **Swept 2026-09-05. Section 3 asserted this cut in two words and nothing had ever drawn it.**
-Sheet: `logo/sheets/small-cut.html`, render `logo/pass-small-cut.png` — which went in past the
-pre-commit image guard on the owner's word, the way every PNG in this directory did. Re-render:
+Sheet: `logo/sheets/small-cut.html`, Re-render:
 
 ```
 node docs/specs/logo/sheets/shot.mjs $PWD/docs/specs/logo/sheets/small-cut.html /tmp/small.png 1240 1000
@@ -647,7 +628,7 @@ rule applies: it was not chosen, it was not eliminated.
 ## 12. The light-theme ground — derived, and it loses
 
 **Asked for on 2026-09-05 and answered on the sheet rather than in a sentence.** Sheet:
-`logo/sheets/light-ground.html`, render `logo/pass-light-ground.png`. Re-render:
+`logo/sheets/light-ground.html`. Re-render:
 
 ```
 node docs/specs/logo/sheets/shot.mjs $PWD/docs/specs/logo/sheets/light-ground.html /tmp/light.png 1300 1000
