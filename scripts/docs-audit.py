@@ -13237,6 +13237,33 @@ def _route_prose_findings() -> List[Finding]:
     return out
 
 
+# CLAUDE.md's "Codex reads this same file" paragraph names these four links.
+AGENT_LINKS: Tuple[Tuple[str, str], ...] = (
+    ("AGENTS.md", "CLAUDE.md"),
+    (".agents/skills", "../.claude/skills"),
+    ("code-card-fork/AGENTS.md", "CLAUDE.md"),
+    ("code-card-fork/CLAUDE.md", "../CLAUDE.md"),
+)
+
+
+def check_agent_links(report: Report) -> None:
+    """Each link CLAUDE.md names is a relative symlink to its stated target."""
+    findings: List[Finding] = []
+    for link, target in AGENT_LINKS:
+        path = ROOT / link
+        if not path.is_symlink():
+            findings.append(Finding(link, f"is not a symlink; CLAUDE.md says it links to `{target}`."))
+        elif os.readlink(path) != target:
+            findings.append(Finding(link, f"links to `{os.readlink(path)}`; CLAUDE.md says `{target}`."))
+    report.add(
+        "agent links",
+        MECHANICAL,
+        findings,
+        f"{len(AGENT_LINKS)} relative symlinks resolve to CLAUDE.md or .claude/skills",
+        scanned=len(AGENT_LINKS),
+    )
+
+
 def check_route_rosters(report: Report) -> None:
     """A hand-typed list of routes in a spec, against `App.tsx`'s own table.
 
@@ -20395,6 +20422,8 @@ def audit(staged_only: bool, commit_only: bool = False) -> Report:
         check_doc_hygiene(report, docs)
     if _run_at_commit("route rosters", commit_only):
         check_route_rosters(report)
+    if _run_at_commit("agent links", commit_only):
+        check_agent_links(report)
     if _run_at_commit("recorded deletions", commit_only):
         check_recorded_deletions(report)
     if _run_at_commit("spec seal", commit_only):
