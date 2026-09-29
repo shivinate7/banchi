@@ -19709,29 +19709,32 @@ def check_phantom_worklist(checks: Checks) -> None:
     the export, live 2 (the sale not yet counted) -> the sale is not subtracted twice, excess 0.
     SKU D: live below real -> absent. A retired copy is not on hand.
     """
-    from types import SimpleNamespace as NS
+    inventory = master.Inventory()
+    n = iter(range(1000))
 
     def card(box, sku, state="identified", at="2026-09-01T00:00:00+00:00"):
-        return NS(box=box, sku=sku, state=state, state_at=at)
+        made, _ = inventory.allocate_capture(box, cid=f"nophoto:{box}/{next(n)}@fixture")
+        made.sku, made.state, made.state_at = sku, state, at
 
-    inventory = NS(
-        boxes={"1": NS(box=1)},
-        cards={
-            "a1": card(1, "A"), "a2": card(1, "A"), "ag1": card(5, "A"), "ag2": card(5, "A"),
-            "bg": card(5, "B"), "cg": card(5, "C"),
-            "c1": card(1, "C"), "c2": card(1, "C", "sold", "2026-09-27T17:00:00+00:00"),
-            "d1": card(1, "D"), "d2": card(1, "D", "retired"), "dg": card(5, "D"),
-        },
-    )
+    for sku, state, at in (
+        ("A", "identified", None), ("A", "identified", None),
+        ("C", "identified", None), ("C", "sold", "2026-09-27T17:00:00+00:00"),
+        ("E", "identified", None), ("E", "sold", "2026-09-20T00:00:00+00:00"),
+        ("D", "identified", None), ("D", "retired", None),
+    ):
+        card(1, sku, state, at or "2026-09-01T00:00:00+00:00")
+    for sku in ("A", "A", "B", "C", "D", "E"):
+        card(5, sku)
+    del inventory.boxes["5"]  # the buried box: its cards stay, its row is gone
     rows = [
         {"TCGplayer Id": sku, "Total Quantity": str(qty), "Product Name": sku, "Condition": "NM"}
-        for sku, qty in (("A", 4), ("B", 1), ("C", 2), ("D", 1))
+        for sku, qty in (("A", 4), ("B", 1), ("C", 2), ("D", 1), ("E", 2))
     ]
     taken = int(datetime(2026, 9, 27, 16, 0, tzinfo=timezone.utc).timestamp())
     got = {w[0]: w[3:] for w in cmd_reconcile.phantom_worklist(inventory, rows, taken)}
     checks.equal(
         got,
-        {"A": (4, 2, 2, 0), "B": (1, 0, 1, 0)},
+        {"A": (4, 2, 2, 0), "B": (1, 0, 1, 0), "E": (2, 1, 1, 0)},
         "ghosts are not on hand: A live 4 real 2 excess 2, B live 1 real 0 excess 1; a sale "
         "after the export is added back (C) and live below real (D) is no excess",
     )

@@ -379,28 +379,28 @@ def phantom_worklist(inventory, rows, taken_at: int):
     """`[(sku, name, condition, live, real, excess, sold_since)]` for every SKU a ghost card
     carries where TCGplayer's live quantity exceeds the real on-hand count.
 
-    REAL = copies not sold, retired or moved, EXCLUDING ghosts. A copy the store marked sold
-    AFTER the export was taken (`state_at` > `taken_at`) is added back: the export still counts
-    it, so subtracting it as well would double-count that sale. A sale TCGplayer already
-    counted before the export but the store marked later is added back too, which UNDERSTATES
-    the excess by that copy. That is the safe direction: never tell the owner to cut a real one.
+    REAL = `Inventory.copies_on_hand` (the one definition of "still here") MINUS ghosts, the
+    only new logic: a ghost is a card whose box has no row. SOLD SINCE THE EXPORT = the SKU's
+    sold copies minus `Inventory.sales_before(sku, taken)`, and those are added back: the
+    export still counts them, so subtracting them too would double-count the sale.
+    `sales_before` counts nothing it cannot date, which understates the excess. That is the safe
+    direction: never tell the owner to cut a real copy.
     """
     real_boxes = {int(entry.box) for entry in inventory.boxes.values()}
-    ghost_skus, real, sold_since = set(), {}, {}
-    for card in inventory.cards.values():
-        sku = getattr(card, "sku", None)
-        if not sku:
-            continue
-        if int(card.box) not in real_boxes:
-            ghost_skus.add(sku)
-            continue
-        if card.state == master.SOLD:
-            at = card.state_at and datetime.fromisoformat(card.state_at).timestamp()
-            if at and at > taken_at:
-                sold_since[sku] = sold_since.get(sku, 0) + 1
-                real[sku] = real.get(sku, 0) + 1
-        elif card.state not in master.TERMINAL_STATES:
-            real[sku] = real.get(sku, 0) + 1
+    taken = datetime.fromtimestamp(taken_at, timezone.utc).isoformat()
+
+    def ghost(card) -> bool:
+        return int(card.box) not in real_boxes
+
+    ghost_skus = {c.sku for c in inventory.cards.values() if c.sku and ghost(c)}
+    real, sold_since = {}, {}
+    for sku in ghost_skus:
+        real[sku] = len([c for c in inventory.copies_on_hand(sku) if not ghost(c)])
+        sold = len([
+            c for c in inventory.positions_for_sku(sku) if c.state == master.SOLD and not ghost(c)
+        ])
+        sold_since[sku] = max(0, sold - inventory.sales_before(sku, taken))
+        real[sku] += sold_since[sku]
     live = {r[tcgcsv.SKU_COLUMN]: r for r in rows}
     out = []
     for sku in sorted(ghost_skus):
@@ -442,6 +442,9 @@ def run_phantoms(args, say) -> int:
 
 def run(args, say) -> int:
     if getattr(args, "phantoms", None):
+        if getattr(args, "live", None) or getattr(args, "write", False):
+            say("--phantoms is read-only and stands alone: drop --live and --write")
+            return 2
         return run_phantoms(args, say)
     if getattr(args, "live", None):
         return run_live(args, say)
