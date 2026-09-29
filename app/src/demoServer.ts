@@ -730,8 +730,23 @@ function parseBody(init?: RequestInit): Dict {
   }
 }
 
+/** `GET /inventory/recent` — Home's hero deck, DERIVED from the whole-store read, never replayed.
+ *  Home asks for no photograph until this answers (D172). The recording of it is the real
+ *  store's answer on the day of the mirror, and that store's newest captures had all sold, so
+ *  it recorded `{}` and Home drew no photograph at all. The server's own rule, on the
+ *  recorded cards: named, photographed, on hand, newest capture first. A sale here also
+ *  leaves the deck without a patch. */
+function recent(limit: number): Dict {
+  const picked = Object.entries(cards())
+    .filter(([, c]) => c.photo !== null && c.name && !DEPARTED.has(String(c.state)))
+    .sort((a, b) => String(b[1].captured_at).localeCompare(String(a[1].captured_at)))
+    .slice(0, limit)
+  return { cards: Object.fromEntries(picked) }
+}
+
 /** Every GET: the recording under its canonical key, or one of the re-sliced reads. */
 function read(path: string): unknown {
+  if (path.startsWith('/inventory/recent?')) return recent(Number(new URLSearchParams(path.slice(path.indexOf('?'))).get('limit')) || 3)
   const entry = responses[canonical(path)]
   if (entry !== undefined) return entry.body
 
