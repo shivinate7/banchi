@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { sealEveryTest } from './shell'
+import { sealEveryTest, card } from './shell'
 import { seedPopulatedPricing } from './routeFixtures'
 
 /* HOME, REVIEW AND PRICING ADDRESS PHOTOGRAPHS BY NAME AND BY VERSION (D172).
@@ -35,6 +35,45 @@ async function photosOn(page: Page, hash: string): Promise<string[]> {
     .toBeGreaterThan(0)
   return srcs
 }
+
+/* A CARD WITH NO PHOTOGRAPH GETS NO PHOTO ADDRESS AT ALL (D172). Its name is `nophoto:…`, which
+ * no route serves, and building `/photo/<box>/<index>` from its slot 404s. Home is seeded on
+ * purpose with a store whose every recent card is one, so the old code's slot fallback is the
+ * only thing that could draw a photograph. `/boxes` waits for the card read, so the slot
+ * placeholder (which is only for the moment before the cards answer) is never drawn. */
+test('Home asks for no photograph of a card that has none', async ({ page }) => {
+  const asked: string[] = []
+  page.on('request', (r) => {
+    if (/\/photo\//.test(r.url())) asked.push(r.url())
+  })
+  let answered!: () => void
+  const recentAnswered = new Promise<void>((resolve) => (answered = resolve))
+  await page.route(/\/inventory\/recent(\?|$)/, async (route) => {
+    const cards = Object.fromEntries(
+      [1, 2, 3].map((index) => [
+        `2/${index}`,
+        {
+          ...card({ box: 2, index, section: 1, card: index, name: `Card ${index}`, boxName: 'SV commons', boxTotal: 3 }),
+          cid: `nophoto:2/${index}@2026-08-22T12:34:00`,
+        },
+      ]),
+    )
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ cards }) })
+    answered()
+  })
+  await page.route(/\/boxes$/, async (route) => {
+    await recentAnswered
+    await page.waitForTimeout(300)
+    await route.fallback()
+  })
+  const boxesRead = page.waitForResponse(/\/boxes$/)
+  await page.goto('/#/')
+  await boxesRead
+  await page.waitForTimeout(500) // a wait for the render after both reads, not an assertion
+  await expect(page.locator('.home-deck[data-empty="true"]')).toBeVisible()
+  expect(await page.evaluate(() => [...document.images].filter((i) => i.src.includes('/photo/')).length)).toBe(0)
+  expect(asked, 'no /photo/ request at all').toEqual([])
+})
 
 for (const [name, path] of [
   /* The three screens this case is about, not a roster of the app: paths, with the `#` added below. */

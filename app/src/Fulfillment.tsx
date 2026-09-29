@@ -1086,11 +1086,11 @@ export function Fulfillment() {
     const between = placeSentence(chosen.where ?? undefined)
     const showBar = chosen.where !== null && chosen.where.located !== false
     const boxName = chosen.where?.box_name ?? null
-    const missing = photoMissing === chosen.key
     /* BY NAME WHERE THE ROW HAS ONE (D172) — the inventory and search paths do, an order
        pick does not; see `Sellable.cid`. He is looking at a photograph to decide whether the
        card in his hand is the card on the screen, so it had better be this card's. */
     const src = photoUrl(chosen.box, chosen.index, chosen)
+    const missing = src === null || photoMissing === chosen.key
     const forOrder = chosen.order
 
     body = (
@@ -1127,7 +1127,7 @@ export function Fulfillment() {
                     key={chosen.key}
                     className="fulfillment-photo"
                     data-ready={photoReady === chosen.key ? 'true' : 'false'}
-                    src={src}
+                    src={src ?? undefined}
                     alt={`The card in ${sayPlace(chosen.place)}`}
                     onLoad={() => setPhotoReady(chosen.key)}
                     onError={() => setPhotoMissing(chosen.key)}
@@ -1615,7 +1615,7 @@ export function Fulfillment() {
         <img
           className="ff-zoom-img"
           /* The same address the confirm frame drew, so the big view is a cache hit. */
-          src={photoUrl(chosen.box, chosen.index, chosen)}
+          src={photoUrl(chosen.box, chosen.index, chosen) ?? undefined}
           alt={`The card in ${sayPlace(chosen.place)}, bigger`}
         />
         <span className="fulfillment-say ff-zoom-hint">Tap anywhere to go back.</span>

@@ -144,7 +144,7 @@ function deckFromBoxes(boxes: BoxRecord[] | null): { cards: DeckCard[]; box: Box
        arithmetic off the registry's `next_index` — there is no record here at all, which is
        the whole point of the first pass — so there is nothing carrying a `cid` to address
        the photograph by. The second pass below has the records and uses the name. */
-    cards.push({ key: `${box.box}/${index}`, box: box.box, index, photo: photoUrl(box.box, index), card: null })
+    cards.push({ key: `${box.box}/${index}`, box: box.box, index, photo: photoUrl(box.box, index) ?? '', card: null })
   }
   return { cards, box }
 }
@@ -170,16 +170,14 @@ function deckFromCards(cards: Record<string, InventoryCard> | null): DeckCard[] 
         card.name !== '',
     )
     .sort((a, b) => String(b[1].captured_at).localeCompare(String(a[1].captured_at)))
-    .slice(0, DECK_DEPTH)
-    .map(([key, card]) => ({
-      key,
-      box: card.box,
-      index: card.index,
+    .flatMap(([key, card]): DeckCard[] => {
       /* BY NAME (D172): an inventory row carries the card's own `cid`, so the hero addresses
-         the photograph rather than the slot it happens to sit in. */
-      photo: photoUrl(card.box, card.index, card),
-      card,
-    }))
+         the photograph rather than the slot it happens to sit in. A card whose name is no
+         photograph's has none to draw, so it is not in a picture of photographs. */
+      const photo = photoUrl(card.box, card.index, card)
+      return photo === null ? [] : [{ key, box: card.box, index: card.index, photo, card }]
+    })
+    .slice(0, DECK_DEPTH)
 }
 
 function greeting(): string {
@@ -487,7 +485,11 @@ export function Home() {
   const fromCards = deckFromCards(shelf.state === 'ready' ? shelf.value : null)
   /* The box-derived pass is a placeholder for the moment before the card map lands, so it
      yields to the named cards the instant they arrive. */
-  const deck = fromCards.length > 0 ? (lastNamedDeck = fromCards) : lastNamedDeck.length > 0 ? lastNamedDeck : fromBoxes.cards
+  /* THE SLOT PLACEHOLDER ENDS WHEN THE CARD READ ANSWERS. Once it has, an empty named deck means
+     no recent card has a photograph (a `nophoto:` name draws none), and the slot pass would
+     ask for a file that is not there. */
+  const placeholder = shelf.state === 'ready' ? [] : fromBoxes.cards
+  const deck = fromCards.length > 0 ? (lastNamedDeck = fromCards) : lastNamedDeck.length > 0 ? lastNamedDeck : placeholder
   const deckBox = fromBoxes.box
   const front = deck[0]
   const frontCard = front?.card ?? null

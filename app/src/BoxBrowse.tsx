@@ -699,10 +699,10 @@ function VariantChooser({
             <li key={group.sku ?? `unidentified-${index}`}>
               <button type="button" className="browse-variant-tile" onClick={() => onPick(index)}>
                 <span className="browse-variant-photo" aria-hidden="true">
-                  {photoCopy === undefined ? (
+                  {photoCopy === undefined || photoUrl(photoCopy.place.box, photoCopy.place.index, photoCopy) === null ? (
                     <Icon name="image" size={18} />
                   ) : (
-                    <img src={photoUrl(photoCopy.place.box, photoCopy.place.index, photoCopy)} alt="" />
+                    <img src={photoUrl(photoCopy.place.box, photoCopy.place.index, photoCopy) ?? undefined} alt="" />
                   )}
                 </span>
                 <span className="browse-variant-text">
@@ -2805,7 +2805,7 @@ export function BoxBrowse({
       {zoomed && selectedRow !== null && selectedRow.card.photo !== null ? (
         <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
           <img
-            src={photoSrc(selectedRow, reshot[selectedRow.key] ?? null)}
+            src={photoSrc(selectedRow, reshot[selectedRow.key] ?? null) ?? undefined}
             alt={`The card photographed at ${selectedLabel ?? `store key ${selectedRow.key}`}`}
           />
         </Overlay>

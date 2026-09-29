@@ -2732,7 +2732,7 @@ function OrderPickPane({
       />
       {!zoomed ? null : (
         <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
-          <img src={photoSrc(row, null)} alt={`The card photographed at ${place === null ? row.key : sayPlace(place)}`} />
+          <img src={photoSrc(row, null) ?? undefined} alt={`The card photographed at ${place === null ? row.key : sayPlace(place)}`} />
         </Overlay>
       )}
     </>

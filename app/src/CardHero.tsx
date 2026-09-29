@@ -418,7 +418,7 @@ export function CardPane({ row, game, place = null, dimmed = false, preChips, po
  * key; `nonce` is the same id one step earlier, covering the window between the re-shoot's own
  * response and the inventory re-read that carries the new `capture_id` onto the row. Moved
  * from `BoxBrowse.tsx` whole — see that file's history for the measurement this rests on. */
-export function photoSrc(row: Row, nonce: string | null): string {
+export function photoSrc(row: Row, nonce: string | null): string | null {
   return photoUrl(row.card.box, row.card.index, row.card, nonce)
 }
 
@@ -474,6 +474,18 @@ export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoo
   }
 
   const src = photoSrc(row, nonce)
+
+  /* The card's own name says it never had a photograph, so there is no file to ask for and
+     nothing to call missing. */
+  if (src === null) {
+    return (
+      <div className="bn-photo browse-absent">
+        <Icon name="image" size={28} />
+        <p>This card was never photographed. It is at {where}.</p>
+        {reshoot}
+      </div>
+    )
+  }
 
   if (absent) {
     return (

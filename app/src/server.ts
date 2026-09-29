@@ -431,7 +431,7 @@ export function photoUrl(
   index: number,
   ref?: PhotoRef | null,
   nonce?: string | null,
-): string {
+): string | null {
   /* THE DEMO BUILD HAS NO PHOTO SERVICE, so the same address resolves to a bundled file.
    * `BASE_URL` rather than a leading slash: a static host serves the demo from a
    * subdirectory (`/banchi/` on GitHub Pages), and an absolute path would 404 on every
@@ -447,6 +447,9 @@ export function photoUrl(
   const version = nonce ?? ref?.capture_id ?? null
   const stamp = version === null ? '' : `?v=${encodeURIComponent(version)}`
   const cid = ref?.cid
+  /* A cid that names no photograph (`nophoto:…`, `moved:…`) means there is NO file to ask for:
+   * the slot route would 404. Null, and every caller draws its no-photo state. */
+  if (typeof cid === 'string' && cid !== '' && !PHOTO_CID.test(cid)) return null
   if (cid !== undefined && cid !== null && PHOTO_CID.test(cid) && version !== null) {
     return `${base}/photo/by-card/${cid}${stamp}`
   }
