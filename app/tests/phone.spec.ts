@@ -2,7 +2,8 @@
 // Governs: D117, D134, D204, D266, D288, D291
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
-import { seedPopulatedGraveyard } from './routeFixtures'
+import { POPULATED_ROUTE_SEEDS, seedPopulatedGraveyard } from './routeFixtures'
+import { routesFromNav } from './routes'
 
 /* THE OWNER'S SCREENS AT A PHONE'S WIDTH, WHICH NOTHING IN THIS SUITE HAD EVER LOOKED AT.
  *
@@ -199,8 +200,14 @@ const auditSource = (mode: Mode) => `(() => {
        box exactly as before. */
     const before = getComputedStyle(t, '::before')
     const hasBefore = before.content !== 'none' && before.content !== ''
-    const effW = hasBefore ? Math.max(box.width, parseFloat(before.width) || 0) : box.width
-    const effH = hasBefore ? Math.max(box.height, parseFloat(before.height) || 0) : box.height
+    /* AN ABSOLUTELY POSITIONED ::after PAD COUNTS TOO (screen pass F8): Inventory's row and
+       section ticks draw a 22px box and reach 46px through \`.browse-tick::after { inset: -12px }\`,
+       the same pattern as the IconButton's ::before, and the box alone reported them as 22. Only
+       an out-of-flow pseudo counts, so a decorative seam or badge is still judged on the box. */
+    const after = getComputedStyle(t, '::after')
+    const hasAfter = after.content !== 'none' && after.content !== '' && after.position === 'absolute'
+    const effW = Math.max(box.width, hasBefore ? parseFloat(before.width) || 0 : 0, hasAfter ? parseFloat(after.width) || 0 : 0)
+    const effH = Math.max(box.height, hasBefore ? parseFloat(before.height) || 0 : 0, hasAfter ? parseFloat(after.height) || 0 : 0)
     // rounded, because a 39.6px control reports 40 and a floor nobody can see is a floor nobody fixes
     const small = Math.round(effW) < FLOOR || Math.round(effH) < FLOOR
     const covered = !centreOwns(document.elementFromPoint(cx, cy))
@@ -382,6 +389,34 @@ test('every owner screen holds the thumb floor at 390, and none scrolls sideways
     expect(over, `${hash} scrolls sideways by ${over}px at 390 — CLAUDE.md: "No horizontal page scroll at 390."`).toBeLessThanOrEqual(0)
   }
   expect(failures, failures.join('\n')).toEqual([])
+})
+
+/* AN IPAD IN PORTRAIT IS 820px WIDE AND ALL THUMB (docs/DESIGN.md), and every floor above answers
+   at 390. The control-height tokens raise themselves on `(pointer: coarse)` at ANY width, but a
+   control that names its own size does not follow them: `pricing-thumb` drew 36px wide, a price
+   input 21px tall, Inventory's row ticks 22, its "All" 39 and Home's run links 38 (screen pass
+   F8). Asked of the BOX, as `#/gallery` is: at 820 the rail and the page sit side by side, so a
+   neighbour's pad rightly crowds a probe and only the size is a fact about the control. */
+test.describe('on a touch screen at 820', () => {
+  test.use({ hasTouch: true, viewport: { width: 820, height: 1180 } })
+
+  test('every owner screen holds the 40px thumb floor, and none scrolls sideways', async ({ page }) => {
+    /* THE POPULATED SEEDS, all of them: Pricing's thumbnails and Home's run links only exist over
+       a populated store, and the small one draws neither. */
+    for (const seed of Object.values(POPULATED_ROUTE_SEEDS)) await seed(page)
+    await page.goto('/')
+    const routes = await routesFromNav(page)
+    const failures: string[] = []
+    for (const hash of routes) {
+      if (hash === '#/fulfillment') continue // his screen draws no shell and holds its own 44px floor
+      await page.goto(hash)
+      await page.waitForTimeout(400)
+      failures.push(...(await sweep(page, hash, 'box')))
+      const over = await overflow(page)
+      expect(over, `${hash} scrolls sideways by ${over}px at 820`).toBeLessThanOrEqual(0)
+    }
+    expect(failures, failures.join('\n')).toEqual([])
+  })
 })
 
 /* THE SHELL'S OWN SURFACES, which belong to no screen and so were in no spec's scope. The palette
