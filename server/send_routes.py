@@ -2128,7 +2128,7 @@ def _markdown_judge(directory: Path, live_path: Path) -> Tuple[set, List[dict]]:
         raise PipelineRefusal(
             HTTPStatus.BAD_GATEWAY,
             "live_check_failed",
-            "Banchi could not read the live export from TCGplayer, so nothing was sent. Try again, or fetch the live export again.",
+            f"Banchi could not read the live export from TCGplayer because {files.plain_cause(exc)}, so nothing was sent. Try again, or fetch the live export again.",
         ) from None
     named: Dict[str, tuple] = {}
     candidates: Dict[str, tuple] = {}

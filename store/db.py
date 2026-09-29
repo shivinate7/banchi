@@ -393,7 +393,11 @@ def _ensure_schema(
         # loud, before any card exists — rather than once per capture, where a refusal is a
         # 500 on `POST /capture` with the physical card already in the drawer.
         raise files.StoreError(
-            "The store was written by a newer version of Banchi than this one, so it was not opened. Update this copy of Banchi on the Mac to the latest version, then try again."
+            (
+            f"The store was written by a newer version of Banchi (data version {stored}) than this one (data version {SCHEMA_VERSION}), so it was not opened. "
+            "This older version strips every field it does not know, one card at a time, so opening it anyway would damage the cards. "
+            "Update this copy of Banchi on the Mac to the latest version, then try again."
+        )
         )
     if stored == SCHEMA_VERSION:
         _repair(conn, directory=directory, locked=locked)
