@@ -30,3 +30,7 @@ The recipe is now the product, then the tooling's proof of itself.
 ### Amended 2026-09-27 — claim-stale and vale both left `make check`
 
 `claim-stale` and `vale` have both left `make check`'s and `make ci-check`'s composition (C1, C2, test-audit lane L3). `make merge` already runs `claim-stale` fresh against `origin/main` (D140). `vale` cannot fail. It printed 1,668 errors nobody read. The global STE gate covers new prose instead. The order argued above is untouched. The twelve tree-only checks still run before the group that spawns processes.
+
+### Amended 2026-09-28 — CI runs `ci-check` as parallel shards
+
+CI no longer runs `make ci-check` as one serial step, which took 600s on run 36509895299. It runs `ci-check-product` (the harness), `ci-check-static` (docs-audit and the other tree checks), `ci-check-guards-1` and `ci-check-guards-2` as four parallel jobs, split so none runs much over 150s. Each shard keeps this entry's order: product checks before self-tests. A required job named `check` needs all four and fails unless each one succeeded, so a skipped or canceled shard counts as red. `make ci-check` is unchanged and is still what a session runs before pushing. `make docs-audit`'s `check registry` row fails when the shards' union is not `ci-check`'s recipe, target for target.

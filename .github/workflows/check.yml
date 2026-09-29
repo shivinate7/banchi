@@ -46,13 +46,9 @@
 # registry` fails on an entry for a target `make check` does not run.
 #
 # THE "TWELVE TO FIFTEEN MINUTES" ABOVE IS WHAT IT COST FROM 2026-09-07 TO 2026-09-11, AND IT
-# IS LEFT AS WRITTEN (D136). Measured over 56 jobs: 940-1,020s wall-clock per run, 913 of 954s
-# in the `make design-check` step, `481 passed (15.2m)` on ONE worker — the runner has two
-# vCPUs and Playwright's default of half of them floors to one. Three things changed it, each
-# argued at the job below and in D136: the suite runs as three shards of one worker each; the
-# seven sleeps on a real clock (2.3 minutes of the serial run) became a fake clock advanced
-# by the same numbers; and the post-merge run below is skipped when the tree it would test
-# already passed on the PR. The new figures are in D136, from a dispatch of this file.
+# IS LEFT AS WRITTEN. What changed it, how the matrix is sharded now, and the measured figures
+# are in D136 and its amendments, never in this comment: the browser matrix's shard count, its
+# worker count and its case count have each moved since, and a number typed here goes stale.
 #
 # ON `push: main` TOO, AT THAT PRICE, for the reason the `on:` block below already gives about
 # every other row: a merge can break what neither side broke alone, and two branches editing one
@@ -127,8 +123,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  # FOUR SHARDS IN PARALLEL, NONE MUCH OVER 150s, AND ONE JOB NAMED `check` THAT ANSWERS FOR THEM (owner's word,
+  # 2026-09-28; D161, amended). The serial `make ci-check` took 600s on run 36509895299. The
+  # shards' recipes together are exactly `ci-check`'s, and `make docs-audit`'s `check registry`
+  # row fails when they are not. Each shard installs the same way and keeps D161's order, product
+  # first. `fail-fast: false` because a red shard is a claim about its own targets and the
+  # others are still worth their verdict.
+  ci-check:
+    name: ci-check (${{ matrix.target }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [ci-check-product, ci-check-static, ci-check-guards-1, ci-check-guards-2]
     steps:
       # The self-tests build throwaway clones and read `git worktree list`, and `merge-selftest`
       # walks main against a fixture origin. Full history is not needed for any of that, but a
@@ -191,8 +198,26 @@ jobs:
           print('FTS5 is available.')
           "
 
-      - name: make ci-check
-        run: make ci-check
+      - name: make ${{ matrix.target }}
+        run: make ${{ matrix.target }}
+
+  # THE REQUIRED CHECK. The ruleset names `check`, so this job keeps that name and passes only
+  # when every shard passed. `if: always()` because a job that `needs` a red shard is otherwise
+  # SKIPPED, and a skipped required check reads as not run; the test is `== 'success'` on every
+  # result, so a failed, skipped or cancelled shard all fail it.
+  check:
+    needs: [ci-check]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: every shard succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "shard results: ${RESULTS}"
+          for r in ${RESULTS}; do
+            [ "${r}" = "success" ] || { echo "a shard did not succeed"; exit 1; }
+          done
 
   # D133's guard as its own check on the PR, so a refusal reads as what it is rather than as one
   # red line inside ninety seconds of `make ci-check` (which runs it too, as `revert-guard`).
@@ -302,8 +327,8 @@ jobs:
   # widened" on the premise that `ubuntu-latest` was 2 vCPU on a PRIVATE repo, so half-of-cores
   # floored to one and more workers meant more of DEBT8's one-in-thirteen red. THAT PREMISE WENT
   # FALSE ON 2026-09-11: the repository went public, and the hosted runner measured on this repo
-  # (run 35420998424) is 4 vCPU / 15 GB, not 2. A local one-worker run of the full 668-case suite
-  # takes 11.7 minutes; `--workers=2` fits the runner's real core count. The clause is amended,
+  # (run 35420998424) is 4 vCPU / 15 GB, not 2. A local one-worker run of the whole suite
+  # took 11.7 minutes then; `--workers=2` fits the runner's real core count. The clause is amended,
   # not repealed — D136's own file records the amendment and the reason. Proof lives at
   # a twenty-dispatch table (at most 1 red run in 20) landing in a decision
   # entry of its own in a later commit of the same task; this comment is not the ongoing reader. Six shards over two runners'
