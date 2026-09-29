@@ -933,7 +933,7 @@ async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<St
     })
   })
 
-  await page.route(/\/photo\/\d+\/\d+$/, async (route) => {
+  await page.route(/\/photo\/(\d+\/\d+|by-card\/[0-9a-f]+)(\?.*)?$/, async (route) => {
     if (mood.noPhoto === true) {
       await route.fulfill({
         status: 404,
