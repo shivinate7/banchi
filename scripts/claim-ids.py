@@ -1607,7 +1607,7 @@ def protected_lines(ref: str, u: Unclaim, cwd: Optional[str] = None) -> Dict[str
     up, at line granularity rather than file granularity: this branch's own citations were
     written by this branch and are not in `ref`'s copy of anything. Every transform in
     `perform_unclaim` is line-local — anchored with `re.M`, or bounded by
-    `(?<![-\w])...(?![-\w])` — so a line is the right unit and no multi-line construct is
+    `(?<![-\\w])...(?![-\\w])` — so a line is the right unit and no multi-line construct is
     cut in half by working one at a time.
 
     IT IS EMPTY UNLESS THE NUMBERS COLLIDED, AND THAT IS WHY THIS IS NOT A BEHAVIOUR CHANGE

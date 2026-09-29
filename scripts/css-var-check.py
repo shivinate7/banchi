@@ -67,7 +67,7 @@ one (`/['"]/ `) opens what it reads as a string that never closes on its own ter
 past the attribute's real end and swallows whatever object literal follows, whose keys then
 count as definitions and can mask a genuinely undefined `var()` elsewhere. The check reports
 clean when it should report a finding, owner's ruling 2026-09-20: written down rather than
-chased. A regex carrying only a brace (`/}/`, `/\{/`) does NOT do this — the brace is merely
+chased. A regex carrying only a brace (`/}/`, `/\\{/`) does NOT do this — the brace is merely
 over-counted, which can only widen the span, never mask anything inside it — which is why the
 limit is exactly this narrow. No such shape exists in `app/src` today; full regex-versus-divide
 disambiguation was judged not worth the brittleness it would add to a guard whose only value
