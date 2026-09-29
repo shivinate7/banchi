@@ -25,12 +25,14 @@ The Makefile's own default is a stale fallback for a hand-run build, by design.
 **Merge needs an Orchestrator that the owner named.** A session merges only after the owner names the act.
 Only a session that the owner has called an Orchestrator may merge. It may merge only PRs it planned and reviewed.
 It merges only through `make merge ARGS="<n> --confirm"`, with CI green, and never with `--admin`.
-The designation is never inherited. It is never assumed from the shape of the work.
+The owner names it per turn. The designation is never inherited. It is never assumed from the shape of the work.
+`make merge` carries a needed rebase and force-push on a branch nobody else holds.
 It is never carried over from an earlier session. It replaced a standing grant. D42 holds the rest.
 
-**Model tiers.** Opus is for planning and for adversarial review of anything that touches money, TCGplayer or the
-store's data. Opus also serves a builder that redesigns a whole flow, and a hard merge.
-Sonnet builds and reviews every ordinary screen lane, fix round and delta review.
+**Model tiers.** Opus is for planning, for a builder that redesigns a whole flow, and for a hard merge.
+Every review is Sonnet. An Opus review needs the orchestrator to ask the owner first and get a yes.
+Sonnet builds every ordinary screen lane and fix round by default. An Opus lane is said in one line first,
+and raised only on the owner's word in `.claude/settings.local.json`.
 
 **A builder commits and pushes its branch after every pass, even when a check is red.**
 Each commit message ends with a `Done:` line and a `Next:` line.

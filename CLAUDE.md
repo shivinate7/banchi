@@ -51,16 +51,18 @@ make reap           # stop what THIS session started, nothing else. Previews. AR
                     #   --confirm stops only its own session's pids (D305, one session of two).
 make janitor-install # copy the sweep and reap to the user's home Claude bin directory.
 make merge          # merge a PR and move main onto it. ARGS=<n> previews. ARGS="<n> --confirm" merges.
+                    #   The owner names the session an Orchestrator first, per turn. It carries a needed
+                    #   rebase and force-push on a branch nobody else holds.
 make janitor        # what a finished session left behind. Previews. ARGS=--confirm reaps.
 make janitor-agent  # that sweep daily, unattended (main tree only). ARGS=--remove.
-make launch-agent   # start the server at login (main tree only). ARGS=--remove.
+make launch-agent   # start the server at login (main tree only). ARGS=--remove. It keeps the server alive over the real store.
 make dev            # Vite with hot reload. Runs beside `make up`.
 make server         # Python capture server alone. Blocks.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev`.
 make design-check   # DESIGN.md's Fulfillment floors in a browser. Machine-wide lock, refuses
                     #   rather than queues. ARGS=--wait queues. PKMNSCAN_SUITE_LOCK=off overrides.
                     #   PW_ARGS=<flags> reaches Playwright. After the run, read `.serve/design-check.json`
-                    #   once. Never poll it. Not in `make check`.
+                    #   once. Never poll it, never pipe it through `tail`. Not in `make check`.
 make design-check-quiet  # the same run, no progress stream, same lock.
 make text-density   # on-demand cut table of screen prose, never a gate. Not in `make check`.
 make demo           # seed a demo store and record the wire. Read `docs/specs/demo.md` first.
@@ -84,8 +86,12 @@ make catalog-mirror # dry run only. ARGS=--dry-run samples over HTTP HEAD.
 ./pkmnscan rescue   <run-dir>       # re-address a stranded run by digest. Previews. --write.
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable. --dry-run.
 ./pkmnscan emit     <run-dir> [<run-dir> ...]  # ONE import.csv across runs and games.
-                                   #   Flags: --cap N, --quantity SKU=N, --listed-only, --split-threshold,
-                                   #   --split-games, --live-guard FILE, --reprice-live F.
+                                   #   No standing cap: every unsent copy goes out unless a send bounds it.
+                                   #   --cap N holds a SKU to N copies LIVE. It refuses while a sent copy is
+                                   #   pending, so run reconcile --live first. --quantity SKU=N sends N copies.
+                                   #   --listed-only, --split-threshold, --split-games as named.
+                                   #   --live-guard FILE trims rows so TCGplayer never holds more copies than
+                                   #   are here. --reprice-live F adds a price-only row per live card F names.
 ./pkmnscan cards    name | audit [--verbose] | photos [--write] [--limit N] | identity [--write]
                                    # stable card names. `make cid-audit` runs the audit.
 ./pkmnscan prices   adopt [--write] | show [--held]  # the price corpus. Adopt folds legacy decisions.json in.
@@ -118,9 +124,11 @@ it. `#/fulfillment` is the Fulfiller's whole product, with no shell (D5, two per
   screen onto `Page` deletes its entries in the same commit.
 - `#/orders` and `#/shipping` are two stages of one screen (`OrdersHub`), joined client-side on order number.
 - `#/inventory` is the one owner-side view of stored cards (D31, one owner-side view). `#/boxes` and `#/pull` are not routes.
+  Sold cards are hidden by default (D132, sold is folded away). Order under a search is frozen once taken, and a sale
+  may not re-rank it (D181, the order is taken once).
 - `#/runs` is off-nav and opens Review's runs sheet (D291, the fold).
 - `#/product` is off-nav and deep-linked by SKU (D227, a route not a lens).
-- `#/revenue` is an eleventh nav row on purpose (D214, gross-revenue retrospective).
+- `#/revenue` is an eleventh nav row on purpose (D214, gross-revenue retrospective). It is gross only, leaves out canceled orders and never claims profit.
 
 ### The design system
 
@@ -248,7 +256,8 @@ you build here. Rationale and open questions live in `docs/CODES-DECISIONS.md`.
 ## Hard rules
 
 - **A RULE THAT CAN BE MECHANICALLY ENFORCED MUST BE.** A new rule needs its enforcement before it is done.
-  Without one, it needs an argument that none is possible (D173, a rule that can be enforced is).
+  Without one, it carries a bold NOT MECHANIZED line that says what a machine would have to see
+  (D173, a rule that can be enforced is).
   The `rule enforcement` row of `make docs-audit` parses every rule here.
   `HARD_RULE_FLOOR` and `PROSE_ONLY_EXPECTED` pin its count.
 - **A route is not a feature. Nothing is built until a screen reaches it.** Done is the route, a client function in
@@ -281,7 +290,8 @@ you build here. Rationale and open questions live in `docs/CODES-DECISIONS.md`.
 - **Nine shell mistakes are refused before they run** by `scripts/guard-shell.py --hook` on Bash and Write/Edit (D135, Codex reads the same rules).
   Each clause has an escape hatch that its refusal names: `PKMNSCAN_CHECKOUT`, `PKMNSCAN_TREE`, `PKMNSCAN_GH`,
   `PKMNSCAN_LINK`, `PKMNSCAN_WAIT`, `PKMNSCAN_PUSH`, `PKMNSCAN_STASH`, `PKMNSCAN_RESET`, `PKMNSCAN_NARRATE`
-  (D235, the heartbeat is refused a pipe). `make guard-shell-selftest` proves each one in a throwaway repo.
+  (D235, the heartbeat is refused a pipe). The ninth clause names its subjects, a short per-incident roster
+  that the self-test reconciles. The other eight resolve what a command would do. `make guard-shell-selftest` proves each one in a throwaway repo.
 - **A citation names a symbol, never a line.** Write a decision id, a section or `module.symbol` (no `.py`).
   A method is "`module.Class`'s `method`". A CSS rule is its selector.
   The `line anchors` row of `make docs-audit` refuses `path:N`, `file.ext:N`, `~N` and a bare `:N` after a cited file.
@@ -292,7 +302,9 @@ you build here. Rationale and open questions live in `docs/CODES-DECISIONS.md`.
   A session merges only after the owner names the act ("merge", not "ship it"). It uses
   `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
   Only a session that the owner names an Orchestrator may merge, and only PRs it planned and reviewed.
-  The designation is never inherited.
+  The designation is never inherited. A session that is not named asks for the word every time.
+  GitHub branch protection also requires `check` and `revert-guard`, with 0 reviews and `strict: false`.
+  It catches the remote half. The local hook is the only cover for a local fast-forward.
   `scripts/githooks/reference-transaction` and `scripts/githooks/pre-push` refuse, armed by `make hooks`.
   `PKMNSCAN_MAIN=off` is the hatch. The primary checkout syncs itself (D176, the primary checkout syncs):
   `scripts/primary_sync.py`, `PKMNSCAN_SYNC=off`, `make sync-selftest`.
@@ -300,14 +312,16 @@ you build here. Rationale and open questions live in `docs/CODES-DECISIONS.md`.
 ## Working agreement
 
 Report format: **Done, Deviations, Input Needed, Next**, in that order (parent CLAUDE.md). Done is one line per item:
-**BUILT**, **RECORDED** or **OTHER**, with its PR or commit. Use bold labels in one quoted block, never a code fence.
-Start with the point.
+**BUILT**, **RECORDED** or **OTHER**, with its PR or commit. "Solved" with no bucket named is refused.
+Use bold labels in one quoted block, never a code fence. Start with the point. No task restatement.
 
-- Run `make harness` before you say something works. Show the output.
+- Run `make harness` before you say something works. Give the verdict, never the output.
 - Screen work: experience is everything (D-claude-md-culled-rulings, rulings CLAUDE.md carried). Run a design pass
   before you build. Review the built screen against it before you call it done.
-- Opus is for planning, adversarial review of money, TCGplayer or store data, redesign of a whole flow, and hard
-  merges. Sonnet builds and reviews every ordinary lane by default.
+- Reserve Opus for planning, for a builder redesigning a whole flow, and for resolving a hard merge.
+  Every review is Sonnet. An Opus review needs the orchestrator to ask the owner first and get a yes.
+  Sonnet builds every ordinary screen lane and fix round by default. Say an Opus lane in one line first.
+  Raise it only on the owner's word, in `.claude/settings.local.json`.
 - A builder commits and pushes its branch after every pass, even red. Each commit message ends with `Done:` and
   `Next:` lines, so a lane resumes from its branch alone.
 - Read `docs/decisions/` before you propose an architecture change (`scripts/decision-context.py` finds the entry,
