@@ -1019,7 +1019,8 @@ UNREADABLE_CLAIM_SENTENCE = "Sending is paused because one saved record cannot b
 
 
 def _unreadable_claim_sentence(exc: Exception) -> str:
-    """The refusal for a live claim the store cannot read. The detail stays in the log, not on screen."""
+    """The refusal for a live claim the store cannot read. The detail (the row keys) goes to stderr, not the screen."""
+    print(f"unreadable claim: {exc}", file=sys.stderr)
     return UNREADABLE_CLAIM_SENTENCE
 
 

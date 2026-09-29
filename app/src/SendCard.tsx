@@ -766,7 +766,7 @@ export function SendCard({
 
       {(live.status?.unreadable_claims ?? 0) > 0 ? (
         <Notice tone="warn" compact className="send-standing send-unreadable" title="Sending is paused">
-          One saved record cannot be read, so this list may miss a send. Nothing was sent.
+          One saved record cannot be read, so this list may miss a send.
         </Notice>
       ) : null}
 

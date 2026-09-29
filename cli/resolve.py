@@ -1970,7 +1970,7 @@ def refuse_reallocated(payload: dict, inventory: master.Inventory, run: runs.Run
             f"drawer and is left as it is.\n"
             f"Nothing was joined, nothing was written, and no queue was touched.",
             f"Run {run.name} was over box {box}, which has been deleted or replaced since, "
-            f"so nothing was sent. Re-identify that box, or send without this run.",
+            f"so nothing was sent. Rebind it on Runs, or send without it.",
         )
 
 

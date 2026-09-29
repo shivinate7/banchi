@@ -1516,7 +1516,10 @@ def _unreadable_claims() -> List[str]:
     """Keys of live send claims that will not parse. Read after `live(strict=False)`."""
     claims = Store().read().send_claims
     claims.live(strict=False)
-    return claims.unreadable()
+    bad = claims.unreadable()
+    if bad:
+        print(f"unreadable send claim rows: {', '.join(bad)}", file=sys.stderr)
+    return bad
 
 
 def do_send_file(stamp: str, name: str) -> bytes:
