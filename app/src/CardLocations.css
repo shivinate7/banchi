@@ -242,6 +242,28 @@
      out under the sale control beside it (measured: a 211px state cell in a 110px track). */
   .card-locations-owner .card-locations-state { justify-self: stretch; justify-content: flex-start; }
 }
+/* A COLUMN TOO NARROW FOR THE ADDRESS BESIDE THE ACTION CELL. The cell reserves 169px (D118), so in
+   the walk's 220px column the `1fr` track was left 3px and the box name drew as `I` (screen
+   pass F5). Below 340px the cell takes its own row under the address instead; the reservation
+   stays, so a press still moves nothing. */
+@container copies (max-width: 339px) {
+  .card-locations-owner .card-locations-row {
+    grid-template-areas:
+      'place place'
+      'action action'
+      'neighbors neighbors'
+      'state state'
+      'bar bar';
+  }
+  .card-locations-owner .card-locations-row.is-nobar {
+    grid-template-areas:
+      'place place'
+      'action action'
+      'neighbors neighbors'
+      'state state';
+  }
+  .card-locations-owner .card-locations-action { justify-self: start; }
+}
 .card-locations-owner .card-locations-row:last-child { border-bottom: 0; }
 .card-locations-owner .card-locations-row:hover { background: var(--bn-hover); }
 
