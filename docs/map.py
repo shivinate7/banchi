@@ -6196,7 +6196,7 @@ COMPONENTS = [
                                           "remember the choice in `localStorage` under "
                                           "`banchi.theme` — device-local like the camera's "
                                           "deviceId (D27), and nothing about a card.",
-                                  "governed_by": ["D5", "D13", "D27", "D32", "D50", "D94", "D95",
+                                  "governed_by": ["D-empty-state-fills-the-frame", "D5", "D13", "D27", "D32", "D50", "D94", "D95",
                                                   "D117", "D118", "D125", "D196", "D221", "D260",
                                                   "D269", "D272", "D288", "D300"]},
             "src/kit/Icon.tsx": {"does": "one icon set, 73 paths on a 24-unit grid at 1.75 stroke "

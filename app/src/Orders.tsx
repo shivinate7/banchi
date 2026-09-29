@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 
 import {
   Button,
+  EmptyFrame,
   EmptyState,
   FilterBar,
   HideToggle,
@@ -3466,7 +3467,7 @@ function PullStage({
     return (
       <div className="orders-stage">
         {failure === null ? null : <Notice tone="danger" title={failure.message} />}
-        <div className="bn-panel orders-empty bn-empty-frame">
+        <EmptyFrame className="bn-panel orders-empty">
           <EmptyState
             icon="cart"
             title="No orders yet"
@@ -3484,7 +3485,7 @@ function PullStage({
           {receipt === null ? null : <div className="orders-empty-receipt">{receipt}</div>}
           <div className="bn-rule">or paste one</div>
           {emptyWell}
-        </div>
+        </EmptyFrame>
       </div>
     )
   }
