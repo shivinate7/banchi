@@ -381,9 +381,10 @@ def phantom_worklist(inventory, rows, taken_at: int):
 
     REAL = `Inventory.copies_on_hand` (the one definition of "still here") MINUS ghosts, the
     only new logic: a ghost is a card whose box has no row. SOLD SINCE THE EXPORT = the SKU's
-    sold copies minus `Inventory.sales_before(sku, taken)`, and those are added back: the
+    real sold copies not dated strictly before the export (`master.newer_stamp`, as in
+    `Inventory.sales_before`, which cannot skip ghosts), and those are added back: the
     export still counts them, so subtracting them too would double-count the sale.
-    `sales_before` counts nothing it cannot date, which understates the excess. That is the safe
+    `newer_stamp` dates nothing it cannot parse as before, which understates the excess. That is the safe
     direction: never tell the owner to cut a real copy.
     """
     real_boxes = {int(entry.box) for entry in inventory.boxes.values()}
@@ -396,10 +397,12 @@ def phantom_worklist(inventory, rows, taken_at: int):
     real, sold_since = {}, {}
     for sku in ghost_skus:
         real[sku] = len([c for c in inventory.copies_on_hand(sku) if not ghost(c)])
-        sold = len([
+        sold = [
             c for c in inventory.positions_for_sku(sku) if c.state == master.SOLD and not ghost(c)
-        ])
-        sold_since[sku] = max(0, sold - inventory.sales_before(sku, taken))
+        ]
+        # `sales_before`'s own test, over REAL cards only: it would count a ghost's sale too.
+        before = [c for c in sold if master.newer_stamp(taken, c.state_at) is True]
+        sold_since[sku] = len(sold) - len(before)
         real[sku] += sold_since[sku]
     live = {r[tcgcsv.SKU_COLUMN]: r for r in rows}
     out = []

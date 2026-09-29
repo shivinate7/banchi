@@ -19721,20 +19721,22 @@ def check_phantom_worklist(checks: Checks) -> None:
         ("C", "identified", None), ("C", "sold", "2026-09-27T17:00:00+00:00"),
         ("E", "identified", None), ("E", "sold", "2026-09-20T00:00:00+00:00"),
         ("D", "identified", None), ("D", "retired", None),
+        ("G", "identified", None), ("G", "sold", "2026-09-27T17:00:00+00:00"),
     ):
         card(1, sku, state, at or "2026-09-01T00:00:00+00:00")
     for sku in ("A", "A", "B", "C", "D", "E"):
         card(5, sku)
+    card(5, "G", "sold", "2026-09-20T00:00:00+00:00")  # a ghost sold BEFORE the export
     del inventory.boxes["5"]  # the buried box: its cards stay, its row is gone
     rows = [
         {"TCGplayer Id": sku, "Total Quantity": str(qty), "Product Name": sku, "Condition": "NM"}
-        for sku, qty in (("A", 4), ("B", 1), ("C", 2), ("D", 1), ("E", 2))
+        for sku, qty in (("A", 4), ("B", 1), ("C", 2), ("D", 1), ("E", 2), ("G", 2))
     ]
     taken = int(datetime(2026, 9, 27, 16, 0, tzinfo=timezone.utc).timestamp())
     got = {w[0]: w[3:] for w in cmd_reconcile.phantom_worklist(inventory, rows, taken)}
     checks.equal(
         got,
-        {"A": (4, 2, 2, 0), "B": (1, 0, 1, 0), "E": (2, 1, 1, 0)},
+        {"A": (4, 2, 2, 0), "B": (1, 0, 1, 0), "E": (2, 1, 1, 0)},  # G: live 2, real 1 sold since, a ghost sale is no real one -> 0
         "ghosts are not on hand: A live 4 real 2 excess 2, B live 1 real 0 excess 1; a sale "
         "after the export is added back (C) and live below real (D) is no excess",
     )
