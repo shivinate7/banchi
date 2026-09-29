@@ -1737,9 +1737,8 @@ def _check_variant_members(
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
             "variant_invalid",
-            f"variant {', '.join(repr(u) for u in unknown)} is not a finish of "
-            f"{entry['display']}. Stocked: {', '.join(vocabulary) or '(no finishes)'}. "
-            "GET /games serves the registry.",
+            f"{', '.join(unknown)} is not a finish of {entry['display']}. "
+            f"Stocked: {', '.join(vocabulary) or '(no finishes)'}. Pick one of those.",
         )
     return [finish for finish in vocabulary if finish in claim]
 
@@ -1877,10 +1876,8 @@ def _optional_game(payload: dict) -> Optional[str]:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
             "game_unverified",
-            f"{entry['display']} has no TCGplayer export yet, so nothing captured under it "
-            "could be identified, priced or listed. Obtain a Filtered CSV export for it and "
-            "author its rarities in pipeline/games.py; until then, capture it as another "
-            "game or leave it out of the box.",
+            f"{entry['display']} cannot be captured yet, because Banchi has no TCGplayer export for it. "
+            "Capture it as another game, or leave it out of the box for now.",
         )
     return text
 
@@ -2117,12 +2114,18 @@ def _optional_sections(payload: dict) -> Optional[Tuple[int, ...]]:
         # is not an existing empty section still refuses there, once mapped to keys.
         master.check_sections(list(dict.fromkeys(raw)))
         return tuple(int(v) for v in raw)
-    except (master.BadSections, TypeError, ValueError) as exc:
+    except master.BadSections as said:
+        # A first-party message (every `BadSections` raise is read by `scripts/error-words.py`).
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
             "sections_invalid",
-            f"{exc}. Sections are the index each one STARTS at, so the first is 1 and the "
-            f"list climbs without repeating: [1, 31, 56] is three dividers.",
+            f"{said}. Each section starts at a card number: the first is 1 and each next one is higher, like 1, 31, 56.",
+        ) from None
+    except (TypeError, ValueError):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "sections_invalid",
+            "The sections are not a list of card numbers. Each section starts at a card number: the first is 1 and each next one is higher, like 1, 31, 56.",
         ) from None
 
 
@@ -3445,7 +3448,7 @@ def do_app_file(path: str) -> Tuple[bytes, str, str]:
         raise BadRequest(
             HTTPStatus.SERVICE_UNAVAILABLE,
             "app_not_built",
-            "The app is not built. `make up` builds it; see .serve/supervisor.log.",
+            "The app has not been built yet. Start the app again from the Mac to build it.",
         )
     wanted = path.lstrip("/")
     if "\x00" in wanted or ".." in wanted.split("/"):
@@ -3570,8 +3573,7 @@ def do_photo_by_card(
         raise BadRequest(
             HTTPStatus.NOT_FOUND,
             "photo_not_found",
-            f"{cid[:24]!r} is not a photograph's name. `moved:` and `nophoto:` cards have "
-            "no photograph at a name of their own.",
+            "This card has no photograph of its own. Cards that were moved or never photographed have none.",
         )
     path = photos.path(cid)
     if not path.is_file():
@@ -4216,12 +4218,8 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
                     "claim_not_stocked_by_game",
-                    f"{join.said_place(inventory, box)} holds cards whose game does not stock this claim: "
-                    f"{named}{more}. Nothing was changed — a sweep that corrected only "
-                    f"the cards that fit would leave the box in a state nobody asked "
-                    f"for. Set `game` in this same call to judge every card against it, "
-                    f"or correct the odd cards one at a time through "
-                    f"PUT /inventory/{box}/<index>.",
+                    f"{join.said_place(inventory, box)} holds cards whose game does not stock this claim: {named}{more}. "
+                    "Nothing was changed. Set the game in the same change, or correct those cards one at a time.",
                 )
 
         # PHASE TWO — the card route's apply, per position: only fields present in the
@@ -4578,15 +4576,9 @@ def do_delete_card(box: int, index: int) -> dict:
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
                     "undo_too_late",
-                    f"{join.said_place(inventory, box, index)} is identified — it has made it into "
-                    f"inventory proper, and undo stops at `captured` (D10, ruling 2, "
-                    f"2026-08-23). What is wrong with it decides the remedy: a bad photo "
-                    f"is re-shot in place (POST /inventory/{box}/{index}/photo), a card "
-                    f"that has left the box is retired "
-                    f"(POST /inventory/{box}/{index}/retire), and a junk record is "
-                    f"deleted with the cards behind it slid forward "
-                    f"(POST /inventory/{box}/{index}/remove) — allowed while every "
-                    f"higher card in {join.said_place(inventory, box)} is still unsold, unretired and unlisted.",
+                    f"{join.said_place(inventory, box, index)} is already identified, so it can no longer be undone. To fix it, re-shoot "
+                    "the photo, retire the card if it left the box, or delete it if it is junk and every "
+                    "card after it is unsold, unretired and unlisted.",
                 )
             departure, route = (
                 ("a retirement", "retire")
@@ -4596,11 +4588,8 @@ def do_delete_card(box: int, index: int) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "undo_too_late",
-                f"{join.said_place(inventory, box, index)} is {card.state}, and {departure} is not undone "
-                f"by deleting the card that left. Undo removes a capture that was never "
-                f"listed — it reaches {' and '.join(UNDOABLE_STATES)} only. Send "
-                f"{{\"undo\": true}} to `/inventory/{box}/{index}/{route}` to reverse it, "
-                f"and leave the position alone.",
+                f"{join.said_place(inventory, box, index)} is {card.state}, and deleting the card does not undo {departure}. "
+                "Undo it on the card itself, and leave the position alone.",
             )
 
         # THE SECOND HALF OF THE SAME REFUSAL, and it is the half that used to be the state
@@ -4614,12 +4603,9 @@ def do_delete_card(box: int, index: int) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "undo_too_late",
-                f"{join.said_place(inventory, box, index)} is one copy of SKU {card.sku}, and that SKU is "
-                f"already out of this Mac: {summary}. Deleting this copy here would leave "
-                f"an import file — and then TCGplayer — disagreeing with the inventory, and "
-                f"the listing counts claiming a copy that is no longer in the box. Undo "
-                f"stops at `emit`. Pull the listing on TCGplayer, or mark this copy sold "
-                f"if it has left; either way, leave the position alone.",
+                f"{join.said_place(inventory, box, index)} is one copy of SKU {card.sku}, and that SKU is already out of this Mac: {summary}. "
+                "Deleting this copy here would leave the listing counts and TCGplayer disagreeing with the box. "
+                "Pull the listing on TCGplayer, or mark this copy sold if it has left; either way, leave the position alone.",
             )
 
         # BUILT ON ONCE ITS SITTING ENDS (UN-2, `docs/specs/undo.md` 11.1). The server
@@ -4847,30 +4833,22 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "card_sold",
-                f"{join.said_place(inventory, box, index)} is sold, and its gap is the permanent record of "
-                f"that sale (D10) — deleting it would erase a departure and renumber the "
-                f"cards behind a slot that must keep meaning what it means. If the sale "
-                f"was recorded in error, send {{\"undo\": true}} to "
-                f"`/inventory/{box}/{index}/sold` first.",
+                f"{join.said_place(inventory, box, index)} is sold, and its place keeps the record of that sale, so it cannot be deleted. "
+                "If the sale was a mistake, undo the sale first, then delete the card.",
             )
         if card.state == master.RETIRED:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "card_retired",
-                f"{join.said_place(inventory, box, index)} is retired ({card.retire_reason}) — it left "
-                f"inventory by its own door, and that departure keeps its record and its "
-                f"permanent gap (D26). If it is back in the box, send "
-                f"{{\"undo\": true}} to `/inventory/{box}/{index}/retire` first.",
+                f"{join.said_place(inventory, box, index)} is retired ({card.retire_reason}), and its place keeps the record of that. "
+                "If it is back in the box, undo the retirement first, then delete the card.",
             )
         if card.state == master.MOVED:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "card_moved",
-                f"{join.said_place(inventory, box, index)} was moved to {card.moved_to} (D83) — this key is "
-                f"a permanent tombstone, the same as a sold or retired one, and deleting it "
-                f"would put a future capture into a box this card's own history still "
-                f"claims. The card itself is not gone: move the transplant at "
-                f"{card.moved_to} instead.",
+                f"{join.said_place(inventory, box, index)} was moved to {card.moved_to}, and its place stays reserved. "
+                f"Delete the card at {card.moved_to} instead.",
             )
         held = _listing_hold(inventory, card)
         if held:
@@ -4888,10 +4866,8 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "capture_id_mismatch",
-                f"The card at {join.said_place(inventory, box, index)} is not the one this request "
-                f"describes — its capture_id is {card.capture_id!r}, not {aimed_at!r}. "
-                f"The box has probably shifted since it was read. Re-read the inventory "
-                f"and aim again; nothing was deleted.",
+                "The card at " f"{join.said_place(inventory, box, index)} is not the one this request was aimed at. The box has probably "
+                "shifted since it was loaded. Reload the box and try again; nothing was deleted.",
             )
 
         # The layout, validated BEFORE any file is touched — `BadSections` escapes as
@@ -4952,12 +4928,9 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "renumber_blocked",
-                f"Deleting {join.said_place(inventory, box, index)} would renumber every higher card in "
-                f"the box, and that shift is blocked: {named}{more}. A sold or retired "
-                f"gap up there is a permanent record a shift would close, and a listed "
-                f"copy's position is already in a file (D10, ruling 1). Reverse a "
-                f"departure recorded in error on its own route, wait for held listings "
-                f"to reconcile away — or leave the gap, which is D10's default answer.",
+                f"Deleting {join.said_place(inventory, box, index)} would renumber every higher card in the box, and that is blocked: {named}{more}. "
+                "A sold or retired card above it keeps its place on record, and a listed copy's position is "
+                "already in a file. Undo a mistaken sale or retirement, wait for held listings to clear, or leave the gap.",
             )
         movers.sort()
 
@@ -5163,25 +5136,21 @@ def _move_one(
         raise BadRequest(
             HTTPStatus.CONFLICT,
             "card_sold",
-            f"{join.said_place(inventory, box, index)} is sold, and its gap is the permanent record of "
-            f"that sale (D10) — a sold card has already left through the other door. If "
-            f"the sale was recorded in error, send {{\"undo\": true}} to "
-            f"`/inventory/{box}/{index}/sold` first.",
+            f"{join.said_place(inventory, box, index)} is sold, so it cannot be changed here. "
+            "If the sale was a mistake, undo it first, then try again.",
         )
     if card.state == master.RETIRED:
         raise BadRequest(
             HTTPStatus.CONFLICT,
             "card_retired",
-            f"{join.said_place(inventory, box, index)} is retired ({card.retire_reason}) — it already "
-            f"left inventory by its own door (D26). If it is back in the box, send "
-            f"{{\"undo\": true}} to `/inventory/{box}/{index}/retire` first.",
+            f"{join.said_place(inventory, box, index)} is retired ({card.retire_reason}), so it already left the inventory. "
+            "If it is back in the box, undo the retirement first, then try again.",
         )
     if card.state == master.MOVED:
         raise BadRequest(
             HTTPStatus.CONFLICT,
             "card_moved",
-            f"{join.said_place(inventory, box, index)} was already moved to {card.moved_to} (D83). Move "
-            f"the transplant at {card.moved_to} instead.",
+            f"{join.said_place(inventory, box, index)} was already moved to {card.moved_to}. Use the card at {card.moved_to} instead.",
         )
     # A CARD WITH A LIVE PAID READING DOES NOT MOVE (D262, D174). The claim holds this
     # key, and the batch writes its answer onto that key when it lands. Moved, the key is a
@@ -5352,7 +5321,8 @@ def _unmove_one(snapshot, store: Store, box: int, index: int) -> dict:
             key, sections_at_move=_arrival_layout(store, key, new_key)
         )
     except (master.CardNotFound, master.CardDeparted) as exc:
-        raise BadRequest(HTTPStatus.CONFLICT, "move_built_on", f"This move can no longer be undone: {exc}. Move the card back instead.") from None
+        files.log_cause('move undo', exc)
+        raise BadRequest(HTTPStatus.CONFLICT, "move_built_on", "This move can no longer be undone: the card it moved to has since left the box or changed. Move the card back instead.") from None
 
     found = photo_for(inventory, restored)
     restored.photo = str(found) if found is not None else None
@@ -5430,10 +5400,8 @@ def do_move_card(box: int, index: int, payload: dict) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "capture_id_mismatch",
-                f"The card at {join.said_place(inventory, box, index)} is not the one this request "
-                f"describes — its capture_id is {card.capture_id!r}, not {aimed_at!r}. "
-                f"The box has probably shifted since it was read. Re-read the inventory "
-                f"and aim again; nothing was moved.",
+                "The card at " f"{join.said_place(inventory, box, index)} is not the one this request was aimed at. The box has probably "
+                "shifted since it was loaded. Reload the box and try again; nothing was moved.",
             )
         result = _move_one(
             snapshot, inventory, key, box, index, to_box,
@@ -6583,9 +6551,8 @@ def do_release_box_listings(box: int, payload: dict) -> dict:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
             "confirm_required",
-            "Releasing a listing hold records your word that TCGplayer is holding none of "
-            "these copies — nothing here can check it. Send `confirm: true`, and show the "
-            "plan from GET /boxes/<box>/listings first.",
+            "Releasing a listing hold needs your confirmation, because nothing here can check that "
+            "TCGplayer is holding none of these copies. Confirm it, then try again.",
         )
 
     with Store().write() as snapshot:
@@ -6750,8 +6717,7 @@ def do_reclaim_box_photos(box: int, payload: dict) -> dict:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
             "confirm_required",
-            "Reclaiming deletes photographs that nothing can regenerate. Send `confirm: "
-            "true`, and show the count from GET /boxes/<box>/photos first.",
+            "Reclaiming deletes photographs that cannot be regenerated. Confirm it, then try again.",
         )
 
     with Store().write() as snapshot:
@@ -6768,9 +6734,9 @@ def do_reclaim_box_photos(box: int, payload: dict) -> dict:
                 HTTPStatus.CONFLICT,
                 "nothing_to_reclaim",
                 f"{join.said_place(inventory, box)} holds no sold card with a photograph still on disk"
-                + (f" — {len(already)} were reclaimed already" if already else "")
-                + ". A photograph is reclaimed from a SOLD card only; a retired card keeps "
-                "its photograph (D26), and a card on hand needs it for the pull preview.",
+                + (f", and {len(already)} were reclaimed already" if already else "")
+                + ". Only sold cards give up their photographs. Retired cards keep theirs, "
+                "and cards on hand need theirs for the pull preview.",
             )
 
         freed = 0
@@ -6890,11 +6856,8 @@ def do_delete_box(box: int) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "box_not_empty_of_commitments",
-                f"{join.said_place(inventory, box)} cannot be deleted: {named}{more}. Listed copies are "
-                f"commitments, not clutter (D10, ruling 3): wait for them to reconcile "
-                f"away, release them, or leave the box standing. Sold, retired and moved "
-                f"cards no longer stand in the way (D134) — they are buried in the "
-                f"graveyard when the box goes.",
+                f"{join.said_place(inventory, box)} cannot be deleted: {named}{more}. Listed copies are commitments, so wait "
+                "for them to clear, release them, or leave the box standing.",
             )
 
         holds.sort()
@@ -7619,8 +7582,8 @@ def _answer_target(
         raise BadRequest(
             HTTPStatus.CONFLICT,
             "not_in_queue",
-            f"{join.said_place(snapshot.inventory, box, index)} is not waiting in the review or parked queue, so "
-            f"there is nothing to answer. Reload the queue.",
+            f"{join.said_place(snapshot.inventory, box, index)} has no question waiting in the review list, so there is nothing to answer. "
+            "Reload the list.",
         )
 
     # ONE ENTRY GOVERNS THE OFFER, and it is the main-queue one whenever the position is
@@ -7709,10 +7672,8 @@ def _answer_target(
         raise BadRequest(
             HTTPStatus.CONFLICT,
             "no_candidates",
-            f"{join.said_place(snapshot.inventory, box, index)} is queued in {offering.name} as "
-            f"`{governing.reason}` and records no candidate rows, so there is nothing here "
-            f"to choose. Search this card's own export and answer with `from_catalog`, or "
-            f"re-shoot it.",
+            f"{join.said_place(snapshot.inventory, box, index)} is waiting with no candidate cards to choose from. "
+            "Search this card's own set for it, or re-shoot the photo.",
         )
 
     chosen = _candidate_with_sku(candidates, sku)
@@ -7771,11 +7732,8 @@ def _answer_target(
         raise BadRequest(
             HTTPStatus.CONFLICT,
             "condition_not_listed",
-            f"{sku} is a {offered_condition!r} row, and this product lists "
-            f"{', '.join(sorted(listable))} (D12). It was offered by a queue entry written "
-            f"before the catalog stopped carrying play grades — re-join this run and the "
-            f"entry will be rewritten with the rows the ladder would actually pick. Nothing "
-            f"was written.",
+            f"{sku} is a {offered_condition!r} row, and this product does not list that condition. It lists {', '.join(sorted(listable))}. "
+            "Match this run again and the question will be rewritten with rows that fit. Nothing was written.",
         )
 
     return card, holders, offering, governing, chosen, offered_condition
@@ -8148,9 +8106,7 @@ def _row_for_bind(snapshot, sku: str) -> "SkuRow":  # noqa: F821 - store.skus.Sk
         raise BadRequest(
             HTTPStatus.CONFLICT,
             "sku_unknown",
-            f"{sku} is not in the SKU table yet (identity-follows-sku.md §3.2). Fetch this "
-            f"game's export (or the live export), or run `pkmnscan skus adopt`, then try "
-            f"again.",
+            f"{sku} is not in the SKU list yet. Fetch this game's export or the live export, then try again.",
         )
     return row
 
@@ -8327,9 +8283,7 @@ def _bind_identity(
         raise BadRequest(
             HTTPStatus.CONFLICT,
             "sku_unknown",
-            f"{sku} is not in the SKU table yet (identity-follows-sku.md §3.2). Fetch this "
-            f"game's export (or the live export), or run `pkmnscan skus adopt`, then try "
-            f"again.",
+            f"{sku} is not in the SKU list yet. Fetch this game's export or the live export, then try again.",
         ) from exc
     except master.GameMismatch as exc:
         raise BadRequest(HTTPStatus.CONFLICT, "game_mismatch", str(exc)) from exc
@@ -8337,7 +8291,7 @@ def _bind_identity(
         raise BadRequest(
             HTTPStatus.NOT_FOUND,
             "card_not_found",
-            f"No card at {key}. bind_sku answers a card that exists.",
+            f"There is no card at {key}. Reload the box, then try again.",
         )
     return bound
 
@@ -9142,8 +9096,8 @@ def _reverse_stand_down(box: int, index: int) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "stand_down_origin_unknown",
-                f"the log cannot say what closed {where}'s question, so nothing here will "
-                f"guess. Answer the card instead, or reopen it with a fresh join.",
+                f"The history cannot say what closed {where}'s question, so nothing was guessed. "
+                "Answer the card instead, or reopen its question.",
             )
         if event.get("event") != STOOD_DOWN:
             raise BadRequest(
@@ -9263,9 +9217,8 @@ def _reverse_answer(box: int, index: int) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "not_in_queue",
-                f"{join.said_place(snapshot.inventory, box, index)} has no entry in the review or parked queue, so "
-                f"there is no answer here to take back. A later run may have released it. "
-                f"Reload the queue.",
+                f"{join.said_place(snapshot.inventory, box, index)} has no question waiting in the review list, so there is no answer to take back. "
+                "A later run may have released it. Reload the list.",
             )
 
         if not cleared:
@@ -9289,12 +9242,10 @@ def _reverse_answer(box: int, index: int) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "undo_too_late",
-                f"{join.said_place(snapshot.inventory, box, index)} was answered as SKU {card.sku}, and that SKU is "
-                f"already out of this Mac: {summary}. Taking the answer back would leave an "
-                f"import file — and then TCGplayer — holding a listing the inventory no longer "
-                f"claims. Undo stops at `emit`. Pull the listing on TCGplayer first if the "
-                f"answer was wrong, or correct the card by hand; either way the queue entry "
-                f"stays as it is.",
+                f"{join.said_place(snapshot.inventory, box, index)} was answered as SKU {card.sku}, and that SKU is already out of this Mac: {summary}. "
+                "Taking the answer back would leave TCGplayer holding a listing the inventory no longer claims. "
+                "Pull the listing on TCGplayer first if the answer was wrong, or correct the card by hand. "
+                "The question stays as it is.",
             )
 
         previous, origin_unknown = _answer_origin(store, key)
@@ -9701,11 +9652,11 @@ def _reverse_correction(box: int, index: int) -> dict:
         try:
             event = _correction_event(store.history_at(key), key)
         except (files.StoreError, OSError, ValueError) as exc:
+            files.log_cause('history read', exc)
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "correction_origin_unknown",
-                f"the store's history could not be read ({type(exc).__name__}: {exc}), so "
-                f"nothing here will guess. Correct the card by hand instead.",
+                f"The store's history could not be read because {files.plain_cause(exc)}, so nothing was guessed. Correct the card by hand instead.",
             ) from exc
         if event is None:
             raise BadRequest(
@@ -9860,9 +9811,8 @@ def do_confirm_identity(box: int, index: int, payload: dict) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "card_departed",
-                f"{join.said_place(snapshot.inventory, box, index)} has left inventory ({card.state}). A departed "
-                f"card's identity is frozen history (D134); this route confirms an "
-                f"on-hand card's listing.",
+                f"{join.said_place(snapshot.inventory, box, index)} has left the inventory ({card.state}), so its identity can no longer change. "
+                "Only cards on hand can have a listing confirmed.",
             )
         if not card.sku:
             raise BadRequest(
@@ -9981,11 +9931,11 @@ def _reverse_confirm(box: int, index: int) -> dict:
         try:
             event = _confirm_event(store.history_at(key), key)
         except (files.StoreError, OSError, ValueError) as exc:
+            files.log_cause('history read', exc)
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "confirm_origin_unknown",
-                f"the store's history could not be read ({type(exc).__name__}: {exc}), so "
-                f"nothing here will guess. Fix the card by hand instead.",
+                f"The store's history could not be read because {files.plain_cause(exc)}, so nothing was guessed. Fix the card by hand instead.",
             ) from exc
         restores_to = _valid_identity_restore(event.get("restores_to")) if event else None
         if restores_to is None:
@@ -10287,7 +10237,7 @@ def do_review_group_answer(payload: dict) -> dict:
                     absent[box] = absent.get(box, 0) + 1
                     continue
                 where = join.place_within_box(view, box, index)
-                named_parts.append(f"{where}: {exc.code} — {exc}")
+                named_parts.append(f"{where}: {exc}")
             for box, count in sorted(absent.items()):
                 named_parts.append(
                     f"{count} of the cards you named {'is' if count == 1 else 'are'} not in "
@@ -10316,11 +10266,9 @@ def do_review_group_answer(payload: dict) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "group_listing_disputed",
-                f"{len(disputed)} of {len(parsed)} cards are `listing_disputed` entries: "
-                f"{', '.join(disputed)}. Those ask whether an existing listing is right, "
-                f"not what a card is, and the answer can differ per card even under the "
-                f"same sku — answer them on the review screen one at a time, each beside "
-                f"its own photograph. Nothing was written.",
+                f"{len(disputed)} of {len(parsed)} cards are questions about an existing listing: "
+                f"{', '.join(disputed)}. The answer can differ per card, so answer them one at a time "
+                "on the review screen. Nothing was written.",
             )
 
         # ELIGIBILITY — the ruling's two conditions, checked here and not only on the
@@ -10344,11 +10292,9 @@ def do_review_group_answer(payload: dict) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "group_not_uniform",
-                f"This group may not be answered as one: {'; '.join(findings)}. A group "
-                f"write needs one shared reason code, exactly one candidate row per card, "
-                f"and one condition GRADE across the group — anything looser is answered "
-                f"one card at a time, each beside its own photograph (D4). Nothing was "
-                f"written.",
+                f"This group cannot be answered as one: {'; '.join(findings)}. A group needs one shared "
+                "reason, one candidate row per card and one condition grade. Anything looser is answered "
+                "one card at a time. Nothing was written.",
             )
 
         # PHASE TWO — the single route's write, per position, in request order. Same
@@ -10693,19 +10639,14 @@ def _sell(snapshot, box: int, index: int, undo: bool, still_here: bool = False) 
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "card_retired",
-                f"{join.said_place(snapshot.inventory, box, index)} is retired ({card.retire_reason}) — it left "
-                f"inventory without a sale, and a sale recorded over that would replace "
-                f"the record of a departure with a transaction that did not happen. If "
-                f"it genuinely sold after all, send {{\"undo\": true}} to "
-                f"`/inventory/{box}/{index}/retire` first, then mark it sold.",
+                f"{join.said_place(snapshot.inventory, box, index)} is retired ({card.retire_reason}), so it left the inventory without a sale. "
+                "If it did sell after all, undo the retirement first, then mark it sold.",
             )
         if was == master.MOVED:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "card_moved",
-                f"{join.said_place(snapshot.inventory, box, index)} was moved to {card.moved_to} (D83) — this key "
-                f"is a tombstone, not the card. Mark the transplant at {card.moved_to} "
-                f"sold instead.",
+                f"{join.said_place(snapshot.inventory, box, index)} was moved to {card.moved_to}. Mark the card at {card.moved_to} sold instead.",
             )
         restored = master.SOLD
 
@@ -10717,9 +10658,8 @@ def _sell(snapshot, box: int, index: int, undo: bool, still_here: bool = False) 
         raise BadRequest(
             HTTPStatus.CONFLICT,
             "inventory_conflict",
-            f"{join.said_place(snapshot.inventory, box, index)} vanished between being read and being written. "
-            f"Retry; if it repeats, another process is writing inventory.json outside "
-            f"the store lock.",
+            f"{join.said_place(snapshot.inventory, box, index)} changed while it was being saved. Try again, "
+            "and if it repeats, make sure no other job is using the inventory.",
         )
 
     # THE SALE MOVES THE SKU'S `live` COUNT, WHICH IS THE HALF OF A SALE THAT USED TO BE
@@ -11035,9 +10975,8 @@ def do_retire(box: int, index: int, payload: dict) -> dict:
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
                     "inventory_conflict",
-                    f"{join.said_place(snapshot.inventory, box, index)} vanished between being read and being "
-                    f"written. Retry; if it repeats, another process is writing "
-                    f"inventory.json outside the store lock.",
+                    f"{join.said_place(snapshot.inventory, box, index)} changed while it was being saved. Try again, "
+                    "and if it repeats, make sure no other job is using the inventory.",
                 )
             # After the state write and inside the same session, so the two commit together
             # or neither does. See the docstring for why the reason does not outlive the
@@ -11048,10 +10987,8 @@ def do_retire(box: int, index: int, payload: dict) -> dict:
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
                     "already_sold",
-                    f"{join.said_place(snapshot.inventory, box, index)} is sold — it left inventory by the other "
-                    f"door, and retiring it would overwrite the record of a real sale. If "
-                    f"the sale is the mistake, send {{\"undo\": true}} to "
-                    f"`/inventory/{box}/{index}/sold` first.",
+                    f"{join.said_place(snapshot.inventory, box, index)} is sold, so it cannot be retired. "
+                    "If the sale was a mistake, undo it first, then retire the card.",
                 )
             if was == master.RETIRED:
                 raise BadRequest(
@@ -11066,9 +11003,7 @@ def do_retire(box: int, index: int, payload: dict) -> dict:
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
                     "card_moved",
-                    f"{join.said_place(snapshot.inventory, box, index)} was moved to {card.moved_to} (D83) — this "
-                    f"key is a tombstone, not the card. Retire the transplant at "
-                    f"{card.moved_to} instead.",
+                    f"{join.said_place(snapshot.inventory, box, index)} was moved to {card.moved_to}. Retire the card at {card.moved_to} instead.",
                 )
             # `Inventory.retire` is the state write, the reason write and the history line
             # in one method — see its docstring for why the three must not come apart. The
@@ -11077,9 +11012,8 @@ def do_retire(box: int, index: int, payload: dict) -> dict:
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
                     "inventory_conflict",
-                    f"{join.said_place(snapshot.inventory, box, index)} vanished between being read and being "
-                    f"written. Retry; if it repeats, another process is writing "
-                    f"inventory.json outside the store lock.",
+                    f"{join.said_place(snapshot.inventory, box, index)} changed while it was being saved. Try again, "
+                    "and if it repeats, make sure no other job is using the inventory.",
                 )
 
         body = {
@@ -11173,27 +11107,21 @@ def do_reshoot(box: int, index: int, payload: dict) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "card_sold",
-                f"{join.said_place(inventory, box, index)} is sold, and its stored photo is the record of "
-                f"what was sold — replacing it would swap the evidence a dispute is "
-                f"answered with. If the sale was recorded in error, send "
-                f"{{\"undo\": true}} to `/inventory/{box}/{index}/sold` first.",
+                f"{join.said_place(inventory, box, index)} is sold, and its photo is the record of what was sold, so it cannot be replaced. "
+                "If the sale was a mistake, undo it first, then try again.",
             )
         if card.state == master.RETIRED:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "card_retired",
-                f"{join.said_place(inventory, box, index)} is retired ({card.retire_reason}) — it has left "
-                f"inventory, and a photo of a card that left is a photo of nothing. If it "
-                f"is back in the box, send {{\"undo\": true}} to "
-                f"`/inventory/{box}/{index}/retire` first.",
+                f"{join.said_place(inventory, box, index)} is retired ({card.retire_reason}), so it has left the inventory and its photo "
+                "cannot be replaced. If it is back in the box, undo the retirement first.",
             )
         if card.state == master.MOVED:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "card_moved",
-                f"{join.said_place(inventory, box, index)} was moved to {card.moved_to} (D83) — this key "
-                f"is a tombstone with no photo of its own. Re-shoot the transplant at "
-                f"{card.moved_to} instead.",
+                f"{join.said_place(inventory, box, index)} was moved to {card.moved_to}. Re-shoot the card at {card.moved_to} instead.",
             )
 
         holder = inventory.card_by_capture_id(capture_id)
@@ -11201,9 +11129,7 @@ def do_reshoot(box: int, index: int, payload: dict) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "capture_id_in_use",
-                f"capture_id {capture_id!r} already names the capture at {holder.key}. "
-                f"Every photograph gets a fresh id — mint a new one rather than reusing "
-                f"another card's.",
+                f"That photo already belongs to the card at {holder.key}. Take the photo again to get a fresh one.",
             )
 
         # A RE-SHOOT MUST MINT A NEW ID WHEN THE BYTES CHANGE. The id is the version in every
@@ -11216,9 +11142,9 @@ def do_reshoot(box: int, index: int, payload: dict) -> dict:
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
                     "capture_id_in_use",
-                    f"capture_id {capture_id!r} already names this card's current photograph, "
-                    f"and these bytes differ. Every new photograph gets a fresh id — mint a "
-                    f"new one.",
+                    "This card's current photograph already has that name, and this is a "
+                    "different picture. Take the new photograph again so it gets a name of "
+                    "its own.",
                 )
 
         previous_capture_id = card.capture_id
@@ -14463,8 +14389,7 @@ def _ingest_record(order_at: int, raw) -> order_store.OrderRecord:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
             "lines_required",
-            f"Order {order_at} carries no `lines`. An order with nothing on it is a "
-            f"purchase nobody can pick, and it is refused rather than stored empty.",
+            f"Order {order_at} has no lines, so nobody could pick it. It was refused rather than stored empty.",
         )
 
     # THE KEY IS COMPOSED BEFORE ANYTHING IS WRITTEN so a bad one refuses by name rather
@@ -15026,29 +14951,22 @@ def _prepare_targets(
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
                     "copy_not_identifiable",
-                    f"The card at {where} carries no capture_id, so this pull "
-                    f"cannot be made idempotent and is refused rather than counted "
-                    f"blind. Every record written by this server has one; this is a "
-                    f"record that predates it.",
+                    f"The card at {where} has no stored identity, so the pull was refused rather than risk "
+                    "counting it twice. Every card saved by this app has one; this is an older record.",
                 )
             if str(card.capture_id) != target["capture_id"]:
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
                     "capture_id_mismatch",
-                    f"The card at {where} is not the card the screen drew: it "
-                    f"carries capture_id {card.capture_id!r} and the request aimed at "
-                    f"{target['capture_id']!r}. A mid-box delete, a capture undo "
-                    f"releasing an index, or a re-shoot all change a slot's occupant. "
-                    f"Re-read the order screen, then aim again.",
+                    f"The card at {where} is not the card the screen showed. A delete, an undo or a re-shoot "
+                    "may have changed what sits there. Reload the order screen, then try again.",
                 )
             if not undo and str(card.sku or "").strip() != sku:
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
                     "sku_mismatch",
-                    f"The card at {where} carries SKU "
-                    f"{str(card.sku or '') or 'nothing'}, and this pull is for {sku}. "
-                    f"A copy fills a line by carrying its SKU; nothing here recategorises "
-                    f"a card to make it fit.",
+                    f"The card at {where} carries SKU {str(card.sku or '') or 'nothing'}, but this pull is for {sku}. "
+                    "A copy fills a line only when its SKU matches.",
                 )
             # COMPUTED BEFORE ANY WRITE — see `do_order_pull`'s docstring, phase one.
             place = places.of(target["box"], target["index"])
@@ -15081,9 +14999,8 @@ def _ledger_pull(
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
                     "pull_not_recorded",
-                    f"The ledger has no record of the copy {copy!r} being pulled for an "
-                    f"order, so this route did not do what is being undone. If it was "
-                    f"marked sold on #/inventory, reverse it there.",
+                    "This order has no pulled copy to put back. "
+                    "If the copy was marked sold on the Inventory screen, undo it there.",
                 )
             built_on = _order_built_on(snapshot, holder[0])
             if built_on is not None:
@@ -15245,13 +15162,12 @@ def do_order_pull(payload: dict) -> dict:
         # ---------------------------------------------------------------- phase one
         prepared, refused = _prepare_targets(snapshot, places, parsed, sku, undo, set())
         if refused:
-            named = "; ".join(f"{where}: {exc.code} — {exc}" for where, exc in refused)
+            named = "; ".join(f"{where}: {exc}" for where, exc in refused)
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "pull_entry_refused",
-                f"{len(refused)} of {len(parsed)} positions refused, so the whole pull is "
-                f"refused and nothing was written — neither the ledger nor one card's "
-                f"state. Re-read the order screen and aim again. {named}",
+                f"{len(refused)} of {len(parsed)} positions were refused, so the whole pull was refused and "
+                f"nothing was written. Reload the order screen, then try again. {named}",
             )
 
         copies = [entry["capture_id"] for entry in prepared]
@@ -15407,14 +15323,7 @@ def do_order_fill(payload: dict) -> dict:
             raise BadRequest(
                 HTTPStatus.BAD_REQUEST,
                 "fill_reason_invalid",
-                f"{reason!r} is not a reason this store records. The reasons are "
-                f"{', '.join(order_store.FILL_REASONS)} — {order_store.FILL_SEALED} for a "
-                f"line that is not a single and was picked by hand, "
-                f"{order_store.FILL_OFF_SYSTEM} for a single this store never "
-                f"photographed, {order_store.FILL_SOLD_SEPARATELY} for a copy that was "
-                f"here and left through #/inventory's sale rather than the order pull. A "
-                f"refund or a cancellation is none of them and is not closed here: "
-                f"`fulfilled` counts copies that went. Stand it down instead.",
+                "A line can be closed here only when it was picked by hand and is not a single, when it is a single this store never photographed, or when the copy was sold separately on the Inventory screen. A refund or a cancellation is not closed here; stand it down instead.",
             )
 
     with Store().write() as snapshot:
@@ -16145,10 +16054,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             raise BadRequest(
-                HTTPStatus.BAD_REQUEST, "length_invalid", "Content-Length is not a number."
+                HTTPStatus.BAD_REQUEST, "length_invalid", "The request length could not be read."
             ) from None
         if length <= 0:
-            raise BadRequest(HTTPStatus.BAD_REQUEST, "body_required", "Send a JSON body.")
+            raise BadRequest(HTTPStatus.BAD_REQUEST, "body_required", "The request had no content.")
         # Base64 inflates by a third, and the decoded ceiling is enforced separately.
         if length > MAX_IMAGE_BYTES * 2:
             raise BadRequest(
@@ -16158,11 +16067,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             raise BadRequest(
-                HTTPStatus.BAD_REQUEST, "body_invalid", "Body is not valid JSON."
+                HTTPStatus.BAD_REQUEST, "body_invalid", "The request content could not be read."
             ) from None
         if not isinstance(payload, dict):
             raise BadRequest(
-                HTTPStatus.BAD_REQUEST, "body_invalid", "Body must be a JSON object."
+                HTTPStatus.BAD_REQUEST, "body_invalid", "The request content was not in a shape the server reads."
             )
         return payload
 
@@ -16193,11 +16102,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
             self._fail(
                 HTTPStatus.SERVICE_UNAVAILABLE,
                 "photo_busy" if photo else "server_busy",
-                f"This server is answering {PHOTO_SLOTS if photo else REQUEST_SLOTS} "
-                f"{'photograph and app-file ' if photo else ''}requests already and this one "
-                f"waited {files.LOCK_TIMEOUT_SECONDS:.0f}s for a turn. Nothing was read or "
-                f"written. Retry, and if it keeps happening something is driving it harder than "
-                f"a person can — see DEBT11.",
+                f"The server is busy with {PHOTO_SLOTS if photo else REQUEST_SLOTS} "
+                f"{'photograph and app-file ' if photo else ''}requests already, and this one "
+                f"waited {files.LOCK_TIMEOUT_SECONDS:.0f} seconds for a turn. Nothing was read or "
+                f"written. Try again in a moment.",
             )
             return
         _inflight_enter()
@@ -16236,8 +16144,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
             self._fail(
                 HTTPStatus.SERVICE_UNAVAILABLE,
                 "store_busy",
-                "The inventory is locked by another process — most likely a running "
-                "`./pkmnscan identify` or `./pkmnscan emit`. Wait for it, then retry.",
+                "The inventory is being used by another job, most likely an identify or a send that is "
+                "still running. Wait for it to finish, then try again.",
             )
         except (master.BadPosition, master.PositionOccupied, master.DuplicateCaptureId) as exc:
             self._fail(HTTPStatus.CONFLICT, "inventory_conflict", str(exc))
@@ -16284,7 +16192,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
             self._fail(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 "server_error",
-                f"{type(exc).__name__}: {exc}. This is a bug — check the server log.",
+                "Something went wrong inside the server. Try again, and if it repeats, restart the app on the Mac.",
             )
         finally:
             _inflight_leave()

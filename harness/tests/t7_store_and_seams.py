@@ -2760,10 +2760,7 @@ def check_undo(checks: Checks) -> None:
                 "in the same code the terminal states get — one code, remedy named per state",
             )
             checks.ok(
-                all(
-                    f"/inventory/3/3/{route}" in str(caught)
-                    for route in ("photo", "retire", "remove")
-                ),
+                all(word in str(caught) for word in ("re-shoot", "retire", "delete")),
                 "and the refusal names all three remedies: re-shoot, retire, and the "
                 "mid-box remove — which one is right depends on what is wrong with the "
                 "card, and only the operator knows that",
@@ -4962,8 +4959,8 @@ def check_review_answer(checks: Checks) -> None:
                 "and it refuses as no_candidates",
             )
             checks.ok(
-                "identification_failed" in str(caught),
-                "and the refusal names why the card is queued, since that is what says "
+                "no candidate cards" in str(caught),
+                "and the refusal says the card has nothing to choose from, since that is what says "
                 "whether it needs a re-shoot or a re-identify",
                 f"message was: {caught}",
             )
@@ -5182,8 +5179,8 @@ def check_review_answer(checks: Checks) -> None:
                 "re-identify, not an answer borrowed from the parked entry",
             )
             checks.ok(
-                "review" in str(caught) and "card_not_detected" in str(caught),
-                "naming the queue it read the offer from and why that card is queued",
+                "no candidate cards" in str(caught) and "re-shoot" in str(caught),
+                "saying there is nothing to choose from and offering the re-shoot",
                 f"message was: {caught}",
             )
 
@@ -5801,8 +5798,8 @@ def check_group_answer(checks: Checks) -> None:
             )
             checks.ok(
                 # D196: same fix — the raw key is gone, the said place is not.
-                "Section 1, Card 6" in str(caught) and "4/6" not in str(caught) and "not_in_queue" in str(caught),
-                "and the failing position is named WITH ITS OWN CODE, so one 409 still "
+                "Section 1, Card 6" in str(caught) and "4/6" not in str(caught) and "not_in_queue" not in str(caught),
+                "and the failing position is named in plain words, so one 409 still "
                 "reports per position, said the way the screens say it",
                 f"message was: {caught}",
             )
@@ -8052,7 +8049,7 @@ def check_retire(checks: Checks) -> None:
         if caught is not None:
             checks.equal(getattr(caught, "code", None), "card_retired", "in its own code")
             checks.ok(
-                "/inventory/3/1/retire" in str(caught),
+                "undo the retirement" in str(caught),
                 "and it names the RETIRE route as the way back — a retired card that "
                 "genuinely sells is two honest steps, reverse then sell",
                 f"message was: {caught}",
@@ -8072,7 +8069,7 @@ def check_retire(checks: Checks) -> None:
                 "in the same code a sold card gets — one code, two remedies",
             )
             checks.ok(
-                "/inventory/3/1/retire" in str(caught),
+                "undo it on the card itself" in str(caught).lower() and "retirement" in str(caught),
                 "and the message names the RETIRE route, not the sale's — 'reverse the "
                 "sale' on a retired card sends the operator to a route that will refuse",
                 f"message was: {caught}",
@@ -8142,7 +8139,7 @@ def check_retire(checks: Checks) -> None:
         if caught is not None:
             checks.equal(getattr(caught, "code", None), "already_sold", "in its own code")
             checks.ok(
-                "/inventory/3/2/sold" in str(caught),
+                "undo it first" in str(caught) and "sale was a mistake" in str(caught),
                 "naming the SALE's reversal route — the pair is what keeps each terminal "
                 "state's history clean enough for the other's reversal to read",
                 f"message was: {caught}",
@@ -8527,7 +8524,7 @@ def check_reshoot(checks: Checks) -> None:
         if caught is not None:
             checks.equal(getattr(caught, "code", None), "card_sold", "in its own code")
             checks.ok(
-                "/inventory/3/2/sold" in str(caught),
+                "undo it first" in str(caught) and "sold" in str(caught),
                 "naming the sale's reversal as the way back",
                 f"message was: {caught}",
             )
@@ -8542,7 +8539,7 @@ def check_reshoot(checks: Checks) -> None:
         if caught is not None:
             checks.equal(getattr(caught, "code", None), "card_retired", "in its own code")
             checks.ok(
-                "/inventory/3/2/retire" in str(caught),
+                "undo the retirement" in str(caught),
                 "naming the retirement's reversal as its way back — two codes, because "
                 "the remedies differ",
                 f"message was: {caught}",
@@ -31917,8 +31914,8 @@ def check_history_blocked_route(checks: Checks) -> None:
                     "is wrong with the run",
                 )
                 checks.ok(
-                    pricehistory.AGENT_ENV in str(refusal),
-                    "...and the refusal NAMES THE REMEDY, the environment variable (D171)",
+                    "browser signature" in str(refusal),
+                    "...and the refusal NAMES THE REMEDY, the browser signature setting, in plain words (D171, D196)",
                     str(refusal),
                 )
             checks.ok(
@@ -32431,8 +32428,8 @@ def check_order_ledger(checks: Checks) -> None:
         )
         if caught is not None:
             checks.ok(
-                key in str(caught) and "o2" in str(caught),
-                "and the refusal names the order and the copy holding it, so the operator "
+                key in str(caught),
+                "and the refusal names the order holding the copy, so the operator "
                 "can go and look rather than guess",
             )
 
@@ -33869,7 +33866,7 @@ def check_order_screen(checks: Checks) -> None:
         checks.ok(
             refused_aim is not None
             and refused_aim[0] == "pull_entry_refused"
-            and "capture_id_mismatch" in refused_aim[1],
+            and "not the card the screen showed" in refused_aim[1],
             "a target whose `capture_id` is not the card at that position is refused as "
             "`capture_id_mismatch`, reported through the whole-pull `pull_entry_refused`. A "
             "mid-box delete, a capture undo releasing an index or a re-shoot all change a "
@@ -33878,7 +33875,7 @@ def check_order_screen(checks: Checks) -> None:
         )
         checks.ok(
             refused_aim is not None
-            and f"The card at {where_3_2} is not the card the screen drew" in refused_aim[1]
+            and f"The card at {where_3_2} is not the card the screen showed" in refused_aim[1]
             and "3/2" not in refused_aim[1]
             and "box 3" not in refused_aim[1].lower(),
             "and the message NAMES THE PLACE, not the store position — the section and "
@@ -34073,8 +34070,8 @@ def check_order_screen(checks: Checks) -> None:
         checks.ok(
             aggregate is not None
             and aggregate[0] == "pull_entry_refused"
-            and f"{where_3_3}: capture_id_mismatch" in aggregate[1]
-            and f"{where_3_4}: copy_not_identifiable" in aggregate[1]
+            and f"{where_3_3}: The card at" in aggregate[1]
+            and f"{where_3_4}: The card at" in aggregate[1]
             and "3/3:" not in aggregate[1] and "3/4:" not in aggregate[1],
             "THREE TARGETS, TWO REFUSALS, AND EACH IS NAMED BY ITS PLACE, WITH ITS OWN "
             "CODE — never the store position `3/3` or `3/4` (D259). "
@@ -35543,8 +35540,8 @@ def check_price_history(checks: Checks) -> None:
             "the override still reached the wire — the host refused it, not this module",
         )
         checks.ok(
-            pricehistory.AGENT_ENV in str(exc),
-            "A 403 RAISES `Blocked` AND NAMES THE REMEDY — the environment variable, so a "
+            "browser signature" in str(exc),
+            "A 403 RAISES `Blocked` AND NAMES THE REMEDY — the browser signature setting, so a "
             "refusal that reaches a caller says what to do next (D171)",
             str(exc),
         )
@@ -38252,8 +38249,8 @@ def check_pricing_reach(checks: Checks) -> None:
         "here irreversible as well as quiet",
     )
     checks.ok(
-        "--cap" in str(refusal or ""),
-        "and the refusal NAMES THE WAY FORWARD — `--cap N` — rather than only reporting that "
+        "cap when you send" in str(refusal or ""),
+        "and the refusal NAMES THE WAY FORWARD — a cap asked for at the send — rather than only reporting that "
         "the key is unwelcome, which is the shape every refusal in this pipeline takes",
     )
     checks.ok(

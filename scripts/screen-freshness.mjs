@@ -316,6 +316,9 @@ const RECORDED = {
     'neighborWords',
     // A send's written file, as an address the download door links to (like `runFileUrl`).
     'sendFileUrl',
+    // Plain-words helpers: `failureTone` maps a failure to a tone, `refusalToast` builds a
+    // toast from an error already in hand. Neither makes a request.
+    'failureTone', 'refusalToast',
   ],
 }
 

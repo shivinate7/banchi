@@ -622,10 +622,11 @@ def _live_quantities(path: Path, step: str) -> Dict[str, int]:
         export = tcgcsv.read_export(path)
         return sendguard.live_by_sku(export.rows, export.header)
     except (OSError, ValueError, tcgcsv.MalformedCsv) as exc:
+        files.log_cause('live check', exc)
         raise PipelineRefusal(
             HTTPStatus.BAD_GATEWAY,
             "live_check_failed",
-            f"Banchi could not read what is live at TCGplayer ({exc}), so nothing was {step}.",
+            f"Banchi could not read the live export from TCGplayer because {files.plain_cause(exc)}, so nothing was {step}. Try again, or fetch the live export again.",
         ) from None
 
 
@@ -952,8 +953,7 @@ def do_send(payload: dict) -> dict:
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
             "confirm_required",
-            "A send reaches TCGplayer and makes copies live. Send `confirm` once the owner has "
-            "pressed it; nothing was sent.",
+            "A send reaches TCGplayer and makes copies live, so it needs your confirmation. Nothing was sent.",
         )
     directories = [pipeline_routes._open_run(str(name)) for name in wanted]
     with _press("listing"):
@@ -1550,7 +1550,7 @@ def do_take_back(stamp: str, payload: dict) -> dict:
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
             "confirm_required",
-            "Taking copies back changes what the next send offers. Send `confirm`.",
+            "Taking copies back changes what the next send offers. Confirm it first.",
         )
     # COMPARE AND SET, INSIDE THE STORE'S OWN WRITE (the round-3 review, H4). Two presses at once
     # both read "not taken back" above; the store write lets one in at a time, whatever process
@@ -1971,8 +1971,7 @@ def do_markdown_send(stamp: str, payload: dict) -> dict:
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
             "confirm_required",
-            "A send changes what buyers pay. Send `confirm` once the owner has pressed it; "
-            "nothing was sent.",
+            "A send changes what buyers pay, so it needs your confirmation. Nothing was sent.",
         )
     with _press("markdown"):
         progress: Dict[str, bool] = {}
@@ -2125,10 +2124,11 @@ def _markdown_judge(directory: Path, live_path: Path) -> Tuple[set, List[dict]]:
         live = sendguard.live_by_sku(fresh.rows, fresh.header)
         prices = sendguard.live_prices(fresh.rows)
     except (OSError, ValueError, tcgcsv.MalformedCsv) as exc:
+        files.log_cause('live check', exc)
         raise PipelineRefusal(
             HTTPStatus.BAD_GATEWAY,
             "live_check_failed",
-            f"Banchi could not read what is live at TCGplayer, so nothing was sent. {exc}",
+            f"Banchi could not read the live export from TCGplayer because {files.plain_cause(exc)}, so nothing was sent. Try again, or fetch the live export again.",
         ) from None
     named: Dict[str, tuple] = {}
     candidates: Dict[str, tuple] = {}

@@ -84,6 +84,8 @@ import {
   undoFill,
   undoPull,
   walkPlan,
+  failureTone,
+  refusalToast,
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
@@ -526,7 +528,7 @@ function StatusPicker({
     <div className="orders-statuses bn-well" role="group" aria-label="Which orders to fetch">
       {failure !== null ? (
         <div className="orders-statuses-state">
-          <Notice tone="danger" title={failure.message} code={failure.code} />
+          <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />
           <Button size="sm" icon="refresh" onClick={onRetry}>
             Count them again
           </Button>
@@ -1014,7 +1016,7 @@ async function undoFromToast(target: PullTarget, place: string, name: string): P
       toast({ kind: 'ok', icon: 'undo', title: 'Already undone', body: `${place} holds it, from somewhere else.` })
     } else {
       const trouble = describeFailure(err)
-      toast({ kind: 'refusal', title: 'The card was not put back', body: trouble.message })
+      toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
     }
   } finally {
     /* Clear `lastPull` only if this is still the pull it names — a later pull may already
@@ -1932,7 +1934,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         return { ok: true, refreshed: [] }
       }
       const trouble = describeFailure(err)
-      toast({ kind: 'refusal', title: 'The card was not put back', body: trouble.message })
+      toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
       return { ok: false }
     } finally {
       setHub((current) => ({ busy: null, lastPull: current.lastPull?.target.capture_id === target.capture_id ? null : current.lastPull }))
@@ -1974,7 +1976,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                   await undoFill(aim, done.moved)
                   touchHub()
                 } catch (err) {
-                  toast({ kind: 'refusal', icon: 'alert', title: describeFailure(err).message })
+                  toast({ ...refusalToast(err), icon: 'alert' })
                 }
               })()
             },
@@ -2044,7 +2046,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                   await reopenOrders(aim)
                   touchHub()
                 } catch (err) {
-                  toast({ kind: 'refusal', icon: 'alert', title: describeFailure(err).message })
+                  toast({ ...refusalToast(err), icon: 'alert' })
                 }
               })()
             },
@@ -2089,7 +2091,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                   await reopenOrders(done.closed)
                   touchHub()
                 } catch (err) {
-                  toast({ kind: 'refusal', icon: 'alert', title: describeFailure(err).message })
+                  toast({ ...refusalToast(err), icon: 'alert' })
                 }
               })()
             },
@@ -2132,7 +2134,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                   await reopenLines(aim)
                   touchHub()
                 } catch (err) {
-                  toast({ kind: 'refusal', icon: 'alert', title: describeFailure(err).message })
+                  toast({ ...refusalToast(err), icon: 'alert' })
                 }
               })()
             },
@@ -3727,7 +3729,7 @@ function PullStage({
     <div className={walking ? 'orders-stage is-walking' : 'orders-stage'}>
       <WalkLinePublisher words={walking && selectedGroup !== null ? chipWords : null} />
       {filterBar}
-      {failure === null ? null : <Notice tone="danger" title={failure.message} code={failure.code} />}
+      {failure === null ? null : <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />}
       {/* THE DEGRADED MAP, SAID ONCE (UX-266), in the kit's notice shape. The ledger answered and
           every Mark sold still works; only the other copies of each card are missing. */}
       {storeFailed ? (

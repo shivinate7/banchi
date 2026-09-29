@@ -34,6 +34,7 @@ import {
   saleStillHere,
   undoRetire,
   undoSale,
+  failureTone,
 } from './server'
 import { BoxIdentity, BoxOps, ClaimEditor, type ClaimPatch } from './BoxOps'
 import { reasonLabel } from './reasons'
@@ -1241,7 +1242,7 @@ export function BoxBrowse({
           setReshootBusy(null)
           const failed = describeFailure(err)
           setReshootFailure({ key: row.key, failure: failed })
-          toast({ kind: 'refusal', title: failed.message, body: failed.code })
+          toast({ kind: 'refusal', tone: failureTone(failed), title: failed.message })
         })
     }
     reader.onerror = () => {
@@ -2517,7 +2518,7 @@ export function BoxBrowse({
   return (
     <section className="browse">
       {failure === null ? null : (
-        <Notice tone="danger" title={failure.message} code={failure.code}>
+        <Notice tone={failureTone(failure)} title={failure.message} code={failure.code}>
           <Button size="sm" icon="refresh" onClick={() => setReloads((n) => n + 1)}>
             Try again
           </Button>
@@ -2845,7 +2846,7 @@ function ReshootControl({ row, busy, failure, onPick }: ReshootControlProps) {
       <Button size="sm" icon="camera" busy={busy} onClick={() => inputRef.current?.click()}>
         {label}
       </Button>
-      {failure === null ? null : <Notice tone="danger" title={failure.message} code={failure.code} />}
+      {failure === null ? null : <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />}
     </div>
   )
 }
@@ -3127,7 +3128,7 @@ function CardOps({
                 This card has left inventory, so it cannot be removed from its box.
               </p>
               {trouble === null ? null : (
-                <Notice tone="danger" title={trouble.message} code={trouble.code} />
+                <Notice tone={failureTone(trouble)} title={trouble.message} code={trouble.code} />
               )}
             </>
           ) : (
@@ -3175,7 +3176,7 @@ function CardOps({
               onApply={(patch) => void correct(patch)}
               onCancel={() => setOpen(null)}
             />
-            {trouble === null ? null : <Notice tone="danger" title={trouble.message} code={trouble.code} />}
+            {trouble === null ? null : <Notice tone={failureTone(trouble)} title={trouble.message} code={trouble.code} />}
           </div>
         </Overlay>
       )}
@@ -3193,7 +3194,7 @@ function CardOps({
               Every card after it takes the number before it. <strong>No undo.</strong>
             </p>
             <p className="bn-muted">Refused if a card after it was sold, retired or listed.</p>
-            {trouble === null ? null : <Notice tone="danger" title={trouble.message} code={trouble.code} />}
+            {trouble === null ? null : <Notice tone={failureTone(trouble)} title={trouble.message} code={trouble.code} />}
           </div>
           <div className="inv-dialog-foot">
             <Button variant="ghost" onClick={() => setOpen(null)} data-autofocus="">

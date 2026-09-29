@@ -307,10 +307,10 @@ def order_key(source: str, number: str) -> str:
     left = str(source).strip()
     right = str(number).strip()
     if not left or not right:
-        raise BadOrderKey(f"source {source!r} and number {number!r} must both be non-empty")
+        raise BadOrderKey(f"Source {source!r} and number {number!r} must both be non-empty")
     if SEPARATOR in left:
         raise BadOrderKey(
-            f"source {left!r} contains {SEPARATOR!r}, which is the key separator — the key "
+            f"Source {left!r} contains {SEPARATOR!r}, which is the key separator — the key "
             f"is split on the FIRST one, so a source carrying it makes two different orders "
             f"share a record. An order NUMBER may contain it."
         )
@@ -775,7 +775,7 @@ class Ledger:
             sku = str(line.sku).strip()
             if sku in seen:
                 raise DuplicateOrderLine(
-                    f"order {record.key} carries two lines for SKU {sku!r}; fulfilment is "
+                    f"Order {record.key} carries two lines for SKU {sku!r}; fulfilment is "
                     f"keyed by SKU, so a count against it would have two owners"
                 )
             seen.add(sku)
@@ -880,7 +880,7 @@ class Ledger:
         line = record.line_for(sku)
         if line is None:
             raise UnknownOrderLine(
-                f"order {key} has no line for SKU {str(sku).strip()!r}; it ordered "
+                f"Order {key} has no line for SKU {str(sku).strip()!r}; it ordered "
                 f"{', '.join(str(each.sku) for each in record.lines) or 'nothing'}"
             )
 
@@ -890,9 +890,8 @@ class Ledger:
             copy = str(raw).strip() if raw is not None else ""
             if not copy:
                 raise CopyNotIdentifiable(
-                    f"a copy pulled for order {key} SKU {line.sku} carries no capture_id, "
-                    f"so this pull cannot be made idempotent and is refused. A capture id "
-                    f"is minted per POST /capture and every record on this store has one."
+                    f"A copy pulled for order {key} SKU {line.sku} has no stored identity, so the pull was refused "
+                    "rather than risk counting it twice."
                 )
             if copy in row.copies or copy in fresh:
                 # Already recorded against THIS line. The repeated press: skipped, not
@@ -901,9 +900,8 @@ class Ledger:
             held = self.holder_of(copy)
             if held is not None:
                 raise CopyAlreadyPulled(
-                    f"capture_id {copy!r} is already recorded against order {held[0]} "
-                    f"SKU {held[1]}; recording it again for {key} would send the same "
-                    f"physical card to two buyers"
+                    f"That copy is already recorded against order {held[0]} SKU {held[1]}. "
+                    f"Recording it again for {key} would send the same card to two buyers."
                 )
             fresh.append(copy)
 
@@ -912,7 +910,7 @@ class Ledger:
 
         if int(row.fulfilled) + len(fresh) > int(line.quantity):
             raise OverFulfilled(
-                f"order {key} ordered {line.quantity} of SKU {line.sku} and has "
+                f"Order {key} ordered {line.quantity} of SKU {line.sku} and has "
                 f"{row.fulfilled} recorded; {len(fresh)} more would be "
                 f"{int(row.fulfilled) + len(fresh)}"
             )
@@ -968,7 +966,7 @@ class Ledger:
         line = record.line_for(sku)
         if line is None:
             raise UnknownOrderLine(
-                f"order {key} has no line for SKU {str(sku).strip()!r}; it ordered "
+                f"Order {key} has no line for SKU {str(sku).strip()!r}; it ordered "
                 f"{', '.join(str(each.sku) for each in record.lines) or 'nothing'}"
             )
         return line
@@ -1014,7 +1012,7 @@ class Ledger:
         row = self.recorded(key, sku)
         if int(row.fulfilled) + count > int(line.quantity):
             raise OverFulfilled(
-                f"order {key} ordered {line.quantity} of SKU {line.sku} and has "
+                f"Order {key} ordered {line.quantity} of SKU {line.sku} and has "
                 f"{row.fulfilled} recorded; {count} more would be "
                 f"{int(row.fulfilled) + count}"
             )

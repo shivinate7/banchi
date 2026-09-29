@@ -281,7 +281,7 @@ def reserve(entries: Sequence[Entry], code: str, *, order_id: str, buyer: Option
         entry.reserved_at = now()
         entry.state_at = entry.reserved_at
         return entry
-    raise LedgerError(f"{code[:3]}-**** is not in the ledger")
+    raise LedgerError(f"{code[:3]}-**** is not in the list of codes.")
 
 
 def take(entries: Sequence[Entry], *, order_id: str, count: int,
@@ -313,7 +313,7 @@ def deliver(entries: Sequence[Entry], code: str) -> Entry:
             entry.delivered_at = now()
             entry.state_at = entry.delivered_at
             return entry
-    raise LedgerError(f"{code[:3]}-**** is not in the ledger")
+    raise LedgerError(f"{code[:3]}-**** is not in the list of codes.")
 
 
 def kill(entries: Sequence[Entry], code: str, reason: str) -> Entry:
@@ -332,7 +332,7 @@ def kill(entries: Sequence[Entry], code: str, reason: str) -> Entry:
             entry.dead_reason = reason
             entry.state_at = now()
             return entry
-    raise LedgerError(f"{code[:3]}-**** is not in the ledger")
+    raise LedgerError(f"{code[:3]}-**** is not in the list of codes.")
 
 
 def counts(entries: Iterable[Entry]) -> Dict[str, int]:

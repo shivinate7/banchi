@@ -28,6 +28,7 @@ import {
   reclaimBoxPhotos,
   releaseBoxListings,
   updateBox,
+  failureTone,
 } from './server'
 import { nonEmptySections, spansOf } from './position'
 import { ReadingAge } from './CardLocations'
@@ -136,7 +137,7 @@ function useBoxWrite(onChanged: () => void): {
 /** The refusal panel: the server's sentence, then the greppable code beneath it. */
 function Trouble({ failure }: { failure: Failure | null }) {
   if (failure === null) return null
-  return <Notice tone="danger" title={failure.message} code={failure.code} />
+  return <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />
 }
 
 function count(n: number, one: string, many: string): string {

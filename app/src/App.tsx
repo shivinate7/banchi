@@ -1445,7 +1445,7 @@ export function App() {
           <div className="bn-banner" role="alert">
             <Icon name="alert" size={16} />
             <span className="bn-grow">
-              Banchi can’t reach the capture server. Screens will show stale or empty data until it answers.
+              Banchi can’t reach the server. Screens will show stale or empty data until it answers.
             </span>
             <Button size="sm" variant="quiet" icon="refresh" onClick={retry}>
               Retry

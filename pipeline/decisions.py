@@ -181,8 +181,7 @@ def parse_sub_threshold(value) -> Optional[pricing.Disposition]:
             _price(value[FLAT_KEY], "sub_threshold.flat"), allow_below_floor=True
         )
     raise MalformedDecisions(
-        f'sub_threshold: expected null, "{FLOOR_CHOICE}" or {{"{FLAT_KEY}": "0.25"}}, '
-        f"got {value!r}"
+        f"The below-cutoff choice is {value!r}, which is not one of: none set, \"{FLOOR_CHOICE}\" or a flat price."
     )
 
 
@@ -279,7 +278,7 @@ class Decisions:
     def parse(cls, payload: dict) -> "Decisions":
         if not isinstance(payload, dict):
             raise MalformedDecisions(
-                f"expected an object, got {type(payload).__name__}"
+                "The pricing settings are not a set of named settings. Restore them from a backup."
             )
 
         overrides: Dict[str, object] = {}

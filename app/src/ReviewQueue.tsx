@@ -36,6 +36,8 @@ import {
   undoAnswer,
   undoRetire,
   undoStandDown,
+  failureTone,
+  refusalToast,
 } from './server'
 import {
   Button,
@@ -828,11 +830,11 @@ export function ReviewQueue() {
         openRuns(false, first.run)
       } else {
         const failed = answer.failed[0]
-        toast({ kind: 'refusal', title: 'Nothing was paid for', body: failed?.sentence ?? failed?.message ?? 'The run did not start.' })
+        toast({ kind: 'refusal', tone: failed === undefined ? 'warn' : failureTone(failed), title: 'Nothing was paid for', body: failed?.sentence ?? failed?.message ?? 'The run did not start.' })
       }
       setReloads((n) => n + 1)
     } catch (err) {
-      toast({ kind: 'refusal', title: 'Nothing was paid for', body: describeFailure(err).message })
+      toast({ ...refusalToast(err, 'Nothing was paid for') })
     } finally {
       spending.current = false
       setSpendBusy(false)
@@ -1774,7 +1776,7 @@ function Tray({
 function RefusalNotice({ refusal, onReload, onDismiss, disabled }: { refusal: Refusal; onReload: () => void; onDismiss: () => void; disabled: boolean }) {
   const stale = STALE_CODES.has(refusal.failure.code)
   return (
-    <Notice tone="danger" title={refusal.failure.message} code={`${refusal.failure.code}${refusal.at === null ? '' : ` ${refusal.at}`}`} className="review-refusal review-note">
+    <Notice tone={failureTone(refusal.failure)} title={refusal.failure.message} code={`${refusal.failure.code}${refusal.at === null ? '' : ` ${refusal.at}`}`} className="review-refusal review-note">
       <span className="review-refusal-actions">
         {/* ICON-MAP (review): words, not an icon — this is the notice's own recovery, the
             one primary action beside Dismiss. words="only-primary" (rule 4). */}
@@ -3023,7 +3025,7 @@ function QueueRefresh({
           /* The TITLE carries the reassurance, not the body. `describeFailure`'s own
              messages already end with one — `origin_blocked`'s says "Nothing was saved" —
              and appending a second read as two different claims about one refusal. */
-          <Notice tone="danger" title="The re-check did not run, and nothing was written" code={failure.code}>
+          <Notice tone={failureTone(failure)} title="The re-check did not run, and nothing was written" code={failure.code}>
             {failure.message}
           </Notice>
         )}

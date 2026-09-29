@@ -283,6 +283,8 @@ export type Failure = {
    *  server was not reached, it failed inside, or it was busy. `refusal` is a "no" that the
    *  same press will get again. Optional, so a failure a screen builds by hand still types. */
   kind?: 'refusal' | 'retry'
+  /** The HTTP status when a response arrived, so a tone can tell a server fault (>= 500) from a refusal. */
+  status?: number
   /** What the refusal carries beside its sentence, when it carries any (round 7). */
   data?: unknown
 }
@@ -290,9 +292,12 @@ export type Failure = {
 /** The codes a second press can clear: nothing answered, or the store was mid-write. */
 const RETRY_CODES: ReadonlySet<string> = new Set(['unreachable', 'bad_response', 'store_busy'])
 
+/** ONE RULE FOR "THE SERVER BROKE": a 5xx. `failureKind` and `failureTone` both read it. */
+const isServerFault = (status: number | undefined): boolean => status !== undefined && status >= 500
+
 function failureKind(code: string, status: number): 'refusal' | 'retry' {
   if (RETRY_CODES.has(code)) return 'retry'
-  if (status >= 500 || status === 429 || status === 423) return 'retry'
+  if (isServerFault(status) || status === 429 || status === 423) return 'retry'
   return 'refusal'
 }
 
@@ -324,14 +329,47 @@ function failureKind(code: string, status: number): 'refusal' | 'retry' {
  * "finish the job" by wiring this into it.
  */
 export function describeFailure(err: unknown): Failure {
-  if (err instanceof ServerError) return { code: err.code, message: err.message, kind: failureKind(err.code, err.status), data: err.data }
-  const detail = err instanceof Error ? err.message : String(err)
+  if (err instanceof ServerError) return { code: err.code, message: err.message, kind: failureKind(err.code, err.status), status: err.status, data: err.data }
+  console.error('The app failed before the server could answer.', err) // the detail belongs in the console, never on screen
   return {
     kind: 'refusal',
     code: 'client_bug',
     message:
-      `The app failed before the capture server could answer: ${detail}. That is a bug in ` +
-      'the app rather than a refusal — check the browser console.',
+      'The app hit a problem before it could ask the server. Reload the page, and if it repeats, restart the app on the Mac.',
+  }
+}
+
+/** Which colour a failure earns. Red is for a real fault: the server did not answer, answered
+ *  garbage, or broke inside. A refusal, a busy store or a guard is a "no" the person can act on,
+ *  so it is a warning and never danger red. */
+const FAULT_CODES: ReadonlySet<string> = new Set([
+  'unreachable',
+  'origin_blocked',
+  'no_server_address',
+  'bad_response',
+  'http_error',
+  'client_bug',
+  'server_error',
+  'store_unavailable',
+  // Named 500s a run start reports inside a 200, where no status reaches the screen.
+  'spawn_failed',
+  'pkmnscan_missing',
+])
+
+export function failureTone(failure: { readonly code?: string | null; readonly status?: number }): 'warn' | 'danger' {
+  if (isServerFault(failure.status)) return 'danger'
+  return failure.code !== undefined && failure.code !== null && FAULT_CODES.has(failure.code) ? 'danger' : 'warn'
+}
+
+/** A refusal toast for a caught failure: amber for a refusal, red for a real fault, by the same
+ *  `failureTone` a Notice uses. With `title` given it is the headline and the server's sentence is the body. */
+export function refusalToast(err: unknown, title?: string) {
+  const f = describeFailure(err)
+  return {
+    kind: 'refusal' as const,
+    tone: failureTone(f),
+    title: title ?? f.message,
+    ...(title === undefined ? {} : { body: f.message }),
   }
 }
 
@@ -685,13 +723,6 @@ async function serverAnswersReads(): Promise<boolean> {
   }
 }
 
-/* The address in the phone's address bar, which is the thing being refused and the thing the
- * operator has to recognise. Guarded for the non-browser callers `sameHostBase` already names
- * — `tsc`, the specs' module imports, an editor's type server — where there is no address bar
- * to quote. */
-const pageOrigin = (): string =>
-  typeof window !== 'undefined' && window.location ? window.location.origin : 'this page'
-
 async function request(path: string, init?: RequestInit): Promise<unknown> {
   /* THE ONE SEAM. Every client function in this module funnels through here, so this branch
    * is the whole of what makes a published demo possible — no screen, no hook and no kit
@@ -707,8 +738,8 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
   if (base === FALLBACK_BASE) {
     throw new ServerError(
       'no_server_address',
-      'This copy of the app was built without the address of its capture server, so it ' +
-        'will not guess one. Nothing was sent. Build it again with `make up`.',
+      'This copy of the app does not know where its server is, so it sent nothing. ' +
+        'Start the app again from the Mac.',
       0,
     )
   }
@@ -751,18 +782,15 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
       noteReachable(true)
       throw new ServerError(
         'origin_blocked',
-        `The capture server at ${base} is running, but it will not accept changes from ` +
-          `${pageOrigin()}. Nothing was saved. Restarting the server will not help — the ` +
-          'address this page was opened at has to be one it allows. On the Mac, set ' +
-          'PKMNSCAN_LAN_NAME in .env to this address\u2019s host name and start it again.',
+        'The server is running, but it will not accept changes from this address. Nothing was saved. ' +
+          'Open the app at the address the Mac shows.',
         0,
       )
     }
     noteReachable(false)
     throw new ServerError(
       'unreachable',
-      `No answer from the capture server at ${base}. It may not be running — ` +
-        'start it with `make server`, then try again.',
+      'The server did not answer. It may not be running, so start it on the Mac, then try again.',
       0,
     )
   }
@@ -776,8 +804,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
      * this is precisely the lost-response case the retry guard exists for. */
     throw new ServerError(
       'unreachable',
-      `The connection to the capture server dropped while reading its answer to ${path}. ` +
-        'Retry the request.',
+      'The connection dropped before the server finished answering. Try again.',
       response.status,
     )
   }
@@ -792,7 +819,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
      * rather than inventing an explanation for a response nobody in this repo wrote. */
     throw new ServerError(
       'http_error',
-      `${response.status} ${response.statusText} from ${url}.`,
+      'Something between this page and the server refused the request. Try again, and if it repeats, restart the app on the Mac.',
       response.status,
     )
   }
@@ -803,8 +830,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
      * empty object that a screen renders as blanks. */
     throw new ServerError(
       'bad_response',
-      `The capture server answered ${response.status} for ${path} with a body that is not ` +
-        'JSON. This is a bug — check the server log.',
+      'The server answered with something the app cannot read. Try again, and if it repeats, restart the app on the Mac.',
       response.status,
     )
   }

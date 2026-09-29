@@ -17,6 +17,7 @@ import {
   ServerError,
   capture,
   createBox,
+  describeFailure,
   getBoxes,
   getCaptureSitting,
   getGames,
@@ -137,11 +138,11 @@ const HALT_CODE_INFO: Record<string, { headline: string; resume: string }> = {
   },
   store_busy: {
     headline: 'Captures are paused — the store is busy.',
-    resume: 'An `identify` or `emit` run is using it. Wait for it to finish, then resume.',
+    resume: 'An identify or a send is using it. Wait for it to finish, then resume.',
   },
   store_unavailable: {
     headline: 'Captures are paused — the store could not be reached.',
-    resume: 'Check the capture server is still running, then resume.',
+    resume: 'Check that the app is still running on the Mac, then resume.',
   },
   inventory_conflict: {
     headline: 'Captures are paused — the store disagreed with what this screen expected.',
@@ -152,7 +153,7 @@ const HALT_CODE_INFO: Record<string, { headline: string; resume: string }> = {
     resume: 'Reload the page to pick up the current game list, then choose Game again.',
   },
   game_unverified: {
-    headline: 'Captures are paused — this game has no export to join against.',
+    headline: 'Captures are paused — this game has no export to check its cards against.',
     resume: 'Choose a different game, or leave this one for a note-only capture, then resume.',
   },
   rarity_claim_invalid: {
@@ -188,8 +189,8 @@ const HALT_CODE_INFO: Record<string, { headline: string; resume: string }> = {
     resume: 'Check the camera feed is live, then resume.',
   },
   server_error: {
-    headline: 'Captures are paused — the server hit a bug.',
-    resume: 'Check the server log names it, then resume.',
+    headline: 'Captures are paused — the server hit a problem.',
+    resume: 'Wait a moment, then resume. If it repeats, restart the app on the Mac.',
   },
 }
 
@@ -598,8 +599,7 @@ function describe(err: unknown): Note {
   // strings — they say what happened and what to do next — and rewording them into
   // something friendlier makes them less actionable, not more.
   if (err instanceof ServerError) return { text: err.message, code: err.code }
-  if (err instanceof Error) return { text: err.message, code: null }
-  return { text: String(err), code: null }
+  return { text: describeFailure(err).message, code: null }
 }
 
 /* THE ADDRESS FIRST, AND THE NONCE ONLY WHERE THE ADDRESS CANNOT ANSWER (D172).
@@ -2223,7 +2223,7 @@ export function CaptureScreen() {
       setBoxNote(
         error instanceof ServerError
           ? error.message
-          : 'The box could not be created. Check the capture server is running.',
+          : 'The box could not be created. Check that the app is running on the Mac, then try again.',
       )
     } finally {
       setBoxBusy(false)

@@ -382,18 +382,16 @@ def _cookie() -> str:
     """
     value = envfile.get_live(COOKIE_ENV)
     if not value:
+        print(f"export: set {COOKIE_ENV} in the settings file", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "tcg_cookie_missing",
-            f"No {COOKIE_ENV} in .env, so there is no session to fetch the export with. "
-            f"Sign in to store.tcgplayer.com, copy the whole `Cookie:` header off any "
-            f"/admin/pricing request in the browser's network tab, and put it in .env as "
-            f"{COOKIE_ENV}=<that value>. It is a bearer instrument: .env only.",
+            "TCGplayer is not signed in on this Mac. Sign in at store.tcgplayer.com in your browser, open the pricing page, and copy the Cookie header of any request in the browser's network tab. Paste it into the Mac's settings file (the .env file in the app's folder), keeping it private, then try again.",
         )
     if "=" not in value:
+        print(f"export: {COOKIE_ENV} holds no name=value pair", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "tcg_cookie_malformed",
-            f"{COOKIE_ENV} holds no `name=value` pair, so it is not a Cookie header. Copy "
-            f"the whole header value, not just the ticket.",
+            "The saved TCGplayer session in the Mac's settings file (the .env file in the app's folder) is not a valid cookie. Copy the whole Cookie header value from your browser, not just part of it.",
         )
     return value
 
@@ -472,11 +470,10 @@ def _check_status(status: int, headers: dict, url: str) -> Optional[str]:
     if status in (301, 302, 303, 307, 308):
         location = str(headers.get("Location") or "")
         if _LOGON_MARKER in location.lower():
+            print(f"export: {COOKIE_ENV} has expired", file=sys.stderr, flush=True)
             raise FetchRefusal(
                 "tcg_session_expired",
-                f"TCGplayer redirected the download to its login page, which means the "
-                f"session in {COOKIE_ENV} has expired. Sign in again, copy the fresh "
-                f"`Cookie:` header, and replace the value in .env. Nothing was written.",
+                "TCGplayer sent the download to its sign-in page, so the saved session has expired. Sign in again, copy the fresh Cookie header into the Mac's settings file (the .env file in the app's folder), then try again. Nothing was written.",
             )
         if not location:
             raise FetchRefusal(
@@ -485,18 +482,16 @@ def _check_status(status: int, headers: dict, url: str) -> Optional[str]:
             )
         return urljoin(url, location)
     if status == 401:
+        print(f"export: {COOKIE_ENV} was refused", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "tcg_session_expired",
-            f"TCGplayer refused the session in {COOKIE_ENV} (401). Sign in again and "
-            f"replace the value in .env. Nothing was written.",
+            "TCGplayer refused the saved session as not authorised. Sign in again and replace the saved session in the Mac's settings file (the .env file in the app's folder). Nothing was written.",
         )
     if status == 403:
+        print(f"export: HTTP 403; set {AGENT_ENV} in the settings file", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "tcg_blocked",
-            f"TCGplayer answered 403. That is either the session having lost its "
-            f"permissions or the WAF declining this client by its request signature — set "
-            f"{AGENT_ENV} in .env to the User-Agent your browser sends and try again. If it "
-            f"keeps refusing, download the export by hand; nothing was written.",
+            "TCGplayer refused the request as forbidden. Either the session lost its permissions, or TCGplayer is declining this app's browser signature. Set the browser signature in the Mac's settings file (the .env file in the app's folder) to match your browser and try again. If it keeps refusing, download the export by hand. Nothing was written.",
         )
     if status >= 500:
         raise FetchRefusal(
@@ -587,14 +582,12 @@ def filters(category_id: int) -> Dict[str, Any]:
     except ValueError:
         raise FetchRefusal(
             "tcg_filters_unreadable",
-            "TCGplayer's filter list did not parse as JSON. The portal may have changed "
-            "shape; nothing was fetched.",
+            "TCGplayer's filter list could not be read. It may have changed. Nothing was fetched.",
         ) from None
     if not isinstance(parsed, dict) or "Sets" not in parsed:
         raise FetchRefusal(
             "tcg_filters_unreadable",
-            "TCGplayer's filter list is not the shape this reads — no `Sets`. Nothing was "
-            "fetched.",
+            "TCGplayer's filter list is not in the shape this app reads. Nothing was fetched.",
         )
     return parsed
 

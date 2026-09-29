@@ -684,7 +684,7 @@ def solve(
     missing = sorted(sku for sku, count in wanted.items() if reach.get(sku, 0) < int(count))
     if missing:
         raise Uncoverable(
-            "no set of stops can fill "
+            "No set of stops can fill "
             + ", ".join(
                 f"{sku} (wants {wanted[sku]}, {reach.get(sku, 0)} reachable)"
                 for sku in missing

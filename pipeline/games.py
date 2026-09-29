@@ -985,18 +985,14 @@ def require(key: str) -> Dict[str, object]:
     entry = get(key)
     if not entry["catalogued"]:
         raise NotCatalogued(
-            f"game {key!r} has no catalog to join against, permanently — it spans several "
-            "product lines at once, so there is no `Product Line` cell to filter an export "
-            "by and no export that would settle it. This is not a missing measurement. "
-            "Branch on games.is_catalogued() before the join; a card of this game is "
-            "captured, located, noted and identified, and then goes no further."
+            f"{key!r} has no card catalogue to match against, permanently, because it spans several product lines. "
+            "Its cards are captured, located and identified, and go no further."
         )
     if not entry["rarities"]:
         raise EmptyVocabulary(
-            f"game {key!r} has no authored rarities"
-            + (" (unverified: no export has been seen)" if entry["unverified"] else "")
-            + ". Author its vocabulary in pipeline/games.py against a real export; do not "
-            "fall back to another game's."
+            f"{key!r} has no known rarity list yet"
+            + (" (no export has been seen)" if entry["unverified"] else "")
+            + ". Add its rarities to Banchi's game list before capturing it. Another game's list is never borrowed."
         )
     return entry
 

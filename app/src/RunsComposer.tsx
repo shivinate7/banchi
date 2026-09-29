@@ -9,6 +9,7 @@ import {
   preflightRun,
   startRun,
   type Failure,
+  failureTone,
 } from './server'
 import type {
   BoxRecord,
@@ -820,7 +821,7 @@ export function RunsComposer({
 
         <div className="runs-composer-body">
           {trouble === null ? null : (
-            <Notice tone="danger" code={trouble.code}>
+            <Notice tone={failureTone(trouble)} code={trouble.code}>
               {trouble.message}
             </Notice>
           )}
@@ -829,7 +830,7 @@ export function RunsComposer({
           {stage === 'select' ? (
             <div className="runs-composer-stage" key="select">
               {boxesFailure === null ? null : (
-                <Notice tone="danger" code={boxesFailure.code}>
+                <Notice tone={failureTone(boxesFailure)} code={boxesFailure.code}>
                   {boxesFailure.message}
                 </Notice>
               )}
