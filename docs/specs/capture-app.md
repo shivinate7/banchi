@@ -89,8 +89,8 @@ depends on these rules:
 - It removes only the newest card in the box. `next_index` is a high-water mark, so a mid-box
   delete would leave a gap that reads like a sale's permanent gap. The refusal names the
   position that is undoable.
-- It removes only a `captured` card (`UNDOABLE_STATES`). An identified card has entered
-  inventory. Its remedies are re-shoot, retire and the mid-box remove. `undo_too_late` names
+- It removes only a `captured` card (`UNDOABLE_STATES`), and only inside the open sitting.
+  An older card refuses `capture_built_on`. An identified card has entered inventory. Its remedies are re-shoot, retire and the mid-box remove. `undo_too_late` names
   all three.
 - It runs in one `Store.write()`. It removes the record, the queue entries and the paid answer.
   It then removes the photo before the sidecar. A stranded sidecar costs nothing. A stranded
