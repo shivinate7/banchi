@@ -33271,6 +33271,27 @@ def check_order_reconcile_backlog(checks: Checks) -> None:
             )
 
 
+def check_order_line_sealed_from_title(checks: Checks) -> None:
+    """A sold sealed box whose SKU left the `skus` table, on a paste with no condition cell,
+    still answers `Unopened` (Sales' Singles/Sealed switch reads that one condition). A
+    single's name, and a name with "Box" in it but no `- Unopened` suffix, stay untouched."""
+
+    class NoSkus:
+        entries: dict = {}
+
+    def wire(name: str) -> dict:
+        return capture_server._order_line_wire(order_store.OrderLine(sku="1", quantity=1, name=name), NoSkus())
+
+    checks.equal(
+        wire("Pokemon - SV09: Journey Together: Journey Together Booster Box - Unopened")["condition"],
+        "Unopened", "a sealed title with no sku row and no condition reads Unopened",
+    )
+    checks.equal(wire("Pokemon - SV09: Journey Together: N's Zoroark - 100/159 - Near Mint")["condition"],
+                 None, "a single's title never gains a condition")
+    checks.equal(wire("Pokemon - Some Booster Box Promo")["condition"], None,
+                 "a name with Box in it but no Unopened suffix is never guessed sealed")
+
+
 # ---------------------------------------------------------------- the order screen
 
 
@@ -40775,6 +40796,7 @@ def run() -> Result:
     check_order_resolver(checks)
     check_order_ledger(checks)
     check_order_reconcile_backlog(checks)
+    check_order_line_sealed_from_title(checks)
     check_order_screen(checks)
     check_order_walk_plan_route(checks)
     check_order_places_scoped(checks)

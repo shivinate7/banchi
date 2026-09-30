@@ -29,7 +29,10 @@
      it (defect fix). */
   grid-template-columns: minmax(220px, 340px) minmax(180px, 1fr) minmax(220px, 300px);
   gap: var(--bn-7);
-  align-items: start;
+  /* STRETCH, NOT START: the shelf column runs about twice the height of the totals, and a
+     `start`-aligned strip left the band under the totals and bars empty. The bars take
+     whatever height the row has (their height is a share of it, see `Revenue.tsx`). */
+  align-items: stretch;
   padding-bottom: var(--bn-6);
   border-bottom: 1px solid var(--bn-line);
   margin-bottom: var(--bn-6);
@@ -61,7 +64,7 @@
   grid-auto-columns: minmax(76px, 1fr);
   gap: var(--bn-2);
   align-items: end;
-  height: 128px;
+  min-height: 128px;
   min-width: 0;
   overflow-x: auto;
 }
@@ -69,6 +72,7 @@
   display: grid;
   grid-template-rows: 1fr auto;
   height: 100%;
+  min-height: 0;
   gap: var(--bn-1);
   text-align: center;
   border-radius: var(--bn-r-sm);
@@ -82,6 +86,7 @@
   justify-content: flex-end;
   align-items: center;
   gap: var(--bn-1);
+  min-height: 0;
 }
 .revenue-month-bar {
   width: 100%;
@@ -191,6 +196,11 @@
 }
 @media (max-width: 639px) { .revenue-tile-art { aspect-ratio: auto; width: 96px; flex: none; } }
 .revenue-tile-art .bn-thumb { width: 100%; height: 100%; border-radius: 0; }
+/* A CATALOGUE (STOCK) PHOTO IS A PRODUCT SHOT WITH ITS OWN WHITE MARGIN AND, ON A CASE, A
+   COUNT BADGE NEAR AN EDGE. `cover` (the kit's default, right for a card photograph) crops
+   both: the badge ran off the frame and the white margin read as a box floating in the tile.
+   `contain` on the kit's neutral ground shows the whole image, badge inside, at every size. */
+.revenue-thumb-stock .bn-thumb-img { object-fit: contain; }
 /* A TILE WITH NO PHOTOGRAPH DOES NOT SPEND THE PHOTOGRAPH'S OWN SPACE ON EMPTY GREY (item 4,
    review round). Sealed product, and a single with every copy already gone, both draw the
    kit's ONE "no photo" placeholder (`bn-thumb[data-missing]`) — sized for a list row by
@@ -454,5 +464,5 @@
   .revenue-period .bn-seg-item { width: 100%; }
   .revenue-range .bn-field { width: auto; flex: 1; min-width: 132px; }
   .revenue-summary { grid-template-columns: minmax(0, 1fr); gap: var(--bn-5); margin-bottom: var(--bn-5); }
-  .revenue-months { height: 96px; }
+  .revenue-months { min-height: 96px; }
 }
