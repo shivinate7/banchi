@@ -447,7 +447,7 @@ def selftest() -> int:
     check("silent-write-selftest reaches shell_parse.py through its guard's import",
           "scripts/shell_parse.py" in derive_subjects(ROOT / "scripts/silent-write-selftest.sh"),
           True)
-    for target in ("claim-selftest", "silent-write-selftest"):
+    for target in ("claim-selftest", "silent-write-selftest", "audit-self-test"):
         entry = next(e for e in ROSTER if e["target"] == target)
         check(f"{target} reaches the docs_audit package through docs-audit.py's import",
               "scripts/docs_audit/**" in subjects_for(entry), True)
