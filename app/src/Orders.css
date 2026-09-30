@@ -360,7 +360,9 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-walk-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-1); }
 .orders-walk-press {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* THE NAME NEVER LOSES ITS ROOM: the slot numbers shrink and wrap before the name column drops
+     under 10ch. */
+  grid-template-columns: minmax(0, max-content) minmax(10ch, 1fr) auto;
   grid-template-areas: 'slot name pick' '. for for';
   align-items: center;
   gap: var(--bn-0-5) var(--bn-3);

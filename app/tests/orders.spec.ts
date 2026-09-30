@@ -5004,3 +5004,13 @@ test('a spare copy sells from the opened fold with its digit, and the order coun
   /* The order counts it: the pick reads as done. */
   await expect(page.locator('.orders-walk-line').first()).toHaveClass(/is-done/)
 })
+
+test('at 820 the pick line always shows the card name, and the slot numbers wrap before it', async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 1000 })
+  await open(page, { orders: oneOpenOrder(), walkPlan: twoCopyPlan() })
+  const name = page.locator('.orders-walk-line .orders-walk-name').first()
+  await expect(name).toHaveText('Volcanion')
+  const box = (await name.boundingBox())!
+  expect(box.width, 'the name keeps room to be read').toBeGreaterThan(60)
+  expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), 'the name is not truncated').toBe(true)
+})
