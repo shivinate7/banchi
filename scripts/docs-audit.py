@@ -66,6 +66,10 @@ import sys
 from pathlib import Path
 from typing import Optional, Sequence
 
+# THE AUDIT NEVER WRITES, and an imported package would leave bytecode beside its modules on every
+# run; the single file this replaced was never cached. So nothing is.
+sys.dont_write_bytecode = True
+
 _SCRIPTS = str(Path(__file__).resolve().parent)
 sys.path.insert(0, _SCRIPTS)
 try:
