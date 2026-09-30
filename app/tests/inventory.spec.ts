@@ -739,6 +739,8 @@ type OpenOptions = {
   boxesDelayMs?: number
   settle?: string
   hideSold?: boolean | null
+  /** Holds every `GET /search` answer until this settles — the pending state, made certain. */
+  searchGate?: Promise<void>
   /** Overrides `GET /orders`'s `resolution.orders` — the default fixture answers "no orders"
    *  (see the comment beside the route below), which is honest but means no case here ever
    *  drew the Wanted pill against a real claim. Passing this is how a test does. */
@@ -918,6 +920,7 @@ async function open(
 
   await page.route(/\/search\?/, async (route) => {
     const asked = new URL(route.request().url()).searchParams.get('q') ?? ''
+    await options.searchGate
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1181,11 +1184,6 @@ async function openBoxOps(page: Page) {
  *  below still assert every one of them; this is the press that reaches them. Idempotent, so a
  *  case may ask for the menu twice. */
 async function openCardOps(page: Page) {
-  /* WAIT FOR THE HEAD TO FINISH MOVING. The head draws the identity alone until the copies search
-     answers, then adds the figures column and pushes Actions ~380px left. A press that lands
-     across that jump goes down on the button and comes up elsewhere, so no click fires and the
-     menu never opens (measured: mousedown at x=1176, mouseup at x=800, ~1 in 100 at 10 workers). */
-  await expect(page.locator('.browse-hero-lead')).toBeVisible()
   if ((await page.getByRole('menuitem', { name: 'Correct' }).count()) === 0) {
     await page.getByRole('button', { name: 'Actions' }).click()
   }
@@ -8574,3 +8572,23 @@ test('D218: this lane\'s own facts draw the separator, never type it', async ({ 
   expect(await sheet.innerText()).not.toMatch(/[·•]/)
 })
 
+
+test('Actions does not move when the copies search answers', async ({ page }) => {
+  /* THE FLAKE THIS PINS: the head drew the identity alone until `/search` answered, then added its
+     figures column and shoved Actions ~380px left. A press across the jump went down on the button
+     and came up elsewhere, so no click fired. The column now holds its final width as placeholder
+     bars while the search is pending, so the button has one x for the whole life of the card. */
+  let release: () => void = () => {}
+  const searchGate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await open(page, BOXES, PRICED_STORE, () => PRICING, SALE, { settle: '.browse-hero-head', searchGate })
+  const actions = page.getByRole('button', { name: 'Actions' })
+  await expect(page.locator('.browse-hero-lead[data-pending="true"]')).toBeVisible()
+  const pending = await actions.boundingBox()
+  release()
+  await expect(page.locator('.browse-hero-lead:not([data-pending])')).toBeVisible()
+  const resolved = await actions.boundingBox()
+  expect(pending).not.toBeNull()
+  expect(resolved?.x).toBe(pending?.x)
+})

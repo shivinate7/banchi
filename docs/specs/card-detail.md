@@ -23,6 +23,11 @@ The panel has two parts.
     The figure itself is plain ink. A recent reading is calm: the dot is `bn-dot-live`, 6px, with no pulse.
     Under the figure is the ceiling meter: one cell for each listing that the cap allows, filled up to the live count.
     The end of the meter says **Cap 5**, so the meter says what it measures, and the ceiling reads with Live.
+- **The right column never arrives late (owner's ruling).** While the copies search is pending, the column draws
+  at its final width with a pulsing bar under each label: Stored, Live and Market for a card with a SKU, Stored
+  alone for one without. Actions rides the left column's end, so it keeps one x for the life of the card. A press
+  that crossed the old jump went down on the button and came up elsewhere, and no click fired. A search that
+  gives up draws no bars. `app/tests/inventory.spec.ts` holds the x.
 - At pane 410 the band stacks. A hairline puts the two figures side by side under the identity lines.
 - Labels are one word each: Stored, Live, Captured, Hidden, Sent, Cap.
 

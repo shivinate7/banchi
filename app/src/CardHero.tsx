@@ -42,7 +42,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ReadingAge } from './CardLocations'
 import { collectorNumber } from './cardNumber'
 import { forSale, IDENTIFIED, readingAgo, readingAgoShort, readingExact, stateLabel, stateTone, staleReading } from './cardState'
-import { Button, Icon, IconButton, Meter, Money, Pill, ProductLink } from './kit'
+import { Button, Icon, IconButton, Meter, Money, Pill, ProductLink, Skeleton } from './kit'
 import { toast } from './kit/toast'
 import { money } from './money'
 import { relativeDate, toDate } from './dates'
@@ -423,6 +423,27 @@ function HeroLead({ figures, market }: { readonly figures: HeroFigures; readonly
   )
 }
 
+/** THE LEAD COLUMN WHILE THE COPIES SEARCH IS STILL ASKING (D118, a press changes what is on
+ *  screen). The real column adds itself when the answer lands, and Actions, which rides the
+ *  identity column's end, used to jump ~380px left under a press. This holds the column at its
+ *  final width instead: a bar where each figure will land, the same three the resolved band draws
+ *  (Stored, Live, Market) for a card with a SKU and Stored alone for one without (D119, no SKU, no
+ *  listing figures). The kit's `Skeleton` pulses and stands still under reduced motion. */
+function HeroLeadPending({ listing }: { readonly listing: boolean }) {
+  return (
+    <div className="browse-hero-lead" aria-hidden="true" data-pending="true">
+      {(listing ? ['Stored', 'Live', 'Market'] : ['Stored']).map((label) => (
+        <div key={label} className="browse-hero-fig">
+          <span className="browse-hero-fig-label">
+            <span className="bn-label">{label}</span>
+          </span>
+          <Skeleton className="browse-hero-fig-bar" width="3ch" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /** The header both screens share, drawn as the band (card-detail spec): the identity on the left
  *  (name, the meta line with the finish and rarity pills on the same line, the side facts) and the
  *  two lead figures on the right. One column under 520px of pane width. `actions` is where a
@@ -435,6 +456,7 @@ export function CardHeroHead({
   postChips,
   actions,
   figures,
+  figuresPending = false,
   market = null,
 }: {
   readonly card: InventoryCard
@@ -445,6 +467,8 @@ export function CardHeroHead({
   readonly postChips?: ReactNode
   readonly actions?: ReactNode
   readonly figures?: HeroFigures | null
+  /** The copies search has not answered: hold the figures column at its final width. */
+  readonly figuresPending?: boolean
   /** The Market figure's price (`useMarketPrice`). */
   readonly market?: number | null
 }) {
@@ -504,7 +528,11 @@ export function CardHeroHead({
           </p>
         )}
       </div>
-      {figures == null ? null : <HeroLead figures={figures} market={market} />}
+      {figures != null ? (
+        <HeroLead figures={figures} market={market} />
+      ) : figuresPending ? (
+        <HeroLeadPending listing={card.sku !== null} />
+      ) : null}
     </div>
   )
 }
@@ -527,13 +555,14 @@ export type CardPaneProps = {
   readonly actions?: ReactNode
   /** The band's figures. Omitted, the band draws the identity alone. */
   readonly figures?: HeroFigures | null
+  readonly figuresPending?: boolean
   readonly photo: Omit<PhotoPanelProps, 'row'>
   /** The copies list beside the photo — `Inventory.tsx`'s `CopiesPanel`, handed down because
    *  the caller already knows which card is selected. */
   readonly detail?: ReactNode
 }
 
-export function CardPane({ row, game, dimmed = false, preChips, postChips, queued, actions, figures, photo, detail }: CardPaneProps) {
+export function CardPane({ row, game, dimmed = false, preChips, postChips, queued, actions, figures, figuresPending, photo, detail }: CardPaneProps) {
   const market = useMarketPrice(row.card)
   return (
     <section
@@ -542,7 +571,7 @@ export function CardPane({ row, game, dimmed = false, preChips, postChips, queue
       data-dimmed={dimmed ? 'true' : undefined}
       inert={dimmed}
     >
-      <CardHeroHead card={row.card} game={game} preChips={preChips} postChips={postChips} actions={actions} figures={figures} market={market} />
+      <CardHeroHead card={row.card} game={game} preChips={preChips} postChips={postChips} actions={actions} figures={figures} figuresPending={figuresPending} market={market} />
       {queued}
       {/* NO `detail`, NO COPIES COLUMN: `#/orders`' walk draws where each copy is in its own column, so
           its card pane is the head, the band and the photograph alone (same components, switched off
