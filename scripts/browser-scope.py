@@ -71,8 +71,6 @@ regardless — D136's pass record is the only thing that skips the matrix on mai
         Whole files, slowest first, onto the lightest shard, from `scripts/browser-spec-
         times.json` (file name to seconds: each test's median over 50 `check.yml` runs).
         A spec with no time gets the mean, so a stale table costs balance, never coverage.
-    scripts/browser-scope.py shard-plan M
-        Each shard's expected test seconds (wall-clock is about that over `--workers`).
     scripts/browser-scope.py shard-refresh FILE ... [--write]
         Re-time from `.serve/design-check.json` files (`fileSeconds`). The nightly uploads
         each shard's as `design-check-times-N`; download them and run this. Previews.
@@ -602,10 +600,7 @@ def selftest() -> int:
     ok(off_verdict.specs == set(all_specs()) and not off_verdict.partial,
        "PKMNSCAN_BROWSER_SCOPE=off selects every spec")
 
-    def shard_ok(cond: bool, label: str) -> None:
-        ok(cond, label)
-
-    shard_selftest_cases(shard_ok)
+    shard_selftest_cases(ok)
 
     print()
     if failures:
@@ -1087,8 +1082,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     sh.add_argument("n", type=int)
     sh.add_argument("m", type=int)
     sh.add_argument("specs", nargs="*")
-    plan = sub.add_parser("shard-plan", help="each shard's expected test seconds")
-    plan.add_argument("m", type=int)
     refresh = sub.add_parser("shard-refresh", help="re-time from design-check.json files")
     refresh.add_argument("files", nargs="+")
     refresh.add_argument("--write", action="store_true")
@@ -1107,10 +1100,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 2
         bins = pack_shards(args.specs or all_specs(), args.m, load_spec_times())
         print(" ".join(sorted(bins[args.n - 1][1])))
-        return 0
-    if args.command == "shard-plan":
-        for i, (load, files) in enumerate(pack_shards(all_specs(), args.m, load_spec_times()), 1):
-            print(f"shard {i}: {load:7.1f}s test time, {len(files)} specs")
         return 0
     if args.command == "shard-refresh":
         return shard_refresh(args.files, args.write)

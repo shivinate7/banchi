@@ -143,7 +143,7 @@ export default class DesignCheckVerdict implements Reporter {
   private failures: Failure[] = []
   private failureCount = 0
   private counts = { total: 0, passed: 0, failed: 0, flaky: 0, skipped: 0 }
-  // Seconds of test time per spec file. `scripts/browser-shards.py refresh` reads it to
+  // Seconds of test time per spec file. `scripts/browser-scope.py shard-refresh` reads it to
   // re-balance the CI shards by time.
   private fileSeconds: Record<string, number> = {}
   private readonly listOnly: boolean
