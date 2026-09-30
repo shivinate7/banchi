@@ -84,7 +84,6 @@
   transition: background-color var(--bn-t-fast) var(--bn-ease), border-color var(--bn-t-fast) var(--bn-ease);
 }
 .bn-hidetoggle-mark .bn-icon { opacity: 0; transition: opacity var(--bn-t-fast) var(--bn-ease); }
-.bn-hidetoggle[aria-pressed='true'] { color: var(--bn-ink); }
 .bn-hidetoggle[aria-pressed='true'] .bn-hidetoggle-mark { background: var(--bn-accent); border-color: var(--bn-accent); }
 .bn-hidetoggle[aria-pressed='true'] .bn-hidetoggle-mark .bn-icon { opacity: 1; }
 .bn-hidetoggle-count {

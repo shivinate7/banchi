@@ -45,12 +45,28 @@ for (const theme of ['light', 'dark'] as const) {
       expect(new Set(widths).size, `row widths ${widths.join(', ')}`).toBe(1)
 
       // The direction toggle is a segment inside the Sort field, never a loose icon beside it.
-      const inside = await overlay.locator('.bn-sort').evaluate((sort) => {
+      // Measured: the sort owns ONE drawn edge; its key and direction sit inside that edge,
+      // flush against each other, with no edge of their own on the key. A loose icon beside the
+      // field (no edge on the sort, a gap between the two) fails every line.
+      const field = await overlay.locator('.bn-sort').evaluate((sort) => {
         const box = sort.getBoundingClientRect()
+        const edge = parseFloat(getComputedStyle(sort).borderTopWidth)
+        const pick = sort.querySelector('.bn-pick')!
         const dir = sort.querySelector('.bn-sort-dir')!.getBoundingClientRect()
-        return dir.left >= box.left && dir.right <= box.right && dir.top >= box.top && dir.bottom <= box.bottom
+        const key = pick.getBoundingClientRect()
+        return {
+          edge,
+          keyEdge: parseFloat(getComputedStyle(pick).borderTopWidth),
+          gap: Math.round(dir.left - key.right),
+          rightInset: Math.round(box.right - edge - dir.right),
+          heightInset: Math.round(box.height - 2 * edge - dir.height),
+        }
       })
-      expect(inside, 'direction toggle sits inside the sort field').toBe(true)
+      expect(field.edge, 'the sort draws one edge').toBeGreaterThan(0)
+      expect(field.keyEdge, 'the key draws no edge of its own').toBe(0)
+      expect(field.gap, 'the direction is flush against the key').toBeLessThanOrEqual(0)
+      expect(field.rightInset, 'the direction ends at the field edge').toBe(0)
+      expect(field.heightInset, 'the direction fills the field').toBe(0)
 
       const first = overlay.locator('.bn-fchip > .bn-pick:not([data-active])').first()
       const handle = (await first.elementHandle())!
@@ -62,6 +78,7 @@ for (const theme of ['light', 'dark'] as const) {
       await first.click()
       await page.locator('[role="option"]').first().click()
       await page.keyboard.press('Escape')
+      await settleMotion(page)
       const set = await handle.evaluate((el) => {
         const at = getComputedStyle(el)
         const words = getComputedStyle(el.querySelector('.bn-pick-value')!)

@@ -1753,3 +1753,25 @@ test('a double press on Identify now spends once', async ({ page }) => {
   await expect(page.locator('.review-runs-sheet')).toBeVisible()
   expect(spends).toHaveLength(1)
 })
+
+test('the reason lens is disabled while an answer is in flight', async ({ page }) => {
+  await open(page)
+  let release: () => void = () => undefined
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route(/\/answer$/, async (route) => {
+    await held
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ position: '2/14', cleared: true, restores_to: null }),
+    })
+  })
+  const trigger = page.locator('.review-filters .bn-filterbar-trigger')
+  await expect(trigger).toBeEnabled()
+  await page.locator('.review-candidate').first().click()
+  await expect(trigger).toBeDisabled()
+  release()
+  await expect(trigger).toBeEnabled()
+})

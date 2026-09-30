@@ -1634,6 +1634,7 @@ export function ReviewQueue() {
           facets={reasonFacets}
           value={reasonFilter === null ? {} : { reason: [reasonFilter] }}
           onChange={(next) => setReasonFilter(next.reason?.[0] ?? null)}
+          disabled={disabled}
           count={{ shown: worklist.length, total: everyone.length, noun: { one: 'card', many: 'cards' }, quietAtRest: true }}
         />
       )}

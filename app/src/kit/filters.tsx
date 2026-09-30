@@ -104,6 +104,9 @@ export type FilterBarProps<K extends string = string> = {
    *  phone's thumb reach — pass it explicitly when the screen already knows its own width is
    *  phone-sized (`compact={phone ? 'sheet' : 'popover'}`, the inventory lane's own call). */
   readonly compact?: 'popover' | 'sheet'
+  /** A write is in flight: the trigger cannot be pressed and an open overlay closes. The one
+   *  home for a screen's own busy gate, so no caller hand-rolls a second. */
+  readonly disabled?: boolean
   readonly className?: string
 }
 
@@ -171,6 +174,7 @@ export function FilterBar<K extends string = string>({
   beside,
   label = 'Filters',
   compact = 'popover',
+  disabled = false,
   className,
 }: FilterBarProps<K>) {
   const id = useId().replace(/:/g, '')
@@ -245,17 +249,18 @@ export function FilterBar<K extends string = string>({
               style={{ width: 'var(--bn-control-h)', height: 'var(--bn-control-h)' }}
               className="bn-filterbar-trigger"
               aria-haspopup="dialog"
-              aria-expanded={overlayOpen}
+              aria-expanded={overlayOpen && !disabled}
+              disabled={disabled}
               onClick={() => setOverlayOpen(true)}
             />
             {compact === 'sheet' ? (
-              <Sheet open={overlayOpen} onClose={() => setOverlayOpen(false)} title={label} icon="filter">
+              <Sheet open={overlayOpen && !disabled} onClose={() => setOverlayOpen(false)} title={label} icon="filter">
                 <div className="bn-filterbar-sheet-body" id={`${id}-sheet`}>
                   <FiltersAndSort facets={facets} value={value} onChange={onChange} sort={sort} hide={hides} label={label} />
                 </div>
               </Sheet>
             ) : (
-              <Popover open={overlayOpen} onClose={() => setOverlayOpen(false)} anchor={trigger} label={label} className="bn-filterbar-popover">
+              <Popover open={overlayOpen && !disabled} onClose={() => setOverlayOpen(false)} anchor={trigger} label={label} className="bn-filterbar-popover">
                 <div className="bn-filterbar-sheet-body" id={`${id}-sheet`}>
                   <FiltersAndSort facets={facets} value={value} onChange={onChange} sort={sort} hide={hides} label={label} />
                 </div>
