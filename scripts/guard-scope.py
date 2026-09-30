@@ -296,6 +296,13 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
     # modules is walked for its own imports. Known gap: importlib-by-path loads and
     # `from . import` are not followed.
     queue = [h for h in resolved if h.startswith("scripts/") and h.endswith(".py")]
+    # The test itself is walked too: a self-test that is a thin script over a package imports it.
+    try:
+        own = str(test_path.relative_to(ROOT))
+    except ValueError:
+        own = ""
+    if own.startswith("scripts/") and own.endswith(".py") and own not in queue:
+        queue.append(own)
     while queue:
         try:
             tree = ast.parse((ROOT / queue.pop()).read_text())
