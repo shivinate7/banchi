@@ -8,8 +8,16 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .core import module_globals
-from .core import EXIT_USAGE, Finding, ROOT, Report, _strip_ts_comments, entry_parser, rel
+from .core import (
+    EXIT_USAGE,
+    Finding,
+    ROOT,
+    Report,
+    _strip_ts_comments,
+    entry_parser,
+    module_globals,
+    rel,
+)
 from .dispatch import UNDISPATCHED, check_dispatch
 from .env_map import _consumer_block, _map_sections
 from .hygiene import ROSTER_MARK, ROUTE_HASH, _balanced, expected_rosters

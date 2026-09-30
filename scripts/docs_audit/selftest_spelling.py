@@ -6,8 +6,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from .core import module_globals
-from .core import ROOT, Report, _STAGED_PATHS, markdown_files, rel
+from .core import ROOT, Report, _STAGED_PATHS, markdown_files, module_globals, rel
 from .design import _RAW_COLOR_RE, check_raw_color
 from .rules import (
     _markdown_spelling_found,

@@ -5,9 +5,8 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from .core import module_globals
+from .core import ADVISORY, MECHANICAL, Report, module_globals
 from .code_invariants import _pipeline_imports, check_import_layering, check_unscoped_walk
-from .core import ADVISORY, MECHANICAL, Report
 from .dispatch import check_dispatch
 from .strings import (
     APP_TS_COMPILER,

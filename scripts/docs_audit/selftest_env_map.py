@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from . import core
-from .core import module_globals
 from .core import (
     ROOT,
     Report,
@@ -15,6 +14,7 @@ from .core import (
     exists,
     glob_files,
     leave_staged_mode,
+    module_globals,
     read,
     rel,
 )
