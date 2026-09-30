@@ -104,7 +104,8 @@ test('the departed row says one state and offers no action', async ({ page }) =>
      never was. */
   await expect(row.locator('.card-locations-action')).toHaveText('')
   const slot = await row.locator('.card-locations-action').boundingBox()
-  expect(slot?.width ?? 0, 'the action slot keeps its width with nothing in it').toBeGreaterThanOrEqual(137)
+  /* The foot is a row of its own now (card-detail spec), so what it reserves is its 40px height. */
+  expect(slot?.height ?? 0, 'the action slot keeps its height with nothing in it').toBeGreaterThanOrEqual(40)
 })
 
 test('the pooled row is the only no-bar shell that has not left', async ({ page }) => {
@@ -199,11 +200,12 @@ test('the copies specimen answers to its own width, as the screen does', async (
   const row = page.locator('.card-locations-owner .card-locations-row').first()
   await expect(row).toBeVisible()
 
-  /* Under 620px the container query rewrites the grid. Comparing the resolved areas rather than
+  /* The row is one column at every width (card-detail spec), so the areas are the same narrow as
+     wide. Comparing the resolved areas rather than
      asserting a class is what makes this a statement about the CASCADE — a class can be present
      while the rule that reads it never matches, and that is precisely the defect. */
   const areas = await row.evaluate((el) => getComputedStyle(el).gridTemplateAreas)
-  expect(areas).toBe('"place action" "neighbors neighbors" "state state" "bar bar"')
+  expect(areas).toBe('"place" "neighbors" "bar" "state" "action"')
 })
 
 /* THE SHEET'S IMAGERY IS THE SHEET'S, AND UNTIL 2026-09-06 IT WAS THE OWNER'S STORE'S.
@@ -1212,4 +1214,44 @@ test('axe finds nothing on the kit at 390 and 1440 in both themes, but what is l
   expect(unlisted, `axe violations nobody owns:\n${unlisted.join('\n')}`).toEqual([])
   const stale = AXE_KNOWN.filter((_, i) => !seen.has(i)).map((k) => `${k.selector} (${k.owner})`)
   expect(stale, 'listed violations that are gone: take them off the list').toEqual([])
+})
+
+test('Mark sold is the same tint and the same width on every row', async ({ page }) => {
+  /* OWNER RULING (card-detail spec): one worded control, no chosen copy. Read as computed style so a
+     row that drifts to another variant or width goes red. */
+  const sells = page.locator('.card-locations-owner .card-locations-sell')
+  expect(await sells.count()).toBeGreaterThan(1)
+  const drawn = await sells.evaluateAll((els) =>
+    els.map((el) => {
+      const s = getComputedStyle(el)
+      return { bg: s.backgroundColor, ink: s.color, width: Math.round(el.getBoundingClientRect().width), tint: el.classList.contains('bn-btn-tint') }
+    }),
+  )
+  for (const one of drawn) {
+    expect(one.tint, 'every row uses the kit tint variant').toBe(true)
+    expect(one).toEqual(drawn[0])
+  }
+  expect(drawn[0]!.width).toBe(128)
+})
+
+test('a meter with many cells never paints them over its end label at a narrow width', async ({ page }) => {
+  /* A pane of 410px leaves the Live figure little: 13 cells at 14px cannot fit beside "Cap 13,
+     1 over", so the cells shrink and the label wraps under them, and never lies on top of them. */
+  const meter = page.locator('.kit-meter-wide')
+  await meter.evaluate((el) => { (el as HTMLElement).style.width = '100px' })
+  const box = (await meter.boundingBox())!
+  const end = (await meter.locator('.bn-meter-end').boundingBox())!
+  /* THE CELLS THEMSELVES, not their container: a container squeezed to 6px still paints 13 cells. */
+  const cellRects = await meter.locator('.bn-meter-cells > span').evaluateAll((els) =>
+    els.map((el) => {
+      const r = el.getBoundingClientRect()
+      return { x: r.x, y: r.y, right: r.right, bottom: r.bottom }
+    }),
+  )
+  expect(end.x + end.width, 'the label stays inside the meter').toBeLessThanOrEqual(box.x + box.width + 0.5)
+  for (const cell of cellRects) {
+    expect(cell.right, 'a cell stays inside the meter').toBeLessThanOrEqual(box.x + box.width + 0.5)
+    const apart = end.y >= cell.bottom - 0.5 || end.x >= cell.right - 0.5
+    expect(apart, 'no cell is painted over the label').toBe(true)
+  }
 })

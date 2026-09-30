@@ -37,12 +37,12 @@
  * the same manual-wins-until-toggled behaviour, just kept inside the component that draws it.
  */
 
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { ReadingAge } from './CardLocations'
 import { collectorNumber } from './cardNumber'
-import { IDENTIFIED, readingAgo, stateLabel, stateTone } from './cardState'
-import { Button, Icon, IconButton, Pill } from './kit'
+import { forSale, IDENTIFIED, readingAgo, readingAgoShort, readingExact, stateLabel, stateTone, staleReading } from './cardState'
+import { Button, Icon, IconButton, Meter, Money, Pill, ProductLink } from './kit'
 import { toast } from './kit/toast'
 import { money } from './money'
 import { relativeDate, toDate } from './dates'
@@ -54,13 +54,14 @@ import {
   confirmIdentity,
   correctAnswer,
   describeFailure,
+  getPricing,
   photoUrl,
   reviewCatalog,
   undoConfirmIdentity,
   undoCorrectAnswer,
   refusalToast,
 } from './server'
-import type { BoxRecord, CandidateRow, CatalogLookup, InventoryCard, Listing, PricingPayload } from './types'
+import type { BoxRecord, CandidateRow, CatalogLookup, InventoryCard, Listing, PricingPayload, SearchGroup } from './types'
 import './CardHero.css'
 
 /** One inventory row: the store key plus the card it names. `BoxBrowse.tsx` re-exports this
@@ -309,63 +310,201 @@ export function factGroupsOf(
 
 /* -------------------------------------------------------------------------- the hero head */
 
-/** The header both screens share: name, the number line, the finish/rarity pills, the state
- *  pill — `BoxBrowse.tsx`'s own `.browse-hero-*` classes. `actions` is where a caller's own
- *  edit menu goes (Inventory's `CardOps`); `#/orders` leaves it empty — Mark sold lives in the
- *  copies list below, not up here, and retire/move/reshoot are Inventory-only. */
+/** THE BAND'S FIGURES, HANDED IN BY WHICHEVER SCREEN HOLDS THE CARD'S SEARCH GROUP (the card-detail
+ *  spec, "The band"). They are facts about the card and its copies, so they sit with the card and
+ *  not over the copies list. `Inventory.tsx` and `Orders.tsx` both build one and pass it through
+ *  `CardPane`, so the band is drawn in one place.
+ *  - `listedAt`: when this store last wrote the SKU's listing figures. Null draws a quiet dash.
+ *  - `hidden`: the departed copies the list folds away (`CardLocations.tsx:hiddenCopies`).
+ *  - `cap`: `group.listable` where the screen has it. Null draws no ceiling meter, because a screen
+ *    that cannot say the ceiling must not draw one (`#/orders`' take carries no cap). */
+export type HeroFigures = {
+  readonly group: SearchGroup
+  readonly listedAt: string | null
+  readonly hidden: number
+  readonly cap: number | null
+}
+
+/** THE MARKET PRICE OF ONE CARD, read once per run off the pricing file (`marketTable`): the band's
+ *  Market figure. One home, called by `CardPane`, so `#/inventory` and the `#/orders` walk draw the
+ *  same figure from the same read. Null while it loads, on a failed read, and where the run holds no
+ *  row for this card: the band draws a quiet dash and never a made-up figure. */
+export function useMarketPrice(card: InventoryCard): number | null {
+  const run = card.run ?? null
+  const [read, setRead] = useState<{ run: string; table: MarketRead } | null>(null)
+  useEffect(() => {
+    if (run === null) return
+    let live = true
+    getPricing(run)
+      .then((payload) => {
+        if (live) setRead({ run, table: marketTable(payload) })
+      })
+      .catch(() => {
+        if (live) setRead({ run, table: { kind: 'absent', why: 'could not be read' } })
+      })
+    return () => {
+      live = false
+    }
+  }, [run])
+  if (run === null || read === null || read.run !== run || read.table.kind !== 'table') return null
+  const raw = read.table.rows[`${card.box}/${card.index}`]
+  const price = raw === null || raw === undefined ? NaN : Number(raw)
+  return Number.isNaN(price) ? null : price
+}
+
+/** Stored and Live, the two lead figures. A group with no SKU has no listing, so it draws no Live
+ *  figure and no ceiling: the store has nothing to report and the band must not invent it (D119). */
+function HeroLead({ figures, market }: { readonly figures: HeroFigures; readonly market: number | null }) {
+  const { group, listedAt, cap } = figures
+  const listing = group.sku !== null
+  const live = forSale(group.listed.live, group.sold_here)
+  const read = Boolean(listedAt) || group.listed.live > 0
+  /* THE DOT SITS IN THE LABEL LINE, NOT ON THE FIGURE. Recent: the live dot at rest. Three days or
+     more: amber (provisional, `cardState.ts:STALE_READING_DAYS`). Unread: no dot, a quiet dash. */
+  const dot = !read
+    ? null
+    : staleReading(listedAt)
+      ? 'bn-dot bn-dot-warn'
+      : 'bn-dot bn-dot-live bn-dot-still'
+  const ago = readingAgoShort(listedAt)
+  const over = cap === null ? 0 : live - cap
+  return (
+    <div className="browse-hero-lead">
+      <div className="browse-hero-fig">
+        <span className="browse-hero-fig-label">
+          <span className="bn-label">Stored</span>
+        </span>
+        <span className="browse-hero-fig-value">{group.on_hand}</span>
+      </div>
+      {listing ? (
+        <div
+          className="browse-hero-fig"
+          data-read={read ? 'true' : 'false'}
+          title={
+            group.sold_here > 0
+              ? `${group.listed.live} when read, ${group.sold_here} sold here since.`
+              : read
+                ? `This store last wrote these listing figures ${readingExact(listedAt) ?? 'at an unknown time'}.`
+                : 'Nothing has written a listing figure for this yet.'
+          }
+        >
+          <span className="browse-hero-fig-label">
+            {dot === null ? null : <span className={dot} aria-hidden="true" />}
+            <span className="bn-label">Live</span>
+            <span className="browse-hero-age">{read ? ago : 'not read'}</span>
+          </span>
+          <span className="browse-hero-fig-value">{read ? live : '—'}</span>
+          {cap === null || cap <= 0 ? null : (
+            <Meter
+              cells={cap}
+              filled={live}
+              tone={over > 0 ? 'warn' : undefined}
+              end={over > 0 ? `Cap ${cap}, ${over} over` : <>Cap {cap}</>}
+              label={over > 0 ? `${live} live, cap ${cap}, ${over} over` : `${live} live, cap ${cap}`}
+            />
+          )}
+        </div>
+      ) : null}
+      {/* MARKET, beside Live: the price this card last read at, opening the product by SKU. A dash
+          where nothing has read one. */}
+      {listing && group.sku !== null ? (
+        <div className="browse-hero-fig">
+          <span className="browse-hero-fig-label">
+            <span className="bn-label">Market</span>
+          </span>
+          <span className="browse-hero-fig-value">
+            <ProductLink sku={group.sku} name={group.names[0]}>
+              <Money value={market} />
+            </ProductLink>
+          </span>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+/** The header both screens share, drawn as the band (card-detail spec): the identity on the left
+ *  (name, the meta line with the finish and rarity pills on the same line, the side facts) and the
+ *  two lead figures on the right. One column under 520px of pane width. `actions` is where a
+ *  caller's own edit menu goes (Inventory's `CardOps`); `#/orders` leaves it empty. `figures` is
+ *  omitted by a caller with no search group, which then draws the identity alone. */
 export function CardHeroHead({
   card,
   game,
-  place = null,
   preChips,
   postChips,
   actions,
+  figures,
+  market = null,
 }: {
   readonly card: InventoryCard
   readonly game: string | null
-  /** `positionLabel(card)`, raw — null draws no place line at all. Shown only where the pane
-   *  is one column (`BoxBrowse.css`), same as before the move. */
-  readonly place?: string | null
   /** Before the finish/rarity pills — `BoxBrowse.tsx`'s own printing-chooser chip. */
   readonly preChips?: ReactNode
   /** After the state pill — `BoxBrowse.tsx`'s own review-queue chip. */
   readonly postChips?: ReactNode
   readonly actions?: ReactNode
+  readonly figures?: HeroFigures | null
+  /** The Market figure's price (`useMarketPrice`). */
+  readonly market?: number | null
 }) {
   const name = nameOf(card)
   const number = numberCell(card)
   return (
     <div className="browse-hero-head">
       <div className="browse-hero-text">
-        <h2 className={name === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>{name ?? 'Not identified yet'}</h2>
+        <div className="browse-hero-titlerow">
+          <h2 className={name === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>{name ?? 'Not identified yet'}</h2>
+          {actions}
+        </div>
+        {/* THE META LINE: number, set, game, then rarity and finish as outline pills on the SAME
+            line. No row holds rarity alone. The seam between the three facts is CSS (D218). */}
         <p className="browse-hero-sub">
-          {[number === 'none' ? null : number, card.set_hint, game]
-            .filter((part): part is string => typeof part === 'string' && part !== '')
-            .map((part, i) => (
-              <span key={`${part}-${i}`} className={i === 0 && number !== 'none' ? 'browse-hero-number' : undefined}>
-                {part}
-              </span>
-            ))}
-        </p>
-        {place === null ? null : <p className="browse-hero-place">{sayPlace(place)}</p>}
-        <div className="browse-hero-chips">
+          <span className="browse-hero-parts">
+            {[number === 'none' ? null : number, card.set_hint, game]
+              .filter((part): part is string => typeof part === 'string' && part !== '')
+              .map((part, i) => (
+                <span key={`${part}-${i}`} className={i === 0 && number !== 'none' ? 'browse-hero-number' : undefined}>
+                  {part}
+                </span>
+              ))}
+          </span>
           {preChips}
           {claimList(card.metadata_finish).map((finish) => (
-            <Pill key={`f-${finish}`} icon="sparkles">
+            <Pill key={`f-${finish}`} icon="sparkles" outline>
               {titleCase(finish)}
             </Pill>
           ))}
           {claimList(card.rarity_claim).map((rarity) => (
-            <Pill key={`r-${rarity}`}>{titleCase(rarity)}</Pill>
+            <Pill key={`r-${rarity}`} outline>
+              {titleCase(rarity)}
+            </Pill>
           ))}
           {/* THE CARD'S STATE ONLY WHEN IT IS THE EXCEPTION (UX-221) — `BoxBrowse.tsx`'s own
               rule, moved with the rest of the head. The dead copy of this component always
               drew the pill; that was the divergence this move fixes. */}
           {card.state === IDENTIFIED ? null : <Pill tone={stateTone(card.state)}>{stateLabel(card.state)}</Pill>}
           {postChips}
-        </div>
+        </p>
+        {/* THE SIDE FACTS: history, quieter than the lead figures and equal to each other. Hidden
+            is drawn at 0 too, so a sale that folds a copy away adds no line (D118). */}
+        {figures == null ? null : (
+          <p className="browse-hero-side">
+            <span>
+              Captured<b>{figures.group.copies.length}</b>
+            </span>
+            <span>
+              Hidden<b>{figures.hidden}</b>
+            </span>
+            {figures.group.sku === null ? null : (
+              <span>
+                Sent<b>{figures.group.listed.pushed}</b>
+              </span>
+            )}
+          </p>
+        )}
       </div>
-      {actions}
+      {figures == null ? null : <HeroLead figures={figures} market={market} />}
     </div>
   )
 }
@@ -378,7 +517,6 @@ export function CardHeroHead({
 export type CardPaneProps = {
   readonly row: Row
   readonly game: string | null
-  readonly place?: string | null
   /** `dimPanel` in `BoxBrowse.tsx`: a stale row held on screen while the next one loads. */
   readonly dimmed?: boolean
   readonly preChips?: ReactNode
@@ -387,13 +525,16 @@ export type CardPaneProps = {
   readonly queued?: ReactNode
   /** `CardOps`, Inventory-only. Empty on `#/orders`. */
   readonly actions?: ReactNode
+  /** The band's figures. Omitted, the band draws the identity alone. */
+  readonly figures?: HeroFigures | null
   readonly photo: Omit<PhotoPanelProps, 'row'>
   /** The copies list beside the photo — `Inventory.tsx`'s `CopiesPanel`, handed down because
    *  the caller already knows which card is selected. */
-  readonly detail: ReactNode
+  readonly detail?: ReactNode
 }
 
-export function CardPane({ row, game, place = null, dimmed = false, preChips, postChips, queued, actions, photo, detail }: CardPaneProps) {
+export function CardPane({ row, game, dimmed = false, preChips, postChips, queued, actions, figures, photo, detail }: CardPaneProps) {
+  const market = useMarketPrice(row.card)
   return (
     <section
       className="bn-panel browse-card"
@@ -401,13 +542,16 @@ export function CardPane({ row, game, place = null, dimmed = false, preChips, po
       data-dimmed={dimmed ? 'true' : undefined}
       inert={dimmed}
     >
-      <CardHeroHead card={row.card} game={game} place={place} preChips={preChips} postChips={postChips} actions={actions} />
+      <CardHeroHead card={row.card} game={game} preChips={preChips} postChips={postChips} actions={actions} figures={figures} market={market} />
       {queued}
-      <div className="browse-band">
+      {/* NO `detail`, NO COPIES COLUMN: `#/orders`' walk draws where each copy is in its own column, so
+          its card pane is the head, the band and the photograph alone (same components, switched off
+          by omission, never a fork). */}
+      <div className="browse-band" data-photo-only={detail === undefined ? 'true' : undefined}>
         <div className="browse-shot">
           <PhotoPanel row={row} {...photo} />
         </div>
-        <div className="browse-under">{detail}</div>
+        {detail === undefined ? null : <div className="browse-under">{detail}</div>}
       </div>
     </section>
   )

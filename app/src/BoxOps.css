@@ -48,11 +48,9 @@
    beside them are — so they stay plain text rather than a `bn-stat`. */
 .boxops-identity-note { color: var(--bn-ink); font-weight: 600; }
 
-/* THE CENSUS TRIAD (D41), BROUGHT TO THIS PANEL. `CardLocations`' three figures — copies, in
-   the boxes, live on TCGplayer — are `bn-stat` tiles at `--bn-fs-2xl`, an 11px 600-weight
-   label above no separator (`CardLocations.css`'s `.card-locations-owner .card-locations-stat`
-   skin). This is the SAME skin, so the two owner-side census blocks on this screen read one
-   size and one weight rather than each screen inventing its own — the layout row itself is
+/* THE CENSUS TRIAD (D41), BROUGHT TO THIS PANEL. The census figures here are `bn-stat` tiles at `--bn-fs-2xl`, an 11px 600-weight
+   label above no separator. The card pane's own figures moved into the band
+   (`BoxBrowse.css`'s `.browse-hero-lead`); this panel keeps its own skin — the layout row itself is
    `.bn-stat-row` (kit.css), shared rather than duplicated. */
 .boxops-stat .bn-stat-value {
   font-size: var(--bn-fs-2xl);

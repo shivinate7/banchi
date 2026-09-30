@@ -161,6 +161,8 @@ const ORDERS_KEYS: ScreenKeys = {
     { keys: ['↑'], does: 'Select the buyer before it' },
     { keys: ['J'], does: 'Step to the next card in the walk' },
     { keys: ['K'], does: 'Step to the card before it in the walk' },
+    { keys: ['1', '2', '3'], does: 'Mark the 1st, 2nd, 3rd copy of the current pick sold', when: 'with a walk open' },
+    { keys: ['←', '→'], does: 'Go to the previous or next pick', when: 'with a walk open' },
     { keys: ['U'], does: 'Undo the newest sale' },
   ],
 }

@@ -321,6 +321,10 @@ async function open(page: Page, options: { plan?: WalkPlan; orders?: OrdersPaylo
   return wire
 }
 
+/* The pick the walk stands on, in the walk column: the copies' rows and their presses live there now
+   (the card pane holds the head, the band and the photograph only). */
+const CURRENT_PICK = '.orders-walk-line:has(.orders-walk-press[aria-current="true"])'
+
 sealEveryTest()
 
 /* -------------------------------------------------------------------------------------- 1 */
@@ -331,7 +335,7 @@ test('only the newest pull in the walk offers Undo — the older one reads Sold'
   /* `.card-locations-row` is `CardLocations.tsx`'s own copy row, reused whole
    * (D304, lane A3) — the old `.orders-card-copy`
    * pane forked its own rows, and that fork is deleted. */
-  const rows = page.locator('.browse-card .card-locations-row')
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
   /* THE SLOT HOLDS EVERY STATE (D118): the Mark sold icon, the Undo icon and the Sold pill all
      fit the one reserved width, so a press never moves the place beside it. */
   const slotWidth = () => rows.nth(0).locator('.card-locations-action').evaluate((el) => Math.round(el.getBoundingClientRect().width))
@@ -361,7 +365,7 @@ test('a newer pull is what ends the older one’s Undo, not any span of time', a
      screen HAD before this fix — per-copy granularity the owner declined) would fail exactly
      here rather than being read as "the newest one also happens to work". */
   const wire = await open(page)
-  const rows = page.locator('.browse-card .card-locations-row')
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
 
   await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
@@ -382,7 +386,7 @@ test('the newest pull stays undoable well past the old twenty-second window', as
      happens: 25 real seconds pass on the fake clock and the newest pull's `Undo` is untouched. */
   await page.clock.install()
   const wire = await open(page)
-  const rows = page.locator('.browse-card .card-locations-row')
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
 
   await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
@@ -398,7 +402,7 @@ test('the newest pull stays undoable well past the old twenty-second window', as
 
 test('undoing the newest pull returns it to Mark sold, and the older copy stays Sold', async ({ page }) => {
   const wire = await open(page)
-  const rows = page.locator('.browse-card .card-locations-row')
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
 
   await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
@@ -451,7 +455,7 @@ test('a walk row fills the pane with the hero head, the photo, and every on-hand
   await expect(page.locator('img.browse-photo')).toBeVisible()
 
   // Every on-hand copy, in `CardLocations`, the walk's chosen copy first and marked current.
-  const rows = page.locator('.browse-card .card-locations-row')
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
   await expect(rows).toHaveCount(2)
   await expect(rows.nth(0)).toHaveAttribute('aria-current', 'true')
   await expect(rows.nth(1)).not.toHaveAttribute('aria-current', 'true')

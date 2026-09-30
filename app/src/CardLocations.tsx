@@ -7,7 +7,7 @@ import { PullConfirm } from './PullConfirm'
 import { PositionBar } from './PositionBar'
 import { placePartsOf, sayPlace, sectionCountOf, type Persona } from './position'
 import { collectorNumber } from './cardNumber'
-import { Chip, Icon, IconButton, Pill } from './kit'
+import { Button, Chip, Icon, Pill } from './kit'
 import { RANK_IS_CURRENT, ranksAsLive, ranksAsShown, stalenessSentence, type FrozenRank } from './frozenRank'
 import './CardLocations.css'
 import { forSale, IDENTIFIED, readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
@@ -85,24 +85,6 @@ function saidState(state: string): string {
 
 function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`
-}
-
-/* HOW MUCH ROOM IS LEFT UNDER THE CEILING — said as headroom, never as a second live count.
- *
- * `group.listable` is D7's `min(cap, on hand)` computed by the server: what the rule permits
- * for THIS SKU. Drawn as `up to 3 may be live` it used the same numeral as the live figure two
- * lines above it, and the two sentences could not be told apart — is three live, or may three
- * be? Headroom is the same fact in terms nothing else on the panel is measured in. */
-function headroom(group: SearchGroup): string {
-  // THE ESTIMATE, NOT THE READING (D115). Headroom is what may still GO live, so it has to
-  // count against what is live NOW — a SKU read at 4 with 2 sold here has room for 2, and
-  // computing off the raw reading would say `At the ceiling of 4` and refuse a relist the
-  // shelf can support. It would also put a third number on a panel that now draws two.
-  const room = group.listable - forSale(group.listed.live, group.sold_here)
-  if (group.listable === 0) return 'No copies can go live'
-  if (room > 0) return `Room for ${room} more live`
-  if (room === 0) return `At the ceiling of ${group.listable}`
-  return `${-room} over ${group.listable}`
 }
 
 /** ONE LINE, EVERY FACT ONCE (the owner's ruling, 2026-09-25, Direction B): the box's name, the
@@ -296,6 +278,68 @@ export function CardLocations(props: CardLocationsProps) {
   )
 }
 
+/** HOW MANY DEPARTED COPIES THE LIST FOLDS AWAY (D132) — the band's `Hidden` figure. One home:
+ *  `OwnerRows` asks it for what it draws, and a screen that draws the band above the list asks it
+ *  with the same arguments, so the two cannot disagree. A copy stays drawn when the walk stands on
+ *  it, when its sale's receipt is standing, or when it left after the order was taken
+ *  (`frozenRank.ts`). `preserveOrder` folds nothing. */
+export function hiddenCopies(
+  group: SearchGroup,
+  {
+    soldKeys,
+    hideSold = false,
+    currentKey,
+    frozen = RANK_IS_CURRENT,
+    preserveOrder = false,
+  }: {
+    readonly soldKeys: ReadonlySet<string>
+    readonly hideSold?: boolean
+    readonly currentKey?: string
+    readonly frozen?: FrozenRank
+    readonly preserveOrder?: boolean
+  },
+): number {
+  if (preserveOrder || !hideSold) return 0
+  return group.copies.filter(
+    (copy) =>
+      isSold(copy, soldKeys) &&
+      !(copy.key === currentKey || soldKeys.has(copy.key) || ranksAsShown(copy.key, true, frozen)),
+  ).length
+}
+
+/** THE ONE MARK SOLD PRESS, on every copy row in the product (owner ruling, card-detail spec): a
+ *  worded 40px button in the kit's tint form, the same width on every row (D195). Inventory's row,
+ *  `#/orders`' walk and this list's own fallback all draw it, so one edit changes all three. The
+ *  words stay because it is the one primary act in its row; Retire and Move are the icons beside
+ *  it. `name` is the accessible name and must contain "Mark sold" (Label in Name). */
+export function MarkSoldButton({
+  busy,
+  disabled,
+  name,
+  onClick,
+}: {
+  readonly busy: boolean
+  readonly disabled: boolean
+  readonly name?: string
+  readonly onClick: () => void
+}) {
+  return (
+    <Button
+      variant="tint"
+      size="lg"
+      icon="sold"
+      words="only-primary"
+      className="card-locations-sell"
+      aria-label={name}
+      busy={busy}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      Mark sold
+    </Button>
+  )
+}
+
 /* Sold is the only thing that stops a sale — D7's "every unsold copy is sellable" as code. */
 function isSold(copy: SearchCopy, soldKeys: ReadonlySet<string>): boolean {
   return copy.state === SOLD || copy.state === RETIRED || soldKeys.has(copy.key)
@@ -333,7 +377,6 @@ function OwnerRows({
   soldKeys,
   sections,
   currentKey,
-  listedAt,
   claims,
   onGoTo,
   renderAction,
@@ -395,29 +438,11 @@ function OwnerRows({
   const drawn = preserveOrder
     ? group.copies
     : [...[...standing].sort(byFullest), ...(hideSold ? [] : group.copies.filter(sinks))]
-  const hidden = preserveOrder ? 0 : gone.length - kept.length
   /* HOW STALE THE ORDER IS, counted over the copies THIS LIST draws. `frozen` is the screen's —
      one press makes the box rail stale too — and a sentence saying `3 copies stale` over a list
      that holds one of them would be counting somebody else's cards. */
   const staleHere = group.copies.filter((copy) => frozen.has(copy.key)).length
   const stale = stalenessSentence(staleHere)
-
-  /* A GROUP WITH NO SKU HAS NO LISTING TO REPORT, AND THE HEADER MUST NOT INVENT ONE (D119).
-     `capture_server.py:do_search` sends the SKU-less bag `listed: {0,0,0}`, `sold_here: 0` and
-     `live_as_of: null` — structurally, not because nothing has happened yet: `emit` is what
-     creates a listing record and it cannot run for a card the pipeline has not identified.
-     Drawn anyway that reads `0 live on TCGplayer · not read yet` and `Pushed 0 · Staged 0 ·
-     Room for 1 more live` — a promise of headroom on a card that cannot be listed at all.
-
-     WHAT GOES IS THE SENTENCE, NEVER THE FIGURE. `group.listable` stays exactly what the server
-     sent; rewriting it to 0 here would make this the one thing in the product that answers a
-     question differently from the store.
-
-     DERIVED FROM `sku` AND NOT TAKEN AS A PROP: a prop is a second place the same fact can be
-     told, and one caller forgetting it is a header that lies. Derived, it also reaches the
-     search path — the 65 cards this store holds with a name and no SKU already land in the
-     loose bag and already draw this. */
-  const listing = group.sku !== null
 
   /* THE SLOT-COLUMN RESERVATION IS RETIRED (the owner's ruling, 2026-09-25, Direction B): the
      card figure no longer sits in a column of its own beside a separate path — `RowIdentity`
@@ -458,79 +483,6 @@ function OwnerRows({
             </Chip>
           )}
         </div>
-        <div className="card-locations-stats">
-          {/* "1 copy" beside "1 in the boxes" said one fact twice (UX-258, cut list #6): the copy
-              count is drawn only when it differs from what is in the boxes. */}
-          {group.copies.length === group.on_hand ? null : (
-            <div className="bn-stat card-locations-stat">
-              <span className="bn-stat-value">{group.copies.length}</span>
-              <span className="bn-stat-label">{group.copies.length === 1 ? 'copy' : 'copies'}</span>
-            </div>
-          )}
-          <div className="bn-stat card-locations-stat">
-            <span className="bn-stat-value">{group.on_hand}</span>
-            <span className="bn-stat-label">in the boxes</span>
-          </div>
-          {/* THE LIVE FIGURE NEVER STANDS ALONE. It is what this store last believed, so its
-              reading age sits under it, quieter than the count itself.
-              AND SINCE D115 IT IS TWO NUMBERS. The big one is the ESTIMATE — the reading less
-              what has sold here since — because that is the figure that must agree with the
-              shelf the operator is standing at (D7). The split under it is drawn only when
-              there is a difference: `4 when read · 2 sold here since` on 3 of 443 SKUs is
-              information, and `· 0 sold here since` on the other 440 is noise that trains the
-              eye to skip the line. */}
-          {listing ? (
-            <div
-              className="bn-stat card-locations-stat card-locations-live"
-              data-read={listedAt || group.listed.live > 0 ? 'true' : 'false'}
-            >
-              {/* RED IS FOR A PROBLEM, AND A LIVE LISTING IS NOT ONE (UX-247). An unread figure is
-                  an unknown: a quiet dash, never a red 0. A read figure is ink, and its dot is
-                  the live mark only while copies are live. */}
-              <span className="bn-stat-value">
-                {listedAt || group.listed.live > 0 ? (
-                  <>
-                    <span
-                      className={forSale(group.listed.live, group.sold_here) > 0 ? 'bn-dot bn-dot-live' : 'bn-dot'}
-                      aria-hidden="true"
-                    />
-                    {forSale(group.listed.live, group.sold_here)}
-                  </>
-                ) : (
-                  '—'
-                )}
-              </span>
-              <span className="bn-stat-label">live on TCGplayer</span>
-              <ReadingAge at={listedAt} />
-              {group.sold_here > 0 ? (
-                <span className="card-locations-since">
-                  <span>{group.listed.live} when read</span>
-                  <span>{group.sold_here} sold here since</span>
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-
-        {/* THE CEILING, SAID SO IT CANNOT BE READ AS A SECOND READING. `up to 3 may be live`
-            sat two lines under `3 live on TCGplayer` and used the same figure to mean the
-            other thing, so a reader could not tell whether three ARE live or three MAY be.
-            Headroom is the honest form of the same fact. */}
-        {listing ? (
-          <p className="card-locations-counts">
-            {/* THE LISTING'S STAGES IN WORDS, AND ONLY THE ONES THAT HOLD A COPY (UX-207, D196,
-                cut list #7): "Pushed 0 Staged 0" named the pipeline's two stages to the owner. */}
-            {group.listed.pushed + group.listed.staged + group.listed.live === 0 ? (
-              <span>Not listed yet</span>
-            ) : (
-              <>
-                {group.listed.pushed > 0 ? <span>{group.listed.pushed} sent</span> : null}
-                {group.listed.staged > 0 ? <span>{group.listed.staged} waiting to go live</span> : null}
-                <span>{headroom(group)}</span>
-              </>
-            )}
-          </p>
-        ) : null}
       </header>
       )}
 
@@ -681,13 +633,7 @@ function OwnerRows({
                 ) : sold ? (
                   copy.state === SOLD || copy.state === RETIRED ? null : <Pill tone="ok">Sold</Pill>
                 ) : (
-                  /* ICON (ICONOGRAPHY): this default fallback row (no per-card renderAction
-                     caller) reads Mark sold from the kit's own `sold` glyph, same as
-                     Inventory.tsx's own row form. */
-                  <IconButton
-                    size="sm"
-                    icon="sold"
-                    label="Mark sold"
+                  <MarkSoldButton
                     busy={busyKey === copy.key}
                     disabled={busyKey !== null && busyKey !== copy.key}
                     onClick={() => onSell(copy)}
@@ -698,11 +644,6 @@ function OwnerRows({
           )
         })}
       </ul>
-      {hidden === 0 ? null : (
-        <p className="card-locations-hidden">
-          {`${hidden} hidden`}
-        </p>
-      )}
     </section>
   )
 }

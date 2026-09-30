@@ -8,14 +8,13 @@ import {
   HideToggle,
   Icon,
   IconButton,
+  Kbd,
   Loading,
   matchQuery,
-  Money,
   Notice,
   Page,
   patchViewQuery,
   Pill,
-  ProductLink,
   Sheet,
   Stat,
   useFacetParams,
@@ -33,9 +32,8 @@ import {
 import { absoluteDate, relativeDate } from './dates'
 import { toast } from './kit/toast'
 import { boxTitle } from './kit/data'
-import { CardPane, gameWord, marketTable, photoSrc, type MarketRead, type Row } from './CardHero'
-import { CardLocations, layoutsOf } from './CardLocations'
-import { forSale } from './cardState'
+import { CardPane, gameWord, photoSrc, type HeroFigures, type Row } from './CardHero'
+import { layoutsOf } from './CardLocations'
 import { Dialog as Overlay } from './kit/overlay'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { orderReasonLabel, orderReasonRemedy } from './orderReasons'
@@ -73,7 +71,6 @@ import {
   getBoxes,
   getInventoryCopies,
   getOrders,
-  getPricing,
   ingestOrders,
   nameOrders,
   previewOrders,
@@ -89,7 +86,7 @@ import {
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
-import { pickFigureOf, RowAction, takeBuyers, useOrderWalk, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
+import { pickFigureOf, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
 import type {
   BoxRecord,
   IngestResult,
@@ -2619,17 +2616,12 @@ function OrderPickPane({
   walk,
   owedBySku,
   showBuyers,
-  sections,
   boxes,
 }: {
   readonly boxes: readonly BoxRecord[]
   readonly walk: OrderWalk
   readonly owedBySku: ReadonlyMap<string, number>
   readonly showBuyers: boolean
-  /** Each box's own divider layout (A4: lifted to `PullStage`, one `getBoxes()` read for the
-   *  whole screen — `WalkList`'s own copy rows draw off the SAME map, never a second read of
-   *  the same fact). Optional; the strip is honest without it. */
-  readonly sections: ReadonlyMap<number, readonly SectionDetail[]>
 }) {
   const { currentRow, currentGroup, currentCard } = walk
 
@@ -2639,29 +2631,6 @@ function OrderPickPane({
     setBroken(false)
     setZoomed(false)
   }, [currentRow?.copy.key])
-
-  /* THE MARKET READING, ONE READ PER RUN (the owner's pick, 2026-09-24: B, one quiet line under
-   *  the card, `CardHero.tsx`'s own header names the same ruling). Kept on the pane through this
-   *  rebuild — Q6 dropped the Details fold, not this line, which the owner asked for by name and
-   *  which `orders.spec.ts` still proves. A failed read is a quiet dash. */
-  const [priced, setPriced] = useState<Record<string, MarketRead>>({})
-  const asked = useRef<Set<string>>(new Set())
-  const pricedRun = currentCard?.run ?? null
-  useEffect(() => {
-    if (pricedRun === null || asked.current.has(pricedRun)) return
-    asked.current.add(pricedRun)
-    let live = true
-    getPricing(pricedRun)
-      .then((payload) => {
-        if (live) setPriced((held) => ({ ...held, [pricedRun]: marketTable(payload) }))
-      })
-      .catch(() => {
-        if (live) setPriced((held) => ({ ...held, [pricedRun]: { kind: 'absent', why: 'could not be read' } }))
-      })
-    return () => {
-      live = false
-    }
-  }, [pricedRun])
 
   if (currentRow === null || currentGroup === null) return null
 
@@ -2676,17 +2645,15 @@ function OrderPickPane({
    *  `photo: null`, which `PhotoPanel` draws as its own honest placeholder. */
   const row: Row = { key: currentRow.copy.key, card: currentCard ?? syntheticCard(currentRow) }
   const place = currentRow.copy.place.label
-  const { take } = currentRow
-  const read = currentCard?.run == null ? undefined : priced[currentCard.run]
-  const rawMarket = read?.kind === 'table' && currentCard !== null ? read.rows[`${currentCard.box}/${currentCard.index}`] : null
-  const market = rawMarket === null || rawMarket === undefined || Number.isNaN(Number(rawMarket)) ? null : Number(rawMarket)
-  const liveNow = take.listed === undefined ? null : forSale(take.listed.live, take.sold_here ?? 0)
+  /* THE SAME BAND INVENTORY DRAWS (`CardHero.tsx:CardHeroHead`), fed from the walk's own group.
+     `hidden` is 0 because the walk folds nothing (`preserveOrder`), and `cap` is null because a take
+     carries no ceiling: a screen that cannot say the ceiling draws no meter. */
+  const figures: HeroFigures = { group: currentGroup, listedAt: currentGroup.live_as_of, hidden: 0, cap: null }
   return (
     <>
       <CardPane
         row={row}
         game={gameWord(row.card)}
-        place={place}
         preChips={
           <span className="orders-pick-chip">
             <Pill tone="accent">
@@ -2702,6 +2669,7 @@ function OrderPickPane({
           </span>
         }
         postChips={showBuyers ? <Pill>For {takeBuyers(currentRow.take)}</Pill> : undefined}
+        figures={figures}
         photo={{
           label: place,
           absent: broken,
@@ -2711,27 +2679,16 @@ function OrderPickPane({
           reshoot: null,
           boxes,
         }}
-        detail={
-          <>
-            <p className="orders-card-market">
-              <ProductLink sku={take.sku} name={take.name ?? undefined}>
-                {market === null ? '—' : <Money value={market} />} market, {liveNow === null ? '—' : liveNow} live
-              </ProductLink>
-            </p>
-            <CardLocations
-              group={currentGroup}
-              persona="owner"
-              onSell={walk.onSell}
-              busyKey={walk.busyCopy}
-              soldKeys={walk.soldKeys}
-              sections={sections}
-              currentKey={currentRow.copy.key}
-              preserveOrder
-              renderAction={(copy) => <RowAction walk={walk} copy={copy} />}
-            />
-          </>
-        }
       />
+      {/* THE TWO ARROWS PAGE THROUGH THE PICKS (the keys ← and → do the same). */}
+      <div className="orders-pick-nav">
+        <IconButton icon="chevronLeft" label="Previous pick" onClick={() => stepPickAndReveal(walk, -1)} />
+        <span className="orders-pick-keys" aria-hidden="true">
+          <Kbd>←</Kbd>
+          <Kbd>→</Kbd>
+        </span>
+        <IconButton icon="chevronRight" label="Next pick" onClick={() => stepPickAndReveal(walk, 1)} />
+      </div>
       {!zoomed ? null : (
         <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
           <img src={photoSrc(row, null) ?? undefined} alt={`The card photographed at ${place === null ? row.key : sayPlace(place)}`} />
@@ -3413,6 +3370,9 @@ function PullStage({
     return () => window.removeEventListener('keydown', onKey)
   }, [shownGroups, selectedKey])
 
+  /* `1`..`9` MARK A COPY OF THE CURRENT PICK, `←`/`→` PAGE THROUGH THE PICKS. */
+  useWalkKeys(walk)
+
   /* `J`/`K` STEP THE WALK LIST (§13). Same guard rules as the buyer list's own arrows. */
   useEffect(() => {
     if (walk.rows.length === 0) return
@@ -3793,7 +3753,7 @@ function PullStage({
               and up the pane goes back to its usual sticky column beside the walk. */}
           {narrow ? null : (
             <div className="orders-cardcol">
-              <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} sections={sections} boxes={boxRecords} />
+              <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} />
             </div>
           )}
         </div>
@@ -3805,7 +3765,7 @@ function PullStage({
           title={walk.currentRow?.take.name ?? 'The card'}
           className="orders-card-sheet"
         >
-          <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} sections={sections} boxes={boxRecords} />
+          <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} />
         </Sheet>
       )}
 
