@@ -6,16 +6,15 @@ Near Mint filter and the uncapped candidate list. `./pkmnscan cards variants` is
 `./pkmnscan cards identity --write` fills the set through `bind_sku`
 (`docs/specs/identity-follows-sku.md`).
 
-The problem: a search by name on `#/inventory` reached one printing and offered no way to any
-other. Three separate causes were found and fixed in three pieces.
+A search by name on `#/inventory` reaches every printing of the card. `#/review` narrows to the
+printing in front of you.
 
 ## 1. The name-to-printing level on `#/inventory`
 
 `do_search` returns one group per SKU, each whole. A group carries `sku`, `names`,
 `number_display`, `set_hint`, `condition`, `on_hand`, `listable`, `listed` and every copy with
-its photograph. Two places used to drop that. `BoxBrowse` flattened `results.groups` into a
-copy-level filter and a box ranking. The copies panel asked by SKU first, so once a row was
-identified the sibling printings were never fetched.
+its photograph. `BoxBrowse` reads `results.groups` at group level. The copies panel must not ask
+by SKU first, or the sibling printings are never fetched.
 
 A search that returns more than one group draws a chooser (`VariantChooser` in
 `app/src/BoxBrowse.tsx`) with one tile per printing. A tile carries a photograph of a copy that
@@ -27,7 +26,7 @@ and the wire.
 
 ## 2. Inventory facets need a stored set
 
-- `cards` has a `set` column and a `rarity` column. Both are written when the card is bound to
+- `cards` has a `set_name` column and a `rarity` column. Both are written when the card is bound to
   a SKU, from the catalog row.
 - The route resolves a typed hint through `pipeline/setnames.py` before storing it. That covers
   the shutter press that skipped Enter, the CLI and the two `set_hint` patch paths.
@@ -67,6 +66,5 @@ set, so the real choice is a third as wide as the list that was drawn.
   that agree with the claim could sit in the tail past the cutoff. Now they rank first and keep
   a digit.
 
-An entry written before this change keeps its old, unranked suggestions until
-`pkmnscan queue refresh --write` runs over it (D167's mechanism). That press is a one-time step
-over the live store, on the owner's word.
+A queue entry that predates the ranking keeps its old, unranked suggestions until
+`pkmnscan queue refresh --write` runs over it (D167's mechanism).

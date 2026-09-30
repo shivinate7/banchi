@@ -14,19 +14,16 @@ for the card's identity. Nothing about a name or a number can pick a SKU.
 Foil. One PRODUCT has both. The printing (normal, foil, holofoil, reverse holofoil) lives only
 in the SKU's `Condition` cell. So a SKU is the finest layer.
 
-## 1. Why a SKU and a name can disagree
+## 1. Why a SKU and a name must not drift
 
-The store began as a record of READINGS. D36 (the run owns what the model read) and D67 (the
-set code is stripped for the eye, never in the record) both say so. `cards.name` and
-`cards.number` were the model's read. The SKU arrived later as a second, independent column. It holds the catalog row
-that the join or a human chose. D213 (the set is a stored fact) made `set_name` and `rarity`
-follow the SKU. It left `name` and `number` as the read.
+The store records READINGS (D36, the run owns what the model read; D67, the set code is
+stripped for the eye, never in the record). The SKU is a second, independent column. It holds
+the catalog row that the join or a human chose. If `name` and `number` stay the model's read,
+a misread number can sit under a right SKU, and a name can dispute the listing. Nothing checks
+the pair.
 
-The two could then drift. A misread number sat under a right SKU. A name disputed the listing.
-Nothing checked the pair.
-
-The fix moves the read out of the identity fields and into `read_*`. The identity fields hold
-the SKU's facts. A guard (4.3) keeps it so.
+So the read lives in `read_*`. The identity fields hold the SKU's facts, as D213 (the set is a
+stored fact) already did for `set_name` and `rarity`. A guard (4.3) keeps it so.
 
 ## 2. The layers
 
@@ -175,8 +172,9 @@ the store's `identifications` table (keyed by photograph digest), and `read_*` o
 the copy moves with its source. `read_*` is never a key and never binds a slot. The digest
 does that.
 
-The migration recovers `read_*` from the `identifications` entry under the card's `cid`. It
-does not use the card's current fields, because a correction may have overwritten them.
+The migration recovers `read_*` from the `identifications` entry under the card's `cid`. Where
+no entry matches the `cid`, `pipeline/identity_binding.py` falls back to the card's current
+fields. Those may be a correction's overwrite, so an entry is the better source.
 
 ## 4. The writers
 
@@ -276,14 +274,14 @@ find the card.
 
 ### 5.3 Identity readers that change with no code
 
-Every screen that draws `name`, `number` or `rarity` now draws the SKU's product. That covers
-the `#/inventory` lists and Details, the landmark walk, Home's recent deck, orders and the
-walk, holdings (`_value_rows`, D236) and the Fulfiller's screen. `#/graveyard` and box delete
-draw the name at burial, which is frozen history (D134).
+Every screen that draws `name`, `number` or `rarity` draws the SKU's product. That covers the
+`#/inventory` lists and Details, the landmark walk, Home's recent deck, orders and the walk,
+holdings (`_value_rows`, D236) and the Fulfiller's screen. `#/graveyard` and box delete draw
+the name at burial, which is frozen history (D134).
 
-`number_key` composes from the catalog pair. So D234's glued-code repair has nothing to repair
-on a SKU-bound card. Price history (D254) tier (b) reads the SKU table. It no longer merges
-cached exports on each call. Tier (c) now equals tier (b) for every SKU-bound card.
+`number_key` composes from the catalog pair, so D234's glued-code repair has nothing to repair
+on a SKU-bound card. Price history (D254) tier (b) reads the SKU table. Tier (c) equals tier
+(b) for every SKU-bound card.
 
 ### 5.4 The one new thing a screen draws
 
@@ -398,7 +396,8 @@ counts on the owner's store: unmeasured here.
 2. **Fill the table:** `./pkmnscan skus adopt --write` (3.2).
 3. **The press:** `./pkmnscan cards identity --write`. It previews by default. It never runs at
    open time, because its answer depends on what the table holds, and that grows.
-   - Every card: backfill `read_*` from the `identifications` entry for its `cid`.
+   - Every card: backfill `read_*` from the `identifications` entry for its `cid`. If none
+     matches, use the card's current fields.
    - T1, T2, T3, T4u: `bind_sku(bound_by=migration)`, with the class recorded on the event.
    - T4s, T5: write `identity_source = read`. Leave every identity field as it is. No held card
      changes on screen.
@@ -432,9 +431,9 @@ the replay on the day of the write.
 
 ## 8. The right SKU, the wrong name
 
-### 8.1 After the change it is "confirm"
+### 8.1 Confirm, or correct
 
-For a card bound `sku`, the name already follows the SKU. So there is nothing to correct. The
+For a card bound `sku`, the name follows the SKU, so there is nothing to correct. The
 "Read as" line (5.4) keeps the camera's version visible when it disputes.
 
 For a held card, the owner gives one of two answers.
@@ -463,14 +462,13 @@ On a held card, the refusal text also names the other press: "If the listing is 
 ### 8.3 Old history lines
 
 `_reverse_correction` restores a key only where the line records it (D252: a missing key is not
-a null claim). A line now records the previous binding (`sku`, `bound_by`). `unbind_sku`
-derives the identity from the SKU table. A line written before the change still carries `name`,
-`number`, `rarity` and `set_name`. `unbind_sku` ignores them.
+a null claim). A line records the previous binding (`sku`, `bound_by`). `unbind_sku` derives the identity
+from the SKU table. A line with the old `name`, `number`, `rarity` and `set_name` keys is
+still read, and `unbind_sku` ignores those keys.
 
 ## 9. Risks, and what is given up
 
-1. **A wrong SKU now looks right.** A misbound card used to draw the camera's name. That name
-   at least disagreed with the listing. Now it draws the listing's name, cleanly. Four things
+1. **A wrong SKU looks right.** A misbound card draws the listing's name, cleanly. Four things
    protect the outcome.
    - D253 refuses to bind a disputing read at the join.
    - The one writer refuses it too.

@@ -4751,53 +4751,15 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
     record with no id whose upstairs neighbour also has none — named here rather than
     papered over, because both halves of that are records this server never wrote.
 
-    FILES MOVE FIRST, INSIDE THE BLOCK, ASCENDING — and the ordering argument is
-    `do_delete_card`'s money rule extended to a rename. The session commits records only
-    at block exit, so a crash mid-shift discards every record edit while leaving some
-    photos already at their new names. Three properties make that recoverable rather than
-    wrong:
-
-      the first rename CONSUMES the target's photo   `os.replace(N+1 -> N)` atomically
-                                                     overwrites the doomed file. Nothing
-                                                     ever unlinks the target's photo while
-                                                     there are cards to shift, so no retry
-                                                     can blindly unlink a slot that a
-                                                     partial shift has already refilled
-                                                     with a NEIGHBOUR's photo — the one
-                                                     ordering that destroys a photo of a
-                                                     card that still exists.
-      a rename RESUMES rather than repeating         source missing while the record says
-                                                     the card has a photo means an earlier
-                                                     attempt already moved it; the loop
-                                                     takes the destination as done and
-                                                     walks on. The RECORD is what breaks
-                                                     the tie — a card that never had a
-                                                     photo is distinguishable from one
-                                                     whose photo has already moved, which
-                                                     is what makes the retry safe where a
-                                                     bare `is_file()` probe would misread
-                                                     the target's leftovers as a moved
-                                                     photo.
-      sidecars are REGENERATED, not renamed          written whole from the record at the
-                                                     new index (`write_atomic`), old one
-                                                     unlinked after — idempotent on a
-                                                     retry, and the reader can never find
-                                                     a sidecar whose `index` disagrees
-                                                     with its filename.
-
-    What a crash between renames costs, stated exactly: until the operation is retried to
-    completion, records point at photo names a partial shift has already moved, so an
-    identify run in that window would attribute photos one position off. The window is
-    closed by retrying the remove, which the `capture_id` check permits precisely because
-    the store was never committed. Past the block, the commit is per file (capture-server
-    spec §6.5), exactly as every other route here — this one cannot promise more.
-
     EVERYTHING KEYED BY A SHIFTED POSITION MOVES WITH IT: record key and its `box`/`index`
-    fields, photo, sidecar, queue entries (`position`, `box`, `index`, the rendered
+    fields, queue entries (`position`, `box`, `index`, the rendered
     `label`, and `photo` re-pointed), cache entries re-keyed. `capture_id`s ride along
     untouched — they name photographs, and no photograph changed. A CLEARED queue entry
     moves too, flag intact: the answer is about the physical card, and the physical card
     is what slid down.
+
+    Photographs live under `cid`, so no file is renamed. Only the target's photo and sidecar are
+    unlinked.
 
     TWO HISTORY LINES, COMMITTED WITH THE CHANGE OR NOT AT ALL: `removed` for the target —
     same shape as undo's, because the same thing happened to that record — and

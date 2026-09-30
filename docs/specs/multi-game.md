@@ -85,9 +85,6 @@ because a zero-row catalog looks exactly like an empty run.
 
 ### 2.2 `rune` is not a rarity, and `Showcase` is the alt-art treatment
 
-The owner's guess before the export was read was "common/uncommon/rare/epic/alt art/showcase/
-rune". Part of it was not in the data.
-
 - `rune` appears in no `Rarity` cell in the English catalog.
 - `alt art` is not a rarity. It is what `Showcase` IS, for example `Ahri, Alluring (Alternate
   Art)` at `066a/298`.
@@ -115,11 +112,8 @@ The `Condition` column of both games is the five grades crossed with `{"", " Foi
     pokemon     normal -> "Near Mint"   holo -> "Near Mint Holofoil"
                 reverse_holo -> "Near Mint Reverse Holofoil"
 
-A screen typed against Pokemon's three finish strings kept drawing Pokemon's chips whatever
-game was chosen. It offered `holo` and `reverse_holo` for Riftbound. That game does not print
-them, and the server refuses them. The rig reported it, not a test.
-
-`app/src/types.ts` types the finish as `string` on purpose. A union of every game's finishes
+A screen must offer the chosen game's own finish chips. Riftbound prints no `holo` or
+`reverse_holo`, and the server refuses them. `app/src/types.ts` types the finish as `string` on purpose. A union of every game's finishes
 would type a Riftbound `reverse_holo` as legal. That is the same defect in a wider hat. The
 server validates the claim against the chosen game's own list and answers `variant_invalid`.
 The app's job is to offer the right chips, not to prove them in the type system.
@@ -230,17 +224,17 @@ nothing.
 session could reasonably disagree with the stack order of the rarities or with which finishes a
 rarity may claim.
 
-### 4.2 `catalogd` and `unverified` are orthogonal
+### 4.2 `catalogued` and `unverified` are orthogonal
 
 There are three states. The two that look alike have opposite remedies.
 
-- `catalogd: True, unverified: False` is measured. An export was read, and the vocabulary was
+- `catalogued: True, unverified: False` is measured. An export was read, and the vocabulary was
   authored from its cells. This is every real game.
-- `catalogd: True, unverified: True` is a real TCGplayer product line whose export nobody has
+- `catalogued: True, unverified: True` is a real TCGplayer product line whose export nobody has
   seen. It is temporary, and the fix is to get the export. Every consumer refuses, because a
   guessed rarity list is what D22 refuses. No entry is in this state today. The state stays,
   because the next game added starts there.
-- `catalogd: False` is `misc`. It is permanent and correct. There is no single `Product Line`
+- `catalogued: False` is `misc`. It is permanent and correct. There is no single `Product Line`
   to read, and no export is coming.
 
 If the two shared a flag, every misc capture would read as a fault. A real fault would then hide
@@ -289,13 +283,12 @@ grayed out, and the operator has no way to say what is true. The screen has deci
 card in the operator's hand does not exist. **The superset rule and unselectable must never be
 separated.**
 
-### 5.2 The vindication
+### 5.2 Widen to what the printing admits
 
-`finish_by_rarity["Rare"]` for Pokemon carried `normal` against an SV09 that stocks no plain
-Near Mint `Rare` row. It was authored beyond the evidence on purpose, and the temptation was to
-trim it to what the one export proved. The wider Pokemon export stocks plain Near Mint Rare
-rows in more than one era. Narrowing the line would have made two eras of plain `Rare`
-unclaimable.
+`finish_by_rarity["Rare"]` for Pokemon carries `normal`, though SV09 stocks no plain Near Mint
+`Rare` row. It is authored beyond that one export on purpose. The wider Pokemon export stocks
+plain Near Mint Rare rows in more than one era. Trimming the line to one export would make
+those eras of plain `Rare` unclaimable.
 
 The principle: **widen to every finish that the rarity's own printing admits. Narrow only where
 the printing forbids it.**
@@ -374,11 +367,9 @@ authored ahead of its game. Blocking on it would force the registry and the disp
 together in one commit. A registry name with no profile is the direction that breaks a run. It
 stops at import with both names in the message.
 
-**A strategy that no game claims is deleted.** `operator_note` named a game that is deliberately
-never sent to the model. The owner ruled that `misc` is identified and submitted to the batch
-API. That left a strategy no game could claim and a predicate that could never answer False.
-That is the dead-field shape that this registry is audited to prevent. The free-text note stays
-as an addition. It was never a substitute for reading the card.
+**A strategy that no game claims does not stand.** It is a dead field, and this registry is
+audited to prevent those. `misc` is identified and submitted to the batch API like any game. Its
+free-text note is an addition, never a substitute for reading the card.
 
 **Crop bands.** A band profile is a *selection*, not a rectangle. A card is 63x88mm whatever is
 printed on it. The only per-game question is which bands are worth cutting. `pokemon` claims
@@ -464,9 +455,8 @@ legitimately holds both plain Commons and holo Rares. Three rules each stop a sp
 `--export` is repeatable. **Never infer the game from a filename.** Read each file's `Product
 Line` column and map file to games. Then invert to game to files, which must be exactly one.
 
-**The catalog join was product-line blind, not agnostic.** The column was declared in the
-canonical header and read by nothing. Two exports concatenated would have cross-joined in
-silence.
+**The join reads the `Product Line` column.** An export is never taken as product-line
+agnostic. Two exports concatenated without that read would cross-join in silence.
 
 **Catalogs are built per game and never merged.** A merged number index would report
 cross-*game* collisions as though they were the cross-*set* collisions that the collision report
@@ -558,7 +548,7 @@ Identification accuracy for either game is unmeasured.
   from `066/298`.
 - **Do not give `misc` a `product_line` string.** `None` is not a `str`, and that property does
   the work.
-- **Do not collapse `catalogd` and `unverified`.** They have opposite remedies (section 4.2).
+- **Do not collapse `catalogued` and `unverified`.** They have opposite remedies (section 4.2).
 - **Do not merge per-game catalogs, and do not infer a game from a filename** (section 9.2).
 - **Do not put a name from the module inside a registry literal, or a callable in an entry.**
   The audit reads the file with `ast` and must never run it.

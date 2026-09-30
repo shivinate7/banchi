@@ -168,7 +168,7 @@ unreachable.
 | item | the doubt | now |
 |---|---|---|
 | 1 | a re-shoot breaks the frozen digest, so the audit needs an excused set | closed. A re-shoot writes new bytes at the card's own name. The `reshot` history line records the new `photo_sha256`. The audit excuses a card only by a recorded digest that equals the file |
-| 2 | `do_remove_card`'s docstring and a survey disagree about a killed renumber | closed. The rename loop is gone. The docstring still describes it (unmeasured whether it was updated) |
+| 2 | `do_remove_card`'s docstring and a survey disagree about a killed renumber | closed. The rename loop is gone, and the docstring says so |
 | 3 | freezing a filename, keeping `next_index` and forbidding a cid-named file cannot all hold | closed structurally. The name is a UNIQUE sha256 and no filename is an index |
 | 4 | whether the owner wants a 64-character id on the wire | open. The full 64 characters is built. `cid[:12]` is what prose and screens use. Nothing types either. Only the owner can rule |
 | 5 | the seeding stalls the live capture server | closed by hazard 1. The lock holds for row writes and a re-stat |
@@ -190,21 +190,18 @@ symlink at that name. `make ignore-check` covers it.
 - `./pkmnscan cards name`, `audit` and `photos`.
 - `make cid-selftest` and `make cid-audit`.
 
-**Two defects were found in `store/db.py` while building.**
+**Two rules in `store/db.py` keep the cid unique.**
 
-- `SqliteSource.upsert` was `INSERT OR REPLACE`. It resolves a conflict in ANY constraint by
-  deleting the conflicting row. A second card with a name that another card held deleted that
-  other card. It is now `ON CONFLICT (<primary key>) DO UPDATE`, so every other constraint
-  raises. This matters because the claim "two cards cannot compose one photograph path" rests
-  on two cards never holding one name.
-- `flush_rows` wrote rows one statement at a time. A mid-box renumber re-keys rows, so two
-  rows briefly hold one name, and SQLite checks a UNIQUE index at once. Every touched key is
-  cleared before any is written.
+- `SqliteSource.upsert` is `ON CONFLICT (<primary key>) DO UPDATE`, never `INSERT OR REPLACE`.
+  `INSERT OR REPLACE` resolves a conflict in ANY constraint by deleting the conflicting row, so
+  a second card with a held name would delete the first card. The claim "two cards cannot
+  compose one photograph path" rests on two cards never holding one name.
+- `flush_rows` clears every touched key before it writes any. A mid-box renumber re-keys rows,
+  so two rows briefly hold one name, and SQLite checks a UNIQUE index at once.
 
-**A guard is trusted once it goes red on its defect.** A survivor of a mutation test is
-information. Two guards can mask each other: the relocation's source check and its destination
-re-hash both end in the same outcome. The re-hash is provoked by making `os.link` land
-different bytes.
+**A guard is trusted once it goes red on its defect.** Two guards can mask each other. The
+relocation's source check and its destination re-hash end in the same outcome, so the re-hash is
+provoked by making `os.link` land different bytes.
 
 **The client.** `photoUrl` in `app/src/server.ts` is the one place that builds a by-card URL.
 It sends `?v=<capture id>`, which moves exactly when the bytes do. `PHOTO_CID` there is the
@@ -307,9 +304,8 @@ symmetry is `bid` : box :: `cid` : card. `card_id` is taken by the T1 fixtures.
 
 ## 3. The migration
 
-Schema version 4 added `cards.cid`. Version 3 belongs to D174's `submissions` table, which
-merged while this work was open. Two steps at the same version in `_upgrade` conflict in the one
-function where taking either side silently loses a migration. Claim a schema version at merge.
+Schema version 4 adds `cards.cid`. Version 3 is D174's `submissions` table. Each step in
+`_upgrade` owns one version (section 5).
 
 The seeding touches no file outside the database. That property lets it run inside `_upgrade`.
 
@@ -482,14 +478,15 @@ that names the photograph changes when the bytes change.
   `custom_id`. A junk capture deleted mid-box would return paid answers keyed one card off.
   That has not fired.
 
-## 5. The order of work
+## 5. Ordering rules
 
-The change is built. **Two schema steps at one version in `_upgrade` are the one merge
-conflict that loses data.** The change that protects money merges first and takes the lower
-version. The forward-version guard lands first, alone, as a
-one-commit change that alters no behavior on any store that exists. A signature change such as
-`photoUrl(box, index)` to `photoUrl(cid)` wants a quiet tree. An exact-match roster (the T7
-command list) needs a recount from `entry.COMMANDS` at a conflict, never a side.
+- **Two schema steps at one version in `_upgrade` are the one merge conflict that loses data.**
+  The change that protects money takes the lower version. Claim a version at merge.
+- **The forward-version guard lands alone**, as a one-commit change that alters no behavior on
+  any store that exists.
+- A signature change such as `photoUrl(box, index)` to `photoUrl(cid)` wants a quiet tree.
+- An exact-match roster (the T7 command list) needs a recount from `entry.COMMANDS` at a
+  conflict, never a side.
 
 ## 6. How it is proven
 
@@ -554,8 +551,8 @@ decision is written under a slug, and `make merge` claims its number (D140).
    carries the new `photo_sha256`. A `reshot` line without a digest is a named unprovable and
    exits non-zero. It is never an excuse. The correctness of the excused set rests on a field
    whose real-world firings are unmeasured.
-2. **`do_remove_card`'s docstring** still describes the retired rename loop. Its body renames
-   nothing.
+2. **`do_remove_card` renames no file.** Photographs live under `cid`. It unlinks only the
+   target's photo and sidecar.
 3. **The three commitments that a filename-freezing change cannot all keep.** They are freezing
    the birth filename, leaving `next_index` unchanged and forbidding a cid-named file. This
    change avoids the trap because no filename is an index. A future change that freezes a

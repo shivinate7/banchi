@@ -842,12 +842,11 @@ def _repair(
     AND THE NAME IS A DIGEST, SO THE NEXT READ HEALS IT — BYTE-IDENTICALLY. That was measured
     before this was written, and it is the entire argument against an allocator, which would
     have handed the stripped row a fresh number and left every reference to its old one
-    pointing at nothing. `docs/specs/stable-card-id.md` §6.1 item 2 made this a named
-    REFUSAL instead; §0.6 hazard 3 overrules that, because refusing to use the one property
-    the design was chosen for, in the one situation it was bought for, is giving it away.
+    pointing at nothing. `docs/specs/stable-card-id.md` §0.6 hazard 3 is why this heals and does not refuse: refusing
+    to use the one property the design was chosen for, in the one situation it was bought for,
+    is giving it away.
 
-    IT IS LOUD IN THREE PLACES so it can never be the silent re-issue that refusal was
-    guarding against: `cards_reissued` in a receipt, a `card_ids_reissued` history event
+    IT IS LOUD IN THREE PLACES so it can never be a silent re-issue: `cards_reissued` in a receipt, a `card_ids_reissued` history event
     naming every key, and a line in `make status`.
 
     THE PROBE IS AN INDEX PROBE AND NOT A SCAN, which is what lets it run on every open.

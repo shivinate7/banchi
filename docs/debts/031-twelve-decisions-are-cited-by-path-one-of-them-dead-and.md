@@ -19,7 +19,7 @@ cause, so the next claim writes an id rather than a broken path.
 FOUR already-claimed, numbered-path citations sit across four files (six more sat in two records since deleted). This is a different,
 older style. It names a real entry by its full `D<n>-<slug>.md` filename, not by its bare id:
 
-    docs/specs/stable-card-id.md, line 764
+    docs/specs/stable-card-id.md
     scripts/docs-audit.py, line 11689
     store/orders.py, line 181
     store/numbers.py, line 5
