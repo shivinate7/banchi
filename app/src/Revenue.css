@@ -1,3 +1,4 @@
+}
 /* SALES (`#/revenue`) — Direction B (D298): a summary band, a podium of the
  * best sellers, a foil/rarity mix tile, bar rows for the rest of the top ten, then the full
  * sortable, drillable table. Every color here is a `--bn-*` token; nothing names one. */
@@ -27,7 +28,7 @@
      note) balloons past the viewport and starves the middle `1fr` track to 0 — measured,
      the month bars then stack invisibly behind the shelf column instead of drawing beside
      it (defect fix). */
-  grid-template-columns: minmax(220px, 340px) minmax(180px, 1fr) minmax(220px, 300px);
+  grid-template-columns: minmax(220px, 340px) minmax(180px, 1fr);
   gap: var(--bn-7);
   /* STRETCH, NOT START: the shelf column runs about twice the height of the totals, and a
      `start`-aligned strip left the band under the totals and bars empty. The bars take
@@ -64,7 +65,7 @@
   grid-auto-columns: minmax(76px, 1fr);
   gap: var(--bn-2);
   align-items: end;
-  min-height: 128px;
+  min-height: 160px;
   min-width: 0;
   overflow-x: auto;
   scroll-snap-type: x proximity;
@@ -117,12 +118,18 @@
 /* ---- the shelf (D236), a column of the summary band -------------------------------------- */
 
 .revenue-shelf {
+  /* THE SHELF IS ITS OWN ROW UNDER THE TOTALS AND BARS AT EVERY WIDTH. As a third column it
+     ran twice the height of the totals and left a blank block under them; as a row it is only
+     as tall as its own line, and the bars take the totals' height. */
+  grid-column: 1 / -1;
   display: flex;
-  flex-direction: column;
-  gap: var(--bn-2);
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--bn-2) var(--bn-4);
   min-width: 0;
-  padding-left: var(--bn-7);
-  border-left: 1px solid var(--bn-line);
+  border-top: 1px solid var(--bn-line);
+  padding-top: var(--bn-5);
 }
 .revenue-shelf-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-2); }
 .revenue-shelf-figure { font-size: var(--bn-fs-2xl); font-weight: 600; }
@@ -433,7 +440,6 @@
   /* Same `auto`-track trap as the three-column rule above (see its own comment): capped,
      never `auto`, or the lead column's longest sentence pushes the month bars off the
      right edge (defect fix, measured at 820: 63px of page scroll). */
-  .revenue-summary { grid-template-columns: minmax(220px, 340px) minmax(180px, 1fr); }
   /* The strip takes the whole row: beside the totals it had ~330px for five 76px columns, which
      cut the newest month off the edge. */
   .revenue-months { grid-column: 1 / -1; }

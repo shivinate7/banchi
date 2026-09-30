@@ -550,12 +550,14 @@ const HOLDINGS_RANGE_OPTIONS: readonly { readonly value: HoldingsRange; readonly
 /** A DAY THAT PRICED ONLY A HANDFUL OF NAMES IS NOT A LOW VALUE, IT IS AN UNFINISHED SWEEP.
  *  Measured on the owner's store: the archive's first day priced 3 of 706 names, so its total
  *  was $0.26 against about $1,100 the next day, and the line drew a cliff that was never a
- *  fall in what is on the shelf. A point below half of the best coverage in the range is left
- *  off the drawn line (the note under it says how many), never plotted as a low figure and
- *  never drawn as a zero. ponytail: half is a display cut, not a data rule. */
+ *  fall in what is on the shelf. Only LEADING readings below half of the best coverage are left
+ *  off (the note under the chart says how many); every later reading draws, so the last point
+ *  on the line is the headline figure. Never plotted as a low figure, never drawn as a zero.
+ *  ponytail: half is a display cut, not a data rule. */
 export function plottedTotals(totals: readonly HoldingsTotal[]): readonly HoldingsTotal[] {
   const best = Math.max(0, ...totals.map((t) => t.priced_names))
-  return totals.filter((t) => t.priced_names * 2 >= best)
+  const first = totals.findIndex((t) => t.priced_names * 2 >= best)
+  return first < 0 ? totals : totals.slice(first)
 }
 
 /** A `gap_before` point that lands alone — its neighbor on both sides broken off — is still
@@ -1163,7 +1165,6 @@ export function Revenue() {
       <Page
         title="Sales"
         icon="dollar"
-        lede="Your gross-revenue retrospective."
         className="revenue"
         status={
           <Notice tone="danger" title="Could not read your orders">
@@ -1177,12 +1178,12 @@ export function Revenue() {
   }
 
   if (orders === null) {
-    return <Page title="Sales" icon="dollar" lede="Your gross-revenue retrospective." className="revenue" loading />
+    return <Page title="Sales" icon="dollar" className="revenue" loading />
   }
 
   if (sales.length === 0) {
     return (
-      <Page title="Sales" icon="dollar" lede="Your gross-revenue retrospective." className="revenue">
+      <Page title="Sales" icon="dollar" className="revenue">
         <EmptyState
           icon="dollar"
           title="Nothing has sold yet."

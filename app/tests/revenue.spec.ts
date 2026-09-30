@@ -915,20 +915,41 @@ test('"gross" is said once: the eyebrow, not the subtitle or the sort (defect 4)
   await expect(page.locator('.revenue-summary .bn-eyebrow').first()).toContainText(/^gross/i)
 })
 
-test('the month bars take the height of the shelf column, leaving no empty band (defect 5)', async ({ page }) => {
+test('the shelf sits in its own row, so the totals and bars leave no empty band (defect 5)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await stub(page, generalOrders())
   await stubShelf(page)
   await open(page, '?period=all')
+  const lead = await page.locator('.revenue-summary-lead').boundingBox()
   const months = await page.locator('.revenue-months').boundingBox()
   const shelf = await page.locator('.revenue-shelf').boundingBox()
-  expect(months && shelf).toBeTruthy()
-  expect(months!.height).toBeGreaterThanOrEqual(shelf!.height - 2)
-  // The tallest bar rises in proportion to that height rather than stopping at a fixed 72px.
+  expect(lead && months && shelf).toBeTruthy()
+  // Beside each other, not under one another, and the shelf is below both.
+  expect(months!.x).toBeGreaterThan(lead!.x + lead!.width - 1)
+  expect(shelf!.y).toBeGreaterThanOrEqual(months!.y + months!.height - 1)
+  // The strip is no taller than the totals need (a 3x blank block was the defect).
+  expect(months!.height).toBeLessThanOrEqual(lead!.height + 60)
   const tallest = await page
     .locator('.revenue-month-bar')
     .evaluateAll((els) => Math.max(...els.map((e) => e.getBoundingClientRect().height)))
-  expect(tallest).toBeGreaterThan(100)
+  expect(tallest).toBeGreaterThan(80)
+})
+
+test('only leading low-coverage readings are trimmed, so the line ends on the headline figure (fix round)', async ({ page }) => {
+  await stub(page, generalOrders())
+  await stubShelf(page, {
+    totals: [
+      { start: '2026-08-21', value: '1.00', priced_names: 1, unpriced_names: 9, gap_before: false },
+      { start: '2026-08-22', value: '100.00', priced_names: 9, unpriced_names: 1, gap_before: false },
+      { start: '2026-08-23', value: '50.00', priced_names: 4, unpriced_names: 6, gap_before: false },
+      { start: '2026-08-24', value: '110.00', priced_names: 9, unpriced_names: 1, gap_before: false },
+    ],
+  })
+  await open(page, '?period=all')
+  const points = await page.locator('.revenue-spark polyline').getAttribute('points')
+  expect(points?.trim().split(/\s+/)).toHaveLength(3)
+  await expect(page.locator('.revenue-shelf')).toContainText('1 early reading left off')
+  await expect(page.locator('.revenue-shelf')).toContainText('9 of 10 priced')
 })
 
 test('a sealed line lands on Sealed and an unrecorded rarity is said plainly (defects 7 and 8)', async ({ page }) => {
@@ -961,7 +982,18 @@ test('a sealed line lands on Sealed and an unrecorded rarity is said plainly (de
 
 test('at 820 the newest month, its bar and its label sit whole inside the strip (fix round)', async ({ page }) => {
   await page.setViewportSize({ width: 820, height: 1000 })
-  await stub(page, generalOrders())
+  // Twelve months of five-figure sales: too wide for the strip, so it must open at the newest.
+  const months = ['2025-10', '2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09']
+  await stub(
+    page,
+    months.map((m, i) =>
+      orderRow({
+        number: `ORD-${3000 + i}`,
+        placed_at: `${m}-05T10:00:00+00:00`,
+        lines: [line({ sku: '9100001', name: 'Charizard ex', quantity: 1, unit_price: `${12000 + i * 111}.50` })],
+      }),
+    ),
+  )
   await open(page, '?period=all')
   const strip = await page.locator('.revenue-months').boundingBox()
   const col = page.locator('.revenue-month-col').last()
