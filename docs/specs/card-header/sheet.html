@@ -44,7 +44,11 @@ body { padding: var(--bn-6); }
 .copy { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--bn-2) var(--bn-3); align-items: start; padding: var(--bn-3); background: var(--bn-surface-2); border-radius: var(--bn-r); }
 .copy-id { display: flex; flex-wrap: wrap; gap: 0 var(--bn-2); font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); }
 .copy-id span + span::before { content: '·'; margin-right: var(--bn-2); color: var(--bn-ink-4); }
-.copy-acts { display: flex; gap: var(--bn-1); }
+.copy { container-type: inline-size; }
+.copy-acts { display: flex; align-items: center; gap: var(--bn-2); }
+.copy .position-bar-chip { top: 50%; }
+@container (max-width: 640px) { .copy-acts { grid-column: 1 / -1; grid-row: 2; } }
+@container (max-width: 440px) { .copy-acts .bn-btn-primary { flex: 1; } }
 .copy-bar { grid-column: 1 / -1; min-width: 0; }
 .more { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); padding: var(--bn-1) var(--bn-1); }
 
@@ -198,8 +202,13 @@ document.getElementById('flip').href = '?theme=' + (theme === 'dark' ? 'light' :
 const IMG = 'card.jpg'
 const dots = '<svg class="bn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h.01 M12 12h.01 M19 12h.01"></path></svg>'
 const kebab = `<button type="button" class="bn-btn bn-icon-btn kebab" aria-label="Actions" style="width:28px;height:28px">${dots}</button>`
-const icon = (d) => `<button type="button" class="bn-btn bn-icon-btn" aria-label="action" style="width:28px;height:28px"><svg class="bn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"></path></svg></button>`
-const acts = icon('M12 3v18 M17 7H9.5a3 3 0 0 0 0 6h5a3 3 0 0 1 0 6H7') + icon('M3 7h18v4H3z M5 11v9h14v-9') + icon('M4 12h13 M13 6l6 6-6 6')
+/* THE COPY ROW'S PRESSES, as `Inventory.tsx`'s copy actions draw them. Mark sold is the primary: the kit's
+   `bn-btn-primary` at `bn-btn-lg` (40px) with words. Retire and Move are the kit's 40px icon buttons
+   (`size="xl"`: 40px face, 18px glyph), with the icon paths from `kit/Icon.tsx`. */
+const svg = (d, px) => `<svg class="bn-icon" width="${px}" height="${px}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"></path></svg>`
+const primaryBtn = `<button type="button" class="bn-btn bn-btn-primary bn-btn-lg">${svg('M5 12l5 5 9-10', 16)}Mark sold</button>`
+const iconBtn = (d, label) => `<button type="button" class="bn-btn bn-icon-btn" aria-label="${label}" title="${label}" style="width:40px;height:40px">${svg(d, 18)}</button>`
+const acts = primaryBtn + iconBtn('M3 4.4h18v4H3z M4 8.4h16v11H4z M10 12.4h4', 'Retire') + iconBtn('M3 12h12 M11 7l5 5-5 5 M20 5v14', 'Move')
 const epic = '<span class="bn-pill bn-pill-accent">Epic</span>'
 const meta = (withPill) => `<p class="meta"><span class="num">090/219</span><span class="sep">Riftbound</span>${withPill ? `<span class="sep">${epic}</span>` : ''}</p>`
 const liveFig = '<span class="live-figure"><span class="bn-dot bn-dot-live" aria-hidden="true"></span>5</span>'
@@ -214,7 +223,7 @@ function bar(sections, here, card, of) {
   const at = ((card - 0.5) / of) * 100
   const segs = sections.map((n, i) => `<span class="position-bar-segment${i === here ? ' position-bar-here' : ''}" style="flex-grow:${n}"><span class="position-bar-segment-num" aria-hidden="true">${i + 1}</span></span>`).join('')
   let ticks = ''
-  for (let c = 5; c <= of; c += 5) ticks += `<span class="position-bar-tick"${c % 10 === 0 ? ' data-major="true"' : ''} style="left:${((c - 0.5) / of) * 100}%">${c % 10 === 0 ? `<span class="position-bar-tick-num">${c}</span>` : ''}</span>`
+  for (let c = 5; c < of; c += 5) ticks += `<span class="position-bar-tick"${c % 10 === 0 ? ' data-major="true"' : ''} style="left:${((c - 0.5) / of) * 100}%">${c % 10 === 0 && c < of - 1 && Math.abs(c - card) > Math.max(1, of * 0.06) ? `<span class="position-bar-tick-num">${c}</span>` : ''}</span>`
   return `<div class="position-bar position-bar-owner" data-depth="on" role="img" style="--pb-knockout:var(--bn-surface-2)">
     <div class="position-bar-track">${segs}<span class="position-bar-marker" style="left:${boxAt}%"></span></div>
     <div class="position-bar-zoom"><div class="position-bar-track position-bar-sectiontrack">

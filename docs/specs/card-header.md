@@ -164,3 +164,23 @@ One word each. Lead: "Stored" (the box list already says "stored") and "Live" wi
 "2d ago" as the read age. Side: "Captured", "Hidden", "Sent" and "Cap 5" for the ceiling. The
 full meter under Live shows that the cap is reached. The words above that read "in the boxes",
 "live on TCGplayer" and "at the ceiling of" are the earlier wording.
+
+### The copy row's presses, and the ruler (F3)
+
+Each copy has three presses in `Inventory.tsx`'s copy actions. "Mark sold" records a sale of that
+copy. It is the one act the owner does every day at the shelf. The app already treats it as the
+primary: it has words and the kit's primary style on the phone action bar. "Retire" puts a copy
+away and can be undone. "Move" sends one copy to another box. Both are rare.
+
+The sheet now ranks them. "Mark sold" is a labelled `bn-btn-primary` at `bn-btn-lg` (40px). Retire
+and Move are the kit's `IconButton` at `size="xl"` (40px face, 18px glyph) with their tooltips.
+I chose two visible icon buttons over a "..." menu. A menu would hide a press behind a press, and
+only two rare acts remain. The card already has its own "..." menu in the title line.
+
+At a copy width above 640px the presses sit at the right of the identity line. Below that they
+move to a row of their own. Below 440px "Mark sold" fills the row. That row costs 48px per copy at
+410. Trade-off: that is the price of a labelled button on a narrow pane.
+
+Ruler, matching `rulerTicksOf`: no tick at the last card, and no tick number within one card of
+the end, so the end shows "40" once. The sheet also hides a tick number that sits under the blue
+chip, and centres the chip vertically on the ruler.
