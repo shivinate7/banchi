@@ -69,7 +69,9 @@ for (const theme of ['light', 'dark'] as const) {
       expect(field.heightInset, 'the direction fills the field').toBe(0)
 
       const first = overlay.locator('.bn-fchip > .bn-pick:not([data-active])').first()
-      const handle = (await first.elementHandle())!
+      // Found again by its label after the pick: a node held across a re-render can be a
+      // detached copy, which reads no style at all.
+      const facet = (await first.locator('.bn-pick-label').textContent())!
       const rest = await look(first)
       const sortLook = await look(overlay.locator('.bn-sort > .bn-pick'))
       expect(rest.weight, 'one value weight at rest').toBe(sortLook.weight)
@@ -77,13 +79,16 @@ for (const theme of ['light', 'dark'] as const) {
 
       await first.click()
       await page.locator('[role="option"]').first().click()
-      await page.keyboard.press('Escape')
+      // No Escape: a single-choice pick closes its own list, and a second Escape closes the
+      // popover under it, so the trigger is read while the popover is still up.
       await settleMotion(page)
-      const set = await handle.evaluate((el) => {
+      await expect(overlay).toBeVisible()
+      const set = await overlay.locator('.bn-fchip > .bn-pick', { has: page.locator('.bn-pick-label', { hasText: new RegExp(`^${facet}$`) }) }).evaluate((el) => {
         const at = getComputedStyle(el)
         const words = getComputedStyle(el.querySelector('.bn-pick-value')!)
         return { edge: at.borderTopColor, ground: at.backgroundColor, ink: words.color, weight: words.fontWeight }
       })
+      expect(set.weight, 'the set look was read from a live node').not.toBe('')
       expect(set.weight, 'set is not marked by weight').toBe(rest.weight)
       expect(set.ink, 'set changes ink').not.toBe(rest.ink)
       expect(set.edge, 'set changes edge').not.toBe(rest.edge)
