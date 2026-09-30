@@ -943,16 +943,16 @@ test('the Show facet lists a buyer only in its own state, and each count is the 
   await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
   const list = page.getByRole('listbox', { name: 'Show' })
   /* EACH COUNT IS BUYERS, THE ROWS THE LIST WILL DRAW, never lines. */
-  await expect(list.getByRole('option', { name: /^Short/ })).toContainText('1')
+  await expect(list.getByRole('option', { name: /^Partly picked/ })).toContainText('1')
   await expect(list.getByRole('option', { name: /^Ready/ })).toContainText('1')
   await expect(list.getByRole('option', { name: /^Check/ })).toContainText('1')
-  await list.getByRole('option', { name: /^Short/ }).click()
+  await list.getByRole('option', { name: /^Partly picked/ }).click()
   await closeFilters(page)
 
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Bob')
-  /* THE ROW SAYS WHAT THE FILTER SAYS. */
-  await expect(page.locator('.orders-index-row')).toContainText('Short')
+  /* THE ROW CARRIES NO STATUS CHIP: the Show facet says the state (D304, Q2b). */
+  await expect(page.locator('.orders-index-row .bn-pill')).toHaveCount(0)
   await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('1 of 3 buyers')
   /* No legend of machine codes anywhere on the screen (UX-238, UX-239). */
   await expect(page.locator(VIEW)).not.toContainText('sku_unseen')
@@ -962,8 +962,11 @@ test('the Show facet lists a buyer only in its own state, and each count is the 
  *  Short (UX-196). */
 test('Check names what to look at, in cards', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
+  /* THE ROW CARRIES NO CHIP (D304, Q2b): the state reads in the walk's head once the buyer is open. */
   const carol = page.locator('.orders-index-row', { hasText: 'Carol' })
-  await expect(carol).toContainText('1 missing')
+  await carol.click()
+  await expect(carol).not.toContainText('missing')
+  await expect(page.locator('.orders-panel')).toContainText('1 missing')
 })
 
 /* -------------------------------------------------------------------------------------- 3 */
@@ -2112,7 +2115,7 @@ test('an open order under Ready in the row draws its status LABEL, never the ord
   await open(page, { orders: both })
 
   const row = page.locator('.orders-index-row').first()
-  await expect(row).toContainText('Short')
+  await expect(page.locator('.orders-panel')).toContainText('Partly picked')
   await expect(row).not.toContainText(SECOND_ORDER)
 })
 
@@ -2658,10 +2661,10 @@ test('the filter bar clears the 40px thumb floor at phone width', async ({ page 
 
 /* A SORT PRESS RE-SORTS AT ONCE (FLT-01, the owner's ruling, amending D296; UX-170). Ready to
  * ship still leads, and the list says so. */
-test('the sort press re-orders the list at once, Ready first, and the list says so', async ({ page }) => {
+test('the sort press re-orders the list at once, Ready to ship still leading, in one flat list', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
-  await expect(page.locator('.orders-buyers-note')).toHaveText('Ready')
+  await expect(page.locator('.orders-group-head')).toHaveCount(0)
 
   await (await openFilters(page)).getByRole('button', { name: /^Order: Newest first/ }).click()
   await closeFilters(page)
@@ -3105,7 +3108,7 @@ test('a done order with nothing owed still draws nothing — unchanged from befo
   /* NOTHING IS OWED, AND THE EMPTY STATE SAYS SO, with the one press that shows the done buyers. */
   await expect(page.locator('main.orders')).toContainText('Nothing is owed')
   await page.locator('.bn-empty').getByRole('button', { name: 'Show done buyers' }).click()
-  await expect(page.locator('.orders-index-row')).toContainText('Done')
+  await expect(page.locator('.orders-index-row')).toContainText('1 sold')
   await expect(page.locator('.orders-lines')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Pull', exact: true })).toHaveCount(0)
 })
@@ -3940,8 +3943,11 @@ test('the selected buyer row draws a spine, not a ring', async ({ page }) => {
   /* S4, D50 — one grammar with `#/inventory`'s own `.orders-walk-press`/`.browse-boxcell`: a tint
    *  plus an accent spine (`::before`, opacity/scale toggled), never a `box-shadow` ring. */
   await open(page, { orders: threeBuyerPayload() })
-  const selected = page.locator('.orders-index-row[aria-current="true"]')
+  /* THE SELECTED UNIT IS THE WHOLE ITEM, checkbox included: the row is inside it, and it carries the spine. */
+  await expect(page.locator('.orders-index-row[aria-current="true"]')).toHaveCount(1)
+  const selected = page.locator('.orders-index-item.is-selected')
   await expect(selected).toHaveCount(1)
+  await expect(selected.locator('.orders-index-row[aria-current="true"]')).toHaveCount(1)
   const before = await selected.evaluate((el) => {
     const style = getComputedStyle(el, '::before')
     return { opacity: style.opacity, background: style.backgroundColor, position: style.position }
@@ -4568,9 +4574,9 @@ test('the lightbox traps focus, closes on Escape, and gives focus back to the ph
  * buyer who owes at least one copy the store cannot find, whatever that buyer's state. Its count
  * is the rows it shows, it is drawn only while it has any, and each row under it says its own
  * missing copies and orders (`orderBuyers.ts:groupMissing`, the rule Home's line sums). */
-test('the Show facet offers "Missing a copy", counts its buyers, and lists only them', async ({ page }) => {
+test('the Show facet offers "Missing" (a product never seen), counts its buyers, and lists only them', async ({ page }) => {
   const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
-  const bob = seededOrder({ number: 'B0002', buyer: 'Bob', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'short' })
+  const bob = seededOrder({ number: 'B0002', buyer: 'Bob', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'sku_unseen' })
   await open(page, {
     orders: payloadOf([alice.row, bob.row], [{ ...alice.resolved, outstanding: 0 }, { ...bob.resolved, outstanding: 2 }]),
   })
@@ -4586,7 +4592,39 @@ test('the Show facet offers "Missing a copy", counts its buyers, and lists only 
   await expect(page).toHaveURL(/[?&]show=missing/)
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Bob')
-  await expect(page.locator('.orders-index-figure')).toHaveText(/2 missing in 1 order$/)
+  await expect(page.locator('.orders-index-figure')).toHaveText(/1 missing in 1 order$/)
+})
+
+test('"Short" lists a buyer whose product the store knows but has no copy left of, apart from Missing and Partly picked', async ({ page }) => {
+  const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
+  const bob = seededOrder({ number: 'B0002', buyer: 'Bob', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'no_copies_on_hand' })
+  const cy = seededOrder({ number: 'C0003', buyer: 'Cy', status: 'Ready to Ship', placedAt: '2026-08-16T00:00:00+00:00', reason: 'sku_unseen' })
+  await open(page, { orders: payloadOf([alice.row, bob.row, cy.row], [alice.resolved, bob.resolved, cy.resolved]) })
+
+  await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
+  const list = page.getByRole('listbox', { name: 'Show' })
+  await expect(list.getByRole('option', { name: /^Short/ })).toContainText('1')
+  await expect(list.getByRole('option', { name: /^Missing/ })).toContainText('1')
+  await list.getByRole('option', { name: /^Short/ }).click()
+  await closeFilters(page)
+
+  await expect(page).toHaveURL(/show=noneleft/)
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Bob')
+})
+
+test('a buyer whose only unfilled line is a sealed product is listed under Missing', async ({ page }) => {
+  const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
+  const dee = seededOrder({ number: 'D0004', buyer: 'Dee', status: 'Ready to Ship', placedAt: '2026-08-17T00:00:00+00:00', reason: 'not_a_single' })
+  await open(page, { orders: payloadOf([alice.row, dee.row], [alice.resolved, dee.resolved]) })
+
+  await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
+  const list = page.getByRole('listbox', { name: 'Show' })
+  await expect(list.getByRole('option', { name: /^Missing/ })).toContainText('1')
+  await list.getByRole('option', { name: /^Missing/ }).click()
+  await closeFilters(page)
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Dee')
 })
 
 test('"Missing a copy" is not offered while no buyer owes a missing copy', async ({ page }) => {
@@ -4609,7 +4647,7 @@ test('the Show facet takes several picks: a buyer passes on any, and the URL kee
 
   await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
   const list = page.getByRole('listbox', { name: 'Show' })
-  await list.getByRole('option', { name: /^Short/ }).click()
+  await list.getByRole('option', { name: /^Partly picked/ }).click()
   await list.getByRole('option', { name: /^Done/ }).click()
   /* EACH COUNT STAYS ITS OWN ROWS: another pick in the same facet does not change it. */
   await expect(list.getByRole('option', { name: /^Ready/ })).toContainText('1')
@@ -4641,7 +4679,7 @@ test('a fresh landing shows only pullable buyers, and one click widens it', asyn
   await expect(page.locator('.orders-index-row')).toHaveAttribute('aria-current', 'true')
   /* THE HIDDEN SET AND THE HEADLINE'S PICK COUNT COME FROM ONE ARITHMETIC (`pickOf`): Alice holds
      the one pick, Bob's line is short, so the headline names both and the list is the picks' buyers. */
-  const headline = (await page.locator(VIEW).innerText()).match(/(\d+) pick and (\d+) short/)
+  const headline = (await page.locator(VIEW).innerText()).match(/(\d+) pick and (\d+) unfilled/)
   expect(headline).not.toBeNull()
   expect(Number(headline![1])).toBe(1)
   expect(Number(headline![2])).toBe(1)
@@ -4727,4 +4765,68 @@ test('landing view: the last sale leaves the buyer on screen', async ({ page }) 
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Ada Lovelace')
   await expect(page.locator('.orders-index-row')).toHaveAttribute('aria-current', 'true')
+})
+
+
+/* ------------------------------------------------------- the buyer list at 820 (D304, Q2b) */
+
+test('at 820 a long buyer list rests with the Walk press in view and 40px, and a short one shows whole rows', async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 1000 })
+  const seeds = Array.from({ length: 16 }, (_, at) =>
+    seededOrder({ number: `L${String(at).padStart(4, '0')}`, buyer: `Buyer ${at}`, status: 'Ready to Ship', placedAt: `2026-08-${String(at + 1).padStart(2, '0')}T00:00:00+00:00`, reason: 'resolved' }),
+  )
+  await open(page, { orders: payloadOf(seeds.map((one) => one.row), seeds.map((one) => one.resolved)) })
+  const panel = page.locator('.orders-buyers-panel')
+  const walk = panel.locator('.orders-walkall')
+  await expect(walk).toBeVisible()
+  await settleMotion(page)
+  /* Scroll down and back up: a snap that skips the head rests at the first row instead. */
+  await panel.evaluate((el) => el.scrollTo({ top: 200, behavior: 'instant' }))
+  await panel.evaluate((el) => el.scrollTo({ top: 0, behavior: 'instant' }))
+  await settleMotion(page)
+  const at = await panel.evaluate((el) => ({ top: el.scrollTop, over: el.scrollHeight > el.clientHeight }))
+  expect(at.over, 'the fixture must overflow the card').toBe(true)
+  expect(at.top, 'snap rested past the Walk head').toBe(0)
+  const [box, card] = await Promise.all([walk.boundingBox(), panel.boundingBox()])
+  expect(box!.height).toBeGreaterThanOrEqual(40)
+  expect(box!.y).toBeGreaterThanOrEqual(card!.y)
+})
+
+test('at 820 a list that fits shows every row whole', async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 1000 })
+  await open(page, { orders: threeBuyerPayload() })
+  const panel = page.locator('.orders-buyers-panel')
+  await expect(panel.locator('.orders-index-item')).toHaveCount(3)
+  const fit = await panel.evaluate((el) => {
+    const cap = el.getBoundingClientRect()
+    return [...el.querySelectorAll('.orders-index-item')].every((row) => {
+      const box = row.getBoundingClientRect()
+      return box.top >= cap.top - 0.5 && box.bottom <= cap.bottom + 0.5
+    })
+  })
+  expect(fit).toBe(true)
+})
+
+test('the position card stays inside the walk column at 1440 and 820', async ({ page }) => {
+  for (const width of [1440, 820]) {
+    await page.setViewportSize({ width, height: 1000 })
+    await open(page, { orders: threeBuyerPayload(), walkPlan: walkPlanOf([walkPlanStop({})]) })
+    const where = page.locator('.walk-pick-where').first()
+    await expect(where).toBeVisible()
+    const over = await where.evaluate((el) => el.getBoundingClientRect().right - (el.closest('.orders-walk') as HTMLElement).getBoundingClientRect().right)
+    expect(over, `overflow at ${width}`).toBeLessThanOrEqual(0.5)
+  }
+})
+
+test('a buyer with one Missing order and one Short order counts two orders, and the rows add to the Home sentence', async ({ page }) => {
+  const unseen = seededOrder({ number: 'M0001', buyer: 'Eve', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'sku_unseen' })
+  const none = seededOrder({ number: 'M0002', buyer: 'Eve', status: 'Ready to Ship', placedAt: '2026-08-02T00:00:00+00:00', reason: 'no_copies_on_hand' })
+  await open(page, { orders: payloadOf([unseen.row, none.row], [{ ...unseen.resolved, outstanding: 1 }, { ...none.resolved, outstanding: 1 }]) })
+  await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
+  const list = page.getByRole('listbox', { name: 'Show' })
+  await list.getByRole('option', { name: /^Missing/ }).click()
+  await list.getByRole('option', { name: /^Short/ }).click()
+  await closeFilters(page)
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-figure')).toHaveText(/2 unfilled in 2 orders$/)
 })

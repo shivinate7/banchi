@@ -6375,6 +6375,7 @@ GAME_OPTIONAL_KEYS = frozenset(
         "export_scope",
         "export_needs_hint",
         "export_category_bytes",
+        "rarity_display",
     }
 )
 

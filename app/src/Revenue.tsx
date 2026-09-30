@@ -98,10 +98,10 @@ type SortDir = 'asc' | 'desc'
  *  copies, most recent sale, or the name from the top. Every later click on the same
  *  column just flips it. */
 const DEFAULT_DIR: Record<SortKey, SortDir> = { name: 'asc', copies: 'desc', gross: 'desc', last: 'desc' }
-const SORT_LABEL: Record<SortKey, string> = { name: 'Name', copies: 'Copies', gross: 'Gross', last: 'Last sold' }
+const SORT_LABEL: Record<SortKey, string> = { name: 'Name', copies: 'Copies', gross: 'Revenue', last: 'Last sold' }
 /** The podium's own segmented labels — the mock's own wording ("A to Z", "Latest") next to
  *  the same four keys the table's own column headers already sort by. One state, two faces. */
-const SORT_SEGMENT_LABEL: Record<SortKey, string> = { name: 'Alphabetical', copies: 'Copies', gross: 'Gross', last: 'Latest' }
+const SORT_SEGMENT_LABEL: Record<SortKey, string> = { name: 'Alphabetical', copies: 'Copies', gross: 'Revenue', last: 'Latest' }
 const SORT_KEYS: readonly SortKey[] = ['gross', 'copies', 'last', 'name']
 
 type Granularity = 'week' | 'month'
@@ -541,11 +541,24 @@ function marketCompareOf(row: Product, prices: SoldPricesLookup): MarketCompare 
  *  figure — the route only ever emits a total for a date it actually priced something at —
  *  so the only break this needs is the structural one `gap_before` states. */
 const HOLDINGS_RANGE_OPTIONS: readonly { readonly value: HoldingsRange; readonly label: string }[] = [
-  { value: 'month', label: 'Month' },
-  { value: 'quarter', label: 'Quarter' },
+  { value: 'month', label: '1 month' },
+  { value: 'quarter', label: '3 months' },
   { value: 'semiannual', label: '6 months' },
   { value: 'annual', label: 'Year' },
 ]
+
+/** A DAY THAT PRICED ONLY A HANDFUL OF NAMES IS NOT A LOW VALUE, IT IS AN UNFINISHED SWEEP.
+ *  Measured on the owner's store: the archive's first day priced 3 of 706 names, so its total
+ *  was $0.26 against about $1,100 the next day, and the line drew a cliff that was never a
+ *  fall in what is on the shelf. Only LEADING readings below half of the best coverage are left
+ *  off (the note under the chart says how many); every later reading draws, so the last point
+ *  on the line is the headline figure. Never plotted as a low figure, never drawn as a zero.
+ *  ponytail: half is a display cut, not a data rule. */
+export function plottedTotals(totals: readonly HoldingsTotal[]): readonly HoldingsTotal[] {
+  const best = Math.max(0, ...totals.map((t) => t.priced_names))
+  const first = totals.findIndex((t) => t.priced_names * 2 >= best)
+  return first < 0 ? totals : totals.slice(first)
+}
 
 /** A `gap_before` point that lands alone — its neighbor on both sides broken off — is still
  *  a real, priced point. It is drawn as a dot rather than dropped, so a structural gap in
@@ -586,7 +599,7 @@ function plotHoldings(segment: readonly (readonly [number, number])[]): string {
 function HoldingsSpark({ totals }: { totals: readonly HoldingsTotal[] }) {
   const W = 220
   const H = 56
-  const runs = useMemo(() => holdingsSegments(totals, W, H), [totals])
+  const runs = useMemo(() => holdingsSegments(plottedTotals(totals), W, H), [totals])
   if (runs === null) {
     return <div className="revenue-spark revenue-holdings-spark-empty" aria-hidden="true" />
   }
@@ -742,7 +755,14 @@ function RowThumb({
   const src = entry !== undefined ? photoUrl(entry.box, entry.index, entry) : (stockPhotos[sku] ?? null)
   return (
     <span ref={host} style={{ display: 'contents' }}>
-      <CardThumb src={src} alt={name} size={size} crop={entry === undefined ? null : crop} focus={THUMB_FOCUS} />
+      <CardThumb
+        src={src}
+        alt={name}
+        size={size}
+        crop={entry === undefined ? null : crop}
+        focus={THUMB_FOCUS}
+        className={entry === undefined ? 'revenue-thumb-stock' : undefined}
+      />
     </span>
   )
 }
@@ -751,6 +771,12 @@ function MetaLine({ product }: { readonly product: Product }) {
   if (product.rarity !== null) return <p className="revenue-tile-meta">{product.rarity}</p>
   if (isSealed(product.kind, product.condition)) return <p className="revenue-tile-meta">Sealed</p>
   return null
+}
+
+/** A strip that scrolls opens at its newest month. Stable identity, so it runs on mount only
+ *  (the strip is keyed by its own length, so a new period remounts it). */
+const scrollToEnd = (el: HTMLDivElement | null) => {
+  if (el !== null) el.scrollLeft = el.scrollWidth
 }
 
 const STOCK_RETRY_MS = 5000
@@ -1060,7 +1086,7 @@ export function Revenue() {
       // rarity" on a store that plainly sold foils and singles was this line reading a
       // sealed line's blank rarity as a missing fact rather than as the correct answer for
       // a sealed line).
-      const label = p.rarity ?? (isSealed(p.kind, p.condition) ? 'Sealed' : 'Unknown rarity')
+      const label = p.rarity ?? (isSealed(p.kind, p.condition) ? 'Sealed' : 'Rarity not recorded')
       byRarity.set(label, (byRarity.get(label) ?? 0) + p.gross)
     }
     const rarity = Array.from(byRarity.entries())
@@ -1071,8 +1097,13 @@ export function Revenue() {
 
   const latestHoldingsTotal: HoldingsTotal | null =
     holdings === null || holdings.totals.length === 0 ? null : (holdings.totals[holdings.totals.length - 1] ?? null)
-  const holdingsHistoryLabel =
-    holdings?.history_begins == null ? null : absoluteDate(`${holdings.history_begins}T00:00:00`)
+  const drawnTotals = holdings === null ? [] : plottedTotals(holdings.totals)
+  const leftOff = holdings === null ? 0 : holdings.totals.length - drawnTotals.length
+  const drawnFirst = drawnTotals[0]
+  const drawnLast = drawnTotals[drawnTotals.length - 1]
+  const drawnFrom = drawnFirst === undefined ? null : parseIsoDate(drawnFirst.start)
+  const drawnTo = drawnLast === undefined ? null : parseIsoDate(drawnLast.start)
+  const drawnDays = drawnFrom === null || drawnTo === null ? 0 : Math.round((drawnTo.getTime() - drawnFrom.getTime()) / 86_400_000) + 1
 
   const shelfColumn = (
     /* WHAT'S STILL ON THE SHELF (D236) — UNSOLD stock, valued off the price-history
@@ -1106,20 +1137,23 @@ export function Revenue() {
       ) : (
         <>
           <Money value={Number(latestHoldingsTotal.value)} className="revenue-shelf-figure" />
-          <p className="revenue-shelf-note">
-            {`${latestHoldingsTotal.priced_names} of ${holdings.on_hand_names} priced, ${latestHoldingsTotal.unpriced_names} not yet`}
-          </p>
+          <p className="revenue-shelf-note">{`${latestHoldingsTotal.priced_names} of ${holdings.on_hand_names} priced`}</p>
           <HoldingsSpark totals={holdings.totals} />
         </>
       )}
       {holdingsFailure !== null || holdings === null ? null : (
         <>
           <p className="revenue-shelf-note">
-            {holdingsHistoryLabel === null
+            {drawnDays === 0
               ? 'No history recorded for these names yet.'
-              : `Since ${holdingsHistoryLabel}, ${holdings.width_days === 1 ? 'daily' : `every ${holdings.width_days} days`}`}
+              : `${holdings.width_days === 1 ? 'Daily' : `Every ${holdings.width_days} days`}, over the last ${drawnDays} days`}
           </p>
-          <p className="revenue-shelf-note">{`${holdings.unmarked.names} unpriced`}</p>
+          {leftOff === 0 ? null : (
+            <p className="revenue-shelf-note">
+              {`${leftOff} early ${leftOff === 1 ? 'reading' : 'readings'} left off, too few priced.`}
+            </p>
+          )}
+          <p className="revenue-shelf-note">{`${holdings.unmarked.names} never priced`}</p>
           <p className="revenue-shelf-note">{`${holdings.sealed_excluded.names} sealed`}</p>
         </>
       )}
@@ -1131,7 +1165,6 @@ export function Revenue() {
       <Page
         title="Sales"
         icon="dollar"
-        lede="Your gross-revenue retrospective."
         className="revenue"
         status={
           <Notice tone="danger" title="Could not read your orders">
@@ -1145,12 +1178,12 @@ export function Revenue() {
   }
 
   if (orders === null) {
-    return <Page title="Sales" icon="dollar" lede="Your gross-revenue retrospective." className="revenue" loading />
+    return <Page title="Sales" icon="dollar" className="revenue" loading />
   }
 
   if (sales.length === 0) {
     return (
-      <Page title="Sales" icon="dollar" lede="Your gross-revenue retrospective." className="revenue">
+      <Page title="Sales" icon="dollar" className="revenue">
         <EmptyState
           icon="dollar"
           title="Nothing has sold yet."
@@ -1191,7 +1224,6 @@ export function Revenue() {
     <Page
       title="Sales"
       icon="dollar"
-      lede="Gross"
       className="revenue"
       actions={
         <div className="revenue-period">
@@ -1269,7 +1301,7 @@ export function Revenue() {
         </div>
 
         <h2 className="bn-sr">{granularity === 'week' ? 'By week' : 'By month'}</h2>
-        <div className="revenue-months" role="group" aria-label={granularity === 'week' ? 'Filter by week' : 'Filter by month'}>
+        <div className="revenue-months" ref={scrollToEnd} key={`${granularity}-${buckets.length}`} role="group" aria-label={granularity === 'week' ? 'Filter by week' : 'Filter by month'}>
           {buckets.map((b, i) => (
             <button
               type="button"
@@ -1287,7 +1319,7 @@ export function Revenue() {
                   className="revenue-month-bar"
                   data-zero={b.gross === 0 ? 'true' : undefined}
                   data-ongoing={b.inProgress && b.gross > 0 ? 'true' : undefined}
-                  style={{ height: b.gross === 0 ? 2 : Math.max(6, (b.gross / bmax) * 72) }}
+                  style={{ height: b.gross === 0 ? 2 : `max(6px, calc((100% - 24px) * ${b.gross / bmax}))` }}
                 />
               </span>
               <span className="revenue-month-label">

@@ -601,8 +601,8 @@ export function Home() {
           : openOrders === 0
             ? 'no open orders'
             : toPull
-              ? `${toPull} owed${unfindable ? `, ${unfindable} missing` : ''}`
-              : `every copy pulled${unfindable ? `, ${unfindable} missing` : ''}`,
+              ? `${toPull} owed${unfindable ? `, ${unfindable} unfilled` : ''}`
+              : `every copy pulled${unfindable ? `, ${unfindable} unfilled` : ''}`,
       tone: toPull ? 'warn' : openOrders === 0 ? 'ok' : undefined,
     },
     {
