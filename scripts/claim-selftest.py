@@ -2667,6 +2667,53 @@ def main() -> int:
            "a number committed before merging main in is still refused, and main's is not",
            names(found))
 
+        # THE HOOK'S OWN READ: `--staged` on a merge in progress diffs the index against HEAD,
+        # the first parent, so everything the other side brought reads as added.
+        def staged_growth(root: Path) -> list:
+            audit.ROOT = root
+            rep = audit.Report()
+            audit.check_numbered_record_growth(rep, True)
+            return next(r for r in rep.checks if r.check == "numbered record growth").findings
+
+        wg = world("staged-main")
+        branch_with(wg, "feature-g")
+        git(wg, "fetch", "-q", "origin")
+        git(wg, "merge", "-q", "--no-ff", "--no-commit", "origin/main")
+        found = staged_growth(wg)
+        ok(not found, "a staged merge of main does not read main's numbers as the branch's",
+           names(found))
+        write(wg, "docs/decisions/D062-in-the-staged-merge.md", "own\n")
+        git(wg, "add", "-A")
+        found = staged_growth(wg)
+        ok(names(found) == "D062-in-the-staged-merge.md",
+           "a number added inside the staged merge is refused, and main's is not", names(found))
+
+        wh = world("staged-feature")
+        git(wh, "fetch", "-q", "origin")
+        base_sha = git(wh, "rev-parse", "origin/main").strip()
+        branch_with(wh, "feature-h", "D091-feature-number.md")
+        git(wh, "checkout", "-q", "-b", "integration-h", base_sha)
+        write(wh, "integration.txt", "integration\n")
+        git(wh, "add", "-A")
+        git(wh, "commit", "-qm", "integration work")
+        git(wh, "merge", "-q", "--no-ff", "--no-commit", "feature-h")
+        found = staged_growth(wh)
+        ok(names(found) == "D091-feature-number.md",
+           "a staged merge of a non-main branch carrying a number is refused", names(found))
+
+        wi = world("staged-stale")
+        branch_with(wi, "feature-i")
+        stale_ref = git(wi, "rev-parse", "origin/main").strip()
+        git(wi, "fetch", "-q", "origin", "main:refs/heads/main-tip")
+        git(wi, "update-ref", "refs/remotes/origin/main", stale_ref)
+        git(wi, "merge", "-q", "--no-ff", "--no-commit", "main-tip")
+        found = staged_growth(wi)
+        said = " ".join(f.message for f in found)
+        ok(names(found) == "D050-main-only.md" and "git fetch origin main" in said
+           and "PKMNSCAN" not in said,
+           "with origin/main behind the merged main the row stays red and says to fetch main "
+           "and commit again, with no hatch", names(found) + " | " + said[-160:])
+
         print("\n  -- and it does NOT refuse the sanctioned claim itself --")
         # THE ROUND THIS ARM CLOSES: `merge-pr.py:claim_half` runs `claim-ids.py --write`
         # (a plain filesystem rename, no `git mv`), `git add -A`, then a plain `git commit`

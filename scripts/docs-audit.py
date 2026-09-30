@@ -3089,9 +3089,25 @@ def _is_main_ancestor(commit: str) -> bool:
     return done.returncode == 0
 
 
+def _names_from_main(parents: Iterable[str], directory: str) -> Tuple[Set[str], Set[str]]:
+    """`(excused, stale)`: the file names under `directory` that the merged-in `parents` hold.
+    THE ONE EXCUSAL, for both modes. A parent that is an ancestor of `origin/main` excuses
+    its names (main's own numbers); any other parent (a feature branch, a PR head, or local
+    main ahead of a stale `origin/main`) excuses nothing, and its names come back as `stale`
+    so a refusal can say where they came from. An unreadable ref is "not an ancestor"."""
+    excused: Set[str] = set()
+    stale: Set[str] = set()
+    for parent in parents:
+        held = {Path(p).name for p in
+                git("ls-tree", "-r", "--name-only", parent, "--", directory).splitlines()}
+        (excused if _is_main_ancestor(parent) else stale).update(held)
+    return excused, stale
+
+
 def check_numbered_record_growth(report: Report, staged_only: bool) -> None:
     findings: List[Finding] = []
     dirs = ["docs/decisions", "docs/debts"]
+    stale_paths: Set[str] = set()
 
     if staged_only:
         # THIS COMMIT'S OWN CHANGE, AND NOTHING EARLIER — exactly what the pre-commit hook
@@ -3101,6 +3117,14 @@ def check_numbered_record_growth(report: Report, staged_only: bool) -> None:
         sanctioned = _sanctioned_new_paths([cached_diff], _held_numbers("HEAD"))
         candidates = _added_or_renamed_paths([cached_diff])
         where = "the staged diff"
+        # A MERGE IN PROGRESS stages every number the other side brought as an add against
+        # HEAD (the first parent). Main's own are not this branch's.
+        merge_head = git("rev-parse", "-q", "--verify", "MERGE_HEAD").strip()
+        if merge_head:
+            for directory in dirs:
+                excused, stale = _names_from_main([merge_head], directory)
+                candidates -= {f"{directory}/{n}" for n in excused}
+                stale_paths.update(f"{directory}/{n}" for n in stale)
     else:
         base = git("merge-base", _MERGE_BASE_REFERENCE, "HEAD").strip()
         if not base:
@@ -3128,20 +3152,16 @@ def check_numbered_record_growth(report: Report, staged_only: bool) -> None:
                 Path(p).name for p in
                 git("ls-tree", "-r", "--name-only", base, "--", directory).splitlines()
             )
-            # A FILE A MERGE BROUGHT IN FROM MAIN IS MAIN'S, NOT THE BRANCH'S. A merged-in
-            # parent counts only when it is an ancestor of `origin/main` (`_is_main_ancestor`):
-            # a feature branch merged into an integration branch, or the PR head that is the
-            # second parent of CI's synthetic merge, is not main, and its numbers stay the
-            # branch's. A number the merge commit itself adds, or a commit before the merge,
-            # is in no such parent's tree. Anything unreadable excuses nothing: fail closed.
-            merged_in = set()
+            # A FILE A MERGE BROUGHT IN FROM MAIN IS MAIN'S, NOT THE BRANCH'S
+            # (`_names_from_main`). A feature branch merged into an integration branch, or the
+            # PR head that is the second parent of CI's synthetic merge, is not main. A number
+            # the merge commit itself adds, or a commit before the merge, is in no such tree.
+            merged_in: Set[str] = set()
             for merge in git("rev-list", "--merges", f"{base}..HEAD").splitlines():
-                for parent in git("rev-list", "--parents", "-n", "1", merge).split()[2:]:
-                    if _is_main_ancestor(parent):
-                        merged_in.update(
-                            Path(p).name for p in
-                            git("ls-tree", "-r", "--name-only", parent, "--", directory).splitlines()
-                        )
+                excused, stale = _names_from_main(
+                    git("rev-list", "--parents", "-n", "1", merge).split()[2:], directory)
+                merged_in |= excused
+                stale_paths.update(f"{directory}/{n}" for n in stale)
             for path in sorted(dirpath.glob("*.md")):
                 if path.name not in base_names and path.name not in merged_in:
                     candidates.add(f"{directory}/{path.name}")
@@ -3162,12 +3182,16 @@ def check_numbered_record_growth(report: Report, staged_only: bool) -> None:
             scanned += 1
             if new_path in sanctioned:
                 continue
+            remedy = (
+                " It is in the merged-in commit, which `origin/main` does not yet contain: if "
+                "that commit is main's, fetch main (`git fetch origin main`), then commit again."
+                if new_path in stale_paths else "")
             findings.append(Finding(
                 new_path,
                 f"is a NUMBERED {kind} record with no matching slug rename behind it (D140). "
                 f"A branch never allocates a number by hand — write a slug instead and "
                 f"`scripts/claim-ids.py` claims the number at the merge, which git sees as a "
-                f"RENAME from the slug file with the same descriptive tail.",
+                f"RENAME from the slug file with the same descriptive tail." + remedy,
             ))
     report.add("numbered record growth", MECHANICAL, findings,
                scanned=scanned,
