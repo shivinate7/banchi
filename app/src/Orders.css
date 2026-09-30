@@ -3,6 +3,7 @@
    Tokens only; both themes free.
    ========================================================================== */
 
+.orders-hub .bn-verdict { overflow-wrap: anywhere; }
 .orders-hub .bn-verdict strong { color: var(--bn-ink); font-weight: 700; }
 .orders-stage { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
 /* Add orders and Cards to pull: two small squares on the filter bar's line. */
@@ -35,6 +36,9 @@
   align-items: start;
 }
 .orders-buyers { grid-area: buyers; display: none; min-width: 0; }
+/* THE LIST IS ONE CARD, the kit's own `bn-panel` (the one `#/inventory`'s box list wears), and it
+   scrolls itself so the card's shadow is never clipped by the rail. */
+.orders-buyers-panel { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .orders-cardcol { grid-area: card; display: none; min-width: 0; }
 .orders-walk { grid-area: walk; min-width: 0; }
 
@@ -96,7 +100,6 @@
     position: sticky;
     top: var(--bn-4);
     max-height: calc(100dvh - var(--browse-rail-rest, var(--bn-4)) - var(--bn-4));
-    overflow-y: auto;
   }
   .orders-buyerchip { display: none; }
   .orders-cardcol { display: block; }
@@ -216,10 +219,12 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--bn-2);
-  min-height: var(--bn-control-h);
-  padding: 0 var(--bn-1) var(--bn-1) var(--bn-3);
+  min-height: var(--bn-control-h-lg);
+  padding: var(--bn-1) var(--bn-2) 0 var(--bn-3);
 }
-.orders-buyers-note { font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-ink-3); }
+/* One heading style for every group, the first on the Walk press's row and the rest in the list. */
+.orders-group-head { font-family: var(--bn-font-ui); font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--bn-ink-3); }
+.orders-group-head-item { padding: var(--bn-3) var(--bn-2) var(--bn-1) var(--bn-3); }
 /* The same list padding and row gap as Inventory's box list (`.browse-boxes`). */
 .orders-index {
   list-style: none;
@@ -229,7 +234,8 @@
   padding: var(--bn-1);
 }
 .orders-index > li { animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards; }
-.orders-index-item { display: flex; align-items: center; gap: 0; min-width: 0; }
+.orders-index-item { display: flex; align-items: center; gap: 0; min-width: 0; position: relative; border-radius: var(--bn-r); transition: background-color var(--bn-t-fast) var(--bn-ease); }
+.orders-index-item:hover { background: var(--bn-hover); }
 .orders-index-item > .orders-index-row { flex: 1 1 auto; min-width: 0; }
 /* THE LABEL IS THE TARGET (40px, UX-267); the box inside it stays the system's 16px. A row with
    nothing to walk keeps the same slot empty, so every name starts on one edge. */
@@ -247,7 +253,9 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-index-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  /* THE COUNT SITS ON THE NAME'S LINE, not the row's middle; a one-line row stays centred. */
+  align-items: first baseline;
+  align-content: center;
   gap: var(--bn-2);
   width: 100%;
   min-height: 42px;
@@ -256,12 +264,10 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   text-align: left;
   color: var(--bn-ink);
   background: transparent;
-  position: relative;
-  transition: background-color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
 }
-.orders-index-row:hover { background: var(--bn-hover); }
-/* The selected row: a tint and a 3px accent spine, the spine always in the DOM (D118). */
-.orders-index-row::before {
+/* THE SELECTED UNIT IS THE WHOLE ITEM, checkbox included: a tint and a 3px accent spine on the
+   item's own edge, the spine always in the DOM (D118). */
+.orders-index-item::before {
   content: '';
   position: absolute;
   left: 0;
@@ -274,9 +280,10 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   scale: 1 0.4;
   transition: opacity var(--bn-t-fast) var(--bn-ease), scale var(--bn-t) var(--bn-ease-spring);
 }
-.orders-index-row[aria-current='true'] { background: var(--bn-accent-tint); }
-.orders-index-row[aria-current='true']::before { opacity: 1; scale: 1 1; }
-.orders-index-row[aria-current='true'] .orders-index-number { color: var(--bn-accent); }
+.orders-index-item.is-selected,
+.orders-index-item.is-selected:hover { background: var(--bn-accent-tint); }
+.orders-index-item.is-selected::before { opacity: 1; scale: 1 1; }
+.orders-index-item.is-selected .orders-index-number { color: var(--bn-accent); }
 .orders-index-main { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
 /* A NAME WRAPS, never an ellipsis: "Buyer on order …00012" cut to "Buyer on order …0…" named
    nobody (review, UX-268). */

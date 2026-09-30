@@ -2661,7 +2661,7 @@ test('the filter bar clears the 40px thumb floor at phone width', async ({ page 
 test('the sort press re-orders the list at once, Ready first, and the list says so', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
-  await expect(page.locator('.orders-buyers-note')).toHaveText('Ready')
+  await expect(page.locator('.orders-group-head').first()).toHaveText('Ready')
 
   await (await openFilters(page)).getByRole('button', { name: /^Order: Newest first/ }).click()
   await closeFilters(page)
@@ -3940,8 +3940,11 @@ test('the selected buyer row draws a spine, not a ring', async ({ page }) => {
   /* S4, D50 — one grammar with `#/inventory`'s own `.orders-walk-press`/`.browse-boxcell`: a tint
    *  plus an accent spine (`::before`, opacity/scale toggled), never a `box-shadow` ring. */
   await open(page, { orders: threeBuyerPayload() })
-  const selected = page.locator('.orders-index-row[aria-current="true"]')
+  /* THE SELECTED UNIT IS THE WHOLE ITEM, checkbox included: the row is inside it, and it carries the spine. */
+  await expect(page.locator('.orders-index-row[aria-current="true"]')).toHaveCount(1)
+  const selected = page.locator('.orders-index-item.is-selected')
   await expect(selected).toHaveCount(1)
+  await expect(selected.locator('.orders-index-row[aria-current="true"]')).toHaveCount(1)
   const before = await selected.evaluate((el) => {
     const style = getComputedStyle(el, '::before')
     return { opacity: style.opacity, background: style.backgroundColor, position: style.position }

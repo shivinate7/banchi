@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
 import {
   Button,
@@ -979,7 +979,7 @@ function verdictOf(open: readonly OrderRow[], resolved: readonly ResolvedOrder[]
       <strong>{owed}</strong> owed, <strong>{buyers}</strong> {plural(buyers, 'buyer', 'buyers')}
       {parts.length === 0 ? null : (
         <>
-          {' — '}
+          {': '}
           {joinPhrases(parts)}
         </>
       )}
@@ -3593,7 +3593,6 @@ function PullStage({
   const walkAll =
     tickableKeys.size < 2 ? null : (
       <Button
-        variant="quiet"
         size="sm"
         className="orders-walkall"
         aria-pressed={allTicked}
@@ -3607,27 +3606,39 @@ function PullStage({
     )
   const readyFirst = sortedReadyFirst(shownGroups, readyOf)
 
+  /* EVERY GROUP GETS ONE HEADING (owner's report): where Ready-to-ship buyers lead others, the list
+     names both groups the same way. The Walk press sits on the first heading's row. */
   const buyerList = (
     <>
       {walkAll === null && !readyFirst ? null : (
         <div className="orders-buyers-head">
-          {readyFirst ? <span className="orders-buyers-note">Ready</span> : <span />}
+          {readyFirst ? <h3 className="orders-group-head">Ready</h3> : <span />}
           {walkAll}
         </div>
       )}
       <ol className="orders-index bn-stagger">
         {shownGroups.map((group, at) => (
-          <li key={group.key} className="orders-index-item" style={{ '--i': at } as CSSProperties}>
-            {tickFor(group)}
-            <BuyerRow
-              group={group}
-              answers={answers}
-              status={statusByGroup.get(group.key) ?? 'done'}
-              missing={shows.includes(MISSING_FACET) && groupMissing(group, answers).copies > 0 ? groupMissing(group, answers) : null}
-              selected={group.key === selectedKey}
-              onSelect={() => select(group.key)}
-            />
-          </li>
+          <Fragment key={group.key}>
+            {readyFirst && at > 0 && readyOf(shownGroups[at - 1]!) && !readyOf(group) ? (
+              <li className="orders-group-head-item">
+                <h3 className="orders-group-head">Not ready</h3>
+              </li>
+            ) : null}
+            <li
+              className={['orders-index-item', group.key === selectedKey ? 'is-selected' : ''].filter(Boolean).join(' ')}
+              style={{ '--i': at } as CSSProperties}
+            >
+              {tickFor(group)}
+              <BuyerRow
+                group={group}
+                answers={answers}
+                status={statusByGroup.get(group.key) ?? 'done'}
+                missing={shows.includes(MISSING_FACET) && groupMissing(group, answers).copies > 0 ? groupMissing(group, answers) : null}
+                selected={group.key === selectedKey}
+                onSelect={() => select(group.key)}
+              />
+            </li>
+          </Fragment>
         ))}
       </ol>
     </>
@@ -3760,7 +3771,7 @@ function PullStage({
               own `RailFrame`, sticky and fit to the window, its own scroll — never the page's.
               `#/inventory`'s box list is the only other caller. */}
           <RailFrame className="orders-buyers" role="navigation" aria-label="Buyers">
-            {buyerList}
+            <div className="bn-panel orders-buyers-panel">{buyerList}</div>
           </RailFrame>
           <button type="button" className="orders-buyerchip" aria-haspopup="dialog" onClick={() => setBuyersOpen(true)}>
             <Icon name="list" size={16} />
@@ -3931,9 +3942,26 @@ function lookWords(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder
   return `${total} review`
 }
 
+/** THE TWO "NEEDS A LOOK" CHIPS MEAN DIFFERENT THINGS, so they read different. `short`: the store
+ *  knows the card and has no copy left to give (`no_copies_on_hand`, or `short` after some were
+ *  pulled). `missing`: the store has never seen the product (`sku_unseen`, `sku_unknown`), so no
+ *  copy can be pulled until it is added. Same tones and icons `REASON_TONE` and `REASON_ICON` give
+ *  those reasons on the order's own line, less the `info` tone the Pill has no name for. */
+function lookPill(words: string): { tone: PillTone; icon: IconName } {
+  if (words.endsWith(' missing')) return { tone: 'danger', icon: 'search' }
+  if (words.endsWith(' short')) return { tone: 'warn', icon: 'box' }
+  return STATUS_PILL.look
+}
+
 /** The one status a buyer shows, in words. */
 function statusWords(status: Status, group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): string {
   return status === 'look' ? lookWords(group, answers) : STATUS_PILL[status].label
+}
+
+/** The one status a buyer shows, as pill props: words, tone and icon. */
+function statusPill(status: Status, group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>) {
+  const label = statusWords(status, group, answers)
+  return { label, ...(status === 'look' ? lookPill(label) : STATUS_PILL[status]) }
 }
 
 /** A buyer, in the list: the name, ONE status (the worst, and only when it is not Ready), and
@@ -3956,7 +3984,7 @@ function BuyerRow({
   readonly onSelect: () => void
 }) {
   const figures = figuresOf(group, answers)
-  const pill = STATUS_PILL[status]
+  const pill = statusPill(status, group, answers)
   const ref = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     if (selected) ref.current?.scrollIntoView({ block: 'nearest' })
@@ -3970,7 +3998,7 @@ function BuyerRow({
           <span className="orders-index-meta">
             {status === 'ready' ? null : (
               <Pill size="sm" tone={pill.tone} icon={pill.icon}>
-                {statusWords(status, group, answers)}
+                {pill.label}
               </Pill>
             )}
             {group.orders.length > 1 ? <span className="orders-index-count">{group.orders.length} orders</span> : null}
@@ -4012,7 +4040,7 @@ function OrderPanel({
   readonly onManage: () => void
 }) {
   const figures = figuresOf(group, answers)
-  const pill = STATUS_PILL[status]
+  const pill = statusPill(status, group, answers)
   const single = group.orders.length === 1 ? group.orders[0]!.number : null
   return (
     <div className="orders-panel">
@@ -4033,7 +4061,7 @@ function OrderPanel({
       </div>
       <div className="orders-panel-facts">
         <Pill tone={pill.tone} icon={pill.icon}>
-          {statusWords(status, group, answers)}
+          {pill.label}
         </Pill>
         <div className="orders-panel-figures">
           <Stat size="sm" value={figures.owed} label="owed" />
