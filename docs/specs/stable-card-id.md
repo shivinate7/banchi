@@ -24,7 +24,7 @@ its receipts, landed so the next session finds them instead of re-deriving them 
 working agreement: design work is repo work).
 
 **THE DECIDING MEASUREMENT WAS RE-TAKEN ON 2026-09-12, AFTER THE RE-SCOPE, AND IT REPRODUCES.**
-Beside §1's reading, not instead of it (`docs/specs/order-pipeline.md` §1's discipline): 2,535
+Beside §1's reading, not instead of it: 2,535
 cards, **2,535 of 2,535** digests equal the file on disk, 0 mismatches, 0 missing, 2,535
 distinct digests over **4,445,351,065 bytes**, 0 duplicate groups, in **3.00 s** against §1's
 2.68 s — the same corpus, a colder cache. `Card.photo` measures **1,993 absolute, 542 relative,
@@ -34,7 +34,7 @@ events rather than 12,002 — a live store between two readings.
 
 **THE MEASUREMENTS ARE EVIDENCE AND ARE NEVER REWRITTEN.** `docs/GATES.md`'s discipline
 applies to this file: if you re-verify a number and it disagrees, write the new reading BESIDE
-the old one with its date, the way `docs/specs/order-pipeline.md` §1 carries three snapshots.
+the old one with its date.
 §7 item 7 already names two figures here that will not reproduce.
 
 **THE SURROUNDING PLAN IS NOT A REPO DOCUMENT, AND THAT IS THE GAP THIS FILE ONLY HALF

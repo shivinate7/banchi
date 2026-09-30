@@ -502,9 +502,9 @@ a nameless order on itself. The full id stays in the order slot alone.
   screen would make the two panes differ, so the words are kept.
 - **`#8 of 34` is the whole caption on every screen**, with no `so far`. The section line reads
   `card 7 of 14` for a growing section and `card 7 of 14 slots` for a settled one.
-- **`market` and `listings` are wired for Orders** by the path that Inventory uses.
-  `WalkMainPane` keeps a per-run market cache, and `POST /inventory/copies` answers `listings`
-  narrowed to the SKUs that its own scan matched (D220).
+- **The pane's `market` and `listings` facts come from the same reads as `#/inventory`.**
+  `POST /inventory/copies` answers `listings` beside `cards`. Unknown: where in `Orders.tsx` the
+  market read is wired today.
 - **Small readings that were defects.** A buyer row's per-order pill shows the status word and
   not the order's number. "Hide unknown SKUs" filters `sku_unseen`, the "Never seen" chip's own
   reason. The bulk tick controls read "Tick shown" and "Untick shown", as `#/inventory` says.
