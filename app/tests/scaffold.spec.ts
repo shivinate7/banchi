@@ -237,6 +237,10 @@ test('the runtime allow list names only real routes, real assertions and a lane'
 })
 
 for (const route of ROUTE_TABLE) {
+  /* `#/gallery` IS NOT RUN HERE: `gallery.spec.ts`'s "the kit is a Page: one h1, one width, one top
+     gap, no sideways scroll, at every width" keeps the claim, and it costs one page load, not
+     one per width. */
+  if (route.path === '/gallery') continue
   test(`${route.path} inherits the page scaffold at every width`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     const failures = new Map<string, string[]>()
