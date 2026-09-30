@@ -8512,17 +8512,17 @@ test('D218: this lane\'s own facts draw the separator, never type it', async ({ 
      DRAWS, never the whole `.bn-view`: this route's own `.position-bar-text`
      (`PositionBar.tsx`, D41's accessible-name territory, a different file this sweep does not
      touch) still types one today, so a blanket assertion cannot pass until every lane on this
-     route has landed. `.bn-filtercount` is the rail's store-wide count line (BoxBrowse.tsx);
+     route has landed. the rail's search placeholder holds the store-wide box count (BoxBrowse.tsx);
      `.boxops-sheet` is the Manage sheet in full, including the Name-sections editor's example
      text and its own per-section Field labels (BoxOps.tsx) — both self-contained to this
      lane's components. */
   await open(page)
 
-  /* The header's census pill is gone (the rail's count line says the boxes); that line is
-     this lane's store-wide figure now. */
-  const census = page.locator('.browse-filterbar .bn-filtercount')
-  await expect(census).toBeVisible()
-  expect(await census.innerText()).not.toMatch(/[·•]/)
+  /* The store-wide box count lives in the search placeholder; no standalone count line is
+     drawn at rest. */
+  const search = page.locator('.browse-filterbar').getByRole('searchbox')
+  await expect(search).toHaveAttribute('placeholder', /^Search \d+ (box|boxes)$/)
+  await expect(page.locator('.browse-filterbar .bn-filtercount')).toHaveCount(0)
 
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Naming/ }).click()

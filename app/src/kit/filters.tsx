@@ -17,7 +17,8 @@ import './filters.css'
  * four widths in four rows).
  *
  * FilterBar DRAWS "N of M" BY CONSTRUCTION (FLT-13): `count` is a required prop, and the
- * `FilterCount` line under the controls is not something a caller can leave out. The words
+ * `FilterCount` line under the controls is always drawn, unless `count.quietAtRest` is set and
+ * nothing narrows the list. The words
  * after "filtered by" are built here, from the facets, the search and the hide toggle, so a
  * caller never writes that sentence a second time. The line is also the bar's ONE clear-all:
  * `FilterChips`' own "Clear all" is not drawn inside a FilterBar (filters.css), so two clear
@@ -77,6 +78,9 @@ export type FilterBarCount = {
   readonly shown: number
   readonly total: number
   readonly noun?: { readonly one: string; readonly many: string }
+  /** The caller already says the total elsewhere (the search placeholder): draw the line only
+   *  once something narrows the list, where it carries the "filtered by" words and the clear. */
+  readonly quietAtRest?: boolean
 }
 
 export type FilterBarProps<K extends string = string> = {
@@ -265,7 +269,9 @@ export function FilterBar<K extends string = string>({
         <FailureNotice failure={search.failure} title="The search did not answer." onRetry={search.onRetry} compact />
       )}
 
-      <FilterCount shown={count.shown} total={count.total} noun={count.noun} filters={words} onClear={clearable ? clearAll : undefined} />
+      {count.quietAtRest === true && words.length === 0 && count.shown === count.total ? null : (
+        <FilterCount shown={count.shown} total={count.total} noun={count.noun} filters={words} onClear={clearable ? clearAll : undefined} />
+      )}
     </div>
   )
 }
