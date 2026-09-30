@@ -21,10 +21,17 @@ from .spelling import (
     _md_prose_only,
     british_spelling,
     spelling_findings,
+    spelling_findings_many,
 )
 
 
 def run(ok) -> None:
+    batch = [("def colour_map(): pass\n", ".py"), ("const x = 1\n", ".ts")] * 20
+    ok(
+        spelling_findings_many(batch) == [spelling_findings(*item) for item in batch]
+        and spelling_findings_many(batch)[0] != [],
+        "the forked whole-tree read finds what the in-process read finds, in order",
+    )
     ok(
         bool(_RAW_COLOR_RE.search("color: #1E40AF;")) and not _RAW_COLOR_RE.search("var(--accent)"),
         "the literal pattern matches a hex and not a token reference",
