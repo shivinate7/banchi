@@ -2503,7 +2503,9 @@ COMPONENTS = [
                         "how D141's measurement was taken; `selftest` proves the matcher and "
                         "the Makefile narrowing. Never acts on a push to main — there it "
                         "prints its answer and the matrix runs unless D136's pass record says "
-                        "the tree was tested.",
+                        "the tree was tested. `shard N M` packs the spec files onto M CI shards by "
+                        "measured time from `scripts/browser-spec-times.json`; `shard-refresh` "
+                        "re-times it from the nightly's per-shard artifacts.",
                 # D136 is the gate this composes with, D18 is why it writes nothing, D16 is
                 # why the list has a reader before it has a filter.
                 "governed_by": ["D16", "D18", "D136", "D141", "D196", "D215", "D261", "D275",
