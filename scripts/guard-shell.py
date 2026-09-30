@@ -136,6 +136,8 @@ import re
 import subprocess
 import sys
 import tempfile
+from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import List, NamedTuple, Optional, Sequence, Set, Tuple
 
@@ -205,7 +207,83 @@ class Verdict(NamedTuple):
 def _off(clause: str, command: str) -> bool:
     """Whether this clause's hatch is set, in either of `PKMNSCAN_KILL`'s two forms."""
     name = HATCH[clause]
-    return os.environ.get(name) == "off" or (name + "=off") in command
+    return os.environ.get(name) == "off" or name in _hatches_set(command)
+
+
+# ---------------------------------------------------------------------- the hatch log
+#
+# EVERY `PKMNSCAN_<NAME>=off` A COMMAND SETS IS LOGGED (D179), because a hatch that lifts a
+# guard prints nothing while it does. One line per name, tab-separated: time, hatch, checkout,
+# branch, the first 120 characters of the command. The file lives in git's common dir, so every
+# worktree of this clone writes one log; `scripts/status.py` reads it back through
+# `recent_hatch_uses`. LOG ONLY: no verdict reads it, and any error here is swallowed.
+
+HATCH_LOG = "pkmnscan-hatches.log"
+_HATCH_TOKEN = re.compile(r"^(PKMNSCAN_[A-Z0-9_]+)=off$")
+
+
+@lru_cache(maxsize=16)
+def _hatches_set(command: str) -> Tuple[str, ...]:
+    """Hatch names a command REALLY sets, read from the parsed stages, never from raw text.
+
+    A real setting is an env prefix (`X=off cmd`), `export X=off`, or `env X=off cmd`. A
+    mention inside an argument, a comment, a heredoc body or a quoted string is not one.
+    """
+    if shell_parse is None or not command:
+        return ()
+    names: Set[str] = set()
+    for stage in shell_parse.read(command).every:
+        for token in stage.argv:
+            found = _HATCH_TOKEN.match(token)
+            if found:
+                names.add(found.group(1))
+            elif token in ("export", "env") or token.startswith("-") or shell_parse.ASSIGNMENT.match(token):
+                continue
+            else:
+                break
+    return tuple(sorted(names))
+
+
+_STAMP = "%Y-%m-%dT%H:%M:%S%z"
+
+
+def hatch_log_path(cwd: str) -> str:
+    ok, out = _run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=cwd)
+    return os.path.join(out.strip(), HATCH_LOG) if ok and out.strip() else ""
+
+
+def log_hatches(command: str, cwd: str) -> None:
+    try:
+        names = _hatches_set(command)
+        path = hatch_log_path(cwd) if names else ""
+        if not path:
+            return
+        _, branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd)
+        stamp = datetime.now().astimezone().strftime(_STAMP)
+        head = " ".join(command.split())[:120]
+        with open(path, "a", encoding="utf-8") as handle:
+            for name in names:
+                handle.write("\t".join([stamp, name, checkout_root(cwd), branch.strip(), head]) + "\n")
+    except Exception:
+        pass                              # fails open: a log is never a reason to block
+
+
+def recent_hatch_uses(cwd: str, hours: int = 24) -> List[Tuple[str, str, str]]:
+    """(hatch, checkout, branch) for each use in the last `hours`, oldest first."""
+    path = hatch_log_path(cwd)
+    found: List[Tuple[str, str, str]] = []
+    if not path or not os.path.isfile(path):
+        return found
+    cutoff = datetime.now().astimezone().timestamp() - hours * 3600
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            parts = line.rstrip("\n").split("\t")
+            try:
+                if len(parts) >= 4 and datetime.strptime(parts[0], _STAMP).timestamp() >= cutoff:
+                    found.append((parts[1], parts[2], parts[3]))
+            except ValueError:
+                continue
+    return found
 
 
 # ------------------------------------------------------------------------------- the system
@@ -1261,15 +1339,9 @@ def _push_refusal(text: str, remote: str, spec: str, branch: str, tracked: str) 
         "caught",
         "  only because the next command's output looked wrong.",
         "",
-        "  Git's own `push.default=simple` refuses exactly this shape for a BARE `git push`",
-        "  and prints the fix — but naming a refspec, even an unqualified `HEAD`, is git's "
-        "own",
-        "  signal that the caller knows what they want, and here that signal was wrong. Two "
-        "real",
-        "  fixes, both git's own:",
-        "      git push                              # let git's safety net name the fix",
-        "      git push {0} HEAD:{1}      # push to the branch actually tracked".format(
-            remote, tracked),
+        "  Name the branch's OWN name as the destination. That is a real push to the branch",
+        "  you are on:",
+        "      git push -u {0} HEAD:{1}".format(remote, branch),
     ], "BLOCKED: this pushes to a branch of the WRONG name, not the one tracked.")
 
 
@@ -1296,8 +1368,8 @@ def clause_push(reading: "shell_parse.Reading", cwd: str) -> Verdict:
         for spec in refspecs:
             if ":" in spec:
                 continue                   # an explicit destination; this IS the fix, not the trap
-            if spec != "HEAD" and spec != branch:
-                continue                   # a different ref — not this clause's business
+            if spec != "HEAD":
+                continue                   # a ref named outright (the branch's own name too) lands on that name: no trap
             tracked = _tracked_branch(branch, remote, where)
             if tracked is None or tracked == branch:
                 continue                   # no upstream on this remote, or it already matches
@@ -1801,6 +1873,7 @@ def hook(payload: dict) -> int:
     cwd = str(payload.get("cwd") or "") or os.getcwd()
     command = str(tool_input.get("command") or "")
     if command:
+        log_hatches(command, cwd)
         verdict = read_command(command, cwd, bool(tool_input.get("run_in_background")))
     else:
         target = str(tool_input.get("file_path") or tool_input.get("notebook_path") or "")

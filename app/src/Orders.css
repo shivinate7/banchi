@@ -399,6 +399,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+.orders-walk-pick-count { white-space: nowrap; }
 .orders-walk-for { grid-area: for; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .orders-walk-line.is-done .orders-walk-name,
 .orders-walk-line.is-done .orders-walk-slot { color: var(--bn-ink-3); text-decoration: line-through; }
