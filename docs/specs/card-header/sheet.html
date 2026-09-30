@@ -142,6 +142,23 @@ body { padding: var(--bn-6); }
 .x-narrow .f-meter .bn-progress { flex: 1; width: auto; }
 .f-say { font-size: var(--bn-fs-md); color: var(--bn-ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .f-say b { color: var(--bn-ink); font-weight: 700; }
+/* F2: F with the white space taken out. Smaller rungs, the bar fills the width, the menu sits on the
+   title line, and the photograph and the copies both start at the top of the body. */
+.f2 .f-band { padding: var(--bn-3) var(--bn-4) 0; gap: var(--bn-2); }
+.f2 .f-top { align-items: flex-start; gap: var(--bn-2); }
+.f2-title { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--bn-3); }
+.f2 .kebab { margin-top: var(--bn-0-5); }
+.f2 .f-cell { flex: 1 1 auto; justify-content: center; padding: var(--bn-1-5) var(--bn-3); }
+.f2 .f-meter { flex: 2 1 auto; margin-left: 0; padding: var(--bn-1-5) var(--bn-3); gap: var(--bn-2); }
+.f2 .f-meter .bn-progress { flex: 1; width: auto; min-width: 48px; }
+.f2 .x-body { padding: var(--bn-3) var(--bn-4) var(--bn-4); gap: var(--bn-4); }
+.f2 .copies { gap: var(--bn-1-5); }
+.f2 .copy { padding: var(--bn-2) var(--bn-3); gap: var(--bn-1) var(--bn-3); }
+.f2 .x-body > .shot { align-self: start; }
+.f2.x-narrow .f-band, .f2.x-narrow .x-body { padding-left: var(--bn-3); padding-right: var(--bn-3); }
+.f2.x-narrow .f-cell { padding: var(--bn-1-5) var(--bn-2); }
+.f2.x-narrow .f-cell:nth-child(3) { flex: 1 0 100%; }
+.f2.x-narrow .f-meter { flex: 1 0 100%; padding: var(--bn-1-5) var(--bn-2); }
 .c-list { padding: 0 var(--bn-5) var(--bn-5); }
 .c-narrow .c-list { padding: 0 var(--bn-4) var(--bn-4); }
 </style>
@@ -260,7 +277,18 @@ function F(n) {
   return `<div class="pane ${n ? 'x-narrow' : 'x-wide x-beside'}"><div class="f-band">${top}${bar}</div>${body}</div>`
 }
 
+function F2(n) {
+  const top = `<div class="f-top">${n ? thumb : ''}<div class="f2-title">${bigName}${meta(true)}</div>${kebab}</div>`
+  const bar = `<div class="f-bar">
+    <div class="f-cell fact"><b>7</b> copies</div><div class="f-cell fact"><b>5</b> in the boxes</div>
+    <div class="f-cell fact">${liveInline} live on TCGplayer<span class="readage">read 2 days ago</span></div>
+    <div class="f-meter"><span class="f-say"><b>7</b> sent · At the ceiling of 5</span><div class="bn-progress" role="img" aria-label="5 of 5 may be live"><span style="width:100%"></span></div></div></div>`
+  const body = n ? `<div class="x-body">${copies()}</div>` : `<div class="x-body">${shotBtn}${copies()}</div>`
+  return `<div class="pane f2 ${n ? 'x-narrow' : 'x-wide x-beside'}"><div class="f-band">${top}${bar}</div>${body}</div>`
+}
+
 const DIRS = [
+  ['F2. Stat bar, tight', 'Third round, from F: smaller spacing rungs between title, bar and copies; the bar fills the width (each count and the meter share it); the menu is on the title line; the photograph and the copies both start directly under the band.', F2],
   ['A. Rail', 'The photograph becomes a left rail that runs the whole pane, so no empty band exists. Title, rarity, counts strip and copies stack in one right-hand column.', A],
   ['B. Masthead', 'One full-width header: title and rarity left, the three counts right. A meter row says live against the ceiling, and holds the sent line and reading age. The photograph and copies sit under it.', B],
   ['D. Inline', 'Second round: every fact fits in the band above the photograph. One flowing band: name, number, game and rarity on the first line, then the counts as one sentence of inline facts. The shortest band. The photograph sits beside the copies, which take the rest of the height.', D],
@@ -269,7 +297,7 @@ const DIRS = [
   ['C. Ledger','The photograph shrinks to a leading thumbnail (tap to zoom). Facts become four 40px ruled rows, so the copies list gets the full width and the top is short.', C],
 ]
 document.getElementById('root').innerHTML = DIRS.sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([t, d, f]) => `
-<section class="dir" id="${t[0]}"><div class="dir-head"><h2>${t}</h2><p>${d}</p></div>
+<section class="dir" id="${t.split('.')[0]}"><div class="dir-head"><h2>${t}</h2><p>${d}</p></div>
 <div class="frames">
   <div><div class="frame-cap">Viewport 1440 · pane 820</div><div class="frame wide">${f(false)}</div></div>
   <div><div class="frame-cap">Viewport 820 · pane 410</div><div class="frame narrow">${f(true)}</div></div>
