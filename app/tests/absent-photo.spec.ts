@@ -3,6 +3,7 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { place, seedPopulatedPricing } from './routeFixtures'
+import { setViewport } from './phoneSwitch'
 
 /* THE PHOTOGRAPH IS GONE (a 404 on the file), ON THREE SCREENS, AND EACH SAYS IT THE SAME WAY.
  *
@@ -86,7 +87,7 @@ for (const theme of ['light', 'dark'] as const) {
     { width: 820, height: 1000 },
   ]) {
     test(`Review, photo missing, ${size.width} ${theme}: the sentence, one action, a readable place chip`, async ({ page }) => {
-      await page.setViewportSize(size)
+      await setViewport(page, size)
       await openReview(page)
       await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), theme)
       const panel = page.locator('.review-absent')

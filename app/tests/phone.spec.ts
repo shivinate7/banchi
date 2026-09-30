@@ -5,6 +5,9 @@ import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { POPULATED_ROUTE_SEEDS, seedPopulatedGraveyard } from './routeFixtures'
 import { routesFromNav } from './routes'
+import { PHONE_OFF_REASON, PHONE_SPECS_ON, setViewport } from './phoneSwitch'
+
+test.skip(!PHONE_SPECS_ON, PHONE_OFF_REASON)
 
 /* THE OWNER'S SCREENS AT A PHONE'S WIDTH, WHICH NOTHING IN THIS SUITE HAD EVER LOOKED AT.
  *
@@ -394,13 +397,13 @@ const SCREENS = [
 ]
 
 test("the per-screen roster is the drawer's own roster", async ({ page }) => {
-  await page.setViewportSize(PHONE)
+  await setViewport(page, PHONE)
   expect([...SCREENS].sort()).toEqual([...(await phoneRoutes(page))].sort())
 })
 
 for (const hash of SCREENS) {
   test(`${hash} holds the thumb floor at 390, and does not scroll sideways`, async ({ page }) => {
-    await page.setViewportSize(PHONE)
+    await setViewport(page, PHONE)
     await page.goto(hash)
     await page.waitForTimeout(400)
     const failures = await sweep(page, hash, hash === '#/gallery' ? 'box' : 'probe')
@@ -442,7 +445,7 @@ test.describe('on a touch screen at 820', () => {
    is the only way to `#/gallery` on a phone and the fastest way to the six screens behind More;
    its field measured 24px and its rows 37 before D117. */
 test('the phone shell holds the floor: the drawer, the palette and the tab bar', async ({ page }) => {
-  await page.setViewportSize(PHONE)
+  await setViewport(page, PHONE)
   await page.goto('/')
 
   const failures: string[] = []
@@ -465,7 +468,7 @@ test('the phone shell holds the floor: the drawer, the palette and the tab bar',
 /* THE STATES A ROUTE RENDER NEVER REACHES. Each of these is a surface a thumb opens, and each
    draws kit controls that a route sweep cannot see. */
 test('the sheets and menus a phone opens hold the floor too', async ({ page }) => {
-  await page.setViewportSize(PHONE)
+  await setViewport(page, PHONE)
   const failures: string[] = []
 
   /* THE TWO SCREENS ARE PICKED OUT OF THE HARVEST, NOT TYPED. `make docs-audit`'s `route
@@ -519,7 +522,7 @@ test('the sheets and menus a phone opens hold the floor too', async ({ page }) =
  * backwards. `review.spec.ts` already proves the CLICK reaches the composer, not the sheet,
  * at desktop width; this proves the THUMB-FLOOR SWEEP scopes to it too, at 390. */
 test('"Check first" mounts the composer over the runs sheet in one commit, and the sweep reaches it', async ({ page }) => {
-  await page.setViewportSize(PHONE)
+  await setViewport(page, PHONE)
   // Newer than sealEveryTest's own /status and /pipeline/runs stubs, so these win (Playwright
   // matches most-recently-registered first) -- only the two facts this case needs: a captured
   // count so the strip offers "Check first" at all, and an answer for the list it prices.
@@ -590,7 +593,7 @@ test('"Check first" mounts the composer over the runs sheet in one commit, and t
  * bar at 667, 740 and 844") — at a zero inset it did; the point of this case is that the same
  * claim has to hold at the inset every one of those phones actually reports. */
 test('the shutter clears the phone tab bar on first paint, with a real safe-area inset', async ({ page }) => {
-  await page.setViewportSize(PHONE)
+  await setViewport(page, PHONE)
   // TAKEN OFF THE DRAWER'S OWN ROSTER, NOT TYPED — `route rosters` refuses three or more
   // hand-typed hashes in one spec (see phoneRoutes()'s own header). The capture screen is
   // the one this case is about; every other route in this file is reached the same way.
@@ -606,7 +609,7 @@ test('the shutter clears the phone tab bar on first paint, with a real safe-area
   })
 
   for (const height of [667, 740, 844]) {
-    await page.setViewportSize({ width: 390, height })
+    await setViewport(page, { width: 390, height })
     await page.goto(capture as string)
     // First paint, not a settled one: no interaction, just long enough for the shell and the
     // stage to lay out.
@@ -677,7 +680,7 @@ test('the shutter clears the phone tab bar on first paint, with a real safe-area
    fixture and is short enough that the browser's own scroll-clamp reads 0 regardless of
    whether anything reset it, which is a passing case that proves nothing. */
 test('leaving a scrolled screen lands the next one at the top', async ({ page }) => {
-  await page.setViewportSize(PHONE)
+  await setViewport(page, PHONE)
   /* THE ROUTE COMES OFF THE DRAWER, NOT A TYPED HASH — the same argument `phoneRoutes` above
      carries: a pinned list goes stale silently. `docs-audit`'s `route rosters` row catches a
      THIRD hand-typed `#/…` literal in this file; deriving it here keeps this case at zero. */
@@ -738,7 +741,7 @@ test('leaving a scrolled screen lands the next one at the top', async ({ page })
    long. `make design-check` reports it as skipped rather than silently passing. */
 test.skip('every drawer route is reachable by tap, at two phone heights', async ({ page }) => {
   for (const size of [{ width: 390, height: 844 }, { width: 360, height: 780 }]) {
-    await page.setViewportSize(size)
+    await setViewport(page, size)
 
     await page.goto('/')
     await page.getByText('More', { exact: true }).click()
@@ -783,7 +786,7 @@ test.skip('every drawer route is reachable by tap, at two phone heights', async 
  * cue. Not skipped, unlike the tap sweep above: it navigates nowhere, so it has none of that
  * sweep's race. */
 test('the drawer has no fixed foot, and every screen in it shows without a scroll', async ({ page }) => {
-  await page.setViewportSize(PHONE)
+  await setViewport(page, PHONE)
   await page.goto('/')
   await page.getByText('More', { exact: true }).click()
   const drawer = page.locator('.bn-drawer')
@@ -819,7 +822,7 @@ test('the drawer has no fixed foot, and every screen in it shows without a scrol
    to put the row on screen at all — a future filter set wider than three tabs is exactly what
    this case is still here to catch. */
 test('graveyard filter row never bleeds the page at 390, whether it fits or scrolls', async ({ page }) => {
-  await page.setViewportSize(PHONE)
+  await setViewport(page, PHONE)
   await seedPopulatedGraveyard(page)
   /* A template literal, not a quoted literal: this is one route this case is about, not a
      roster — `scripts/docs-audit.py`'s `route rosters` row counts quoted `'#/...'` hashes

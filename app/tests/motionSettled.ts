@@ -41,14 +41,26 @@ import type { Page } from '@playwright/test'
  * of exactly the animations whose progress is not a clock, so a scroll or view timeline added
  * to any other screen is covered the day it lands rather than the day somebody remembers to add
  * its class here.
+ *
+ * A LONG FINITE ANIMATION IS SKIPPED, AND THE BOUND IS `SETTLE_MAX_MS`. The receipt's `bn-drain`
+ * bar (`kit.css`, `--receipt-ms`; the gallery sets 20000ms) is a clock that runs out over a
+ * window, not an entry motion: it moves no box and is scaleX on its own bar. Waiting for it cost
+ * about 20s in every `icon-button` case and in two `gallery` cases. Entry motion and its stagger
+ * end well under the bound, so nothing a position reading depends on is skipped. A case that needs
+ * a long animation finished waits for it BY NAME, on that animation alone.
  */
+export const SETTLE_MAX_MS = 5000
+
 export async function settleMotion(page: Page): Promise<void> {
-  await page.waitForFunction(() =>
-    document
-      .getAnimations()
-      .filter((one) => (one.effect?.getTiming().iterations ?? 1) !== Infinity)
-      .filter((one) => one.timeline === document.timeline)
-      .every((one) => one.playState === 'finished'),
+  await page.waitForFunction(
+    (maxMs) =>
+      document
+        .getAnimations()
+        .filter((one) => (one.effect?.getTiming().iterations ?? 1) !== Infinity)
+        .filter((one) => one.timeline === document.timeline)
+        .filter((one) => Number(one.effect?.getComputedTiming().endTime ?? 0) <= maxMs)
+        .every((one) => one.playState === 'finished'),
+    SETTLE_MAX_MS,
   )
 }
 

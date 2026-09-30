@@ -3,6 +3,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { sealEveryTest, settleAnimations } from './shell'
 import { batchOf, shippingRow as row } from './routeFixtures'
+import { setViewport } from './phoneSwitch'
 
 /* AN EMPTY STATE FILLS THE FRAME TO ONE CAP, CENTRED (D309).
  * `.shipping-empty` was capped at 880px and `.orders-empty`, `.review-lone` at 720px inside a frame
@@ -67,7 +68,7 @@ for (const theme of ['light', 'dark'] as const) {
           })
         }
         await stubReads(page)
-        await page.setViewportSize({ width, height })
+        await setViewport(page, { width, height })
         await page.emulateMedia({ colorScheme: theme })
       })
 

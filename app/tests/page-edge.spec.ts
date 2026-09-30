@@ -4,6 +4,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { routesFromNav } from './routes'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
+import { setViewport } from './phoneSwitch'
 
 /* ONE LEFT EDGE FOR EVERY SCREEN (`D197`). The owner's own three screenshots,
  * 2026-09-13: `#/pricing`'s content started roughly 330px further right than `#/review` and
@@ -47,7 +48,7 @@ async function withRail(page: Page, stored: string, width: number): Promise<void
       /* unreadable storage reads as never chosen, which is the sidebar — a real default */
     }
   }, stored)
-  await page.setViewportSize({ width, height: 1000 })
+  await setViewport(page, { width, height: 1000 })
 }
 
 test('every owner screen shares one left edge, at every width and rail state', async ({

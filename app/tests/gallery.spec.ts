@@ -4,6 +4,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test'
 import { createRequire } from 'node:module'
 import { sealEveryTest } from './shell'
 import { settleMotion } from './motionSettled'
+import { PHONE_OFF_REASON, PHONE_SPECS_ON, phoneOff, setViewport } from './phoneSwitch'
 
 /* THE ROW SHAPES `#/gallery` DRAWS THAT NOTHING ELSE IN THIS APP EVER DRAWS.
  *
@@ -195,7 +196,7 @@ test('a label with no figure re-ranks its path, and a live one does not (D41)', 
  * in this file is about what is in the DOM at any width.
  */
 test('the copies specimen answers to its own width, as the screen does', async ({ page }) => {
-  await page.setViewportSize({ width: 400, height: 900 })
+  await setViewport(page, { width: 400, height: 900 })
 
   const row = page.locator('.card-locations-owner .card-locations-row').first()
   await expect(row).toBeVisible()
@@ -385,7 +386,8 @@ async function setTheme(page: import('@playwright/test').Page, theme: 'light' | 
 
 test('the kit is a Page: one h1, one width, one top gap, no sideways scroll, at every width', async ({ page }) => {
   for (const [width, height] of WIDTHS) {
-    await page.setViewportSize({ width, height })
+    if (phoneOff(width)) continue
+    await setViewport(page, { width, height })
     await page.waitForTimeout(100)
     const m = await page.evaluate(() => {
       const main = document.querySelector<HTMLElement>('main[data-bn-page]')
@@ -432,7 +434,8 @@ test('a notice keeps the machine\'s words behind "What the server said" (D269)',
 
 test('the status slot: a one-line answer moves nothing at 390, 720, 820 and 1440 (D118)', async ({ page }) => {
   for (const width of [390, 720, 820, 1440]) {
-    await page.setViewportSize({ width, height: 900 })
+    if (phoneOff(width)) continue
+    await setViewport(page, { width, height: 900 })
     const spec = page.locator('[data-specimen="status-slot"]')
     const under = spec.locator('[data-kit-under-slot]')
     await spec.getByRole('button', { name: 'Clear' }).click()
@@ -454,7 +457,7 @@ test('the status slot: a one-line answer moves nothing at 390, 720, 820 and 1440
 })
 
 test('at 390 a 300-character answer is never cut, and its disclosure stays inside the gutter', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   const spec = page.locator('[data-specimen="status-slot"]')
   await spec.scrollIntoViewIfNeeded()
   await spec.locator('[data-kit-answer="long"]').click()
@@ -860,7 +863,7 @@ async function wordSpaceWidth(el: Locator, before: string, after: string): Promi
  * assertion below fails. */
 for (const width of [1440, 390]) {
   test(`an overlay title's word space stays visible at ${width}`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 })
+    await setViewport(page, { width, height: 900 })
     const opener = page.locator('[data-kit-open="modal"]')
     await opener.scrollIntoViewIfNeeded()
     await opener.click()
@@ -893,7 +896,7 @@ test('a popover closes on Escape, and on Tab past its last item, and gives focus
 })
 
 test('at 390 a popover near the foot opens above its trigger, clear of the tab bar', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   const opener = page.locator('[data-kit-open="popover"]')
   await opener.scrollIntoViewIfNeeded()
   /* put the trigger just above the tab bar, where there is no room below it */
@@ -1012,6 +1015,7 @@ test.describe('under reduced motion', () => {
 })
 
 test.describe('on a touch screen', () => {
+  test.skip(!PHONE_SPECS_ON, PHONE_OFF_REASON)
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } })
 
   test('a key hint leaves as a whole phrase, a keycap in a control hides, and a bare keycap stays (UX-040)', async ({ page }) => {
@@ -1080,7 +1084,7 @@ for (const width of [639, 720] as const) {
   test(`at ${width}, ${phone ? 'a sheet rises from the bottom and the toast clears the tab bar' : 'a sheet stays on its own edge and the toast sits at the page corner'} (kit-frame-2)`, async ({
     page,
   }) => {
-    await page.setViewportSize({ width, height: 900 })
+    await setViewport(page, { width, height: 900 })
 
     const opener = page.locator('[data-kit-open="sheet"]')
     await opener.scrollIntoViewIfNeeded()
@@ -1133,7 +1137,8 @@ test('every toggle shows the focus ring, whatever outline it wears (UX-100)', as
 
 test('the toolbar: one control height, and at 390 the field takes the whole first row', async ({ page }) => {
   for (const width of [1440, 390]) {
-    await page.setViewportSize({ width, height: 900 })
+    if (phoneOff(width)) continue
+    await setViewport(page, { width, height: 900 })
     const toolbar = page.locator('[data-specimen="toolbar"] .bn-toolbar')
     await toolbar.scrollIntoViewIfNeeded()
     const m = await toolbar.evaluate((root) => {
@@ -1178,7 +1183,8 @@ test('axe finds nothing on the kit at 390 and 1440 in both themes, but what is l
   const unlisted: string[] = []
   for (const theme of ['light', 'dark'] as const) {
     for (const width of [390, 1440]) {
-      await page.setViewportSize({ width, height: 900 })
+      if (phoneOff(width)) continue
+      await setViewport(page, { width, height: 900 })
       await setTheme(page, theme)
       await page.addScriptTag({ path: axePath })
       /* two states: the page at rest, and the page with a layer open over it (a layer is

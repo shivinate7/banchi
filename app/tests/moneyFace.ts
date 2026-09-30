@@ -18,6 +18,9 @@
 export interface MoneyFaceResult {
   text: Array<{ amount: string; fontFamily: string; sample: string }>
   fields: Array<{ amount: string; fontFamily: string; tag: string }>
+  /** True when the page drew no `.bn-view`: nothing was scanned, and a caller must FAIL on it.
+   *  An empty result from a page that drew nothing reads the same as a clean screen. */
+  noView: boolean
 }
 
 /** Runs INSIDE the page via `page.evaluate(scanMoneyFace)`. Self-contained on purpose — see
@@ -44,7 +47,7 @@ export function scanMoneyFace(): MoneyFaceResult {
   // never returns.
   const MONO_FACE = 'jetbrains mono'
 
-  const empty: MoneyFaceResult = { text: [], fields: [] }
+  const empty: MoneyFaceResult = { text: [], fields: [], noView: true }
   const view = document.querySelector('.bn-view')
   if (!view) return empty
 
@@ -107,7 +110,7 @@ export function scanMoneyFace(): MoneyFaceResult {
     }
   })
 
-  return { text: textHits, fields: fieldHits }
+  return { text: textHits, fields: fieldHits, noView: false }
 }
 
 /* THE MUTATION HOOK for `money-face.spec.ts` (`MONEY_FACE_MUTATE=<hash>`): one dollar figure

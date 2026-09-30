@@ -6,6 +6,7 @@ import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 import { settled, whatMoved } from './motionSettled'
 import { iconTip } from './iconTooltip'
+import { phoneOff, setViewport } from './phoneSwitch'
 
 /* THE OWNER'S ONE VIEW OF STORED CARDS, asserted where nothing else can reach it.
  *
@@ -3072,7 +3073,7 @@ test('the box panel draws its census as bn-stat figures, not the old dotted line
 
   /* AND THE FOUR FIGURES SIT ON ONE ROW AT 1440 — the rail is 300px and this is the width the
      brief named as the floor for it. */
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   const tops = await stats.evaluateAll((nodes) => nodes.map((n) => n.getBoundingClientRect().top))
   expect(new Set(tops.map((t) => Math.round(t))).size).toBe(1)
 })
@@ -4544,7 +4545,7 @@ test('S2 — a sold card says so once, not on the hero, the row and the phone ba
 })
 
 test('S2 — the phone sticky bar draws no second Sold pill beside the hero', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   // Deep-linked (`&card=`) rather than walked to, so this reaches Eiscue with no box-rail
   // drawer in the way — the same door a Review pill link or an order pull opens it by.
   const cards: Cards = { ...CARDS, '2/4': card({ index: 4, state: 'sold', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1, sectionEnd: 3, cid: 'eiscue-cid' }) }
@@ -4894,7 +4895,8 @@ test('the header holds one worded primary and the filter bar one line, at 390 an
    * already; this measures that it stays that way and that the filter bar's own height still
    * reads as one control row, at both widths the owner asked this measured at. */
   for (const width of [390, 720]) {
-    await page.setViewportSize({ width, height: 900 })
+    if (phoneOff(width)) continue
+    await setViewport(page, { width, height: 900 })
     // Below 640 the rail is a phone drawer — `.browse-mobilebar` chip settles it; at 720 the
     // desk rail is on screen from the start and the usual section-fold wait applies.
     await open(page, BOXES, STORE, () => PRICING, SALE, {
@@ -5790,7 +5792,8 @@ test('no wrapped line of the identity row begins with the separator, at 390 and 
      the pseudo-elements' own computed `content` instead, which is the actual mechanism the
      lane review named: `::after` on every fact but the last, `::before` on none. */
   for (const width of [390, 820]) {
-    await page.setViewportSize({ width, height: 900 })
+    if (phoneOff(width)) continue
+    await setViewport(page, { width, height: 900 })
     await open(page, BOXES, STORE, () => PRICING, SALE, { settle: '.card-locations-owner' })
     const identity = page.locator('.card-locations-row.is-current .card-locations-identity')
     await expect(identity).toBeVisible()
@@ -5814,7 +5817,7 @@ test('the box fact never grows past its own text, and the dot never floats away 
   /* A WIDE VIEWPORT, DELIBERATELY: the free width a `flex-grow` bug needs to be visible at all —
      at the suite's narrower default this fact's own row happens to have none to spend, so the
      mutation this case exists to catch would pass unnoticed there. */
-  await page.setViewportSize({ width: 1920, height: 900 })
+  await setViewport(page, { width: 1920, height: 900 })
   await open(page)
 
   /* A REAL BUG, FOUND BY THE OWNER'S OWN SCREENSHOT (Direction B, round two, 2026-09-25): the
@@ -5890,7 +5893,7 @@ test('the address holds one line at both widths, including the longest label the
   await settleFonts(page)
 
   for (const width of [1440, 1280]) {
-    await page.setViewportSize({ width, height: 900 })
+    await setViewport(page, { width, height: 900 })
     await page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity').waitFor()
 
     const unwrapped = await page.locator('.card-locations-row.is-current .card-locations-label').evaluate((el) => {
@@ -5953,7 +5956,7 @@ test("the box's census and its forecast are told apart, and the fill says which 
 
   /* And no figure wraps away from its own label at either width. */
   for (const width of [1440, 1280]) {
-    await page.setViewportSize({ width, height: 900 })
+    await setViewport(page, { width, height: 900 })
     const cells = await page.locator('.boxops-census-cell').evaluateAll((nodes) =>
       nodes.map((node) => {
         const value = node.querySelector('dd') as HTMLElement
@@ -5982,7 +5985,7 @@ test('a narrow copies column shortens the bar, never the position label', async 
      threshold at 560 the narrow branch still applies at 528, so a case left at the default
      viewport passes against the very mutation it is written to catch. Observed — this case was
      kept only after it was seen to go red at 1440 and green at 1280 against that change. */
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   /* A ROW THAT DRAWS A BAR, which since D119 is the first one again — the copy the walk is
      standing on draws its lens in the list like every other row. The filter stays: a pooled or
      departed copy still carries no bar, and this case measures a row that has one. */
@@ -6102,7 +6105,7 @@ test('every copy row draws the same bar height, located or not', async ({ page }
   }
 
   await open(page, boxes, { cards, search: (query) => searchAnswer(query, cards) })
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   await expandAll(page)
   await page.locator('.browse-row', { hasText: 'Thievul' }).first().click()
   await expect(page.locator('.card-locations-owner .position-bar').first()).toBeVisible()
@@ -6121,7 +6124,7 @@ test('every copy row draws the same bar height, located or not', async ({ page }
 
 test('a wider copies column never makes its rows taller', async ({ page }) => {
   await open(page)
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   await page.locator('.card-locations-row').first().waitFor()
 
   /* THE DEFECT THIS CLOSES, AND IT WAS DORMANT RATHER THAN INVISIBLE. `CardLocations.css` switches
@@ -6359,7 +6362,7 @@ test('the market row draws on one line at the width the owner works at', async (
      priced one. `no row matched by this run` was 236.6px against the 181px track — worse than
      the price it sits beside — and it would have gone on wrapping had only the priced form been
      fixed. */
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   await open(page, BOXES, PRICED_STORE)
   await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toBeVisible()
   expect(await marketLines(page)).toBe(1)
@@ -6435,7 +6438,7 @@ test('a run with no pricing table names the remedy rather than reading as an unp
   const stale: Cards = Object.fromEntries(
     Object.entries(CARDS).map(([key, held]) => [key, { ...held, run: '2026-08-22-box1-03' }]),
   )
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   await open(page, BOXES, { cards: stale, search: (query) => searchAnswer(query, stale) })
   await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toHaveText(
     'join this run',
@@ -6641,7 +6644,7 @@ const BIG_CARDS: Cards = {
  * on a fact that must render whole. What is still worth proving is the fact D41 actually
  * protects: a four-digit figure renders WHOLE, never clipped mid-digit, wrapped or not. */
 test('a four-digit card number renders whole, never clipped mid-digit', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   await open(page, BIG_BOX, { cards: BIG_CARDS, search: (query) => searchAnswer(query, BIG_CARDS) })
   await settleFonts(page)
   await expandAll(page)
@@ -7046,7 +7049,7 @@ test('N3 — pressing a box does not scroll the box rail', async ({ page }) => {
     sections: [],
     sections_detail: [{ section: 1, start: 1, end: 5, count: 5 }],
   }))
-  await page.setViewportSize({ width: 1440, height: 700 })
+  await setViewport(page, { width: 1440, height: 700 })
   await open(page, { boxes: many }, STORE, () => PRICING, SALE, {
     route: '/#/inventory?box=1',
     settle: '.browse-boxcell',
@@ -7123,7 +7126,7 @@ async function sectionTitleFit(title: Locator, count: string): Promise<{ countIn
 test('a long section name is drawn whole, and its count is said once, at 820', async ({ page }) => {
   /* The same title `#/orders` draws (`SectionTitle.tsx`): the NAME ellipsizes, `3 cards` stays
      whole. Verified red first: the one-span title cut the count, the end of the sentence. */
-  await page.setViewportSize({ width: 820, height: 1180 })
+  await setViewport(page, { width: 820, height: 1180 })
   const named = (input: Parameters<typeof card>[0]) => {
     const one = card(input)
     return { ...one, place: { ...one.place, section_name: 'Holographic promos from the vintage binder' } }
@@ -7332,7 +7335,7 @@ test('N5 — the search placeholder fits the rail column at 720 and 820', async 
     })
 
   for (const width of [720, 820]) {
-    await page.setViewportSize({ width, height: 900 })
+    await setViewport(page, { width, height: 900 })
     await open(page)
     const fit = await fitsColumn()
     expect(fit, `no search field found to measure at ${width}`).not.toBeNull()
@@ -8520,7 +8523,7 @@ test('the control that re-ranks reserves its own room, so appearing moves no cop
 test('the re-rank control clears the thumb floor on a phone', async ({ page }) => {
   /* D117's floor, on a control that did not exist when it was written: 40px under 767px, met by
      `--bn-control-h-sm` in the token file rather than by a number in `CardLocations.css`. */
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   const { store, depart } = stackedStore()
   /* `settle` because a phone draws the walk inside a drawer and `open`'s default wait is a
      section fold, which is not on screen here — waiting for it would fail on the arrangement
@@ -8574,7 +8577,7 @@ test('D218: this lane\'s own facts draw the separator, never type it', async ({ 
 
 
 for (const width of [1280, 820]) test(`Actions does not move when the copies search answers, at ${width}`, async ({ page }) => {
-  await page.setViewportSize({ width, height: 900 })
+  await setViewport(page, { width, height: 900 })
   /* THE FLAKE THIS PINS: the head drew the identity alone until `/search` answered, then added its
      figures column and shoved Actions ~380px left. A press across the jump went down on the button
      and came up elsewhere, so no click fired. The column now holds its final width as placeholder

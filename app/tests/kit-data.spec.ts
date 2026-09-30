@@ -8,6 +8,7 @@ import { canonicalNumber, compactText, foldText, matchQuery, queryTokens } from 
 import { absoluteDate, relativeDate } from '../src/dates'
 import { moneyGrouped, moneySigned } from '../src/money'
 import { STATUS_TONES, boxesMostRecentFirst } from '../src/kit/dataRules'
+import { setViewport } from './phoneSwitch'
 
 /* THE KIT'S DATA PRIMITIVES (`src/kit/data.tsx`), and the one matcher every search shares
  * (`src/kit/match.ts`).
@@ -220,7 +221,7 @@ test('amber means only "needs the owner", and blue only "moving now"', () => {
  * ============================================================================================ */
 
 async function open(page: Page, width: (typeof WIDTHS)[number], theme: 'light' | 'dark'): Promise<void> {
-  await page.setViewportSize({ width, height: HEIGHT[width] })
+  await setViewport(page, { width, height: HEIGHT[width] })
   await page.goto(theme === 'dark' ? `${PAGE}?theme=dark` : PAGE)
   await expect(page.locator('[data-kit-data]')).toBeVisible()
   await settleFonts(page)
