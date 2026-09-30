@@ -24,7 +24,7 @@ import { toast } from './kit/toast'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
-import { CardLocations } from './CardLocations'
+import { CardLocations, MarkSoldButton } from './CardLocations'
 import { describeFailure, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
@@ -801,14 +801,26 @@ export function RowAction({ walk, copy, take }: { readonly walk: OrderWalk; read
   const where = copy.place.label === null ? copy.key : sayPlace(copy.place.label)
   if (receipt !== undefined && copy.key !== walk.newestUndoKey) return <Pill tone="ok" icon="check">Sold</Pill>
   const undo = receipt !== undefined
+  /* MARK SOLD IS INVENTORY'S OWN PRESS (`CardLocations.tsx:MarkSoldButton`), so a change to it
+     reaches the walk with no second edit. Undo is the icon it always was. */
+  if (!undo) {
+    return (
+      <MarkSoldButton
+        name={`Mark sold: ${where}`}
+        busy={busy}
+        disabled={walk.busyCopy !== null && !busy}
+        onClick={() => walk.onSell(copy, take)}
+      />
+    )
+  }
   return (
     <IconButton
-      icon={undo ? 'undo' : 'sold'}
-      label={undo ? 'Undo' : 'Mark sold'}
-      name={`${undo ? 'Undo' : 'Mark sold'}: ${where}`}
+      icon="undo"
+      label="Undo"
+      name={`Undo: ${where}`}
       busy={busy}
       disabled={walk.busyCopy !== null && !busy}
-      onClick={() => (undo ? walk.undoCopy(copy.key) : walk.onSell(copy, take))}
+      onClick={() => walk.undoCopy(copy.key)}
     />
   )
 }

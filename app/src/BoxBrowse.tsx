@@ -42,6 +42,7 @@ import { RailFrame } from './RailFrame'
 import {
   CardDetailsSection,
   CardPane,
+  type HeroFigures,
   gameLabel,
   gameWord,
   marketTable,
@@ -468,6 +469,10 @@ type BoxBrowseProps = {
   /** The one primary action for the selected copy, drawn in the phone's sticky action bar. */
   actionBar?: ReactNode
 
+  /** The band's figures for the selected card (`CardHero.tsx:HeroFigures`), built by the screen
+   *  that holds the card's search group. Null draws the identity alone. */
+  figures?: HeroFigures | null
+
   /** Which card the walk is pointing at, reported on every change and `null` when the filter
    *  leaves nothing to point at. */
   onSelect?: (row: Row | null) => void
@@ -734,6 +739,7 @@ function VariantChooser({
 
 export function BoxBrowse({
   detail,
+  figures,
   actionBar,
   onSelect,
   onBoxes,
@@ -2748,6 +2754,7 @@ export function BoxBrowse({
                       ),
                     }}
                     detail={panelDetail}
+                    figures={figures}
                   />
 
                   <CardDetailsSection

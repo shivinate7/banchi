@@ -33,7 +33,7 @@ import {
 import { absoluteDate, relativeDate } from './dates'
 import { toast } from './kit/toast'
 import { boxTitle } from './kit/data'
-import { CardPane, gameWord, marketTable, photoSrc, type MarketRead, type Row } from './CardHero'
+import { CardPane, gameWord, marketTable, photoSrc, type HeroFigures, type MarketRead, type Row } from './CardHero'
 import { CardLocations, layoutsOf } from './CardLocations'
 import { forSale } from './cardState'
 import { Dialog as Overlay } from './kit/overlay'
@@ -2683,6 +2683,10 @@ function OrderPickPane({
   const rawMarket = read?.kind === 'table' && currentCard !== null ? read.rows[`${currentCard.box}/${currentCard.index}`] : null
   const market = rawMarket === null || rawMarket === undefined || Number.isNaN(Number(rawMarket)) ? null : Number(rawMarket)
   const liveNow = take.listed === undefined ? null : forSale(take.listed.live, take.sold_here ?? 0)
+  /* THE SAME BAND INVENTORY DRAWS (`CardHero.tsx:CardHeroHead`), fed from the walk's own group.
+     `hidden` is 0 because the walk folds nothing (`preserveOrder`), and `cap` is null because a take
+     carries no ceiling: a screen that cannot say the ceiling draws no meter. */
+  const figures: HeroFigures = { group: currentGroup, listedAt: currentGroup.live_as_of, hidden: 0, cap: null }
   return (
     <>
       <CardPane
@@ -2704,6 +2708,7 @@ function OrderPickPane({
           </span>
         }
         postChips={showBuyers ? <Pill>For {takeBuyers(currentRow.take)}</Pill> : undefined}
+        figures={figures}
         photo={{
           label: place,
           absent: broken,

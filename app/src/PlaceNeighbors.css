@@ -15,14 +15,32 @@
   color: var(--bn-ink-3);
 }
 
-.nb-side { min-width: 0; }
+.nb { align-items: center; }
+/* One unbreakable group per side: the arrow and its name never part (D218: the arrows are CSS). */
+.nb-side { display: inline-flex; align-items: baseline; gap: var(--bn-1-5); white-space: nowrap; }
 .nb-side b { color: var(--bn-ink); font-weight: 700; }
 .nb-rest { color: var(--bn-ink-3); font-weight: 600; }
+.nb-side[data-side='back']::before { content: '\2190'; }
+.nb-side[data-side='front']::after { content: '\2192'; }
+.nb-side::before, .nb-side::after { color: var(--bn-ink-4); font-weight: 400; }
+
+/* This copy's number, in the ruler pin's chip style (accent ground, `--bn-on-accent` ink). */
+.nb-here {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 var(--bn-1);
+  border-radius: var(--bn-r-xs);
+  background: var(--bn-accent);
+  color: var(--bn-on-accent);
+  font-size: var(--bn-fs-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.nb-end { font-family: var(--bn-font-mono); letter-spacing: var(--bn-tracking-caps); }
 
 /* An unread neighbour, said in words (LOC-28): muted and in the running voice, because it
    names no card a hand can recognise by its face, only a count of cards nothing has read. */
 .nb-unread { color: var(--bn-ink-3); font-style: italic; font-weight: 600; }
-
-/* THE SEAM (D218: never typed) — a bare arrow, muted, between the two names. */
-.nb-arrow { color: var(--bn-ink-4); }
-.nb-arrow::before { content: '→'; }

@@ -6977,7 +6977,7 @@ COMPONENTS = [
                         "can name, so the bare `#270` the owner read as a sold card leaking "
                         "into the ladder is gone \u2014 it never was one \u2014 and the unread "
                         "side is said in words instead (LOC-28).",
-                "governed_by": ["D22", "D24", "D58", "D31", "D41", "D92", "D260"]},
+                "governed_by": ["D22", "D24", "D31", "D41", "D58", "D92", "D218", "D260"]},
             "src/PlaceNeighbors.css": {
                 "does": "the one-line shape (Direction B, 2026-09-25): a flex row that wraps "
                         "rather than truncates, an arrow between the two names, no key column "
@@ -7511,9 +7511,9 @@ COMPONENTS = [
                                          "falling back to \"another box\" the same honest way "
                                          "`Graveyard.tsx`'s own `movedToName` does when the old "
                                          "box is gone (D259).",
-                                 "governed_by": ["D6", "D26", "D28", "D31", "D34", "D77", "D183",
-                                                 "D67", "D83", "D89", "D97", "D118", "D134", "D172",
-                                                 "D195", "D218", "D252", "D259"]},
+                                 "governed_by": ["D6", "D26", "D28", "D31", "D34", "D67", "D77",
+                                                 "D83", "D89", "D97", "D118", "D119", "D134",
+                                                 "D172", "D183", "D195", "D218", "D252", "D259"]},
             "src/CardHero.css": {"does": "the listing-correction control's own spacing. Everything "
                                          "else it draws with is reused rather than restyled: "
                                          "`kit.css`'s `.bn-panel*` for the panel chrome, "
@@ -7558,10 +7558,10 @@ COMPONENTS = [
                                               "every one of those numbers would be a structural zero "
                                               "under a headroom promise nothing can keep.",
                                       "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24",
-                                                      "D26", "D28", "D58", "D31", "D38", "D41",
-                                                      "D45", "D67", "D68", "D92",
-                                                      "D115", "D118", "D119", "D132", "D172",
-                                                      "D181", "D196", "D218", "D259", "D260"]},
+                                                      "D26", "D28", "D31", "D38", "D41", "D45",
+                                                      "D58", "D67", "D68", "D92", "D115", "D118",
+                                                      "D119", "D132", "D172", "D181", "D195",
+                                                      "D196", "D218", "D259", "D260"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
@@ -7576,8 +7576,8 @@ COMPONENTS = [
                                               "bar's, and the drain's track is a token here where "
                                               "`kit.css` paints it as a white alpha for an inverted "
                                               "panel.",
-                                      "governed_by": ["D5", "D7", "D58", "D31", "D38", "D41", "D45",
-                                                      "D115", "D118", "D119", "D132",
+                                      "governed_by": ["D5", "D7", "D31", "D38", "D41", "D45", "D58",
+                                                      "D115", "D118", "D119", "D132", "D195",
                                                       "D218", "D259"]},
             # ---- the runs screen (D39, 2026-08-29) ----
             #

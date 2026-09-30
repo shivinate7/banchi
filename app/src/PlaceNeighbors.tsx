@@ -106,13 +106,25 @@ export function PlaceNeighbors({
        wording) where the eye is given two names and an arrow. `role="group"` is what makes
        that name apply to the whole line rather than to either name alone. */
     <p className="nb" role="group" aria-label={parts.said}>
-      {parts.prev === null ? null : (
+      {/* NO WORDS, READ THE WAY THE RULER RUNS (owner ruling): `<- back [N] front ->`. The arrows
+          are CSS on the side group (D218), so each `arrow + name` is one unbreakable unit. At a
+          box's own end the side is an outline BACK or FRONT chip, with no arrow. */}
+      {parts.prev === null ? (
+        <span className="bn-pill bn-pill-sm bn-pill-outline nb-end" data-end="back">BACK</span>
+      ) : (
         <span className="nb-side" data-side="back">
           <Name side={parts.prev} />
         </span>
       )}
-      {parts.prev !== null && parts.next !== null ? <span className="nb-arrow" aria-hidden="true" /> : null}
-      {parts.next === null ? null : (
+      {/* This copy's own number, the ruler pin's chip. A departed copy has no card to name. */}
+      {place?.card == null ? null : (
+        <span className="nb-here" aria-hidden="true">
+          {place.card}
+        </span>
+      )}
+      {parts.next === null ? (
+        <span className="bn-pill bn-pill-sm bn-pill-outline nb-end" data-end="front">FRONT</span>
+      ) : (
         <span className="nb-side" data-side="front">
           <Name side={parts.next} />
         </span>

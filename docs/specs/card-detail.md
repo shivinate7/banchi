@@ -1,6 +1,6 @@
 # Card detail panel
 
-Status: design, not built. The sheet is `docs/specs/card-detail/sheet.html` (`#light` or `#dark`).
+Status: built. Two screens draw it from one home: `#/inventory` and the `#/orders` walk. The sheet is `docs/specs/card-detail/sheet.html` (`#light` or `#dark`).
 The renders sit beside it: `pane-820-*.png`, `pane-410-*.png`, `live-states-*.png`.
 
 ## The direction: one band, then the hand
@@ -41,10 +41,10 @@ The panel has two parts.
 The row keeps every fact that the built row has:
 
 - the address: box, section, and "Card N of M";
-- the neighbour line. It has no words (owner ruling). It runs the same way as the ruler:
+- the neighbor line. It has no words (owner ruling). It runs the same way as the ruler:
   "← **Bellows Breath** [4] **Hextech Anomaly** →".
   - The left arrow points to the back, and the right arrow points to the front.
-  - [4] is this copy's own number chip, the same accent chip as on the ruler pin. It sits between the two neighbours.
+  - [4] is this copy's own number chip, the same accent chip as on the ruler pin. It sits between the two neighbors.
   - At the end of a box, an outline BACK or FRONT pill takes the place of the name and its arrow.
   - Each "arrow + name" pair is kept together on one line;
 - the section strip;
@@ -53,7 +53,7 @@ The row keeps every fact that the built row has:
 
 There are two changes to the ruler:
 
-- **The number chip is centred on the pin.** The built chip sits beside the pin and flips past the middle.
+- **The number chip is centered on the pin.** The built chip sits beside the pin and flips past the middle.
   The new chip is clamped inside the ruler at both ends (card 1 and card 42 in the sheet).
 - **A tick number within 2 cards of the pin is not drawn.** The chip names that place.
 
@@ -67,7 +67,7 @@ same weight, on every row.
 
 - **Mark sold** is a worded 40px `bn-btn`, 128px wide, with accent ink on the `--bn-accent-tint` ground. It has no
   fill and no shadow. On hover the ground goes to `--bn-accent-tint-2`.
-  It is the one coloured control in the row, so it is clearly the primary act. Three tinted buttons do not make
+  It is the one colored control in the row, so it is clearly the primary act. Three tinted buttons do not make
   a wall of accent.
 - **Retire** and **Move** are bare `bn-icon-btn` icons at 40px, in ink-3.
 - All targets are 40px or more.
@@ -104,7 +104,7 @@ PNGs.
    - A reading 3 days old or more: `bn-dot-warn`. **Provisional:** the owner may drop the amber state.
    - An unread figure is a quiet dash, with no dot.
 5. `app/src/PositionBar.tsx` and `app/src/PositionBar.css`:
-   - Centre `.position-bar-chip` on the pin, and clamp it inside the ruler.
+   - Center `.position-bar-chip` on the pin, and clamp it inside the ruler.
    - Delete `data-flip`.
    - Do not draw the tick number within 2 cards of the pin.
    - Keep the height of the block the same in every state (D118, a press moves nothing).
@@ -133,4 +133,4 @@ PNGs.
 - The brief's data has 5 stored but draws 3 copy rows. The sheet draws what the brief names. In the product, the
   rows count every drawn copy.
 - A short copy list leaves empty height under the photo and under the list at pane 820.
-- At 410 the photo is 180px wide and centred, so there is empty space on each side of it.
+- At 410 the photo is 180px wide and centered, so there is empty space on each side of it.

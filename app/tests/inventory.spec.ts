@@ -4531,7 +4531,7 @@ test('S2 — a sold card says so once, not on the hero, the row and the phone ba
   await expect(row).toBeVisible()
   await expect(row.locator('.card-locations-state .bn-pill', { hasText: 'Sold' })).toHaveCount(0)
   await expect(row.locator('.card-locations-action .bn-pill', { hasText: 'Sold' })).toHaveCount(0)
-  await expect(page.locator('.browse-hero-chips .bn-pill', { hasText: 'Sold' })).toHaveCount(1)
+  await expect(page.locator('.browse-hero-sub .bn-pill', { hasText: 'Sold' })).toHaveCount(1)
 })
 
 test('S2 — the phone sticky bar draws no second Sold pill beside the hero', async ({ page }) => {
@@ -4545,7 +4545,7 @@ test('S2 — the phone sticky bar draws no second Sold pill beside the hero', as
     route: '/#/inventory?box=2&card=eiscue-cid',
   })
 
-  await expect(page.locator('.browse-hero-chips .bn-pill', { hasText: 'Sold' })).toHaveCount(1)
+  await expect(page.locator('.browse-hero-sub .bn-pill', { hasText: 'Sold' })).toHaveCount(1)
   await expect(page.locator('.browse-actionbar-slot .bn-pill', { hasText: 'Sold' })).toHaveCount(0)
 })
 
