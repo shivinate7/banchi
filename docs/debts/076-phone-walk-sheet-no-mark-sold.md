@@ -1,4 +1,4 @@
-## DEBT-phone-walk-sheet-no-mark-sold — the walk's card sheet on a phone has no Mark sold
+## DEBT76 — the walk's card sheet on a phone has no Mark sold
 
 On a phone, a tap on a walk row opens the card in a sheet. Since the card pane became the head,
 the band and the photograph alone, the sheet holds no copies and no Mark sold. The press is on
