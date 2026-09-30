@@ -1161,6 +1161,20 @@ judge "$tmp/main" "PKMNSCAN_PUSH=off git push origin HEAD"
 a="$(cat "$tmp/main/.git/pkmnscan-hatches.log" | wc -l | tr -d ' ')"
 if [ "$a" = "$((b + 1))" ]; then ok "a real push hatch lifts AND logs exactly one line"
 else bad "the push hatch wrote $((a - b)) log line(s)"; fi
+# A `-c` SCRIPT IS READ LIKE A BARE COMMAND: the shared reading unwraps it once.
+refuses "bash -c reads the push inside" \
+  "$tmp/main" "bash -c 'git push origin HEAD'"
+refuses "sh -c with -u reads the push inside" \
+  "$tmp/main" "sh -c \"git push -u origin HEAD\""
+allows "bash -c with the branch's own name is fine" \
+  "$tmp/main" "bash -c 'git push origin HEAD:pr-h-readings-table-local'"
+refuses "a hatch merely echoed inside -c does not lift" \
+  "$tmp/main" "bash -c 'echo PKMNSCAN_PUSH=off; git push origin HEAD'"
+b="$(cat "$tmp/main/.git/pkmnscan-hatches.log" | wc -l | tr -d ' ')"
+judge "$tmp/main" "bash -c 'PKMNSCAN_PUSH=off git push origin HEAD'"
+a="$(cat "$tmp/main/.git/pkmnscan-hatches.log" | wc -l | tr -d ' ')"
+if [ "$a" = "$((b + 1))" ] && [ -z "$out" ]; then ok "a hatch inside -c lifts AND logs exactly one line"
+else bad "the -c hatch wrote $((a - b)) log line(s), out=[$out]"; fi
 (cd "$tmp/main" && git checkout -q main 2>/dev/null)
 
 allows "stash, inline"   "$tmp/main" "PKMNSCAN_STASH=off git stash pop"

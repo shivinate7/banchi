@@ -447,7 +447,24 @@ def strip_prefixes(argv: Sequence[str]) -> List[str]:
     return [] if index is None else list(argv[index:])
 
 
-def read(command: str) -> Reading:
+SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
+
+
+def _dash_c_payload(argv: Sequence[str]) -> Optional[str]:
+    """The script string of `bash -c '...'` (or sh/zsh/dash/ksh), else None. A flag cluster
+    holding `c` (`-c`, `-lc`, `-ec`) takes the next word as the script."""
+    words = strip_prefixes(argv)
+    if not words or _basename(words[0]) not in SHELLS:
+        return None
+    for i, word in enumerate(words[1:], 1):
+        if not word.startswith("-") or word.startswith("--"):
+            return None
+        if "c" in word[1:]:
+            return words[i + 1] if i + 1 < len(words) else None
+    return None
+
+
+def read(command: str, _depth: int = 0) -> Reading:
     """One command, parsed into stages with their pipelines resolved.
 
     THE ONE ENTRY POINT BOTH GUARDS CALL, so a command is tokenized once and read the same way
@@ -464,6 +481,15 @@ def read(command: str) -> Reading:
         for stage, op in parsed:
             placed.append(Placed(stage, op, tail))
             every.append(stage)
+    # A `-c` SCRIPT IS UNWRAPPED ONCE, HERE, so every clause sees the inner stages exactly as
+    # it sees bare ones: `bash -c 'X origin HEAD'` reads as `X origin HEAD`.
+    for stage in list(every):
+        inner = _dash_c_payload(stage.argv) if _depth < 3 else None
+        if inner:
+            got = read(inner, _depth + 1)
+            placed += got.placed
+            every += got.every
+            unreadable += got.unreadable
     return Reading(placed, every, unreadable)
 
 
