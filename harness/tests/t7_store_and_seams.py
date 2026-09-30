@@ -31,7 +31,7 @@ every gate in the repo on the day they shipped, and both are recorded in docs/de
 
 Isolation is `PKMNSCAN_HOME` pointed at a temporary directory. `store.files.home()` reads
 the environment on every call rather than at import, so no module reload is needed — and
-that property is itself asserted below, because the whole test is built on it.
+that property is itself asserted in `harness/tests/t7/`, because the whole test is built on it.
 
 UNDO ARRIVED WITH STEP 7a AND SO DID ITS CASES, which is what the paragraph here used to
 promise. `check_undo` covers what D10 settles: delete rather than tombstone, the newest
@@ -157,7 +157,7 @@ profile, and a green T7 must never be read as one.
 WHAT THIS STILL DOES NOT COVER, and it is the important sentence in this file now. These
 three routes were built before Gate B, which `docs/specs/capture-app.md` scheduled them
 after. Every queue entry these cases assert against is still hand-built — by the harness
-below, or by hand in a browser — so what is asserted here is that the routes behave as
+in `t7/`, or by hand in a browser — so what is asserted here is that the routes behave as
 `docs/DESIGN.md` describes, not that a run produces entries of that shape. Half of that
 closed on 2026-08-22: Gate B put 16 real entries in front of them — the queue read
 served them, the owner answered every one through the answer route, and the shape
