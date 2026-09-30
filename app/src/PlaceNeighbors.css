@@ -26,3 +26,20 @@
 /* THE SEAM (D218: never typed) — a bare arrow, muted, between the two names. */
 .nb-arrow { color: var(--bn-ink-4); }
 .nb-arrow::before { content: '→'; }
+
+/* THE BOX'S END, where a card has no neighbour on one side: a marker in the ruler's own words,
+   not pressable, so a lone neighbour never reads as the other side's. */
+.nb-end {
+  flex: none;
+  padding: 0 var(--bn-2);
+  border-radius: var(--bn-r-xs);
+  background: var(--bn-accent-tint);
+  color: var(--bn-accent);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 600;
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+  line-height: 1.6;
+  pointer-events: none;
+  user-select: none;
+}
