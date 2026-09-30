@@ -58,6 +58,10 @@
                   line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: var(--bn-tracking-tight);
                   display: flex; align-items: center; gap: var(--bn-2); }
   .cd-age { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+  /* A recent reading is calm: the live dot keeps its colour, sits small in the label line and does
+     not pulse. The figure beside it is plain ink. */
+  .cd-fig-label .bn-dot { width: 6px; height: 6px; }
+  .cd-fig-label .bn-dot-live { animation: none; box-shadow: none; }
   /* The ceiling meter: one cell per listing the ceiling allows. Its end says what it measures. */
   .cd-meter { display: flex; align-items: center; gap: var(--bn-2); margin-top: var(--bn-1-5); }
   .cd-meter-cells { display: flex; gap: 3px; }
@@ -90,18 +94,19 @@
   .nb { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-sm);
         font-weight: 600; color: var(--bn-ink-3); }
   .nb b { color: var(--bn-ink); font-weight: 700; }
-  .nb .arrow::before { content: '→'; color: var(--bn-ink-4); }
+  .nb .word { font-weight: 500; }
+  .cp > .nb { grid-column: 1 / -1; }
+  .cp-where { align-self: center; }
+  .nb .pair { white-space: nowrap; display: inline-flex; align-items: center; gap: var(--bn-2); }
   .nb .end { height: 18px; font-family: var(--bn-font-mono); letter-spacing: var(--bn-tracking-caps); }
 
-  /* Actions. Mark sold is worded and drawn as a raised button; Retire and Move are bare icons.
-     The fill arrives only under the hand (row :hover or :focus-within), so a list of any length
-     holds at most one filled accent button at a time. */
+  /* Actions. The chosen row (a press on the row chooses it) carries the one worded, filled
+     Mark sold. Every other row carries Mark sold as a 40px icon in accent ink, first of its three
+     icons. A list of any length holds one worded button. */
   .cp-acts { display: flex; align-items: center; gap: var(--bn-1); align-self: start; }
-  .cp-sell { --btn-h: 40px; width: 128px; color: var(--bn-accent); font-weight: 600; }
-  .cp-sell svg { color: var(--bn-accent); }
-  .cp:hover .cp-sell, .cp:focus-within .cp-sell, .cp.is-hot .cp-sell {
-    color: var(--bn-on-accent); background: var(--bn-accent); box-shadow: var(--bn-shadow-1); }
-  .cp:hover .cp-sell svg, .cp:focus-within .cp-sell svg, .cp.is-hot .cp-sell svg { color: var(--bn-on-accent); }
+  .cp-sell { --btn-h: 40px; width: 128px; font-weight: 600; }
+  .cp-icon.cp-sell-icon { color: var(--bn-accent); }
+  .cp.is-chosen { background: var(--bn-surface); box-shadow: inset 3px 0 0 var(--bn-accent), var(--bn-shadow-1); }
   .cp-icon { width: 40px; height: 40px; color: var(--bn-ink-3); }
   .cp-icon svg { width: 20px; height: 20px; }
 
@@ -139,7 +144,8 @@
   .frame-410 .cd-body { grid-template-columns: minmax(0, 1fr); padding: var(--bn-4); gap: var(--bn-4); }
   .frame-410 .cd-photo { width: 180px; justify-self: center; }
   .frame-410 .cp { grid-template-columns: minmax(0, 1fr); }
-  .frame-410 .cp-acts { order: 4; }
+  .frame-410 .cp.is-chosen .cp-acts { order: 4; }
+  .frame-410 .cp:not(.is-chosen) { grid-template-columns: minmax(0, 1fr) auto; }
   .frame-410 .cp-sell { flex: 1; width: auto; }
 
   /* ---- the Live dot's three states, drawn once under the panes ---- */
@@ -173,8 +179,8 @@
           <span class="cd-fig-value">5</span>
         </div>
         <div class="cd-fig">
-          <span class="cd-fig-label"><span class="bn-label">Live</span><span class="cd-age">2d ago</span></span>
-          <span class="cd-fig-value"><span class="bn-dot bn-dot-live"></span>5</span>
+          <span class="cd-fig-label"><span class="bn-dot bn-dot-live"></span><span class="bn-label">Live</span><span class="cd-age">2d ago</span></span>
+          <span class="cd-fig-value">5</span>
           <span class="cd-meter" aria-label="5 live, cap 5">
             <span class="cd-meter-cells"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span></span>
             <span class="cd-meter-end">Cap <b>5</b></span>
@@ -200,14 +206,14 @@
 
 <div class="states" id="states">
   <div>
-    <div class="cd-fig"><span class="cd-fig-label"><span class="bn-label">Live</span><span class="cd-age">2d ago</span></span>
-      <span class="cd-fig-value"><span class="bn-dot bn-dot-live"></span>5</span></div>
-    <p class="note">Red: copies are live and the reading is fresh.</p>
+    <div class="cd-fig"><span class="cd-fig-label"><span class="bn-dot bn-dot-live"></span><span class="bn-label">Live</span><span class="cd-age">2d ago</span></span>
+      <span class="cd-fig-value">5</span></div>
+    <p class="note">Recent: the live dot, small and still. Nothing to do.</p>
   </div>
   <div>
-    <div class="cd-fig"><span class="cd-fig-label"><span class="bn-label">Live</span><span class="cd-age">9d ago</span></span>
-      <span class="cd-fig-value"><span class="bn-dot bn-dot-warn"></span>5</span></div>
-    <p class="note">Amber: the reading is old. The age that turns it amber is the owner's call.</p>
+    <div class="cd-fig"><span class="cd-fig-label"><span class="bn-dot bn-dot-warn"></span><span class="bn-label">Live</span><span class="cd-age">3d ago</span></span>
+      <span class="cd-fig-value">5</span></div>
+    <p class="note">Amber: the reading is 3 days old or more. Provisional.</p>
   </div>
   <div>
     <div class="cd-fig"><span class="cd-fig-label"><span class="bn-label">Live</span><span class="cd-age">not read</span></span>
@@ -227,7 +233,7 @@
 
   /* Three copies. sections: card counts per section in the box; here: which one holds the copy. */
   const ROWS = [
-    { box: 'RB Origins', section: 'Section 2: Epics', card: 4, of: 11, prev: 'Bellows Breath', next: 'Hextech Anomaly', sections: [14, 11, 9], here: 2, hot: true },
+    { box: 'RB Origins', section: 'Section 2: Epics', card: 4, of: 11, prev: 'Bellows Breath', next: 'Hextech Anomaly', sections: [14, 11, 9], here: 2, chosen: true },
     { box: 'MEG Bulk', section: 'Section 1: Unleashed', card: 1, of: 23, prev: null, next: 'Void Assault', sections: [23, 18, 12, 7], here: 1 },
     { box: 'Mixed Singles', section: 'Section 4: Riftbound', card: 42, of: 42, prev: 'Moonfall', next: null, sections: [9, 16, 12, 42], here: 4 },
   ]
@@ -258,16 +264,18 @@
       : `<b>${name}</b>`
     const strip = r.sections.map((n, i) =>
       `<span class="${i + 1 === r.here ? 'here' : ''}" style="flex-grow:${n}">${i + 1}</span>`).join('')
-    return `<article class="cp${r.hot ? ' is-hot' : ''}">
+    return `<article class="cp${r.chosen ? ' is-chosen' : ''}" aria-current="${r.chosen ? 'true' : 'false'}">
       <div class="cp-where">
         <p class="cp-addr"><span class="box">${r.box}</span><span>${r.section}</span><span class="card">Card ${r.card} of ${r.of}</span></p>
-        <p class="nb">${side(r.prev, 'BACK')}<span class="arrow" aria-hidden="true"></span>${side(r.next, 'FRONT')}</p>
       </div>
       <div class="cp-acts">
-        <button class="bn-btn cp-sell" type="button">${svg('sold', 18)}Mark sold</button>
+        ${r.chosen
+          ? `<button class="bn-btn bn-btn-primary cp-sell" type="button">${svg('sold', 18)}Mark sold</button>`
+          : `<button class="bn-icon-btn cp-icon cp-sell-icon" type="button" aria-label="Mark sold" title="Mark sold">${svg('sold', 20)}</button>`}
         <button class="bn-icon-btn cp-icon" type="button" aria-label="Retire" title="Retire">${svg('archive', 20)}</button>
         <button class="bn-icon-btn cp-icon" type="button" aria-label="Move" title="Move">${svg('moveTo', 20)}</button>
       </div>
+      <p class="nb"><span class="pair"><span class="word">Between</span>${side(r.prev, 'BACK')}</span><span class="pair"><span class="word">and</span>${side(r.next, 'FRONT')}</span></p>
       <div class="cp-loc">
         <div class="strip">${strip}</div>
         ${ruler(r.card, r.of)}

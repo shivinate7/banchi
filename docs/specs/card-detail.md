@@ -19,7 +19,8 @@ The panel has two parts.
   - The side facts on line 3: `Captured 8`, `Hidden 3` and `Sent 7`. All three have the same size and weight.
 - Right column: the two lead figures. They have equal weight, and a hairline divides them.
   - **Stored.** The copies in the boxes.
-  - **Live.** It has a state dot and its read age beside the label ("2d ago", sentence case, outside the caps label).
+  - **Live.** The label line holds the state dot, the label and the read age ("2d ago", sentence case).
+    The figure itself is plain ink. A recent reading is calm: the dot is `bn-dot-live`, 6px, with no pulse.
     Under the figure is the ceiling meter: one cell for each listing that the cap allows, filled up to the live count.
     The end of the meter says **Cap 5**, so the meter says what it measures, and the ceiling reads with Live.
 - At pane 410 the band stacks. A hairline puts the two figures side by side under the identity lines.
@@ -40,7 +41,9 @@ The panel has two parts.
 The row keeps every fact that the built row has:
 
 - the address: box, section, and "Card N of M";
-- the neighbour line: Prev → Next, with an outline BACK or FRONT pill where the copy is at the end of the box;
+- the neighbour line, which is one labelled phrase across the full row: "Between **Bellows Breath** and
+  **Hextech Anomaly**". At the end of a box, an outline BACK or FRONT pill takes the place of the name.
+  Each "word + name" pair is kept together on one line;
 - the section strip;
 - the card ruler: ticks every 5, a number every 10, the edge numbers, the filled card cell and the pin;
 - BACK/FRONT, written once under the ruler.
@@ -56,16 +59,16 @@ There are two changes to the ruler:
 The code makes Mark sold the act that matters. Walk-in sales are recorded here (`OwnerRows` rule 3), and it is the
 only act with a worded primary form (`Inventory.tsx` `renderAction`). Retire and Move open a dialog.
 
-- **Mark sold** has words and a raised `bn-btn`, with accent ink and the `sold` glyph.
-  - It is filled accent only under the hand: row `:hover` or `:focus-within`.
-    Row 1 in the sheet shows that state (`is-hot`).
-  - Many copies can show many worded buttons, but at most one of them is filled at a time.
-  - On a touch screen there is no hover. All rows show the quiet form, and the words and accent ink carry the rank.
-- **Retire** and **Move** are bare `bn-icon-btn` icons at 40px.
-- All three targets are 40px or more.
-- The Mark sold buttons share one width across the rows: 128px at 820, and the full row at 410 (D195, same-role
-  buttons share a width).
-- At 410 the actions become the foot of the row, under the ruler.
+- **One row is chosen.** A press on a row chooses it. When the panel opens, the chosen row is the copy the walk
+  stands on (`currentKey`). The chosen row has a white ground and an accent rail on its left edge (row 1 in the sheet).
+- **The chosen row only** has the worded, filled `bn-btn-primary` Mark sold. A list of any length has one worded
+  button, so there is no wall.
+- **Every other row** has Mark sold as a 40px `bn-icon-btn` with the `sold` glyph in accent ink. It is the first of
+  the row's three icons, so it is still the primary act. A press on it sells that copy directly, with no choose step.
+- **Retire** and **Move** are bare `bn-icon-btn` icons at 40px, in ink-3.
+- All targets are 40px or more.
+- At 410 the chosen row's actions become the foot of the row, under the ruler, and Mark sold fills the width.
+  Other rows keep their three icons at the top right.
 
 ## Build checklist (one Sonnet lane)
 
@@ -91,19 +94,27 @@ PNGs.
    - Add it to `#/gallery`.
    - Draw over-cap as filled cells plus a warn end label ("Cap 5, 1 over"). Do not add cells past the cap.
 4. The Live dot:
-   - Red (`bn-dot-live`) while copies are live.
-   - Amber (`bn-dot-warn`) for an old reading. The age that makes a reading old is **input needed from the owner**.
-   - An unread figure is a quiet dash.
+   - The dot sits in the label line, 6px, not on the figure.
+   - A recent reading: `bn-dot-live` with no pulse. Add a kit modifier (for example `bn-dot-still`) to stop the
+     pulse, and do not change `bn-dot-live` itself.
+   - A reading 3 days old or more: `bn-dot-warn`. **Provisional:** the owner may drop the amber state.
+   - An unread figure is a quiet dash, with no dot.
 5. `app/src/PositionBar.tsx` and `app/src/PositionBar.css`:
    - Centre `.position-bar-chip` on the pin, and clamp it inside the ruler.
    - Delete `data-flip`.
    - Do not draw the tick number within 2 cards of the pin.
    - Keep the height of the block the same in every state (D118, a press moves nothing).
-6. `app/src/PlaceNeighbors.tsx`: draw the end-of-box word as a `bn-pill-sm bn-pill-outline` chip.
-7. `Inventory.tsx` `renderAction` row form:
-   - Mark sold becomes a worded `Button` with a shared width and accent ink.
-   - The fill is CSS only, under `.card-locations-row:hover` and `:focus-within`.
-   - Retire and Move stay `IconButton size="xl"`.
+6. `app/src/PlaceNeighbors.tsx`:
+   - Say the line as "Between X and Y". Delete the arrow.
+   - Each "word + name" pair is one unbreakable group.
+   - Draw the end-of-box word as a `bn-pill-sm bn-pill-outline` chip.
+   - The line spans the full row, under the address and the actions.
+   - Update its `aria-label` to the same words.
+7. `Inventory.tsx` `renderAction` row form, and a chosen-row state in `CardLocations.tsx` `OwnerRows`:
+   - Keep the chosen key as screen state. It starts at `currentKey`, and a press on a row sets it.
+   - Chosen row: `Button variant="primary"` "Mark sold", and Retire and Move as `IconButton size="xl"`.
+   - Every other row: `IconButton size="xl" icon="sold"` in accent ink, then Retire and Move.
+   - Choosing a row moves no other row, and the row does not change height (D118, a press moves nothing).
    - `app/tests/button-stack.spec.ts` may measure this row. Read it, and update it to the new form.
 8. `app/src/BoxBrowse.css` `.browse-band`: the photo is one column, and the copies list takes `flex: 1` and scrolls.
    At a narrow pane the photo stacks above the list at 180px wide.
@@ -112,7 +123,9 @@ PNGs.
 
 ## Open
 
-- The age that turns the Live dot amber (item 4).
+- The amber state at 3 days is provisional (item 4).
+- `OwnerRows` rule 2 says that nothing is preselected. When the panel opens, the chosen row is the copy the walk
+  stands on, so the worded button starts there. The builder must not add a recommendation beyond that.
 - The brief's data has 5 stored but draws 3 copy rows. The sheet draws what the brief names. In the product, the
   rows count every drawn copy.
 - A short copy list leaves empty height under the photo and under the list at pane 820.
