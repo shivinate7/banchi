@@ -290,8 +290,8 @@ def main() -> int:
        f"the synthetic fixture is {row_total} distinct (sku, range, start) keys, "
        f"{SKU_COUNT} skus x {ROWS_PER_SKU} rows each")
 
-    # 30 skus spread over all 500. Each arm is a full in-memory scan, so 300 cost ~35s.
-    sample = synthetic_skus[::17]
+    # 31 skus: every 17th plus the last (synthetic-499). Each arm is a full in-memory scan, so 300 cost ~35s.
+    sample = synthetic_skus[::17] + synthetic_skus[-1:]
 
     # THE OLD SCAN, timed on its own instance so building the new index never gets counted
     # against it.

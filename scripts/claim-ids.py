@@ -188,16 +188,20 @@ def blobs_at(rev: str, paths: Sequence[str], cwd: Optional[str] = None) -> List[
     except OSError:
         return [""] * len(paths)
     out, at, blobs = done.stdout, 0, []
-    for _ in paths:
-        header_end = out.index(b"\n", at)
-        header = out[at:header_end].split()
-        at = header_end + 1
-        if len(header) == 3 and header[1] == b"blob":
-            size = int(header[2])
-            blobs.append(out[at:at + size].decode("utf-8", errors="replace"))
-            at += size + 1
-        else:
-            blobs.append("")
+    try:
+        for _ in paths:
+            header_end = out.index(b"\n", at)
+            header = out[at:header_end].split()
+            at = header_end + 1
+            if header[-1].isdigit():  # any object has a body: blob, tree or commit
+                size = int(header[-1])
+                blobs.append(out[at:at + size].decode("utf-8", errors="replace")
+                             if header[-2] == b"blob" else "")
+                at += size + 1
+            else:  # `missing`, `ambiguous`
+                blobs.append("")
+    except (ValueError, IndexError):
+        return [""] * len(paths)
     return blobs
 
 

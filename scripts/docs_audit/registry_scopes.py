@@ -434,7 +434,6 @@ def _static_str_list(node: Optional[ast.expr]) -> Optional[List[str]]:
 
 
 _PARSED: Dict[str, ast.Module] = {}
-_EVIDENCE: Dict[tuple, tuple] = {}
 
 
 def _parse(source: str) -> ast.Module:
@@ -446,16 +445,6 @@ def _parse(source: str) -> ast.Module:
 
 
 def _write_evidence(nodes: Iterable[ast.AST], aliases: Dict[str, str]) -> List[str]:
-    """`_walk_write_evidence`, once per (nodes, aliases). The cache pins the nodes, so an
-    `id` in a key can never be reused by another tree."""
-    nodes = list(nodes)
-    key = (tuple(id(n) for n in nodes), tuple(sorted(aliases.items())))
-    if key not in _EVIDENCE:
-        _EVIDENCE[key] = (nodes, _walk_write_evidence(nodes, aliases))
-    return _EVIDENCE[key][1]
-
-
-def _walk_write_evidence(nodes: Iterable[ast.AST], aliases: Dict[str, str]) -> List[str]:
     """Write-shaped `Call` nodes under `nodes`, per the vocabulary argued above."""
     evidence: List[str] = []
     for root in nodes:

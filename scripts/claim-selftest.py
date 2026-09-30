@@ -2794,6 +2794,22 @@ def main() -> int:
                "growth` recognizes its own sanctioned rename and does not refuse its own claim",
                committed.stdout.decode("utf-8", errors="replace"))
 
+    print("\n  -- blobs_at: one cat-file --batch answers what show did, for every shape --")
+    btmp = Path(tempfile.mkdtemp(prefix="blobs-at-"))
+    git(btmp, "init", "-q", ".")
+    write(btmp, "d/a.md", "first\n")
+    write(btmp, "d/b.md", "second\n")
+    git(btmp, "add", "-A")
+    git(btmp, "commit", "-qm", "x")
+    got = claim_ids_module().blobs_at(
+        "HEAD", ["d/a.md", "d", "d/b.md", "d/nope blob", "d/b.md"], cwd=str(btmp))
+    ok(got == ["first\n", "", "second\n", "", "second\n"],
+       "a tree path and a missing path ending in ` blob` each answer empty and leave the "
+       "neighbouring blobs intact", got)
+    ok(claim_ids_module().blobs_at("nope", ["d/a.md"], cwd=str(btmp)) == [""],
+       "an unreadable rev answers empty, never raises")
+    shutil.rmtree(btmp, ignore_errors=True)
+
     # A CLAIMED ID IN A TEST'S `Governs:` HEADER STALES THE GENERATED docs/TESTS.md. The claim
     # commit must carry it regenerated, or `docs-audit`'s `test purposes` row fails on that very
     # commit (the PR #517 refusal). Red on a claim that only rewrites the header.
