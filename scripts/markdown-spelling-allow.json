@@ -654,21 +654,6 @@
         "behaviour"
       ]
     },
-    "docs/specs/capture-app.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "unlabelled"
-      ]
-    },
-    "docs/specs/capture-server.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "generalisation",
-        "generalises",
-        "labelled",
-        "serialise"
-      ]
-    },
     "docs/specs/code-cards.md": {
       "lane": "docs-sweep",
       "SPELLING": [

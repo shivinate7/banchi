@@ -169,7 +169,7 @@ argued for one card within reach of the hand that fed it. A press that deletes f
 therefore make the five visible. `U` and the trigger seam mean exactly one card, the top row.
 
 A refused walk stops at the refusal and says how far it got. With no shots in the sitting (for
-example after a reload), the stack is one unlabelled row. It aims at the server's newest card
+example after a reload), the stack is one unlabeled row. It aims at the server's newest card
 in the box.
 
 An open Section or Box list shows in front of the Recent strip and scrolls. It stays out of
