@@ -18,7 +18,7 @@ export type { IconName }
 export { UNDO_KEY, UNDO_KEY_LABEL, useUndoHotkey } from './undo'
 
 /* ---- Button ------------------------------------------------------------------ */
-export type ButtonVariant = 'default' | 'primary' | 'ghost' | 'quiet' | 'danger' | 'danger-solid' | 'ok'
+export type ButtonVariant = 'default' | 'primary' | 'ghost' | 'quiet' | 'danger' | 'danger-solid' | 'ok' | 'tint'
 export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl'
 
 /** `R2-icon-only-button` clause (c)'s declared exception (the coordinator's ruling,
@@ -500,6 +500,44 @@ export function Pill({
     <span className={classes}>
       {icon ? <Icon name={icon} size={size === 'sm' ? 10 : 12} /> : null}
       {children}
+    </span>
+  )
+}
+
+/* ---- Meter --------------------------------------------------------------------------- */
+/** A count against a ceiling: one cell for each unit the ceiling allows, filled up to `filled`,
+ *  and an end label that says what the ceiling is ("Cap 5"). Over the ceiling it draws every cell
+ *  filled and NO cell past the ceiling, and the caller's end label carries the excess
+ *  (`tone="warn"`). `label` is the spoken form, since the cells are drawn and never read.
+ *  ponytail: one cell per unit, so a ceiling in the dozens draws a long strip; cap the cells or
+ *  switch to a bar if a ceiling that large ever ships. */
+export function Meter({
+  cells,
+  filled,
+  end,
+  label,
+  tone,
+  className,
+}: {
+  readonly cells: number
+  readonly filled: number
+  readonly end: ReactNode
+  readonly label: string
+  readonly tone?: 'warn'
+  readonly className?: string
+}) {
+  const total = Math.max(0, Math.floor(cells))
+  const on = Math.min(total, Math.max(0, Math.floor(filled)))
+  return (
+    <span className={['bn-meter', className ?? ''].filter(Boolean).join(' ')} role="img" aria-label={label}>
+      <span className="bn-meter-cells" aria-hidden="true">
+        {Array.from({ length: total }, (_, i) => (
+          <span key={i} className={i < on ? 'is-on' : undefined} />
+        ))}
+      </span>
+      <span className="bn-meter-end" data-tone={tone}>
+        {end}
+      </span>
     </span>
   )
 }

@@ -36,6 +36,34 @@ export function readingAgo(at: string | null | undefined): string | null {
   return `${days} day${days === 1 ? '' : 's'} ago`
 }
 
+/** `2d ago`, `5h ago`, `just now`: the same reading as `readingAgo`, cut to the band's width. */
+export function readingAgoShort(at: string | null | undefined): string | null {
+  if (typeof at !== 'string' || at.trim() === '') return null
+  const when = Date.parse(at)
+  if (Number.isNaN(when)) return null
+  const elapsed = Math.max(0, Date.now() - when)
+  if (elapsed < 2 * MINUTE) return 'just now'
+  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)}m ago`
+  if (elapsed < DAY) return `${Math.floor(elapsed / HOUR)}h ago`
+  return `${Math.floor(elapsed / DAY)}d ago`
+}
+
+/** Whole days since a reading, or null when it has no usable stamp. */
+export function readingDays(at: string | null | undefined): number | null {
+  if (typeof at !== 'string' || at.trim() === '') return null
+  const when = Date.parse(at)
+  return Number.isNaN(when) ? null : Math.floor(Math.max(0, Date.now() - when) / DAY)
+}
+
+/** A reading this many days old draws its dot amber. PROVISIONAL (card-detail spec, item 4): the
+ *  owner may drop the amber state, and deleting this constant, `staleReading` below and their one
+ *  call site in `CardHero.tsx` is the whole removal. */
+export const STALE_READING_DAYS = 3
+export function staleReading(at: string | null | undefined): boolean {
+  const days = readingDays(at)
+  return days !== null && days >= STALE_READING_DAYS
+}
+
 /** The moment itself, as a person's clock says it — the hover behind the coarse phrase. The
  *  kit's one date and one clock format (`dates.ts`). */
 export function readingExact(at: string | null | undefined): string | undefined {

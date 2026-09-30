@@ -29,7 +29,8 @@ import {
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
 import { useViewParam } from './kit/viewState'
-import { CardLocations, layoutsOf } from './CardLocations'
+import { CardLocations, hiddenCopies, layoutsOf, MarkSoldButton } from './CardLocations'
+import type { HeroFigures } from './CardHero'
 import { InventorySets } from './InventorySets'
 import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
@@ -378,6 +379,10 @@ function InventoryWalk({
   /* The copy the walk is pointing at, as the search knows it — for the phone's action bar,
    * which is its one reader since D119 deleted the location card. */
   const [currentCopy, setCurrentCopy] = useState<SearchCopy | null>(null)
+  /* THE SELECTED CARD'S SEARCH GROUP, lifted from `CopiesPanel` so the band above the photograph
+     can draw its figures (card-detail spec). It is the same group the copies list draws, so the
+     figures and the rows cannot disagree. */
+  const [heroGroup, setHeroGroup] = useState<SearchGroup | null>(null)
 
   /* The toast standing for each receipt, by copy key, so an undo from the row can take it down. */
   const toasts = useRef<Map<string, number>>(new Map())
@@ -766,6 +771,7 @@ function InventoryWalk({
           onSell={sell}
           onGoTo={walkTo}
           onCurrent={setCurrentCopy}
+          onGroup={setHeroGroup}
           renderAction={actionFor}
           hideSold={hideSold}
           frozen={frozen}
@@ -773,6 +779,18 @@ function InventoryWalk({
         />
       </div>
     )
+
+  /* THE BAND'S FIGURES: only for the group that holds the selected card, so a stale group from the
+     card the walk just left never labels the new one. */
+  const figures: HeroFigures | null =
+    heroGroup === null || selected === null || !heroGroup.copies.some((copy) => copy.key === selected.key)
+      ? null
+      : {
+          group: heroGroup,
+          listedAt: heroGroup.sku === null ? null : (listings[heroGroup.sku]?.live_as_of ?? null),
+          hidden: hiddenCopies(heroGroup, { soldKeys, hideSold, currentKey: selected.key, frozen }),
+          cap: heroGroup.listable,
+        }
 
   return (
     /* THE KIT'S PAGE (D275): the one h1 off the route, the one width and top gap. */
@@ -790,6 +808,7 @@ function InventoryWalk({
       ) : (
       <BoxBrowse
         detail={detail}
+        figures={figures}
         onSelect={setSelected}
         onBoxes={setBoxRecords}
         onListings={setListings}
@@ -853,6 +872,7 @@ function CopiesPanel({
   onSell,
   onGoTo,
   onCurrent,
+  onGroup,
   renderAction,
   hideSold,
   frozen,
@@ -868,6 +888,7 @@ function CopiesPanel({
   onSell: (copy: SearchCopy) => void
   onGoTo: (copy: SearchCopy) => void
   onCurrent: (copy: SearchCopy | null) => void
+  onGroup: (group: SearchGroup | null) => void
   renderAction: (copy: SearchCopy, primary: boolean) => ReactNode
   hideSold: boolean
   frozen: FrozenRank
@@ -932,6 +953,11 @@ function CopiesPanel({
   /* The one-copy group, built only where the search cannot be asked. Null when the record
      carries no place at all, which is the one shape that has no copy to put in a group. */
   const solo = useMemo(() => (lone === null ? null : loneGroup(row, lone)), [row, lone])
+
+  const bandGroup = handle === null ? solo : group
+  useEffect(() => {
+    onGroup(bandGroup)
+  }, [bandGroup, onGroup])
 
   if (handle === null) {
     return (
@@ -1129,7 +1155,12 @@ function Action({
            build, 2026-09-25: "big icons"; the first round's `md` read as only slightly bigger).
            `xl` is 40px, the kit's own defined ceiling — no new pixel value invented, and "40 or
            more on a phone, comfortable on desktop" is met at the floor rather than past it. */
-        <IconButton size="xl" icon="sold" label="Mark sold" busy={busy} disabled={busyKey !== null && !busy} onClick={() => onSell(copy)} />
+        <MarkSoldButton
+          busy={busy}
+          disabled={busyKey !== null && !busy}
+          name={copy.place.label === null ? undefined : `Mark sold: ${sayPlace(copy.place.label)}`}
+          onClick={() => onSell(copy)}
+        />
       )}
       {/* ICON IN BOTH SECTORS (ICONOGRAPHY): Retire is reversible (Undo), so it never spends
           words. `archive` — a lidded box — reads as "put away" rather than "delete". */}

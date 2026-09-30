@@ -8,7 +8,7 @@ import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import {
   Button, Chip, ConfirmSheet, EmptyState, Icon, IconButton, Kbd, Loading, Lockup, Logo, Modal, Money, Notice, Page, PageUndo, Pill, Popover, Refusal, ReloadButton, Retry,
-  KeyHint, Section, SectionPicker, Segmented, Select, Sheet, Stat, StatusSlot, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
+  KeyHint, Meter, Section, SectionPicker, Segmented, Select, Sheet, Stat, StatusSlot, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
   type ButtonSize, type ButtonVariant, type IconName, type PillTone,
 } from './kit'
 import { MARKS } from './kit/markPalettes'
@@ -301,7 +301,7 @@ const TYPE_SCALE: readonly { token: string; px: number; role: string }[] = [
 
 const SPACES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'] as const
 const RADII = ['xs', 'sm', '', 'lg', 'xl', '2xl', 'full'] as const
-const VARIANTS: readonly ButtonVariant[] = ['default', 'primary', 'ghost', 'quiet', 'danger', 'danger-solid', 'ok']
+const VARIANTS: readonly ButtonVariant[] = ['default', 'primary', 'ghost', 'quiet', 'danger', 'danger-solid', 'ok', 'tint']
 const SIZES: readonly ButtonSize[] = ['sm', 'md', 'lg', 'xl']
 const TONES: readonly PillTone[] = ['default', 'accent', 'ok', 'warn', 'danger', 'live']
 
@@ -886,7 +886,7 @@ export function Gallery() {
           </Section>
 
           {/* -------------------------------------------------------------- primitives */}
-          <Section id="kit-buttons" data-kit-section="buttons" className="kit-section" title="Buttons" lede="Seven variants, four sizes. Primary is the one thing to do; danger is red; money moments carry the figure in the label.">
+          <Section id="kit-buttons" data-kit-section="buttons" className="kit-section" title="Buttons" lede="Eight variants, four sizes. Tint is the one worded act in a repeated row. Primary is the one thing to do; danger is red; money moments carry the figure in the label.">
             <div className="kit-grid">
               {VARIANTS.map((v) => (
                 <Spec key={v} label={v}>
@@ -1092,6 +1092,15 @@ export function Gallery() {
                   <span className="bn-dot bn-dot-danger" /> danger
                   <span className="bn-dot bn-dot-accent" /> accent
                   <span className="bn-dot bn-dot-live" /> live
+                  <span className="bn-dot bn-dot-live bn-dot-still" /> still
+                </div>
+              </Spec>
+              <Spec label="meter: a count against a ceiling">
+                <div className="kit-row kit-row-wrap">
+                  <Meter cells={5} filled={3} end="Cap 5" label="3 of 5" />
+                  <Meter cells={5} filled={5} end="Cap 5" label="5 of 5" />
+                  <Meter cells={5} filled={6} end="Cap 5, 1 over" tone="warn" label="6 of 5, 1 over" />
+                  <Meter cells={13} filled={14} end="Cap 13, 1 over" tone="warn" label="14 of 13, 1 over" className="kit-meter-wide" />
                 </div>
               </Spec>
             </div>

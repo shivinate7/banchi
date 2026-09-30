@@ -138,6 +138,7 @@ async function open(page: Page, sectionCount: number, cardsPerSection: number, p
         groups: [
           {
             sku: card.sku,
+            names: [card.name],
             name: card.name,
             number_display: card.number_display,
             set_hint: card.set_hint,
@@ -304,6 +305,22 @@ test('the card ruler ticks every 5th card and numbers every 10th (D310)', async 
   await expect(ruler.locator('.position-bar-chip')).toHaveText('17')
   await expect(page.locator('.card-locations-row.is-current .position-bar-text-box')).toHaveCount(0)
 })
+
+/* THE CHIP IS CENTERED ON THE PIN AND CLAMPED INSIDE THE RULER (card-detail spec), so at card 1 and
+   at the last card it never crosses the ruler's edge. Measured as boxes, not as a class. */
+for (const [label, card] of [['first', 1], ['last', 30]] as const) {
+  test(`the number chip stays inside the ruler at the ${label} card`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await open(page, 1, 30, card)
+    const ruler = page.locator('.card-locations-row.is-current .position-bar-sectiontrack')
+    const chip = ruler.locator('.position-bar-chip')
+    await expect(chip).toHaveText(String(card))
+    const r = (await ruler.boundingBox())!
+    const c = (await chip.boundingBox())!
+    expect(c.x, 'the chip starts inside the ruler').toBeGreaterThanOrEqual(r.x)
+    expect(c.x + c.width, 'the chip ends inside the ruler').toBeLessThanOrEqual(r.x + r.width)
+  })
+}
 
 test('the tick number under or next to the pin is hidden, and the chip sits mid-track', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })

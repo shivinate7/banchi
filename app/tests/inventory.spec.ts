@@ -1316,10 +1316,10 @@ test('selecting a card shows every copy of it, each with both doors out of inven
      THE FIGURE IS DRAWN AS HEADROOM NOW, and the assertion keeps its whole bite: one live
      against a ceiling of two leaves room for ONE, where a screen reading the bare cap of 4
      would offer room for three. */
-  await expect(page.locator('.card-locations-live .bn-stat-value')).toHaveText('1')
-  // D218: pushed/staged/headroom are sibling spans now; the seam is CSS
-  // (`.card-locations-counts > span::before`), never part of `textContent`.
-  await expect(page.locator('.card-locations-counts')).toHaveText('2 waiting to go liveRoom for 1 more live')
+  /* THE BAND DRAWS IT NOW (card-detail spec): the Live figure, and the ceiling as a meter whose
+     spoken form is `1 live, cap 2` — one live against a ceiling of two. */
+  await expect(page.locator('.browse-hero-fig').nth(1).locator('.browse-hero-fig-value')).toHaveText('1')
+  await expect(page.locator('.browse-hero-fig .bn-meter')).toHaveAttribute('aria-label', '1 live, cap 2')
 
   /* AND THE CARD'S NAME IS DRAWN ONCE ON THIS SCREEN. This header carried an `<h3>` with the same
      name the band's first fact row prints a few hundred pixels above — invisible while the two
@@ -1415,14 +1415,12 @@ test('a copy sold here since the reading is drawn beside it, and headroom follow
   // is SKU 8937370, the row the sister case above asserts at zero sold.
   await expect(page.locator('.card-locations-owner')).toBeVisible()
 
-  await expect(page.locator('.card-locations-live .bn-stat-value')).toHaveText('0')
-  // D218: the seam is CSS now (`.card-locations-since > span::before`), never `textContent`.
-  await expect(page.locator('.card-locations-since')).toHaveText('1 when read1 sold here since')
+  await expect(page.locator('.browse-hero-fig').nth(1).locator('.browse-hero-fig-value')).toHaveText('0')
+  await expect(page.locator('.browse-hero-fig').nth(1)).toHaveAttribute('title', '1 when read, 1 sold here since.')
   /* AND HEADROOM MOVES WITH IT. Computing off the raw reading would say `Room for 1 more live`
      here and refuse a relist the shelf can support — the one-line bug the change would
      otherwise have left behind. */
-  // D218: the seam is CSS now (`.card-locations-counts > span::before`), never `textContent`.
-  await expect(page.locator('.card-locations-counts')).toHaveText('2 waiting to go liveRoom for 2 more live')
+  await expect(page.locator('.browse-hero-fig .bn-meter')).toHaveAttribute('aria-label', '0 live, cap 2')
 })
 
 test('a card with no name and no SKU still offers both doors', async ({ page }) => {
@@ -4539,7 +4537,7 @@ test('S2 — a sold card says so once, not on the hero, the row and the phone ba
   await expect(row).toBeVisible()
   await expect(row.locator('.card-locations-state .bn-pill', { hasText: 'Sold' })).toHaveCount(0)
   await expect(row.locator('.card-locations-action .bn-pill', { hasText: 'Sold' })).toHaveCount(0)
-  await expect(page.locator('.browse-hero-chips .bn-pill', { hasText: 'Sold' })).toHaveCount(1)
+  await expect(page.locator('.browse-hero-sub .bn-pill', { hasText: 'Sold' })).toHaveCount(1)
 })
 
 test('S2 — the phone sticky bar draws no second Sold pill beside the hero', async ({ page }) => {
@@ -4553,7 +4551,7 @@ test('S2 — the phone sticky bar draws no second Sold pill beside the hero', as
     route: '/#/inventory?box=2&card=eiscue-cid',
   })
 
-  await expect(page.locator('.browse-hero-chips .bn-pill', { hasText: 'Sold' })).toHaveCount(1)
+  await expect(page.locator('.browse-hero-sub .bn-pill', { hasText: 'Sold' })).toHaveCount(1)
   await expect(page.locator('.browse-actionbar-slot .bn-pill', { hasText: 'Sold' })).toHaveCount(0)
 })
 
@@ -5273,6 +5271,26 @@ test('the neighbours are ranked, not joined — the names are the only thing dra
   )
 })
 
+test('the neighbour line carries no words: names and this copy\'s number only', async ({ page }) => {
+  await open(page, BOXES, {
+    cards: NEIGHBORLY,
+    search: (query) => searchAnswer(query, NEIGHBORLY),
+  })
+  /* OWNER RULING: `<- back [N] front ->`, arrows drawn by CSS. The text of the line is the two
+     names and the number chip and nothing else — no `back`, `front`, `before`, `after`. */
+  const band = page.locator('.card-locations-row.is-current .nb')
+  await expect(band).toHaveText('Galio, Indefaticable1Evelynn, Entrancing')
+  /* Every line, end chips aside (BACK / FRONT stand in for a name at a box's end): no direction word. */
+  const words = await page.locator('.card-locations-owner .nb').evaluateAll((els) =>
+    els.map((el) => {
+      const copy = el.cloneNode(true) as HTMLElement
+      copy.querySelectorAll('.nb-end').forEach((chip) => chip.remove())
+      return copy.textContent ?? ''
+    }),
+  )
+  for (const text of words) expect(text).not.toMatch(/\b(back|front|before|after|next|previous)\b/i)
+})
+
 test('the neighbour names are read as words, not as metadata', async ({ page }) => {
   await open(page, BOXES, {
     cards: NEIGHBORLY,
@@ -5331,7 +5349,6 @@ test('a card at the back of the box gets one row, not a pretend between', async 
      the line reads `BACK → Next` (`PlaceNeighbors.tsx`). */
   await expect(front.locator('.nb-side')).toHaveCount(1)
   await expect(front.locator('.nb-side')).toHaveAttribute('data-side', 'front')
-  await expect(front.locator('.nb-arrow')).toHaveCount(1)
   await expect(front.locator(':scope > *').first()).toHaveClass('nb-end')
   await expect(front.locator('.nb-end')).toHaveText('Back')
 
@@ -6137,9 +6154,9 @@ test('a wider copies column never makes its rows taller', async ({ page }) => {
   const taller = heights.filter((point, at) => at > 0 && point.row > heights[at - 1]!.row)
   expect(taller, `row grew as the container widened: ${JSON.stringify(taller)}`).toEqual([])
 
-  /* And the wide branch really is better by the end of the sweep, so this cannot be satisfied by
-     deleting the threshold and never switching at all. */
-  expect(heights[heights.length - 1]!.row).toBeLessThan(heights[0]!.row)
+  /* THERE IS NO WIDE BRANCH ANY MORE: the row is one column at every width (card-detail spec), so
+     the widest row is never taller than the narrowest. */
+  expect(heights[heights.length - 1]!.row).toBeLessThanOrEqual(heights[0]!.row)
 })
 
 test('the box fill is qualified once, on the identity line', async ({ page }) => {

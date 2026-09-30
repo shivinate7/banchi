@@ -39,7 +39,7 @@
 /* THE LIST IS ONE CARD, the kit's own `bn-panel` (the one `#/inventory`'s box list wears), and it
    scrolls itself so the card's shadow is never clipped by the rail. */
 .orders-buyers-panel { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-.orders-cardcol { grid-area: card; display: none; min-width: 0; }
+.orders-cardcol { grid-area: card; display: none; min-width: 0; container: pane / inline-size; }
 .orders-walk { grid-area: walk; min-width: 0; }
 
 /* The skip link (interaction review, "32 tab stops"): off screen until a Tab lands on it, then
@@ -360,7 +360,9 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-walk-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-1); }
 .orders-walk-press {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* THE NAME NEVER LOSES ITS ROOM: the slot numbers shrink and wrap before the name column drops
+     under 10ch. */
+  grid-template-columns: minmax(4ch, max-content) minmax(10ch, 1fr) minmax(0, auto);
   grid-template-areas: 'slot name pick' '. for for';
   align-items: center;
   gap: var(--bn-0-5) var(--bn-3);
@@ -377,7 +379,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-walk-line > .walk-pick-where { flex: 1 1 100%; min-width: 0; }
 .orders-walk-press:hover { background: var(--bn-hover); }
 .orders-walk-press[aria-current='true'] { background: var(--bn-accent-tint); }
-.orders-walk-slot { grid-area: slot; min-width: 4ch; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bn-ink-2); }
+.orders-walk-slot { grid-area: slot; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bn-ink-2); }
 /* "(either)": more candidate copies stand here than this take wants (D212, review finding 2).
    Quiet and unweighted on purpose — it names a fact about the copies, not a second number. */
 .orders-walk-slot-either { font-weight: 400; font-variant-numeric: normal; color: var(--bn-ink-3); }
@@ -391,7 +393,10 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   font-size: var(--bn-fs-sm);
   font-weight: 600;
   color: var(--bn-ink-2);
-  white-space: nowrap;
+  /* It wraps rather than run past the row when the column is narrow. */
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 .orders-walk-for { grid-area: for; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -404,11 +409,9 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
    D304. `CardLocations` is reused whole, head
    off — this block is only the seam `mock.css` already measured: its own `copies` container
    (so a narrow walk column gets the same reflow `#/inventory`'s rail does, never the width
-   `.orders-walk` happens to have at the desk), a tighter row gap than the pane's own list, and
+   `.orders-walk` happens to have at the desk), and
    a box name that keeps one line here, since the walk names the take's own card once already. */
 .walk-pick-where { margin: 0 0 var(--bn-2) var(--bn-2); container: copies / inline-size; }
-.walk-pick-where .card-locations-rows { gap: var(--bn-1); }
-.walk-pick-where .card-locations-row { padding-block: var(--bn-2); }
 .walk-pick-where .card-locations-identity-box { white-space: nowrap; }
 
 /* ---- the card pane: `CardHero.tsx:CardPane` and `CardLocations.tsx:CardLocations`, reused
@@ -1169,3 +1172,13 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   /* the box keeps its drawn size; the label that wraps it takes the tap */
   .orders-status { min-height: var(--bn-control-h-sm); }
 }
+
+/* The card pane's own paging: two arrow buttons around the two key caps. */
+.orders-pick-nav { display: flex; align-items: center; justify-content: center; gap: var(--bn-3); padding: var(--bn-3) 0; }
+.orders-pick-keys { display: inline-flex; gap: var(--bn-1); }
+/* The digit that marks a copy, drawn beside its Mark sold press. */
+.walk-keyhint { display: inline-flex; align-items: center; gap: var(--bn-2); }
+
+/* The spares fold under a pick line: a quiet 40px press, and the same copy rows when open. */
+.orders-walk-line > .orders-walk-spares { flex: 1 1 100%; min-width: 0; margin: 0 0 var(--bn-2) var(--bn-2); }
+.orders-walk-spares > .bn-btn { color: var(--bn-ink-3); }
