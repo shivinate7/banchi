@@ -16083,7 +16083,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 HTTPStatus.SERVICE_UNAVAILABLE,
                 "photo_busy" if photo else "server_busy",
                 f"The server is busy with {PHOTO_SLOTS if photo else REQUEST_SLOTS} "
-                f"{'photograph and app-file ' if photo else ''}requests already, and this one "
+                f"{'photograph, app-file and status ' if photo else ''}requests already, and this one "
                 f"waited {files.LOCK_TIMEOUT_SECONDS:.0f} seconds for a turn. Nothing was read or "
                 f"written. Try again in a moment.",
             )
@@ -17284,15 +17284,41 @@ _slots = threading.BoundedSemaphore(REQUEST_SLOTS)
 PHOTO_SLOTS = 4
 _photo_slots = threading.BoundedSemaphore(PHOTO_SLOTS)
 PHOTO_LANE_PREFIXES = ("/photo/", "/assets/")
-# The longest prefix, as the bytes a request line starts with. The sorter compares these.
-_PHOTO_LANE_LINES = tuple(b"GET " + p.encode() for p in PHOTO_LANE_PREFIXES)
+# THE SAME LANE CARRIES THE CHEAP, LOCK-FREE READS THE APP POLLS (DEBT11). Four writers parked on
+# the store lock hold all four slots for up to `LOCK_TIMEOUT_SECONDS`, and `/status` is what the
+# app asks "is the server alive" with. Each route below was probed on a scratch store with the
+# lock held and answers without it. NOT HERE ON PURPOSE: the heavy lock-free reads (`/orders`,
+# `/inventory`, `/boxes`, `/pipeline/*`). They are GIL-bound, and sharing the photo bound with
+# them would give back the photo starvation this lane exists to remove. That is DEBT11's open gap.
+PHOTO_LANE_EXACT = ("/status", "/queues", "/capture/sitting", "/games")
+# How many bytes the sorter peeks: enough for the request line of every route above.
+_SORT_PEEK_BYTES = 64
 # How long a silent connection waits for its first byte before it goes to the slot pool by default.
 SORT_SECONDS = 1.0
 
 
 def photo_lane_path(target: str) -> bool:
-    """One predicate for both sides: the sorter's peek and `_dispatch`'s gate."""
-    return target.startswith(PHOTO_LANE_PREFIXES)
+    """One predicate for both sides: the sorter's peek and `_dispatch`'s gate.
+
+    The exact routes are compared as `do_GET` compares them: query dropped, trailing slash dropped.
+    """
+    return target.startswith(PHOTO_LANE_PREFIXES) or (
+        (urlparse(target).path.rstrip("/") or "/") in PHOTO_LANE_EXACT
+    )
+
+
+def _sorted_to_photo_lane(peeked: bytes) -> bool:
+    """The sorter's side of `photo_lane_path`, over the first bytes of the request line.
+
+    An exact route needs the whole target, so it counts only once the space after it has arrived;
+    a prefix route needs no more than its prefix. A short read routes to the slot pool, and
+    `_dispatch` still gates by the parsed path, so a wrong sort costs a lane and never the bound.
+    """
+    parts = peeked.split(b" ", 2)
+    if len(parts) < 2 or parts[0] != b"GET":
+        return False
+    target = parts[1].decode("latin-1")
+    return target.startswith(PHOTO_LANE_PREFIXES) or (len(parts) == 3 and photo_lane_path(target))
 
 
 def photo_slots_in_use() -> int:
@@ -17448,7 +17474,7 @@ class CaptureServer(ThreadingHTTPServer):
     def _route(self, request, client_address, peeked: bytes) -> None:
         """Pick a pool. Never raises: a connection that cannot be routed is closed, not lost."""
         try:
-            pool = self._photo_pool if peeked.startswith(_PHOTO_LANE_LINES) else self._pool
+            pool = self._photo_pool if _sorted_to_photo_lane(peeked) else self._pool
             pool.submit(self._serve_one, request, client_address)
         except Exception:  # noqa: BLE001 — one bad connection must not end the sorter
             traceback.print_exc()
@@ -17500,7 +17526,7 @@ class CaptureServer(ThreadingHTTPServer):
                     with contextlib.suppress(Exception):
                         sel.unregister(request)
                     try:
-                        peeked = request.recv(len(_PHOTO_LANE_LINES[-1]), socket.MSG_PEEK)
+                        peeked = request.recv(_SORT_PEEK_BYTES, socket.MSG_PEEK)
                     except OSError:
                         peeked = b""
                     self._route(request, addr, peeked)
