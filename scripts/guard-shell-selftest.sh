@@ -454,7 +454,7 @@ if command -v gh >/dev/null 2>&1; then
     *) bad "gh api --help no longer mentions --method" ;;
   esac
 else
-  say "skip" "gh is not installed; the flag check cannot be posed"
+  bad "SKIPPED, and a skipped required case is a failure: gh is not installed, so the flag check cannot be posed"
 fi
 
 refuses "the 2026-09-12 command"  "$tmp/main" "gh api 'repos/{owner}/{repo}/commits/abc123/check-runs' -f per_page=100"

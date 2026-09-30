@@ -1037,6 +1037,50 @@ else
 fi
 cd "$tmp/work" || exit 1
 
+# ------------------------------------------------------------- THE LIVENESS FAIL-LIVE ARMS
+# A false "dead" deletes a tree somebody is working in, and no real process raises EPERM or
+# hides from `ps` on demand, so the arms that answer LIVE on anything unreadable are forced
+# here. Each line prints one verdict; the controls prove the functions can still say "dead".
+echo
+echo "  -- unreadable liveness reads as live --"
+out="$(python3 - "$JANITOR" <<'LIVE'
+import importlib.util, os, sys
+spec = importlib.util.spec_from_file_location("janitor", sys.argv[1])
+j = importlib.util.module_from_spec(spec); sys.modules["janitor"] = j
+spec.loader.exec_module(j)
+
+def kill_raising(exc):
+    def kill(pid, sig):
+        raise exc
+    return kill
+
+real_kill = os.kill
+os.kill = kill_raising(PermissionError(1, "EPERM"))
+print("pid-eperm", j._pid_alive(4242))
+os.kill = kill_raising(ProcessLookupError(3, "ESRCH"))
+print("pid-gone", j._pid_alive(4242))
+os.kill = real_kill
+
+real_run = j.run
+def ps_says(ok, out):
+    j.run = lambda args, cwd=None: j.Ran(ok, out, "")
+ps_says(False, "")
+print("same-no-ps", j._same_process({"startedAt": 1_000_000}, 4242))
+ps_says(True, "garbage")
+print("same-bad-ps", j._same_process({"startedAt": 1_000_000}, 4242))
+ps_says(True, "Mon Jan  1 00:00:00 2001")
+print("same-no-startedat", j._same_process({}, 4242))
+print("same-mismatch", j._same_process({"startedAt": 1_000_000}, 4242))
+j.run = real_run
+LIVE
+)"
+said "EPERM on a pid means the process exists — alive"      "pid-eperm True" "$out"
+said "control: ESRCH means gone — not alive"                "pid-gone False" "$out"
+said "no answer from ps reads as the same process"          "same-no-ps True" "$out"
+said "an unparseable ps answer reads as the same process"   "same-bad-ps True" "$out"
+said "a record with no startedAt reads as the same process" "same-no-startedat True" "$out"
+said "control: a start time that disagrees is a new process" "same-mismatch False" "$out"
+
 # ------------------------------------------------------------------------- NOT A REPO
 echo
 echo "  -- a directory that is not a clone --"

@@ -1877,6 +1877,50 @@ function selfTest() {
         const press = async () => { await quietly(1, 2) }
         return <button onClick={press}>{rows}</button>
       }`],
+    /* THE WRAPPER WALK'S TWO BOUNDS. Evidence two wrappers up is followed and three up is not,
+     * so a deep chain reads as unproven rather than covered by whatever sits far above it. And
+     * an UPPERCASE top-level function is a component, never a wrapper, so a call to it does
+     * not lend its write the caller's evidence. Each pair has a control that shows the walk
+     * runs at all. */
+    ['the write two wrappers below the evidence is still followed', 'reload counter', `
+      async function inner() { await doWrite(1, 2) }
+      async function middle() { await inner() }
+      export function TwoDeep() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        const press = async () => { await middle(); setReloads((n) => n + 1) }
+        return <button onClick={press}>{rows}</button>
+      }`],
+    ['the write three wrappers below the evidence is not followed', null, `
+      async function inner() { await doWrite(1, 2) }
+      async function middle() { await inner() }
+      async function outer() { await middle() }
+      export function ThreeDeep() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        const press = async () => { await outer(); setReloads((n) => n + 1) }
+        return <button onClick={press}>{rows}</button>
+      }`],
+    ['a write in an uppercase top-level function borrows no caller evidence', null, `
+      async function Sync() { await doWrite(1, 2) }
+      export function Owner() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        const press = async () => { await Sync(); setReloads((n) => n + 1) }
+        return <button onClick={press}>{rows}</button>
+      }`],
+    ['the same write in a lowercase function borrows the caller evidence', 'reload counter', `
+      async function sync() { await doWrite(1, 2) }
+      export function LowerOwner() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        const press = async () => { await sync(); setReloads((n) => n + 1) }
+        return <button onClick={press}>{rows}</button>
+      }`],
     ['the write inside a thunk handed to a hook that calls the callback', 'callback prop, re-read owned by the parent', `
       function useWrite(onChanged: () => void) {
         const write = useCallback(async (run) => { const answer = await run(); onChanged(); return answer }, [onChanged])

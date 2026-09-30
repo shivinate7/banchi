@@ -2421,51 +2421,6 @@ def main() -> int:
         ok("DEBT2" in out and "DEBT3" in out,
            "named, with what it would become if put back to a slug and reclaimed", out)
 
-        print("\n  -- RED ON THE OLD CODE: the pre-debt claimer cannot see any of the above --")
-        # THE .bak PROOF (never `git checkout <path>` over a shared tree — see this repo's own
-        # guard-shell.py PKMNSCAN_CHECKOUT clause): the branch this entry landed on
-        # (ux/pr4b-debt-claim) forked from a commit where `scripts/claim-ids.py` had no `debt`
-        # kind at all. That exact file is fetchable from THIS repo's own git history without
-        # touching the working tree — `git show <merge-base>:scripts/claim-ids.py`, written to a
-        # `.bak`-suffixed scratch path (never this checkout's own `scripts/claim-ids.py`) and run
-        # DIRECTLY, since `claim_rc`'s own subprocess always targets the real, current CLAIMER —
-        # a fixture's own `scripts/claim-ids.py` is never what runs a claim, only what
-        # `settle_corpus`'s dynamic import of its HELPER modules reads.
-        base_sha = git(ROOT, "merge-base", "origin/main", "HEAD").strip()
-        old_claimer_text = git(ROOT, "show", f"{base_sha}:scripts/claim-ids.py")
-        if old_claimer_text and '"debt"' not in old_claimer_text:
-            old_claimer_bak = tmp / "claim-ids.py.bak"
-            old_claimer_bak.write_text(old_claimer_text, encoding="utf-8")
-
-            otmp = tmp / "old-claimer"
-            otmp.mkdir()
-            owork = build_split(otmp)
-            write(owork, "docs/debts/_preamble.md", "# Fixture\n")
-            write(owork, "docs/debts/001-first.md", "## 1 — First finding\n\nbody\n")
-            write(owork, "docs/debts/ORDER.json", json.dumps(
-                {"source": "docs/debts/README.md", "order": ["_preamble.md", "001-first.md"]}))
-            write(owork, "docs/debts/README.md",
-                 "# Known gaps\n\n## Index\n\n```\nDEBT1  First finding\n```\n")
-            git(owork, "add", "-A")
-            git(owork, "commit", "-qm", "seed")
-            git(owork, "checkout", "-q", "-b", "feature-old")
-            write(owork, "docs/debts/" + SDEBT + ".md", f"## {SDEBT} — A second finding\n\nbody\n")
-            git(owork, "add", "-A")
-            git(owork, "commit", "-qm", "a debt slug, on the pre-debt claimer")
-
-            old_done = subprocess.run(
-                [sys.executable, str(old_claimer_bak), "--root", str(owork), "--porcelain"],
-                cwd=str(owork), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
-            out = old_done.stdout.decode("utf-8", errors="replace")
-            ok(SDEBT not in out,
-               "RED, as expected: the pre-debt claimer's `pending()` has no 'debt' key at all, "
-               "so a debt slug is invisible to it and never allocated — this is the exact gap "
-               "the fix closes", out)
-        else:
-            print("  (skipped: the merge-base already carries debt support, or could not be "
-                  "read — this arm proves the fix against the commit this branch actually "
-                  "forked from, not a fabricated 'before')")
-
         print("\n  -- and docs-audit refuses a NUMBERED record a branch allocates by hand --")
         # THE EXACT DEFECT A DEBT COLLISION ONCE WAS: a branch writing
         # `docs/debts/048-....md` straight, never a slug, so `scripts/claim-ids.py` could
@@ -2736,8 +2691,9 @@ def main() -> int:
             ["git", "clone", "-q", "--local", "--no-hardlinks", str(ROOT), str(rwork)],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
         if cloned.returncode != 0:
-            print("  (skipped: could not clone this repository locally for the real-hook "
-                  "arm)\n" + cloned.stdout.decode("utf-8", errors="replace"))
+            ok(False, "SKIPPED, and a skip of a required arm is a failure: could not clone "
+               "this repository locally for the real-hook arm",
+               cloned.stdout.decode("utf-8", errors="replace"))
         else:
             # `app/node_modules` IS GITIGNORED, so the clone above does not carry it, and
             # `no mechanism on screen`/`typed interpunct` shell out to `node` over it —

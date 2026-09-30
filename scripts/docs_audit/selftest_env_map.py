@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
+from typing import List
+
 from . import core
 from .core import (
     ROOT,
@@ -20,7 +24,12 @@ from .core import (
 )
 from .env_map import _hook_triples, check_codex_hooks, source_names
 from .registry_scopes import _spec_map_should_run
-from .rules import check_identifier_spelling, check_rule_enforcement
+from .rules import (
+    HARD_RULE_FLOOR,
+    PROSE_ONLY_EXPECTED,
+    check_identifier_spelling,
+    check_rule_enforcement,
+)
 from .screens import _ROSTER_RE, _storage_sites, check_storage_keys
 from .spelling import check_shell_substitution
 
@@ -36,6 +45,47 @@ def run(ok) -> None:
         "every identifier in code, and every British word in markdown prose, is spelled American",
         "\n".join(f.where for f in by_label["identifier spelling"][:12]),
     )
+
+    # THE TWO PINS, PROVED BY A CLAUDE.md THAT BREAKS EACH. The real tree is above both, so the
+    # row stays green with either check deleted; only a fixture on the wrong side of a pin shows
+    # the check fires. The real tree must also agree with the pins, or the row is red today.
+    print("\nrule enforcement: the floor and the prose pin each fire on a fixture")
+    ok(not by_label["rule enforcement"],
+       "the real CLAUDE.md agrees with both pins",
+       "\n".join(f.message for f in by_label["rule enforcement"][:4]))
+    argued = ("- **Rule {n}.** **NOT MECHANIZED:** a machine cannot see what a person would "
+              "have to judge here at all.\n")
+    mech = "- **Rule {n}.** Enforced by `make check`.\n"
+
+    def rule_messages(n_argued: int, n_mech: int) -> List[str]:
+        here = module_globals()
+        saved_root, saved_index = here["ROOT"], here["_INDEX_PATHS"]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = "".join(argued.format(n=i) for i in range(n_argued))
+            body += "".join(mech.format(n=n_argued + i) for i in range(n_mech))
+            (root / "CLAUDE.md").write_text("# T\n\n## Hard rules\n\n" + body, encoding="utf-8")
+            (root / "Makefile").write_text("check:\n\ttrue\n", encoding="utf-8")
+            here["ROOT"], here["_INDEX_PATHS"] = root, None
+            try:
+                fixture_report = Report()
+                check_rule_enforcement(fixture_report)
+            finally:
+                here["ROOT"], here["_INDEX_PATHS"] = saved_root, saved_index
+        return [f.message for f in fixture_report.checks[0].findings]
+
+    pin, floor = PROSE_ONLY_EXPECTED, HARD_RULE_FLOOR
+    found = rule_messages(pin, floor - pin)
+    ok(not found, "control: exactly the pinned counts raise nothing", str(found))
+    found = rule_messages(pin, floor - 1 - pin)
+    ok(len(found) == 1 and f"read {floor - 1} hard rules where {floor} are pinned" in found[0],
+       "one rule under the floor raises the floor finding and only that", str(found))
+    found = rule_messages(pin + 1, floor - pin - 1)
+    ok(len(found) == 1 and "argue their own unenforceability" in found[0],
+       "one more admission than pinned raises the prose-debt finding", str(found))
+    found = rule_messages(pin - 1, floor - pin + 1)
+    ok(len(found) == 1 and "only" in found[0] and "argue their own unenforceability" in found[0],
+       "one fewer admission than pinned raises it too: the pin reads both ways", str(found))
 
     print("\nspec map: path-gated in staged mode (test-audit plan S3)")
     here = module_globals()
