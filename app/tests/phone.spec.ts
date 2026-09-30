@@ -1,5 +1,6 @@
 // Protects: The owner-side shell at phone width fits without sideways scroll and keeps every touch target at 40px or more, including menus, sheets and the palette.
 // Governs: D117, D134, D266, D288, D291
+import { readFileSync } from 'node:fs'
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { POPULATED_ROUTE_SEEDS, seedPopulatedGraveyard } from './routeFixtures'
@@ -377,19 +378,37 @@ async function phoneRoutes(page: Page): Promise<string[]> {
   return hrefs
 }
 
-test('every owner screen holds the thumb floor at 390, and none scrolls sideways', async ({ page }) => {
+/* ONE TEST PER SCREEN, SO EACH HAS ITS OWN BUDGET AND A RED NAMES THE SCREEN. One test walking
+   every screen outgrew the 30s default as screens were added (27.5s to 29.2s green, 31.4s red on
+   a batch run). The roster has to exist when the file is collected, before any browser, so it is
+   read from `ROUTES` in `App.tsx` as text: an owner row with `nav: true` is a drawer link, and
+   `#/gallery` is the one off-nav screen `phoneRoutes` adds. The test below it proves this
+   roster equals the drawer's own, so a row this read misses fails loudly and never goes green.
+   No per-screen setup beyond the goto: nothing is shared, so there is no `beforeAll`. */
+const TABLE = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8').split('export const ROUTES')[1]!.split('\n]\n')[0]!
+const SCREENS = [
+  ...[...TABLE.matchAll(/^ {2}\{ path: '([^']+)'.*$/gm)]
+    .filter((m) => m[0].includes("persona: 'owner'") && m[0].includes('nav: true'))
+    .map((m) => '#' + m[1]),
+  '#/gallery',
+]
+
+test("the per-screen roster is the drawer's own roster", async ({ page }) => {
   await page.setViewportSize(PHONE)
-  const routes = await phoneRoutes(page)
-  const failures: string[] = []
-  for (const hash of routes) {
+  expect([...SCREENS].sort()).toEqual([...(await phoneRoutes(page))].sort())
+})
+
+for (const hash of SCREENS) {
+  test(`${hash} holds the thumb floor at 390, and does not scroll sideways`, async ({ page }) => {
+    await page.setViewportSize(PHONE)
     await page.goto(hash)
     await page.waitForTimeout(400)
-    failures.push(...(await sweep(page, hash, hash === '#/gallery' ? 'box' : 'probe')))
+    const failures = await sweep(page, hash, hash === '#/gallery' ? 'box' : 'probe')
     const over = await overflow(page)
     expect(over, `${hash} scrolls sideways by ${over}px at 390 — CLAUDE.md: "No horizontal page scroll at 390."`).toBeLessThanOrEqual(0)
-  }
-  expect(failures, failures.join('\n')).toEqual([])
-})
+    expect(failures, failures.join('\n')).toEqual([])
+  })
+}
 
 /* AN IPAD IN PORTRAIT IS 820px WIDE AND ALL THUMB (docs/DESIGN.md), and every floor above answers
    at 390. The control-height tokens raise themselves on `(pointer: coarse)` at ANY width, but a

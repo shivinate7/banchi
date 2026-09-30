@@ -1180,10 +1180,9 @@
   gap: var(--bn-2);
   padding: var(--bn-4);
   border-radius: var(--bn-r);
-  /* var(--bn-surface-3), NOT -2 (R2-class round 2): `.bn-skeleton`'s own idle background is
-     -2, so a -2 well painted the bars into their own ground -- barely visible, the contrast
-     the plan's own review found. -3 is the kit's "an object that paints its own ground,
-     lifted" tone (tokens.css), the one surface a -2 bar actually shows up against. */
+  /* var(--bn-surface-3): `.bn-skeleton`'s own idle background is `--bn-line`, a tint of the
+     ink, so the well has to be a surface the tint reads against. -3 is the kit's "an object
+     that paints its own ground, lifted" tone (tokens.css). */
   background: var(--bn-surface-3);
 }
 .review-recheck-wait-line { height: 12px; }
