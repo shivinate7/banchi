@@ -181,7 +181,7 @@ Fulfiller's. The shell has these parts:
 
 - `cd app && npx tsc --noEmit` prints nothing.
 - Look at it at 1440 and 820, in both themes. Look at 390 only on an owner phone report.
-  The specs that assert phone layout are off by the owner's word (DEBT-phone-specs-off). One switch turns them back on:
+  The specs that assert phone layout are off by the owner's word: DEBT-phone-specs-off (every phone-width spec is off). One switch turns them back on:
   `PHONE_SPECS_ON` in `app/tests/phoneSwitch.ts`.
 - Anything a thumb presses is 40px or more.
 - `make design-check` asserts `docs/DESIGN.md`'s Fulfillment floors in a real browser.
