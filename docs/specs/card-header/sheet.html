@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Card header, three directions</title>
+<!-- A DESIGN SHEET, NOT PRODUCT. Links the real tokens and kit by relative path and adds only the
+     layout below, which uses --bn-* tokens and nothing else. `?theme=dark` flips the whole sheet
+     (tokens.css defines dark on :root only). Each frame is the CARD PANE, not the viewport:
+     1440 viewport = an 820px pane, 820 viewport = a 410px pane (measured in the running app). -->
+<link rel="stylesheet" href="../../../app/src/tokens.css">
+<link rel="stylesheet" href="../../../app/src/base.css">
+<link rel="stylesheet" href="../../../app/src/kit.css">
+<style>
+body { padding: var(--bn-6); }
+.sheet-top { display: flex; align-items: baseline; gap: var(--bn-4); margin-bottom: var(--bn-6); }
+.sheet-top h1 { font-family: var(--bn-font-display); font-size: var(--bn-fs-3xl); font-weight: 800; letter-spacing: var(--bn-tracking-tight); }
+.dir { margin-bottom: var(--bn-9); }
+.dir-head { display: flex; flex-direction: column; gap: var(--bn-1); margin-bottom: var(--bn-4); max-width: 840px; }
+.dir-head h2 { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; }
+.dir-head p { color: var(--bn-ink-3); font-size: var(--bn-fs-md); }
+.frames { display: flex; flex-wrap: wrap; gap: var(--bn-6); align-items: flex-start; }
+.frame-cap { font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); margin-bottom: var(--bn-2); }
+.frame.wide { width: 820px; }
+.frame.narrow { width: 410px; }
+
+/* ---- shared parts (all three directions) ---- */
+.pane { background: var(--bn-surface); border-radius: var(--bn-r-lg); box-shadow: var(--bn-shadow-1); overflow: hidden; }
+.name { font-family: var(--bn-font-display); font-size: var(--bn-fs-2xl); font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; color: var(--bn-ink); overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-1) var(--bn-2); font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+.meta .num { font-family: var(--bn-font-mono); font-weight: 600; color: var(--bn-ink-2); }
+.meta > .sep::before { content: '·'; margin-right: var(--bn-2); color: var(--bn-ink-4); }
+.kebab { flex: none; }
+.readage { font-size: var(--bn-fs-xs); font-weight: 500; color: var(--bn-ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.live-figure { display: inline-flex; align-items: center; gap: var(--bn-1-5); }
+.shot { display: block; border: 0; padding: 0; background: var(--bn-surface-2); border-radius: var(--bn-r); overflow: hidden; }
+.shot img { display: block; width: 100%; height: auto; }
+.ceiling { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+.ceiling b { font-weight: 600; color: var(--bn-ink-2); }
+
+/* the copies list, unchanged from the product in intent: one card per copy */
+.copies { display: flex; flex-direction: column; gap: var(--bn-2); list-style: none; }
+.copy { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--bn-2) var(--bn-3); align-items: start; padding: var(--bn-3); background: var(--bn-surface-2); border-radius: var(--bn-r); }
+.copy-id { display: flex; flex-wrap: wrap; gap: 0 var(--bn-2); font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); }
+.copy-id span + span::before { content: '·'; margin-right: var(--bn-2); color: var(--bn-ink-4); }
+.copy-acts { display: flex; gap: var(--bn-1); }
+.ruler { grid-column: 1 / -1; position: relative; height: 26px; border-radius: var(--bn-r-xs); background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-line); }
+.ruler i { position: absolute; top: 3px; bottom: 3px; left: 8%; width: 6%; border-radius: var(--bn-r-xs); background: var(--bn-accent); }
+.ruler-ends { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: var(--bn-fs-2xs); letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); }
+.more { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); padding: var(--bn-1) var(--bn-1); }
+
+/* ---- A. Rail: the photograph runs the whole height, everything else is one right-hand column ---- */
+.a-grid { display: grid; gap: var(--bn-5); padding: var(--bn-5); }
+.a-wide .a-grid { grid-template-columns: 250px minmax(0, 1fr); align-items: start; }
+.a-narrow .a-grid { grid-template-columns: 116px minmax(0, 1fr); gap: var(--bn-4); padding: var(--bn-4); }
+.a-main { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
+.a-titlerow { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--bn-3); }
+.a-titlebox { display: flex; flex-direction: column; gap: var(--bn-1-5); min-width: 0; }
+.a-strip { display: grid; grid-template-columns: repeat(3, auto); justify-content: start; box-shadow: inset 0 1px 0 var(--bn-line), inset 0 -1px 0 var(--bn-line); }
+.a-strip .bn-stat { padding: var(--bn-3) var(--bn-6) var(--bn-3) 0; }
+.a-strip .bn-stat + .bn-stat { padding-left: var(--bn-6); box-shadow: inset 1px 0 0 var(--bn-line); }
+.a-narrow .a-strip { grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.a-narrow .a-strip .bn-stat { padding-right: var(--bn-2); }
+.a-narrow .a-strip .bn-stat + .bn-stat { padding-left: var(--bn-3); }
+.a-strip .bn-stat-label { font-weight: 600; letter-spacing: 0.02em; }
+.a-foot { display: flex; flex-wrap: wrap; gap: var(--bn-1) var(--bn-3); align-items: baseline; margin-top: calc(-1 * var(--bn-2)); }
+.a-narrow .a-body { display: contents; }
+.a-narrow .a-belowfold { grid-column: 1 / -1; }
+
+/* ---- B. Masthead: one full-width header, counts on its right, a meter under it ---- */
+.b-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--bn-3) var(--bn-6); align-items: start; padding: var(--bn-5) var(--bn-5) var(--bn-4); }
+.b-narrow .b-head { grid-template-columns: minmax(0, 1fr); padding: var(--bn-4); }
+.b-titlebox { display: flex; flex-direction: column; gap: var(--bn-1-5); min-width: 0; }
+.b-titlerow { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--bn-3); }
+.b-counts { display: flex; gap: var(--bn-6); align-items: flex-start; padding-top: var(--bn-1); }
+.b-narrow .b-counts { gap: var(--bn-5); padding-top: 0; }
+.b-wide .b-titlerow .kebab { order: 3; }
+.b-meter { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--bn-1) var(--bn-4); align-items: center; padding: var(--bn-3) var(--bn-5); background: var(--bn-surface-2); }
+.b-narrow .b-meter { padding: var(--bn-3) var(--bn-4); }
+.b-meter .bn-progress { grid-column: 1 / -1; height: 6px; }
+.b-meter-say { font-size: var(--bn-fs-md); color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+.b-meter-say b { font-weight: 700; color: var(--bn-ink); }
+.b-band { display: grid; gap: var(--bn-5); padding: var(--bn-5); align-items: start; }
+.b-wide .b-band { grid-template-columns: 220px minmax(0, 1fr); }
+.b-narrow .b-band { grid-template-columns: minmax(0, 1fr); padding: var(--bn-4); }
+.b-narrow .b-band .shot { max-width: 220px; }
+
+/* ---- C. Ledger: photograph shrinks to a leading thumbnail; the facts are rows ---- */
+.c-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--bn-4); padding: var(--bn-5); align-items: start; }
+.c-narrow .c-head { padding: var(--bn-4); gap: var(--bn-3); }
+.c-thumb { width: 140px; grid-row: 1 / 3; }
+.c-narrow .c-thumb { width: 64px; grid-row: auto; }
+.c-titlebox { display: flex; flex-direction: column; gap: var(--bn-1-5); min-width: 0; }
+.c-ledger { grid-column: 1 / -1; display: grid; margin: 0; }
+.c-wide .c-ledger { grid-column: 2 / -1; align-self: end; }
+.c-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: var(--bn-4); min-height: var(--bn-control-h-lg); box-shadow: inset 0 1px 0 var(--bn-line); }
+.c-row dt { font-size: var(--bn-fs-md); color: var(--bn-ink-2); font-weight: 600; }
+.c-row dd { display: flex; align-items: baseline; gap: var(--bn-3); justify-content: flex-end; text-align: right; }
+.c-row .fig { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--bn-ink); }
+.c-row .note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.c-list { padding: 0 var(--bn-5) var(--bn-5); }
+.c-narrow .c-list { padding: 0 var(--bn-4) var(--bn-4); }
+</style>
+</head>
+<body>
+<div class="sheet-top">
+  <h1>Card detail, top of page: three directions</h1>
+  <span class="bn-muted" id="which"></span>
+  <a class="bn-btn bn-btn-sm" id="flip" href="#">Switch theme</a>
+</div>
+<main id="root"></main>
+
+<script>
+const q = new URLSearchParams(location.search)
+const theme = q.get('theme') === 'dark' ? 'dark' : 'light'
+document.documentElement.setAttribute('data-theme', theme)
+document.getElementById('which').textContent = theme + ' theme'
+document.getElementById('flip').href = '?theme=' + (theme === 'dark' ? 'light' : 'dark')
+
+const IMG = 'card.jpg'
+const dots = '<svg class="bn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h.01 M12 12h.01 M19 12h.01"></path></svg>'
+const kebab = `<button type="button" class="bn-btn bn-icon-btn kebab" aria-label="Actions" style="width:28px;height:28px">${dots}</button>`
+const icon = (d) => `<button type="button" class="bn-btn bn-icon-btn" aria-label="action" style="width:28px;height:28px"><svg class="bn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"></path></svg></button>`
+const acts = icon('M12 3v18 M17 7H9.5a3 3 0 0 0 0 6h5a3 3 0 0 1 0 6H7') + icon('M3 7h18v4H3z M5 11v9h14v-9') + icon('M4 12h13 M13 6l6 6-6 6')
+const epic = '<span class="bn-pill bn-pill-accent">Epic</span>'
+const meta = (withPill) => `<p class="meta"><span class="num">090/219</span><span class="sep">Riftbound</span>${withPill ? `<span class="sep">${epic}</span>` : ''}</p>`
+const liveFig = '<span class="live-figure"><span class="bn-dot bn-dot-live" aria-hidden="true"></span>5</span>'
+const stat = (v, l, extra = '') => `<div class="bn-stat"><span class="bn-stat-value">${v}</span><span class="bn-stat-label">${l}</span>${extra}</div>`
+const copy = (box, sec, n, pos) => `<li class="copy"><span class="copy-id"><span>${box}</span><span>${sec}</span><span>Card ${n} of 11</span></span><span class="copy-acts">${acts}</span><div class="ruler" aria-hidden="true"><i style="left:${pos}%"></i></div><div class="ruler-ends"><span>Back</span><span>Front</span></div></li>`
+const copies = () => `<ul class="copies">${copy('RB Origins', 'Section 2: Epics', 4, 30)}${copy('RB Epics', 'Section 1: Epics', 7, 58)}<li class="more">5 more copies</li></ul>`
+const ceiling = '<span class="ceiling"><b>7</b> sent · At the ceiling of 5</span>'
+
+/* A: the photograph is a rail down the whole pane; header, counts and copies are one column. */
+function A(n) {
+  const cls = n ? 'a-narrow' : 'a-wide'
+  const strip = `<div class="a-strip">${stat(7, 'copies')}${stat(5, 'in the boxes')}${stat(liveFig, 'live on TCGplayer', '<span class="readage">read 2 days ago</span>')}</div>`
+  const head = `<div class="a-titlerow"><div class="a-titlebox"><h2 class="name">LeBlanc, Everywhere At Once</h2>${meta(true)}</div>${kebab}</div>`
+  const shot = `<button class="shot" type="button" aria-label="Open the photograph full size"><img src="${IMG}" alt="The card"></button>`
+  if (n) return `<div class="pane ${cls}"><div class="a-grid">${shot}<div class="a-titlebox">${head}</div>${strip.replace('class="a-strip"', 'class="a-strip"')}<div class="a-belowfold a-main"><div class="a-foot">${ceiling}</div>${copies()}</div></div></div>`
+  return `<div class="pane ${cls}"><div class="a-grid">${shot}<div class="a-main">${head}${strip}<div class="a-foot">${ceiling}</div>${copies()}</div></div></div>`
+}
+
+/* B: a full-width masthead with the counts at its right and a meter of live against the ceiling. */
+function B(n) {
+  const cls = n ? 'b-narrow' : 'b-wide'
+  const counts = `<div class="b-counts">${stat(7, 'copies')}${stat(5, 'in the boxes')}${stat(liveFig, 'live on TCGplayer')}</div>`
+  const title = `<div class="b-titlebox"><div class="b-titlerow"><h2 class="name">LeBlanc, Everywhere At Once</h2>${n ? kebab : ''}</div>${meta(true)}</div>`
+  const meter = `<div class="b-meter"><span class="b-meter-say"><b>5</b> live of <b>5</b> allowed · 7 sent</span><span class="readage">read 2 days ago</span><div class="bn-progress" role="img" aria-label="5 of 5"><span style="width:100%"></span></div></div>`
+  const band = `<div class="b-band"><button class="shot" type="button" aria-label="Open the photograph full size"><img src="${IMG}" alt="The card"></button>${copies()}</div>`
+  if (n) return `<div class="pane ${cls}"><div class="b-head">${title}${counts}</div>${meter}${band}</div>`
+  return `<div class="pane ${cls}"><div class="b-head">${title}<div style="display:flex;gap:var(--bn-4);align-items:flex-start">${counts}${kebab}</div></div>${meter}${band}</div>`
+}
+
+/* C: no big photograph up top. A thumbnail leads the title; the facts are four ruled rows. */
+function C(n) {
+  const cls = n ? 'c-narrow' : 'c-wide'
+  const thumb = `<button class="shot c-thumb" type="button" aria-label="Open the photograph full size"><img src="${IMG}" alt="The card"></button>`
+  const title = `<div class="c-titlebox"><h2 class="name">LeBlanc, Everywhere At Once</h2>${meta(true)}</div>`
+  const ledger = `<dl class="c-ledger">
+    <div class="c-row"><dt>Copies</dt><dd><span class="fig">7</span></dd></div>
+    <div class="c-row"><dt>In the boxes</dt><dd><span class="fig">5</span></dd></div>
+    <div class="c-row"><dt>Live on TCGplayer</dt><dd><span class="readage">read 2 days ago</span><span class="fig live-figure"><span class="bn-dot bn-dot-live" aria-hidden="true"></span>5</span></dd></div>
+    <div class="c-row"><dt>Sent</dt><dd><span class="note">At the ceiling of 5</span><span class="fig">7</span></dd></div>
+  </dl>`
+  return `<div class="pane ${cls}"><div class="c-head">${thumb}${title}${kebab}${ledger}</div><div class="c-list">${copies()}</div></div>`
+}
+
+const DIRS = [
+  ['A. Rail', 'The photograph becomes a left rail that runs the whole pane, so no empty band exists. Title, rarity, counts strip and copies stack in one right-hand column.', A],
+  ['B. Masthead', 'One full-width header: title and rarity left, the three counts right. A meter row says live against the ceiling, and holds the sent line and reading age. The photograph and copies sit under it.', B],
+  ['C. Ledger', 'The photograph shrinks to a leading thumbnail (tap to zoom). Facts become four 40px ruled rows, so the copies list gets the full width and the top is short.', C],
+]
+document.getElementById('root').innerHTML = DIRS.map(([t, d, f]) => `
+<section class="dir" id="${t[0]}"><div class="dir-head"><h2>${t}</h2><p>${d}</p></div>
+<div class="frames">
+  <div><div class="frame-cap">Viewport 1440 · pane 820</div><div class="frame wide">${f(false)}</div></div>
+  <div><div class="frame-cap">Viewport 820 · pane 410</div><div class="frame narrow">${f(true)}</div></div>
+</div></section>`).join('')
+</script>
+</body>
+</html>
