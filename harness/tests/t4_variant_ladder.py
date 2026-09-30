@@ -64,9 +64,7 @@ holofoil || reverseHolofoil || normal.
 from __future__ import annotations
 
 import json
-import os
 import tempfile
-from contextlib import contextmanager
 from decimal import Decimal
 from pathlib import Path
 
@@ -74,7 +72,7 @@ from harness.tests import Checks, Result
 from cli import resolve, runs
 from identify import prompt, sidecar
 from pipeline import games, join, routing, tcgcsv, variant
-from store import files
+from harness.tests.home import isolated_home as _isolated_home
 
 NAME = "T4"
 DESCRIPTION = "Variant ladder resolves all four stages, and the routing table"
@@ -116,21 +114,6 @@ def _check_stage(c, resolution, stage, sku, condition, price, label):
         (stage, sku, condition, price),
         label,
     )
-
-
-@contextmanager
-def _isolated_home():
-    """An empty store in a temporary directory. `cli/resolve.py` reads the live inventory."""
-    previous = os.environ.get(files.HOME_ENV)
-    with tempfile.TemporaryDirectory() as tmp:
-        os.environ[files.HOME_ENV] = tmp
-        try:
-            yield Path(tmp)
-        finally:
-            if previous is None:
-                os.environ.pop(files.HOME_ENV, None)
-            else:
-                os.environ[files.HOME_ENV] = previous
 
 
 def _detected_finishes(export_path, reads):
