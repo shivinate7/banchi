@@ -6,6 +6,7 @@ import { sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
 import { settleMotion } from './motionSettled'
 import type { FilterFacet } from '../src/kit/data'
+import { setViewport } from './phoneSwitch'
 
 sealEveryTest()
 
@@ -15,7 +16,7 @@ const FACET_KEYS: FilterFacet['key'][] = ['game', 'set', 'rarity']
 const BAR = '[data-specimen="FilterBar"]'
 
 async function openPopover(page: Page, width: number, theme: 'light' | 'dark') {
-  await page.setViewportSize({ width, height: width > 1000 ? 900 : 1180 })
+  await setViewport(page, { width, height: width > 1000 ? 900 : 1180 })
   await page.goto(theme === 'dark' ? `${PAGE}?theme=dark` : PAGE)
   await expect(page.locator('[data-kit-filters]')).toBeVisible()
   await settleFonts(page)

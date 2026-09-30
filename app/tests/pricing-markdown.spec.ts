@@ -5,6 +5,7 @@ import { sealEveryTest } from './shell'
 import { settleMotion } from './motionSettled'
 
 import type { MarkdownSku } from '../src/types'
+import { setViewport } from './phoneSwitch'
 
 /* `#/pricing` AS A LENS OVER LIVE TCGPLAYER LISTINGS (D103): the Live tab (D277, Q6).
  *
@@ -617,7 +618,7 @@ async function legible(page: Page, name: string): Promise<void> {
 test('the row and caption tracks agree at the table tier, and the price is not clipped (data-copies=none)', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   await open(page)
   await expect(page.locator(VIEW)).toBeVisible()
   await expect(page.locator('.pricing-list')).toHaveAttribute('data-copies', 'none')
@@ -642,7 +643,7 @@ test('at 700 the row and caption tracks still agree, and the price is not clippe
   /* 700 IS THE OWNER'S HALF-SCREEN DESK (D197's 720 width, minus a scrollbar): the column is
      under the 900px step, so Lowest and the trend leave the row, and both the caption and the
      rows drop them together. */
-  await page.setViewportSize({ width: 700, height: 900 })
+  await setViewport(page, { width: 700, height: 900 })
   await open(page)
   await expect(page.locator('.pricing-list')).toHaveAttribute('data-copies', 'none')
   await expect(page.locator('.pricing-caption .pricing-col-low')).toBeHidden()
@@ -689,7 +690,7 @@ function expectStill(
    during a press held open. */
 for (const width of [390, 820]) {
   test(`r9: the lens press keeps its place and size while it runs (${width})`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 844 })
+    await setViewport(page, { width, height: 844 })
     const wire = await open(page, { sendDelayMs: 1500 })
     const field = page.locator('.pricing-input').first()
     await field.click()
@@ -714,7 +715,7 @@ for (const width of [390, 820]) {
    the bar, set to the right, moved the press under the finger. */
 for (const width of [390, 820]) {
   test(`r9: a file link already on screen holds its place through the send (${width})`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 844 })
+    await setViewport(page, { width, height: 844 })
     const wire = await open(page, { sendDelayMs: 1500 })
     const field = page.locator('.pricing-input').first()
     await field.click()

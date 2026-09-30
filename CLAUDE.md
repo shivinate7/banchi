@@ -74,7 +74,7 @@ make demo-mirror-install  # CI's step: install the committed scrub. No store, no
 make demo-static    # demo-mirror-install, then a static build to dist-demo/.
 make demo-preview   # serve dist-demo/ as a static host would.
 make check          # the whole suite, product first, guard self-tests last. `make explain` lists it.
-make ci-check       # the subset CI runs on a fresh clone.
+make ci-check       # the same targets as `check`, as CI runs them on a fresh clone.
 make css-var-check  # a `var(--x)` with no fallback and no definition. PKMNSCAN_CSS_VARS=off skips it.
 make token-literal-check  # a CSS literal equal to a design token, ratcheted per file. PKMNSCAN_TOKEN_LITERALS=off skips it.
 make catalog-refresh  # re-clone pokemon-tcg-data into vendor/. Writes. ARGS=--dry-run.
@@ -181,7 +181,8 @@ Fulfiller's. The shell has these parts:
 
 - `cd app && npx tsc --noEmit` prints nothing.
 - Look at it at 1440 and 820, in both themes. Look at 390 only on an owner phone report.
-  The specs that assert phone layout stay in CI.
+  The specs that assert phone layout are off by the owner's word: DEBT77 (every phone-width spec is off). One switch turns them back on:
+  `PHONE_SPECS_ON` in `app/tests/phoneSwitch.ts`.
 - Anything a thumb presses is 40px or more.
 - `make design-check` asserts `docs/DESIGN.md`'s Fulfillment floors in a real browser.
 

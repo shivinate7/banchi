@@ -12,6 +12,7 @@ import type {
   TrendRange,
   TrendsPayload,
 } from '../src/types'
+import { setViewport } from './phoneSwitch'
 
 /* THE PRICING SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
  *
@@ -1429,7 +1430,7 @@ test('r8: a refused count of live copies is offered back at TCGplayer count', as
    stay where they were. */
 for (const width of [390, 820]) {
   test(`r9: the send press keeps its place and size while it runs (${width})`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 844 })
+    await setViewport(page, { width, height: 844 })
     const wire = await open(page, {
       skus: [
         sku({
@@ -1527,7 +1528,7 @@ test('r5: two presses in one second: the card stands on the newest press, not th
    Each folds to one line: the warning's own imperative, a press that opens the rest, and
    Dismiss. It never folds away: only Dismiss takes it off the card (round 4). */
 test('r5: at 390 two taken-back warnings fold to one line each, and stay until Dismiss', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   const staged = sendSummary({
     stamp: '20260924-120000-aaaaaa',
     state: 'taken_back',
@@ -2018,7 +2019,7 @@ test("finding #9 (the delta review round) — the hold toast's own Undo clears t
    * `.pricing-bar` — the clearance rule (and this case) went missing with the old name. At
    * 390 the bar is `position: fixed` regardless of content height (unlike the desktop
    * `sticky` case above), so the default fixture already puts it on screen. */
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   await open(page)
 
   await page.locator('.pricing-hold').first().click()
@@ -3786,7 +3787,7 @@ async function typeAndCheck(page: Page): Promise<void> {
    `data-direct='some'` correctly; the double-open version of the same case drew 'none' every
    time. Two variants, two tests. */
 test('the "Lists at" field reads a long price in full at 1440, data-direct=none', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
 
   /* No row in this fixture carries a Direct figure — the default shape `sku()` already
      builds. An existing typed answer seeds the "before" state. */
@@ -3812,7 +3813,7 @@ test('the "Lists at" field reads a long price in full at 1440, data-direct=none'
    its own comment on why two navigations to the same hash do not even re-fetch. */
 for (const width of [1024, 820, 720, 390, 360]) {
   test(`the "Lists at" field reads a long price in full at ${width}`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 })
+    await setViewport(page, { width, height: 900 })
     await open(page, {
       decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '9876.54' } },
     })
@@ -4016,7 +4017,7 @@ test('Held shows only the held rows, and its count is the bar’s count', async 
 })
 
 test('every control that answers a row is on the row, and the caption shares its tracks', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   await open(page)
   await expect(field(page)).toBeVisible()
   await expect(page.locator('.pricing-row .pricing-hold')).toBeVisible()
@@ -4175,7 +4176,7 @@ test('a product name opens the one product view, and T opens it from the keyboar
 })
 
 test('the slim bar stays at the top of the column while the list scrolls', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   await open(page, {
     skus: Array.from({ length: 24 }, (_, at) => sku({ sku: String(1000 + at), name: `Card ${at}` })),
   })
@@ -4192,7 +4193,7 @@ test('the slim bar stays at the top of the column while the list scrolls', async
 })
 
 test('on a phone the bar is one line pinned above the tab bar, and More opens the doors', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   await open(page)
   const bar = page.locator('.pricing-bar')
   const box = await bar.boundingBox()
@@ -4287,7 +4288,7 @@ test('with nothing ready, the send press is disabled', async ({ page }) => {
  * `PhotoSheet` still draws the per-copy place, unchanged. */
 for (const width of [390, 820]) {
   test(`at ${width} the copy count and the live line stay inside the card column`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 })
+    await setViewport(page, { width, height: 900 })
     await open(page, {
       worklist: {
         runs: [{ run: RUN, box: 7, box_name: 'Riftbound Origins singles and Surging Sparks overflow', skus: 1 }],

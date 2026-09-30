@@ -4,6 +4,7 @@ import { test, expect, type Page, type Route } from '@playwright/test'
 
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
+import { setViewport } from './phoneSwitch'
 
 /* WHERE A CARD IS, SAID ONE WAY ON EVERY SCREEN (the locating lane, 2026-09-23).
  *
@@ -200,7 +201,7 @@ async function stubBox(
 }
 
 async function frame(page: Page, size: (typeof SIZES)[number], theme: (typeof THEMES)[number]) {
-  await page.setViewportSize({ width: size.width, height: size.height })
+  await setViewport(page, { width: size.width, height: size.height })
   await page.emulateMedia({ colorScheme: theme })
   /* SOLD SHOWN, so the departed copy is on the list to be read. Seeded before first paint, the
      same call `inventory.spec.ts` makes for the same device key. */

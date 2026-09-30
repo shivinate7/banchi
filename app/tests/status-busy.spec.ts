@@ -29,7 +29,10 @@ test('a 503 from /status keeps the shell online', async ({ page }) => {
   )
   const answered = page.waitForResponse((r) => /\/status$/.test(r.url()) && r.status() === refusal.status)
   await page.goto('/')
-  await answered
-  await page.waitForTimeout(300)
+  /* THE EVENT IS THE READ FINISHING, NOT A GUESSED 300ms. The refusal's body is read to its end,
+     then two frames run, which is one React commit and one paint of whatever the poll's `onError`
+     set. A banner the regression would draw is on screen by then. */
+  await (await answered).finished()
+  await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))))
   await expect(page.locator('.bn-banner')).toHaveCount(0)
 })

@@ -65,6 +65,10 @@ test('every visible dollar figure on every route is drawn in the mono face', asy
   const swept = await sweepEveryRoute(page, async (route, width) => {
     if (MUTATE_ROUTE !== '' && MUTATE_ROUTE === route) await page.evaluate(injectInterMoney)
     const result = await page.evaluate(scanMoneyFace)
+    if (result.noView) {
+      problems.push(`${route} at ${width}: the page drew no .bn-view, so no dollar figure was read. A screen with no view cannot be checked.`)
+      return
+    }
     for (const hit of result.text) {
       report(route, hit.amount, `drawn as "${hit.fontFamily}" in "${hit.sample}"`, width)
     }
@@ -109,6 +113,7 @@ test('every dollar figure on the kit sheet is drawn in the mono face', async ({ 
   await page.goto('/#/gallery')
   await expect(page.locator('main.gallery')).toBeVisible()
   const result = await page.evaluate(scanMoneyFace)
+  expect(result.noView, 'the kit sheet drew no .bn-view, so no dollar figure was read').toBe(false)
   const misses = [
     ...result.text.map((hit) => `'${hit.amount}' drawn as "${hit.fontFamily}" in "${hit.sample}"`),
     ...result.fields.map((hit) => `'${hit.amount}' in a <${hit.tag}> drawn as "${hit.fontFamily}"`),

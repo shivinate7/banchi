@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { routesFromNav } from './routes'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
+import { phoneOff, setViewport } from './phoneSwitch'
 
 /* EVERY SCREEN INHERITS THE PAGE SCAFFOLD, ASSERTED IN A BROWSER (D275).
  *
@@ -207,7 +208,7 @@ async function settle(page: Page): Promise<void> {
 
 test('the route table is read, and it names the same routes the nav does', async ({ page }) => {
   expect(ROUTE_TABLE.length, 'kit-adoption --routes returned almost nothing').toBeGreaterThan(3)
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   /* `routesFromNav` deliberately does not name `#/runs` — it redirects rather than drawing a
      screen, so the content sweeps built on that helper must not land on it (see its own
      comment). This reconciliation is the one place that does need it, so it is added here,
@@ -236,16 +237,21 @@ test('the runtime allow list names only real routes, real assertions and a lane'
 })
 
 for (const route of ROUTE_TABLE) {
+  /* `#/gallery`'S PAGE, H1, WIDTH, TOP GAP AND SIDEWAYS SCROLL ARE NOT READ HERE: `gallery.spec.ts`'s
+     "the kit is a Page: one h1, one width, one top gap, no sideways scroll, at every width" holds
+     those, in one load. Its head gap and tab title are NOT held there, so they still run. */
+  const heldByGallery = route.path === '/gallery' ? new Set(['page', 'h1', 'width', 'top', 'scroll']) : new Set<string>()
   test(`${route.path} inherits the page scaffold at every width`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     const failures = new Map<string, string[]>()
-    const fail = (assertion: string, message: string) => failures.set(assertion, [...(failures.get(assertion) ?? []), message])
+    const fail = (assertion: string, message: string) => heldByGallery.has(assertion) || failures.set(assertion, [...(failures.get(assertion) ?? []), message])
     const want = titleOf(route)
 
-    await page.setViewportSize({ width: 1440, height: 900 })
+    await setViewport(page, { width: 1440, height: 900 })
     await page.goto(`/#${route.path}`)
     for (const [width, height] of WIDTHS) {
-      await page.setViewportSize({ width, height })
+      if (phoneOff(width)) continue
+      await setViewport(page, { width, height })
       await page.reload()
       await settle(page)
       const m = await page.evaluate(() => {
@@ -299,7 +305,7 @@ for (const route of ROUTE_TABLE) {
       }
       if (m.sideways > 0) fail('scroll', `${at}: scrolls sideways by ${m.sideways}px`)
     }
-    const measured = PER_ROUTE.filter((a) => a !== 'title' && applies(route, a))
+    const measured = PER_ROUTE.filter((a) => a !== 'title' && !heldByGallery.has(a) && applies(route, a))
     expect(reconcile(route, failures, measured)).toEqual([])
   })
 
@@ -326,7 +332,7 @@ for (const route of ROUTE_TABLE) {
    the width assertion (no allow entry), so it is measured as it stands and then with the page's
    cap removed. The judges are the same functions the route tests call. */
 test('a page whose max-width is none fails the width check (fixture)', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   await page.goto('/#/gallery')
   await settle(page)
   const read = () =>
@@ -393,7 +399,7 @@ test('the over-time title read goes red when a right title changes later (fixtur
 })
 
 test('the palette and the keyboard sheet name every route', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   await page.goto('/#/')
   await settle(page)
 

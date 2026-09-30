@@ -3,6 +3,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
+import { setViewport } from './phoneSwitch'
 
 /* THE GRAVEYARD'S OWN SPEC, AND `#/inventory`'S "MOVED FROM" — NEITHER HAD ONE (D134, amended
  * by the UX review's graveyard ruling, 2026-09-26, verbatim "Move Moved out of Graveyard").
@@ -97,7 +98,7 @@ sealEveryTest()
 test('at 820 no header or cell in the table is cut short (screen pass F7)', async ({ page }) => {
   // The wrap is ~690px at 820: seven columns left `Captured` reading "CAPTURE", its cells "28 da…" and
   // the condition "Near Mint …". The two lowest-value columns leave and the rest stay whole.
-  await page.setViewportSize({ width: 820, height: 900 })
+  await setViewport(page, { width: 820, height: 900 })
   await openGraveyard(page, GRAVEYARD_ROWS.map((row) => (row.sku === null ? row : { ...row, condition: 'Near Mint Holofoil' })))
   await expect(page.locator('.graveyard-table tbody tr').first()).toBeVisible()
   const cut = await page.evaluate(() =>

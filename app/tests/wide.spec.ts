@@ -4,6 +4,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { routesFromNav } from './routes'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
+import { setViewport } from './phoneSwitch'
 
 /* THE OWNER'S SCREENS ABOVE THE DESK, WHICH NOTHING IN THIS SUITE HAD EVER LOOKED AT.
  *
@@ -78,7 +79,7 @@ async function withRail(page: Page, stored: string, width: number): Promise<void
          and the default one, so the sweep is still measuring something */
     }
   }, stored)
-  await page.setViewportSize({ width, height: 1000 })
+  await setViewport(page, { width, height: 1000 })
 }
 
 /** Every visible prose run on the page, and how wide its FIRST LINE actually inked. */

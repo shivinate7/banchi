@@ -11,6 +11,7 @@ import { routesFromNav } from './routes'
 import { sweepEveryRoute } from './routeSweep'
 import { PRODUCT_ROUTE } from './routeFixtures'
 import { injectRepeatedSentence, measureTextShape, type TextShapeResult } from './textShape'
+import { setViewport } from './phoneSwitch'
 
 /* NO CEILING, NO PIN (D284). This file is the repetition check and the sentence-shape check. The third
  * piece, the on-demand density pass, is `make text-density`, which runs THIS file's sweep in a
@@ -123,7 +124,7 @@ test('a route repeats no sentence across its cards and no fact twice, and keeps 
 })
 
 test('the pending list names only real routes, real assertions and a lane', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 1000 })
+  await setViewport(page, { width: 1440, height: 1000 })
   const routes = await routesFromNav(page)
   const ALLOW = readAllow()
   const problems: string[] = []
