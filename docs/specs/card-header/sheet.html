@@ -152,6 +152,10 @@ body { padding: var(--bn-6); }
 .f2 .f-meter { flex: 2 1 auto; margin-left: 0; padding: var(--bn-1-5) var(--bn-3); gap: var(--bn-2); }
 .f2 .f-meter .bn-progress { flex: 1; width: auto; min-width: 48px; }
 .f2 .x-body { padding: var(--bn-3) var(--bn-4) var(--bn-4); gap: var(--bn-4); }
+/* "3 hidden" folded into the copies cell. Today it is a line of its own under the list and does
+   nothing when pressed; here it is quiet text on the count it qualifies. */
+.f2-hidden { margin-left: var(--bn-1-5); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.f2-hidden::before { content: '·'; margin-right: var(--bn-1-5); color: var(--bn-ink-4); }
 .f2 .copies { gap: var(--bn-1-5); }
 .f2 .copy { padding: var(--bn-2) var(--bn-3); gap: var(--bn-1) var(--bn-3); }
 .f2 .x-body > .shot { align-self: start; }
@@ -207,7 +211,7 @@ function bar(sections, here, card, of) {
     </div><p class="position-bar-zoom-ends"><span class="position-bar-end-back">Back</span><span class="position-bar-end-front">Front</span></p></div></div>`
 }
 const copy = (box, sec, card, of, sections, here) => `<li class="copy"><span class="copy-id"><span>${box}</span><span>${sec}</span><span>Card ${card} of ${of}</span></span><span class="copy-acts">${acts}</span><div class="copy-bar">${bar(sections, here, card, of)}</div></li>`
-const copies = () => `<ul class="copies">${copy('RB Origins', 'Section 2: Epics', 24, 40, [12, 40, 14], 1)}${copy('RB Epics', 'Section 1: Epics', 7, 30, [30, 22, 18], 0)}<li class="more">5 more copies</li></ul>`
+const copies = (tail = `<li class="more">3 hidden</li>`) => `<ul class="copies">${copy('RB Origins', 'Section 2: Epics', 24, 40, [12, 40, 14], 1)}${copy('RB Epics', 'Section 1: Epics', 7, 30, [30, 22, 18], 0)}${tail}</ul>`
 const ceiling = '<span class="ceiling"><b>7</b> sent · At the ceiling of 5</span>'
 
 /* A: the photograph is a rail down the whole pane; header, counts and copies are one column. */
@@ -280,10 +284,10 @@ function F(n) {
 function F2(n) {
   const top = `<div class="f-top">${n ? thumb : ''}<div class="f2-title">${bigName}${meta(true)}</div>${kebab}</div>`
   const bar = `<div class="f-bar">
-    <div class="f-cell fact"><b>7</b> copies</div><div class="f-cell fact"><b>5</b> in the boxes</div>
+    <div class="f-cell fact"><b>7</b> copies<span class="f2-hidden" title="Sold or moved copies, folded away by the hide-sold setting">3 hidden</span></div><div class="f-cell fact"><b>5</b> in the boxes</div>
     <div class="f-cell fact">${liveInline} live on TCGplayer<span class="readage">read 2 days ago</span></div>
     <div class="f-meter"><span class="f-say"><b>7</b> sent · At the ceiling of 5</span><div class="bn-progress" role="img" aria-label="5 of 5 may be live"><span style="width:100%"></span></div></div></div>`
-  const body = n ? `<div class="x-body">${copies()}</div>` : `<div class="x-body">${shotBtn}${copies()}</div>`
+  const body = n ? `<div class="x-body">${copies('')}</div>` : `<div class="x-body">${shotBtn}${copies('')}</div>`
   return `<div class="pane f2 ${n ? 'x-narrow' : 'x-wide x-beside'}"><div class="f-band">${top}${bar}</div>${body}</div>`
 }
 
