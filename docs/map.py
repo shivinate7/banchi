@@ -2266,7 +2266,7 @@ COMPONENTS = [
                 # D14 is why a code-shaped literal is worth a rule at all: the other track
                 # on the shared rig handles bearer instruments.
                 "governed_by": ["D11", "D14", "D16", "D18", "D24", "D44", "D47", "D58", "D70",
-                                "D92", "D295", "D303"],
+                                "D92", "D295", "D303", "D312"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
                         "declare. Listed, so its absence would be a finding; a sibling "
                         "hook's arrival is caught by `hook roster` since 2026-09-05. "
@@ -2584,8 +2584,8 @@ COMPONENTS = [
                 # violating it, so wired into the commit path it would refuse its own commits.
                 # D43 and D138 join with D158: the cases turn on a linked worktree having its own
                 # store, and on the primary checkout being the one the live server is built from.
-                "governed_by": ["D18", "D42", "D43", "D138", "D158", "D140", "D176",
-                                "D303"],
+                "governed_by": ["D18", "D42", "D43", "D138", "D140", "D158", "D176", "D303",
+                                "D312"],
             },
             "lan-check.py": {
                 "does": "answers whether the owner's LAN URL still works, end to end and from "

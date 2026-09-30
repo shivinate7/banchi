@@ -531,6 +531,38 @@ case "$both_out" in
   *) ok "a slug on a ref that is NOT main — silent" ;;
 esac
 
+echo "  -- a secrets file is refused in any directory (D312, the hook refuses a secrets file) --"
+git switch -q -c secretstest 2>/dev/null
+mkdir -p sub/deep
+for name in .env .env.local sub/.env sub/deep/.env.production; do
+  printf 'K=v\n' > "$name"
+  git add -f "$name"
+  expect refuse "$name staged, even by a forced add" git commit -qm "secrets file"
+  git reset -q -- "$name"
+  rm -f "$name"
+done
+mkdir -p "café" other
+for name in "café/.env" .ENV .Env.Local .env.example.bak; do
+  printf 'K=v\n' > "$name"
+  git add -f "$name"
+  expect refuse "$name staged — non-ASCII dir, upper case, or a template backup" git commit -qm "secrets file"
+  git reset -q -- "$name"
+  rm -f "$name"
+done
+printf 'K=v\n' > moved.txt
+git add moved.txt && git commit -qm "to be renamed" -q
+git mv moved.txt .env
+expect refuse "a git mv rename onto the name" git commit -qm "rename onto secrets"
+git mv -f .env moved.txt
+printf 'K=v\n' > gone.txt; git add gone.txt; git commit -qm "gone" -q
+git rm -q gone.txt
+expect allow "a staged delete is not a secrets file staged" git commit -qm "delete"
+for name in .env.example sub/.env.example other/.ENV.EXAMPLE .envrc; do
+  printf 'K=\n' > "$name"
+  git add -f "$name"
+  expect allow "$name staged — not a secrets file" git commit -qm "template"
+done
+
 echo "  -- every staged image gets the QR scan, wherever it lands (D303) --"
 # THE FOLDER LIST IS GONE. Before this, only demo-assets/photos/, demo-assets/extra/photos/
 # and demo-assets/mirror/photos/ were re-decoded by scripts/qr-clear-check.py; every other
