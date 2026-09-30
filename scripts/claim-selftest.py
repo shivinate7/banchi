@@ -2569,30 +2569,7 @@ def main() -> int:
            "a rename to a different number is still an allocation and is refused",
            "\n".join(f.where + ": " + f.message for f in changed_row.findings))
 
-        print("\n  -- and a merge of main brings main's own numbers, which are not the branch's --")
-        mtmp = tmp / "merge-in"
-        mtmp.mkdir()
-        mwork = build_split(mtmp)
-        git(mwork, "checkout", "-q", "-b", "feature-merge")
-        write(mwork, "notes.txt", "branch work\n")
-        git(mwork, "add", "-A")
-        git(mwork, "commit", "-qm", "branch work")
-        # main gains a number of its own, pushed from a second clone.
-        mother = mtmp / "other"
-        subprocess.run(["git", "clone", "-q", str(mtmp / "origin.git"), str(mother)],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-        write(mother, "docs/decisions/D050-main-only.md", "main only\n")
-        git(mother, "add", "-A")
-        git(mother, "commit", "-qm", "main allocates D050")
-        git(mother, "push", "-q", "origin", "HEAD:main")
-        # the merge arrives by a commit id, so the local `origin/main` ref stays behind it,
-        # the case a merge-base read alone cannot excuse.
-        stale_main = git(mwork, "rev-parse", "origin/main").strip()
-        pre_merge = git(mwork, "rev-parse", "HEAD").strip()
-        git(mwork, "fetch", "-q", "origin", "main:refs/heads/main-tip")
-        # a fetch with a refspec also moves `origin/main`; put it back behind the merge.
-        git(mwork, "update-ref", "refs/remotes/origin/main", stale_main)
-        git(mwork, "merge", "-q", "--no-ff", "-m", "merge main in", "main-tip")
+        print("\n  -- and a merge brings numbers in: main's are main's, nobody else's are --")
 
         def growth(root: Path) -> list:
             audit.ROOT = root
@@ -2600,28 +2577,95 @@ def main() -> int:
             audit.check_numbered_record_growth(rep, False)
             return next(r for r in rep.checks if r.check == "numbered record growth").findings
 
-        merged_findings = growth(mwork)
-        ok(not merged_findings, "a number main allocated, brought in by a merge, is main's",
-           "\n".join(f.where for f in merged_findings))
+        def names(findings: list) -> str:
+            return ",".join(sorted(Path(f.where).name for f in findings))
+
+        def world(label: str) -> Path:
+            """A clone at main's old tip, whose real `origin` has since gained D050 on main
+            (not yet fetched). Each arm gets its own, so no arm inherits another's history."""
+            wtmp = tmp / ("merge-" + label)
+            wtmp.mkdir()
+            wwork = build_split(wtmp)
+            other = wtmp / "other"
+            subprocess.run(["git", "clone", "-q", str(wtmp / "origin.git"), str(other)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            write(other, "docs/decisions/D050-main-only.md", "main only\n")
+            git(other, "add", "-A")
+            git(other, "commit", "-qm", "main allocates D050")
+            git(other, "push", "-q", "origin", "HEAD:main")
+            return wwork
+
+        def branch_with(work: Path, branch: str, number_file: str = "") -> str:
+            git(work, "checkout", "-q", "-b", branch)
+            write(work, "notes.txt", branch + "\n")
+            if number_file:
+                write(work, "docs/decisions/" + number_file, "own\n")
+            git(work, "add", "-A")
+            git(work, "commit", "-qm", "work on " + branch)
+            return git(work, "rev-parse", "HEAD").strip()
+
+        # (a) main's own D050, merged in from a real, fetched `origin/main`: main's.
+        wa = world("a")
+        branch_with(wa, "feature-a")
+        git(wa, "fetch", "-q", "origin")
+        git(wa, "merge", "-q", "--no-ff", "-m", "merge main in", "origin/main")
+        found = growth(wa)
+        ok(not found, "a number main allocated, brought in by a merge of origin/main, is main's",
+           names(found))
         # (b) the merge commit ITSELF adds a number no parent holds: still the branch's.
-        git(mwork, "checkout", "-q", "-b", "feature-evil", pre_merge)
-        git(mwork, "merge", "-q", "--no-ff", "--no-commit", "main-tip")
-        write(mwork, "docs/decisions/D060-in-the-merge.md", "own one\n")
-        git(mwork, "add", "-A")
-        git(mwork, "commit", "-qm", "merge main and slip in a number")
-        evil = growth(mwork)
-        ok(len(evil) == 1 and "D060-in-the-merge.md" in evil[0].where,
-           "a number the merge commit itself adds is still refused, and main's is not",
-           "\n".join(f.where for f in evil))
+        wb = world("b")
+        branch_with(wb, "feature-b")
+        git(wb, "fetch", "-q", "origin")
+        git(wb, "merge", "-q", "--no-ff", "--no-commit", "origin/main")
+        write(wb, "docs/decisions/D060-in-the-merge.md", "own one\n")
+        git(wb, "add", "-A")
+        git(wb, "commit", "-qm", "merge main and slip in a number")
+        found = growth(wb)
+        ok(names(found) == "D060-in-the-merge.md",
+           "a number the merge commit itself adds is still refused, and main's is not", names(found))
         # (c) an ordinary commit after the merge adds a number: still refused.
-        git(mwork, "checkout", "-q", "feature-merge")
-        write(mwork, "docs/decisions/D061-plain-commit.md", "own two\n")
-        git(mwork, "add", "-A")
-        git(mwork, "commit", "-qm", "a plain commit allocates a number")
-        plain = growth(mwork)
-        ok(len(plain) == 1 and "D061-plain-commit.md" in plain[0].where,
-           "a number a normal commit adds after a merge is still refused",
-           "\n".join(f.where for f in plain))
+        wc = world("c")
+        branch_with(wc, "feature-c")
+        git(wc, "fetch", "-q", "origin")
+        git(wc, "merge", "-q", "--no-ff", "-m", "merge main in", "origin/main")
+        branch_with(wc, "feature-c2", "D061-plain-commit.md")
+        found = growth(wc)
+        ok(names(found) == "D061-plain-commit.md",
+           "a number a normal commit adds after a merge is still refused", names(found))
+        # (d) a feature branch that allocated D090, merged into an integration branch: the
+        # merged-in parent is not main, so the number is not excused.
+        wd = world("d")
+        git(wd, "fetch", "-q", "origin")
+        base_sha = git(wd, "rev-parse", "origin/main").strip()
+        branch_with(wd, "feature-d", "D090-feature-number.md")
+        git(wd, "checkout", "-q", "-b", "integration", base_sha)
+        write(wd, "integration.txt", "integration\n")
+        git(wd, "add", "-A")
+        git(wd, "commit", "-qm", "integration work")
+        git(wd, "merge", "-q", "--no-ff", "-m", "merge the feature in", "feature-d")
+        found = growth(wd)
+        ok(names(found) == "D090-feature-number.md",
+           "a feature branch's number merged into an integration branch is refused", names(found))
+        # (e) CI's synthetic merge: main's tip first, the PR head second, the PR head carrying
+        # a number of its own.
+        we = world("e")
+        pr_head = branch_with(we, "pr-head", "D070-pr-number.md")
+        git(we, "fetch", "-q", "origin")
+        git(we, "checkout", "-q", "--detach", "origin/main")
+        git(we, "merge", "-q", "--no-ff", "-m", "synthetic merge", pr_head)
+        found = growth(we)
+        ok(names(found) == "D070-pr-number.md",
+           "the PR head's number in CI's synthetic merge (main first, PR second) is refused",
+           names(found))
+        # (f) commit a number, THEN merge main in: the number sits in the first parent.
+        wf = world("f")
+        branch_with(wf, "feature-f", "D080-before-the-merge.md")
+        git(wf, "fetch", "-q", "origin")
+        git(wf, "merge", "-q", "--no-ff", "-m", "merge main in", "origin/main")
+        found = growth(wf)
+        ok(names(found) == "D080-before-the-merge.md",
+           "a number committed before merging main in is still refused, and main's is not",
+           names(found))
 
         print("\n  -- and it does NOT refuse the sanctioned claim itself --")
         # THE ROUND THIS ARM CLOSES: `merge-pr.py:claim_half` runs `claim-ids.py --write`

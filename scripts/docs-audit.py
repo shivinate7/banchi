@@ -3075,6 +3075,20 @@ def _added_or_renamed_paths(diff_texts: Iterable[str]) -> Set[str]:
     return paths
 
 
+def _is_main_ancestor(commit: str) -> bool:
+    """`git merge-base --is-ancestor <commit> origin/main`: exit 0 is True. Exit 1 is False.
+    Any other exit, or no git, is also False, because the caller excuses on True only, so an
+    unreadable `origin/main` leaves the numbers unexcused and the row red (`git()` above would
+    read the failure as empty, which is the same here but not by name)."""
+    try:
+        done = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", commit, _MERGE_BASE_REFERENCE],
+            cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    except OSError:
+        return False
+    return done.returncode == 0
+
+
 def check_numbered_record_growth(report: Report, staged_only: bool) -> None:
     findings: List[Finding] = []
     dirs = ["docs/decisions", "docs/debts"]
@@ -3114,18 +3128,20 @@ def check_numbered_record_growth(report: Report, staged_only: bool) -> None:
                 Path(p).name for p in
                 git("ls-tree", "-r", "--name-only", base, "--", directory).splitlines()
             )
-            # A FILE A MERGE BROUGHT IN FROM THE OTHER SIDE IS NOT THE BRANCH'S: merging main
-            # in lands main's own new numbers on the branch, and a local `origin/main` that
-            # lags the merged commit cannot say so. The merged-in parent's own tree can. A
-            # number the merge commit itself adds (in no other parent's tree) stays the
-            # branch's. An unreadable parent reads empty, so nothing is excused: fail closed.
+            # A FILE A MERGE BROUGHT IN FROM MAIN IS MAIN'S, NOT THE BRANCH'S. A merged-in
+            # parent counts only when it is an ancestor of `origin/main` (`_is_main_ancestor`):
+            # a feature branch merged into an integration branch, or the PR head that is the
+            # second parent of CI's synthetic merge, is not main, and its numbers stay the
+            # branch's. A number the merge commit itself adds, or a commit before the merge,
+            # is in no such parent's tree. Anything unreadable excuses nothing: fail closed.
             merged_in = set()
             for merge in git("rev-list", "--merges", f"{base}..HEAD").splitlines():
                 for parent in git("rev-list", "--parents", "-n", "1", merge).split()[2:]:
-                    merged_in.update(
-                        Path(p).name for p in
-                        git("ls-tree", "-r", "--name-only", parent, "--", directory).splitlines()
-                    )
+                    if _is_main_ancestor(parent):
+                        merged_in.update(
+                            Path(p).name for p in
+                            git("ls-tree", "-r", "--name-only", parent, "--", directory).splitlines()
+                        )
             for path in sorted(dirpath.glob("*.md")):
                 if path.name not in base_names and path.name not in merged_in:
                     candidates.add(f"{directory}/{path.name}")
