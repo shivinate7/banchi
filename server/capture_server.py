@@ -16194,16 +16194,19 @@ class CaptureHandler(BaseHTTPRequestHandler):
         the total is the work itself. Route only, no query string, no body: nothing about a card.
         `make status` prints the last few.
         """
-        total = time.monotonic() - began
-        if total < SLOW_REQUEST_SECONDS:
-            return
-        busy = "+".join(dict.fromkeys(b for b in (busy_before, _supervisor_busy()) if b)) or "no"
-        route = urlparse(self.path).path[:80]
-        files.log_note(
-            f"{SLOW_LINE_PREFIX} {self.command} {route} total={total:.2f}s "
-            f"slot_wait={slot_wait:.2f}s ({pool} pool) lock_wait={files.lock_wait_seconds():.2f}s "
-            f"supervisor_busy={busy}" + (" refused" if refused else "")
-        )
+        try:  # runs in `_dispatch`'s `finally`: a logging fault must never replace the answer
+            total = time.monotonic() - began
+            if total < SLOW_REQUEST_SECONDS:
+                return
+            busy = "+".join(dict.fromkeys(b for b in (busy_before, _supervisor_busy()) if b)) or "no"
+            route = urlparse(self.path).path[:80]
+            files.log_note(
+                f"{SLOW_LINE_PREFIX} {self.command} {route} total={total:.2f}s "
+                f"slot_wait={slot_wait:.2f}s ({pool} pool) lock_wait={files.lock_wait_seconds():.2f}s "
+                f"supervisor_busy={busy}" + (" refused" if refused else "")
+            )
+        except Exception:  # noqa: BLE001, S110
+            pass
 
     def do_OPTIONS(self) -> None:  # noqa: N802 — BaseHTTPRequestHandler's naming
         """The preflight. It answers 204 for any path, and now not for any origin.
@@ -17339,7 +17342,7 @@ def _supervisor_busy() -> str:
         if time.time() - SUPERVISOR_BUSY_FILE.stat().st_mtime > SUPERVISOR_BUSY_MAX_AGE:
             return ""
         return SUPERVISOR_BUSY_FILE.read_text("utf-8").strip()[:40]
-    except OSError:
+    except (OSError, ValueError):
         return ""
 
 

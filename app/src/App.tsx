@@ -435,7 +435,7 @@ function useServerPresence(enabled: boolean): { state: ServerState; retry: () =>
     /* A REFUSAL THE SERVER SENT IS AN ANSWER. `/status` shares the photo lane and can be
      * turned away `photo_busy` (503) under a photo flood: the server is up, so the shell stays
      * online. Only "no response at all" (`status` 0) is offline. */
-    onError: (err) => setState(err instanceof ServerError && err.status > 0 ? 'online' : 'offline'),
+    onError: (err) => setState(err instanceof ServerError && err.status > 0 && err.code !== 'http_error' ? 'online' : 'offline'),
     liveMs: 15000,
     idleMs: 15000,
     refreshOnFocus: true,

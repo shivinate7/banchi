@@ -670,8 +670,8 @@ def mark_busy(what: str, root: Path = REPO_ROOT) -> None:
     or a branch syncs then names that cause. `clear_busy` removes it; a crash's leftover expires.
     """
     path = state_dir(root) / "busy"
-    path.parent.mkdir(parents=True, exist_ok=True)
     with contextlib.suppress(OSError):
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(what + "\n", "utf-8")
 
 

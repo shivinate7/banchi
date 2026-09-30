@@ -37395,14 +37395,26 @@ def check_slow_request_line(checks: Checks) -> None:
     answer: list = []
     real_note, real_limit = files.log_note, capture_server.SLOW_REQUEST_SECONDS
     real_busy = capture_server.SUPERVISOR_BUSY_FILE
-    files.log_note = lines.append
+    # ONLY THIS CHECK'S OWN HANDLER'S LINES COUNT. A late `_note_slow` from an earlier check's server
+    # (it runs after the response) must not be read as this check's line.
+    mine = threading.local()
+
+    class Mine(QuietHandler):
+        def _note_slow(self, *args, **kwargs) -> None:
+            mine.on = True
+            try:
+                super()._note_slow(*args, **kwargs)
+            finally:
+                mine.on = False
+
+    files.log_note = lambda text: lines.append(text) if getattr(mine, "on", False) else None
     capture_server.SLOW_REQUEST_SECONDS = 0.3
     origin = capture_server.DEFAULT_ALLOWED_ORIGINS[0]
     with isolated_home() as home:
         Store().read()
         capture_server.SUPERVISOR_BUSY_FILE = home / "busy"
         capture_server.SUPERVISOR_BUSY_FILE.write_text("app-build\n", "utf-8")
-        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), Mine)
         thread = _spawn_server(httpd)
         port = httpd.server_address[1]
         try:
@@ -37417,6 +37429,14 @@ def check_slow_request_line(checks: Checks) -> None:
                 writer.start()
                 time.sleep(0.8)  # parked on the lock; released on leaving the block
             writer.join(timeout=30)
+            # `_note_slow` runs in `_dispatch`'s `finally`, AFTER the response is sent. Wait for
+            # the line on a condition, once and bounded, before the seams are put back.
+            deadline = time.monotonic() + 5.0
+            while time.monotonic() < deadline and not any(
+                str(ln).startswith(capture_server.SLOW_LINE_PREFIX) and "POST /boxes " in str(ln)
+                for ln in list(lines)
+            ):
+                time.sleep(0.01)
         finally:
             files.log_note = real_note
             capture_server.SLOW_REQUEST_SECONDS = real_limit
@@ -37425,10 +37445,13 @@ def check_slow_request_line(checks: Checks) -> None:
             httpd.server_close()
             thread.join(timeout=5)
 
-    slow = [ln for ln in lines if str(ln).startswith(capture_server.SLOW_LINE_PREFIX)]
+    slow = [
+        ln for ln in lines
+        if str(ln).startswith(capture_server.SLOW_LINE_PREFIX) and "POST /boxes " in ln
+    ]
     checks.equal(
         len(slow), 1,
-        f"exactly one slow-request line: the parked write, not the fast read (log saw {lines!r}, "
+        f"exactly one slow-request line for the parked write (log saw {lines!r}, "
         f"write answered {answer!r})",
     )
     line = slow[0] if slow else ""
