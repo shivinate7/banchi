@@ -20,6 +20,7 @@ from harness.tests.t7.common import (
     isolated_home,
 )
 
+
 def check_value_table(checks: Checks) -> None:
     """Every card on hand, ranked by what it is worth, with nothing dropped.
 
@@ -287,6 +288,7 @@ def check_value_table(checks: Checks) -> None:
             (0, 0),
             "the new totals fields read 0 on an empty store too",
         )
+
 
 def check_value_page(checks: Checks) -> None:
     """`GET /pipeline/value?band=...` — the paginated sibling of

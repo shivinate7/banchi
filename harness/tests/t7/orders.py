@@ -55,6 +55,7 @@ from harness.tests.t7.common import (
     write_export,
 )
 
+
 def write_staged(path, quantities):
     """An Export From Staged: the seam rows, with `Add to Quantity` set per SKU.
 
@@ -77,6 +78,7 @@ def write_staged(path, quantities):
         )
     tcgcsv.write_csv(path, source.header, rows)
     return Path(path)
+
 
 def orders_with_picks() -> dict:
     """`GET /orders` with real `picks` merged back in, for tests written against the combined
@@ -115,6 +117,7 @@ def _stages(inventory) -> str:
     print THIS number — not that they print some number that happens to match today.
     """
     return ", ".join(f"{k} {v}" for k, v in inventory.listing_counts().items() if v)
+
 
 def check_committed_copies_are_the_oldest(checks: Checks) -> None:
     """The copies held back as already-at-TCGplayer are the OLDEST CAPTURES, not the first box.
@@ -282,6 +285,7 @@ def check_committed_copies_are_the_oldest(checks: Checks) -> None:
             "be D59's stuck-`pushed` correction undone rather than this defect fixed",
         )
 
+
 def _copies_out_reference(
     inventory: master.Inventory, live_by_sku: dict
 ) -> Tuple[dict, dict]:
@@ -324,6 +328,7 @@ def _copies_out_reference(
         )
         out[sku] = max(live, claim - sold)
     return out, live_now
+
 
 def check_copies_out_one_pass_matches_reference(checks: Checks) -> None:
     """`resolve._copies_out`'s one-pass rewrite must equal the per-listing arithmetic it
@@ -391,6 +396,7 @@ def check_copies_out_one_pass_matches_reference(checks: Checks) -> None:
             "across both `copies_out` and `live_now` — including SKU-D, whose retired copy "
             "must NOT be counted alongside the sold one",
         )
+
 
 def check_listing_commands(checks: Checks) -> None:
     """`emit`, `reconcile` and `join` moving SKU QUANTITIES rather than card states (D7).
@@ -1228,6 +1234,7 @@ def check_listing_commands(checks: Checks) -> None:
             "which a second session reads back unchanged — a v2 payload is not re-migrated",
         )
 
+
 def check_order_resolver(checks: Checks) -> None:
     """`pipeline/orders.py` — an order line resolved to the copies that fill it.
 
@@ -1664,6 +1671,7 @@ def check_order_resolver(checks: Checks) -> None:
             "and a run that was identified and never joined has no pricing table, which is "
             "an ordinary state and not a complaint (D86) — the card-first pass needs none",
         )
+
 
 def check_order_ledger(checks: Checks) -> None:
     """`store/orders.py` — `inventory/orders.json`, the durable half of the order flow.
@@ -2776,6 +2784,7 @@ def check_order_reconcile_backlog(checks: Checks) -> None:
                 "with the same refusal code as a cutoff a year out",
             )
 
+
 def check_order_line_sealed_from_title(checks: Checks) -> None:
     """A sold sealed box whose SKU left the `skus` table, on a paste with no condition cell,
     still answers `Unopened` (Sales' Singles/Sealed switch reads that one condition). A
@@ -3887,6 +3896,7 @@ def check_order_screen(checks: Checks) -> None:
             "change queued behind it, because `Store.write()` commits only on a clean exit",
         )
 
+
 def check_order_walk_plan_route(checks: Checks) -> None:
     """`POST /orders/walk-plan` composes a REAL position for every copy it offers, and —
     RULED 2026-09-19 (`docs/specs/order-walk-plan.md` §8) — carries EVERY on-hand copy of the take's SKU,
@@ -4084,6 +4094,7 @@ def check_order_walk_plan_route(checks: Checks) -> None:
                 "stage, zero sold here, null read time — the same shape a SKU with no "
                 "listing gets from `/search` (D115), never a fabricated absence",
             )
+
 
 def check_order_places_scoped(checks: Checks) -> None:
     """Store-scaling item 6: `do_orders` scopes its `_Places` build to the boxes its picks
@@ -4376,6 +4387,7 @@ def check_order_picks_tier(checks: Checks) -> None:
                 "is not a caller error",
             )
 
+
 def check_inventory_copies_route(checks: Checks) -> None:
     """DEBT27, site 1: `POST /inventory/copies` — every on-hand copy of a SKU
     set, store-wide, in `do_inventory`'s own per-card shape.
@@ -4528,6 +4540,7 @@ def check_inventory_copies_route(checks: Checks) -> None:
             "field_not_settable",
             "an unrecognised field is refused by name",
         )
+
 
 def check_order_fetch_route(checks: Checks) -> None:
     """`POST /orders/fetch` in both of its bodies (D91), against canned pages and no socket.

@@ -56,6 +56,7 @@ from harness.tests.t7.common import (
     write_export,
 )
 
+
 def _assert_identity_round_trip(checks: Checks, before: dict, after: dict, label: str) -> None:
     """identity-follows-sku.md §8, lane 3a review round: D28's "undo must be exact" — a
     forward write then its own undo must leave the card byte-identical to `before`, except
@@ -71,6 +72,7 @@ def _assert_identity_round_trip(checks: Checks, before: dict, after: dict, label
         f"EXACTLY (D28: undo must be exact) — bound_by/identity_source/read_disputes "
         f"included, not only sku/condition/name/number/printed_total/set_name/rarity",
     )
+
 
 def check_cli_seams(checks: Checks) -> None:
     """The wiring that feeds rules T3-T5 already check.
@@ -892,6 +894,7 @@ def check_review_catalog(checks: Checks) -> None:
             "and that refusal wrote nothing",
         )
 
+
 def check_correct_answer(checks: Checks) -> None:
     """POST /inventory/<box>/<index>/correct — D252.
 
@@ -1460,6 +1463,7 @@ def check_correct_answer(checks: Checks) -> None:
             "MISSING key means leave the field exactly where it stands, never guess `None`",
         )
 
+
 def check_correct_answer_live_release(checks: Checks) -> None:
     """POST /inventory/<box>/<index>/correct — the `live` stage of the release, and the
     stamps a round trip must not corrupt. D252, review round 2.
@@ -1560,6 +1564,7 @@ def check_correct_answer_live_release(checks: Checks) -> None:
         )
         if undone is not None:
             checks.ok(True, "and the route itself answered")
+
 
 def check_identity_binding(checks: Checks) -> None:
     """identity-follows-sku.md, lane 3a's own coverage. Every server writer that sets a SKU
@@ -2181,6 +2186,7 @@ def check_identity_binding(checks: Checks) -> None:
             "refused whole",
         )
 
+
 def check_catalog_number_fields_round_trip(checks: Checks) -> None:
     """`join.catalog_number_fields`, round-tripped over every distinct `Number` cell in the
     four committed exports — item 2 of the review on the D252 amendment. `store/numbers.py:
@@ -2263,6 +2269,7 @@ def check_catalog_number_fields_round_trip(checks: Checks) -> None:
         "shape the review named by name",
     )
     checks.note(f"{total_checked} cells checked, {mangled} mangled")
+
 
 def check_catalog_set_rarity_match(checks: Checks) -> None:
     """`server/capture_server.py:_catalog_matches` sees `Set Name`/`Rarity`
@@ -2455,6 +2462,7 @@ def check_catalog_set_rarity_match(checks: Checks) -> None:
         "reason",
     )
 
+
 class _ClaimCard:
     """Everything `join.claim_matches`/`join.rank_by_claims` read off a card, duck-typed —
     `_catalog_matches`'s own `card` parameter never requires `store.master.Card` itself,
@@ -2465,6 +2473,7 @@ class _ClaimCard:
         self.metadata_finish = metadata_finish
         self.set_hint = set_hint
         self.game = game
+
 
 def check_catalog_claim_rank_and_no_cutoff(checks: Checks) -> None:
     """D23's amendment, 2026-09-24: `do_review_catalog` no longer cuts the wire response at
@@ -2556,6 +2565,7 @@ def check_catalog_claim_rank_and_no_cutoff(checks: Checks) -> None:
                 "and the card's own stored claim ranks the search exactly as the direct "
                 "call above did",
             )
+
 
 def check_identify_preflight_stage(checks: Checks) -> None:
     """`identify` hashes before it decodes, and `Item.stage` is what makes that safe.
@@ -2815,6 +2825,7 @@ def check_identify_preflight_stage(checks: Checks) -> None:
             cmd_identify.batch.run_batch = real_run_batch
             cmd_identify.images.prepare = real_prepare
 
+
 def check_review_stand_down(checks: Checks) -> None:
     """POST /review/<box>/<index>/stand-down — D37, closing a question without answering it.
 
@@ -3016,6 +3027,7 @@ def check_review_stand_down(checks: Checks) -> None:
             "and the answer is still on the card after that refusal",
         )
 
+
 def check_run_realignment(checks: Checks) -> None:
     """D36 — a run's slot numbers are re-bound to the photographs they were taken from.
 
@@ -3183,6 +3195,7 @@ def check_run_realignment(checks: Checks) -> None:
         checks.equal(
             moved, {"9/1": "9/2"}, "D36: and the card that really moved is still re-bound"
         )
+
 
 def check_reused_box_refusal(checks: Checks) -> None:
     """D36 (amended) — a run over a box whose number was deleted and reused is refused outright.
@@ -3360,6 +3373,7 @@ def check_reused_box_refusal(checks: Checks) -> None:
         ("born after the run AND holding only others' cards: disowned", (made, [other], "r", ran), True),
     ):
         checks.equal(master.box_disowns_run(*args), expected, f"box_disowns_run: {label}")
+
 
 def check_box_true_index(checks: Checks) -> None:
     """A box has a TRUE INDEX that is never reused, and a run over a deleted drawer says so.
@@ -3544,6 +3558,7 @@ def check_box_true_index(checks: Checks) -> None:
             "younger than the run and the box's 133 cards are all another run's",
         )
 
+
 def check_emit_buried_box(checks: Checks) -> None:
     """An emit over a buried box refuses and creates no card (2026-09-27 incident).
 
@@ -3663,6 +3678,7 @@ def check_emit_buried_box(checks: Checks) -> None:
             "a card that is where the store says it is",
             said,
         )
+
 
 def check_rescue_stranded_run(checks: Checks) -> None:
     """The one-time repair for a run D36 refuses, and the binding that ends the class.
@@ -4036,6 +4052,7 @@ def check_rescue_stranded_run(checks: Checks) -> None:
         checks.equal(code, 1, "`pkmnscan rescue` is a real subcommand and exits 1 on a refusal")
         checks.ok("REFUSING" in said.getvalue(), "printing the refusal", said.getvalue())
 
+
 def check_rescue_discharges_stranded_count(checks: Checks) -> None:
     """A rescued run stops counting as stranded on `#/pricing`.
 
@@ -4159,6 +4176,7 @@ def check_rescue_discharges_stranded_count(checks: Checks) -> None:
             "an unjoined rescue is invisible to this count — the stranded run reads exactly "
             "as it did before any rescue existed",
         )
+
 
 def check_rescue_route(checks: Checks) -> None:
     """`POST /pipeline/runs/<name>/rescue` — the CLI reached from a screen, D145.
@@ -4309,6 +4327,7 @@ def check_rescue_route(checks: Checks) -> None:
             "a refusal carries no raw stdout either — the log file is the only place it goes",
             refused,
         )
+
 
 def check_rescue_json_reasons(checks: Checks) -> None:
     """Every reason `cmd_rescue.run --json` can return, pinned against the REAL condition.
@@ -4480,6 +4499,7 @@ def check_rescue_json_reasons(checks: Checks) -> None:
             report.get("reason"), "no_identifications",
             "a store-backed join's own output directory reports no_identifications",
         )
+
 
 def check_store_backed_join(checks: Checks) -> None:
     """PR G — `join` without a run directory, reading identifications straight off the store.
@@ -4747,6 +4767,7 @@ def check_store_backed_join(checks: Checks) -> None:
             str(caught) if caught else "",
         )
 
+
 def check_run_binds_to_bid(checks: Checks) -> None:
     """A run records its drawer's TRUE INDEX from every path that starts one (D145).
 
@@ -4877,6 +4898,7 @@ def check_run_binds_to_bid(checks: Checks) -> None:
             "and a run holding nothing is absent rather than zero, which is what lets the "
             "screen drop a false alarm without dropping a card",
         )
+
 
 def check_printed_code_profiles(checks: Checks) -> None:
     """`riftbound_card_v1` and `one_piece_card_v1`: the wiring, and the one seam that lies.

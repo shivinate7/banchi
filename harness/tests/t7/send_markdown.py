@@ -52,6 +52,7 @@ from harness.tests.t7.common import (
     seam_run,
 )
 
+
 def check_markdown(checks: Checks) -> None:
     """The live listings that are not selling, marked down and pushed back (D100).
 
@@ -389,6 +390,7 @@ def check_markdown(checks: Checks) -> None:
             f"owner's store carries no `sku` key, and a query over the log loses it silently",
         )
 
+
 def check_markdown_floor(checks: Checks) -> None:
     """The floor a markdown obeys is the STORE's cut-off (D9, amended 2026-09-09).
 
@@ -544,6 +546,7 @@ def check_markdown_floor(checks: Checks) -> None:
             "operator presses, which is the figure on the screen in front of them",
             said,
         )
+
 
 def check_markdown_lens(checks: Checks) -> None:
     """`survey.json`, and the rows the offer never held (D103).
@@ -876,6 +879,7 @@ def check_markdown_lens(checks: Checks) -> None:
             except pipeline_routes.PipelineRefusal as refusal:
                 checks.equal(refusal.code, code, f"the route refuses `{code}` by name")
 
+
 def check_markdown_push(checks: Checks) -> None:
     """The two routes that reach TCGplayer, at every gate that fires BEFORE the socket opens.
 
@@ -1021,6 +1025,7 @@ def check_markdown_push(checks: Checks) -> None:
         ("/admin/pricing/initializeexportcsv", "/admin/pricing/uploadexportcsv", 750, 3),
         "and the endpoints, the chunk size and the pinned scope are the ones read off their bundle",
     )
+
 
 @contextmanager
 def send_portal():
@@ -1205,6 +1210,7 @@ def send_portal():
             else:
                 os.environ[name] = value
 
+
 def _refusal_text_route(fn) -> Optional[Tuple[str, str]]:
     """`(code, message)` off the `PipelineRefusal` `fn` raised, or None if it answered. For a case
     whose refusal must NAME a card, where the message is the contract."""
@@ -1214,6 +1220,7 @@ def _refusal_text_route(fn) -> Optional[Tuple[str, str]]:
         return (caught.code, str(caught))
     return None
 
+
 def _route_refusal(fn) -> Optional[str]:
     """The `PipelineRefusal` code `fn` raised, or None if it answered."""
     try:
@@ -1221,6 +1228,7 @@ def _route_refusal(fn) -> Optional[str]:
     except pipeline_routes.PipelineRefusal as caught:
         return caught.code
     return None
+
 
 def check_send_guard(checks: Checks) -> None:
     """The double-send guard, at the command: TCGplayer never ends up holding more than is here.
@@ -1312,6 +1320,7 @@ def check_send_guard(checks: Checks) -> None:
         "every copy that has left",
     )
     checks.equal(sendguard.room(live=5, held=3), 0, "room is never negative")
+
 
 def check_send_press(checks: Checks) -> None:
     """The one press, every path, against the loopback portal (`send_portal`).
@@ -1610,6 +1619,7 @@ def check_send_press(checks: Checks) -> None:
         "and a price file still refuses any quantity at all (D100)",
     )
 
+
 def _press_thread(fn, answers, index):
     """Run one press on its own thread and keep what it answered, or the code it refused."""
 
@@ -1625,6 +1635,7 @@ def _press_thread(fn, answers, index):
     thread.start()
     return thread
 
+
 @contextmanager
 def _short_timeout(seconds: float):
     """The transport's timeout, lowered for one case so the slow mode is past it quickly."""
@@ -1635,6 +1646,7 @@ def _short_timeout(seconds: float):
     finally:
         tcg_export.TIMEOUT_S = before
 
+
 def _age_receipt(stamp: str) -> None:
     """Move a receipt's wait into the past: the lag has passed for it."""
     directory = send_routes.sends_dir() / stamp
@@ -1642,8 +1654,10 @@ def _age_receipt(stamp: str) -> None:
     record["check_after"] = "2000-01-01T00:00:00+00:00"
     send_routes._write(directory, record)
 
+
 def _posts(portal) -> List[str]:
     return [name for kind, name in portal["calls"] if kind == "POST"]
+
 
 @contextmanager
 def _case(checks: Checks, label: str):
@@ -1654,6 +1668,7 @@ def _case(checks: Checks, label: str):
         import traceback
 
         checks.ok(False, f"{label}: the case raised", traceback.format_exc()[-1500:])
+
 
 def check_send_hazards(checks: Checks) -> None:
     """The adversarial review's failures, each against the stand-in portal's own mode.
@@ -2103,6 +2118,7 @@ def check_send_hazards(checks: Checks) -> None:
                 f"and its receipt stays, saying so, rather than being removed: {sorted(record)}",
             )
 
+
 @contextmanager
 def _patched(owner, name: str, value):
     """Swap one attribute for one case, and put it back whatever the case did."""
@@ -2113,9 +2129,11 @@ def _patched(owner, name: str, value):
     finally:
         setattr(owner, name, before)
 
+
 class _Died(BaseException):
     """A server dying mid-press, as the code under test sees it: nothing after this line runs,
     and no `except Exception` catches it."""
+
 
 def _markdown_dir(home: Path, stamp: str, price: str = "19.99", *, at: Optional[str] = None) -> Path:
     """A mark-down directory holding one price row for Articuno, as `reprice list` writes it.
@@ -2153,6 +2171,7 @@ def _markdown_dir(home: Path, stamp: str, price: str = "19.99", *, at: Optional[
     )
     return directory
 
+
 def _live_export_priced(quantities: Dict[str, int], prices: Dict[str, str]) -> bytes:
     """A live export holding these quantities, and these marketplace prices where named."""
     source = tcgcsv.read_export(FIXTURE_EXPORT)
@@ -2167,10 +2186,12 @@ def _live_export_priced(quantities: Dict[str, int], prices: Dict[str, str]) -> b
     tcgcsv.write_csv(path, source.header, rows)
     return path.read_bytes()
 
+
 def _dead_pid() -> int:
     gone = subprocess.Popen(["true"])
     gone.wait()
     return gone.pid
+
 
 def check_send_review_r3(checks: Checks) -> None:
     """The round-2 adversarial review's failures (F1-F6, and three more), each red first.
@@ -2560,6 +2581,7 @@ def check_send_review_r3(checks: Checks) -> None:
             "and a second check that still finds none offers all four back",
         )
 
+
 class _GatedStore:
     """`Store`, with the first two `write()` calls held at a barrier until both arrive. Two
     presses at once then enter their store write together, which is the race a take-back must
@@ -2580,6 +2602,7 @@ class _GatedStore:
             with contextlib.suppress(threading.BrokenBarrierError):
                 self.gate.wait()
         return self._real.write(*args, **kwargs)
+
 
 def check_send_review_r4(checks: Checks) -> None:
     """The round-3 adversarial review's failures (H1-H4), each red first on the round-3 build.
@@ -2863,6 +2886,7 @@ def check_send_review_r4(checks: Checks) -> None:
             "back answers for the receipt rather than 404",
         )
 
+
 def check_send_review_r5(checks: Checks) -> None:
     """Round 5: the mixed send (the owner's ruling, 2026-09-24: "Allow mixed"), and the order of
     two presses in one second. Each case went red on the round-4 build before the fix.
@@ -3085,6 +3109,7 @@ def check_send_review_r5(checks: Checks) -> None:
             (1, 0),
             "AND THE CREDIT LEDGER AGREES: one live copy goes to the send pressed first",
         )
+
 
 def check_send_review_r6(checks: Checks) -> None:
     """Round 6: the fresh review of round 5 (B1-B3, S1-S4, N2), each red first on the round-5
@@ -3332,6 +3357,7 @@ def check_send_review_r6(checks: Checks) -> None:
             "B3: A MARK-DOWN ROLLED BACK IS RECORDED AS NOT LIVE, AND 'CHECK THE STAGED LIST'",
         )
 
+
 def check_send_review_r7(checks: Checks) -> None:
     """Round 7: the review of round 6 (R6-1 to R6-4) and the owner's ruling on R6-3, each red
     first on the round-6 build (9ee9b6e3).
@@ -3458,6 +3484,7 @@ def check_send_review_r7(checks: Checks) -> None:
             "R6-1: THE WORKLIST CARRIES TCGPLAYER'S PRICE FROM THE NEWEST LIVE EXPORT (22.03), not "
             "only the join's (25.99)",
         )
+
 
 def check_schema_eleven_then_twelve(checks: Checks) -> None:
     """Two branches each took schema 11. Main's identity lane took it for `skus` and
@@ -3592,6 +3619,7 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
             "and both cards are in the store",
         )
 
+
 def check_send_review_r8(checks: Checks) -> None:
     """Round 8: the review of round 7 (R7-1, R7-3, R7-4), each red first on the round-7 build
     (19c3bc3e). A move of live copies under the floor is refused and never offered back; a move
@@ -3684,6 +3712,7 @@ def check_send_review_r8(checks: Checks) -> None:
             "R7-4: TWO LIVE COPIES WITH NO PRICE ARE A MOVE THE BUTTON MUST NAME, the safe side",
         )
         checks.equal(portal["rows"], [], "R7-4: and TCGplayer receives no row")
+
 
 def check_run_match(checks: Checks) -> None:
     """Q4 of the flow interview: matching runs by itself when a reading finishes, and a problem
@@ -3785,12 +3814,14 @@ def check_run_match(checks: Checks) -> None:
             "A SIGN-IN THAT HAS EXPIRED is the run's next step, never a silent stall",
         )
 
+
 def _refusal_code_transport(rows, *, listing: bool) -> Optional[str]:
     try:
         tcg_import._check(rows, listing=listing)
     except tcg_import.FetchRefusal as refusal:
         return refusal.code
     return None
+
 
 def check_live_markdown_guards(checks: Checks) -> None:
     """The Live tab's four rules (the owner's rulings, 2026-09-26), each red under its own
@@ -4075,6 +4106,7 @@ def check_live_markdown_guards(checks: Checks) -> None:
             "and a list filtered to Singles carries it",
         )
 
+
 def check_publish_lag(checks: Checks) -> None:
     """`reconcile --live` will not settle a SKU this pipeline just published (D273).
 
@@ -4172,6 +4204,7 @@ def check_publish_lag(checks: Checks) -> None:
         "the window is at least a minute — the measured staleness was ~40s, so anything "
         "shorter would be a guard that does not cover the one reading it was built for",
     )
+
 
 def check_pricing_route(checks: Checks) -> None:
     """`GET /pipeline/runs/<name>/pricing` — free, read-only, two files from one moment.
@@ -4296,6 +4329,7 @@ def check_pricing_route(checks: Checks) -> None:
         finally:
             httpd.shutdown()
             thread.join(timeout=5)
+
 
 def check_corpus_revision(checks: Checks) -> None:
     """`PUT /pricing` refuses a write that is behind the file on disk.
@@ -4535,6 +4569,7 @@ def check_corpus_revision(checks: Checks) -> None:
             "the ratchet reads `channel == 'price'` for exactly this reason",
         )
 
+
 def check_pricing_clear(checks: Checks) -> None:
     """The mass-clear: what it removes, what it refuses to touch, and the way back.
 
@@ -4729,6 +4764,7 @@ def check_pricing_clear(checks: Checks) -> None:
             "user, exactly as the PUT allows",
         )
 
+
 def check_pricing_labels(checks: Checks) -> None:
     """`pricing.json`'s position labels are re-rendered on every read, and the file never moves.
 
@@ -4891,6 +4927,7 @@ def check_pricing_labels(checks: Checks) -> None:
             f"answered {answer!r}",
         )
 
+
 def check_box_views_bounded(checks: Checks) -> None:
     """`cli/resolve.py:box_views(inventory, boxes=...)` — the bounded
     branch a caller uses when its own positions already name a small set of boxes, and the
@@ -4951,6 +4988,7 @@ def check_box_views_bounded(checks: Checks) -> None:
             "a requested box that holds no on-hand card at all is simply absent, never a "
             "refusal",
         )
+
 
 def check_withholding(checks: Checks) -> None:
     """A withheld SKU writes no row, moves no count, and is still FINDABLE (D86).

@@ -34,6 +34,7 @@ from harness.tests.t7.common import (
     stored_captures,
 )
 
+
 def check_history(checks: Checks) -> None:
     """The three routes that write without moving a card between states.
 
@@ -517,6 +518,7 @@ def check_history(checks: Checks) -> None:
             "and the reversal actually puts that state back, past the withdrawn answer",
         )
 
+
 def check_history_scoped_read(checks: Checks) -> None:
     """`db.events_at` is a scope, not a rewrite: at any key, it must equal the box-filtered
     slice of the full log a reversal reader already gets today, one row at a time, filtered
@@ -584,6 +586,7 @@ def check_history_scoped_read(checks: Checks) -> None:
             capture_server._state_before_sale(Store().history(), "3/2"),
             "and the reader that actually decides an undo agrees, scoped or not",
         )
+
 
 def check_history_scoped_uses_index(checks: Checks) -> None:
     """`events_at`'s scope is provable in code, but a session six months from now could

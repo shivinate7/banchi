@@ -287,6 +287,7 @@ def check_inventory_filter_facets(checks: Checks) -> None:
             httpd.shutdown()
             thread.join()
 
+
 def check_inventory_facet_cells(checks: Checks) -> None:
     """FLT-09 — `#/inventory`'s filters work in any order, so `GET /boxes` ships the cells.
 
@@ -694,6 +695,7 @@ def check_box_routes_and_search(checks: Checks) -> None:
             "trailing separator, on the game that never prints one",
         )
 
+
 def check_search_fts5(checks: Checks) -> None:
     """Store-scaling item 8: `do_search` reads an FTS5 index, and the walk is deleted.
 
@@ -992,6 +994,7 @@ def check_search_fts5(checks: Checks) -> None:
         checks.equal(stamp, (str(db.SCHEMA_VERSION),), "and lands on the current schema")
         checks.ok(has_fts is not None, "with the search index built")
 
+
 def check_inventory_box_route(checks: Checks) -> None:
     """D192/item 2: `GET /inventory/<box>` reads one box, never the store.
 
@@ -1062,6 +1065,7 @@ def check_inventory_box_route(checks: Checks) -> None:
             caught is None or "2/1" in str(caught),
             "and the refusal names the corrupt record, exactly as `next_index` already does",
         )
+
 
 def check_rows_scoped_after_full_load(checks: Checks) -> None:
     """D192/item 2: `where()`/`select()` cost what the index costs, even after this
@@ -1189,6 +1193,7 @@ def check_rows_scoped_after_full_load(checks: Checks) -> None:
                 "and it does NOT yet answer for its new state — the documented gap for a "
                 "row mutated in place into a match the source's own index cannot see",
             )
+
 
 def check_inventory_recent_route(checks: Checks) -> None:
     """D192/item 2: `GET /inventory/recent` — Home's hero deck — is a lean top-K read over
@@ -1396,6 +1401,7 @@ def check_box_names(checks: Checks) -> None:
             "and it skips a number held by CARDS with no registry entry — handing that one "
             "out again would put two boxes' photographs in one directory",
         )
+
 
 def check_box_claims(checks: Checks) -> None:
     """PUT /inventory/<box> — the box-level claim apply, the owner's ask of 2026-08-23.
@@ -1671,6 +1677,7 @@ def check_box_claims(checks: Checks) -> None:
             "OMITTING `indices` still means the whole box — the compatibility guarantee "
             "that makes the selection strictly additive to the route that shipped without it",
         )
+
 
 def check_place_neighbors(checks: Checks) -> None:
     """D58's digital half on the wire: `neighbors` and `section_gaps` in the place block.
@@ -2099,6 +2106,7 @@ def check_box_claim_product(checks: Checks) -> None:
             "a later call that does not mention `product` leaves it alone",
         )
 
+
 def check_box_names_and_place_labels(checks: Checks) -> None:
     """A box is shown by its name, and a place label is box name, section and card in section.
 
@@ -2380,6 +2388,7 @@ def check_box_names_and_place_labels(checks: Checks) -> None:
             "EVERY UNNAMED BOX GETS ITS OWN `Box <number>` FIRST, WHERE IT IS FREE, and only then "
             "are the clashes resolved: a clash never shifts a later box off its own free name",
         )
+
 
 def check_consolidated_numbering(checks: Checks) -> None:
     """A card's number is its place among the cards IN the box, not among the slots. D58.
@@ -2703,6 +2712,7 @@ def check_section_names(checks: Checks) -> None:
             ({}, {"2": "Rares"}),
             "the event carries both maps, by ordinal, so the trail says what a section was called",
         )
+
 
 def check_open_section(checks: Checks) -> None:
     """`POST /boxes/<box>/sections` — D10's divider, opened one at a time at the rig.

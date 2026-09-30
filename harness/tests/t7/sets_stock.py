@@ -29,6 +29,7 @@ from harness.tests.t7.common import (
     isolated_home,
 )
 
+
 def check_pipeline_sets(checks: Checks) -> None:
     """`GET /pipeline/sets` — the owner's "by set order" view (D293).
 
@@ -207,6 +208,7 @@ def check_pipeline_sets(checks: Checks) -> None:
         "on-hand qty sums to exactly the identified cards planted: 3 Spiritforged SKUs + "
         "1 extra RICH copy + 3 Origins + 1 sku_unknown + 2 blanks + 1 no-set = 11",
     )
+
 
 def check_stock_images(checks: Checks) -> None:
     """`pipeline/stockimages.py` (`D301`) — both sources stubbed, never a socket.
@@ -471,6 +473,7 @@ def check_stock_images(checks: Checks) -> None:
         "answered 'Classic Collection' here, which this line goes red on without the fix.",
     )
 
+
 def check_sales_stock_photo_fallback(checks: Checks) -> None:
     """F2, the owner's report: *"why does the sales page not pull the icons like you're
     able to do on sets and pricing?"* `#/revenue`'s `GET /skus/photos` gains a stock-photo
@@ -714,6 +717,7 @@ def check_sales_stock_photo_fallback(checks: Checks) -> None:
                 and "unregistered-sku" not in threaded["stock_photos"],
                 "a SKU whose product line no game claims is absent from both fields too",
             )
+
 
 def check_stock_images_pokemon_warm_refusal(checks: Checks) -> None:
     """Finding 2, review round 2026-09-27: `warm_stock_images`'s startup pairs are every

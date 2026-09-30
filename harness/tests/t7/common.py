@@ -107,6 +107,7 @@ NEVER_BOUND_IDENTITY_SNAPSHOT = {
     "read_disputes": False,
 }
 
+
 def stored_label(box: int, index: int) -> str:
     """`Position.label` for a card, against the box's STORED name (D259).
 
@@ -116,6 +117,7 @@ def stored_label(box: int, index: int) -> str:
     """
     entry = Store().read().inventory.box(box)
     return join.Position(box, index, box_name=entry.name if entry else None).label
+
 
 def entry(box: int, index: int, **extra) -> queues.QueueEntry:
     """A queue entry for a captured position, with the fields a review row is drawn from.
@@ -147,6 +149,7 @@ def entry(box: int, index: int, **extra) -> queues.QueueEntry:
     }
     fields.update(extra)
     return queues.QueueEntry(**fields)
+
 
 def _seed_sku_table(snapshot, candidates, *, product_line: str = "Pokemon") -> None:
     """Fold candidate-shaped fixture rows into the store's `skus` table directly, through
@@ -181,6 +184,7 @@ def _seed_sku_table(snapshot, candidates, *, product_line: str = "Pokemon") -> N
         events=snapshot.inventory.events,
     )
 
+
 @contextmanager
 def isolated_home():
     """A whole store in a temporary directory, restored on the way out.
@@ -198,6 +202,7 @@ def isolated_home():
                 os.environ.pop(files.HOME_ENV, None)
             else:
                 os.environ[files.HOME_ENV] = previous
+
 
 @contextmanager
 def hermetic():
@@ -237,6 +242,7 @@ def hermetic():
             cache.clear()
             cache.update(before)
 
+
 def store_tables() -> dict:
     """Every table of the isolated store, as ordered rows. What is compared where a case
     used to compare a file's bytes (D88): 'byte-identical' on a document becomes
@@ -246,6 +252,7 @@ def store_tables() -> dict:
         return db.dump_tables(conn)
     finally:
         conn.close()
+
 
 def stored_payloads(table: str, fixed: Optional[dict] = None) -> dict:
     """key -> stored payload dict for one table, straight off the database rather than
@@ -258,6 +265,7 @@ def stored_payloads(table: str, fixed: Optional[dict] = None) -> dict:
     finally:
         conn.close()
 
+
 def append_history(events) -> None:
     """Hand-write history rows, bypassing every route — the seed for the cases that need a
     log no route can produce. `history.jsonl` used to be appended to directly here."""
@@ -268,6 +276,7 @@ def append_history(events) -> None:
         conn.execute("COMMIT")
     finally:
         conn.close()
+
 
 def corrupt_history(position: Optional[str] = None) -> None:
     """One history row whose payload is not JSON — the hand-edit `_sale_origin` degrades
@@ -291,6 +300,7 @@ def corrupt_history(position: Optional[str] = None) -> None:
     finally:
         conn.close()
 
+
 @contextmanager
 def quiet():
     """Capture what the code under test prints, and yield the buffer.
@@ -303,6 +313,7 @@ def quiet():
     with redirect_stdout(buffer), redirect_stderr(buffer):
         yield buffer
 
+
 class QuietHandler(capture_server.CaptureHandler):
     """The real handler with its request log silenced.
 
@@ -313,6 +324,7 @@ class QuietHandler(capture_server.CaptureHandler):
 
     def log_message(self, fmt: str, *args) -> None:  # noqa: A003 - BaseHTTPRequestHandler's name
         pass
+
 
 def _spawn_server(httpd) -> threading.Thread:
     """Start `httpd.serve_forever` on a daemon thread with a short poll, and return it.
@@ -337,6 +349,7 @@ def _spawn_server(httpd) -> threading.Thread:
 # whole file's.
 _MINTED_PHOTOGRAPHS = itertools.count(1)
 
+
 def photograph() -> bytes:
     """JPEG-shaped bytes nothing else in this run will produce. One per capture.
 
@@ -352,10 +365,12 @@ def photograph() -> bytes:
     seed = f"t7-photograph-{next(_MINTED_PHOTOGRAPHS)}".encode()
     return b"\xff\xd8\xff" + hashlib.sha256(seed).digest() * 2
 
+
 def capture_payload(box: int, **extra) -> dict:
     payload = {"box": box, "image": base64.b64encode(photograph()).decode("ascii")}
     payload.update(extra)
     return payload
+
 
 def sent_image(payload: dict) -> bytes:
     """The photograph a capture body carries, decoded — what the store should hold afterwards.
@@ -364,6 +379,7 @@ def sent_image(payload: dict) -> bytes:
     both sides, which stopped being possible when every capture began carrying its own.
     """
     return base64.b64decode(payload["image"])
+
 
 def back_of(box: int) -> dict:
     """The aim at `box`'s last section, key and token: where a Move to box went before it
@@ -374,6 +390,7 @@ def back_of(box: int) -> dict:
         "section": master.divider_key(inventory.dividers_of(box)[-1]),
         "layout_token": inventory.layout_token(box),
     }
+
 
 def fake_cid(seed) -> str:
     """A distinct, deterministic 64-hex name for a card a test invents (D172).
@@ -401,6 +418,7 @@ def fake_cid(seed) -> str:
     store's bookkeeping is checked without a camera in the way.
     """
     return hashlib.sha256(str(seed).encode()).hexdigest()
+
 
 def photo_of(box: int, index: int) -> Path:
     """Where the card at this position files its photograph, on disk or not (D172).
@@ -434,6 +452,7 @@ def photo_of(box: int, index: int) -> Path:
         )
     return capture_server.photo_target(card)
 
+
 def stored_captures():
     """Every capture `identify` would read out of this store, in the order `scan` returns.
 
@@ -451,6 +470,7 @@ def stored_captures():
     """
     return sidecar.scan(photos.root())
 
+
 def capture_named(key: str):
     """The stored capture whose sidecar claims this position — `stored_captures`' index.
 
@@ -464,6 +484,7 @@ def capture_named(key: str):
             f"Keys on disk: {sorted(capture.key for capture in stored_captures())}"
         )
     return found[0]
+
 
 def run_photo(box: int, index: int) -> str:
     """The `photo` an `identifications.json` records for this position (D172).
@@ -504,6 +525,7 @@ ARTICUNO_SKU = "8608859"  # 161/159 Near Mint Holofoil, market 22.03 — one row
 
 SEAM_SKUS = (DUNSPARCE_SKU, DUNSPARCE_REVERSE_SKU, ARTICUNO_SKU)
 
+
 def write_export(path, *, live=None, market=None):
     """A Filtered Export holding the three seam rows. `live` overrides `Total Quantity`.
 
@@ -527,6 +549,7 @@ def write_export(path, *, live=None, market=None):
         rows.append(row)
     tcgcsv.write_csv(path, source.header, rows)
     return Path(path)
+
 
 def identifications_for(cards) -> dict:
     """An `identifications.json` payload, shaped as `cli/cmd_identify.py` writes it.
@@ -559,6 +582,7 @@ def identifications_for(cards) -> dict:
         },
     }
 
+
 def seam_run(checks: Checks, cards, *, live=None, market=None, join=True, sections=None):
     """A joined run over `cards`, in whatever isolated home is current. Returns the run.
 
@@ -585,6 +609,7 @@ def seam_run(checks: Checks, cards, *, live=None, market=None, join=True, sectio
     said = command(checks, "join", str(run_dir.directory), "--export", str(export))
     return runs.open_run(run_dir.directory), said
 
+
 def command(checks: Checks, *argv, exits: int = 0):
     """Run one `./pkmnscan` subcommand and return what it printed. Exit 0 or a failure.
 
@@ -600,6 +625,7 @@ def command(checks: Checks, *argv, exits: int = 0):
     text = said.getvalue()
     checks.ok(code == exits, f"`pkmnscan {argv[0]}` exits {exits}", f"exit {code}\n{text}")
     return text
+
 
 def refusal(checks: Checks, fn, code: str, label: str) -> None:
     """Assert a route refuses with one specific code.
@@ -624,6 +650,7 @@ _PRODUCT_LINE_BY_GAME = {
     "pokemon": "Pokemon",
     "riftbound": "Riftbound League of Legends Trading Card Game",
 }
+
 
 def _bind(
     snapshot,
@@ -665,6 +692,7 @@ def _bind(
         number_strategy=_STRATEGY_BY_GAME[game],
     )
 
+
 def _refusal_text(fn) -> Optional[Tuple[str, str]]:
     """`(code, message)` off the refusal `fn` raised, or None if it did not refuse.
 
@@ -681,6 +709,7 @@ def _refusal_text(fn) -> Optional[Tuple[str, str]]:
     except Exception:  # noqa: BLE001 — the caller asserts on None and reports it
         return None
     return None
+
 
 def answers(checks: Checks, fn, label: str):
     """Assert a route ANSWERS at all, and hand back what it said. `refusal`'s mirror.
@@ -707,6 +736,7 @@ def events_for(key: str) -> list:
     """Every `history.jsonl` line for one position, in the order they were appended."""
     return [event for event in Store().history() if event.get("position") == key]
 
+
 def last_event(key: str) -> dict:
     """The newest line for one position, or an empty dict when there is none.
 
@@ -719,6 +749,7 @@ def last_event(key: str) -> dict:
     """
     events = events_for(key)
     return events[-1] if events else {}
+
 
 def request(port, method, path, *, origin=None, payload=None, extra_headers=None):
     """One request against the running server. Returns `(status, body, headers)`.
@@ -747,11 +778,13 @@ def request(port, method, path, *, origin=None, payload=None, extra_headers=None
     except urllib.error.HTTPError as refused:
         return int(refused.code), refused.read(), dict(refused.headers)
 
+
 def error_code(body):
     try:
         return (json.loads(body or b"{}").get("error") or {}).get("code")
     except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
         return None
+
 
 def error_message(body) -> str:
     """`error_code`'s other half — the sentence a person reads, for the cases that assert on it."""
@@ -766,6 +799,7 @@ def error_message(body) -> str:
 RIFTBOUND_EXPORT = (
     REPO_ROOT / "fixtures" / "riftbound_export_untouched.csv"
 )
+
 
 def _live_export_bytes(quantities: Dict[str, int]) -> bytes:
     """A live export (My Pricing shape) holding the seam rows at these `Total Quantity`s.

@@ -29,6 +29,7 @@ from harness.tests.t7.common import (
     request,
 )
 
+
 def check_connection_close(checks: Checks) -> None:
     """Every response closes its connection, INCLUDING the 304 — the pool's whole premise.
 
@@ -136,6 +137,7 @@ def check_connection_close(checks: Checks) -> None:
             httpd.shutdown()
             httpd.server_close()
             thread.join(timeout=5)
+
 
 def check_request_slots(checks: Checks) -> None:
     """The bound on concurrently-executing requests holds, and the drain does not see a queue.
@@ -516,6 +518,7 @@ def check_request_slots(checks: Checks) -> None:
         "which is worse than the unbounded server it replaces",
     )
 
+
 def check_photo_lane(checks: Checks) -> None:
     """The photo lane holds its own bound, apart from the slot pool (owner's ruling, 2026-09-28).
 
@@ -667,6 +670,7 @@ def check_photo_lane(checks: Checks) -> None:
         "and every photo slot is given back",
     )
 
+
 def check_lockfree_lane(checks: Checks) -> None:
     """Parked writers cannot starve the lock-free reads in the lane (DEBT11).
 
@@ -754,6 +758,7 @@ def check_lockfree_lane(checks: Checks) -> None:
     )
     checks.equal(capture_server.slots_in_use(), 0, "and every slot is given back once the lock frees")
 
+
 def check_lane_survives_bad_target(checks: Checks) -> None:
     """`photo_lane_path` runs before `_dispatch`'s `try`, so a target `urlparse` rejects must not raise."""
     import http.client
@@ -779,6 +784,7 @@ def check_lane_survives_bad_target(checks: Checks) -> None:
         httpd.server_close()
         thread.join(timeout=5)
     checks.ok(isinstance(status, int), f"and the server answers `GET //[` instead of dropping the socket — {status}")
+
 
 def check_slow_request_line(checks: Checks) -> None:
     """A request parked on the store lock past the threshold logs ONE line that names the lock wait.
@@ -865,6 +871,7 @@ def check_slow_request_line(checks: Checks) -> None:
     )
     checks.ok("slot_wait=0" in line and "(slot pool)" in line, "and the slot wait apart from it, with its pool")
     checks.ok("supervisor_busy=app-build" in line, "and what the supervisor was doing")
+
 
 def check_photo_lane_threads_and_faults(checks: Checks) -> None:
     """The photo pool bounds THREADS, and a sorter fault degrades the server to base.

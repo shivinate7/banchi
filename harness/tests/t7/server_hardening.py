@@ -37,6 +37,7 @@ from harness.tests.t7.common import (
     sent_image,
 )
 
+
 def photo_named_by(blob: bytes) -> Path:
     """Where a capture of THESE BYTES would be filed, whether or not one ever was (D172).
 
@@ -147,6 +148,7 @@ def allowed_origins_env(value):
         else:
             os.environ[capture_server.ORIGINS_ENV] = previous
 
+
 def raw_head(port, path):
     """One HEAD over a bare socket, returning `(head, rest)` — every byte the server sent.
 
@@ -174,6 +176,7 @@ def raw_head(port, path):
             seen += chunk
     head, _, rest = seen.partition(b"\r\n\r\n")
     return head, rest
+
 
 def check_origin_gate(checks: Checks) -> None:
     """The CSRF gate on the three mutating verbs, over real sockets.
@@ -719,6 +722,7 @@ def check_photo_cache(checks: Checks) -> None:
             httpd.server_close()
             thread.join(timeout=5)
 
+
 def check_app_serve(checks: Checks) -> None:
     """The capture server hands out the built app, and does not stop being an API (D138).
 
@@ -1009,6 +1013,7 @@ def check_app_serve(checks: Checks) -> None:
                 httpd.server_close()
                 thread.join(timeout=5)
     capture_server.APP_DIST = original
+
 
 def check_dual_stack_bind(checks: Checks) -> None:
     """The 2026-09-23 incident, proved and closed (D43).

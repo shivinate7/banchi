@@ -30,6 +30,7 @@ from harness.tests.t7.common import (
     isolated_home,
 )
 
+
 def shipping_refusal(checks: Checks, fn, code: str, label: str) -> None:
     """`refusal`'s shape for the shipping module's own exception.
 
@@ -54,6 +55,7 @@ def shipping_refusal(checks: Checks, fn, code: str, label: str) -> None:
 SHIPPING_FIXTURE = "fixtures/orders-shipping.csv"
 
 SHIPPING_EXPORT = REPO_ROOT / SHIPPING_FIXTURE
+
 
 def _shipment(**overrides) -> shipping.Shipment:
     """One synthetic export row. Every column present, so the reader's contract holds.
@@ -83,6 +85,7 @@ def _shipment(**overrides) -> shipping.Shipment:
     )
     cells.update(overrides)
     return shipping.Shipment(cells=cells)
+
 
 def check_shipping_lane(checks: Checks) -> None:
     """`pipeline/shipping.py` and `pipeline/pirateship.py` — the router and the emitter.
@@ -429,6 +432,7 @@ def home_files(home):
         if path.suffix not in (".sqlite-wal", ".sqlite-shm")
         and not path.name.endswith(("-wal", "-shm"))
     )
+
 
 def check_shipping_routes(checks: Checks) -> None:
     """`server/shipping_routes.py` and `server/order_transport.py` — the two seams that hold

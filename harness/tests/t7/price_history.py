@@ -56,6 +56,7 @@ TCGCSV_PRICES = REPO_ROOT / TCGCSV_PRICES_FIXTURE
 
 PRICE_HISTORY = REPO_ROOT / PRICE_HISTORY_FIXTURE
 
+
 def _riftbound_row(sku: str) -> tcgcsv.Row:
     """One row of the committed Riftbound export, by SKU. Raises if it is not there.
 
@@ -69,6 +70,7 @@ def _riftbound_row(sku: str) -> tcgcsv.Row:
         if row.get(tcgcsv.SKU_COLUMN) == sku:
             return row
     raise AssertionError(f"{RIFTBOUND_EXPORT.name} carries no SKU {sku}")
+
 
 def _seed_market_cache(directory, product_id: int, month: dict, annual: dict) -> None:
     """Warm `Market`'s on-disk cache so the route below opens no socket.
@@ -92,6 +94,7 @@ def _seed_market_cache(directory, product_id: int, month: dict, annual: dict) ->
         path = directory / f"{slug}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({"fetched_at": at, "payload": payload}), "utf-8")
+
 
 def check_history_route(checks: Checks) -> None:
     """`GET /pipeline/runs/<name>/history` — D278's route, and the reading it serves.
@@ -481,6 +484,7 @@ def check_history_route(checks: Checks) -> None:
         finally:
             urllib.request.urlopen = real_urlopen
 
+
 def check_history_blocked_route(checks: Checks) -> None:
     """A 403 refuses as `history_blocked`, and `PKMNSCAN_TCG_USER_AGENT` reaches the wire
     (D216).
@@ -629,6 +633,7 @@ def check_history_blocked_route(checks: Checks) -> None:
                     os.environ.pop(env_name, None)
                 else:
                     os.environ[env_name] = value
+
 
 def check_price_history(checks: Checks) -> None:
     """`pipeline/pricehistory.py` — the sku -> productId walk, and the readings over it.

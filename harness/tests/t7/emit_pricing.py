@@ -58,6 +58,7 @@ from harness.tests.t7.common import (
     write_export,
 )
 
+
 def check_emit_claim_decides(checks: Checks) -> None:
     """`join` and `emit` re-derive ONE answer for a contradicted claim, and it is the claim's SKU.
 
@@ -146,6 +147,7 @@ def check_emit_claim_decides(checks: Checks) -> None:
             "contradict a claim — so the claim decides, and rung 3's other job, choosing "
             "inside a multi-member claim, is untouched",
         )
+
 
 def check_emit_identity_stamp(checks: Checks) -> None:
     """The live cap bounds the LISTING. Every copy the run matched gets its identity.
@@ -263,6 +265,7 @@ def check_emit_identity_stamp(checks: Checks) -> None:
             "now, so they are not in `uncommitted_positions` at all — the idempotence lives "
             "in `_committed_keys`, which reads the `Listing` and never `card.sku`",
         )
+
 
 def check_pricing_authority(checks: Checks) -> None:
     """`decisions.json` decides the price, and `join` may not take that decision back.
@@ -409,6 +412,7 @@ def check_pricing_authority(checks: Checks) -> None:
                 (1, True),
                 label,
             )
+
 
 def check_threshold_and_file_shape(checks: Checks) -> None:
     """The stored D9 cut-off, and how many spreadsheets one press writes.
@@ -590,6 +594,7 @@ def check_threshold_and_file_shape(checks: Checks) -> None:
             not list(run_dir.directory.glob("import*.csv")),
             "and nothing was written",
         )
+
 
 def check_prices_adopt(checks: Checks) -> None:
     """`pkmnscan prices adopt` folds, RETIRES, and the two commands refuse until it has (D86, amended).
@@ -867,6 +872,7 @@ def check_prices_adopt(checks: Checks) -> None:
             "corpus — the answer was already there; emit only reads it",
         )
 
+
 def check_readings_adopt_cli(checks: Checks) -> None:
     """`pkmnscan readings adopt` and `readings show`, through the real argparse dispatch
     (D189).
@@ -932,6 +938,7 @@ def check_readings_adopt_cli(checks: Checks) -> None:
             "a `show` press is read-only — the table is unchanged by looking at it",
         )
 
+
 def check_readings_writer_after_join(checks: Checks) -> None:
     """A join leaves `readings` current with no `readings adopt` press (item 5, D189
     amended). `check_readings_adopt_cli` proves the CLI surface over the manual press;
@@ -992,6 +999,7 @@ def check_readings_writer_after_join(checks: Checks) -> None:
             "the first run's reading survives a second, unrelated run's join",
             after,
         )
+
 
 def check_readings_writer_after_live_export(checks: Checks) -> None:
     """A fetched live export leaves `readings` current with no `readings adopt` press (item
@@ -1147,6 +1155,7 @@ def check_readings_writer_after_live_export(checks: Checks) -> None:
             else:
                 os.environ[name] = value
 
+
 def check_phantom_worklist(checks: Checks) -> None:
     """`reconcile --phantoms`: ghosts of a buried box are excluded from what is really on hand.
 
@@ -1186,6 +1195,7 @@ def check_phantom_worklist(checks: Checks) -> None:
         "ghosts are not on hand: A live 4 real 2 excess 2, B live 1 real 0 excess 1; a sale "
         "after the export is added back (C) and live below real (D) is no excess",
     )
+
 
 def check_live_reconcile(checks: Checks) -> None:
     """The whole store against one live export, both directions (D87).
@@ -1386,6 +1396,7 @@ def check_live_reconcile(checks: Checks) -> None:
             "TCGplayer holds, which is exactly what the export is evidence of",
         )
 
+
 def check_merged_emit_cap(checks: Checks) -> None:
     """Two runs, one SKU, one cap — the arithmetic a merged file has to re-derive (D86).
 
@@ -1477,6 +1488,7 @@ def check_merged_emit_cap(checks: Checks) -> None:
             "exactly that, stamping every copy once per run that held it",
         )
 
+
 def check_merged_emit_uncapped(checks: Checks) -> None:
     """The same send with no cap asked for — the shape that raised `TypeError` (D7, rewritten).
 
@@ -1536,6 +1548,7 @@ def check_merged_emit_uncapped(checks: Checks) -> None:
             "because `uncommitted_positions` — what actually stops a copy going twice — is "
             "the same list in both",
         )
+
 
 def check_unsent_copies_worklist(checks: Checks) -> None:
     """`GET /pipeline/pricing` counts every copy TCGplayer does not hold, against the live
@@ -1660,6 +1673,7 @@ def check_unsent_copies_worklist(checks: Checks) -> None:
             httpd.shutdown()
             thread.join(timeout=5)
 
+
 def check_cap_flag_refusals(checks: Checks) -> None:
     """`--cap 0` is a sentence, not a traceback — and it is parsed before any work.
 
@@ -1706,6 +1720,7 @@ def check_cap_flag_refusals(checks: Checks) -> None:
             "AND NOTHING WAS WRITTEN. The cap is parsed before the run is opened, so a "
             "refusal costs nothing — the shape every refusal on this path takes",
         )
+
 
 def check_emit_send_quantity(checks: Checks) -> None:
     """A number on the card's row is a SEND quantity, this press only (D7, amended 2026-09-11).
@@ -1922,6 +1937,7 @@ def check_emit_send_quantity(checks: Checks) -> None:
             f"the route refuses {bad!r} by name rather than forwarding it into argv",
         )
 
+
 def check_merged_cap_is_the_tightest(checks: Checks) -> None:
     """Legs carrying different caps merge to the SMALLEST, and a leg with none does not win.
 
@@ -1960,6 +1976,7 @@ def check_merged_cap_is_the_tightest(checks: Checks) -> None:
         None,
         "no cap only when NO leg names one — the ordinary send, and the case that raised",
     )
+
 
 def check_unsent_listing_sells_out(checks: Checks) -> None:
     """A listing this pipeline never sent, selling out, is settled — the hole D109 armed.
@@ -3221,6 +3238,7 @@ def check_pipeline_routes(checks: Checks) -> None:
             "one reading as newer than everything would settle the whole store",
         )
 
+
 def check_pricing_reach(checks: Checks) -> None:
     """A price is a fact about a listing, and the store remembers listings it never saw (D109).
 
@@ -3451,6 +3469,7 @@ def check_pricing_reach(checks: Checks) -> None:
         "while the FOLDING the comparison depends on is untouched — `stamp_answers` dates an "
         "answer by whether its token moved, so breaking this would re-date the whole corpus",
     )
+
 
 def check_emit_unpriced_left_out(checks: Checks) -> None:
     """A SEND WITH ONE UNPRICED ROW SENDS EVERY OTHER READY COPY (D277 Q3, the owner's words:
@@ -3720,8 +3739,10 @@ _M_PRICE_CUT_LIVE = (
     "back by --listed-only, and TCGplayer already holds every copy of 1 card"
 )
 
+
 def _m_row(sku: str, price: str) -> Tuple[str, int, str]:
     return (sku, 1, price)
+
 
 def _m_cases() -> Dict[str, dict]:
     """Every case: store, layout, flags, and what each of the four readers must say."""
@@ -3993,11 +4014,13 @@ def _m_cases() -> Dict[str, dict]:
         }
     return cases
 
+
 def _m_hold(skus) -> None:
     book = corpus.Corpus.read()
     for sku in skus:
         book.answers[sku] = corpus.Answer(value={"withheld": "keeping"})
     book.write()
+
 
 def _m_files(dirs) -> Dict[str, List[Tuple[str, int, str]]]:
     out: Dict[str, List[Tuple[str, int, str]]] = {}
@@ -4013,8 +4036,10 @@ def _m_files(dirs) -> Dict[str, List[Tuple[str, int, str]]]:
             )
     return out
 
+
 class _ToolchainMissing(Exception):
     """`app/node_modules` is absent: a read that could not run, never a failure."""
+
 
 def _m_home(worklists: Dict[str, dict]) -> Dict[str, dict]:
     """Home's line, tile and run chips for each worklist, off `app/src/standing.ts` itself."""
@@ -4073,6 +4098,7 @@ def _m_home(worklists: Dict[str, dict]) -> Dict[str, dict]:
         if done.returncode != 0:
             raise RuntimeError(f"node could not read Home: {done.stderr.strip()[:900]}")
         return json.loads(done.stdout)
+
 
 def check_send_matrix(checks: Checks) -> None:
     """THE SEND MATRIX (R6): every store shape and flag set, all four readers, one table."""

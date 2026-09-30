@@ -56,6 +56,7 @@ def _demo_seed_module():
     spec.loader.exec_module(module)
     return module
 
+
 def check_undo_until_built_on(checks: Checks) -> None:
     """`docs/specs/undo.md` section 11, lane S: an undo has no clock and lasts until the
     next step is built on it. The server decides "built on", and refuses with a sentence.

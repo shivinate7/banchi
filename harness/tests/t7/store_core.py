@@ -127,6 +127,7 @@ def check_next_index_sql(checks: Checks) -> None:
         boxes = sorted({int(b) for b in read.boxes} | {int(c.box) for c in read.cards.values()})
         compare(read, boxes, "demo seed")
 
+
 def check_allocator(checks: Checks) -> None:
     """The seventeen cases `docs/debts/` enumerates, plus the coercion that caused them.
 
@@ -316,6 +317,7 @@ def check_store(checks: Checks) -> None:
             not list(Store().directory.glob(".*.tmp")),
             "and nothing is staged beside the database — the transaction is the atomicity",
         )
+
 
 def check_set_and_rarity(checks: Checks) -> None:
     """D213: the schema migration
@@ -527,6 +529,7 @@ def check_set_and_rarity(checks: Checks) -> None:
             "against, not a fixture that quietly gives the chooser an easier field",
         )
 
+
 @contextmanager
 def _no_new_files_in(directory: Path):
     """Strips write permission from `directory` for the block, restoring it in `finally` so
@@ -558,6 +561,7 @@ def _no_new_files_in(directory: Path):
         yield
     finally:
         directory.chmod(mode)
+
 
 def check_open_read_only(checks: Checks) -> None:
     """`store/db.py:open_read_only`, the one read-only door: it never migrates, and it sees
@@ -649,6 +653,7 @@ def check_open_read_only(checks: Checks) -> None:
                 not any(Path(f"{target}{side}").exists() for side in ("-wal", "-shm")),
                 "and opening it cold created no side file",
             )
+
 
 def check_open_read_only_race(checks: Checks) -> None:
     """`open_read_only` checks the WAL, then opens, in two steps — and a commit that lands
@@ -746,6 +751,7 @@ def check_open_read_only_race(checks: Checks) -> None:
                 holder.execute("ROLLBACK")
                 holder.close()
 
+
 def check_open_read_only_wal_present_never_falls_back(checks: Checks) -> None:
     """`open_read_only`'s fallback is keyed on what makes `immutable=1` SAFE — an absent or
     empty `-wal` — never on which error the plain open raised (PR #463: two builds raised
@@ -817,6 +823,7 @@ def check_open_read_only_wal_present_never_falls_back(checks: Checks) -> None:
             holder.execute("ROLLBACK")
             holder.close()
 
+
 def check_open_read_only_corrupt_main_file(checks: Checks) -> None:
     """The immutable fallback forces ITS OWN open too (`PRAGMA schema_version`, the same
     reason the plain open forces its own), so a genuinely corrupt or unreadable main file
@@ -842,6 +849,7 @@ def check_open_read_only_corrupt_main_file(checks: Checks) -> None:
             "a garbage main file raises rather than returning a connection — corruption is "
             "never mistaken for the cold-store state the fallback exists for",
         )
+
 
 def check_store_of_record(checks: Checks) -> None:
     """D88: one transaction over every table, a session that loads only what it names, and
@@ -1124,6 +1132,7 @@ def check_store_of_record(checks: Checks) -> None:
             "and the store is what it was",
         )
 
+
 def check_skus_photos_limit(checks: Checks) -> None:
     """Round 2 review finding: `GET /skus/photos` (`do_skus_photos`, D298)
     had no server-side bound of its own — only `Revenue.tsx:PHOTO_LOOKUP_CAP` bounded what
@@ -1151,6 +1160,7 @@ def check_skus_photos_limit(checks: Checks) -> None:
             "too_many_skus",
             "one SKU over the limit refuses",
         )
+
 
 def check_photo_reclaim(checks: Checks) -> None:
     """D89: a sold card's photograph is reclaimed, the record stays, the digest stays.
@@ -1319,6 +1329,7 @@ def check_photo_reclaim(checks: Checks) -> None:
             "D36's realign reads the reclaimed card as departed — the digest on the record is "
             "still comparable, and the box's other photographs are still there to check",
         )
+
 
 def asdict_entry(entry) -> dict:
     from dataclasses import asdict
@@ -1599,6 +1610,7 @@ def check_server_routes(checks: Checks) -> None:
             "and the denominator goes with it rather than standing alone: the count and "
             "the numbers drawn against it come off one walk",
         )
+
 
 def check_boxes_and_listings(checks: Checks) -> None:
     """D20's box object, D7's fungible copies, and the v1 -> v2 migration between them.
@@ -1996,6 +2008,7 @@ def check_boxes_and_listings(checks: Checks) -> None:
         "and a v2 payload is NOT re-migrated on read — the stages stay where they are",
     )
 
+
 def check_drain(checks: Checks) -> None:
     """The shutdown seam `scripts/serve.py` restarts through.
 
@@ -2051,6 +2064,7 @@ def check_drain(checks: Checks) -> None:
     worker.join(5)
     checks.equal(capture_server.inflight(), 0, "the counter falls when the request finishes")
     checks.ok(capture_server.drain(0.5), "and the drain then returns true")
+
 
 def check_supervisor_recovery(checks: Checks) -> None:
     """`scripts/serve.py` counts a FAST failure, and confirms a recovery it did not choose.

@@ -43,6 +43,7 @@ from harness.tests.t7.common import (
     write_export,
 )
 
+
 def check_crop_preview(checks: Checks) -> None:
     """D32 — `POST /pipeline/crop-preview`: what a reading sends, before it is paid for.
 
@@ -350,6 +351,7 @@ def check_crop_preview(checks: Checks) -> None:
             "checkout were the old shape's only trace, and a ticked selection is a list of "
             "position keys on the wire now",
         )
+
 
 def check_export_fetch(checks: Checks) -> None:
     """D65: the Filtered Export fetched instead of downloaded, and every refusal in the way.
@@ -2019,6 +2021,7 @@ def check_export_fetch(checks: Checks) -> None:
                 os.environ.pop(name, None)
             else:
                 os.environ[name] = value
+
 
 def check_key_rotation(checks: Checks) -> None:
     """`identify/batch.py:_client` and `envfile` — the API key survives a rotation (2026-09-11).

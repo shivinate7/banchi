@@ -551,6 +551,7 @@ def check_queue_supersede(checks: Checks) -> None:
 # the case below, because `Queue.upsert` writes today's date when it finds none.
 FROZEN_SEEN = "2026-08-24"
 
+
 def check_queue_refresh(checks: Checks) -> None:
     """`cli/requeue.py` — every OPEN entry re-resolved against a current export, store-wide.
 
@@ -956,6 +957,7 @@ def check_queue_refresh(checks: Checks) -> None:
             "byte for byte there too",
         )
 
+
 def check_queue_refresh_agreement(checks: Checks) -> None:
     """The refresh and the JOIN must produce the same entry for the same card.
 
@@ -1083,6 +1085,7 @@ def check_queue_refresh_agreement(checks: Checks) -> None:
             "the same statement from the other end: the frozen entries are frozen because "
             "no run covers them, never because a join and a refresh disagree",
         )
+
 
 def check_queue_refresh_reading(checks: Checks) -> None:
     """`requeue.identified` — the reading is the CARD's, and it is the whole reading.
@@ -1260,6 +1263,7 @@ def check_queue_refresh_reading(checks: Checks) -> None:
                     "Read off the stale entry instead it would say `reverse_holo`, which "
                     "IS stocked, and the card would resolve to the wrong SKU",
                 )
+
 
 def check_remove_and_box_delete(checks: Checks) -> None:
     """POST /inventory/<box>/<index>/remove and DELETE /boxes/<box> — D10's rulings 1 and 3.
@@ -1706,6 +1710,7 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             "and recreating the number starts from nothing, like a box never used",
         )
 
+
 def check_graveyard(checks: Checks) -> None:
     """GET /graveyard — D134's merge of two sources into one screen.
 
@@ -1788,6 +1793,7 @@ def check_graveyard(checks: Checks) -> None:
             "stamp; the standing one still reads `buried: false`",
             f"rows were: {rows!r}",
         )
+
 
 def check_listing_release(checks: Checks) -> None:
     """GET /boxes/<box>/listings and its release — D34, the door the delete gate lacked.
@@ -2049,6 +2055,7 @@ def check_listing_release(checks: Checks) -> None:
             f"buried lines were: {buried!r}",
         )
 
+
 def check_queue_starvation(checks: Checks) -> None:
     """The starvation tier, in its own home because it writes a queue the other blocks count.
 
@@ -2113,6 +2120,7 @@ def check_queue_starvation(checks: Checks) -> None:
             "and an entry with NO first_seen can never starve at all: an unmeasurable wait "
             "must not outrank a known price (store/queues.py:_age_days returns None)",
         )
+
 
 def check_queues(checks: Checks) -> None:
     """GET /queues — the two standing queues, in the order they are meant to be worked.
