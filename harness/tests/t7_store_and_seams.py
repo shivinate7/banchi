@@ -16841,7 +16841,7 @@ def check_emit_buried_box(checks: Checks) -> None:
     deletion record refuses the run on both branches (bid, time), the single and the merged
     path refuse, a position the store holds no card at is refused, the Send screen's mapping
     shows the owner one plain sentence, and a card that MOVED to another live box still sends.
-    (docs/debts slug `emit-buried-box`.)
+    (D36, D145.)
     """
     checks.note("")
     checks.note("EMIT OVER A BURIED BOX — refused, and no ghost card is born")
@@ -26744,7 +26744,7 @@ def check_listing_commands(checks: Checks) -> None:
     # --- emit against a position the store has never seen ---------------------------------
     # A run joined from a recovered or hand-made identifications file. It USED TO upsert a
     # card here; that birth made 99 ghost cards and ~96 phantom TCGplayer copies on
-    # 2026-09-27 (docs/debts slug `emit-buried-box`). No caller needs it, so it is gone: the
+    # 2026-09-27 (D36, D145). No caller needs it, so it is gone: the
     # emit refuses, names the position, and writes and creates nothing.
     with isolated_home():
         run_dir = runs.create("t7-unseen")

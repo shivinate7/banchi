@@ -1,4 +1,4 @@
-## 1 — The reverse direction: five checks walk docs→code and never back
+## 1 — The reverse direction: two checks walk docs→code and never back
 
 Two audit rows prove that what is published is consistent. Neither can see a real thing that was never published.
 

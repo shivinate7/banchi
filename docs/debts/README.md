@@ -27,10 +27,10 @@ its own number.
 ## Index
 
 ```
-DEBT1 The reverse direction: five checks walk docs→code and never back
+DEBT1 The reverse direction: two checks walk docs→code and never back
 DEBT2 The map's reach
 DEBT3 The claim chain
-DEBT4 Criteria and evidence: two paths a row can go quiet through
+DEBT4 Criteria and evidence: four ways a row goes quiet
 DEBT6 T7 leaves two capture-server facts unchecked
 DEBT7 The preview crops the card, and the one check that looks at a photo cannot see it
 DEBT8 Recorded and correctly unfixed

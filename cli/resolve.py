@@ -1950,8 +1950,7 @@ def refuse_reallocated(payload: dict, inventory: master.Inventory, run: runs.Run
     scope_bid = scope.get("bid") if isinstance(scope, dict) else None
     if not isinstance(scope_bid, int) or isinstance(scope_bid, bool):
         scope_bid = None
-    # THE DELETION RECORD IS READ ONLY WHEN A BOX HAS NO REGISTRY ROW, and once (2026-09-27
-    # incident, docs/debts slug `emit-buried-box`).
+    # THE DELETION RECORD IS READ ONLY WHEN A BOX HAS NO REGISTRY ROW, and once X.
     deleted = None
     for box in boxes:
         if deleted is None and inventory.box(box) is None:

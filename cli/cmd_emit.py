@@ -234,7 +234,7 @@ def _withhold_disputed(resolved, snapshot) -> List[dict]:
 def _unheld_positions(resolved, snapshot) -> List[str]:
     """Every UNCOMMITTED position this run would stamp that the store holds no card at.
 
-    THE 2026-09-27 PHANTOM-COPY INCIDENT (docs/debts, slug `emit-buried-box`). The stamp loops
+    THE 2026-09-27 PHANTOM-COPY INCIDENT (a run over a buried box). The stamp loops
     used to UPSERT a card for any position the store did not know, and a run over a buried box
     made 99 ghost cards and published about 96 copies TCGplayer never had. An emit may only
     ever ship a copy that a card in the store stands behind, so an absent card is reported
