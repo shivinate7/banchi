@@ -7,7 +7,7 @@ which exist have passed. These entries name what those checks do not cover.
 This is not a backlog to burn down on sight. An entry leaves when someone argues that it
 should, or when its gap closes. A closed entry is deleted, and history lives in version
 control. A number is never reused, so the gaps in the sequence are deleted entries: 5, 10, 12,
-13, 15, 17, 18, 21, 28, 35, 37, 42, 45, 47, 51, 52, 53, 56 and 57.
+13, 15, 17, 18, 21, 24, 28, 35, 37, 42, 45, 47, 51, 52, 53, 56 and 57.
 
 ## How to find one
 
@@ -42,7 +42,6 @@ DEBT19 The revert guard is exact, and three shapes of reversal walk past it
 DEBT20 Two liveness oracles read a pid, and a recycled one lies to both
 DEBT22 A control shrunk inside its own sticky bar is invisible to the thumb-floor sweep
 DEBT23 A sale fixture that moves after the press is only wrong sometimes, so no check can flag it
-DEBT24 A zero reading cannot tell a sold-out listing from an import sitting in Staged
 DEBT25 A cited number still resolves when it is the wrong one, and no check can read what a sentence is about
 DEBT26 The Intelligent Mail barcode encoder is written, correct against the Postal Service's own examples, and parked on a branch
 DEBT27 `Fulfillment.tsx`'s store-wide `GET /inventory` browse is argued and left

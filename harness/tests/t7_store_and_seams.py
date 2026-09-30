@@ -27255,7 +27255,7 @@ def check_listing_commands(checks: Checks) -> None:
 
     # --- a zero reading taken AFTER the sale ages the claim (D150) ---
     #
-    # THE OWNER'S OWN CASE, WHICH DEBT24 RECORDED AS DELIBERATELY UNFIXED. A copy
+    # THE OWNER'S OWN CASE, WHICH D150 LEAVES OUT OF SCOPE BY THE OWNER'S CHOICE. A copy
     # is pushed, it sells, and a later export reads `Total Quantity` 0 for the SKU. `pushed`
     # has no drawdown and the old gate aged it only where the export reported copies LIVE, so
     # the claim stood at its full count forever: the copies on hand were committed against it

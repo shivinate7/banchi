@@ -42,7 +42,7 @@
 
 **Once a SKU is not pending, the store's `live_now` is the true count.** The cap is spent against it alone. `copies_out` and `live_now` no longer read `guard_live` at all. `SkuMatch.guard_live` and `unguarded_room` are deleted with it — there is no second reading left to max or sum. The refusal names the remedy in the screen's own words: *"N copies sent and not yet seen live — read what is live, then send again"*.
 
-**THIS REFUSAL IS ONLY AS HONEST AS `_copies_out`, AND IT IS NOT ALWAYS RIGHT.** DEBT24 is still open under it. A copy marked sold by hand against a staged, never-live listing ages the claim down. `copies_out - live_now` can then read zero while TCGplayer still holds the copy. `_cap_pending` would read "not pending" on a card that still is. This lane did not touch `_copies_out`. Fixing that reading is not this amendment's job.
+**THIS REFUSAL IS ONLY AS HONEST AS `_copies_out`, AND IT IS NOT ALWAYS RIGHT.** A zero reading means not live (D150). A copy stuck in TCGplayer's Staged list is out of scope by the owner's choice, so `_cap_pending` can read "not pending" on a card TCGplayer still holds.
 
 **The guard file (`emit --live-guard`) keeps every other job it had.** `cli/cmd_emit.py:_apply_guard`'s `sendguard.room` trim, applied to `asked`, still bounds a send to what is physically on hand. It still runs whether or not a cap is asked for.
 
