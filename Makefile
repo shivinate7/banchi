@@ -12,6 +12,13 @@
 # FAILURE rather than crashing or, worse, skipping. A skipped test must not read as a pass.
 PYTHON := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 
+# A PATH GATE SKIPS ITS SELF-TEST ON EXACTLY THIS EXIT CODE AND ON NOTHING ELSE. The classifiers
+# (`scripts/guard-scope.py`, `scripts/serve-scope.py`) answer 0 to run and 3 to skip. A crash, a
+# missing interpreter or a traceback exits 1 or 2 or 127, and that must RUN the test: a gate
+# that fails open cannot skip on an error. `guard-scope-selftest` reads every gated recipe
+# against this line, and against the classifier's own skip code.
+SKIP_CODE := 3
+
 # Every app/ target needs its dependencies on disk first. Named as a fix rather than run
 # automatically: an implicit install hides a slow, network-touching step inside a target
 # that is supposed to serve, typecheck or assert — and the first time it matters is the
@@ -653,7 +660,8 @@ ignore-check:
 # In `check` and `ci-check`, never in the git hook: D18, it writes.
 verdict-selftest:
 	$(NPM_GUARD)
-	@if python3 scripts/guard-scope.py classify --target verdict-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target verdict-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/verdict-selftest.py; \
 	else \
 		echo "verdict-selftest: SKIPPED — nothing in this branch reaches app/design-check-reporter.ts. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -661,7 +669,8 @@ verdict-selftest:
 
 # python3, not $(PYTHON): the script is stdlib-only so it must not need `make venv`.
 audit-self-test:
-	@if python3 scripts/guard-scope.py classify --target audit-self-test --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target audit-self-test --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/docs-audit.py --self-test; \
 	else \
 		echo "audit-self-test: SKIPPED — this branch does not touch scripts/docs-audit.py or scripts/docs_audit/. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -761,7 +770,8 @@ kit-adoption-selftest:
 # reaches a real checkout's server, and it stops only the processes it started.
 port-slots-selftest:
 	$(NPM_GUARD)
-	@if python3 scripts/guard-scope.py classify --target port-slots-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target port-slots-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/port-slots.py selftest; \
 	else \
 		echo "port-slots-selftest: SKIPPED — this branch does not touch the port-slot claim or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -779,7 +789,8 @@ port-slots-selftest:
 # still applies to the temp store it writes, which is why it gates rather than runs in the
 # commit hook).
 match-selftest:
-	@if python3 scripts/guard-scope.py classify --target match-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target match-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/match-selftest.py; \
 	else \
 		echo "match-selftest: SKIPPED — this branch does not touch search, matching or their callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -791,7 +802,8 @@ match-selftest:
 # it exercises the guard by VIOLATING it, so a version wired into the commit path would be
 # refusing its own commits.
 githooks-selftest:
-	@if python3 scripts/guard-scope.py classify --target githooks-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target githooks-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/githooks-selftest.sh; \
 	else \
 		echo "githooks-selftest: SKIPPED — nothing in this branch reaches scripts/githooks/. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -821,7 +833,8 @@ merge:
 # writes a bare repo, a clone and a linked worktree; and because it drives the thing that moves
 # main, so a version on the commit path would be exercising that against the real one.
 merge-selftest:
-	@if python3 scripts/guard-scope.py classify --target merge-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target merge-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/merge-selftest.sh; \
 	else \
 		echo "merge-selftest: SKIPPED — nothing in this branch reaches scripts/merge-pr.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -852,7 +865,8 @@ revert-guard:
 # it writes a repository under `mktemp -d`; and githooks-selftest's second reason, it drives
 # the guard by defeating it.
 revert-selftest:
-	@if python3 scripts/guard-scope.py classify --target revert-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target revert-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/revert-audit.py selftest; \
 	else \
 		echo "revert-selftest: SKIPPED — this branch does not touch scripts/revert-audit.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -887,7 +901,8 @@ claim-stale:
 # The claimer, proved where it can actually be wrong: a throwaway repository in which main
 # moves underneath the branch. In `check`, never in the git hook — it writes (D18).
 claim-selftest:
-	@if python3 scripts/guard-scope.py classify --target claim-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target claim-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/claim-selftest.py; \
 	else \
 		echo "claim-selftest: SKIPPED — nothing in this branch reaches scripts/claim-ids.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -1015,7 +1030,8 @@ screen-freshness:
 # reason, one line up.
 screen-freshness-selftest:
 	$(NPM_GUARD)
-	@if python3 scripts/guard-scope.py classify --target screen-freshness-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target screen-freshness-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		node scripts/screen-freshness.mjs --self-test; \
 	else \
 		echo "screen-freshness-selftest: SKIPPED — this branch does not touch scripts/screen-freshness.mjs. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -1067,7 +1083,8 @@ janitor-agent:
 # In `check`, never in the git hook: it writes a temp tree and signals the processes it spawned
 # there, which is D18's line. Same standing as merge-selftest and githooks-selftest.
 janitor-selftest:
-	@if python3 scripts/guard-scope.py classify --target janitor-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target janitor-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/janitor-selftest.sh; \
 	else \
 		echo "janitor-selftest: SKIPPED — nothing in this branch reaches scripts/janitor.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -1090,7 +1107,8 @@ janitor-selftest:
 #
 # PKMNSCAN_SERVE_SCOPE=off runs it regardless, and every skip prints that.
 serve-selftest:
-	@if python3 scripts/serve-scope.py classify --base origin/main; then \
+	@python3 scripts/serve-scope.py classify --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/serve-selftest.py; \
 	else \
 		echo "serve-selftest: SKIPPED — nothing in this branch reaches what it reads."; \
@@ -1142,7 +1160,8 @@ guard-scope-selftest:
 # clone: the subject of a sync is the PRIMARY tree, and on this machine that is the owner's live
 # rig. In `check` and never in the git hook — D18, the same standing as merge-selftest.
 sync-selftest:
-	@if python3 scripts/guard-scope.py classify --target sync-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target sync-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/sync-selftest.py; \
 	else \
 		echo "sync-selftest: SKIPPED — nothing in this branch reaches scripts/primary_sync.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -1176,7 +1195,8 @@ reap:
 # Its fixture spawned every subject by an ABSOLUTE path until 2026-09-12, which is why thirteen
 # arms could not see the bare sweep's blind spot — `spawn_relative` is the subject it lacked.
 reap-selftest:
-	@if python3 scripts/guard-scope.py classify --target reap-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target reap-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/reap-selftest.sh; \
 	else \
 		echo "reap-selftest: SKIPPED — nothing in this branch reaches scripts/reap.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -1200,7 +1220,8 @@ reap-selftest:
 # examining nothing, which is the shape `Report.render` printing `ok` for an empty findings
 # list has on this side of the fence.
 submission-selftest:
-	@if python3 scripts/guard-scope.py classify --target submission-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target submission-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/submission-selftest.py; \
 	else \
 		echo "submission-selftest: SKIPPED — this branch does not touch the claim table it proves. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -1217,7 +1238,8 @@ submission-selftest:
 # from the tree alone — which is `make lan-check`'s reason, not a weaker one. It is its
 # own target and `make status` reports when it has never been run against this store.
 cid-selftest:
-	@if python3 scripts/guard-scope.py classify --target cid-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target cid-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/cid-selftest.py; \
 	else \
 		echo "cid-selftest: SKIPPED — this branch does not touch the card's stable name or the photograph store. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -1229,7 +1251,8 @@ cid-selftest:
 # cached-export files under `mktemp`, never the operator's own store or their real
 # `inventory/.exports/`. In `check`, never in the git hook, D18 — it writes a temp store.
 pricearchive-selftest:
-	@if python3 scripts/guard-scope.py classify --target pricearchive-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target pricearchive-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/pricearchive-selftest.py; \
 	else \
 		echo "pricearchive-selftest: SKIPPED — this branch does not touch price-history resolution or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -1242,7 +1265,8 @@ pricearchive-selftest:
 # wrong. Same standing as `pricearchive-selftest` and `cid-selftest`: no network, no store on
 # disk but a throwaway one, D18 — none of them gate on writing the operator's own store.
 archive-review-selftest:
-	@if python3 scripts/guard-scope.py classify --target archive-review-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target archive-review-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/archive-review-selftest.py; \
 	else \
 		echo "archive-review-selftest: SKIPPED — this branch does not touch the archive review queue or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -1251,7 +1275,8 @@ archive-review-selftest:
 # pipeline/holdings.py, proved against in-memory fixtures, no store, no network:
 # on-hand quantity, the gap guard, sealed-product exclusion. PATH GATED (D247).
 holdings-selftest:
-	@if python3 scripts/guard-scope.py classify --target holdings-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target holdings-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/holdings-selftest.py; \
 	else \
 		echo "holdings-selftest: SKIPPED — this branch does not touch unsold-stock holdings or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -1260,7 +1285,8 @@ holdings-selftest:
 # pipeline/identity_checks.py's four stored-data checks, proved against literal
 # fixtures, no store, no network. PATH GATED (D247).
 identity-checks-selftest:
-	@if python3 scripts/guard-scope.py classify --target identity-checks-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target identity-checks-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/identity-checks-selftest.py; \
 	else \
 		echo "identity-checks-selftest: SKIPPED — this branch does not touch the stored-data identification checks or their callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -1270,7 +1296,8 @@ identity-checks-selftest:
 # store/postings.py's mutated copy for the append-only property to count as proved — see the
 # self-test's own header.
 price-postings-selftest:
-	@if python3 scripts/guard-scope.py classify --target price-postings-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target price-postings-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/price-postings-selftest.py && \
 		$(PYTHON) scripts/price-postings-selftest.py --mutate-to-upsert; \
 	else \
@@ -1280,7 +1307,8 @@ price-postings-selftest:
 # pipeline/productview.py and server/pipeline_routes.py:do_product_history, proved
 # against a throwaway store: archive-hit and live-fallback. PATH GATED (D247).
 product-history-selftest:
-	@if python3 scripts/guard-scope.py classify --target product-history-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target product-history-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/product-history-selftest.py; \
 	else \
 		echo "product-history-selftest: SKIPPED — this branch does not touch the per-product history route or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -1289,7 +1317,8 @@ product-history-selftest:
 # pipeline/sku_number_contradictions.py, proved against literal fixtures and
 # duck-typed Market fakes, no store, no network. PATH GATED (D247).
 sku-number-contradictions-selftest:
-	@if python3 scripts/guard-scope.py classify --target sku-number-contradictions-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target sku-number-contradictions-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/sku-number-contradictions-selftest.py; \
 	else \
 		echo "sku-number-contradictions-selftest: SKIPPED — this branch does not touch the SKU self-contradiction check or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -1414,7 +1443,8 @@ identity-cli-selftest:
 # `make mutate-guards` carries 7 anchored arms over this guard — a mechanized subset of the
 # twenty-one, not a replacement for them.
 silent-write-selftest:
-	@if python3 scripts/guard-scope.py classify --target silent-write-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target silent-write-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/silent-write-selftest.sh; \
 	else \
 		echo "silent-write-selftest: SKIPPED — nothing in this branch reaches scripts/silent-write-guard.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -1448,7 +1478,8 @@ silent-write-selftest:
 # the false positives are RUN there too, because a case that is secretly a typo passes for the
 # wrong reason. IN `check`, NEVER IN THE GIT HOOK: it writes a temp repository (D18).
 guard-shell-selftest:
-	@if python3 scripts/guard-scope.py classify --target guard-shell-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target guard-shell-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/guard-shell-selftest.sh; \
 	else \
 		echo "guard-shell-selftest: SKIPPED — nothing in this branch reaches scripts/guard-shell.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -1645,7 +1676,8 @@ design-check:
 # spawns processes and writes a lock directory under `mktemp -d`, which is D18's line. Same
 # standing as janitor-selftest, merge-selftest and githooks-selftest.
 suite-lock-selftest:
-	@if python3 scripts/guard-scope.py classify --target suite-lock-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target suite-lock-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/suite-lock.py selftest; \
 	else \
 		echo "suite-lock-selftest: SKIPPED — this branch does not touch scripts/suite-lock.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
@@ -1655,7 +1687,8 @@ suite-lock-selftest:
 # real tree (D-browser-spec-allow-list). Reads only; nothing here writes, so it sits beside
 # the other guard selftests rather than on the commit path (D18).
 browser-scope-selftest:
-	@if python3 scripts/guard-scope.py classify --target browser-scope-selftest --base origin/main; then \
+	@python3 scripts/guard-scope.py classify --target browser-scope-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/browser-scope.py selftest; \
 	else \
 		echo "browser-scope-selftest: SKIPPED — this branch does not touch the browser-matrix classifier or its spec map. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \

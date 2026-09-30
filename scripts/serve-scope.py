@@ -51,6 +51,8 @@ import types
 from pathlib import Path
 from typing import List, Sequence
 
+SKIP_EXIT = 3  # any other non-zero exit is a crash, and a crash must RUN the test
+
 ROOT = Path(__file__).resolve().parent.parent
 HATCH = "PKMNSCAN_SERVE_SCOPE"
 
@@ -213,6 +215,15 @@ def selftest() -> int:
     check("no merge-base RUNS", with_stub(landing_base=lambda r, h: None), True)
     check("a failed diff RUNS", with_stub(changed_paths=lambda s, h: None), True)
 
+    # THE RECIPE SKIPS ON THE SKIP EXIT AND NOTHING ELSE: read as a boolean, a crashed
+    # classifier would SKIP the test.
+    makefile = (ROOT / "Makefile").read_text()
+    check("the serve-selftest recipe skips only on SKIP_CODE",
+          "python3 scripts/serve-scope.py classify --base origin/main; rc=$$?; \\\n"
+          "\tif [ $$rc -ne $(SKIP_CODE) ]; then" in makefile, True)
+    check("the Makefile's SKIP_CODE is this classifier's skip exit",
+          f"SKIP_CODE := {SKIP_EXIT}\n" in makefile, True)
+
     # THE RECONCILIATION, PROVED HERE TOO AND NOT ONLY IN THE AUDIT ROW.
     carried = set(carried_names())
     declared = {scope_for(entry) for entry in SCOPE if "beyond_carry" not in entry}
@@ -251,7 +262,7 @@ def main() -> int:
         should_run, lines = classify(args.base, args.head)
         for line in lines:
             print(line)
-        return 0 if should_run else 3
+        return 0 if should_run else SKIP_EXIT
     parser.print_help()
     return 2
 
