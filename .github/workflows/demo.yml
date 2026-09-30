@@ -123,30 +123,39 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('app/package-lock.json') }}
 
-      # THE CAUSE OF THE INSTALL HANGS (measured over the last 120 design-check jobs: 12 took over
-      # 120 s, median 19 s; job 110053275779 had a browser cache HIT and still hung): the browser
+      # THE CAUSE OF THE INSTALL HANGS (this job runs the same install as check.yml's design-check job, where the stall was measured: 12 of 120 installs took over 120 s, median 19 s, with the browser cache a hit): the browser
       # cache is fine, but `--with-deps` runs `apt-get install` for ~32 MB of font and mesa
       # packages, and the runner's azure.archive.ubuntu.com mirror sometimes serves them at
       # ~100 kB/s. The log stops at a `Get:N` line. This cache holds those .debs so a shard only
       # downloads what the mirror updated since (apt ignores a cached .deb whose version is stale).
+      # `actions/cache` never overwrites a key, so the key carries the ISO week and the runner
+      # image: each week saves a fresh set, seeded from the last one through `restore-keys`.
+      - name: Name this week's apt cache
+        id: apt-week
+        run: echo "key=$(date -u +%G-W%V)-${ImageVersion:-none}" >> "$GITHUB_OUTPUT"
+
       - name: Cache the apt packages
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/apt-archives
-          key: playwright-apt-${{ runner.os }}-${{ hashFiles('app/package-lock.json') }}
+          key: playwright-apt-${{ runner.os }}-${{ steps.apt-week.outputs.key }}
+          restore-keys: |
+            playwright-apt-${{ runner.os }}-
 
       - name: Install chromium
         timeout-minutes: 5
         working-directory: app
         # BANDAID, ON TOP OF THE CACHE ABOVE: a mirror stall still costs one try. `timeout 120`
-        # kills the stalled attempt and the second one starts from the .debs already fetched.
+        # kills the stalled npx, but its `sudo apt-get` child lives on and holds the dpkg lock.
+        # The retry stops that child, and the drop-in makes apt wait up to 60 s on the lock
+        # itself (Playwright runs apt-get as root, which reads /etc/apt/apt.conf.d).
         run: |
+          echo 'DPkg::Lock::Timeout "60";' | sudo tee /etc/apt/apt.conf.d/99lock-timeout
           sudo mkdir -p /var/cache/apt/archives
           sudo cp -n ~/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
           timeout 120 npx playwright install --with-deps chromium || {
             sudo pkill -x apt-get || true
             sudo pkill -x dpkg || true
-            sleep 2
             timeout 120 npx playwright install --with-deps chromium
           }
           mkdir -p ~/apt-archives
