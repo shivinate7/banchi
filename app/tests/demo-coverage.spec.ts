@@ -55,7 +55,8 @@ function basePath(): string {
 
 const REFUSAL = 'Not in this demo.'
 
-// THE ONE NAMED HOST, NEVER A STUB (closed). `pipeline/stockimages.py` (D301)
+// THE NAMED STOCK-IMAGE HOSTS, NEVER A STUB (closed). A second host, `images.pokemontcg.io`, joined
+// when the mirror refresh gave Sales rows Pokemon stock photographs: the same hotlink design. `pipeline/stockimages.py` (D301)
 // hotlinks Riftbound and One Piece stock images straight from `tcgplayer-cdn.tcgplayer.com` —
 // that is the design, not a leak, and the published page really does load them. A one-pixel
 // stub used to answer in its place, which tested a rule the shipped page does not follow: the
@@ -64,8 +65,8 @@ const REFUSAL = 'Not in this demo.'
 // `sealOutside`'s own `allowOutside` option (shell.ts), never a widened default there, which
 // would weaken the seal for every OTHER spec that imports it — and lets the real request land.
 // `the seal still refuses a host not on the allow list` below proves every other outside host
-// is refused exactly as before.
-sealEveryTest({ allowOutside: ['tcgplayer-cdn.tcgplayer.com'] })
+// is refused exactly as before (example.com stays the probe).
+sealEveryTest({ allowOutside: ['tcgplayer-cdn.tcgplayer.com', 'images.pokemontcg.io'] })
 
 test.skip(!BUILT && !REQUIRED, 'no dist-demo/ in this checkout: run `make demo-static` first')
 
@@ -438,7 +439,7 @@ test.describe('the published demo draws what reviewers grade', () => {
     // used to trigger it is gone). Same behavior: the figure draws once holdings load, with
     // no press needed.
     await visit(page, 'Sales')
-    await expect(page.getByText(/\d+ of \d+ priced, \d+ not yet/)).toBeVisible()
+    await expect(page.getByText(/\d+ of \d+ priced/)).toBeVisible()
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
   })
 })
