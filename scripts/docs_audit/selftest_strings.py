@@ -15,7 +15,9 @@ from .strings import (
     _offender_diff,
     _offender_growth,
     _offender_list_shape,
+    UNKNOWN_NO_TOOLCHAIN,
     _run_user_strings,
+    _user_strings_toolchain_missing,
     _typed_interpunct_found,
     _typed_interpunct_growth,
     _typed_interpunct_hits,
@@ -71,114 +73,119 @@ def run(ok) -> None:
             "}\n",
         )
 
-        # THE DEFAULT CALL — no widening flags, exactly what `no mechanism on screen` uses —
-        # proves the two new channels stay OFF unless a caller asks for them, which is the
-        # whole argument for why widening them does not touch that row's own fixtures above.
-        default_strings = _run_user_strings(["--dir", str(fixture_dir)])
-        ok(default_strings is not None, "the extractor runs, unwidened, over the fixture tree")
-        if default_strings is not None:
-            default_hits = {f.where.split(":")[0].split("/")[-1] for f in _typed_interpunct_hits(default_strings)}
-            ok("PlainDot.tsx" in default_hits,
-               "a middle dot in plain JSX text is caught with NO widening at all")
-            ok("NoticeCodeDot.tsx" not in default_hits,
-               "`Notice`'s `code` prop is NOT caught without `--include-code-attr` — the "
-               "widening is opt-in, so `no mechanism on screen`'s own call is untouched")
-            ok("JoinLiteral.tsx" not in default_hits,
-               "a `.join(' · ')` call is NOT caught without `--join-literals` — the same "
-               "opt-in argument, for the other widening")
+        # No node or app/node_modules/typescript is a read that could not run: unknown,
+        # never a crash and never an ok. The node arm below runs whenever the toolchain is present.
+        if _user_strings_toolchain_missing():
+            print(f"  UNKNOWN the extractor arm of this self-test did not run: {UNKNOWN_NO_TOOLCHAIN}")
+        else:
+            # THE DEFAULT CALL — no widening flags, exactly what `no mechanism on screen` uses —
+            # proves the two new channels stay OFF unless a caller asks for them, which is the
+            # whole argument for why widening them does not touch that row's own fixtures above.
+            default_strings = _run_user_strings(["--dir", str(fixture_dir)])
+            ok(default_strings is not None, "the extractor runs, unwidened, over the fixture tree")
+            if default_strings is not None:
+                default_hits = {f.where.split(":")[0].split("/")[-1] for f in _typed_interpunct_hits(default_strings)}
+                ok("PlainDot.tsx" in default_hits,
+                   "a middle dot in plain JSX text is caught with NO widening at all")
+                ok("NoticeCodeDot.tsx" not in default_hits,
+                   "`Notice`'s `code` prop is NOT caught without `--include-code-attr` — the "
+                   "widening is opt-in, so `no mechanism on screen`'s own call is untouched")
+                ok("JoinLiteral.tsx" not in default_hits,
+                   "a `.join(' · ')` call is NOT caught without `--join-literals` — the same "
+                   "opt-in argument, for the other widening")
 
-        # THE ROW'S OWN CALL — `TYPED_INTERPUNCT_EXTRACT_ARGS`, both widenings together,
-        # exactly what `check_typed_interpunct` passes in production.
-        widened_strings = _run_user_strings(["--dir", str(fixture_dir), *TYPED_INTERPUNCT_EXTRACT_ARGS])
-        ok(widened_strings is not None, "the extractor runs, widened, over the fixture tree")
-        if widened_strings is not None:
-            widened_hits = {f.where.split(":")[0].split("/")[-1] for f in _typed_interpunct_hits(widened_strings)}
-            ok("PlainDot.tsx" in widened_hits,
-               "plain JSX text is still caught once widened")
-            ok("NoticeCodeDot.tsx" in widened_hits,
-               "`--include-code-attr` catches a typed dot inside `Notice`'s own `code` prop — "
-               "extractor addition (a)")
-            ok("JoinLiteral.tsx" in widened_hits,
-               "`--join-literals` catches `parts.join(' · ')` fed to a local helper "
-               "(`PositionLabel.tsx`'s `whole()` shape) — extractor addition (b)/(c), the "
-               "direct-literal check for a call the AST walk cannot see through by reference")
-            ok("CommaJoin.tsx" not in widened_hits,
-               "a `.join(', ')` call is extracted (the literal argument reaches the walk) but "
-               "carries no interpunct character, so it is not a HIT — the widening reads every "
-               "`.join(<literal>)` separator, and the character test is what decides a finding")
+            # THE ROW'S OWN CALL — `TYPED_INTERPUNCT_EXTRACT_ARGS`, both widenings together,
+            # exactly what `check_typed_interpunct` passes in production.
+            widened_strings = _run_user_strings(["--dir", str(fixture_dir), *TYPED_INTERPUNCT_EXTRACT_ARGS])
+            ok(widened_strings is not None, "the extractor runs, widened, over the fixture tree")
+            if widened_strings is not None:
+                widened_hits = {f.where.split(":")[0].split("/")[-1] for f in _typed_interpunct_hits(widened_strings)}
+                ok("PlainDot.tsx" in widened_hits,
+                   "plain JSX text is still caught once widened")
+                ok("NoticeCodeDot.tsx" in widened_hits,
+                   "`--include-code-attr` catches a typed dot inside `Notice`'s own `code` prop — "
+                   "extractor addition (a)")
+                ok("JoinLiteral.tsx" in widened_hits,
+                   "`--join-literals` catches `parts.join(' · ')` fed to a local helper "
+                   "(`PositionLabel.tsx`'s `whole()` shape) — extractor addition (b)/(c), the "
+                   "direct-literal check for a call the AST walk cannot see through by reference")
+                ok("CommaJoin.tsx" not in widened_hits,
+                   "a `.join(', ')` call is extracted (the literal argument reaches the walk) but "
+                   "carries no interpunct character, so it is not a HIT — the widening reads every "
+                   "`.join(<literal>)` separator, and the character test is what decides a finding")
 
-        # ONE ENTRY EXCUSES ONE STRING IN ONE NAMED FUNCTION. The review's probe: a listed bare
-        # `·` join removed from one component, and a new one typed in another, stayed green
-        # while the key was the string alone.
-        def scoped(body: str) -> Dict[str, Dict[str, List[str]]]:
-            scope_dir = fixture_dir / "scoped"
-            scope_dir.mkdir(exist_ok=True)
-            (scope_dir / "Two.tsx").write_text(body)
-            got = _run_user_strings(["--dir", str(scope_dir), *TYPED_INTERPUNCT_EXTRACT_ARGS])
-            return _typed_interpunct_found(got or [])
+            # ONE ENTRY EXCUSES ONE STRING IN ONE NAMED FUNCTION. The review's probe: a listed bare
+            # `·` join removed from one component, and a new one typed in another, stayed green
+            # while the key was the string alone.
+            def scoped(body: str) -> Dict[str, Dict[str, List[str]]]:
+                scope_dir = fixture_dir / "scoped"
+                scope_dir.mkdir(exist_ok=True)
+                (scope_dir / "Two.tsx").write_text(body)
+                got = _run_user_strings(["--dir", str(scope_dir), *TYPED_INTERPUNCT_EXTRACT_ARGS])
+                return _typed_interpunct_found(got or [])
 
-        two_components = (
-            "export function First(p: { a: string[] }) {\n"
-            "  return <p>{p.a.join(' · ')}</p>\n"
-            "}\n"
-            "export function Second(p: { a: string[] }) {\n"
-            "  return <p>{p.a.join(', ')}</p>\n"
-            "}\n"
-            "const helper = (a: string[]) => a.join(' · ')\n"
-        )
-        before = scoped(two_components)
-        ok(before == {"Two.tsx": {TYPED_INTERPUNCT_RULE: ["First: ·", "helper: ·"]}},
-           "each typed dot is keyed by the named function around it: a component, or an "
-           "arrow bound to a name", f"{before}")
-        moved_dot = scoped(two_components.replace("join(' · ')}</p>", "join(', ')}</p>", 1)
-                           .replace("join(', ')}</p>\n}\nconst", "join(' · ')}</p>\n}\nconst"))
-        unlisted, stale = _offender_diff(moved_dot, before)
-        ok(unlisted == [("Two.tsx", TYPED_INTERPUNCT_RULE, "Second: ·")]
-           and stale == [("Two.tsx", TYPED_INTERPUNCT_RULE, "First: ·")],
-           "RED: the listed dot removed from one component and the same bare `·` typed in "
-           "another is a NEW offender and a stale entry, not a pass", f"{unlisted} {stale}")
-        ok(_offender_diff(scoped(two_components.replace("First(p", "First(q")
-                                 .replace("p.a.join(' · ')", "q.a.join(' · ')")), before)
-           == ([], []),
-           "an edit elsewhere in the same function moves nothing: the key is the function's "
-           "name, never a line")
+            two_components = (
+                "export function First(p: { a: string[] }) {\n"
+                "  return <p>{p.a.join(' · ')}</p>\n"
+                "}\n"
+                "export function Second(p: { a: string[] }) {\n"
+                "  return <p>{p.a.join(', ')}</p>\n"
+                "}\n"
+                "const helper = (a: string[]) => a.join(' · ')\n"
+            )
+            before = scoped(two_components)
+            ok(before == {"Two.tsx": {TYPED_INTERPUNCT_RULE: ["First: ·", "helper: ·"]}},
+               "each typed dot is keyed by the named function around it: a component, or an "
+               "arrow bound to a name", f"{before}")
+            moved_dot = scoped(two_components.replace("join(' · ')}</p>", "join(', ')}</p>", 1)
+                               .replace("join(', ')}</p>\n}\nconst", "join(' · ')}</p>\n}\nconst"))
+            unlisted, stale = _offender_diff(moved_dot, before)
+            ok(unlisted == [("Two.tsx", TYPED_INTERPUNCT_RULE, "Second: ·")]
+               and stale == [("Two.tsx", TYPED_INTERPUNCT_RULE, "First: ·")],
+               "RED: the listed dot removed from one component and the same bare `·` typed in "
+               "another is a NEW offender and a stale entry, not a pass", f"{unlisted} {stale}")
+            ok(_offender_diff(scoped(two_components.replace("First(p", "First(q")
+                                     .replace("p.a.join(' · ')", "q.a.join(' · ')")), before)
+               == ([], []),
+               "an edit elsewhere in the same function moves nothing: the key is the function's "
+               "name, never a line")
 
-        nested = scoped(
-            "export function One(p: { a: string[] }) {\n"
-            "  const sep = (a: string[]) => a.join(' · ')\n"
-            "  return <p>{sep(p.a)}</p>\n"
-            "}\n"
-            "export function Two(p: { a: string[] }) {\n"
-            "  const sep = (a: string[]) => a.join(' · ')\n"
-            "  return <p>{sep(p.a)}</p>\n"
-            "}\n")
-        ok(nested == {"Two.tsx": {TYPED_INTERPUNCT_RULE: ["One.sep: ·", "Two.sep: ·"]}},
-           "two local helpers with one name in two functions get two keys: a nested scope "
-           "is qualified by the scope around it", f"{nested}")
+            nested = scoped(
+                "export function One(p: { a: string[] }) {\n"
+                "  const sep = (a: string[]) => a.join(' · ')\n"
+                "  return <p>{sep(p.a)}</p>\n"
+                "}\n"
+                "export function Two(p: { a: string[] }) {\n"
+                "  const sep = (a: string[]) => a.join(' · ')\n"
+                "  return <p>{sep(p.a)}</p>\n"
+                "}\n")
+            ok(nested == {"Two.tsx": {TYPED_INTERPUNCT_RULE: ["One.sep: ·", "Two.sep: ·"]}},
+               "two local helpers with one name in two functions get two keys: a nested scope "
+               "is qualified by the scope around it", f"{nested}")
 
-        # A FUNCTION RENAME MOVES ITS ENTRIES, the way a file rename does. The rename is red
-        # until the entries are re-keyed. Re-keyed, it is not growth, because growth drops
-        # the scope (`typed_interpunct_growth_key`).
-        renamed_fn = scoped(two_components.replace("function First(", "function Renamed("))
-        unlisted, stale = _offender_diff(renamed_fn, before)
-        ok(len(unlisted) == 1 and len(stale) == 1,
-           "RED: a function renamed and its entry left alone is one unlisted, one stale",
-           f"{unlisted} {stale}")
-        dot_rules = {TYPED_INTERPUNCT_RULE}
-        ok(_offender_diff(renamed_fn, renamed_fn) == ([], [])
-           and _typed_interpunct_growth(before, renamed_fn, dot_rules, []) == ([], []),
-           "T7b: the entry re-keyed to the new function name is not growth — the same "
-           "string, the same number of times, in the same file")
-        refused, _ = _offender_growth(before, renamed_fn, dot_rules, dot_rules)
-        ok(len(refused) == 1,
-           "RED without the growth key: counted with its scope, the re-key reads as growth",
-           f"{refused}")
-        more = {"Two.tsx": {TYPED_INTERPUNCT_RULE: before["Two.tsx"][TYPED_INTERPUNCT_RULE]
-                            + ["Second: ·"]}}
-        refused, _ = _typed_interpunct_growth(before, more, dot_rules, [])
-        ok(len(refused) == 1,
-           "RED: one more copy of a listed string in the same file is growth",
-           f"{refused}")
+            # A FUNCTION RENAME MOVES ITS ENTRIES, the way a file rename does. The rename is red
+            # until the entries are re-keyed. Re-keyed, it is not growth, because growth drops
+            # the scope (`typed_interpunct_growth_key`).
+            renamed_fn = scoped(two_components.replace("function First(", "function Renamed("))
+            unlisted, stale = _offender_diff(renamed_fn, before)
+            ok(len(unlisted) == 1 and len(stale) == 1,
+               "RED: a function renamed and its entry left alone is one unlisted, one stale",
+               f"{unlisted} {stale}")
+            dot_rules = {TYPED_INTERPUNCT_RULE}
+            ok(_offender_diff(renamed_fn, renamed_fn) == ([], [])
+               and _typed_interpunct_growth(before, renamed_fn, dot_rules, []) == ([], []),
+               "T7b: the entry re-keyed to the new function name is not growth — the same "
+               "string, the same number of times, in the same file")
+            refused, _ = _offender_growth(before, renamed_fn, dot_rules, dot_rules)
+            ok(len(refused) == 1,
+               "RED without the growth key: counted with its scope, the re-key reads as growth",
+               f"{refused}")
+            more = {"Two.tsx": {TYPED_INTERPUNCT_RULE: before["Two.tsx"][TYPED_INTERPUNCT_RULE]
+                                + ["Second: ·"]}}
+            refused, _ = _typed_interpunct_growth(before, more, dot_rules, [])
+            ok(len(refused) == 1,
+               "RED: one more copy of a listed string in the same file is growth",
+               f"{refused}")
 
     # DOT GROWTH IS PER FILE, with a file rename mapped back through git's rename pairs. The
     # second review's X1 and X2: counted over the whole list, a dot fixed in one file excused

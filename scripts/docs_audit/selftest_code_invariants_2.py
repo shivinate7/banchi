@@ -293,7 +293,10 @@ def run(ok) -> None:
              module_globals()["_user_strings_toolchain_missing"]) = _saved
 
         strings = _run_user_strings(["--dir", str(fixture_dir)])
-        ok(strings is not None, "the extractor runs over a throwaway fixture tree",
+        if strings is None and _user_strings_toolchain_missing():
+            print(f"  UNKNOWN the extractor fixture cases did not run: {UNKNOWN_NO_TOOLCHAIN}")
+        else:
+            ok(strings is not None, "the extractor runs over a throwaway fixture tree",
            "node or app/node_modules/typescript unavailable — install and re-run")
         if strings is not None:
             findings, _used = _no_mechanism_findings(strings)

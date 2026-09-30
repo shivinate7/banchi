@@ -63,7 +63,6 @@ DEBT48 code-side mechanization left open
 DEBT49 `_copies_out` and `_committed_keys` cost a full-table pass per call
 DEBT50 git and gh CLI traps hit from this checkout
 DEBT54 the 13th-row undo walk times out under load
-DEBT55 the audit self-test crashes when app/node_modules is missing
 DEBT58 the Lane H palette record is on a branch, not in main
 DEBT59 an unreadable live claim has no way out on screen
 DEBT60 the demo builds with Hide unpullable forced off
