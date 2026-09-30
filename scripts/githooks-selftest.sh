@@ -531,6 +531,22 @@ case "$both_out" in
   *) ok "a slug on a ref that is NOT main — silent" ;;
 esac
 
+echo "  -- a secrets file is refused in any directory (D-precommit-secrets-file) --"
+git switch -q -c secretstest 2>/dev/null
+mkdir -p sub/deep
+for name in .env .env.local sub/.env sub/deep/.env.production; do
+  printf 'K=v\n' > "$name"
+  git add -f "$name"
+  expect refuse "$name staged, even by a forced add" git commit -qm "secrets file"
+  git reset -q -- "$name"
+  rm -f "$name"
+done
+for name in .env.example sub/.env.example .envrc; do
+  printf 'K=\n' > "$name"
+  git add -f "$name"
+  expect allow "$name staged — not a secrets file" git commit -qm "template"
+done
+
 echo "  -- every staged image gets the QR scan, wherever it lands (D303) --"
 # THE FOLDER LIST IS GONE. Before this, only demo-assets/photos/, demo-assets/extra/photos/
 # and demo-assets/mirror/photos/ were re-decoded by scripts/qr-clear-check.py; every other

@@ -151,6 +151,19 @@ $(printf '%s\n' "$icloud_dupes" | sed 's/^/    /')
   If a name like this is genuinely intended:  PKMNSCAN_DUPES=off git commit ..."
 fi
 
+# SECRETS FILES (D-precommit-secrets-file). Refused: any staged path whose basename is `.env` or
+# starts with `.env.`, in any directory. The Claude guard only sees a command that NAMES the file,
+# so `git add -f .` sweeps it in, and Codex runs no Claude hook. This hook is the one guard every
+# tool runs. The one allow is `.env.example`, the template this repo already tracks: it is
+# named here, and nothing else is exempt. No hatch: a secret in history is not undone by a flag.
+secrets_files="$(printf '%s\n' "$staged" | grep -E '(^|/)\.env(\.[^/]*)?$' | grep -Ev '(^|/)\.env\.example$' || true)"
+if [ -n "$secrets_files" ]; then
+  fail "a secrets file is staged:
+$(printf '%s\n' "$secrets_files" | sed 's/^/    /')
+  A basename of .env or .env.* holds keys and tokens. Unstage it and leave it untracked.
+  Only the template .env.example is allowed."
+fi
+
 # A SYMLINK THAT LEAVES THE REPOSITORY. Refused, and it is the rule this hook was missing
 # on 2026-08-29 when a tracked one cost the 133 MB image mirror (D47).
 #
