@@ -26905,6 +26905,11 @@ def check_listing_commands(checks: Checks) -> None:
         rose = write_export(
             run_dir.path("export.csv"), live={DUNSPARCE_SKU: 2, ARTICUNO_SKU: 4}
         )
+        # DATED, NOT RACED: the store stamped `live_as_of` to the millisecond a moment ago
+        # and a tie goes to the store, so a file written in that same millisecond is not
+        # NEWER and is refused. Say which order this case means, as the cases below do.
+        newer = time.time() + 60
+        os.utime(rose, (newer, newer))
         said = command(checks, "join", str(run_dir.directory), "--export", str(rose))
         inventory = Store().read().inventory
         checks.equal(
@@ -35281,6 +35286,117 @@ def check_price_history(checks: Checks) -> None:
         raised is not None and "Not A Real Product Line" in str(raised),
         "and the refusal names the row's own unresolvable Product Line, the ordinary "
         "resolution failure, proving product_id_for_row is what ran",
+    )
+
+    # A groups list cached before a set released: a miss refetches once and resolves; a set
+    # missing from both still refuses.
+    def _catalog(groups):
+        def fetch(url):
+            if url.endswith("/tcgplayer/categories"):
+                return {"results": [{"categoryId": 3, "name": "Pokemon"}]}
+            if url.endswith("/groups"):
+                return {"results": groups()}
+            raise AssertionError(url)
+        return fetch
+
+    old_groups = [{"groupId": 1, "name": "Old Set"}]
+    live_groups = old_groups
+    cache_home = Path(tempfile.mkdtemp())
+    pricehistory.Market(
+        cache_dir=cache_home, fetcher=_catalog(lambda: live_groups), courtesy_delay=0
+    ).group_id(3, "Old Set")
+    live_groups = old_groups + [{"groupId": 2, "name": "New Set"}]
+    new_market = pricehistory.Market(
+        cache_dir=cache_home, fetcher=_catalog(lambda: live_groups), courtesy_delay=0
+    )
+    checks.equal(
+        new_market.group_id(3, "New Set"), 2,
+        "a set missing from the cached groups list resolves after one refetch, no cache deletion",
+    )
+    checks.raises(
+        pricehistory.NotResolvable,
+        lambda: new_market.group_id(3, "Never Released"),
+        "a set missing from the fresh list too still refuses",
+    )
+    requests_before = new_market.requests
+    checks.raises(
+        pricehistory.NotResolvable,
+        lambda: new_market.group_id(3, "Never Released"),
+        "and asks again for nothing: one refetch per instance, never one per card",
+    )
+    checks.equal(new_market.requests, requests_before, "the second miss spent no request")
+
+    # Products miss, a failing host, and an empty refetch, on the same stubbed catalogue.
+    live = {"groups": old_groups, "products": [{"productId": 10, "name": "Alpha"}], "fail": False}
+
+    def _mirror(url):
+        if live["fail"]:
+            raise pricehistory.Unreachable("stub host down")
+        if url.endswith("/tcgplayer/categories"):
+            return {"results": [{"categoryId": 3, "name": "Pokemon"}]}
+        if url.endswith("/groups"):
+            return {"results": live["groups"]}
+        return {"results": live["products"]}
+
+    def _row(card):
+        return {"Product Line": "Pokemon", "Set Name": "Old Set", "Number": "", "Product Name": card}
+
+    products_home = Path(tempfile.mkdtemp())
+    pricehistory.Market(cache_dir=products_home, fetcher=_mirror, courtesy_delay=0).product_id_for_row(_row("Alpha"))
+    live["products"] = [{"productId": 10, "name": "Alpha"}, {"productId": 11, "name": "Bravo"}]
+    checks.equal(
+        pricehistory.Market(cache_dir=products_home, fetcher=_mirror, courtesy_delay=0).product_id_for_row(_row("Bravo")),
+        11,
+        "a card added to a cached product list resolves after one refetch",
+    )
+    live["fail"] = True
+    down = pricehistory.Market(cache_dir=products_home, fetcher=_mirror, courtesy_delay=0)
+    for card in ("Nope 1", "Nope 2", "Nope 3", "Nope 4", "Nope 5"):
+        with contextlib.suppress(pricehistory.NotResolvable, pricehistory.Unreachable):
+            down.product_id_for_row(_row(card))
+    checks.equal(down.requests, 1, "a failing refetch makes exactly one request across many cards")
+    live["fail"] = False
+    live["products"] = []
+    empty = pricehistory.Market(cache_dir=products_home, fetcher=_mirror, courtesy_delay=0)
+    checks.raises(
+        pricehistory.NotResolvable,
+        lambda: empty.product_id_for_row(_row("Nope 6")),
+        "a card in neither list still refuses",
+    )
+    checks.equal(
+        pricehistory.Market(cache_dir=products_home, fetcher=_no_network, courtesy_delay=0).product_id_for_row(_row("Bravo")),
+        11,
+        "an empty refetch leaves the old cache intact, so a cached card still resolves",
+    )
+
+    # An EXPIRED groups cache (two days old): a failing host serves the old list in one
+    # request; an empty payload does not replace it.
+    clock = {"t": 1_000_000.0}
+    aged_home = Path(tempfile.mkdtemp())
+    live["fail"], live["products"] = False, [{"productId": 10, "name": "Alpha"}]
+    live["groups"] = old_groups
+    pricehistory.Market(
+        cache_dir=aged_home, fetcher=_mirror, courtesy_delay=0, now=lambda: clock["t"]
+    ).group_id(3, "Old Set")
+    clock["t"] += 2 * 24 * 60 * 60
+    live["fail"] = True
+    aged = pricehistory.Market(
+        cache_dir=aged_home, fetcher=_mirror, courtesy_delay=0, now=lambda: clock["t"]
+    )
+    resolved = [aged.group_id(3, "Old Set") for _ in range(20)]
+    checks.equal(
+        (resolved[-1], aged.requests), (1, 1),
+        "an expired groups cache and a failing host: the old set still resolves, in 1 request across 20 cards",
+    )
+    live["fail"], live["groups"] = False, []
+    emptied = pricehistory.Market(
+        cache_dir=aged_home, fetcher=_mirror, courtesy_delay=0, now=lambda: clock["t"]
+    )
+    checks.equal(emptied.group_id(3, "Old Set"), 1, "an expired cache and an empty payload: the old list still resolves")
+    checks.equal(
+        pricehistory.Market(cache_dir=aged_home, fetcher=_no_network, courtesy_delay=0, now=lambda: 1_000_001.0).group_id(3, "Old Set"),
+        1,
+        "and the empty payload was never stored",
     )
 
     # ---------------------------------------------------------------- the parse, on real bytes

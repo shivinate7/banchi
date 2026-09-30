@@ -229,7 +229,9 @@ COURTESY_DELAY_SECONDS = 0.15
 
 # How long a cached answer is served before it is re-fetched.
 #
-# CATEGORIES, GROUPS AND PRODUCTS NEVER EXPIRE, ON THE OWNER'S OWN RULING (2026-09-20): the
+# CATEGORIES AND PRODUCTS NEVER EXPIRE, ON THE OWNER'S OWN RULING. GROUPS EXPIRE DAILY
+# (`GROUPS_TTL_SECONDS`), because a set released after the list was pulled is missing from
+# it; a group or product MISS also refetches once (`group_id`, `product_id_for_row`). The
 # set of cards in a catalogue set does not change from pull to pull. Measured independently
 # across settled Pokemon sets: recently-modified products all carry their original low
 # product ids, and no new ids appear — what churn exists is field edits to an existing
@@ -267,6 +269,10 @@ COURTESY_DELAY_SECONDS = 0.15
 # short enough that nobody reads a stale figure and long enough that re-running an analysis
 # in one sitting costs no requests.
 CATALOG_TTL_SECONDS = float("inf")
+# A day: a set released after the groups list was cached is missing from it, and an infinite
+# life refused every card of that set forever. Long enough that one sweep is one request; a
+# miss also refetches once (`group_id`), so the day is only the backstop for `groups` callers.
+GROUPS_TTL_SECONDS = 24 * 60 * 60
 PRICE_TTL_SECONDS = 7 * 24 * 60 * 60
 HISTORY_TTL_SECONDS = 60 * 60
 
@@ -1050,6 +1056,9 @@ class Market:
         self._memory: Dict[str, Tuple[float, Dict]] = {}
         self._indexes: Dict[Tuple[int, int], ProductIndex] = {}
         self.requests = 0
+        # Slugs fetched over the network this instance's life: a miss refetches a catalogue
+        # list once, never once per card.
+        self._attempted: set = set()
         # SET ONCE, BY THE FIRST `Offline` (never a plain `Unreachable` — see that class's
         # docstring), and read by every `get()` after it for the rest of THIS instance's
         # life. A batch that has already learned the socket cannot be reached does not
@@ -1103,24 +1112,46 @@ class Market:
             # A cache that cannot be written is slower, not wrong.
             pass
 
-    def get(self, url: str, slug: str, ttl: float) -> Dict:
+    def refetch(self, url: str, slug: str) -> Dict:
+        """Refetch a catalogue list after a miss against the cached one: `get` past any TTL."""
+        return self.get(url, slug, -1, catalog=True)
+
+    def get(self, url: str, slug: str, ttl: float, catalog: bool = False) -> Dict:
+        """One home for the catalogue lists' expiry rule (`catalog=True`).
+
+        The attempt is recorded BEFORE the fetch, so with a stale list in hand a failing host
+        costs one request per instance, not one per card, and the stale list is served rather
+        than an error. A payload with fewer results than the stale list held (an empty one
+        included) is never stored: the cache keeps the old list.
+        """
         payload = self._cached(slug, ttl)
         if payload is not None:
             return payload
+        stale = self._cached(slug, float("inf")) if catalog else None
+        if stale is not None and slug in self._attempted:
+            return stale
         if self._offline is not None:
             # FAIL FAST, NEVER RE-ATTEMPT. The socket has already failed once with no
             # response at all this instance's life — a second, distinct URL over the same
             # dead network fails the identical way, so there is nothing to wait politely
             # before, and no reason to spend the syscall finding that out again.
+            if stale is not None:
+                return stale
             raise self._offline
         if self.requests and self._courtesy_delay:
             time.sleep(self._courtesy_delay)
+        self._attempted.add(slug)
         self.requests += 1
         try:
             payload = self._fetch(url)
-        except Offline as exc:
-            self._offline = exc
+        except PriceHistoryError as exc:
+            if isinstance(exc, Offline):
+                self._offline = exc
+            if stale is not None:
+                return stale
             raise
+        if stale is not None and len(payload.get("results") or ()) < len(stale.get("results") or ()):
+            return stale
         self._store(slug, payload)
         return payload
 
@@ -1143,15 +1174,20 @@ class Market:
         return int(row["categoryId"])  # type: ignore[index]
 
     def groups(self, category_id: int) -> Dict[str, object]:
-        payload = self.get(
-            f"{CATALOG_HOST}/tcgplayer/{int(category_id)}/groups",
-            f"tcgcsv/{int(category_id)}/groups",
-            CATALOG_TTL_SECONDS,
-        )
+        slug = f"tcgcsv/{int(category_id)}/groups"
+        url = f"{CATALOG_HOST}/tcgplayer/{int(category_id)}/groups"
+        payload = self.get(url, slug, GROUPS_TTL_SECONDS, catalog=True)
         return index_by_name(payload.get("results") or ())
 
     def group_id(self, category_id: int, set_name: str) -> int:
-        row = self.groups(category_id).get(join.normalize_set(set_name))
+        name = join.normalize_set(set_name)
+        row = self.groups(category_id).get(name)
+        if row is None:
+            # A miss against a list cached before the set released is the exact failure:
+            # ask the mirror once before refusing.
+            slug = f"tcgcsv/{int(category_id)}/groups"
+            payload = self.refetch(f"{CATALOG_HOST}/tcgplayer/{int(category_id)}/groups", slug)
+            row = index_by_name(payload.get("results") or ()).get(name)
         if row is None:
             raise NotResolvable(
                 f"No tcgcsv group in category {category_id} is named {set_name!r}. All 19 "
@@ -1160,13 +1196,13 @@ class Market:
             )
         return int(row["groupId"])  # type: ignore[index]
 
-    def products(self, category_id: int, group_id: int) -> ProductIndex:
+    def products(self, category_id: int, group_id: int, refresh: bool = False) -> ProductIndex:
         key = (int(category_id), int(group_id))
-        if key not in self._indexes:
-            payload = self.get(
-                f"{CATALOG_HOST}/tcgplayer/{key[0]}/{key[1]}/products",
-                f"tcgcsv/{key[0]}/{key[1]}/products",
-                CATALOG_TTL_SECONDS,
+        if key not in self._indexes or refresh:
+            url = f"{CATALOG_HOST}/tcgplayer/{key[0]}/{key[1]}/products"
+            slug = f"tcgcsv/{key[0]}/{key[1]}/products"
+            payload = (
+                self.refetch(url, slug) if refresh else self.get(url, slug, CATALOG_TTL_SECONDS)
             )
             self._indexes[key] = ProductIndex.build(payload.get("results") or ())
         return self._indexes[key]
@@ -1215,9 +1251,11 @@ class Market:
         """
         category_id = self.category_id(row.get(tcgcsv.PRODUCT_LINE_COLUMN, ""))
         group_id = self.group_id(category_id, row.get(tcgcsv.SET_COLUMN, ""))
-        product_id = self.products(category_id, group_id).find(
-            row.get(tcgcsv.NUMBER_COLUMN, ""), row.get(tcgcsv.NAME_COLUMN, "")
-        )
+        number, name = row.get(tcgcsv.NUMBER_COLUMN, ""), row.get(tcgcsv.NAME_COLUMN, "")
+        product_id = self.products(category_id, group_id).find(number, name)
+        if product_id is None:
+            # Same rule as `group_id`: a product list pulled before the card was added.
+            product_id = self.products(category_id, group_id, refresh=True).find(number, name)
         if product_id is None:
             raise NotResolvable(
                 "No single tcgcsv product matches "

@@ -3075,9 +3075,45 @@ def _added_or_renamed_paths(diff_texts: Iterable[str]) -> Set[str]:
     return paths
 
 
+def _is_main_ancestor(commit: str) -> bool:
+    """`git merge-base --is-ancestor <commit> origin/main`: exit 0 is True. Exit 1 is False.
+    Any other exit, or no git, is also False, because the caller excuses on True only, so an
+    unreadable `origin/main` leaves the numbers unexcused and the row red (`git()` above would
+    read the failure as empty, which is the same here but not by name)."""
+    try:
+        done = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", commit, _MERGE_BASE_REFERENCE],
+            cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    except OSError:
+        return False
+    return done.returncode == 0
+
+
+def _names_from_main(parents: Iterable[str], directory: str) -> Tuple[Set[str], Set[str]]:
+    """`(excused, stale)`: the file names under `directory` that the merged-in `parents` hold.
+    THE ONE EXCUSAL, read by the staged merge only: a full run needs none, because the
+    merge-base with `origin/main` already holds every main-ancestor parent's names. A parent that is an ancestor of `origin/main` excuses
+    its names (main's own numbers); any other parent (a feature branch, a PR head, or local
+    main ahead of a stale `origin/main`) excuses nothing, and the names `origin/main` lacks
+    come back as `stale` so a refusal can say where they came from. An unreadable ref is "not an ancestor"."""
+    excused: Set[str] = set()
+    stale: Set[str] = set()
+    main_held = {Path(p).name for p in
+                 git("ls-tree", "-r", "--name-only", _MERGE_BASE_REFERENCE, "--", directory).splitlines()}
+    for parent in parents:
+        held = {Path(p).name for p in
+                git("ls-tree", "-r", "--name-only", parent, "--", directory).splitlines()}
+        if _is_main_ancestor(parent):
+            excused |= held
+        else:
+            stale |= held - main_held
+    return excused, stale
+
+
 def check_numbered_record_growth(report: Report, staged_only: bool) -> None:
     findings: List[Finding] = []
     dirs = ["docs/decisions", "docs/debts"]
+    stale_paths: Set[str] = set()
 
     if staged_only:
         # THIS COMMIT'S OWN CHANGE, AND NOTHING EARLIER — exactly what the pre-commit hook
@@ -3087,6 +3123,14 @@ def check_numbered_record_growth(report: Report, staged_only: bool) -> None:
         sanctioned = _sanctioned_new_paths([cached_diff], _held_numbers("HEAD"))
         candidates = _added_or_renamed_paths([cached_diff])
         where = "the staged diff"
+        # A MERGE IN PROGRESS stages every number the other side brought as an add against
+        # HEAD (the first parent). Main's own are not this branch's.
+        merge_head = git("rev-parse", "-q", "--verify", "MERGE_HEAD").strip()
+        if merge_head:
+            for directory in dirs:
+                excused, stale = _names_from_main([merge_head], directory)
+                candidates -= {f"{directory}/{n}" for n in excused}
+                stale_paths.update(f"{directory}/{n}" for n in stale)
     else:
         base = git("merge-base", _MERGE_BASE_REFERENCE, "HEAD").strip()
         if not base:
@@ -3134,12 +3178,16 @@ def check_numbered_record_growth(report: Report, staged_only: bool) -> None:
             scanned += 1
             if new_path in sanctioned:
                 continue
+            remedy = (
+                " It is in the merged-in commit, which `origin/main` does not yet contain: if "
+                "that commit is main's, fetch main (`git fetch origin main`), then commit again."
+                if new_path in stale_paths else "")
             findings.append(Finding(
                 new_path,
                 f"is a NUMBERED {kind} record with no matching slug rename behind it (D140). "
                 f"A branch never allocates a number by hand — write a slug instead and "
                 f"`scripts/claim-ids.py` claims the number at the merge, which git sees as a "
-                f"RENAME from the slug file with the same descriptive tail.",
+                f"RENAME from the slug file with the same descriptive tail." + remedy,
             ))
     report.add("numbered record growth", MECHANICAL, findings,
                scanned=scanned,
