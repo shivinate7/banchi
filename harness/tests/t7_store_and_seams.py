@@ -16841,7 +16841,7 @@ def check_emit_buried_box(checks: Checks) -> None:
     deletion record refuses the run on both branches (bid, time), the single and the merged
     path refuse, a position the store holds no card at is refused, the Send screen's mapping
     shows the owner one plain sentence, and a card that MOVED to another live box still sends.
-    (docs/debts slug `emit-buried-box`.)
+    (D36, D145.)
     """
     checks.note("")
     checks.note("EMIT OVER A BURIED BOX — refused, and no ghost card is born")
@@ -26744,7 +26744,7 @@ def check_listing_commands(checks: Checks) -> None:
     # --- emit against a position the store has never seen ---------------------------------
     # A run joined from a recovered or hand-made identifications file. It USED TO upsert a
     # card here; that birth made 99 ghost cards and ~96 phantom TCGplayer copies on
-    # 2026-09-27 (docs/debts slug `emit-buried-box`). No caller needs it, so it is gone: the
+    # 2026-09-27 (D36, D145). No caller needs it, so it is gone: the
     # emit refuses, names the position, and writes and creates nothing.
     with isolated_home():
         run_dir = runs.create("t7-unseen")
@@ -26905,6 +26905,11 @@ def check_listing_commands(checks: Checks) -> None:
         rose = write_export(
             run_dir.path("export.csv"), live={DUNSPARCE_SKU: 2, ARTICUNO_SKU: 4}
         )
+        # DATED, NOT RACED: the store stamped `live_as_of` to the millisecond a moment ago
+        # and a tie goes to the store, so a file written in that same millisecond is not
+        # NEWER and is refused. Say which order this case means, as the cases below do.
+        newer = time.time() + 60
+        os.utime(rose, (newer, newer))
         said = command(checks, "join", str(run_dir.directory), "--export", str(rose))
         inventory = Store().read().inventory
         checks.equal(
@@ -27255,7 +27260,7 @@ def check_listing_commands(checks: Checks) -> None:
 
     # --- a zero reading taken AFTER the sale ages the claim (D150) ---
     #
-    # THE OWNER'S OWN CASE, WHICH DEBT24 RECORDED AS DELIBERATELY UNFIXED. A copy
+    # THE OWNER'S OWN CASE, WHICH D150 LEAVES OUT OF SCOPE BY THE OWNER'S CHOICE. A copy
     # is pushed, it sells, and a later export reads `Total Quantity` 0 for the SKU. `pushed`
     # has no drawdown and the old gate aged it only where the export reported copies LIVE, so
     # the claim stood at its full count forever: the copies on hand were committed against it
@@ -29948,6 +29953,14 @@ def check_export_fetch(checks: Checks) -> None:
                     "a game with no TCGplayer category answers 200 with an empty list and a "
                     "reason — never a refusal, because this is drawn on the rig's own screen "
                     "and a capture must not stop for a missing convenience",
+                )
+                status, raw, _ = request(port, "GET", "/tcg/sets?game=not-a-game")
+                body = json.loads(raw or b"{}")
+                checks.equal(
+                    (status, body.get("sets")),
+                    (200, []),
+                    "and a game the registry does not know answers the same 200 and an empty "
+                    "list — `game_registry.get` raises `UnknownGame`, and it was a 500",
                 )
 
                 # ------------------------------ THE HINT VOCABULARY IS NOT TCGPLAYER'S
@@ -33271,6 +33284,41 @@ def check_order_reconcile_backlog(checks: Checks) -> None:
             )
 
 
+def check_order_line_sealed_from_title(checks: Checks) -> None:
+    """A sold sealed box whose SKU left the `skus` table, on a paste with no condition cell,
+    still answers `Unopened` (Sales' Singles/Sealed switch reads that one condition). A
+    single's name, and a name with "Box" in it but no `- Unopened` suffix, stay untouched."""
+
+    class NoSkus:
+        entries: dict = {}
+
+    def wire(name: str) -> dict:
+        return capture_server._order_line_wire(order_store.OrderLine(sku="1", quantity=1, name=name), NoSkus())
+
+    checks.equal(
+        wire("Pokemon - SV09: Journey Together: Journey Together Booster Box - Unopened")["condition"],
+        "Unopened", "a sealed title with no sku row and no condition reads Unopened",
+    )
+    checks.equal(wire("Pokemon - SV09: Journey Together: N's Zoroark - 100/159 - Near Mint")["condition"],
+                 None, "a single's title never gains a condition")
+    checks.equal(wire("Pokemon - Some Booster Box Promo")["condition"], None,
+                 "a name with Box in it but no Unopened suffix is never guessed sealed")
+
+    from types import SimpleNamespace
+
+    class OnePieceSkus:
+        entries = {"1": SimpleNamespace(condition="", rarity="SR", product_line="One Piece Card Game", set_name="")}
+
+    def rarity_of(code: str, skus) -> object:
+        return capture_server._order_line_wire(
+            order_store.OrderLine(sku="1", quantity=1, name="x", rarity=code), skus
+        )["rarity"]
+
+    checks.equal(rarity_of("SR", OnePieceSkus()), "Super Rare", "a One Piece SR reads Super Rare")
+    checks.equal(rarity_of("DON!!", OnePieceSkus()), "DON!!", "a code no ruling names stays verbatim")
+    checks.equal(rarity_of("SR", NoSkus()), "SR", "with no game known, a code is never guessed")
+
+
 # ---------------------------------------------------------------- the order screen
 
 
@@ -35240,6 +35288,117 @@ def check_price_history(checks: Checks) -> None:
         "resolution failure, proving product_id_for_row is what ran",
     )
 
+    # A groups list cached before a set released: a miss refetches once and resolves; a set
+    # missing from both still refuses.
+    def _catalog(groups):
+        def fetch(url):
+            if url.endswith("/tcgplayer/categories"):
+                return {"results": [{"categoryId": 3, "name": "Pokemon"}]}
+            if url.endswith("/groups"):
+                return {"results": groups()}
+            raise AssertionError(url)
+        return fetch
+
+    old_groups = [{"groupId": 1, "name": "Old Set"}]
+    live_groups = old_groups
+    cache_home = Path(tempfile.mkdtemp())
+    pricehistory.Market(
+        cache_dir=cache_home, fetcher=_catalog(lambda: live_groups), courtesy_delay=0
+    ).group_id(3, "Old Set")
+    live_groups = old_groups + [{"groupId": 2, "name": "New Set"}]
+    new_market = pricehistory.Market(
+        cache_dir=cache_home, fetcher=_catalog(lambda: live_groups), courtesy_delay=0
+    )
+    checks.equal(
+        new_market.group_id(3, "New Set"), 2,
+        "a set missing from the cached groups list resolves after one refetch, no cache deletion",
+    )
+    checks.raises(
+        pricehistory.NotResolvable,
+        lambda: new_market.group_id(3, "Never Released"),
+        "a set missing from the fresh list too still refuses",
+    )
+    requests_before = new_market.requests
+    checks.raises(
+        pricehistory.NotResolvable,
+        lambda: new_market.group_id(3, "Never Released"),
+        "and asks again for nothing: one refetch per instance, never one per card",
+    )
+    checks.equal(new_market.requests, requests_before, "the second miss spent no request")
+
+    # Products miss, a failing host, and an empty refetch, on the same stubbed catalogue.
+    live = {"groups": old_groups, "products": [{"productId": 10, "name": "Alpha"}], "fail": False}
+
+    def _mirror(url):
+        if live["fail"]:
+            raise pricehistory.Unreachable("stub host down")
+        if url.endswith("/tcgplayer/categories"):
+            return {"results": [{"categoryId": 3, "name": "Pokemon"}]}
+        if url.endswith("/groups"):
+            return {"results": live["groups"]}
+        return {"results": live["products"]}
+
+    def _row(card):
+        return {"Product Line": "Pokemon", "Set Name": "Old Set", "Number": "", "Product Name": card}
+
+    products_home = Path(tempfile.mkdtemp())
+    pricehistory.Market(cache_dir=products_home, fetcher=_mirror, courtesy_delay=0).product_id_for_row(_row("Alpha"))
+    live["products"] = [{"productId": 10, "name": "Alpha"}, {"productId": 11, "name": "Bravo"}]
+    checks.equal(
+        pricehistory.Market(cache_dir=products_home, fetcher=_mirror, courtesy_delay=0).product_id_for_row(_row("Bravo")),
+        11,
+        "a card added to a cached product list resolves after one refetch",
+    )
+    live["fail"] = True
+    down = pricehistory.Market(cache_dir=products_home, fetcher=_mirror, courtesy_delay=0)
+    for card in ("Nope 1", "Nope 2", "Nope 3", "Nope 4", "Nope 5"):
+        with contextlib.suppress(pricehistory.NotResolvable, pricehistory.Unreachable):
+            down.product_id_for_row(_row(card))
+    checks.equal(down.requests, 1, "a failing refetch makes exactly one request across many cards")
+    live["fail"] = False
+    live["products"] = []
+    empty = pricehistory.Market(cache_dir=products_home, fetcher=_mirror, courtesy_delay=0)
+    checks.raises(
+        pricehistory.NotResolvable,
+        lambda: empty.product_id_for_row(_row("Nope 6")),
+        "a card in neither list still refuses",
+    )
+    checks.equal(
+        pricehistory.Market(cache_dir=products_home, fetcher=_no_network, courtesy_delay=0).product_id_for_row(_row("Bravo")),
+        11,
+        "an empty refetch leaves the old cache intact, so a cached card still resolves",
+    )
+
+    # An EXPIRED groups cache (two days old): a failing host serves the old list in one
+    # request; an empty payload does not replace it.
+    clock = {"t": 1_000_000.0}
+    aged_home = Path(tempfile.mkdtemp())
+    live["fail"], live["products"] = False, [{"productId": 10, "name": "Alpha"}]
+    live["groups"] = old_groups
+    pricehistory.Market(
+        cache_dir=aged_home, fetcher=_mirror, courtesy_delay=0, now=lambda: clock["t"]
+    ).group_id(3, "Old Set")
+    clock["t"] += 2 * 24 * 60 * 60
+    live["fail"] = True
+    aged = pricehistory.Market(
+        cache_dir=aged_home, fetcher=_mirror, courtesy_delay=0, now=lambda: clock["t"]
+    )
+    resolved = [aged.group_id(3, "Old Set") for _ in range(20)]
+    checks.equal(
+        (resolved[-1], aged.requests), (1, 1),
+        "an expired groups cache and a failing host: the old set still resolves, in 1 request across 20 cards",
+    )
+    live["fail"], live["groups"] = False, []
+    emptied = pricehistory.Market(
+        cache_dir=aged_home, fetcher=_mirror, courtesy_delay=0, now=lambda: clock["t"]
+    )
+    checks.equal(emptied.group_id(3, "Old Set"), 1, "an expired cache and an empty payload: the old list still resolves")
+    checks.equal(
+        pricehistory.Market(cache_dir=aged_home, fetcher=_no_network, courtesy_delay=0, now=lambda: 1_000_001.0).group_id(3, "Old Set"),
+        1,
+        "and the empty payload was never stored",
+    )
+
     # ---------------------------------------------------------------- the parse, on real bytes
     #
     # THE ORDER ASSERTION IS THE POINT OF COMMITTING THIS FILE. Both halves, so a change
@@ -36742,15 +36901,15 @@ def check_request_slots(checks: Checks) -> None:
     # regardless of what mechanism was supposed to stop it. That is the whole repair: an
     # instrument that is part of the mechanism it measures reports zero when the mechanism is
     # deleted, and zero passes every assertion of the form `<= REQUEST_SLOTS`.
-    original = capture_server.do_status
+    original = capture_server.do_inventory
 
     def instrumented(gate: threading.Event, state: dict):
-        """Patch `do_status` — the route the dispatcher calls AFTER taking a slot.
+        """Patch `do_inventory` — the route the dispatcher calls AFTER taking a slot.
 
         PATCHED AT THE ROUTE AND NOT AT `do_GET`, AND THE FIRST DRAFT GOT THAT WRONG. The slot is
         acquired inside `_dispatch`, which `do_GET` calls — so a hold placed in `do_GET` parks the
         thread OUTSIDE the bound, every reading is 0, and the assertions pass while measuring
-        nothing. `do_status` is invoked by the dispatcher after the slot is taken, so a hold here
+        nothing. `do_inventory` is invoked by the dispatcher after the slot is taken, so a hold here
         is a hold on a slot.
         """
 
@@ -36780,7 +36939,7 @@ def check_request_slots(checks: Checks) -> None:
         }
 
     def fire(port: int, count: int, state: dict) -> list:
-        """`count` callers at `GET /status`, each recording the status it was answered with.
+        """`count` callers at `GET /inventory`, each recording the status it was answered with.
 
         THE OUTCOME IS RECORDED BECAUSE LEG 2 NEEDS THE EXCESS CALLERS TO SAY SOMETHING. A caller
         that is refused 503 has demonstrably reached the semaphore and been turned away; a caller
@@ -36794,7 +36953,7 @@ def check_request_slots(checks: Checks) -> None:
                 outcome = "error"
                 try:
                     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
-                    conn.request("GET", "/status")
+                    conn.request("GET", "/inventory")
                     response = conn.getresponse()
                     response.read()
                     outcome = int(response.status)
@@ -36820,7 +36979,7 @@ def check_request_slots(checks: Checks) -> None:
     httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
     port = httpd.server_address[1]
     thread = _spawn_server(httpd)
-    capture_server.do_status = instrumented(gate, state)
+    capture_server.do_inventory = instrumented(gate, state)
     try:
         # EVERY THREAD ALIVE BEFORE THE LOAD, so the ones the SERVER makes can be told from the
         # ones this check makes. Naming the pool's workers and counting those was the first
@@ -36867,7 +37026,7 @@ def check_request_slots(checks: Checks) -> None:
             f"where one per connection would be all of them",
         )
     finally:
-        capture_server.do_status = original
+        capture_server.do_inventory = original
         gate.set()
         httpd.shutdown()
         httpd.server_close()
@@ -36892,7 +37051,7 @@ def check_request_slots(checks: Checks) -> None:
     )
     httpd._pool = wide  # noqa: SLF001 — the transport is the confound this leg removes
     thread = _spawn_server(httpd)
-    capture_server.do_status = instrumented(gate, state)
+    capture_server.do_inventory = instrumented(gate, state)
     # THE WAIT FOR A SLOT, SHORTENED FOR THIS LEG, AND IT IS WHAT MAKES THE READING DETERMINISTIC
     # RATHER THAN TIMED. The first draft of this leg slept half a second after the bound was met
     # and then read the occupancy, on the reasoning that an unbounded build would have filled up
@@ -36975,7 +37134,7 @@ def check_request_slots(checks: Checks) -> None:
         )
     finally:
         files.LOCK_TIMEOUT_SECONDS = real_timeout
-        capture_server.do_status = original
+        capture_server.do_inventory = original
         gate.set()
         httpd.shutdown()
         httpd.server_close()
@@ -37008,7 +37167,7 @@ def check_request_slots(checks: Checks) -> None:
     )
     httpd._pool = wide  # noqa: SLF001 — as leg 2: the pool must not be what refuses
     thread = _spawn_server(httpd)
-    capture_server.do_status = instrumented(gate, state)
+    capture_server.do_inventory = instrumented(gate, state)
     # THE TIMEOUT, SHORTENED FOR THE LENGTH OF THIS LEG ONLY. `_dispatch` reads
     # `files.LOCK_TIMEOUT_SECONDS` at call time, so the module attribute is the seam; nothing
     # else picks it up, because `files.exclusive` binds it as a DEFAULT ARGUMENT at import and
@@ -37023,7 +37182,7 @@ def check_request_slots(checks: Checks) -> None:
             time.sleep(0.02)
 
         started = time.monotonic()
-        status, body, _ = request(port, "GET", "/status")
+        status, body, _ = request(port, "GET", "/inventory")
         waited = time.monotonic() - started
 
         gate.set()
@@ -37056,7 +37215,7 @@ def check_request_slots(checks: Checks) -> None:
         )
     finally:
         files.LOCK_TIMEOUT_SECONDS = real_timeout
-        capture_server.do_status = original
+        capture_server.do_inventory = original
         gate.set()
         httpd.shutdown()
         httpd.server_close()
@@ -37155,7 +37314,7 @@ def check_photo_lane(checks: Checks) -> None:
             time.sleep(0.01)
         slots_held = capture_server.slots_in_use()
         started = time.monotonic()
-        status, _, _ = request(port, "GET", "/status")
+        status, _, _ = request(port, "GET", "/inventory")
         status_wait = time.monotonic() - started
         deadline = time.monotonic() + 20.0
         while time.monotonic() < deadline:
@@ -37192,7 +37351,8 @@ def check_photo_lane(checks: Checks) -> None:
         checks.equal(
             status,
             int(HTTPStatus.OK),
-            "`GET /status` answers 200 while the photo lane is full — a photo flood does not "
+            "`GET /inventory` (a slot-pool read; `/status` shares the lane now) answers 200 while "
+            "the photo lane is full — a photo flood does not "
             "starve the app's other requests",
         )
         checks.ok(status_wait < 2.0, f"and it answered at once, not after a wait — {status_wait:.2f}s")
@@ -37220,6 +37380,208 @@ def check_photo_lane(checks: Checks) -> None:
         0,
         "and every photo slot is given back",
     )
+
+
+def check_lockfree_lane(checks: Checks) -> None:
+    """Parked writers cannot starve the lock-free reads in the lane (DEBT11).
+
+    WHAT IT PROVES: with the store lock held and `REQUEST_SLOTS` real writers parked on it, each
+    route in `PHOTO_LANE_EXACT` still answers 200 within a bound, over the SHIPPED transport
+    (nothing widened). WHAT IT DOES NOT: that the heavy lock-free reads answer. They are not in the
+    lane and this check says nothing for them.
+
+    THE WRITERS ARE REAL: `POST /boxes` takes the store lock and waits on it, holding a slot. The
+    scratch store is opened first, because the first read of a fresh store upgrades it under the
+    same lock. Released at the end so the writers finish and join, with no 30s wait.
+    """
+    import http.client
+
+    checks.note("")
+    checks.note("LOCK-FREE LANE — parked writers do not starve the routes in it")
+    bound = 3.0
+    origin = capture_server.DEFAULT_ALLOWED_ORIGINS[0]
+    with isolated_home():
+        Store().read()  # the schema upgrade takes the lock; do it before the lock is held
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = _spawn_server(httpd)
+        writers = []
+        results = {}
+
+        def write(n: int) -> None:
+            with contextlib.suppress(Exception):
+                request(port, "POST", "/boxes", origin=origin, payload={"name": f"parked {n}"})
+
+        def probe(path: str):
+            started = time.monotonic()
+            try:
+                conn = http.client.HTTPConnection("127.0.0.1", port, timeout=bound)
+                conn.request("GET", path, headers={"Connection": "close"})
+                answer = conn.getresponse()
+                answer.read()
+                conn.close()
+                return int(answer.status), time.monotonic() - started
+            except Exception:  # noqa: BLE001 — a timeout is the finding
+                return None, time.monotonic() - started
+
+        try:
+            with files.exclusive(files.inventory_dir()):
+                for n in range(capture_server.REQUEST_SLOTS):
+                    writer = threading.Thread(target=write, args=(n,), daemon=True)
+                    writer.start()
+                    writers.append(writer)
+                # READ ON A CONDITION: every slot is held by a writer that is parked on the lock.
+                deadline = time.monotonic() + 10.0
+                while (
+                    time.monotonic() < deadline
+                    and capture_server.slots_in_use() < capture_server.REQUEST_SLOTS
+                ):
+                    time.sleep(0.01)
+                held = capture_server.slots_in_use()
+                # A FIXED LIST, not the constant: a route dropped from `PHOTO_LANE_EXACT` must go red
+                # here rather than leave the probe.
+                for path in ("/status", "/queues", "/capture/sitting", "/games"):
+                    results[path] = probe(path)
+                slot_route = probe("/inventory")
+        finally:
+            for writer in writers:
+                writer.join(timeout=30)
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+    checks.equal(
+        held,
+        capture_server.REQUEST_SLOTS,
+        "every request slot is held by a writer parked on the store lock — the guard on the "
+        "readings below",
+    )
+    for path, (status, took) in results.items():
+        checks.ok(
+            status == int(HTTPStatus.OK) and took < bound,
+            f"`GET {path}` answers 200 within {bound:.0f}s with every slot parked on the store "
+            f"lock — {status} in {took:.2f}s",
+        )
+    checks.ok(
+        slot_route[0] is None,
+        "and a slot-pool read (`/inventory`) is still parked behind them, so the lane is what "
+        f"answered and not a lock that never blocked — {slot_route[0]} in {slot_route[1]:.2f}s",
+    )
+    checks.equal(capture_server.slots_in_use(), 0, "and every slot is given back once the lock frees")
+
+
+def check_lane_survives_bad_target(checks: Checks) -> None:
+    """`photo_lane_path` runs before `_dispatch`'s `try`, so a target `urlparse` rejects must not raise."""
+    import http.client
+
+    checks.note("")
+    checks.note("LANE PREDICATE — a target that is not a URL")
+    try:
+        in_lane = capture_server.photo_lane_path("//[")
+    except ValueError:
+        in_lane = "raised ValueError"
+    checks.equal(in_lane, False, "`//[` is not in the lane and does not raise")
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    thread = _spawn_server(httpd)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1], timeout=5)
+        conn.request("GET", "//[", headers={"Connection": "close"})
+        status = conn.getresponse().status
+        conn.close()
+    except Exception as caught:  # noqa: BLE001 — a dropped socket is the finding
+        status = repr(caught)
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+    checks.ok(isinstance(status, int), f"and the server answers `GET //[` instead of dropping the socket — {status}")
+
+
+def check_slow_request_line(checks: Checks) -> None:
+    """A request parked on the store lock past the threshold logs ONE line that names the lock wait.
+
+    WHAT IT PROVES: the slow-request line (`CaptureHandler._note_slow`) exists, carries the route
+    without a query string, splits the slot wait from the lock wait, and reports what the
+    supervisor's busy file says. WHAT IT DOES NOT: that the supervisor writes that file. A fast
+    request writes no line. The log seam is `files.log_note`, replaced for the length of the check.
+    """
+    checks.note("")
+    checks.note("SLOW REQUEST LINE — a stall names its cause")
+    lines: list = []
+    answer: list = []
+    real_note, real_limit = files.log_note, capture_server.SLOW_REQUEST_SECONDS
+    real_busy = capture_server.SUPERVISOR_BUSY_FILE
+    # ONLY THIS CHECK'S OWN HANDLER'S LINES COUNT. A late `_note_slow` from an earlier check's server
+    # (it runs after the response) must not be read as this check's line.
+    mine = threading.local()
+
+    class Mine(QuietHandler):
+        def _note_slow(self, *args, **kwargs) -> None:
+            mine.on = True
+            try:
+                super()._note_slow(*args, **kwargs)
+            finally:
+                mine.on = False
+
+    files.log_note = lambda text: lines.append(text) if getattr(mine, "on", False) else None
+    capture_server.SLOW_REQUEST_SECONDS = 0.3
+    origin = capture_server.DEFAULT_ALLOWED_ORIGINS[0]
+    with isolated_home() as home:
+        Store().read()
+        capture_server.SUPERVISOR_BUSY_FILE = home / "busy"
+        capture_server.SUPERVISOR_BUSY_FILE.write_text("app-build\n", "utf-8")
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), Mine)
+        thread = _spawn_server(httpd)
+        port = httpd.server_address[1]
+        try:
+            request(port, "GET", "/inventory?q=secret-card")  # fast: no line
+            with files.exclusive(files.inventory_dir()):
+                writer = threading.Thread(
+                    target=lambda: answer.append(
+                        request(port, "POST", "/boxes", origin=origin, payload={"name": "slow"})[:2]
+                    ),
+                    daemon=True,
+                )
+                writer.start()
+                time.sleep(0.8)  # parked on the lock; released on leaving the block
+            writer.join(timeout=30)
+            # `_note_slow` runs in `_dispatch`'s `finally`, AFTER the response is sent. Wait for
+            # the line on a condition, once and bounded, before the seams are put back.
+            deadline = time.monotonic() + 5.0
+            while time.monotonic() < deadline and not any(
+                str(ln).startswith(capture_server.SLOW_LINE_PREFIX) and "POST /boxes " in str(ln)
+                for ln in list(lines)
+            ):
+                time.sleep(0.01)
+        finally:
+            files.log_note = real_note
+            capture_server.SLOW_REQUEST_SECONDS = real_limit
+            capture_server.SUPERVISOR_BUSY_FILE = real_busy
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+    slow = [
+        ln for ln in lines
+        if str(ln).startswith(capture_server.SLOW_LINE_PREFIX) and "POST /boxes " in ln
+    ]
+    checks.equal(
+        len(slow), 1,
+        f"exactly one slow-request line for the parked write (log saw {lines!r}, "
+        f"write answered {answer!r})",
+    )
+    line = slow[0] if slow else ""
+    waited = re.search(r"lock_wait=([\d.]+)s", line)
+    checks.ok(
+        "POST /boxes " in line and "secret-card" not in line,
+        f"it names the route and no query string — {line!r}",
+    )
+    checks.ok(
+        bool(waited) and float(waited.group(1)) >= 0.3,
+        f"it names the lock wait, at least the 0.3s threshold — {waited.group(0) if waited else None}",
+    )
+    checks.ok("slot_wait=0" in line and "(slot pool)" in line, "and the slot wait apart from it, with its pool")
+    checks.ok("supervisor_busy=app-build" in line, "and what the supervisor was doing")
 
 
 def check_photo_lane_threads_and_faults(checks: Checks) -> None:
@@ -39496,7 +39858,7 @@ def _m_cases() -> Dict[str, dict]:
         "home": {"line": "send 3 copies to TCGplayer", "behind": "1 card needs a price", "tile": "runs to price, 3 ready"},
     }
     # R7 F5, UNDER A CAP THE GUARD USED TO CLOSE AND NO LONGER DOES (the owner's ruling,
-    # 2026-09-27, replacing the 2026-09-25 "take the larger" amendment, DEBT37). A cap of 1
+    # 2026-09-27, replacing the 2026-09-25 "take the larger" amendment, D7). A cap of 1
     # with one Dunsparce live guard-side now leaves room for exactly one, because the guard's
     # own reading no longer feeds the cap at all — only the store's own `copies_out` does, and
     # it is fresh here (no prior push, no pending). What the guard STILL does, unchanged, is
@@ -39516,7 +39878,7 @@ def _m_cases() -> Dict[str, dict]:
 
     # ============================================================ D7, THE 2026-09-27 RULING
     #
-    # `--cap` REFUSES A CARD OUTRIGHT WHILE A COPY SENT SINCE IS STILL PENDING (DEBT37), and
+    # `--cap` REFUSES A CARD OUTRIGHT WHILE A COPY SENT SINCE IS STILL PENDING (D7), and
     # once reconciled the cap reads the store's own one reading alone — nothing maxed or
     # summed with a guard any more. `pure1`/`pure2` hold Dunsparce alone (no R, no A), so a
     # case can push, reconcile and cap one SKU with nothing else to crowd the assertions;
@@ -39585,7 +39947,7 @@ def _m_cases() -> Dict[str, dict]:
                      "tile": "2 ready"},
         }
 
-    # --- DEBT37's wording gap 2: the empty-send headline names a card the cap closed --------
+    # --- D7's capped-card clause: the empty-send headline names a card the cap closed --------
     # Two of Dunsparce's three copies are pushed and never reconciled (one stays uncommitted,
     # for the same reason as the row above), the reverse holo's one copy is pushed in full,
     # and Articuno still has no price — nothing is left to send at all, which is what reaches
@@ -39613,7 +39975,7 @@ def _m_cases() -> Dict[str, dict]:
                      "tile": "run to price, 1 ready"},
         }
 
-    # --- DEBT37's wording gap 1: a guard-zeroed `asked` is not a typed zero -----------------
+    # --- D7's guard-zero wording: a guard-zeroed `asked` is not a typed zero -----------------
     # The cap already closes Dunsparce to nothing on its own (one pushed and reconciled,
     # exactly at a cap of one, with two more uncommitted behind it) — so the guard's OWN
     # independent closure (it shows the whole three on hand as live) trims `would` from zero,
@@ -40775,6 +41137,7 @@ def run() -> Result:
     check_order_resolver(checks)
     check_order_ledger(checks)
     check_order_reconcile_backlog(checks)
+    check_order_line_sealed_from_title(checks)
     check_order_screen(checks)
     check_order_walk_plan_route(checks)
     check_order_places_scoped(checks)
@@ -40783,6 +41146,9 @@ def run() -> Result:
     check_order_fetch_route(checks)
     check_request_slots(checks)
     check_photo_lane(checks)
+    check_lockfree_lane(checks)
+    check_lane_survives_bad_target(checks)
+    check_slow_request_line(checks)
     check_photo_lane_threads_and_faults(checks)
     check_connection_close(checks)
     check_crop_preview(checks)

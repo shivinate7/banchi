@@ -468,7 +468,7 @@ const PRICED_STORE: Store = { cards: JOINED, search: (query) => searchAnswer(que
  * reports `Property 'products' is missing in type ... but required in type 'GameRegistry'`.
  *
  * `capture-undo.spec.ts` and `capture-claims.spec.ts` carry the same annotation for the same
- * reason. Twelve of the eighteen spec files still do not; DEBT3 says so. */
+ * reason. Most spec files still do not; DEBT3 says so. */
 const GAMES: GameRegistry = {
   default: 'pokemon',
   games: [
@@ -1316,10 +1316,10 @@ test('selecting a card shows every copy of it, each with both doors out of inven
      THE FIGURE IS DRAWN AS HEADROOM NOW, and the assertion keeps its whole bite: one live
      against a ceiling of two leaves room for ONE, where a screen reading the bare cap of 4
      would offer room for three. */
-  await expect(page.locator('.card-locations-live .bn-stat-value')).toHaveText('1')
-  // D218: pushed/staged/headroom are sibling spans now; the seam is CSS
-  // (`.card-locations-counts > span::before`), never part of `textContent`.
-  await expect(page.locator('.card-locations-counts')).toHaveText('2 waiting to go liveRoom for 1 more live')
+  /* THE BAND DRAWS IT NOW (card-detail spec): the Live figure, and the ceiling as a meter whose
+     spoken form is `1 live, cap 2` — one live against a ceiling of two. */
+  await expect(page.locator('.browse-hero-fig').nth(1).locator('.browse-hero-fig-value')).toHaveText('1')
+  await expect(page.locator('.browse-hero-fig .bn-meter')).toHaveAttribute('aria-label', '1 live, cap 2')
 
   /* AND THE CARD'S NAME IS DRAWN ONCE ON THIS SCREEN. This header carried an `<h3>` with the same
      name the band's first fact row prints a few hundred pixels above — invisible while the two
@@ -1415,14 +1415,12 @@ test('a copy sold here since the reading is drawn beside it, and headroom follow
   // is SKU 8937370, the row the sister case above asserts at zero sold.
   await expect(page.locator('.card-locations-owner')).toBeVisible()
 
-  await expect(page.locator('.card-locations-live .bn-stat-value')).toHaveText('0')
-  // D218: the seam is CSS now (`.card-locations-since > span::before`), never `textContent`.
-  await expect(page.locator('.card-locations-since')).toHaveText('1 when read1 sold here since')
+  await expect(page.locator('.browse-hero-fig').nth(1).locator('.browse-hero-fig-value')).toHaveText('0')
+  await expect(page.locator('.browse-hero-fig').nth(1)).toHaveAttribute('title', '1 when read, 1 sold here since.')
   /* AND HEADROOM MOVES WITH IT. Computing off the raw reading would say `Room for 1 more live`
      here and refuse a relist the shelf can support — the one-line bug the change would
      otherwise have left behind. */
-  // D218: the seam is CSS now (`.card-locations-counts > span::before`), never `textContent`.
-  await expect(page.locator('.card-locations-counts')).toHaveText('2 waiting to go liveRoom for 2 more live')
+  await expect(page.locator('.browse-hero-fig .bn-meter')).toHaveAttribute('aria-label', '0 live, cap 2')
 })
 
 test('a card with no name and no SKU still offers both doors', async ({ page }) => {
@@ -4334,10 +4332,11 @@ const NEIGHBORLY: Cards = {
     section: 1,
     sectionStart: 1,
     sectionEnd: 3,
-    /* THE BOX'S FRONT: no card in front of it, so one row and not a pretend `between`. Its
-       neighbour is also the case with NO comma, which must render whole rather than being cut
-       at some other punctuation. */
-    neighbors: { prev: null, next: { index: 4, slot: 3, name: 'Conscription' } },
+    /* A MIDDLE CARD: it has earlier cards in its section, so `prev` is a real neighbour. */
+    neighbors: {
+      prev: { index: 2, slot: 1, name: 'Quiet Ember' },
+      next: { index: 4, slot: 3, name: 'Conscription' },
+    },
   }),
   /* LOC-28'S ROW: two on-hand cards toward the back carry no name. The owner's ruling of
      makes them the neighbour, said as "2 unread cards" (D260), and never walks past them
@@ -4357,6 +4356,13 @@ const NEIGHBORLY: Cards = {
     },
   }),
 }
+
+/* THE BOX'S ENDS, one card each, kept out of `NEIGHBORLY` (its tests index it with `.nth`). */
+const boxEnd = (neighbors: NonNullable<Cards[string]['place']>['neighbors']): Cards => ({
+  '2/1': card({ index: 1, state: 'identified', name: 'Bashful Bloom', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3, neighbors }),
+})
+const BOX_BACK = boxEnd({ prev: null, next: { index: 4, slot: 3, name: 'Conscription' } })
+const BOX_FRONT = boxEnd({ prev: { index: 2, slot: 1, name: 'Quiet Ember' }, next: null })
 
 test('UX-190 — a sale says which card took its number, and the rows hold still', async ({ page }) => {
   const cards: Cards = Object.fromEntries(Object.entries(NEIGHBORLY).map(([key, held]) => [key, { ...held }]))
@@ -4531,7 +4537,7 @@ test('S2 — a sold card says so once, not on the hero, the row and the phone ba
   await expect(row).toBeVisible()
   await expect(row.locator('.card-locations-state .bn-pill', { hasText: 'Sold' })).toHaveCount(0)
   await expect(row.locator('.card-locations-action .bn-pill', { hasText: 'Sold' })).toHaveCount(0)
-  await expect(page.locator('.browse-hero-chips .bn-pill', { hasText: 'Sold' })).toHaveCount(1)
+  await expect(page.locator('.browse-hero-sub .bn-pill', { hasText: 'Sold' })).toHaveCount(1)
 })
 
 test('S2 — the phone sticky bar draws no second Sold pill beside the hero', async ({ page }) => {
@@ -4545,7 +4551,7 @@ test('S2 — the phone sticky bar draws no second Sold pill beside the hero', as
     route: '/#/inventory?box=2&card=eiscue-cid',
   })
 
-  await expect(page.locator('.browse-hero-chips .bn-pill', { hasText: 'Sold' })).toHaveCount(1)
+  await expect(page.locator('.browse-hero-sub .bn-pill', { hasText: 'Sold' })).toHaveCount(1)
   await expect(page.locator('.browse-actionbar-slot .bn-pill', { hasText: 'Sold' })).toHaveCount(0)
 })
 
@@ -5265,6 +5271,26 @@ test('the neighbours are ranked, not joined — the names are the only thing dra
   )
 })
 
+test('the neighbour line carries no words: names and this copy\'s number only', async ({ page }) => {
+  await open(page, BOXES, {
+    cards: NEIGHBORLY,
+    search: (query) => searchAnswer(query, NEIGHBORLY),
+  })
+  /* OWNER RULING: `<- back [N] front ->`, arrows drawn by CSS. The text of the line is the two
+     names and the number chip and nothing else — no `back`, `front`, `before`, `after`. */
+  const band = page.locator('.card-locations-row.is-current .nb')
+  await expect(band).toHaveText('Galio, Indefaticable1Evelynn, Entrancing')
+  /* Every line, end chips aside (BACK / FRONT stand in for a name at a box's end): no direction word. */
+  const words = await page.locator('.card-locations-owner .nb').evaluateAll((els) =>
+    els.map((el) => {
+      const copy = el.cloneNode(true) as HTMLElement
+      copy.querySelectorAll('.nb-end').forEach((chip) => chip.remove())
+      return copy.textContent ?? ''
+    }),
+  )
+  for (const text of words) expect(text).not.toMatch(/\b(back|front|before|after|next|previous)\b/i)
+})
+
 test('the neighbour names are read as words, not as metadata', async ({ page }) => {
   await open(page, BOXES, {
     cards: NEIGHBORLY,
@@ -5310,20 +5336,21 @@ test('the neighbour names are read as words, not as metadata', async ({ page }) 
 
 test('a card at the back of the box gets one row, not a pretend between', async ({ page }) => {
   await open(page, BOXES, {
-    cards: NEIGHBORLY,
-    search: (query) => searchAnswer(query, NEIGHBORLY),
+    cards: BOX_BACK,
+    search: (query) => searchAnswer(query, BOX_BACK),
   })
 
   /* READ OFF THE COPIES LIST RATHER THAN THE BAND, because both copies of this SKU are drawn
      there unconditionally — so the case needs no fold, no walk and no second selection, and it
      asserts the block at the site that draws it once per copy. */
-  const front = page.locator('.card-locations-owner .nb').nth(1)
+  const front = page.locator('.card-locations-owner .nb').first()
   await expect(front).toBeVisible()
-  /* ONE SIDE, NOT A PRETEND BETWEEN: no `back`, and no arrow — an arrow only ever draws between
-     two real sides (`PlaceNeighbors.tsx`). */
+  /* ONE SIDE, NOT A PRETEND BETWEEN: no `back`, and the empty side wears a BACK marker, so
+     the line reads `BACK → Next` (`PlaceNeighbors.tsx`). */
   await expect(front.locator('.nb-side')).toHaveCount(1)
   await expect(front.locator('.nb-side')).toHaveAttribute('data-side', 'front')
-  await expect(front.locator('.nb-arrow')).toHaveCount(0)
+  await expect(front.locator(':scope > *').first()).toHaveClass('nb-end')
+  await expect(front.locator('.nb-end')).toHaveText('Back')
 
   /* A NAME WITH NO COMMA RENDERS WHOLE. The seam splits on the first `, ` and refuses any other
      punctuation — the same refusal `PositionLabel` makes for a label it cannot parse — so every
@@ -5332,7 +5359,19 @@ test('a card at the back of the box gets one row, not a pretend between', async 
   await expect(front.locator('.nb-rest')).toHaveCount(0)
   /* Nothing toward the back: card 1 is at the far back, so this card sits behind its one
      neighbour and in front of nothing (UX-186). */
-  await expect(front).toHaveAttribute('aria-label', 'Position: Conscription')
+  await expect(front).toHaveAttribute('aria-label', 'Next: Conscription (first in the box)')
+})
+
+test('a card at the front of the box draws FRONT last, after its one neighbour', async ({ page }) => {
+  await open(page, BOXES, {
+    cards: BOX_FRONT,
+    search: (query) => searchAnswer(query, BOX_FRONT),
+  })
+  const back = page.locator('.card-locations-owner .nb').first()
+  await expect(back.locator('.nb-side')).toHaveAttribute('data-side', 'back')
+  await expect(back.locator(':scope > *').last()).toHaveClass('nb-end')
+  await expect(back.locator('.nb-end')).toHaveText('Front')
+  await expect(back).toHaveAttribute('aria-label', 'Previous: Quiet Ember (last in the box)')
 })
 
 test('an unread neighbour is said in words, and counts as the neighbour (LOC-28)', async ({ page }) => {
@@ -6115,9 +6154,9 @@ test('a wider copies column never makes its rows taller', async ({ page }) => {
   const taller = heights.filter((point, at) => at > 0 && point.row > heights[at - 1]!.row)
   expect(taller, `row grew as the container widened: ${JSON.stringify(taller)}`).toEqual([])
 
-  /* And the wide branch really is better by the end of the sweep, so this cannot be satisfied by
-     deleting the threshold and never switching at all. */
-  expect(heights[heights.length - 1]!.row).toBeLessThan(heights[0]!.row)
+  /* THERE IS NO WIDE BRANCH ANY MORE: the row is one column at every width (card-detail spec), so
+     the widest row is never taller than the narrowest. */
+  expect(heights[heights.length - 1]!.row).toBeLessThanOrEqual(heights[0]!.row)
 })
 
 test('the box fill is qualified once, on the identity line', async ({ page }) => {
@@ -8512,17 +8551,17 @@ test('D218: this lane\'s own facts draw the separator, never type it', async ({ 
      DRAWS, never the whole `.bn-view`: this route's own `.position-bar-text`
      (`PositionBar.tsx`, D41's accessible-name territory, a different file this sweep does not
      touch) still types one today, so a blanket assertion cannot pass until every lane on this
-     route has landed. `.bn-filtercount` is the rail's store-wide count line (BoxBrowse.tsx);
+     route has landed. the rail's search placeholder holds the store-wide box count (BoxBrowse.tsx);
      `.boxops-sheet` is the Manage sheet in full, including the Name-sections editor's example
      text and its own per-section Field labels (BoxOps.tsx) — both self-contained to this
      lane's components. */
   await open(page)
 
-  /* The header's census pill is gone (the rail's count line says the boxes); that line is
-     this lane's store-wide figure now. */
-  const census = page.locator('.browse-filterbar .bn-filtercount')
-  await expect(census).toBeVisible()
-  expect(await census.innerText()).not.toMatch(/[·•]/)
+  /* The store-wide box count lives in the search placeholder; no standalone count line is
+     drawn at rest. */
+  const search = page.locator('.browse-filterbar').getByRole('searchbox')
+  await expect(search).toHaveAttribute('placeholder', /^Search \d+ (box|boxes)$/)
+  await expect(page.locator('.browse-filterbar .bn-filtercount')).toHaveCount(0)
 
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Naming/ }).click()

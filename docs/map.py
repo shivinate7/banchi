@@ -4498,8 +4498,8 @@ COMPONENTS = [
             "score-trace.py": {
                 "does": "`scripts/score-trace.py summary|presence|sweep|stalls|camera|gain|contact` "
                         "— re-scores a "
-                        "saved motion trace offline, which is docs/specs/motion-trigger.md §4 "
-                        "step 5's standing promise written down. `summary` says what the "
+                        "saved motion trace offline, which is docs/specs/motion-trigger.md §4's "
+                        "\"Scoring a trace offline\" written down. `summary` says what the "
                         "machine did live and what today's adaptive form would do; `presence` "
                         "re-runs the card-present gate over each verdict's own pixels; `sweep` "
                         "scores the stillness thresholds across a grid over every trace at "
@@ -4897,7 +4897,7 @@ COMPONENTS = [
                         "fixtures and writes nothing (D18). `--routes` prints ROUTES as JSON for "
                         "app/tests/scaffold.spec.ts, so the spec and the check read one table "
                         "with one reader.",
-                "governed_by": ["D18", "D173", "D259", "D275", "D280", "D288"]},
+                "governed_by": ["D18", "D173", "D259", "D275", "D280", "D288", "D311"]},
             "checks.py": {
                 "does": "`make explain` — what `make check` runs, as a CHECKS literal plus its "
                         "own renderer, one entry per target in the recipe: what it asserts, "
@@ -4996,8 +4996,8 @@ COMPONENTS = [
                 # kept now that the repo has left iCloud for that entry's amended reason: the
                 # hazard belongs to a synced directory, and a tree can be put inside one
                 # without telling this script.
-                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D138", "D80", "D86", "D88",
-                                "D111", "D127", "D158"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D111",
+                                "D127", "D138", "D158", "D179"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
@@ -5364,6 +5364,14 @@ COMPONENTS = [
                                 "D227"],
             },
         },
+    },
+    {
+        "path": "docs/agent-traps.md",
+        "status": "built",
+        "does": "the one home for tool and test traps that produced a false green or a lost "
+                "tree: how a guard passes for the wrong reason, and session and worktree "
+                "hazards. Lessons only, no dates.",
+        "governed_by": ["D16"],
     },
     {
         "path": "fixtures/",
@@ -6977,7 +6985,7 @@ COMPONENTS = [
                         "can name, so the bare `#270` the owner read as a sold card leaking "
                         "into the ladder is gone \u2014 it never was one \u2014 and the unread "
                         "side is said in words instead (LOC-28).",
-                "governed_by": ["D22", "D24", "D58", "D31", "D41", "D92", "D260"]},
+                "governed_by": ["D22", "D24", "D31", "D41", "D58", "D92", "D218", "D260"]},
             "src/PlaceNeighbors.css": {
                 "does": "the one-line shape (Direction B, 2026-09-25): a flex row that wraps "
                         "rather than truncates, an arrow between the two names, no key column "
@@ -7511,9 +7519,9 @@ COMPONENTS = [
                                          "falling back to \"another box\" the same honest way "
                                          "`Graveyard.tsx`'s own `movedToName` does when the old "
                                          "box is gone (D259).",
-                                 "governed_by": ["D6", "D26", "D28", "D31", "D34", "D77", "D183",
-                                                 "D67", "D83", "D89", "D97", "D118", "D134", "D172",
-                                                 "D195", "D218", "D252", "D259"]},
+                                 "governed_by": ["D6", "D26", "D28", "D31", "D34", "D67", "D77",
+                                                 "D83", "D89", "D97", "D118", "D119", "D134",
+                                                 "D172", "D183", "D195", "D218", "D252", "D259"]},
             "src/CardHero.css": {"does": "the listing-correction control's own spacing. Everything "
                                          "else it draws with is reused rather than restyled: "
                                          "`kit.css`'s `.bn-panel*` for the panel chrome, "
@@ -7558,10 +7566,10 @@ COMPONENTS = [
                                               "every one of those numbers would be a structural zero "
                                               "under a headroom promise nothing can keep.",
                                       "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24",
-                                                      "D26", "D28", "D58", "D31", "D38", "D41",
-                                                      "D45", "D67", "D68", "D92",
-                                                      "D115", "D118", "D119", "D132", "D172",
-                                                      "D181", "D196", "D218", "D259", "D260"]},
+                                                      "D26", "D28", "D31", "D38", "D41", "D45",
+                                                      "D58", "D67", "D68", "D92", "D115", "D118",
+                                                      "D119", "D132", "D172", "D181", "D195",
+                                                      "D196", "D218", "D259", "D260"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
@@ -7576,8 +7584,8 @@ COMPONENTS = [
                                               "bar's, and the drain's track is a token here where "
                                               "`kit.css` paints it as a white alpha for an inverted "
                                               "panel.",
-                                      "governed_by": ["D5", "D7", "D58", "D31", "D38", "D41", "D45",
-                                                      "D115", "D118", "D119", "D132",
+                                      "governed_by": ["D5", "D7", "D31", "D38", "D41", "D45", "D58",
+                                                      "D115", "D118", "D119", "D132", "D195",
                                                       "D218", "D259"]},
             # ---- the runs screen (D39, 2026-08-29) ----
             #
@@ -8092,8 +8100,8 @@ COMPONENTS = [
                                         "copies, which Orders' `show=missing` facet filters on "
                                         "and `missingCopies` sums for Home's \"Cannot be "
                                         "filled\" line (UX-077).",
-                                "governed_by": ["D13", "D63", "D69", "D97", "D193", "D121",
-                                                "D285", "D287"]},
+                                "governed_by": ["D13", "D63", "D69", "D97", "D121", "D193", "D285",
+                                                "D287", "D304"]},
             "src/orderView.ts": {"does": "HOW THE BUYER LIST IS SORTED AND FILTERED "
                                         "(`D296`): Ready to Ship leads, newest "
                                         "first within a group, everything else stays reachable "
@@ -8251,11 +8259,10 @@ COMPONENTS = [
                                            "`renderAction` slot calls per copy. `WalkCardPane` "
                                            "and its `orders-card-*` classes are deleted, not "
                                            "adapted.",
-                                   "governed_by": ["D24", "D57", "D58", "D278", "D277", "D93", "D97",
-                                                   "D260", "D118", "D132", "D164", "D171",
-                                                   "D181", "D193", "D296", "D212", "D218", "D220",
-                                                   "D252", "D263", "D279",
-                                                   "D304"]},
+                                   "governed_by": ["D24", "D57", "D58", "D93", "D97", "D118",
+                                                   "D132", "D164", "D171", "D181", "D193", "D195",
+                                                   "D212", "D218", "D220", "D252", "D260", "D263",
+                                                   "D277", "D278", "D279", "D296", "D304"]},
             "src/Shipping.tsx": {"does": "`#/shipping`: NINE LINES THAT POINT THE ROUTE AT THE "
                                          "HUB — `<OrdersHub stage=\'ship\'/>`. The stage itself "
                                          "is src/OrdersShipStage.tsx, which `Orders.tsx` "
@@ -8903,6 +8910,13 @@ COMPONENTS = [
                         "`make design-check`.",
                 "governed_by": ["D57", "D58", "D118", "D181", "D260", "D264"],
             },
+            "tests/inventory-neighbor-side.spec.ts": {
+                "does": "A card at a box's end names its one neighbor with its side "
+                        "(`D58`, `D260`): the first card reads `Next: X (first in the box)`, the "
+                        "last `Previous: X (last in the box)`, a middle card the two-name form. "
+                        "Reads `placeSentence` through the dev server. Run by `make design-check`.",
+                "governed_by": ["D58", "D260"],
+            },
             "tests/absent-photo.spec.ts": {
                 "does": "A photograph that 404s says so the same way on Review and Pricing "
                         "(`D196`, `D118`): one plain sentence, a Re-shoot link, no address and "
@@ -8920,6 +8934,14 @@ COMPONENTS = [
                         "route-fulfilled stub is never HTTP-cached, so the cache hit itself "
                         "is held by harness T7 `check_photo_cache`. Run by `make design-check`.",
                 "governed_by": ["D26", "D172"],
+            },
+            "tests/status-busy.spec.ts": {
+                "does": "a `503 photo_busy` from the shell's `/status` poll leaves the app "
+                        "online (`D207`): `/status` shares the photo lane and can be turned "
+                        "away under a photo flood, and a refusal the server sent is an "
+                        "answer. Only a request with no response draws the offline banner. "
+                        "Run by `make design-check`.",
+                "governed_by": ["D207"],
             },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "
@@ -9259,6 +9281,13 @@ COMPONENTS = [
                         "toggle, compact mode by the bar's own width, and a hand-edited URL read "
                         "safely. Run by `make design-check`.",
                 "governed_by": ["D118", "D132", "D270", "D285", "D288"],
+            },
+            "tests/filter-standard.spec.ts": {
+                "does": "on the kit's filter popover, at 1440 and 820 in both themes: every "
+                        "filter and sort row has one width, the sort direction sits inside the "
+                        "sort field, one value style at rest, and a set filter changes ink, edge "
+                        "and ground while its weight stays the same.",
+                "governed_by": ["D195", "D311"],
             },
             "tests/filters/index.html": {
                 "does": "a test page the dev server serves and the build never ships: it mounts "

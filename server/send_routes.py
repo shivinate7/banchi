@@ -878,7 +878,7 @@ def _empty_reasons(empty: dict, trimmed: list, step: str) -> "PipelineRefusal":
         names = f" ({', '.join(gone[:5])}{f' and {len(gone) - 5} more' if len(gone) > 5 else ''})" if gone else ""
         said.append(f"TCGplayer already had every copy of {live} card{'s' if live != 1 else ''}{names}.")
     if capped:
-        # DEBT37'S WORDING GAP 2: a card `--cap` closed had no clause here at all, silently
+        # THE CAPPED-CARD CLAUSE (D7): a card `--cap` closed had no clause here at all, silently
         # dropped from a title that named every OTHER reason. Never folded into `live` above —
         # a capped card may be pending a reconcile rather than confirmed live.
         said.append(

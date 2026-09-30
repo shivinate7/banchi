@@ -145,7 +145,6 @@ export function PositionBar({
       ro.disconnect()
     }
     // Re-run whenever the walk lands on a different card or a different section count.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [place.label, place.section, sections?.length])
 
   return (
@@ -229,7 +228,8 @@ export function PositionBar({
                     aria-hidden="true"
                   />
                 )}
-                {/* THE TICKS (D310): every 5th card, every 10th darker and numbered. */}
+                {/* THE TICKS (D310): every 5th card, every 10th darker and numbered. A number on or next to
+                    the pin is left off: the chip says it. */}
                 {rulerTicksOf(depth.of).map((tick) => (
                   <span
                     key={tick.card}
@@ -238,7 +238,10 @@ export function PositionBar({
                     style={{ left: `${tick.at}%` }}
                     aria-hidden="true"
                   >
-                    {tick.label ? <span className="position-bar-tick-num">{tick.card}</span> : null}
+                    {/* A number within 2 cards of the pin is left out: the chip names that place. */}
+                    {tick.label && (place.card === null || Math.abs(tick.card - place.card) > 2) ? (
+                      <span className="position-bar-tick-num">{tick.card}</span>
+                    ) : null}
                   </span>
                 ))}
                 {/* SECTION NUMBERS AT BOTH ENDS (LOC-04): card 1 at the back, the last card at the
@@ -252,16 +255,19 @@ export function PositionBar({
               data-gone={depth?.marker == null ? 'true' : undefined}
               style={{ left: `${sectionAt}%` }}
               aria-hidden="true"
-            >
-              {/* THE CARD'S NUMBER, in a chip beside the pin (D310). It rides the
-                  pin, so it eases and fades with it, and it flips to the pin's other side past the
-                  middle so it never meets the ruler's end. */}
-              {depth?.marker == null || place.card === null ? null : (
-                <span className="position-bar-chip" data-flip={depth.marker > 50 ? 'true' : undefined}>
-                  {place.card}
-                </span>
-              )}
-            </span>
+            />
+            {/* THE CARD'S NUMBER, centred on the pin and clamped inside the ruler at both ends. A
+                sibling of the pin, not its child, so the clamp reads the ruler's own width. It
+                eases and fades with the pin (same `left`, same `data-gone`). */}
+            {depth?.marker == null || place.card === null ? null : (
+              <span
+                className="position-bar-chip"
+                style={{ left: `clamp(var(--bn-3), ${sectionAt}%, calc(100% - var(--bn-3)))` }}
+                aria-hidden="true"
+              >
+                {place.card}
+              </span>
+            )}
           </div>
           {/* RETIRED, NEVER DRAWN (the owner's Direction-B build, 2026-09-25): every fact this
               caption ever stated — the section's name, the card's count — is now said once, on

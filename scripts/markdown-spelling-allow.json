@@ -29,50 +29,10 @@
         "travelled"
       ]
     },
-    "docs/debts/001-the-reverse-direction-five-checks-walk-docs-code-and.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "labelled",
-        "labelled"
-      ]
-    },
-    "docs/debts/008-recorded-and-correctly-unfixed.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "honoured",
-        "optimisation"
-      ]
-    },
-    "docs/debts/014-a-pooled-card-reaches-the-pricing-table-and-the-box-walk.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "travelling"
-      ]
-    },
-    "docs/debts/016-the-browser-fleet-is-locked-and-the-rest-of-the-load-is.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "serialises"
-      ]
-    },
     "docs/debts/022-a-control-shrunk-inside-its-own-sticky-bar-is-invisible.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "centre",
-        "centre",
         "centre"
-      ]
-    },
-    "docs/debts/023-a-sale-fixture-that-moves-after-the-press-is-only-wrong.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "neighbour"
-      ]
-    },
-    "docs/debts/026-the-intelligent-mail-barcode-encoder-is-written-correct.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "judgement"
       ]
     },
     "docs/debts/029-the-drawers-tap-sweep-is-skipped-because-it-races-itself.md": {
@@ -91,15 +51,6 @@
       "lane": "docs-sweep",
       "SPELLING": [
         "catalogue",
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "catalogue"
-      ]
-    },
-    "docs/debts/044-pokemontcg-io-is-deprecated-and-this-repo-does-not-call-it.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
         "catalogue"
       ]
     },
@@ -654,21 +605,6 @@
         "behaviour"
       ]
     },
-    "docs/specs/capture-app.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "unlabelled"
-      ]
-    },
-    "docs/specs/capture-server.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "generalisation",
-        "generalises",
-        "labelled",
-        "serialise"
-      ]
-    },
     "docs/specs/code-cards.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -676,59 +612,10 @@
         "realised"
       ]
     },
-    "docs/specs/demo.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "catalogue",
-        "catalogue"
-      ]
-    },
     "docs/specs/logo.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "greys"
-      ]
-    },
-    "docs/specs/mechanization-backlog.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "artefact",
-        "behaviour",
-        "behaviour",
-        "behavioural",
-        "canonicalise",
-        "canonicalise",
-        "generalise",
-        "generalised",
-        "judgement",
-        "judgement",
-        "judgement",
-        "judgement",
-        "mechanisable",
-        "mechanised",
-        "mechanising",
-        "neighbour",
-        "neighbour",
-        "recognise",
-        "recognising",
-        "summarise"
-      ]
-    },
-    "docs/specs/motion-trigger.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "centre",
-        "centre",
-        "centre",
-        "labelled",
-        "labelled",
-        "labelled",
-        "neighbour",
-        "neighbours",
-        "polariser",
-        "quantisation",
-        "synchronisation",
-        "synthesised"
       ]
     },
     "docs/specs/order-flow.md": {

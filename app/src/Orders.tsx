@@ -8,14 +8,13 @@ import {
   HideToggle,
   Icon,
   IconButton,
+  Kbd,
   Loading,
   matchQuery,
-  Money,
   Notice,
   Page,
   patchViewQuery,
   Pill,
-  ProductLink,
   Sheet,
   Stat,
   useFacetParams,
@@ -33,9 +32,8 @@ import {
 import { absoluteDate, relativeDate } from './dates'
 import { toast } from './kit/toast'
 import { boxTitle } from './kit/data'
-import { CardPane, gameWord, marketTable, photoSrc, type MarketRead, type Row } from './CardHero'
-import { CardLocations, layoutsOf } from './CardLocations'
-import { forSale } from './cardState'
+import { CardPane, gameWord, photoSrc, type HeroFigures, type Row } from './CardHero'
+import { layoutsOf } from './CardLocations'
 import { Dialog as Overlay } from './kit/overlay'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { orderReasonLabel, orderReasonRemedy } from './orderReasons'
@@ -44,7 +42,7 @@ import { hubState, setHub, touchHub, useHub, type Stage } from './OrdersHubStore
 import { PositionLabel } from './PositionLabel'
 import { RailFrame } from './RailFrame'
 import { sayPlace } from './position'
-import { buyerKeyOf, groupBuyers, groupForOrderKey, groupMissing, lineReason, MISSING_FACET, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
+import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, lineReason, FLAGGED_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
 import {
   applyTake,
   buyerLabel,
@@ -55,7 +53,6 @@ import {
   groupOrderValue,
   orderBuyerLabel,
   passesHideUnknown,
-  sortedReadyFirst,
   sortGroups,
   statusVocabulary,
   takeOrder,
@@ -74,7 +71,6 @@ import {
   getBoxes,
   getInventoryCopies,
   getOrders,
-  getPricing,
   ingestOrders,
   nameOrders,
   previewOrders,
@@ -90,7 +86,7 @@ import {
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
-import { pickFigureOf, RowAction, takeBuyers, useOrderWalk, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
+import { pickFigureOf, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
 import type {
   BoxRecord,
   IngestResult,
@@ -868,7 +864,7 @@ function ownsAWalkableBody(order: OrderRow): boolean {
 const STATUS_PILL: Record<Status, { label: string; tone: PillTone; icon: IconName }> = {
   /* THE WORD IS "Ready" — one word, not "Ready to sell" (owner's ruling, 2026-09-19). */
   ready: { label: 'Ready', tone: 'ok', icon: 'check' },
-  short: { label: 'Short', tone: 'warn', icon: 'alert' },
+  short: { label: 'Partly picked', tone: 'warn', icon: 'alert' },
   look: { label: 'Check', tone: 'warn', icon: 'eye' },
   unresolved: { label: 'Unresolved', tone: 'default', icon: 'clock' },
   done: { label: 'Done', tone: 'default', icon: 'check' },
@@ -888,14 +884,14 @@ const SORT_OPTIONS: readonly SortOption<OrderSortKey>[] = [
 const SORT_AT_REST: SortValue<OrderSortKey> = { key: 'placed', dir: 'desc' }
 
 /** The "Show" facet's choices: a buyer's one state, worst first (UX-171, UX-199), after
- *  "Missing a copy" — every buyer who owes at least one copy the store cannot find, across
- *  states (`orderBuyers.ts:groupMissing`, the owner's option c). Home's "Cannot be filled"
- *  press opens that one. */
-type ShowValue = Status | typeof MISSING_FACET
-const SHOW_ORDER: readonly ShowValue[] = [MISSING_FACET, 'look', 'short', 'ready', 'unresolved', 'done']
+ *  Flagged, Short and Partly picked, the three ways a buyer owes a copy the store cannot fill
+ *  (`orderBuyers.ts:UNFILLABLE_FACETS`). Home's "Cannot be filled" press opens all three. */
+type ShowValue = Status | typeof FLAGGED_FACET | typeof NONE_LEFT_FACET
+const SHOW_ORDER: readonly ShowValue[] = [FLAGGED_FACET, NONE_LEFT_FACET, 'look', 'short', 'ready', 'unresolved', 'done']
 const NO_SHOWS: readonly ShowValue[] = []
 /** ONE STATE, ONE NAME: the facet and the row's pill read the same `STATUS_PILL` words. */
-const showLabel = (value: ShowValue): string => (value === MISSING_FACET ? 'Missing' : STATUS_PILL[value].label)
+const showLabel = (value: ShowValue): string =>
+  value === FLAGGED_FACET ? 'Flagged' : value === NONE_LEFT_FACET ? 'Short' : STATUS_PILL[value].label
 
 const LANE_TONE: Record<ShippingLane, PillTone> = { envelope: 'ok', parcel: 'default', unjudged: 'warn' }
 const LANE_ICON: Record<ShippingLane, IconName> = { envelope: 'mail', parcel: 'package', unjudged: 'alert' }
@@ -972,14 +968,13 @@ function verdictOf(open: readonly OrderRow[], resolved: readonly ResolvedOrder[]
      line is the only place to see broken out, which the data rule refuses — every number
      stays, as a short labeled figure, never a bare word standing in for all of them. */
   const parts = short > 0 || elsewhere > 0 ? [`${pick} pick`] : []
-  if (short > 0) parts.push(`${short} short`)
-  if (elsewhere > 0) parts.push(`${elsewhere} missing`)
+  if (short + elsewhere > 0) parts.push(`${short + elsewhere} unfilled`)
   return (
     <>
       <strong>{owed}</strong> owed, <strong>{buyers}</strong> {plural(buyers, 'buyer', 'buyers')}
       {parts.length === 0 ? null : (
         <>
-          {' — '}
+          {': '}
           {joinPhrases(parts)}
         </>
       )}
@@ -2621,17 +2616,12 @@ function OrderPickPane({
   walk,
   owedBySku,
   showBuyers,
-  sections,
   boxes,
 }: {
   readonly boxes: readonly BoxRecord[]
   readonly walk: OrderWalk
   readonly owedBySku: ReadonlyMap<string, number>
   readonly showBuyers: boolean
-  /** Each box's own divider layout (A4: lifted to `PullStage`, one `getBoxes()` read for the
-   *  whole screen — `WalkList`'s own copy rows draw off the SAME map, never a second read of
-   *  the same fact). Optional; the strip is honest without it. */
-  readonly sections: ReadonlyMap<number, readonly SectionDetail[]>
 }) {
   const { currentRow, currentGroup, currentCard } = walk
 
@@ -2641,29 +2631,6 @@ function OrderPickPane({
     setBroken(false)
     setZoomed(false)
   }, [currentRow?.copy.key])
-
-  /* THE MARKET READING, ONE READ PER RUN (the owner's pick, 2026-09-24: B, one quiet line under
-   *  the card, `CardHero.tsx`'s own header names the same ruling). Kept on the pane through this
-   *  rebuild — Q6 dropped the Details fold, not this line, which the owner asked for by name and
-   *  which `orders.spec.ts` still proves. A failed read is a quiet dash. */
-  const [priced, setPriced] = useState<Record<string, MarketRead>>({})
-  const asked = useRef<Set<string>>(new Set())
-  const pricedRun = currentCard?.run ?? null
-  useEffect(() => {
-    if (pricedRun === null || asked.current.has(pricedRun)) return
-    asked.current.add(pricedRun)
-    let live = true
-    getPricing(pricedRun)
-      .then((payload) => {
-        if (live) setPriced((held) => ({ ...held, [pricedRun]: marketTable(payload) }))
-      })
-      .catch(() => {
-        if (live) setPriced((held) => ({ ...held, [pricedRun]: { kind: 'absent', why: 'could not be read' } }))
-      })
-    return () => {
-      live = false
-    }
-  }, [pricedRun])
 
   if (currentRow === null || currentGroup === null) return null
 
@@ -2678,17 +2645,15 @@ function OrderPickPane({
    *  `photo: null`, which `PhotoPanel` draws as its own honest placeholder. */
   const row: Row = { key: currentRow.copy.key, card: currentCard ?? syntheticCard(currentRow) }
   const place = currentRow.copy.place.label
-  const { take } = currentRow
-  const read = currentCard?.run == null ? undefined : priced[currentCard.run]
-  const rawMarket = read?.kind === 'table' && currentCard !== null ? read.rows[`${currentCard.box}/${currentCard.index}`] : null
-  const market = rawMarket === null || rawMarket === undefined || Number.isNaN(Number(rawMarket)) ? null : Number(rawMarket)
-  const liveNow = take.listed === undefined ? null : forSale(take.listed.live, take.sold_here ?? 0)
+  /* THE SAME BAND INVENTORY DRAWS (`CardHero.tsx:CardHeroHead`), fed from the walk's own group.
+     `hidden` is 0 because the walk folds nothing (`preserveOrder`), and `cap` is null because a take
+     carries no ceiling: a screen that cannot say the ceiling draws no meter. */
+  const figures: HeroFigures = { group: currentGroup, listedAt: currentGroup.live_as_of, hidden: 0, cap: null }
   return (
     <>
       <CardPane
         row={row}
         game={gameWord(row.card)}
-        place={place}
         preChips={
           <span className="orders-pick-chip">
             <Pill tone="accent">
@@ -2704,6 +2669,7 @@ function OrderPickPane({
           </span>
         }
         postChips={showBuyers ? <Pill>For {takeBuyers(currentRow.take)}</Pill> : undefined}
+        figures={figures}
         photo={{
           label: place,
           absent: broken,
@@ -2713,27 +2679,16 @@ function OrderPickPane({
           reshoot: null,
           boxes,
         }}
-        detail={
-          <>
-            <p className="orders-card-market">
-              <ProductLink sku={take.sku} name={take.name ?? undefined}>
-                {market === null ? '—' : <Money value={market} />} market, {liveNow === null ? '—' : liveNow} live
-              </ProductLink>
-            </p>
-            <CardLocations
-              group={currentGroup}
-              persona="owner"
-              onSell={walk.onSell}
-              busyKey={walk.busyCopy}
-              soldKeys={walk.soldKeys}
-              sections={sections}
-              currentKey={currentRow.copy.key}
-              preserveOrder
-              renderAction={(copy) => <RowAction walk={walk} copy={copy} />}
-            />
-          </>
-        }
       />
+      {/* THE TWO ARROWS PAGE THROUGH THE PICKS (the keys ← and → do the same). */}
+      <div className="orders-pick-nav">
+        <IconButton icon="chevronLeft" label="Previous pick" onClick={() => stepPickAndReveal(walk, -1)} />
+        <span className="orders-pick-keys" aria-hidden="true">
+          <Kbd>←</Kbd>
+          <Kbd>→</Kbd>
+        </span>
+        <IconButton icon="chevronRight" label="Next pick" onClick={() => stepPickAndReveal(walk, 1)} />
+      </div>
       {!zoomed ? null : (
         <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
           <img src={photoSrc(row, null) ?? undefined} alt={`The card photographed at ${place === null ? row.key : sayPlace(place)}`} />
@@ -2868,6 +2823,11 @@ function PullStage({
      still lacks the plan until the owner's `make demo-mirror` (DEBT60,
      the pullable set is not recorded), after which this line goes. Module-local, like `OrdersShipStage.tsx`'s own, so an ordinary build folds it. */
   const IS_DEMO = __BN_DEMO__
+  /* THE OLD URL VALUE STILL WORKS: `show=missing` was this facet's value before it was named Flagged. */
+  useEffect(() => {
+    const old = viewQuery.getAll('show')
+    if (old.includes('missing')) patchViewQuery({ show: old.map((value) => (value === 'missing' ? FLAGGED_FACET : value)) })
+  }, [viewQuery])
   const [pullableAtRest] = useState(() => !IS_DEMO && !['show', 'status', 'buyer', 'order', 'q', 'unknown'].some((key) => viewQuery.has(key)))
   const [hideUnpullable, setHideUnpullable] = useViewFlag('pullable', pullableAtRest)
 
@@ -3074,7 +3034,9 @@ function PullStage({
     value === 'done'
       ? inDoneBase(group)
       : inOpenBase(group) &&
-        (value === MISSING_FACET ? groupMissing(group, answers).copies > 0 : statusByGroup.get(group.key) === value)
+        (value === FLAGGED_FACET || value === NONE_LEFT_FACET
+          ? groupFacetCopies(group, answers, value).copies > 0
+          : statusByGroup.get(group.key) === value)
   const inBase = (group: BuyerGroup) =>
     shows.length === 0 ? inOpenBase(group) : shows.some((value) => (value === 'done' ? inDoneBase(group) : inOpenBase(group)))
   const passesShow = (group: BuyerGroup) => shows.length === 0 || shows.some((value) => matchesShow(group, value))
@@ -3186,7 +3148,7 @@ function PullStage({
             passesSearch(group) &&
             passesHide(group),
         ).length,
-      })).filter((option) => (option.value !== 'unresolved' && option.value !== MISSING_FACET) || option.count > 0),
+      })).filter((option) => (option.value !== 'unresolved' && option.value !== FLAGGED_FACET && option.value !== NONE_LEFT_FACET) || option.count > 0),
     },
     {
       ...facetShape[1]!,
@@ -3315,7 +3277,7 @@ function PullStage({
    *  own per-buyer walk both read `line.picks` off `answers`; every other order's line reads
    *  `reason` alone off the lite tier `payload` already carries. `ownsAWalkableBody` is the
    *  exact set those two consumers draw from (`groupWalkable`, `OrderDetail`'s own gate), so
-   *  fetching anything wider would pay for a picker no view here builds. Missing keys only —
+   *  fetching anything wider would pay for a picker no view here builds. Keys not yet answered only —
    *  once `detail` holds an order it is not asked for again until `payload` changes (the
    *  effect above clears it then, and only then). This is deliberately a spinner-shaped cost:
    *  opening a buyer for the first time in a sitting waits on one small POST rather than on
@@ -3407,6 +3369,9 @@ function PullStage({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [shownGroups, selectedKey])
+
+  /* `1`..`9` MARK A COPY OF THE CURRENT PICK, `←`/`→` PAGE THROUGH THE PICKS. */
+  useWalkKeys(walk)
 
   /* `J`/`K` STEP THE WALK LIST (§13). Same guard rules as the buyer list's own arrows. */
   useEffect(() => {
@@ -3566,6 +3531,17 @@ function PullStage({
 
   /* ---------------------------------------------------------------------- the buyer list */
 
+  /* Under the Flagged, Short or Partly picked facet a row says its own copies for that reason, in that facet's word. */
+  const unfilledFigure = (group: BuyerGroup) => {
+    const picks = UNFILLABLE_FACETS.filter((value) => shows.includes(value))
+    if (picks.length === 0) return null
+    const parts = picks.map((value) => groupFacetCopies(group, answers, value))
+    const copies = parts.reduce((sum, part) => sum + part.copies, 0)
+    if (copies === 0) return null
+    const word = picks.length > 1 ? 'unfilled' : { flagged: 'flagged', noneleft: 'short', short: 'still owed' }[picks[0]!]
+    return { copies, orders: new Set(parts.flatMap((part) => part.keys)).size, word }
+  }
+
   const tickFor = (group: BuyerGroup) => {
     if (!tickableKeys.has(group.key)) return <span className="orders-index-tick" aria-hidden="true" />
     return (
@@ -3593,7 +3569,6 @@ function PullStage({
   const walkAll =
     tickableKeys.size < 2 ? null : (
       <Button
-        variant="quiet"
         size="sm"
         className="orders-walkall"
         aria-pressed={allTicked}
@@ -3605,25 +3580,24 @@ function PullStage({
         {allTicked ? 'Stop' : `Walk ${tickableKeys.size}`}
       </Button>
     )
-  const readyFirst = sortedReadyFirst(shownGroups, readyOf)
 
+  /* ONE FLAT LIST, NO GROUP HEADINGS (the owner's ruling): the Walk press has its own row. */
   const buyerList = (
     <>
-      {walkAll === null && !readyFirst ? null : (
-        <div className="orders-buyers-head">
-          {readyFirst ? <span className="orders-buyers-note">Ready</span> : <span />}
-          {walkAll}
-        </div>
-      )}
+      {walkAll === null ? null : <div className="orders-buyers-head">{walkAll}</div>}
       <ol className="orders-index bn-stagger">
         {shownGroups.map((group, at) => (
-          <li key={group.key} className="orders-index-item" style={{ '--i': at } as CSSProperties}>
+          <li
+            key={group.key}
+            className={['orders-index-item', group.key === selectedKey ? 'is-selected' : ''].filter(Boolean).join(' ')}
+            style={{ '--i': at } as CSSProperties}
+          >
             {tickFor(group)}
             <BuyerRow
               group={group}
               answers={answers}
               status={statusByGroup.get(group.key) ?? 'done'}
-              missing={shows.includes(MISSING_FACET) && groupMissing(group, answers).copies > 0 ? groupMissing(group, answers) : null}
+              missing={unfilledFigure(group)}
               selected={group.key === selectedKey}
               onSelect={() => select(group.key)}
             />
@@ -3760,7 +3734,7 @@ function PullStage({
               own `RailFrame`, sticky and fit to the window, its own scroll — never the page's.
               `#/inventory`'s box list is the only other caller. */}
           <RailFrame className="orders-buyers" role="navigation" aria-label="Buyers">
-            {buyerList}
+            <div className="bn-panel orders-buyers-panel">{buyerList}</div>
           </RailFrame>
           <button type="button" className="orders-buyerchip" aria-haspopup="dialog" onClick={() => setBuyersOpen(true)}>
             <Icon name="list" size={16} />
@@ -3779,7 +3753,7 @@ function PullStage({
               and up the pane goes back to its usual sticky column beside the walk. */}
           {narrow ? null : (
             <div className="orders-cardcol">
-              <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} sections={sections} boxes={boxRecords} />
+              <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} />
             </div>
           )}
         </div>
@@ -3791,7 +3765,7 @@ function PullStage({
           title={walk.currentRow?.take.name ?? 'The card'}
           className="orders-card-sheet"
         >
-          <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} sections={sections} boxes={boxRecords} />
+          <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} />
         </Sheet>
       )}
 
@@ -3907,11 +3881,11 @@ function figuresOf(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder
  *  ("N cards need a look"), naming no single one of them wrongly. */
 function lookWords(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): string {
   const words: Partial<Record<OrderLineReason, string>> = {
-    sku_unseen: 'missing',
-    sku_unknown: 'missing',
+    sku_unseen: 'flagged',
+    sku_unknown: 'flagged',
     no_copies_on_hand: 'short',
     short: 'short',
-    not_a_single: 'sealed',
+    not_a_single: 'flagged',
   }
   const tally = new Map<string, number>()
   for (const order of group.open) {
@@ -3926,9 +3900,22 @@ function lookWords(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder
   const only = entries.length === 1 ? entries[0] : undefined
   if (only !== undefined) {
     const [word, count] = only
-    return word === 'short' || word === 'missing' ? `${count} ${word}` : `${count} ${plural(count, 'card', 'cards')} ${word}`
+    return word === 'short' || word === 'flagged' ? `${count} ${word}` : `${count} ${plural(count, 'card', 'cards')} ${word}`
   }
   return `${total} review`
+}
+
+/** THE TWO "NEEDS A LOOK" CHIPS MEAN DIFFERENT THINGS, so they read different. `short`: the store
+ *  knows the card and has no copy left to give (`no_copies_on_hand`, or `short` after some were
+ *  pulled). `flagged`: the store has never seen the product (`sku_unseen`, `sku_unknown`), or it is
+ *  sealed (`not_a_single`, which the store does not hold), so no copy can be pulled until it is added. Same tones and icons `REASON_TONE` and `REASON_ICON` give
+ *  those reasons on the order's own line, less the `info` tone the Pill has no name for. */
+function lookPill(words: string, sealedOnly: boolean): { tone: PillTone; icon: IconName } {
+  /* A sealed-only buyer is flagged by hand, not an error: the plain look tone. */
+  if (words.endsWith(' flagged') && sealedOnly) return { tone: STATUS_PILL.look.tone, icon: STATUS_PILL.look.icon }
+  if (words.endsWith(' flagged')) return { tone: 'danger', icon: 'search' }
+  if (words.endsWith(' short')) return { tone: 'warn', icon: 'box' }
+  return STATUS_PILL.look
 }
 
 /** The one status a buyer shows, in words. */
@@ -3936,8 +3923,16 @@ function statusWords(status: Status, group: BuyerGroup, answers: ReadonlyMap<str
   return status === 'look' ? lookWords(group, answers) : STATUS_PILL[status].label
 }
 
-/** A buyer, in the list: the name, ONE status (the worst, and only when it is not Ready), and
- *  ONE figure (UX-199). No dot beside the chip (it repeated it), no per-order chips, no bar. */
+/** The one status a buyer shows, as pill props: words, tone and icon. */
+function statusPill(status: Status, group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>) {
+  const label = statusWords(status, group, answers)
+  const flagged = group.open.flatMap((order) => (answers.get(order.key)?.lines ?? []).filter((line) => line.outstanding > 0).map((line) => lineReason(order, line)))
+  const sealedOnly = flagged.some((reason) => reason === 'not_a_single') && !flagged.some((reason) => reason === 'sku_unseen' || reason === 'sku_unknown')
+  return { label, ...(status === 'look' ? lookPill(label, sealedOnly) : STATUS_PILL[status]) }
+}
+
+/** A buyer, in the list: the name and ONE figure (UX-199). NO STATUS CHIP ON A ROW (the owner's
+ *  ruling): the filter's Show facet is where a state is picked, so the row carries no noise. */
 function BuyerRow({
   group,
   answers,
@@ -3949,14 +3944,13 @@ function BuyerRow({
   readonly group: BuyerGroup
   readonly answers: ReadonlyMap<string, ResolvedOrder>
   readonly status: Status
-  /** Under "Missing a copy", the figure the list is filtered on: the buyer's missing copies and
-   *  the open orders that miss one, so the list adds up to Home's "Cannot be filled" line. */
-  readonly missing?: { readonly copies: number; readonly orders: number } | null
+  /** Under a Flagged, Short or Partly picked facet, the figure the list is filtered on: the buyer's unfilled copies and
+   *  the open orders that owe one, so the list adds up to Home's "Cannot be filled" line. */
+  readonly missing?: { readonly copies: number; readonly orders: number; readonly word: string } | null
   readonly selected: boolean
   readonly onSelect: () => void
 }) {
   const figures = figuresOf(group, answers)
-  const pill = STATUS_PILL[status]
   const ref = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     if (selected) ref.current?.scrollIntoView({ block: 'nearest' })
@@ -3966,21 +3960,16 @@ function BuyerRow({
     <button ref={ref} type="button" className="orders-index-row" aria-current={selected ? 'true' : undefined} onClick={onSelect}>
       <span className="orders-index-main">
         <span className="orders-index-number"><LabelText text={buyerLabel(group)} /></span>
-        {status === 'ready' && group.orders.length < 2 ? null : (
+        {group.orders.length > 1 ? (
           <span className="orders-index-meta">
-            {status === 'ready' ? null : (
-              <Pill size="sm" tone={pill.tone} icon={pill.icon}>
-                {statusWords(status, group, answers)}
-              </Pill>
-            )}
-            {group.orders.length > 1 ? <span className="orders-index-count">{group.orders.length} orders</span> : null}
+            <span className="orders-index-count">{group.orders.length} orders</span>
           </span>
-        )}
+        ) : null}
       </span>
       <span className="orders-index-figure">
         {missing !== null ? (
           <>
-            <b>{missing.copies}</b> missing in <b>{missing.orders}</b> {missing.orders === 1 ? 'order' : 'orders'}
+            <b>{missing.copies}</b> {missing.word} in <b>{missing.orders}</b> {missing.orders === 1 ? 'order' : 'orders'}
           </>
         ) : status === 'done' ? (
           <>
@@ -4012,7 +4001,7 @@ function OrderPanel({
   readonly onManage: () => void
 }) {
   const figures = figuresOf(group, answers)
-  const pill = STATUS_PILL[status]
+  const pill = statusPill(status, group, answers)
   const single = group.orders.length === 1 ? group.orders[0]!.number : null
   return (
     <div className="orders-panel">
@@ -4033,7 +4022,7 @@ function OrderPanel({
       </div>
       <div className="orders-panel-facts">
         <Pill tone={pill.tone} icon={pill.icon}>
-          {statusWords(status, group, answers)}
+          {pill.label}
         </Pill>
         <div className="orders-panel-figures">
           <Stat size="sm" value={figures.owed} label="owed" />

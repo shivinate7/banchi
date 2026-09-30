@@ -1,851 +1,292 @@
-# Capture server — execution spec (build-order step 5)
+# Capture server
 
-## STATUS — BUILT 2026-08-11. This is the record of a plan that ran, not a plan to run.
-
-**Step 5 is done and the imperative voice below is historical.** `server/capture_server.py`
-exists, `docs/map.py` carries the package as built, and T7 has reached `store/`, `server/`
-and `cli/` since 2026-08-13. Read the sections as the argument behind what shipped.
-
-**Sections 2, 3, 4 and 7 are one-time edits, all applied.** They name line numbers in files
-that have since moved and they instruct edits already in git. **Section 4 was applied and
-then deliberately reversed**: it deletes the `PostToolUse` block from `.claude/settings.json`,
-which happened on 2026-08-11 — and the block was re-added on 2026-08-12 with build-order
-step 6, when TypeScript arrived and gave it something real to run. That file's own
-`_PostToolUse_typecheck_note` carries the argument. A session following section 4 today
-would undo a working check.
-
-**Sections 5 and 6 are the ones still worth reading**: the allocator's rule and the server's
-contract, including the sidecar seam that can fail silently. Both describe live code.
-
-**The server has grown well past the five routes this file was written about.** It does not
-publish a route count and neither does `docs/GATES.md`, deliberately — `server/capture_server.py`'s
-own header is the register.
+`server/capture_server.py` is the LAN server that the capture app writes through. It runs on
+`http.server.ThreadingHTTPServer` and adds nothing to `requirements.txt`. This file holds the
+allocator's rule (§5) and the server's contract (§6). The module header in
+`server/capture_server.py` is the register of routes. This file does not count them.
 
 ---
 
-Planning output of the 2026-08-11 workflow review; owner-approved. The executing session
-implements from this file, top to bottom, and asks nothing. Every judgment call below is
-already made; deviating from one is an owner conversation, not an implementation choice.
-
-Scope: the capture server, the position allocator it needs, one settled decision, and two
-cleanup sweeps that must land first. `make harness` must be green before and after every
-commit in this plan.
-
-**Read `docs/specs/audit-retirement.md` section 10 before section 1 here, and read its
-accuracy note.** Its mechanical figures held under execution and its runtime claims did
-not. The same discipline applies to this file: every line number and signature below was
-read from source on 2026-08-11 and re-verified by a second pass, but verify before
-building on one.
-
----
-
-## 0. The rules this session runs under
-
-Two owner constraints, settled. Neither is a preference.
-
-**0.1 — Nothing in this plan edits `scripts/docs-audit.py`. Ever.** If the audit blocks,
-the fix is the map or the doc it names, never the auditor. If a finding is a false
-positive, record it in `docs/debts/` and work around it. The reason is on the record in
-D16: an agent that can edit the docs to satisfy its own gate will do exactly that, and
-each edit will look reasonable. The generalisation is D18. This session is the first in
-the project's history to touch the auditor's subject matter without touching the auditor,
-and that is the point — the repo spent a full day and eighteen commits on the auditor and
-its docs, nine of them on that file alone, and shipped no product code.
-
-**0.2 — `store/` and `cli/` have zero harness coverage, `server/` will be the third, and
-this session does not fix that.** Verified: no module under `harness/tests/` imports
-`store` or `cli`. That is 2,509 lines, about 40% of product code, including the package
-the capture server writes through. The mitigation is honesty, not coverage: the capture
-server says so in its own module docstring, and `docs/map.py` stops implying otherwise
-(section 3.2). Do not add a harness test for the server in this plan, and do not register
-T7 — D16 rejected that id by name and `scripts/docs-audit-allow.txt` records why.
-
-> **Status, 2026-08-13:** T7 exists and is registered, and it reaches `store/`, `server/`
-> and `cli/` — added through exactly the process the batch-script spec's §11 demands:
-> argued first, the contract in `docs/GATES.md` amended, every published count reconciled
-> in the same commit. All three references in the paragraph above have since moved. D16's
-> paragraph was reworded to make its argument without naming a number, so it no longer
-> rejects the id by name; the allowlist line that recorded why self-cleaned away the day
-> the name came true, which is precisely what that mechanism is for; and
-> `server/capture_server.py` now says T7 reaches it, where the docstring this paragraph
-> cites once said the opposite. The instruction is left standing as the record of what
-> this session was told.
+## 0. Rules that bind a doc
 
 ### 0.3 — Writing docs in this repo without blocking your own commit
 
-Empirically verified 2026-08-11 against a scratch copy of the tree, not read off a doc.
-The pre-commit hook runs three opsec rules and then the audit in staged mode; exit 1
-blocks.
+The pre-commit hook runs the opsec rules and then `make docs-audit` in staged mode. Exit 1
+blocks the commit. These constructs block:
 
-| Construct | Result |
-|---|---|
-| A path whose first segment is an existing top-level directory, and which does not exist | **BLOCKS** |
-| The same path in plain prose, no backticks | **BLOCKS** — backticks are irrelevant to the paths row |
-| The same path inside a fenced block, or inside a `#` comment in one | **BLOCKS** — fences are scanned line by line |
-| A path under a gitignored tree — `captures/`, `inventory/`, `runs/`, `harness/images/` | **Free.** Gitignored targets are skipped, which is why every capture path below is safe |
-| Any path under `server/` | **Free today.** `server` is not yet a top-level name, so the candidate is never resolved at all |
-| `pkg/module.name` where the module exists but defines no `name` | **BLOCKS** — the dotted form is read as an attribute claim, so it is a promise the code must already keep |
-| `make <target>` inside backticks or a fence, target absent from the Makefile | **BLOCKS** |
-| `pkmnscan <verb>` inside backticks or a fence, verb outside the four registered ones | **BLOCKS** |
-| The phrase "check" or "checks" followed by 1–2 digits | **BLOCKS**, and there is no allowlist for a phrase. Name a row by its printed label instead |
-| A decision id with no heading, or a test id outside the registered set | **BLOCKS** |
-| An env var not already present in the code | **BLOCKS**. "Present" means it already appears in a `.py` file, the Makefile, `.env.example`, a script under `scripts/`, the pre-commit hook, or a `.claude` settings file. Grep before naming one — the set is larger than it looks |
-| An uppercase alphanumeric 3-4-3-3 hyphen group anywhere | **BLOCKS** — the code-card opsec rule, and it fires *before* the audit, so the message will not mention the docs |
-| 20 or more staged lines under `pipeline/`, `identify/`, `geometry/`, `store/` or `cli/` without `docs/specs/batch-script.md` also staged | **Advisory (exit 2)** — prints and allows. Section 5's allocator crosses that threshold, so expect it |
+- A path whose first segment is an existing top-level directory, and which does not exist.
+  Backticks and fences do not exempt it.
+- `make <target>` in backticks with no such Makefile target.
+- `pkmnscan <verb>` in backticks with an unregistered verb.
+- An environment variable that no code, script or settings file names.
+- The phrase "check" followed by a number. Name a row by its printed label instead.
+- A decision id with no entry.
 
-**The escape route for a path you cannot avoid naming**, in order: write it without a
-slash ("the position allocator in the store package"); or add a `path  # reason` line to
-`scripts/docs-audit-allow.txt` in the same commit, which self-cleans because the audit
-blocks the day the file arrives; or defer the reference to the commit that creates it.
-
-**Sequencing rule that falls out of the above, and the single most likely way to waste an
-hour: keep the spec-and-cleanup commits free of any file under `server/`.** The moment
-one is staged, `server` becomes a top-level name, every other `server/` path in this file
-starts being resolved, and the `server/` entry in `docs/map.py` — currently `planned` —
-fails the repo map row. Section 6's commit is where all of that lands together.
-
-Pre-flight is `make docs-audit` (whole tree) before staging, then `git add`, then the
-hook. The two disagree in both directions and the whole-tree run is the stricter one.
-
----
-
-## 1. Order of operations
-
-Items are named; do them in this order. Sizes are the diff, not the thinking.
-
-| order | item | size | waits for |
-|---|---|---|---|
-| 0 | photo-layout-ruling | 3 doc lines | — |
-| 1 | false-claim-sweep | 6 edits, 5 files | — |
-| 2 | hook-deletion | 2 edits + 2 debts entries | — |
-| 3 | allocator | ~25 lines in one built module | — |
-| 4 | capture-server | ~400 lines, new directory | 0, 3 |
-| 5 | map-flip | ~15 lines | 4, same commit |
-
-Items 0–2 are independent of each other and of the server. They are first because each
-one is a false sentence in a file an agent reads as ground truth, and the execution
-session is about to become the agent that reads them.
-
----
-
-## 2. photo-layout-ruling
-
-`POST /capture`'s first line of work is deciding where a photo goes, and the repo
-currently answers that three incompatible ways:
-
-- D13, stack: photos on Mac disk, *organized by set*.
-- D6, photo service and pull preview: photos are *already position-keyed on disk*.
-- `identify/sidecar.py`'s "FILENAME CONVENTION" paragraph, the code that actually reads
-  them: box-keyed, `captures/box3/0017.jpg`.
-
-**Ruled: box-keyed.** The reader already parses it and D6's own route,
-`GET /photo/<box>/<position>`, already assumes it. Set-keyed cannot serve that route
-without a lookup the server has no table for, and it cannot exist at capture time anyway
-— the set is not known until identification runs, which is D1's whole point.
-
-Two edits, one commit:
-
-- **D13, stack** — strike "organized by set". D13's sentence becomes:
-
-  > Inventory state is server-side JSON on the Mac, read and written through the capture
-  > server, so the owner's and Fulfiller's devices share one truth. Photos on Mac disk,
-  > box-keyed by capture position — see D6.
-
-- **D6, photo service and pull preview** — delete the word "already", which is false:
-  `captures/` holds an empty `ui/` and nothing else. The sentence becomes:
-
-  > Photos are position-keyed on disk — this is display, not new storage.
-
-Rewriting in place is what D16 requires of a decisions entry; do not append a history
-note.
-
----
-
-## 3. false-claim-sweep
-
-Four copies of one false sentence, plus the map's coverage claim. All in files an agent
-reads as ground truth, which is why this is not a tidy-up.
-
-### 3.1 — The harness does not gate commits
-
-`grep -c harness scripts/githooks/pre-commit` returns 0. The pre-commit hook runs three
-opsec rules and the docs audit. The harness runs from `scripts/stop-gate.sh` at turn end.
-Four files say otherwise:
-
-| file | current text | replacement |
-|---|---|---|
-| `docs/map.py`, `harness/` component's `does` field | ``"does": "T1-T6. `make harness` must exit 0 before any commit.",`` | ``"does": "T1-T6. The Stop hook runs it at every turn end; the pre-commit hook does not.",`` |
-| `CLAUDE.md` line 14 at `6c5bd28f` | `make harness        # all six verification tests; MUST exit 0 before any commit` | `make harness        # all six verification tests; the Stop hook runs it at turn end` |
-| `README.md` line 29 at `6c5bd28f` | ``harness/                   T1-T6. `make harness` must exit 0 before any commit.`` | ``harness/                   T1-T6. The Stop hook runs it at every turn end.`` |
-| `Makefile:20` | `T1-T6 verification tests. Must exit 0 before any commit.` | `T1-T6 verification tests. Run at turn end by the Stop hook.` |
-
-Preserve column alignment in all four; `CLAUDE.md` line 14 and `README.md` line 29 at `6c5bd28f` sit inside fenced
-blocks whose columns are load-bearing for readability, and `Makefile:20` begins with a
-tab that make requires.
-
-**Do not touch these two, which are true and say something else:**
-`CLAUDE.md`'s working agreement ("Run `make harness` before you tell me something works")
-is a working rule addressed to the operator. No hook can check it.
-`harness/eval/runcache.py`'s own module docstring ("stays a check, not a bill") states a
-cost requirement on the harness, not an enforcement claim.
-
-**The replacement wording is itself conditional and that is accepted.** `stop-gate.sh`
-disarms on `PKMNSCAN_GATE=off`, on a missing harness target, on a missing tests directory,
-and while any test still carries its not-implemented marker. Saying so in four one-line
-fields would cost more than it buys; the script's own `--status` flag is the authority.
-
-### 3.2 — The map's one false coverage claim
-
-`docs/map.py`'s `store/queues.py` module entry claimed `tested_by: ["T3", "T4"]`. Nothing under
-`harness/` imports `store`.
-
-The audit cannot catch this: its repo map row validates only that the cited test id is
-registered in the harness registry (`scripts/docs-audit.check_map`). It never checks that
-the test reaches the module. So the field is unenforced in both directions, and this
-entry would have audited clean forever.
-
-**Audited, all 11 entries, 2026-08-11: ten are true, one is false.** The field is
-accurate because of who wrote it, not because of anything checking it. There are also
-exactly two silent omissions — `identify/sidecar.py` is exercised by t4 and
-`pipeline/decisions.py` by t5, and neither carries the field.
-
-Three edits:
-
-- **`docs/map.py`'s `store/queues.py` module entry** — strike `tested_by` from it. Omission
-  is the file's existing convention for an uncovered module: 15 of its 25 module entries
-  already omit the field. Do not invent an `untested: True` key.
-- **`docs/map.py`, the `store/` component entry** — add the honest fact once, on the
-  package, between `governed_by` and `modules`, matching the layout the `cli/` entry
-  already uses:
-
-  ```python
-  "note": "no harness test reaches this package — nothing under harness/ imports "
-          "store. `built` above means the code exists, not that it is covered; "
-          "docs/debts/ records why that is not being fixed before step 5.",
-  ```
-
-  > **Status, 2026-08-13:** that note was written and has since been replaced. T7 reaches
-  > `store/` and `server/`, so the sentence it instructed is no longer true and the map
-  > says something else now. The instruction is left as the record of what this session
-  > did; read `docs/map.py` for what the entry currently says. The convention the bullet
-  > above establishes — omit `tested_by` rather than invent a key for "uncovered" — still
-  > holds, and `store/queues.py` and `store/cache.py` still omit it.
-
-- **`docs/map.py`'s "status: built | stub | planned" legend comment** — currently `built
-  code exists and the harness covers it`. That is the sentence the false claim
-  generalises from, and it is wrong for `cli/` too. Replace with: `built    code exists.
-  tested_by names the harness tests that reach it, where any do.`
-
-**Do not add `tested_by` to the two omissions.** The field is unvalidated either way, and
-completing it by hand builds a more detailed unenforced claim — the exact shape D17 warns
-about when it says an index that drifts is worse than none because it is believed. If the
-field is ever to be trusted it needs a checker, and a checker is out of scope here and
-forbidden by 0.1 anyway.
-
----
-
-## 4. hook-deletion
-
-### 4.1 — The edits
-
-**`.claude/settings.json`** — delete the `PostToolUse` block whole, including its trailing
-comma. It runs `make lint typecheck 2>&1 | tail -20` after every Write and Edit. Because
-`make lint` exits 1 make aborts, so `typecheck` never runs at all; because of the pipe the
-hook's own exit is 0, so it never blocks. Net effect: five lines of failure text after
-every edit, meaning nothing, teaching every session that hook output is noise.
-
-`grep -rn PostToolUse` outside `docs/specs/` returns exactly one hit — the block itself.
-No doc claims lint or typecheck runs after an edit, so the deletion falsifies nothing.
-Confirm the JSON still parses: the preceding array is already comma-terminated, and the
-`Stop` key becomes the last member of the hooks object.
-
-**`.claude/settings.json`, `permissions.allow`** — remove `Bash(make check)`, add
-`Bash(make status)` and `Bash(make docs-audit)`. `make check` can never exit 0 while lint
-and typecheck are stubs, and nothing automated invokes it, so the grant is a prompt for a
-command that cannot succeed. `make status` is what `README.md` and `CLAUDE.md` both tell a
-cold session to run first and it was not granted. `make docs-audit` is read-only and this
-plan runs it repeatedly.
-
-Do not add `Bash(make audit-history)`: it is a deliberate, slow, once-in-a-while
-diagnostic, and a standing grant invites it into routine use, which is against the spirit
-of `docs/specs/audit-retirement.md` section 7's rule that it informs retirement arguments
-and never makes one.
-
-`Bash(npm run lint)` stays, though it is in the same can-never-succeed category today —
-there is no `package.json`. It becomes true at step 7 and removing it is churn.
-
-`.claude/settings.local.json` defines no hooks and grants neither of the two additions, so
-there is no duplicate to reconcile.
-
-**Do not leave a `_removed_PostToolUse_note` key behind**, even though the file carries two
-such note keys already. The debts entry below is the single record, and keeping it single
-is what makes its own claim checkable.
-
-### 4.2 — Two entries for `docs/debts/`
-
-Match the file's voice: heading, body, a **Cost** line, a **Why not fixed** line. Widen the
-file's framing first — its opening scoped it to the audit-retirement review. A second
-sentence in `docs/debts/` at the time this was written re-pinned that scope harder
-still. Both needed the widening, or neither did. **Both sentences are gone.** `docs/debts/`
-reads as a general framing now, in the file this session saw and in the `docs/debts/` stub
-split from later. The instruction stands as the record of what this session meant to widen.
-The two entries below still come from step-5 spec work instead.
-
-> ### The post-edit hook channel is gone, and step 7 is when it should come back
->
-> `.claude/settings.json` used to run `make lint typecheck` after every Write and Edit.
-> Both targets exit 1 by design (`Makefile:3` — a target that exits 0 with nothing to run
-> is a lie), and under one make invocation the abort on lint meant typecheck never ran.
-> Five lines of failure after every edit, blocking nothing, from 2026-08-03 until it was
-> deleted on 2026-08-11.
->
-> Deleted rather than repointed. Repointing it at the harness costs far more output per
-> edit for a check the Stop hook already runs at turn end, and dropping lint's exit 1
-> would make `make check` green by lying.
->
-> **Cost**: there is now no automatic post-edit signal at all. Zero today, because there
-> was nothing behind the channel. Real at build-order step 7, when TypeScript arrives and
-> `make typecheck` starts meaning something.
->
-> **Why not fixed**: there is nothing to point it at yet. Step 7 should re-add it — at the
-> typecheck target alone, not at the composite — rather than rediscovering the question.
-
-> ### `tested_by` in the repo map is an unenforced claim
->
-> The repo map row validates only that a cited test id is registered in the harness
-> registry (`scripts/docs-audit.check_map`). It never checks the test reaches the module.
-> Audited 2026-08-11: ten of eleven entries were true, one was false — `store/queues.py`
-> claimed T3 and T4 while nothing under `harness/` imports `store` at all — and two
-> modules that *are* exercised carry no entry. The false line was struck; the field is
-> still unenforced in both directions.
->
-> Underneath it: `store/` and `cli/` have zero harness coverage. 2,509 lines, about 40% of
-> product code, including the package the capture server writes through.
->
-> **Cost**: the map can claim coverage that does not exist, in the file D17 argues must be
-> audited exactly as hard as it is trusted. The claim is believed precisely because the
-> map is otherwise reliable.
->
-> **Why not fixed**: a real checker means resolving each test's imports and asserting the
-> module is reached — new machinery in the auditor, which the step-5 plan forbids by name,
-> and which is the same instinct that spent a full day and eighteen commits on the auditor
-> and its docs. The honest interim is the legend fix and this entry.
+Name an unbuilt thing by its behavior and never by a file that does not exist. Paths under a
+gitignored tree, such as `captures/` and `inventory/`, are skipped. Run `make docs-audit` on
+the whole tree before staging.
 
 ---
 
 ## 5. allocator
 
-D10 says "sequential position assigned at capture". Nothing implements it: a grep for
-`next_index`, `next_position` and `allocate` across `store/`, `cli/`, `pipeline/` and
-`identify/` returns zero matches. This is the one piece of real engineering in step 5 and
-the smoke test exercises it twenty times.
+D10 (inventory model) says a position is assigned at capture. `Inventory.allocate_capture` in
+`store/master.py` does it.
 
 ### 5.1 — Where it lives, and its shape
 
-`store/master.py`, on `Inventory`, beside `record_capture`. Not on the session object,
-which holds the lock and the atomic replace and no domain logic at all, and not in the
-server, which must stay a transport.
+The allocator lives on `Inventory`, beside `record_capture`. It does not live on the session,
+which holds the lock and the transaction and has no domain logic. It does not live in the
+server, which stays a transport.
 
-**Allocation folds into the write. Do not ship a public "what is next" that a caller then
-passes back in.**
+Allocation folds into the write. `allocate_capture(box, capture_id=, cid=, section=,
+layout_token=, **claims)` takes no index, so no stale read can enter a write. It returns
+`(card, created)`. `created` is False only when `capture_id` replays a capture already
+recorded.
 
-```python
-def allocate_capture(self, box, *, capture_id=None, photo=None,
-                     set_hint=None, metadata_finish=None):
-    """Assign the next index in `box` and record the card. Returns (card, created).
+`next_index(box)` is display only: status and run reports. Never pass its value into a write.
+Two devices could both show "next: 17" and both post. Reading the value and then recording it
+takes two lock acquisitions with a network round trip between them. That is the lost update
+that `store/session.py` explains.
 
-    Takes no index: there is no parameter through which a stale read can enter a
-    write. `created` is False only when `capture_id` replays a capture already
-    recorded.
-    """
+On a collision, `allocate_capture` raises `PositionOccupied`. It never upserts. `record_capture`
+would take its existing-record branch and copy photo, set hint and finish over the incumbent
+without a log. One physical card would vanish from inventory.
 
-def next_index(self, box):
-    """The index allocate_capture would assign. DISPLAY ONLY — status, run reports."""
-```
+`record_capture` stays public and takes a `Card` with an explicit box and index. The CLI
+depends on it. The safety is that the server never calls it for a capture.
 
-The argument is already written in `store/__init__.py`'s "READS NEED NO LOCK; WRITES DO"
-paragraph: two writers each reading,
-each modifying, each writing back means the second silently erases the first, so the write
-re-reads inside the lock, and "re-reading is the half that actually matters". A public
-`next_index` fed back into a write is that lost update with a network round trip and a
-human hand in the middle of it. Both devices display "next: 17", both post, and the second
-lands in `record_capture`'s existing-record branch — which copies the incoming photo, set
-hint **and recorded variant** onto the incumbent and returns it, with no log and nothing
-reported. One physical card gone from inventory. Note the variant overwrite specifically:
-D3 rung 1 forbids even `--variant` replacing a recorded toggle, and that branch does
-exactly that to a card which may already be identified.
-
-**Honest limit, state it in the docstring rather than claiming a guarantee:**
-`record_capture` remains public and still takes a `Card` carrying an explicit box and
-index, because two CLI call sites depend on it — `cli/cmd_identify.run` and
-`cli/cmd_emit.run`. The safety here is that the server never calls it, not that the
-seam is absent.
-
-**`capture_id` needs somewhere to live, and today there is nowhere.** `Card` has no such
-field, and `Inventory.parse` filters every record through `Card.__annotations__`, so an
-unknown key is silently dropped on reload — a retry guard that forgets across a restart is
-not a guard. Add `capture_id: Optional[str] = None` to the `Card` dataclass. It is
-additive and backward-compatible: existing records load with `None`, and the filter means
-old files need no migration. This is the one sanctioned edit to a built module's data
-shape in this plan; it is justified because the alternative is a guard that does not hold,
-and it is small enough to review in one line.
+`capture_id` is a field on `Card`. A retry guard that forgets across a restart is not a guard.
 
 ### 5.2 — The rule
 
-**`next = 1 + max(index of every card in that box, over all states, default 0)`.** A
-high-water mark. Not count+1, not first-free.
+`next = 1 + max(index of every card in the box, over all states, default 0)`. This is a
+high-water mark. It is not count+1 and it is not first-free.
 
-Indices are 1-based and that is forced, not chosen: section and card are derived from the
-index, so index 0 labels a slot that does not exist. **The arithmetic used to be spelled out
-here as `(index - 1) // 25 + 1` and `(index - 1) % 25 + 1`. D10's amendment made that a
-special case rather than the rule, and D10's amendment of 2026-08-29 deleted the special
-case as well** — dividers are declared per box, an undeclared box is the one undivided
-section it physically is, and no window is assumed at any size. `pipeline/join.py:Position`
-is the formula; this file names it and does not restate it.
+Indices are 1-based. Section and card derive from the index, so index 0 would label a slot
+that does not exist.
 
-*count+1* agrees with the high-water mark for sold cards — nothing deletes a record, `sold`
-is a state — and fails the moment anything does delete one, silently, through the upsert
-branch described above. *first-free* contradicts D10 in its own words: sold cards leave
-permanent gaps, and the next captured card goes on the end of the stack because that is
-where the operator's hand puts it.
+- count+1 agrees with the high-water mark until anything deletes a record. Then it collides
+  silently.
+- first-free contradicts D10. Sold cards leave permanent gaps. The next captured card goes on
+  the end of the stack, because that is where the operator's hand puts it.
 
-**Coerce every field you compare or compute on.** `Inventory.parse` reconstructs cards
-straight from JSON with no coercion at all and there is no post-init hook, while
-`position_key` coerces with `int()`. So a record whose box was written as a string is
-invisible to a bare `c.box == box` filter and the allocator hands out an occupied index —
-and coercing only the box is not enough, because that same record's `index` is also still
-a string and the high-water arithmetic then fails on it. Filter on
-`int(c.box) == int(box)` **and** take the maximum over `int(c.index)`. A record whose
-index will not parse is a refusal naming the position, not an exception escaping inside
-the lock.
+A record whose box or index will not coerce to an integer stops the scan. It refuses and names
+the position. Skipping it would hide the collision it is about to cause.
 
-Related, and worth knowing before you meet it: `Card` declares `box` and `index` as
-required fields with no defaults, so a record missing either raises from `Inventory.parse`
-and takes down `Store.read()` — which means every route, not just the write path. Do not
-add a repair path for it; just know that a hand-edited inventory file fails loudly and at
-the front door.
+### 5.3 — Sections
 
-### 5.3 — Sections, and the constant that is gone
+Dividers are declared per box. An undeclared box is one undivided section, and no window size
+is assumed. `pipeline/join.py`'s `Position` derives section, card and label from the box's own
+layout. This file names it and does not restate it. `harness/tests/t3_join_coverage.py`
+asserts the rendered label, so the server never re-derives one.
 
-Do not write a new formula and do not reintroduce a constant. `pipeline/join.py:Position`
-derives section, card and the label, and the server calls it with the box's own divider
-layout, since D10's amendment made sections per-box: `Position(box, index, sections)`.
+A divider goes in one at a time through `POST /boxes/<box>/sections`. The capture screen's `S`
+sends it. A whole layout can be typed through `PUT /boxes/<box>`. Neither invents a divider.
 
-**`CARDS_PER_SECTION` no longer exists** (deleted 2026-08-29, D10 amended). It was the
-default a box with no declared layout rendered with, and it cut a divider into every such
-box every twenty-five cards whether or not one was in the plastic — the owner's own box 1
-holds 133 cards, no dividers, and read as six sections. An undeclared box is now ONE
-section: `Position.layout` falls back to `(1,)`, `card` is the index, and `section_end` is
-None, which the server fills in from the box's fill exactly as it already did for the final
-section of a declared box.
-
-Dividers are put in one at a time by `POST /boxes/<box>/sections` — the capture screen's
-`S`, pressed at the moment the physical divider goes in — or typed as a whole layout through
-`PUT /boxes/<box>`. Neither invents one.
-
-There is no cycle: `pipeline`, `identify` and `geometry` import `store` nowhere. And the
-label is the one part of this path with harness coverage — `harness/tests/t3_join_coverage.py`
-asserts the rendered label verbatim — so re-deriving it inside the server would move a
-covered line into the directory that by 0.2 has none.
+A capture can name a section by divider key (`docs/specs/subbox-capture.md`). The store then
+files the card at the tail of that section. An unknown key (`SectionGone`) writes nothing.
 
 ### 5.4 — Edge cases
 
-**Empty box**: `default=0` yields 1. No branch, no error.
-
-**Superseded 2026-09-25: a box has no seal and no capacity (D299).**
-
-**A box that does not exist**: creation is implicit, and it stays implicit even though a box
-is now an object. **This paragraph used to read "there is no box object anywhere in `store/`,
-only a flat dict keyed by box and index", and D20 built one** — `store/master.py:Box`, with a
-name, a divider layout, an open/closed lid and a capacity frozen at sealing. D20 quotes this
-very sentence as the state it was correcting, so it is rewritten here rather than left to
-contradict the entry that cites it.
-
-What did not change is that capture never demands a registry entry first: `allocate_capture`
-calls `ensure_box`, which creates an unnamed, undeclared, open box if the registry has never
-seen the number. Requiring registration would make the registry a second thing to keep in
-step with the cards, and the v1 migration produces exactly this shape, so the two paths
-cannot diverge. A **sealed** box is the one case that refuses — `BoxClosed`, checked before
-an index is computed, because capacity was frozen at the fill and one more card would falsify
-every fraction drawn from it.
-
-The hazard that creates is a typo: `box=33` for a card going into box 3 is a valid int, a
-new box, index 1, a real photo, and a real listing, and nothing downstream can tell. The
-allocator reports it for free — when the computed index is 1 the box is new — and the
-response carries that fact so the app can require a confirmation on the first capture into
-a box. It catches the first typo only; a repeated typo into the same phantom box returns
-index 2 and looks ordinary. Record that limit, do not paper over it.
-
-**Undo is not step 5.** The step 5 line in `docs/GATES.md` does not contain it; the step 7
-line does. Do not build a void route, and do not add void fields to the card record.
-
-Note for whoever builds it, because the allocator's shape already constrains the answer:
-under a high-water mark, an undo that *deletes* the record reuses the index and an undo
-that *tombstones* burns it. That is a live disagreement — reuse keeps index and physical
-slot aligned when the card never entered the box, burning avoids ever pointing an old
-index at a new card — and D10 speaks only to renumbering, not to reuse. Settle it at step
-7 with the capture app's actual undo window in hand, not now.
+- An empty box gives index 1.
+- A box has no seal and no capacity (D299).
+- A box that does not exist is created implicitly. `allocate_capture` calls `ensure_box`,
+  which makes an unnamed, undeclared box if the registry has never seen the number. Capture
+  never demands a registry entry first.
+- A typo such as `box=33` for box 3 is a valid new box, and nothing downstream can tell. The
+  app's box field creates boxes by name (`docs/specs/capture-app.md` §5.2), so no number is
+  typed.
+- Undo deletes the record and releases its index. `docs/specs/undo.md` owns it.
 
 ---
 
 ## 6. capture-server
 
-### 6.1 — Framework: stdlib, decided
+### 6.1 — Framework
 
-`server/capture_server.py`, running `http.server.ThreadingHTTPServer`. No addition to
-`requirements.txt`.
-
-`requirements.txt` is `anthropic`, `Pillow`, `numpy` and a block naming what it
-deliberately omits — D15 makes that its job, so every addition is a recorded decision.
-`Makefile:44-47` sets the rule this inherits: a step-away tool that needs `make venv`
-first is not a step-away tool, which is why the audit and status targets run bare
-`python3`. `make server` is the same kind of tool, started by the owner and reached by a
-non-technical Fulfiller. The load is two devices on a LAN. Python is 3.9.6, so write for
-3.9: `from __future__ import annotations`, no `X | None`, no `match`.
+The load is two devices on a LAN. The app runs on the venv's Python 3.12 (`VENV_PYTHON` in the
+Makefile). Stand-alone scripts that the Makefile runs with bare `python3` use the system Python
+3.9. Keep those scripts free of `X | None` and `match`. `requirements.txt` lists what it deliberately omits
+(D15), so every addition is a recorded decision.
 
 ### 6.2 — The module docstring carries the contract
 
-At the density of `store/__init__.py`, and it must state three things the map cannot:
+The module docstring states the route list and status codes. It states that every write goes
+through the store session, and that the server never touches disk state directly.
 
-1. The route list and status codes.
-2. That every write goes through the store session and the server never touches disk state
-   directly.
-3. **That nothing tests this file.** Per 0.2, verbatim in the docstring: no harness test
-   reaches `server/`, `store/` or `cli/`, so a green harness says nothing about this
-   module.
+### 6.3 — The sidecar contract
 
-### 6.3 — The sidecar contract, which is the part that can fail silently
+The server writes a sidecar beside each photo. `identify/sidecar.py` reads it. The link is
+one-way. A mismatch surfaces at identification time, which is when money is spent.
 
-The server writes; `identify/sidecar.py` reads. One-way, no test on either side, and a
-mismatch surfaces at identification time, which is when money is spent.
+**Location.** A photograph is filed under the card's name: `<home>/photos/<aa>/<cid>.jpg`
+(D183). The sidecar is `<cid>.json` beside it. `store/photos.py` is the only module that
+composes that path. `<home>/captures/cards/box<N>/<index>.jpg` is the legacy address. Reads
+try it only until the store's `photos_relocated` gate is set.
 
-**The capture root is `captures/cards/`, not `captures/`.** This matters more than it
-looks. `scripts/screenshot.sh`'s `OUT_DIR` assignment writes UI renders as `.png` into
-`captures/ui/`, and the scanner walks its root recursively and turns every photo-suffixed
-file it finds into a
-capture and therefore a paid Batch request. Rooting at `captures/` would bill every
-screenshot the first time someone ran both tools. Nothing today defines a capture-root
-constant; define one in the server module, put nothing else beneath it, and leave `ui/` as
-a sibling. `captures/` stays gitignored, so nothing here needs a new ignore rule.
+**The money rule.** `identify.sidecar.scan` walks its root recursively. It turns every file
+with a photo suffix into a capture and so into a paid Batch request. Nothing but card photos
+and their sidecars may sit under a scanned root. Photos live outside `captures/` for this
+reason. `captures/ui/` holds screenshots, which are also photo-suffixed.
 
-**Filename**: `captures/cards/box<N>/<index padded to 4>.jpg`, sidecar alongside with a
-`.json` suffix. Lowercase `box`, no separator, no dots or suffixes in the stem. The reader
-matches and removes the box marker first, then takes the *last* run of digits in what is
-left — so a stem like `0017.2` parses as index 2. Zero-pad to 4 because the scanner sorts
-by path string. One extension only, `.jpg`, so the photo route can find a file from box
-and index alone — which means the client posts JPEG bytes and the server verifies the
-magic bytes and refuses anything else. It must not convert: re-encoding at capture time is
-forbidden by 6.6, and writing a PNG under a `.jpg` name is the kind of lie that surfaces
-three steps downstream.
+**One extension.** The client posts JPEG bytes. The server checks the magic bytes and refuses
+anything else. It does not convert. Re-encoding at capture time is forbidden by §6.6.
 
-**Keep it flat.** No section directories, no date directories between the capture root and
-`box<N>/`.
+**Keys.** `sidecar_payload` writes `box`, `index` and the claims. `CLAIM_WIRE_NAMES` maps each
+claim to its wire spelling: `set_hint`, `variant` (the record's `metadata_finish`), `game`,
+`rarity_claim`, `product` and `note`. An empty claim is never written, because absent means no
+claim (D3, D23).
 
-**The money rule: nothing else with a photo suffix may ever be written under the capture
-root.** No thumbnails, no previews, no `-original` copies.
+Write `index` as an integer. Never write `position`. The reader accepts it as an alias, but the
+store's `position_key` returns a string such as `"3/17"`. With a valid `box` present, the
+reader takes the sidecar branch on the box alone. It then labels the capture as coming from the
+sidecar while the index came from the filename. No problem is recorded. The server's own
+output hides that mistake.
 
-**JSON keys — write these three, exactly:**
-
-```json
-{"box": 3, "index": 17, "set_hint": "SV09: Journey Together", "variant": "reverse_holo"}
-```
-
-- `box` is read from the `box` key only.
-- `index` is the accepted name for the position. **`position` is an alias for the same
-  integer** — a trap worth naming, because `store/master.py`'s `position_key` returns the
-  string `"3/17"` for the same concept. Writing `{"position": "3/17"}` fails the integer
-  coercion and falls back to filename recovery. On its own that fallback is reported. But
-  every sidecar this spec writes also carries `box`, and with a valid `box` present the
-  reader takes the sidecar branch on the box alone: the capture is labelled as having come
-  from its sidecar while the index in fact came from the filename, and no problem is
-  recorded at all. **That is the real reason never to write `position`** — the mistake is
-  undetectable in exactly the configuration the server produces. Write `index`, an int.
-- `set_hint` accepts `set_hint`, `set` or `hint`; write `set_hint`.
-- `variant` accepts `variant`, `metadata_finish` or `finish`; write `variant`, and only a
-  member of the finish enum — a value outside it is reported as a problem, never coerced.
-- Omit `set_hint` and `variant` entirely when the toggles are unset. The reader treats a
-  null and an absent key identically, so this costs nothing either way; write neither, so
-  the file records only claims the operator actually made.
-
-A missing or malformed sidecar is explicitly *not* a failure — the reader recovers the
-position from the filename and treats it as equivalent, because the same server writes
-both. That is a safety net, not a license to skip the file.
+A missing or malformed sidecar is not a failure. The reader recovers the position from the
+filename. `identify/sidecar.py` documents the reader's cases. A photo named by its card
+digest carries no position, and the reader refuses to invent one.
 
 ### 6.4 — Routes
 
-The surface is the step 5 line in `docs/GATES.md` and nothing else:
+The port is 8000 in the main checkout. A linked worktree derives its own port from
+`server/ports.py` (D43). Bodies are JSON in and JSON out, except photo bytes.
 
-> 5. Capture server: `POST /capture`, position-ordered filenames, JSON sidecars (position,
->    box, set hint, variant), `/status`, `GET /photo/<box>/<position>`, `GET`/`PUT`
->    inventory state shared across devices.
+**`POST /capture`.** The body is `application/json` with a base64 `image`. The stdlib has no
+multipart parser worth using on the path that allocates positions. The body carries `box` and
+`image`. It can carry `capture_id`, `section`, `layout_token` and the claims. The server holds
+no current box. Box, hint and finish are client state, resent on every capture. That is how two
+devices share one truth without a session. The response is 201 with the card, its position
+label and section key. A replayed `capture_id` returns the original card with 200.
 
-Port 8000, matching what `make server` already prints. JSON in, JSON out, except the photo
-bytes.
+The server checks the claims before it decodes the image, because the claims are cheap and a
+refusal should burn nothing. It computes the card's name from the decoded bytes before it takes
+the lock.
 
-**Overtaken in one detail on 2026-08-29 (D43): 8000 is the MAIN checkout's port, not every
-checkout's.** The store has always defaulted to the checkout the code runs from, so each git
-worktree has its own inventory — and a shared port meant whichever server won the bind
-answered every tree's UI, in one direction driving the owner's real inventory from a branch
-and in the other writing real capture photographs into a directory deleted with it. A linked
-worktree now derives its own port; the main tree is unchanged, so this line stays true where
-anyone reading this spec is standing. `server/ports.py` holds the derivation.
+**`GET /status`.** It takes no lock and has no side effects. It reports counts, the next index
+per known box, and whether the store parses. It never probes the lock, because the only
+primitive is an acquire and a read route must not become a writer. It carries `boot_id`, a
+per-process id. A client can then tell a restart from a reload, and a stale server is visible.
 
-**`POST /capture`** — `application/json` with base64 image bytes, not multipart: the stdlib
-has no multipart parser worth using on the path that allocates positions, and base64 costs
-33% on a LAN. Body carries `box` (required), `image` (required), optional `set_hint`,
-`variant`, `capture_id`. There is no server-side "current box" — box, hint and variant are
-client state resent on every capture, which is the only way two devices share one truth
-without a session. Returns 201 with box, index, the rendered position label, and whether
-the box was new.
+**`GET /photo/<box>/<position>`.** It returns the photo bytes, or 404 when absent (D6, one
+photo route serves every view).
 
-`capture_id` is the retry guard. Wifi blips between commit and response, the app retries,
-and without it a second index is burnt and one physical card holds two records. Replay
-lookup is a linear scan over the card dict — fine at this scale, say so in a comment — and
-two cards carrying the same id is a refusal, matching the package's temperament of
-refusing rather than coercing.
+**`GET /inventory` and `PUT /inventory/<box>/<position>`.** `GET` returns the card map. `PUT`
+is per position and never a whole-document replace. A replace would rebuild every card from a
+client's stale snapshot, which is the lost update of §5.1 with a wider blast radius. `PUT`
+corrects the claims in `PUT_FIELDS`, and it never creates a card. It also rewrites the
+sidecar, because `cli/cmd_identify.py` builds its card from the sidecar and would otherwise
+revert the correction. It appends a `corrected` event.
 
-**`GET /status`** — lock-free, side-effect-free. Counts, the next index per known box, and
-whether the store directory exists. **Do not probe the lock**: the only primitive exposed
-is an acquire, and taking it to report on it makes a read route a writer.
+**Errors.** Every error body says what happened and what to do next, because the app shows
+these strings. Reserve 500 for bugs. Every anticipated condition gets its own code.
 
-**`GET /photo/<box>/<position>`** — the photo bytes, 404 when absent. D6's route, and the
-review queue and pull modal both reuse it.
+**CORS and origin gate.** The app is a different origin, and the Fulfiller's device is on the
+LAN. There is no auth and no TLS on this LAN tool (D13, D5). Do not add a login screen.
 
-**`GET /inventory` and `PUT /inventory/<box>/<position>`** — the shared-truth route. `GET`
-returns the whole card map. `PUT` is per-position and takes one card's mutable fields; it
-is deliberately *not* a whole-document replace, which would have to rebuild every card
-from a client's stale snapshot and is the lost update of 5.1 with a bigger blast radius.
-
-`PUT` must not create cards. `record_capture`'s first branch fires when the key is absent
-and creates a new card from whatever it is given, so a `PUT` naming a position that does
-not exist would invent one — it does land in the history file as a capture event, but the
-caller gets a success and nothing flags it. Guard on the key existing and refuse
-otherwise. The inverse is also true: the existing-record branch does *not* log, so a
-legitimate correction leaves no history entry. Record that as a known gap rather than
-adding a log call to an uncovered module. Settable at step 5: `set_hint` and `variant` —
-and note neither can be *cleared* back to "no claim" through this path, because that
-branch only assigns when the incoming value is not None.
-
-**Uniform error body**, because step 7 surfaces these strings and `docs/DESIGN.md`'s copy
-rule reaches them: what happened, and what to do next. Reserve 500 for bugs; every
-anticipated condition gets its own code.
-
-**CORS**: the step 7 app is a different origin and the Fulfiller's device is on the LAN.
-No credentials ever, answer preflight. No auth and no TLS — LAN tool, two known devices,
-D13 and D5. State that as a decision so nobody adds a login screen.
-
-**"Allow any origin" was this spec's instruction and it opened a hole; corrected
-2026-08-23.** Reads still allow any origin, so `GET /photo/<box>/<index>` stays embeddable —
-the review queue and the pull preview both depend on that. **The three mutating verbs do
-not.** With `Access-Control-Allow-Origin: *` advertised alongside `DELETE`, any page open in
-the owner's browser could preflight and then send `DELETE /inventory/3/17`, which is D10's
-hard delete of the record, the sidecar and the photo with no backup. Nothing read `Origin`.
-That is a CSRF hole rather than a missing login, and the fix is an allowlist rather than the
-auth this section rightly still refuses.
-
-**An absent `Origin` is allowed to write, and that is load-bearing.** A browser page cannot
-omit the header; `curl`, `./pkmnscan` and the harness all do. Requiring it would kill every
-command-line path in the project at once — measured, not assumed: mutating the check to
-require the header turns eleven T7 assertions red, eight of them in the concurrency section
-that sends no origin at all.
-
-**`PKMNSCAN_ALLOWED_ORIGINS`** extends the two defaults and cannot replace them. **Those
-defaults are THIS CHECKOUT's dev origin in both spellings**, `http://localhost:<dev port>`
-and `http://127.0.0.1:<dev port>` — 5173 in the main working tree, and the port
-`server/ports.py:dev_port` derives in a linked worktree. It was the literal 5173 everywhere
-until 2026-08-30, which meant a worktree served an app whose every write its own server then
-refused as `origin_not_allowed`; D43's amendment carries the account. A checkout allows its
-own origin and not another tree's, so pointing one tree's app at another tree's server —
-already a deliberate act, through `VITE_CAPTURE_SERVER` — needs the origin named here. Comma- or whitespace-separated; entries
-are lowercased and lose a trailing slash, because that is what a human types. A port is
-never defaulted in, so `http://localhost` and `http://localhost:80` are different and the
-error is toward refusing. **`*` is not a wildcard here**: the list is compared by exact
-string, so setting the variable to `*` refuses everything rather than re-opening the hole —
-asserted in T7, because a wildcard sneaking back through configuration would undo the whole
-control silently.
-
-**`PKMNSCAN_LAN_NAME`** (D138) is the name the owner's own DNS answers with — `pkmnscan.lan` on
-their UniFi. `scripts/serve.py` reads it, together with this Mac's Bonjour name, and composes
-`PKMNSCAN_ALLOWED_ORIGINS` from both when it starts the server, so opening the app from a phone
-can WRITE and not only read. It is read through `envfile`, so it belongs in `.env` rather than a
-shell profile: D47's amendment records that an export in `~/.zshenv` fixes an interactive shell
-and does nothing for a process launchd starts, which reads no profile at all.
-
-It sets nothing this file does not already describe — the variable above is still what the
-server reads, still extends rather than replaces, and still cannot be widened to `*`.
+- Reads allow any origin, so `GET /photo/...` stays embeddable.
+- The mutating verbs are gated by an origin allowlist. `_dispatch` runs the gate ahead of
+  every handler. Without it, any page open in the owner's browser could preflight and send
+  `DELETE /inventory/3/17`, which hard-deletes the record, the sidecar and the photo.
+- An absent `Origin` may write. A browser page cannot omit the header. `curl`, `./pkmnscan`
+  and the harness all omit it, so requiring it would break every command-line path.
+- An unknown origin is told `GET, HEAD, OPTIONS` only. Its preflight for a write fails in the
+  browser, and the request never leaves. `fetch` then rejects with a bare `TypeError`.
+  `app/src/server.ts` probes `GET /status` on that path and raises `origin_blocked`, which
+  names the address as the thing refused. It never reports `unreachable` for a running server.
+- The defaults are this checkout's own dev origin, `http://localhost:<dev port>` and
+  `http://127.0.0.1:<dev port>` (D43). `PKMNSCAN_ALLOWED_ORIGINS` extends them and never
+  replaces them. Entries are comma- or whitespace-separated, lowercased, without a trailing
+  slash. A port is never defaulted in. Comparison is by exact string, so `*` refuses
+  everything and does not open the gate. T7 asserts this.
+- `PKMNSCAN_LAN_NAME` (D138) names the owner's DNS name for this Mac. `scripts/serve.py` reads
+  it through `envfile`, so it belongs in `.env` and not in a shell profile. It composes
+  `PKMNSCAN_ALLOWED_ORIGINS` from that name and this Mac's Bonjour name. A phone can then
+  write and not only read.
 
 ### 6.4b — Is the LAN URL still good? (`make lan-check`)
 
-**The question this answers is the owner's, and it has no answer anywhere else in the repo.**
-The address is reached from a phone, the parts that hold it up sit in two different places,
-and the way it breaks does not look like breakage. `make lan-check` runs the whole chain from
-this machine and says.
+`make lan-check` runs the whole chain from this machine and says whether the LAN address works
+for a phone. Reads are ungated and writes are origin-checked. Losing the LAN name leaves the
+app rendering every screen while capture, undo, mark-sold and every other write answer 403
+`origin_not_allowed`. So "I opened it and it looked fine" is not evidence. The check presses a
+write to find out.
 
-**Six things hold `http://pkmnscan.lan:8000` up. Two of them are not this repo's** — D43 is
-explicit that the owner's DNS is theirs and nothing here touches it:
+Parts that hold `http://pkmnscan.lan:8000` up:
 
 | Where | What | If it is wrong |
 |---|---|---|
-| UniFi | a DHCP reservation pinning this Mac to an address | the name resolves to an address this Mac no longer holds |
-| UniFi | a local DNS record mapping `pkmnscan.lan` to it | the name does not resolve at all |
-| here | `app/vite.config.ts`'s `allowedHosts: ['.lan', '.local']` | "Blocked request. This host is not allowed." |
-| here | `app/src/server.ts` composing the capture base from `location.hostname` | the phone calls itself and nothing answers |
-| here | `PKMNSCAN_LAN_NAME` in `.env` | **writes 403 and reads do not** — see below |
-| here | `PKMNSCAN_ALLOWED_ORIGINS`, composed from it by `scripts/serve.py` | the same |
+| the owner's router | a DHCP reservation pinning this Mac | the name resolves to an address this Mac no longer holds |
+| the owner's router | a local DNS record for `pkmnscan.lan` | the name does not resolve |
+| here | `app/vite.config.ts`'s `allowedHosts` | "Blocked request. This host is not allowed." |
+| here | `app/src/server.ts` composing the capture base from `location.hostname` | the phone calls itself |
+| here | `PKMNSCAN_LAN_NAME` in `.env` | writes answer 403 and reads do not |
+| here | `PKMNSCAN_ALLOWED_ORIGINS`, composed by `scripts/serve.py` | the same |
 
-**The failure is silent, and that is the whole reason this section exists.** Reads are ungated
-and writes are origin-checked (6.4 above). Lose the LAN name — a fresh clone, a rewritten
-`.env`, a `.env` copied from an `.env.example` that did not list it — and the app opened at
-`pkmnscan.lan` still renders every screen and still draws all 1,625 cards, while capture, undo,
-mark-sold, retire, the mid-box delete and the claim editor all answer 403 `origin_not_allowed`.
-**So "I opened it and it looked fine" is not evidence.** The only way to know is to press
-something that writes, which is why the check presses one.
+The check writes nothing. The origin gate runs ahead of the body read. `POST /capture` with no
+body therefore answers `origin_not_allowed` for an unknown origin and `body_required` for a
+known one. `body_required` is raised before the store opens. The same request with one header
+different is the experiment. A foreign-origin request is the control. It also asks the
+preflight question, because a `curl`-only check would pass on a rig where the browser blocks
+every phone write.
 
-**It writes nothing to press it.** The origin gate runs in `_dispatch`, ahead of every handler
-and therefore ahead of the body being read — so `POST /capture` with no body is refused by the
-gate as `origin_not_allowed` when the origin is unknown and by `_body()` as `body_required`
-when it is known, and `body_required` is raised before the store is opened, let alone locked.
-Those two answers are the experiment: the same request, one header different. A sixth row sends
-a deliberately foreign origin as the control, because if that one can write too then the fifth
-row proved nothing.
+It does not prove that the phone resolves the name. Every row runs from this Mac. A phone on a
+guest VLAN, or with a VPN, can fail while everything here passes.
 
-**What a browser hits is not what `curl` hits, and the difference is the whole phone story.**
-`curl` sends no preflight, so it reaches the origin gate and reads the 403 — whose message
-names the remedy. A browser never gets that far. Measured on the rig 2026-09-06: an origin the
-server does not know is answered `Access-Control-Allow-Methods: GET, OPTIONS`, so a POST fails
-the preflight and **the browser refuses to send the request at all**. (`HEAD` joined that list
-on 2026-09-11 with `do_HEAD`, and the measurement is left as it was taken: what it is evidence
-of is that POST is absent, and POST is still absent.) `fetch` then rejects with
-a bare `TypeError` carrying no reason, and the 403 and its message are never delivered to the
-page.
-
-**That used to be reported as `unreachable` — "It may not be running — start it with `make
-server`".** So in the one failure this section exists for, the phone told the operator to
-restart a server that was running, while the shell showed no offline banner off
-the same ungated read. `app/src/server.ts` had predicted it in a comment since step 7a and
-shipped it anyway. It now probes `GET /status` on that path — a simple request, so no
-preflight, and ungated, so it answers whenever the server is up at all — and raises
-`origin_blocked` naming the address as the thing being refused. `make lan-check` asks the
-preflight question too, because a check doing only the `curl` half would pass on a rig where
-every write from the phone is blocked before it leaves the handset.
-
-**What it still does not prove: that the PHONE resolves the name.** Every row runs from this
-Mac, so a phone on a guest VLAN, or with Private DNS or a VPN on, can fail while all of this
-passes. Closing that needs something the phone runs, and nothing here does. Until then a green
-run means *this Mac* reaches the URL and the origin is allowed, which is the half that breaks
-silently; the phone's half fails loudly, in the address bar.
-
-**It is not in `make check`, and D18 is not why** — nothing here writes. It is out because
-`check` answers from the tree alone: a row that resolves DNS and expects a server to be up
-would go red on a train and in every worktree, and a check that fails for reasons unrelated to
-the commit is one people learn to ignore. Run it on the rig, when you want to know.
+It is not in `make check`. `make check` answers from the tree alone. A row that resolves DNS
+and expects a server would go red on a train and in every worktree.
 
 ### 6.4a — Shutdown, and why it counts requests rather than threads
 
-**`make up` restarts this process whenever a watched Python file changes** (D138), so shutdown
-stopped being a once-a-day event and became a many-times-a-day one. `store/session.py:Store.write()`
-replaces four JSON files in sequence — each atomic alone, none atomic as a set — so a kill landing
-between them leaves a torn store.
+`make up` restarts the server whenever a watched Python file changes (D138), so shutdown
+happens many times a day. The store commits one SQLite transaction per write (D88). A kill
+between file writes of photos and sidecars can still leave a file the store does not describe.
 
-On SIGTERM or Ctrl-C the server **stops accepting first**, then waits for in-flight requests, then
-exits. The wait is bounded by `DRAIN_SECONDS`, which is `files.LOCK_TIMEOUT_SECONDS + 5` and is
-derived rather than chosen: a capture posted while `./pkmnscan identify` holds the store lock
-legitimately waits the full lock timeout before answering `store_busy`, and a shorter drain would
-cut a request that was behaving correctly. Past the bound it exits anyway and says so loudly — an
-unkillable wedged server is worse than a cut request.
+On SIGTERM or Ctrl-C the server stops accepting first, then waits for in-flight requests, then
+exits. `DRAIN_SECONDS` bounds the wait. It is `files.LOCK_TIMEOUT_SECONDS + 5`, derived and not
+chosen. A capture can wait on `./pkmnscan identify` for the full lock timeout before it answers
+`store_busy`. A shorter drain would cut a request that behaved correctly.
+Past the bound the server exits and says so loudly.
 
-**The counter lives at `_dispatch` and counts REQUESTS, not threads or connections.** The obvious
-implementation does not work and looks as though it does: `ThreadingHTTPServer` sets
-`daemon_threads = True` and `socketserver._Threads.append` discards daemon threads, so
-`server_close()`'s join is already a no-op; and setting it `False` would block forever, because
-`protocol_version` is HTTP/1.1 and a handler thread lives for the whole keep-alive connection.
-T7's `check_drain` asserts the seam.
-
-**`GET /status` carries `boot_id`**, a per-process id, so a client can tell a restart from a
-reload — and so a stale server, which is what `docs/GATES.md` records costing box 95 its
-timestamps, is visible rather than inferred.
+The counter lives at `_dispatch` and counts requests, not threads or connections.
+`ThreadingHTTPServer` sets `daemon_threads = True`, so `server_close()`'s join is already a
+no-op. Setting it to `False` would block forever, because HTTP/1.1 keeps a handler thread
+alive for the whole connection. T7's `check_drain` asserts the seam.
 
 ### 6.5 — Concurrency
 
-`store/__init__.py`'s "TWO WRITERS, ONE OWNER" paragraph already rules it: the server is a
-second writer, not a second owner. Concretely — the server holds no authoritative copy of
-anything between requests.
-No cache, no dirty set, no periodic flush.
+The server is a second writer and not a second owner. It holds no authoritative copy between
+requests. It has no cache, no dirty set and no periodic flush.
 
-1. Reads take no lock, and the session's read already takes none. There is no shared mode
-   — the lock is exclusive only — so adding one would serialise both devices' polling
-   behind every write, and a read that lost the race would stall for the full 30-second
-   timeout and then raise. Not a deadlock; just the worst available way to answer a poll.
-2. Every write goes through the session's write context and nothing else.
-3. Nothing is written when an exception escapes the block — the writes happen after the
-   yield. Do not catch-and-continue inside it; swallowing an error there commits a partial
-   mutation. Know the limit: the guarantee is per *file*. The session replaces four JSON
-   files and appends history after the yield, each atomically, so a crash between two of
-   those replaces leaves the set inconsistent. Nothing here makes that more likely — just
-   do not write code that assumes a transaction.
-4. Allocation happens inside the same lock as the record. Non-negotiable, per 5.1.
+1. Reads take no lock. The lock is an exclusive `flock`, so a shared read mode would serialize
+   both devices' polling behind every write. A read that lost the race would stall for the full
+   30-second timeout.
+2. Every write goes through `Store().write()` and nothing else. It opens one SQLite transaction
+   (`BEGIN IMMEDIATE`) inside the lock. It commits on a clean exit and writes nothing when an
+   exception escapes. Do not catch and continue inside the block.
+3. Photographs and sidecars are outside the transaction. A crash between a file write and the
+   commit can leave a file that the store does not describe. Write the expensive file so that
+   every partial failure left is the cheap one.
+4. Allocation happens inside the same lock as the record (§5.1).
 5. Never hold the lock across a network wait. Decode the whole body first, then open the
-   session for the writes.
-6. No background threads mutate the store.
+   session.
+6. No background thread mutates the store.
 
-The lock is an `flock` on a fresh handle per call, so two threads in one process contend
-exactly as two processes do — which is correct, and means a threading server needs no
-extra in-process lock. One caveat pointing the other way: the atomic replace names its
-temporary file by process id, not thread id, so two threads writing at once would collide
-on a single temp path. The lock is what prevents that, which is a further reason nothing
-may write outside it.
+The `flock` is on a fresh handle per call. Two threads in one process contend as two processes
+do, so a threading server needs no extra in-process lock.
 
-### 6.6 — What this session must not build
+### 6.6 — What the capture path must not do
 
-No UI, no HTML, no bundle — the app is step 7 on its own port. No camera code, no device
-picker. No auto-capture or motion state machine — Gate C. No detection, cropping,
-downscaling or re-encoding at capture time — that is batch-time work. No identification:
-no API key read, no Batch call, the server never spends money. No pricing, no CSV, no
-join, no catalog. No mark-sold, no pull, no Fulfillment routes. No undo route. No
-review-queue clearing — the queues only grow until step 7, and `store/queues.py` says that
-is correct. No writes to the answer cache. No re-shoot route. No SQLite — D13 settles
-inventory as JSON, and D15's SQLite is the catalog at step 9. No renumbering, compaction
-or gap-filling: D10, and it is the one operation that would make the history file lie.
+- No detection, cropping, downscaling or re-encoding at capture time. That is batch-time work.
+- No identification. The capture server reads no API key, makes no Batch call and never spends
+  money.
+- No pricing, CSV, join or catalog work on the capture path.
+- No renumbering, compaction or gap-filling by capture (D10). Those operations would make the
+  history file lie.
+- No auto-capture logic. The trigger is client-side (`docs/specs/capture-app.md` §6).
 
-And per 0.1: no edits to `scripts/docs-audit.py`, for any reason.
+### 6.7 — `make server` blocks
 
-### 6.7 — What to settle while building
-
-**`make server` blocks.** Every other target returns. A foreground server is conventional
-and correct, but an agent that runs it in the foreground hangs its own turn, because the
-Stop hook runs the harness at turn end and never gets there. Keep it foreground; say in
-the help text that agents background it.
-
----
-
-## 7. map-flip
-
-Lands in the same commit as section 6, and only then — per 0.3, this is the commit where
-`server/` becomes a real top-level name.
-
-- Flip the `server/` entry from `planned` to `built`, and give it a `modules` list. Note
-  the orphan rule only scans a component that *has* one, so adding the list is what puts
-  the new package under the rule at all.
-- Add D10 to the entry's `governed_by`, and D7 if the code cites it. D17 requires
-  `governed_by` to be a superset of the decision ids the file's own comments name, and the
-  repo map row enforces that direction.
-- Move step 5 to `done` and step 6 to `next` in the build order. Exactly one step is
-  `next` and the audit enforces it.
-- `docs/GATES.md`'s build order is the other half of that pair; the two disagreeing is
-  what one commit on 2026-08-11 already had to fix.
-- The allocator goes in the existing `store/master.py`, so the store entry's `modules` list
-  needs no new member.
-
-Expect the audit to walk you through anything missed here: it produces one blocking
-finding at a time, each naming the file to fix.
-
----
-
-## 8. What this plan does not do
-
-- It adds no harness coverage. 0.2.
-- It adds no checker for `tested_by`. Section 3.2 and 0.1.
-- It builds no undo. Section 5.4.
-- It does not fill in `docs/DESIGN.md`. That is step 6, its token block is still a
-  template with no values, and it is owner input rather than agent work — worth starting
-  in parallel with this plan, because Gate B runs through it.
+`make server` runs in the foreground. An agent that runs it in the foreground hangs its own
+turn. Agents background it, or use `make up`.

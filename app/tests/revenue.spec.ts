@@ -205,7 +205,7 @@ test('a failed read draws the failure notice', async ({ page }) => {
 test('gross-descending is the default sort, and its column carries aria-sort', async ({ page }) => {
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  await expect(page.getByRole('columnheader', { name: 'Gross' })).toHaveAttribute('aria-sort', 'descending')
+  await expect(page.getByRole('columnheader', { name: 'Revenue' })).toHaveAttribute('aria-sort', 'descending')
   await expect(page.getByRole('columnheader', { name: 'Name' })).not.toHaveAttribute('aria-sort', /.+/)
   // Charizard ex ($37.50) > Pikachu VMAX ($16.00) > the SKU fallback ($3.25).
   expect(await productNames(page)).toEqual(['Charizard ex', 'Pikachu VMAX', '9199999'])
@@ -840,4 +840,167 @@ test('changing the sort during the retry window still resolves the photo', async
   await page.getByLabel('Sort').getByRole('button', { name: 'Copies' }).click()
   await page.clock.fastForward(6000)
   await expect(page.locator('img[src="' + STOCK_URL + '"]').first()).toBeVisible()
+  // Defect 6: a catalogue photo is fitted whole (badge and margin inside the frame), never cover-cropped.
+  await expect(page.locator('img[src="' + STOCK_URL + '"]').first()).toHaveCSS('object-fit', 'contain')
+})
+
+
+/* -------------------------------------------- the seven owner-reported Sales defects */
+
+/** A holdings payload whose first day priced 1 of 10 names ($1) — the partial first sweep
+ *  that drew a false cliff — then two full days. */
+async function stubShelf(page: Page, over: Record<string, unknown> = {}) {
+  await page.route(/\/pipeline\/holdings-value\?/, (route) =>
+    json(route, {
+      range: 'month',
+      width_days: 1,
+      history_begins: '2026-08-21',
+      at: '2026-09-19T00:00:00+00:00',
+      on_hand_names: 10,
+      series: [],
+      totals: [
+        { start: '2026-08-21', value: '1.00', priced_names: 1, unpriced_names: 9, gap_before: false },
+        { start: '2026-08-22', value: '100.00', priced_names: 9, unpriced_names: 1, gap_before: false },
+        { start: '2026-08-23', value: '110.00', priced_names: 8, unpriced_names: 2, gap_before: false },
+      ],
+      unmarked: { names: 1 },
+      sealed_excluded: { names: 0, reason: 'sealed product has no card record' },
+      ...over,
+    }),
+  )
+}
+
+test('the shelf states two distinct counts: priced at the last reading, and never priced (defect 1)', async ({ page }) => {
+  await stub(page, generalOrders())
+  await stubShelf(page)
+  await open(page, '?period=all')
+  const shelf = page.locator('.revenue-shelf')
+  await expect(shelf).toContainText('8 of 10 priced')
+  await expect(shelf).toContainText('1 never priced')
+  await expect(shelf).not.toContainText('not yet')
+  await expect(shelf).not.toContainText(/\d+ unpriced/)
+})
+
+test('a partial first sweep is left off the line, said in words, and never drawn as a zero (defect 2)', async ({ page }) => {
+  await stub(page, generalOrders())
+  await stubShelf(page)
+  await open(page, '?period=all')
+  const shelf = page.locator('.revenue-shelf')
+  // Two full days draw one polyline of two points; the $1 day is not a point on it.
+  const points = await page.locator('.revenue-spark polyline').getAttribute('points')
+  expect(points?.trim().split(/\s+/)).toHaveLength(2)
+  await expect(shelf).toContainText('1 early reading left off, too few priced.')
+  // A relative span, no calendar date.
+  await expect(shelf).toContainText('Daily, over the last 2 days')
+  await expect(shelf).not.toContainText(/Aug|2026/)
+})
+
+test('the shelf range uses the page picker words (defect 3)', async ({ page }) => {
+  await stub(page, generalOrders())
+  await open(page, '?period=all')
+  const pageWords = await page.getByRole('group', { name: 'Period' }).getByRole('button').allInnerTexts()
+  const shelf = await page.getByRole('group', { name: 'Time range' }).getByRole('button').allInnerTexts()
+  expect(shelf.length).toBeGreaterThan(0)
+  // Every shelf word except its finest range ("1 month", which the page has no tab for) is one the page says.
+  for (const word of shelf.filter((w) => w !== '1 month')) expect(pageWords).toContain(word)
+  expect(shelf).not.toContain('Month')
+  expect(shelf).not.toContain('Quarter')
+})
+
+test('"gross" is said once: the eyebrow, not the subtitle or the sort (defect 4)', async ({ page }) => {
+  await stub(page, generalOrders())
+  await open(page, '?period=all')
+  const words = await page.locator('main.revenue').innerText()
+  expect(words.match(/gross/gi) ?? []).toHaveLength(1)
+  await expect(page.locator('.revenue-summary .bn-eyebrow').first()).toContainText(/^gross/i)
+})
+
+test('the shelf sits in its own row, so the totals and bars leave no empty band (defect 5)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await stub(page, generalOrders())
+  await stubShelf(page)
+  await open(page, '?period=all')
+  const lead = await page.locator('.revenue-summary-lead').boundingBox()
+  const months = await page.locator('.revenue-months').boundingBox()
+  const shelf = await page.locator('.revenue-shelf').boundingBox()
+  expect(lead && months && shelf).toBeTruthy()
+  // Beside each other, not under one another, and the shelf is below both.
+  expect(months!.x).toBeGreaterThan(lead!.x + lead!.width - 1)
+  expect(shelf!.y).toBeGreaterThanOrEqual(months!.y + months!.height - 1)
+  // The strip is no taller than the totals need (a 3x blank block was the defect).
+  expect(months!.height).toBeLessThanOrEqual(lead!.height + 60)
+  const tallest = await page
+    .locator('.revenue-month-bar')
+    .evaluateAll((els) => Math.max(...els.map((e) => e.getBoundingClientRect().height)))
+  expect(tallest).toBeGreaterThan(80)
+})
+
+test('only leading low-coverage readings are trimmed, so the line ends on the headline figure (fix round)', async ({ page }) => {
+  await stub(page, generalOrders())
+  await stubShelf(page, {
+    totals: [
+      { start: '2026-08-21', value: '1.00', priced_names: 1, unpriced_names: 9, gap_before: false },
+      { start: '2026-08-22', value: '100.00', priced_names: 9, unpriced_names: 1, gap_before: false },
+      { start: '2026-08-23', value: '50.00', priced_names: 4, unpriced_names: 6, gap_before: false },
+      { start: '2026-08-24', value: '110.00', priced_names: 9, unpriced_names: 1, gap_before: false },
+    ],
+  })
+  await open(page, '?period=all')
+  const points = await page.locator('.revenue-spark polyline').getAttribute('points')
+  expect(points?.trim().split(/\s+/)).toHaveLength(3)
+  await expect(page.locator('.revenue-shelf')).toContainText('1 early reading left off')
+  await expect(page.locator('.revenue-shelf')).toContainText('9 of 10 priced')
+})
+
+test('a sealed line lands on Sealed and an unrecorded rarity is said plainly (defects 7 and 8)', async ({ page }) => {
+  await stub(page, [
+    orderRow({
+      number: 'ORD-2001',
+      lines: [
+        // The server completes a missing condition from the title's own " - Unopened" (the
+        // harness's t7 check pins that); this pins that the screen routes it by that condition.
+        line({
+          sku: '8609043',
+          name: 'Pokemon - SV09: Journey Together: Journey Together Enhanced Booster Box - Unopened',
+          condition: 'Unopened',
+          rarity: null,
+          quantity: 6,
+          unit_price: '100.00',
+        }),
+        // A single whose SKU left the table: no rarity to read.
+        line({ sku: '9000001', name: 'Old Card', condition: 'Near Mint', rarity: null, quantity: 1, unit_price: '5.00' }),
+      ],
+    }),
+  ])
+  await open(page, '?period=all')
+  await expect(page.locator('.revenue-podium .revenue-tile-name')).toHaveText(['Old Card'])
+  await expect(page.locator('.revenue-mix')).toContainText('Rarity not recorded')
+  await expect(page.locator('.revenue-mix')).not.toContainText('Unknown rarity')
+  await page.getByRole('button', { name: 'Sealed' }).click()
+  await expect(page.locator('.revenue-podium .revenue-tile-name')).toContainText('Enhanced Booster Box')
+})
+
+test('at 820 the newest month, its bar and its label sit whole inside the strip (fix round)', async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 1000 })
+  // Twelve months of five-figure sales: too wide for the strip, so it must open at the newest.
+  const months = ['2025-10', '2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09']
+  await stub(
+    page,
+    months.map((m, i) =>
+      orderRow({
+        number: `ORD-${3000 + i}`,
+        placed_at: `${m}-05T10:00:00+00:00`,
+        lines: [line({ sku: '9100001', name: 'Charizard ex', quantity: 1, unit_price: `${12000 + i * 111}.50` })],
+      }),
+    ),
+  )
+  await open(page, '?period=all')
+  const strip = await page.locator('.revenue-months').boundingBox()
+  const col = page.locator('.revenue-month-col').last()
+  for (const part of ['.revenue-month-bar', '.revenue-month-label', '.revenue-month-v']) {
+    const box = await col.locator(part).first().boundingBox()
+    expect(box).toBeTruthy()
+    expect(box!.x).toBeGreaterThanOrEqual(strip!.x - 1)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(strip!.x + strip!.width + 1)
+  }
 })

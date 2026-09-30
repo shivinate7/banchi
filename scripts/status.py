@@ -119,6 +119,13 @@ SOURCES = (
         "why": "read by decision_gists()",
     },
     {
+        "path": "scripts/guard-shell.py",
+        "kind": "defs",
+        "requires": ("recent_hatch_uses",),
+        "why": "the hatch log's reader, loaded by hatch_uses() — the guard writes the log and "
+               "owns its format",
+    },
+    {
         "path": "scripts/icloud-sweep.py",
         "kind": "file",
         "requires": (),
@@ -704,6 +711,23 @@ def hooks() -> List[str]:
     return out
 
 
+def hatch_uses(where: Path) -> List[str]:
+    """Every `PKMNSCAN_*=off` a command set in the last 24 hours, from the log the shell
+    guard keeps in this clone's git common dir (D179). Nothing when there is none."""
+    guard, why = sidecar("scripts/guard-shell.py", "guard_shell")
+    if guard is None:
+        return [field("hatch uses", why)]
+    try:
+        uses = guard.recent_hatch_uses(str(where))
+    except OSError as exc:
+        return [field("hatch uses", f"log unreadable — {exc}")]
+    if not uses:
+        return []
+    out = [field("hatch uses", f"{len(uses)} in the last 24h")]
+    out += [cont(f"{name}  {checkout}  {branch}") for name, checkout, branch in uses]
+    return out
+
+
 def guards() -> List[str]:
     """Which guards are standing down right now, and whether the turn gate is armed.
 
@@ -737,6 +761,8 @@ def guards() -> List[str]:
         lines.append(cont("refusing nothing in every session since."))
     else:
         lines.append(field("hatches", "none set — every guard in this shell is armed"))
+
+    lines += hatch_uses(ROOT)
 
     gate = resolve("scripts/stop-gate.sh")
     if gate:
@@ -1106,6 +1132,31 @@ def janitor_install() -> List[str]:
     return [field("Hooks copy", "~/.claude/bin matches this tree")]
 
 
+SLOW_SHOWN = 5
+
+
+def slow_requests() -> List[str]:
+    """The last few slow-request lines the capture server logged, and what each one blames.
+
+    The server writes them (`CaptureHandler._note_slow`) to the log this checkout's supervisor
+    keeps. The prefix is read out of the server source, so the writer and this reader share one
+    spelling. Nothing here judges the cause; each line names it.
+    """
+    prefix = literals(ROOT / "server" / "capture_server.py").get("SLOW_LINE_PREFIX")
+    log = ROOT / ".serve" / "capture.log"
+    if not isinstance(prefix, str) or not log.is_file():
+        return []
+    try:
+        found = [ln.strip() for ln in read(log).splitlines() if ln.startswith(prefix)]
+    except OSError:
+        return []
+    if not found:
+        return [field("slow requests", "none in the log")]
+    out = [field("slow requests", f"last {min(len(found), SLOW_SHOWN)} of {len(found)}")]
+    out += [cont(ln[len(prefix):].strip()) for ln in found[-SLOW_SHOWN:]]
+    return out
+
+
 def store() -> List[str]:
     """The store's two directories, and the shape of the store inside the first (D88).
 
@@ -1180,7 +1231,7 @@ def render() -> str:
     lines.append(field("the map", "`make map` renders docs/map.py — a package, a path, a"))
     lines.append(cont("decision id, or `--stale` for prose its file has outrun."))
     lines += ["", "REPO"] + repo() + hooks() + guards() + ports_and_store() + icloud() + leftovers() + janitor_install()
-    lines += ["", "SERVING"] + serving()
+    lines += ["", "SERVING"] + serving() + slow_requests()
     lines += ["", "STORE"] + store()
 
     if MISSING:

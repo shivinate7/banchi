@@ -47,7 +47,7 @@ const GAMES: GameRegistry = {
 
 /** A box of `sectionCount` sections, `cardsPerSection` cards each, with the current card at
  *  section 1 (or its last card, for a section smaller than 17 — the owner's own reported case). */
-function buildBox(sectionCount: number, cardsPerSection: number) {
+function buildBox(sectionCount: number, cardsPerSection: number, pinAt?: number) {
   const sections_detail = []
   let start = 1
   for (let s = 1; s <= sectionCount; s += 1) {
@@ -55,7 +55,7 @@ function buildBox(sectionCount: number, cardsPerSection: number) {
     start += cardsPerSection
   }
   const boxTotal = sectionCount * cardsPerSection
-  const at = Math.min(17, cardsPerSection)
+  const at = pinAt ?? Math.min(17, cardsPerSection)
   const card = {
     box: 2,
     index: 1,
@@ -125,8 +125,8 @@ function buildBox(sectionCount: number, cardsPerSection: number) {
   return { card, boxes }
 }
 
-async function open(page: Page, sectionCount: number, cardsPerSection: number) {
-  const { card, boxes } = buildBox(sectionCount, cardsPerSection)
+async function open(page: Page, sectionCount: number, cardsPerSection: number, pinAt?: number) {
+  const { card, boxes } = buildBox(sectionCount, cardsPerSection, pinAt)
   const cards = { '2/1': card }
 
   await page.route(/\/search\?/, (route) =>
@@ -138,6 +138,7 @@ async function open(page: Page, sectionCount: number, cardsPerSection: number) {
         groups: [
           {
             sku: card.sku,
+            names: [card.name],
             name: card.name,
             number_display: card.number_display,
             set_hint: card.set_hint,
@@ -303,4 +304,31 @@ test('the card ruler ticks every 5th card and numbers every 10th (D310)', async 
   await expect(ruler.locator('.position-bar-tick-num')).toHaveText(['10', '20', '30', '40'])
   await expect(ruler.locator('.position-bar-chip')).toHaveText('17')
   await expect(page.locator('.card-locations-row.is-current .position-bar-text-box')).toHaveCount(0)
+})
+
+/* THE CHIP IS CENTERED ON THE PIN AND CLAMPED INSIDE THE RULER (card-detail spec), so at card 1 and
+   at the last card it never crosses the ruler's edge. Measured as boxes, not as a class. */
+for (const [label, card] of [['first', 1], ['last', 30]] as const) {
+  test(`the number chip stays inside the ruler at the ${label} card`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await open(page, 1, 30, card)
+    const ruler = page.locator('.card-locations-row.is-current .position-bar-sectiontrack')
+    const chip = ruler.locator('.position-bar-chip')
+    await expect(chip).toHaveText(String(card))
+    const r = (await ruler.boundingBox())!
+    const c = (await chip.boundingBox())!
+    expect(c.x, 'the chip starts inside the ruler').toBeGreaterThanOrEqual(r.x)
+    expect(c.x + c.width, 'the chip ends inside the ruler').toBeLessThanOrEqual(r.x + r.width)
+  })
+}
+
+test('the tick number under or next to the pin is hidden, and the chip sits mid-track', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await open(page, 1, 79, 60)
+  const ruler = page.locator('.card-locations-row.is-current .position-bar-sectiontrack')
+  await expect(ruler.locator('.position-bar-chip')).toHaveText('60')
+  await expect(ruler.locator('.position-bar-tick-num')).toHaveText(['10', '20', '30', '40', '50', '70'])
+  const track = (await ruler.boundingBox())!
+  const chip = (await ruler.locator('.position-bar-chip').boundingBox())!
+  expect(Math.abs(chip.y + chip.height / 2 - (track.y + track.height / 2)), 'chip centred on the track').toBeLessThan(1.5)
 })

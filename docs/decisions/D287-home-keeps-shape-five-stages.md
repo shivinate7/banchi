@@ -63,7 +63,7 @@ copy' filter". The build now:
 - Orders' "Show" facet gains a value, `missing`, labelled "Missing a copy". It lists every buyer
   that the same rule counts, whatever that buyer's state. Its count is the rows it shows, and it
   is offered only while it has any. Under it, each row says its own missing copies and orders.
-- The press opens `#/orders?show=missing` (D285's URL view state).
+- The press opens `#/orders?show=missing&show=noneleft&show=short` (D285's URL view state; D304 Q2b words each).
 
 `app/tests/home.spec.ts` presses the line against a ledger shaped like the owner's store. One
 buyer misses 5 copies under "Needs a look", one misses 1 copy under "Short", and one open order

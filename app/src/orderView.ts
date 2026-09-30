@@ -251,15 +251,6 @@ export function applyTake(fresh: readonly BuyerGroup[], take: GroupTake): BuyerG
   return [...known, ...arrived]
 }
 
-/** True when a sorted list leads with Ready to ship buyers AND holds others after them: the one
- *  case the list must say so, because the date order alone would not explain it (UX-170). */
-export function sortedReadyFirst(
-  groups: readonly BuyerGroup[],
-  ready: (group: BuyerGroup) => boolean = groupIsReadyToShip,
-): boolean {
-  return groups.some(ready) && groups.some((group) => !ready(group))
-}
-
 /** Does this group carry a line the resolver could not identify — the "Never seen" chip's own
  *  reason (`sku_unseen`), read off the answers this screen already has rather than a new
  *  notion. Only OPEN orders are asked, matching every other reason-shaped question this screen

@@ -99,7 +99,7 @@ class Plan:
     dropped: "OrderedDict[str, str]" = field(default_factory=OrderedDict)
     # EVERY MERGED MATCH, DROPPED OR NOT. `dropped` above carries the reason string alone,
     # and `cli/cmd_emit.py` needs the match itself to ask `match.capped` for the empty-send
-    # headline's cap count (DEBT37's wording gap 2) — the same reason `skus` above carries
+    # headline's cap count (D7's capped-card clause) — the same reason `skus` above carries
     # `MergedSku.match` rather than a second copy of what it says.
     matches: Dict[str, join.SkuMatch] = field(default_factory=dict)
 
@@ -336,7 +336,7 @@ def empty_send_sentence(
     A send with one reason keeps that reason's own sentence. A send with several names every
     one, so a card the guard trimmed is never hidden behind a card that needs a price.
 
-    `capped` IS ITS OWN REASON, APART FROM `live` (DEBT37's wording gap 2). Before this, a
+    `capped` IS ITS OWN REASON, APART FROM `live` (D7's capped-card clause). Before this, a
     card `--cap` closed had no clause here at all: the headline counted `needs_price`,
     `under_cut_off` and `live` (a guard trim) and silently dropped every card whose reason was
     the cap, even though `pipeline/join.py:SkuMatch.nothing_to_add` named it correctly on its

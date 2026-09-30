@@ -587,8 +587,8 @@ export function placeParts(place: Place | undefined, _departed = false): PlacePa
      (LOC-09) outright: a bare position never claims a state to get wrong. */
   let said: string
   if (prev !== null && next !== null) said = `Position: ${neighborWords(prev)} / ${neighborWords(next)}`
-  else if (prev !== null) said = `Position: ${neighborWords(prev)}`
-  else if (next !== null) said = `Position: ${neighborWords(next)}`
+  else if (prev !== null) said = `Previous: ${neighborWords(prev)} (last in the box)`
+  else if (next !== null) said = `Next: ${neighborWords(next)} (first in the box)`
   /* The one card whose box holds nothing else. No neighbours is no content, and null lets a
      screen render nothing rather than chrome. */
   else return null
@@ -604,8 +604,8 @@ export function placeParts(place: Place | undefined, _departed = false): PlacePa
  * `aria-label`. Kept as its own export rather than inlined at the call sites: it is the shape
  * three screens have imported since 2026-08-13.
  *
- * At the box's ends there is one neighbour and the sentence names only that one (`Position:
- * Mantine`) rather than pretending a between. */
+ * At the box's ends there is one neighbour and the sentence names only that one, with its side
+ * (`Next: Mantine (first in the box)`) rather than pretending a between. */
 export function placeSentence(place: Place | undefined, departed = false): string | null {
   return placeParts(place, departed)?.said ?? null
 }

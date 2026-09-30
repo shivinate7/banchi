@@ -1151,7 +1151,7 @@ export function SortControl<K extends string>({
         name={`Order: ${value.dir === 'asc' ? asc : desc}. Press to reverse.`}
         /* Sized to `Select`'s own height through the SAME inline `style` IconButton already
            merges a caller's `style` into — never a CSS override (FLT-24). */
-        style={{ width: 'var(--bn-control-h)', height: 'var(--bn-control-h)' }}
+        style={{ width: 'var(--bn-control-h)', height: '100%' }}
         className="bn-sort-dir"
         onClick={() => onChange({ key: value.key, dir: value.dir === 'asc' ? 'desc' : 'asc' })}
       />

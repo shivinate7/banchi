@@ -6,7 +6,7 @@ import type { IconName } from './kit'
  * the React-free half `boxTitle` lives in for exactly this reason ("No React, so a spec can
  * import it" — see its own header). */
 import { boxTitle } from './kit/dataRules'
-import { MISSING_FACET, missingCopies } from './orderBuyers'
+import { missingCopies, UNFILLABLE_FACETS } from './orderBuyers'
 import type {
   EmptySend,
   OrdersPayload,
@@ -183,7 +183,7 @@ export function emptySendTitle(empty: EmptySend): string {
     said.push(`TCGplayer already had every copy of ${live} ${live === 1 ? 'card' : 'cards'}${names ? ` (${names})` : ''}.`)
   }
   if (capped > 0) {
-    // DEBT37'S WORDING GAP 2: a card `--cap` closed had no clause here at all, silently
+    // THE CAPPED-CARD CLAUSE (D7): a card `--cap` closed had no clause here at all, silently
     // dropped from a title that named every other reason. Never folded into `live` above —
     // a capped card was never confirmed live, which is what `live` says.
     said.push(`${capped} ${capped === 1 ? 'card is' : 'cards are'} held at this send's cap.`)
@@ -329,7 +329,7 @@ export function standing(input: StandingInput): Standing | null {
          condition on this screen that is genuinely bad news, and until now it was tail text
          inside a stage note. */
   if (unfindable !== null && unfindable > 0) {
-    /* The press opens Orders on exactly the buyers counted here (UX-077): `show=missing`. */
+    /* The press opens Orders on exactly the buyers counted here (UX-077): the three unfillable `show` values. */
     const missingOrders = missing?.orders ?? 0
     return {
       key: 'unfindable',
@@ -339,11 +339,11 @@ export function standing(input: StandingInput): Standing | null {
       say: [
         t(' — '),
         n(unfindable),
-        t(' short across '),
+        t(' unfilled across '),
         n(missingOrders),
         t(missingOrders === 1 ? ' order.' : ' orders.'),
       ],
-      href: `#/orders?show=${MISSING_FACET}`,
+      href: `#/orders?${UNFILLABLE_FACETS.map((value) => `show=${value}`).join('&')}`,
       kbd: ',O',
       behind,
       problem,

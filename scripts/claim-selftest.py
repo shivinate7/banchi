@@ -2519,7 +2519,48 @@ def main() -> int:
         ok(not retitle_row.findings,
            "renaming a held number to a new descriptive tail allocates nothing",
            "\n".join(f.where + ": " + f.message for f in retitle_row.findings))
-        git(twork, "mv", "docs/decisions/D002-second.md", "docs/decisions/D009-second.md")
+        # HEAVY CONTENT CHANGE: a retitle whose body is rewritten reads as D + A, never R.
+        write(twork, "docs/decisions/D002-second-title.md", "wholly\nnew\ntext\nnothing\nshared\n")
+        git(twork, "rm", "-q", "docs/decisions/D002-second.md")
+        git(twork, "add", "-A")
+        git(twork, "commit", "-qm", "retitle with the whole body rewritten")
+        heavy_report = audit.Report()
+        audit.check_numbered_record_growth(heavy_report, False)
+        heavy_row = next(r for r in heavy_report.checks if r.check == "numbered record growth")
+        ok(not heavy_row.findings,
+           "a retitle read as delete plus add (heavy content change) allocates nothing",
+           "\n".join(f.where + ": " + f.message for f in heavy_row.findings))
+        # A NEW NUMBER with no file behind it on the base, next to an unrelated delete, fails.
+        write(twork, "docs/decisions/D077-brand-new.md", "new\n")
+        git(twork, "add", "-A")
+        git(twork, "commit", "-qm", "a new number")
+        newnum_report = audit.Report()
+        audit.check_numbered_record_growth(newnum_report, False)
+        newnum_row = next(r for r in newnum_report.checks if r.check == "numbered record growth")
+        ok(any("D077-brand-new.md" in f.where for f in newnum_row.findings),
+           "a genuinely new number is still refused",
+           "\n".join(f.where for f in newnum_row.findings))
+        git(twork, "rm", "-q", "docs/decisions/D077-brand-new.md")
+        git(twork, "commit", "-qm", "drop the probe")
+        # ONE DELETE, TWO ADDS of a held number hands it to two records: refused.
+        dtmp = tmp / "two-adds"
+        dtmp.mkdir()
+        dwork = build_split(dtmp)
+        git(dwork, "checkout", "-q", "-b", "feature-two-adds")
+        git(dwork, "rm", "-q", "docs/decisions/D001-first.md")
+        write(dwork, "docs/decisions/D001-aaa.md", "alpha\nonly\n")
+        write(dwork, "docs/decisions/D001-bbb.md", "beta\nonly\n")
+        git(dwork, "add", "-A")
+        git(dwork, "commit", "-qm", "one delete, two adds of one number")
+        audit.ROOT = dwork
+        two_report = audit.Report()
+        audit.check_numbered_record_growth(two_report, False)
+        two_row = next(r for r in two_report.checks if r.check == "numbered record growth")
+        ok(len(two_row.findings) >= 1,
+           "one delete plus two adds of a number is refused, not sanctioned twice",
+           "\n".join(f.where for f in two_row.findings))
+        audit.ROOT = twork
+        git(twork, "mv", "docs/decisions/D002-second-title.md", "docs/decisions/D009-second.md")
         git(twork, "commit", "-qm", "a rename that changes the number")
         changed_report = audit.Report()
         audit.check_numbered_record_growth(changed_report, False)
@@ -2527,6 +2568,151 @@ def main() -> int:
         ok(len(changed_row.findings) == 1 and "D009-second.md" in changed_row.findings[0].where,
            "a rename to a different number is still an allocation and is refused",
            "\n".join(f.where + ": " + f.message for f in changed_row.findings))
+
+        print("\n  -- and a merge brings numbers in: main's are main's, nobody else's are --")
+
+        def growth(root: Path) -> list:
+            audit.ROOT = root
+            rep = audit.Report()
+            audit.check_numbered_record_growth(rep, False)
+            return next(r for r in rep.checks if r.check == "numbered record growth").findings
+
+        def names(findings: list) -> str:
+            return ",".join(sorted(Path(f.where).name for f in findings))
+
+        def world(label: str) -> Path:
+            """A clone at main's old tip, whose real `origin` has since gained D050 on main
+            (not yet fetched). Each arm gets its own, so no arm inherits another's history."""
+            wtmp = tmp / ("merge-" + label)
+            wtmp.mkdir()
+            wwork = build_split(wtmp)
+            other = wtmp / "other"
+            subprocess.run(["git", "clone", "-q", str(wtmp / "origin.git"), str(other)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            write(other, "docs/decisions/D050-main-only.md", "main only\n")
+            git(other, "add", "-A")
+            git(other, "commit", "-qm", "main allocates D050")
+            git(other, "push", "-q", "origin", "HEAD:main")
+            return wwork
+
+        def branch_with(work: Path, branch: str, number_file: str = "") -> str:
+            git(work, "checkout", "-q", "-b", branch)
+            write(work, "notes.txt", branch + "\n")
+            if number_file:
+                write(work, "docs/decisions/" + number_file, "own\n")
+            git(work, "add", "-A")
+            git(work, "commit", "-qm", "work on " + branch)
+            return git(work, "rev-parse", "HEAD").strip()
+
+        # (a) main's own D050, merged in from a real, fetched `origin/main`: main's.
+        wa = world("a")
+        branch_with(wa, "feature-a")
+        git(wa, "fetch", "-q", "origin")
+        git(wa, "merge", "-q", "--no-ff", "-m", "merge main in", "origin/main")
+        found = growth(wa)
+        ok(not found, "a number main allocated, brought in by a merge of origin/main, is main's",
+           names(found))
+        # (b) the merge commit ITSELF adds a number no parent holds: still the branch's.
+        wb = world("b")
+        branch_with(wb, "feature-b")
+        git(wb, "fetch", "-q", "origin")
+        git(wb, "merge", "-q", "--no-ff", "--no-commit", "origin/main")
+        write(wb, "docs/decisions/D060-in-the-merge.md", "own one\n")
+        git(wb, "add", "-A")
+        git(wb, "commit", "-qm", "merge main and slip in a number")
+        found = growth(wb)
+        ok(names(found) == "D060-in-the-merge.md",
+           "a number the merge commit itself adds is still refused, and main's is not", names(found))
+        # (c) an ordinary commit after the merge adds a number: still refused.
+        wc = world("c")
+        branch_with(wc, "feature-c")
+        git(wc, "fetch", "-q", "origin")
+        git(wc, "merge", "-q", "--no-ff", "-m", "merge main in", "origin/main")
+        branch_with(wc, "feature-c2", "D061-plain-commit.md")
+        found = growth(wc)
+        ok(names(found) == "D061-plain-commit.md",
+           "a number a normal commit adds after a merge is still refused", names(found))
+        # (d) a feature branch that allocated D090, merged into an integration branch: the
+        # merged-in parent is not main, so the number is not excused.
+        wd = world("d")
+        git(wd, "fetch", "-q", "origin")
+        base_sha = git(wd, "rev-parse", "origin/main").strip()
+        branch_with(wd, "feature-d", "D090-feature-number.md")
+        git(wd, "checkout", "-q", "-b", "integration", base_sha)
+        write(wd, "integration.txt", "integration\n")
+        git(wd, "add", "-A")
+        git(wd, "commit", "-qm", "integration work")
+        git(wd, "merge", "-q", "--no-ff", "-m", "merge the feature in", "feature-d")
+        found = growth(wd)
+        ok(names(found) == "D090-feature-number.md",
+           "a feature branch's number merged into an integration branch is refused", names(found))
+        # (e) CI's synthetic merge: main's tip first, the PR head second, the PR head carrying
+        # a number of its own.
+        we = world("e")
+        pr_head = branch_with(we, "pr-head", "D070-pr-number.md")
+        git(we, "fetch", "-q", "origin")
+        git(we, "checkout", "-q", "--detach", "origin/main")
+        git(we, "merge", "-q", "--no-ff", "-m", "synthetic merge", pr_head)
+        found = growth(we)
+        ok(names(found) == "D070-pr-number.md",
+           "the PR head's number in CI's synthetic merge (main first, PR second) is refused",
+           names(found))
+        # (f) commit a number, THEN merge main in: the number sits in the first parent.
+        wf = world("f")
+        branch_with(wf, "feature-f", "D080-before-the-merge.md")
+        git(wf, "fetch", "-q", "origin")
+        git(wf, "merge", "-q", "--no-ff", "-m", "merge main in", "origin/main")
+        found = growth(wf)
+        ok(names(found) == "D080-before-the-merge.md",
+           "a number committed before merging main in is still refused, and main's is not",
+           names(found))
+
+        # THE HOOK'S OWN READ: `--staged` on a merge in progress diffs the index against HEAD,
+        # the first parent, so everything the other side brought reads as added.
+        def staged_growth(root: Path) -> list:
+            audit.ROOT = root
+            rep = audit.Report()
+            audit.check_numbered_record_growth(rep, True)
+            return next(r for r in rep.checks if r.check == "numbered record growth").findings
+
+        wg = world("staged-main")
+        branch_with(wg, "feature-g")
+        git(wg, "fetch", "-q", "origin")
+        git(wg, "merge", "-q", "--no-ff", "--no-commit", "origin/main")
+        found = staged_growth(wg)
+        ok(not found, "a staged merge of main does not read main's numbers as the branch's",
+           names(found))
+        write(wg, "docs/decisions/D062-in-the-staged-merge.md", "own\n")
+        git(wg, "add", "-A")
+        found = staged_growth(wg)
+        ok(names(found) == "D062-in-the-staged-merge.md",
+           "a number added inside the staged merge is refused, and main's is not", names(found))
+
+        wh = world("staged-feature")
+        git(wh, "fetch", "-q", "origin")
+        base_sha = git(wh, "rev-parse", "origin/main").strip()
+        branch_with(wh, "feature-h", "D091-feature-number.md")
+        git(wh, "checkout", "-q", "-b", "integration-h", base_sha)
+        write(wh, "integration.txt", "integration\n")
+        git(wh, "add", "-A")
+        git(wh, "commit", "-qm", "integration work")
+        git(wh, "merge", "-q", "--no-ff", "--no-commit", "feature-h")
+        found = staged_growth(wh)
+        ok(names(found) == "D091-feature-number.md",
+           "a staged merge of a non-main branch carrying a number is refused", names(found))
+
+        wi = world("staged-stale")
+        branch_with(wi, "feature-i")
+        stale_ref = git(wi, "rev-parse", "origin/main").strip()
+        git(wi, "fetch", "-q", "origin", "main:refs/heads/main-tip")
+        git(wi, "update-ref", "refs/remotes/origin/main", stale_ref)
+        git(wi, "merge", "-q", "--no-ff", "--no-commit", "main-tip")
+        found = staged_growth(wi)
+        said = " ".join(f.message for f in found)
+        ok(names(found) == "D050-main-only.md" and "git fetch origin main" in said
+           and "PKMNSCAN" not in said,
+           "with origin/main behind the merged main the row stays red and says to fetch main "
+           "and commit again, with no hatch", names(found) + " | " + said[-160:])
 
         print("\n  -- and it does NOT refuse the sanctioned claim itself --")
         # THE ROUND THIS ARM CLOSES: `merge-pr.py:claim_half` runs `claim-ids.py --write`

@@ -229,7 +229,7 @@ export function worstStatus(group: BuyerGroup, answers: ReadonlyMap<string, Reso
 /** THE ONE RULE FOR "MISSING A COPY" (UX-077, the owner's option c at the PR 2 integration): a
  *  buyer's missing copies are the `outstanding` copies on its OPEN orders (D121), and its missing
  *  orders are the open orders with any. Home's "Cannot be filled" sentence and the Orders "Show"
- *  facet `missing` both read this, so the sentence and the list it opens count the same thing. */
+ *  Flagged, Short and Partly picked facets read the same rule through `groupFacetCopies`, so the sentence and the list it opens count the same thing. */
 export function groupMissing(
   group: BuyerGroup,
   answers: ReadonlyMap<string, ResolvedOrder>,
@@ -246,8 +246,43 @@ export function groupMissing(
   return { copies, orders }
 }
 
-/** The "Show" facet value for every buyer who owes at least one missing copy. */
-export const MISSING_FACET = 'missing'
+/** The "Show" facet values for a buyer with a copy the store cannot give, said one way each (D304,
+ *  Q2b). `flagged` (once `missing`, still read from a link): a product the store has never seen, or a sealed product, which the store does not hold. `noneleft` (worded "Short"): a product the
+ *  store knows and has no copy left of. The old status `short` is worded "Partly picked". */
+export const FLAGGED_FACET = 'flagged'
+export const NONE_LEFT_FACET = 'noneleft'
+/** Home's "Cannot be filled" press opens every one of these at once, so its list holds the buyers
+ *  its sentence counts. */
+export const UNFILLABLE_FACETS = [FLAGGED_FACET, NONE_LEFT_FACET, 'short'] as const
+
+export type UnfillableFacet = (typeof UNFILLABLE_FACETS)[number]
+const FACET_REASONS: Record<UnfillableFacet, readonly OrderLineReason[]> = {
+  flagged: ['sku_unseen', 'sku_unknown', 'not_a_single'],
+  noneleft: ['no_copies_on_hand'],
+  short: ['short'],
+}
+
+/** The copies a buyer's open orders still owe for the reasons one facet names, and the open orders
+ *  that owe them. The count under the facet's own value, and the figure on a row. */
+export function groupFacetCopies(
+  group: BuyerGroup,
+  answers: ReadonlyMap<string, ResolvedOrder>,
+  facet: UnfillableFacet,
+): { readonly copies: number; readonly orders: number; readonly keys: readonly string[] } {
+  let copies = 0
+  const keys: string[] = []
+  for (const order of group.open) {
+    let here = 0
+    for (const line of answers.get(order.key)?.lines ?? []) {
+      if (FACET_REASONS[facet].includes(lineReason(order, line))) here += line.outstanding
+    }
+    if (here > 0) {
+      copies += here
+      keys.push(order.key)
+    }
+  }
+  return { copies, orders: keys.length, keys }
+}
 
 /** WHAT HOME'S "Cannot be filled" LINE SAYS: every missing copy, and only the open orders that
  *  miss one, summed over `groupMissing`. The press opens `#/orders?show=missing`, which lists

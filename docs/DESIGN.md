@@ -323,6 +323,10 @@ sheet now, it is reachable from the command palette (never the nav), and `make s
 renders it. `app/tests/fulfillment.spec.ts`'s pull-confirm describe block measures three of
 the Fulfillment floors on its pull-confirm specimens.
 
+**Filters are one kit control** (D311). Every filter and sort row is the
+same width. The sort direction is a segment inside the Sort field. A value reads in `--bn-ink-2` at
+one weight, at rest. A set filter takes the accent edge, tint and ink, never weight alone.
+
 ## Spacing relations (F6)
 
 Each spacing literal in `app/src/**/*.css` is a `var(--bn-*)` or a deliberate value pinned
@@ -493,10 +497,9 @@ CONTAINER       widths measured against a COLUMN rather than the window, so they
                 the ladder and carry no step arithmetic: a `pane` of 640px and a viewport of
                 640px are different quantities. Each is named with its container and sheet.
   copies  470   CardLocations — the marker's track stops being 110px and starts being ~285
-  copies  479   CardLocations — the identity keeps every character, the stage triple drops
-  copies  619   CardLocations — the address takes the whole line
-  copies  299   CardLocations — the action cell takes its own row under the address
+  copies  479   CardLocations — the re-rank chip takes its own row under the heading
   pane    479   BoxBrowse — the fact grid goes to one column
+  pane    520   BoxBrowse — the band stacks: the two lead figures sit under the identity
   pane    559   BoxBrowse — the photograph stops short of the full width
   pane    560   BoxBrowse — the photo/copies band splits in two
   pane    760   BoxBrowse — the fact grid goes to two columns

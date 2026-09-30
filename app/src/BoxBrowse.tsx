@@ -42,6 +42,7 @@ import { RailFrame } from './RailFrame'
 import {
   CardDetailsSection,
   CardPane,
+  type HeroFigures,
   gameLabel,
   gameWord,
   marketTable,
@@ -468,6 +469,10 @@ type BoxBrowseProps = {
   /** The one primary action for the selected copy, drawn in the phone's sticky action bar. */
   actionBar?: ReactNode
 
+  /** The band's figures for the selected card (`CardHero.tsx:HeroFigures`), built by the screen
+   *  that holds the card's search group. Null draws the identity alone. */
+  figures?: HeroFigures | null
+
   /** Which card the walk is pointing at, reported on every change and `null` when the filter
    *  leaves nothing to point at. */
   onSelect?: (row: Row | null) => void
@@ -734,6 +739,7 @@ function VariantChooser({
 
 export function BoxBrowse({
   detail,
+  figures,
   actionBar,
   onSelect,
   onBoxes,
@@ -2036,8 +2042,9 @@ export function BoxBrowse({
           failure: searchFailure,
           /* N5: `SearchField`'s own default, "Card name, number or SKU", cut to "Card na" in
              the rail's own narrow column at 720 and 820 — a raw clip, no ellipsis, off the
-             native `placeholder` attribute. Shorter here, where the column is narrowest. */
-          placeholder: 'Search',
+             native `placeholder` attribute. Shorter here, where the column is narrowest. It carries the
+             box count, so the count line stays quiet until a search or pick narrows the list. */
+          placeholder: `Search ${boxRecords.length.toLocaleString('en-US')} ${boxRecords.length === 1 ? 'box' : 'boxes'}`,
         }}
         count={{
           /* While the chooser is pending, `reachableCount` reads `activeGroups` — which is
@@ -2046,6 +2053,7 @@ export function BoxBrowse({
           shown: chooserActive ? chooserMatchesByShelf.size : reachableCount,
           total: boxRecords.length,
           noun: { one: 'box', many: 'boxes' },
+          quietAtRest: true,
         }}
         sort={{
           options: [
@@ -2663,7 +2671,6 @@ export function BoxBrowse({
                   <CardPane
                     row={panelRow}
                     game={game}
-                    place={selectedLabel}
                     /* REVIEW, PR #407: `pointer-events: none` (BoxBrowse.css) blocks the
                      * mouse alone. Tab still reached `CardOps`' "Card actions" button and
                      * Enter opened its menu on `held.current` — the previous box's card,
@@ -2748,6 +2755,7 @@ export function BoxBrowse({
                       ),
                     }}
                     detail={panelDetail}
+                    figures={figures}
                   />
 
                   <CardDetailsSection

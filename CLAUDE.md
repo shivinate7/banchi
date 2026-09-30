@@ -203,8 +203,8 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **The capture server is threaded and not yours to restart.** It is `class CaptureServer(ThreadingHTTPServer)` in
   `server/capture_server.py`, with `request_queue_size = 128` and `CaptureHandler.timeout = 15`.
   `REQUEST_SLOTS = 4` bounds executing requests. `PHOTO_SLOTS = 4` bounds `/photo/` and `/assets/`
-  GETs (refusal `photo_busy`). The pool is safe over HTTP/1.1 only because every response sends
-  `Connection: close` (DEBT11, the capture server bounds concurrent requests). A burst of clients kills it. Run the full
+  GETs and the cheap lock-free reads in `PHOTO_LANE_EXACT`, `/status` first (refusal `photo_busy`). The pool is safe over HTTP/1.1 only because every response sends
+  `Connection: close` (DEBT11, a parked writer still holds a request slot). A burst of clients kills it. Run the full
   suite once, at the end. Never `make up ARGS=--restart`, `make down` or `make up` to fix a wedge.
   The `server concurrency` row of `make docs-audit` reads these figures.
 - **The join key is per game and normalized on both sides** (`pipeline/games.py`,
@@ -297,6 +297,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   `PKMNSCAN_LINK`, `PKMNSCAN_WAIT`, `PKMNSCAN_PUSH`, `PKMNSCAN_STASH`, `PKMNSCAN_RESET`, `PKMNSCAN_NARRATE`
   (D235, the heartbeat is refused a pipe). The ninth clause names its subjects, a short per-incident roster
   that the self-test reconciles. The other eight resolve what a command would do. `make guard-shell-selftest` proves each one in a throwaway repo.
+  A hatch counts only as a real assignment (env prefix, `export` or `env`), never a mention. Every `PKMNSCAN_*=off` a command sets is logged, and `make status` shows the last 24 hours. A hatch set in the environment is not logged, and `make status` lists it under `hatches` (D179, shell mistakes are refused by resolving them).
 - **A citation names a symbol, never a line.** Write a decision id, a section or `module.symbol` (no `.py`).
   A method is "`module.Class`'s `method`". A CSS rule is its selector.
   The `line anchors` row of `make docs-audit` refuses `path:N`, `file.ext:N`, `~N` and a bare `:N` after a cited file.
@@ -351,6 +352,7 @@ Use bold labels in one quoted block, never a code fence. Start with the point. N
 - `docs/map.py` is the repo as data: built, TBD, and the decisions that govern each file. Read it through `make map`.
   Never read it whole. `make docs-audit` fails a file with no entry.
 - Build order is `SHIPPED` and `OPEN` (D80, a section with no reader). `n` is a stable id.
+- `docs/agent-traps.md` holds the tool and test traps that produced a false green or a lost tree. Read it before a mutation run or a worktree recovery.
 - `docs/decisions/` holds settled decisions, one file each. It is never `@`-loaded (D60, the @-loaded docs are dense).
   `scripts/decision-context.py` names the governing ones.
 - `docs/GATES.md` points at `docs/gates/`: the harness contract and the build order.
