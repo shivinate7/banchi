@@ -176,6 +176,20 @@ def run(ok) -> None:
         )
         ok(not dispatch(looped), "dispatch through a loop is dispatch", str(dispatch(looped)))
 
+        # The shape `rows.py` really has: a `ROWS` table of entries, no `audit()` naming a check.
+        tabled = (
+            emit.format("check_one")
+            + emit.format("check_two")
+            + "ROWS = (\n    Row('one', 1, check_one),\n    Row('two', 1, check_two),\n)\n"
+        )
+        ok(not dispatch(tabled), "a check named in the ROWS table is dispatched", str(dispatch(tabled)))
+        found = dispatch(tabled.replace("    Row('two', 1, check_two),\n", ""))
+        ok(
+            len(found) == 1 and "check_two" in found[0].message,
+            "the check whose ROWS entry was forgotten is named, and only it",
+            str(found),
+        )
+
         # The rename hole, closed by reading both signals. `audit_two` emits a row and no
         # longer looks like a check by name — which is what a diff that reads as tidying does.
         renamed = (

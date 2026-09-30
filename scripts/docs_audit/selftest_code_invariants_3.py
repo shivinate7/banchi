@@ -6,7 +6,6 @@ import tempfile
 from pathlib import Path
 from typing import List
 
-from .core import module_globals
 from .code_invariants import (
     CODE_AGREEMENT_ARM_COUNT,
     check_column_counts,
@@ -14,7 +13,7 @@ from .code_invariants import (
     check_import_filename_agreement,
     check_threshold_agreement,
 )
-from .core import Finding, ROOT, Report, markdown_files
+from .core import Finding, PACKAGE_DIR, ROOT, Report, markdown_files, module_globals
 from .paths_commands import _commands_named, _commands_roster_findings, check_commands_roster
 from .registry_scopes import CHECKS_REGISTRY, check_commit_path
 
@@ -363,7 +362,32 @@ def run(ok) -> None:
                "names it",
                str(findings))
 
-    # Arm 4: the honest pair, unmutated. `docs-audit` and `sigil-check` are the only two
+    # Arm 4: the package. `docs-audit.py` is a thin entry point and every row lives in the
+    # package beside it, so a write planted in a package function the audit reaches must be
+    # found through the entry, or the entry reads as a program of three functions that write
+    # nothing. `read` is on every row's path.
+    core_path = PACKAGE_DIR / "core.py"
+    core_original = core_path.read_text(encoding="utf-8")
+    core_bak = core_path.with_suffix(".py.bak")
+    core_anchor = "def read(path: Path) -> str:\n"
+    ok(core_anchor in core_original, "core.py still has the `read` this arm mutates")
+    core_mutated = core_original.replace(
+        core_anchor, core_anchor + '    Path("/tmp/docs-audit-selftest-mutant").write_text("mutated")\n', 1)
+    core_bak.write_text(core_original, encoding="utf-8")
+    try:
+        core_path.write_text(core_mutated, encoding="utf-8")
+        findings = _run_commit_path()
+    finally:
+        core_path.write_text(core_original, encoding="utf-8")
+        core_bak.unlink()
+    ok(any(f.where.endswith("docs-audit") and "SAYS NOTHING" in f.message for f in findings),
+       "arm 4: a write planted in a package module the audit reaches goes red on `commit path`",
+       str(findings))
+    ok(not _run_commit_path(),
+       "restored from the .bak copy, the package passes `commit path` clean again",
+       str(_run_commit_path()))
+
+    # Arm 5: the honest pair, unmutated. `docs-audit` and `sigil-check` are the only two
     # entries `commit_path: True` names today, and neither should ever produce a finding
     # on a clean tree.
     clean_findings = _run_commit_path()

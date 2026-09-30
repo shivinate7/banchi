@@ -52,7 +52,8 @@ def claim_ids_module():
 
 def docs_audit_module():
     """`scripts/docs-audit.py`, imported. Safe: everything in it runs from `main()`, guarded
-    by `if __name__ == "__main__":`, so importing it only defines functions."""
+    by `if __name__ == "__main__":`, so importing it only defines functions. The rows sit in
+    `scripts/docs_audit/`; the module carries their names, and `set_root` moves the tree."""
     return _load("docs_audit", DOCS_AUDIT)
 
 
@@ -2485,7 +2486,7 @@ def main() -> int:
         git(nwork, "commit", "-qm", "a branch writes a numbered debt directly")
 
         audit = docs_audit_module()
-        audit.ROOT = nwork
+        audit.set_root(nwork)
         report = audit.Report()
         audit.check_numbered_record_growth(report, False)
         row = next(r for r in report.checks if r.check == "numbered record growth")
@@ -2512,7 +2513,7 @@ def main() -> int:
         git(twork, "checkout", "-q", "-b", "feature-retitle")
         git(twork, "mv", "docs/decisions/D001-first.md", "docs/decisions/D001-a-better-title.md")
         git(twork, "commit", "-qm", "retitle a record the base already holds")
-        audit.ROOT = twork
+        audit.set_root(twork)
         retitle_report = audit.Report()
         audit.check_numbered_record_growth(retitle_report, False)
         retitle_row = next(r for r in retitle_report.checks if r.check == "numbered record growth")
@@ -2552,14 +2553,14 @@ def main() -> int:
         write(dwork, "docs/decisions/D001-bbb.md", "beta\nonly\n")
         git(dwork, "add", "-A")
         git(dwork, "commit", "-qm", "one delete, two adds of one number")
-        audit.ROOT = dwork
+        audit.set_root(dwork)
         two_report = audit.Report()
         audit.check_numbered_record_growth(two_report, False)
         two_row = next(r for r in two_report.checks if r.check == "numbered record growth")
         ok(len(two_row.findings) >= 1,
            "one delete plus two adds of a number is refused, not sanctioned twice",
            "\n".join(f.where for f in two_row.findings))
-        audit.ROOT = twork
+        audit.set_root(twork)
         git(twork, "mv", "docs/decisions/D002-second-title.md", "docs/decisions/D009-second.md")
         git(twork, "commit", "-qm", "a rename that changes the number")
         changed_report = audit.Report()
@@ -2572,7 +2573,7 @@ def main() -> int:
         print("\n  -- and a merge brings numbers in: main's are main's, nobody else's are --")
 
         def growth(root: Path) -> list:
-            audit.ROOT = root
+            audit.set_root(root)
             rep = audit.Report()
             audit.check_numbered_record_growth(rep, False)
             return next(r for r in rep.checks if r.check == "numbered record growth").findings
@@ -2670,7 +2671,7 @@ def main() -> int:
         # THE HOOK'S OWN READ: `--staged` on a merge in progress diffs the index against HEAD,
         # the first parent, so everything the other side brought reads as added.
         def staged_growth(root: Path) -> list:
-            audit.ROOT = root
+            audit.set_root(root)
             rep = audit.Report()
             audit.check_numbered_record_growth(rep, True)
             return next(r for r in rep.checks if r.check == "numbered record growth").findings

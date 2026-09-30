@@ -86,7 +86,7 @@ ROSTER = (
     {"target": "claim-selftest", "test": "scripts/claim-selftest.py"},
     {"target": "guard-shell-selftest", "test": "scripts/guard-shell-selftest.sh"},
     {"target": "sync-selftest", "test": "scripts/sync-selftest.py"},
-    {"target": "audit-self-test", "test": "scripts/docs-audit.py", "func": "self_test"},
+    {"target": "audit-self-test", "test": "scripts/docs-audit.py", "package": "scripts/docs_audit"},
     {"target": "janitor-selftest", "test": "scripts/janitor-selftest.sh"},
     {"target": "merge-selftest", "test": "scripts/merge-selftest.sh"},
     {"target": "githooks-selftest", "test": "scripts/githooks-selftest.sh"},
@@ -237,12 +237,11 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
     """Every local file `test_path` reads, read out of its own source — never hand-typed.
 
     `func`, when given, narrows the scan to one top-level function's own body instead of the
-    whole module — `audit-self-test`'s reason: `scripts/docs-audit.py` is one 20,000-line
-    file that both contains `self_test()` (isolated, no filesystem access — its own
-    docstring says so) and every `check_*` row's own file constants, so scanning the whole
-    module would make audit-self-test "reachable" from nearly everything the audit checks,
-    which is not what `--self-test` actually reads. `revert-audit.py` and `suite-lock.py`
-    need no such narrowing: each is a normal-sized guard that tests itself, whole.
+    whole module, for a test that shares its file with code whose constants it does not read.
+    A roster entry's `package` is the other case, and `subjects_for` handles it: the rows of
+    `audit-self-test` live in a package, and only the package's `selftest*.py` modules say
+    what `--self-test` reads. `revert-audit.py` and `suite-lock.py` need no narrowing: each is
+    a normal-sized guard that tests itself, whole.
 
     Filtered to paths that exist as real files, so a renamed subject falls out on its own
     instead of pointing at nothing, and a false hit (a decorative string that happens to look
@@ -303,11 +302,30 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
     return tuple(sorted(resolved))
 
 
+def subjects_for(entry: dict) -> Tuple[str, ...]:
+    """Every local file one roster entry's test reads.
+
+    The test's own source, narrowed by `func` when the entry names one. When the entry names a
+    `package`, also every `selftest*.py` module in it: those hold the cases, and the package's
+    row modules are carried whole by `scope_for`, so they are not subjects.
+    """
+    subjects = set(derive_subjects(ROOT / entry["test"], func=entry.get("func")))
+    package = entry.get("package")
+    if package:
+        for part in sorted((ROOT / package).glob("selftest*.py")):
+            subjects.update(derive_subjects(part))
+        subjects = {s for s in subjects if not s.startswith(package + "/")}
+    return tuple(sorted(subjects))
+
+
 def scope_for(entry: dict) -> Tuple[dict, ...]:
     """The full `classify_paths` scope for one roster entry: subjects, the test, the gate."""
     rel_test = entry["test"]
-    subjects = derive_subjects(ROOT / rel_test, func=entry.get("func"))
+    subjects = subjects_for(entry)
     scope: List[dict] = [{"path": rel_test, "why": "the test itself."}]
+    if entry.get("package"):
+        scope.append({"path": entry["package"] + "/**",
+                      "why": "the package the test runs: every row it proves."})
     for subject in subjects:
         scope.append({"path": subject, "why": f"read by `{rel_test}`, derived from its source."})
     scope.append({
@@ -385,7 +403,7 @@ def selftest() -> int:
     for entry in ROSTER:
         test_path = ROOT / entry["test"]
         check(f"{entry['target']}: test file exists", test_path.exists(), True)
-        subjects = derive_subjects(test_path, func=entry.get("func"))
+        subjects = subjects_for(entry)
         if entry["target"] not in SELF_SUBJECT_TARGETS:
             check(f"{entry['target']}: at least one subject is derived", len(subjects) > 0, True)
         for subject in subjects:

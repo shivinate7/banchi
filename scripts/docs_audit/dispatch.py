@@ -21,7 +21,7 @@ from .core import (
     staged_changes,
 )
 
-# Checks defined in this file that `audit()` deliberately does not call: name -> why.
+# Checks the package defines that `ROWS` deliberately does not name: name -> why.
 #
 # EMPTY, AND THAT IS THE FINISHED STATE, the same shape as D18's seam list and for the same
 # reason. It exists so that the escape route is the loud one. Without it, the only ways to
@@ -30,7 +30,7 @@ from .core import (
 # here is an argument somebody had to write down and a reviewer can disagree with.
 #
 # Self-cleaning in both directions, the property D16 wants of `scripts/docs-audit-allow.txt`:
-# an entry naming a check `audit()` does call is stale and reported, and an entry naming
+# an entry naming a check `ROWS` does name is stale and reported, and an entry naming
 # nothing defined here is dangling and reported. A list that only grows stops being read.
 UNDISPATCHED: Dict[str, str] = {
     "corpus_is_empty":
@@ -38,7 +38,7 @@ UNDISPATCHED: Dict[str, str] = {
         "`check_decision_structure` iterates the entry files in docs/decisions/, and "
         "reported `0 entries` in GREEN when the corpus could not be read — measured by "
         "deleting one entry file. This writes the row that says so, under that check's "
-        "label, which is why it calls `report.add` and why `audit()` does not call it. "
+        "label, which is why it calls `report.add` and why `ROWS` does not name it. "
         "Dispatching it directly would print a second row nobody asked for; leaving it "
         "out of this list would report it as a check that has never run. It also served "
         "`check_entry_budget`, CUT 2026-09-28 (test-audit plan Q2); the second caller went "
@@ -83,32 +83,35 @@ def defined_checks(tree: ast.Module) -> Dict[str, int]:
 
 
 def dispatched_names(tree: ast.Module, names: Iterable[str]) -> Optional[Set[str]]:
-    """Which of `names` appear anywhere inside `audit()`. None when there is no `audit()`.
+    """Which of `names` appear anywhere inside `ROWS` or `audit()`. None when there is neither.
 
-    Every name in the function, not the top-level call statements only. The retired count
-    machinery read statements and its own docstring named the failure: restructure some of
-    the calls into a loop, leave the rest, and the reader sees fewer checks than there are.
-    A walk sees a name in a tuple, a loop, a branch or a `try`, so the only restructuring it
-    misses is one that moves dispatch out of `audit()` entirely — which the row reports as
-    itself rather than guessing at.
+    Every name in the table, not the top-level entries only. The retired count machinery read
+    statements and its own docstring named the failure: restructure some of the calls into a
+    loop, leave the rest, and the reader sees fewer checks than there are. A walk sees a name
+    in a tuple, a loop, a branch or a `try`, so the only restructuring it misses is one that
+    moves dispatch out of `ROWS` and `audit()` entirely, which the row reports as itself
+    rather than guessing at.
 
-    Scoped to `audit()` on purpose. A file-wide search would be vacuous: `self_test` drives
+    Scoped to those two on purpose. A file-wide search would be vacuous: `self_test` drives
     check functions by name to prove they fire, so a name it exercises would read as
-    accounted for while `audit()` called none of them.
+    accounted for while nothing dispatched it. `audit()` is read as well as `ROWS` because a
+    fixture under `--self-test` is a one-file auditor with the older shape.
     """
     wanted = set(names)
-    audit_fn = next(
-        (
-            node
-            for node in tree.body
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "audit"
-        ),
-        None,
-    )
-    if audit_fn is None:
+    scopes = [
+        node
+        for node in tree.body
+        if (isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "audit")
+        or (isinstance(node, ast.Assign) and any(getattr(t, "id", "") == "ROWS" for t in node.targets))
+        or (isinstance(node, ast.AnnAssign) and getattr(node.target, "id", "") == "ROWS")
+    ]
+    if not scopes:
         return None
     return {
-        node.id for node in ast.walk(audit_fn) if isinstance(node, ast.Name) and node.id in wanted
+        node.id
+        for scope in scopes
+        for node in ast.walk(scope)
+        if isinstance(node, ast.Name) and node.id in wanted
     }
 
 
@@ -118,7 +121,7 @@ def _dispatch_sources() -> List[Path]:
 
 
 def check_dispatch(report: Report, source: Optional[Path] = None) -> None:
-    """Every check defined in the package, against the ones `audit()` actually calls.
+    """Every check defined in the package, against the ones `ROWS` actually names.
 
     The failure: add a check function, forget the call. It never runs, the report still
     looks full, the hook still passes, and nothing in the repo can say the auditor is
@@ -154,7 +157,7 @@ def check_dispatch(report: Report, source: Optional[Path] = None) -> None:
     `source` is one file to reconcile alone, defining its checks and calling them: a fixture
     under `--self-test`. The reader's behavior on a shape it cannot read has to be provable
     without restructuring the live package to find out. With no `source` the checks are
-    every module's functions and the calls are the ones `rows.audit` makes.
+    every module's functions and the dispatch is `rows.ROWS`.
     """
     if source is not None:
         sources = [source]
@@ -189,16 +192,16 @@ def check_dispatch(report: Report, source: Optional[Path] = None) -> None:
         findings.append(
             Finding(
                 rel(dispatch_source),
-                "defines no `audit()`, which is where this file's checks are dispatched "
-                "from and where this row reads them.",
+                "defines no `ROWS` and no `audit()`, which is where this file's checks are "
+                "dispatched from and where this row reads them.",
             )
         )
     elif checks and not called:
         findings.append(
             Finding(
                 rel(dispatch_source),
-                "`audit()` names none of the checks defined in this file. Either nothing "
-                "this script reports is running, or dispatch moved out of `audit()` and "
+                "`ROWS` names none of the checks defined in this file. Either nothing "
+                "this script reports is running, or dispatch moved out of `ROWS` and "
                 "this reader has to move with it.\nReported once rather than once per "
                 "check: the fault is in the reading, and a wall of findings would each "
                 "name the wrong cause.",
@@ -211,10 +214,10 @@ def check_dispatch(report: Report, source: Optional[Path] = None) -> None:
             findings.append(
                 Finding(
                     f"{rel(path)}:{line}",
-                    f"`{name}` is defined here and `audit()` never calls it, so it has "
+                    f"`{name}` is defined here and `ROWS` never names it, so it has "
                     f"never run. The row it would print is simply absent from the report, "
                     f"and an absent row is the one failure this file cannot show you.\n"
-                    f"Call it from `audit()`, or record it in UNDISPATCHED with the reason "
+                    f"Add it to `ROWS`, or record it in UNDISPATCHED with the reason "
                     f"it is defined and not dispatched.",
                 )
             )
@@ -233,7 +236,7 @@ def check_dispatch(report: Report, source: Optional[Path] = None) -> None:
                 Finding(
                     rel(dispatch_source),
                     f"UNDISPATCHED records `{name}` as deliberately not dispatched ({why}), "
-                    f"and `audit()` calls it. Drop the entry: an exemption that outlives its "
+                    f"and `ROWS` names it. Drop the entry: an exemption that outlives its "
                     f"reason is how the list stops being read.",
                 )
             )

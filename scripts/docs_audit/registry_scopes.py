@@ -28,6 +28,7 @@ from .core import (
     _walk,
     entry_parser,
     exists,
+    glob_files,
     literals_from_module,
     read,
     rel,
@@ -337,10 +338,20 @@ def _check_registry() -> Row:
 # top-level `if` statements, keeps only the branch(es) whose test names a flag this
 # INVOCATION actually passes (an `if` testing no flag is not a mode gate and both its arms are
 # kept), takes the calls named there as seeds, and closes over every LOCALLY DEFINED function
-# reachable from those seeds by a plain `name(...)` call — recursively, so `audit()`'s ~90
-# `check_*` calls all pull their own bodies in. Module top-level statements (imports, regex
-# `re.compile`, constant tables) are always included; they run at import time regardless of
-# mode.
+# reachable from those seeds by a plain `name(...)` call, or by a plain reference to the name
+# of a MODULE-LEVEL function, recursively. Module top-level statements (imports, regex `re.compile`, constant tables) are
+# always included; they run at import time regardless of mode.
+#
+# A SCRIPT THAT KEEPS ITS CODE IN A PACKAGE BESIDE IT IS READ THROUGH THE PACKAGE. `docs-audit.py`
+# is a thin entry point and every row lives in `scripts/docs_audit/`, so reading the entry alone
+# would close over three functions and find no write in code it never opened: a pass that proves
+# nothing. Every package the entry imports from its own directory is read as one program, each
+# function against its own module's imports. The rows are reached by name reference, not by
+# call: `rows.ROWS` names each check and `rows.audit` calls it through the table. Every name a
+# package module's top-level statements mention seeds the closure, which is how the checks come
+# in. A reference counts as reachable because a function handed around as a value runs. Only a
+# module-level function is followed by reference: a nested function or a method shares its name
+# with variables and modules (`dispatch`, `error`), and a call is the only proof it is meant.
 #
 # WHAT THIS CANNOT SEE, stated rather than assumed away:
 #   - A write behind an alias this file cannot resolve: `f = Path.write_text; f(p, s)`,
@@ -360,16 +371,15 @@ def _check_registry() -> Row:
 #     analyzed is correctly excluded; a write reachable from BOTH branches by different
 #     names (unusual) is correctly included once either branch is taken.
 #
-# Measured against the two checks this applies to today: `docs-audit` (`python3
-# scripts/docs-audit.py`, no flags) closes over 316 locally defined functions and finds no
-# write evidence — `self_test()` and its fixture writers are provably excluded, not merely
-# assumed off-path, and the two opaque `subprocess` calls in its reachable set (`git(*args)`
-# and a `node scripts/user-strings.mjs ...` invocation whose argv is spread from a `*args`
-# parameter) are named above rather than cleared. `sigil-check` (both `--self-test` and its
-# bare invocation, since the hook runs both) closes over 4-5 functions each and contains no
-# write-shaped call of any kind — it does not import `os`, `shutil` or `subprocess` at all.
-# So `scripts/docs-audit.py`'s own docstring claim, "THE AUDIT NEVER WRITES", HOLDS for the
-# reachable code this reads, with the blind spots above never having been asked to clear it.
+# Measured against the two checks this applies to: `docs-audit` (`python3 scripts/docs-audit.py`,
+# no flags) closes over the package's check functions and finds no write evidence — `self_test()`
+# and its fixture writers are provably excluded, not merely assumed off-path, and the two opaque
+# `subprocess` calls in its reachable set (`git(*args)` and a `node scripts/user-strings.mjs ...`
+# invocation whose argv is spread from a `*args` parameter) are named above rather than
+# cleared. `sigil-check` (both `--self-test` and its bare invocation, since the hook runs both)
+# contains no write-shaped call of any kind — it does not import `os`, `shutil` or `subprocess`
+# at all. So `scripts/docs-audit.py`'s own docstring claim, "THE AUDIT NEVER WRITES", HOLDS for
+# the reachable code this reads, with the blind spots above never having been asked to clear it.
 
 _WRITE_METHODS_UNRESOLVED_ROOT = frozenset({
     "write_text", "write_bytes", "write", "writelines", "touch",
@@ -520,26 +530,58 @@ def _local_functions(tree: ast.Module) -> Dict[str, ast.AST]:
             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
 
 
-def _call_closure(seed_names: Iterable[str], funcs: Dict[str, ast.AST]) -> List[ast.AST]:
-    """Every locally defined function reachable from `seed_names` by a `name(...)` call,
-    transitively. `obj.method(...)` calls are not followed — see the blind spots above."""
+def _call_closure(seed_names: Iterable[str], funcs: Dict[str, List[Tuple[ast.AST, Dict[str, str]]]],
+                  module_level: Optional[Set[str]] = None,
+                  ) -> List[Tuple[ast.AST, Dict[str, str]]]:
+    """Every locally defined function reachable from `seed_names`, transitively, each with the
+    import aliases of the module it is defined in. A function is reached by a plain `name(...)`
+    call, or, when it is module-level, by a plain reference to its name; `obj.method(...)` is not
+    followed — see the blind spots above. Every function of a given name is taken, since two
+    modules may define one.
+    """
+    by_reference = module_level if module_level is not None else set()
     visited: Set[str] = set()
     frontier: Set[str] = set(seed_names)
-    nodes: List[ast.AST] = []
+    nodes: List[Tuple[ast.AST, Dict[str, str]]] = []
     while frontier:
         name = frontier.pop()
         if name in visited:
             continue
         visited.add(name)
-        fn = funcs.get(name)
-        if fn is None:
-            continue
-        nodes.append(fn)
-        for node in ast.walk(fn):
-            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                    and node.func.id not in visited):
-                frontier.add(node.func.id)
+        for fn, aliases in funcs.get(name, []):
+            nodes.append((fn, aliases))
+            for node in ast.walk(fn):
+                if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                        and node.func.id not in visited):
+                    frontier.add(node.func.id)
+                elif isinstance(node, ast.Name) and node.id in by_reference and node.id not in visited:
+                    frontier.add(node.id)
     return nodes
+
+
+def _package_trees(script: Path, tree: ast.Module) -> List[ast.Module]:
+    """The parsed modules of every package `script` imports from its own directory.
+
+    A package here is a directory beside the script that holds an `__init__.py`. Read through
+    `read` and `glob_files`, so `--staged` sees the index, the same as every other source.
+    """
+    roots: Set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            roots.add(node.module.split(".")[0])
+        elif isinstance(node, ast.Import):
+            roots.update(alias.name.split(".")[0] for alias in node.names)
+    trees: List[ast.Module] = []
+    for root in sorted(roots):
+        directory = script.parent / root
+        if not exists(directory / "__init__.py"):
+            continue
+        for module_path in glob_files(directory, "*.py"):
+            try:
+                trees.append(ast.parse(read(module_path)))
+            except SyntaxError:
+                continue
+    return trees
 
 
 def _split_invocations(runs: str) -> List[Tuple[str, FrozenSet[str]]]:
@@ -582,18 +624,39 @@ def _commit_path_write_evidence(entry: dict) -> Optional[List[str]]:
             continue
         saw_any = True
         aliases = _import_aliases(tree)
-        funcs = _local_functions(tree)
-        main_fn = funcs.get("main")
+        own_funcs = _local_functions(tree)
+        funcs: Dict[str, List[Tuple[ast.AST, Dict[str, str]]]] = {
+            name: [(fn, aliases)] for name, fn in own_funcs.items()}
+        main_fn = own_funcs.get("main")
         top_level = [s for s in tree.body
                      if not isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef,
                                             ast.ClassDef, ast.Import, ast.ImportFrom))]
+        package_top: List[Tuple[ast.stmt, Dict[str, str]]] = []
+        package_seeds: Set[str] = set()
+        module_level: Set[str] = {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
+        for package_tree in _package_trees(path, tree):
+            package_aliases = _import_aliases(package_tree)
+            module_level.update(n.name for n in package_tree.body if isinstance(n, ast.FunctionDef))
+            for name, fn in _local_functions(package_tree).items():
+                funcs.setdefault(name, []).append((fn, package_aliases))
+            for stmt in package_tree.body:
+                if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef,
+                                     ast.Import, ast.ImportFrom)):
+                    continue
+                package_top.append((stmt, package_aliases))
+                package_seeds.update(n.id for n in ast.walk(stmt) if isinstance(n, ast.Name))
+        package_seeds &= module_level
         if main_fn is None:
             # No `main()` to mode-scope from — read the whole module rather than guess a mode.
-            nodes = list(funcs.values()) + top_level
+            nodes = [pair for pairs in funcs.values() for pair in pairs]
         else:
-            seeds = _entry_point_seeds(main_fn, flags)
-            nodes = _call_closure(seeds, funcs) + top_level
-        evidence.extend(_write_evidence(nodes, aliases))
+            seeds = _entry_point_seeds(main_fn, flags) | package_seeds
+            nodes = _call_closure(seeds, funcs, module_level)
+        for fn, fn_aliases in nodes:
+            evidence.extend(_write_evidence([fn], fn_aliases))
+        evidence.extend(_write_evidence(top_level, aliases))
+        for stmt, stmt_aliases in package_top:
+            evidence.extend(_write_evidence([stmt], stmt_aliases))
     if not saw_any:
         return None
     return sorted(set(evidence))
