@@ -739,6 +739,8 @@ type OpenOptions = {
   boxesDelayMs?: number
   settle?: string
   hideSold?: boolean | null
+  /** Holds every `GET /search` answer until this settles — the pending state, made certain. */
+  searchGate?: Promise<void>
   /** Overrides `GET /orders`'s `resolution.orders` — the default fixture answers "no orders"
    *  (see the comment beside the route below), which is honest but means no case here ever
    *  drew the Wanted pill against a real claim. Passing this is how a test does. */
@@ -918,6 +920,7 @@ async function open(
 
   await page.route(/\/search\?/, async (route) => {
     const asked = new URL(route.request().url()).searchParams.get('q') ?? ''
+    await options.searchGate
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -8569,3 +8572,32 @@ test('D218: this lane\'s own facts draw the separator, never type it', async ({ 
   expect(await sheet.innerText()).not.toMatch(/[·•]/)
 })
 
+
+for (const width of [1280, 820]) test(`Actions does not move when the copies search answers, at ${width}`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 900 })
+  /* THE FLAKE THIS PINS: the head drew the identity alone until `/search` answered, then added its
+     figures column and shoved Actions ~380px left. A press across the jump went down on the button
+     and came up elsewhere, so no click fired. The column now holds its final width as placeholder
+     bars while the search is pending, so the button has one x for the whole life of the card. */
+  let release: () => void = () => {}
+  const searchGate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await open(page, BOXES, PRICED_STORE, () => PRICING, SALE, { settle: '.browse-hero-head', searchGate })
+  const actions = page.getByRole('button', { name: 'Actions' })
+  await expect(page.locator('.browse-hero-lead[data-pending="true"]')).toBeVisible()
+  await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished)))
+  const pending = await actions.boundingBox()
+  const under = page.locator('.browse-under')
+  const lead = page.locator('.browse-hero-lead')
+  const yOf = async () => [Math.round((await lead.boundingBox())?.y ?? -1), Math.round((await under.boundingBox())?.y ?? -1)]
+  const pendingY = await yOf()
+  release()
+  await expect(page.locator('.browse-hero-lead:not([data-pending])')).toBeVisible()
+  const resolved = await actions.boundingBox()
+  expect(pending).not.toBeNull()
+  expect(resolved?.x).toBe(pending?.x)
+  /* THE SIDE-FACTS LINE HOLDS ITS HEIGHT TOO: the figures column and the copies panel stay put. */
+  await expect(page.locator('.browse-hero-side:not([data-pending])')).toBeVisible()
+  expect(await yOf()).toEqual(pendingY)
+})

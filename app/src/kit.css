@@ -1180,7 +1180,9 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   position: relative;
   overflow: hidden;
   border-radius: var(--bn-r-sm);
-  background: var(--bn-surface-2);
+  /* `--bn-line` and not `--bn-surface-2`: that one is the SUNKEN ground, darker than a dark panel, so
+     a bar read as a near-black hole there. A line tint is lighter than its ground in both themes. */
+  background: var(--bn-line);
   min-height: 12px;
 }
 .bn-skeleton::after {
@@ -1188,7 +1190,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, var(--bn-surface-3), transparent);
+  background: linear-gradient(90deg, transparent, var(--bn-line-strong), transparent);
   animation: bn-shimmer 1.4s ease-in-out infinite;
 }
 @keyframes bn-shimmer { to { transform: translateX(100%); } }

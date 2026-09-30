@@ -519,6 +519,9 @@
 /* The two lead figures, equal weight, split by a hairline. */
 .browse-hero-lead { display: grid; grid-auto-flow: column; grid-auto-columns: auto; align-items: start; }
 .browse-hero-fig { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 112px; }
+.browse-hero-side-bar { height: 1lh; min-height: 0; }
+.browse-hero-meter-bar { font-size: var(--bn-fs-xs); height: 1.14em; min-height: 0; margin-top: var(--bn-1-5); }
+.browse-hero-fig-bar { height: var(--bn-fs-3xl); margin-top: var(--bn-1); }
 .browse-hero-fig + .browse-hero-fig { border-left: 1px solid var(--bn-line); padding-left: var(--bn-5); margin-left: var(--bn-5); }
 .browse-hero-fig-label { display: flex; align-items: center; gap: var(--bn-2); min-height: var(--bn-4); }
 .browse-hero-fig-label .bn-dot { width: 6px; height: 6px; }

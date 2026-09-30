@@ -480,6 +480,45 @@ def isolated_home():
                 os.environ[files.HOME_ENV] = previous
 
 
+@contextmanager
+def hermetic():
+    """One check's process-global state, put back on the way out, and the owner's `.env`
+    kept out of it.
+
+    Three things leaked across checks and each is restored here:
+    - `os.environ`. `check_history_route` ran a CLI `join`, which `envfile.load`ed the
+      owner's `.env` (API keys, the store cookie) into the process for every later check.
+    - `envfile`'s own state (`ENV_FILE`, `_loaded`, `_from_file`).
+    - the server modules' caches (`_SETS_CACHE`, `_NEWEST_LIVE`, `_HOLDER`, `_BATCHES`,
+      `_CHILDREN`, `_SEARCH_WORK_COUNTERS`), which a later check could read warm.
+
+    `ENV_FILE` points at a file that does not exist for the check's whole run, so no check
+    reads a real `.env` and a check needs no `.env` to pass, as on a fresh clone. A check
+    that needs a settings file points `ENV_FILE` at its own and restores it, as before.
+    `_MINTED_PHOTOGRAPHS` is left alone on purpose: it is a counter that must never repeat
+    (D172).
+    """
+    caches = (
+        pipeline_routes._SETS_CACHE, pipeline_routes._NEWEST_LIVE, pipeline_routes._CHILDREN,
+        send_routes._HOLDER, shipping_routes._BATCHES, capture_server._SEARCH_WORK_COUNTERS,
+    )
+    saved = [dict(cache) for cache in caches]
+    environ = dict(os.environ)
+    env_file, from_file, loaded = envfile.ENV_FILE, set(envfile._from_file), envfile._loaded
+    envfile.ENV_FILE = Path(tempfile.gettempdir()) / "t7-hermetic-no-such.env"
+    try:
+        yield
+    finally:
+        envfile.ENV_FILE, envfile._loaded = env_file, loaded
+        envfile._from_file.clear()
+        envfile._from_file.update(from_file)
+        os.environ.clear()
+        os.environ.update(environ)
+        for cache, before in zip(caches, saved):
+            cache.clear()
+            cache.update(before)
+
+
 def store_tables() -> dict:
     """Every table of the isolated store, as ordered rows. What is compared where a case
     used to compare a file's bytes (D88): 'byte-identical' on a document becomes
@@ -41005,174 +41044,196 @@ def check_stock_images_pokemon_warm_refusal(checks: Checks) -> None:
     )
 
 
-def run() -> Result:
-    checks = Checks()
-    check_pipeline_routes(checks)
-    check_emit_claim_decides(checks)
-    check_emit_unpriced_left_out(checks)
-    check_send_matrix(checks)
-    check_emit_identity_stamp(checks)
-    check_pricing_authority(checks)
-    check_prices_adopt(checks)
-    check_readings_adopt_cli(checks)
-    check_readings_writer_after_join(checks)
-    check_readings_writer_after_live_export(checks)
-    check_merged_emit_cap(checks)
-    check_merged_emit_uncapped(checks)
-    check_unsent_copies_worklist(checks)
-    check_cap_flag_refusals(checks)
-    check_emit_send_quantity(checks)
-    check_merged_cap_is_the_tightest(checks)
-    check_threshold_and_file_shape(checks)
-    check_live_reconcile(checks)
-    check_phantom_worklist(checks)
-    check_unsent_listing_sells_out(checks)
-    check_pricing_reach(checks)
-    check_markdown(checks)
-    check_markdown_floor(checks)
-    check_markdown_lens(checks)
-    check_markdown_push(checks)
-    check_send_guard(checks)
-    check_send_press(checks)
-    check_send_hazards(checks)
-    check_send_review_r3(checks)
-    check_send_review_r4(checks)
-    check_send_review_r5(checks)
-    check_send_review_r6(checks)
-    check_send_review_r7(checks)
-    check_send_review_r8(checks)
-    check_live_markdown_guards(checks)
-    check_schema_eleven_then_twelve(checks)
-    check_run_match(checks)
-    check_publish_lag(checks)
-    check_withholding(checks)
-    check_pricing_route(checks)
-    check_corpus_revision(checks)
-    check_pricing_clear(checks)
-    check_pricing_labels(checks)
-    check_box_views_bounded(checks)
-    check_allocator(checks)
-    check_next_index_sql(checks)
-    check_boxes_and_listings(checks)
-    check_store(checks)
-    check_set_and_rarity(checks)
-    check_open_read_only(checks)
-    check_open_read_only_race(checks)
-    check_open_read_only_wal_present_never_falls_back(checks)
-    check_open_read_only_corrupt_main_file(checks)
-    check_store_of_record(checks)
-    check_photo_reclaim(checks)
-    check_skus_photos_limit(checks)
-    check_server_routes(checks)
-    check_drain(checks)
-    check_supervisor_recovery(checks)
-    check_undo(checks)
-    check_remove_and_box_delete(checks)
-    check_graveyard(checks)
-    check_queues(checks)
-    check_queue_starvation(checks)
-    check_listing_release(checks)
-    check_queue_supersede(checks)
-    check_queue_refresh(checks)
-    check_queue_refresh_agreement(checks)
-    check_queue_refresh_reading(checks)
-    check_review_answer(checks)
-    check_group_answer(checks)
-    check_mark_sold(checks)
-    check_mark_sold_releases_ledger(checks)
-    check_retire(checks)
-    check_reshoot(checks)
-    check_history(checks)
-    check_history_scoped_read(checks)
-    check_history_scoped_uses_index(checks)
-    check_sidecar_seam(checks)
-    check_capture_claim_chain(checks)
-    check_game_and_note_seam(checks)
-    check_inventory_filter_facets(checks)
-    check_inventory_facet_cells(checks)
-    check_box_routes_and_search(checks)
-    check_search_fts5(checks)
-    check_inventory_box_route(checks)
-    check_rows_scoped_after_full_load(checks)
-    check_inventory_recent_route(checks)
-    check_box_names(checks)
-    check_box_claims(checks)
-    check_box_claim_product(checks)
-    check_place_neighbors(checks)
-    check_open_section(checks)
-    check_section_names(checks)
-    check_consolidated_numbering(checks)
-    check_box_names_and_place_labels(checks)
-    check_concurrency(checks)
-    check_origin_gate(checks)
-    check_photo_cache(checks)
-    check_app_serve(checks)
-    check_dual_stack_bind(checks)
-    check_cli_seams(checks)
-    check_code_ledger(checks)
-    check_identify_preflight_stage(checks)
-    check_review_stand_down(checks)
-    check_review_catalog(checks)
-    check_correct_answer(checks)
-    check_correct_answer_live_release(checks)
-    check_identity_binding(checks)
-    check_catalog_number_fields_round_trip(checks)
-    check_catalog_set_rarity_match(checks)
-    check_catalog_claim_rank_and_no_cutoff(checks)
-    check_run_realignment(checks)
-    check_reused_box_refusal(checks)
-    check_box_true_index(checks)
-    check_emit_buried_box(checks)
-    check_rescue_stranded_run(checks)
-    check_rescue_discharges_stranded_count(checks)
-    check_rescue_route(checks)
-    check_rescue_json_reasons(checks)
-    check_store_backed_join(checks)
-    check_run_binds_to_bid(checks)
-    check_printed_code_profiles(checks)
-    check_cli_refusals(checks)
-    check_listing_commands(checks)
-    check_committed_copies_are_the_oldest(checks)
-    check_copies_out_one_pass_matches_reference(checks)
-    check_order_resolver(checks)
-    check_order_ledger(checks)
-    check_order_reconcile_backlog(checks)
-    check_order_line_sealed_from_title(checks)
-    check_order_screen(checks)
-    check_order_walk_plan_route(checks)
-    check_order_places_scoped(checks)
-    check_order_picks_tier(checks)
-    check_inventory_copies_route(checks)
-    check_order_fetch_route(checks)
-    check_request_slots(checks)
-    check_photo_lane(checks)
-    check_lockfree_lane(checks)
-    check_lane_survives_bad_target(checks)
-    check_slow_request_line(checks)
-    check_photo_lane_threads_and_faults(checks)
-    check_connection_close(checks)
-    check_crop_preview(checks)
-    check_export_fetch(checks)
-    check_key_rotation(checks)
-    check_price_history(checks)
-    check_history_route(checks)
-    check_history_blocked_route(checks)
-    check_shipping_lane(checks)
-    check_shipping_routes(checks)
-    check_shipping_stamps(checks)
-    check_value_table(checks)
-    check_value_page(checks)
-    check_undo_until_built_on(checks)
-    check_pipeline_sets(checks)
-    check_stock_images(checks)
-    check_sales_stock_photo_fallback(checks)
-    check_stock_images_pokemon_warm_refusal(checks)
-    # The box map's cases live in a sibling file (D264). Imported here, not at the top,
-    # because that file imports its fixtures from this one.
-    from harness.tests import t7_box_map
 
-    for box_map_check in t7_box_map.CHECKS:
-        box_map_check(checks)
+CHECK_ORDER = (
+    check_pipeline_routes,
+    check_emit_claim_decides,
+    check_emit_unpriced_left_out,
+    check_send_matrix,
+    check_emit_identity_stamp,
+    check_pricing_authority,
+    check_prices_adopt,
+    check_readings_adopt_cli,
+    check_readings_writer_after_join,
+    check_readings_writer_after_live_export,
+    check_merged_emit_cap,
+    check_merged_emit_uncapped,
+    check_unsent_copies_worklist,
+    check_cap_flag_refusals,
+    check_emit_send_quantity,
+    check_merged_cap_is_the_tightest,
+    check_threshold_and_file_shape,
+    check_live_reconcile,
+    check_phantom_worklist,
+    check_unsent_listing_sells_out,
+    check_pricing_reach,
+    check_markdown,
+    check_markdown_floor,
+    check_markdown_lens,
+    check_markdown_push,
+    check_send_guard,
+    check_send_press,
+    check_send_hazards,
+    check_send_review_r3,
+    check_send_review_r4,
+    check_send_review_r5,
+    check_send_review_r6,
+    check_send_review_r7,
+    check_send_review_r8,
+    check_live_markdown_guards,
+    check_schema_eleven_then_twelve,
+    check_run_match,
+    check_publish_lag,
+    check_withholding,
+    check_pricing_route,
+    check_corpus_revision,
+    check_pricing_clear,
+    check_pricing_labels,
+    check_box_views_bounded,
+    check_allocator,
+    check_next_index_sql,
+    check_boxes_and_listings,
+    check_store,
+    check_set_and_rarity,
+    check_open_read_only,
+    check_open_read_only_race,
+    check_open_read_only_wal_present_never_falls_back,
+    check_open_read_only_corrupt_main_file,
+    check_store_of_record,
+    check_photo_reclaim,
+    check_skus_photos_limit,
+    check_server_routes,
+    check_drain,
+    check_supervisor_recovery,
+    check_undo,
+    check_remove_and_box_delete,
+    check_graveyard,
+    check_queues,
+    check_queue_starvation,
+    check_listing_release,
+    check_queue_supersede,
+    check_queue_refresh,
+    check_queue_refresh_agreement,
+    check_queue_refresh_reading,
+    check_review_answer,
+    check_group_answer,
+    check_mark_sold,
+    check_mark_sold_releases_ledger,
+    check_retire,
+    check_reshoot,
+    check_history,
+    check_history_scoped_read,
+    check_history_scoped_uses_index,
+    check_sidecar_seam,
+    check_capture_claim_chain,
+    check_game_and_note_seam,
+    check_inventory_filter_facets,
+    check_inventory_facet_cells,
+    check_box_routes_and_search,
+    check_search_fts5,
+    check_inventory_box_route,
+    check_rows_scoped_after_full_load,
+    check_inventory_recent_route,
+    check_box_names,
+    check_box_claims,
+    check_box_claim_product,
+    check_place_neighbors,
+    check_open_section,
+    check_section_names,
+    check_consolidated_numbering,
+    check_box_names_and_place_labels,
+    check_concurrency,
+    check_origin_gate,
+    check_photo_cache,
+    check_app_serve,
+    check_dual_stack_bind,
+    check_cli_seams,
+    check_code_ledger,
+    check_identify_preflight_stage,
+    check_review_stand_down,
+    check_review_catalog,
+    check_correct_answer,
+    check_correct_answer_live_release,
+    check_identity_binding,
+    check_catalog_number_fields_round_trip,
+    check_catalog_set_rarity_match,
+    check_catalog_claim_rank_and_no_cutoff,
+    check_run_realignment,
+    check_reused_box_refusal,
+    check_box_true_index,
+    check_emit_buried_box,
+    check_rescue_stranded_run,
+    check_rescue_discharges_stranded_count,
+    check_rescue_route,
+    check_rescue_json_reasons,
+    check_store_backed_join,
+    check_run_binds_to_bid,
+    check_printed_code_profiles,
+    check_cli_refusals,
+    check_listing_commands,
+    check_committed_copies_are_the_oldest,
+    check_copies_out_one_pass_matches_reference,
+    check_order_resolver,
+    check_order_ledger,
+    check_order_reconcile_backlog,
+    check_order_line_sealed_from_title,
+    check_order_screen,
+    check_order_walk_plan_route,
+    check_order_places_scoped,
+    check_order_picks_tier,
+    check_inventory_copies_route,
+    check_order_fetch_route,
+    check_request_slots,
+    check_photo_lane,
+    check_lockfree_lane,
+    check_lane_survives_bad_target,
+    check_slow_request_line,
+    check_photo_lane_threads_and_faults,
+    check_connection_close,
+    check_crop_preview,
+    check_export_fetch,
+    check_key_rotation,
+    check_price_history,
+    check_history_route,
+    check_history_blocked_route,
+    check_shipping_lane,
+    check_shipping_routes,
+    check_shipping_stamps,
+    check_value_table,
+    check_value_page,
+    check_undo_until_built_on,
+    check_pipeline_sets,
+    check_stock_images,
+    check_sales_stock_photo_fallback,
+    check_stock_images_pokemon_warm_refusal,
+)
+
+
+def run(order=None) -> Result:
+    """Run every check, in `CHECK_ORDER` then the box map's, each inside `hermetic`.
+
+    `order` is for the order proof only: a function from the list of checks to the list to
+    run. `harness/run.py` never passes it, so the normal run is the hand-ordered one.
+    """
+    from harness.tests import t7_box_map  # its fixtures come from this file (D264)
+
+    checks = Checks()
+    todo = list(CHECK_ORDER) + list(t7_box_map.CHECKS)
+    if order is not None:
+        todo = list(order(todo))
+    timings = []
+    for check in todo:
+        began = time.perf_counter()
+        with hermetic():
+            check(checks)
+        timings.append((time.perf_counter() - began, check.__name__))
+    slowest = sorted(timings, reverse=True)[:15]
+    checks.note("")
+    checks.note(
+        f"SLOWEST 15 OF {len(timings)} CHECKS — {sum(t for t, _ in timings):.1f}s in all"
+    )
+    for seconds, name in slowest:
+        checks.note(f"{seconds:7.2f}s  {name}")
     return checks.result(
         "store/, server/ and cli/ — the packages no harness test reached before this one."
     )
