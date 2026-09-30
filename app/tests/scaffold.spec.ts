@@ -237,14 +237,14 @@ test('the runtime allow list names only real routes, real assertions and a lane'
 })
 
 for (const route of ROUTE_TABLE) {
-  /* `#/gallery` IS NOT RUN HERE: `gallery.spec.ts`'s "the kit is a Page: one h1, one width, one top
-     gap, no sideways scroll, at every width" keeps the claim, and it costs one page load, not
-     one per width. */
-  if (route.path === '/gallery') continue
+  /* `#/gallery`'S PAGE, H1, WIDTH, TOP GAP AND SIDEWAYS SCROLL ARE NOT READ HERE: `gallery.spec.ts`'s
+     "the kit is a Page: one h1, one width, one top gap, no sideways scroll, at every width" holds
+     those, in one load. Its head gap and tab title are NOT held there, so they still run. */
+  const heldByGallery = route.path === '/gallery' ? new Set(['page', 'h1', 'width', 'top', 'scroll']) : new Set<string>()
   test(`${route.path} inherits the page scaffold at every width`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     const failures = new Map<string, string[]>()
-    const fail = (assertion: string, message: string) => failures.set(assertion, [...(failures.get(assertion) ?? []), message])
+    const fail = (assertion: string, message: string) => heldByGallery.has(assertion) || failures.set(assertion, [...(failures.get(assertion) ?? []), message])
     const want = titleOf(route)
 
     await setViewport(page, { width: 1440, height: 900 })
@@ -305,7 +305,7 @@ for (const route of ROUTE_TABLE) {
       }
       if (m.sideways > 0) fail('scroll', `${at}: scrolls sideways by ${m.sideways}px`)
     }
-    const measured = PER_ROUTE.filter((a) => a !== 'title' && applies(route, a))
+    const measured = PER_ROUTE.filter((a) => a !== 'title' && !heldByGallery.has(a) && applies(route, a))
     expect(reconcile(route, failures, measured)).toEqual([])
   })
 

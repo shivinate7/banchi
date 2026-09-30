@@ -154,7 +154,7 @@ async function drawerRoutes(page: Page): Promise<string[]> {
 
 export type Visit = (route: string, width: number) => Promise<void>
 
-/** Every route at 1440, then every route at 390, each opened with `openSettled` before
+/** Every route at 1440 (and at 390 while `PHONE_SPECS_ON` is true), each opened with `openSettled` before
  *  `visit` reads it. Returns every route swept, for the callers' stale-entry checks. */
 export async function sweepEveryRoute(page: Page, visit: Visit): Promise<Set<string>> {
   trackReads(page)

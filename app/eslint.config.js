@@ -287,6 +287,19 @@ export default tseslint.config(
     },
   },
   {
+    /* THE PHONE SWITCH HAS ONE DOOR. A spec sizes its page through `setViewport`
+     * (`tests/phoneSwitch.ts`), which skips a phone width while phone is off. A raw
+     * `setViewportSize` walks round that switch, so only `phoneSwitch.ts` may call it. */
+    files: ['tests/**/*.ts', 'tests/**/*.tsx'],
+    ignores: ['tests/phoneSwitch.ts'],
+    rules: {
+      'no-restricted-properties': [
+        'error',
+        { property: 'setViewportSize', message: "Use `setViewport(page, size)` from './phoneSwitch', so the phone switch reaches this case." },
+      ],
+    },
+  },
+  {
     /* The second exception, and the fourth rule's whole reason for having a shape rather
      * than being a ban. TWO FILES, exempted outright. `useCamera.ts` is where D27's carve-out
      * was argued informally before it was a
