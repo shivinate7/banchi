@@ -19,7 +19,7 @@
  * one press (Mark sold / Undo) `CardLocations`'s own `renderAction` slot calls per copy.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Icon, IconButton, Kbd, Loading, Notice, overlayOpen, Pill } from './kit'
+import { Button, Icon, IconButton, Kbd, Loading, Notice, overlayOpen, Pill } from './kit'
 import { toast } from './kit/toast'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
@@ -328,6 +328,17 @@ export function useOrderWalk({
   const sections = useMemo(() => sectionsOf(plan, rows), [plan, rows])
 
   const [current, setCurrent] = useState<string | null>(null)
+  /* WHICH PICKS SHOW THEIR SPARES: the copies of a take the solver did not pick (`here: false`),
+     folded under its line. At walk level and not in `WalkList` so the digit keys read the same fact
+     the eye does: a key cap is drawn on exactly the copies it acts on. */
+  const [openSpares, setOpenSpares] = useState<ReadonlySet<string>>(new Set())
+  const toggleSpares = (takeKey: string) =>
+    setOpenSpares((held) => {
+      const next = new Set(held)
+      if (next.has(takeKey)) next.delete(takeKey)
+      else next.add(takeKey)
+      return next
+    })
   /* LANDING, THE SAME MOMENT INVENTORY'S OWN BOX WALK PICKS ITS FIRST CARD: the first row of a
      freshly landed plan. Keyed off the plan's own identity (a new object from a new fetch),
      never off `rows`'s content, so re-deriving `rows` from an unchanged plan cannot reset where
@@ -616,6 +627,8 @@ export function useOrderWalk({
     facts,
     rawCards,
     stepPick,
+    openSpares,
+    toggleSpares,
   }
 }
 
@@ -665,7 +678,7 @@ export function useWalkKeys(walk: OrderWalk): void {
       if (!/^[1-9]$/.test(event.key) || event.repeat) return
       const line = currentLineOf(now)
       if (line === null) return
-      const copy = groupOf(line.take, line.rows.map((row) => row.copy), now.facts, now.rawCards).copies[Number(event.key) - 1]
+      const copy = groupOf(line.take, keyedCopiesOf(line, now.openSpares), now.facts, now.rawCards).copies[Number(event.key) - 1]
       if (copy === undefined || now.soldKeys.has(copy.key) || copy.state === 'sold' || copy.state === 'retired') return
       event.preventDefault()
       /* ONE SALE AT A TIME: a digit pressed while another sale is in flight says so, never nothing. */
@@ -678,6 +691,18 @@ export function useWalkKeys(walk: OrderWalk): void {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+}
+
+/** The copies of a take that are not at its stop: spares the solver did not pick. */
+function sparesOf(take: WalkPlanTake): WalkPlanCopy[] {
+  return take.copies.filter((copy) => !copy.here)
+}
+
+/** THE COPIES A PICK'S DIGITS REACH, in the order the walk column draws them: the copies at the stop,
+ *  then, only while its fold is open, its spares. The key caps and the keys read this one list. */
+function keyedCopiesOf(line: WalkTakeLine, openSpares: ReadonlySet<string>): WalkPlanCopy[] {
+  const here = line.rows.map((row) => row.copy)
+  return openSpares.has(line.takeKey) ? [...here, ...sparesOf(line.take)] : here
 }
 
 /** The pick the walk stands on: its take at its stop, with every copy row it draws. */
@@ -704,7 +729,7 @@ function takeLinesOf(rows: readonly WalkRow[]): WalkTakeLine[] {
 /** Every copy the wanted count is asking for has a receipt against it. Shared by the press's
  *  own snapshot (below) and each line's `is-done` styling — one formula, not two. */
 function pickedAllOf(line: WalkTakeLine, soldKeys: ReadonlySet<string>): boolean {
-  return line.rows.filter((row) => soldKeys.has(row.copy.key)).length >= line.take.wanted
+  return line.take.copies.filter((copy) => soldKeys.has(copy.key)).length >= line.take.wanted
 }
 
 /** Every take key across every section, flat — what a press of Hide picked snapshots. */
@@ -807,9 +832,11 @@ export function WalkList({
             {collapsed ? null : (
               <ul className="orders-walk-rows">
                 {shown.map((line) => {
-                  const picked = line.rows.filter((row) => walk.soldKeys.has(row.copy.key)).length
+                  const picked = line.take.copies.filter((copy) => walk.soldKeys.has(copy.key)).length
                   const done = picked >= line.take.wanted
                   const figure = pickFigureOf(line.take, owedBySku)
+                  const spares = sparesOf(line.take)
+                  const spareOpen = walk.openSpares.has(line.takeKey)
                   const current = line.rows.some((row) => row.rowKey === walk.current)
                   const slots = line.rows.map((row) => row.copy.place.card).filter((card): card is number => card !== null)
                   const next = line.rows.find((row) => !walk.soldKeys.has(row.copy.key)) ?? line.rows[0]
@@ -874,10 +901,45 @@ export function WalkList({
                         renderAction={(copy) => {
                           /* THE DIGIT THAT MARKS THIS COPY, on the current pick's rows only: the keys act on the pick the
                              walk stands on. */
-                          const at = line.rows.findIndex((row) => row.copy.key === copy.key)
+                          const at = keyedCopiesOf(line, walk.openSpares).findIndex((one) => one.key === copy.key)
                           return <RowAction walk={walk} copy={copy} take={line.take} hint={current && at >= 0 && at < 9 ? String(at + 1) : undefined} />
                         }}
                       />
+                      {/* THE SPARES, FOLDED (the owner's ruling): copies of this take the solver did not pick.
+                          Opened, they are the same copy rows, sold through the same press, and the digit keys
+                          continue into them. */}
+                      {spares.length === 0 ? null : (
+                        <div className="orders-walk-spares">
+                          <Button
+                            variant="ghost"
+                            size="lg"
+                            iconRight={spareOpen ? 'chevronUp' : 'chevronDown'}
+                            aria-expanded={spareOpen}
+                            words="not-in-vocabulary"
+                            onClick={() => walk.toggleSpares(line.takeKey)}
+                          >
+                            {spares.length} more elsewhere
+                          </Button>
+                          {!spareOpen ? null : (
+                            <CardLocations
+                              group={groupOf(line.take, spares, walk.facts, walk.rawCards)}
+                              persona="owner"
+                              onSell={walk.onSell}
+                              busyKey={walk.busyCopy}
+                              soldKeys={walk.soldKeys}
+                              sections={sections}
+                              currentKey={walk.currentRow?.copy.key}
+                              preserveOrder
+                              head={false}
+                              className="walk-pick-where"
+                              renderAction={(copy) => {
+                                const at = keyedCopiesOf(line, walk.openSpares).findIndex((one) => one.key === copy.key)
+                                return <RowAction walk={walk} copy={copy} take={line.take} hint={current && at >= 0 && at < 9 ? String(at + 1) : undefined} />
+                              }}
+                            />
+                          )}
+                        </div>
+                      )}
                     </li>
                   )
                 })}

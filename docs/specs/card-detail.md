@@ -142,6 +142,12 @@ nothing else on its right panel.
   walk column scrolls that pick into view (smooth unless motion is reduced). A pick the Hide picked
   fold has taken off the list is skipped. No key acts in a text field, with a modifier, or under
   an open layer. A digit pressed while a sale is in flight says so.
+- **Spares.** A pick's copies the solver did not choose (`here: false`) sit folded under its line
+  in the walk column, behind a quiet 40px "N more elsewhere" press. Opened, they are the same
+  `CardLocations` rows (address, neighbor line, ruler, Mark sold), sold through the same `onSell`, so
+  the order counts them like any copy. The panel stays photo-only. The digits reach the copies at the
+  stop first, then the spares only while the fold is open, so a key cap is drawn on exactly the copies
+  a digit acts on. The fold is walk state (`openSpares`), not local to the list.
 - **Hints.** The digit stands beside each of the current pick's Mark sold buttons, and the panel
   carries two arrow buttons with the `←` `→` caps.
 - **The band's Market** is a figure beside Live, linking to the product by SKU. `Orders` passes no
@@ -149,8 +155,6 @@ nothing else on its right panel.
 
 ## Open
 
-- A copy of a pick that is not at the stop has no pane row now, and the walk column draws only the
-  copies at the stop. The owner is deciding how such a copy is reached.
 
 - The amber state at 3 days is provisional (item 4).
 - The brief's data has 5 stored but draws 3 copy rows. The sheet draws what the brief names. In the product, the

@@ -1173,3 +1173,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-pick-keys { display: inline-flex; gap: var(--bn-1); }
 /* The digit that marks a copy, drawn beside its Mark sold press. */
 .walk-keyhint { display: inline-flex; align-items: center; gap: var(--bn-2); }
+
+/* The spares fold under a pick line: a quiet 40px press, and the same copy rows when open. */
+.orders-walk-line > .orders-walk-spares { flex: 1 1 100%; min-width: 0; margin: 0 0 var(--bn-2) var(--bn-2); }
+.orders-walk-spares > .bn-btn { color: var(--bn-ink-3); }

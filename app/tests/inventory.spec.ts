@@ -5280,9 +5280,15 @@ test('the neighbour line carries no words: names and this copy\'s number only', 
      names and the number chip and nothing else — no `back`, `front`, `before`, `after`. */
   const band = page.locator('.card-locations-row.is-current .nb')
   await expect(band).toHaveText('Galio, Indefaticable1Evelynn, Entrancing')
-  /* At a box's own end a BACK or FRONT chip stands in for the name, and is the only word. */
-  const front = page.locator('.card-locations-owner .nb').nth(1)
-  await expect(front).toHaveText('BACK3Conscription')
+  /* Every line, end chips aside (BACK / FRONT stand in for a name at a box's end): no direction word. */
+  const words = await page.locator('.card-locations-owner .nb').evaluateAll((els) =>
+    els.map((el) => {
+      const copy = el.cloneNode(true) as HTMLElement
+      copy.querySelectorAll('.nb-end').forEach((chip) => chip.remove())
+      return copy.textContent ?? ''
+    }),
+  )
+  for (const text of words) expect(text).not.toMatch(/\b(back|front|before|after|next|previous)\b/i)
 })
 
 test('the neighbour names are read as words, not as metadata', async ({ page }) => {

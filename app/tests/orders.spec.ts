@@ -4963,3 +4963,44 @@ test('the walk keys do nothing while a layer is open over the walk', async ({ pa
   await page.keyboard.press('1')
   expect(wire.filter((one) => one.path.endsWith('/orders/pull'))).toHaveLength(0)
 })
+
+/* THE SPARES FOLD (the owner's ruling): copies of a take the solver did not pick sit folded under its
+   line; opened, they are the same rows, sold through the same press, and the digits continue into
+   them only while the fold is open. */
+function sparePlan(): WalkPlan {
+  return walkPlanOf([
+    walkPlanStop({
+      takes: [
+        walkPlanTake({
+          wanted: 1,
+          copies: [
+            walkPlanCopy({ capture_id: 'cap-a' }),
+            walkPlanCopy({ box: 9, index: 99, slot: 5, card: 5, label: 'Box 9, Section 1, Card 5', capture_id: 'cap-spare', key: '9/99', here: false }),
+          ],
+        }),
+      ],
+    }),
+  ])
+}
+
+test('a spare copy sells from the opened fold with its digit, and the order counts it', async ({ page }) => {
+  const wire = await open(page, { orders: oneOpenOrder(), walkPlan: sparePlan() })
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-row`)).toHaveCount(1)
+  /* FOLDED: the second digit reaches nothing, so it does nothing. */
+  await page.keyboard.press('2')
+  expect(wire.filter((one) => one.path.endsWith('/orders/pull'))).toHaveLength(0)
+
+  await page.getByRole('button', { name: '1 more elsewhere' }).click()
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-row`)).toHaveCount(2)
+  await expect(page.locator(`${CURRENT_PICK} .walk-keyhint .bn-kbd`)).toHaveText(['1', '2'])
+  await page.keyboard.press('2')
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
+  expect(wire.find((one) => one.path.endsWith('/orders/pull'))?.body).toMatchObject({
+    source: 'TCGplayer',
+    number: ORDER_NUMBER,
+    sku: SKU,
+    targets: [{ box: 9, index: 99, capture_id: 'cap-spare' }],
+  })
+  /* The order counts it: the pick reads as done. */
+  await expect(page.locator('.orders-walk-line').first()).toHaveClass(/is-done/)
+})
