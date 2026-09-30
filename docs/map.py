@@ -5366,6 +5366,14 @@ COMPONENTS = [
         },
     },
     {
+        "path": "docs/agent-traps.md",
+        "status": "built",
+        "does": "the one home for tool and test traps that produced a false green or a lost "
+                "tree: how a guard passes for the wrong reason, and session and worktree "
+                "hazards. Lessons only, no dates.",
+        "governed_by": ["D16"],
+    },
+    {
         "path": "fixtures/",
         "status": "built",
         "does": "real TCGplayer exports for three product lines — Pokemon (SV09), Riftbound "

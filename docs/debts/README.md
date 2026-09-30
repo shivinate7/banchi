@@ -7,7 +7,7 @@ which exist have passed. These entries name what those checks do not cover.
 This is not a backlog to burn down on sight. An entry leaves when someone argues that it
 should, or when its gap closes. A closed entry is deleted, and history lives in version
 control. A number is never reused, so the gaps in the sequence are deleted entries: 5, 10, 12,
-13, 15, 17, 18, 21, 28, 35, 37, 42, 45, 47, 53, 56 and 57.
+13, 15, 17, 18, 21, 28, 35, 37, 42, 45, 47, 51, 52, 53, 56 and 57.
 
 ## How to find one
 
@@ -63,8 +63,6 @@ DEBT46 a search with a typo finds nothing, and no near match is offered
 DEBT48 code-side mechanization left open
 DEBT49 `_copies_out` and `_committed_keys` cost a full-table pass per call
 DEBT50 git and gh CLI traps hit from this checkout
-DEBT51 A guard or probe can pass for the wrong reason
-DEBT52 Claude Code multi-agent and worktree session traps
 DEBT54 the 13th-row undo walk times out under load
 DEBT55 the audit self-test crashes when app/node_modules is missing
 DEBT58 the Lane H palette record is on a branch, not in main
