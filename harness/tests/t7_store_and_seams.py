@@ -35321,6 +35321,49 @@ def check_price_history(checks: Checks) -> None:
     )
     checks.equal(new_market.requests, requests_before, "the second miss spent no request")
 
+    # Products miss, a failing host, and an empty refetch, on the same stubbed catalogue.
+    live = {"groups": old_groups, "products": [{"productId": 10, "name": "Alpha"}], "fail": False}
+
+    def _mirror(url):
+        if live["fail"]:
+            raise pricehistory.Unreachable("stub host down")
+        if url.endswith("/tcgplayer/categories"):
+            return {"results": [{"categoryId": 3, "name": "Pokemon"}]}
+        if url.endswith("/groups"):
+            return {"results": live["groups"]}
+        return {"results": live["products"]}
+
+    def _row(card):
+        return {"Product Line": "Pokemon", "Set Name": "Old Set", "Number": "", "Product Name": card}
+
+    products_home = Path(tempfile.mkdtemp())
+    pricehistory.Market(cache_dir=products_home, fetcher=_mirror, courtesy_delay=0).product_id_for_row(_row("Alpha"))
+    live["products"] = [{"productId": 10, "name": "Alpha"}, {"productId": 11, "name": "Bravo"}]
+    checks.equal(
+        pricehistory.Market(cache_dir=products_home, fetcher=_mirror, courtesy_delay=0).product_id_for_row(_row("Bravo")),
+        11,
+        "a card added to a cached product list resolves after one refetch",
+    )
+    live["fail"] = True
+    down = pricehistory.Market(cache_dir=products_home, fetcher=_mirror, courtesy_delay=0)
+    for card in ("Nope 1", "Nope 2", "Nope 3", "Nope 4", "Nope 5"):
+        with contextlib.suppress(pricehistory.NotResolvable, pricehistory.Unreachable):
+            down.product_id_for_row(_row(card))
+    checks.equal(down.requests, 1, "a failing refetch makes exactly one request across many cards")
+    live["fail"] = False
+    live["products"] = []
+    empty = pricehistory.Market(cache_dir=products_home, fetcher=_mirror, courtesy_delay=0)
+    checks.raises(
+        pricehistory.NotResolvable,
+        lambda: empty.product_id_for_row(_row("Nope 6")),
+        "a card in neither list still refuses",
+    )
+    checks.equal(
+        pricehistory.Market(cache_dir=products_home, fetcher=_no_network, courtesy_delay=0).product_id_for_row(_row("Bravo")),
+        11,
+        "an empty refetch leaves the old cache intact, so a cached card still resolves",
+    )
+
     # ---------------------------------------------------------------- the parse, on real bytes
     #
     # THE ORDER ASSERTION IS THE POINT OF COMMITTING THIS FILE. Both halves, so a change

@@ -18,7 +18,7 @@ That premise was wrong. D222's throttle is the PRICE-HISTORY host,
 in one sitting. The CATALOGUE lives on a different host, `tcgcsv.com`. It has throttled
 nothing across many probes. It answers one request per (category, group), not per card.
 The owner ruled that a catalogue set's membership does not change from pull to pull. As of
-DEBT34, that answer is now cached forever, rather than re-fetched weekly. The owner's
+DEBT34, that answer is cached without expiry for products, rather than re-fetched weekly. The groups list expires daily and a miss refetches once. The owner's
 words: the catalogue is literally free to pull. What follows keeps the original
 argument's shape and corrects the one premise that was wrong.
 
@@ -36,7 +36,7 @@ this entry now measures as small.
 about each ambiguous card's group. Most cards in one run share a handful of (category,
 group) pairs. The group-level cache means the FIRST ambiguous card in a set pays a cached
 request. Every other card in that set, that run, pays nothing. This runs against
-`tcgcsv.com`, measured to throttle nothing across many probes, and now cached forever.
+`tcgcsv.com`, measured to throttle nothing across many probes, and product lists are cached without expiry.
 This is a materially smaller cost than this entry first argued. It does not, on its own,
 settle whether to build this. The three open questions below are unaffected by the
 correction.
