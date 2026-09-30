@@ -2462,9 +2462,13 @@ def main() -> int:
                "so a debt slug is invisible to it and never allocated — this is the exact gap "
                "the fix closes", out)
         else:
-            print("  (skipped: the merge-base already carries debt support, or could not be "
-                  "read — this arm proves the fix against the commit this branch actually "
-                  "forked from, not a fabricated 'before')")
+            # A merge-base that cannot be read is a failure, never a skip. One that already
+            # carries debt support has no "before" to prove against: that is the only skip
+            # here, and it says SKIPPED.
+            ok(bool(old_claimer_text), "the merge-base's claim-ids.py could be read",
+               f"reading claim-ids.py at {base_sha} printed nothing")
+            print("  SKIPPED (not applicable): the merge-base already carries debt support, "
+                  "so there is no 'before' to prove the fix against")
 
         print("\n  -- and docs-audit refuses a NUMBERED record a branch allocates by hand --")
         # THE EXACT DEFECT A DEBT COLLISION ONCE WAS: a branch writing
@@ -2736,8 +2740,9 @@ def main() -> int:
             ["git", "clone", "-q", "--local", "--no-hardlinks", str(ROOT), str(rwork)],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
         if cloned.returncode != 0:
-            print("  (skipped: could not clone this repository locally for the real-hook "
-                  "arm)\n" + cloned.stdout.decode("utf-8", errors="replace"))
+            ok(False, "SKIPPED, and a skip of a required arm is a failure: could not clone "
+               "this repository locally for the real-hook arm",
+               cloned.stdout.decode("utf-8", errors="replace"))
         else:
             # `app/node_modules` IS GITIGNORED, so the clone above does not carry it, and
             # `no mechanism on screen`/`typed interpunct` shell out to `node` over it —
