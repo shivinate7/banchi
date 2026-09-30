@@ -5,10 +5,13 @@ import { test, expect, type Locator, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
 import { settleMotion } from './motionSettled'
+import type { FilterFacet } from '../src/kit/data'
 
 sealEveryTest()
 
 const PAGE = '/tests/filters/index.html'
+// The specimen bar's three facets: Game, Set and Rarity.
+const FACET_KEYS: FilterFacet['key'][] = ['game', 'set', 'rarity']
 const BAR = '[data-specimen="FilterBar"]'
 
 async function openPopover(page: Page, width: number, theme: 'light' | 'dark') {
@@ -37,6 +40,7 @@ for (const theme of ['light', 'dark'] as const) {
       const overlay = await openPopover(page, width, theme)
       const rows = overlay.locator('.bn-fchip, .bn-sort, .bn-hidetoggle')
       expect(await rows.count()).toBeGreaterThan(2)
+      expect(await overlay.locator('.bn-fchip').count(), 'every facet is a kit row').toBe(FACET_KEYS.length)
       const widths = await rows.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().width)))
       expect(new Set(widths).size, `row widths ${widths.join(', ')}`).toBe(1)
 

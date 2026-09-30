@@ -43,7 +43,7 @@ import {
   Button,
   EmptyFrame,
   EmptyState,
-  FilterChips,
+  FilterBar,
   type FilterFacet,
   Icon,
   IconButton,
@@ -1628,12 +1628,13 @@ export function ReviewQueue() {
       )}
 
       {!lens ? null : (
-        <FilterChips
+        <FilterBar
           className="review-filters"
           label="Work one reason at a time"
           facets={reasonFacets}
           value={reasonFilter === null ? {} : { reason: [reasonFilter] }}
           onChange={(next) => setReasonFilter(next.reason?.[0] ?? null)}
+          count={{ shown: worklist.length, total: everyone.length, noun: { one: 'card', many: 'cards' } }}
         />
       )}
 
