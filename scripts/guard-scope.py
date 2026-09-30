@@ -291,6 +291,23 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
         if (ROOT / candidate).is_file():
             resolved.add(candidate)
 
+    # A subject that imports a sibling script (`silent-write-guard.py` -> `shell_parse.py`)
+    # reads it too, so follow those imports to a fixed point.
+    queue = [h for h in resolved if h.startswith("scripts/") and h.endswith(".py")]
+    while queue:
+        try:
+            tree = ast.parse((ROOT / queue.pop()).read_text())
+        except (OSError, SyntaxError):
+            continue
+        for n in ast.walk(tree):
+            mods = ([a.name for a in n.names] if isinstance(n, ast.Import)
+                    else [n.module] if isinstance(n, ast.ImportFrom) and n.module else [])
+            for m in mods:
+                sib = f"scripts/{m.split('.')[0]}.py"
+                if sib not in resolved and (ROOT / sib).is_file():
+                    resolved.add(sib)
+                    queue.append(sib)
+
     if any(h.startswith("scripts/githooks/") for h in resolved):
         resolved = {h for h in resolved if not h.startswith("scripts/githooks/")}
         resolved.add("scripts/githooks/**")
