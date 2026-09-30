@@ -37,7 +37,7 @@ DIRECTORY = ROOT / "docs" / "decisions"
 MANIFEST = DIRECTORY / "ORDER.json"
 STUB = ROOT / "docs" / "decisions" / "README.md"
 
-# scripts/prose-guard.py's `_ID`, which is scripts/docs-audit.py's `_ID_ANY`: a number, or a
+# scripts/prose-guard.py's `_ID`, which is scripts/docs_audit/records.py's `_ID_ANY`: a number, or a
 # claim slug a branch writes and `make merge` substitutes. Spelled here a third time rather
 # than imported because this module is imported BY those two and a cycle would be worse than
 # a duplicated regex — `make docs-audit`'s `claim vocabulary` row is what keeps the three in

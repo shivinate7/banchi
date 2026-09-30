@@ -50,7 +50,7 @@ Git reports zeros whenever the caller did not state an expected value, even wher
 
 **One exemption: packing.** `pack-refs` and `gc` write main into packed-refs, then delete the loose main stating `<sha> 0000`. A delete is allowed only when `old` is nonzero, equals main's value on disk, and a loose file exists. A real delete states zeros first, so it stays refused (2026-09-28).
 
-**It fails open on its own bugs, which is a trade rather than a weakness.** This runs on every ref update in every worktree of the clone, so a version exiting non-zero by accident breaks git for every concurrent session at once. The only non-zero exit in the file is the deliberate refusal; an unknown phase, an unparseable line or a missing git allows. Same rule `scripts/docs-audit.py:nested_worktrees` states for itself, and the same one `scripts/guard-opsec.sh` took after it over-triggered (D16).
+**It fails open on its own bugs, which is a trade rather than a weakness.** This runs on every ref update in every worktree of the clone, so a version exiting non-zero by accident breaks git for every concurrent session at once. The only non-zero exit in the file is the deliberate refusal; an unknown phase, an unparseable line or a missing git allows. Same rule `scripts/docs_audit/core.py:nested_worktrees` states for itself, and the same one `scripts/guard-opsec.sh` took after it over-triggered (D16).
 
 ### Installed into the git common dir
 

@@ -523,7 +523,7 @@ to be able to see. None of these entries has been re-checked against the code si
 - **Never edit a document only to get a blocked commit through.** A machine would need to know why an edit was made. That needs state across two commit attempts, which is a write on the commit path (D18). The buildable half is a row that fails on any write call reachable outside `--self-test` in `scripts/docs-audit.py`. It also fails on any argparse flag named `fix`, `write`, `apply` or `repair`. D16's
   "a `--fix` flag is a change to this entry" rests on nobody having added one.
 - **A wrap-up does not restate the task.** A machine would need to know that a sentence adds nothing.
-  `scripts/docs-audit.py`'s `strip_presentation` sets the bar: a claim is policeable only when it
+  `scripts/docs_audit/harness_criteria.py`'s `strip_presentation` sets the bar: a claim is policeable only when it
   self-identifies and its ground truth is a machine-readable assignment in the same tree. Delete the
   restatement and do not widen a check to chase it.
 - **A citation must name the section it is about and not merely a section that exists.** A machine would

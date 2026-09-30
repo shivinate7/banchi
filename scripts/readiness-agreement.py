@@ -33,7 +33,7 @@ needs, it says so and fails loud rather than guessing.
 
 `--self-test` runs this script's own mutation-tested arms. See `SELF_TEST_ARM_COUNT` below —
 the count lives here, in code, not in a sentence someone can drift away from (the precedent is
-`scripts/sigil-check.py`'s `SELF_TEST` and `scripts/docs-audit.py`'s `HARD_RULE_FLOOR`).
+`scripts/sigil-check.py`'s `SELF_TEST` and `scripts/docs_audit/rules.py`'s `HARD_RULE_FLOOR`).
 """
 
 from __future__ import annotations

@@ -50,10 +50,10 @@ neither of which `.codex/hooks.json` had. A Codex session could have run an unre
 notify a supervisor to stop. Both are added to `.codex/hooks.json` in the same change that
 adds the guard below, so the row starts green rather than starts by reporting the gap.
 
-**`scripts/docs-audit.py:check_codex_hooks` reads both files as `(event, matcher, command)` triples and reports whichever side is missing what the other runs**, plus any command that
+**`scripts/docs_audit/env_map.py:check_codex_hooks` reads both files as `(event, matcher, command)` triples and reports whichever side is missing what the other runs**, plus any command that
 names a script no longer in the tree. It is MECHANICAL — a hook roster is a literal, checkable
 the same way `check_hook_roster` already checks `scripts/githooks/` against `docs/map.py` — and
-it is registered in `audit()` and covered by `--self-test`, which drives the extractor on
+it is a `ROWS` entry and covered by `--self-test`, which drives the extractor on
 synthetic dicts (so the mutation this row exists to catch — one hook removed from one file —
 is provable without touching either real file) and then asserts the two real files agree.
 
@@ -67,7 +67,7 @@ is asserted here.
 
 **BUILT**: the three symlinks, committed and verified to resolve inside the repository;
 `.codex/hooks.json` tracked and brought to parity with `.claude/settings.json`'s hook roster;
-the `codex hooks` mechanical row in `scripts/docs-audit.py`, registered in `audit()` and
+the `codex hooks` mechanical row in `scripts/docs-audit.py`, a `ROWS` entry and
 covered by `--self-test`; the stale allowlist line removed; the `.gitignore` line for
 `.codex/config.toml`; `docs/map.py`'s `governed_by` for `docs-audit.py` extended with D111,
 D127 and this entry.

@@ -86,7 +86,7 @@ ROSTER = (
     {"target": "claim-selftest", "test": "scripts/claim-selftest.py"},
     {"target": "guard-shell-selftest", "test": "scripts/guard-shell-selftest.sh"},
     {"target": "sync-selftest", "test": "scripts/sync-selftest.py"},
-    {"target": "audit-self-test", "test": "scripts/docs-audit.py", "func": "self_test"},
+    {"target": "audit-self-test", "test": "scripts/docs-audit.py", "package": "scripts/docs_audit"},
     {"target": "janitor-selftest", "test": "scripts/janitor-selftest.sh"},
     {"target": "merge-selftest", "test": "scripts/merge-selftest.sh"},
     {"target": "githooks-selftest", "test": "scripts/githooks-selftest.sh"},
@@ -237,12 +237,11 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
     """Every local file `test_path` reads, read out of its own source — never hand-typed.
 
     `func`, when given, narrows the scan to one top-level function's own body instead of the
-    whole module — `audit-self-test`'s reason: `scripts/docs-audit.py` is one 20,000-line
-    file that both contains `self_test()` (isolated, no filesystem access — its own
-    docstring says so) and every `check_*` row's own file constants, so scanning the whole
-    module would make audit-self-test "reachable" from nearly everything the audit checks,
-    which is not what `--self-test` actually reads. `revert-audit.py` and `suite-lock.py`
-    need no such narrowing: each is a normal-sized guard that tests itself, whole.
+    whole module, for a test that shares its file with code whose constants it does not read.
+    A roster entry's `package` is the other case, and `subjects_for` handles it: the rows of
+    `audit-self-test` live in a package, and only the package's `selftest*.py` modules say
+    what `--self-test` reads. `revert-audit.py` and `suite-lock.py` need no narrowing: each is
+    a normal-sized guard that tests itself, whole.
 
     Filtered to paths that exist as real files, so a renamed subject falls out on its own
     instead of pointing at nothing, and a false hit (a decorative string that happens to look
@@ -292,9 +291,18 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
             resolved.add(candidate)
 
     # A subject that imports a sibling script (`silent-write-guard.py` -> `shell_parse.py`)
-    # reads it too, so follow those imports to a fixed point. Known gap: importlib-by-path
-    # loads and `from . import` are not followed.
+    # reads it too, so follow those imports to a fixed point. A sibling PACKAGE (a directory with
+    # an `__init__.py`, such as `scripts/docs_audit/`) counts whole as `<dir>/**`, and each of its
+    # modules is walked for its own imports. Known gap: importlib-by-path loads and
+    # `from . import` are not followed.
     queue = [h for h in resolved if h.startswith("scripts/") and h.endswith(".py")]
+    # The test itself is walked too: a self-test that is a thin script over a package imports it.
+    try:
+        own = str(test_path.relative_to(ROOT))
+    except ValueError:
+        own = ""
+    if own.startswith("scripts/") and own.endswith(".py") and own not in queue:
+        queue.append(own)
     while queue:
         try:
             tree = ast.parse((ROOT / queue.pop()).read_text())
@@ -306,7 +314,13 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
             mods = ([a.name for a in n.names] if isinstance(n, ast.Import)
                     else [n.module] if isinstance(n, ast.ImportFrom) and n.module else [])
             for m in mods:
-                sib = f"scripts/{m.split('.')[0]}.py"
+                pkg = f"scripts/{m.split('.')[0]}"
+                if (ROOT / pkg / "__init__.py").is_file():
+                    if pkg + "/**" not in resolved:
+                        resolved.add(pkg + "/**")
+                        queue.extend(f"{pkg}/{q.name}" for q in (ROOT / pkg).glob("*.py"))
+                    continue
+                sib = pkg + ".py"
                 if sib not in resolved and (ROOT / sib).is_file():
                     resolved.add(sib)
                     queue.append(sib)
@@ -323,10 +337,28 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
     return tuple(sorted(resolved))
 
 
+def subjects_for(entry: dict) -> Tuple[str, ...]:
+    """Every local file one roster entry's test reads.
+
+    The test's own source, narrowed by `func` when the entry names one. When the entry names a
+    `package`, also what every `selftest*.py` module in it reads: those hold the cases. The
+    package's row modules are not read through their own path chains, which are row constants.
+    The package itself is a subject through the import walk in `derive_subjects`.
+    """
+    subjects = set(derive_subjects(ROOT / entry["test"], func=entry.get("func")))
+    package = entry.get("package")
+    if package:
+        for part in sorted((ROOT / package).glob("selftest*.py")):
+            subjects.update(derive_subjects(part))
+        subjects = {s for s in subjects
+                    if not s.startswith(package + "/") or s.endswith("/**")}
+    return tuple(sorted(subjects))
+
+
 def scope_for(entry: dict) -> Tuple[dict, ...]:
     """The full `classify_paths` scope for one roster entry: subjects, the test, the gate."""
     rel_test = entry["test"]
-    subjects = derive_subjects(ROOT / rel_test, func=entry.get("func"))
+    subjects = subjects_for(entry)
     scope: List[dict] = [{"path": rel_test, "why": "the test itself."}]
     for subject in subjects:
         scope.append({"path": subject, "why": f"read by `{rel_test}`, derived from its source."})
@@ -405,7 +437,7 @@ def selftest() -> int:
     for entry in ROSTER:
         test_path = ROOT / entry["test"]
         check(f"{entry['target']}: test file exists", test_path.exists(), True)
-        subjects = derive_subjects(test_path, func=entry.get("func"))
+        subjects = subjects_for(entry)
         if entry["target"] not in SELF_SUBJECT_TARGETS:
             check(f"{entry['target']}: at least one subject is derived", len(subjects) > 0, True)
         for subject in subjects:
@@ -415,6 +447,10 @@ def selftest() -> int:
     check("silent-write-selftest reaches shell_parse.py through its guard's import",
           "scripts/shell_parse.py" in derive_subjects(ROOT / "scripts/silent-write-selftest.sh"),
           True)
+    for target in ("claim-selftest", "silent-write-selftest", "audit-self-test"):
+        entry = next(e for e in ROSTER if e["target"] == target)
+        check(f"{target} reaches the docs_audit package through docs-audit.py's import",
+              "scripts/docs_audit/**" in subjects_for(entry), True)
 
     makefile = (ROOT / "Makefile").read_text() if (ROOT / "Makefile").exists() else ""
     wired = set(re.findall(

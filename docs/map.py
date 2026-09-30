@@ -2266,7 +2266,7 @@ COMPONENTS = [
                 # D14 is why a code-shaped literal is worth a rule at all: the other track
                 # on the shared rig handles bearer instruments.
                 "governed_by": ["D11", "D14", "D16", "D18", "D24", "D44", "D47", "D58", "D70",
-                                "D92", "D295", "D303"],
+                                "D92", "D295", "D303", "D312"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
                         "declare. Listed, so its absence would be a finding; a sibling "
                         "hook's arrival is caught by `hook roster` since 2026-09-05. "
@@ -2584,8 +2584,8 @@ COMPONENTS = [
                 # violating it, so wired into the commit path it would refuse its own commits.
                 # D43 and D138 join with D158: the cases turn on a linked worktree having its own
                 # store, and on the primary checkout being the one the live server is built from.
-                "governed_by": ["D18", "D42", "D43", "D138", "D158", "D140", "D176",
-                                "D303"],
+                "governed_by": ["D18", "D42", "D43", "D138", "D140", "D158", "D176", "D303",
+                                "D312"],
             },
             "lan-check.py": {
                 "does": "answers whether the owner's LAN URL still works, end to end and from "
@@ -3692,7 +3692,7 @@ COMPONENTS = [
                         "than filtered — it was measured to leak zero of the ~2,700 hits "
                         "on this tree. Extracts only; the FORBIDDEN word list, the path "
                         "pattern and the decision-citation pattern all live in "
-                        "scripts/docs-audit.py's `NO_MECHANISM_WORDS`, in one place, so a "
+                        "scripts/docs_audit/strings.py's `NO_MECHANISM_WORDS`, in one place, so a "
                         "session refining the rule edits one dictionary rather than two "
                         "files. `--dir <path>` points it at a throwaway fixture tree for "
                         "the auditor's own self-test rather than trusting app/src to hold "
@@ -3744,7 +3744,7 @@ COMPONENTS = [
                         "file -> word -> lane, on `kit-adoption-allow.json`'s own shape. "
                         "Exists because growing `machine-words.json`'s word list put ten new "
                         "hits in front of screens no wave-2 lane had reached yet. Read by "
-                        "`scripts/docs-audit.py:check_no_mechanism_on_screen`, which fails "
+                        "`scripts/docs_audit/strings.py:check_no_mechanism_on_screen`, which fails "
                         "on an unlisted hit and on a listed entry that matches nothing.",
                 "governed_by": ["D196", "D284"]},
             "text-density/density.mjs": {
@@ -3847,8 +3847,10 @@ COMPONENTS = [
                         "find and rewrites nothing.",
                 "governed_by": ["D18"]},
             "docs-audit.py": {
-                "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
-                        "question under `--staged`. `--json` is the machine surface "
+                "does": "The entry script for D16's layers 1 and 2: `build_parser` and `main`, "
+                        "with the mechanical checks and the coupling question under "
+                        "`--staged` in the `docs_audit/` modules listed below. `--json` is "
+                        "the machine surface "
                         "nothing downstream may parse a render instead of, and "
                         "`--self-test` is what checks the checker. It NEVER writes, and it "
                         "parses with `ast` rather than importing, so it does not run "
@@ -3922,6 +3924,123 @@ COMPONENTS = [
                                 "D191", "D192", "D196", "D210", "D213", "D215", "D218", "D245",
                                 "D247", "D248", "D277", "D280", "D284", "D305"],
             },
+            "docs_audit/__init__.py": {
+                "does": "Imports every module of the docs-audit package in dependency order and lists them in "
+                        "`MODULES`, which is what `scripts/docs-audit.py` copies onto its own namespace.",
+                "governed_by": []},
+            "docs_audit/code_invariants.py": {
+                "does": "The rows that read an invariant out of code with `ast`: import layering, identity "
+                        "writers, claim decode and clients, server concurrency, estimate wire and column counts.",
+                "governed_by": ["D9", "D26", "D33", "D63", "D70", "D83", "D101", "D138", "D173",
+                                "D196"]},
+            "docs_audit/core.py": {
+                "does": "The shared half of the audit: `Finding`, `Row` and `Report`, the staged-mode readers "
+                        "(`read`, `exists`, `glob_files`), `ROOT` and `set_root`, the module-globals mapping the "
+                        "self-test patches through, and the helpers two row modules both use.",
+                "governed_by": ["D60", "D191", "D192", "D213", "D218", "D277", "D280", "D284"]},
+            "docs_audit/design.py": {
+                "does": "The design-token, raw-color, breakpoint and JS-breakpoint rows over `docs/DESIGN.md`, "
+                        "`tokens.css` and the stylesheets.",
+                "governed_by": ["D80", "D123", "D141"]},
+            "docs_audit/dispatch.py": {
+                "does": "The row that reconciles every defined check with the ones `rows.audit` runs, the "
+                        "subject-count row and the coupling question.",
+                "governed_by": []},
+            "docs_audit/env_map.py": {
+                "does": "The rows over environment variables, hatches, the subagent override, the repo map, the "
+                        "hook roster, Codex hooks and the build-order mirror.",
+                "governed_by": ["D2", "D31", "D80", "D111", "D127", "D135", "D140", "D178", "D280"]},
+            "docs_audit/games.py": {
+                "does": "The rows over game and export vocabulary: the registry against the committed exports, "
+                        "coverage, the matrix superset and the join-key shape.",
+                "governed_by": ["D3", "D12", "D22", "D23", "D65", "D76", "D87", "D104"]},
+            "docs_audit/harness_criteria.py": {
+                "does": "The rows that reconcile harness test counts, published pass criteria and their evidence "
+                        "with `harness/run.py` and `docs/GATES.md`.",
+                "governed_by": ["D39"]},
+            "docs_audit/hygiene.py": {
+                "does": "The doc-hygiene, route-roster, recorded-deletion, spec-seal, design-check verdict and "
+                        "positional-reference rows.",
+                "governed_by": ["D69", "D70", "D90", "D97", "D110", "D113", "D119", "D132", "D144",
+                                "D149", "D155"]},
+            "docs_audit/paths_commands.py": {
+                "does": "The rows that read paths, line anchors, `make` targets, the commands roster and "
+                        "`pkmnscan` subcommands out of the markdown.",
+                "governed_by": ["D60", "D135", "D245", "D248", "D305"]},
+            "docs_audit/reasons.py": {
+                "does": "The rows over reason codes and their neighbours: motion params, pricing presets, hint "
+                        "reasons, the transport promise and the export request.",
+                "governed_by": ["D22", "D63", "D65", "D69", "D81", "D84", "D86", "D104", "D138"]},
+            "docs_audit/records.py": {
+                "does": "The rows over the decision, gate and debt records: decision ids, id claims, numbering "
+                        "growth, heading structure and the debts index.",
+                "governed_by": ["D2", "D50", "D60", "D92", "D140", "D148", "D149", "D160", "D182"]},
+            "docs_audit/registry_scopes.py": {
+                "does": "The rows over the check registry, the commit path, the suite lock, the browser, spec, "
+                        "serve and guard scopes, and how callers invoke the audit.",
+                "governed_by": ["D43", "D74", "D80", "D92", "D122", "D136", "D141", "D215", "D247"]},
+            "docs_audit/rows.py": {
+                "does": "`ROWS`, the mode filter and `audit()`: the one table that names every row with its tier, and the loop that runs it.",
+                "governed_by": []},
+            "docs_audit/rules.py": {
+                "does": "The rule-enforcement row over CLAUDE.md's hard rules and the identifier-spelling row.",
+                "governed_by": ["D7", "D43", "D60", "D280"]},
+            "docs_audit/screens.py": {
+                "does": "The logo, storage-key, views-manifest and render rows over the front end's screens.",
+                "governed_by": ["D6", "D24", "D27", "D94", "D102", "D140", "D142"]},
+            "docs_audit/selftest.py": {
+                "does": "The `--self-test` driver. It runs each `selftest_*` module's `run` in the order the "
+                        "single function ran its cases.",
+                "governed_by": []},
+            "docs_audit/selftest_code_invariants_1.py": {
+                "does": "Self-test cases for the code invariants rows, part 1, called by `selftest.self_test`.",
+                "governed_by": ["D141"]},
+            "docs_audit/selftest_code_invariants_2.py": {
+                "does": "Self-test cases for the code invariants rows, part 2, called by `selftest.self_test`.",
+                "governed_by": ["D63", "D134", "D210"]},
+            "docs_audit/selftest_code_invariants_3.py": {
+                "does": "Self-test cases for the code invariants rows, part 3, called by `selftest.self_test`.",
+                "governed_by": ["D9"]},
+            "docs_audit/selftest_data.py": {
+                "does": "Fixture lines the path-extractor self-test cases read.",
+                "governed_by": ["D10"]},
+            "docs_audit/selftest_design.py": {
+                "does": "Self-test cases for the design rows, called by `selftest.self_test`.",
+                "governed_by": []},
+            "docs_audit/selftest_env_map.py": {
+                "does": "Self-test cases for the env map rows, called by `selftest.self_test`.",
+                "governed_by": ["D27", "D135", "D141"]},
+            "docs_audit/selftest_paths_commands_1.py": {
+                "does": "Self-test cases for the paths commands rows, part 1, called by `selftest.self_test`.",
+                "governed_by": []},
+            "docs_audit/selftest_paths_commands_2.py": {
+                "does": "Self-test cases for the paths commands rows, part 2, called by `selftest.self_test`.",
+                "governed_by": []},
+            "docs_audit/selftest_records.py": {
+                "does": "Self-test cases for the records rows, called by `selftest.self_test`.",
+                "governed_by": ["D9", "D24", "D70", "D92", "D101", "D140", "D148"]},
+            "docs_audit/selftest_registry_scopes.py": {
+                "does": "Self-test cases for the registry scopes rows, called by `selftest.self_test`.",
+                "governed_by": []},
+            "docs_audit/selftest_spelling.py": {
+                "does": "Self-test cases for the spelling rows, called by `selftest.self_test`.",
+                "governed_by": []},
+            "docs_audit/selftest_status_reach.py": {
+                "does": "Self-test cases for the status reach rows, called by `selftest.self_test`.",
+                "governed_by": ["D7"]},
+            "docs_audit/selftest_strings.py": {
+                "does": "Self-test cases for the strings rows, called by `selftest.self_test`.",
+                "governed_by": ["D280"]},
+            "docs_audit/spelling.py": {
+                "does": "The American-spelling reader and the shell-substitution row.",
+                "governed_by": ["D60", "D88", "D280"]},
+            "docs_audit/status_reach.py": {
+                "does": "The closed-vocabulary, tested-by reach and status-source rows.",
+                "governed_by": []},
+            "docs_audit/strings.py": {
+                "does": "The rows over screen strings: mechanism words, the typed interpunct, the offender-list "
+                        "ratchet and views opsec.",
+                "governed_by": ["D24", "D41", "D134", "D177", "D196", "D210", "D218", "D280", "D284"]},
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
                         "substitute them (D140). A branch cannot allocate a "
@@ -4651,7 +4770,7 @@ COMPONENTS = [
                         "gates nothing: D18's seam list names this one location and nothing "
                         "else. "
                         "Previews by default; `--write` applies. It imports "
-                        "`docs-audit.py:cited_decisions()` rather than reimplementing it, so "
+                        "`docs_audit/env_map.py:cited_decisions()` rather than reimplementing it, so "
                         "the writer and the gate cannot disagree about what a file cites. "
                         "Stdlib, and it splices with `ast` so the hand-written prose around "
                         "each list survives untouched.",

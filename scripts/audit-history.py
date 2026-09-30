@@ -35,10 +35,11 @@ session came from regexing the rendered report; D18's rule about not publishing 
 nothing consumes has a sibling here — do not parse what is written for a human.
 
 STANDING HAZARD FOR ANYONE EXTENDING THIS TOOL: injecting current code into an old tree
-means part of what you measure is the instrument. Today's docs-audit.py cites D16-D18 in
+means part of what you measure is the instrument. Today's docs-audit.py and its package cite D16-D18 in
 its own comments, so on trees predating those decisions it reports findings against
 itself — which is why `subject_absent` discards anything whose `where` is an injected
-file. Add a file to the injection list and you must add it there too.
+file. Add a file to the injection list and you must add it there too. The injected files are
+the entry script and the `scripts/docs_audit/` package copied beside it.
 
 This is the same bug class as the staged-read defect two commits earlier: logic that is
 correct against the wrong scope. Neither is visible by reading the code — both showed up
@@ -66,6 +67,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -74,6 +76,8 @@ from typing import Dict, List, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
 AUDIT = ROOT / "scripts" / "docs-audit.py"
+# The rows live in a package beside the entry script, and the entry cannot run without it.
+AUDIT_PACKAGE = ROOT / "scripts" / "docs_audit"
 
 # The absence family, and ONLY it. A finding whose subject is simply not in the archived
 # tree says nothing about drift: `git archive` omits every gitignored path, which is what
@@ -109,9 +113,13 @@ def subject_absent(where: str, message: str) -> bool:
     # cites D16-D18 in its own comments, so on any tree predating those decisions it
     # reports nine findings against itself — the instrument, not the subject. Caught only
     # because the total ran 36x over the hand-classified baseline: 72 against a known 2.
-    if where.split(":")[0] == "scripts/docs-audit.py":
+    injected = where.split(":")[0].split(" ->")[0]
+    if injected == "scripts/docs-audit.py" or injected.startswith("scripts/docs_audit"):
         return True
     target = _TARGET.search(message)
+    # A finding ABOUT an injected package file, such as the old tree's map having no entry for it.
+    if target and target.group(1).startswith("scripts/docs_audit/"):
+        return True
     if target and gitignored(target.group(1)):
         return True
     return bool(_ABSENT.search(message))
@@ -135,6 +143,9 @@ def audit_tree(sha: str) -> Optional[List[dict]]:
             return None
         (tree / "scripts").mkdir(parents=True, exist_ok=True)
         (tree / "scripts" / "docs-audit.py").write_bytes(AUDIT.read_bytes())
+        # The package with it, or the entry script has nothing to import. `__pycache__` stays behind.
+        shutil.copytree(AUDIT_PACKAGE, tree / "scripts" / "docs_audit",
+                        ignore=shutil.ignore_patterns("__pycache__"))
         done = subprocess.run(
             [sys.executable, str(tree / "scripts" / "docs-audit.py"), "--json"],
             cwd=str(tree), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False,
@@ -154,7 +165,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help="only the oldest N commits (default: every commit)")
     args = parser.parse_args(argv)
 
-    if not AUDIT.exists():
+    if not AUDIT.exists() or not AUDIT_PACKAGE.is_dir():
         print("audit-history: scripts/docs-audit.py is missing — nothing to run.", file=sys.stderr)
         return 1
 

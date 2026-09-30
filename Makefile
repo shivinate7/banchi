@@ -664,7 +664,7 @@ audit-self-test:
 	@if python3 scripts/guard-scope.py classify --target audit-self-test --base origin/main; then \
 		python3 scripts/docs-audit.py --self-test; \
 	else \
-		echo "audit-self-test: SKIPPED — this branch does not touch scripts/docs-audit.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "audit-self-test: SKIPPED — this branch does not touch scripts/docs-audit.py or scripts/docs_audit/. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
 	fi
 
 # D92 — a bare `#` on an owner-side screen is D58's COUNT, and three renderers spelled the

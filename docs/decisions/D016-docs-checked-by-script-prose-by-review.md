@@ -35,6 +35,18 @@ Added 2026-08-29. Concurrent sessions check worktrees out under `.claude/worktre
 
 **This is not the gitignore filter and neither subsumes the other.** That filter stops a finding being *reported* for local state; this stops a foreign tree being *enumerated*. The finding here was against the make-targets check, which never consults the filter. `--self-test` covers the staged path; the on-disk path needs a real repository with a real worktree in it and was verified by hand, which that case says in as many words rather than implying coverage it does not have.
 
+### The auditor is a package, and `scripts/docs-audit.py` is its entry point
+
+`scripts/docs-audit.py` keeps the docstring, `build_parser` and `main`. The rows live in `scripts/docs_audit/`, one module per group, and `--self-test` lives in the `selftest_*` modules there, one `run` per span of cases, called in the order the single function ran them. **`ROWS` in `docs_audit/rows.py` is the one table of rows: name, tier, check, arguments.** The tier is a field, so a row cannot be untiered, and `check dispatch` reads the table: a check any module defines that no `ROWS` entry names fails the commit. A name that two modules share lives in `core`, so imports run one way.
+
+**The reason was the file's shape, and the fact behind it is the edit rate.** One file held every row, its fixtures and the wiring, and changes to unrelated rows conflicted by construction. The audit that scoped the split counted 90 commits to it in 7 days (recount with `git log --since=7.days -- scripts/docs-audit.py scripts/docs_audit/`). **Trigger to split again:** one module still takes most of those commits.
+
+**Four things a split file can hide, each with its reader:**
+- **`commit path` reads the package the entry imports.** The entry alone closes over three functions, so a write in any row would have passed as "nothing writes". The self-test plants a write in a package module and expects the row red.
+- **`audit-self-test`'s roster entry in `scripts/guard-scope.py` names the package**, so a branch that touches only `scripts/docs_audit/` still runs the self-test.
+- **`scripts/audit-history.py` copies the package beside the entry** into each old tree; the entry cannot run without it.
+- **Each module holds an imported copy of a shared name.** `ROOT` moves with `set_root`, and the self-test patches names through `module_globals()`, which writes every copy. A caller that assigns `ROOT` on the entry script moves nothing.
+
 ### Nothing on the audit path can write
 
 The script opens, compares, prints, and sets an exit code; it parses with `ast` rather than importing, so it does not even run project code. Its only writes are inside `--self-test`, into a temporary directory it creates and destroys.
