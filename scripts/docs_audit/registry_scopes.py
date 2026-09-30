@@ -150,13 +150,15 @@ def _check_registry() -> Row:
         return Row("check registry", MECHANICAL, [Finding(
             "Makefile",
             "the `check:` recipe could not be read, so nothing can be reconciled against it. "
-            "If the target changed shape, this row's reader has to move with it.")])
+            "If the target changed shape, this row's reader has to move with it.")],
+            "the `check:` recipe could not be read, so the registry was not checked")
     if loaded is None:
         return Row("check registry", MECHANICAL, [Finding(
             rel(CHECKS_REGISTRY),
             "CHECKS and NEEDS could not be read as module-level literals. They are parsed "
             "with `ast.literal_eval` and never imported, so every entry must stay a plain "
-            "literal — no helper class, no call, no comprehension.")])
+            "literal — no helper class, no call, no comprehension.")],
+            "the registry file is missing or unreadable, so the recipe was not checked")
 
     entries, needs = loaded
     findings: List[Finding] = []

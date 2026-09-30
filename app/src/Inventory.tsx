@@ -383,6 +383,8 @@ function InventoryWalk({
      can draw its figures (card-detail spec). It is the same group the copies list draws, so the
      figures and the rows cannot disagree. */
   const [heroGroup, setHeroGroup] = useState<SearchGroup | null>(null)
+  /* The copies search is still asking for the selected card: the band holds its figures column. */
+  const [heroPending, setHeroPending] = useState(false)
 
   /* The toast standing for each receipt, by copy key, so an undo from the row can take it down. */
   const toasts = useRef<Map<string, number>>(new Map())
@@ -772,6 +774,7 @@ function InventoryWalk({
           onGoTo={walkTo}
           onCurrent={setCurrentCopy}
           onGroup={setHeroGroup}
+          onPending={setHeroPending}
           renderAction={actionFor}
           hideSold={hideSold}
           frozen={frozen}
@@ -809,6 +812,7 @@ function InventoryWalk({
       <BoxBrowse
         detail={detail}
         figures={figures}
+        figuresPending={figures === null && heroPending}
         onSelect={setSelected}
         onBoxes={setBoxRecords}
         onListings={setListings}
@@ -873,6 +877,7 @@ function CopiesPanel({
   onGoTo,
   onCurrent,
   onGroup,
+  onPending,
   renderAction,
   hideSold,
   frozen,
@@ -889,6 +894,7 @@ function CopiesPanel({
   onGoTo: (copy: SearchCopy) => void
   onCurrent: (copy: SearchCopy | null) => void
   onGroup: (group: SearchGroup | null) => void
+  onPending: (pending: boolean) => void
   renderAction: (copy: SearchCopy, primary: boolean) => ReactNode
   hideSold: boolean
   frozen: FrozenRank
@@ -958,6 +964,11 @@ function CopiesPanel({
   useEffect(() => {
     onGroup(bandGroup)
   }, [bandGroup, onGroup])
+
+  const bandPending = handle !== null && group === null && !gaveUp && (loading || !settled)
+  useEffect(() => {
+    onPending(bandPending)
+  }, [bandPending, onPending])
 
   if (handle === null) {
     return (
