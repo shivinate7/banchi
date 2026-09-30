@@ -67,8 +67,10 @@
   min-height: 128px;
   min-width: 0;
   overflow-x: auto;
+  scroll-snap-type: x proximity;
 }
 .revenue-month-col {
+  scroll-snap-align: end;
   display: grid;
   grid-template-rows: 1fr auto;
   height: 100%;
@@ -432,6 +434,9 @@
      never `auto`, or the lead column's longest sentence pushes the month bars off the
      right edge (defect fix, measured at 820: 63px of page scroll). */
   .revenue-summary { grid-template-columns: minmax(220px, 340px) minmax(180px, 1fr); }
+  /* The strip takes the whole row: beside the totals it had ~330px for five 76px columns, which
+     cut the newest month off the edge. */
+  .revenue-months { grid-column: 1 / -1; }
   .revenue-shelf {
     grid-column: 1 / -1;
     border-left: 0;

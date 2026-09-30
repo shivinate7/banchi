@@ -771,6 +771,12 @@ function MetaLine({ product }: { readonly product: Product }) {
   return null
 }
 
+/** A strip that scrolls opens at its newest month. Stable identity, so it runs on mount only
+ *  (the strip is keyed by its own length, so a new period remounts it). */
+const scrollToEnd = (el: HTMLDivElement | null) => {
+  if (el !== null) el.scrollLeft = el.scrollWidth
+}
+
 const STOCK_RETRY_MS = 5000
 
 export function Revenue() {
@@ -1294,7 +1300,7 @@ export function Revenue() {
         </div>
 
         <h2 className="bn-sr">{granularity === 'week' ? 'By week' : 'By month'}</h2>
-        <div className="revenue-months" role="group" aria-label={granularity === 'week' ? 'Filter by week' : 'Filter by month'}>
+        <div className="revenue-months" ref={scrollToEnd} key={`${granularity}-${buckets.length}`} role="group" aria-label={granularity === 'week' ? 'Filter by week' : 'Filter by month'}>
           {buckets.map((b, i) => (
             <button
               type="button"

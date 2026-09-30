@@ -958,3 +958,17 @@ test('a sealed line lands on Sealed and an unrecorded rarity is said plainly (de
   await page.getByRole('button', { name: 'Sealed' }).click()
   await expect(page.locator('.revenue-podium .revenue-tile-name')).toContainText('Enhanced Booster Box')
 })
+
+test('at 820 the newest month, its bar and its label sit whole inside the strip (fix round)', async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 1000 })
+  await stub(page, generalOrders())
+  await open(page, '?period=all')
+  const strip = await page.locator('.revenue-months').boundingBox()
+  const col = page.locator('.revenue-month-col').last()
+  for (const part of ['.revenue-month-bar', '.revenue-month-label', '.revenue-month-v']) {
+    const box = await col.locator(part).first().boundingBox()
+    expect(box).toBeTruthy()
+    expect(box!.x).toBeGreaterThanOrEqual(strip!.x - 1)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(strip!.x + strip!.width + 1)
+  }
+})
