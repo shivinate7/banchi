@@ -290,6 +290,26 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
         if (ROOT / candidate).is_file():
             resolved.add(candidate)
 
+    # A subject that imports a sibling script (`silent-write-guard.py` -> `shell_parse.py`)
+    # reads it too, so follow those imports to a fixed point. Known gap: importlib-by-path
+    # loads and `from . import` are not followed.
+    queue = [h for h in resolved if h.startswith("scripts/") and h.endswith(".py")]
+    while queue:
+        try:
+            tree = ast.parse((ROOT / queue.pop()).read_text())
+        except (OSError, SyntaxError):
+            # unreadable: its imports are unknown, so every script counts as read (fail safe)
+            resolved |= {f"scripts/{q.name}" for q in (ROOT / "scripts").glob("*.py")}
+            break
+        for n in ast.walk(tree):
+            mods = ([a.name for a in n.names] if isinstance(n, ast.Import)
+                    else [n.module] if isinstance(n, ast.ImportFrom) and n.module else [])
+            for m in mods:
+                sib = f"scripts/{m.split('.')[0]}.py"
+                if sib not in resolved and (ROOT / sib).is_file():
+                    resolved.add(sib)
+                    queue.append(sib)
+
     if any(h.startswith("scripts/githooks/") for h in resolved):
         resolved = {h for h in resolved if not h.startswith("scripts/githooks/")}
         resolved.add("scripts/githooks/**")
@@ -409,6 +429,10 @@ def selftest() -> int:
         for subject in subjects:
             real = subject.endswith("/**") or (ROOT / subject).is_file()
             check(f"{entry['target']}: subject `{subject}` exists", real, True)
+
+    check("silent-write-selftest reaches shell_parse.py through its guard's import",
+          "scripts/shell_parse.py" in derive_subjects(ROOT / "scripts/silent-write-selftest.sh"),
+          True)
 
     makefile = (ROOT / "Makefile").read_text() if (ROOT / "Makefile").exists() else ""
     wired = set(re.findall(

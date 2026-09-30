@@ -5243,9 +5243,9 @@ COMPONENTS = [
                 # D43 is the port and the store, both derived rather than assumed: this
                 # spawns its own server precisely so it never touches `make up`, which on
                 # the main checkout is the owner's live process over their real inventory.
-                "governed_by": ["D13", "D43", "D183", "D61", "D278", "D70", "D76", "D86", "D88",
-                                "D97", "D277", "D172", "D193", "D213", "D216", "D220",
-                                "D227", "D269", "D295", "D301"],
+                "governed_by": ["D13", "D43", "D61", "D70", "D76", "D86", "D88", "D97", "D172",
+                                "D183", "D193", "D213", "D216", "D220", "D227", "D269", "D277",
+                                "D278", "D295", "D298", "D301"],
             },
             "demo-record-resume-selftest.py": {
                 "does": "`WorkArea`/`snapshot_key`, the resume cache PR 4B lane M added to "

@@ -723,6 +723,12 @@ def sweep_coverage(server: Server, space: Dict[str, object], recorded: Dict[str,
     # set the screen asks about — the trends index's own shape, one route over.
     for sku in space["skus"]:  # type: ignore[union-attr]
         take("/pipeline/price-now?sku=%s" % urllib.parse.quote(sku))
+    # `#/revenue`'s thumbnails (D298): `getSkuPhotos` asks `/skus/photos` on arrival, and
+    # `demoServer.ts:skuPhotos` merges these per-SKU answers. Without them a static host has
+    # no answer and every sales row draws no photograph. The stock image URLs ride in the
+    # answer, which is why `PKMNSCAN_STOCK_IMAGES_SYNC` is set above.
+    for sku in space["skus"]:  # type: ignore[union-attr]
+        take("/skus/photos?sku=%s" % urllib.parse.quote(sku))
 
     # ------------------------------------------------------------------ `#/product` (D227)
     # BEST EFFORT, like the price histories above: archive first, then a live read of a

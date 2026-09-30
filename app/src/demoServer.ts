@@ -618,6 +618,20 @@ function priceNow(skus: string[]): unknown {
   return { prices }
 }
 
+/** `GET /skus/photos?sku=…` for any set of SKUs, merged out of per-SKU recordings. A SKU with
+ *  no recording is left out of both fields, the route's own "no photograph" answer. */
+function skuPhotos(skus: string[]): unknown {
+  const photos: Dict = {}
+  const stock: Dict = {}
+  for (const sku of skus) {
+    const one = doc(`/skus/photos?sku=${encodeURIComponent(sku)}`)
+    if (one === null) continue
+    Object.assign(photos, (one.photos as Dict) ?? {})
+    Object.assign(stock, (one.stock_photos as Dict) ?? {})
+  }
+  return { photos, stock_photos: stock }
+}
+
 /**
  * `GET /search?q=…` for a query nobody recorded, answered by the kit's ONE matcher.
  *
@@ -761,6 +775,7 @@ function read(path: string): unknown {
   }
   if (route === '/pipeline/value') return valuePage(params)
   if (route === '/pipeline/price-now') return priceNow(params.getAll('sku').filter((s) => s !== ''))
+  if (route === '/skus/photos') return skuPhotos(params.getAll('sku').filter((s) => s !== ''))
   if (route === '/search') return search(params.get('q') ?? '')
   notRecorded()
 }
