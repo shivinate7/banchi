@@ -1181,6 +1181,11 @@ async function openBoxOps(page: Page) {
  *  below still assert every one of them; this is the press that reaches them. Idempotent, so a
  *  case may ask for the menu twice. */
 async function openCardOps(page: Page) {
+  /* WAIT FOR THE HEAD TO FINISH MOVING. The head draws the identity alone until the copies search
+     answers, then adds the figures column and pushes Actions ~380px left. A press that lands
+     across that jump goes down on the button and comes up elsewhere, so no click fires and the
+     menu never opens (measured: mousedown at x=1176, mouseup at x=800, ~1 in 100 at 10 workers). */
+  await expect(page.locator('.browse-hero-lead')).toBeVisible()
   if ((await page.getByRole('menuitem', { name: 'Correct' }).count()) === 0) {
     await page.getByRole('button', { name: 'Actions' }).click()
   }
