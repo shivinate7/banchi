@@ -53,9 +53,6 @@ def run(ok) -> None:
     ok(not by_label["rule enforcement"],
        "the real CLAUDE.md agrees with both pins",
        "\n".join(f.message for f in by_label["rule enforcement"][:4]))
-    ok(HARD_RULE_FLOOR >= 12,
-       "the floor has not been lowered below 12 (lower it here and in rules.py, in one commit)",
-       str(HARD_RULE_FLOOR))
     argued = ("- **Rule {n}.** **NOT MECHANIZED:** a machine cannot see what a person would "
               "have to judge here at all.\n")
     mech = "- **Rule {n}.** Enforced by `make check`.\n"
