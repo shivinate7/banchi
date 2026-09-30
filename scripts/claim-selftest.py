@@ -2569,6 +2569,60 @@ def main() -> int:
            "a rename to a different number is still an allocation and is refused",
            "\n".join(f.where + ": " + f.message for f in changed_row.findings))
 
+        print("\n  -- and a merge of main brings main's own numbers, which are not the branch's --")
+        mtmp = tmp / "merge-in"
+        mtmp.mkdir()
+        mwork = build_split(mtmp)
+        git(mwork, "checkout", "-q", "-b", "feature-merge")
+        write(mwork, "notes.txt", "branch work\n")
+        git(mwork, "add", "-A")
+        git(mwork, "commit", "-qm", "branch work")
+        # main gains a number of its own, pushed from a second clone.
+        mother = mtmp / "other"
+        subprocess.run(["git", "clone", "-q", str(mtmp / "origin.git"), str(mother)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        write(mother, "docs/decisions/D050-main-only.md", "main only\n")
+        git(mother, "add", "-A")
+        git(mother, "commit", "-qm", "main allocates D050")
+        git(mother, "push", "-q", "origin", "HEAD:main")
+        # the merge arrives by a commit id, so the local `origin/main` ref stays behind it,
+        # the case a merge-base read alone cannot excuse.
+        stale_main = git(mwork, "rev-parse", "origin/main").strip()
+        pre_merge = git(mwork, "rev-parse", "HEAD").strip()
+        git(mwork, "fetch", "-q", "origin", "main:refs/heads/main-tip")
+        # a fetch with a refspec also moves `origin/main`; put it back behind the merge.
+        git(mwork, "update-ref", "refs/remotes/origin/main", stale_main)
+        git(mwork, "merge", "-q", "--no-ff", "-m", "merge main in", "main-tip")
+
+        def growth(root: Path) -> list:
+            audit.ROOT = root
+            rep = audit.Report()
+            audit.check_numbered_record_growth(rep, False)
+            return next(r for r in rep.checks if r.check == "numbered record growth").findings
+
+        merged_findings = growth(mwork)
+        ok(not merged_findings, "a number main allocated, brought in by a merge, is main's",
+           "\n".join(f.where for f in merged_findings))
+        # (b) the merge commit ITSELF adds a number no parent holds: still the branch's.
+        git(mwork, "checkout", "-q", "-b", "feature-evil", pre_merge)
+        git(mwork, "merge", "-q", "--no-ff", "--no-commit", "main-tip")
+        write(mwork, "docs/decisions/D060-in-the-merge.md", "own one\n")
+        git(mwork, "add", "-A")
+        git(mwork, "commit", "-qm", "merge main and slip in a number")
+        evil = growth(mwork)
+        ok(len(evil) == 1 and "D060-in-the-merge.md" in evil[0].where,
+           "a number the merge commit itself adds is still refused, and main's is not",
+           "\n".join(f.where for f in evil))
+        # (c) an ordinary commit after the merge adds a number: still refused.
+        git(mwork, "checkout", "-q", "feature-merge")
+        write(mwork, "docs/decisions/D061-plain-commit.md", "own two\n")
+        git(mwork, "add", "-A")
+        git(mwork, "commit", "-qm", "a plain commit allocates a number")
+        plain = growth(mwork)
+        ok(len(plain) == 1 and "D061-plain-commit.md" in plain[0].where,
+           "a number a normal commit adds after a merge is still refused",
+           "\n".join(f.where for f in plain))
+
         print("\n  -- and it does NOT refuse the sanctioned claim itself --")
         # THE ROUND THIS ARM CLOSES: `merge-pr.py:claim_half` runs `claim-ids.py --write`
         # (a plain filesystem rename, no `git mv`), `git add -A`, then a plain `git commit`

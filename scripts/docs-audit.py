@@ -3114,8 +3114,20 @@ def check_numbered_record_growth(report: Report, staged_only: bool) -> None:
                 Path(p).name for p in
                 git("ls-tree", "-r", "--name-only", base, "--", directory).splitlines()
             )
+            # A FILE A MERGE BROUGHT IN FROM THE OTHER SIDE IS NOT THE BRANCH'S: merging main
+            # in lands main's own new numbers on the branch, and a local `origin/main` that
+            # lags the merged commit cannot say so. The merged-in parent's own tree can. A
+            # number the merge commit itself adds (in no other parent's tree) stays the
+            # branch's. An unreadable parent reads empty, so nothing is excused: fail closed.
+            merged_in = set()
+            for merge in git("rev-list", "--merges", f"{base}..HEAD").splitlines():
+                for parent in git("rev-list", "--parents", "-n", "1", merge).split()[2:]:
+                    merged_in.update(
+                        Path(p).name for p in
+                        git("ls-tree", "-r", "--name-only", parent, "--", directory).splitlines()
+                    )
             for path in sorted(dirpath.glob("*.md")):
-                if path.name not in base_names:
+                if path.name not in base_names and path.name not in merged_in:
                     candidates.add(f"{directory}/{path.name}")
         where = f"the branch's history since {base[:9]}"
 
