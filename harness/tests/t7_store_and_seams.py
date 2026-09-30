@@ -29949,6 +29949,14 @@ def check_export_fetch(checks: Checks) -> None:
                     "reason — never a refusal, because this is drawn on the rig's own screen "
                     "and a capture must not stop for a missing convenience",
                 )
+                status, raw, _ = request(port, "GET", "/tcg/sets?game=not-a-game")
+                body = json.loads(raw or b"{}")
+                checks.equal(
+                    (status, body.get("sets")),
+                    (200, []),
+                    "and a game the registry does not know answers the same 200 and an empty "
+                    "list — `game_registry.get` raises `UnknownGame`, and it was a 500",
+                )
 
                 # ------------------------------ THE HINT VOCABULARY IS NOT TCGPLAYER'S
                 #
@@ -36777,15 +36785,15 @@ def check_request_slots(checks: Checks) -> None:
     # regardless of what mechanism was supposed to stop it. That is the whole repair: an
     # instrument that is part of the mechanism it measures reports zero when the mechanism is
     # deleted, and zero passes every assertion of the form `<= REQUEST_SLOTS`.
-    original = capture_server.do_status
+    original = capture_server.do_inventory
 
     def instrumented(gate: threading.Event, state: dict):
-        """Patch `do_status` — the route the dispatcher calls AFTER taking a slot.
+        """Patch `do_inventory` — the route the dispatcher calls AFTER taking a slot.
 
         PATCHED AT THE ROUTE AND NOT AT `do_GET`, AND THE FIRST DRAFT GOT THAT WRONG. The slot is
         acquired inside `_dispatch`, which `do_GET` calls — so a hold placed in `do_GET` parks the
         thread OUTSIDE the bound, every reading is 0, and the assertions pass while measuring
-        nothing. `do_status` is invoked by the dispatcher after the slot is taken, so a hold here
+        nothing. `do_inventory` is invoked by the dispatcher after the slot is taken, so a hold here
         is a hold on a slot.
         """
 
@@ -36815,7 +36823,7 @@ def check_request_slots(checks: Checks) -> None:
         }
 
     def fire(port: int, count: int, state: dict) -> list:
-        """`count` callers at `GET /status`, each recording the status it was answered with.
+        """`count` callers at `GET /inventory`, each recording the status it was answered with.
 
         THE OUTCOME IS RECORDED BECAUSE LEG 2 NEEDS THE EXCESS CALLERS TO SAY SOMETHING. A caller
         that is refused 503 has demonstrably reached the semaphore and been turned away; a caller
@@ -36829,7 +36837,7 @@ def check_request_slots(checks: Checks) -> None:
                 outcome = "error"
                 try:
                     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
-                    conn.request("GET", "/status")
+                    conn.request("GET", "/inventory")
                     response = conn.getresponse()
                     response.read()
                     outcome = int(response.status)
@@ -36855,7 +36863,7 @@ def check_request_slots(checks: Checks) -> None:
     httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
     port = httpd.server_address[1]
     thread = _spawn_server(httpd)
-    capture_server.do_status = instrumented(gate, state)
+    capture_server.do_inventory = instrumented(gate, state)
     try:
         # EVERY THREAD ALIVE BEFORE THE LOAD, so the ones the SERVER makes can be told from the
         # ones this check makes. Naming the pool's workers and counting those was the first
@@ -36902,7 +36910,7 @@ def check_request_slots(checks: Checks) -> None:
             f"where one per connection would be all of them",
         )
     finally:
-        capture_server.do_status = original
+        capture_server.do_inventory = original
         gate.set()
         httpd.shutdown()
         httpd.server_close()
@@ -36927,7 +36935,7 @@ def check_request_slots(checks: Checks) -> None:
     )
     httpd._pool = wide  # noqa: SLF001 — the transport is the confound this leg removes
     thread = _spawn_server(httpd)
-    capture_server.do_status = instrumented(gate, state)
+    capture_server.do_inventory = instrumented(gate, state)
     # THE WAIT FOR A SLOT, SHORTENED FOR THIS LEG, AND IT IS WHAT MAKES THE READING DETERMINISTIC
     # RATHER THAN TIMED. The first draft of this leg slept half a second after the bound was met
     # and then read the occupancy, on the reasoning that an unbounded build would have filled up
@@ -37010,7 +37018,7 @@ def check_request_slots(checks: Checks) -> None:
         )
     finally:
         files.LOCK_TIMEOUT_SECONDS = real_timeout
-        capture_server.do_status = original
+        capture_server.do_inventory = original
         gate.set()
         httpd.shutdown()
         httpd.server_close()
@@ -37043,7 +37051,7 @@ def check_request_slots(checks: Checks) -> None:
     )
     httpd._pool = wide  # noqa: SLF001 — as leg 2: the pool must not be what refuses
     thread = _spawn_server(httpd)
-    capture_server.do_status = instrumented(gate, state)
+    capture_server.do_inventory = instrumented(gate, state)
     # THE TIMEOUT, SHORTENED FOR THE LENGTH OF THIS LEG ONLY. `_dispatch` reads
     # `files.LOCK_TIMEOUT_SECONDS` at call time, so the module attribute is the seam; nothing
     # else picks it up, because `files.exclusive` binds it as a DEFAULT ARGUMENT at import and
@@ -37058,7 +37066,7 @@ def check_request_slots(checks: Checks) -> None:
             time.sleep(0.02)
 
         started = time.monotonic()
-        status, body, _ = request(port, "GET", "/status")
+        status, body, _ = request(port, "GET", "/inventory")
         waited = time.monotonic() - started
 
         gate.set()
@@ -37091,7 +37099,7 @@ def check_request_slots(checks: Checks) -> None:
         )
     finally:
         files.LOCK_TIMEOUT_SECONDS = real_timeout
-        capture_server.do_status = original
+        capture_server.do_inventory = original
         gate.set()
         httpd.shutdown()
         httpd.server_close()
@@ -37190,7 +37198,7 @@ def check_photo_lane(checks: Checks) -> None:
             time.sleep(0.01)
         slots_held = capture_server.slots_in_use()
         started = time.monotonic()
-        status, _, _ = request(port, "GET", "/status")
+        status, _, _ = request(port, "GET", "/inventory")
         status_wait = time.monotonic() - started
         deadline = time.monotonic() + 20.0
         while time.monotonic() < deadline:
@@ -37227,7 +37235,8 @@ def check_photo_lane(checks: Checks) -> None:
         checks.equal(
             status,
             int(HTTPStatus.OK),
-            "`GET /status` answers 200 while the photo lane is full — a photo flood does not "
+            "`GET /inventory` (a slot-pool read; `/status` shares the lane now) answers 200 while "
+            "the photo lane is full — a photo flood does not "
             "starve the app's other requests",
         )
         checks.ok(status_wait < 2.0, f"and it answered at once, not after a wait — {status_wait:.2f}s")
@@ -37255,6 +37264,208 @@ def check_photo_lane(checks: Checks) -> None:
         0,
         "and every photo slot is given back",
     )
+
+
+def check_lockfree_lane(checks: Checks) -> None:
+    """Parked writers cannot starve the lock-free reads in the lane (DEBT11).
+
+    WHAT IT PROVES: with the store lock held and `REQUEST_SLOTS` real writers parked on it, each
+    route in `PHOTO_LANE_EXACT` still answers 200 within a bound, over the SHIPPED transport
+    (nothing widened). WHAT IT DOES NOT: that the heavy lock-free reads answer. They are not in the
+    lane and this check says nothing for them.
+
+    THE WRITERS ARE REAL: `POST /boxes` takes the store lock and waits on it, holding a slot. The
+    scratch store is opened first, because the first read of a fresh store upgrades it under the
+    same lock. Released at the end so the writers finish and join, with no 30s wait.
+    """
+    import http.client
+
+    checks.note("")
+    checks.note("LOCK-FREE LANE — parked writers do not starve the routes in it")
+    bound = 3.0
+    origin = capture_server.DEFAULT_ALLOWED_ORIGINS[0]
+    with isolated_home():
+        Store().read()  # the schema upgrade takes the lock; do it before the lock is held
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = _spawn_server(httpd)
+        writers = []
+        results = {}
+
+        def write(n: int) -> None:
+            with contextlib.suppress(Exception):
+                request(port, "POST", "/boxes", origin=origin, payload={"name": f"parked {n}"})
+
+        def probe(path: str):
+            started = time.monotonic()
+            try:
+                conn = http.client.HTTPConnection("127.0.0.1", port, timeout=bound)
+                conn.request("GET", path, headers={"Connection": "close"})
+                answer = conn.getresponse()
+                answer.read()
+                conn.close()
+                return int(answer.status), time.monotonic() - started
+            except Exception:  # noqa: BLE001 — a timeout is the finding
+                return None, time.monotonic() - started
+
+        try:
+            with files.exclusive(files.inventory_dir()):
+                for n in range(capture_server.REQUEST_SLOTS):
+                    writer = threading.Thread(target=write, args=(n,), daemon=True)
+                    writer.start()
+                    writers.append(writer)
+                # READ ON A CONDITION: every slot is held by a writer that is parked on the lock.
+                deadline = time.monotonic() + 10.0
+                while (
+                    time.monotonic() < deadline
+                    and capture_server.slots_in_use() < capture_server.REQUEST_SLOTS
+                ):
+                    time.sleep(0.01)
+                held = capture_server.slots_in_use()
+                # A FIXED LIST, not the constant: a route dropped from `PHOTO_LANE_EXACT` must go red
+                # here rather than leave the probe.
+                for path in ("/status", "/queues", "/capture/sitting", "/games"):
+                    results[path] = probe(path)
+                slot_route = probe("/inventory")
+        finally:
+            for writer in writers:
+                writer.join(timeout=30)
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+    checks.equal(
+        held,
+        capture_server.REQUEST_SLOTS,
+        "every request slot is held by a writer parked on the store lock — the guard on the "
+        "readings below",
+    )
+    for path, (status, took) in results.items():
+        checks.ok(
+            status == int(HTTPStatus.OK) and took < bound,
+            f"`GET {path}` answers 200 within {bound:.0f}s with every slot parked on the store "
+            f"lock — {status} in {took:.2f}s",
+        )
+    checks.ok(
+        slot_route[0] is None,
+        "and a slot-pool read (`/inventory`) is still parked behind them, so the lane is what "
+        f"answered and not a lock that never blocked — {slot_route[0]} in {slot_route[1]:.2f}s",
+    )
+    checks.equal(capture_server.slots_in_use(), 0, "and every slot is given back once the lock frees")
+
+
+def check_lane_survives_bad_target(checks: Checks) -> None:
+    """`photo_lane_path` runs before `_dispatch`'s `try`, so a target `urlparse` rejects must not raise."""
+    import http.client
+
+    checks.note("")
+    checks.note("LANE PREDICATE — a target that is not a URL")
+    try:
+        in_lane = capture_server.photo_lane_path("//[")
+    except ValueError:
+        in_lane = "raised ValueError"
+    checks.equal(in_lane, False, "`//[` is not in the lane and does not raise")
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    thread = _spawn_server(httpd)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1], timeout=5)
+        conn.request("GET", "//[", headers={"Connection": "close"})
+        status = conn.getresponse().status
+        conn.close()
+    except Exception as caught:  # noqa: BLE001 — a dropped socket is the finding
+        status = repr(caught)
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+    checks.ok(isinstance(status, int), f"and the server answers `GET //[` instead of dropping the socket — {status}")
+
+
+def check_slow_request_line(checks: Checks) -> None:
+    """A request parked on the store lock past the threshold logs ONE line that names the lock wait.
+
+    WHAT IT PROVES: the slow-request line (`CaptureHandler._note_slow`) exists, carries the route
+    without a query string, splits the slot wait from the lock wait, and reports what the
+    supervisor's busy file says. WHAT IT DOES NOT: that the supervisor writes that file. A fast
+    request writes no line. The log seam is `files.log_note`, replaced for the length of the check.
+    """
+    checks.note("")
+    checks.note("SLOW REQUEST LINE — a stall names its cause")
+    lines: list = []
+    answer: list = []
+    real_note, real_limit = files.log_note, capture_server.SLOW_REQUEST_SECONDS
+    real_busy = capture_server.SUPERVISOR_BUSY_FILE
+    # ONLY THIS CHECK'S OWN HANDLER'S LINES COUNT. A late `_note_slow` from an earlier check's server
+    # (it runs after the response) must not be read as this check's line.
+    mine = threading.local()
+
+    class Mine(QuietHandler):
+        def _note_slow(self, *args, **kwargs) -> None:
+            mine.on = True
+            try:
+                super()._note_slow(*args, **kwargs)
+            finally:
+                mine.on = False
+
+    files.log_note = lambda text: lines.append(text) if getattr(mine, "on", False) else None
+    capture_server.SLOW_REQUEST_SECONDS = 0.3
+    origin = capture_server.DEFAULT_ALLOWED_ORIGINS[0]
+    with isolated_home() as home:
+        Store().read()
+        capture_server.SUPERVISOR_BUSY_FILE = home / "busy"
+        capture_server.SUPERVISOR_BUSY_FILE.write_text("app-build\n", "utf-8")
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), Mine)
+        thread = _spawn_server(httpd)
+        port = httpd.server_address[1]
+        try:
+            request(port, "GET", "/inventory?q=secret-card")  # fast: no line
+            with files.exclusive(files.inventory_dir()):
+                writer = threading.Thread(
+                    target=lambda: answer.append(
+                        request(port, "POST", "/boxes", origin=origin, payload={"name": "slow"})[:2]
+                    ),
+                    daemon=True,
+                )
+                writer.start()
+                time.sleep(0.8)  # parked on the lock; released on leaving the block
+            writer.join(timeout=30)
+            # `_note_slow` runs in `_dispatch`'s `finally`, AFTER the response is sent. Wait for
+            # the line on a condition, once and bounded, before the seams are put back.
+            deadline = time.monotonic() + 5.0
+            while time.monotonic() < deadline and not any(
+                str(ln).startswith(capture_server.SLOW_LINE_PREFIX) and "POST /boxes " in str(ln)
+                for ln in list(lines)
+            ):
+                time.sleep(0.01)
+        finally:
+            files.log_note = real_note
+            capture_server.SLOW_REQUEST_SECONDS = real_limit
+            capture_server.SUPERVISOR_BUSY_FILE = real_busy
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+    slow = [
+        ln for ln in lines
+        if str(ln).startswith(capture_server.SLOW_LINE_PREFIX) and "POST /boxes " in ln
+    ]
+    checks.equal(
+        len(slow), 1,
+        f"exactly one slow-request line for the parked write (log saw {lines!r}, "
+        f"write answered {answer!r})",
+    )
+    line = slow[0] if slow else ""
+    waited = re.search(r"lock_wait=([\d.]+)s", line)
+    checks.ok(
+        "POST /boxes " in line and "secret-card" not in line,
+        f"it names the route and no query string — {line!r}",
+    )
+    checks.ok(
+        bool(waited) and float(waited.group(1)) >= 0.3,
+        f"it names the lock wait, at least the 0.3s threshold — {waited.group(0) if waited else None}",
+    )
+    checks.ok("slot_wait=0" in line and "(slot pool)" in line, "and the slot wait apart from it, with its pool")
+    checks.ok("supervisor_busy=app-build" in line, "and what the supervisor was doing")
 
 
 def check_photo_lane_threads_and_faults(checks: Checks) -> None:
@@ -40819,6 +41030,9 @@ def run() -> Result:
     check_order_fetch_route(checks)
     check_request_slots(checks)
     check_photo_lane(checks)
+    check_lockfree_lane(checks)
+    check_lane_survives_bad_target(checks)
+    check_slow_request_line(checks)
     check_photo_lane_threads_and_faults(checks)
     check_connection_close(checks)
     check_crop_preview(checks)

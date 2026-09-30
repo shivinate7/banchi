@@ -2,7 +2,7 @@ import { Component, useCallback, useEffect, useId, useMemo, useRef, useState } f
 import type { ComponentType, ErrorInfo, ReactNode } from 'react'
 import { isEditableTarget } from './keys'
 import { rememberRail, storedRail, storedTheme } from './deviceMemory'
-import { getStatus, onServerBoot, onServerReachable } from './server'
+import { getStatus, onServerBoot, onServerReachable, ServerError } from './server'
 import { useSearch } from './useSearch'
 import { matchQuery } from './kit/match'
 import { usePoll } from './usePoll'
@@ -432,7 +432,10 @@ function useServerPresence(enabled: boolean): { state: ServerState; retry: () =>
     enabled,
     fn: getStatus,
     onData: () => setState('online'),
-    onError: () => setState('offline'),
+    /* A REFUSAL THE SERVER SENT IS AN ANSWER. `/status` shares the photo lane and can be
+     * turned away `photo_busy` (503) under a photo flood: the server is up, so the shell stays
+     * online. Only "no response at all" (`status` 0) is offline. */
+    onError: (err) => setState(err instanceof ServerError && err.status > 0 && err.code !== 'http_error' ? 'online' : 'offline'),
     liveMs: 15000,
     idleMs: 15000,
     refreshOnFocus: true,

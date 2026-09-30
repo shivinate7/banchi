@@ -35,7 +35,7 @@ DEBT6 T7 leaves two capture-server facts unchecked
 DEBT7 The preview crops the card, and the one check that looks at a photo cannot see it
 DEBT8 Recorded and correctly unfixed
 DEBT9 The sigil check matches text, so a renamed local walks past it
-DEBT11 A writer holding the store lock holds a request slot, and the bounds are proven on an empty store
+DEBT11 A writer parked on the store lock still holds a request slot, and the heavy lock-free reads wait behind it
 DEBT14 A pooled card reaches the pricing table and the box walk, and `located` suppresses the label everywhere and the photograph nowhere
 DEBT16 The browser fleet is locked and the rest of the load is not, and only one of those was measured
 DEBT19 The revert guard is exact, and three shapes of reversal walk past it
