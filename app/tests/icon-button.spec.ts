@@ -4,6 +4,7 @@ import { test, expect } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleMotion } from './motionSettled'
 import { iconTip } from './iconTooltip'
+import { phoneOff, setViewport } from './phoneSwitch'
 
 declare global {
   interface Window {
@@ -137,7 +138,8 @@ test('showing the tooltip moves nothing else on the page (D118)', async ({ page 
 
 test('the overlay Close tooltip is not clipped by the sheet, at 1440 and at 390', async ({ page }) => {
   for (const width of [1440, 390]) {
-    await page.setViewportSize({ width, height: 900 })
+    if (phoneOff(width)) continue
+    await setViewport(page, { width, height: 900 })
     const opener = page.locator('[data-kit-section] button', { hasText: /^Open (a |the )?(sheet|modal)/i }).first()
     if ((await opener.count()) === 0) continue
     await opener.scrollIntoViewIfNeeded()
@@ -163,7 +165,7 @@ test('the overlay Close tooltip is not clipped by the sheet, at 1440 and at 390'
 })
 
 test('the tooltip stays inside the viewport at 390, for the first icon button on the page', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   await page.goto(GALLERY)
   const section = page.locator('[data-kit-section="icon-button"]')
   await section.scrollIntoViewIfNeeded()
@@ -178,7 +180,7 @@ test('the tooltip stays inside the viewport at 390, for the first icon button on
 
 test('a long-press opens the tooltip and does not also press the button', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'CDP touch dispatch is Chromium-only')
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   await page.goto(GALLERY)
   const section = page.locator('[data-kit-section="icon-button"]')
   await section.scrollIntoViewIfNeeded()

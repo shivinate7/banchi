@@ -28,6 +28,7 @@ import type {
   WalkPlanStop,
   WalkPlanTake,
 } from '../src/types'
+import { setViewport } from './phoneSwitch'
 
 /* THE ORDER SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
  *
@@ -1090,7 +1091,7 @@ test('UN-6 — a sale changes nothing but its own row, at 390 (D118, the Opus re
    * into `Undo` in place (D57) and nothing else on the pane is re-mounted. This is a REAL D118
    * rect-diff: every other measured box on the pane is asserted equal before and after the
    * press, not just the one button's own coordinate. */
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   const SKU_B = '9191487'
   const lineB = line({
     sku: SKU_B,
@@ -1342,7 +1343,7 @@ test('finding #16 (the Opus review round) — the struck-out row in the walk lis
    * walk list's own row, once struck through, offered nothing back. `newestUndoKey` already
    * names the one reversible copy; this proves the list itself now draws it, never only the
    * pane above. */
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   await open(page, { walkPlan: walkPlanOf([walkPlanStop()]) })
 
   /* HIDE SOLD DEFAULTS ON (D132), so a done line leaves `.orders-walk-list` entirely unless
@@ -2167,7 +2168,7 @@ for (const [width, height] of [
   [390, 844],
 ] as const) {
   test(`at ${width}, a nameless buyer's "order …006AC" tail stays on one line`, async ({ page }) => {
-    await page.setViewportSize({ width, height })
+    await setViewport(page, { width, height })
     const nameless = order({ buyer: null })
     await open(page, { orders: payloadOf([nameless], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
     if (width === 390) await page.locator('.orders-buyerchip').click()
@@ -2519,7 +2520,7 @@ for (const [width, height] of [
 ] as const) {
   const desk = width >= 1000
   test(`at ${width}, the buyer list sits ${desk ? 'beside the walk' : 'above the walk, beside the card'}`, async ({ page }) => {
-    await page.setViewportSize({ width, height })
+    await setViewport(page, { width, height })
     await open(page, { orders: threeBuyerPayload() })
     const buyers = await page.locator('.orders-buyers').boundingBox()
     const walk = await page.locator('.orders-walk').boundingBox()
@@ -2540,7 +2541,7 @@ for (const [width, height] of [
 /* ON A PHONE THE BUYER LIST IS A SHEET, and the line that opens it says who, how many and what is
  * next (UX-194). */
 test('at 390, the buyer picker is reachable through the chip and its bottom sheet', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   await open(page, { orders: threeBuyerPayload() })
 
   await expect(page.locator('.orders-buyers')).toBeHidden()
@@ -2564,7 +2565,7 @@ test('at 390, the buyer picker is reachable through the chip and its bottom shee
  * the case now presses that chip. The contract it asserts is unchanged: the focus stays inside,
  * Escape closes, and focus returns to the chip that opened it. */
 test('the buyer sheet traps focus, closes on Escape, and gives focus back to the chip', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   await open(page, { orders: threeBuyerPayload() })
 
   const chip = page.locator('.orders-buyerchip')
@@ -2589,7 +2590,7 @@ test('the buyer sheet traps focus, closes on Escape, and gives focus back to the
 /* AT 390 THE WALK IS ON THE PAGE, under the card, never only inside a sheet. Ticking a second buyer
  * from the sheet widens the walk the page draws. */
 test('at 390, the walk rows are on the page, and a tick from the sheet widens them', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 900 })
+  await setViewport(page, { width: 390, height: 900 })
   await open(page, { orders: secondBuyerPayload().payload })
   await stubWalkPlan(page, bothPlan())
 
@@ -2656,7 +2657,7 @@ test('each control narrows; they compose', async ({ page }) => {
 })
 
 test('the filter bar clears the 40px thumb floor at phone width', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 900 })
+  await setViewport(page, { width: 390, height: 900 })
   await open(page, { orders: threeBuyerPayload() })
   const trigger = page.locator(`${VIEW} .bn-filterbar-trigger`)
   await expect(trigger).toBeVisible()
@@ -3835,7 +3836,7 @@ test('a long section name is drawn whole, and its count is said once, at 820', a
   /* THE COUNT IS THE FACT A HAND CHECKS THE ROWS AGAINST, so a narrow rail cuts the NAME and
      keeps `19 cards` whole (`SectionTitle.tsx`). Verified red first: on the one-span title the
      ellipsis cut the END of the sentence, which is the count. */
-  await page.setViewportSize({ width: 820, height: 1180 })
+  await setViewport(page, { width: 820, height: 1180 })
   await open(page, {
     walkPlan: walkPlanOf([
       walkPlanStop({
@@ -3858,7 +3859,7 @@ test('a long section name is drawn whole, and its count is said once, at 820', a
 test('the walk column keeps the box name readable beside the action cell, at 820', async ({ page }) => {
   /* SCREEN PASS F5: the action cell reserves 169px (D118) and the walk column is 220px, so the
      row's `1fr` track was 3px and "RB Epics" drew as one character. */
-  await page.setViewportSize({ width: 820, height: 1180 })
+  await setViewport(page, { width: 820, height: 1180 })
   await open(page, { orders: threeBuyerPayload(), walkPlan: walkPlanOf([walkPlanStop({})]) })
   await page.locator('.orders-index-item').first().locator('.orders-index-tick input').check()
   const box = page.locator('.walk-pick-where .card-locations-row .card-locations-identity-box').first()
@@ -4431,7 +4432,7 @@ test('a typed ?buyer= selects that buyer, and Back selects the one before (FLT-1
 /* ------------------------------------------------------------ walk mode (the owner's ruling, 2026-09-24) */
 
 test('at 390, choosing a buyer enters walk mode, and Back leaves', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   await open(page, { orders: secondBuyerPayload().payload, walkPlan: bothPlan() })
   await page.locator('.orders-buyerchip').click()
   await page.locator('.orders-buyers-sheet .orders-index-row', { hasText: 'Ada' }).click()
@@ -4471,7 +4472,7 @@ for (const [width, height] of [
   [390, 844],
 ] as const) {
   test(`at ${width}, the filter bar is one line: the search and one Filters button`, async ({ page }) => {
-    await page.setViewportSize({ width, height })
+    await setViewport(page, { width, height })
     await open(page, { orders: threeBuyerPayload() })
     /* Settle fonts before any measurement: a late swap shifts the row a fraction of a pixel,
        and the anchor and button forms of IconButton can settle on different frames. */
@@ -4851,7 +4852,7 @@ test('the key 2 marks the second copy of the current pick sold, and Undo puts it
 })
 
 test('the arrow key selects the next pick and brings its line into view', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 500 })
+  await setViewport(page, { width: 1440, height: 500 })
   await open(page, { orders: oneOpenOrder(), walkPlan: bothPlan() })
   await expect(page.locator('.browse-card .browse-hero-name')).toHaveText('Volcanion')
   await page.keyboard.press('ArrowRight')
@@ -4878,7 +4879,7 @@ test('the walk keys do nothing while a text field has focus', async ({ page }) =
 /* ------------------------------------------------------- the buyer list at 820 (D304, Q2b) */
 
 test('at 820 a long buyer list rests with the Walk press in view and 40px, and a short one shows whole rows', async ({ page }) => {
-  await page.setViewportSize({ width: 820, height: 1000 })
+  await setViewport(page, { width: 820, height: 1000 })
   const seeds = Array.from({ length: 16 }, (_, at) =>
     seededOrder({ number: `L${String(at).padStart(4, '0')}`, buyer: `Buyer ${at}`, status: 'Ready to Ship', placedAt: `2026-08-${String(at + 1).padStart(2, '0')}T00:00:00+00:00`, reason: 'resolved' }),
   )
@@ -4900,7 +4901,7 @@ test('at 820 a long buyer list rests with the Walk press in view and 40px, and a
 })
 
 test('at 820 a list that fits shows every row whole', async ({ page }) => {
-  await page.setViewportSize({ width: 820, height: 1000 })
+  await setViewport(page, { width: 820, height: 1000 })
   await open(page, { orders: threeBuyerPayload() })
   const panel = page.locator('.orders-buyers-panel')
   await expect(panel.locator('.orders-index-item')).toHaveCount(3)
@@ -4916,7 +4917,7 @@ test('at 820 a list that fits shows every row whole', async ({ page }) => {
 
 test('the position card stays inside the walk column at 1440 and 820', async ({ page }) => {
   for (const width of [1440, 820]) {
-    await page.setViewportSize({ width, height: 1000 })
+    await setViewport(page, { width, height: 1000 })
     await open(page, { orders: threeBuyerPayload(), walkPlan: walkPlanOf([walkPlanStop({})]) })
     const where = page.locator('.walk-pick-where').first()
     await expect(where).toBeVisible()
@@ -5028,7 +5029,7 @@ test('a spare copy sells from the opened fold with its digit, and the order coun
 })
 
 test('at 820 the pick line always shows the card name, and the slot numbers wrap before it', async ({ page }) => {
-  await page.setViewportSize({ width: 820, height: 1000 })
+  await setViewport(page, { width: 820, height: 1000 })
   await open(page, { orders: oneOpenOrder(), walkPlan: twoCopyPlan() })
   const name = page.locator('.orders-walk-line .orders-walk-name').first()
   await expect(name).toHaveText('Volcanion')
@@ -5066,7 +5067,7 @@ test('digits reach the spares only while the fold is open', async ({ page }) => 
 })
 
 test('at 820 a picked line keeps its slot numbers clear of the struck name', async ({ page }) => {
-  await page.setViewportSize({ width: 820, height: 1000 })
+  await setViewport(page, { width: 820, height: 1000 })
   await open(page, { orders: oneOpenOrder(), walkPlan: twoCopyPlan(), pull: SPARE_PULL })
   await expect(page.locator('.walk-keyhint').first()).toBeVisible()
   await page.keyboard.press('1')
@@ -5122,7 +5123,7 @@ test('a digit pressed while a sale is in flight says one sale at a time', async 
 })
 
 test('the pick figure never breaks "1 of 1" across lines in a narrow column', async ({ page }) => {
-  await page.setViewportSize({ width: 820, height: 1000 })
+  await setViewport(page, { width: 820, height: 1000 })
   await open(page, { orders: oneOpenOrder(), walkPlan: volcanionPlan() })
   const pick = page.locator('.orders-walk-pick').first()
   await expect(pick).toContainText('1 of 1')

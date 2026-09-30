@@ -2,6 +2,7 @@
 // Governs: D121, D275
 import { test, expect } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { setViewport } from './phoneSwitch'
 
 sealEveryTest({ store: true, cards: 4 })
 
@@ -11,7 +12,7 @@ sealEveryTest({ store: true, cards: 4 })
 for (const [w, h] of [[1440, 900], [820, 1100]] as const) {
   for (const theme of ['light', 'dark']) {
     test(`Home verdict sits under the greeting, ${w}px ${theme}`, async ({ page }) => {
-      await page.setViewportSize({ width: w, height: h })
+      await setViewport(page, { width: w, height: h })
       await page.route(/\/orders$/, (route) =>
         route.fulfill({ contentType: 'application/json', body: JSON.stringify({ summary: '', orders: [], resolution: { orders: [], counts: {} } }) }),
       )

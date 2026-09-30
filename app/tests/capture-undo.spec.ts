@@ -4,6 +4,7 @@ import { expect, test } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import type { Page } from '@playwright/test'
 import type { GameRegistry } from '../src/types'
+import { setViewport } from './phoneSwitch'
 
 /* THE UNDO STACK ON THE CAPTURE SCREEN — the owner's ask of 2026-08-29: "a list of 10 rather
  * than the one I can see right now", with `U` still undoing the most recent.
@@ -1584,7 +1585,7 @@ test('a capture whose place is unlabeled never writes a zero count onto the box'
 test('the per-row remove control clears the 40px thumb floor on a phone (D117)', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   await open(page)
   await shoot(page, 2)
 

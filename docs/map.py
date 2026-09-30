@@ -9505,6 +9505,13 @@ COMPONENTS = [
                         "twice 75ms apart and waits for agreement, which `settleMotion`'s "
                         "start-to-finish wait cannot do for an animation it was never watching.",
                 "governed_by": ["D16", "D50", "D118"]},
+            "tests/phoneSwitch.ts": {
+                "does": "the one switch for every phone-width spec, `PHONE_SPECS_ON`, off by the "
+                        "owner's word. `setViewport` replaces `page.setViewportSize` in the specs "
+                        "and skips the case below 768; `phoneOff` skips one width inside a loop. "
+                        "Flipping the constant runs them all again. Deletes no test. Not a "
+                        "harness test; `make design-check` runs the specs that import it.",
+                "governed_by": ["D16"]},
             "tests/iconTooltip.ts": {
                 "does": "one helper, `iconTip`, the one way a test finds an `IconButton`'s "
                         "tooltip since round 3 portals it to `<body>` (D288, kit/index.tsx's "

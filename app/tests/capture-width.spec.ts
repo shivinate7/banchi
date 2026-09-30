@@ -2,6 +2,7 @@
 // Governs: D118, D195, D197
 import { expect, test } from '@playwright/test'
 import { sealEveryTest, settleAnimations } from './shell'
+import { setViewport } from './phoneSwitch'
 
 /* SPARE WIDTH GOES TO THE BLACK STAGE PANEL, NEVER TO A WHITE BAND (owner, 2026-09-28, 2026-09-29).
  * The stage panel flexes with the sidebar and its 9:16 frame stays centred (a painted box, so its
@@ -47,7 +48,7 @@ for (const theme of ['light', 'dark'] as const) {
           }
         })
       }
-      await page.setViewportSize({ width, height })
+      await setViewport(page, { width, height })
       await page.emulateMedia({ colorScheme: theme })
       await page.goto('/#/capture')
       await page.locator('.capture-shell').waitFor()

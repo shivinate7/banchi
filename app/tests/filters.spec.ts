@@ -11,6 +11,7 @@ import { matchSpans } from '../src/kit/highlight'
 import { countFacets, filterRows, withCounts } from '../src/kit/facets'
 import { parseViewQuery, readFacets, readFlag, readSort, writeFlag } from '../src/kit/viewState'
 import type { FilterFacet } from '../src/kit/data'
+import { setViewport } from './phoneSwitch'
 
 /* THE FILTER BAR, THE HIDE TOGGLE, THE SORTABLE TABLE HEADER AND THE MATCH HIGHLIGHT
  * (`kit/filters.tsx`, `kit/highlight.tsx`, `kit/facets.ts`), drawn on `tests/filters/index.html`
@@ -154,7 +155,7 @@ const HEIGHT: Record<(typeof WIDTHS)[number], number> = { 1440: 900, 820: 1180, 
 const SPECIMENS = ['FilterBar', 'Rail', 'FilterRows', 'HideToggle', 'SortHeader', 'Highlight'] as const
 
 async function open(page: Page, width: (typeof WIDTHS)[number], theme: 'light' | 'dark' = 'light', hash = ''): Promise<void> {
-  await page.setViewportSize({ width, height: HEIGHT[width] })
+  await setViewport(page, { width, height: HEIGHT[width] })
   await page.goto(`${theme === 'dark' ? `${PAGE}?theme=dark` : PAGE}${hash}`)
   await expect(page.locator('[data-kit-filters]')).toBeVisible()
   await settleFonts(page)

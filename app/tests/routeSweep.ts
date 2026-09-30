@@ -4,6 +4,7 @@ import { settleFonts } from './fontsReady'
 import { routesFromNav } from './routes'
 import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
 import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, SHIPPING_EXPORT_CSV } from './routeFixtures'
+import { phoneOff, setViewport } from './phoneSwitch'
 
 /* THE ONE SWEEP `text-shape.spec.ts`, `machine-words.spec.ts` AND `money-face.spec.ts` RUN,
  * and `make text-density` through the first of them (D284). One copy, so the
@@ -159,7 +160,7 @@ export async function sweepEveryRoute(page: Page, visit: Visit): Promise<Set<str
   trackReads(page)
   for (const seed of Object.values(POPULATED_ROUTE_SEEDS)) await seed(page)
 
-  await page.setViewportSize({ width: 1440, height: 1000 })
+  await setViewport(page, { width: 1440, height: 1000 })
   const wide = (await routesFromNav(page)).filter((route) => !EXCLUDED_FROM_SWEEP.test(route))
   expect(wide.length, 'the route harvest returned too few screens to check').toBeGreaterThan(6)
   wide.push(PRODUCT_ROUTE)
@@ -168,13 +169,17 @@ export async function sweepEveryRoute(page: Page, visit: Visit): Promise<Set<str
     await visit(route, 1440)
   }
 
-  await page.setViewportSize({ width: 390, height: 844 })
-  const phone = await drawerRoutes(page)
-  expect(phone.length, 'the phone drawer harvest returned too few screens to check').toBeGreaterThan(6)
-  phone.push(PRODUCT_ROUTE)
-  for (const route of phone) {
-    await openSettled(page, route)
-    await visit(route, 390)
+  /* the phone arm is off with the rest of the phone specs (`phoneSwitch.ts`). */
+  const phone: string[] = []
+  if (!phoneOff(390)) {
+    await setViewport(page, { width: 390, height: 844 })
+    phone.push(...(await drawerRoutes(page)))
+    expect(phone.length, 'the phone drawer harvest returned too few screens to check').toBeGreaterThan(6)
+    phone.push(PRODUCT_ROUTE)
+    for (const route of phone) {
+      await openSettled(page, route)
+      await visit(route, 390)
+    }
   }
 
   return new Set([...wide, ...phone])

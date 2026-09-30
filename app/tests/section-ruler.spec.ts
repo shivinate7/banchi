@@ -3,6 +3,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import type { GameRegistry } from '../src/types'
 import { sealEveryTest } from './shell'
+import { setViewport } from './phoneSwitch'
 
 /* THE SECTION RULER NEVER PASSES ITS CONTAINER — the owner's report, 2026-09-25, box WB1 R2:
  * "sections can pass the width of their container (wb1 R2 has 12 sections but only 11 show on
@@ -234,7 +235,7 @@ async function assertRulerNeverOverflows(page: Page) {
 for (const sectionCount of [12, 30]) {
   for (const width of [1440, 820, 390]) {
     test(`the section ruler stays inside its card at ${sectionCount} sections, ${width}`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 900 })
+      await setViewport(page, { width, height: 900 })
       await open(page, sectionCount, 5)
       await assertRulerNeverOverflows(page)
     })
@@ -248,7 +249,7 @@ for (const width of [1440, 820, 390]) {
     // 60 sections at 2 cards each: comfortably past the point where 20px-floor chips plus gaps
     // exceed even the widest of these cards, so this is the scroll-track path at every one of
     // them and not the shrink-to-fit one — 1440 and 820 included, not only the 390 phone case.
-    await page.setViewportSize({ width, height: 900 })
+    await setViewport(page, { width, height: 900 })
     await open(page, 60, 2)
     await page.locator('.card-locations-row.is-current').scrollIntoViewIfNeeded()
     const track = page.locator('.card-locations-row.is-current .position-bar-owner[data-depth] > .position-bar-track')
@@ -268,7 +269,7 @@ for (const width of [1440, 820, 390]) {
 }
 
 test('the section ruler is drawn above the card ruler', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   await open(page, 12, 5)
   const row = page.locator('.card-locations-row.is-current')
   const sectionTrack = row.locator('.position-bar-owner[data-depth] > .position-bar-track')
@@ -280,7 +281,7 @@ test('the section ruler is drawn above the card ruler', async ({ page }) => {
 
 
 test('a numbered tick within 1 card of the end loses its number (D310)', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   await open(page, 3, 21)
   const ruler = page.locator('.card-locations-row.is-current .position-bar-sectiontrack')
   await expect(ruler.locator('.position-bar-tick')).toHaveCount(4)
@@ -288,7 +289,7 @@ test('a numbered tick within 1 card of the end loses its number (D310)', async (
 })
 
 test('a long section ticks every 10 and numbers every 50 (D310)', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   await open(page, 3, 150)
   const ruler = page.locator('.card-locations-row.is-current .position-bar-sectiontrack')
   await expect(ruler.locator('.position-bar-tick')).toHaveCount(14)
@@ -296,7 +297,7 @@ test('a long section ticks every 10 and numbers every 50 (D310)', async ({ page 
 })
 
 test('the card ruler ticks every 5th card and numbers every 10th (D310)', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   await open(page, 3, 48)
   const ruler = page.locator('.card-locations-row.is-current .position-bar-sectiontrack')
   await expect(ruler.locator('.position-bar-tick')).toHaveCount(9)
@@ -310,7 +311,7 @@ test('the card ruler ticks every 5th card and numbers every 10th (D310)', async 
    at the last card it never crosses the ruler's edge. Measured as boxes, not as a class. */
 for (const [label, card] of [['first', 1], ['last', 30]] as const) {
   test(`the number chip stays inside the ruler at the ${label} card`, async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 })
+    await setViewport(page, { width: 1440, height: 900 })
     await open(page, 1, 30, card)
     const ruler = page.locator('.card-locations-row.is-current .position-bar-sectiontrack')
     const chip = ruler.locator('.position-bar-chip')
@@ -323,7 +324,7 @@ for (const [label, card] of [['first', 1], ['last', 30]] as const) {
 }
 
 test('the tick number under or next to the pin is hidden, and the chip sits mid-track', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   await open(page, 1, 79, 60)
   const ruler = page.locator('.card-locations-row.is-current .position-bar-sectiontrack')
   await expect(ruler.locator('.position-bar-chip')).toHaveText('60')
