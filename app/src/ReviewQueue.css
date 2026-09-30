@@ -152,61 +152,8 @@
   .review-runs-sheet { width: 100vw; }
 }
 
-/* The reason lens. Wide screens wrap it; below 1024px it is one scrolling strip with a
-   fade for the affordance. The mask's colour is alpha-only and names no colour. */
-.review-filters {
-  display: flex;
-  align-items: center;
-  gap: var(--bn-0-75);
-  flex-wrap: wrap;
-  width: fit-content;
-  max-width: 100%;
-  min-width: 0;
-  margin: calc(-1 * var(--bn-2)) 0 var(--bn-3);
-  padding: var(--bn-0-75);
-  border-radius: var(--bn-r);
-  background: var(--bn-surface-2);
-}
-@media (max-width: 1023px) {
-  .review-filters {
-    flex-wrap: nowrap;
-    width: auto;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    mask-image: linear-gradient(90deg, var(--bn-mask) calc(100% - 28px), transparent);
-    -webkit-mask-image: linear-gradient(90deg, var(--bn-mask) calc(100% - 28px), transparent);
-  }
-  .review-filters::-webkit-scrollbar { display: none; }
-}
-.review-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--bn-1-5);
-  height: 28px;
-  padding: 0 var(--bn-3);
-  border-radius: var(--bn-r-sm);
-  font-size: var(--bn-fs-sm);
-  font-weight: 600;
-  color: var(--bn-ink-3);
-  white-space: nowrap;
-  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
-}
-.review-filter:hover:not(:disabled) { color: var(--bn-ink); }
-.review-filter[aria-pressed='true'] { background: var(--bn-surface); color: var(--bn-accent); box-shadow: var(--bn-shadow-1); }
-.review-filter:disabled { opacity: 0.5; }
-.review-filter-count {
-  font-family: var(--bn-font-ui);
-  font-variant-numeric: tabular-nums;
-  font-size: var(--bn-fs-xs);
-  font-weight: 600;
-  color: var(--bn-ink-3);
-  padding: 1px var(--bn-1-5);
-  border-radius: var(--bn-r-xs);
-  background: var(--bn-surface);
-}
-.review-filter[aria-pressed='true'] .review-filter-count { color: var(--bn-accent); background: var(--bn-accent-tint); }
-.review-filter-clear { color: var(--bn-ink-3); }
+/* The reason lens is the kit's `FilterChips`; this only spaces it from the page. */
+.review-filters { margin: calc(-1 * var(--bn-2)) 0 var(--bn-3); }
 .review-queue-toggle .bn-pill { height: 18px; padding: 0 var(--bn-1-5); }
 
 /* ---- body ------------------------------------------------------------------ */
@@ -1082,7 +1029,6 @@
   .review-candidate { grid-template-columns: minmax(0, 1fr) auto auto; }
   .review-close-choice { grid-template-columns: minmax(0, 1fr) auto; min-height: 44px; }
   /* A thumb presses these: 40px chips, 44px actions. The 767px block below is layout only. */
-  .review-filter { height: 40px; padding: 0 var(--bn-3); }
   .review-actions .bn-btn { height: 44px; }
   .review-actions .bn-btn.bn-btn-icon { width: 44px; }
 }
@@ -1099,7 +1045,7 @@
   /* The queue sheet keeps a band of scrim beside it: 380px in a 390px viewport left a 10px
      sliver of the page, which reads as a misfit rather than as an overlay. */
   .review.is-queue-open .review-rail { width: calc(100vw - var(--bn-7)); }
-  .review-filters { padding: var(--bn-0-5); margin-top: calc(-1 * var(--bn-3)); margin-bottom: var(--bn-5); }
+  .review-filters { margin-top: calc(-1 * var(--bn-3)); margin-bottom: var(--bn-5); }
   .review-question-title { font-size: var(--bn-fs-xl); }
   .review-candidate { min-height: 56px; padding: var(--bn-3) var(--bn-3); gap: var(--bn-3); }
   .review-candidate-price { font-size: var(--bn-fs-lg); min-width: 0; }
@@ -1139,32 +1085,6 @@
   .review-caption { min-height: var(--bn-control-h-sm); }
   .review-details-summary { min-height: var(--bn-control-h-sm); }
   .review-chip { height: var(--bn-control-h-sm); }
-}
-
-/* ---- THE SCROLLING CHIP ROW SAYS SO (D117) ----------------------------------------------------
-   Both of these rows scroll horizontally on a phone with `scrollbar-width: none`, so the third
-   chip was cut mid-word with nothing on screen to suggest a swipe would reach it. The fade is a
-   mask driven by the row's OWN scroll progress, so it says which way there is more: right edge
-   only at the start, left edge only at the end, both in the middle.
-   `scroll()` IS WHAT MAKES IT HONEST. A static fade would sit on a row that does not overflow and
-   read as a rendering fault; a scroll-progress timeline whose scroller has no overflow is INACTIVE,
-   and an inactive timeline applies no effect at all. So a short row gets nothing, with no
-   measurement and no class to keep in step. Behind `@supports` because the fallback — no fade,
-   which is today — is the correct one. */
-@supports (animation-timeline: scroll()) {
-  /* `black` IS AN ALPHA HERE, NOT PAINT, which is why no token is read for it. A mask uses only
-     the alpha channel of what it is given: `black` means "keep this pixel" and `transparent`
-     means "drop it", and neither has anything to do with the theme. `raw color` reads this sheet
-     for hex literals on the premise that a color must follow the theme; the premise does not
-     hold for a mask, and the keyword rather than `#000` is what says so at the call site. */
-  @keyframes bn-edgefade {
-    from { mask-image: linear-gradient(90deg, black 0, black calc(100% - 28px), transparent 100%); }
-    50% { mask-image: linear-gradient(90deg, transparent 0, black 28px, black calc(100% - 28px), transparent 100%); }
-    to { mask-image: linear-gradient(90deg, transparent 0, black 28px, black 100%); }
-  }
-  @media (max-width: 767px) {
-    .review-filters { animation: bn-edgefade linear both; animation-timeline: scroll(self inline); }
-  }
 }
 
 /* ---- the store-wide re-check ------------------------------------------------------------

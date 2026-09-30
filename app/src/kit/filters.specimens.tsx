@@ -6,7 +6,7 @@ import { countFacets, filterRows } from './facets'
 import { Highlight } from './highlight'
 import { matchQuery, type MatchFields } from './match'
 import { Button } from './index'
-import type { FilterFacet, FilterValue, SortValue } from './data'
+import { FilterChips, SortControl, type FilterFacet, type FilterValue, type SortValue } from './data'
 
 /* `FilterBar`, `HideToggle`, `SortHeader` and `Highlight`, drawn on the kit page. Invented data
  * only: nothing here reads the store. The bar's counts are REAL arithmetic over the invented
@@ -201,6 +201,18 @@ export function FilterSpecimens() {
             }
             count={{ shown: rail.shown.length, total: FILTER_ROWS.length }}
           />
+        </div>
+      </Specimen>
+
+      {/* THE STANDARD, OPEN (filters-are-one-kit-control): every row one width, the sort's
+          direction a segment inside its field, Game set and the rest at rest. */}
+      <Specimen name="FilterRows">
+        <div className="bn-filterbar-sheet-body" style={{ width: '320px', maxWidth: '100%' }} data-specimen-rows>
+          <FilterChips facets={facets} value={filters} onChange={setFilters} />
+          <SortControl options={SORTS} value={sort} onChange={setSort} />
+          <HideToggle checked={hideSold} onChange={setHideSold} count={soldHere}>
+            Hide sold
+          </HideToggle>
         </div>
       </Specimen>
 
