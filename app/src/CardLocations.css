@@ -110,6 +110,8 @@
   overflow: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* A SCROLL RESTS ON A ROW EDGE where it can: whole rows, never a strip cut through the middle. */
+  scroll-snap-type: y proximity;
   min-height: 0;
   flex: 1 1 auto;
   /* THE BOTTOM EDGE READS AS A FADE RATHER THAN AS A CUT ROW — `BoxBrowse.css`'s own scroller
@@ -144,6 +146,7 @@
   gap: var(--bn-2);
   padding: var(--bn-3) var(--bn-4);
   border-radius: var(--bn-r-lg);
+  scroll-snap-align: start;
   background: var(--bn-surface-2);
   /* The ruler's marks ring themselves in the ground they stand on. */
   --pb-knockout: var(--bn-surface-2);

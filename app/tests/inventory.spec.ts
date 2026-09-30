@@ -5263,6 +5263,20 @@ test('the neighbours are ranked, not joined — the names are the only thing dra
   )
 })
 
+test('the neighbour line carries no words: names and this copy\'s number only', async ({ page }) => {
+  await open(page, BOXES, {
+    cards: NEIGHBORLY,
+    search: (query) => searchAnswer(query, NEIGHBORLY),
+  })
+  /* OWNER RULING: `<- back [N] front ->`, arrows drawn by CSS. The text of the line is the two
+     names and the number chip and nothing else — no `back`, `front`, `before`, `after`. */
+  const band = page.locator('.card-locations-row.is-current .nb')
+  await expect(band).toHaveText('Galio, Indefaticable1Evelynn, Entrancing')
+  /* At a box's own end a BACK or FRONT chip stands in for the name, and is the only word. */
+  const front = page.locator('.card-locations-owner .nb').nth(1)
+  await expect(front).toHaveText('BACK3Conscription')
+})
+
 test('the neighbour names are read as words, not as metadata', async ({ page }) => {
   await open(page, BOXES, {
     cards: NEIGHBORLY,

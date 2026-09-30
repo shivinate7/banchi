@@ -37,12 +37,12 @@
  * the same manual-wins-until-toggled behaviour, just kept inside the component that draws it.
  */
 
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { ReadingAge } from './CardLocations'
 import { collectorNumber } from './cardNumber'
 import { forSale, IDENTIFIED, readingAgo, readingAgoShort, readingExact, stateLabel, stateTone, staleReading } from './cardState'
-import { Button, Icon, IconButton, Meter, Pill } from './kit'
+import { Button, Icon, IconButton, Meter, Money, Pill, ProductLink } from './kit'
 import { toast } from './kit/toast'
 import { money } from './money'
 import { relativeDate, toDate } from './dates'
@@ -54,6 +54,7 @@ import {
   confirmIdentity,
   correctAnswer,
   describeFailure,
+  getPricing,
   photoUrl,
   reviewCatalog,
   undoConfirmIdentity,
@@ -324,9 +325,36 @@ export type HeroFigures = {
   readonly cap: number | null
 }
 
+/** THE MARKET PRICE OF ONE CARD, read once per run off the pricing file (`marketTable`): the band's
+ *  Market figure. One home, called by `CardPane`, so `#/inventory` and the `#/orders` walk draw the
+ *  same figure from the same read. Null while it loads, on a failed read, and where the run holds no
+ *  row for this card: the band draws a quiet dash and never a made-up figure. */
+export function useMarketPrice(card: InventoryCard): number | null {
+  const run = card.run
+  const [read, setRead] = useState<{ run: string; table: MarketRead } | null>(null)
+  useEffect(() => {
+    if (run === null) return
+    let live = true
+    getPricing(run)
+      .then((payload) => {
+        if (live) setRead({ run, table: marketTable(payload) })
+      })
+      .catch(() => {
+        if (live) setRead({ run, table: { kind: 'absent', why: 'could not be read' } })
+      })
+    return () => {
+      live = false
+    }
+  }, [run])
+  if (run === null || read === null || read.run !== run || read.table.kind !== 'table') return null
+  const raw = read.table.rows[`${card.box}/${card.index}`]
+  const price = raw === null || raw === undefined ? NaN : Number(raw)
+  return Number.isNaN(price) ? null : price
+}
+
 /** Stored and Live, the two lead figures. A group with no SKU has no listing, so it draws no Live
  *  figure and no ceiling: the store has nothing to report and the band must not invent it (D119). */
-function HeroLead({ figures }: { readonly figures: HeroFigures }) {
+function HeroLead({ figures, market }: { readonly figures: HeroFigures; readonly market: number | null }) {
   const { group, listedAt, cap } = figures
   const listing = group.sku !== null
   const live = forSale(group.listed.live, group.sold_here)
@@ -337,9 +365,7 @@ function HeroLead({ figures }: { readonly figures: HeroFigures }) {
     ? null
     : staleReading(listedAt)
       ? 'bn-dot bn-dot-warn'
-      : live > 0
-        ? 'bn-dot bn-dot-live bn-dot-still'
-        : 'bn-dot'
+      : 'bn-dot bn-dot-live bn-dot-still'
   const ago = readingAgoShort(listedAt)
   const over = cap === null ? 0 : live - cap
   return (
@@ -379,6 +405,20 @@ function HeroLead({ figures }: { readonly figures: HeroFigures }) {
           )}
         </div>
       ) : null}
+      {/* MARKET, beside Live: the price this card last read at, opening the product by SKU. A dash
+          where nothing has read one. */}
+      {listing && group.sku !== null ? (
+        <div className="browse-hero-fig">
+          <span className="browse-hero-fig-label">
+            <span className="bn-label">Market</span>
+          </span>
+          <span className="browse-hero-fig-value">
+            <ProductLink sku={group.sku} name={group.names[0]}>
+              <Money value={market} />
+            </ProductLink>
+          </span>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -395,6 +435,7 @@ export function CardHeroHead({
   postChips,
   actions,
   figures,
+  market = null,
 }: {
   readonly card: InventoryCard
   readonly game: string | null
@@ -404,6 +445,8 @@ export function CardHeroHead({
   readonly postChips?: ReactNode
   readonly actions?: ReactNode
   readonly figures?: HeroFigures | null
+  /** The Market figure's price (`useMarketPrice`). */
+  readonly market?: number | null
 }) {
   const name = nameOf(card)
   const number = numberCell(card)
@@ -461,7 +504,7 @@ export function CardHeroHead({
           </p>
         )}
       </div>
-      {figures == null ? null : <HeroLead figures={figures} />}
+      {figures == null ? null : <HeroLead figures={figures} market={market} />}
     </div>
   )
 }
@@ -491,6 +534,7 @@ export type CardPaneProps = {
 }
 
 export function CardPane({ row, game, dimmed = false, preChips, postChips, queued, actions, figures, photo, detail }: CardPaneProps) {
+  const market = useMarketPrice(row.card)
   return (
     <section
       className="bn-panel browse-card"
@@ -498,7 +542,7 @@ export function CardPane({ row, game, dimmed = false, preChips, postChips, queue
       data-dimmed={dimmed ? 'true' : undefined}
       inert={dimmed}
     >
-      <CardHeroHead card={row.card} game={game} preChips={preChips} postChips={postChips} actions={actions} figures={figures} />
+      <CardHeroHead card={row.card} game={game} preChips={preChips} postChips={postChips} actions={actions} figures={figures} market={market} />
       {queued}
       <div className="browse-band">
         <div className="browse-shot">

@@ -4439,9 +4439,13 @@ test('at 390, choosing a buyer enters walk mode, and Back leaves', async ({ page
   await expect(page.locator(`${VIEW} .orders-filterbar`)).toBeVisible()
 })
 
-test('the card pane draws no market line: the band holds the Live figure', async ({ page }) => {
+test('the band holds the Market figure, and it opens the product view', async ({ page }) => {
   await open(page, { orders: oneOpenOrder(), walkPlan: volcanionPlan() })
-  await expect(page.locator('.browse-card .browse-hero-fig').nth(1)).toBeVisible()
+  const fig = page.locator('.browse-card .browse-hero-fig', { hasText: 'Market' })
+  await expect(fig).toBeVisible()
+  /* No reading in this fixture: a quiet dash, never a made-up figure. */
+  await expect(fig.locator('.bn-money')).toHaveText('—')
+  await expect(fig.getByRole('link')).toHaveAttribute('href', /product/)
   await expect(page.locator('.browse-card .orders-card-market')).toHaveCount(0)
 })
 
@@ -4724,4 +4728,38 @@ test('landing view: the last sale leaves the buyer on screen', async ({ page }) 
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Ada Lovelace')
   await expect(page.locator('.orders-index-row')).toHaveAttribute('aria-current', 'true')
+})
+
+/* THE BAND'S LIVE DOT (card-detail spec, item 4): the live dot at rest for a recent reading, amber
+   from STALE_READING_DAYS on. Provisional by the owner's word, so the boundary is what is guarded. */
+for (const [days, cls] of [
+  [2, 'bn-dot-live'],
+  [3, 'bn-dot-warn'],
+] as const) {
+  test(`a listing read ${days} days ago draws the ${cls} dot`, async ({ page }) => {
+    const at = new Date(Date.now() - days * 86_400_000 - 60_000).toISOString()
+    const plan = walkPlanOf([
+      walkPlanStop({ takes: [walkPlanTake({ listed: { pushed: 0, staged: 0, live: 1 }, live_as_of: at })] }),
+    ])
+    await open(page, { orders: oneOpenOrder(), walkPlan: plan })
+    await expect(page.locator('.browse-card .browse-hero-fig-label .bn-dot')).toHaveClass(new RegExp(cls))
+  })
+}
+
+/* THE WALK PLAN'S PLACES CARRY NO NEIGHBOURS; the rows borrow them from the inventory read, and
+   draw no neighbour line where that read has no card for the place. */
+test('a copy row draws its neighbours from the inventory read', async ({ page }) => {
+  const withNeighbors = inventoryCard({
+    place: place({ neighbors: { prev: { index: 20, slot: 16, name: 'Charmander' }, next: { index: 22, slot: 18, name: 'Squirtle' } } }),
+  })
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
+  await open(page, { orders: oneOpenOrder(), walkPlan: volcanionPlan(), inventoryCards: { '3/21': withNeighbors } })
+  await expect(page.locator('.browse-card .card-locations-row .nb')).toContainText('Charmander')
+})
+
+test('a copy row draws no neighbour line when the inventory read has no card for its place', async ({ page }) => {
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
+  await open(page, { orders: oneOpenOrder(), walkPlan: volcanionPlan(), inventoryCards: {} })
+  await expect(page.locator('.browse-card .card-locations-row').first()).toBeVisible()
+  await expect(page.locator('.browse-card .card-locations-row .nb')).toHaveCount(0)
 })
