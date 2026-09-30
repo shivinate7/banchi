@@ -606,21 +606,6 @@
         "behaviour"
       ]
     },
-    "docs/specs/capture-app.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "unlabelled"
-      ]
-    },
-    "docs/specs/capture-server.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "generalisation",
-        "generalises",
-        "labelled",
-        "serialise"
-      ]
-    },
     "docs/specs/code-cards.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -628,59 +613,10 @@
         "realised"
       ]
     },
-    "docs/specs/demo.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "catalogue",
-        "catalogue"
-      ]
-    },
     "docs/specs/logo.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "greys"
-      ]
-    },
-    "docs/specs/mechanization-backlog.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "artefact",
-        "behaviour",
-        "behaviour",
-        "behavioural",
-        "canonicalise",
-        "canonicalise",
-        "generalise",
-        "generalised",
-        "judgement",
-        "judgement",
-        "judgement",
-        "judgement",
-        "mechanisable",
-        "mechanised",
-        "mechanising",
-        "neighbour",
-        "neighbour",
-        "recognise",
-        "recognising",
-        "summarise"
-      ]
-    },
-    "docs/specs/motion-trigger.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "centre",
-        "centre",
-        "centre",
-        "labelled",
-        "labelled",
-        "labelled",
-        "neighbour",
-        "neighbours",
-        "polariser",
-        "quantisation",
-        "synchronisation",
-        "synthesised"
       ]
     },
     "docs/specs/order-flow.md": {

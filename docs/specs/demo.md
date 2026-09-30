@@ -1,196 +1,143 @@
 # The public demo, and why it is not a fork
 
-**THE STORE IS NOW A MIRROR, NOT AN INVENTION, as of 2026-09-26 (`D295`, §13).**
-`demo-static` no longer builds from `demo-seed`/`demo-record`. It installs a scrubbed
-recording of the owner's own real store instead. Below, §§2-12 describe the flow that
-mechanism replaces. They stay accurate about the wire, the coverage sweep and the build.
-`demo-seed`/`demo-record`/`demo` still work exactly as written. They are just no longer what
-gets published. Read §13 first for what changed and why.
+The published page (`shivinate7.github.io/banchi`) is the real front end playing back a recorded
+wire. `.github/workflows/demo.yml` rebuilds it on every push to `main` that touches what it is
+built from.
 
-**COVERAGE WIDENED 2026-09-24**: photographs, undo, facet counts, the order walk, a typed
-search, the graveyard, the price histories and the value bands (§3, §5, §8, §8a).
+**The published store is a mirror and not an invention (D295, §13).** `make demo-static` installs
+a scrubbed recording of the owner's own real store from `demo-assets/mirror/`. `demo-seed`,
+`demo-record` and `demo` still work as a generator anyone can run on demand. They are not what
+gets published. §§2-6 and §12 describe that generator. §§1, 5-11 and 13 hold for the published
+build.
 
-**STATUS, 2026-09-13: BUILT and LIVE.** `make demo` / `demo-seed` / `demo-record` /
-`demo-static` / `demo-preview` are all real and all re-runnable. The published page
-(`shivinate7.github.io/banchi`) is rebuilt by `.github/workflows/demo.yml` on every push to
-`main` that touches what it is built from. This file is that argument's home —
-it existed only as prose inside `CLAUDE.md`'s command reference until this entry, verified
-against the code rather than carried forward from memory. **Re-verified against the tree
-on 2026-09-19** before landing: every mechanism below still holds, and three figures that
-had drifted since the first draft — `request()`'s line, the `app/src` line count and
-`capture_server.py`'s size — were re-measured rather than carried.
+Governing decisions:
 
-Governed by D42 (a workflow may publish but never move `main`), D18 (a generator may write;
-nothing that writes may gate a commit — every `demo-*` target is off the commit path for this
-reason), D70 (a live code card is a bearer instrument, which is why `demo-assets/`'s
-photographs must be QR-cleared before they can be tracked at all), and D102/D94 (the mark and
-the brand the published page carries are the same generated ones the real app draws).
+- D42: a workflow may publish and never moves `main`.
+- D18: a generator may write, and nothing that writes may gate a commit. Every `demo-*` target is
+  off the commit path.
+- D70: a live code card is a bearer instrument. `demo-assets/`'s photographs must be QR-cleared
+  before they can be tracked at all.
+- D102 and D94: the mark and the brand on the published page are the same generated ones the real
+  app draws.
 
 ---
 
 ## 1. Why not a fork
 
-The product this repo builds is one Vite/React front end talking to one Python capture
-server over one HTTP boundary. `app/src/server.ts`'s `request()` is the **only**
-place a client call is made — every one of the client's exported functions funnels through
-it — and `app/src/server.ts:photoUrl()` is the **only** place a photograph is
-addressed. Both were read and confirmed current as of this entry.
+The product is one Vite/React front end talking to one Python capture server over one HTTP
+boundary. `app/src/server.ts`'s `request()` is the only place a client call is made. Every
+exported client function funnels through it. `photoUrl()` in the same file is the only place a
+photograph is addressed.
 
-That means a demo differs from the real product in exactly two functions: what `request()`
-resolves to, and what a photograph URL points at. Forking the app to build a public copy
-would duplicate the other 55,000-odd lines under `app/src` (`wc -l` over `app/src/**/*.{ts,tsx}`,
-re-measured 2026-09-19: 55,428) to carry none of the actual difference, and would diverge from the real
-app on the next commit that touched either copy and not the other — this repo's history moves
-fast enough that a maintained fork was never a serious option.
+A demo therefore differs from the real product in exactly two functions: what `request()`
+resolves to, and what a photograph URL points at. A fork would duplicate all of `app/src` to
+carry none of that difference. It would diverge from the real app on the next commit that touched
+one copy and not the other.
 
-**UNVERIFIED, carried from the original design conversation rather than re-derived here:**
-earlier drafts of this argument cited "38,705 lines" and "134 commits landed in the three
-days before this was built" as the measurements that closed the fork question. Neither figure
-was reproduced for this entry — the line count above is a fresh, larger measurement of a
-later tree, and the commit-velocity claim was not re-run at all. Treat both
-historical figures as illustrative rather than load-bearing.
+## 2. What differs, and the three-way split (the seed generator)
 
-## 2. What differs, and the three-way split
+`scripts/demo-seed.py`'s module docstring states the split:
 
-`scripts/demo-seed.py`'s own module docstring states the split in these terms, and it still
-governs the architecture even though one clause of it (§6) is now stale:
+- **REAL:** the catalog. Every curated card is drawn from a real TCGplayer export under
+  `fixtures/`: real SKUs, names, numbers and market prices. The pipeline join and the pricing
+  arithmetic run for real. Nothing about the numbers on `#/pricing` is invented.
+- **INVENTED:** which of those cards sits in which box at which index, what has sold, what is
+  held back, and who it shipped to. None of it describes a physical object. It makes the store look
+  worked and not freshly built.
+- **CURATED-REAL:** the photographs (§3).
 
-- **REAL** — the catalogue. Every curated card is drawn from a real TCGplayer export under
-  `fixtures/`: real SKUs, real names, real numbers, real market prices. The pipeline join
-  that resolves a card against those exports, and the pricing arithmetic downstream of it,
-  run for real — nothing about the numbers a viewer sees on `#/pricing` is invented.
-- **INVENTED** — which of those cards sits in which box at which index, what has sold, what
-  is held back, and who it shipped to. None of it describes a physical object; it exists to
-  make the store look worked rather than freshly built.
-- **SYNTHETIC**, as originally designed — the photographs, to be drawn by a `card_image()`
-  function so that neither somebody else's card art nor a picture of the owner's desk would
-  reach a published page.
+## 3. The photographs are real, curated and QR-cleared
 
-## 3. The photographs are no longer synthetic, and the docstring is stale about it
+`scripts/demo-seed.py`'s `Row` class reads a curated manifest of real photographs.
+`demo-assets/cards.json` holds 132 entries (`DEMO_PHOTO_COUNT`). Each pairs one of the owner's
+card photographs with the identification it actually received. `demo-seed.py` refuses to run
+without that manifest.
 
-**Verified against the code, and the correction this entry exists partly to record:**
-`scripts/demo-seed.py` has no `card_image()` function today — it was searched for and is not
-present. The `Row` class that replaced it (see the file's own comment: *"The demo drew its own
-cards until 2026-09-06 and could caption them anything; real photography cannot"*) reads a
-curated manifest of **real photographs** instead: `demo-assets/cards.json` holds 132 entries
-(measured 2026-09-13, matching the Makefile's `DEMO_PHOTO_COUNT ?= 132`), each pairing one of
-the owner's own real card photographs with the identification it actually received.
+`demo-assets/` is the one tracked-image exception in this repo. It is safe to track only because
+of what curates it. `make demo-photos SOURCE=<checkout>` (`scripts/demo-photos.py`) reads a real
+store's photographs. It refuses any photograph that a QR decodes out of, at full resolution and
+before the downscale. A live code card's whole identity is that QR (D70).
 
-This is `demo-assets/` — the **one** tracked-image exception in this repo, and it is safe to
-track only because of what curates it. `make demo-photos SOURCE=<checkout>` (`scripts/demo-photos.py`)
-reads a real store's photographs and **refuses any photograph a QR decodes out of, at full
-resolution, before the downscale** — because a live code card's whole identity is that QR
-(D70), and a bearer instrument published to strangers is a defect this repo will not ship.
-`demo-seed.py` then refuses to run at all without that curated manifest present.
+There are three checks, each on a different artifact:
 
-**The second check reads the published bytes (2026-09-24).** `scripts/demo-record.py:copy_photos`
-copies each card's photograph from the card record's own `photo` field. Before this date it
-walked `captures/cards/box*/`. The seed stopped writing that folder when the photographs moved
-under the card's own name (D172, D183), so every build published 0 photographs. Now the
-recorder decodes each photograph it copies with `codes/qr.py`. If a QR decodes on one, it
-refuses the whole copy and writes nothing. It never prints the payload. A store of cards that
-copies 0 photographs is also a refusal. `python3 scripts/demo-record.py --self-test` proves the
-QR refusal on a throwaway store with a synthetic symbol. A copy of the recorder with the refusal
-removed fails 2 of its 3 cases. The seed's docstring no longer says SYNTHETIC. It was corrected
-on the same date.
-
-So the SYNTHETIC row above is superseded by fact: the photographs a viewer sees are real,
-curated, and QR-cleared, not drawn. The REAL / INVENTED split still holds exactly as designed;
-what moved from SYNTHETIC to a fourth, curated-real category is the photography alone, and
-`make docs-audit` has no row watching this drift because nothing before this entry recorded
-the original claim anywhere but a stale docstring comment.
+- The curator refuses a decodable photograph before it is written.
+- `scripts/demo-record.py`'s `copy_photos` copies each card's photograph from the card record's own
+  `photo` field. It decodes each one with `codes/qr.py`. If a QR decodes on any of them, it
+  refuses the whole copy and writes nothing. It never prints the payload. A store that copies no
+  photographs is also a refusal. `python3 scripts/demo-record.py --self-test` proves the refusal on
+  a throwaway store with a synthetic symbol.
+- `scripts/githooks/pre-commit` runs `scripts/qr-clear-check.py` on every staged image (D303). It
+  reads the staged blob and not the working-tree file. It refuses on the first decode and names the
+  file. `PKMNSCAN_QR=off` bypasses it once.
 
 ## 4. The seed is deterministic, and refuses a real store
 
-`scripts/demo-seed.py` seeds one RNG from a fixed constant (`SEED = 20260906`) and stamps
-every record as an offset from one fixed clock (`NOW = 2026-09-06T14:30:00Z`), so an unchanged
-tree rebuilds the store byte-identically and a rebuild is not a diff nobody can read.
+`scripts/demo-seed.py` seeds one RNG from a fixed constant (`SEED`) and stamps every record as an
+offset from one fixed clock (`NOW`). An unchanged tree rebuilds the store byte-identically.
 
-**It refuses to touch a store that already holds cards unless `--force` says so** — verified
-in the file's own docstring and invoked exactly that way by `make demo-seed`
-(`PKMNSCAN_HOME=$(DEMO_HOME) $(PYTHON) scripts/demo-seed.py --force`, `DEMO_HOME ?= demo`).
-`PKMNSCAN_HOME` unset means the checkout's own store, which is somebody's real one (D43); the
-seed's refusal is that same rule applied to a script that would otherwise overwrite it.
+It refuses to touch a store that already holds cards unless `--force` says so. `make demo-seed`
+passes `--force` with `PKMNSCAN_HOME=$(DEMO_HOME)` (`DEMO_HOME ?= demo`). An unset `PKMNSCAN_HOME`
+means the checkout's own store, which is somebody's real one (D43).
 
-Identification is the one step of the real pipeline that costs money, so it is the only step
-the seed fakes: it writes `identifications.json` in exactly the shape a real `pkmnscan
-identify` run leaves behind — a shape `cli/resolve.py` documents as an explicitly supported
-input ("a hand-made or recovered identifications file"). Everything after that runs for real:
-`make demo-seed`'s recipe itself runs `./pkmnscan join` twice against
-`fixtures/riftbound_export_untouched.csv`, so the catalogue lookup, the variant ladder, the
-cap arithmetic and `pricing.json` are the pipeline's own output over real fixture data, never
-a fixture pretending to be one.
+Identification is the one step of the real pipeline that costs money, so it is the only step the
+seed fakes. It writes `identifications.json` in the shape a real `pkmnscan identify` run leaves.
+`cli/resolve.py` documents that shape as a supported input. Everything after runs for real.
+`make demo-seed` runs `./pkmnscan join` against `fixtures/riftbound_export_untouched.csv`, so the
+catalog lookup, the variant ladder and the cap arithmetic are the pipeline's own output.
 
 ## 5. The bundle, and why it never touches the owner's server
 
-`make demo-record` (`scripts/demo-record.py`) spawns its **own** capture server over the demo
-store, on its own port, sweeps every GET the client can build against the parameter space the
-seeded store actually holds, records every 200 response into `app/demo/bundle.json` plus the
-photographs Vite will bundle, and stops that server again. It never starts, restarts, or binds
-`make up`'s port — which in the main checkout is the owner's live process over their real
-inventory (D43, D138). A 404 recorded here means the path is not a read this demo replays, not
-that a read failed.
+`make demo-record` (`scripts/demo-record.py`) spawns its own capture server over the demo store,
+on its own port. It sweeps every GET the client can build against the parameter space the store
+holds. It records every 200 response into `app/demo/bundle.json`, plus the photographs Vite
+bundles, and it stops that server. It never starts, restarts or binds `make up`'s port, which in
+the main checkout is the owner's live process over their real inventory (D43, D138). A 404
+recorded here means the path is not a read this demo replays.
 
-**What the sweep records, since 2026-09-24.** The first sweep left whole screens refusing, so a
-reviewer could not tell a demo gap from a product defect. `sweep_coverage` adds these reads:
+`sweep_coverage` records these reads:
 
 - `/graveyard`, `/inventory/recent` at Home's own depth, and `/pipeline/submissions`.
 - Every `/boxes` facet filter the three menus can make (D213), each facet unset or one value.
 - Each value band (`top`, `bottom`, `gaps`) whole, once per box. The browser cuts the page.
 - `/pipeline/holdings-value` for each range, and `/pipeline/price-now` for each SKU.
 - `/pipeline/products/<sku>/history` for each SKU, when the server can answer it.
-- Three POST routes that only read: `/inventory/copies` per SKU, `/orders/picks` per order,
-  and `/orders/walk-plan` for every SINGLE open order, plus the one full "walk all" set
-  (2026-09-27, resolving §13's open question below). The full powerset never fit a real
-  store. Any other ticked combination is refused honestly (D269/TXT-46), never a wrong plan.
+- Three POST routes that only read: `/inventory/copies` per SKU, `/orders/picks` per order, and
+  `/orders/walk-plan`. A POST read is keyed `POST <path> <body>` with the body's keys sorted
+  (`demo-record.py`'s `post_key`).
 
-Measured 2026-09-24, with the recorded price histories: 786 recorded routes, 9.0 MB of JSON on
-disk. The walk plans are 1.5 MB of it. The built `demoServer` chunk is 5.3 MB, and 364 KB after
-gzip compression. A POST read is keyed
-`POST <path> <body>`, with the body's keys sorted (`demo-record.py:post_key`).
+Every box has a name. The seed refuses a box with no name and two boxes with one name (D20).
 
-**Every box has a name.** The owner ruled that a box number is never shown. So the seed refuses
-a box with no name, and two boxes with one name (D20).
-
-`app/src/demoServer.ts` is what a published build plays the recording back through. Its own
-header, read in full for this entry, states the mechanism precisely: `server.ts`'s single
-`request()` reaches it through a dynamic `import()` gated on `if (DEMO)`, and every screen, the
-kit, the shell, the router and the keyboard map are **the same code** the owner runs at the
-desk — only the wire is frozen.
+`app/src/demoServer.ts` plays the recording back. `server.ts`'s single `request()` reaches it
+through a dynamic `import()` gated on `if (DEMO)`. Every screen, the kit, the shell, the router and
+the keyboard map are the same code the owner runs at the desk. Only the wire is frozen.
 
 ## 6. `VITE_DEMO` is a build-time constant, not a runtime flag
 
-**Verified in the `define` block of `app/vite.config.ts`**: `__BN_DEMO__: JSON.stringify(process.env.VITE_DEMO
-=== '1')`. This is a compile-time literal substitution, not an environment read at run time. An
-ordinary build (`VITE_DEMO` unset) folds `__BN_DEMO__` to the literal `false`; Rollup then dead-
-code-eliminates the `if (DEMO)` branch in `server.ts` entirely, so neither `demoServer.ts` nor
-the recorded bundle it imports (`#demo-bundle`) is ever emitted into a real build's chunks. A
-runtime flag — reading an environment variable or a query parameter at load time — was
-deliberately rejected: a UI that could answer from the wrong store at runtime is exactly D43's
-subject, generalized from "which checkout's store" to "which store, real or recorded, this
-bundle can possibly reach." A build-time constant makes the two cases structurally different
-artifacts rather than one artifact with a mode switch.
+`app/vite.config.ts` defines `__BN_DEMO__` as `JSON.stringify(process.env.VITE_DEMO === '1')`. That is a compile-time literal. An ordinary build folds it to `false`. Rollup then removes the `if (DEMO)` branch in `server.ts`. So neither `demoServer.ts` nor the recorded bundle (`#demo-bundle`) is ever emitted into a real build's chunks.
 
-`make demo-static` is the recipe that sets it: `cd app && VITE_DEMO=1 DEMO_BASE=$(DEMO_BASE)
-npx vite build --outDir ../dist-demo --emptyOutDir` (Makefile, verified).
+A runtime flag was rejected. A UI that could answer from the wrong store at run time is D43's
+subject, generalized from "which checkout's store" to "which store, real or recorded, this bundle
+can possibly reach". A build-time constant makes the two cases structurally different artifacts
+and not one artifact with a mode switch.
+
+`make demo-static` sets it: `cd app && VITE_DEMO=1 DEMO_BASE=$(DEMO_BASE) npx vite build --outDir
+../dist-demo --emptyOutDir`.
 
 ## 7. `DEMO_BASE` — where the bundle believes it is served from
 
-GitHub Pages serves a project site at `/<repo>/`, never at `/`. A Vite build with no `base`
-override assumes `/`, and every asset reference 404s the moment such a build is placed under a
-subpath — a failure invisible on `localhost` and only visible once published.
-`.github/workflows/demo.yml`'s build step derives this from the repository name itself —
-`make demo-static DEMO_BASE="/${GITHUB_REPOSITORY#*/}/"` — so a repository rename cannot leave
-a stale path baked into the artifact; the Makefile's own `DEMO_BASE ?= /$(DEMO_REPO)/` default
-is a fallback for a hand-run build and is allowed to be stale by design, exactly as the
-Makefile's own comment already states for a related target. `make demo-preview` serves
-`dist-demo/` through `vite preview` with the same `--base`, so a link that resolves in preview
-resolves published.
+GitHub Pages serves a project site at `/<repo>/` and never at `/`. A Vite build with no `base`
+override assumes `/`, so every asset reference 404s under a subpath. That failure is invisible on
+`localhost`.
 
-## 8. What a published page genuinely cannot do, refused by name
+`.github/workflows/demo.yml` derives the base from the repository name:
+`make demo-static DEMO_BASE="/${GITHUB_REPOSITORY#*/}/"`. A repository rename then cannot leave a
+stale path in the artifact. The Makefile's `DEMO_BASE ?= /$(DEMO_REPO)/` is a fallback for a
+hand-run build and may go stale. `make demo-preview` serves `dist-demo/` through `vite preview`
+with the same `--base`, so a link that resolves in preview resolves published.
 
-`app/src/demoServer.ts`'s `CANNOT` table (verified in full) refuses seven paths, each with the
-reason on it, rather than failing silently or looking broken:
+## 8. What a published page cannot do, refused by name
+
+`app/src/demoServer.ts`'s `CANNOT` table refuses seven paths, each with its reason:
 
 | Path prefix | Refusal code | Reason |
 |---|---|---|
@@ -202,290 +149,212 @@ reason on it, rather than failing silently or looking broken:
 | `/capture` | `demo_no_camera` | writes a photograph to a disk this demo has none of |
 | `/codes/scan` | `demo_no_camera` | reads QR codes off photographs on disk |
 
-Each refusal is thrown as a real `ServerError` in the server's own envelope, so a screen draws
-it exactly the way it draws a real refusal — the viewer sees a true sentence about the product
-rather than a broken button.
+Each refusal is a real `ServerError` in the server's own envelope, so a screen draws it the way it
+draws a real refusal. Every refusal says "Not in this demo." (TXT-46). The code under it names which
+refusal it was. The reasons in the table are for the reader of `demoServer.ts` and not for the
+screen.
 
-**Reads are recorded; writes are real, within reason.** A demo where every press is inert
-argues against the product it demonstrates, so the presses that carry the product's own
-claim — the sale, the review answer, the stand-down, a price, a hold, a rename, a divider —
-are implemented against a **mutable, in-memory copy** of the recording (`structuredClone`d
-once at load). Press one and the store visibly changes underneath: the counters, the queues
-and the box walk all answer differently afterward, exactly as they do at the desk. Nothing is
-persisted — a reload starts the demo over, which is the right behavior for a stranger clicking
-a shared link, and no attempt is made to write any of it back.
+**Reads are recorded. Writes are real, within reason.** A demo where every press is inert argues
+against the product. The presses that carry the product's claim are implemented against a mutable,
+in-memory copy of the recording (`structuredClone`d once at load). Those presses are the sale, the
+review answer, the stand-down, a price, a hold, a rename and a divider. Press one and the store
+changes underneath: the counters, the queues and the box walk all answer differently afterward.
+Nothing persists. A reload starts the demo over, which is right for a stranger clicking a shared
+link.
 
-`demoServer.ts`'s own comment states the boundary this deliberately does not cross: **it does
-not re-implement the server.** `server/capture_server.py` is over thirteen thousand lines, and a
-second copy of its rules in TypeScript would be a copy that drifts — the exact defect this
-repo refuses everywhere else, in `CLAUDE.md`'s own words about the join key and the pricing
-answer alike. What exists instead is a patch per write: the documents a real press would have changed,
-changed by hand. Anything subtler than that is a refusal, never a guess.
+`demoServer.ts` does not re-implement the server. A second copy of `server/capture_server.py`'s
+rules in TypeScript would drift. What exists is a patch per write: the documents a real press would
+change, changed by hand. Anything subtler is a refusal and never a guess.
 
-**The screen is told one sentence.** Every refusal says "Not in this demo." (TXT-46). The code
-under it names which refusal it was. The reasons in the table above are for the reader of
-`demoServer.ts`, not for the screen.
+### What the demo answers
 
-### What the demo answers, since 2026-09-24
-
-- **One canonical key per read.** A GET is its path plus its query pairs, sorted and
-  re-encoded on both sides. So a filter the screen builds in another order still finds its
-  recording.
-- **Re-sliced, never invented.** Copies, picks, today's price and trends are recorded one
-  member at a time. The browser merges the members the screen asks for. The server answers a
-  subset exactly as it answers the whole, and each route's own docstring says so. A value band
-  is recorded whole and cut into the page the screen asks for, with the demo's own cursor.
-- **A typed search** uses `kit/match.ts:filterByQuery`, the one matcher the owner ruled every
-  search follows, over the search groups the server composed. It does not copy the server's
-  ranking. Groups come back in name order.
-- **A walk plan** is the recording for exactly the ticked set. A set the recording does not
-  hold is refused.
+- **One canonical key per read.** A GET is its path plus its query pairs, sorted and re-encoded on
+  both sides. A filter the screen builds in another order still finds its recording.
+- **Re-sliced, never invented.** Copies, picks, today's price and trends are recorded one member at
+  a time. The browser merges the members the screen asks for. A value band is recorded whole and cut
+  into the page the screen asks for, with the demo's own cursor.
+- **A typed search** uses `kit/match.ts`'s `filterByQuery`, the one matcher every search follows,
+  over the search groups the server composed. It does not copy the server's ranking. Groups come
+  back in name order.
+- **A walk plan** is the recording for exactly the ticked set. A set the recording does not hold is
+  refused.
 - **Undo.** A sale, a retirement, a review answer and a stand-down answer `restores_to`, and
   `{"undo": true}` reverses each one.
-- **A state change reaches every document that holds the card**: the whole-store read, the
-  box read, the recent deck, the search groups, the copies and the walk copies. It also moves
-  the box counters on every `/boxes` row and each search group's `on_hand`.
+- **A state change reaches every document that holds the card.** Those documents are the whole-store read, the box read, the recent deck, the search groups, the copies and the walk copies. A state change also moves the box counters on every `/boxes` row and each search group's `on_hand`.
 
-### What a press does NOT reach, on purpose
+### What a press does not reach, on purpose
 
-- **The place labels.** D58 renumbers the cards after a sale on the next read. The demo does
-  not recompose a label. That matches the owner's "nothing jumps" ruling for a press, and the
-  next load of the published page is a reload, which starts it over.
-- **The graveyard and the walk plans.** A card sold in the demo does not appear in the
-  graveyard, and a recorded walk plan still lists it.
-- **The order ledger.** The pull, the close and the fill each write it, and its arithmetic is
-  server logic. All three are refused.
-- **A typed catalog lookup on Review.** Only the empty lookup a card opens with could be
-  recorded, and the demo's queued cards carry no run, so even that one refuses.
-- **The shipping export on Home and Orders.** The Shipping stage reads the recorded export
-  when it opens, and holds it in the browser's memory. Home and the Orders tab say "no
-  export" until then. The fix is in `OrdersShipStage.tsx`, not here.
+- **The place labels.** D58 renumbers cards after a sale on the next read. The demo does not
+  recompose a label.
+- **The graveyard and the walk plans.** A card sold in the demo does not appear in the graveyard,
+  and a recorded walk plan still lists it.
+- **The order ledger.** The pull, the close and the fill each write it, and its arithmetic is server
+  logic. All three are refused.
+- **A typed catalog lookup on Review.** Only the empty lookup a card opens with could be recorded,
+  and the demo's queued cards carry no run, so even that one refuses.
+- **The shipping export on Home and Orders.** The Shipping stage reads the recorded export when it
+  opens and holds it in the browser's memory. Home and the Orders tab say "no export" until then.
+  The fix is in `OrdersShipStage.tsx`.
 
 ### The price histories are recorded once, on the owner's Mac
 
-**The owner's ruling (2026-09-24).** Every price history this product draws is read from
-`infinite-api.tcgplayer.com`. That host refuses the honest User-Agent (D216), and the owner
-allows the browser signature from the owner's own machine only. So CI never fetches a history.
-`make demo-histories` records them on the owner's Mac, when the owner chooses:
+Every price history this product draws comes from `infinite-api.tcgplayer.com`. That host refuses
+the honest User-Agent (D216). The owner allows the browser signature from the owner's own machine
+only. So CI never fetches a history. `make demo-histories` records them on the owner's Mac, when the
+owner chooses:
 
     PKMNSCAN_TCG_USER_AGENT="<the browser's User-Agent>" make demo-histories
 
 - It reads every demo card that a committed export can place, over all four ranges
-  (`pipeline/pricehistory.py:RANGES`). It writes a NEW directory,
-  `fixtures/demo-price-history/<date>/`, and refuses if that directory exists. So a fixture is
-  never modified.
-- Each file is one product and one range, the endpoint's answer verbatim except that `result`
-  keeps only the SKUs the demo holds. `index.json` maps each SKU to its product.
+  (`pipeline/pricehistory.py`). It writes a new directory, `fixtures/demo-price-history/<date>/`,
+  and refuses if that directory exists. A fixture is never modified.
+- Each file is one product and one range: the endpoint's answer verbatim, except that `result` keeps
+  only the SKUs the demo holds. `index.json` maps each SKU to its product.
 - Before it writes, every key of every answer is checked against an allow list of public market
-  figures (`scripts/demo-histories.py:ALLOWED_RESULT` and `ALLOWED_BUCKET`). A key outside the
+  figures (`scripts/demo-histories.py`'s `ALLOWED_RESULT` and `ALLOWED_BUCKET`). A key outside the
   list refuses the whole run. The User-Agent is never written.
-- Without `PKMNSCAN_TCG_USER_AGENT` it refuses, and names the variable.
+- Without `PKMNSCAN_TCG_USER_AGENT` it refuses and names the variable.
 
-Measured on the first run, 2026-09-24: 92 SKUs read, 368 files, 0 refused, 3.2 MB. The 40
-Pokemon cards in `demo-assets/` have no row in a committed export, so none of them has a
+The 40 Pokemon cards in `demo-assets/` have no row in a committed export, so none of them has a
 history.
 
-**Two readers, both on the newest directory.** The seed writes the price archive (D219) through
-the real `pipeline/pricearchive.py:sweep`, with a `FixtureMarket` in the network's place. So
-`#/product` and "Value my stock" draw real ranges. The recorder copies the files into the demo
-home's own market cache (`demo-record.py:warm_history_cache`), stamped at record time. So the
-per-run price history on `#/pricing` and the trend strip answer from them, and no history
-request leaves the build. The product lookup still asks the public tcgcsv mirror for a product
-number. That mirror answers the honest User-Agent. The demo never draws an invented price.
+Two readers use the newest directory. The seed writes the price archive (D219) through the real
+`pipeline/pricearchive.py`'s `sweep`, with a `FixtureMarket` in the network's place. `#/product` and
+"Value my stock" then draw real ranges. The recorder copies the files into the demo home's market
+cache (`demo-record.py`'s `warm_history_cache`). The per-run price history on `#/pricing` and the
+trend strip then answer from them, and no history request leaves the build. The demo never draws an
+invented price.
 
 ## 8a. The coverage spec
 
-`app/tests/demo-coverage.spec.ts` reads the BUILT artifact, `dist-demo/`. It serves the files
-on this checkout's own origin under the demo's base path, as a static host would. It checks
-that every recorded card has its photograph in the build. It checks that each screen draws its
-photographs with a 200. It presses Mark sold then Undo, a Game pick, a typed search and a
-review answer with its undo. It opens the order walk, the graveyard, product history, the
-value band and "Value my stock". No screen may draw "Not in this demo." on arrival.
+`app/tests/demo-coverage.spec.ts` reads the built artifact, `dist-demo/`. It serves the files on
+this checkout's own origin under the demo's base path, as a static host would. It checks these
+things:
 
-Every screen is reached from the demo's root, by the sidebar or by a control on the screen.
-The one typed link is `#/product?sku=…`, because D227 makes that view a deep link and no screen
-links to it yet.
+- Every recorded card has its photograph in the build.
+- Each screen draws its photographs with a 200.
+- Mark sold then Undo, a Game pick, a typed search and a review answer with its undo all work.
+- The order walk, the graveyard, product history, the value band and "Value my stock" open.
+- No screen draws "Not in this demo." on arrival.
+
+Every screen is reached from the demo's root, by the sidebar or by a control on the screen. The one
+typed link is `#/product?sku=…`, because D227 makes that view a deep link and no screen links to it.
 
 Run `make demo-static` first. Without `dist-demo/` the cases skip, with that reason.
 `DEMO_REQUIRED=1` makes a missing build a failure. Set `DEMO_PREVIEW_URL` to a running
-`make demo-preview` to read every file from the preview server instead. Measured 2026-09-24:
-18 of 18 pass on this tree. With `DEMO_REQUIRED=1` and no build, 18 of 18 fail.
+`make demo-preview` to read every file from the preview server.
 
-**CI runs both guards before it publishes.** `.github/workflows/demo.yml` runs
+CI runs both guards before it publishes. `.github/workflows/demo.yml` runs
 `python3 scripts/demo-record.py --self-test` and then this spec with `DEMO_REQUIRED=1`, after
-`make demo-static` and before the upload. A red step stops the job, so nothing is published.
-No workflow calls `make demo-histories`.
+`make demo-static` and before the upload. A red step stops the job. No workflow calls
+`make demo-histories`.
 
 ## 9. No secret can reach a published page, and it is checked against the artifact
 
-Vite inlines only environment variables prefixed `VITE_` into a client bundle. **Verified**:
-`.env.example` carries `ANTHROPIC_API_KEY`, `POKEMONTCG_API_KEY`, `TCGPLAYER_STORE_COOKIE`,
-`PKMNSCAN_TCG_SELLER_KEY`, `PKMNSCAN_TCG_USER_AGENT` and `PKMNSCAN_LAN_NAME` — every secret
-this repo defines — and not one of them carries the `VITE_` prefix. So a public build cannot
-leak one by the naming convention alone.
+Vite inlines only environment variables prefixed `VITE_` into a client bundle. `.env.example` names
+every secret this repo defines, and none carries the `VITE_` prefix. So a public build cannot leak
+one by the naming convention alone.
 
-That property is asserted over the built artifact rather than merely trusted.
-`.github/workflows/demo.yml`'s "Prove nothing private reached the bundle" step greps
-`dist-demo/` for two independent shapes after the build completes: any `/Users/` or `/home/`
-path (a machine-local leak — `scripts/demo_scrub.py:audit` is the recorder's own first line of
-defense, and this CI check re-examines the artifact rather than trusting an earlier pass over it),
-and a **secret value**, never a secret's name — an `sk-ant-` key body, or a
-`TCGAuthTicket...=<value>` assignment. Verified in the workflow: this is a deliberate, recorded
-correction. The first version matched the bare strings `ANTHROPIC_API_KEY` and
-`TCGPLAYER_STORE_COOKIE`, and its very first run blocked the publish on a recorded server
-refusal that *named* the missing variable — the opposite of a leak. A guard that fires on the
-word for a secret keeps firing on documentation and refusals until somebody disables it, which
-is the same argument this repo makes everywhere else about a guard nobody trusts. The step also
-prints what it matched, so a real failure does not require reproducing the build by hand to
-diagnose.
+The property is also asserted over the built artifact. The "Prove nothing private reached the
+bundle" step in `.github/workflows/demo.yml` greps `dist-demo/` for two shapes after the build:
 
-## 10. The old freshness guard is retired (D295 amended, L5, 2026-09-27)
+- A `/Users/` or `/home/` path, which is a machine-local leak. `scripts/demo_scrub.py`'s `audit` is
+  the recorder's own first line of defense, and this grep re-examines the artifact.
+- A secret value and never a secret's name: an `sk-ant-` key body, or a `TCGAuthTicket...=<value>`
+  assignment.
 
-`demo-freshness` (once `demo-freshness.py`) used to compare a digest of
-`app/src/types.ts` and `app/src/server.ts` against what `app/demo/bundle.json` was recorded
-against. It never gated `make check`. Nothing derived from the demo was committed. CI built
-`app/demo/bundle.json` fresh on every push to `main` that touched the paths
-`.github/workflows/demo.yml` lists (`app/**`, `server/**`, `store/**`, `pipeline/**`,
-`cli/**`, `identify/**`, `geometry/**`, `codes/**`, `fixtures/**`, `demo-assets/**`, every
-script under `scripts/` whose name starts with `demo-` or `demo_`, `Makefile`, the workflow
-file itself). So the published copy could not go stale. The published mirror never reads
-`app/demo/bundle.json` at all, so this guard tested only the invented seed's own recorder
-(the test-audit plan's Q5: "cut the old seed guards"). `demo-seed` / `demo-record` / `demo`
-stay, as a generator anyone can run on demand.
+A guard that matches a secret's name keeps firing on documentation and on refusals that name the
+missing variable. Somebody then disables it. The step prints what it matched, so a real failure
+needs no local rebuild to diagnose.
+
+## 10. There is no freshness guard
+
+Nothing derived from the demo is committed. CI builds the bundle fresh on every push to `main` that
+touches the paths `.github/workflows/demo.yml` lists. The published copy therefore cannot go stale.
+`demo-freshness` and `demo-determinism` are retired (D295): the published mirror never reads
+`app/demo/bundle.json`, so those guards tested only the invented seed's own recorder.
 
 ## 11. What republishes, and why nothing is ever queued
 
-`concurrency: {group: demo-pages, cancel-in-progress: true}` (verified in the workflow) means
-a newer push cancels a build already in flight rather than queuing behind it — a queued build
-of older code has nothing to offer once newer code is already on `main`, so the last push is
-the only result anybody wants. The job reads the repo and writes to GitHub Pages; it has no
-permission to write to the repository itself, so it cannot move `main` and is not a second way
-around D42.
+`concurrency: {group: demo-pages, cancel-in-progress: true}` means a newer push cancels a build in
+flight and does not queue behind it. A queued build of older code has nothing to offer once newer
+code is on `main`. The job reads the repo and writes to GitHub Pages. It has no permission to write
+to the repository, so it cannot move `main` and is not a second way around D42.
 
 ### 11a. Dispatching `demo.yml` on a branch is a safe dry run
 
-`demo.yml` triggers on a push to `main` only. A PR never runs it. Dispatch it by hand on a
-feature branch instead: `gh workflow run demo.yml --ref <branch>`. This is safe. The
-`github-pages` environment names a deployment-branch policy of `main` alone. So the `build`
-job runs in full, and the environment refuses `deploy` before `actions/deploy-pages` even
-loads. Nothing this dispatch builds can reach the public page.
+`demo.yml` triggers on a push to `main` only. A PR never runs it. Dispatch it by hand on a feature
+branch instead: `gh workflow run demo.yml --ref <branch>`. The `github-pages` environment names a
+deployment-branch policy of `main` alone (unverified from this repo). The `build` job then runs in
+full, and the environment refuses `deploy` before `actions/deploy-pages` loads.
 
-Read the **`build` job's own conclusion**, never the run's overall one. The run reads red
-because the environment refused `deploy`, not because anything failed. For what got
-packaged, download the artifact instead of trusting a local build:
-`gh run download <id> -R shivinate7/banchi -n github-pages -D <dir>`.
+Read the `build` job's own conclusion and never the run's overall one. The run reads red because
+the environment refused `deploy`, not because anything failed. To see what got packaged, download
+the artifact: `gh run download <id> -R shivinate7/banchi -n github-pages -D <dir>`.
 
 ## 12. A second, small, real box — opt-in, additive, and off by default
 
-**Built 2026-09-25, on the owner's ruling: "copy paste some data that we already have so it
-is not empty in demo... touch / break nothing."** `make demo-seed` on its own stays
-byte-identical to before this section existed. Nothing above §11 changed.
+`make demo-seed` on its own is unchanged by this section. `PKMNSCAN_DEMO_EXTRA_REAL=1` is a
+target-specific Make variable that `demo-record` sets. It makes `scripts/demo-seed.py`'s
+`add_extra_real_boxes()` run. That function runs in its own `store.write()`, after the deterministic
+base store is committed. It only adds: one box, its cards, and a listing row per SKU. No order is
+written. Buyers and orders stay invented.
 
-`PKMNSCAN_DEMO_EXTRA_REAL=1` is a target-specific Make variable on `demo-static` and
-`demo-record`. It reaches `demo-seed` only through that chain. When set, it makes
-`scripts/demo-seed.py:add_extra_real_boxes()` run. That function runs in its own
-`store.write()`. It runs after the deterministic base store is already committed. It can
-only add: one more box, its cards, and a listing row per SKU. No order is written. Buyers
-and orders stay invented, on the owner's own ruling.
+Two scripts run once by hand, against a read-only copy of the owner's store and never the owner's
+own checkout:
 
-**Two scripts, run once by hand, against a READ-ONLY COPY of the owner's store, never the
-owner's own checkout:**
+- `scripts/extract_real_facts.py` writes `demo-assets/real-facts.json`. It holds a typed price per
+  SKU from `prices.json`, kept only for a SKU that a vendored fixture also prices. It holds a short
+  list of real sale lines per SKU: `unit_price` and the order's `placed_at`, never a buyer, an order
+  number or an address. It holds a `pin_skus` list of real cards worth surfacing.
+- `scripts/demo-extra-real.py` curates `demo-assets/extra/cards.json` and
+  `demo-assets/extra/photos/`. It reuses `demo-photos.py`'s QR clearance and crop, loaded by path.
+  It never picks a SKU that `demo-assets/cards.json` already curated. `cards.cid` is UNIQUE on the
+  photograph's own digest (D172), and both manifests draw from the same real store.
 
-- `scripts/extract_real_facts.py` writes `demo-assets/real-facts.json`. It holds a typed
-  price per SKU, from `prices.json`. It keeps a price only for a SKU a vendored fixture also
-  prices, so a mismatch is checkable against the demo's own real arithmetic. It holds a
-  short list of real sale lines per SKU: `unit_price` and the order's `placed_at`, never a
-  buyer, an order number, or an address. It holds a `pin_skus` list naming specific real
-  cards worth surfacing — a $5+ card, a 25%+ typed-price mismatch, a real foil/normal pair.
-- `scripts/demo-extra-real.py` curates a second manifest and photograph set:
-  `demo-assets/extra/cards.json` and `demo-assets/extra/photos/`. It reuses
-  `demo-photos.py`'s QR clearance and crop, loaded by path rather than copied. The same
-  positive decode test runs on every candidate. It never picks a SKU the default 132-card
-  `demo-assets/cards.json` already curated. `cards.cid` is UNIQUE on the photograph's own
-  digest (D172), and the two manifests draw from the same real store.
+The box is named `Demo Box`. Its one section carries no name, so `Section 1` reads with nothing
+after it, as an undeclared section reads everywhere else (D10). No screen, tooltip or title in the
+built demo may say whose cards these are.
 
-**Measured on the first real run:** 60 photographs, 1.6 MB, 0 QR refusals. 18 real typed
-prices reached the corpus. 26 cards were marked `sold` with a real sale date. This stays
-well under the ~20 MB budget. A bare `make demo-seed` is unaffected. The diff against the
-file before this section is purely additive: two new functions, roughly 70 lines, plus
-eight lines wired into `main()`.
+The curator's QR clearance is not the gate. The commit is. A hook that matched only the path once
+let a decodable synthetic QR JPEG into `demo-assets/extra/photos/`. §3's `qr-clear-check.py` closes
+that gap.
 
-**The box carries a neutral name, and so does the section.** Review round 2026-09-25: the
-box was first named after the owner directly, and the owner renamed it. It is `Demo Box`
-now. Its one section carries no name at all. `Section 1` reads with nothing after it,
-exactly how an undeclared section reads everywhere else in this product (D10). No screen,
-tooltip, or title in the built demo may say whose cards these are.
-`grep -rio owner app/demo/bundle.json dist-demo/` finds nothing about this box. The only
-hits anywhere in the built JS and CSS are React's own `ownerDocument` DOM property and an
-unrelated `search-field-owner` class name.
+## 13. The store is a mirror, not an invention (D295)
 
-**The curator's own QR clearance is not the gate. The commit is.** Review round
-2026-09-25: a reviewer committed a synthetic, decodable QR JPEG into
-`demo-assets/extra/photos/`. The pre-commit hook let it through. The hook matched the
-PATH and never opened the file. It trusted the two curator scripts to be the only
-writers, rather than checking. `scripts/qr-clear-check.py` closes that gap.
-`scripts/githooks/pre-commit` now re-decodes every STAGED image under
-`demo-assets/photos/` and `demo-assets/extra/photos/` with `codes/qr.py`. It reads the
-staged blob, never the working-tree file, and refuses on the first decode it finds, naming
-the file. `PKMNSCAN_QR=off` is the bypass, in the shape every other opsec rule in this hook
-already uses.
+The owner's ruling was "full mirror is fine". Photos are capped "to just 512mb". Every name reads
+"Jane Doe N", and every address reads "123 Demo Way". D295 carries every quote in full. This
+section is the mechanism. D295 is the decision.
 
+`demo-static` depends on `demo-mirror-install`. The build step is unchanged: `VITE_DEMO=1 npx vite
+build` (§6). Every reader downstream of `app/demo/bundle.json` is unchanged too: `demoServer.ts`
+and the coverage spec (§8a). Only the bundle's source changed.
 
-## 13. The store is a mirror, not an invention (`D295`, 2026-09-26)
+Three commands, three machines:
 
-**The owner's ruling.** "full mirror is fine." Photos are capped "to just 512mb." Every
-name reads "Jane Doe N." Every address reads "123 Demo Way." See `D295` for every
-quote in full. This section is the mechanism's own record. `D295` is the decision.
-
-**What replaces what.** `demo-static` used to depend on `demo` — `demo-seed` then
-`demo-record`, §§2-6. It now depends on `demo-mirror-install`. The BUILD step itself did
-not move. `VITE_DEMO=1 npx vite build` (§6) reads the same. Every reader downstream of
-`app/demo/bundle.json` stays the same too: `demoServer.ts`, the coverage spec (§8a),
-freshness (§10). Only the bundle's SOURCE changed.
-
-**Three commands, three machines.**
-
-- `make demo-mirror SOURCE=<checkout>` — the owner's Mac only. It reads a `.backup` copy
-  of the real `store.sqlite`. It scrubs that copy. It records the result offline. It writes
-  the scrubbed output to the tracked `demo-assets/mirror/`.
-- `make demo-mirror-rebuild` — the owner's Mac, to iterate on the scrub or the recorder
+- `make demo-mirror SOURCE=<checkout>` runs on the owner's Mac only. It reads a `.backup` copy of
+  the real `store.sqlite`, scrubs the copy, records the result offline, and writes the scrubbed
+  output to the tracked `demo-assets/mirror/`.
+- `make demo-mirror-rebuild` runs on the owner's Mac. It iterates on the scrub or the recorder
   without reading the real store again.
-- `make demo-mirror-install` — CI, and anyone else. It reads no store. It contacts no
+- `make demo-mirror-install` runs in CI and anywhere else. It reads no store and contacts no
   network. It copies the committed `demo-assets/mirror/` into `app/demo/` and
   `app/public/demo/photos/`.
 
-**The one check is the owner's own ruling, not a CI gate.** The owner ruled out a second
-check in CI (`D295` carries the exact words). So `assert_scrubbed()` runs once, on
-the owner's own Mac, before anything is committed. It is a plain `assert` over the finished
-recording and the shipping export. Every buyer name must match `^Jane Doe \d+$`. Every
-address field must be blank or exactly "123 Demo Way." Nothing else runs this check. The
-workflow does not repeat it.
+**The one check is the owner's own ruling and not a CI gate.** `demo-mirror.py`'s
+`assert_scrubbed()` runs once, on the owner's Mac, before anything is committed. It is a plain
+`assert` over the finished recording and the shipping export. Every buyer name must match
+`^Jane Doe \d+$`. Every address field must be blank or exactly "123 Demo Way". The workflow does not
+repeat it.
 
-**Why the store never leaves the Mac.** `demo-mirror/`, the raw snapshot, is gitignored.
-Its own comment in `.gitignore` records why. `demo-assets/mirror/`, the scrub's output, is
-the one thing committed. It stands on the same footing as `demo-assets/photos/` and
-`demo-assets/extra/photos/` (§3, §12): a tracked exception this repo allows only because of
-what curates it. `scripts/githooks/pre-commit` re-decodes every staged image under all
-three directories for a QR before it lets a commit through (D70). This entry widened that
-same check to cover the new directory.
+**The store never leaves the Mac.** `demo-mirror/`, the raw snapshot, is gitignored. Its comment in
+`.gitignore` records why. `demo-assets/mirror/`, the scrub's output, is the one thing committed. It
+stands on the same footing as `demo-assets/photos/` and `demo-assets/extra/photos/`: a tracked
+exception this repo allows only because of what curates it. `scripts/githooks/pre-commit`
+re-decodes every staged image for a QR before it lets a commit through (D70, D303).
 
-**Why the walk-plan sweep changed shape.** §5 records `WALK_PLAN_ORDERS = 7`, and every
-subset of the invented demo's seven orders — 127 sets. The owner's real ledger holds 834
-orders, measured 2026-09-26. Recording every subset of 834 orders is not a number this repo
-can reach by raising a constant. The fix narrows the question instead. Only an OPEN order
-can ever be ticked: every caller of `walkPlan` sends open keys alone (`Fulfillment.tsx`,
-`Orders.tsx`, D97/D220). So the sweep now reads the recorded `/orders` GET. It keeps the
-open keys only. THE OPEN QUESTION IS NOW ANSWERED (2026-09-27): a real 71-open-order rebuild
-hit the refusal (`2^71` sets, not `2^7`). The recorder now records every SINGLE open order.
-It also records the one full "walk all" set every screen asks for whole — never a merge,
-and never a subset in between. `demoServer.ts:walkPlan` already refused an unrecorded set
-with the demo's one honest notice (D269/TXT-46). It never fabricates a plan, so no client
-change was needed. A partial selection (some orders, not all, not one) is the one gap this
-recording leaves on purpose.
+**The walk-plan sweep records singles.** A real store's open orders make a powerset that no constant can reach: 71 open orders is 2^71 sets. Only an open order can ever be ticked. Every caller of `walkPlan` sends open keys alone (`Fulfillment.tsx`, `Orders.tsx`, D97, D220). So the recorder reads the recorded `/orders` GET and keeps the open keys. It records every single open order, plus the one full "walk all" set that every screen asks for whole. It never records a merge or a subset in between. `demoServer.ts`'s `walkPlan` refuses an unrecorded set with the demo's one honest notice (D269, TXT-46) and never fabricates a plan. A partial selection (some orders, not all, not one) is the one gap this recording leaves on purpose.
 
-**What is left open.** `ux/stock-images` is a separate lane. It is meant to put stock image
-URLs on route responses, so a recording can carry them. This section does not depend on it
-landing. The old invented seed's own determinism guard (make demo-determinism) is retired
-(D295 amended, L5, 2026-09-27) — nothing shipped from it, and nothing checks it any more.
-Proving the mirror deterministic means reading the real store twice, and nothing here does
-that yet.
+**Open.** `ux/stock-images` is a separate lane that may put stock image URLs on route responses.
+This section does not depend on it. Proving the mirror deterministic means reading the real store
+twice, and nothing does that yet.

@@ -4498,8 +4498,8 @@ COMPONENTS = [
             "score-trace.py": {
                 "does": "`scripts/score-trace.py summary|presence|sweep|stalls|camera|gain|contact` "
                         "— re-scores a "
-                        "saved motion trace offline, which is docs/specs/motion-trigger.md §4 "
-                        "step 5's standing promise written down. `summary` says what the "
+                        "saved motion trace offline, which is docs/specs/motion-trigger.md §4's "
+                        "\"Scoring a trace offline\" written down. `summary` says what the "
                         "machine did live and what today's adaptive form would do; `presence` "
                         "re-runs the card-present gate over each verdict's own pixels; `sweep` "
                         "scores the stillness thresholds across a grid over every trace at "
