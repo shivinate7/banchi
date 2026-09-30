@@ -6998,7 +6998,12 @@ def do_tcg_sets(game: str) -> dict:
     blocking a capture. So every failure here answers 200 with an empty list and a reason,
     and the screen renders a plain input when the list is empty.
     """
-    entry = game_registry.get(game) or {}
+    try:
+        entry = game_registry.get(game)
+    except game_registry.UnknownGame:
+        # `get` raises rather than defaults, and a blank or misspelled `?game=` is a screen
+        # that has not chosen yet: the same "nothing to fetch" answer as a game with no category.
+        entry = {}
     category = entry.get("tcgplayer_category_id")
     if not category:
         # NOT A TRANSPORT REFUSAL AND SO NOT A TRANSPORT SENTENCE. Nothing was fetched:
