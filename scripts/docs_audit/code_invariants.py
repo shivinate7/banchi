@@ -1070,7 +1070,7 @@ def check_server_concurrency(report: Report) -> None:
 _SHIPPING_COLUMN_CLAIMS = (
     (Path("docs") / "specs" / "order-pipeline.md",
      re.compile(r"import file — \*\*([A-Za-z]+) columns\*\*")),
-    (Path("harness") / "tests" / "t7_store_and_seams.py",
+    (Path("harness") / "tests" / "t7" / "shipping.py",
      re.compile(r"the header is the ([a-z]+) columns")),
 )
 
