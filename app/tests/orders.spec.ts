@@ -4679,7 +4679,7 @@ test('a fresh landing shows only pullable buyers, and one click widens it', asyn
   await expect(page.locator('.orders-index-row')).toHaveAttribute('aria-current', 'true')
   /* THE HIDDEN SET AND THE HEADLINE'S PICK COUNT COME FROM ONE ARITHMETIC (`pickOf`): Alice holds
      the one pick, Bob's line is short, so the headline names both and the list is the picks' buyers. */
-  const headline = (await page.locator(VIEW).innerText()).match(/(\d+) pick and (\d+) short/)
+  const headline = (await page.locator(VIEW).innerText()).match(/(\d+) pick and (\d+) unfilled/)
   expect(headline).not.toBeNull()
   expect(Number(headline![1])).toBe(1)
   expect(Number(headline![2])).toBe(1)
