@@ -17,7 +17,8 @@ import './filters.css'
  * four widths in four rows).
  *
  * FilterBar DRAWS "N of M" BY CONSTRUCTION (FLT-13): `count` is a required prop, and the
- * `FilterCount` line under the controls is not something a caller can leave out. The words
+ * `FilterCount` line under the controls is always drawn, unless `count.quietAtRest` is set and
+ * nothing narrows the list. The words
  * after "filtered by" are built here, from the facets, the search and the hide toggle, so a
  * caller never writes that sentence a second time. The line is also the bar's ONE clear-all:
  * `FilterChips`' own "Clear all" is not drawn inside a FilterBar (filters.css), so two clear
