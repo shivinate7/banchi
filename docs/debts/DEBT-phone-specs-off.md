@@ -1,4 +1,4 @@
-## DEBT77 — every phone-width spec is off
+## DEBT-phone-specs-off — every phone-width spec is off
 
 By the owner's word, no spec that draws a page below 768px wide runs. That is all of
 `app/tests/phone.spec.ts`, the touch-screen block in `app/tests/gallery.spec.ts`, and every
