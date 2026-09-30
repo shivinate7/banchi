@@ -132,6 +132,7 @@ jobs:
   ci-check:
     name: ci-check (${{ matrix.target }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -209,6 +210,7 @@ jobs:
     needs: [ci-check]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: every shard succeeded
         env:
@@ -227,6 +229,7 @@ jobs:
   # full-depth clone, because the window is the base's last sixty first-parent commits.
   revert-guard:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -246,6 +249,7 @@ jobs:
   # and `revert-guard` only.
   zizmor:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -261,6 +265,7 @@ jobs:
   # artifacts through the API needs; nothing here writes.
   already-passed:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       actions: read
       contents: read
@@ -295,6 +300,7 @@ jobs:
   # answers RUN, out loud, whenever it cannot compute one. Nothing here writes.
   browser-scope:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       run: ${{ steps.scope.outputs.run }}
       specs: ${{ steps.specs.outputs.specs }}
@@ -344,6 +350,7 @@ jobs:
     # this line, a failed `already-passed` skipped the matrix; now it runs it.
     if: ${{ !cancelled() && needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -373,6 +380,7 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('app/package-lock.json') }}
 
       - name: Install chromium
+        timeout-minutes: 5
         working-directory: app
         run: npx playwright install --with-deps chromium
 
@@ -421,6 +429,7 @@ jobs:
     needs: [design-check, browser-scope]
     if: github.event_name != 'push' && needs.browser-scope.outputs.partial != 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
