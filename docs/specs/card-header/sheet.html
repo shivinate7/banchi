@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="../../../app/src/tokens.css">
 <link rel="stylesheet" href="../../../app/src/base.css">
 <link rel="stylesheet" href="../../../app/src/kit.css">
+<link rel="stylesheet" href="../../../app/src/PositionBar.css">
 <style>
 body { padding: var(--bn-6); }
 .sheet-top { display: flex; align-items: baseline; gap: var(--bn-4); margin-bottom: var(--bn-6); }
@@ -44,9 +45,7 @@ body { padding: var(--bn-6); }
 .copy-id { display: flex; flex-wrap: wrap; gap: 0 var(--bn-2); font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); }
 .copy-id span + span::before { content: '·'; margin-right: var(--bn-2); color: var(--bn-ink-4); }
 .copy-acts { display: flex; gap: var(--bn-1); }
-.ruler { grid-column: 1 / -1; position: relative; height: 26px; border-radius: var(--bn-r-xs); background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-line); }
-.ruler i { position: absolute; top: 3px; bottom: 3px; left: 8%; width: 6%; border-radius: var(--bn-r-xs); background: var(--bn-accent); }
-.ruler-ends { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: var(--bn-fs-2xs); letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); }
+.copy-bar { grid-column: 1 / -1; min-width: 0; }
 .more { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); padding: var(--bn-1) var(--bn-1); }
 
 /* ---- A. Rail: the photograph runs the whole height, everything else is one right-hand column ---- */
@@ -98,6 +97,51 @@ body { padding: var(--bn-6); }
 .c-row dd { display: flex; align-items: baseline; gap: var(--bn-3); justify-content: flex-end; text-align: right; }
 .c-row .fig { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--bn-ink); }
 .c-row .note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+/* ---- D, E, F: the copies fit the band above the photo. The band is full width, the copies
+   list under it takes every remaining pixel, beside the photograph or at full width. ---- */
+.thumb { width: 56px; flex: none; }
+.x-body { padding: 0 var(--bn-5) var(--bn-5); display: grid; gap: var(--bn-5); align-items: start; }
+.x-wide.x-beside .x-body { grid-template-columns: 220px minmax(0, 1fr); }
+.x-narrow .x-body { padding: 0 var(--bn-4) var(--bn-4); }
+.fact { font-size: var(--bn-fs-md); color: var(--bn-ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fact b { font-size: var(--bn-fs-base); font-weight: 700; color: var(--bn-ink); }
+.fact .readage { margin-left: var(--bn-1-5); }
+
+/* D. one flowing band: name and meta on the first line, the counts as one sentence under it */
+.d-band { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--bn-1) var(--bn-4); padding: var(--bn-4) var(--bn-5); align-items: start; }
+.x-narrow .d-band { padding: var(--bn-4); gap: var(--bn-1) var(--bn-3); }
+.d-line1 { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--bn-1) var(--bn-3); min-width: 0; }
+.d-facts { display: flex; flex-wrap: wrap; gap: var(--bn-1) 0; margin-top: var(--bn-1-5); }
+.d-facts { gap: var(--bn-1) var(--bn-5); }
+.x-narrow .d-facts { gap: var(--bn-1) var(--bn-4); }
+.x-narrow .f-cell { flex: 1 1 auto; padding: var(--bn-2) var(--bn-3); }
+.x-narrow .f-cell:nth-child(3) { flex: 1 0 100%; box-shadow: inset 0 1px 0 var(--bn-line); }
+.d-facts .fact .live-figure { gap: var(--bn-1-5); }
+
+/* E. two-line title block left, the counts as a cluster right */
+.e-band { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: var(--bn-2) var(--bn-5); padding: var(--bn-4) var(--bn-5); align-items: start; }
+.x-narrow .e-band { grid-template-columns: auto minmax(0, 1fr) auto; padding: var(--bn-4); gap: var(--bn-3); }
+.e-title { display: flex; flex-direction: column; gap: var(--bn-1-5); min-width: 0; }
+.e-cluster { display: flex; flex-direction: column; align-items: flex-end; gap: var(--bn-2); }
+.x-narrow .e-cluster { grid-column: 1 / -1; align-items: stretch; }
+.e-cluster .row { display: flex; gap: var(--bn-6); }
+.x-narrow .e-cluster .row { gap: var(--bn-5); }
+
+/* F. a compact stat bar; the ceiling is a meter at its end */
+.f-band { display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4) var(--bn-5); }
+.x-narrow .f-band { padding: var(--bn-4); }
+.f-top { display: flex; align-items: flex-start; gap: var(--bn-3); }
+.f-top .e-title { flex: 1; }
+.f-bar { display: flex; flex-wrap: wrap; align-items: center; min-height: var(--bn-control-h-lg); border-radius: var(--bn-r); background: var(--bn-surface-2); }
+.f-cell { display: flex; align-items: baseline; gap: var(--bn-1-5); padding: var(--bn-2) var(--bn-4); }
+.f-cell + .f-cell { box-shadow: inset 1px 0 0 var(--bn-line); }
+.f-cell .readage { margin-left: var(--bn-1); }
+.f-meter { display: flex; align-items: center; gap: var(--bn-3); padding: var(--bn-2) var(--bn-4); margin-left: auto; box-shadow: inset 1px 0 0 var(--bn-line); }
+.x-narrow .f-meter { margin-left: 0; flex: 1 0 100%; box-shadow: inset 0 1px 0 var(--bn-line); }
+.f-meter .bn-progress { width: 96px; flex: none; }
+.x-narrow .f-meter .bn-progress { flex: 1; width: auto; }
+.f-say { font-size: var(--bn-fs-md); color: var(--bn-ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.f-say b { color: var(--bn-ink); font-weight: 700; }
 .c-list { padding: 0 var(--bn-5) var(--bn-5); }
 .c-narrow .c-list { padding: 0 var(--bn-4) var(--bn-4); }
 </style>
@@ -126,8 +170,27 @@ const epic = '<span class="bn-pill bn-pill-accent">Epic</span>'
 const meta = (withPill) => `<p class="meta"><span class="num">090/219</span><span class="sep">Riftbound</span>${withPill ? `<span class="sep">${epic}</span>` : ''}</p>`
 const liveFig = '<span class="live-figure"><span class="bn-dot bn-dot-live" aria-hidden="true"></span>5</span>'
 const stat = (v, l, extra = '') => `<div class="bn-stat"><span class="bn-stat-value">${v}</span><span class="bn-stat-label">${l}</span>${extra}</div>`
-const copy = (box, sec, n, pos) => `<li class="copy"><span class="copy-id"><span>${box}</span><span>${sec}</span><span>Card ${n} of 11</span></span><span class="copy-acts">${acts}</span><div class="ruler" aria-hidden="true"><i style="left:${pos}%"></i></div><div class="ruler-ends"><span>Back</span><span>Front</span></div></li>`
-const copies = () => `<ul class="copies">${copy('RB Origins', 'Section 2: Epics', 4, 30)}${copy('RB Epics', 'Section 1: Epics', 7, 58)}<li class="more">5 more copies</li></ul>`
+/* THE REAL CARD RULER: PositionBar.css is linked and this is PositionBar.tsx's own markup:
+   the box strip with section numbers, then the card ruler with ticks every 5, numbers every 10,
+   the blue number chip on the marker, and Back and Front written once under it. */
+function bar(sections, here, card, of) {
+  const tot = sections.reduce((a, b) => a + b, 0)
+  const before = sections.slice(0, here).reduce((a, b) => a + b, 0)
+  const boxAt = ((before + card - 0.5) / tot) * 100
+  const at = ((card - 0.5) / of) * 100
+  const segs = sections.map((n, i) => `<span class="position-bar-segment${i === here ? ' position-bar-here' : ''}" style="flex-grow:${n}"><span class="position-bar-segment-num" aria-hidden="true">${i + 1}</span></span>`).join('')
+  let ticks = ''
+  for (let c = 5; c <= of; c += 5) ticks += `<span class="position-bar-tick"${c % 10 === 0 ? ' data-major="true"' : ''} style="left:${((c - 0.5) / of) * 100}%">${c % 10 === 0 ? `<span class="position-bar-tick-num">${c}</span>` : ''}</span>`
+  return `<div class="position-bar position-bar-owner" data-depth="on" role="img" style="--pb-knockout:var(--bn-surface-2)">
+    <div class="position-bar-track">${segs}<span class="position-bar-marker" style="left:${boxAt}%"></span></div>
+    <div class="position-bar-zoom"><div class="position-bar-track position-bar-sectiontrack">
+      <span class="position-bar-cell" style="left:${((card - 1) / of) * 100}%;width:${100 / of}%"></span>${ticks}
+      <span class="position-bar-edge position-bar-edge-start">1</span><span class="position-bar-edge position-bar-edge-end">${of}</span>
+      <span class="position-bar-marker" style="left:${at}%"><span class="position-bar-chip"${at > 50 ? ' data-flip="true"' : ''}>${card}</span></span>
+    </div><p class="position-bar-zoom-ends"><span class="position-bar-end-back">Back</span><span class="position-bar-end-front">Front</span></p></div></div>`
+}
+const copy = (box, sec, card, of, sections, here) => `<li class="copy"><span class="copy-id"><span>${box}</span><span>${sec}</span><span>Card ${card} of ${of}</span></span><span class="copy-acts">${acts}</span><div class="copy-bar">${bar(sections, here, card, of)}</div></li>`
+const copies = () => `<ul class="copies">${copy('RB Origins', 'Section 2: Epics', 24, 40, [12, 40, 14], 1)}${copy('RB Epics', 'Section 1: Epics', 7, 30, [30, 22, 18], 0)}<li class="more">5 more copies</li></ul>`
 const ceiling = '<span class="ceiling"><b>7</b> sent · At the ceiling of 5</span>'
 
 /* A: the photograph is a rail down the whole pane; header, counts and copies are one column. */
@@ -165,12 +228,47 @@ function C(n) {
   return `<div class="pane ${cls}"><div class="c-head">${thumb}${title}${kebab}${ledger}</div><div class="c-list">${copies()}</div></div>`
 }
 
+const shotBtn = `<button class="shot" type="button" aria-label="Open the photograph full size"><img src="${IMG}" alt="The card"></button>`
+const thumb = `<button class="shot thumb" type="button" aria-label="Open the photograph full size"><img src="${IMG}" alt="The card"></button>`
+const bigName = '<h2 class="name">LeBlanc, Everywhere At Once</h2>'
+const liveInline = '<span class="live-figure"><span class="bn-dot bn-dot-live" aria-hidden="true"></span><b>5</b></span>'
+
+/* D: one flowing band. Wide: photograph beside the copies. Narrow: a thumbnail leads the title. */
+function D(n) {
+  const facts = `<div class="d-facts"><span class="fact"><b>7</b> copies</span><span class="fact"><b>5</b> in the boxes</span><span class="fact">${liveInline} live on TCGplayer<span class="readage">read 2 days ago</span></span><span class="fact"><b>7</b> sent, at the ceiling of 5</span></div>`
+  const band = `<div class="d-band">${n ? thumb : ''}<div style="grid-column:${n ? 2 : '1 / 3'}"><div class="d-line1">${bigName}${meta(true)}</div>${facts}</div>${kebab}</div>`
+  const body = n ? `<div class="x-body">${copies()}</div>` : `<div class="x-body">${shotBtn}${copies()}</div>`
+  return `<div class="pane ${n ? 'x-narrow' : 'x-wide x-beside'}">${band}${body}</div>`
+}
+
+/* E: a two-line title block, and the counts as a cluster at the right of the band. Copies run full width. */
+function E(n) {
+  const cluster = `<div class="e-cluster"><div class="row">${stat(7, 'copies')}${stat(5, 'in the boxes')}${stat(liveFig, 'live on TCGplayer', '<span class="readage">read 2 days ago</span>')}</div>${ceiling}</div>`
+  const title = `<div class="e-title">${bigName}${meta(true)}</div>`
+  const band = `<div class="e-band">${thumb}${title}${n ? kebab + cluster : cluster + kebab}</div>`
+  return `<div class="pane ${n ? 'x-narrow' : 'x-wide'}">${band}<div class="x-body">${copies()}</div></div>`
+}
+
+/* F: a compact stat bar under the title; live against the ceiling is a meter at its end. */
+function F(n) {
+  const top = `<div class="f-top">${n ? thumb : ''}<div class="e-title">${bigName}${meta(true)}</div>${kebab}</div>`
+  const bar = `<div class="f-bar">
+    <div class="f-cell fact"><b>7</b> copies</div><div class="f-cell fact"><b>5</b> in the boxes</div>
+    <div class="f-cell fact">${liveInline} live on TCGplayer<span class="readage">read 2 days ago</span></div>
+    <div class="f-meter"><span class="f-say"><b>7</b> sent · At the ceiling of 5</span><div class="bn-progress" role="img" aria-label="5 of 5 may be live"><span style="width:100%"></span></div></div></div>`
+  const body = n ? `<div class="x-body">${copies()}</div>` : `<div class="x-body">${shotBtn}${copies()}</div>`
+  return `<div class="pane ${n ? 'x-narrow' : 'x-wide x-beside'}"><div class="f-band">${top}${bar}</div>${body}</div>`
+}
+
 const DIRS = [
   ['A. Rail', 'The photograph becomes a left rail that runs the whole pane, so no empty band exists. Title, rarity, counts strip and copies stack in one right-hand column.', A],
   ['B. Masthead', 'One full-width header: title and rarity left, the three counts right. A meter row says live against the ceiling, and holds the sent line and reading age. The photograph and copies sit under it.', B],
-  ['C. Ledger', 'The photograph shrinks to a leading thumbnail (tap to zoom). Facts become four 40px ruled rows, so the copies list gets the full width and the top is short.', C],
+  ['D. Inline', 'Second round: every fact fits in the band above the photograph. One flowing band: name, number, game and rarity on the first line, then the counts as one sentence of inline facts. The shortest band. The photograph sits beside the copies, which take the rest of the height.', D],
+  ['E. Cluster', 'Second round: a two-line title block (name, then number, game and rarity) with a thumbnail, and the three counts as a cluster at the right of the same band, the read age under live and the sent line under the cluster. The copies run the full pane width.', E],
+  ['F. Stat bar', 'Second round: title and meta on top, then one compact stat bar: three counts, then the ceiling as a meter (live against the ceiling) with the sent line. The photograph sits beside the copies.', F],
+  ['C. Ledger','The photograph shrinks to a leading thumbnail (tap to zoom). Facts become four 40px ruled rows, so the copies list gets the full width and the top is short.', C],
 ]
-document.getElementById('root').innerHTML = DIRS.map(([t, d, f]) => `
+document.getElementById('root').innerHTML = DIRS.sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([t, d, f]) => `
 <section class="dir" id="${t[0]}"><div class="dir-head"><h2>${t}</h2><p>${d}</p></div>
 <div class="frames">
   <div><div class="frame-cap">Viewport 1440 · pane 820</div><div class="frame wide">${f(false)}</div></div>
