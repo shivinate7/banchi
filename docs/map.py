@@ -8092,8 +8092,8 @@ COMPONENTS = [
                                         "copies, which Orders' `show=missing` facet filters on "
                                         "and `missingCopies` sums for Home's \"Cannot be "
                                         "filled\" line (UX-077).",
-                                "governed_by": ["D13", "D63", "D69", "D97", "D193", "D121",
-                                                "D285", "D287"]},
+                                "governed_by": ["D13", "D63", "D69", "D97", "D121", "D193", "D285",
+                                                "D287", "D304"]},
             "src/orderView.ts": {"does": "HOW THE BUYER LIST IS SORTED AND FILTERED "
                                         "(`D296`): Ready to Ship leads, newest "
                                         "first within a group, everything else stays reachable "
