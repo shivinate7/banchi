@@ -15,7 +15,7 @@
 # is the form that carries the protection — and it is answerable whatever is on disk. Asking the
 # trailing-slash form means traversing the path, and git answers `fatal: pathspec ... is beyond a
 # symbolic link` exactly when a symlink is there: unanswerable precisely in the case being
-# guarded against. `scripts/docs-audit.py:ignored_paths` records the same refusal from the same
+# guarded against. `scripts/docs_audit/paths_commands.py:ignored_paths` records the same refusal from the same
 # cause. A check that cannot run in the failing case is not a check.
 #
 # `--no-index` IS WHY IT CAN ASK ABOUT A PATH THAT IS NOT THERE AT ALL. `git check-ignore`

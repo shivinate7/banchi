@@ -55,7 +55,7 @@
 # when it did not mean to does not block one commit, it breaks git for every concurrent
 # session at once. So the ONLY non-zero exit in this file is the deliberate refusal below,
 # and anything unexpected — a missing git, an unparseable line, a phase we do not know —
-# prints nothing and allows. Same reasoning `scripts/docs-audit.py:nested_worktrees` records
+# prints nothing and allows. Same reasoning `scripts/docs_audit/core.py:nested_worktrees` records
 # for itself, and the same one guard-opsec.sh took after it over-triggered.
 
 set -uo pipefail

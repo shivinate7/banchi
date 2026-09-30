@@ -232,7 +232,7 @@ def css_files(app_src: Path) -> List[Path]:
 def _load_browser_scope():
     """`scripts/browser-scope.py`, imported for its `file_imports`/`resolve_relative` — the
     import-graph reader D141 already built, reused here rather than rewritten. `None` on any
-    failure, the same fail-open posture `docs-audit.py`'s own `_sibling` takes, so a broken
+    failure, the same fail-open posture `docs_audit/core.py`'s own `_sibling` takes, so a broken
     or missing sibling costs this script's own callers, never crashes them."""
     path = ROOT / "scripts" / "browser-scope.py"
     if not path.exists():

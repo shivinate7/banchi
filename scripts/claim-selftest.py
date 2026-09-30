@@ -568,7 +568,7 @@ def main() -> int:
            skill_body)
 
         print("\n  -- and the claimer's walk is a superset of the auditor's own --")
-        # NOT A FIXTURE QUESTION. `docs-audit.py`'s `decision_id_code_haystack()` and
+        # NOT A FIXTURE QUESTION. `docs_audit/records.py`'s `decision_id_code_haystack()` and
         # `markdown_files()` are the auditor's own functions, called here directly rather
         # than retyped — the whole point is that this can never drift the way the dot-dir
         # skip did, because it asks the auditor rather than assuming an answer beside it.
@@ -2470,7 +2470,7 @@ def main() -> int:
         # THE EXACT DEFECT A DEBT COLLISION ONCE WAS: a branch writing
         # `docs/debts/048-....md` straight, never a slug, so `scripts/claim-ids.py` could
         # independently plan the same number for a pending slug elsewhere.
-        # `scripts/docs-audit.py:check_numbered_record_growth` is the mechanized refusal
+        # `scripts/docs_audit/records.py:check_numbered_record_growth` is the mechanized refusal
         # (D140) — proved here against a real repo, because the question is a real
         # `git merge-base`/`git diff` against `origin/main`, not a fixture
         # `check_numbered_record_growth` could be fooled by. FULL MODE (`staged_only=False`):

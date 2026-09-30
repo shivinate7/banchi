@@ -3692,7 +3692,7 @@ COMPONENTS = [
                         "than filtered — it was measured to leak zero of the ~2,700 hits "
                         "on this tree. Extracts only; the FORBIDDEN word list, the path "
                         "pattern and the decision-citation pattern all live in "
-                        "scripts/docs-audit.py's `NO_MECHANISM_WORDS`, in one place, so a "
+                        "scripts/docs_audit/strings.py's `NO_MECHANISM_WORDS`, in one place, so a "
                         "session refining the rule edits one dictionary rather than two "
                         "files. `--dir <path>` points it at a throwaway fixture tree for "
                         "the auditor's own self-test rather than trusting app/src to hold "
@@ -3744,7 +3744,7 @@ COMPONENTS = [
                         "file -> word -> lane, on `kit-adoption-allow.json`'s own shape. "
                         "Exists because growing `machine-words.json`'s word list put ten new "
                         "hits in front of screens no wave-2 lane had reached yet. Read by "
-                        "`scripts/docs-audit.py:check_no_mechanism_on_screen`, which fails "
+                        "`scripts/docs_audit/strings.py:check_no_mechanism_on_screen`, which fails "
                         "on an unlisted hit and on a listed entry that matches nothing.",
                 "governed_by": ["D196", "D284"]},
             "text-density/density.mjs": {
@@ -3847,8 +3847,10 @@ COMPONENTS = [
                         "find and rewrites nothing.",
                 "governed_by": ["D18"]},
             "docs-audit.py": {
-                "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
-                        "question under `--staged`. `--json` is the machine surface "
+                "does": "The entry script for D16's layers 1 and 2: `build_parser` and `main`, "
+                        "with the mechanical checks and the coupling question under "
+                        "`--staged` in the `docs_audit/` modules listed below. `--json` is "
+                        "the machine surface "
                         "nothing downstream may parse a render instead of, and "
                         "`--self-test` is what checks the checker. It NEVER writes, and it "
                         "parses with `ast` rather than importing, so it does not run "
@@ -3978,7 +3980,7 @@ COMPONENTS = [
                         "serve and guard scopes, and how callers invoke the audit.",
                 "governed_by": ["D43", "D74", "D80", "D92", "D122", "D136", "D141", "D215", "D247"]},
             "docs_audit/rows.py": {
-                "does": "`TIER`, the mode filter and `audit()`: the one place that names every row and runs it.",
+                "does": "`ROWS`, the mode filter and `audit()`: the one table that names every row with its tier, and the loop that runs it.",
                 "governed_by": []},
             "docs_audit/rules.py": {
                 "does": "The rule-enforcement row over CLAUDE.md's hard rules and the identifier-spelling row.",
@@ -4768,7 +4770,7 @@ COMPONENTS = [
                         "gates nothing: D18's seam list names this one location and nothing "
                         "else. "
                         "Previews by default; `--write` applies. It imports "
-                        "`docs-audit.py:cited_decisions()` rather than reimplementing it, so "
+                        "`docs_audit/env_map.py:cited_decisions()` rather than reimplementing it, so "
                         "the writer and the gate cannot disagree about what a file cites. "
                         "Stdlib, and it splices with `ast` so the hand-written prose around "
                         "each list survives untouched.",

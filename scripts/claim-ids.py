@@ -214,7 +214,7 @@ def text_files(root: Path) -> List[Path]:
     whatever git ignores.
 
     A DOTTED DIRECTORY IS NOT SKIPPED FOR BEING DOTTED. `SKIP` names the trees to prune, the
-    same way `docs-audit.py`'s own `SKIP_DIRS` does — by name, never by a leading dot — and
+    same way `docs_audit/core.py`'s own `SKIP_DIRS` does — by name, never by a leading dot — and
     until this line `dirs[:] = ... and not d.startswith(".")` pruned every one of them anyway,
     `.claude/` included. `docs-audit.py`'s `decision ids` row DOES read `.claude/skills/`
     (`markdown_files()`'s own `_walk` has no such filter), so a slug cited there survived a

@@ -30,7 +30,7 @@ The sweep that removes the hits below is a separate task, one screen at a time. 
 
 A row that failed on every existing hit would be red the day it landed. That teaches a session to ignore red, rather than trust it. D284's own header makes the same argument, for the word-count ceiling.
 
-So this is a RATCHET, mirroring D284's `copy-budget.json` discipline exactly. `scripts/typed-interpunct.json` pins the count `node scripts/typed-interpunct-pin.mjs --pin` last measured. It is `make docs-audit`'s `typed interpunct` row, in `scripts/docs-audit.py:check_typed_interpunct`. D18 forbids it writing, since it sits on the commit path.
+So this is a RATCHET, mirroring D284's `copy-budget.json` discipline exactly. `scripts/typed-interpunct.json` pins the count `node scripts/typed-interpunct-pin.mjs --pin` last measured. It is `make docs-audit`'s `typed interpunct` row, in `scripts/docs_audit/strings.py:check_typed_interpunct`. D18 forbids it writing, since it sits on the commit path.
 
 - A count at or below the pin is silent. The row prints it and passes. It asks no question of anyone who did not just add a dot.
 - A count above the pin fails. It names the rise, and every current hit, by file and line.

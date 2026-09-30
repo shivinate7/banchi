@@ -28,7 +28,7 @@ A row would have to decide what a sentence is ABOUT. The nearest mechanical prox
 
 ### One reader was made whole, and it did get a guard — over shape, not over meaning
 
-`scripts/docs-audit.py:_debts_section` matches `## <n> — ` and returns None otherwise, and **both** its consumers tolerate a None — one with `or ""`, one with an early return. So sections 20 to 24, written `## <n>. `, were not a failure anywhere: they were five of that file's twenty-three live sections **silently not existing**, with every row green throughout. The headings are normalized here.
+`scripts/docs_audit/records.py:_debts_section` matches `## <n> — ` and returns None otherwise, and **both** its consumers tolerate a None — one with `or ""`, one with an early return. So sections 20 to 24, written `## <n>. `, were not a failure anywhere: they were five of that file's twenty-three live sections **silently not existing**, with every row green throughout. The headings are normalized here.
 
 **`make docs-audit`'s `debts headings` row is the guard that keeps them that way**, and it can be built for exactly the reason the citation-subject row cannot: a heading either parses or it does not. It refuses a heading that is not `## <n> — <title>` and a section number used twice, the second being the same defect wearing a different hat — `_debts_section` returns the first match, so the second section is unreachable. Mutation-tested with four arms: the dotted form, a duplicate number, a number with no title, and an en-dash for the em-dash. All four fire; the baseline is clean.
 

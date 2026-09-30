@@ -29,6 +29,12 @@ Two severities, split by how knowable each finding is:
                        through to the hook's "the auditor is broken" branch, which is loud.
                        The `audit invocation` check exists so it does not get that far.
 
+THE ROWS LIVE IN THE `docs_audit` PACKAGE BESIDE THIS FILE, one module per group, and
+`docs_audit/rows.py` names each row with its tier. This file keeps the command line:
+`build_parser` and `main`. It also carries every name the package defines, so a caller that
+loads it by path still finds them; it moves the tree with `set_root`, never by assigning
+`ROOT` here. See D16.
+
 Stdlib only, so the git hook can call `python3` directly and never depends on `make venv`
 having been run.
 

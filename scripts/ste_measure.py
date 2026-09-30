@@ -29,7 +29,7 @@ the survey's own floor. No number is pinned.
 
 CALLERS BUILD THE FILE LIST; THIS MODULE NEVER TOUCHES DISK. `measure()` takes
 `Sequence[Tuple[str, str]]` — (repo-relative path, text) pairs a caller has already read (via
-`scripts/docs-audit.py`'s `read()` in staged mode) — so this file's own logic is exercised by
+`scripts/docs_audit/core.py`'s `read()` in staged mode) — so this file's own logic is exercised by
 `docs-audit.py --self-test` with synthetic strings, no filesystem and no staged-mode state
 required.
 """
@@ -79,7 +79,7 @@ _ste_lint_module = None
 def load_ste_lint():
     """The vendored linter, imported by path — `scripts/ste/` is not a package and this
     module must not add one just to get a normal import; every other hyphen-or-nested
-    script in this repo is loaded the same way (`scripts/docs-audit.py`'s `_sibling`)."""
+    script in this repo is loaded the same way (`scripts/docs_audit/core.py`'s `_sibling`)."""
     global _ste_lint_module
     if _ste_lint_module is None:
         spec = importlib.util.spec_from_file_location("ste_lint", STE_LINT_PATH)

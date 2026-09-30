@@ -450,7 +450,7 @@ class Scan(NamedTuple):
 
     `examined` is here because a sweep that enumerated nothing must not print the same word as
     one that read the whole process table and found everything owned. That confusion is this
-    repo's signature defect — `corpus_is_empty` exists in `docs-audit.py` for it — and it is
+    repo's signature defect — `corpus_is_empty` exists in `docs_audit/records.py` for it — and it is
     worse here than anywhere: "nothing loose" is the sentence a session would read as proof that
     the four-hour loop of 2026-09-11 was not running, and a `ps` that failed prints it too.
     """

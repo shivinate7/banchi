@@ -38,7 +38,7 @@ export function scanMachineWords(args: {
   const text = (view as HTMLElement).innerText || ''
   if (!text.trim()) return empty
 
-  // `scripts/docs-audit.py:_word_pattern`'s RULE, WITH A LETTER BOUNDARY IN PLACE OF `\b`: a
+  // `scripts/docs_audit/strings.py:_word_pattern`'s RULE, WITH A LETTER BOUNDARY IN PLACE OF `\b`: a
   // bare identifier-shaped word may not touch a LETTER on either side, so `emit` does not
   // match inside `emitted` and `Staged` does not match inside `unstaged`. A letter boundary,
   // not `\b`, because rendered `innerText` joins two adjacent inline spans with no space:
@@ -68,7 +68,7 @@ export function scanMachineWords(args: {
   }
 
   // A REQUEST-PATH SHAPE: one of the repo's own top-level directories, followed by `/` and
-  // more path-shaped characters — the exact pattern `scripts/docs-audit.py:_REPO_PATH_RE`
+  // more path-shaped characters — the exact pattern `scripts/docs_audit/strings.py:_REPO_PATH_RE`
   // matches over JSX literals, applied here to what the page actually drew.
   const pathsHit: MachineWordsResult['paths'] = []
   if (args.repoTopDirs.length > 0) {

@@ -8,7 +8,7 @@
  * needs a reader that knows the difference between a string a person reads and a string that
  * is merely IN the source — a code comment arguing about `D134`, a `request('/inventory/...')`
  * call, a `console.error` — none of which are on screen. A regex over raw text cannot tell
- * those apart; `scripts/docs-audit.py`'s own `check_raw_color` strips comments first for
+ * those apart; `scripts/docs_audit/design.py`'s own `check_raw_color` strips comments first for
  * exactly this reason and this problem is harder, because the false-positive surface is not
  * just comments but every non-visible string literal in a 31,000-line tree.
  *

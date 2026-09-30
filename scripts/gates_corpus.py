@@ -6,7 +6,7 @@ harness's own `Tn` thresholds, `steps/` for the build-order's SHIPPED and OPEN l
 A/B/C run records were deleted, and history lives in version control); `docs/GATES.md` is a stub that points
 at it and is read by nothing. This module is the seam: every reader that used to open that
 path calls `text()` instead and gets the same bytes, so the split changed where the corpus
-LIVES without changing what any checker parses — `scripts/docs-audit.py`'s `gates_sections()`,
+LIVES without changing what any checker parses — `scripts/docs_audit/harness_criteria.py`'s `gates_sections()`,
 `check_id_claims()` and `check_build_order_mirror()` are unmodified by the split beyond
 reading `text()` in place of the file.
 
