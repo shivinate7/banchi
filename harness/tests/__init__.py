@@ -87,4 +87,7 @@ class Checks:
             if self.failures
             else f"  all {total} checks passed"
         )
-        return Result(self.failures == 0, "\n".join(body))
+        # A test that asserted nothing proved nothing: zero checks is a failure.
+        if not total:
+            body.append("  FAIL no checks ran")
+        return Result(self.failures == 0 and total > 0, "\n".join(body))

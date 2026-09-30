@@ -41,6 +41,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from harness.tests import NotImplementedYet, Result  # noqa: E402
+from harness.tests.home import isolated_home  # noqa: E402
 from harness.tests import (  # noqa: E402
     t1_id_eval,
     t2_round_trip,
@@ -110,4 +111,6 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Every test runs against a throwaway store and no settings file, for the whole process.
+    with isolated_home():
+        sys.exit(main())

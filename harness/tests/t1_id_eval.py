@@ -245,6 +245,12 @@ def scorer_fingerprint() -> str:
         inspect.getsource(_score),
         inspect.getsource(_per_set),
         inspect.getsource(Score.correct.fget),
+        # What `_score` calls. Stubbing any of these moves a verdict, so each is hashed:
+        # both name folds with the constants they read, the key composer and `has_number`.
+        inspect.getsource(prompt.normalize_name),
+        repr((prompt._APOSTROPHES, prompt._DASHES, prompt._NAME_NOISE.pattern)),
+        inspect.getsource(join.join_key),
+        inspect.getsource(prompt.Identification.has_number.fget),
         repr(ID_ACCURACY_FLOOR),
     ]
     payload = "\n".join(parts).encode("utf-8")
