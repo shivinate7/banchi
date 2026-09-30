@@ -1158,3 +1158,9 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   /* the box keeps its drawn size; the label that wraps it takes the tap */
   .orders-status { min-height: var(--bn-control-h-sm); }
 }
+
+/* The card pane's own paging: two arrow buttons around the two key caps. */
+.orders-pick-nav { display: flex; align-items: center; justify-content: center; gap: var(--bn-3); padding: var(--bn-3) 0; }
+.orders-pick-keys { display: inline-flex; gap: var(--bn-1); }
+/* The digit that marks a copy, drawn beside its Mark sold press. */
+.walk-keyhint { display: inline-flex; align-items: center; gap: var(--bn-2); }

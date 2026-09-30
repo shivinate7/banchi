@@ -330,7 +330,7 @@ export type HeroFigures = {
  *  same figure from the same read. Null while it loads, on a failed read, and where the run holds no
  *  row for this card: the band draws a quiet dash and never a made-up figure. */
 export function useMarketPrice(card: InventoryCard): number | null {
-  const run = card.run
+  const run = card.run ?? null
   const [read, setRead] = useState<{ run: string; table: MarketRead } | null>(null)
   useEffect(() => {
     if (run === null) return
@@ -530,7 +530,7 @@ export type CardPaneProps = {
   readonly photo: Omit<PhotoPanelProps, 'row'>
   /** The copies list beside the photo — `Inventory.tsx`'s `CopiesPanel`, handed down because
    *  the caller already knows which card is selected. */
-  readonly detail: ReactNode
+  readonly detail?: ReactNode
 }
 
 export function CardPane({ row, game, dimmed = false, preChips, postChips, queued, actions, figures, photo, detail }: CardPaneProps) {
@@ -544,11 +544,14 @@ export function CardPane({ row, game, dimmed = false, preChips, postChips, queue
     >
       <CardHeroHead card={row.card} game={game} preChips={preChips} postChips={postChips} actions={actions} figures={figures} market={market} />
       {queued}
-      <div className="browse-band">
+      {/* NO `detail`, NO COPIES COLUMN: `#/orders`' walk draws where each copy is in its own column, so
+          its card pane is the head, the band and the photograph alone (same components, switched off
+          by omission, never a fork). */}
+      <div className="browse-band" data-photo-only={detail === undefined ? 'true' : undefined}>
         <div className="browse-shot">
           <PhotoPanel row={row} {...photo} />
         </div>
-        <div className="browse-under">{detail}</div>
+        {detail === undefined ? null : <div className="browse-under">{detail}</div>}
       </div>
     </section>
   )

@@ -8,6 +8,7 @@ import {
   HideToggle,
   Icon,
   IconButton,
+  Kbd,
   Loading,
   matchQuery,
   Notice,
@@ -32,7 +33,7 @@ import { absoluteDate, relativeDate } from './dates'
 import { toast } from './kit/toast'
 import { boxTitle } from './kit/data'
 import { CardPane, gameWord, photoSrc, type HeroFigures, type Row } from './CardHero'
-import { CardLocations, layoutsOf } from './CardLocations'
+import { layoutsOf } from './CardLocations'
 import { Dialog as Overlay } from './kit/overlay'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { orderReasonLabel, orderReasonRemedy } from './orderReasons'
@@ -86,7 +87,7 @@ import {
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
-import { pickFigureOf, RowAction, takeBuyers, useOrderWalk, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
+import { pickFigureOf, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
 import type {
   BoxRecord,
   IngestResult,
@@ -2617,17 +2618,12 @@ function OrderPickPane({
   walk,
   owedBySku,
   showBuyers,
-  sections,
   boxes,
 }: {
   readonly boxes: readonly BoxRecord[]
   readonly walk: OrderWalk
   readonly owedBySku: ReadonlyMap<string, number>
   readonly showBuyers: boolean
-  /** Each box's own divider layout (A4: lifted to `PullStage`, one `getBoxes()` read for the
-   *  whole screen — `WalkList`'s own copy rows draw off the SAME map, never a second read of
-   *  the same fact). Optional; the strip is honest without it. */
-  readonly sections: ReadonlyMap<number, readonly SectionDetail[]>
 }) {
   const { currentRow, currentGroup, currentCard } = walk
 
@@ -2685,22 +2681,16 @@ function OrderPickPane({
           reshoot: null,
           boxes,
         }}
-        detail={
-          <>
-            <CardLocations
-              group={currentGroup}
-              persona="owner"
-              onSell={walk.onSell}
-              busyKey={walk.busyCopy}
-              soldKeys={walk.soldKeys}
-              sections={sections}
-              currentKey={currentRow.copy.key}
-              preserveOrder
-              renderAction={(copy) => <RowAction walk={walk} copy={copy} />}
-            />
-          </>
-        }
       />
+      {/* THE TWO ARROWS PAGE THROUGH THE PICKS (the keys ← and → do the same). */}
+      <div className="orders-pick-nav">
+        <IconButton icon="chevronLeft" label="Previous pick" onClick={() => stepPickAndReveal(walk, -1)} />
+        <span className="orders-pick-keys" aria-hidden="true">
+          <Kbd>←</Kbd>
+          <Kbd>→</Kbd>
+        </span>
+        <IconButton icon="chevronRight" label="Next pick" onClick={() => stepPickAndReveal(walk, 1)} />
+      </div>
       {!zoomed ? null : (
         <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
           <img src={photoSrc(row, null) ?? undefined} alt={`The card photographed at ${place === null ? row.key : sayPlace(place)}`} />
@@ -3375,6 +3365,9 @@ function PullStage({
     return () => window.removeEventListener('keydown', onKey)
   }, [shownGroups, selectedKey])
 
+  /* `1`..`9` MARK A COPY OF THE CURRENT PICK, `←`/`→` PAGE THROUGH THE PICKS. */
+  useWalkKeys(walk)
+
   /* `J`/`K` STEP THE WALK LIST (§13). Same guard rules as the buyer list's own arrows. */
   useEffect(() => {
     if (walk.rows.length === 0) return
@@ -3746,7 +3739,7 @@ function PullStage({
               and up the pane goes back to its usual sticky column beside the walk. */}
           {narrow ? null : (
             <div className="orders-cardcol">
-              <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} sections={sections} boxes={boxRecords} />
+              <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} />
             </div>
           )}
         </div>
@@ -3758,7 +3751,7 @@ function PullStage({
           title={walk.currentRow?.take.name ?? 'The card'}
           className="orders-card-sheet"
         >
-          <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} sections={sections} boxes={boxRecords} />
+          <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} />
         </Sheet>
       )}
 

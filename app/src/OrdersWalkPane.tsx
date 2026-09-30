@@ -19,11 +19,12 @@
  * one press (Mark sold / Undo) `CardLocations`'s own `renderAction` slot calls per copy.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Icon, IconButton, Loading, Notice, Pill } from './kit'
+import { Icon, IconButton, Kbd, Loading, Notice, Pill } from './kit'
 import { toast } from './kit/toast'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
+import { isEditableTarget } from './keys'
 import { CardLocations, MarkSoldButton } from './CardLocations'
 import { describeFailure, walkPlan } from './server'
 import type { Failure } from './server'
@@ -430,6 +431,21 @@ export function useOrderWalk({
     if (next !== undefined) setCurrent(next.rowKey)
   }
 
+  /** The previous or next PICK (one take at one stop), not the previous or next copy: the pane
+   *  switches to it at once. Lands on its first copy not yet sold, or its first. Answers the pick's
+   *  `takeKey` so the caller can bring its line into view, or null at either end of the walk. */
+  const stepPick = (direction: 1 | -1): string | null => {
+    const lines = allTakeLinesOf(sections)
+    if (lines.length === 0) return null
+    const at = lines.findIndex((line) => line.rows.some((row) => row.rowKey === current))
+    const next = lines[at === -1 ? 0 : at + direction]
+    if (next === undefined) return null
+    const row = next.rows.find((one) => !soldKeys.has(one.copy.key)) ?? next.rows[0]
+    if (row === undefined) return null
+    setCurrent(row.rowKey)
+    return next.takeKey
+  }
+
   const onSell = (copy: SearchCopy, forTake?: WalkPlanTake) => {
     if (busyCopy !== null) return
     /* THE CARD PANE OFFERS MARK SOLD ON EVERY COPY OF THE TAKE, D212's own copies list — not
@@ -597,10 +613,65 @@ export function useOrderWalk({
      *  copied. */
     facts,
     rawCards,
+    stepPick,
   }
 }
 
 export type OrderWalk = ReturnType<typeof useOrderWalk>
+
+/** Bring one pick's line in the walk column into view: smooth, unless the person asked for less
+ *  motion. Waits a frame so the line the selection just changed is the one measured. */
+function revealPick(takeKey: string): void {
+  window.requestAnimationFrame(() => {
+    const line = document.querySelector(`[data-take-key="${CSS.escape(takeKey)}"]`)
+    if (line === null) return
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    line.scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' })
+  })
+}
+
+/** Page to the previous or next pick and bring it into view. The keys and the panel's two arrow
+ *  buttons both call it, so they cannot disagree. */
+export function stepPickAndReveal(walk: OrderWalk, direction: 1 | -1): void {
+  const takeKey = walk.stepPick(direction)
+  if (takeKey !== null) revealPick(takeKey)
+}
+
+/** THE WALK'S KEYS (the owner's redesign): `1`..`9` mark the 1st..9th copy of the CURRENT pick sold, in
+ *  the order its rows are drawn, through the same press the button makes (`onSell`, so the same receipt,
+ *  toast and Undo); `←` and `→` page to the previous and next pick. Never with a modifier (⌘←/⌘→ step the
+ *  shell's workflow ring), never out of a text field, and a held digit sells once. */
+export function useWalkKeys(walk: OrderWalk): void {
+  const held = useRef(walk)
+  held.current = walk
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const now = held.current
+      if (now.rows.length === 0) return
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return
+      if (isEditableTarget(event.target)) return
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault()
+        stepPickAndReveal(now, event.key === 'ArrowRight' ? 1 : -1)
+        return
+      }
+      if (!/^[1-9]$/.test(event.key) || event.repeat) return
+      const line = currentLineOf(now)
+      if (line === null) return
+      const copy = groupOf(line.take, line.rows.map((row) => row.copy), now.facts, now.rawCards).copies[Number(event.key) - 1]
+      if (copy === undefined || now.soldKeys.has(copy.key) || copy.state === 'sold' || copy.state === 'retired') return
+      event.preventDefault()
+      now.onSell(copy, line.take)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+}
+
+/** The pick the walk stands on: its take at its stop, with every copy row it draws. */
+function currentLineOf(walk: OrderWalk): WalkTakeLine | null {
+  return allTakeLinesOf(walk.sections).find((line) => line.rows.some((row) => row.rowKey === walk.current)) ?? null
+}
 
 /* ------------------------------------------------------------------------------ the walk list */
 
@@ -731,7 +802,7 @@ export function WalkList({
                   const slots = line.rows.map((row) => row.copy.place.card).filter((card): card is number => card !== null)
                   const next = line.rows.find((row) => !walk.soldKeys.has(row.copy.key)) ?? line.rows[0]
                   return (
-                    <li className={done ? 'orders-walk-line is-done' : 'orders-walk-line'} key={line.takeKey}>
+                    <li className={done ? 'orders-walk-line is-done' : 'orders-walk-line'} key={line.takeKey} data-take-key={line.takeKey}>
                       <button
                         className="orders-walk-press"
                         type="button"
@@ -788,7 +859,12 @@ export function WalkList({
                         preserveOrder
                         head={false}
                         className="walk-pick-where"
-                        renderAction={(copy) => <RowAction walk={walk} copy={copy} take={line.take} />}
+                        renderAction={(copy) => {
+                          /* THE DIGIT THAT MARKS THIS COPY, on the current pick's rows only: the keys act on the pick the
+                             walk stands on. */
+                          const at = line.rows.findIndex((row) => row.copy.key === copy.key)
+                          return <RowAction walk={walk} copy={copy} take={line.take} hint={current && at >= 0 && at < 9 ? String(at + 1) : undefined} />
+                        }}
                       />
                     </li>
                   )
@@ -807,7 +883,7 @@ export function WalkList({
  *  only on the newest sale (`newestUndoKey`). `take` names which take this copy is being sold
  *  against (A4): the pane omits it, since `onSell` falls back to the row it is showing, but a
  *  `WalkList` row names its own take explicitly — it may not be the one the pane is on. */
-export function RowAction({ walk, copy, take }: { readonly walk: OrderWalk; readonly copy: SearchCopy; readonly take?: WalkPlanTake }) {
+export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk; readonly copy: SearchCopy; readonly take?: WalkPlanTake; readonly hint?: string }) {
   const receipt = walk.receipts.get(copy.key)
   const busy = walk.busyCopy === copy.key
   const where = copy.place.label === null ? copy.key : sayPlace(copy.place.label)
@@ -816,13 +892,20 @@ export function RowAction({ walk, copy, take }: { readonly walk: OrderWalk; read
   /* MARK SOLD IS INVENTORY'S OWN PRESS (`CardLocations.tsx:MarkSoldButton`), so a change to it
      reaches the walk with no second edit. Undo is the icon it always was. */
   if (!undo) {
-    return (
+    const press = (
       <MarkSoldButton
         name={`Mark sold: ${where}`}
         busy={busy}
         disabled={walk.busyCopy !== null && !busy}
         onClick={() => walk.onSell(copy, take)}
       />
+    )
+    /* THE KEY CAP STANDS BESIDE THE BUTTON, not in it: the button is one width on every row (D195). */
+    return hint === undefined ? press : (
+      <span className="walk-keyhint">
+        <Kbd>{hint}</Kbd>
+        {press}
+      </span>
     )
   }
   return (

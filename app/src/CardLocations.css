@@ -259,8 +259,9 @@
      or nothing at all stands here after a sale, and a 40px control is what the row reserves. */
   min-height: var(--bn-control-h-lg);
   /* AND ITS WIDTH: what stands here after a press (a `Sold` pill, an `Undo`) is narrower than the
-     128px button, and the slot may not shrink under it (D118). */
-  min-width: 128px;
+     128px button plus the digit key cap that may stand beside it (`walk-keyhint`), and the slot may not
+     shrink under it (D118). */
+  min-width: 160px;
 }
 /* MARK SOLD: one width on every row (D195), so the button does not change size between a row
    holding one action and a row holding three. */

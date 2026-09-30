@@ -178,6 +178,7 @@ async function open(page: Page, extraBoxes: readonly Record<string, unknown>[] =
         groups: [
           {
             sku: card.sku,
+            names: [card.name],
             name: card.name,
             number_display: card.number_display,
             set_hint: card.set_hint,
@@ -447,6 +448,7 @@ async function openSale(page: Page): Promise<{ sell: () => void }> {
             groups: [
               {
                 sku: lone.sku,
+                names: [lone.name],
                 name: lone.name,
                 number_display: lone.number_display,
                 set_hint: lone.set_hint,

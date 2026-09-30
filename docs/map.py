@@ -8251,11 +8251,10 @@ COMPONENTS = [
                                            "`renderAction` slot calls per copy. `WalkCardPane` "
                                            "and its `orders-card-*` classes are deleted, not "
                                            "adapted.",
-                                   "governed_by": ["D24", "D57", "D58", "D278", "D277", "D93", "D97",
-                                                   "D260", "D118", "D132", "D164", "D171",
-                                                   "D181", "D193", "D296", "D212", "D218", "D220",
-                                                   "D252", "D263", "D279",
-                                                   "D304"]},
+                                   "governed_by": ["D24", "D57", "D58", "D93", "D97", "D118",
+                                                   "D132", "D164", "D171", "D181", "D193", "D195",
+                                                   "D212", "D218", "D220", "D252", "D260", "D263",
+                                                   "D277", "D278", "D279", "D296", "D304"]},
             "src/Shipping.tsx": {"does": "`#/shipping`: NINE LINES THAT POINT THE ROUTE AT THE "
                                          "HUB — `<OrdersHub stage=\'ship\'/>`. The stage itself "
                                          "is src/OrdersShipStage.tsx, which `Orders.tsx` "
