@@ -1716,7 +1716,7 @@ def open_read_only(db_path: Path) -> sqlite3.Connection:
     waiter loop on principle, and raises `TooManyRaces` by name if a commit somehow keeps
     landing in this exact gap on every attempt, rather than spinning forever.
 
-    `harness/tests/t7_store_and_seams.py:check_open_read_only` proves the store half, and
+    `harness.tests.t7.store_core.check_open_read_only` proves the store half, and
     records the plain open's own `sqlite_errorname`/message in its pass line, so CI's own log
     names the real code the next time a build disagrees. `check_open_read_only_race` forces
     the gap deterministically, by monkeypatching `sqlite3.connect` to land a commit the

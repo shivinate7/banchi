@@ -30,7 +30,7 @@ D93 (the copies panel is the picker) put the inventory side of a line in the ope
 
 The write-time refusal was never `_taken`. `store/orders.py:record_pull` raises `CopyAlreadyPulled` against the ledger's own recorded pulls, independent of anything `pipeline/orders.py` computes. `_taken` only stopped the resolver from offering the same copy twice inside one preview pass. It never touched a copy pulled by hand between two resolutions. `record_pull`'s refusal had to exist regardless.
 
-Removing `_taken` removes a second, redundant gate over the same act. Offering one copy to two orders in a preview is now permitted, on purpose. The operator's hand at the shelf decides which order actually gets it, and `record_pull` guards that moment. T7 (`harness/tests/t7_store_and_seams.py`) now asserts the refusal directly against the same physical copy offered to two orders by one pass.
+Removing `_taken` removes a second, redundant gate over the same act. Offering one copy to two orders in a preview is now permitted, on purpose. The operator's hand at the shelf decides which order actually gets it, and `record_pull` guards that moment. T7 (`harness/tests/t7/orders.py`) now asserts the refusal directly against the same physical copy offered to two orders by one pass.
 
 ### What was given up, plainly
 

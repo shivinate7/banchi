@@ -46,7 +46,7 @@ Pokemon 100%, Riftbound 99.5% (unchanged, and already the review's own baseline)
 moving the tcgcsv walk off the request thread entirely. `url_for` reads a cache only. A miss
 or a stale entry schedules a background `warm`, never a fetch inline.
 `server/capture_server.py:serve` also calls `warm` once at process start. And there were no
-Python tests: `harness/tests/t7_store_and_seams.py:check_stock_images` now covers the prefix
+Python tests: `harness.tests.t7.sets_stock.check_stock_images` now covers the prefix
 fix, a miss, the non-blocking read, and the route threading, both sources stubbed.
 
 **Amended (F2, 2026-09-27): Sales uses this resolver too.** `do_skus_photos` (D298) falls

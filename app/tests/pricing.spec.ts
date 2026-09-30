@@ -3222,7 +3222,7 @@ test('a listing frozen before the counter existed draws the reading, not NaN', a
  * number sends that many, 0 sends none without holding the card.
  *
  * AS WITH THE CAP, THESE CASES ARE ABOUT THE SHAPE OF THE BODY AND THE SCREEN'S ACCOUNT OF IT —
- * `harness/tests/t7_store_and_seams.py:check_emit_send_quantity` owns the file and the store.
+ * `harness.tests.t7.emit_pricing.check_emit_send_quantity` owns the file and the store.
  * What a screen can get wrong here is sending a figure nobody typed, dropping one somebody did,
  * keying it by the wrong card, or letting it survive the press it was typed for. */
 
@@ -3312,8 +3312,7 @@ test('typing in a Qty field does not reach the row keys either', async ({ page }
 /* ============================================================================================
    THE MASS-CLEAR (D168)
 
-   THE PRESS ITSELF IS THE LEAST INTERESTING THING HERE. `harness/tests/t7_store_and_seams.py:
-   check_pricing_clear` executes the route: what may go, what may not, the restore's
+   THE PRESS ITSELF IS THE LEAST INTERESTING THING HERE. `harness.tests.t7.send_markdown.check_pricing_clear` executes the route: what may go, what may not, the restore's
    provenance and the stale-write refusal, all against real Python. These cases are about the
    SCREEN, and specifically about the two properties a stub cannot fake — that the figure in
    the label is the figure that will go, and that the scope the operator chose is the scope

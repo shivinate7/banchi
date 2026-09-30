@@ -67,6 +67,6 @@ this worktree cannot check. The repair only tries the stripped key. It never inv
 match. A card whose stripped key still misses stays exactly as refused as before.
 
 Governs: `pipeline/pricearchive.py`, `pipeline/pricehistory.py:ProductIndex`,
-`store/numbers.py:_SET_CODE_PREFIX`. Proved by `harness/tests/t7_store_and_seams.py` (the
+`store/numbers.py:_SET_CODE_PREFIX`. Proved by `harness/tests/t7/price_history.py` (the
 glued-code repair, mutation-tested by removing it) and `scripts/pricearchive-selftest.py`
 (the number-key composition, mutation-tested the same way).

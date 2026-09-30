@@ -143,7 +143,7 @@ Which callers reach the rule:
 | `Inventory.move_card`, `Inventory.move_cards` | the store, not a route | No. The rule is on the route. |
 | The CLI, orders, fulfillment | none of them moves a card | No. |
 | The demo server (`demoServer.ts`) | no move route | No. |
-| `scripts/cid-selftest.py` and the T7 cases | the two routes | They send `section`. A case for the back of the box sends the last section's key (`t7_store_and_seams.back_of`). |
+| `scripts/cid-selftest.py` and the T7 cases | the two routes | They send `section`. A case for the back of the box sends the last section's key (`harness.tests.t7.common.back_of`). |
 
 ### 1.6 The Map's drag (`POST /boxes/<box>/cards/move`) and section move (`POST /boxes/<box>/sections/move`)
 

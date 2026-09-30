@@ -56,7 +56,7 @@ Automatic rather than a command, unlike D86's `prices adopt`, because there is n
 
 ### What is enforced
 
-`harness/tests/t7_store_and_seams.py:check_store_of_record` holds the three claims: the queue table's write raising after the card table's leaves NEITHER row committed and no history row either; a capture into a 61-card store builds at most two card objects and never loads the table; and the legacy import reads back equal, moves every file, receipts the counts, and ignores a file put back beside the database. Every case in that file that used to compare a store file's bytes compares the table's rows now, and every case that seeded `history.jsonl` by hand seeds the `events` table — the argument for each is unchanged and is in the case.
+`harness.tests.t7.store_core.check_store_of_record` holds the three claims: the queue table's write raising after the card table's leaves NEITHER row committed and no history row either; a capture into a 61-card store builds at most two card objects and never loads the table; and the legacy import reads back equal, moves every file, receipts the counts, and ignores a file put back beside the database. Every case in that file that used to compare a store file's bytes compares the table's rows now, and every case that seeded `history.jsonl` by hand seeds the `events` table — the argument for each is unchanged and is in the case.
 
 ### What it costs, and what is deliberately not done
 

@@ -85,7 +85,7 @@ A lane review caught two defects and asked for one more case.
    `useSearch()` with it once, on mount. That is the same store-wide search a person
    typing the name would run. The fallback order is name, then SKU, then the composed
    number. The name is what a person reads at the drawer first.
-3. **Harness coverage.** `harness/tests/t7_store_and_seams.py:check_pipeline_sets` covers
+3. **Harness coverage.** `harness.tests.t7.sets_stock.check_pipeline_sets` covers
    the grouping rungs, one row per blank card, and the natural sort. Two sort cases: the
    `089a` one, and a digit-width one, `9` before `10`. It also proves a captured, a sold,
    a retired and a moved card are all excluded. Each rung is mutation-proved.
