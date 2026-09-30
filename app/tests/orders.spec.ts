@@ -951,8 +951,8 @@ test('the Show facet lists a buyer only in its own state, and each count is the 
 
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Bob')
-  /* THE ROW SAYS WHAT THE FILTER SAYS. */
-  await expect(page.locator('.orders-index-row')).toContainText('Short')
+  /* THE ROW CARRIES NO STATUS CHIP: the Show facet says the state (D304, Q2b). */
+  await expect(page.locator('.orders-index-row .bn-pill')).toHaveCount(0)
   await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('1 of 3 buyers')
   /* No legend of machine codes anywhere on the screen (UX-238, UX-239). */
   await expect(page.locator(VIEW)).not.toContainText('sku_unseen')
@@ -962,8 +962,11 @@ test('the Show facet lists a buyer only in its own state, and each count is the 
  *  Short (UX-196). */
 test('Check names what to look at, in cards', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
+  /* THE ROW CARRIES NO CHIP (D304, Q2b): the state reads in the walk's head once the buyer is open. */
   const carol = page.locator('.orders-index-row', { hasText: 'Carol' })
-  await expect(carol).toContainText('1 missing')
+  await carol.click()
+  await expect(carol).not.toContainText('missing')
+  await expect(page.locator('.orders-panel')).toContainText('1 missing')
 })
 
 /* -------------------------------------------------------------------------------------- 3 */
@@ -2112,7 +2115,7 @@ test('an open order under Ready in the row draws its status LABEL, never the ord
   await open(page, { orders: both })
 
   const row = page.locator('.orders-index-row').first()
-  await expect(row).toContainText('Short')
+  await expect(page.locator('.orders-panel')).toContainText('Short')
   await expect(row).not.toContainText(SECOND_ORDER)
 })
 
@@ -2658,10 +2661,10 @@ test('the filter bar clears the 40px thumb floor at phone width', async ({ page 
 
 /* A SORT PRESS RE-SORTS AT ONCE (FLT-01, the owner's ruling, amending D296; UX-170). Ready to
  * ship still leads, and the list says so. */
-test('the sort press re-orders the list at once, Ready first, and the list says so', async ({ page }) => {
+test('the sort press re-orders the list at once, Ready to ship still leading, in one flat list', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
-  await expect(page.locator('.orders-group-head').first()).toHaveText('Ready')
+  await expect(page.locator('.orders-group-head')).toHaveCount(0)
 
   await (await openFilters(page)).getByRole('button', { name: /^Order: Newest first/ }).click()
   await closeFilters(page)
@@ -3105,7 +3108,7 @@ test('a done order with nothing owed still draws nothing — unchanged from befo
   /* NOTHING IS OWED, AND THE EMPTY STATE SAYS SO, with the one press that shows the done buyers. */
   await expect(page.locator('main.orders')).toContainText('Nothing is owed')
   await page.locator('.bn-empty').getByRole('button', { name: 'Show done buyers' }).click()
-  await expect(page.locator('.orders-index-row')).toContainText('Done')
+  await expect(page.locator('.orders-index-row')).toContainText('1 sold')
   await expect(page.locator('.orders-lines')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Pull', exact: true })).toHaveCount(0)
 })

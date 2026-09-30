@@ -105,10 +105,14 @@
   .orders-cardcol { display: block; }
 }
 @container orders (min-width: 560px) and (max-width: 999px) {
-  /* MID: Inventory's own skeleton, two columns. The rail's main part is the walk (D289 rule 1),
-     so the buyer list above it is capped to the same "three and a half rows" `#/inventory`'s own
-     box list uses (`BoxBrowse.css:.browse-boxes`), scrolling on its own within that short box. */
-  .orders-buyers { max-height: 164px; }
+  /* MID: Inventory's own skeleton, two columns. The list grows to its rows, never a half row at
+     rest; past a tall cap it scrolls inside its card, snapping to a row, with a fade at the foot. */
+  .orders-buyers-panel {
+    flex: none;
+    max-height: min(60dvh, 26rem);
+    scroll-snap-type: y proximity;
+  }
+  .orders-buyers-panel .orders-index-item { scroll-snap-align: start; }
 }
 @container orders (min-width: 1000px) {
   .orders-layout {
@@ -217,14 +221,11 @@
 .orders-buyers-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: var(--bn-2);
-  min-height: var(--bn-control-h-lg);
-  padding: var(--bn-1) var(--bn-2) 0 var(--bn-3);
+  /* The card's own inset on every side: the Walk press (40px) never touches its edge. */
+  padding: var(--bn-2) var(--bn-2) 0 var(--bn-3);
 }
-/* One heading style for every group, the first on the Walk press's row and the rest in the list. */
-.orders-group-head { font-family: var(--bn-font-ui); font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--bn-ink-3); }
-.orders-group-head-item { padding: var(--bn-3) var(--bn-2) var(--bn-1) var(--bn-3); }
 /* The same list padding and row gap as Inventory's box list (`.browse-boxes`). */
 .orders-index {
   list-style: none;
@@ -372,7 +373,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   background: transparent;
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
-.orders-walk-line > .walk-pick-where { flex: 1 0 100%; }
+.orders-walk-line > .walk-pick-where { flex: 1 1 100%; min-width: 0; }
 .orders-walk-press:hover { background: var(--bn-hover); }
 .orders-walk-press[aria-current='true'] { background: var(--bn-accent-tint); }
 .orders-walk-slot { grid-area: slot; min-width: 4ch; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bn-ink-2); }

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
 import {
   Button,
@@ -55,7 +55,6 @@ import {
   groupOrderValue,
   orderBuyerLabel,
   passesHideUnknown,
-  sortedReadyFirst,
   sortGroups,
   statusVocabulary,
   takeOrder,
@@ -3604,41 +3603,28 @@ function PullStage({
         {allTicked ? 'Stop' : `Walk ${tickableKeys.size}`}
       </Button>
     )
-  const readyFirst = sortedReadyFirst(shownGroups, readyOf)
 
-  /* EVERY GROUP GETS ONE HEADING (owner's report): where Ready-to-ship buyers lead others, the list
-     names both groups the same way. The Walk press sits on the first heading's row. */
+  /* ONE FLAT LIST, NO GROUP HEADINGS (the owner's ruling): the Walk press has its own row. */
   const buyerList = (
     <>
-      {walkAll === null && !readyFirst ? null : (
-        <div className="orders-buyers-head">
-          {readyFirst ? <h3 className="orders-group-head">Ready</h3> : <span />}
-          {walkAll}
-        </div>
-      )}
+      {walkAll === null ? null : <div className="orders-buyers-head">{walkAll}</div>}
       <ol className="orders-index bn-stagger">
         {shownGroups.map((group, at) => (
-          <Fragment key={group.key}>
-            {readyFirst && at > 0 && readyOf(shownGroups[at - 1]!) && !readyOf(group) ? (
-              <li className="orders-group-head-item">
-                <h3 className="orders-group-head">Not ready</h3>
-              </li>
-            ) : null}
-            <li
-              className={['orders-index-item', group.key === selectedKey ? 'is-selected' : ''].filter(Boolean).join(' ')}
-              style={{ '--i': at } as CSSProperties}
-            >
-              {tickFor(group)}
-              <BuyerRow
-                group={group}
-                answers={answers}
-                status={statusByGroup.get(group.key) ?? 'done'}
-                missing={shows.includes(MISSING_FACET) && groupMissing(group, answers).copies > 0 ? groupMissing(group, answers) : null}
-                selected={group.key === selectedKey}
-                onSelect={() => select(group.key)}
-              />
-            </li>
-          </Fragment>
+          <li
+            key={group.key}
+            className={['orders-index-item', group.key === selectedKey ? 'is-selected' : ''].filter(Boolean).join(' ')}
+            style={{ '--i': at } as CSSProperties}
+          >
+            {tickFor(group)}
+            <BuyerRow
+              group={group}
+              answers={answers}
+              status={statusByGroup.get(group.key) ?? 'done'}
+              missing={shows.includes(MISSING_FACET) && groupMissing(group, answers).copies > 0 ? groupMissing(group, answers) : null}
+              selected={group.key === selectedKey}
+              onSelect={() => select(group.key)}
+            />
+          </li>
         ))}
       </ol>
     </>
@@ -3964,8 +3950,8 @@ function statusPill(status: Status, group: BuyerGroup, answers: ReadonlyMap<stri
   return { label, ...(status === 'look' ? lookPill(label) : STATUS_PILL[status]) }
 }
 
-/** A buyer, in the list: the name, ONE status (the worst, and only when it is not Ready), and
- *  ONE figure (UX-199). No dot beside the chip (it repeated it), no per-order chips, no bar. */
+/** A buyer, in the list: the name and ONE figure (UX-199). NO STATUS CHIP ON A ROW (the owner's
+ *  ruling): the filter's Show facet is where a state is picked, so the row carries no noise. */
 function BuyerRow({
   group,
   answers,
@@ -3984,7 +3970,6 @@ function BuyerRow({
   readonly onSelect: () => void
 }) {
   const figures = figuresOf(group, answers)
-  const pill = statusPill(status, group, answers)
   const ref = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     if (selected) ref.current?.scrollIntoView({ block: 'nearest' })
@@ -3994,16 +3979,11 @@ function BuyerRow({
     <button ref={ref} type="button" className="orders-index-row" aria-current={selected ? 'true' : undefined} onClick={onSelect}>
       <span className="orders-index-main">
         <span className="orders-index-number"><LabelText text={buyerLabel(group)} /></span>
-        {status === 'ready' && group.orders.length < 2 ? null : (
+        {group.orders.length > 1 ? (
           <span className="orders-index-meta">
-            {status === 'ready' ? null : (
-              <Pill size="sm" tone={pill.tone} icon={pill.icon}>
-                {pill.label}
-              </Pill>
-            )}
-            {group.orders.length > 1 ? <span className="orders-index-count">{group.orders.length} orders</span> : null}
+            <span className="orders-index-count">{group.orders.length} orders</span>
           </span>
-        )}
+        ) : null}
       </span>
       <span className="orders-index-figure">
         {missing !== null ? (

@@ -15,6 +15,11 @@ way `#/inventory`'s box list does. **This amends D274's HOR-33 finding**, which 
 page scroll for the buyer list, the walk and the page together. Layout R gives the rail its
 own column. So it can scroll on its own again.
 
+**Q2b, the buyer rows.** The list is one kit card, `#/inventory`'s own `bn-panel`. A buyer
+row carries the name and the owed count and no status chip, because the Show facet is where a
+state is picked and a chip on every row is noise. The list is one flat list with no Ready or Not
+ready groups, and the Walk press sits on its own row above it (the owner's rulings).
+
 **Q3, the row detail.** Full detail on every pick row: box, section and card, the section
 strip, the ruler, and the neighbor names, on every copy row. Each row reuses
 `CardLocations` (`head={false}`) rather than a walk-only row. This restores D220's original
