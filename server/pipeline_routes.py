@@ -4598,7 +4598,7 @@ def _positive(value, field: str) -> int:
 #: (D189), because `pipeline/readings.py:collect` now reads this same directory
 #: to arbitrate a market reading and `pipeline/` cannot import `server/` — the layering runs
 #: the other way. Aliased here, under their original names, because this module still WRITES
-#: into it (`do_live_export`) and `harness/tests/t7_store_and_seams.py` still spells them
+#: into it (`do_live_export`) and `harness/tests/t7/pipeline_fetch.py` and `harness/tests/t7/value.py` still spell them
 #: `pipeline_routes.LIVE_DIR` / `pipeline_routes.LIVE_PREFIX`.
 LIVE_DIR = files.LIVE_DIRNAME
 LIVE_PREFIX = files.LIVE_PREFIX
@@ -7511,7 +7511,7 @@ def _reusable(game: str, scope: "tcg_export.Scope") -> Optional[Tuple[Path, floa
 
     THIS IS THE HALF THAT SAVES THE REQUEST, and it is the only part of this route whose
     saving an outcome assertion cannot see: a reuse and a fetch produce the same file, the
-    same receipt figures and the same join. `harness/tests/t7_store_and_seams.py` counts the
+    same receipt figures and the same join. `harness/tests/t7/pipeline_fetch.py` counts the
     stub's requests for exactly that reason.
     """
     for path in _held_exports(game):

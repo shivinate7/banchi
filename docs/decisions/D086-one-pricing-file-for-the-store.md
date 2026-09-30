@@ -162,8 +162,7 @@ cards and not money, because the cheap half goes out at $0.49 either way — but
 a real store had been checked was never true of this one, and nothing read it. (`sub_threshold:
 "floor"` is the form D9 retired; it still parses and becomes a flat figure on its first edit,
 which has not happened because that file has not been written since 2026-09-03.) And
-`harness/tests/
-t7_store_and_seams.py` asserts the shared fallback with the trade written beside it, where the
+`harness/tests/t7/emit_pricing.py` asserts the shared fallback with the trade written beside it, where the
 assertion that used to promise the opposite stood.
 
 **What would reopen it**: an operator who wants the bar for LISTING to sit below the price cheap

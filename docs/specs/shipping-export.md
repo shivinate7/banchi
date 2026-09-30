@@ -133,7 +133,7 @@ this format something the code reads, then by D69, which gave it a screen.
 It read: *"RECORDED, not BUILT. Nothing reads this file and nothing reads the fixture."*
 **Both halves are now false.** `pipeline/shipping.py` reads this format and routes an order by
 the cut derived above, `pipeline/pirateship.py` writes the Pirate Ship import, and
-`harness/tests/t7_store_and_seams.py:check_shipping_lane` asserts the lane counts against this
+`harness.tests.t7.shipping.check_shipping_lane` asserts the lane counts against this
 fixture's 331 real orders. Reachability followed within the day: `#/shipping` is in `ROUTES`,
 `POST /shipping/batches` is served by `server/shipping_routes.py`, `app/src/server.ts` carries
 the client functions, and `app/tests/shipping.spec.ts` asserts the screen.

@@ -1,5 +1,5 @@
 import type { IconName } from './kit'
-/* THE PURE MODULE, NOT `./kit/data` (the barrel): `harness/tests/t7_store_and_seams.py`
+/* THE PURE MODULE, NOT `./kit/data` (the barrel): `harness/tests/t7/emit_pricing.py`
  * bundles this file alone with plain esbuild, no CSS loader, to read Home's status line
  * without a browser. `kit/data.tsx` pulls in the whole kit (icons, overlays, `SearchField`'s
  * own `./kit` re-import), which esbuild's bare bundle cannot resolve; `kit/dataRules.ts` is

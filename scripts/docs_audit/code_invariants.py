@@ -1303,7 +1303,7 @@ def _shipping_columns() -> Row:
 
     WHY THIS ROW EXISTS. `docs/specs/order-pipeline.md` said the renderer produced a file of
     TEN columns from 2026-08-30 until 2026-09-05. It produces twelve — nine named plus three
-    rubber stamps — and `harness/tests/t7_store_and_seams.py` said twelve the whole time. Two
+    rubber stamps — and `harness/tests/t7/shipping.py` said twelve the whole time. Two
     documents in this repository disagreed about a number the code settles in one line, and
     nothing compared either to the code or to each other.
 
