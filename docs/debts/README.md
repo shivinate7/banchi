@@ -37,7 +37,7 @@ DEBT7 The preview crops the card, and the one check that looks at a photo cannot
 DEBT8 Recorded and correctly unfixed
 DEBT9 The sigil check matches text, so a renamed local walks past it
 DEBT10 An order arriving mid-pass is walked but never counted, and a tab outlives its sitting
-DEBT11 The capture server bounds concurrent requests, not threads, and a Playwright fleet is what finds out
+DEBT11 A writer parked on the store lock still holds a request slot, and the heavy lock-free reads wait behind it
 DEBT12 Ten decision entries are over budget on purpose, and the budget was the thing that had drifted
 DEBT13 The commit gate was measured, and it is the checks OFF it that are worth knowing about
 DEBT14 A pooled card reaches the pricing table and the box walk, and `located` suppresses the label everywhere and the photograph nowhere
