@@ -45,7 +45,6 @@ and nothing hand-typed beside it.
 from __future__ import annotations
 
 import importlib
-import os
 import shutil
 import sys
 import tempfile
@@ -54,6 +53,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from harness.tests.home import isolated_home  # noqa: E402
 from store import files  # noqa: E402
 
 PASS = 0
@@ -71,12 +71,6 @@ def ok(condition: bool, label: str, detail: str = "") -> None:
         if detail:
             for line in str(detail).splitlines()[:8]:
                 print(f"         {line}")
-
-
-def _fresh_home() -> Path:
-    home = Path(tempfile.mkdtemp(prefix="price-postings-selftest-"))
-    (home / "inventory").mkdir(parents=True, exist_ok=True)
-    return home
 
 
 def run_suite(db_module, session_module, postings_module) -> None:
@@ -210,11 +204,9 @@ def _mutate_to_upsert(src: str) -> str:
     return mutated
 
 
-def _run_against(home: Path, mutate: bool) -> int:
+def _run_against(mutate: bool) -> int:
     global PASS, FAIL
     PASS = FAIL = 0
-    previous = os.environ.get(files.HOME_ENV)
-    os.environ[files.HOME_ENV] = str(home)
     tmp_module_dir = None
     try:
         if mutate:
@@ -254,20 +246,14 @@ def _run_against(home: Path, mutate: bool) -> int:
         for name in list(sys.modules):
             if name == "store" or name.startswith("store."):
                 del sys.modules[name]
-        if previous is None:
-            os.environ.pop(files.HOME_ENV, None)
-        else:
-            os.environ[files.HOME_ENV] = previous
     return FAIL
 
 
 def main() -> int:
     mutate = "--mutate-to-upsert" in sys.argv[1:]
-    home = _fresh_home()
-    try:
-        _run_against(home, mutate=mutate)
-    finally:
-        shutil.rmtree(home, ignore_errors=True)
+    with isolated_home() as home:
+        (home / "inventory").mkdir(parents=True, exist_ok=True)
+        _run_against(mutate=mutate)
 
     label = "MUTATED (append_postings rewritten as an upsert)" if mutate else "real"
     print(f"\nprice-postings self-test [{label}]: {PASS} passed"
