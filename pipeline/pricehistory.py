@@ -267,6 +267,10 @@ COURTESY_DELAY_SECONDS = 0.15
 # short enough that nobody reads a stale figure and long enough that re-running an analysis
 # in one sitting costs no requests.
 CATALOG_TTL_SECONDS = float("inf")
+# A day: a set released after the groups list was cached is missing from it, and an infinite
+# life refused every card of that set forever. Long enough that one sweep is one request; a
+# miss also refetches once (`group_id`), so the day is only the backstop for `groups` callers.
+GROUPS_TTL_SECONDS = 24 * 60 * 60
 PRICE_TTL_SECONDS = 7 * 24 * 60 * 60
 HISTORY_TTL_SECONDS = 60 * 60
 
@@ -1050,6 +1054,9 @@ class Market:
         self._memory: Dict[str, Tuple[float, Dict]] = {}
         self._indexes: Dict[Tuple[int, int], ProductIndex] = {}
         self.requests = 0
+        # Slugs fetched over the network this instance's life: a miss refetches a catalogue
+        # list once, never once per card.
+        self._fetched: set = set()
         # SET ONCE, BY THE FIRST `Offline` (never a plain `Unreachable` — see that class's
         # docstring), and read by every `get()` after it for the rest of THIS instance's
         # life. A batch that has already learned the socket cannot be reached does not
@@ -1122,6 +1129,7 @@ class Market:
             self._offline = exc
             raise
         self._store(slug, payload)
+        self._fetched.add(slug)
         return payload
 
     # -------------------------------------------------------------------- the catalog
@@ -1142,16 +1150,18 @@ class Market:
             )
         return int(row["categoryId"])  # type: ignore[index]
 
-    def groups(self, category_id: int) -> Dict[str, object]:
-        payload = self.get(
-            f"{CATALOG_HOST}/tcgplayer/{int(category_id)}/groups",
-            f"tcgcsv/{int(category_id)}/groups",
-            CATALOG_TTL_SECONDS,
-        )
+    def groups(self, category_id: int, ttl: float = GROUPS_TTL_SECONDS) -> Dict[str, object]:
+        slug = f"tcgcsv/{int(category_id)}/groups"
+        payload = self.get(f"{CATALOG_HOST}/tcgplayer/{int(category_id)}/groups", slug, ttl)
         return index_by_name(payload.get("results") or ())
 
     def group_id(self, category_id: int, set_name: str) -> int:
-        row = self.groups(category_id).get(join.normalize_set(set_name))
+        name = join.normalize_set(set_name)
+        row = self.groups(category_id).get(name)
+        if row is None and f"tcgcsv/{int(category_id)}/groups" not in self._fetched:
+            # A miss against a list cached before the set released is the exact failure:
+            # ask the mirror once before refusing. `ttl=-1` is stale to any cache entry.
+            row = self.groups(category_id, ttl=-1).get(name)
         if row is None:
             raise NotResolvable(
                 f"No tcgcsv group in category {category_id} is named {set_name!r}. All 19 "
@@ -1160,13 +1170,13 @@ class Market:
             )
         return int(row["groupId"])  # type: ignore[index]
 
-    def products(self, category_id: int, group_id: int) -> ProductIndex:
+    def products(self, category_id: int, group_id: int, ttl: float = CATALOG_TTL_SECONDS) -> ProductIndex:
         key = (int(category_id), int(group_id))
-        if key not in self._indexes:
+        if key not in self._indexes or ttl < 0:
             payload = self.get(
                 f"{CATALOG_HOST}/tcgplayer/{key[0]}/{key[1]}/products",
                 f"tcgcsv/{key[0]}/{key[1]}/products",
-                CATALOG_TTL_SECONDS,
+                ttl,
             )
             self._indexes[key] = ProductIndex.build(payload.get("results") or ())
         return self._indexes[key]
@@ -1215,9 +1225,11 @@ class Market:
         """
         category_id = self.category_id(row.get(tcgcsv.PRODUCT_LINE_COLUMN, ""))
         group_id = self.group_id(category_id, row.get(tcgcsv.SET_COLUMN, ""))
-        product_id = self.products(category_id, group_id).find(
-            row.get(tcgcsv.NUMBER_COLUMN, ""), row.get(tcgcsv.NAME_COLUMN, "")
-        )
+        number, name = row.get(tcgcsv.NUMBER_COLUMN, ""), row.get(tcgcsv.NAME_COLUMN, "")
+        product_id = self.products(category_id, group_id).find(number, name)
+        if product_id is None and f"tcgcsv/{category_id}/{group_id}/products" not in self._fetched:
+            # Same rule as `group_id`: a product list pulled before the card was added.
+            product_id = self.products(category_id, group_id, ttl=-1).find(number, name)
         if product_id is None:
             raise NotResolvable(
                 "No single tcgcsv product matches "

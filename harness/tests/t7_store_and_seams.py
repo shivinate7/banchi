@@ -35283,6 +35283,44 @@ def check_price_history(checks: Checks) -> None:
         "resolution failure, proving product_id_for_row is what ran",
     )
 
+    # A groups list cached before a set released: a miss refetches once and resolves; a set
+    # missing from both still refuses.
+    def _catalog(groups):
+        def fetch(url):
+            if url.endswith("/tcgplayer/categories"):
+                return {"results": [{"categoryId": 3, "name": "Pokemon"}]}
+            if url.endswith("/groups"):
+                return {"results": groups()}
+            raise AssertionError(url)
+        return fetch
+
+    old_groups = [{"groupId": 1, "name": "Old Set"}]
+    live_groups = old_groups
+    cache_home = Path(tempfile.mkdtemp())
+    pricehistory.Market(
+        cache_dir=cache_home, fetcher=_catalog(lambda: live_groups), courtesy_delay=0
+    ).group_id(3, "Old Set")
+    live_groups = old_groups + [{"groupId": 2, "name": "New Set"}]
+    new_market = pricehistory.Market(
+        cache_dir=cache_home, fetcher=_catalog(lambda: live_groups), courtesy_delay=0
+    )
+    checks.equal(
+        new_market.group_id(3, "New Set"), 2,
+        "a set missing from the cached groups list resolves after one refetch, no cache deletion",
+    )
+    checks.raises(
+        pricehistory.NotResolvable,
+        lambda: new_market.group_id(3, "Never Released"),
+        "a set missing from the fresh list too still refuses",
+    )
+    requests_before = new_market.requests
+    checks.raises(
+        pricehistory.NotResolvable,
+        lambda: new_market.group_id(3, "Never Released"),
+        "and asks again for nothing: one refetch per instance, never one per card",
+    )
+    checks.equal(new_market.requests, requests_before, "the second miss spent no request")
+
     # ---------------------------------------------------------------- the parse, on real bytes
     #
     # THE ORDER ASSERTION IS THE POINT OF COMMITTING THIS FILE. Both halves, so a change
