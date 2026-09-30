@@ -10,7 +10,7 @@ The owner's answers to the plan's three questions, verbatim:
 - On how long the pick lasts: "Until the sitting ends".
 - On Move to box: "i need to specify where it goes there no auto default".
 
-`docs/specs/subbox-capture.md` holds the plan, the wire contract and the measurements.
+`docs/specs/subbox-capture.md` holds the wire contract and the screen's rules.
 
 ### The premise that no longer holds
 

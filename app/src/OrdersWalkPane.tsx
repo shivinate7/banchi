@@ -75,7 +75,7 @@ export type WalkUndoFn = (
  *  were to give it to someone, whoever it completes") — because the order closest to done is
  *  the one a single short copy is most likely to finish. Ties go to the order placed longest
  *  ago. AN ORDER WITH NOTHING LEFT OWED IS NEVER PICKED — no `for[0]` fallback
- *  (`docs/specs/order-walk-plan.md` §8, amended): the caller who used to fall through to a
+ *  (`docs/specs/order-walk-plan.md` §8): the caller who used to fall through to a
  *  full order now gets `null` and refuses the press before the server has to. */
 function pickOrderFor(
   take: WalkPlanTake,
@@ -111,7 +111,7 @@ function pickOrderFor(
  *  on-hand copy, not only this stop's reach (D212/D93/D97), so its length is the true
  *  denominator. `owed` is the walked set's own demand (`owedBySku`, which excludes a
  *  stood-down line the same way the planner does). `Y` MUST NEVER COUNT A COPY THE STORE DOES
- *  NOT HAVE — the diagnosed defect (`docs/specs/order-walk-plan.md` §8, amended): Rengar's "of
+ *  NOT HAVE — the diagnosed defect (`docs/specs/order-walk-plan.md` §8): Rengar's "of
  *  8" implied 7 more copies waited elsewhere, and none did. Where `owed` outruns `onHand`,
  *  `of` is capped at what is really here and `short` carries the gap, so the row can say "7
  *  short" instead of a wrong count (the owner's wording ruling, 2026-09-25: "say what's short

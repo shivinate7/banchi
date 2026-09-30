@@ -4751,53 +4751,15 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
     record with no id whose upstairs neighbour also has none — named here rather than
     papered over, because both halves of that are records this server never wrote.
 
-    FILES MOVE FIRST, INSIDE THE BLOCK, ASCENDING — and the ordering argument is
-    `do_delete_card`'s money rule extended to a rename. The session commits records only
-    at block exit, so a crash mid-shift discards every record edit while leaving some
-    photos already at their new names. Three properties make that recoverable rather than
-    wrong:
-
-      the first rename CONSUMES the target's photo   `os.replace(N+1 -> N)` atomically
-                                                     overwrites the doomed file. Nothing
-                                                     ever unlinks the target's photo while
-                                                     there are cards to shift, so no retry
-                                                     can blindly unlink a slot that a
-                                                     partial shift has already refilled
-                                                     with a NEIGHBOUR's photo — the one
-                                                     ordering that destroys a photo of a
-                                                     card that still exists.
-      a rename RESUMES rather than repeating         source missing while the record says
-                                                     the card has a photo means an earlier
-                                                     attempt already moved it; the loop
-                                                     takes the destination as done and
-                                                     walks on. The RECORD is what breaks
-                                                     the tie — a card that never had a
-                                                     photo is distinguishable from one
-                                                     whose photo has already moved, which
-                                                     is what makes the retry safe where a
-                                                     bare `is_file()` probe would misread
-                                                     the target's leftovers as a moved
-                                                     photo.
-      sidecars are REGENERATED, not renamed          written whole from the record at the
-                                                     new index (`write_atomic`), old one
-                                                     unlinked after — idempotent on a
-                                                     retry, and the reader can never find
-                                                     a sidecar whose `index` disagrees
-                                                     with its filename.
-
-    What a crash between renames costs, stated exactly: until the operation is retried to
-    completion, records point at photo names a partial shift has already moved, so an
-    identify run in that window would attribute photos one position off. The window is
-    closed by retrying the remove, which the `capture_id` check permits precisely because
-    the store was never committed. Past the block, the commit is per file (capture-server
-    spec §6.5), exactly as every other route here — this one cannot promise more.
-
     EVERYTHING KEYED BY A SHIFTED POSITION MOVES WITH IT: record key and its `box`/`index`
-    fields, photo, sidecar, queue entries (`position`, `box`, `index`, the rendered
+    fields, queue entries (`position`, `box`, `index`, the rendered
     `label`, and `photo` re-pointed), cache entries re-keyed. `capture_id`s ride along
     untouched — they name photographs, and no photograph changed. A CLEARED queue entry
     moves too, flag intact: the answer is about the physical card, and the physical card
     is what slid down.
+
+    Photographs live under `cid`, so no file is renamed. Only the target's photo and sidecar are
+    unlinked.
 
     TWO HISTORY LINES, COMMITTED WITH THE CHANGE OR NOT AT ALL: `removed` for the target —
     same shape as undo's, because the same thing happened to that record — and
@@ -13944,8 +13906,7 @@ def do_order_picks(payload: dict) -> dict:
 
 def _walk_plan_copy(places: _Places, card: master.Card, *, here: bool) -> dict:
     """One physical copy of a take's SKU, exactly as `/search` renders that same card, plus
-    `here` — whether it is standing at the stop asking for it (RULED 2026-09-19, "The stop,
-    rebuilt", `docs/specs/order-walk-plan.md` §8).
+    `here` — whether it is standing at the stop asking for it (RULED 2026-09-19, `docs/specs/order-walk-plan.md` §8).
 
     EVERY ON-HAND COPY OF THE SKU RIDES THE WIRE NOW, NOT ONLY THE SOLVER'S REACH. D212
     (every copy is fungible, no order claims one) and D93 (the copies panel draws every
@@ -13982,7 +13943,7 @@ def _walk_plan_order_ref(ledger: order_store.Ledger, key: str, sku: str) -> Opti
     `walkplan.demand` applies (owner's ruling 2026-09-17, "if I stand a line down... it should
     say owed 0"), read off this plan's own snapshot so a press this pass records against never
     moves it. Its own reader, `pickOrderFor` (`app/src/OrdersWalkPane.tsx`), needs it to stop
-    handing a press to an order already full (`docs/specs/order-walk-plan.md` §8, amended)."""
+    handing a press to an order already full (`docs/specs/order-walk-plan.md` §8)."""
     record = ledger.orders.get(key)
     if record is None:
         return None
@@ -14194,8 +14155,7 @@ def do_order_walk_plan(payload: dict) -> dict:
     reaches, not of the copies in it, and paid once per press. D260 is what it buys: a card
     nobody has named is not a landmark, and the distance is what keeps the skip honest.
 
-    WIDENED TO EVERY ON-HAND COPY OF EACH SKU, STORE-WIDE, RULED 2026-09-19 ("The stop,
-    rebuilt") — D212 (every copy is fungible, no order claims one) and D93 (the copies
+    WIDENED TO EVERY ON-HAND COPY OF EACH SKU, STORE-WIDE, RULED 2026-09-19 (`docs/specs/order-walk-plan.md` §8) — D212 (every copy is fungible, no order claims one) and D93 (the copies
     panel draws every copy and hides none) reaching this wire. `_walk_plan_take` now calls
     `inventory.copies_on_hand(sku)` once per take, the same accessor `do_search`'s
     `on_hand` count already reads, over the SAME snapshot — never a second

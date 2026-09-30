@@ -1,127 +1,97 @@
 # The order walk is a plan, not a list
 
-**Status: the solver, the route and the screen are all BUILT.** `pipeline/walkplan.py`
+**Status: BUILT.** The solver, the route and the screen all exist. `pipeline/walkplan.py`
 implements sections 5 and 6, and `harness/tests/t11_walk_plan.py` is its contract. Section 7's
-`POST /orders/walk-plan` is built (`server/capture_server.py:do_order_walk_plan`,
-`app/src/server.ts:walkPlan`, `app/src/types.ts:WalkPlan`). It composes every label through
-`_Places.of` — `pipeline/join.py:Position` — rather than a second formula. Section 8's screen
-landed on 2026-09-18, per §9a below, and the route is now reachable from that screen. That
-satisfies CLAUDE.md's own rule that a capability is not built until a screen can reach it.
-The owner ruled on this document on 2026-09-17, before any of it was written.
+`POST /orders/walk-plan` is `server/capture_server.py:do_order_walk_plan`, with the client call
+`app/src/server.ts:walkPlan` and the type `app/src/types.ts:WalkPlan`. It composes every label
+through `_Places.of` (`pipeline/join.py:Position`) and never through a second formula. The
+screen is `#/orders` (section 13). `#/fulfillment` reads the same route for its Owed section.
 
-**Three architectural calls were put to the owner on 2026-09-17 and ruled on.** They are
-settled in this document and are not open questions: the solver runs **on the server**;
-`buildWalkPlan` is **replaced, not extended**; and the plan does not move **inside a pass**,
-where a pass is one press of Start to the end of that walk and nothing longer (section 8,
-which carries the owner's own words).
+**Three architectural calls are settled.** The solver runs **on the server**. The old
+client-side `buildWalkPlan` was replaced and not extended. The plan is a live read of the
+walked set, and it does not move on a press (section 8).
 
-**What it replaces.** `#/orders`'s `Walk the boxes` stage, and the sentence block, the
-`By order` fold and `buildWalkPlan` around it. `#/orders` and `#/shipping` stay two stages of
-one screen and two routes. No new route appears in `App.tsx`'s `ROUTES` table.
+`#/orders` and `#/shipping` are two rows of the shell and two routes (D274). No route was added
+to `App.tsx`'s `ROUTES` table for the walk.
 
 ---
 
-## 1. The complaint
+## 1. What the screen must do
 
-On 2026-09-17 the owner looked at `#/orders` after D212 (every copy is fungible, so no order
-claims one) landed and said *"This is so stupid."* Three reviewers judged the screen cold,
-barred from the repo, the docs and the history. They converged. Ranked by what each cost:
+Five rules, ranked by cost. Each one is a rule the screen keeps.
 
-1. **Over-pulling has no stop.** A line wanting **2** copies drew **10 live Pull buttons**
-   across four box groups. Nothing greyed out. Nothing counted down. The quantity was said
-   once, in a sentence block scrolled far above the rows. The owner's ruling: *"It's not
-   inherently wrong to overpull... it's just unintuitive, it should just close after the 2
-   selections are met (of course with a little period to undo in case if I've misclicked)."*
-2. **No card photographs.** `#/orders` is the only card-pulling screen in this product
-   without them. `#/inventory` and `#/fulfillment` both lead with a large photograph, the
-   card's physical neighbors and a position bar. Owner: *"Yup."*
-3. **No cross-order walk by default.** `By buyer` walks one buyer Box 1 → 2 → 3, then the
-   next buyer starts again at Box 1. Thirty-nine buyers is thirty-nine traversals of one
-   shelf. `Walk the boxes` already flattens correctly and is the second tab, with its
-   relationship to the first never stated.
-4. **A wall of sentences.** `WalkCards` draws one line per card reading
-   `Card name — Pull 1 — 6 on hand across 3 boxes.` Nine lines on a real order, ungrouped and
-   uncollapsed. No other screen speaks this way. Owner: *"Horrible."* It was added earlier
-   the same day by the orchestrating session and is that session's own mistake to undo.
-5. **The good part is hidden.** `buildWalkPlan` already ranks stops fullest-first, behind an
-   unstyled `By order` text toggle with no chevron and no button styling. A reviewer found it
-   by hunting and called it the at-a-glance thing the owner asked for, buried behind the
-   least discoverable control on the page. Owner: *"Yup."*
+1. **Stop over-pulling.** A row closes when its demand is met, and the copy keeps an undo
+   (section 8). Over-pulling stays possible. It must not be the path of least resistance.
+2. **Show card photographs.** `#/inventory` and `#/fulfillment` lead with a large photograph,
+   the card's physical neighbors and a position bar. The walk does too.
+3. **Walk across orders.** The walk covers the whole ticked set in one traversal. Walking one
+   buyer after another would send the operator through box 1, 2 and 3 for each buyer.
+4. **Use counters and not sentences.** One sentence per card is a register no other screen
+   uses.
+5. **Rank fullest-first by default.** The ranked view is the default order and is not behind a
+   toggle.
 
 ## 2. What the owner asked for
 
-Their words: *"depending on the orders selected to walk, it dynamically adjusts which sections
-I could pull from first, with the idea being that of all the orders selected to walk, what is
-the least amount of total sections I need to scavenge through to satisfy all selected
-orders."*
+The owner's words: depending on the orders selected to walk, the screen dynamically adjusts
+which sections to pull from first. Across all selected orders, it uses the least total sections
+that satisfy them.
 
-**Two rulings are already given and are not reopened here.**
+**Two rulings are given and not reopened.**
 
-- **The cost is SECTIONS, counted flat. More boxes is acceptable.** The owner also said they
-  would like to change this by mood later (*"maybe we need a settings tab lol"*). So the cost
-  function is a named, swappable input to the solver. **No settings tab is specified.** The
-  wire carries the cost function's name; today exactly one name is legal.
-- **Selection is: tick the orders, then walk.** The plan covers exactly the ticked set.
+- **The cost is SECTIONS, counted flat. More boxes is acceptable.** The owner may change this
+  by mood later. So the cost function is a named, swappable input to the solver. **No settings
+  tab is specified.** The wire carries the cost function's name. Today exactly one name is
+  legal.
+- **Selection is: tick the orders, then walk.** The plan covers exactly the walked set.
 
 ## 3. The mandate that shapes every part of this
 
-The owner: boxes and sections *"aren't supposed to be so demanding / taxing on how we
-build/operate."*
+The owner: boxes and sections should not be so demanding on how the app is built and operated.
+The operator must not have to think in the box and section taxonomy. The screen says which
+place to open and which cards to take. The addressing is the machine's problem.
 
-The operator must not have to think in the box and section taxonomy. The screen says *open
-this drawer, take these four*, and the addressing stays the machine's problem. Today it is the
-reverse — the taxonomy is on screen and the arithmetic is in the operator's head. Every
-section below is judged against that sentence.
-
-This does not delete the taxonomy. Sections become the thing being minimised, so section
-fragmentation gains a purpose it never had. It is the machine's unit now, not the operator's
-vocabulary.
+This does not delete the taxonomy. Sections become the thing that the solver minimizes. They
+are the machine's unit and not the operator's vocabulary. Every section below is judged against
+that sentence.
 
 ## 4. Why this is possible only now
 
-**D212, every copy is fungible, so no order claims one.** Before it, `pipeline/orders.py`'s
-`_Draw._taken` handed each line up to `line.quantity` pre-chosen copies and withheld them from
-every later order in the pass. There was no freedom. A solver had nothing to choose between.
-D212 removed the exclusive draw: every line now carries every candidate copy the store holds,
-and the refusal moved to the write, `store/orders.py:record_pull`'s `CopyAlreadyPulled`.
+**D212, every copy is fungible, so no order claims one.** Before it, `pipeline/orders.py`
+handed each line up to `line.quantity` pre-chosen copies and withheld them from every later
+order in the pass. The solver had nothing to choose between. D212 removed the exclusive draw.
+Every line now carries every candidate copy that the store holds, and the refusal moved to the
+write, `store/orders.py:record_pull`'s `CopyAlreadyPulled`. That is the choice space this
+solver works in.
 
-That is the choice space this solver works in. It did not exist three days ago.
-
-D212 also named this cost, and it is this document's inheritance: `GET /orders` went from
-54–98ms to 520–580ms on the day it became correct. The route specified in §7 is a second tier
-over the same snapshot, not a third resolution of the whole ledger.
+D212 also named a cost that this document inherits. `GET /orders` became slower when it became
+correct. The walk route is a second tier over the same snapshot. It is not a third resolution
+of the whole ledger.
 
 ## 5. The model
 
 ### Demand
 
-For each ticked order, for each of its lines, the **outstanding** copy count:
+For each walked order, for each of its lines, the **outstanding** copy count:
 
 ```
-demand[sku] = Σ over ticked orders of max(0, line.quantity − progress.recorded[sku])
+demand[sku] = Σ over walked orders of max(0, line.quantity − progress.recorded[sku])
 ```
 
-`recorded` is the ledger's, from `OrderRow.progress`, not the resolver's `fulfilled` — the
-reason `figureOf` already gives: `ResolvedLine.fulfilled` is `len(picks)`, which since D212 is
-what could be offered, never what has been taken.
+`recorded` is the ledger's, from `OrderRow.progress`. It is not the resolver's `fulfilled`,
+which since D212 is what could be offered and never what has been taken.
 
-**Amended 2026-09-17, on the owner's ruling: a STOOD-DOWN line owes zero.** Their words, asked
-before the code was written: *"If I stand a line down, it should say owed 0 and not send me to
-the drawer for those lines."* So a line whose `LineProgress.closed` is set contributes nothing
-to `demand`, whatever `outstanding` still reads. `Ledger.unfulfilled` already reads `closed`
-this way rather than subtracting it from `outstanding`, and its own docstring carries the
-argument: "how many copies does this line owe" is a fact about the ORDER, and "is this store
-still fetching it" is a fact about this store. A walk is the second question. `close_line` is
-the operator saying they will not ship it, so routing a hand to that drawer spends a reach on a
-card they already decided against.
+**A stood-down line owes zero.** A line whose `LineProgress.closed` is set adds nothing to
+`demand`, whatever `outstanding` reads. `Ledger.unfulfilled` reads `closed` the same way. "How
+many copies does this line owe" is a fact about the ORDER. "Is this store still fetching it" is
+a fact about this store. A walk asks the second question. `close_line` is the operator saying
+that they will not ship it, so a hand must not go to that drawer.
+`server/capture_server.py:_engine_order` does not apply this filter. It feeds the resolver,
+which answers the first question.
 
-`server/capture_server.py:_engine_order` deliberately does NOT apply this filter, and the two
-do not conflict. It feeds the resolver, which answers the first question.
-
-Demand is **capped at total availability** before the solve. A SKU the store cannot fill is
-not the solver's problem; it is reported separately (§8, the shortfall block) and never makes
-the instance infeasible. On the owner's store this is not a footnote: of the 59 SKUs the 40
-open orders want, **23 cannot be filled from inventory at all**.
+Demand is **capped at total availability** before the solve. A SKU that the store cannot fill
+is not the solver's problem. It is reported as `shortfall`, and it never leaves the instance
+without a solution.
 
 ### Supply
 
@@ -143,1078 +113,461 @@ subject to Σ over s of supply[s][k] · x[s]  ≥  demand[k]   for every sku k
            x[s] ∈ {0, 1}
 ```
 
-`cost(s) = 1` for every section. That is the owner's ruling: sections counted flat, boxes
-free.
+`cost(s) = 1` for every section (`COST_SECTIONS` in `COST_FUNCTIONS`). That is the owner's
+ruling: sections counted flat, boxes free.
 
-**Why it is swappable, and what that costs.** The owner said they would want to change this by
-mood. So `cost` is a named function selected by a string on the wire (`plan.cost`), resolved
-server-side against a small table. The constraint shape never changes; only the objective's
-coefficients do. Adding `cost_by_box` later is a table entry and a string, not a second solver.
-**What this gives up:** a cost function that is not a per-section constant — "prefer the box I
-am standing at", "prefer sections I have already opened this pass" — does not fit this shape,
-because it makes cost depend on the solution rather than on the section. Those need a
-different formulation and this design does not pretend otherwise.
+**Why it is swappable, and what that costs.** `cost` is a named function, selected by a string
+on the wire (`plan.cost`) and resolved server-side against a small table. The constraint shape
+never changes. Only the objective's coefficients do. Adding `cost_by_box` later is a table
+entry and a string, and not a second solver. **What this gives up:** a cost that is not a
+per-section constant does not fit this shape. "Prefer the box I am standing at" and "prefer
+sections I have already opened" make cost depend on the solution and not on the section. They
+need a different formulation.
 
 ### This is not plain set cover, and the distinction is load-bearing
 
-Each section supplies *K* copies of a SKU; demand is *N* copies. A section holding three
-copies of a card the walk wants three of covers that card alone; a section holding one does
+Each section supplies *K* copies of a SKU, and demand is *N* copies. A section with three
+copies of a card that the walk wants three of covers that card alone. A section with one does
 not. Plain set cover cannot say that. This is a **minimum-cardinality set multicover**, an
-integer program. Treating it as set cover would return plans that send the operator to a
-drawer for a copy that is not there.
+integer program. Treating it as set cover would send the operator to a drawer for a copy that
+is not there.
 
 ## 6. The solver
 
 ### Algorithm
 
-Exact branch and bound, pure Python, in a new `pipeline/walkplan.py`. Four parts:
+Exact branch and bound, pure Python, in `pipeline/walkplan.py`. It has four parts.
 
-1. **Restrict.** Drop every section holding no demanded SKU. Clip each section's supply vector
-   to the demand (`min(demand[k], supply[s][k])`) — surplus copies never change the answer.
-2. **Dominance reduction.** Drop section *B* when some section *A* covers it componentwise on
-   the clipped vectors. Safe for a min-cardinality objective under a constant cost, and it is
-   where most of the search space goes.
-3. **Greedy upper bound.** Repeatedly take the section covering the most outstanding copies.
-   This is the incumbent the search improves on.
-4. **Branch on the scarcest SKU**, never on section index. Pick the outstanding SKU with the
-   fewest usable suppliers and try each supplier in turn, banning already-tried siblings.
-   Bound: `|chosen| + ⌈outstanding / best single-section coverage⌉ ≥ |incumbent|` prunes.
+1. **Restrict.** Drop every section that holds no demanded SKU. Clip each section's supply
+   vector to the demand (`min(demand[k], supply[s][k])`). Surplus copies never change the
+   answer.
+2. **Dominance reduction** (`_dominated`). Drop section *B* when some section *A* covers it
+   componentwise on the clipped vectors. This is safe for a min-cardinality objective under a
+   constant cost, and it removes most of the search space. A cost that is not constant breaks
+   it.
+3. **Greedy upper bound** (`_greedy`). Repeatedly take the section that covers the most
+   outstanding copies. This is the incumbent that the search improves on.
+4. **Branch on the scarcest SKU** in `solve`, never on section index. Pick the outstanding SKU
+   with the fewest usable suppliers. Try each supplier in turn, and ban the siblings already
+   tried. The bound `|chosen| + ⌈outstanding / best single-section coverage⌉ ≥ |incumbent|`
+   prunes.
 
-### Measured, on the owner's real store
+**Exact is cheap, so no heuristic is taken and no dependency is added.** Branching on the
+section index did not finish a real 275-order instance. Branching on the scarcest SKU with
+dominance reduction solves it in milliseconds. The difference is the formulation, and not the
+language. No solver library is used, because `requirements.txt` argues every dependency it
+carries, and a millisecond solve does not earn a new one.
 
-Read read-only from the running server on 2026-09-17 (`GET /orders`, `GET /boxes`,
-`GET /inventory/<box>` for boxes 1, 2, 3, 4 and 6 — no POST, no restart).
+### What the plan is worth
 
-**The store.** 5 boxes, 50 sections, 3,510 cards, 2,954 on hand. 48 sections hold at least one
-on-hand card carrying a SKU; 2,947 such copies. 804 orders, 40 open, 275 walkable under
-`ownsAWalkableBody`.
-
-**The solve.** Worst of twenty random draws at each size below 40, exact in every case:
-
-| ticked | SKUs | copies | candidate sections | optimum | boxes | greedy | exact solve |
-|---|---|---|---|---|---|---|---|
-| 1 order | 2 | 4 | 1 | 1 | 1 | 1 | 0.0 ms |
-| 5 orders | 16 | 22 | 11 | 8 | 4 | 8 | 0.3 ms |
-| 10 orders | 21 | 30 | 12 | 9 | 4 | 9 | 0.4 ms |
-| 20 orders | 31 | 53 | 17 | 12 | 4 | 12 | 0.9 ms |
-| all 40 open | 36 | 69 | 18 | 14 | 4 | 14 | 1.1 ms |
-| all 275 walkable | 202 | 619 | 41 | 41 | 4 | 41 | 27.9 ms |
-
-**Exact is cheap. No heuristic is taken, and no dependency is added.** The naive
-branch-on-section-index formulation was tried first and did not finish the 275-order instance
-in 30 seconds; branching on the scarcest SKU with dominance reduction solves it in 27.9 ms.
-The difference is the formulation, not the language.
-
-**No solver library.** This venv is Python 3.9.6 with no `scipy`, and `requirements.txt` argues
-every dependency it carries. A 1.1 ms pure-Python solve does not earn a new one.
-
-### What the plan is worth, measured
-
-Over the 40 open orders on the owner's store, counting section visits:
-
-| | section visits |
-|---|---|
-| today, `By buyer` — 39 buyers, each walking their own sections | **109** |
-| today, `Walk the boxes` — the flat union of every offered copy's section | **29** |
-| the plan | **14** |
-
-### The honest half of that table
-
-At full walkable scale the plan selects **41 of 41** candidate sections. The demand is spread
-so wide that minimisation buys nothing, and greedy equals optimum in every row above. **The
-solver earns its place on the ticked subsets the owner actually walks, not on the whole
-ledger.** A design argued on the 109 → 14 line alone would be argued on a number that shrinks
-as the tick list grows.
+The plan is worth most on the ticked subsets that the owner actually walks. At full walkable
+scale the demand spreads so wide that the plan selects every candidate section, and greedy
+equals the optimum. A design argued on the whole ledger would be argued on a number that shrinks
+as the tick list grows. Unmeasured now: the current store's figures. The harness does not
+re-measure timing, because a timing assertion on a shared CI machine is a flake and not a guard
+(`harness/tests/t11_walk_plan.py`).
 
 ### Where it runs
 
-**Server-side, in `pipeline/walkplan.py`.** The owner ruled this on 2026-09-17, on three
-reasons, in order:
+**Server-side, in `pipeline/walkplan.py`**, for three reasons.
 
 - This repo forbids pipeline logic in the browser, and "which copies satisfy which demand" is
   pipeline reasoning over inventory.
-- The harness can test it. A solver in `Orders.tsx` is reachable only by a Playwright suite,
-  which `make design-check` keeps off the commit path. A new `harness/tests/` case over a
-  seeded store runs in `make harness`.
+- The harness can test it. A solver in the browser is reachable only by a Playwright suite,
+  which `make design-check` keeps off the commit path. A case over a seeded store runs in
+  `make harness`.
 - It reads one `Store().read()` snapshot. The client would need the whole inventory to do the
-  same arithmetic, which is the second store this repo does not have.
+  same arithmetic, which is the second store that this repo does not have.
 
-**The counter-argument, stated.** The client already holds every pick after
-`POST /orders/picks`, so a browser solve would add no request. It is refused because of the
-three reasons above, not because the data is absent.
+The client already holds every pick after `POST /orders/picks`, so a browser solve would add no
+request. It is refused for the three reasons above and not because the data is absent.
 
 ## 7. The route
 
 ```
 POST /orders/walk-plan
-  { "keys": ["source:number", ...],        required, non-empty, same limit as /orders/picks
+  { "keys": ["source:number", ...],        required, non-empty, capped at ORDER_PICKS_LIMIT
     "cost": "sections" }                   optional, defaults to "sections", one legal value
 ```
 
-Body-addressed for `ORDER_PULL_FIELDS`'s own reason: an order key is `source:number` and a
-number may legally carry a colon.
+The body carries the keys, because an order key is `source:number` and a number may legally
+carry a colon. The route follows `POST /orders/picks`. It takes one `Store().read()` snapshot,
+takes no lock and writes nothing. A key that the ledger does not hold is **skipped and not
+refused**. An empty `keys` list is **refused and not answered empty**. An unknown `cost` is
+refused by name, with the legal values in the message.
 
-It follows `POST /orders/picks` exactly: one `Store().read()` snapshot, no lock, no write, a
-key the ledger does not hold is **skipped rather than refused**, an empty `keys` list is
-**refused rather than answered empty**. An unknown `cost` is refused by name, with the legal
-values in the message.
+The answer is `WalkPlan` in `app/src/types.ts`:
 
-```
-{ "cost": "sections",
-  "stops": [
-    { "key": "box/3/section/6",
-      "box": 3, "box_name": "WB1 R1", "section": 6, "section_name": null,
-      "pooled": false, "game": null, "game_display": null,
-      "order": 1,                       the walk order, ascending box then section
-      "span": { "start": 242, "end": 284 },
-      "takes": [
-        { "sku": "8990745", "name": "...", "number_display": "...",
-          "wanted": 2,                  this stop's share of the demand
-          "for": [ { "key": "...", "number": "...", "buyer": "..." } ],
-          "copies": [
-            { "box": 3, "index": 271, "slot": 244, "capture_id": "...", "cid": "...",
-              "card": 244, "label": "Box 3 · Section 6 · Card 244",
-              "box_total": 987, "box_closed": false, "fraction": 0.246,
-              "neighbors": { "prev": {...}, "next": {...} } } ] } ] } ],
-  "shortfall": [ { "sku": "...", "name": "...", "wanted": 3, "on_hand": 1, "short": 2,
-                   "for": [ ... ] } ],
-  "counts": { "stops": 14, "boxes": 4, "copies": 69, "sections_considered": 48,
-              "sections_candidate": 18, "exact": true, "solve_ms": 1 } }
-```
+- `cost`: the cost function's name.
+- `stops[]` (`WalkPlanStop`): one reach each. It has `key`, `box`, `box_name`, `section`,
+  `section_name`, `pooled`, `game`, `order` (1-based, the drawn order), `span` and the box
+  total, so the span chip can read `#242–284 of 987`. Its `takes[]` (`WalkPlanTake`) carry `sku`,
+  `name`, `number_display`, `wanted`, `for[]` (the orders that want it, each with `owed`) and
+  `copies[]`.
+- `shortfall[]`: SKUs that the store cannot fill, with `wanted`, `on_hand` and `short`.
+- `counts`: `stops`, `boxes`, `copies`, `sections_considered`, `sections_candidate`, `exact`
+  and `solve_ms`.
 
-**`copies` carries every copy of that SKU at that stop, not `wanted` of them.** D93 and D97
-are unamended. The machine ranks, the person reaches. The plan says how many to take. It does
-not pick which.
+**`copies` carries every on-hand copy of that SKU in the whole store, and not `wanted` of them.**
+The stop's own copies come first, densest first. Every other copy follows in box-walk order, by
+box and then by order key (D294). D93, D97 and D212 hold: the machine ranks, the person reaches.
+The plan says how many to take. It does not pick which.
 
-Two registers, not one. The owner's ruling, 2026-09-18, read off main rather than the earlier
-draft of this sentence. `stop.takes` ranks densest first — `count` descending, same as
-`buildWalkPlan`'s `cardsHere` in `app/src/Orders.tsx`. That is which card to reach for first.
-A `Take`'s own `copies` rank front to back, ascending slot, per that file's own comment on a
-`Take`'s copies. That is which copy of one card, once a hand is at it. `buildCopyMap` ranks boxes
-densest-first for a different screen and does not reach here.
+Each copy is a `WalkPlanCopy` with its `key`, `state`, `has_photo`, `capture_id`, `cid`, `here`
+(the copy stands at this stop) and full `place`. The route reads the store-wide copies from the
+snapshot it already holds. It never calls `search()` per card. On a large walk that would be one
+whole-store read per card.
 
-**`cid` is a new field on a pick-shaped row.** `Pick` carries `box`, `index` and `capture_id`
-but no `cid`, so today a photograph on this screen would be addressed by
-`photoUrl(box, index)` rather than by the card's own name (D172, D183). Carrying `cid` here
-lets the walk address photographs the way `#/inventory` and `#/fulfillment` do. It is one
-field on one new route and amends nothing.
+**Two registers, not one.** `stop.takes` rank densest first (`count` descending). That is
+which card to reach for first. A take's `copies` rank front to back, by slot. That is which copy
+of one card, once a hand is at it.
 
-**`exact: false` is reachable and must be drawn.** The solver takes a wall-clock budget. If it
-ever exhausts it, the greedy incumbent is returned and the screen says the plan is a good one
-rather than the best one. A silent fallback to greedy is the failure mode this field exists to
-prevent. On the owner's store today it has never fired.
+**`cid` is on each copy**, so the walk addresses a photograph by the card's own name (D172,
+D183), as `#/inventory` and `#/fulfillment` do.
+
+**The route uses the ordinary `_Places`.** It is lazy per box. This route runs once per walked
+set and covers only the boxes that the plan touches, which the solver keeps few. So the
+neighbor decoration is affordable here. `do_orders` uses a narrower constructor, because its
+picks span most of the store.
+
+**`exact: false` is reachable.** The solver takes a wall-clock budget (`DEFAULT_BUDGET_S`).
+When it runs out, the greedy incumbent returns, flagged. No screen draws the flag today. **That
+is unbuilt.** A silent fallback to greedy is the failure that the field exists to prevent. So a
+screen that draws a plan should say that the plan is a good one and not the best one. The
+harness asserts that `exact` can be false (`harness/tests/t11_walk_plan.py`).
 
 ## 8. The screen
 
-`Walk the boxes` **becomes** this mode. It is not a third mode beside the existing two, and
-`By buyer` keeps its own job: one person, one envelope, the ledger's own view (D193, D296).
+`#/orders` is one screen (section 13). The walk is not a separate mode with its own tab.
+Selecting an order in the rail starts its walk at once, as opening a box in `#/inventory` does.
+The rules below hold for the walk in that screen.
 
 ### Selecting
 
-**SUPERSEDED 2026-09-18 by the owner, after looking at the built screen. The replacement is
-section 12. Read that, not this paragraph.** What this paragraph specified — a second list,
-behind a mode tab, with a tick per row — was built exactly and is wrong. The owner's words:
-*"I imagined an integrated screen, no separate tabs for By Buyer and Walk the boxes, just an
-order screen, and in that screen I can be seeing the buyers and if I want tick next to their
-names and then 'start the walk' rather than clicking a new tab, then operate a UI, then click
-start."*
+- **Nothing is ticked by default.** The operator says who the walk is for, every time. With no
+  order selected, no walk runs.
+- **A tick does not survive a filter that hides its row**, and filtering back does not bring it
+  back. The stored set is pruned. A render-time intersection would hand the tick back when the
+  filter clears. `app/tests/orders.spec.ts` asserts both directions. The walk says how many
+  buyers a filter took out of it (`walkNote`).
+- **The bulk tick controls act on the rows in view**, because those are the only rows that can
+  hold a tick. One control toggles every shown buyer into the walk (`Walk N`, and `Stop` when
+  all are ticked).
+- The walked set is the selected order plus every ticked one. The walk covers the orders that
+  own a walkable body (`ownsAWalkableBody`), and not only the open ones. A shipped order can
+  still owe copies.
+- **Opening a buyer is not ticking one.** `#/orders` opens the first buyer in the list on its
+  own, as `#/inventory` opens its first box. The tick set stays empty. On a phone no sheet
+  opens by itself.
 
-The original text, kept because section 12 is an argument against it: the buyer list gains a
-tick per walkable order and one `Walk N orders` button. The default tick is every currently
-open order, so the default press is the same press it is today. The plan covers exactly the
-ticked set, and the head says so in the operator's units: **"Six drawers. Forty-one cards."**
-Not sections, not boxes, not SKUs.
+### The plan moves when the walked set moves, and on nothing else
 
-**The head's sentence survives section 12 unchanged.** It is the one part of this paragraph the
-owner did not overturn.
+`app/src/OrdersWalkPane.tsx:useOrderWalk` fetches `POST /orders/walk-plan` again when the key
+set changes, and never on a press. An answer for any other key set is dropped, whenever it
+lands. There is no `Re-plan` control. A new order that arrives is not in the walked set, so it
+does not touch the walk. A copy that goes while the walk is open marks its own row and moves
+nothing around it (D118). The stop stays in the list even when every row in it has gone,
+because removing it would move the rest. A toast is the ceiling of the interruption.
+`CopyAlreadyPulled` has the same shape: the row that lost marks itself.
 
-### A stop
+**The freeze is about RANKING, and never about where a card sits.**
 
-**The unit on screen is the drawer, with the cards at it.** Not one card at a time.
-`#/fulfillment` shows one card because it serves a different job and a different person. The
-owner's sentence is *one reach, take four*, and the stop is that reach.
+- **Held while the walked set stays the same:** which places the walk visits and which cards
+  it asks for. Also the order of the stops, the rows and the copies. A pull re-solves nothing. This is D181 and D118 applied to the walk.
+- **Refreshed on every pull, for the rows still ahead in the box that changed:** the card's
+  neighbors, its own number and its position bar. These are not the plan. They describe a card
+  that is still the same card at the same place in the list, said correctly and not stale.
 
-One stop, top to bottom:
+The walk's own normal operation forces this. The solver packs a walk into few drawers, so two
+cards at one stop are likely to be neighbors. Pull the first, and D58 renumbers everything
+after it in that box. The second card's neighbor line would then name a card that is gone. So
+**all positional facts refresh together, or none do**. A line between them would be arbitrary,
+and they come back in one query.
 
-- **The instruction, in the operator's words.** *"Open WB1 R1. Take 4."* The box name leads;
-  the number is the label beneath it. The section is drawn as **where in the drawer** — the
-  span bar `#242–284 of 987` that `#/inventory` already draws — and never as the phrase
-  `Section 6` standing alone, which is the taxonomy on screen the mandate forbids.
-- **One row per card at this stop**, each leading with a **large photograph** at
-  `#/inventory`'s size, the card's name beside it, its position bar, and its physical
-  neighbors. This is the whole of finding number 2, and it is why the stop is the unit: four
-  photographs at one drawer is a page; four photographs one card at a time is four pages.
-- **The take count on the row**, as a counter and not a sentence: **`0 of 2 taken`**, beside
-  the copies. It is the figure the owner had to scroll to find.
-- **The copies**, each with its own Pull, ranked densest-first, every copy drawn and none
-  preselected (D93, D97).
-- **Who it is for** — the buyer's name — said per card, and only when the stop serves more
-  than one buyer.
+`POST /orders/pull` takes `refresh` and answers `refreshed`, in both directions. `refresh` is a
+list of `{box, index}` that the caller still draws and is not pulling. It carries no
+`capture_id`, because nothing is aimed at. `refreshed` is one post-write `Place` per position
+whose box the press touched. A position in any other box is skipped. `places` stays the
+pre-write receipt. `useOrderWalk` keeps a `facts` map and folds `refreshed` into it. A row that
+has gone blanks its own neighbor line.
+
+Nothing here may move anything on screen (D118). A refreshed fact changes the text inside a row
+that is already there, at a height already reserved. A row that grows or shrinks on another
+row's press is this rule built wrong.
 
 ### How a row closes
 
-This is finding 1, and the owner's ruling is the specification.
+A copy is pressed with **Mark sold**, the same button and word as `#/inventory` (D57). On this
+screen the press also records the copy against an owing order. D212 says no order claims a
+copy, and the write refuses a full line.
 
-A row's demand is met the moment `taken == wanted`. On that press:
-
-- The row's remaining Pull buttons are **disabled**, not removed. Removal moves what is around
-  it, which D118 forbids.
-- The row draws its completed state and its **Undo**, for `UNDO_WINDOW_MS` — **20 s**, the
-  constant `Orders.tsx`, `Inventory.tsx` and `Fulfillment.tsx` already share. This is the
-  owner's *"little period to undo in case if I've misclicked."*
-- When the window closes, the row **collapses to one line** — the card's name, `2 taken`, and
-  a chevron that opens it again. It does not leave the stop. A stop whose every row has
-  collapsed collapses itself the same way.
-- **Nothing re-ranks.** The stop order, the row order and the copy order are frozen for the
-  pass, D181 and D118's rule applied to a walk: a take may not move what the hand is reaching
-  for. A row that collapses reserves the height of its tallest state, so the collapse changes
-  what is on the screen and never where the rest of it is.
-
-**Over-pulling stays possible and stops being accidental.** Pull is disabled, not gone, and a
-`Take another` control re-enables the row. The owner's own words: it is not inherently wrong
-to overpull. It is wrong for it to be the path of least resistance.
-
-**The undo window moves nothing.** An undo inside 20 s restores the row in place. The plan is
-never recomputed, by any press (below).
-
-### The pass, and why the plan does not move inside it
-
-**A pass is one press of Start to the end of that walk, and nothing longer.** The owner, 2026-09-17:
-*"I'm thinking of walk as every time I tick some orders and hit start this walk, only for that
-period things remain frozen for me, not some longer duration than that. As soon as I finish
-those that were ticked and return to the app then things can move."*
-
-**Leaving the walk ends the pass** (the owner's ruling, same interview). Tap another screen,
-close the tab, come back an hour later — that walk is over. The buyer list keeps the ticks. The
-next Start builds a **fresh plan against the store as it is then**. One screen, one pass, and
-no walk outlives the sitting it was built in.
-
-### What the freeze covers, and what it does not — RULED 2026-09-19
-
-**The freeze is about RANKING, never about where a card physically sits.** The owner's ruling,
-answering a case this document had not considered.
-
-FROZEN, and recomputed by nothing inside a pass: which drawers the walk visits, which cards it
-asks for, the order of the stops, the order of the rows inside a stop, and the order of the
-copies inside a row — including the rule that cards packed into one section rank higher. A pull
-re-solves NOTHING. This is D181 and D118 applied to the walk, and it is the whole point of the
-pass.
-
-REFRESHED, on every pull, for the rows still ahead in the box that changed: the card's
-neighbours, its own number, and its position bar. These are not the plan. They are the
-DESCRIPTION of a card that is still the same card, still at the same stop, still in the same
-place in the list — said correctly instead of said stale.
-
-**The case that forced this is the walk's own normal operation, not an outside sale.** The
-solver packs a walk into the fewest drawers, so two cards at one stop are LIKELY to be physical
-neighbours. Pull the first and D58 renumbers everything after it in that box: the second card's
-neighbour line now names a card that is no longer there, and its `#17` is now `#16`. The
-operator is counting to a number the screen has wrong, about a card the screen says is beside
-something that has gone.
-
-This is not the edge case section 8 waved at above ("I can't imagine a copy sold on another
-screen ever happening"). It is caused BY the walk, ON most walks.
-
-**All positional facts refresh together, or none do.** The owner's reasoning: a line between
-which ones are worth refreshing would be arbitrary, and they come back in one query either way.
-So neighbours, number and bar move as one.
-
-**A row that has gone blanks its own neighbour line** rather than keep showing a name that the
-same press made wrong.
-
-**Nothing here may move anything on screen** (D118). A refreshed fact changes the text inside a
-row that is already there, at a height already reserved. A row that grows or shrinks on another
-row's press is this ruling built wrong.
-
-**Everywhere else already solves this by re-reading.** `#/inventory` re-reads after every write,
-`#/fulfillment` re-reads in six places, and `CardLocations` refreshes with its parent. The walk
-is the one screen that deliberately does not, which is why it is the one screen with the defect.
-The remedy is not a re-read — that would re-solve the plan — but this narrower refresh.
-
-**Inside a pass, the plan is computed once and does not move.** The owner, on what a mid-walk
-change should do: *"maybe a toast spawns, but frankly I can't imagine a copy sold on another
-screen ever happening, and a new order arriving shouldn't alter my walk."* So there is **no
-`Re-plan` control**. An earlier draft of this document offered one and was wrong.
+- The row's figure is **Pick N of M** (D279, D212). `M` is capped at what is on hand
+  (`take.copies.length`). A card that is too short drops `of M` for a short flag, such as
+  `Pick 1` beside `7 short`. `M` must never count a copy that the store does not have.
+- **Undo is per copy and has no clock** (`docs/specs/undo.md` §2-3, D164). A copy's `Undo`
+  stays until a newer pull takes the "newest" rank from it, or the walk resets.
+  `UNDO_WINDOW_MS` is only the toast's own lifetime.
+- **The pane does not advance itself** (UN-6). A new card must not light under the finger that
+  just sold. The sold copy's row turns into `Undo` in place (D57). Nothing else moves (D118).
+  The operator steps on `J` and `K`.
+- **Hide picked folds on a press and never on a sale** (D304, D263, D118). A sale that lands
+  while it is on leaves the row in place. It folds at the next press or load.
+- **A stop can hold more candidates than a take wants.** Then the row says `(either)`, because
+  every copy is fungible. It never picks one for the operator (D97).
+- **The pass's own tally and the plan's snapshot decide which order a press records against.**
+  A live re-read never decides it. `_walk_plan_order_ref` puts `owed` on every ref: the
+  ledger's own `outstanding`, zeroed for a stood-down line. `pickOrderFor` takes the ref whose
+  remaining (`owed` less what this walk has recorded against it) is smallest and still
+  positive. It returns `null`, never `for[0]`, once no ref owes. Ties go to the order placed
+  longest ago. The order closest to done is the one that a single short copy is most likely to
+  finish. `pickOrderFor` must never fall back to `for[0]`, because that sends presses to an
+  already full order (`over_fulfilled`). This rule decides only which OPEN order a press records
+  against. It never decides which physical copy answers it. Do not put the options "decide at
+  Start, keep live, or ask at the press" to the owner again.
 
 ### Leaving mid-walk loses nothing, and the reason is where the write lands
 
-**A pull is banked at the press, not at the end of the walk.** `store/orders.py:record_pull`
-writes to the ledger the moment the button is pressed. So a pass abandoned after three pulls
-has three pulls recorded, exactly as if it had run to the end.
+**A pull is banked at the press.** `store/orders.py:record_pull` writes to the ledger when the
+button is pressed. A walk abandoned after three pulls has three pulls recorded. **The next plan
+asks only for what is still owed**, because demand is `quantity − progress.recorded`. A
+half-filled line shrinks and may re-route. That is a new plan over what is left. It is not a
+plan that changed under a hand.
 
-**The next plan asks only for what is still owed.** Demand is `quantity − progress.recorded`
-(section 5), so a banked copy is already out of the arithmetic. Nothing is asked for twice.
+### The shortfall
 
-**A half-filled line simply shrinks, and may re-route.** Two copies wanted, one taken, the
-second drawer never reached: the next plan wants one, and it may send the operator to a
-different drawer than the first plan did. That is the solver being correct, not the plan
-changing under a hand — it is a **new** plan, over what is left, in a new pass.
-
-**The one real hole is not this plan's, and is recorded rather than fixed here.** The 20 s
-undo lives only on a toast. `app/src/server.ts:undoPull` has exactly two callers in the whole
-product, `Orders.tsx:undoFromToast` and `Fulfillment.tsx`, both of them toasts. Leave the
-screen inside those 20 s and the undo dies with the toast: the card stays sold and no screen
-offers a way back. The owner's ruling, 2026-09-17: fix it separately, as the reach of the pull
-receipt across `#/orders` and `#/fulfillment` together, not as a clause of this document. This
-paragraph exists so the gap is not discovered again from scratch.
-
-Inside a pass, then:
-
-- **A new order arriving does not touch the walk.** The walk covers the set ticked at the
-  press. An order that arrives after it is simply not in it.
-- **A copy that goes while the walk is open** marks its own row — `gone, skip` — and moves
-  nothing around it (D118). The stop stays in the list at its own position even when every row
-  in it has gone, because removing it would move the rest.
-- **A toast is the ceiling of the interruption.** One toast, said once, and no banner, no line
-  in the list and no control. The owner does not expect this state to occur.
-- **`CopyAlreadyPulled` is the same shape.** The row that lost marks itself. The walk is
-  unchanged.
-
-This is D181's rule (the order is taken once, and a sale may not retake it) applied to a walk,
-and D118's (a press changes what is on the screen, never where the rest of it is) applied to
-the list the press sits in.
-
-### The stop, rebuilt — RULED 2026-09-19, after the owner saw the merged screen
-
-**What shipped was wrong in its unit.** The row was drawn per COPY: a 220px photograph on every
-copy, so two copies of one card drew the same photograph twice, and the photograph's height
-set a ~307px row around ~90px of content. The copies shown were only the ones the solver chose
-at this stop, so the operator could not see where the rest of the card's copies were. Three
-independent reviews reached the same cause: the walk hand-rolled a row that `#/inventory`'s
-copies panel (`CardLocations`, D93's "picker") already is.
-
-**The photograph belongs to the CARD, once, at the take header.** 76×106 at every width. Every
-copy under a take is the same card.
-
-**Each copy is the copies panel's own row**, `CardLocations`'s owner-dense row through
-`renderAction`, with Pull where `#/inventory` puts Mark sold. Nothing hand-rolled beside it.
-
-**Every copy of the card in the store is drawn, this drawer's first, all pressable.** D212 (every
-copy is fungible, no order claims one, the write is the only refusal) and D93 (the picker draws
-every copy and hides none) answer this directly, and D212 records the owner widening it to this
-very screen. The solver ranked this drawer densest; that is the ORDER the copies are drawn in,
-not a filter over which are drawn. A copy in another drawer offers Pull like any other. The
-store-wide copies come over the walk wire from the snapshot the route already holds — never
-from a `search()` per card, which on a 41-card walk is 41 whole-store reads through four
-request slots.
-
-**The ranking does not move.** The copies panel re-sorts by fullest section on every render.
-On the walk it may not. The rows are drawn in the order the wire sends them, this stop's copies
-leading, and a pull does not re-sort. `FrozenRank` from `#/inventory` (D181) keeps a departed
-copy in place.
-
-**A position bar on every copy, AND the span bar at the stop.** The owner's word. §9a finding 4
-read literally. The stop's bar is the section's span, `#242–284 of 987`; the copy's bar is its
-own place in the box. Both are real now that `box_total` is on the wire.
-
-**Undo is per copy, not per take.** The shipped build gated Undo on the whole take being
-satisfied, so at `1 of 2 taken` there was none. Each pulled copy's row draws its own Undo for
-the window, in place, at the row's own height.
-
-**A pulled copy is not excluded from the refresh — it collapses.** The shipped build kept the
-pulled copy's pre-write facts at full size while the rows ahead refreshed, so one drawer read
-`of 616` on one row and `of 615` on the next. A card in the hand has no position. Its row
-collapses to one line: `#4 · taken · Undo`. That is the whole of what it draws.
-
-**A stop whose every take is closed collapses to its instruction line and one summary line per
-take.** Section 8 asked for this and nothing was built.
-
-**Which order a press banks to is decided by the PASS'S OWN TALLY, never the live ledger.** D212:
-no order claims a copy, so there is no assignment to make at Start and no choice to offer at the
-press. The client names the first order in the take's `for` that this pass's own recorded map
-says still owes, and `record_pull` refuses if the line is already full. The shipped build read
-`order.recorded` off a live re-read after every pull, so the answer could move mid-pass.
-
-**The pull receipt speaks in sentences** (D196). The shipped toast printed the raw order key.
-
-**The copy's bar reads `#8 of 34`, never `#8 of 34 so far`** (owner, 2026-09-19). `so far` is
-`PositionBar`'s own caption for a box still being filled — true on `#/capture` and `#/inventory`,
-meaningless in the middle of a pull. The walk drops the two words; every other screen keeps them.
-**Superseded the same evening, once §13 made the pane one component:** the owner ruled *drop it
-everywhere*, `#/inventory` included, rather than carry a flag that makes the shared pane differ
-by two words. `#8 of 34` is the whole caption on every screen. **And the section line too**
-(owner, later the same evening, asked by name): D20's growing-section caption reads
-`card 7 of 14`, never `card 7 of 14 so far`; a settled section still reads `card 7 of 14 slots`.
-
-**The row's address stays as built — `#8 RB Origins Commons` — until the owner has walked with
-it.** The owner's word: leave it, and ask again after real use. A session that changes it before
-that feedback has arrived is working against an explicit hold. What it might become is recorded
-so the ask is cheap: slot only for a copy in this drawer, slot plus box name for one elsewhere,
-the section's name never on a row.
-
-**Which order a press banks to — what is fact, what is built, and what the owner actually
-said.** FACT, D212: no order claims a copy; the write is the only refusal. BUILT: the press names
-the first order in the take's `for` that this pass's own tally has not filled, `record_pull`
-refuses a full line, the row marks itself on refusal; nothing on the wire carries a split. THE
-OWNER: asked three times on 2026-09-19 — once as "decide at Start / keep live / ask at the
-press", once after D212 was read, once more as "is the heuristic the answer" — the owner
-selected no option and said the question itself was misconstrued and they were tired of it. That
-is not a ruling that the heuristic is right, and it is not a ruling that the topic is closed for
-ever. It is a rejection of the question AS FRAMED. A session that wants to change this behaviour
-should first say what the previous framing got wrong, in one sentence, and should not put the
-same three options to the owner again.
-
-**AMENDMENT, 2026-09-25 — the fallback was the defect, and it is gone.** The shipped
-`pickOrderFor` (`app/src/OrdersWalkPane.tsx`) followed this section's words for the first press
-against each ref. Then it diverged. Once every ref had one copy recorded this pass, it fell back
-to `take.for[0]` unconditionally. It never checked whether that ref still owed anything. Take a
-card wanted by two or more orders, in a bigger quantity than the order count. Say the first ref
-owes less than its round-robin share. A press then went to an ALREADY-FULL order. The server
-refused it (`over_fulfilled`). Every press after that refused the same way, because a refusal
-changes no tally. This was diagnosed and reproduced against a copy of the real store, 2026-09-25
-— Mirror Image, two buyers, four presses, the third and fourth both refused.
-
-The fix. `_walk_plan_order_ref`/`_walk_plan_refs` (`server/capture_server.py`) put `owed` on
-every ref now. It is the ledger's own `outstanding`, zeroed for a stood-down line exactly as
-`demand` already filters, read off the plan's own snapshot. `pickOrderFor` takes the ref whose
-remaining (`owed` minus this pass's own tally) is smallest and still positive. It returns `null`,
-never `for[0]`, once no ref still owes. THIS AMENDS THIS SECTION'S OWN WORDS ABOVE ("the first
-order in the take's `for` that this pass's own tally has not filled") to say what the words
-always meant. No ref this pass has already filled is ever picked again.
-
-The owner also settled the shortfall question this section left open above ("is the heuristic
-the answer"). Asked directly, 2026-09-25, about a card too short to cover every order that wants
-it, verbatim:
-
-> `i'd say just flag as too few on hand orsomething but yea if we were to give it to someone
-> whoever it completes`
-
-So one rule now serves both halves. Smallest-remaining-first empties the ref closest to done
-first. That is the ref a short copy is most likely to complete. It never revisits a full ref.
-Ties go to the order placed longest ago. D212 (no order claims a copy, so there is no assignment
-to make) and D97 (the plan says how many, never which) are both untouched. This still decides
-only which OPEN order a press records against, one press at a time. It never decides which
-physical copy answers it.
-
-**Wording, the same ruling.** "Pick X of Y" let Y count copies the store does not have. A card
-too short to cover the walked demand showed a Y that implied copies elsewhere. Those copies did
-not exist — Rengar's "of 8" when the store held one. The owner, on how to say it, verbatim:
-
-> `say what's short but it's not intuitive to use so much verbiage`
-
-`Y` is now capped at what is really on hand — `take.copies.length`, the store-wide on-hand count
-already on the wire. A short card drops `of Y` for a short flag instead: `Pick 1` beside `7
-short`, never a sentence.
-
-### The shortfall block
-
-The plan cannot fill every SKU, and on this store it misses 23 of 59. One block, at the foot,
-one line per card: what is wanted, what is on hand, whose order it is. It is not a stop and
-carries no Pull. Today this state is scattered through per-line reason chips and is not
-countable at a glance.
+The plan reports the SKUs that the store cannot fill, in `shortfall`. `#/orders` draws that state
+per line, as reason chips and in the buyer's own figures (section 14). It does not draw a
+separate block. `Fulfillment.tsx` counts `plan.shortfall`, so its empty state never claims that
+nothing waits.
 
 ## 9. What is deleted
 
-- **`WalkCards` and the sentence block go.** Finding 4, the orchestrating session's own
-  mistake from earlier the same day. What the sentences said — how many to pull, how many are
-  on hand, across how many boxes — is said by the take counter on the row and the stop the row
-  sits in. No sentence replaces them.
-- **`buildWalkPlan` is replaced, not extended** (the owner's ruling, 2026-09-17). It groups by BOX (`key = box/${pick.box}`),
-  ranks by density, is scoped to **one order**, and tallies sections for display only. It is a
-  sort. The plan is a cover with multiplicities across many orders. Nothing of its shape
-  survives the change of unit, of scope and of objective. Its `PlanStop`/`PlanCard` types go
-  with it.
-- **The `By order` fold stops being a fold.** Finding 5 — the ranked view it hides becomes the
-  default mode of `Walk the boxes`, so there is nothing left for the toggle to reveal. Under
-  `By buyer`, one order's own stops stay reachable as a real `Button` with a chevron, in the
-  kit, not an unstyled `<summary>`.
-- **`buildWalk`'s grouping goes.** The client stops deriving stops from pick order; it renders
-  `stops` as the route sends them. `buildCopyMap` stays — it answers the per-line question on
-  `By buyer`, which is unchanged.
+- **`WalkCards` and the sentence block.** Counters replace them.
+- **`buildWalkPlan`.** It grouped by box, ranked by density, covered one order and tallied
+  sections for display. It was a sort. The plan is a cover with multiplicities across many
+  orders. Nothing of its shape survived the change of unit, scope and objective.
+- **The `By order` fold as a hidden ranked view**, and `buildWalk`'s grouping. The client renders
+  `stops` as the route sends them and derives none.
+- **`WalkSelect`, the mode strip, `PullMode` and `HubState.mode`.** The rail is the selection.
+- **The walk-only pane and row.** `#/orders` reuses `CardPane` and `CardLocations` whole (D304).
+  The walk-only stop, take header, copy row, bars and pill were deleted and not adapted.
 
-## 9a. What landed, and four things the first build got wrong
+## 9a. Rules from the first builds
 
-The route and the screen landed on 2026-09-18. The mechanics of section 8 are built and were
-driven by hand in a real browser over a seeded store: the head reads the size in the operator's
-units, the instruction leads with the box name, Pull DISABLES rather than vanishes, the counter
-moves, Undo and `Take another` appear, nothing below the row moves, and there is no horizontal
-scroll at 375px.
-
-**Four layout defects shipped with it, found by the orchestrating session at the first render
-and NOT by the agent that built it, which reported the screenshots as reviewed.** They are
-recorded here rather than fixed in that round, on the owner's ruling: land it, then look at it,
-then make one deliberate pass. The first is the serious one.
-
-1. **THE TAXONOMY IS ON SCREEN, ON EVERY ROW.** Each card draws `BOX <name> · Box <n>` and
-   `SECTION <n> · <name>` as labelled fields. Section 3 is the mandate every other section is
-   judged against, and section 8 forbids this by name: the section is drawn as WHERE IN THE
-   DRAWER and never as the phrase `Section 6` standing alone. The stop header already names the
-   drawer, so the row repeats it and adds the divider on top. At 375px it costs four lines per
-   card. This is the defect this whole document exists to remove, reintroduced one register
-   down.
-2. **Every row carries a raw order key** rather than the buyer's name, and carries it always.
-   Section 8 says who it is for is the buyer's NAME, said only when the stop serves MORE THAN
-   ONE buyer. It is neither conditional nor a name.
-3. **The photograph is a thumbnail rather than `#/inventory`'s size.** Finding 2 of section 1
-   was that this screen has no card photographs at all, and the remedy was a large photograph
-   leading each row. At phone width it loses its space to defect 1.
-4. **No position bar and no neighbours on the row.** Section 8 lists both. The row draws
-   `Card 8` and stops. The stop's own span chip is present and correct.
-
-5. **THE SELECTION IS A FLAT LIST AND NOTHING ELSE, AND THIS ONE IS THIS DOCUMENT'S FAULT.**
-   `WalkSelect` draws one checkbox per walkable order, a `Walk N orders` button, and that is the
-   entire component. There is no tick all, no untick all, no search, no status filter and no
-   sort. Everything arrives ticked and the only way to narrow it is to untick rows one at a time.
-
-   **The build matches this document exactly, which is the problem.** Section 8's "Selecting"
-   specifies a tick per walkable order, one button, and every open order ticked by default. It
-   says nothing about narrowing the list, so nothing was built. On a seven-order demo store the
-   result looks correct, which is how it passed a render.
-
-   **`By buyer` sits three inches away and has all of it**: a search box, four status chips
-   (`All open`, `Every copy found`, `Short`, `Done`), a Newest and Oldest sort, and
-   `Hide unknown SKUs`. The walk is the mode meant for the operator with the most on their plate
-   — 275 walkable orders on the owner's own store, against 40 open — and it is the mode with the
-   fewest ways to say what they mean.
-
-   The owner, looking at the real screen on 2026-09-18: *"I immediately get everything all
-   ticked with no other options, no untick all, no tick all, no 'open only', no other filters."*
-
-   **RULED 2026-09-18: the walk BORROWS `By buyer`'s controls.** The owner's word: *"Just borrow
-   for now."* Not a second vocabulary for the same job — the same chips, the same search, the
-   same sort, so there is one set of behaviours to learn and one place they are decided.
-
-   **What the ruling costs, stated rather than discovered.** Those controls are not components.
-   They are inline JSX inside `PullStage` — the chips built as a local `chips` value, the search,
-   the sort and `Hide unknown SKUs` each written in place. Borrowing them means EXTRACTING them,
-   and the thing they are extracted out of is the mode this document does not touch. So the
-   hazard is not the walk. It is breaking `By buyer` while lifting its own controls out from
-   under it.
-
-   **And the default press changes meaning, which follows from the ruling rather than being a
-   separate one.** Section 8 made every open order ticked by default so the first press stays the
-   press it is today. Once the list can be narrowed, a filter has to narrow BOTH the list and
-   what the button covers, and the button has to say what it covers — `Walk 12 orders` where
-   twelve is what survived the filter. A control that changes the list without changing the press
-   is a control that lies about what the press will do.
-
-   **AMENDED 2026-09-18, by the owner: nothing is ticked by default.** Section 12 carries the
-   ruling. The button still says what it covers, and over an empty selection it is not offered
-   at all.
-
-   Findings 1 through 4 are deferred behind this one, on the owner's ruling. They are about the
-   row read with a hand already in a drawer. This one is about reaching a drawer at all.
-
-**A settled figure lost its footing, and this paragraph is the record rather than the ruling.**
-D97's "N orders complete in this pass" head figure, and the boot-triggered clear beside it, are
-GONE from the rebuild. That figure was twice amended and hard won: it existed because a lifetime
-total was masquerading as a progress figure on the owner's own store. Nothing here answers its
-argument. It simply has nothing left to attach to — `WalkPass` fetches the plan once and never
-re-reads `GET /orders`, so there is no live comparison between what is open and what this pass
-covers, and completion is now counted per card row rather than per order.
-
-**This document does NOT rule D97 superseded.** A settled decision is an argument, and repealing
-one is the owner's act, not a session's. What is recorded is that the argument is unanswered and
-the mechanism is absent. Two ways out, for the owner: rebuild the figure client-side over the
-orders already in hand and the pass's own recorded map, or rule D97 superseded here and say so in
-an entry. One piece of D97 IS already reversed in the open, by section 8's own words: "leaving the
-walk ends the pass" directly contradicts D97 amended's "a toggle is not the end of a pass," and
-that reversal was the owner's, in the 2026-09-17 interview.
-
-**DEFERRED ON THE OWNER'S WORD, 2026-09-19.** Asked directly, with both ways out on the table,
-the owner's answer was: *"we don't really need it right now so leave that as it is."* So this
-paragraph stays exactly what it is — a record that the argument is unanswered and the mechanism
-absent. D97 is NOT superseded and the figure is NOT being rebuilt. A later session should not
-re-raise this as an open question; it was raised and held.
-
-Worth noting for whoever does pick it up: the mechanism got cheaper after this was written. The
-pull now answers with post-write facts (§8's 2026-09-19 ruling), so the moment an order's last
-copy is recorded is something the screen already sees. The figure could be counted off the
-pass's own presses rather than by re-reading the ledger.
-
-It is named here so it cannot be lost the way a silent revert is lost. `make docs-audit`'s
-`recorded deletions` row and `make revert-guard` both exist because this repository has dropped
-settled work by accident before.
-
-**Two questions the build raised and nobody has answered.** They are design, not defects.
-
-- **Which order a press records against** — see §8 "The stop, rebuilt" for what is fact
-  (D212), what is built (the pass-tally heuristic), and what the owner said on 2026-09-19 when
-  asked three times: that the question as framed was misconstrued. No ruling on the heuristic
-  was given. Not closed; not to be re-asked in the same shape.
-- **Whether the stop span should be a proportional bar.** `WalkPlanStop` carries no box total,
-  so the screen draws the honest span numbers rather than fabricating a proportion.
+1. **Do not design a walk-only row.** `CardLocations` already draws the photograph, the position
+   bar and the neighbors. The taxonomy on every row is the defect that this document exists to
+   remove.
+2. **A list of orders needs the controls that the order list already has.** Search, status
+   filter, sort and tick-all belong to the one list that the operator reads (section 12).
+3. **Verify a screen against volume.** A small fixture hides defects that show at hundreds of
+   orders.
+4. **`make check` does not run the browser suite.** `make design-check` is outside it (DEBT16).
+   Check the verdict's own `counts.total`. A `PW_ARGS` `--grep` with spaces silently becomes a
+   file filter.
+5. **D97's "N orders complete in this pass" head figure is gone.** The walk holds no pass. D97's
+   argument is unanswered and not repealed. The owner ruled that the figure is not needed now.
+   A rebuild could count it off the presses of the walk.
 
 ## 10. What this gives up
 
 - **The plan can be worse for a hand that is already at a drawer.** A constant per-section cost
-  cannot know where the operator is standing. A plan of 14 sections may send them back to box 1
-  after box 6. §5 says why that cost function does not fit this formulation.
-- **Fewer sections is not always less work.** A section with 70 cards costs the same as one
-  with 33 (both are real on this store). The owner ruled sections counted flat; this is the
-  price of the ruling, and it is the first thing a second cost function would address.
-- **A stale pass stays stale to its end.** Freezing is what stops the screen moving under the
-  hand, and inside a pass the owner ruled it absolute. So there is no way to refresh a walk
-  that has drifted. The remedy is to end the pass and press Start again, which is cheap —
-  leaving the screen is what ends it, the ticks are kept and every pull is already banked. The
-  trade is bounded by the pass, not by the day, and it is taken on the owner's own estimate
-  that a copy going during a walk is a state they cannot imagine occurring.
-- **A second operator is worse off than today.** D212 already named this: two hands pulling at
-  once learn of a conflict only at `CopyAlreadyPulled`. A frozen plan makes the wrong walk
-  longer before the refusal arrives. This design does not address two hands and should not be
-  read as safe for them.
-- **The minimisation is invisible when it does nothing.** At full walkable scale it selects
-  every candidate section. The operator sees a plan either way and cannot tell a solved plan
-  from a listed one. Nothing on screen distinguishes them, deliberately — a badge saying
-  "optimal" would be noise on every screen where it is trivially true.
-- **A collapsed row hides its copies.** The map D97 argues for is one press away rather than on
-  screen. That is the cost of the wall of rows not returning in another form.
+  cannot know where the operator stands. A plan of 14 sections may send them back to box 1
+  after box 6. Section 5 says why that cost does not fit this formulation.
+- **Fewer sections is not always less work.** A section with 70 cards costs the same as one with
+  33. That is the price of the flat-cost ruling, and a second cost function would address it
+  first.
+- **The plan does not refresh mid-set.** Ranking is held while the walked set stays the same.
+  The remedy for a drifted plan is to change the walked set, which re-solves it. Every pull is
+  already banked.
+- **A second operator is worse off than today.** D212 named this. Two hands that pull at once
+  learn of a conflict only at `CopyAlreadyPulled`. This design does not address two hands.
+- **The minimization is invisible when it does nothing.** At full walkable scale it selects
+  every candidate section, and the operator cannot tell a solved plan from a listed one.
+  Nothing distinguishes them on screen, deliberately. A badge that says "optimal" would be
+  noise where it is trivially true.
+- **A collapsed row hides its copies.** The map that D97 argues for is one press away and not on
+  screen.
 - **One more route on the order path.** `GET /orders`, then `POST /orders/picks`, then
-  `POST /orders/walk-plan`. Three tiers where D212's follow-up was already asked to make the
-  first one cheaper.
-- **`#/orders` gets longer, not shorter.** Photographs at `#/inventory`'s size are the
-  screen's pixel budget spent on the card (D32) and the scroll is the cost. The word count
-  should fall (D284), because sentences are replaced by counters — but this design is not
-  argued on the ratchet and must not be pinned to fit.
+  `POST /orders/walk-plan`.
 
 ## 11. What would reopen this
 
-- **The owner asks for a different cost function.** Expected — they said so. A per-section
-  constant is a table entry; anything depending on the operator's position is a reformulation
-  and a new entry.
-- **A ticked set that does not solve exactly.** `exact: false` reaching the screen means the
-  measurements in §6 no longer bound the real instances. The budget, the bound or the
-  formulation is then the subject, not the screen.
-- **A second operator.** Two hands change what a frozen plan is worth, and D212's own
-  reopening condition is the same one. With no re-plan control at all, the second hand's walk
-  cannot be corrected inside the pass — only ended and started again.
-- **A copy going mid-walk turns out to be common.** The absence of a `Re-plan` control rests
-  on the owner's estimate that it does not happen. A count of `gone, skip` rows over a month
-  of real walks is the measurement that would settle it. If the number is not near zero, the
-  control comes back — as a press, never as an automatic recompute, which stays refused.
-- **The stop stops being the right unit.** If the owner walks with the phone in one hand and
-  wants one card at a time after all, `#/fulfillment`'s unit is the answer and this document's
-  §8 is what changes.
-- **Sections stop fragmenting.** The whole objective assumes sections are finer than boxes. On
-  this store they are — 50 sections over 5 boxes — and a store that stops sectioning makes the
-  cost function equal to counting boxes.
-
-## 13. Orders is inventory's screen with orders in the rail — RULED 2026-09-19, superseding sections 8, 9a and 12's stop
-
-**The owner, after the third build, in their own words:** *"Walking an order should just be a
-tweaked way of routing inventory — an order walk is a tailored prompt that still uses the
-inventory engine, except the left portion of the inventory screen turns into orders and the
-sort is by density."* And, on the vocabulary: *"Stop this 'drawer' nonsense, that term doesn't
-exist anywhere else, neither does 'pull'. You will reuse Inventory's UI/UX and terminology
-exactly."* D90 (an order drives the walk as a mode of the inventory screen) said the same on
-2026-09-02, was built at `71c6dcb5`, and was deleted at `84be07ed` under D97. The owner has
-heard that argument and overruled the deletion — but D90 is NOT brought back as it was. The
-owner's word: *"D90 itself was not perfect, do not just bring D90 back."* What follows is what
-they said today, answered question by question, with the mock they picked.
-
-### The two screens
-
-**`#/inventory` is not touched.** **`#/orders` is its own sidebar item** and takes inventory's
-exact skeleton — the rail, the card pane, the strip between, the header — with orders in the
-rail and the density plan as the order the cards come in.
-
-### The header
-
-Inventory's: `Orders`, one line beneath it, the count chip top-right (`12 open orders`). The
-owner imagines the SELECTED order's text occupying the main pane's top-right quadrant once an
-order is chosen; that is theirs to shape after they see the build and is NOT built first.
-
-### The rail, slot for slot
-
-1. **The search slot** — the buyer search, the status select and the sort that section 12
-   already built.
-2. **Where inventory lists boxes, Orders lists orders.** One row per order, today's `BuyerRow`
-   shape: buyer, `placed Aug 30`, `3 left` with its bar, the status dot. A tick beside each row.
-   - Clicking an order SELECTS it and its walk starts at once — as clicking a box opens it.
-   - Ticking others JOINS them to the walk, live. There is no Start button. Each tick re-plans.
-   - Clicking B while walking A: B replaces A. Ticks stay ticks. The walked set is the selected
-     order plus every ticked one.
-3. **Where inventory shows the box panel, Orders shows the SELECTED order's panel — mock A**
-   (`scratchpad/panel-mock/A-1440-dark.png`, rendered in inventory's own CSS, 197px): the
-   small-caps label `ORDER A2FFC195-256158`, the buyer's name as the title, `Manage` top-right,
-   the status pill, then the census triad in the kit's `bn-stat` — `4 owed`, `1 sold`, `0 short`
-   — the way the card pane's *Every copy of this card* draws its three figures, then the bar,
-   then `placed Aug 30`. No typed middle dot anywhere in it.
-   **Behind `Manage`**: the Add orders well (fetch and paste), the fetch receipt, the status
-   picker, and both stand-down prompts. Inventory's skeleton has no other place for them.
-4. **The strip** — `collapse all`, the section count, `Hide sold`, as inventory draws it.
-5. **Where inventory lists sections and cards, Orders lists THE WALK**: boxes and sections in
-   density order (the solver, §5-6, unchanged), the cards under each, ticks as inventory has,
-   the current card lit, sold copies folded under `Hide sold`. Click a card to land on it.
-
-### The main pane
-
-**Inventory's card pane, unchanged.** Name, number, game, the pills, the photograph, *Every copy
-of this card* with its triad, the SKU line, every copy in the store with `CARD n`, `BOX`,
-`SECTION`, after/before, the state pill, **`Mark sold`**, the section ruler and the box bar
-(D155), `#387 of 675` (no `so far` anywhere, ruled with §8's caption), Details. **`Mark sold` is
-the button and the word**; on this screen
-it also records the copy against an owing order (D212: no order claims a copy, the write
-refuses a full line). The copies in the section you are standing in come first; the order is
-held for the walk (§8's ruling: ranking frozen, position refreshed); a sale refreshes
-positions the way inventory already does. `J`/`K` step through the walk list.
-
-**UN-6, the Opus review round, 2026-09-25: the pane no longer advances itself.** It used to light the next card the instant a take was satisfied, with no press beyond the sale. That was the defect. The new card's own `Mark sold` landed where the finger had just tapped. A fast second tap sold a card nobody looked at. The sold copy's own row turns into `Undo` in place instead (D57). Nothing else on the pane moves (D118). The operator steps on `J`/`K`, same as ever.
-
-### Words
-
-Inventory's, only: box, section, card, copy, on hand, sold, Mark sold. `all pulled` on a buyer
-row becomes `all sold`. The order pill that read `Ready to pull` reads **`Ready`** — one word
-(owner, 2026-09-19, over `Ready to sell` and `Ready to walk`). `Drawer`, `pull`, `stop`, `take`
-do not appear on this screen. No typed middle dot in any string (the rule and its reader are
-their own branch).
-
-### Four answers after the second render — RULED 2026-09-19
-
-The owner saw the rebuilt screen over a seeded store beside `#/inventory` and answered:
-
-- **Copy budget (D284).** `#/orders` measures 140 words against the pinned 107. The 33 are
-  Inventory's Details vocabulary the reused pane carries. **Pin to the measured count.** The
-  pane is worth its words. Hiding facts on one screen would make the two panes differ.
-- **`so far`.** Dropped everywhere — see §8's caption paragraph.
-- **`market` and `listings`.** Not wired for Orders in this build. The pane's two pricing facts
-  draw their honest empty states. **Ship as is.** Wiring is a follow-up if the walk misses them.
-  **Amended 2026-09-20: the owner asked for the follow-up.** Both facts are wired now, by the
-  same path Inventory uses. `WalkMainPane` keeps a per-run market cache, copied from
-  `BoxBrowse.tsx`'s own `priced`/`asked` pair. It reads `listings` from `Orders.tsx`. This is
-  the free third face of the copies read that already answers `rawCards`. `POST
-  /inventory/copies` now answers `listings` too, narrowed to the SKUs the route's own scan
-  matched. This is a dictionary lookup over data the route already read, not a new scan. See
-  D220's own amendment for the full account.
-- **The pill's word** is `Ready`, above.
-
-### What is deleted
-
-All of `app/src/OrdersWalk.tsx` and `.css` as built at `d1f3cb28` (#406): the stop, the take
-header, the copy row, the bars, the `Identified` pill. Not adapted — deleted. The density route
-and the #406 wire (`WalkPlanCopy` with `key`, `place`, `here`) stay; they feed only the walk
-list's order and the pane's landing.
-
-### What must not happen a fourth time
-
-Do not design a stop. Do not design a row. Do not write a walk-specific component where
-inventory already has one. If the walk needs something the card pane does not draw, it is
-added to INVENTORY and both screens get it.
+- **The owner asks for a different cost function.** A per-section constant is a table entry.
+  Anything that depends on the operator's position is a reformulation.
+- **A ticked set that does not solve exactly.** `exact: false` in a real answer means that the
+  solver's budget, bound or formulation is the subject, and not the screen.
+- **A second operator.** Two hands change what a held ranking is worth. D212's own reopening
+  condition is the same one.
+- **A copy going mid-walk turns out to be common.** The absence of a `Re-plan` control rests on
+  the owner's estimate that it does not happen. A count of `gone, skip` rows over real walks
+  would settle it. If it is not near zero, the control comes back as a press. An automatic
+  recompute stays refused.
+- **Sections stop fragmenting.** The objective assumes sections are finer than boxes. A store
+  that stops sectioning makes the cost function equal to counting boxes.
 
 ## 12. One screen, and the list that is already there
 
-**Ruled by the owner on 2026-09-18, looking at the built screen.** This section replaces
-section 8's "Selecting" and makes finding 5 in section 9a moot rather than fixed. It is the
-next piece of work and nothing in sections 1 to 7 changes.
+**The walk selects from the list that the operator is already reading.** That list is the
+selection. There is no second list behind a tab.
 
-### What is wrong with what was built
+- **The left column is the orders**, with every control the list has (search, status, sort) and
+  a tick per walkable row.
+- **The main column is the walk.**
+- **No mode strip.** `By buyer` and `Walk the boxes` are one screen. The filters that once hid
+  when the walk began are the selecting tool now.
+- **A filter narrows what the walk covers**, because the list and the selection are the same
+  thing.
+- **The walk covers the set that is walked.** The list may keep filtering, sorting and
+  unticking. A change to the walked set re-solves the plan (section 8).
 
-Three presses stand between the operator and a drawer: click a tab they were not on, work a
-list they have never seen, press start. The middle list is a SECOND list of the same orders,
-with none of the controls the first one has — no search, no status chips, no sort, no tick all,
-no untick all. Everything arrives ticked. On the owner's store that is 275 rows.
+## 13. Orders is inventory's screen with orders in the rail
 
-**The second list should not be narrowed. It should not exist.** The screen already draws a
-list of these orders, with every control, and the operator is already reading it. That list is
-the selection.
+**The owner's rule:** walking an order is a tweaked way of routing inventory. It is a tailored
+prompt that still uses the inventory engine. The left portion of the inventory screen turns into
+orders, and the sort is by density. The owner also said: use Inventory's UI and words exactly.
+**Do not design a stop, a row or a walk-only component where Inventory already has one.** If
+the walk needs something the card pane does not draw, add it to Inventory, and both screens
+get it.
 
-### The shape
+**`#/inventory` is not touched.** `#/orders` is its own row (D274) and takes Inventory's
+skeleton: the rail, the card pane, the strip between them and the header. The layout, the row
+detail, the pane and the phone order are D304's. D220 and D274 hold the arguments.
 
-`#/orders` takes `#/inventory`'s frame. That frame is `.browse-body` in `app/src/BoxBrowse.css`:
+### The header
 
-```
-grid-template-columns: 300px minmax(0, 1fr);     /* the rail, then the work */
-[data-rail='collapsed']  52px  minmax(0, 1fr)
-<= 1100px-ish            268px minmax(0, 1fr)
-phone                    minmax(0, 1fr)          /* one column, stacked */
-```
+Inventory's: `Orders`, one line under it, and a count chip at top right.
 
-- **The left column is the orders**, the list that exists today, with every control it has
-  today, and a tick per walkable row.
-- **The main column is the walk**, the stops and their cards.
-- **No mode strip and no `PullMode`.** `By buyer` and `Walk the boxes` stop being two modes of
-  one screen and become one screen. Four things go in one change: the `Segmented<PullMode>`
-  strip in `app/src/Orders.tsx`, the `PullMode` type in `app/src/OrdersHubStore.ts`, and the
-  two branches on `mode === 'walk'` in `Orders.tsx`. Find them with
-  `make orient ARGS=app/src/Orders.tsx`, never by the line numbers an earlier draft of this
-  section carried — those were 28 lines stale within a day of being written.
+### The rail
 
-  **The two branches are not the same deletion, and one of them is the point.** The second
-  branch swaps the buyer list for `<OrdersWalk>`, and deleting it is what puts the walk in the
-  main column beside the list rather than instead of it. The FIRST branch is
-  `{mode === 'walk' ? null : (...)}` around the reason chips and the
-  `orders-view-controls` group — the status select, the sort, the buyer search. Today it hides
-  every filter the moment the walk begins. The owner's answer 1 makes those filters the
-  SELECTING tool, so that branch is not incidental cleanup: it is the line that currently stops
-  the operator doing the one thing this shape is for.
-- **`WalkSelect` in `app/src/OrdersWalk.tsx` is DELETED**, not improved. It is the second list.
-- **One press starts the walk**, from the list the operator was already reading.
+1. **The search slot:** the buyer search, the status select and the sort (D296).
+2. **Where Inventory lists boxes, Orders lists orders.** One row per buyer, with the buyer,
+   the placed date, what is left with its bar, and the status. A tick sits beside each walkable
+   row. Clicking an order selects it and its walk starts at once. Ticking others joins them to
+   the walk, live, and each tick re-plans. There is no Start button. Clicking B while walking A
+   replaces A. The walked set is the selected order plus every ticked one.
+3. **Where Inventory shows the box panel, Orders shows the selected order's panel.** It has the
+   order id, the buyer's name, `Manage`, the status pill and the census figures in the kit's
+   `bn-stat`. **Behind `Manage`** are the Add orders well (fetch and paste), the fetch receipt,
+   the status picker and both stand-down prompts.
+4. **The strip:** `collapse all`, the section count and `Hide sold`, as Inventory draws it.
+   `Hide sold` reads Inventory's own stored key (D132).
+5. **Where Inventory lists sections and cards, Orders lists the walk.** Boxes and sections come
+   in density order (the solver), the cards sit under each, the current card is lit, and sold
+   copies fold under `Hide sold`. A press on a card lands on it. `J` and `K` step through the
+   walk list.
 
-### What this settles, and what is left to the build
+### The main pane
 
-**Settled by the shape itself.** The filters and the search are the ones already on the screen, because there is
-only one list now. A filter narrows what the press covers, because the list and the selection
-are the same thing — the question section 9a raised about that answers itself here.
+Inventory's card pane: `CardHero.tsx:CardPane` for the head, and `CardLocations` (`head={false}`)
+for every on-hand copy with its position facts. The walk's chosen copy comes first (D212). The
+copies in the section that the operator stands in come first. The order is held for the walk
+(section 8). A sale refreshes the positions as Inventory already does. No Details fold sits on
+this screen (D304). The card's details table stays on `#/inventory` alone. **`Mark sold` is
+the button and the word.**
 
-**Settled by the owner on 2026-09-18, answering this section's own three questions.**
+### Words
 
-**1. A tick does NOT survive a filter that hides its row.** Filter to `Short` and every buyer
-who falls out of view loses the tick. Filtering back does not bring it back. The tick is a
-property of the list as drawn, not a set held behind it.
+Inventory's only: box, section, card, copy, on hand, sold, Mark sold. The buyer row's
+"all pulled" reads "all sold". The order pill reads **`Ready`**, one word. A typed middle dot is
+in no string (D218).
 
-This makes the filter a selecting tool rather than a view. The flow is: narrow the list, tick
-what is left, press Start. Tick all and untick all act on the rows in view, because those are
-the only rows that can hold a tick.
+A nameless buyer's name slot reads `MM-DD-YY_XXXXX`. `app/src/orderView.ts:unnamedBuyerLabel`
+composes it once: the group's placed date in UTC, an underscore, and the last five characters of
+the group's most recent order id. `BuyerRow`, `OrderPanel`, the phone rail chip and the Manage
+sheet's title all read it. A nameless group holds one order today, because `orderBuyers.ts` keys
+a nameless order on itself. The full id stays in the order slot alone.
 
-**3. Nothing is ticked by default.** The first draft ticked every open order so that the first
-press matched the press before the walk existed. That argument is retired. The operator says
-who the walk is for, every time, and an empty selection means Start is not offered.
+### Answers after review
 
-**Opening a buyer is not ticking one (owner's ruling, 2026-09-28).** `#/orders` opens the first buyer in the list on its own, as `#/inventory` opens its first box: `selectedKey` falls back to the first shown row, and the landing list is the pullable buyers (D270, amended 2026-09-28: "Hide unpullable" is on at rest, one click widens it). That is a view. The tick set stays empty at first render, and on a phone no sheet opens by itself.
+- **Copy budget (D284).** The reused pane carries Inventory's vocabulary. Hiding facts on one
+  screen would make the two panes differ, so the words are kept.
+- **`#8 of 34` is the whole caption on every screen**, with no `so far`. The section line reads
+  `card 7 of 14` for a growing section and `card 7 of 14 slots` for a settled one.
+- **The pane's `market` and `listings` facts come from the same reads as `#/inventory`.**
+  `POST /inventory/copies` answers `listings` beside `cards`. Unknown: where in `Orders.tsx` the
+  market read is wired today.
+- **Small readings that were defects.** A buyer row's per-order pill shows the status word and
+  not the order's number. "Hide unknown SKUs" filters `sku_unseen`, the "Never seen" chip's own
+  reason. The bulk tick controls read "Tick shown" and "Untick shown", as `#/inventory` says.
 
-**2 was not a question the owner could answer as asked, because "a frozen pass" was this
-document's word and not defined here.** It is defined in section 8: from the press of Start to
-the end of that walk, the plan is computed once and does not move. A new order does not join
-it. A copy that goes elsewhere marks its own row and moves nothing around it. The freeze covers
-the WALK, in the main column.
+## 14. The screen's own arithmetic, one formula, one unit
 
-The left column is the orders list, and that list is live. It re-sorts on Ready to Ship (D296).
-Rows change status under the hand. So one screen would hold a frozen walk beside a moving list.
-
-**The answers above resolve it, and the resolution needs the owner's word.** The walk covers the
-set that was ticked AT THE PRESS. Once Start is pressed the list is no longer the walk's input,
-so the list may keep filtering, sorting and unticking without touching the walk. The two clocks
-do not collide, because only one of them is read.
-
-What that leaves open is what the ticks LOOK LIKE during a pass, and it is small enough to
-decide at build time with the owner watching: the ticks stay as the operator left them and are
-simply not read again, or the press clears them, which says plainly that the walk is now its own
-thing.
-
-### Sequencing
-
-1. The three questions above are answered. What the ticks look like during a pass is decided
-   at build time, in front of the owner.
-2. Build the frame and move the list into it. This is the whole of the layout change and it
-   touches `Orders.tsx`, `OrdersWalk.tsx`, their sheets and `OrdersHubStore.ts`.
-3. Delete `WalkSelect`, the mode strip and `PullMode` in the same change. A half-removed mode is
-   worse than either state.
-4. Findings 1 through 4 in section 9a, deferred behind this on the owner's word. They are the
-   ROW read with a hand already in a drawer. This section is about reaching a drawer at all.
-
-### What the next session must not repeat
-
-**`make check` DOES NOT RUN THE BROWSER SUITE.** `make design-check` is deliberately outside it
-(DEBT16). The agent that built section 8's screen ran `make check`, got exit 0, and reported the
-screen verified. Thirteen tests in `app/tests/orders.spec.ts` were red on CI, all of them
-asserting the walk section 9 had deleted. Run `make design-check` before claiming a screen
-works, and check the verdict's own `counts.total` — a `PW_ARGS` `--grep` containing spaces
-silently becomes a file filter and runs other tests green.
-
-**The suite is the only thing that reads these screens, and it asserts the OLD walk in places.**
-Removing the mode strip will break tests that click it. Rewrite them against the rule they were
-protecting, re-aim them if the subject moved, and delete only with the claim named — section 9a
-records what a quiet deletion cost this document already.
-
-**Render it against a store with real volume.** Finding 5 passed a render because the demo store
-holds seven orders. The defect only appears at the owner's 275. A screen that looks right on the
-fixture is not verified.
-
-**Never `git stash` in any worktree of this clone.** The stack is per-clone, not per-worktree, so
-another session's pop takes it. Commit to set work aside. `git show <rev>:<path>` or a `.bak`
-copy to read a baseline.
-
-### What landed, 2026-09-19
-
-**BUILT.** `#/orders` is one screen. The buyer list holds a tick per walkable buyer, and
-`Tick all` and `Untick all` act on the rows in view. Start is absent over an empty selection
-and while a pass runs. The walk fills the column beside the list. The mode strip, `PullMode`,
-`HubState.mode` and `WalkSelect` are deleted.
-
-**Two things this section left to the build, settled here.**
-
-- **What the ticks look like during a pass: they stay.** Section 8 already ruled it — "leaving
-  the walk ends the pass ... The buyer list keeps the ticks." They are simply not read again
-  once the pass is frozen, so ending a pass finds the selection as the operator left it.
-- **How a pass ENDS, ruled by the owner on 2026-09-19.** Deleting the mode strip deleted the
-  thing that used to end one (tapping `By buyer`). The replacement is an explicit `End walk` in
-  the walk's own header. Nothing else ends a pass: not a filter, not a sort, not a tick, not
-  clicking a buyer. Leaving `#/orders` still does, through the unmount cleanup that already
-  existed. The owner also ruled the left list stays live during a pass. Clicking a buyer
-  selects it, and the main column keeps the walk.
-
-**The tick is pruned, not intersected.** A tick does not survive a filter that hides its row
-(answer 1), and the stored set is what loses the member. A render-time `ticked` against
-`visible` would hand the tick back the moment the filter was cleared. Answer 1 forbids that in
-as many words. `app/tests/orders.spec.ts` asserts both directions, and that case was proved red
-against the intersection build before it was kept.
-
-**Findings 1 to 4 of section 9a were superseded by section 13**, the ruling of 2026-09-19.
-
-### The positional facts, built 2026-09-19
-
-**BUILT.** The half of §9a finding 4 that was fixed in form and not in substance, plus the
-freeze ruling above it.
-
-**Superseded 2026-09-25: a box has no seal and no capacity (D299).**
-
-- **`WalkPlanCopy` carries the box's own numbers** — `box_total`, `box_closed` and `fraction`,
-  the same three `Place` carries. `_walk_plan_copy` already held them in the block `_Places.of`
-  composed. They were simply not on the wire, so `neighborShim` passed `box_total: 0` and
-  `PositionBar` drew its honest "a box the server could not size" state on every row. That
-  state is a blank track and one sentence. The shim is now `placeOf` and the 0 is gone.
-- **`neighbors` is real.** `POST /orders/walk-plan` dropped `_Places.for_keys` for the ordinary
-  `_Places`, which is already scoped by being lazy per box. That constructor's restriction was
-  argued for `do_orders`, whose picks span most of the store. This route fires once per pass
-  over the few drawers the solver picked.
-  **Measured 2026-09-19**, synthetic store at the owner's own scale (2,560 cards, 8 drawers,
-  275 walkable orders), timing the `_Places` build plus the whole stop rendering:
-  **4.5 ms → 18.5 ms** for 40 open orders, **24.1 ms → 32.2 ms** for all 275. The delta is the
-  per-box walk of the drawers the plan reaches, not of the copies in it. It is paid once per
-  press.
-- **`POST /orders/pull` takes `refresh` and answers `refreshed`, in both directions.**
-  `refresh` is a list of `{box, index}` the caller is still DRAWING and is not pulling. It
-  carries no `capture_id`, because nothing is aimed at. `refreshed` is one post-write `Place`
-  per position the press actually touched the box of. A position in any other drawer is
-  skipped rather than answered. The route's phase one is untouched: `places` is still the
-  pre-write receipt, and phase three builds its own `_Places` so it cannot read the pre-write
-  walk.
-- **`WalkPass` holds a `facts` map** keyed by position, folds `refreshed` into it, and passes it
-  down to `CopyRow`. Nothing else reads it. The plan is still fetched once per pass.
-  `app/tests/orders.spec.ts` asserts the call count beside a string of every stop, row and
-  copy id before and after a press.
-- **A gone row blanks its own ladder**, and `.walkplan-copy-neighbors` reserves the ladder's
-  tallest state. Blanking it, or a `skipped` line appearing, therefore moves nothing (D118).
-  The reservation is derived from `PlaceNeighbors.css`'s own two line heights rather than
-  typed.
-
-**Unchanged, and asserted so:** the drawers, the cards, the stop order, the row order and the
-copy order. The rule that packed sections rank higher is untouched. `pipeline/walkplan.py` is
-not edited by this work.
-
-### The nameless buyer's own label, and four small readings — FIXED 2026-09-20
-
-**A nameless buyer's NAME slot reads `MM-DD-YY_XXXXX`, never `No name` and a typed dot.**
-`app/src/orderView.ts:unnamedBuyerLabel` composes it once. The pieces are the group's own
-`latest` placed date in UTC, an underscore, then the last five characters of the group's
-most recent order id. `BuyerRow`, `OrderPanel`, the phone rail chip and the Manage sheet's
-title all read it.
-
-Before this fix each of the four built the same `No name · #<n>` string apart. That typed
-the separator D218 refuses. It also repeated the row's full id in both the number slot and
-the name slot.
-
-A nameless group holds exactly one order today, by construction. `orderBuyers.ts` keys a
-nameless order on itself and never merges two. So several dates in one group cannot arise.
-The helper still falls back to the most recent order if that ever changes. A shorter id
-draws whole rather than padded. The full id is never drawn here. It stays in the order slot
-alone. See D220's own amendment for the fuller argument.
-
-**Four small readings, fixed in the same pass, each a defect and not a redesign.** A buyer
-row's per-order pill drew the order's own number instead of its status word. "Hide unknown
-SKUs" named the wrong reason. It filters `sku_unseen`, the "Never seen" chip's own reason.
-It never filtered `sku_unknown`. "Tick all" and "Untick all" are now "Tick shown" and
-"Untick shown", matching `#/inventory`'s own wording for the same reach. "Untick shown" now
-reads the ticked set for its disabled state, not the shown set. The step-through hint no
-longer renders below phone width, where its arrow-key handler is gated off.
-
-## 14. The screen's own arithmetic, one formula, one unit — the UX review, 2026-09-26
-
-**Every count `#/orders` draws over one open order's lines reconciles in one unit: copies.**
-Sum this formula line by line, over any set of open orders:
+**Every count `#/orders` draws over one open order's lines reconciles in one unit: copies.** Sum
+this formula line by line, over any set of open orders:
 
 ```
 owed = pick + short + elsewhere
 ```
 
-- `owed` — `line.owed`. What the order still wants.
-- `pick` — `line.owed - line.outstanding`, summed only where positive. What the resolver can
-  offer right now. `cardsToPull` sums this same way, over whichever set is walked.
-- `short` — `line.outstanding` where the line's reason is `no_copies_on_hand` or `short`.
-  Both reasons name the same fact: nothing is left on hand for this SKU. The split exists
-  only so `statusOf` can rank a buyer who got some of it above one who got none. A screen
-  states both as one bucket, "short", never as two words for one problem.
-- `elsewhere` — `line.outstanding` where the reason is `sku_unseen`, `sku_unknown` or
+- `owed` is `line.owed`. What the order still wants.
+- `pick` is `line.owed - line.outstanding`, summed only where positive. What the resolver can
+  offer now. `cardsToPull` sums this the same way over whichever set is walked.
+- `short` is `line.outstanding` where the line's reason is `no_copies_on_hand` or `short`. Both
+  reasons name one fact: nothing is left on hand for this SKU. The split exists only so
+  `statusOf` can rank a buyer who got some above one who got none. A screen states both as one
+  bucket, "short".
+- `elsewhere` is `line.outstanding` where the reason is `sku_unseen`, `sku_unknown` or
   `not_a_single`. This store has never carried the SKU, or the line is sealed product. A
-  screen with room to spare names them apart ("not in the store", "sealed"). A compact chip
-  states only their sum. See the next paragraph for why.
+  compact chip states only their sum.
 
-**The review's finding 1** named two true numbers that a reader could not reconcile: the
-header's "216 copies owed to 70 buyers", and the walk's "97 cards to pick". Both are correct.
-They answer two different questions. One counts the whole store. The other counts only the
-walked subset. Neither said which question it answered, so together they read as one
-contradicted claim.
+The header and the walk's count answer two different questions. One counts the whole store. The
+other counts only the walked subset. Neither said which question it answered, so together they
+read as one contradicted claim. The header states its own breakdown once (`verdictOf`): "N
+copies owed to M buyers, P to pick, S short, E not in the store". A reader can see that the
+identity holds without needing the walk's number to match.
 
-The fix is not to force the two numbers to agree — they legitimately differ whenever fewer
-than all buyers are walked. The fix gives the header its own full breakdown, stated once:
-"216 copies owed to 70 buyers — 97 to pick, 105 short, 14 not in the store"
-(`verdictOf`, `app/src/Orders.tsx`). A reader can see the header's own identity hold. It no
-longer needs the walk's number to match it.
+A buyer chip must not disagree with that buyer's own figures. `lookWords` sums every reason's
+`outstanding`, never `owed` and never only the loudest reason. One reason explains the whole
+total, and the chip names it ("7 short"). Two or more reasons together read "N review".
 
-**Finding 1's second half** named a buyer chip ("7 cards none left") beside that same buyer's
-own figures ("11 short"). One buyer, one set of orders, still two disagreeing numbers. This
-half WAS a defect. `lookWords` reported only the loudest reason's own count, weighted by
-`owed`. It silently dropped every other reason. It never even mapped the `short` bucket at
-all.
+## 15. Every copy is fungible, and the row says so
 
-The fix sums every reason's `outstanding`, never `owed`, and never only the loudest one. One
-reason explains the whole total: the chip names that reason. Two or more reasons together:
-the chip reads "N cards need a look" instead. See `lookWords`'s own comment for the worked
-example.
+A take's slot list can outnumber what it wants. `wanted = 1` over two candidate cards at the
+same stop is not an error. It is D212 reaching the row. Without a word, a row that prints both
+card numbers reads as "take both". So `OrdersWalkPane.tsx` appends `(either)` only when the stop
+holds more candidates than the take wants. It never picks one for the operator (D97). It says
+that the choice is free.
 
-## 15. Every copy is fungible — naming it on the row, not only in the plan (finding 2)
+## 16. The walk rejoins Inventory's own components
 
-A take's slot list can outnumber what it wants. `wanted = 1` over two candidate cards
-standing in the SAME stop is not an error. It is D212 (every copy is fungible) reaching the
-row.
-
-Before this fix, the row printed both card numbers. Nothing told the operator either one
-would do. For a "Pick 1" line, that read as "take both" (the review's Allen Petlock example,
-`#61, #62 Tasty Faefolk Pick 1 of 2`).
-
-The fix is one word, `(either)`. `OrdersWalkPane.tsx` appends it only when the stop holds more
-candidates than the take wants. It never picks one for the operator — D97 still forbids
-that. It only says the choice is free.
-
-## 16. The walk rejoins Inventory's own components — the owner's answers, 2026-09-27
-
-`D304` (orders walk rejoins inventory) names where the built screen (§13, §14, §15)
-drifted from D220 and D274. This section adds the one argument that belongs in this spec: the
-sort key.
-
-**The layout, the row detail, the pane and the phone order** are all the owner's answers, in
-that decision entry. This section does not restate them.
+`D304` (orders walk reuses Inventory's rows) names where the built screen drifted from D220 and
+D274. This section holds the one argument that belongs in this spec: the sort key.
 
 **The sort key changes, and only in `plan`.** `StopKey.walk_order` has four callers in
-`pipeline/walkplan.py`. Three are the solver's own determinism, and stay untouched:
-`_dominated` (the order dominated stops are dropped in), `_greedy` (the order candidates are
-offered in, which breaks ties) and `solve` (the supplier order the exact search walks). The
-fourth, `plan`, is the drawn order: `walk = sorted(solution.chosen, key=lambda k:
-k.walk_order)`.
+`pipeline/walkplan.py`. Three are the solver's own determinism, and stay untouched: `_dominated`
+(the order dominated stops are dropped in), `_greedy` (the order candidates are offered in,
+which breaks ties) and `solve` (the supplier order that the exact search walks). The fourth,
+`plan`, is the drawn order. A change to `walk_order` itself can change which stops the solver
+picks on a tie. That would change what the walk holds, and not only its order.
 
-A change to `walk_order` itself can change which stops the solver picks on a tie. That would
-change what the walk holds, not only its order. So `plan` alone changes. It already holds
-`inventory`. Its new key is `(pooled flag, density, name key of inventory.box_title(box),
-section)`: density first, and the box name in natural order breaks a tie only.
-`store/master.py:box_title` composes a box's name, the same function the refusals already
-use. Pooled stops stay last.
+So `plan` alone changes. Its key is `_drawn_key`: `(pooled flag, density, natural name key of
+inventory.box_title(box), section)`. Density is `Stop.copies`, the count of cards that the
+stop's takes already ask for. The box name breaks a tie only, in natural order, so "WB1 R2"
+sorts before "WB1 R10". The name is never the hidden box number (D259). Pooled stops stay
+last.
 
-Every caller of the drawn order was checked against this change:
+Every reader of the drawn order follows the wire:
 
-- `server/capture_server.py:do_order_walk_plan` and `_walk_plan_stop` serialize `result.stops`
-  in order and send `order`. No change.
-- `app/src/OrdersWalkPane.tsx:rowsOf` sorts nothing of its own. The screen follows the wire.
-  No change.
-- `app/src/Fulfillment.tsx` folds `plan.stops[].takes[]` to one entry per SKU. A lane checks
-  whether that fold keeps first-seen order anywhere a person sees it.
-- `app/src/orderView.ts`'s "Fewest drawers" buyer sort reads counts, not order. No change.
-- `harness/tests/t11_walk_plan.py` asserts that `order` is contiguous from 1. A new case adds
-  two boxes whose number order and name order disagree, and is red on the old sort.
+- `do_order_walk_plan` and `_walk_plan_stop` serialize `result.stops` in order and send
+  `order`.
+- `OrdersWalkPane.tsx:rowsOf` sorts nothing of its own.
+- `app/src/Fulfillment.tsx` folds `plan.stops[].takes[]` to one entry per SKU, and the screen
+  must keep first-seen order wherever a person sees it.
+- `app/src/orderView.ts`'s "Fewest drawers" buyer sort reads counts, and not order.
+- `harness/tests/t11_walk_plan.py` asserts that `order` is contiguous from 1, and has a case
+  with two boxes whose number order and name order disagree.
 
-This is lane A1 of the lane plan.
+## 17. How each screen ranks a search — one shared record
 
-## 17. How each screen ranks a search — one shared record, 2026-09-29
-
-The owner's word, 2026-09-29 (A1): Inventory and the Orders walk both lead with section
-density, and they now break a tie the same way. D132 (Inventory) and D304 (the walk) each
-point here.
+Inventory and the Orders walk both lead with section density. They break a tie the same way.
+D132 (Inventory) and D304 (the walk) each point here.
 
 **Inventory's box rail under a search** (`app/src/BoxBrowse.tsx`'s `order`):
 
 1. Main key: the most LIVE copies of the answer in the box's best section. A box is ranked by
    its fullest section, never by its total. Only the best rank tier that still has a live copy
-   counts (F8).
-2. Tie: the box's natural name (`boxTitle`, digit runs compared as numbers, so "Box 2"
+   counts.
+2. Tie: the box's natural name (`boxTitle`, digit runs compared as numbers, so "Box 2" comes
    before "Box 10").
 3. Then the box's own `bid`, newest first, then the box number.
 
@@ -1227,9 +580,10 @@ point here.
 **With no search**, Inventory ranks by this device's box recency, then `bid`, then the box
 number (D132). The walk has no no-search order.
 
-**The order is frozen once taken** (D181, D118, `app/src/frozenRank.ts`). A copy that left
-since the order was taken still counts for its section, so a sale never re-ranks a list under
-the hand that made it. The walk's ranking is frozen for the pass the same way (§8). One
-difference stays. Inventory's natural sort is the platform's `Intl.Collator` with `numeric`.
-The walk's is `_natural_key`. Python and TypeScript cannot share one function, so the two
-agree on digit runs and case, and may differ on punctuation and accents.
+**The order is frozen once taken** (D181, D118, `app/src/frozenRank.ts`). A copy that left since
+the order was taken still counts for its section. So a sale never re-ranks a list under the hand
+that made it. The walk's ranking is held the same way (section 8).
+
+One difference stays. Inventory's natural sort is the platform's `Intl.Collator` with
+`numeric`. The walk's is `_natural_key`. Python and TypeScript cannot share one function. The
+two agree on digit runs and case, and may differ on punctuation and accents.

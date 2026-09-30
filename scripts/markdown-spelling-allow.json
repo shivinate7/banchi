@@ -683,13 +683,6 @@
         "catalogue"
       ]
     },
-    "docs/specs/identity-follows-sku.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behaviour",
-        "neighbour"
-      ]
-    },
     "docs/specs/logo.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -738,74 +731,18 @@
         "synthesised"
       ]
     },
-    "docs/specs/multi-game.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "greyed",
-        "judgement",
-        "normalisation",
-        "normalise",
-        "normalises",
-        "summarised"
-      ]
-    },
     "docs/specs/order-flow.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "acknowledgement",
-        "acknowledgement",
         "cancelled",
         "judgements",
-        "travelled",
-        "travelling"
-      ]
-    },
-    "docs/specs/order-pipeline.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "labelled",
-        "optimisation",
-        "summarised"
-      ]
-    },
-    "docs/specs/order-walk-plan.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behaviour",
-        "behaviours",
-        "greyed",
-        "labelled",
-        "minimisation",
-        "minimisation",
-        "minimised",
-        "neighbour",
-        "neighbour",
-        "neighbours",
-        "neighbours",
-        "neighbours",
-        "neighbours"
+        "travelled"
       ]
     },
     "docs/specs/sales-plan.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "cancelled"
-      ]
-    },
-    "docs/specs/stale-listings.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "artefact",
-        "catalogue",
-        "honour",
-        "materialises"
       ]
     },
     "docs/specs/subbox-capture.md": {

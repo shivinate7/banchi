@@ -3663,7 +3663,7 @@ export type ResolvedOrder = {
 export type WalkPlanRef = { key: string; number: string; buyer: string | null; owed: number }
 
 /** One physical copy of a take's card, anywhere in the store — REBUILT 2026-09-19 (`docs/
- *  specs/order-walk-plan.md` §8, "The stop, rebuilt"). The flat fields the first build carried
+ *  specs/order-walk-plan.md` §8). The flat fields the first build carried
  *  (`box`, `index`, `slot`, `card`, `label`, `neighbors`, `box_total`,
  *  `fraction`) are GONE — every one of them now lives inside `place`, which is the full block
  *  `_Places.of` composes, the same dict `do_search` sends. The client composes NOTHING from

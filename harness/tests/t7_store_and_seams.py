@@ -12030,7 +12030,7 @@ def check_consolidated_numbering(checks: Checks) -> None:
     """A card's number is its place among the cards IN the box, not among the slots. D58.
 
     THE PROPERTY, AND IT IS ONE SENTENCE: sell card 17 and the card behind it becomes card
-    17. `docs/specs/order-flow.md` §10.4 spells out what that replaces — *"`Card 17` is the
+    17. `docs/specs/order-flow.md` §4.1 says what that replaces — *"`Card 17` is the
     seventeenth slot, not the seventeenth card you can count"* — and D58 has been waiting
     since 2026-08-23 for a physical marker to explain the difference to whoever is holding
     the box. There is nothing left to explain.
@@ -12087,7 +12087,7 @@ def check_consolidated_numbering(checks: Checks) -> None:
             label(4),
             f"{box_title}, Section 1, Card 3",
             "SELL CARD 3 AND THE CARD BEHIND IT BECOMES CARD 3 — the whole of D58 in one "
-            "assertion, and the sentence `docs/specs/order-flow.md` §10.4 says could not "
+            "assertion, and the sentence `docs/specs/order-flow.md` §4.1 says could not "
             "be true while a label named a slot",
         )
         checks.equal(
@@ -34351,7 +34351,7 @@ def check_order_screen(checks: Checks) -> None:
 
 def check_order_walk_plan_route(checks: Checks) -> None:
     """`POST /orders/walk-plan` composes a REAL position for every copy it offers, and —
-    RULED 2026-09-19, "The stop, rebuilt" — carries EVERY on-hand copy of the take's SKU,
+    RULED 2026-09-19 (`docs/specs/order-walk-plan.md` §8) — carries EVERY on-hand copy of the take's SKU,
     store-wide, not only the copies standing at the stop the solver chose.
 
     `pipeline/walkplan.py` is proved by T11 and renders no labels on purpose. This is the
@@ -34362,7 +34362,7 @@ def check_order_walk_plan_route(checks: Checks) -> None:
                    all — `app/src/OrdersWalk.tsx` drew `PositionBar`'s honest "a box the
                    server could not size" blank track on every row, for ever (§9a finding 4).
                    Fixed 2026-09-19 by dropping `for_keys` for the ordinary, lazy `_Places`.
-      2026-09-19   "The stop, rebuilt" found the SAME shape still wrong in its UNIT: a
+      2026-09-19   the stop rebuild found the SAME shape still wrong in its UNIT: a
                    `WalkPlanCopy` carried only the copies the solver picked for this one
                    stop, so a card the store held three of could draw two, with no way to
                    see where the third was. D212 (every copy is fungible, no order claims
