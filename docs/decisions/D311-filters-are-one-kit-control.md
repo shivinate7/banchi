@@ -1,4 +1,4 @@
-## D-filters-are-one-kit-control — Filters are one kit control
+## D311 — Filters are one kit control
 
 **Every filter and sort row is one kit control, one width.** In the Filters popover and sheet,
 Game, Set, Rarity and Sort fill the same width (D195, same-role buttons share a width). No screen

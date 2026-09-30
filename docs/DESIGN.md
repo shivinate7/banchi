@@ -323,7 +323,7 @@ sheet now, it is reachable from the command palette (never the nav), and `make s
 renders it. `app/tests/fulfillment.spec.ts`'s pull-confirm describe block measures three of
 the Fulfillment floors on its pull-confirm specimens.
 
-**Filters are one kit control** (D-filters-are-one-kit-control). Every filter and sort row is the
+**Filters are one kit control** (D311). Every filter and sort row is the
 same width. The sort direction is a segment inside the Sort field. A value reads in `--bn-ink-2` at
 one weight, at rest. A set filter takes the accent edge, tint and ink, never weight alone.
 

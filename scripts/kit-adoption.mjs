@@ -40,7 +40,7 @@
  *                            `app/src/Gallery.tsx` is exempt from this one rule: it is the kit's
  *                            specimen sheet and draws each kit class raw on purpose
  *                            (`bn-pick`, `bn-fchip`, `bn-filterchips`, `bn-filterbar`, `bn-sort` and
- *                            `bn-hidetoggle` are the kit's filter control, D-filters-are-one-kit-control)
+ *                            `bn-hidetoggle` are the kit's filter control, D311)
  *                R2-date     `toLocaleDateString`, `toLocaleTimeString` or `Intl.DateTimeFormat`
  *                            outside `app/src/dates.ts`. ALSO, BY HEURISTIC: `.toLocaleString(...)`
  *                            with an object-literal argument that names a date or time option

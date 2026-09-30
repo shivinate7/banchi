@@ -1,5 +1,5 @@
 // Protects: Every filter and sort row is one kit control of one width, the sort direction sits inside its field, and a set filter differs from rest by more than weight.
-// Governs: D-filters-are-one-kit-control, D195
+// Governs: D311, D195
 import { test, expect, type Locator, type Page } from '@playwright/test'
 
 import { sealEveryTest } from './shell'

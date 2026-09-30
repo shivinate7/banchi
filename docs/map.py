@@ -4897,7 +4897,7 @@ COMPONENTS = [
                         "fixtures and writes nothing (D18). `--routes` prints ROUTES as JSON for "
                         "app/tests/scaffold.spec.ts, so the spec and the check read one table "
                         "with one reader.",
-                "governed_by": ["D18", "D173", "D259", "D275", "D280", "D288", "D-filters-are-one-kit-control"]},
+                "governed_by": ["D18", "D173", "D259", "D275", "D280", "D288", "D311"]},
             "checks.py": {
                 "does": "`make explain` — what `make check` runs, as a CHECKS literal plus its "
                         "own renderer, one entry per target in the recipe: what it asserts, "
@@ -9272,7 +9272,7 @@ COMPONENTS = [
                         "filter and sort row has one width, the sort direction sits inside the "
                         "sort field, one value style at rest, and a set filter changes ink, edge "
                         "and ground while its weight stays the same.",
-                "governed_by": ["D195", "D-filters-are-one-kit-control"],
+                "governed_by": ["D195", "D311"],
             },
             "tests/filters/index.html": {
                 "does": "a test page the dev server serves and the build never ships: it mounts "
