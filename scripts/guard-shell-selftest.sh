@@ -694,8 +694,6 @@ echo "  the guard refuses it, exactly as it happened"
 
 refuses "the 2026-09-12 command — a coordinator's \`git push origin HEAD\`" \
   "$tmp/main" "git push origin HEAD"
-refuses "naming the LOCAL branch literally is the identical trap" \
-  "$tmp/main" "git push origin pr-h-readings-table-local"
 refuses "\`-u\` does not launder it — it would re-point the tracking AFTER the wrong push" \
   "$tmp/main" "git push -u origin HEAD"
 refuses "\`--force\` does not launder it either" \
@@ -710,17 +708,26 @@ case "$out" in *"claude/pr-h-readings-table"*) ok "the refusal names the tracked
   *) bad "the refusal does not name the tracked upstream" ;; esac
 case "$out" in *"PKMNSCAN_PUSH=off"*) ok "the refusal prints its escape hatch" ;;
   *) bad "the refusal does not name PKMNSCAN_PUSH=off" ;; esac
-case "$out" in *"git push origin HEAD:claude/pr-h-readings-table"*) \
-  ok "the refusal prints the explicit fix — git's own second form" ;;
-  *) bad "the refusal does not print the explicit, correctly-targeted form" ;; esac
-case "$out" in *"safety net name the fix"*) \
-  ok "the refusal also names the bare \`git push\` form, which lets git print the fix itself" ;;
-  *) bad "the refusal does not mention the bare-\`git push\` alternative" ;; esac
+# (a) the trap is still refused: `git push origin HEAD` above, on a branch whose upstream is
+# ANOTHER branch. (A bare `git push` is git's own net, allowed below.)
+remedy="$(printf '%s\n' "$out" | grep 'git push -u ')"
+case "$remedy" in *"git push -u origin HEAD:pr-h-readings-table-local"*) \
+  ok "(b) the refusal's remedy pushes to the branch's OWN name" ;;
+  *) bad "the remedy does not name the branch's own name: $remedy" ;; esac
+case "$remedy" in *"claude/pr-h-readings-table"*) \
+  bad "the remedy names the upstream it refused: $remedy" ;;
+  *) ok "(b) the remedy does not name the refused upstream" ;; esac
 
 echo ""
 echo "  what clause 6 must NEVER refuse"
 
-allows "the explicit, correctly-targeted form — this IS the fix" \
+allows "(c) the explicit own-name push, HEAD:<own> — the remedy as printed" \
+  "$tmp/main" "git push -u origin HEAD:pr-h-readings-table-local"
+allows "(c) the own name as a plain refspec — it lands on that name" \
+  "$tmp/main" "git push origin pr-h-readings-table-local"
+allows "(c) \`-u\` with the own name as a plain refspec" \
+  "$tmp/main" "git push -u origin pr-h-readings-table-local"
+allows "an explicit form to the tracked branch, spelled out by the caller" \
   "$tmp/main" "git push origin HEAD:claude/pr-h-readings-table"
 allows "an explicit form to somewhere else entirely — not this clause's business" \
   "$tmp/main" "git push origin HEAD:some-other-branch"
@@ -1147,6 +1154,20 @@ allows "push, inline"    "$tmp/main" "PKMNSCAN_PUSH=off git push origin HEAD"
 (cd "$tmp/main" && git checkout -q main 2>/dev/null)
 
 allows "stash, inline"   "$tmp/main" "PKMNSCAN_STASH=off git stash pop"
+hatchlog="$tmp/main/.git/pkmnscan-hatches.log"
+before="$(cat "$hatchlog" 2>/dev/null | wc -l | tr -d ' ')"
+judge "$tmp/main" "git status --porcelain"
+judge "$tmp/main" "echo PKMNSCAN_STASH=offish PKMNSCAN_x=on"
+after_plain="$(cat "$hatchlog" 2>/dev/null | wc -l | tr -d ' ')"
+if [ "$before" = "$after_plain" ]; then ok "a plain command writes no hatch-log line"
+else bad "a plain command wrote to the hatch log"; fi
+judge "$tmp/main" "export PKMNSCAN_RESET=off; git status --porcelain"
+after_hatch="$(cat "$hatchlog" 2>/dev/null | wc -l | tr -d ' ')"
+if [ "$after_hatch" = "$((after_plain + 1))" ]; then ok "a hatch command writes exactly one hatch-log line"
+else bad "a hatch command wrote $((after_hatch - after_plain)) hatch-log lines"; fi
+case "$(tail -1 "$hatchlog" 2>/dev/null)" in
+  *"	PKMNSCAN_RESET	"*"	"*"export PKMNSCAN_RESET=off"*) ok "the line names the hatch, checkout, branch and command" ;;
+  *) bad "the hatch-log line is malformed: $(tail -1 "$hatchlog" 2>/dev/null)" ;; esac
 allows "reset, inline"   "$tmp/main" "PKMNSCAN_RESET=off git reset --hard"
 allows "narrate, inline" "$tmp/main" "PKMNSCAN_NARRATE=off make merge ARGS=\"437 --confirm\" | tail -5"
 

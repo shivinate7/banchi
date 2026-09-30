@@ -119,6 +119,13 @@ SOURCES = (
         "why": "read by decision_gists()",
     },
     {
+        "path": "scripts/guard-shell.py",
+        "kind": "defs",
+        "requires": ("recent_hatch_uses",),
+        "why": "the hatch log's reader, loaded by hatch_uses() — the guard writes the log and "
+               "owns its format",
+    },
+    {
         "path": "scripts/icloud-sweep.py",
         "kind": "file",
         "requires": (),
@@ -704,6 +711,23 @@ def hooks() -> List[str]:
     return out
 
 
+def hatch_uses(where: Path) -> List[str]:
+    """Every `PKMNSCAN_*=off` a command set in the last 24 hours, from the log the shell
+    guard keeps in this clone's git common dir (D179). Nothing when there is none."""
+    guard, why = sidecar("scripts/guard-shell.py", "guard_shell")
+    if guard is None:
+        return [field("hatch uses", why)]
+    try:
+        uses = guard.recent_hatch_uses(str(where))
+    except OSError as exc:
+        return [field("hatch uses", f"log unreadable — {exc}")]
+    if not uses:
+        return []
+    out = [field("hatch uses", f"{len(uses)} in the last 24h")]
+    out += [cont(f"{name}  {checkout}  {branch}") for name, checkout, branch in uses]
+    return out
+
+
 def guards() -> List[str]:
     """Which guards are standing down right now, and whether the turn gate is armed.
 
@@ -737,6 +761,8 @@ def guards() -> List[str]:
         lines.append(cont("refusing nothing in every session since."))
     else:
         lines.append(field("hatches", "none set — every guard in this shell is armed"))
+
+    lines += hatch_uses(ROOT)
 
     gate = resolve("scripts/stop-gate.sh")
     if gate:

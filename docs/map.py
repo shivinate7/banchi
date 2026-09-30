@@ -4996,8 +4996,8 @@ COMPONENTS = [
                 # kept now that the repo has left iCloud for that entry's amended reason: the
                 # hazard belongs to a synced directory, and a tree can be put inside one
                 # without telling this script.
-                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D138", "D80", "D86", "D88",
-                                "D111", "D127", "D158"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D111",
+                                "D127", "D138", "D158", "D179"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
