@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Card detail sheet</title>
+<!-- The sheet builds on the product's own design files, and nothing else. -->
+<link rel="stylesheet" href="../../../app/src/fonts.css" />
+<link rel="stylesheet" href="../../../app/src/tokens.css" />
+<link rel="stylesheet" href="../../../app/src/base.css" />
+<link rel="stylesheet" href="../../../app/src/kit.css" />
+<script>
+  /* #dark or #light picks the theme. tokens.css keys dark off <html data-theme>. */
+  document.documentElement.setAttribute('data-theme', location.hash === '#dark' ? 'dark' : 'light')
+</script>
+<style>
+  /* Sheet-local rules. Every value is a --bn-* token or a layout length. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bn-bg); color: var(--bn-ink); font-family: var(--bn-font-ui);
+         font-size: var(--bn-fs-base); line-height: 1.5; padding: var(--bn-6); }
+  .sheet { display: flex; gap: var(--bn-8); align-items: flex-start; }
+  .frame-cap { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3);
+               margin-bottom: var(--bn-2); letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; }
+  .frame { flex: none; }
+  .frame-820 { width: 820px; }
+  .frame-410 { width: 410px; }
+  .frame-820 .cd { height: 860px; }
+
+  /* ---- the panel ---- */
+  .cd { display: flex; flex-direction: column; }
+
+  /* ---- THE BAND: every fact about the card and its copies, one block, full width ---- */
+  .cd-band { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--bn-2) var(--bn-6);
+             padding: var(--bn-5) var(--bn-5) var(--bn-4); border-bottom: 1px solid var(--bn-line); }
+  .cd-id { min-width: 0; display: flex; flex-direction: column; gap: var(--bn-1-5); }
+  .cd-name { font-family: var(--bn-font-display); font-size: var(--bn-fs-h2); font-weight: 800;
+             letter-spacing: var(--bn-tracking-tight); line-height: var(--bn-lh-tight); }
+  /* The meta line: number, set, game, then rarity and finish as pills on the same line. */
+  .cd-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-1-5) var(--bn-2);
+             font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .cd-meta > .part { white-space: nowrap; }
+  .cd-meta > .part:not(.last)::after { content: ''; display: inline-block; width: 3px; height: 3px;
+             border-radius: var(--bn-r-full); background: var(--bn-ink-4); margin-left: var(--bn-2);
+             vertical-align: middle; }
+  .cd-meta .num { font-family: var(--bn-font-mono); color: var(--bn-ink-2); }
+  .cd-meta .bn-pill { height: 20px; }
+  /* Side facts: quieter, equal to each other. Label first, then the figure. */
+  .cd-side { display: flex; flex-wrap: wrap; gap: var(--bn-1) var(--bn-5); margin-top: var(--bn-1);
+             font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .cd-side b { color: var(--bn-ink); font-weight: 600; font-variant-numeric: tabular-nums; margin-left: var(--bn-1); }
+
+  /* The two lead figures, equal weight, split by a hairline. */
+  .cd-lead { display: grid; grid-template-columns: auto auto; align-items: start; }
+  .cd-fig { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 112px; }
+  .cd-fig + .cd-fig { border-left: 1px solid var(--bn-line); padding-left: var(--bn-5); margin-left: var(--bn-5); }
+  .cd-fig-label { display: flex; align-items: center; gap: var(--bn-2); }
+  .cd-fig-value { font-family: var(--bn-font-display); font-size: var(--bn-fs-3xl); font-weight: 800;
+                  line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: var(--bn-tracking-tight);
+                  display: flex; align-items: center; gap: var(--bn-2); }
+  .cd-age { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+  /* The ceiling meter: one cell per listing the ceiling allows. Its end says what it measures. */
+  .cd-meter { display: flex; align-items: center; gap: var(--bn-2); margin-top: var(--bn-1-5); }
+  .cd-meter-cells { display: flex; gap: 3px; }
+  .cd-meter-cells > span { width: 14px; height: 6px; border-radius: var(--bn-r-xs); background: var(--bn-surface-3); }
+  .cd-meter-cells > span.on { background: var(--bn-ink-3); }
+  .cd-meter-end { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; }
+  .cd-meter-end b { color: var(--bn-ink-2); font-weight: 600; }
+
+  /* ---- BELOW THE BAND: the photo, and the copies claiming the rest ---- */
+  .cd-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 260px minmax(0, 1fr);
+             gap: var(--bn-5); padding: var(--bn-5); }
+  .cd-photo { border-radius: var(--bn-r-lg); overflow: hidden; box-shadow: var(--bn-shadow-2); align-self: start;
+              aspect-ratio: 360 / 540; background: var(--bn-surface-2); }
+  .cd-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .cd-copies { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: var(--bn-3); }
+  .cd-copies-head { display: flex; align-items: baseline; justify-content: space-between; }
+
+  /* ---- one copy ---- */
+  .cp { background: var(--bn-surface-2); border-radius: var(--bn-r-lg); padding: var(--bn-3) var(--bn-4) var(--bn-3);
+        display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--bn-2) var(--bn-3);
+        transition: background-color var(--bn-t) var(--bn-ease); }
+  .cp-where { min-width: 0; display: flex; flex-direction: column; gap: var(--bn-1); }
+  .cp-addr { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--bn-2); font-size: var(--bn-fs-sm);
+             font-weight: 600; color: var(--bn-ink-2); }
+  .cp-addr > span { white-space: nowrap; }
+  .cp-addr > span:not(:last-child)::after { content: ''; display: inline-block; width: 3px; height: 3px; border-radius: var(--bn-r-full);
+             background: var(--bn-ink-4); margin-left: var(--bn-2); vertical-align: middle; }
+  .cp-addr .box { color: var(--bn-ink); font-weight: 700; }
+  .cp-addr .card { color: var(--bn-ink); font-weight: 700; }
+  .nb { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-sm);
+        font-weight: 600; color: var(--bn-ink-3); }
+  .nb b { color: var(--bn-ink); font-weight: 700; }
+  .nb .arrow::before { content: '→'; color: var(--bn-ink-4); }
+  .nb .end { height: 18px; font-family: var(--bn-font-mono); letter-spacing: var(--bn-tracking-caps); }
+
+  /* Actions. Mark sold is worded and drawn as a raised button; Retire and Move are bare icons.
+     The fill arrives only under the hand (row :hover or :focus-within), so a list of any length
+     holds at most one filled accent button at a time. */
+  .cp-acts { display: flex; align-items: center; gap: var(--bn-1); align-self: start; }
+  .cp-sell { --btn-h: 40px; width: 128px; color: var(--bn-accent); font-weight: 600; }
+  .cp-sell svg { color: var(--bn-accent); }
+  .cp:hover .cp-sell, .cp:focus-within .cp-sell, .cp.is-hot .cp-sell {
+    color: var(--bn-on-accent); background: var(--bn-accent); box-shadow: var(--bn-shadow-1); }
+  .cp:hover .cp-sell svg, .cp:focus-within .cp-sell svg, .cp.is-hot .cp-sell svg { color: var(--bn-on-accent); }
+  .cp-icon { width: 40px; height: 40px; color: var(--bn-ink-3); }
+  .cp-icon svg { width: 20px; height: 20px; }
+
+  /* The locator: section strip over the card ruler, full row width. */
+  .cp-loc { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--bn-1-5); }
+  .strip { display: flex; gap: 2px; height: 20px; }
+  .strip > span { flex-basis: 0; min-width: 20px; border-radius: var(--bn-r-xs); display: flex; align-items: center;
+                  justify-content: center; font-size: var(--bn-fs-2xs); font-weight: 700; color: var(--bn-ink-3);
+                  box-shadow: inset 0 0 0 1px var(--bn-line-strong); font-variant-numeric: tabular-nums; }
+  .strip > span.here { background: var(--bn-accent-tint-2); color: var(--bn-accent); box-shadow: inset 0 0 0 1px var(--bn-accent); }
+  .ruler { position: relative; height: 40px; border-radius: var(--bn-r-sm); background: var(--bn-surface);
+           box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+  .ruler .tick { position: absolute; bottom: 0; width: 1px; height: var(--bn-1-5); background: var(--bn-ink-4); translate: -50% 0; }
+  .ruler .tick.major { height: var(--bn-3); background: var(--bn-ink-3); }
+  .ruler .tick-num { position: absolute; top: var(--bn-0-75); translate: -50% 0; font-size: var(--bn-fs-2xs);
+                     color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+  .ruler .edge { position: absolute; top: 50%; translate: 0 -50%; font-size: var(--bn-fs-2xs); color: var(--bn-ink-3);
+                 font-variant-numeric: tabular-nums; }
+  .ruler .edge.start { left: var(--bn-1-5); }
+  .ruler .edge.end { right: var(--bn-1-5); }
+  .ruler .cell { position: absolute; top: 0; bottom: 0; background: var(--bn-accent-tint); }
+  .ruler .pin { position: absolute; top: 0; bottom: 0; width: 2px; translate: -50% 0; background: var(--bn-accent); }
+  /* The chip is centred on the pin, in the ruler's lower band, under the tick numbers. */
+  .ruler .chip { position: absolute; top: 62%; left: clamp(12px, var(--at), calc(100% - 12px)); translate: -50% -50%; min-width: 22px; padding: 0 var(--bn-1);
+                 height: 18px; border-radius: var(--bn-r-xs); background: var(--bn-accent); color: var(--bn-on-accent);
+                 font-size: var(--bn-fs-xs); font-weight: 700; display: flex; align-items: center; justify-content: center;
+                 font-variant-numeric: tabular-nums; }
+  .ends { display: flex; justify-content: space-between; font-family: var(--bn-font-mono); font-size: var(--bn-fs-2xs);
+          letter-spacing: var(--bn-tracking-caps); color: var(--bn-ink-3); }
+
+  /* ---- 410: the same band, stacked; actions become the row's foot ---- */
+  .frame-410 .cd-band { grid-template-columns: minmax(0, 1fr); padding: var(--bn-4); }
+  .frame-410 .cd-lead { grid-template-columns: 1fr 1fr; padding-top: var(--bn-3); border-top: 1px solid var(--bn-line); margin-top: var(--bn-2); }
+  .frame-410 .cd-side { order: 3; }
+  .frame-410 .cd-body { grid-template-columns: minmax(0, 1fr); padding: var(--bn-4); gap: var(--bn-4); }
+  .frame-410 .cd-photo { width: 180px; justify-self: center; }
+  .frame-410 .cp { grid-template-columns: minmax(0, 1fr); }
+  .frame-410 .cp-acts { order: 4; }
+  .frame-410 .cp-sell { flex: 1; width: auto; }
+
+  /* ---- the Live dot's three states, drawn once under the panes ---- */
+  .states { margin-top: var(--bn-6); padding: var(--bn-3); display: flex; gap: var(--bn-8); }
+  .states .cd-fig { min-width: 0; }
+  .states .note { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); max-width: 200px; margin-top: var(--bn-1); }
+</style>
+</head>
+<body>
+<template id="panel">
+  <section class="bn-panel cd">
+    <header class="cd-band">
+      <div class="cd-id">
+        <h2 class="cd-name">Pyke, Returned</h2>
+        <p class="cd-meta">
+          <span class="part num">145a/219</span>
+          <span class="part">Unleashed</span>
+          <span class="part last">Riftbound</span>
+          <span class="bn-pill bn-pill-outline">Epic</span>
+          <span class="bn-pill bn-pill-outline"><svg class="bn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"><path d="M10.8 2.7l1.8 5.2L17.8 9.7l-5.2 1.8L10.8 16.7l-1.8 -5.2L3.8 9.7l5.2 -1.8z M17.8 16.7l0.7 2 2 0.7 -2 0.7 -0.7 2 -0.7 -2 -2 -0.7 2 -0.7z"/></svg>Foil</span>
+        </p>
+        <p class="cd-side">
+          <span>Captured<b>8</b></span>
+          <span>Hidden<b>3</b></span>
+          <span>Sent<b>7</b></span>
+        </p>
+      </div>
+      <div class="cd-lead">
+        <div class="cd-fig">
+          <span class="cd-fig-label"><span class="bn-label">Stored</span></span>
+          <span class="cd-fig-value">5</span>
+        </div>
+        <div class="cd-fig">
+          <span class="cd-fig-label"><span class="bn-label">Live</span><span class="cd-age">2d ago</span></span>
+          <span class="cd-fig-value"><span class="bn-dot bn-dot-live"></span>5</span>
+          <span class="cd-meter" aria-label="5 live, cap 5">
+            <span class="cd-meter-cells"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span></span>
+            <span class="cd-meter-end">Cap <b>5</b></span>
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <div class="cd-body">
+      <div class="cd-photo"><img src="../../../demo-assets/extra/photos/0000.jpg" alt="Photo of this copy" /></div>
+      <div class="cd-copies">
+        <div class="cd-copies-head"><h3 class="bn-section-title">Copies</h3></div>
+        <!-- rows are filled in by the script below from ROWS -->
+      </div>
+    </div>
+  </section>
+</template>
+
+<div class="sheet">
+  <div class="frame frame-820"><p class="frame-cap">Pane 820</p><div class="slot"></div></div>
+  <div class="frame frame-410"><p class="frame-cap">Pane 410</p><div class="slot"></div></div>
+</div>
+
+<div class="states" id="states">
+  <div>
+    <div class="cd-fig"><span class="cd-fig-label"><span class="bn-label">Live</span><span class="cd-age">2d ago</span></span>
+      <span class="cd-fig-value"><span class="bn-dot bn-dot-live"></span>5</span></div>
+    <p class="note">Red: copies are live and the reading is fresh.</p>
+  </div>
+  <div>
+    <div class="cd-fig"><span class="cd-fig-label"><span class="bn-label">Live</span><span class="cd-age">9d ago</span></span>
+      <span class="cd-fig-value"><span class="bn-dot bn-dot-warn"></span>5</span></div>
+    <p class="note">Amber: the reading is old. The age that turns it amber is the owner's call.</p>
+  </div>
+  <div>
+    <div class="cd-fig"><span class="cd-fig-label"><span class="bn-label">Live</span><span class="cd-age">not read</span></span>
+      <span class="cd-fig-value" style="color: var(--bn-ink-3)">—</span></div>
+    <p class="note">No reading: a quiet dash, never a red 0.</p>
+  </div>
+</div>
+
+<script>
+  const ICON = {
+    sold: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 6v12 M15.5 8H10a1.75 1.75 0 0 0 0 3.5h4a1.75 1.75 0 0 1 0 3.5H8.5',
+    archive: 'M3 4.4h18v4H3z M4 8.4h16v11H4z M10 12.4h4',
+    moveTo: 'M3 12h12 M11 7l5 5-5 5 M20 5v14',
+  }
+  const svg = (name, size) =>
+    `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="${ICON[name]}"/></svg>`
+
+  /* Three copies. sections: card counts per section in the box; here: which one holds the copy. */
+  const ROWS = [
+    { box: 'RB Origins', section: 'Section 2: Epics', card: 4, of: 11, prev: 'Bellows Breath', next: 'Hextech Anomaly', sections: [14, 11, 9], here: 2, hot: true },
+    { box: 'MEG Bulk', section: 'Section 1: Unleashed', card: 1, of: 23, prev: null, next: 'Void Assault', sections: [23, 18, 12, 7], here: 1 },
+    { box: 'Mixed Singles', section: 'Section 4: Riftbound', card: 42, of: 42, prev: 'Moonfall', next: null, sections: [9, 16, 12, 42], here: 4 },
+  ]
+
+  function ruler(card, of) {
+    const at = (n) => ((n - 0.5) / of) * 100
+    let ticks = ''
+    for (let n = 5; n < of; n += 5) {
+      const major = n % 10 === 0
+      ticks += `<span class="tick${major ? ' major' : ''}" style="left:${at(n)}%"></span>`
+      /* A tick number that would sit under the chip is left out; the chip names the card. */
+      if (major && Math.abs(n - card) > 2) ticks += `<span class="tick-num" style="left:${at(n)}%">${n}</span>`
+    }
+    const w = 100 / of
+    return `<div class="ruler">
+      <span class="cell" style="left:${(card - 1) * w}%;width:${w}%"></span>
+      ${ticks}
+      ${card === 1 ? '' : '<span class="edge start">1</span>'}
+      ${card === of ? '' : `<span class="edge end">${of}</span>`}
+      <span class="pin" style="left:${at(card)}%"></span>
+      <span class="chip" style="--at:${at(card)}%">${card}</span>
+    </div>`
+  }
+
+  function row(r) {
+    const side = (name, end) => name === null
+      ? `<span class="bn-pill bn-pill-sm bn-pill-outline end">${end}</span>`
+      : `<b>${name}</b>`
+    const strip = r.sections.map((n, i) =>
+      `<span class="${i + 1 === r.here ? 'here' : ''}" style="flex-grow:${n}">${i + 1}</span>`).join('')
+    return `<article class="cp${r.hot ? ' is-hot' : ''}">
+      <div class="cp-where">
+        <p class="cp-addr"><span class="box">${r.box}</span><span>${r.section}</span><span class="card">Card ${r.card} of ${r.of}</span></p>
+        <p class="nb">${side(r.prev, 'BACK')}<span class="arrow" aria-hidden="true"></span>${side(r.next, 'FRONT')}</p>
+      </div>
+      <div class="cp-acts">
+        <button class="bn-btn cp-sell" type="button">${svg('sold', 18)}Mark sold</button>
+        <button class="bn-icon-btn cp-icon" type="button" aria-label="Retire" title="Retire">${svg('archive', 20)}</button>
+        <button class="bn-icon-btn cp-icon" type="button" aria-label="Move" title="Move">${svg('moveTo', 20)}</button>
+      </div>
+      <div class="cp-loc">
+        <div class="strip">${strip}</div>
+        ${ruler(r.card, r.of)}
+        <p class="ends"><span>BACK</span><span>FRONT</span></p>
+      </div>
+    </article>`
+  }
+
+  const tpl = document.getElementById('panel')
+  for (const slot of document.querySelectorAll('.slot')) {
+    slot.appendChild(tpl.content.cloneNode(true))
+    slot.querySelector('.cd-copies').insertAdjacentHTML('beforeend', ROWS.map(row).join(''))
+  }
+</script>
+</body>
+</html>
