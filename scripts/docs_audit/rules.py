@@ -31,6 +31,7 @@ from .spelling import (
     MARKDOWN_SPELLING_RULE,
     SPELLING_SUFFIXES,
     spelling_findings,
+    spelling_findings_many,
 )
 from .strings import (
     _offender_diff,
@@ -423,8 +424,8 @@ def _markdown_spelling_found(paths: Sequence[Path]) -> Dict[str, Dict[str, List[
     ste_measure = _sibling("ste_measure.py")
     list_key = ste_measure.list_key if ste_measure is not None else (lambda path: path)
     found: Dict[str, Dict[str, List[str]]] = {}
-    for path in paths:
-        words = [british for _, _, british, _ in spelling_findings(read(path), ".md")]
+    for path, hits in zip(paths, spelling_findings_many([(read(p), ".md") for p in paths])):
+        words = [british for _, _, british, _ in hits]
         if words:
             found.setdefault(list_key(rel(path)), {}) \
                  .setdefault(MARKDOWN_SPELLING_RULE, []).extend(sorted(words))
@@ -462,9 +463,9 @@ def check_identifier_spelling(report: Report) -> None:
     code_findings = 0
 
     paths, whole_tree = _spelling_scope()
-    for path in paths:
+    for path, hits in zip(paths, spelling_findings_many([(read(p), p.suffix) for p in paths])):
         scanned += 1
-        for line, name, british, american in spelling_findings(read(path), path.suffix):
+        for line, name, british, american in hits:
             code_findings += 1
             findings.append(
                 Finding(

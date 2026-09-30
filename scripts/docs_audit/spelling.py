@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import keyword
 import re
+import multiprocessing
 import tokenize
 from typing import Dict, List, Optional, Tuple
 
@@ -485,6 +486,20 @@ def spelling_findings(text: str, suffix: str) -> List[Tuple[int, str, str, str]]
         if hit:
             found.append((code.count("\n", 0, match.start()) + 1, match.group(0), hit[0], hit[1]))
     return found
+
+
+def _findings_of(item: Tuple[str, str]) -> List[Tuple[int, str, str, str]]:
+    return spelling_findings(*item)
+
+
+def spelling_findings_many(items: List[Tuple[str, str]]) -> List[List[Tuple[int, str, str, str]]]:
+    """`spelling_findings` over (text, suffix) pairs, in order. The whole-tree read is ~1M
+    tokens of pure-Python lexing, so a big batch fans out over forked workers; a staged commit's
+    handful of files stays in-process. Same findings either way."""
+    if len(items) < 32:
+        return [_findings_of(item) for item in items]
+    with multiprocessing.get_context("fork").Pool() as pool:
+        return pool.map(_findings_of, items, chunksize=8)
 
 
 SHELL_SUFFIXES = (".sh",)
