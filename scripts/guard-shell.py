@@ -137,6 +137,7 @@ import subprocess
 import sys
 import tempfile
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import List, NamedTuple, Optional, Sequence, Set, Tuple
 
@@ -206,7 +207,7 @@ class Verdict(NamedTuple):
 def _off(clause: str, command: str) -> bool:
     """Whether this clause's hatch is set, in either of `PKMNSCAN_KILL`'s two forms."""
     name = HATCH[clause]
-    return os.environ.get(name) == "off" or (name + "=off") in command
+    return os.environ.get(name) == "off" or name in _hatches_set(command)
 
 
 # ---------------------------------------------------------------------- the hatch log
@@ -221,14 +222,15 @@ HATCH_LOG = "pkmnscan-hatches.log"
 _HATCH_TOKEN = re.compile(r"^(PKMNSCAN_[A-Z0-9_]+)=off$")
 
 
-def _hatches_set(command: str) -> List[str]:
+@lru_cache(maxsize=16)
+def _hatches_set(command: str) -> Tuple[str, ...]:
     """Hatch names a command REALLY sets, read from the parsed stages, never from raw text.
 
     A real setting is an env prefix (`X=off cmd`), `export X=off`, or `env X=off cmd`. A
     mention inside an argument, a comment, a heredoc body or a quoted string is not one.
     """
-    if shell_parse is None:
-        return []
+    if shell_parse is None or not command:
+        return ()
     names: Set[str] = set()
     for stage in shell_parse.read(command).every:
         for token in stage.argv:
@@ -239,7 +241,9 @@ def _hatches_set(command: str) -> List[str]:
                 continue
             else:
                 break
-    return sorted(names)
+    return tuple(sorted(names))
+
+
 _STAMP = "%Y-%m-%dT%H:%M:%S%z"
 
 

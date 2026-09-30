@@ -1151,6 +1151,16 @@ allows "tree, inline"     "$WT" "PKMNSCAN_TREE=off cat > $tmp/main/work.py"
 # without the hatch and the test would prove nothing about the hatch itself.
 (cd "$tmp/main" && git checkout -q pr-h-readings-table-local 2>/dev/null)
 allows "push, inline"    "$tmp/main" "PKMNSCAN_PUSH=off git push origin HEAD"
+# A HATCH IS HONOURED ONLY AS A REAL ASSIGNMENT: a mention never lifts, so every lift is logged.
+refuses "a hatch in a trailing comment does not lift" \
+  "$tmp/main" "git push origin HEAD # PKMNSCAN_PUSH=off"
+refuses "a hatch echoed before the command does not lift" \
+  "$tmp/main" "echo PKMNSCAN_PUSH=off; git push origin HEAD"
+b="$(cat "$tmp/main/.git/pkmnscan-hatches.log" | wc -l | tr -d ' ')"
+judge "$tmp/main" "PKMNSCAN_PUSH=off git push origin HEAD"
+a="$(cat "$tmp/main/.git/pkmnscan-hatches.log" | wc -l | tr -d ' ')"
+if [ "$a" = "$((b + 1))" ]; then ok "a real push hatch lifts AND logs exactly one line"
+else bad "the push hatch wrote $((a - b)) log line(s)"; fi
 (cd "$tmp/main" && git checkout -q main 2>/dev/null)
 
 allows "stash, inline"   "$tmp/main" "PKMNSCAN_STASH=off git stash pop"
