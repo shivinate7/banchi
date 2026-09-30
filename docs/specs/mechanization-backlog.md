@@ -52,7 +52,7 @@ The ranks are stable ids. They are not renumbered, so a citation of a rank keeps
 | 39 | Every server route is reachable from `app/src/server.ts`. | Shelved |
 | 40 | Register a window keydown listener in `useLayoutEffect` when its dependencies name state the handler reads. | Shelved |
 
-"Shelved" means the mechanism's named artifact is not in the tree. I checked each by name and by the
+"Shelved" means the mechanism's named artifact is not in the tree. Each was checked by name and by the
 recipe or function it would change. Rank 32, rank 33 and rank 37 are shelved on a weaker basis. No artifact with the named shape exists. I did not read every candidate site.
 
 **Rank 21, partly built.** `Report.add` takes `scanned`, and `render` prints `none` for a row that
@@ -144,11 +144,11 @@ table must mark the failure.
 
 **Mechanism.** `scripts/score-detect.py` holds the photo names in `_score`, and `_summarize` discards
 them. Have it write `declined_frames: [{box, filename, area, detail}]` beside the count. Add one
-entry to `_DETECT_CLAIMS` asserting `len(declined_frames) == overall.declined`. A score file that
+claim asserting `len(declined_frames) == overall.declined`. A score file that
 predates the key must read as "re-run the scan" and never as a wrong figure.
 
-**Where.** `scripts/score-detect.py` (the writer) and a new pin in `scripts/docs-audit.py`'s
-`_DETECT_CLAIMS` and `detector standing` row.
+**Where.** `scripts/score-detect.py` (the writer) and a new pin. The `detector standing` row and
+`_DETECT_CLAIMS` are cut, so the pin needs a new home in `scripts/docs-audit.py`, or the rank is cut.
 
 **Catches.** A pinned figure standing beside a false claim. `harness/results/detect.json` carries
 `overall.declined` and `per_box` integers and no filenames. So an eye pass over the declined frames cannot start from the file a debt entry names. That eye pass is the only thing that can settle a

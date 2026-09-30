@@ -105,8 +105,9 @@ files the card at the tail of that section. An unknown key (`SectionGone`) write
 
 ### 6.1 — Framework
 
-The load is two devices on a LAN. Python is 3.9, so write `from __future__ import annotations`
-and use no `X | None` and no `match`. `requirements.txt` lists what it deliberately omits
+The load is two devices on a LAN. The app runs on the venv's Python 3.12 (`VENV_PYTHON` in the
+Makefile). Stand-alone scripts that the Makefile runs with bare `python3` use the system Python
+3.9. Keep those scripts free of `X | None` and `match`. `requirements.txt` lists what it deliberately omits
 (D15), so every addition is a recorded decision.
 
 ### 6.2 — The module docstring carries the contract

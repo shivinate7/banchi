@@ -19,7 +19,7 @@ No server anywhere enforces a time limit. `undo_too_late` is a state test and no
 reversal decides "built on" by a fact in the store, and the server refuses with a sentence. The
 screen never guesses it. `store/orders.py`'s `reopen_line` has no window and no clock. How long
 an undo stays offered is the screen's business, and no screen offers a fixed window. The
-receipt's `UNDO_WINDOW_MS` is gone.
+receipt has no window. `UNDO_WINDOW_MS` is only the toast's own TTL (`Inventory.tsx`, `Orders.tsx`).
 
 ## 2. Two mechanisms, and they are not the same mechanism
 
@@ -273,10 +273,11 @@ T7's `check_undo_until_built_on` proves each one.
   `PageUndo` is a header door. Review does not draw it (§11.12). `Page` has no `undo` prop.
   `Gallery.tsx`'s specimen draws `PageUndo` and its `.bn-page-undo` wrapper directly. A screen that
   wants the header door writes that same pair.
-- **UN-12.** `Pricing.tsx`'s `Undo` type is `{ entries: readonly UndoEntry[] }`. `write` is
-  `writeMany`'s one-op case. `setHold` pushes both fields it touches as one entry.
-- **UN-13.** The store-wide cut-off (`setCut`) has a receipt and a `'cutoff'`-kind `UndoEntry` that
-  holds the prior `threshold` and `sub_threshold`. It reverts on the same pop other entries do.
+- **UN-12.** `Pricing.tsx`'s `Undo` type is `{ id } & ({ kind: 'answer', writes } | { kind: 'cutoff', before })`.
+  Each `writes` item holds a SKU, its prior answer and its channel. `setHold` pushes both fields it
+  touches as one `answer` entry.
+- **UN-13.** The store-wide cut-off (`setCut`) has a receipt and a `{ kind: 'cutoff', before }` entry
+  that holds the prior `threshold` and `sub_threshold`. It reverts on the same pop other entries do.
 - **UN-7, screen half.** `BoxBrowse.tsx`'s `CardOps` offers "This card is still here"
   (`saleStillHere`) once the ordinary reversal refuses `sale_built_on`. It is never a retry of the
   same request. The card is back in stock, and the order line it was pulled for is marked filled by

@@ -103,8 +103,8 @@ depends on these rules:
 one decision, applied once.
 
 The base URL is derived per checkout. `vite.config.ts` injects this checkout's own capture port
-(D43, the port follows the store), and `VITE_CAPTURE_SERVER` outranks it. The server answers
-CORS for any origin. A LAN tool has no auth and no TLS. Do not add a login screen.
+(D43, the port follows the store), and `VITE_CAPTURE_SERVER` outranks it. Reads allow any origin. Writes need an allowed origin
+(`docs/specs/capture-server.md` §6.4). There is no auth and no TLS. Do not add a login screen.
 
 The app shows the server's own message. That message says what happened and what to do next.
 The app must not paraphrase it into something less actionable.
