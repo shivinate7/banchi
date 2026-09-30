@@ -362,7 +362,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   display: grid;
   /* THE NAME NEVER LOSES ITS ROOM: the slot numbers shrink and wrap before the name column drops
      under 10ch. */
-  grid-template-columns: minmax(0, max-content) minmax(10ch, 1fr) auto;
+  grid-template-columns: minmax(4ch, max-content) minmax(10ch, 1fr) minmax(0, auto);
   grid-template-areas: 'slot name pick' '. for for';
   align-items: center;
   gap: var(--bn-0-5) var(--bn-3);
@@ -379,7 +379,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-walk-line > .walk-pick-where { flex: 1 1 100%; min-width: 0; }
 .orders-walk-press:hover { background: var(--bn-hover); }
 .orders-walk-press[aria-current='true'] { background: var(--bn-accent-tint); }
-.orders-walk-slot { grid-area: slot; min-width: 4ch; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bn-ink-2); }
+.orders-walk-slot { grid-area: slot; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bn-ink-2); }
 /* "(either)": more candidate copies stand here than this take wants (D212, review finding 2).
    Quiet and unweighted on purpose — it names a fact about the copies, not a second number. */
 .orders-walk-slot-either { font-weight: 400; font-variant-numeric: normal; color: var(--bn-ink-3); }
@@ -393,7 +393,10 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   font-size: var(--bn-fs-sm);
   font-weight: 600;
   color: var(--bn-ink-2);
-  white-space: nowrap;
+  /* It wraps rather than run past the row when the column is narrow. */
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 .orders-walk-for { grid-area: for; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

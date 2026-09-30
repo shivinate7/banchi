@@ -145,7 +145,6 @@ export function PositionBar({
       ro.disconnect()
     }
     // Re-run whenever the walk lands on a different card or a different section count.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [place.label, place.section, sections?.length])
 
   return (

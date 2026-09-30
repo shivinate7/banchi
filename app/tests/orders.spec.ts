@@ -5014,3 +5014,87 @@ test('at 820 the pick line always shows the card name, and the slot numbers wrap
   expect(box.width, 'the name keeps room to be read').toBeGreaterThan(60)
   expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), 'the name is not truncated').toBe(true)
 })
+
+const SPARE_PULL = { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] }
+
+test('a sold spare\'s own row Undo reverses it', async ({ page }) => {
+  const wire = await open(page, { orders: oneOpenOrder(), walkPlan: sparePlan(), pull: SPARE_PULL })
+  await page.getByRole('button', { name: '1 more elsewhere' }).click()
+  await page.keyboard.press('2')
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
+  /* `rows` holds only the copies at a stop, so the Undo used to find no row for a spare and do nothing. */
+  const undo = page.locator(CURRENT_PICK).getByRole('button', { name: /^Undo/ })
+  await expect(undo).toBeVisible()
+  await undo.click()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(2)
+  expect(wire.filter((one) => one.path.endsWith('/orders/pull'))[1]?.body).toMatchObject({
+    undo: true,
+    targets: [{ box: 9, index: 99, capture_id: 'cap-spare' }],
+  })
+})
+
+test('digits reach the spares only while the fold is open', async ({ page }) => {
+  const wire = await open(page, { orders: oneOpenOrder(), walkPlan: sparePlan(), pull: SPARE_PULL })
+  await page.getByRole('button', { name: '1 more elsewhere' }).click()
+  await expect(page.locator(`${CURRENT_PICK} .walk-keyhint .bn-kbd`)).toHaveText(['1', '2'])
+  await page.getByRole('button', { name: '1 more elsewhere' }).click()
+  await expect(page.locator(`${CURRENT_PICK} .walk-keyhint .bn-kbd`)).toHaveText(['1'])
+  await page.keyboard.press('2')
+  expect(wire.filter((one) => one.path.endsWith('/orders/pull'))).toHaveLength(0)
+})
+
+test('at 820 a picked line keeps its slot numbers clear of the struck name', async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 1000 })
+  await open(page, { orders: oneOpenOrder(), walkPlan: twoCopyPlan(), pull: SPARE_PULL })
+  await expect(page.locator('.walk-keyhint').first()).toBeVisible()
+  await page.keyboard.press('1')
+  const line = page.locator('.orders-walk-line').first()
+  await expect(line).toHaveClass(/is-done/)
+  const slot = (await line.locator('.orders-walk-slot').boundingBox())!
+  const name = (await line.locator('.orders-walk-name').boundingBox())!
+  expect(slot.x + slot.width, 'the numbers end before the name begins').toBeLessThanOrEqual(name.x + 0.5)
+  /* AND THE PICK FIGURE STAYS INSIDE THE ROW: it wraps rather than run past the walk column. */
+  const pick = (await line.locator('.orders-walk-pick').boundingBox())!
+  const press = (await line.locator('.orders-walk-press').boundingBox())!
+  expect(pick.x + pick.width, 'the pick figure ends inside the row').toBeLessThanOrEqual(press.x + press.width + 0.5)
+})
+
+test('paging with the arrows skips a pick the Hide picked fold has taken off the list', async ({ page }) => {
+  const three = walkPlanOf([
+    walkPlanStop({
+      takes: [
+        walkPlanTake(),
+        walkPlanTake({ sku: '9191487', name: 'Sunrise', copies: [walkPlanCopy({ index: 30, slot: 26, card: 26, label: 'Box 3, Section 2, Card 26', capture_id: 'cap-c', key: '3/30' })] }),
+        walkPlanTake({ sku: '9191488', name: 'Riposte', copies: [walkPlanCopy({ index: 40, slot: 36, card: 36, label: 'Box 3, Section 2, Card 36', capture_id: 'cap-d', key: '3/40' })] }),
+      ],
+    }),
+  ])
+  await open(page, { orders: oneOpenOrder(), walkPlan: three, pull: SPARE_PULL })
+  await expect(page.locator('.walk-keyhint').first()).toBeVisible()
+  await page.keyboard.press('1')
+  await expect(page.locator('.orders-walk-line').first()).toHaveClass(/is-done/)
+  const hide = page.getByRole('button', { name: /^Picked/ })
+  await hide.click()
+  await hide.click()
+  await expect(page.locator('.orders-walk-line')).toHaveCount(2)
+  await page.getByRole('button', { name: /Sunrise/ }).click()
+  await expect(page.locator('.browse-card .browse-hero-name')).toHaveText('Sunrise')
+  /* Volcanion is picked and folded: the panel must not step onto a card the column does not show. */
+  await page.keyboard.press('ArrowLeft')
+  await expect(page.locator('.browse-card .browse-hero-name')).toHaveText('Sunrise')
+  await page.keyboard.press('ArrowRight')
+  await expect(page.locator('.browse-card .browse-hero-name')).toHaveText('Riposte')
+})
+
+test('a digit pressed while a sale is in flight says one sale at a time', async ({ page }) => {
+  const wire = await open(page, { orders: oneOpenOrder(), walkPlan: twoCopyPlan(), pull: SPARE_PULL })
+  await page.route(/\/orders\/pull$/, async (route) => {
+    await new Promise((settled) => setTimeout(settled, 1500))
+    await route.fallback()
+  })
+  await expect(page.locator('.walk-keyhint').first()).toBeVisible()
+  await page.keyboard.press('1')
+  await page.keyboard.press('2')
+  await expect(page.locator('.bn-toast', { hasText: 'One sale at a time' })).toBeVisible()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
+})

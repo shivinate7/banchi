@@ -563,12 +563,14 @@ export function useOrderWalk({
        `RowAction` only ever wires this to the newest copy's own button, and this guard is the
        same rule enforced a second time, defensively, rather than trusted to the caller. */
     if (receipt === undefined || busyCopy !== null || copyKey !== newestUndoKey) return
-    const row = rows.find((candidate) => candidate.copy.key === copyKey)
-    if (row === undefined) return
+    /* THE NAME COMES FROM THE PLAN'S TAKES, NOT FROM `rows`: `rows` holds only the copies at a stop, and
+       a sold spare (`here: false`) has no row there, so keying the lookup on it made its Undo a no-op. */
+    const named = plan?.stops.flatMap((stop) => stop.takes).find((take) => take.sku === receipt.sku)
+    if (named === undefined) return
     setBusyCopy(copyKey)
     void (async () => {
       const refresh = staleAfter(receipt.target.box, copyKey)
-      const outcome = await onUndo(receipt.target, receipt.place, row.take.name ?? row.take.sku, refresh)
+      const outcome = await onUndo(receipt.target, receipt.place, named.name ?? named.sku, refresh)
       if (!live.current) return
       if (outcome.ok) {
         absorb(outcome.refreshed)
