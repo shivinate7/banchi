@@ -499,8 +499,8 @@ check:
 # re-derived. All nine tests now pass on a clone with no images and no cache, measured.
 #
 # Everything below answers from the tree alone, which is exactly what a re-checker can own.
-# IT IS A SUBSET AND CAN DRIFT FROM `check`. Kept adjacent to it deliberately, so the two are
-# read together; `make explain` still describes the full suite and this list adds no rows to it.
+# IT RUNS THE SAME TARGETS AS `check`, NOT FEWER. Kept adjacent to it deliberately, so the two
+# are read together; `make explain` describes the suite and this list adds no rows to it.
 ci-check:
 	@$(MAKE) --no-print-directory harness
 	@$(MAKE) --no-print-directory docs-audit

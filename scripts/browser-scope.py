@@ -55,8 +55,8 @@ regardless — D136's pass record is the only thing that skips the matrix on mai
         one-line summary to GITHUB_STEP_SUMMARY when that is set. NEVER a typed list: for
         each spec, its own relative import closure, plus the closure of every screen whose
         route hash the spec's body names (comments stripped first, matched against
-        `app/src/App.tsx`'s own `ROUTES`), plus every screen when the spec calls
-        `routesFromNav(`. A shared surface (`app/src/kit/**`, `tokens.css`, `base.css`,
+        `app/src/App.tsx`'s own `ROUTES`), plus every screen when the spec sweeps
+        the nav (calls `routesFromNav(` itself or through a test-side helper it imports). A shared surface (`app/src/kit/**`, `tokens.css`, `base.css`,
         `App.tsx`, `main.tsx`, `index.html`, `app/public/**`, a non-spec `app/tests/*`, a
         config or package file, or anything already in the top-level `SCOPE` outside
         `app/**`) selects every spec. So does an unmapped `app/**` path, an empty or
@@ -64,6 +64,18 @@ regardless — D136's pass record is the only thing that skips the matrix on mai
         by `make`), or `PKMNSCAN_BROWSER_SCOPE=off` — printed by name on every such skip.
         `partial=true` only when the run is genuinely narrowed, so `design-check-passed`
         never records a tree as fully tested on a partial run.
+    scripts/browser-scope.py shard N M [SPEC ...]
+        THE THIRD LEVER. Which spec files run on shard N of M, packed by measured TIME, not
+        case count: Playwright's own `--shard` left one shard near 513 s and another near
+        306 s. SPEC ... narrows the universe (the `specs` output); none means every spec.
+        Whole files, slowest first, onto the lightest shard, from `scripts/browser-spec-
+        times.json` (file name to seconds: each test's median over 50 `check.yml` runs).
+        A spec with no time gets the mean, so a stale table costs balance, never coverage.
+    scripts/browser-scope.py shard-plan M
+        Each shard's expected test seconds (wall-clock is about that over `--workers`).
+    scripts/browser-scope.py shard-refresh FILE ... [--write]
+        Re-time from `.serve/design-check.json` files (`fileSeconds`). The nightly uploads
+        each shard's as `design-check-times-N`; download them and run this. Previews.
     scripts/browser-scope.py list
     scripts/browser-scope.py selftest
 
@@ -523,6 +535,12 @@ def selftest() -> int:
        "`app/src/Inventory.tsx` reaches `inventory.spec.ts`")
     ok("app/tests/cursor.spec.ts" in inventory_verdict.specs,
        "`app/src/Inventory.tsx` reaches a `routesFromNav(` spec (`cursor.spec.ts`)")
+    ok("app/tests/money-face.spec.ts" in inventory_verdict.specs
+       and "app/tests/machine-words.spec.ts" in inventory_verdict.specs,
+       "`app/src/Inventory.tsx` reaches the specs that sweep through `sweepEveryRoute`, "
+       "a helper that calls `routesFromNav(` for them")
+    ok(not _NAV_CALL_RE.search("export async function routesFromNav(page: Page)"),
+       "the `routesFromNav` definition is not a call")
     ok("app/tests/review.spec.ts" not in inventory_verdict.specs,
        "`app/src/Inventory.tsx` does not reach `review.spec.ts`")
     ok(inventory_verdict.partial, "a real screen file narrows the run")
@@ -583,6 +601,11 @@ def selftest() -> int:
             os.environ["PKMNSCAN_BROWSER_SCOPE"] = old
     ok(off_verdict.specs == set(all_specs()) and not off_verdict.partial,
        "PKMNSCAN_BROWSER_SCOPE=off selects every spec")
+
+    def shard_ok(cond: bool, label: str) -> None:
+        ok(cond, label)
+
+    shard_selftest_cases(shard_ok)
 
     print()
     if failures:
@@ -723,7 +746,7 @@ _ROUTE_HASH_RE = re.compile(r"#(/[a-z][a-z0-9-]*|/)")
 
 def spec_named_views(spec_path: str, routes: Dict[str, str]) -> Set[str]:
     """The view files a spec names EXPLICITLY, by route hash in its own (comment-stripped)
-    body — never through a `routesFromNav(` sweep. Shared between `spec_reach` (which adds
+    body — never through a nav sweep (`sweeps_nav`). Shared between `spec_reach` (which adds
     the sweep's own routes on top) and `unnamed_route_views` (which asks whether a screen is
     ever named this way by ANYONE, or only ever swept)."""
     full = ROOT / spec_path
@@ -737,15 +760,32 @@ def spec_named_views(spec_path: str, routes: Dict[str, str]) -> Set[str]:
     return named
 
 
+_NAV_CALL_RE = re.compile(r"(?<!function )routesFromNav\(")
+
+
+def sweeps_nav(spec_path: str) -> bool:
+    """Does this spec visit whatever the nav draws? True when its own (comment-stripped) body
+    calls `routesFromNav(`, OR when any test-side module it imports, transitively, does — a
+    helper such as `routeSweep.ts:sweepEveryRoute` makes the call for the spec, and reading
+    only the spec's own text missed `money-face.spec.ts` and `machine-words.spec.ts`. The
+    definition (`function routesFromNav(`) is not a call. Fails open: a spec that imports a
+    sweeping helper for an unrelated export is still counted as sweeping."""
+    for path in import_closure([spec_path]):
+        if not path.startswith(APP_TESTS + "/"):
+            continue
+        full = ROOT / path
+        text = full.read_text(encoding="utf-8", errors="replace") if full.is_file() else ""
+        if _NAV_CALL_RE.search(strip_comments(text)):
+            return True
+    return False
+
+
 def spec_reach(spec_path: str, routes: Dict[str, str]) -> Set[str]:
     """One spec's own footprint: its own import closure, plus the closure of every screen
-    whose route hash its (comment-stripped) body names, plus every screen when it calls
-    `routesFromNav(` — a sweep that visits whatever the nav currently draws."""
-    full = ROOT / spec_path
-    text = full.read_text(encoding="utf-8", errors="replace") if full.is_file() else ""
-    stripped = strip_comments(text)
+    whose route hash its (comment-stripped) body names, plus every screen when it sweeps the
+    nav (`sweeps_nav`) — a sweep that visits whatever the nav currently draws."""
     starts = [spec_path]
-    if "routesFromNav(" in stripped:
+    if sweeps_nav(spec_path):
         starts.extend(routes.values())
     else:
         starts.extend(spec_named_views(spec_path, routes))
@@ -767,9 +807,7 @@ def unnamed_route_views() -> Set[str]:
     routes = route_views()
     named: Set[str] = set()
     for spec in all_specs():
-        full = ROOT / spec
-        text = full.read_text(encoding="utf-8", errors="replace") if full.is_file() else ""
-        if "routesFromNav(" in strip_comments(text):
+        if sweeps_nav(spec):
             continue
         named |= spec_named_views(spec, routes)
     _unnamed_routes_cache = set(routes.values()) - named
@@ -969,6 +1007,70 @@ def classify_specs_revisions(base: str, head: str) -> SpecVerdict:
 # ----------------------------------------------------------------------------------- main
 
 
+# --------------------------------------------------------------------------- the shards
+#
+# THE THIRD LEVER. `check.yml` runs the browser matrix as M shards; this says which spec
+# files each one runs. Longest-processing-time packing over measured seconds per file.
+
+SPEC_TIMES = ROOT / "scripts" / "browser-spec-times.json"
+
+
+def pack_shards(specs: Sequence[str], shards: int, times: Dict[str, float]):
+    """`[[load, [spec, ...]], ...]`: each spec, slowest first (ties by name), onto the
+    lightest shard. A spec with no measured time is given the mean of those that have one."""
+    known = [times[Path(s).name] for s in specs if Path(s).name in times]
+    mean = sum(known) / len(known) if known else 1.0
+    cost = {s: times.get(Path(s).name, mean) for s in specs}
+    bins: List[list] = [[0.0, []] for _ in range(shards)]
+    for spec in sorted(specs, key=lambda s: (-cost[s], s)):
+        lightest = min(bins, key=lambda b: b[0])
+        lightest[0] += cost[spec]
+        lightest[1].append(spec)
+    return bins
+
+
+def load_spec_times() -> Dict[str, float]:
+    return json.loads(SPEC_TIMES.read_text(encoding="utf-8"))
+
+
+def shard_refresh(files: Sequence[str], write: bool) -> int:
+    total: Dict[str, float] = {}
+    for f in files:
+        for name, secs in json.loads(Path(f).read_text(encoding="utf-8")).get(
+                "fileSeconds", {}).items():
+            total[name] = total.get(name, 0.0) + secs
+    if not total:
+        print("no `fileSeconds` in those files; refusing to write an empty table")
+        return 1
+    table = {k: round(v, 1) for k, v in sorted(total.items())}
+    if write:
+        SPEC_TIMES.write_text(json.dumps(table, indent=2) + "\n", encoding="utf-8")
+    print(f"{len(table)} specs, {sum(table.values()):.0f}s total; "
+          f"{'written' if write else 'preview, --write saves'}")
+    return 0
+
+
+def shard_selftest_cases(ok: Callable[[bool, str], None]) -> None:
+    print("\nthe shards, by time")
+    times, specs = load_spec_times(), all_specs()
+    ok(all(Path(s).name in times for s in specs if "demo-coverage" not in s),
+       "every spec has a measured time (demo-coverage never ran in the sample, so it is exempt)")
+    for m in (6, 3):
+        bins = pack_shards(specs, m, times)
+        ok(sorted(s for _, files in bins for s in files) == specs,
+           f"{m} shards hold every spec exactly once")
+        loads = [b[0] for b in bins]
+        ok(max(loads) <= min(loads) * 1.1,
+           f"{m} shards balance within 10% by time ({min(loads):.0f}..{max(loads):.0f}s)")
+    ok([b[1] for b in pack_shards(specs, 6, times)]
+       == [b[1] for b in pack_shards(list(reversed(specs)), 6, times)],
+       "the split does not depend on input order")
+    ok(sum(len(b[1]) for b in pack_shards(specs[:2], 6, times)) == 2,
+       "fewer specs than shards loses none")
+    ok(sum(len(b[1]) for b in pack_shards(specs + ["app/tests/new.spec.ts"], 6, times))
+       == len(specs) + 1, "a spec with no time is still assigned")
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -981,6 +1083,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     specs = sub.add_parser("specs", help="which app/tests/*.spec.ts files the change reaches")
     specs.add_argument("--base", help="a revision; the merge-base against --head is the start")
     specs.add_argument("--head", default="HEAD")
+    sh = sub.add_parser("shard", help="spec files for shard N of M, packed by time")
+    sh.add_argument("n", type=int)
+    sh.add_argument("m", type=int)
+    sh.add_argument("specs", nargs="*")
+    plan = sub.add_parser("shard-plan", help="each shard's expected test seconds")
+    plan.add_argument("m", type=int)
+    refresh = sub.add_parser("shard-refresh", help="re-time from design-check.json files")
+    refresh.add_argument("files", nargs="+")
+    refresh.add_argument("--write", action="store_true")
     sub.add_parser("list", help="the scope, with each entry's reason")
     sub.add_parser("selftest", help="prove the matcher and the narrowing")
     args = parser.parse_args(argv)
@@ -990,6 +1101,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             within = f"  (within {entry['within']})" if entry.get("within") else ""
             print(f"{entry['path']}{within}\n    {entry['why']}\n")
         return 0
+    if args.command == "shard":
+        if not 1 <= args.n <= args.m:
+            print(f"shard {args.n} is outside 1..{args.m}", file=sys.stderr)
+            return 2
+        bins = pack_shards(args.specs or all_specs(), args.m, load_spec_times())
+        print(" ".join(sorted(bins[args.n - 1][1])))
+        return 0
+    if args.command == "shard-plan":
+        for i, (load, files) in enumerate(pack_shards(all_specs(), args.m, load_spec_times()), 1):
+            print(f"shard {i}: {load:7.1f}s test time, {len(files)} specs")
+        return 0
+    if args.command == "shard-refresh":
+        return shard_refresh(args.files, args.write)
     if args.command == "history":
         return history(args.count)
     if args.command == "selftest":

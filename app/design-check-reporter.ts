@@ -1,5 +1,5 @@
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, relative, resolve } from 'node:path'
+import { basename, dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import type {
@@ -143,6 +143,9 @@ export default class DesignCheckVerdict implements Reporter {
   private failures: Failure[] = []
   private failureCount = 0
   private counts = { total: 0, passed: 0, failed: 0, flaky: 0, skipped: 0 }
+  // Seconds of test time per spec file. `scripts/browser-shards.py refresh` reads it to
+  // re-balance the CI shards by time.
+  private fileSeconds: Record<string, number> = {}
   private readonly listOnly: boolean
 
   constructor(options: { _mode?: string } = {}) {
@@ -172,6 +175,8 @@ export default class DesignCheckVerdict implements Reporter {
   }
 
   onTestEnd(test: TestCase, result: TestResult): void {
+    const file = basename(test.location.file)
+    this.fileSeconds[file] = (this.fileSeconds[file] ?? 0) + result.duration / 1000
     const outcome = test.outcome()
     if (outcome === 'skipped') this.counts.skipped += 1
     else if (outcome === 'flaky') this.counts.flaky += 1
@@ -213,6 +218,9 @@ export default class DesignCheckVerdict implements Reporter {
       counts: { ...this.counts },
       failures: this.failures,
       failuresOmitted: omitted,
+      fileSeconds: Object.fromEntries(
+        Object.entries(this.fileSeconds).map(([k, v]) => [k, Math.round(v * 10) / 10]),
+      ),
     })
 
     const { total } = this.counts
