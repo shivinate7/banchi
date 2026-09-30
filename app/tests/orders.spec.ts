@@ -4613,6 +4613,20 @@ test('"Short" lists a buyer whose product the store knows but has no copy left o
   await expect(page.locator('.orders-index-row')).toContainText('Bob')
 })
 
+test('a buyer whose only unfilled line is a sealed product is listed under Missing', async ({ page }) => {
+  const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
+  const dee = seededOrder({ number: 'D0004', buyer: 'Dee', status: 'Ready to Ship', placedAt: '2026-08-17T00:00:00+00:00', reason: 'not_a_single' })
+  await open(page, { orders: payloadOf([alice.row, dee.row], [alice.resolved, dee.resolved]) })
+
+  await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
+  const list = page.getByRole('listbox', { name: 'Show' })
+  await expect(list.getByRole('option', { name: /^Missing/ })).toContainText('1')
+  await list.getByRole('option', { name: /^Missing/ }).click()
+  await closeFilters(page)
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Dee')
+})
+
 test('"Missing a copy" is not offered while no buyer owes a missing copy', async ({ page }) => {
   const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
   await open(page, { orders: payloadOf([alice.row], [{ ...alice.resolved, outstanding: 0 }]) })

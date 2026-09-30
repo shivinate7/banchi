@@ -247,7 +247,7 @@ export function groupMissing(
 }
 
 /** The "Show" facet values for a buyer with a copy the store cannot give, said one way each (D304,
- *  Q2b). `missing`: a product the store has never seen. `noneleft` (worded "Short"): a product the
+ *  Q2b). `missing`: a product the store has never seen, a sealed product included (it has no single on file). `noneleft` (worded "Short"): a product the
  *  store knows and has no copy left of. The old status `short` is worded "Partly picked". */
 export const MISSING_FACET = 'missing'
 export const NONE_LEFT_FACET = 'noneleft'
@@ -257,7 +257,7 @@ export const UNFILLABLE_FACETS = [MISSING_FACET, NONE_LEFT_FACET, 'short'] as co
 
 export type UnfillableFacet = (typeof UNFILLABLE_FACETS)[number]
 const FACET_REASONS: Record<UnfillableFacet, readonly OrderLineReason[]> = {
-  missing: ['sku_unseen', 'sku_unknown'],
+  missing: ['sku_unseen', 'sku_unknown', 'not_a_single'],
   noneleft: ['no_copies_on_hand'],
   short: ['short'],
 }
