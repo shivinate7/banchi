@@ -683,13 +683,6 @@
         "catalogue"
       ]
     },
-    "docs/specs/identity-follows-sku.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behaviour",
-        "neighbour"
-      ]
-    },
     "docs/specs/logo.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -736,24 +729,6 @@
         "quantisation",
         "synchronisation",
         "synthesised"
-      ]
-    },
-    "docs/specs/multi-game.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "greyed",
-        "judgement",
-        "normalisation",
-        "normalise",
-        "normalises",
-        "summarised"
       ]
     },
     "docs/specs/order-flow.md": {
