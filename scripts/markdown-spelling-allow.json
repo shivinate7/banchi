@@ -667,23 +667,6 @@
         "greys"
       ]
     },
-    "docs/specs/motion-trigger.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "centre",
-        "centre",
-        "centre",
-        "labelled",
-        "labelled",
-        "labelled",
-        "neighbour",
-        "neighbours",
-        "polariser",
-        "quantisation",
-        "synchronisation",
-        "synthesised"
-      ]
-    },
     "docs/specs/order-flow.md": {
       "lane": "docs-sweep",
       "SPELLING": [
