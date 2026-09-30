@@ -661,6 +661,20 @@ GAMES = (
         # 17 rows, all `Unopened`: Dash Packs, Booster Boxes, Double Pack Sets. Same
         # treatment as Riftbound's `None` and for the same reason.
         "rarities_not_claimed": ("None",),
+        # THE FULL NAMES A SCREEN DRAWS FOR THE EXPORT'S CODES (the owner's ruling, on the
+        # Sales rarity breakdown, where Pokemon and Riftbound already read in full). DISPLAY
+        # ONLY: every join, ladder and finish claim above still keys on the export's verbatim
+        # cell. `TR`, `PR` and `DON!!` are absent because no ruling names them, so they stay
+        # verbatim; a code not listed is never guessed (`display_rarity`).
+        "rarity_display": {
+            "C": "Common",
+            "UC": "Uncommon",
+            "R": "Rare",
+            "SR": "Super Rare",
+            "SEC": "Secret Rare",
+            "L": "Leader",
+            "SP": "Special",
+        },
         # The same two finishes as Riftbound, from the same measured `Condition` vocabulary:
         # five grades x {"", " Foil"} plus `Unopened`. No reverse holo.
         "finishes": ("normal", "foil"),
@@ -869,6 +883,19 @@ def game_for_product_line(product_line: str) -> Optional[str]:
         ) == folded:
             return str(entry["key"])
     return None
+
+
+def display_rarity(product_line: Optional[str], rarity: Optional[str]) -> Optional[str]:
+    """The rarity as a screen should say it: the game's own full name for a code its entry
+    lists under `rarity_display`, otherwise the cell verbatim (`None` stays `None`). The one
+    home for that map; a caller with a stored `Rarity` cell and a `Product Line` asks here."""
+    if not rarity:
+        return rarity
+    key = game_for_product_line(str(product_line or ""))
+    if key is None:
+        return rarity
+    table = next((g.get("rarity_display") for g in GAMES if g["key"] == key), None) or {}
+    return table.get(rarity, rarity)
 
 
 def is_catalogued(key: str) -> bool:

@@ -13549,6 +13549,8 @@ def _order_line_wire(line, skus: "Skus") -> dict:  # noqa: F821 - store.skus.Sku
     else:
         row["product_line"] = None
         row["set_name"] = None
+    # THE RARITY A SCREEN DRAWS: a game's own codes read in full (`games.display_rarity`).
+    row["rarity"] = games.display_rarity(row.get("product_line"), row.get("rarity"))
     # A SKU THE TABLE NO LONGER HOLDS (a delisted product) AND A PASTE THAT CARRIED NO
     # CONDITION CELL LEAVE NO FIELD TO READ, BUT TCGPLAYER'S OWN LINE TITLE ENDS WITH THE
     # CONDITION IT SOLD UNDER ("... Booster Box - Unopened"). Only that ONE exact word is read

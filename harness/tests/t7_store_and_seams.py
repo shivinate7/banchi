@@ -33291,6 +33291,20 @@ def check_order_line_sealed_from_title(checks: Checks) -> None:
     checks.equal(wire("Pokemon - Some Booster Box Promo")["condition"], None,
                  "a name with Box in it but no Unopened suffix is never guessed sealed")
 
+    from types import SimpleNamespace
+
+    class OnePieceSkus:
+        entries = {"1": SimpleNamespace(condition="", rarity="SR", product_line="One Piece Card Game", set_name="")}
+
+    def rarity_of(code: str, skus) -> object:
+        return capture_server._order_line_wire(
+            order_store.OrderLine(sku="1", quantity=1, name="x", rarity=code), skus
+        )["rarity"]
+
+    checks.equal(rarity_of("SR", OnePieceSkus()), "Super Rare", "a One Piece SR reads Super Rare")
+    checks.equal(rarity_of("DON!!", OnePieceSkus()), "DON!!", "a code no ruling names stays verbatim")
+    checks.equal(rarity_of("SR", NoSkus()), "SR", "with no game known, a code is never guessed")
+
 
 # ---------------------------------------------------------------- the order screen
 
