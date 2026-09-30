@@ -667,31 +667,6 @@
         "greys"
       ]
     },
-    "docs/specs/mechanization-backlog.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "artefact",
-        "behaviour",
-        "behaviour",
-        "behavioural",
-        "canonicalise",
-        "canonicalise",
-        "generalise",
-        "generalised",
-        "judgement",
-        "judgement",
-        "judgement",
-        "judgement",
-        "mechanisable",
-        "mechanised",
-        "mechanising",
-        "neighbour",
-        "neighbour",
-        "recognise",
-        "recognising",
-        "summarise"
-      ]
-    },
     "docs/specs/motion-trigger.md": {
       "lane": "docs-sweep",
       "SPELLING": [
