@@ -93,7 +93,7 @@ SEND_RECEIPT = "send.json"
 #:
 #: HOW TO REPLACE IT WITH A MEASUREMENT: publish one SKU, then fetch the live export on a
 #: fixed interval until its price agrees, and record the interval. That is a real experiment
-#: and it belongs in `docs/specs/stale-listings.md` §6 beside the timeline that produced this.
+#: and it belongs in `docs/specs/stale-listings.md` §6 beside the other importer lessons.
 PUBLISH_LAG_S = 15 * 60
 
 

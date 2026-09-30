@@ -36,7 +36,7 @@ their importer runs over each CSV row. FOUR OF THE FIVE HAVE BEEN RUN AGAINST TH
 ACCOUNT on 2026-09-06: `initializeexportcsv`, `uploadexportcsv` and `finalizeexportcsv` for a
 100-row file TCGplayer accepted, and then the whole chain plus `movetolive` for a single row —
 Vilemaw, $23.22 to $750.00 and back, confirmed on the portal's own Live grid. `rollbackexportcsv`
-is the one still only read. `docs/specs/stale-listings.md` §6 carries the timeline.
+is the one still only read. `docs/specs/stale-listings.md` §6 carries what those runs taught.
 
 WHAT THAT RUN ALSO MEASURED, and it is not about this module: `Export From Live` is NOT
 read-your-writes. Forty seconds after a confirmed publish it still served the pre-publish price
