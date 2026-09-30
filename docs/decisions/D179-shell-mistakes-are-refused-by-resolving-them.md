@@ -365,7 +365,8 @@ above, so the next edit cannot trade one for the other.
 prints nothing while it does. A run of hatch uses was therefore invisible. `guard-shell.py --hook`
 already sees every Bash command, so it is the one home.
 
-A command can set any `PKMNSCAN_<NAME>=off`, inline or with `export`. The hook then appends one
+A command can set any `PKMNSCAN_<NAME>=off`: an env prefix, `export`, or `env`. The hook reads
+that from the parsed stages, so a mention in an argument, a comment or a heredoc is not a use. The hook then appends one
 line per name to `pkmnscan-hatches.log` in `git rev-parse --git-common-dir`. Every worktree of the
 clone shares that file. A line holds the time, the hatch, the checkout, the branch and the first
 120 characters of the command.

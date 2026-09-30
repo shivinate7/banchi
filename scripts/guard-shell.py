@@ -218,7 +218,28 @@ def _off(clause: str, command: str) -> bool:
 # `recent_hatch_uses`. LOG ONLY: no verdict reads it, and any error here is swallowed.
 
 HATCH_LOG = "pkmnscan-hatches.log"
-_HATCH_SET = re.compile(r"\b(PKMNSCAN_[A-Z0-9_]+)=off(?![\w-])")
+_HATCH_TOKEN = re.compile(r"^(PKMNSCAN_[A-Z0-9_]+)=off$")
+
+
+def _hatches_set(command: str) -> List[str]:
+    """Hatch names a command REALLY sets, read from the parsed stages, never from raw text.
+
+    A real setting is an env prefix (`X=off cmd`), `export X=off`, or `env X=off cmd`. A
+    mention inside an argument, a comment, a heredoc body or a quoted string is not one.
+    """
+    if shell_parse is None:
+        return []
+    names: Set[str] = set()
+    for stage in shell_parse.read(command).every:
+        for token in stage.argv:
+            found = _HATCH_TOKEN.match(token)
+            if found:
+                names.add(found.group(1))
+            elif token in ("export", "env") or token.startswith("-") or shell_parse.ASSIGNMENT.match(token):
+                continue
+            else:
+                break
+    return sorted(names)
 _STAMP = "%Y-%m-%dT%H:%M:%S%z"
 
 
@@ -229,7 +250,7 @@ def hatch_log_path(cwd: str) -> str:
 
 def log_hatches(command: str, cwd: str) -> None:
     try:
-        names = sorted(set(_HATCH_SET.findall(command)))
+        names = _hatches_set(command)
         path = hatch_log_path(cwd) if names else ""
         if not path:
             return
@@ -1315,7 +1336,7 @@ def _push_refusal(text: str, remote: str, spec: str, branch: str, tracked: str) 
         "  only because the next command's output looked wrong.",
         "",
         "  Name the branch's OWN name as the destination. That is a real push to the branch",
-        "  you are on, and it does not touch `{0}/{1}`:".format(remote, tracked),
+        "  you are on:",
         "      git push -u {0} HEAD:{1}".format(remote, branch),
     ], "BLOCKED: this pushes to a branch of the WRONG name, not the one tracked.")
 

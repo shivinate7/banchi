@@ -710,7 +710,7 @@ case "$out" in *"PKMNSCAN_PUSH=off"*) ok "the refusal prints its escape hatch" ;
   *) bad "the refusal does not name PKMNSCAN_PUSH=off" ;; esac
 # (a) the trap is still refused: `git push origin HEAD` above, on a branch whose upstream is
 # ANOTHER branch. (A bare `git push` is git's own net, allowed below.)
-remedy="$(printf '%s\n' "$out" | grep 'git push -u ')"
+remedy="$(printf '%s\n' "$out" | sed -n '/Name the branch/,/git push -u/p')"
 case "$remedy" in *"git push -u origin HEAD:pr-h-readings-table-local"*) \
   ok "(b) the refusal's remedy pushes to the branch's OWN name" ;;
   *) bad "the remedy does not name the branch's own name: $remedy" ;; esac
@@ -1158,9 +1158,29 @@ hatchlog="$tmp/main/.git/pkmnscan-hatches.log"
 before="$(cat "$hatchlog" 2>/dev/null | wc -l | tr -d ' ')"
 judge "$tmp/main" "git status --porcelain"
 judge "$tmp/main" "echo PKMNSCAN_STASH=offish PKMNSCAN_x=on"
+for mention in \
+  "grep -n 'PKMNSCAN_TREE=off' README.md" \
+  "echo PKMNSCAN_TREE=off" \
+  "git commit -m 'doc: PKMNSCAN_PUSH=off is the hatch'" \
+  "cat <<EOF
+PKMNSCAN_STASH=off
+EOF" \
+  "# PKMNSCAN_TREE=off" \
+  "printf 'PKMNSCAN_LINK=off'" \
+; do
+  judge "$tmp/main" "$mention"
+done
 after_plain="$(cat "$hatchlog" 2>/dev/null | wc -l | tr -d ' ')"
-if [ "$before" = "$after_plain" ]; then ok "a plain command writes no hatch-log line"
-else bad "a plain command wrote to the hatch log"; fi
+if [ "$before" = "$after_plain" ]; then ok "a plain command and six MENTIONS of a hatch write no hatch-log line"
+else bad "a plain command or a mention wrote $((after_plain - before)) hatch-log line(s)"; fi
+for real in "PKMNSCAN_GH=off gh api x" "env PKMNSCAN_LINK=off ls" "PKMNSCAN_WAIT=off echo hi"; do
+  b="$(cat "$hatchlog" | wc -l | tr -d ' ')"
+  judge "$tmp/main" "$real"
+  a="$(cat "$hatchlog" | wc -l | tr -d ' ')"
+  if [ "$a" = "$((b + 1))" ]; then ok "a real setting writes one line: $real"
+  else bad "a real setting wrote $((a - b)) line(s): $real"; fi
+done
+after_plain="$(cat "$hatchlog" | wc -l | tr -d ' ')"
 judge "$tmp/main" "export PKMNSCAN_RESET=off; git status --porcelain"
 after_hatch="$(cat "$hatchlog" 2>/dev/null | wc -l | tr -d ' ')"
 if [ "$after_hatch" = "$((after_plain + 1))" ]; then ok "a hatch command writes exactly one hatch-log line"
