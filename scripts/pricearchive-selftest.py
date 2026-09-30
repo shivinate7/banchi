@@ -33,10 +33,7 @@ file's own imports, never hand-typed beside it).
 
 from __future__ import annotations
 
-import os
-import shutil
 import sys
-import tempfile
 import time
 from datetime import date
 from decimal import Decimal
@@ -46,6 +43,7 @@ from typing import Dict, List
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from harness.tests.home import isolated_home  # noqa: E402
 from pipeline import games as games_module  # noqa: E402
 from pipeline import join as join_module  # noqa: E402
 from pipeline import pricearchive as archive_walk  # noqa: E402
@@ -339,10 +337,7 @@ def main() -> int:
     print("\n-- store/pricearchive.py: for_sku on a store reads only that SKU's rows --")
     from server import pipeline_routes  # noqa: E402  (lazy: only this arm needs the routes)
 
-    read_previous = os.environ.get(files.HOME_ENV)
-    read_home = Path(tempfile.mkdtemp(prefix="pricearchive-selftest-perkey-"))
-    os.environ[files.HOME_ENV] = str(read_home)
-    try:
+    with isolated_home():
         seeded = {k: v for k, v in synthetic_payload.items()
                   if v.sku in set(synthetic_skus[:40])}
         with Store().write() as snapshot:
@@ -385,12 +380,6 @@ def main() -> int:
                                "source": "archive"}},
            "do_pipeline_price_now answers the newest priced month bucket, and omits an unseen SKU",
            priced)
-    finally:
-        if read_previous is None:
-            os.environ.pop(files.HOME_ENV, None)
-        else:
-            os.environ[files.HOME_ENV] = read_previous
-        shutil.rmtree(read_home, ignore_errors=True)
 
     # ---------------------------------------------- pipeline: parse_ledger_name (sealed subjects)
     print("\n-- pipeline/pricearchive.py: parse_ledger_name, pure, no store, no network --")
@@ -497,10 +486,7 @@ def main() -> int:
 
     # ---------------------------------------------------------------- pipeline: rows_from_store
     print("\n-- pipeline/pricearchive.py: rows_from_store reads only the store --")
-    previous = os.environ.get(files.HOME_ENV)
-    home = Path(tempfile.mkdtemp(prefix="pricearchive-selftest-"))
-    os.environ[files.HOME_ENV] = str(home)
-    try:
+    with isolated_home() as home:
         with Store().write() as snapshot:
             snapshot.inventory.cards["1:1"] = Card(
                 box=1, index=1, sku="444", name="Pikachu", number="25/102",
@@ -1071,10 +1057,7 @@ def main() -> int:
         # own `skus` table (identity-follows-sku.md §3.2/§5.3, lane 4 — this reader moved off
         # a disk walk and onto the table lane 0 built)
         print("\n-- pipeline/pricearchive.py: merged_export_rows_by_sku, off the skus table --")
-        skus_home = Path(tempfile.mkdtemp(prefix="pricearchive-selftest-skus-"))
-        previous_home = os.environ.get(files.HOME_ENV)
-        os.environ[files.HOME_ENV] = str(skus_home)
-        try:
+        with isolated_home():
             csv_row: Dict[str, str] = {
                 tcgcsv_module.SKU_COLUMN: "7654321",
                 tcgcsv_module.PRODUCT_LINE_COLUMN: "Riftbound League of Legends Trading Card Game",
@@ -1128,39 +1111,21 @@ def main() -> int:
                 "this reader never falls through to a card's own fields",
                 merged_again.get("7654321"),
             )
-        finally:
-            if previous_home is None:
-                os.environ.pop(files.HOME_ENV, None)
-            else:
-                os.environ[files.HOME_ENV] = previous_home
-            shutil.rmtree(skus_home, ignore_errors=True)
 
         # MUTATION GUARD: an empty `skus` table (a fresh store, nothing ever adopted or
         # fetched) answers an empty map, never an exception — the function's own stated
         # fail-open shape, unchanged by the move off disk.
-        no_skus_home = Path(tempfile.mkdtemp(prefix="pricearchive-selftest-noskus-"))
-        previous_home = os.environ.get(files.HOME_ENV)
-        os.environ[files.HOME_ENV] = str(no_skus_home)
-        try:
+        with isolated_home():
             ok(archive_walk.merged_export_rows_by_sku() == {},
                "MUTATION GUARD: a store whose `skus` table is empty answers an empty "
                "map rather than raising")
-        finally:
-            if previous_home is None:
-                os.environ.pop(files.HOME_ENV, None)
-            else:
-                os.environ[files.HOME_ENV] = previous_home
-            shutil.rmtree(no_skus_home, ignore_errors=True)
 
         # --------- pipeline/productview.py: row_for_sku prefers the SKU's own skus-table row
         # (D254, identity-follows-sku.md §3.2/§5.3 lane 4) — the live-fallback path's own
         # tier (b), a real store and a real `skus` row together, the same shape `GET
         # /pipeline/products/<sku>/history` reaches when the archive has never swept a SKU.
         print("\n-- pipeline/productview.py: row_for_sku prefers the skus-table row --")
-        rowsku_home = Path(tempfile.mkdtemp(prefix="pricearchive-selftest-rowsku-"))
-        previous_home = os.environ.get(files.HOME_ENV)
-        os.environ[files.HOME_ENV] = str(rowsku_home)
-        try:
+        with isolated_home():
             with Store().write() as snapshot:
                 snapshot.inventory.cards["1:1"] = Card(
                     box=1, index=1, sku="7654321", name="Totally Wrong Stored Name",
@@ -1212,12 +1177,6 @@ def main() -> int:
                 "SKU — the table preference never manufactures a subject "
                 "`rows_from_store` never named",
             )
-        finally:
-            if previous_home is None:
-                os.environ.pop(files.HOME_ENV, None)
-            else:
-                os.environ[files.HOME_ENV] = previous_home
-            shutil.rmtree(rowsku_home, ignore_errors=True)
 
         # ------------------------------------------ every refusal reaches the output
         print("\n-- pipeline/pricearchive.py: format_refusals never truncates --")
@@ -1433,8 +1392,7 @@ def main() -> int:
         # THE GUARD, PROVEN TO FAIL FIRST: the OLD shape (one `sweep()` call over every row,
         # written once at the end) loses EVERYTHING when the connection drops partway —
         # nothing is committed because nothing was ever written before the raise.
-        os.environ[files.HOME_ENV] = str(Path(tempfile.mkdtemp(prefix="pricearchive-old-")))
-        try:
+        with isolated_home():
             with Store().write() as snapshot:
                 pass  # establish an empty store to read back against
             one_shot_market = RecordingMarket(script, raise_on={"R2"})
@@ -1449,9 +1407,6 @@ def main() -> int:
                "the OLD one-transaction-at-the-end shape has nothing to commit when the "
                "call that would have produced it never returned — this is the bug "
                "D224's chunking fixes", after_old)
-        finally:
-            shutil.rmtree(os.environ[files.HOME_ENV], ignore_errors=True)
-            os.environ[files.HOME_ENV] = str(home)
 
         # THE FIX: chunked, one commit per chunk. R1 lands before R2's chunk raises; R3 is
         # never even reached this pass.
@@ -1587,12 +1542,6 @@ def main() -> int:
         ]
         ok(not offenders, "nothing writes price_history or archive.entries except upsert",
            offenders)
-    finally:
-        if previous is None:
-            os.environ.pop(files.HOME_ENV, None)
-        else:
-            os.environ[files.HOME_ENV] = previous
-        shutil.rmtree(home, ignore_errors=True)
 
     print("\nprice-history archive self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))
