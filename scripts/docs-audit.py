@@ -3024,6 +3024,33 @@ def _sanctioned_new_paths(diff_texts: Iterable[str],
                     new_name = new_path[len(directory):]
                     if _sanctioned_rename(old_name, new_name, kind, held):
                         sanctioned.add(new_path)
+        # A RETITLE WITH HEAVY CONTENT CHANGE reads as `D old` + `A new`, never `R`, once it
+        # falls under the similarity floor. The number identifies the record: an added file
+        # whose number the base holds, with a file of that number deleted in this same diff,
+        # allocates nothing. EXACTLY one delete and one add of the number: two adds would hand
+        # one number to two records.
+        deleted_numbers: List[Tuple[str, str]] = []
+        added: List[Tuple[str, str, str]] = []
+        for line in diff_text.splitlines():
+            fields = line.split("\t")
+            if len(fields) != 2 or fields[0] not in ("A", "D"):
+                continue
+            for directory, kind, number_re in (
+                ("docs/decisions/", "decision", _NUMBER_OF_DECISION),
+                ("docs/debts/", "debt", _NUMBER_OF_DEBT),
+            ):
+                if fields[1].startswith(directory):
+                    match = number_re.match(fields[1][len(directory):])
+                    if match and fields[0] == "D":
+                        deleted_numbers.append((kind, match.group(1)))
+                    elif match:
+                        added.append((kind, match.group(1), fields[1]))
+        for kind, number, path in added:
+            if ((deleted_numbers.count((kind, number)) == 1
+                    and sum(1 for k, n, _ in added if (k, n) == (kind, number)) == 1)
+                    and held is not None
+                    and number in held.get(kind, set())):
+                sanctioned.add(path)
     return sanctioned
 
 

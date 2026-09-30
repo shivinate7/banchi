@@ -3231,8 +3231,8 @@ class Inventory:
         """
         entry = self.box(box)
         if entry is None:
-            # NO REGISTRY ROW IS NOT "NOBODY'S TO DISOWN" (2026-09-27 incident, docs/debts
-            # slug `emit-buried-box`). A box that was buried has no row, and the store's
+            # NO REGISTRY ROW IS NOT "NOBODY'S TO DISOWN" (2026-09-27 incident,
+            # D36, D145). A box that was buried has no row, and the store's
             # `box_deleted` events are the only record of it: they carry the drawer's `bid`
             # (D145, newer ones) and the time. `deleted` is those events, read by the caller.
             # A run started before the deletion, or over that exact drawer, is refused.

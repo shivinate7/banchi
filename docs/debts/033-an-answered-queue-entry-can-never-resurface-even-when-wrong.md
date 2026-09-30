@@ -1,46 +1,11 @@
 ## 33 — An answered queue entry can never resurface, even when it is wrong
 
-Found while measuring D239, its own 15
-subjects, against the real
-store, and named again here on the owner's ruling: *"mark this gap known but do not address
-right now."*
+`store/queues.py:Queue.upsert` refuses to re-queue a position that carries `cleared_by_human` (D167: an answer outlives the question that produced it) and has no exception for an answer later shown wrong. A card answered once, then contradicted by a live catalogue lookup or by its own SKU's other copies, cannot reach a person through the standing queue again. When D239 counted the archive sweep's refusals against the real store, all 16 were in this state (13 with an `answered` event, 3 `cleared_by_human` for `no_catalog_row` with no logged event), and each is permanently unarchivable through the review queue. A SKU number contradiction has the same shape and no queue to land in.
 
-**The gap.** `store/queues.py:Queue.upsert` refuses to re-queue a position that already
-carries `cleared_by_human` (D167's own promise: an answer must outlive the question that
-produced it). That refusal has no exception for an answer that later proves wrong. A card
-answered on Tuesday, then contradicted by a live catalogue lookup, cannot reach a human
-through the standing queue again. The same is true of a card whose own SKU's two copies
-disagree about the number (the sku-number-contradictions build, a separate PR, kept
-separate on the owner's ruling). The mechanism that stops the queue nagging on a settled answer is the same
-mechanism that buries a wrong one.
+**Outcome at risk.** A wrong answer stays wrong, and the card cannot be archived through review. The gap stays in the app on purpose: the app gets no reopen control and no third state.
 
-**What it costs today.** All 16 of the archive sweep's remaining refusals are in exactly
-this state, measured against `inventory/store.sqlite`. 13 carry a real `answered` event. 3
-carry no logged event, but are `cleared_by_human` with reason `no_catalog_row`, first seen
-2026-09-01. Every one of them is permanently unarchivable through the review queue as it
-stands. The count will grow. A SKU-contradiction is the same shape of problem, from a
-second source, and it has no queue to land in either.
+**Remedy: a back-end repair by an operator session** (Claude Code against the store), not a screen. A repair needs:
 
-**Two ways out were identified. Neither is chosen here.**
-
-1. Widen `Queue.reopen` (D28's undo window) past the same-sitting reversal it was built
-   for. A later run could then reopen a stale answer. This blurs a control built for a
-   person reversing themselves while the tap is still warm. It becomes a control a machine
-   triggers months later — a different caller, a different risk.
-2. Add a third state beside `open` and `cleared_by_human`, something like `contradicted`.
-   A disputed answer could then surface without erasing the original one. This is a real
-   product decision. A third state touches every reader of the queue's two-state
-   assumption, and it is not decided here.
-
-**Why it is not fixed now.** Both fixes change a mechanism (D167, D28) that other code
-already trusts to behave exactly as documented. The owner's ruling is to know the gap and
-revisit it on purpose, not patch it inside this task's own scope.
-
-**NOT MECHANIZED:** nothing here checks whether an `answered` entry has since been
-contradicted. That check is the very capability this entry says does not exist yet. A
-future build that closes this gap should add its own guard beside whichever fix it picks.
-
-Cites D167 (the queue's refusal to re-ask an answered entry) and D28 (the undo window
-this gap does not widen). Cites D239, where
-the 16 cards were counted, and the sku-number-contradictions build, whose findings have
-nowhere to go while this gap stands.
+- **Finding the cards.** `cleared_by_human` queue entries (`store/queues.py`) that a later fact contradicts: a live catalog lookup that disagrees with the answer, or a SKU whose copies disagree on the number. The archive sweep's refusals list them.
+- **What to change.** Reopen the entry or correct the card through the store's own write path (`Store().write()`), never by editing the SQLite file.
+- **The owner's word, per repair.** It writes the owner's store, so each repair is named and approved first, with a backup taken before it.

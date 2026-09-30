@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Re-score a saved motion trace offline — docs/specs/motion-trigger.md §4 step 5, in code.
+"""Re-score a saved motion trace offline — docs/specs/motion-trigger.md §4 "Scoring a trace offline", in code.
 
 THE PROMISE THIS DISCHARGES. The trace has existed since 2026-08-23 and the spec has said
 since then that handing one to a session makes the tuning happen offline, "period, jitter,

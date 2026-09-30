@@ -1042,7 +1042,7 @@ def add_extra_real_boxes() -> dict:
     RUNS IN ITS OWN `store.write()`, AFTER THE DETERMINISTIC BASE STORE IS ALREADY
     COMMITTED. So it cannot perturb `SEED`/`NOW`, `placed`, the corpus, the review queue, or
     either run directory the base build writes — this only ever ADDS a box, its cards, and a
-    listing row per SKU. `docs/specs/demo.md` §4's REAL/INVENTED split still holds: reads
+    listing row per SKU. `docs/specs/demo.md` §2's REAL/INVENTED split still holds: reads
     `demo-assets/extra/cards.json` (`scripts/demo-extra-real.py`'s own output), which is
     itself real names, numbers, SKUs, rarities, market prices, typed prices and sale facts
     curated from a READ-ONLY COPY of the owner's store. WHICH BOX AND INDEX each card sits
