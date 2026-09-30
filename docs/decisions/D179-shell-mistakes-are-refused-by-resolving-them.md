@@ -359,6 +359,31 @@ recommended never needed the `cd`. `git -C <other> <write verb>` remains a decla
 `scripts/guard-shell-selftest.sh` pins the false positive in four spellings and each real write
 above, so the next edit cannot trade one for the other.
 
+### Every hatch use is logged, and the push remedy names the branch's own name
+
+**The owner's ruling: log and surface every `PKMNSCAN_*=off` use.** A hatch lifts its guard and
+prints nothing while it does. A run of hatch uses was therefore invisible. `guard-shell.py --hook`
+already sees every Bash command, so it is the one home.
+
+A command can set any `PKMNSCAN_<NAME>=off`: an env prefix, `export`, or `env`. The hook reads
+that from the parsed stages, so a mention in an argument, a comment or a heredoc is not a use.
+`_off` reads the same parsed set, so a hatch counts only as a real assignment. Every hatch a
+command sets is logged, and a mention never lifts. A hatch set in the environment is not logged
+here; `make status` names it under `hatches`. The hook appends one
+line per name to `pkmnscan-hatches.log` in `git rev-parse --git-common-dir`. Every worktree of the
+clone shares that file. A line holds the time, the hatch, the checkout, the branch and the first
+120 characters of the command.
+
+The log is LOG ONLY. It never changes a verdict. It fails open on any logging error.
+`make status` prints the last 24 hours (name, checkout, branch), or nothing when there are none.
+The self-test pins that a hatch command writes one line and a plain command writes none.
+
+**The push clause's printed remedy names the branch's own name.** It prints
+`git push -u <remote> HEAD:<branch>` and never the upstream it refused (the rule that a refusal's
+printed remedy never names the forbidden target). A push that names the branch's own name as the
+destination lands on that name, so the clause allows it. `HEAD` stays refused when the upstream is
+a different non-default branch.
+
 ### Standing
 
 **BUILT and self-tested**: six clauses, `scripts/guard-shell-selftest.sh` with five

@@ -297,6 +297,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   `PKMNSCAN_LINK`, `PKMNSCAN_WAIT`, `PKMNSCAN_PUSH`, `PKMNSCAN_STASH`, `PKMNSCAN_RESET`, `PKMNSCAN_NARRATE`
   (D235, the heartbeat is refused a pipe). The ninth clause names its subjects, a short per-incident roster
   that the self-test reconciles. The other eight resolve what a command would do. `make guard-shell-selftest` proves each one in a throwaway repo.
+  A hatch counts only as a real assignment (env prefix, `export` or `env`), never a mention. Every `PKMNSCAN_*=off` a command sets is logged, and `make status` shows the last 24 hours. A hatch set in the environment is not logged, and `make status` lists it under `hatches` (D179, shell mistakes are refused by resolving them).
 - **A citation names a symbol, never a line.** Write a decision id, a section or `module.symbol` (no `.py`).
   A method is "`module.Class`'s `method`". A CSS rule is its selector.
   The `line anchors` row of `make docs-audit` refuses `path:N`, `file.ext:N`, `~N` and a bare `:N` after a cited file.
