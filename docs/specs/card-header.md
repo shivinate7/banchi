@@ -89,3 +89,42 @@ Build notes for A:
 
 Unmeasured: how often the owner reads the photo on this screen. Also unmeasured: how many copies
 a typical card has. The sheet shows two rows and "5 more copies".
+
+## Second round: everything in the band above the photo
+
+New constraint from the owner: all the copies facts fit in the band that the title block takes
+today. The facts are the title, number, game, rarity, the three counts, the read age and the
+sent and ceiling line. The band is full width. The photo and copies sit under it. The copies
+take all the remaining height. The copy rows now use the real card ruler. `PositionBar.css` is
+linked, and the markup is `PositionBar.tsx`'s own. That gives the box strip, ticks every 5,
+numbers every 10, the blue number chip, and Back and Front written once. A to C use the same
+rows.
+
+### D. Inline
+
+Two lines. Line one has the name, then number, game and Epic pill. Line two is the counts as
+one sentence of inline facts. It has 7 copies, 5 in the boxes, live with its dot and read age,
+and 7 sent at the ceiling of 5. This is the shortest band, about 90px. The photo (220px) sits
+beside the copies. At 410 a thumbnail leads the title and the facts wrap to three short lines.
+Trade-off: the counts lose their size. They read as text, not as figures.
+
+### E. Cluster
+
+A two-line title block with a 56px thumbnail. The three counts sit at the right of the same
+band as a cluster. The read age is under live. The sent and ceiling line is under the cluster.
+The copies run the full pane width, which gives the ruler the most room. Trade-off: the large
+photo is gone. Tap the thumbnail to zoom. At 410 the cluster drops to its own row under the
+title.
+
+### F. Stat bar
+
+Title and meta on top. Under them is one compact bar (40px) of three counts. At its end is the
+ceiling as a meter. It says "7 sent, At the ceiling of 5" and shows a bar that fills live
+against the ceiling. The bar is neutral, not green. The photo sits beside the copies.
+Trade-off: the band is about 130px, taller than D. At 410 the bar wraps to three rows.
+
+### Pick for the second round
+
+F. It is the only pass that keeps the counts as figures and turns the ceiling into a picture.
+The band stays close to today's height. The photo stays large. Choose D if the shortest band
+matters most. Choose E if the copies list should get the full width.
