@@ -77,6 +77,9 @@ export type FilterBarCount = {
   readonly shown: number
   readonly total: number
   readonly noun?: { readonly one: string; readonly many: string }
+  /** The caller already says the total elsewhere (the search placeholder): draw the line only
+   *  once something narrows the list, where it carries the "filtered by" words and the clear. */
+  readonly quietAtRest?: boolean
 }
 
 export type FilterBarProps<K extends string = string> = {
@@ -265,7 +268,9 @@ export function FilterBar<K extends string = string>({
         <FailureNotice failure={search.failure} title="The search did not answer." onRetry={search.onRetry} compact />
       )}
 
-      <FilterCount shown={count.shown} total={count.total} noun={count.noun} filters={words} onClear={clearable ? clearAll : undefined} />
+      {count.quietAtRest === true && words.length === 0 && count.shown === count.total ? null : (
+        <FilterCount shown={count.shown} total={count.total} noun={count.noun} filters={words} onClear={clearable ? clearAll : undefined} />
+      )}
     </div>
   )
 }
