@@ -128,3 +128,32 @@ Trade-off: the band is about 130px, taller than D. At 410 the bar wraps to three
 F. It is the only pass that keeps the counts as figures and turns the ceiling into a picture.
 The band stays close to today's height. The photo stays large. Choose D if the shortest band
 matters most. Choose E if the copies list should get the full width.
+
+## Third and fourth rounds: F2 and F3
+
+F2 takes the white space out of F. It uses smaller spacing rungs and the menu sits on the title
+line. The bar fills the width. The photo and the copies both start directly under the band. The
+"hidden" line under the copies list is folded into the bar. That line only reports the departed
+copies that the hide-sold setting folds away, and it is not a press today. Whether it should
+become one is open.
+
+F3 re-ranks the figures. It is F2 with two lead figures and quieter side facts.
+
+- Lead, equal weight: "in the boxes" (`group.on_hand`, the true inventory) and "live on
+  TCGplayer" with the red dot and the read age. The ceiling meter sits under the live figure, so
+  it stays tied to live.
+- Side, quieter and equal to each other: "captured", "hidden", and "sent" with the ceiling.
+  "Captured" is every copy the store holds for the SKU. That is `group.copies.length`, sold and
+  moved copies included, the same meaning as the box census. It replaces the old bare "copies".
+  "Hidden" is the departed copies that the hide-sold fold removes from the list.
+- The sheet's numbers agree with those meanings: 5 in the boxes and 3 departed give 8 captured.
+- Separators are drawn in CSS (D218). At 410 the side facts drop to one row under the lead
+  figures.
+- Trade-off: the sent and ceiling line is now a small fact, not a headline. The meter carries
+  the ceiling for the reader who glances.
+
+### Pick
+
+F3. It puts the two figures the owner acts on at the front, with equal weight. It keeps every
+fact and gives the ceiling a picture next to live. The band is about 70px tall under the title.
+Choose F2 if the owner wants the counts as a flat row of equal cells.

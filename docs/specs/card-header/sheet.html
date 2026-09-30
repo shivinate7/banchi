@@ -156,6 +156,19 @@ body { padding: var(--bn-6); }
    nothing when pressed; here it is quiet text on the count it qualifies. */
 .f2-hidden { margin-left: var(--bn-1-5); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .f2-hidden::before { content: '·'; margin-right: var(--bn-1-5); color: var(--bn-ink-4); }
+/* F3 bar */
+.g-bar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1.1fr); border-radius: var(--bn-r); background: var(--bn-surface-2); }
+.x-narrow .g-bar { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
+.g-lead { display: flex; flex-direction: column; justify-content: center; gap: var(--bn-1-5); padding: var(--bn-2) var(--bn-3); min-height: var(--bn-control-h-lg); min-width: 0; }
+.g-lead + .g-lead, .g-side { box-shadow: inset 1px 0 0 var(--bn-line); }
+.g-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--bn-1-5); }
+.g-fig { font-family: var(--bn-font-display); font-size: var(--bn-fs-2xl); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--bn-ink); }
+.g-lab { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-2); }
+.g-lead .readage { flex: 1 0 100%; }
+.g-side { display: flex; flex-direction: column; justify-content: center; gap: var(--bn-0-5); padding: var(--bn-2) var(--bn-3); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+.g-row { display: flex; flex-wrap: wrap; }
+.g-row span + span::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
+.x-narrow .g-side { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; gap: var(--bn-0-5) var(--bn-4); box-shadow: inset 0 1px 0 var(--bn-line); }
 .f2 .copies { gap: var(--bn-1-5); }
 .f2 .copy { padding: var(--bn-2) var(--bn-3); gap: var(--bn-1) var(--bn-3); }
 .f2 .x-body > .shot { align-self: start; }
@@ -291,7 +304,25 @@ function F2(n) {
   return `<div class="pane f2 ${n ? 'x-narrow' : 'x-wide x-beside'}"><div class="f-band">${top}${bar}</div>${body}</div>`
 }
 
+/* F3: F2 with the figures re-ranked. Lead: in the boxes and live on TCGplayer, equal weight, the
+   ceiling meter under live. Side, quieter and equal: captured, hidden, sent and the ceiling.
+   Field meanings: in the boxes is `group.on_hand`; captured is every copy the store holds for the SKU
+   (`group.copies.length`, sold and moved included, the same meaning as the box census's "captured");
+   hidden is the departed copies the hide-sold fold removes from the list. So 5 in the boxes and 3
+   departed give 8 captured. The sheet's data is set to agree. Separators are CSS (D218). */
+function F3(n) {
+  const top = `<div class="f-top">${n ? thumb : ''}<div class="f2-title">${bigName}${meta(true)}</div>${kebab}</div>`
+  const bar = `<div class="g-bar">
+    <div class="g-lead"><div class="g-head"><span class="g-fig">5</span><span class="g-lab">in the boxes</span></div></div>
+    <div class="g-lead"><div class="g-head"><span class="g-fig live-figure"><span class="bn-dot bn-dot-live" aria-hidden="true"></span>5</span><span class="g-lab">live on TCGplayer</span><span class="readage">read 2 days ago</span></div>
+      <div class="bn-progress bn-progress-sm" role="img" aria-label="5 of 5 may be live"><span style="width:100%"></span></div></div>
+    <div class="g-side"><div class="g-row"><span>8 captured</span><span title="Sold or moved copies, folded away by the hide-sold setting">3 hidden</span></div><div class="g-row"><span>7 sent</span><span>At the ceiling of 5</span></div></div></div>`
+  const body = n ? `<div class="x-body">${copies('')}</div>` : `<div class="x-body">${shotBtn}${copies('')}</div>`
+  return `<div class="pane f2 ${n ? 'x-narrow' : 'x-wide x-beside'}"><div class="f-band">${top}${bar}</div>${body}</div>`
+}
+
 const DIRS = [
+  ['F3. Stat bar, ranked', 'Fourth round, from F2: two lead figures of equal weight, in the boxes and live on TCGplayer, with the ceiling meter under live. Captured, hidden and sent with the ceiling are quieter side facts of equal weight. No bare "copies".', F3],
   ['F2. Stat bar, tight', 'Third round, from F: smaller spacing rungs between title, bar and copies; the bar fills the width (each count and the meter share it); the menu is on the title line; the photograph and the copies both start directly under the band.', F2],
   ['A. Rail', 'The photograph becomes a left rail that runs the whole pane, so no empty band exists. Title, rarity, counts strip and copies stack in one right-hand column.', A],
   ['B. Masthead', 'One full-width header: title and rarity left, the three counts right. A meter row says live against the ceiling, and holds the sent line and reading age. The photograph and copies sit under it.', B],
