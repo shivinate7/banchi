@@ -229,7 +229,8 @@ export function PositionBar({
                     aria-hidden="true"
                   />
                 )}
-                {/* THE TICKS (D310): every 5th card, every 10th darker and numbered. */}
+                {/* THE TICKS (D310): every 5th card, every 10th darker and numbered. A number on or next to
+                    the pin is left off: the chip says it. */}
                 {rulerTicksOf(depth.of).map((tick) => (
                   <span
                     key={tick.card}
@@ -238,7 +239,7 @@ export function PositionBar({
                     style={{ left: `${tick.at}%` }}
                     aria-hidden="true"
                   >
-                    {tick.label ? <span className="position-bar-tick-num">{tick.card}</span> : null}
+                    {tick.label && !(place.card !== null && Math.abs(tick.card - place.card) <= 1) ? <span className="position-bar-tick-num">{tick.card}</span> : null}
                   </span>
                 ))}
                 {/* SECTION NUMBERS AT BOTH ENDS (LOC-04): card 1 at the back, the last card at the
