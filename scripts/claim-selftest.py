@@ -2542,6 +2542,24 @@ def main() -> int:
            "\n".join(f.where for f in newnum_row.findings))
         git(twork, "rm", "-q", "docs/decisions/D077-brand-new.md")
         git(twork, "commit", "-qm", "drop the probe")
+        # ONE DELETE, TWO ADDS of a held number hands it to two records: refused.
+        dtmp = tmp / "two-adds"
+        dtmp.mkdir()
+        dwork = build_split(dtmp)
+        git(dwork, "checkout", "-q", "-b", "feature-two-adds")
+        git(dwork, "rm", "-q", "docs/decisions/D001-first.md")
+        write(dwork, "docs/decisions/D001-aaa.md", "alpha\nonly\n")
+        write(dwork, "docs/decisions/D001-bbb.md", "beta\nonly\n")
+        git(dwork, "add", "-A")
+        git(dwork, "commit", "-qm", "one delete, two adds of one number")
+        audit.ROOT = dwork
+        two_report = audit.Report()
+        audit.check_numbered_record_growth(two_report, False)
+        two_row = next(r for r in two_report.checks if r.check == "numbered record growth")
+        ok(len(two_row.findings) >= 1,
+           "one delete plus two adds of a number is refused, not sanctioned twice",
+           "\n".join(f.where for f in two_row.findings))
+        audit.ROOT = twork
         git(twork, "mv", "docs/decisions/D002-second-title.md", "docs/decisions/D009-second.md")
         git(twork, "commit", "-qm", "a rename that changes the number")
         changed_report = audit.Report()
