@@ -44,7 +44,7 @@ import { hubState, setHub, touchHub, useHub, type Stage } from './OrdersHubStore
 import { PositionLabel } from './PositionLabel'
 import { RailFrame } from './RailFrame'
 import { sayPlace } from './position'
-import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, lineReason, MISSING_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
+import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, lineReason, FLAGGED_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
 import {
   applyTake,
   buyerLabel,
@@ -890,12 +890,12 @@ const SORT_AT_REST: SortValue<OrderSortKey> = { key: 'placed', dir: 'desc' }
  *  "Missing a copy" — every buyer who owes at least one copy the store cannot find, across
  *  states (`orderBuyers.ts:groupMissing`, the owner's option c). Home's "Cannot be filled"
  *  press opens that one. */
-type ShowValue = Status | typeof MISSING_FACET | typeof NONE_LEFT_FACET
-const SHOW_ORDER: readonly ShowValue[] = [MISSING_FACET, NONE_LEFT_FACET, 'look', 'short', 'ready', 'unresolved', 'done']
+type ShowValue = Status | typeof FLAGGED_FACET | typeof NONE_LEFT_FACET
+const SHOW_ORDER: readonly ShowValue[] = [FLAGGED_FACET, NONE_LEFT_FACET, 'look', 'short', 'ready', 'unresolved', 'done']
 const NO_SHOWS: readonly ShowValue[] = []
 /** ONE STATE, ONE NAME: the facet and the row's pill read the same `STATUS_PILL` words. */
 const showLabel = (value: ShowValue): string =>
-  value === MISSING_FACET ? 'Missing' : value === NONE_LEFT_FACET ? 'Short' : STATUS_PILL[value].label
+  value === FLAGGED_FACET ? 'Flagged' : value === NONE_LEFT_FACET ? 'Short' : STATUS_PILL[value].label
 
 const LANE_TONE: Record<ShippingLane, PillTone> = { envelope: 'ok', parcel: 'default', unjudged: 'warn' }
 const LANE_ICON: Record<ShippingLane, IconName> = { envelope: 'mail', parcel: 'package', unjudged: 'alert' }
@@ -2867,6 +2867,11 @@ function PullStage({
      still lacks the plan until the owner's `make demo-mirror` (DEBT60,
      the pullable set is not recorded), after which this line goes. Module-local, like `OrdersShipStage.tsx`'s own, so an ordinary build folds it. */
   const IS_DEMO = __BN_DEMO__
+  /* THE OLD URL VALUE STILL WORKS: `show=missing` was this facet's value before it was named Flagged. */
+  useEffect(() => {
+    const old = viewQuery.getAll('show')
+    if (old.includes('missing')) patchViewQuery({ show: old.map((value) => (value === 'missing' ? FLAGGED_FACET : value)) })
+  }, [viewQuery])
   const [pullableAtRest] = useState(() => !IS_DEMO && !['show', 'status', 'buyer', 'order', 'q', 'unknown'].some((key) => viewQuery.has(key)))
   const [hideUnpullable, setHideUnpullable] = useViewFlag('pullable', pullableAtRest)
 
@@ -3073,7 +3078,7 @@ function PullStage({
     value === 'done'
       ? inDoneBase(group)
       : inOpenBase(group) &&
-        (value === MISSING_FACET || value === NONE_LEFT_FACET
+        (value === FLAGGED_FACET || value === NONE_LEFT_FACET
           ? groupFacetCopies(group, answers, value).copies > 0
           : statusByGroup.get(group.key) === value)
   const inBase = (group: BuyerGroup) =>
@@ -3187,7 +3192,7 @@ function PullStage({
             passesSearch(group) &&
             passesHide(group),
         ).length,
-      })).filter((option) => (option.value !== 'unresolved' && option.value !== MISSING_FACET && option.value !== NONE_LEFT_FACET) || option.count > 0),
+      })).filter((option) => (option.value !== 'unresolved' && option.value !== FLAGGED_FACET && option.value !== NONE_LEFT_FACET) || option.count > 0),
     },
     {
       ...facetShape[1]!,
@@ -3574,7 +3579,7 @@ function PullStage({
     const parts = picks.map((value) => groupFacetCopies(group, answers, value))
     const copies = parts.reduce((sum, part) => sum + part.copies, 0)
     if (copies === 0) return null
-    const word = picks.length > 1 ? 'unfilled' : { missing: 'missing', noneleft: 'short', short: 'still owed' }[picks[0]!]
+    const word = picks.length > 1 ? 'unfilled' : { flagged: 'flagged', noneleft: 'short', short: 'still owed' }[picks[0]!]
     return { copies, orders: new Set(parts.flatMap((part) => part.keys)).size, word }
   }
 
@@ -3917,11 +3922,11 @@ function figuresOf(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder
  *  ("N cards need a look"), naming no single one of them wrongly. */
 function lookWords(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): string {
   const words: Partial<Record<OrderLineReason, string>> = {
-    sku_unseen: 'missing',
-    sku_unknown: 'missing',
+    sku_unseen: 'flagged',
+    sku_unknown: 'flagged',
     no_copies_on_hand: 'short',
     short: 'short',
-    not_a_single: 'sealed',
+    not_a_single: 'flagged',
   }
   const tally = new Map<string, number>()
   for (const order of group.open) {
@@ -3936,7 +3941,7 @@ function lookWords(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder
   const only = entries.length === 1 ? entries[0] : undefined
   if (only !== undefined) {
     const [word, count] = only
-    return word === 'short' || word === 'missing' ? `${count} ${word}` : `${count} ${plural(count, 'card', 'cards')} ${word}`
+    return word === 'short' || word === 'flagged' ? `${count} ${word}` : `${count} ${plural(count, 'card', 'cards')} ${word}`
   }
   return `${total} review`
 }
@@ -3947,7 +3952,7 @@ function lookWords(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder
  *  copy can be pulled until it is added. Same tones and icons `REASON_TONE` and `REASON_ICON` give
  *  those reasons on the order's own line, less the `info` tone the Pill has no name for. */
 function lookPill(words: string): { tone: PillTone; icon: IconName } {
-  if (words.endsWith(' missing')) return { tone: 'danger', icon: 'search' }
+  if (words.endsWith(' flagged')) return { tone: 'danger', icon: 'search' }
   if (words.endsWith(' short')) return { tone: 'warn', icon: 'box' }
   return STATUS_PILL.look
 }
