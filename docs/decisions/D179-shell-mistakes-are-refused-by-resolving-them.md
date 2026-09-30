@@ -367,8 +367,9 @@ already sees every Bash command, so it is the one home.
 
 A command can set any `PKMNSCAN_<NAME>=off`: an env prefix, `export`, or `env`. The hook reads
 that from the parsed stages, so a mention in an argument, a comment or a heredoc is not a use.
-`_off` reads the same parsed set, so a hatch counts only as a real assignment. Every lift is
-logged, and a mention never lifts. The hook appends one
+`_off` reads the same parsed set, so a hatch counts only as a real assignment. Every hatch a
+command sets is logged, and a mention never lifts. A hatch set in the environment is not logged
+here; `make status` names it under `hatches`. The hook appends one
 line per name to `pkmnscan-hatches.log` in `git rev-parse --git-common-dir`. Every worktree of the
 clone shares that file. A line holds the time, the hatch, the checkout, the branch and the first
 120 characters of the command.
