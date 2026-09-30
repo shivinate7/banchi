@@ -26,9 +26,7 @@ rule. `make design-check` is the only check in this repo that can see reachabili
 | 13 track back | **missing.** |
 | 14 tell buyer | **missing.** Deferred behind 13. |
 
-**Step 11 has no second form.** The owner once wanted an order to drive the inventory walk with
-the write on the envelope. That was built, used, and deleted (T6). The want is met by the walk
-on `#/orders`, where the write stays on the copy.
+**Step 11 has one form:** the per-copy press, from the walk on `#/orders`. The envelope form is not built (T6).
 
 **`store/orders.py` is written by a screen.** `store/session.py` carries `Ledger` in `Snapshot`
 and writes it last on every store write. `pipeline/orders.py` is read by `GET /orders`.
@@ -302,13 +300,10 @@ BUILT block. Read them there. That module cites this section by number for the r
 
 ### T6 — the order drives the walk. SUPERSEDED, and deleted (D97 amended)
 
-An envelope form of step 11 was built (`POST /orders/fill`, a walk on `#/inventory?order=`,
-and a write per envelope). The owner used it beside the per-copy walk and ruled for the
-per-copy walk. The envelope form is deleted from the tree. The want is met by the walk on
-`#/orders` (`docs/specs/order-walk-plan.md`). `_prepare_targets` and `_ledger_pull` are
-`POST /orders/pull`'s own two phases. They were never part of the envelope. `POST /orders/fill`
-in the tree today is a different route: it closes copies of a line that have no card behind
-them (D113).
+The envelope form is not in the tree. The want is met by the per-copy walk on `#/orders`
+(`docs/specs/order-walk-plan.md`, D97). `_prepare_targets` and `_ledger_pull` are `POST
+/orders/pull`'s own two phases. `POST /orders/fill` closes copies of a line that have no card
+behind them (D113).
 
 ---
 
@@ -342,10 +337,8 @@ make a broken projection indistinguishable from a working one.
 `capture_id`. D10 lets a mid-box delete slide every higher index down one, so a position
 written down today names a different card tomorrow (D63).
 
-**A count with no reader has no contradiction.** A route-count sentence outlived its subject in
-this file once, because nothing contradicted it. `make docs-audit`'s `route rosters` row
-reconciles each spec's pinned roster against `App.tsx`'s `ROUTES` table. Do not write a route
-count in prose.
+**Do not write a route count in prose.** `make docs-audit`'s `route rosters` row reconciles each
+spec's pinned roster against `App.tsx`'s `ROUTES` table.
 
 ---
 

@@ -179,7 +179,7 @@ class Position:
     is every ON-HAND index in this box, ascending — the cards a person would count if they
     opened it — and where it is given, every number below is rendered in that space instead
     of in index space. `Card 17` is then the seventeenth card you can count rather than the
-    seventeenth slot, which is the distinction `docs/specs/order-flow.md` §10.4 spends its
+    seventeenth slot, which is the distinction `docs/specs/order-flow.md` §4.1 spends its
     length on and D58 was waiting on a physical marker to explain.
 
     THE INDEX STILL NEVER MOVES, AND THAT IS WHAT MAKES THIS CHEAP. D10 as amended already

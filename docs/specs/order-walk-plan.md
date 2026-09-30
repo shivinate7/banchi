@@ -16,25 +16,20 @@ to `App.tsx`'s `ROUTES` table for the walk.
 
 ---
 
-## 1. The complaint
+## 1. What the screen must do
 
-The owner looked at `#/orders` after D212 (every copy is fungible, so no order claims one) and
-said it was so stupid. Three reviewers judged the screen cold. They converged on five faults,
-ranked by cost. Each one is a rule the screen keeps.
+Five rules, ranked by cost. Each one is a rule the screen keeps.
 
-1. **Over-pulling has no stop.** A line that wanted 2 copies drew 10 live buttons across four
-   box groups. Nothing counted down. The owner's rule: it is not wrong to over-pull, but it
-   must not be the path of least resistance. A row closes when its demand is met, and the copy
-   keeps an undo (section 8).
-2. **No card photographs.** `#/inventory` and `#/fulfillment` both lead with a large photograph,
-   the card's physical neighbors and a position bar. The walk must too.
-3. **No cross-order walk by default.** Walking one buyer after another sends the operator
-   through box 1, 2 and 3 again for each buyer. The walk covers the whole ticked set in one
-   traversal.
-4. **A wall of sentences.** One sentence per card, ungrouped, is a register no other screen
-   uses. Counters replace them.
-5. **The good part was hidden.** The fullest-first ranking sat behind an unstyled toggle. It is
-   the default order now.
+1. **Stop over-pulling.** A row closes when its demand is met, and the copy keeps an undo
+   (section 8). Over-pulling stays possible. It must not be the path of least resistance.
+2. **Show card photographs.** `#/inventory` and `#/fulfillment` lead with a large photograph,
+   the card's physical neighbors and a position bar. The walk does too.
+3. **Walk across orders.** The walk covers the whole ticked set in one traversal. Walking one
+   buyer after another would send the operator through box 1, 2 and 3 for each buyer.
+4. **Use counters and not sentences.** One sentence per card is a register no other screen
+   uses.
+5. **Rank fullest-first by default.** The ranked view is the default order and is not behind a
+   toggle.
 
 ## 2. What the owner asked for
 
@@ -312,10 +307,9 @@ copy, and the write refuses a full line.
 - **Undo is per copy and has no clock** (`docs/specs/undo.md` §2-3, D164). A copy's `Undo`
   stays until a newer pull takes the "newest" rank from it, or the walk resets.
   `UNDO_WINDOW_MS` is only the toast's own lifetime.
-- **The pane does not advance itself** (UN-6). It once lit the next card the instant a take was
-  satisfied. The new card's own `Mark sold` then landed where the finger had just tapped. A
-  fast second tap sold a card nobody looked at. The sold copy's row turns into `Undo` in place
-  (D57). Nothing else moves (D118). The operator steps on `J` and `K`.
+- **The pane does not advance itself** (UN-6). A new card must not light under the finger that
+  just sold. The sold copy's row turns into `Undo` in place (D57). Nothing else moves (D118).
+  The operator steps on `J` and `K`.
 - **Hide picked folds on a press and never on a sale** (D304, D263, D118). A sale that lands
   while it is on leaves the row in place. It folds at the next press or load.
 - **A stop can hold more candidates than a take wants.** Then the row says `(either)`, because
@@ -326,12 +320,10 @@ copy, and the write refuses a full line.
   remaining (`owed` less what this walk has recorded against it) is smallest and still
   positive. It returns `null`, never `for[0]`, once no ref owes. Ties go to the order placed
   longest ago. The order closest to done is the one that a single short copy is most likely to
-  finish.
-
-  An earlier fallback to `for[0]` sent presses to an already full order, and the server refused
-  every one (`over_fulfilled`). This rule decides only which OPEN order a press records
-  against. It never decides which physical copy answers it. The owner rejected the framing
-  "decide at Start, keep live, or ask at the press". Do not put those three options again.
+  finish. `pickOrderFor` must never fall back to `for[0]`, because that sends presses to an
+  already full order (`over_fulfilled`). This rule decides only which OPEN order a press records
+  against. It never decides which physical copy answers it. Do not put the options "decide at
+  Start, keep live, or ask at the press" to the owner again.
 
 ### Leaving mid-walk loses nothing, and the reason is where the write lands
 
@@ -360,29 +352,21 @@ nothing waits.
 - **The walk-only pane and row.** `#/orders` reuses `CardPane` and `CardLocations` whole (D304).
   The walk-only stop, take header, copy row, bars and pill were deleted and not adapted.
 
-## 9a. What the first builds got wrong
+## 9a. Rules from the first builds
 
-The lessons outlive the builds.
-
-1. **Do not design a walk-only row.** Three builds drew a per-copy row. It had a photograph
-   on every copy and the box and section as labeled fields. It showed a raw order key for the
-   buyer and no position bar. Each repeated something that `CardLocations` already draws. The taxonomy on
-   every row is the defect that this document exists to remove, brought back one register down.
-2. **A list of orders needs the controls that the order list already has.** A flat list with
-   one tick per row matched an earlier draft. It had no search, status filter, sort or
-   tick-all, and it was useless on a large store. The fix was to stop building a second list. The walk selects
-   from the list that the operator is already reading (section 12).
-3. **A screen that looks right on a small fixture is not verified.** The demo store held seven
-   orders, and the defect appeared only at hundreds. Render a screen against volume.
+1. **Do not design a walk-only row.** `CardLocations` already draws the photograph, the position
+   bar and the neighbors. The taxonomy on every row is the defect that this document exists to
+   remove.
+2. **A list of orders needs the controls that the order list already has.** Search, status
+   filter, sort and tick-all belong to the one list that the operator reads (section 12).
+3. **Verify a screen against volume.** A small fixture hides defects that show at hundreds of
+   orders.
 4. **`make check` does not run the browser suite.** `make design-check` is outside it (DEBT16).
-   A green `make check` is no evidence for a screen. Check the verdict's own `counts.total`. A
-   `PW_ARGS` `--grep` with spaces silently becomes a file filter.
-5. **A figure can lose its footing in a rebuild.** D97's "N orders complete in this pass" head
-   figure and its boot-triggered clear are gone. The mechanism is absent, because the walk no
-   longer holds a pass and does not compare open orders with the walked set. D97's argument is
-   unanswered. It is not repealed. The owner ruled that the figure is not needed now. Do not
-   re-raise it as open. The pull answers with post-write facts. A rebuild could count the
-   figure off the presses of the walk, and not off a re-read of the ledger.
+   Check the verdict's own `counts.total`. A `PW_ARGS` `--grep` with spaces silently becomes a
+   file filter.
+5. **D97's "N orders complete in this pass" head figure is gone.** The walk holds no pass. D97's
+   argument is unanswered and not repealed. The owner ruled that the figure is not needed now.
+   A rebuild could count it off the presses of the walk.
 
 ## 10. What this gives up
 
@@ -423,11 +407,8 @@ The lessons outlive the builds.
 
 ## 12. One screen, and the list that is already there
 
-**The walk selects from the list that the operator is already reading.** The screen already
-draws a list of the orders, with every control. That list is the selection. A second list
-behind a tab, with a tick per row and none of the controls, was built and was wrong. The owner's
-picture: no separate tabs, just an order screen, where the operator sees the buyers, ticks
-beside their names, and the walk runs.
+**The walk selects from the list that the operator is already reading.** That list is the
+selection. There is no second list behind a tab.
 
 - **The left column is the orders**, with every control the list has (search, status, sort) and
   a tick per walkable row.

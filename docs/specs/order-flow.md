@@ -114,11 +114,10 @@ make the app disagree with the shelf in front of the operator.
 
 ### 3.1 — A box has no seal and no capacity (D299)
 
-D20 once sealed a box to freeze its capacity, so that "#40 of 250" stayed true. D58 made
-every number count the cards on hand. The capacity then divided nothing, and D299 removed the
-seal. `store/master.py:Box` carries `box`, `bid`, `name`, `sections`, `section_names` and
-`created_at`. It has no `state`, no `capacity` and no `closed_at`. `PUT /boxes/<box>` refuses a
-body that sends `state`. `POST /boxes` accepts no capacity.
+A box has no seal and no capacity (D299). D58 made every number count the cards on hand, so a
+capacity would divide nothing. `store/master.py:Box` carries `box`, `bid`, `name`, `sections`,
+`section_names` and `created_at`. It has no `state`, no `capacity` and no `closed_at`.
+`PUT /boxes/<box>` refuses a body that sends `state`. `POST /boxes` accepts no capacity.
 
 Old history can still hold `box_closed` and `box_reopened` lines. Nothing writes them now.
 Sold cards do not shrink a box. D10 makes their gaps permanent, and `next_index` is a
@@ -154,7 +153,8 @@ Section and Card are a *rendering* of that index against the box's current divid
 Moving a divider relabels every card behind it and touches no index.
 
 D58 took the seam to its end. The rendering counts the cards in the box and not the slots.
-A departure closes up behind it, and `Card 17` is the seventeenth card that a person can
+A departure closes up behind it. Before D58, `Card 17` was the seventeenth slot and not the
+seventeenth card that a person can count. Now it is the seventeenth card that a person can
 count. The section boundaries are mapped into the same space, so both halves of the label
 stay countable.
 
@@ -196,15 +196,15 @@ a divider with cards behind it. Do not return to freezing.
 
 ## 5. `_Places` — one renderer, and the failure that shaped it
 
-### 5.1 — One corrupt record blanked every label in the inventory
+### 5.1 — Labels and totals degrade separately
 
 `server/capture_server.py:_Places` builds the `place` block for four routes. It is made per
 request and never held between them. `Inventory.box_fill` is O(cards), and rendering thousands
 of cards with an uncached total is millions of coercions on the route that the app polls.
 
 The box total is a whole-box scan. It raises `BadPosition` on any record in the box, and not
-only the record being rendered. Letting that escape once cost every neighbor its label. T7
-caught it. **A label needs only its own two integers and the box's layout.** Only the total
+only the record being rendered. If it escaped, one corrupt record would blank every
+neighbor's label. T7 asserts that it does not. **A label needs only its own two integers and the box's layout.** Only the total
 needs the scan. So the two degrade separately. A bad neighbor costs the box its total
 (`box_total` 0 and `fraction` null, which the app draws as "no fraction"). It costs nobody
 their position.
@@ -402,12 +402,11 @@ together stack against the lock and can return out of order.
 
 ### 8.3 — The Fulfiller's search: a way in added, none taken away
 
-The Fulfillment list was a haystack that he searched by eye. The store answered first: 229
-cards, 176 with no name recorded, with no photo on the row. There was nothing to search by
-eye. So a `SearchField` sits above the list. The list stays beneath it. Typing narrows it.
-Clearing gives back the box-walk list. A search screen that he navigates to and from was
-declined. **Nothing he can do may stop working, because nobody has watched him do any of
-it.** A flow with no instrument is a flow to add to and never to replace.
+The Fulfillment list is a haystack with no names to search by eye, so a `SearchField` sits
+above it. The list stays beneath it. Typing narrows it. Clearing gives back the box-walk list. A
+search screen that he navigates to and from was declined. **Nothing he can do may stop working,
+because nobody has watched him do any of it.** A flow with no instrument is a flow to add to and
+never to replace.
 
 The server groups. The owner's screen pulls the whole store and groups in the browser, which
 is wrong for this one. **Every copy is its own card** in his skin, with its own photo,
@@ -424,10 +423,10 @@ beside it. It is the first thing to watch when a real order is pulled.
 
 ### 9.1 — The photograph is the one unknown height
 
-The review queue's photograph is the one thing on that screen whose height is not known
-before it draws. The next card's image was unloaded at the advance, so the candidate rows
-jumped up and dropped back when it decoded. The answer that a finger writes there cannot be
-taken back, because `store/queues.py:Queue.upsert` refuses to re-queue a cleared position.
+The review queue's photograph is the one thing on that screen whose height is not known before
+it draws. If the stage does not reserve its height, the candidate rows jump when the image
+decodes. An answer that a finger writes there cannot be taken back, because
+`store/queues.py:Queue.upsert` refuses to re-queue a cleared position.
 
 The fix is two parts. The stage reserves its height (`--rv-photo-h` in
 `app/src/ReviewQueue.css`), and `ReviewQueue.tsx` prefetches the next card's image. A photo
@@ -509,23 +508,21 @@ counts what is in a section and compares it to the record. No code does that tod
 **D27, session state.** The ban on browser storage is about *inventory*. D13 puts one truth on
 the Mac. It never covered the capture screen's own scratch state. One key stays in
 `sessionStorage`, the in-flight capture id, because a reload during a halt would make a
-lost-response ambiguity unresolvable. D10's high-water mark would then hand the burned position
-to the next card. D142 moved the other settings to `deviceMemory.ts`. Trigger mode is not
-stored (D19). An armed machine that survives a reload is the automatic act that D19 refuses.
+lost-response ambiguity unresolvable. Then D10's high-water mark would hand the burned position
+to the next card. D142 moved the other settings to `deviceMemory.ts`. Trigger mode is not stored
+(D19). An armed machine that survives a reload is the automatic act that D19 refuses.
 
-**D28, the undo.** Pressing a digit on the review screen writes a SKU and a condition onto a
-real card. `Queue.upsert` refuses to re-queue a cleared position, so an answer outlives the
-question. The screen had no undo. Mark-sold, which is reversible, had a confirm, an undo
-window and a `restores_to` check. The irreversible action had fewer guards than the
-reversible one. `store/queues.py:Queue.reopen` is the one door back. It refuses anything that
-is not present and cleared. Every entry that the answer cleared is reopened, because a
-reversal of one of two would leave the card half-answered.
+**D28, the undo.** A digit on the review screen writes a SKU and a condition onto a real card.
+`Queue.upsert` refuses to re-queue a cleared position, so an answer outlives the question.
+`store/queues.py:Queue.reopen` is the one door back. It refuses anything that is not present and
+cleared. Every entry that the answer cleared is reopened, because a reversal of one of two would
+leave the card half-answered. An irreversible action must not have fewer guards than a
+reversible one.
 
 The window is the screen's, and no clock lives in the store. A deadline enforced in the store
-would fail when the store was slow to lock. The rule that D28 reopens is `docs/DESIGN.md`'s
-no-acknowledgement rule. It leaned on "undo covers the mistake", and undo did not exist there.
-A confirm would double the keystrokes on the screen where the owner spends the most hours.
-**Rejected:** a modifier or an Enter to confirm. One key per card is the property to keep.
+would fail when the store was slow to lock. A confirm would double the keystrokes on the screen
+where the owner spends the most hours, so undo replaces it. **Rejected:** a modifier or an Enter
+to confirm. One key per card is the property to keep.
 
 ---
 
@@ -541,7 +538,7 @@ A confirm would double the keystrokes on the screen where the owner spends the m
 - **The search debounce, the reserved photo height and the position bar's density are
   judgements.** Each is marked at the place it is set.
 
-## 13. What a later session must not undo
+## 13. What a later session must keep
 
 - **Do not put a listing stage back on a card.** `check_state` refuses the three that left.
 - **Do not "simplify" `Listing.held` to include `live`.** Section 2.2.

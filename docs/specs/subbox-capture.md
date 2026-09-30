@@ -358,13 +358,12 @@ unconditionally, which covers `section` for the same reason.
 
 ## 7. Where the build differs from the plan
 
-The build and the plan agree. The rules this section once listed live in section 1 (the token,
-`section_required`, `history_unreadable`) and section 3 (`section_tail_key`, the move undo).
+It does not differ. The rules live in section 1 (the token, `section_required`,
+`history_unreadable`) and section 3 (`section_tail_key`, the move undo).
 
 ## 8. Measurements
 
-Not recorded here. Numbers measured on a store go stale when the store changes. Measure the
-live store when a number matters.
+None are kept. Section 4 holds the invariants. Measure the live store when a number matters.
 
 ## 9. The owner's rulings
 
@@ -379,7 +378,7 @@ live store when a number matters.
 
 ## 10. Lanes
 
-All built. `docs/map.py` lists which file belongs to which decision.
+File ownership is in `docs/map.py`.
 
 ## 11. The Move-to-box section choice
 

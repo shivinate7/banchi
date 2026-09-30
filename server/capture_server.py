@@ -13944,8 +13944,7 @@ def do_order_picks(payload: dict) -> dict:
 
 def _walk_plan_copy(places: _Places, card: master.Card, *, here: bool) -> dict:
     """One physical copy of a take's SKU, exactly as `/search` renders that same card, plus
-    `here` — whether it is standing at the stop asking for it (RULED 2026-09-19, "The stop,
-    rebuilt", `docs/specs/order-walk-plan.md` §8).
+    `here` — whether it is standing at the stop asking for it (RULED 2026-09-19, `docs/specs/order-walk-plan.md` §8).
 
     EVERY ON-HAND COPY OF THE SKU RIDES THE WIRE NOW, NOT ONLY THE SOLVER'S REACH. D212
     (every copy is fungible, no order claims one) and D93 (the copies panel draws every
@@ -13982,7 +13981,7 @@ def _walk_plan_order_ref(ledger: order_store.Ledger, key: str, sku: str) -> Opti
     `walkplan.demand` applies (owner's ruling 2026-09-17, "if I stand a line down... it should
     say owed 0"), read off this plan's own snapshot so a press this pass records against never
     moves it. Its own reader, `pickOrderFor` (`app/src/OrdersWalkPane.tsx`), needs it to stop
-    handing a press to an order already full (`docs/specs/order-walk-plan.md` §8, amended)."""
+    handing a press to an order already full (`docs/specs/order-walk-plan.md` §8)."""
     record = ledger.orders.get(key)
     if record is None:
         return None
@@ -14194,8 +14193,7 @@ def do_order_walk_plan(payload: dict) -> dict:
     reaches, not of the copies in it, and paid once per press. D260 is what it buys: a card
     nobody has named is not a landmark, and the distance is what keeps the skip honest.
 
-    WIDENED TO EVERY ON-HAND COPY OF EACH SKU, STORE-WIDE, RULED 2026-09-19 ("The stop,
-    rebuilt") — D212 (every copy is fungible, no order claims one) and D93 (the copies
+    WIDENED TO EVERY ON-HAND COPY OF EACH SKU, STORE-WIDE, RULED 2026-09-19 (`docs/specs/order-walk-plan.md` §8) — D212 (every copy is fungible, no order claims one) and D93 (the copies
     panel draws every copy and hides none) reaching this wire. `_walk_plan_take` now calls
     `inventory.copies_on_hand(sku)` once per take, the same accessor `do_search`'s
     `on_hand` count already reads, over the SAME snapshot — never a second

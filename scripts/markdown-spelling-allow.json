@@ -759,7 +759,6 @@
     "docs/specs/order-flow.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "acknowledgement",
         "cancelled",
         "judgements",
         "travelled"

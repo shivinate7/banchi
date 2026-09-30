@@ -91,8 +91,8 @@ A SKU is stale when **all three** hold:
 
 Where no export has caught the SKU yet, term 3 falls back to the oldest `captured_at` of any
 card that ever carried it. That measures how long the card has been **owned**, not how long
-the listing has been live. It is a floor on the real age. It once made most live SKUs
-`too_young`, because the window measured when the project got a camera. Every report counts
+the listing has been live. It is a floor on the real age, so it can make live SKUs
+`too_young`. Every report counts
 both clocks and says which one dated which rows. A proxy that nobody is told about is a lie,
 and so is one claimed where it is not used.
 
@@ -336,14 +336,10 @@ These are the lessons from driving TCGplayer's importer with real files.
    lag. To measure it, publish one SKU and fetch the live export at a fixed interval. Record
    the interval at which its price agrees.
 
-**How the first three were learned is part of the finding.** A session drove the importer as a
-dry run. Its request interceptor was built from function names in the portal's bundle, and the
-wire names were different. Nothing matched, nothing was blocked, and the upload was real.
-**A deny-list over a surface that nobody has seen fails open.** The next session that drives a
-path like this blocks every non-GET by default. It allows only what it has observed and
-judged. It proves that the guard fires on a harmless write before it points the guard at a
-real file. `Import To Staged` is not a live write, and that is what made the mistake
-recoverable.
+**A deny-list over a surface that nobody has seen fails open.** A session that drives a path like
+this blocks every non-GET by default and allows only what it has observed and judged. It proves
+that the guard fires on a harmless write before it points the guard at a real file. `Import To
+Staged` is not a live write, and that is what keeps a mistake recoverable.
 
 ## 6b. This path can raise a price (D107)
 
