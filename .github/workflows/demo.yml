@@ -69,6 +69,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -123,6 +124,7 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('app/package-lock.json') }}
 
       - name: Install chromium
+        timeout-minutes: 5
         working-directory: app
         run: npx playwright install --with-deps chromium
 
@@ -207,6 +209,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       pages: write
       id-token: write
