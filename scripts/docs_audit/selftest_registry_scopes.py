@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 
 from .core import (
     EXIT_USAGE,
+    MECHANICAL,
     Finding,
     ROOT,
     Report,
@@ -21,7 +22,8 @@ from .core import (
 from .dispatch import UNDISPATCHED, check_dispatch
 from .env_map import _consumer_block, _map_sections
 from .hygiene import ROSTER_MARK, ROUTE_HASH, _balanced, expected_rosters
-from .registry_scopes import INVOKERS, check_audit_invocation
+from . import registry_scopes
+from .registry_scopes import INVOKERS, check_audit_invocation, check_check_registry
 
 
 def run(ok) -> None:
@@ -64,6 +66,24 @@ def run(ok) -> None:
             )
         finally:
             INVOKERS[:] = saved
+
+    # A registry file that is absent must be a red row with a summary, never a crash.
+    saved_registry = registry_scopes.CHECKS_REGISTRY
+    registry_scopes.CHECKS_REGISTRY = Path(tempfile.gettempdir()) / "no-such-checks-registry.py"
+    try:
+        report = Report()
+        check_check_registry(report)
+        rows = [row for row in report.checks if row.check == "check registry"]
+        ok(
+            len(rows) == 1 and rows[0].severity == MECHANICAL and bool(rows[0].findings)
+            and bool(rows[0].summary),
+            "a missing checks registry is a red row with a summary, not a crash",
+            str(rows),
+        )
+    except Exception as exc:  # the old code raised here
+        ok(False, "a missing checks registry is a red row with a summary, not a crash", repr(exc))
+    finally:
+        registry_scopes.CHECKS_REGISTRY = saved_registry
 
     # A check that is defined and never dispatched prints nothing at all, so this row is the
     # only one whose failure mode is an ABSENT row. Every case below is a way for the

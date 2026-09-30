@@ -78,6 +78,9 @@ ROOT = Path(__file__).resolve().parent.parent
 AUDIT = ROOT / "scripts" / "docs-audit.py"
 # The rows live in a package beside the entry script, and the entry cannot run without it.
 AUDIT_PACKAGE = ROOT / "scripts" / "docs_audit"
+# Data the package reads when it is imported. Trees older than the file lack it, and the
+# auditor dies before it prints a row, so it travels with the instrument like the package.
+AUDIT_DATA = ["scripts/machine-words.json", "scripts/machine-words-allow.json"]
 
 # The absence family, and ONLY it. A finding whose subject is simply not in the archived
 # tree says nothing about drift: `git archive` omits every gitignored path, which is what
@@ -114,7 +117,7 @@ def subject_absent(where: str, message: str) -> bool:
     # reports nine findings against itself — the instrument, not the subject. Caught only
     # because the total ran 36x over the hand-classified baseline: 72 against a known 2.
     injected = where.split(":")[0].split(" ->")[0]
-    if injected == "scripts/docs-audit.py" or injected.startswith("scripts/docs_audit"):
+    if injected in ("scripts/docs-audit.py", *AUDIT_DATA) or injected.startswith("scripts/docs_audit"):
         return True
     target = _TARGET.search(message)
     # A finding ABOUT an injected package file, such as the old tree's map having no entry for it.
@@ -123,6 +126,9 @@ def subject_absent(where: str, message: str) -> bool:
     if target and gitignored(target.group(1)):
         return True
     return bool(_ABSENT.search(message))
+
+
+FAILURE: Dict[str, str] = {}  # sha -> why the auditor did not run, read by `main`
 
 
 def audit_tree(sha: str) -> Optional[List[dict]]:
@@ -146,13 +152,24 @@ def audit_tree(sha: str) -> Optional[List[dict]]:
         # The package with it, or the entry script has nothing to import. `__pycache__` stays behind.
         shutil.copytree(AUDIT_PACKAGE, tree / "scripts" / "docs_audit",
                         ignore=shutil.ignore_patterns("__pycache__"))
+        for name in AUDIT_DATA:
+            if (ROOT / name).exists():
+                (tree / name).write_bytes((ROOT / name).read_bytes())
         done = subprocess.run(
             [sys.executable, str(tree / "scripts" / "docs-audit.py"), "--json"],
-            cwd=str(tree), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False,
+            cwd=str(tree), stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
         )
         try:
             return json.loads(done.stdout.decode("utf-8", errors="replace"))["rows"]
         except (ValueError, KeyError):
+            lines = done.stderr.decode("utf-8", errors="replace").strip().splitlines()
+            last = lines[-1] if lines else f"exit {done.returncode}, no output"
+            # A read of a file the tree predates is expected on old trees: the auditor needs
+            # it and the commit cannot have it. Say which file, in plain words.
+            missing = re.search(r"No such file or directory: '([^']+)'", last)
+            if missing and str(tree) in missing.group(1):
+                last = "this tree predates " + missing.group(1).split(str(tree), 1)[1].lstrip("/")
+            FAILURE[sha] = last[:200]
             return None
 
 
@@ -188,7 +205,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         result = audit_tree(sha)
         if result is None:
             broken += 1
-            rows.append((sha[:8], subject, 0, 0, "auditor did not run"))
+            rows.append((sha[:8], subject, 0, 0, "auditor did not run: " + FAILURE.get(sha, "no reason captured")))
             continue
         sub = ab = 0
         for row in result:
