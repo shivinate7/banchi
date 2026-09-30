@@ -4,6 +4,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
+import { setViewport } from './phoneSwitch'
 
 /* THE FOURTH COMMAND, OVER THE WHOLE STORE — asserted where nothing else can see it (D87).
  *
@@ -260,7 +261,7 @@ test('the log well fold toggle is a thumb target on a phone, outside the markdow
   await pick(page)
   await expect(page.locator('.livecheck .runslog')).toBeVisible()
 
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   await settleFonts(page)
 
   const seen = await page.evaluate(() => {

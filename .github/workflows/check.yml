@@ -1,6 +1,6 @@
 # Re-run the gate on every pull request, because nothing ever did.
 #
-# WHY THIS EXISTS. `make check` runs fourteen checks and had no re-checker: it fired only when a
+# WHY THIS EXISTS. `make check` runs the whole suite (`make explain` lists it) and had no re-checker: it fired only when a
 # person typed it, on a machine that already had whatever that machine happened to have. On
 # 2026-09-06 that turned out to matter — `tsc --noEmit` needed `app/demo/bundle.json`, a file
 # `make demo-record` writes and `.gitignore` excludes, so `make check` FAILED IN EVERY FRESH
@@ -111,16 +111,29 @@ on:
   # out without having to remember to look.
   push:
     branches: [main]
+  # THE NIGHTLY FULL RUN (the required-checks entry in docs/decisions/, D136). A merge is
+  # allowed without the browser matrix because this run re-checks main at night and flags the
+  # owner with an issue. It runs every check and every browser shard: no path scope skips
+  # anything on a schedule or a dispatch (see the scope hatches on the steps below).
+  schedule:
+    - cron: '17 3 * * *'
   workflow_dispatch:
+    inputs:
+      report_failure:
+        description: Open or update the nightly-failure issue if this run fails (a schedule always does)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
-# One run per branch, newest wins: an older commit's verdict is not something anybody wants
-# once a newer one exists.
+# A pull request's newer push cancels its older run: an older commit's verdict is not
+# something anybody wants once a newer one exists. NOTHING ELSE IS EVER CANCELLED. A run on
+# main, a nightly and a manual run each get a group of their own (the run id), so a second
+# merge can neither cancel the first one's verdict nor replace it while it waits.
 concurrency:
-  group: check-${{ github.ref }}
-  cancel-in-progress: true
+  group: check-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # FOUR SHARDS IN PARALLEL, NONE MUCH OVER 150s, AND ONE JOB NAMED `check` THAT ANSWERS FOR THEM (owner's word,
@@ -199,7 +212,12 @@ jobs:
           print('FTS5 is available.')
           "
 
+      # A schedule or a dispatch runs every self-test: the two path gates answer "run" on
+      # their own hatches, which is what those hatches are for. A PR keeps its scope.
       - name: make ${{ matrix.target }}
+        env:
+          PKMNSCAN_GUARD_SCOPE: ${{ github.event_name != 'pull_request' && 'off' || '' }}
+          PKMNSCAN_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'off' || '' }}
         run: make ${{ matrix.target }}
 
   # THE REQUIRED CHECK. The ruleset names `check`, so this job keeps that name and passes only
@@ -324,6 +342,8 @@ jobs:
         id: specs
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
+          # Off a pull request, every spec: a nightly never narrows.
+          PKMNSCAN_BROWSER_SCOPE: ${{ github.event_name != 'pull_request' && 'off' || '' }}
         run: python3 scripts/browser-scope.py specs --base "origin/$BASE_REF"
 
   # The browser half. Same tree, different question: what a person actually sees.
@@ -426,10 +446,35 @@ jobs:
       # space-separated list of `app/tests/*.spec.ts` paths. `make` word-splits `PW_ARGS`, so
       # a path with a space would silently become two filters — the reason the classifier
       # answers "every spec" rather than name one.
+      #
+      # THE SHARDS ARE PACKED BY TIME, NOT BY CASE COUNT. `scripts/browser-scope.py shard` hands
+      # this shard its spec files from `scripts/browser-spec-times.json` (its docstring says
+      # where the times live and how the nightly's artifacts refresh them). Playwright's own
+      # `--shard` split by case count left one shard at about 513 s and another at 306 s.
+      # An empty shard (a narrowed list smaller than the shard count) has nothing to run.
       - name: make design-check
         env:
           SPECS: ${{ needs.browser-scope.outputs.specs != 'all' && needs.browser-scope.outputs.specs || '' }}
-        run: make design-check PW_ARGS="--shard=${{ matrix.shard }}/6 --workers=2 $SPECS"
+          SHARD: ${{ matrix.shard }}
+          SHARDS: ${{ strategy.job-total }}
+        run: |
+          files="$(python3 scripts/browser-scope.py shard "$SHARD" "$SHARDS" $SPECS)"
+          if [ -z "$files" ]; then
+            echo "no spec lands on shard $SHARD of $SHARDS"
+            exit 0
+          fi
+          make design-check PW_ARGS="--workers=2 $files"
+
+      # The nightly keeps each shard's per-file seconds, for `browser-scope.py shard-refresh`.
+      - name: Keep the shard's timings
+        if: ${{ always() && github.event_name == 'schedule' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: design-check-times-${{ matrix.shard }}
+          path: .serve/design-check.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
 
       # WHAT A RED RUN LEAVES BEHIND, because until 2026-09-11 it left four lines. The config turns
       # `trace: retain-on-failure` on under CI, so a failing case has its DOM before and after every
@@ -482,3 +527,33 @@ jobs:
           name: design-check-pass-${{ steps.tree.outputs.tree }}
           path: design-check-pass.txt
           retention-days: 30
+
+  # THE NIGHTLY ALARM. Runs only after a schedule, or a dispatch that asks for it, and only
+  # when a job failed. One open issue titled as below collects every repeat as a comment, so
+  # a week of red nights is one issue and not seven. `issues: write` is the whole grant: the
+  # job checks nothing out and reads its verdict from `needs`. A skipped job is not a failure.
+  nightly-alarm:
+    needs: [ci-check, revert-guard, zizmor, design-check]
+    if: ${{ always() && (github.event_name == 'schedule' || inputs.report_failure) && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the nightly-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEEDS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          title="Nightly check failing"
+          failed="$(jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | "- \(.key) (\(.value.result))"' <<<"$NEEDS")"
+          body="$(printf 'Failed jobs at %s:\n\n%s\n\nRun: %s' "${SHA:0:12}" "$failed" "$RUN_URL")"
+          open="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" \
+            --json number,title --jq "[.[] | select(.title == \"$title\")][0].number // empty")"
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi

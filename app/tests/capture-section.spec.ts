@@ -4,6 +4,7 @@ import { expect, test } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import type { Page } from '@playwright/test'
 import type { GameRegistry } from '../src/types'
+import { setViewport } from './phoneSwitch'
 
 /* SUB-BOX CAPTURE, LANE B — the Capture screen's own section picker
  * (docs/specs/subbox-capture.md §5). Lane A (the store, the server, the harness) is proved by
@@ -523,7 +524,7 @@ test('the row does not move the shutter below it, on a pick or an S (D118)', asy
 test('at 390, the row stacks, every target is 40px or more, and nothing scrolls sideways', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   await open(page)
 
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth)
@@ -905,7 +906,7 @@ for (const [width, height] of [
   [390, 844],
 ] as const) {
   test(`the last of 12 sections scrolls into view and takes a real click at ${width}`, async ({ page }) => {
-    await page.setViewportSize({ width, height })
+    await setViewport(page, { width, height })
     await open(page, {
       spans: manySections(12),
       boxes: [
@@ -932,7 +933,7 @@ for (const [width, height] of [
 test('walking the open list by keyboard keeps the focused option in view to the last row at 390', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   await open(page, {
     spans: manySections(12),
     boxes: [
@@ -963,7 +964,7 @@ for (const [width, height] of [
   [390, 844],
 ] as const) {
   test(`the open list fits between the top bar and the tab bar at ${width}`, async ({ page }) => {
-    await page.setViewportSize({ width, height })
+    await setViewport(page, { width, height })
     await open(page, {
       spans: manySections(12),
       boxes: [

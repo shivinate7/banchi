@@ -2503,7 +2503,9 @@ COMPONENTS = [
                         "how D141's measurement was taken; `selftest` proves the matcher and "
                         "the Makefile narrowing. Never acts on a push to main — there it "
                         "prints its answer and the matrix runs unless D136's pass record says "
-                        "the tree was tested.",
+                        "the tree was tested. `shard N M` packs the spec files onto M CI shards by "
+                        "measured time from `scripts/browser-spec-times.json`; `shard-refresh` "
+                        "re-times it from the nightly's per-shard artifacts.",
                 # D136 is the gate this composes with, D18 is why it writes nothing, D16 is
                 # why the list has a reader before it has a filter.
                 "governed_by": ["D16", "D18", "D136", "D141", "D196", "D215", "D261", "D275",
@@ -9505,6 +9507,13 @@ COMPONENTS = [
                         "twice 75ms apart and waits for agreement, which `settleMotion`'s "
                         "start-to-finish wait cannot do for an animation it was never watching.",
                 "governed_by": ["D16", "D50", "D118"]},
+            "tests/phoneSwitch.ts": {
+                "does": "the one switch for every phone-width spec, `PHONE_SPECS_ON`, off by the "
+                        "owner's word. `setViewport` replaces `page.setViewportSize` in the specs "
+                        "and skips the case below 768; `phoneOff` skips one width inside a loop. "
+                        "Flipping the constant runs them all again. Deletes no test. Not a "
+                        "harness test; `make design-check` runs the specs that import it.",
+                "governed_by": ["D16"]},
             "tests/iconTooltip.ts": {
                 "does": "one helper, `iconTip`, the one way a test finds an `IconButton`'s "
                         "tooltip since round 3 portals it to `<body>` (D288, kit/index.tsx's "

@@ -4,6 +4,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test'
 import { sealEveryTest, settleAnimations } from './shell'
 import { settleFonts } from './fontsReady'
 import { settleMotion } from './motionSettled'
+import { setViewport } from './phoneSwitch'
 
 /* docs/DESIGN.md's Fulfillment constraints table, every row of it, as assertions.
  *
@@ -2154,7 +2155,7 @@ async function keysSentenceXs(page: Page): Promise<number[]> {
 test('the keyboard sheet\'s three rows start their sentences at the same x — 1440px', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   await openList(page)
   const xs = await keysSentenceXs(page)
   for (const x of xs.slice(1)) expect(Math.abs(x - xs[0]!), `sentence x per row: ${xs.join(', ')}`).toBeLessThan(1)
@@ -2163,7 +2164,7 @@ test('the keyboard sheet\'s three rows start their sentences at the same x — 1
 test('the keyboard sheet\'s three rows start their sentences at the same x — 390px', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   await openList(page)
   const xs = await keysSentenceXs(page)
   for (const x of xs.slice(1)) expect(Math.abs(x - xs[0]!), `sentence x per row: ${xs.join(', ')}`).toBeLessThan(1)
@@ -2289,7 +2290,7 @@ test(`every position label is at least ${PLACE_FLOOR}px and set in tabular figur
  * one); 768-899 now draws the place at the page's full width, the same single-column layout
  * the phone already uses. */
 test('the position label does not wrap to three lines at 768px', async ({ page }) => {
-  await page.setViewportSize({ width: 768, height: 1024 })
+  await setViewport(page, { width: 768, height: 1024 })
   // Browsed from a box, not from an order: `.fulfillment-place-large` is the single-card
   // panel's own class, unchanged by the Owed rebuild, and drawn on every card that flow opens
   // regardless of whether an order is waiting for it.
@@ -2335,7 +2336,7 @@ test('the longest label the store can emit does not wrap to three lines at 820px
       },
     ],
   }
-  await page.setViewportSize({ width: 820, height: 1024 })
+  await setViewport(page, { width: 820, height: 1024 })
   await openList(page, [], { orders: ONE_OPEN_ORDER, plan: maxLabelPlan })
   const place = view(page).locator('.card-locations-place-large')
   await expect(place).toHaveText(MAX_LABEL)
@@ -2355,7 +2356,7 @@ test('the longest label the store can emit does not wrap to three lines at 820px
 test('the landing column widens in short landscape rather than staying at the narrow column width', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 844, height: 390 })
+  await setViewport(page, { width: 844, height: 390 })
   await openList(page)
   const column = view(page).locator('.ff-column')
   const width = await column.evaluate((node) => node.getBoundingClientRect().width)
@@ -2379,7 +2380,7 @@ for (const screen of WIDTHS) {
   test(`the card photo is at least ${PHOTO_FLOOR}px on its short edge — ${screen.name}`, async ({
     page,
   }) => {
-    await page.setViewportSize({ width: screen.width, height: screen.height })
+    await setViewport(page, { width: screen.width, height: screen.height })
     await openList(page)
     await openCard(page, 'Charizard ex')
 
@@ -2395,7 +2396,7 @@ for (const screen of WIDTHS) {
   })
 
   test(`the floors hold on the card at ${screen.name} width`, async ({ page }) => {
-    await page.setViewportSize({ width: screen.width, height: screen.height })
+    await setViewport(page, { width: screen.width, height: screen.height })
     await openList(page)
     await fatTargets(page, `${screen.name} list`)
     await openCard(page, 'Charizard ex')
@@ -3227,7 +3228,7 @@ for (const screen of WIDTHS) {
      * spend 96px of a 375px screen on padding and left the photo at 227px. Measured at 1280
      * alone it cleared the floor with room to spare — which is the shape of the miss this
      * whole two-width loop exists for. */
-    await page.setViewportSize({ width: screen.width, height: screen.height })
+    await setViewport(page, { width: screen.width, height: screen.height })
     await openSearch(page, 'Eiscue', 2)
     await settlePhotos(page)
 

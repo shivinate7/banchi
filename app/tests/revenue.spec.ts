@@ -4,6 +4,7 @@ import { test, expect, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 
 import type { OrderLineProgress, OrderLineWire, OrderRow, OrdersPayload } from '../src/types'
+import { setViewport } from './phoneSwitch'
 
 /* `#/revenue` (SALES) BECOMES A TOOL — sort, filter, cross-filter, deep-link and drill down
  * (`D217`), over the same `GET /orders` payload D214 already reshapes. Nothing here
@@ -370,7 +371,7 @@ test('a same-path query change never scrolls the page back to the top (D201)', a
   // scroll clamp cannot read 0 by accident of nothing being scrollable (`D201`'s own case
   // names exactly this trap: a destination short enough to fit the viewport passes for the
   // wrong reason).
-  await page.setViewportSize({ width: 390, height: 360 })
+  await setViewport(page, { width: 390, height: 360 })
   await stub(page, generalOrders())
   await open(page, '?period=all')
   /* THE TABLE FIRST, THEN THE SCROLL (the PR 2 integration's full run, twice under load): a
@@ -448,7 +449,7 @@ test('no horizontal scroll at 390, with Custom selected — the fifth period opt
   // the widest state is the one with the extra sort icon's `flex-shrink: 0` PLUS the
   // Custom range fields open, so this checks that state specifically rather than the
   // screen's own resting one.
-  await page.setViewportSize({ width: 390, height: 900 })
+  await setViewport(page, { width: 390, height: 900 })
   await stub(page, generalOrders())
   await open(page, '?period=all')
   await page.getByRole('button', { name: 'Custom' }).click()
@@ -469,7 +470,7 @@ test('no PAGE horizontal scroll at 820 with a long month strip of large figures 
       lines: [line({ sku: '9100001', name: 'Charizard ex', quantity: 1, unit_price: `${12000 + i * 111}.50` })],
     }),
   )
-  await page.setViewportSize({ width: 820, height: 900 })
+  await setViewport(page, { width: 820, height: 900 })
   await stub(page, orders)
   await open(page, '?period=all')
   await expect(page.locator('.revenue-month-col').first()).toBeVisible()
@@ -493,7 +494,7 @@ test('no PAGE horizontal scroll at 390 with the Today column active — it scrol
   // The Today column (D225) is the widest state the product table can be in.
   // `.revenue-table-wrap` is where any overflow belongs, never `document.documentElement`.
   stubPrices(page, { '9100001': { market: '18.00', at: 1_758_000_000 } })
-  await page.setViewportSize({ width: 390, height: 900 })
+  await setViewport(page, { width: 390, height: 900 })
   await stub(page, generalOrders())
   await open(page, '?period=all')
   await page.getByRole('button', { name: "Compare to today's market" }).click()
@@ -916,7 +917,7 @@ test('"gross" is said once: the eyebrow, not the subtitle or the sort (defect 4)
 })
 
 test('the shelf sits in its own row, so the totals and bars leave no empty band (defect 5)', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await setViewport(page, { width: 1440, height: 900 })
   await stub(page, generalOrders())
   await stubShelf(page)
   await open(page, '?period=all')
@@ -981,7 +982,7 @@ test('a sealed line lands on Sealed and an unrecorded rarity is said plainly (de
 })
 
 test('at 820 the newest month, its bar and its label sit whole inside the strip (fix round)', async ({ page }) => {
-  await page.setViewportSize({ width: 820, height: 1000 })
+  await setViewport(page, { width: 820, height: 1000 })
   // Twelve months of five-figure sales: too wide for the strip, so it must open at the newest.
   const months = ['2025-10', '2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09']
   await stub(

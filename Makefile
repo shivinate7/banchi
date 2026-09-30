@@ -516,8 +516,8 @@ check:
 # re-derived. All nine tests now pass on a clone with no images and no cache, measured.
 #
 # Everything below answers from the tree alone, which is exactly what a re-checker can own.
-# IT IS A SUBSET AND CAN DRIFT FROM `check`. Kept adjacent to it deliberately, so the two are
-# read together; `make explain` still describes the full suite and this list adds no rows to it.
+# IT RUNS THE SAME TARGETS AS `check`, NOT FEWER. Kept adjacent to it deliberately, so the two
+# are read together; `make explain` describes the suite and this list adds no rows to it.
 ci-check:
 	@$(MAKE) --no-print-directory harness
 	@$(MAKE) --no-print-directory docs-audit
@@ -1725,14 +1725,12 @@ screenshot:
 # three. app/design-check-reporter.ts carries the rest of the argument.
 #
 # `ARGS` REACHES THE LOCK AND `PW_ARGS` REACHES PLAYWRIGHT, and the two are kept apart by the
-# `--` on each side (D136). Until 2026-09-11 nothing here could hand Playwright a flag at all,
-# and the one that mattered was `--shard`: `.github/workflows/check.yml` runs this suite as
-# three shards on three 2-vCPU runners — `PW_ARGS="--shard=1/3 --workers=1"` — because one
-# runner ran all 481 cases on ONE worker in 15 minutes, against 89-175s for the rig's seven.
-# Sharding splits the CASES and leaves the worker count alone, which is the half that matters:
-# docs/debts/ section 8 measured a one-in-thirteen red whose only known mechanism is "the
-# suite around it", and more workers on one box is more suite around it. On the rig `PW_ARGS`
-# is for a session that wants one spec — `PW_ARGS=tests/brand.spec.ts` — and nothing else.
+# `--` on each side (D136). `.github/workflows/check.yml` runs this suite as six shards with
+# `--workers=2`, each handed its spec files by `scripts/browser-scope.py shard`, which packs
+# whole files by measured time rather than splitting the cases. More workers on one box is
+# more suite around a test, and docs/debts/ section 8 measured a one-in-thirteen red whose
+# only known mechanism is "the suite around it". On the rig `PW_ARGS` is for a session that
+# wants one spec — `PW_ARGS=tests/brand.spec.ts` — and nothing else.
 # Each shard leaves its own `.serve/design-check.json`; on a runner that is one file per job.
 design-check:
 	$(NPM_GUARD)

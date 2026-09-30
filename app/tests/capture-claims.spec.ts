@@ -4,6 +4,7 @@ import { expect, test } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import type { Page } from '@playwright/test'
 import type { GameRegistry } from '../src/types'
+import { phoneOff, setViewport } from './phoneSwitch'
 
 /* THE CAPTURE SCREEN'S CLAIM CONTROLS, IN A BROWSER — the screen the owner spends the most
  * hours in, and the one whose controls nothing ran until this file existed.
@@ -1576,7 +1577,8 @@ test('a set hint that names no set never clips its sub-line, at every width this
     })
 
   for (const width of [1440, 820, 390]) {
-    await page.setViewportSize({ width, height: 900 })
+    if (phoneOff(width)) continue
+    await setViewport(page, { width, height: 900 })
     await expect(row).toContainText('Spiritfoged')
     await expect(sub).toHaveText(/names no set/i)
 
@@ -1736,7 +1738,8 @@ test('the shutter keeps one fixed position whatever field opens above it (D118)'
   // Both widths the owner named: 1440 desktop, 390 phone — the shutter's own row reflows
   // between them (D205's tab bar, the phone's single column), so each gets its own baseline.
   for (const width of [1440, 390]) {
-    await page.setViewportSize({ width, height: width === 1440 ? 900 : 844 })
+    if (phoneOff(width)) continue
+    await setViewport(page, { width, height: width === 1440 ? 900 : 844 })
     const baseline = await docRect()
 
     for (const field of fields) {
@@ -1806,7 +1809,8 @@ test('the stage panel hugs the portrait frame: no dead side bands', async ({ pag
     [390, 844],
     [375, 812],
   ] as const) {
-    await page.setViewportSize({ width, height })
+    if (phoneOff(width)) continue
+    await setViewport(page, { width, height })
     let last = ''
     await expect
       .poll(async () => {

@@ -3,6 +3,7 @@
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { CAPTURE_PORT } from '../devPort'
+import { setViewport } from './phoneSwitch'
 
 /* THE SHELL'S KEYBOARD, AND THE FIRST TEST THIS APP HAS HAD OF THE CHROME EVERY SCREEN SITS IN.
  *
@@ -940,7 +941,7 @@ test('focus never escapes the open palette, keys sheet or phone drawer (UX-014)'
   await page.keyboard.press('Escape')
   await expect(page.locator('.app-keys')).toHaveCount(0)
 
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   const more = page.getByRole('button', { name: 'More' })
   await more.click()
   const drawer = page.locator('.bn-drawer[role="dialog"]')
@@ -956,7 +957,7 @@ test('focus never escapes the open palette, keys sheet or phone drawer (UX-014)'
 
 test('no global key acts under an open layer', async ({ page }) => {
   await open(page, RING[0])
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   await page.getByRole('button', { name: 'More' }).click()
   await expect(page.locator('.bn-drawer')).toBeVisible()
   await expect.poll(() => page.evaluate(() => document.querySelector('.bn-drawer')?.contains(document.activeElement))).toBe(true)
@@ -998,7 +999,7 @@ test('the first Tab reaches the skip link, and a navigation hands focus to the s
 })
 
 test('the phone tab bar lights More when the screen is behind it (UX-046)', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   await open(page, '#/pricing')
   const more = page.getByRole('button', { name: 'More' })
   await expect(more).toHaveAttribute('aria-current', 'page')

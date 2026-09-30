@@ -57,15 +57,16 @@ import hashlib
 import os
 import time
 import tempfile
-from contextlib import contextmanager, redirect_stderr, redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 
 from harness.tests import Checks, Result
+from harness.tests.home import isolated_home as _isolated_home
 from cli import resolve, runs
 from pipeline import games, join, pricing, routing, tcgcsv, variant
-from store import files, master
+from store import master
 from store.session import Store
 
 NAME = "T3"
@@ -220,26 +221,6 @@ def _clean_batch():
     cards.append(_card(12, "Butterfree", "003", metadata="reverse_holo"))
     cards.append(_card(13, "Butterfree", "003", metadata="reverse_holo"))
     return cards
-
-
-@contextmanager
-def _isolated_home():
-    """A whole store in a temporary directory, restored on the way out.
-
-    The cases below read the live inventory through `cli/resolve.py`, which is the only path
-    that turns a SKU's listing COUNTS into per-position `committed` flags. Restores the
-    previous value rather than deleting the key: six other tests share this process.
-    """
-    previous = os.environ.get(files.HOME_ENV)
-    with tempfile.TemporaryDirectory() as tmp:
-        os.environ[files.HOME_ENV] = tmp
-        try:
-            yield Path(tmp)
-        finally:
-            if previous is None:
-                os.environ.pop(files.HOME_ENV, None)
-            else:
-                os.environ[files.HOME_ENV] = previous
 
 
 def _capture_at(box, copies):

@@ -52,9 +52,7 @@ even apply: nothing here generates a tracked file).
 from __future__ import annotations
 
 import hashlib
-import os
 import sys
-import tempfile
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
@@ -64,9 +62,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from cli import cmd_identify, runs  # noqa: E402
+from harness.tests.home import isolated_home as _isolated_home  # noqa: E402
 from pipeline import games, routing, tcgcsv  # noqa: E402
 from pipeline.skus import row_from_csv  # noqa: E402
-from store import files, master  # noqa: E402
+from store import master  # noqa: E402
 from store.master import Card, Inventory  # noqa: E402
 from store.skus import Skus  # noqa: E402
 from store.session import Store  # noqa: E402
@@ -113,26 +112,6 @@ RIFTBOUND_BOX = 4
 # ------------------------------------------------------------------------------ the store
 
 
-def _isolated_home():
-    """`harness/tests/t3_join_coverage.py:_isolated_home`, reused rather than reimplemented
-    — a whole store in a throwaway directory, the previous `PKMNSCAN_HOME` restored on the
-    way out."""
-    from contextlib import contextmanager
-
-    @contextmanager
-    def _cm():
-        previous = os.environ.get(files.HOME_ENV)
-        with tempfile.TemporaryDirectory() as tmp:
-            os.environ[files.HOME_ENV] = tmp
-            try:
-                yield Path(tmp)
-            finally:
-                if previous is None:
-                    os.environ.pop(files.HOME_ENV, None)
-                else:
-                    os.environ[files.HOME_ENV] = previous
-
-    return _cm()
 
 
 def _capture(copies: int, box: int = BOX) -> None:

@@ -5,6 +5,7 @@ import { sealEveryTest } from './shell'
 import { batchOf, order as orderRow, payloadOf, shippingRow as row } from './routeFixtures'
 
 import type { OrderRow, ShippingBatch } from '../src/types'
+import { setViewport } from './phoneSwitch'
 
 /* NOTHING HERE MAY REACH THE CAPTURE SERVER, AND THE SHELL'S OWN READ IS NOT THIS SCREEN'S.
    `app/tests/shell.ts` carries the argument; the call has to sit above every hook and every
@@ -610,7 +611,7 @@ test('an order the ledger already knows opens it; an order it does not stays pla
 test('on a phone every lane opens folded; off a phone every lane opens shown (UX-016/D61)', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+  await setViewport(page, { width: 390, height: 844 })
   await open(page, { batch: threeKinds() })
   await readExport(page)
 

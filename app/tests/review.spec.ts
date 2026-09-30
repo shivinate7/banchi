@@ -5,6 +5,7 @@ import { settleFonts } from './fontsReady'
 import { sealEveryTest, settleAnimations } from './shell'
 import type { Place } from '../src/types'
 import { runRow } from './routeFixtures'
+import { setViewport } from './phoneSwitch'
 
 /* THE REVIEW QUEUE, ASSERTED — AND UNTIL THIS FILE EXISTED, NOTHING ASSERTED IT AT ALL.
  *
@@ -264,7 +265,7 @@ async function open(
     })
   })
 
-  await page.setViewportSize(DESK)
+  await setViewport(page, DESK)
   await page.goto(VIEW_ROUTE)
   await expect(page.locator(VIEW)).toBeVisible()
   /* THE FACES BEFORE THE RULER. Every geometry case in this file measures type, and
@@ -685,7 +686,7 @@ test('finding #10 (the Opus review round) — the receipt reserves its own row, 
 
 test('below 900px the screen is the single column it shipped with', async ({ page }) => {
   await open(page)
-  await page.setViewportSize(PHONE)
+  await setViewport(page, PHONE)
   await expect(page.locator(VIEW)).toBeVisible()
 
   /* The split is a desktop layout, and below 900px the card is one column with the

@@ -65,6 +65,11 @@ export default defineConfig({
   use: {
     baseURL: DEV_URL,
 
+    /* A CLICK OR FILL THAT CANNOT LAND FAILS IN 15s, NOT AT THE TEST'S OWN TIMEOUT. Playwright's
+       default is no limit on an action, so a control that never becomes actionable held a case
+       until the whole-test timeout. 15s matches `expect.timeout` above. */
+    actionTimeout: 15_000,
+
     /* THE SUITE RENDERS WHAT THE OWNER SEES, ON ANY MACHINE. The product formats every date
        with `toLocaleDateString(undefined, ...)` — 63 call sites — which resolves to the
        RUNTIME's zone and locale, and that is correct: a person should see their own. It makes
