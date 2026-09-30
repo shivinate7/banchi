@@ -44,7 +44,7 @@ import { hubState, setHub, touchHub, useHub, type Stage } from './OrdersHubStore
 import { PositionLabel } from './PositionLabel'
 import { RailFrame } from './RailFrame'
 import { sayPlace } from './position'
-import { buyerKeyOf, groupBuyers, groupForOrderKey, groupMissing, lineReason, MISSING_FACET, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
+import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, lineReason, MISSING_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
 import {
   applyTake,
   buyerLabel,
@@ -867,7 +867,7 @@ function ownsAWalkableBody(order: OrderRow): boolean {
 const STATUS_PILL: Record<Status, { label: string; tone: PillTone; icon: IconName }> = {
   /* THE WORD IS "Ready" — one word, not "Ready to sell" (owner's ruling, 2026-09-19). */
   ready: { label: 'Ready', tone: 'ok', icon: 'check' },
-  short: { label: 'Short', tone: 'warn', icon: 'alert' },
+  short: { label: 'Partly picked', tone: 'warn', icon: 'alert' },
   look: { label: 'Check', tone: 'warn', icon: 'eye' },
   unresolved: { label: 'Unresolved', tone: 'default', icon: 'clock' },
   done: { label: 'Done', tone: 'default', icon: 'check' },
@@ -890,11 +890,12 @@ const SORT_AT_REST: SortValue<OrderSortKey> = { key: 'placed', dir: 'desc' }
  *  "Missing a copy" — every buyer who owes at least one copy the store cannot find, across
  *  states (`orderBuyers.ts:groupMissing`, the owner's option c). Home's "Cannot be filled"
  *  press opens that one. */
-type ShowValue = Status | typeof MISSING_FACET
-const SHOW_ORDER: readonly ShowValue[] = [MISSING_FACET, 'look', 'short', 'ready', 'unresolved', 'done']
+type ShowValue = Status | typeof MISSING_FACET | typeof NONE_LEFT_FACET
+const SHOW_ORDER: readonly ShowValue[] = [MISSING_FACET, NONE_LEFT_FACET, 'look', 'short', 'ready', 'unresolved', 'done']
 const NO_SHOWS: readonly ShowValue[] = []
 /** ONE STATE, ONE NAME: the facet and the row's pill read the same `STATUS_PILL` words. */
-const showLabel = (value: ShowValue): string => (value === MISSING_FACET ? 'Missing' : STATUS_PILL[value].label)
+const showLabel = (value: ShowValue): string =>
+  value === MISSING_FACET ? 'Missing' : value === NONE_LEFT_FACET ? 'Short' : STATUS_PILL[value].label
 
 const LANE_TONE: Record<ShippingLane, PillTone> = { envelope: 'ok', parcel: 'default', unjudged: 'warn' }
 const LANE_ICON: Record<ShippingLane, IconName> = { envelope: 'mail', parcel: 'package', unjudged: 'alert' }
@@ -3073,7 +3074,9 @@ function PullStage({
     value === 'done'
       ? inDoneBase(group)
       : inOpenBase(group) &&
-        (value === MISSING_FACET ? groupMissing(group, answers).copies > 0 : statusByGroup.get(group.key) === value)
+        (value === MISSING_FACET || value === NONE_LEFT_FACET
+          ? groupFacetCopies(group, answers, value).copies > 0
+          : statusByGroup.get(group.key) === value)
   const inBase = (group: BuyerGroup) =>
     shows.length === 0 ? inOpenBase(group) : shows.some((value) => (value === 'done' ? inDoneBase(group) : inOpenBase(group)))
   const passesShow = (group: BuyerGroup) => shows.length === 0 || shows.some((value) => matchesShow(group, value))
@@ -3185,7 +3188,7 @@ function PullStage({
             passesSearch(group) &&
             passesHide(group),
         ).length,
-      })).filter((option) => (option.value !== 'unresolved' && option.value !== MISSING_FACET) || option.count > 0),
+      })).filter((option) => (option.value !== 'unresolved' && option.value !== MISSING_FACET && option.value !== NONE_LEFT_FACET) || option.count > 0),
     },
     {
       ...facetShape[1]!,
@@ -3565,6 +3568,17 @@ function PullStage({
 
   /* ---------------------------------------------------------------------- the buyer list */
 
+  /* Under the Missing or Short facet a row says its own copies for that reason, in that facet's word. */
+  const unfilledFigure = (group: BuyerGroup) => {
+    const picks = UNFILLABLE_FACETS.filter((value) => shows.includes(value))
+    if (picks.length === 0) return null
+    const parts = picks.map((value) => groupFacetCopies(group, answers, value))
+    const copies = parts.reduce((sum, part) => sum + part.copies, 0)
+    if (copies === 0) return null
+    const word = picks.length > 1 ? 'unfilled' : { missing: 'missing', noneleft: 'short', short: 'still owed' }[picks[0]!]
+    return { copies, orders: Math.max(...parts.map((part) => part.orders)), word }
+  }
+
   const tickFor = (group: BuyerGroup) => {
     if (!tickableKeys.has(group.key)) return <span className="orders-index-tick" aria-hidden="true" />
     return (
@@ -3620,7 +3634,7 @@ function PullStage({
               group={group}
               answers={answers}
               status={statusByGroup.get(group.key) ?? 'done'}
-              missing={shows.includes(MISSING_FACET) && groupMissing(group, answers).copies > 0 ? groupMissing(group, answers) : null}
+              missing={unfilledFigure(group)}
               selected={group.key === selectedKey}
               onSelect={() => select(group.key)}
             />
@@ -3965,7 +3979,7 @@ function BuyerRow({
   readonly status: Status
   /** Under "Missing a copy", the figure the list is filtered on: the buyer's missing copies and
    *  the open orders that miss one, so the list adds up to Home's "Cannot be filled" line. */
-  readonly missing?: { readonly copies: number; readonly orders: number } | null
+  readonly missing?: { readonly copies: number; readonly orders: number; readonly word: string } | null
   readonly selected: boolean
   readonly onSelect: () => void
 }) {
@@ -3988,7 +4002,7 @@ function BuyerRow({
       <span className="orders-index-figure">
         {missing !== null ? (
           <>
-            <b>{missing.copies}</b> missing in <b>{missing.orders}</b> {missing.orders === 1 ? 'order' : 'orders'}
+            <b>{missing.copies}</b> {missing.word} in <b>{missing.orders}</b> {missing.orders === 1 ? 'order' : 'orders'}
           </>
         ) : status === 'done' ? (
           <>

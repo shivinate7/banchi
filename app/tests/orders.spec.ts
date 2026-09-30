@@ -943,10 +943,10 @@ test('the Show facet lists a buyer only in its own state, and each count is the 
   await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
   const list = page.getByRole('listbox', { name: 'Show' })
   /* EACH COUNT IS BUYERS, THE ROWS THE LIST WILL DRAW, never lines. */
-  await expect(list.getByRole('option', { name: /^Short/ })).toContainText('1')
+  await expect(list.getByRole('option', { name: /^Partly picked/ })).toContainText('1')
   await expect(list.getByRole('option', { name: /^Ready/ })).toContainText('1')
   await expect(list.getByRole('option', { name: /^Check/ })).toContainText('1')
-  await list.getByRole('option', { name: /^Short/ }).click()
+  await list.getByRole('option', { name: /^Partly picked/ }).click()
   await closeFilters(page)
 
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
@@ -2115,7 +2115,7 @@ test('an open order under Ready in the row draws its status LABEL, never the ord
   await open(page, { orders: both })
 
   const row = page.locator('.orders-index-row').first()
-  await expect(page.locator('.orders-panel')).toContainText('Short')
+  await expect(page.locator('.orders-panel')).toContainText('Partly picked')
   await expect(row).not.toContainText(SECOND_ORDER)
 })
 
@@ -4574,9 +4574,9 @@ test('the lightbox traps focus, closes on Escape, and gives focus back to the ph
  * buyer who owes at least one copy the store cannot find, whatever that buyer's state. Its count
  * is the rows it shows, it is drawn only while it has any, and each row under it says its own
  * missing copies and orders (`orderBuyers.ts:groupMissing`, the rule Home's line sums). */
-test('the Show facet offers "Missing a copy", counts its buyers, and lists only them', async ({ page }) => {
+test('the Show facet offers "Missing" (a product never seen), counts its buyers, and lists only them', async ({ page }) => {
   const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
-  const bob = seededOrder({ number: 'B0002', buyer: 'Bob', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'short' })
+  const bob = seededOrder({ number: 'B0002', buyer: 'Bob', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'sku_unseen' })
   await open(page, {
     orders: payloadOf([alice.row, bob.row], [{ ...alice.resolved, outstanding: 0 }, { ...bob.resolved, outstanding: 2 }]),
   })
@@ -4592,7 +4592,25 @@ test('the Show facet offers "Missing a copy", counts its buyers, and lists only 
   await expect(page).toHaveURL(/[?&]show=missing/)
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Bob')
-  await expect(page.locator('.orders-index-figure')).toHaveText(/2 missing in 1 order$/)
+  await expect(page.locator('.orders-index-figure')).toHaveText(/1 missing in 1 order$/)
+})
+
+test('"Short" lists a buyer whose product the store knows but has no copy left of, apart from Missing and Partly picked', async ({ page }) => {
+  const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
+  const bob = seededOrder({ number: 'B0002', buyer: 'Bob', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'no_copies_on_hand' })
+  const cy = seededOrder({ number: 'C0003', buyer: 'Cy', status: 'Ready to Ship', placedAt: '2026-08-16T00:00:00+00:00', reason: 'sku_unseen' })
+  await open(page, { orders: payloadOf([alice.row, bob.row, cy.row], [alice.resolved, bob.resolved, cy.resolved]) })
+
+  await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
+  const list = page.getByRole('listbox', { name: 'Show' })
+  await expect(list.getByRole('option', { name: /^Short/ })).toContainText('1')
+  await expect(list.getByRole('option', { name: /^Missing/ })).toContainText('1')
+  await list.getByRole('option', { name: /^Short/ }).click()
+  await closeFilters(page)
+
+  await expect(page).toHaveURL(/show=noneleft/)
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Bob')
 })
 
 test('"Missing a copy" is not offered while no buyer owes a missing copy', async ({ page }) => {
@@ -4615,7 +4633,7 @@ test('the Show facet takes several picks: a buyer passes on any, and the URL kee
 
   await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
   const list = page.getByRole('listbox', { name: 'Show' })
-  await list.getByRole('option', { name: /^Short/ }).click()
+  await list.getByRole('option', { name: /^Partly picked/ }).click()
   await list.getByRole('option', { name: /^Done/ }).click()
   /* EACH COUNT STAYS ITS OWN ROWS: another pick in the same facet does not change it. */
   await expect(list.getByRole('option', { name: /^Ready/ })).toContainText('1')

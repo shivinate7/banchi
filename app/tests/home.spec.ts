@@ -178,8 +178,8 @@ function shortLedger(): OrdersPayload {
 }
 
 for (const [label, ledger, facet] of [
-  ['a buyer who is only short', shortLedger, 'missing'],
-  ['a buyer whose missing copy leaves it at Needs a look', mixedLedger, 'missing'],
+  ['a buyer who is only short', shortLedger, 'missing&show=noneleft&show=short'],
+  ['a buyer whose missing copy leaves it at Needs a look', mixedLedger, 'missing&show=noneleft&show=short'],
 ] as const) {
   test(`the "Cannot be filled" press opens a non-empty Orders list on show=${facet}: ${label}`, async ({ page }) => {
     await page.route(/\/orders$/, (route) => json(route, ledger()))
@@ -239,7 +239,7 @@ test('"Cannot be filled" counts only the orders that miss a copy, and the list i
   await expect(standingRow).toContainText('Unfillable')
   const said = (await standingRow.innerText()).replace(/\s+/g, ' ')
   expect(said).toContain('6 short across 3 orders')
-  await expect(standingRow).toHaveAttribute('href', '#/orders?show=missing')
+  await expect(standingRow).toHaveAttribute('href', '#/orders?show=missing&show=noneleft&show=short')
   await standingRow.click()
 
   /* FULL EQUALITY (the owner's option c): the "Missing a copy" list holds every buyer Home
@@ -252,7 +252,7 @@ test('"Cannot be filled" counts only the orders that miss a copy, and the list i
   const figures = await page.locator('main.orders .orders-index-figure').allInnerTexts()
   const sums = figures.reduce(
     (acc, text) => {
-      const m = /(\d+) missing in (\d+) orders?/.exec(text.replace(/\s+/g, ' '))
+      const m = /(\d+) unfilled in (\d+) orders?/.exec(text.replace(/\s+/g, ' '))
       expect(m, `a row's figure: "${text}"`).not.toBeNull()
       return { copies: acc.copies + Number(m![1]), orders: acc.orders + Number(m![2]) }
     },
