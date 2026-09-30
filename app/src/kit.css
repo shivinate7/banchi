@@ -380,7 +380,9 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 
 /* The tinted primary: accent ink on the accent tint, no fill and no shadow. The one coloured
    control in a row that repeats it, so it reads as the act without stacking into a wall of accent. */
-.bn-btn-tint { color: var(--bn-accent); background: var(--bn-accent-tint); box-shadow: none; }
+/* Ink is `--bn-accent-hover`, one step deeper than the accent: the plain accent on its own tint
+   over a sunken row measured under AA in the light theme (axe, color-contrast). */
+.bn-btn-tint { color: var(--bn-accent-hover); background: var(--bn-accent-tint); box-shadow: none; }
 .bn-btn-tint:hover { background: var(--bn-accent-tint-2); }
 .bn-btn-ok { color: var(--bn-ok); }
 .bn-btn-ok:hover { background: var(--bn-ok-tint); }

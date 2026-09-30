@@ -395,11 +395,9 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
    D304. `CardLocations` is reused whole, head
    off — this block is only the seam `mock.css` already measured: its own `copies` container
    (so a narrow walk column gets the same reflow `#/inventory`'s rail does, never the width
-   `.orders-walk` happens to have at the desk), a tighter row gap than the pane's own list, and
+   `.orders-walk` happens to have at the desk), and
    a box name that keeps one line here, since the walk names the take's own card once already. */
 .walk-pick-where { margin: 0 0 var(--bn-2) var(--bn-2); container: copies / inline-size; }
-.walk-pick-where .card-locations-rows { gap: var(--bn-1); }
-.walk-pick-where .card-locations-row { padding-block: var(--bn-2); }
 .walk-pick-where .card-locations-identity-box { white-space: nowrap; }
 
 /* ---- the card pane: `CardHero.tsx:CardPane` and `CardLocations.tsx:CardLocations`, reused

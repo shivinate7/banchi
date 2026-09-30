@@ -104,9 +104,9 @@
 .card-locations-owner .card-locations-rows {
   display: flex;
   flex-direction: column;
-  border-radius: var(--bn-r-lg);
-  background: var(--bn-surface);
-  box-shadow: var(--bn-shadow-1);
+  /* EACH COPY IS ITS OWN CARD (card-detail spec): a rounded ground per row with a gap between,
+     and no shared panel behind them. */
+  gap: var(--bn-3);
   overflow: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -143,7 +143,10 @@
   align-items: center;
   gap: var(--bn-2);
   padding: var(--bn-3) var(--bn-4);
-  border-bottom: 1px solid var(--bn-line);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface-2);
+  /* The ruler's marks ring themselves in the ground they stand on. */
+  --pb-knockout: var(--bn-surface-2);
   transition: background-color var(--bn-t-fast) var(--bn-ease);
   animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
 }
@@ -154,7 +157,6 @@
     'state'
     'action';
 }
-.card-locations-owner .card-locations-row:last-child { border-bottom: 0; }
 .card-locations-owner .card-locations-row:hover { background: var(--bn-hover); }
 
 /* The copy the walk is standing on. A NEUTRAL rail and a neutral ground: this says "you are

@@ -75,10 +75,10 @@ function Name({ side }: { side: PlaceNeighbor }): ReactNode {
 
   const [champion, epithet] = seam(side.name)
   return (
-    <>
+    <span className="nb-name">
       <b>{champion}</b>
       {epithet === null ? null : <span className="nb-rest">, {epithet}</span>}
-    </>
+    </span>
   )
 }
 

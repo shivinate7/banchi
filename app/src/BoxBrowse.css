@@ -748,7 +748,7 @@
 
 /* in a single column the photograph stops short of the full width */
 @container pane (max-width: 559px) {
-  .browse-shot { max-width: 300px; }
+  .browse-shot { max-width: 180px; justify-self: center; width: 100%; }
 }
 @media (max-width: 639px) {
   .browse-shot { max-width: none; align-items: center; }

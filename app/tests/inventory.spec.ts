@@ -1316,10 +1316,10 @@ test('selecting a card shows every copy of it, each with both doors out of inven
      THE FIGURE IS DRAWN AS HEADROOM NOW, and the assertion keeps its whole bite: one live
      against a ceiling of two leaves room for ONE, where a screen reading the bare cap of 4
      would offer room for three. */
-  await expect(page.locator('.card-locations-live .bn-stat-value')).toHaveText('1')
-  // D218: pushed/staged/headroom are sibling spans now; the seam is CSS
-  // (`.card-locations-counts > span::before`), never part of `textContent`.
-  await expect(page.locator('.card-locations-counts')).toHaveText('2 waiting to go liveRoom for 1 more live')
+  /* THE BAND DRAWS IT NOW (card-detail spec): the Live figure, and the ceiling as a meter whose
+     spoken form is `1 live, cap 2` — one live against a ceiling of two. */
+  await expect(page.locator('.browse-hero-fig').nth(1).locator('.browse-hero-fig-value')).toHaveText('1')
+  await expect(page.locator('.browse-hero-fig .bn-meter')).toHaveAttribute('aria-label', '1 live, cap 2')
 
   /* AND THE CARD'S NAME IS DRAWN ONCE ON THIS SCREEN. This header carried an `<h3>` with the same
      name the band's first fact row prints a few hundred pixels above — invisible while the two
@@ -1415,14 +1415,12 @@ test('a copy sold here since the reading is drawn beside it, and headroom follow
   // is SKU 8937370, the row the sister case above asserts at zero sold.
   await expect(page.locator('.card-locations-owner')).toBeVisible()
 
-  await expect(page.locator('.card-locations-live .bn-stat-value')).toHaveText('0')
-  // D218: the seam is CSS now (`.card-locations-since > span::before`), never `textContent`.
-  await expect(page.locator('.card-locations-since')).toHaveText('1 when read1 sold here since')
+  await expect(page.locator('.browse-hero-fig').nth(1).locator('.browse-hero-fig-value')).toHaveText('0')
+  await expect(page.locator('.browse-hero-fig').nth(1)).toHaveAttribute('title', '1 when read, 1 sold here since.')
   /* AND HEADROOM MOVES WITH IT. Computing off the raw reading would say `Room for 1 more live`
      here and refuse a relist the shelf can support — the one-line bug the change would
      otherwise have left behind. */
-  // D218: the seam is CSS now (`.card-locations-counts > span::before`), never `textContent`.
-  await expect(page.locator('.card-locations-counts')).toHaveText('2 waiting to go liveRoom for 2 more live')
+  await expect(page.locator('.browse-hero-fig .bn-meter')).toHaveAttribute('aria-label', '0 live, cap 2')
 })
 
 test('a card with no name and no SKU still offers both doors', async ({ page }) => {
@@ -6115,9 +6113,9 @@ test('a wider copies column never makes its rows taller', async ({ page }) => {
   const taller = heights.filter((point, at) => at > 0 && point.row > heights[at - 1]!.row)
   expect(taller, `row grew as the container widened: ${JSON.stringify(taller)}`).toEqual([])
 
-  /* And the wide branch really is better by the end of the sweep, so this cannot be satisfied by
-     deleting the threshold and never switching at all. */
-  expect(heights[heights.length - 1]!.row).toBeLessThan(heights[0]!.row)
+  /* THERE IS NO WIDE BRANCH ANY MORE: the row is one column at every width (card-detail spec), so
+     the widest row is never taller than the narrowest. */
+  expect(heights[heights.length - 1]!.row).toBeLessThanOrEqual(heights[0]!.row)
 })
 
 test('the box fill is qualified once, on the identity line', async ({ page }) => {

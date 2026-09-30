@@ -104,7 +104,8 @@ test('the departed row says one state and offers no action', async ({ page }) =>
      never was. */
   await expect(row.locator('.card-locations-action')).toHaveText('')
   const slot = await row.locator('.card-locations-action').boundingBox()
-  expect(slot?.width ?? 0, 'the action slot keeps its width with nothing in it').toBeGreaterThanOrEqual(137)
+  /* The foot is a row of its own now (card-detail spec), so what it reserves is its 40px height. */
+  expect(slot?.height ?? 0, 'the action slot keeps its height with nothing in it').toBeGreaterThanOrEqual(40)
 })
 
 test('the pooled row is the only no-bar shell that has not left', async ({ page }) => {
@@ -199,11 +200,12 @@ test('the copies specimen answers to its own width, as the screen does', async (
   const row = page.locator('.card-locations-owner .card-locations-row').first()
   await expect(row).toBeVisible()
 
-  /* Under 620px the container query rewrites the grid. Comparing the resolved areas rather than
+  /* The row is one column at every width (card-detail spec), so the areas are the same narrow as
+     wide. Comparing the resolved areas rather than
      asserting a class is what makes this a statement about the CASCADE — a class can be present
      while the rule that reads it never matches, and that is precisely the defect. */
   const areas = await row.evaluate((el) => getComputedStyle(el).gridTemplateAreas)
-  expect(areas).toBe('"place action" "neighbors neighbors" "state state" "bar bar"')
+  expect(areas).toBe('"place" "neighbors" "bar" "state" "action"')
 })
 
 /* THE SHEET'S IMAGERY IS THE SHEET'S, AND UNTIL 2026-09-06 IT WAS THE OWNER'S STORE'S.
