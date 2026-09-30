@@ -143,7 +143,12 @@ jobs:
         run: |
           sudo mkdir -p /var/cache/apt/archives
           sudo cp -n ~/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
-          timeout 120 npx playwright install --with-deps chromium || timeout 120 npx playwright install --with-deps chromium
+          timeout 120 npx playwright install --with-deps chromium || {
+            sudo pkill -x apt-get || true
+            sudo pkill -x dpkg || true
+            sleep 2
+            timeout 120 npx playwright install --with-deps chromium
+          }
           mkdir -p ~/apt-archives
           cp -n /var/cache/apt/archives/*.deb ~/apt-archives/ 2>/dev/null || true
 
