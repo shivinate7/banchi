@@ -689,6 +689,16 @@ async function open(
   return wire
 }
 
+/* `open()` RETURNS ON `main.orders`, WHICH DRAWS BEFORE THE ORDERS READ LANDS. A case that asserts
+   something is ABSENT (`toHaveCount(0)`) right after it reads the loading shape, where the thing
+   can never be, and passes whatever the rule does. Call this first: it waits for `GET /orders` to
+   be asked and for the loading shape to go, so the absence is read off the loaded rows. */
+async function ordersLoaded(page: Page, wire: Wire[]): Promise<void> {
+  await expect.poll(() => wire.some((one) => one.method === 'GET' && one.path.endsWith('/orders'))).toBe(true)
+  await expect(page.locator('.orders-stage')).toBeVisible()
+  await expect(page.locator('.orders-stage .bn-loading')).toHaveCount(0)
+}
+
 /* -------------------------------------------------------------------------------------- 1 */
 
 /* NOTHING HERE MAY REACH THE CAPTURE SERVER — `app/tests/shell.ts` carries the argument. This
@@ -912,7 +922,8 @@ test('a Ready to Ship order is never proposed for stand-down', async ({ page }) 
   /* THE PRESS MAY NOT REACH LIVE WORK. `open()`'s default order is Ready to ship, so the prompt
      must not draw at all — a bulk control that swept in the orders you still have to pick would
      be worse than the backlog it exists to clear. */
-  await open(page)
+  const wire = await open(page)
+  await ordersLoaded(page, wire)
   await expect(page.locator('.orders-backlog')).toHaveCount(0)
 })
 
@@ -932,7 +943,10 @@ test('a status this rule does not recognise is left open rather than swept in', 
         [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }],
       ),
     })
-    await expect(page.locator(VIEW)).toBeVisible()
+    /* THE SAME URL IS NOT A NAVIGATION, so `open()` on the second status draws the first one's
+       rows. Reload, so each status is read and drawn on its own. */
+    await page.reload()
+    await ordersLoaded(page, wire)
     await expect(page.locator('.orders-backlog')).toHaveCount(0)
     expect(wire.filter((one) => one.path === '/orders/close')).toEqual([])
   }
