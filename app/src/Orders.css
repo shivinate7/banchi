@@ -35,7 +35,7 @@
   align-items: start;
 }
 .orders-buyers { grid-area: buyers; display: none; min-width: 0; }
-.orders-cardcol { grid-area: card; display: none; min-width: 0; }
+.orders-cardcol { grid-area: card; display: none; min-width: 0; container: pane / inline-size; }
 .orders-walk { grid-area: walk; min-width: 0; }
 
 /* The skip link (interaction review, "32 tab stops"): off screen until a Tab lands on it, then
