@@ -5319,11 +5319,13 @@ test('a card at the back of the box gets one row, not a pretend between', async 
      asserts the block at the site that draws it once per copy. */
   const front = page.locator('.card-locations-owner .nb').nth(1)
   await expect(front).toBeVisible()
-  /* ONE SIDE, NOT A PRETEND BETWEEN: no `back`, and no arrow — an arrow only ever draws between
-     two real sides (`PlaceNeighbors.tsx`). */
+  /* ONE SIDE, NOT A PRETEND BETWEEN: no `back`, and the empty side wears a BACK marker, so
+     the line reads `BACK → Next` (`PlaceNeighbors.tsx`). */
   await expect(front.locator('.nb-side')).toHaveCount(1)
   await expect(front.locator('.nb-side')).toHaveAttribute('data-side', 'front')
-  await expect(front.locator('.nb-arrow')).toHaveCount(0)
+  await expect(front.locator('.nb-arrow')).toHaveCount(1)
+  await expect(front.locator(':scope > *').first()).toHaveClass('nb-end')
+  await expect(front.locator('.nb-end')).toHaveText('Back')
 
   /* A NAME WITH NO COMMA RENDERS WHOLE. The seam splits on the first `, ` and refuses any other
      punctuation — the same refusal `PositionLabel` makes for a label it cannot parse — so every
@@ -5332,7 +5334,7 @@ test('a card at the back of the box gets one row, not a pretend between', async 
   await expect(front.locator('.nb-rest')).toHaveCount(0)
   /* Nothing toward the back: card 1 is at the far back, so this card sits behind its one
      neighbour and in front of nothing (UX-186). */
-  await expect(front).toHaveAttribute('aria-label', 'Position: Conscription')
+  await expect(front).toHaveAttribute('aria-label', 'Next: Conscription (first in the box)')
 })
 
 test('an unread neighbour is said in words, and counts as the neighbour (LOC-28)', async ({ page }) => {
