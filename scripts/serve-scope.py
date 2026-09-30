@@ -47,6 +47,7 @@ import ast
 import importlib.util
 import os
 import sys
+import types
 from pathlib import Path
 from typing import List, Sequence
 
@@ -189,6 +190,28 @@ def selftest() -> int:
     check("an empty diff runs it", verdict([]), True)
     check("one in-scope path among many runs it",
           verdict(["docs/DESIGN.md", "app/src/Home.tsx", "store/master.py"]), True)
+
+    # EACH FAIL-OPEN ARM, forced through a stub matcher: the real VCS never fails on demand,
+    # so a flipped arm (skip where it must RUN) would stay green. The control proves the
+    # stub can make the gate SKIP at all.
+    def with_stub(**overrides):
+        stub = types.SimpleNamespace(
+            landing_base=lambda reference, head: "a" * 40,
+            changed_paths=lambda start, head: ["app/src/Orders.tsx"],
+            git_reader=lambda start, head: (lambda side, path: ""),
+            classify_paths=browser.classify_paths)
+        for name, value in overrides.items():
+            setattr(stub, name, value)
+        real = globals()["_browser_scope"]
+        globals()["_browser_scope"] = lambda: stub
+        try:
+            return classify("origin/main", "HEAD")[0]
+        finally:
+            globals()["_browser_scope"] = real
+
+    check("stub control: an unrelated change SKIPS", with_stub(), False)
+    check("no merge-base RUNS", with_stub(landing_base=lambda r, h: None), True)
+    check("a failed diff RUNS", with_stub(changed_paths=lambda s, h: None), True)
 
     # THE RECONCILIATION, PROVED HERE TOO AND NOT ONLY IN THE AUDIT ROW.
     carried = set(carried_names())

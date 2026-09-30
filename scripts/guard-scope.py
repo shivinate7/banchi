@@ -58,6 +58,7 @@ import os
 import re
 import sys
 import tempfile
+import types
 from pathlib import Path
 from typing import List, Optional, Sequence, Set, Tuple
 
@@ -554,6 +555,32 @@ def selftest() -> int:
     missing_head = "0" * 40
     check("no merge-base with a nonexistent head runs",
           classify("reap-selftest", "origin/main", missing_head)[0], True)
+
+    # ---- each fail-open arm, forced through a stub matcher. The real VCS never fails on
+    # demand, so without a stub a flipped arm (skip where it must RUN) stays green. The
+    # positive control proves the stub can make the gate SKIP at all.
+    def with_stub(**overrides):
+        stub = types.SimpleNamespace(
+            landing_base=lambda reference, head: "a" * 40,
+            changed_paths=lambda start, head: ["app/src/Orders.tsx"],
+            git_reader=lambda start, head: (lambda side, path: ""),
+            classify_paths=browser.classify_paths)
+        for name, value in overrides.items():
+            setattr(stub, name, value)
+        real = globals()["_browser_scope"]
+        globals()["_browser_scope"] = lambda: stub
+        try:
+            return classify("reap-selftest", "origin/main", "HEAD")[0]
+        finally:
+            globals()["_browser_scope"] = real
+
+    def boom(*args):
+        raise RuntimeError("forced")
+
+    check("stub control: an unrelated change SKIPS", with_stub(), False)
+    check("no merge-base RUNS", with_stub(landing_base=lambda r, h: None), True)
+    check("a failed diff RUNS", with_stub(changed_paths=lambda s, h: None), True)
+    check("a classification that raises RUNS", with_stub(changed_paths=boom), True)
 
     # ---- the pure half, per target, against `classify_paths` directly — the same shape
     # `serve-scope.py`'s own selftest uses, so a target's derived scope is proved without
