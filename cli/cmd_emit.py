@@ -534,14 +534,14 @@ def _apply_guard(guard, matches_by_sku, inventory):
             # THE GUARD'S READING NO LONGER FEEDS THE CAP (D7, the owner's ruling of
             # 2026-09-27). It used to raise `SkuMatch.guard_live`, so `--cap` counted it as a
             # floor on `copies_out` — a second reading the cap could be spent against, and
-            # DEBT37 is what that cost: a copy the store's own reading and the guard's both
+            # the overshoot is what that cost: a copy the store's own reading and the guard's both
             # counted was maxed rather than summed, so it could overshoot the cap by the
             # pending count. `--cap` now refuses a pending card outright
             # (`SkuMatch._cap_pending`) instead. THIS TRIM IS THE ONE JOB THE GUARD KEEPS: an
             # on-hand ceiling, `sendguard.room`, applied to `asked` exactly as before.
             if match.asked is None or match.asked > rooms[sku]:
                 match.asked = rooms[sku]
-                # WORDING GAP 1 (DEBT37): a zero the GUARD wrote is not a zero the operator
+                # GUARD-ZERO WORDING (D7): a zero the GUARD wrote is not a zero the operator
                 # typed, and `nothing_to_add` needs to tell them apart rather than reading
                 # every zero as "this send asked for none of this card".
                 if rooms[sku] == 0:
@@ -898,7 +898,7 @@ def _say_empty(left_out, cut_back, needs_price, live_names, capped, say) -> int:
     counts as needing a price and is not in `live_names`, which is this line's own list: the
     route reads the names from here, never from the guard's trims.
 
-    `capped` IS A COUNT, NOT A NAME LIST (DEBT37's wording gap 2). Unlike a guard trim, a
+    `capped` IS A COUNT, NOT A NAME LIST (D7's capped-card clause). Unlike a guard trim, a
     capped card's own line already carries every figure a name would add nothing to — "3
     copies sent since the live reading" or "4 live, at the cap of 4" — so the headline only
     needs how many, the way `needs_price` and `under_cut_off` are counts too."""

@@ -1,61 +1,7 @@
-## 31 — Twelve decisions are cited by path, one of them dead, and the path guard never reads code
+## 31 — The path guard never reads code, so a decision cited by path in a comment goes unchecked
 
-Found sweeping for the rest of PR #424's defect. That defect turned a slug's path citation
-into a path that never existed. RECORDED here, not fixed, on the owner's word, 2026-09-19.
-The mass rewrite waits until the current batch of work merges and the tree is back on
-`main`. This entry is the record. A finding that lives only in a pull request body is a
-finding that is lost.
+`check_paths` (the `paths` row) is called only with markdown files. A decision cited by its filename in a code comment, as in `store/numbers.py` and `store/orders.py`, is never resolved, and a mistyped one is invisible. `decision ids in code` resolves a bare `D<n>` in `.py`, `.ts`, `.tsx`, `.css` and `.js`, and never reads the path around it. A dead path citation once shipped this way: a comment in `scripts/docs-audit.py` cited a decision file without its slug.
 
-**What was measured.** Two shapes exist. Only the first is this repo's defect.
+**Outcome at risk.** A dead path citation ships unnoticed.
 
-One slug-form path citation, and it is the worked example. `docs/specs/sales-plan.md`, line 139,
-carried a path naming the price-history archive entry. That entry was still an unclaimed
-slug. The claim ran on 2026-09-19 and allocated D219. The claim step rewrote the path by
-substituting the token. That produced a path to a file that does not exist. The real file
-keeps its slug tail after the number. The audit refused the claim commit and the merge
-stopped. A person repaired that one line by hand, to cite D219 as an id. PR #424 fixes the
-cause, so the next claim writes an id rather than a broken path.
-
-FOUR already-claimed, numbered-path citations sit across four files (six more sat in two records since deleted). This is a different,
-older style. It names a real entry by its full `D<n>-<slug>.md` filename, not by its bare id:
-
-    docs/specs/stable-card-id.md
-    scripts/docs-audit.py, line 11689
-    store/orders.py, line 181
-    store/numbers.py, line 5
-
-Three of these resolve. ONE IS DEAD. `scripts/docs-audit.py`, line 11689, cites
-`docs/decisions/D218.md`. That file does not exist. The real one is
-`docs/decisions/D218-a-typed-dot-is-a-defect.md`. The citation dropped the descriptive
-tail, the same shape PR #424's defect added one where none belonged, in reverse.
-
-**Why the dead one was never caught, verified rather than assumed.** `make docs-audit`'s
-`paths` row is `check_paths(report, docs, allowed)`. Every caller passes it `docs =
-markdown_files()` (`scripts/docs-audit._walk`, `_walk(ROOT, (".md",))`) or a `.md`
-fixture. The four calls inside the row's own self-test do this too. No call anywhere in this
-file hands it a `.py`, `.ts`, `.tsx`, `.css` or `.js` path. The rule is real. `check_paths` is
-a real reader for it. The reader is wired to one file type only. A citation of the identical
-shape, sitting in a comment in `scripts/docs-audit.py`, is invisible to its own audit. This is
-not a gap in the rule. It is a gap in which files the reader opens.
-
-This is narrower than `decision ids in code`, which already resolves a BARE `D<n>` citation
-across `.py`, `.ts`, `.tsx`, `.css` and `.js` (`make docs-audit`'s own report: "citations in
-.py, .ts, .tsx, .css and .js all resolve"). That check reads the token alone. It never reads
-the path around it. A path-shaped citation is a different question it does not ask either.
-
-**What closes this.** Two things. Neither is built here. This entry is the record. The work
-is the owner's to schedule.
-
-1. The four citations become id citations. PR #424 taught the claim step this same
-   rewrite, for the future. This is the same rewrite, done once by hand, or by a small
-   script, over the existing tree. It matches the rule this repo already holds: "Give each
-   record its own file, one folder per kind. Cite by id, never by path."
-   (`~/Developer/claude-settings/CLAUDE.md`). D160 applies the identical argument a second
-   time.
-2. The `paths` row, or a sibling row built for the purpose, learns to open the file types
-   that can carry this citation. A repeat of that `scripts/docs-audit.py` citation is then caught on
-   the day it is written. Nobody sweeps for it by hand again.
-
-None of the six files above is `docs/decisions/`, `docs/decisions/` or `docs/map.py`. PR
-#424's own change does not touch them. Leaving them as they are does not affect `repo map`'s
-`governed_by` accounting.
+**Closes when.** The remaining path citations in code become id citations (cite by id, never by path), and the `paths` row, or a sibling row, opens the file types that can carry one.

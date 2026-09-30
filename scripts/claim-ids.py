@@ -1285,7 +1285,7 @@ def parse_claimed_ident(ident: str) -> Tuple[str, int]:
         return "step", int(match.group(1))
     raise ValueError(
         f"{ident!r} is not a claimed id's own spelling. A claimed id is a bare number in one "
-        f"of the four namespaces this file allocates: `D188`, `C4`, `step 12`, `DEBT12` — "
+        f"of the four namespaces this file allocates: `D188`, `C4`, `step 12`, `DEBT48` — "
         f"never a slug, since a slug is already unclaimed.")
 
 
@@ -1836,7 +1836,7 @@ def build_parser() -> argparse.ArgumentParser:
                              "Writes nothing, ever.")
     parser.add_argument("--unclaim", metavar="ID",
                         help="put an already-claimed id back to slug form: `D188`, `C4`, "
-                             "`step 12`, or `DEBT12`. The exact inverse of a claim, for the id "
+                             "`step 12`, or `DEBT48`. The exact inverse of a claim, for the id "
                              "`stale_claims` reported gone stale — REFUSES when ID is already "
                              "on --ref, since an id main holds is not this branch's to give "
                              "back. Previews by default; needs --write to perform it.")

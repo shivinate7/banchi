@@ -2155,7 +2155,7 @@ class SkuMatch:
     # amended). `None` for a store-less match, where the row alone answers — `live_before`.
     live_out: Optional[int] = None
     # WHETHER THE LIVE GUARD (`emit --live-guard`) LOWERED `asked` ALL THE WAY TO 0, on this
-    # match rather than on the operator's own typed figure (DEBT37's wording gap 1). `asked`
+    # match rather than on the operator's own typed figure (D7's guard-zero wording). `asked`
     # cannot carry both facts at once, so this is the second field: `nothing_to_add` reads it
     # to tell "the guard left no room" from "the operator asked for none of this card", which
     # is a different sentence from a different cause. Set only in `cli/cmd_emit.py:_apply_guard`,
@@ -2228,7 +2228,7 @@ class SkuMatch:
         this figure so `--cap` would count a live copy the store had not yet read — and could
         then overshoot the cap by the pending count, because a copy the guard and the store
         both counted was summed nowhere but could still be counted twice across the two
-        readings (DEBT37). `_cap_pending` below is the replacement: `--cap` now refuses a
+        readings (D7). `_cap_pending` below is the replacement: `--cap` now refuses a
         card outright while a copy is unreconciled, rather than picking between two readings
         that can each be wrong. What every SENTENCE about live quantity reads, so "4 live, at
         the cap of 4" can never be printed off a reading the store has since superseded —
@@ -2272,7 +2272,7 @@ class SkuMatch:
         """Whether this card's `nothing_to_add` reason is ABOUT THE CAP — pending reconcile,
         or the ordinary at/over-cap sentences — rather than being held back, a typed zero, a
         guard trim, or having left no copy to send at all. What `empty_send_sentence` counts
-        apart from `live` (DEBT37's wording gap 2): a card the cap closed never had TCGplayer
+        apart from `live` (D7's capped-card clause): a card the cap closed never had TCGplayer
         confirmed to hold every copy, which is what `live` says."""
         return (
             bool(self.copies)
@@ -2356,7 +2356,7 @@ class SkuMatch:
         # zero typed for this card is why nothing goes, and it is not a hold, so the way
         # back is the field and not the corpus.
         if self.asked == 0:
-            # DEBT37's WORDING GAP 1: a zero here can be the OPERATOR'S, or it can be the live
+            # D7's GUARD-ZERO WORDING: a zero here can be the OPERATOR'S, or it can be the live
             # guard's own room closing to nothing (`cli/cmd_emit.py:_apply_guard`) — two
             # different causes that `asked` cannot carry apart on its own. `guard_trimmed`
             # is the second field that lets this method tell them apart, rather than reading
@@ -2380,7 +2380,7 @@ class SkuMatch:
             return "every copy in this run is already listed or has left the box"
         # THE OWNER'S RULING, 2026-09-27, REPLACING THE 2026-09-25 "TAKE THE LARGER" AMENDMENT:
         # `--cap` is refused for this card outright while a copy sent since is still pending —
-        # no copy is silently maxed or summed across two readings any more (DEBT37). `pending`
+        # no copy is silently maxed or summed across two readings any more (D7). `pending`
         # is `nothing_to_add`'s own name for the same gap `_cap_pending` tests.
         #
         # THE REMEDY IS WORDED AS THE SCREEN'S OWN ACTION (D196, on review). `pkmnscan

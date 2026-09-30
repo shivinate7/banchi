@@ -183,7 +183,7 @@ export function emptySendTitle(empty: EmptySend): string {
     said.push(`TCGplayer already had every copy of ${live} ${live === 1 ? 'card' : 'cards'}${names ? ` (${names})` : ''}.`)
   }
   if (capped > 0) {
-    // DEBT37'S WORDING GAP 2: a card `--cap` closed had no clause here at all, silently
+    // THE CAPPED-CARD CLAUSE (D7): a card `--cap` closed had no clause here at all, silently
     // dropped from a title that named every other reason. Never folded into `live` above —
     // a capped card was never confirmed live, which is what `live` says.
     said.push(`${capped} ${capped === 1 ? 'card is' : 'cards are'} held at this send's cap.`)

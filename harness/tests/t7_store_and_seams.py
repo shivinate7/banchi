@@ -39496,7 +39496,7 @@ def _m_cases() -> Dict[str, dict]:
         "home": {"line": "send 3 copies to TCGplayer", "behind": "1 card needs a price", "tile": "runs to price, 3 ready"},
     }
     # R7 F5, UNDER A CAP THE GUARD USED TO CLOSE AND NO LONGER DOES (the owner's ruling,
-    # 2026-09-27, replacing the 2026-09-25 "take the larger" amendment, DEBT37). A cap of 1
+    # 2026-09-27, replacing the 2026-09-25 "take the larger" amendment, D7). A cap of 1
     # with one Dunsparce live guard-side now leaves room for exactly one, because the guard's
     # own reading no longer feeds the cap at all — only the store's own `copies_out` does, and
     # it is fresh here (no prior push, no pending). What the guard STILL does, unchanged, is
@@ -39516,7 +39516,7 @@ def _m_cases() -> Dict[str, dict]:
 
     # ============================================================ D7, THE 2026-09-27 RULING
     #
-    # `--cap` REFUSES A CARD OUTRIGHT WHILE A COPY SENT SINCE IS STILL PENDING (DEBT37), and
+    # `--cap` REFUSES A CARD OUTRIGHT WHILE A COPY SENT SINCE IS STILL PENDING (D7), and
     # once reconciled the cap reads the store's own one reading alone — nothing maxed or
     # summed with a guard any more. `pure1`/`pure2` hold Dunsparce alone (no R, no A), so a
     # case can push, reconcile and cap one SKU with nothing else to crowd the assertions;
@@ -39585,7 +39585,7 @@ def _m_cases() -> Dict[str, dict]:
                      "tile": "2 ready"},
         }
 
-    # --- DEBT37's wording gap 2: the empty-send headline names a card the cap closed --------
+    # --- D7's capped-card clause: the empty-send headline names a card the cap closed --------
     # Two of Dunsparce's three copies are pushed and never reconciled (one stays uncommitted,
     # for the same reason as the row above), the reverse holo's one copy is pushed in full,
     # and Articuno still has no price — nothing is left to send at all, which is what reaches
@@ -39613,7 +39613,7 @@ def _m_cases() -> Dict[str, dict]:
                      "tile": "run to price, 1 ready"},
         }
 
-    # --- DEBT37's wording gap 1: a guard-zeroed `asked` is not a typed zero -----------------
+    # --- D7's guard-zero wording: a guard-zeroed `asked` is not a typed zero -----------------
     # The cap already closes Dunsparce to nothing on its own (one pushed and reconciled,
     # exactly at a cap of one, with two more uncommitted behind it) — so the guard's OWN
     # independent closure (it shows the whole three on hand as live) trims `would` from zero,
