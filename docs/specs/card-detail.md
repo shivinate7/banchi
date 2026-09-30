@@ -41,9 +41,12 @@ The panel has two parts.
 The row keeps every fact that the built row has:
 
 - the address: box, section, and "Card N of M";
-- the neighbour line, which is one labelled phrase across the full row: "Between **Bellows Breath** and
-  **Hextech Anomaly**". At the end of a box, an outline BACK or FRONT pill takes the place of the name.
-  Each "word + name" pair is kept together on one line;
+- the neighbour line. It has no words (owner ruling). It runs the same way as the ruler:
+  "← **Bellows Breath** [4] **Hextech Anomaly** →".
+  - The left arrow points to the back, and the right arrow points to the front.
+  - [4] is this copy's own number chip, the same accent chip as on the ruler pin. It sits between the two neighbours.
+  - At the end of a box, an outline BACK or FRONT pill takes the place of the name and its arrow.
+  - Each "arrow + name" pair is kept together on one line;
 - the section strip;
 - the card ruler: ticks every 5, a number every 10, the edge numbers, the filled card cell and the pin;
 - BACK/FRONT, written once under the ruler.
@@ -59,16 +62,17 @@ There are two changes to the ruler:
 The code makes Mark sold the act that matters. Walk-in sales are recorded here (`OwnerRows` rule 3), and it is the
 only act with a worded primary form (`Inventory.tsx` `renderAction`). Retire and Move open a dialog.
 
-- **One row is chosen.** A press on a row chooses it. When the panel opens, the chosen row is the copy the walk
-  stands on (`currentKey`). The chosen row has a white ground and an accent rail on its left edge (row 1 in the sheet).
-- **The chosen row only** has the worded, filled `bn-btn-primary` Mark sold. A list of any length has one worded
-  button, so there is no wall.
-- **Every other row** has Mark sold as a 40px `bn-icon-btn` with the `sold` glyph in accent ink. It is the first of
-  the row's three icons, so it is still the primary act. A press on it sells that copy directly, with no choose step.
+Owner ruling: no copy is chosen or preselected (`OwnerRows` rule 2 stands). Mark sold is the same control, at the
+same weight, on every row.
+
+- **Mark sold** is a worded 40px `bn-btn`, 128px wide, with accent ink on the `--bn-accent-tint` ground. It has no
+  fill and no shadow. On hover the ground goes to `--bn-accent-tint-2`.
+  It is the one coloured control in the row, so it is clearly the primary act. Three tinted buttons do not make
+  a wall of accent.
 - **Retire** and **Move** are bare `bn-icon-btn` icons at 40px, in ink-3.
 - All targets are 40px or more.
-- At 410 the chosen row's actions become the foot of the row, under the ruler, and Mark sold fills the width.
-  Other rows keep their three icons at the top right.
+- The actions are the foot of the row, right-aligned under BACK/FRONT, at every width. No text line shares a line
+  with a 40px control, so the gap between the lines is the same on every row.
 
 ## Build checklist (one Sonnet lane)
 
@@ -105,16 +109,18 @@ PNGs.
    - Do not draw the tick number within 2 cards of the pin.
    - Keep the height of the block the same in every state (D118, a press moves nothing).
 6. `app/src/PlaceNeighbors.tsx`:
-   - Say the line as "Between X and Y". Delete the arrow.
-   - Each "word + name" pair is one unbreakable group.
-   - Draw the end-of-box word as a `bn-pill-sm bn-pill-outline` chip.
-   - The line spans the full row, under the address and the actions.
-   - Update its `aria-label` to the same words.
-7. `Inventory.tsx` `renderAction` row form, and a chosen-row state in `CardLocations.tsx` `OwnerRows`:
-   - Keep the chosen key as screen state. It starts at `currentKey`, and a press on a row sets it.
-   - Chosen row: `Button variant="primary"` "Mark sold", and Retire and Move as `IconButton size="xl"`.
-   - Every other row: `IconButton size="xl" icon="sold"` in accent ink, then Retire and Move.
-   - Choosing a row moves no other row, and the row does not change height (D118, a press moves nothing).
+   - Draw "← back-name [N] front-name →": CSS arrows in ink-4, and the copy's number in the ruler's chip style.
+   - No words on screen. Keep the spoken `aria-label` as it is.
+   - Each "arrow + name" pair is one unbreakable group.
+   - Draw the end-of-box word as a `bn-pill-sm bn-pill-outline` chip, with no arrow.
+   - The line spans the full row, under the address.
+7. `Inventory.tsx` `renderAction` row form:
+   - Use the same control on every row: a worded `Button` "Mark sold" with the `sold` icon, accent ink and a tint
+     ground. It shares one width across the rows (D195, same-role buttons share a width).
+     Add the tint form as a kit button variant, not as a local style.
+   - Retire and Move stay `IconButton size="xl"`.
+   - Put the actions in a right-aligned foot row under the ruler, at every width.
+   - Add no chosen or preselected row.
    - `app/tests/button-stack.spec.ts` may measure this row. Read it, and update it to the new form.
 8. `app/src/BoxBrowse.css` `.browse-band`: the photo is one column, and the copies list takes `flex: 1` and scrolls.
    At a narrow pane the photo stacks above the list at 180px wide.
@@ -124,8 +130,6 @@ PNGs.
 ## Open
 
 - The amber state at 3 days is provisional (item 4).
-- `OwnerRows` rule 2 says that nothing is preselected. When the panel opens, the chosen row is the copy the walk
-  stands on, so the worded button starts there. The builder must not add a recommendation beyond that.
 - The brief's data has 5 stored but draws 3 copy rows. The sheet draws what the brief names. In the product, the
   rows count every drawn copy.
 - A short copy list leaves empty height under the photo and under the list at pane 820.

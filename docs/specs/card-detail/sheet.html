@@ -94,19 +94,29 @@
   .nb { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-sm);
         font-weight: 600; color: var(--bn-ink-3); }
   .nb b { color: var(--bn-ink); font-weight: 700; }
-  .nb .word { font-weight: 500; }
-  .cp > .nb { grid-column: 1 / -1; }
-  .cp-where { align-self: center; }
-  .nb .pair { white-space: nowrap; display: inline-flex; align-items: center; gap: var(--bn-2); }
+  /* The neighbours, read the way the ruler runs: the card toward the back on the left under a
+     left arrow, this copy's own number chip in the middle, the card toward the front on the right
+     under a right arrow. No words. A box end shows the BACK or FRONT chip in place of a name. */
+  .nb .side { white-space: nowrap; display: inline-flex; align-items: center; gap: var(--bn-1-5); }
+  .nb .dir { color: var(--bn-ink-4); font-weight: 400; }
+  .nb .back .dir::before { content: '←'; }
+  .nb .front .dir::before { content: '→'; }
+  .nb .here { min-width: 22px; height: 18px; padding: 0 var(--bn-1); border-radius: var(--bn-r-xs);
+              background: var(--bn-accent); color: var(--bn-on-accent); font-size: var(--bn-fs-xs); font-weight: 700;
+              display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
   .nb .end { height: 18px; font-family: var(--bn-font-mono); letter-spacing: var(--bn-tracking-caps); }
 
-  /* Actions. The chosen row (a press on the row chooses it) carries the one worded, filled
-     Mark sold. Every other row carries Mark sold as a 40px icon in accent ink, first of its three
-     icons. A list of any length holds one worded button. */
+  /* One column at every width: address, neighbours, locator, then the actions as the row's foot.
+     No text row shares a line with a 40px control, so the gaps are the same on every row. */
+  .cp { grid-template-columns: minmax(0, 1fr); }
+  .cp-acts { justify-content: flex-end; order: 4; }
+
+  /* Actions, the same on every row. Mark sold is worded on a tinted accent ground: the one
+     coloured control in the row, but never a filled slab. Retire and Move are bare ink icons. */
   .cp-acts { display: flex; align-items: center; gap: var(--bn-1); align-self: start; }
-  .cp-sell { --btn-h: 40px; width: 128px; font-weight: 600; }
-  .cp-icon.cp-sell-icon { color: var(--bn-accent); }
-  .cp.is-chosen { background: var(--bn-surface); box-shadow: inset 3px 0 0 var(--bn-accent), var(--bn-shadow-1); }
+  .cp-sell { --btn-h: 40px; width: 128px; font-weight: 600; color: var(--bn-accent);
+             background: var(--bn-accent-tint); box-shadow: none; }
+  .cp-sell:hover { background: var(--bn-accent-tint-2); }
   .cp-icon { width: 40px; height: 40px; color: var(--bn-ink-3); }
   .cp-icon svg { width: 20px; height: 20px; }
 
@@ -144,9 +154,6 @@
   .frame-410 .cd-body { grid-template-columns: minmax(0, 1fr); padding: var(--bn-4); gap: var(--bn-4); }
   .frame-410 .cd-photo { width: 180px; justify-self: center; }
   .frame-410 .cp { grid-template-columns: minmax(0, 1fr); }
-  .frame-410 .cp.is-chosen .cp-acts { order: 4; }
-  .frame-410 .cp:not(.is-chosen) { grid-template-columns: minmax(0, 1fr) auto; }
-  .frame-410 .cp-sell { flex: 1; width: auto; }
 
   /* ---- the Live dot's three states, drawn once under the panes ---- */
   .states { margin-top: var(--bn-6); padding: var(--bn-3); display: flex; gap: var(--bn-8); }
@@ -233,7 +240,7 @@
 
   /* Three copies. sections: card counts per section in the box; here: which one holds the copy. */
   const ROWS = [
-    { box: 'RB Origins', section: 'Section 2: Epics', card: 4, of: 11, prev: 'Bellows Breath', next: 'Hextech Anomaly', sections: [14, 11, 9], here: 2, chosen: true },
+    { box: 'RB Origins', section: 'Section 2: Epics', card: 4, of: 11, prev: 'Bellows Breath', next: 'Hextech Anomaly', sections: [14, 11, 9], here: 2 },
     { box: 'MEG Bulk', section: 'Section 1: Unleashed', card: 1, of: 23, prev: null, next: 'Void Assault', sections: [23, 18, 12, 7], here: 1 },
     { box: 'Mixed Singles', section: 'Section 4: Riftbound', card: 42, of: 42, prev: 'Moonfall', next: null, sections: [9, 16, 12, 42], here: 4 },
   ]
@@ -259,23 +266,24 @@
   }
 
   function row(r) {
-    const side = (name, end) => name === null
-      ? `<span class="bn-pill bn-pill-sm bn-pill-outline end">${end}</span>`
-      : `<b>${name}</b>`
+    const back = r.prev === null
+      ? `<span class="bn-pill bn-pill-sm bn-pill-outline end">BACK</span>`
+      : `<span class="dir" aria-hidden="true"></span><b>${r.prev}</b>`
+    const front = r.next === null
+      ? `<span class="bn-pill bn-pill-sm bn-pill-outline end">FRONT</span>`
+      : `<b>${r.next}</b><span class="dir" aria-hidden="true"></span>`
     const strip = r.sections.map((n, i) =>
       `<span class="${i + 1 === r.here ? 'here' : ''}" style="flex-grow:${n}">${i + 1}</span>`).join('')
-    return `<article class="cp${r.chosen ? ' is-chosen' : ''}" aria-current="${r.chosen ? 'true' : 'false'}">
+    return `<article class="cp">
       <div class="cp-where">
         <p class="cp-addr"><span class="box">${r.box}</span><span>${r.section}</span><span class="card">Card ${r.card} of ${r.of}</span></p>
       </div>
       <div class="cp-acts">
-        ${r.chosen
-          ? `<button class="bn-btn bn-btn-primary cp-sell" type="button">${svg('sold', 18)}Mark sold</button>`
-          : `<button class="bn-icon-btn cp-icon cp-sell-icon" type="button" aria-label="Mark sold" title="Mark sold">${svg('sold', 20)}</button>`}
+        <button class="bn-btn cp-sell" type="button">${svg('sold', 18)}Mark sold</button>
         <button class="bn-icon-btn cp-icon" type="button" aria-label="Retire" title="Retire">${svg('archive', 20)}</button>
         <button class="bn-icon-btn cp-icon" type="button" aria-label="Move" title="Move">${svg('moveTo', 20)}</button>
       </div>
-      <p class="nb"><span class="pair"><span class="word">Between</span>${side(r.prev, 'BACK')}</span><span class="pair"><span class="word">and</span>${side(r.next, 'FRONT')}</span></p>
+      <p class="nb"><span class="side back">${back}</span><span class="here" aria-hidden="true">${r.card}</span><span class="side front">${front}</span></p>
       <div class="cp-loc">
         <div class="strip">${strip}</div>
         ${ruler(r.card, r.of)}
