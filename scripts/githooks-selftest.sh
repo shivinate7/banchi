@@ -531,7 +531,7 @@ case "$both_out" in
   *) ok "a slug on a ref that is NOT main — silent" ;;
 esac
 
-echo "  -- a secrets file is refused in any directory (D-precommit-secrets-file) --"
+echo "  -- a secrets file is refused in any directory (D-precommit-secrets-file, the hook refuses a secrets file) --"
 git switch -q -c secretstest 2>/dev/null
 mkdir -p sub/deep
 for name in .env .env.local sub/.env sub/deep/.env.production; do
@@ -541,7 +541,23 @@ for name in .env .env.local sub/.env sub/deep/.env.production; do
   git reset -q -- "$name"
   rm -f "$name"
 done
-for name in .env.example sub/.env.example .envrc; do
+mkdir -p "café" other
+for name in "café/.env" .ENV .Env.Local .env.example.bak; do
+  printf 'K=v\n' > "$name"
+  git add -f "$name"
+  expect refuse "$name staged — non-ASCII dir, upper case, or a template backup" git commit -qm "secrets file"
+  git reset -q -- "$name"
+  rm -f "$name"
+done
+printf 'K=v\n' > moved.txt
+git add moved.txt && git commit -qm "to be renamed" -q
+git mv moved.txt .env
+expect refuse "a git mv rename onto the name" git commit -qm "rename onto secrets"
+git mv -f .env moved.txt
+printf 'K=v\n' > gone.txt; git add gone.txt; git commit -qm "gone" -q
+git rm -q gone.txt
+expect allow "a staged delete is not a secrets file staged" git commit -qm "delete"
+for name in .env.example sub/.env.example other/.ENV.EXAMPLE .envrc; do
   printf 'K=\n' > "$name"
   git add -f "$name"
   expect allow "$name staged — not a secrets file" git commit -qm "template"

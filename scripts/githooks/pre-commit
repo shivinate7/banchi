@@ -151,12 +151,21 @@ $(printf '%s\n' "$icloud_dupes" | sed 's/^/    /')
   If a name like this is genuinely intended:  PKMNSCAN_DUPES=off git commit ..."
 fi
 
-# SECRETS FILES (D-precommit-secrets-file). Refused: any staged path whose basename is `.env` or
-# starts with `.env.`, in any directory. The Claude guard only sees a command that NAMES the file,
-# so `git add -f .` sweeps it in, and Codex runs no Claude hook. This hook is the one guard every
-# tool runs. The one allow is `.env.example`, the template this repo already tracks: it is
-# named here, and nothing else is exempt. No hatch: a secret in history is not undone by a flag.
-secrets_files="$(printf '%s\n' "$staged" | grep -E '(^|/)\.env(\.[^/]*)?$' | grep -Ev '(^|/)\.env\.example$' || true)"
+# SECRETS FILES (D-precommit-secrets-file, the hook refuses a secrets file). Refused: any staged
+# path whose basename is `.env` or starts with `.env.`, in any directory. The Claude guard only
+# sees a command that NAMES the file, so `git add -f .` sweeps it in, and Codex runs no Claude
+# hook. This hook is the one guard every tool runs. The one allow is `.env.example`, the template
+# this repo tracks. Names are read with -z, so git does not quote a non-ASCII path. The match is
+# case-insensitive, because macOS is: `.ENV` is the same file. Fails open like the other clauses.
+# No hatch: a secret in history is not undone by a flag.
+secrets_files=""
+while IFS= read -r -d '' sp; do
+  sb="$(printf '%s' "${sp##*/}" | tr 'A-Z' 'a-z')"
+  case "$sb" in
+    .env.example) ;;
+    .env|.env.*) secrets_files="$secrets_files$sp"$'\n' ;;
+  esac
+done < <(git diff --cached --name-only --diff-filter=ACMR -z 2>/dev/null)
 if [ -n "$secrets_files" ]; then
   fail "a secrets file is staged:
 $(printf '%s\n' "$secrets_files" | sed 's/^/    /')
