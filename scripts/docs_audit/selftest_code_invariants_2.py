@@ -1,4 +1,4 @@
-"""Self-test cases, code invariants rows. Called by `selftest.self_test`."""
+"""Self-test cases, code invariants rows, part 2. Called by `selftest.self_test`."""
 
 from __future__ import annotations
 

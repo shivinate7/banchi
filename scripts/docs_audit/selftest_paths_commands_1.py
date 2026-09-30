@@ -1,4 +1,4 @@
-"""Self-test cases, paths commands rows. Called by `selftest.self_test`."""
+"""Self-test cases, paths commands rows, part 1. Called by `selftest.self_test`."""
 
 from __future__ import annotations
 

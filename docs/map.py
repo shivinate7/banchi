@@ -3993,13 +3993,13 @@ COMPONENTS = [
                         "single function ran its cases.",
                 "governed_by": []},
             "docs_audit/selftest_code_invariants_1.py": {
-                "does": "Self-test cases for the code invariants 1 rows, called by `selftest.self_test`.",
+                "does": "Self-test cases for the code invariants rows, part 1, called by `selftest.self_test`.",
                 "governed_by": ["D141"]},
             "docs_audit/selftest_code_invariants_2.py": {
-                "does": "Self-test cases for the code invariants 2 rows, called by `selftest.self_test`.",
+                "does": "Self-test cases for the code invariants rows, part 2, called by `selftest.self_test`.",
                 "governed_by": ["D63", "D134", "D210"]},
             "docs_audit/selftest_code_invariants_3.py": {
-                "does": "Self-test cases for the code invariants 3 rows, called by `selftest.self_test`.",
+                "does": "Self-test cases for the code invariants rows, part 3, called by `selftest.self_test`.",
                 "governed_by": ["D9"]},
             "docs_audit/selftest_data.py": {
                 "does": "Fixture lines the path-extractor self-test cases read.",
@@ -4011,10 +4011,10 @@ COMPONENTS = [
                 "does": "Self-test cases for the env map rows, called by `selftest.self_test`.",
                 "governed_by": ["D27", "D135", "D141"]},
             "docs_audit/selftest_paths_commands_1.py": {
-                "does": "Self-test cases for the paths commands 1 rows, called by `selftest.self_test`.",
+                "does": "Self-test cases for the paths commands rows, part 1, called by `selftest.self_test`.",
                 "governed_by": []},
             "docs_audit/selftest_paths_commands_2.py": {
-                "does": "Self-test cases for the paths commands 2 rows, called by `selftest.self_test`.",
+                "does": "Self-test cases for the paths commands rows, part 2, called by `selftest.self_test`.",
                 "governed_by": []},
             "docs_audit/selftest_records.py": {
                 "does": "Self-test cases for the records rows, called by `selftest.self_test`.",
