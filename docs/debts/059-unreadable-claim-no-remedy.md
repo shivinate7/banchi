@@ -1,15 +1,7 @@
 ## DEBT59 — an unreadable live claim has no way out on screen
 
-**Symptom.** A live send claim or submission whose row will not parse makes `SendClaims.live`
-and `Submissions.live` raise `StoreError`. That is correct: a money path must not skip a live
-claim. The press pre-check now refuses with the same sentence (`claim_unreadable`).
+A live send claim or submission whose row will not parse makes `SendClaims.live` and `Submissions.live` raise `StoreError`. That is correct: a money path must not skip a live claim. The press pre-check refuses with `claim_unreadable`, and the Sends list (`send_routes.do_sends`) draws every readable claim and returns `unreadable_claims`, which Pricing's send card shows. Still strict and raising: `_claim_rows`, `_claim_conflict` and `do_pipeline_waiting` in `server/pipeline_routes.py`, and `SendClaims.overlap` and `Submissions.overlap`. The app offers no release, so recovery is a hand repair of the row. It has never occurred on the real store (unmeasured beyond that).
 
-**Gap.** Callers that stay strict and raise: `_claim_rows` (the claims list), `_claim_conflict`
-and `do_pipeline_waiting` in `server/pipeline_routes.py`, and `SendClaims.overlap` /
-`Submissions.overlap` (emit, the claim itself). The Sends list (`send_routes.do_sends`, through
-`_held_stamps` and `_markdown_records`) no longer raises: it draws every readable claim and
-returns `unreadable_claims`, which Pricing's send card shows. The app still offers no release. Recovery today is a hand repair of the row.
+**Outcome at risk.** A press stays refused until someone repairs a database row by hand.
 
-**Why not fixed.** A remedy needs claim rows that tolerate an unreadable claim, so the screen
-can draw and release it by key. That is more than 40 lines and a screen change. Owner's word,
-2026-09-28: leave as a gap. It has never occurred on the real store (unmeasured beyond that).
+**Closes when.** Claim rows tolerate an unreadable claim so the screen can draw and release it by key. That is more than 40 lines and a screen change, and the owner chose to leave it.

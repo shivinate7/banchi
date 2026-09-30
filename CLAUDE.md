@@ -351,6 +351,7 @@ Use bold labels in one quoted block, never a code fence. Start with the point. N
 - `docs/map.py` is the repo as data: built, TBD, and the decisions that govern each file. Read it through `make map`.
   Never read it whole. `make docs-audit` fails a file with no entry.
 - Build order is `SHIPPED` and `OPEN` (D80, a section with no reader). `n` is a stable id.
+- `docs/agent-traps.md` holds the tool and test traps that produced a false green or a lost tree. Read it before a mutation run or a worktree recovery.
 - `docs/decisions/` holds settled decisions, one file each. It is never `@`-loaded (D60, the @-loaded docs are dense).
   `scripts/decision-context.py` names the governing ones.
 - `docs/GATES.md` points at `docs/gates/`: the harness contract and the build order.

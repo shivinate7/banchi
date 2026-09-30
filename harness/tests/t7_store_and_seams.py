@@ -16841,7 +16841,7 @@ def check_emit_buried_box(checks: Checks) -> None:
     deletion record refuses the run on both branches (bid, time), the single and the merged
     path refuse, a position the store holds no card at is refused, the Send screen's mapping
     shows the owner one plain sentence, and a card that MOVED to another live box still sends.
-    (docs/debts slug `emit-buried-box`.)
+    (D36, D145.)
     """
     checks.note("")
     checks.note("EMIT OVER A BURIED BOX — refused, and no ghost card is born")
@@ -26744,7 +26744,7 @@ def check_listing_commands(checks: Checks) -> None:
     # --- emit against a position the store has never seen ---------------------------------
     # A run joined from a recovered or hand-made identifications file. It USED TO upsert a
     # card here; that birth made 99 ghost cards and ~96 phantom TCGplayer copies on
-    # 2026-09-27 (docs/debts slug `emit-buried-box`). No caller needs it, so it is gone: the
+    # 2026-09-27 (D36, D145). No caller needs it, so it is gone: the
     # emit refuses, names the position, and writes and creates nothing.
     with isolated_home():
         run_dir = runs.create("t7-unseen")
@@ -27255,7 +27255,7 @@ def check_listing_commands(checks: Checks) -> None:
 
     # --- a zero reading taken AFTER the sale ages the claim (D150) ---
     #
-    # THE OWNER'S OWN CASE, WHICH DEBT24 RECORDED AS DELIBERATELY UNFIXED. A copy
+    # THE OWNER'S OWN CASE, WHICH D150 LEAVES OUT OF SCOPE BY THE OWNER'S CHOICE. A copy
     # is pushed, it sells, and a later export reads `Total Quantity` 0 for the SKU. `pushed`
     # has no drawdown and the old gate aged it only where the export reported copies LIVE, so
     # the claim stood at its full count forever: the copies on hand were committed against it
@@ -39531,7 +39531,7 @@ def _m_cases() -> Dict[str, dict]:
         "home": {"line": "send 3 copies to TCGplayer", "behind": "1 card needs a price", "tile": "runs to price, 3 ready"},
     }
     # R7 F5, UNDER A CAP THE GUARD USED TO CLOSE AND NO LONGER DOES (the owner's ruling,
-    # 2026-09-27, replacing the 2026-09-25 "take the larger" amendment, DEBT37). A cap of 1
+    # 2026-09-27, replacing the 2026-09-25 "take the larger" amendment, D7). A cap of 1
     # with one Dunsparce live guard-side now leaves room for exactly one, because the guard's
     # own reading no longer feeds the cap at all — only the store's own `copies_out` does, and
     # it is fresh here (no prior push, no pending). What the guard STILL does, unchanged, is
@@ -39551,7 +39551,7 @@ def _m_cases() -> Dict[str, dict]:
 
     # ============================================================ D7, THE 2026-09-27 RULING
     #
-    # `--cap` REFUSES A CARD OUTRIGHT WHILE A COPY SENT SINCE IS STILL PENDING (DEBT37), and
+    # `--cap` REFUSES A CARD OUTRIGHT WHILE A COPY SENT SINCE IS STILL PENDING (D7), and
     # once reconciled the cap reads the store's own one reading alone — nothing maxed or
     # summed with a guard any more. `pure1`/`pure2` hold Dunsparce alone (no R, no A), so a
     # case can push, reconcile and cap one SKU with nothing else to crowd the assertions;
@@ -39620,7 +39620,7 @@ def _m_cases() -> Dict[str, dict]:
                      "tile": "2 ready"},
         }
 
-    # --- DEBT37's wording gap 2: the empty-send headline names a card the cap closed --------
+    # --- D7's capped-card clause: the empty-send headline names a card the cap closed --------
     # Two of Dunsparce's three copies are pushed and never reconciled (one stays uncommitted,
     # for the same reason as the row above), the reverse holo's one copy is pushed in full,
     # and Articuno still has no price — nothing is left to send at all, which is what reaches
@@ -39648,7 +39648,7 @@ def _m_cases() -> Dict[str, dict]:
                      "tile": "run to price, 1 ready"},
         }
 
-    # --- DEBT37's wording gap 1: a guard-zeroed `asked` is not a typed zero -----------------
+    # --- D7's guard-zero wording: a guard-zeroed `asked` is not a typed zero -----------------
     # The cap already closes Dunsparce to nothing on its own (one pushed and reconciled,
     # exactly at a cap of one, with two more uncommitted behind it) — so the guard's OWN
     # independent closure (it shows the whole three on hand as live) trims `would` from zero,
