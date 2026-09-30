@@ -2519,7 +2519,30 @@ def main() -> int:
         ok(not retitle_row.findings,
            "renaming a held number to a new descriptive tail allocates nothing",
            "\n".join(f.where + ": " + f.message for f in retitle_row.findings))
-        git(twork, "mv", "docs/decisions/D002-second.md", "docs/decisions/D009-second.md")
+        # HEAVY CONTENT CHANGE: a retitle whose body is rewritten reads as D + A, never R.
+        write(twork, "docs/decisions/D002-second-title.md", "wholly\nnew\ntext\nnothing\nshared\n")
+        git(twork, "rm", "-q", "docs/decisions/D002-second.md")
+        git(twork, "add", "-A")
+        git(twork, "commit", "-qm", "retitle with the whole body rewritten")
+        heavy_report = audit.Report()
+        audit.check_numbered_record_growth(heavy_report, False)
+        heavy_row = next(r for r in heavy_report.checks if r.check == "numbered record growth")
+        ok(not heavy_row.findings,
+           "a retitle read as delete plus add (heavy content change) allocates nothing",
+           "\n".join(f.where + ": " + f.message for f in heavy_row.findings))
+        # A NEW NUMBER with no file behind it on the base, next to an unrelated delete, fails.
+        write(twork, "docs/decisions/D077-brand-new.md", "new\n")
+        git(twork, "add", "-A")
+        git(twork, "commit", "-qm", "a new number")
+        newnum_report = audit.Report()
+        audit.check_numbered_record_growth(newnum_report, False)
+        newnum_row = next(r for r in newnum_report.checks if r.check == "numbered record growth")
+        ok(any("D077-brand-new.md" in f.where for f in newnum_row.findings),
+           "a genuinely new number is still refused",
+           "\n".join(f.where for f in newnum_row.findings))
+        git(twork, "rm", "-q", "docs/decisions/D077-brand-new.md")
+        git(twork, "commit", "-qm", "drop the probe")
+        git(twork, "mv", "docs/decisions/D002-second-title.md", "docs/decisions/D009-second.md")
         git(twork, "commit", "-qm", "a rename that changes the number")
         changed_report = audit.Report()
         audit.check_numbered_record_growth(changed_report, False)
