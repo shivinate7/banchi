@@ -53,7 +53,7 @@ CLI/audit surface, if one is ever added. `events_at` is a sibling, not a replace
 same relationship `events_named` (D134) already has to `history()`, on a different scoping
 axis (event name there, box here).
 
-**Covered by:** `harness/tests/t7_store_and_seams.py:check_history_scoped_read` (functional
+**Covered by:** `harness.tests.t7.history_sidecar.check_history_scoped_read` (functional
 equivalence against the box-filtered slice of a full read, including the `renumbered`
 cross-box-isolation case) and `check_history_scoped_uses_index` (asserts the `EXPLAIN QUERY
 PLAN` names `events_position` and never falls back to a table scan). `check_mark_sold` and

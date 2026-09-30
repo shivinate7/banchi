@@ -170,7 +170,7 @@ with no cards. A silent sort would relabel a box without a word.
 
 A formula asserted against itself proves nothing about the cards already on a shelf. If the
 migration is wrong, every position label in a real inventory shifts at once. The only symptom
-is a person who opens the wrong slot weeks later. So `harness/tests/t7_store_and_seams.py`
+is a person who opens the wrong slot weeks later. So `harness/tests/t7/store_core.py`
 asserts the migrated labels as strings, such as `Box 1 · Section 1 · Card 25`. A
 `join.Position(...)` call there would pass under any layout rule, including a wrong one.
 

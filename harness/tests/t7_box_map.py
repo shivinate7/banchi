@@ -5,8 +5,8 @@ Governs: D145, D262, D264, D294
 
 A SIBLING OF `t7_store_and_seams.py`, NOT A NEW HARNESS TEST. `t7_store_and_seams.run()` calls
 every `check_*` here, so T7's verdict carries them and the harness still has ten tests. They
-live in their own file because they share one fixture (a box of named sections) and the
-parent file is already 36,000 lines.
+live in their own file because they share one fixture (a box of named sections). The other
+groups live in `harness/tests/t7/`.
 
 Every case below was observed FAILING before its fix was kept.
 """

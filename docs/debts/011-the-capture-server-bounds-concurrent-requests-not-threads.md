@@ -43,7 +43,7 @@ stall with a high `lock_wait` is this gap. A stall with `supervisor_busy` set is
 sync. A high total with neither is the request's own work. `make status` prints the last five
 under SERVING. The line holds no query string and no card data.
 
-**Proof.** `harness/tests/t7_store_and_seams.py:check_lockfree_lane` parks `REQUEST_SLOTS` real
+**Proof.** `harness.tests.t7.server_lanes.check_lockfree_lane` parks `REQUEST_SLOTS` real
 writers on a held store lock. It requires `/status` and each `PHOTO_LANE_EXACT` route to answer 200
 within 3 s, while a slot-pool read stays parked. It goes red with `PHOTO_LANE_EXACT` emptied.
 `check_photo_lane` proves the lane's own bound and refusal. `check_photo_lane_threads_and_faults`

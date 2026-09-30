@@ -95,7 +95,7 @@ file asserts that two rows sharing one `image_url` still draw their own label (`
 Pricing, `printing` in Sets), and that a join miss draws no stock image. Removing the `<img>` from
 either screen turns its case red.
 
-`harness/tests/t7_store_and_seams.py:check_stock_images` covers the Python side, with both sources
+`harness.tests.t7.sets_stock.check_stock_images` covers the Python side, with both sources
 stubbed and no real host reached. It asserts the `"CODE: "` prefix match and a miss answering `None`.
 It asserts the cold-cache timing: a fetcher that sleeps 200ms still answers in under 100ms. It asserts
 the route threading: `do_pipeline_sets` carries `image_url` only when handed a resolver, and carries

@@ -389,7 +389,7 @@ cannot go wrong this way is the quantity, because no file on this path can move 
 | lens | `app/src/pricingSource.ts`, the source seam and the adapter. The screen is `app/src/Pricing.tsx`, opened at `#/pricing?markdown=<stamp>`. |
 | output | `inventory/markdowns/<stamp>/`: `worklist.csv`, `report.txt`, `manifest.json`, `survey.json`, then `import.csv` and `receipt.txt` |
 | answers | `inventory/prices.json`, through `pipeline/corpus.py` |
-| harness | `check_markdown` and `check_markdown_lens` in `harness/tests/t7_store_and_seams.py`, and the markdown arms of `check_history_route` and `check_corpus_revision` |
+| harness | `check_markdown` and `check_markdown_lens` in `harness/tests/t7/send_markdown.py`, and the markdown arms of `check_history_route` and `check_corpus_revision` |
 | screen tests | `app/tests/pricing-markdown.spec.ts`, run by `make design-check` |
 
 ## 9. What would reopen this

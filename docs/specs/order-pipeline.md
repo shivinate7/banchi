@@ -194,7 +194,7 @@ corners.
 
 **Done:** a batch whose orders are in the ledger renders with its Rubber Stamp columns filled.
 One whose orders are not renders them empty and never guesses. Both halves are asserted in
-`harness/tests/t7_store_and_seams.py:check_shipping_stamps`, over the same 331-order export in
+`harness.tests.t7.shipping.check_shipping_stamps`, over the same 331-order export in
 one store.
 
 **The seam is a callable, and what crosses it is order numbers and strings.**
