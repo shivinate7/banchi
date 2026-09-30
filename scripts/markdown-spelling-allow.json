@@ -661,13 +661,6 @@
         "realised"
       ]
     },
-    "docs/specs/demo.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "catalogue",
-        "catalogue"
-      ]
-    },
     "docs/specs/logo.md": {
       "lane": "docs-sweep",
       "SPELLING": [

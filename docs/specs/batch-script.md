@@ -430,6 +430,10 @@ still refuses on an unanswered `no_market_data` card.
   `import-subthreshold.csv` below it, one pair per game. The split is not cosmetic. The valuable
   cards can be staged and moved live while the bulk file waits. A pricing mistake on the cheap
   file cannot touch the valuable one.
+- `--split-games` writes one file per game, if Import to Staged refuses a file that spans two
+  `Product Line`s. That is unestablished. `fixtures/staged-import-accepted.csv` proves the format
+  for one line only. A merged file whose games carry different export headers is refused and not
+  written.
 
 `--listed-only` is not a split. It drops the sub-threshold rows and says how many it left for a
 later press.
