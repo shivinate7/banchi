@@ -26905,6 +26905,11 @@ def check_listing_commands(checks: Checks) -> None:
         rose = write_export(
             run_dir.path("export.csv"), live={DUNSPARCE_SKU: 2, ARTICUNO_SKU: 4}
         )
+        # DATED, NOT RACED: the store stamped `live_as_of` to the millisecond a moment ago
+        # and a tie goes to the store, so a file written in that same millisecond is not
+        # NEWER and is refused. Say which order this case means, as the cases below do.
+        newer = time.time() + 60
+        os.utime(rose, (newer, newer))
         said = command(checks, "join", str(run_dir.directory), "--export", str(rose))
         inventory = Store().read().inventory
         checks.equal(
