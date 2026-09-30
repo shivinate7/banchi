@@ -177,9 +177,10 @@ and Move are the kit's `IconButton` at `size="xl"` (40px face, 18px glyph) with 
 I chose two visible icon buttons over a "..." menu. A menu would hide a press behind a press, and
 only two rare acts remain. The card already has its own "..." menu in the title line.
 
-At a copy width above 640px the presses sit at the right of the identity line. Below that they
-move to a row of their own. Below 440px "Mark sold" fills the row. That row costs 48px per copy at
-410. Trade-off: that is the price of a labelled button on a narrow pane.
+A copy card is about 530px wide in the 820 pane and about 350px in the 410 pane. Both are under
+640px, so the presses sit in a row of their own under the identity line. Above 640px they would
+sit at its right. Below 440px "Mark sold" fills the row. The row costs 48px per copy.
+Trade-off: that is the price of a labelled button.
 
 Ruler, matching `rulerTicksOf`: no tick at the last card, and no tick number within one card of
 the end, so the end shows "40" once. The sheet also hides a tick number that sits under the blue
