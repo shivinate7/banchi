@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -488,6 +488,16 @@ check:
 	@$(MAKE) --no-print-directory kit-adoption-selftest
 	@$(MAKE) --no-print-directory port-slots-selftest
 	@$(MAKE) --no-print-directory match-selftest
+	@$(MAKE) --no-print-directory serve-scope-selftest
+	@$(MAKE) --no-print-directory demo-record-selftest
+	@$(MAKE) --no-print-directory demo-record-resume-selftest
+	@$(MAKE) --no-print-directory demo-record-walkplan-selftest
+	@$(MAKE) --no-print-directory pricehistory-cache-selftest
+	@$(MAKE) --no-print-directory pricehistory-offline-selftest
+	@$(MAKE) --no-print-directory repair-born-game-selftest
+	@$(MAKE) --no-print-directory stockimages-cache-selftest
+	@$(MAKE) --no-print-directory sku-name-contradictions-selftest
+	@$(MAKE) --no-print-directory pipeline-trends-archive-ids-selftest
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
 # This exists because nothing ever re-ran the gate: `make check` failed in every fresh checkout
@@ -552,6 +562,16 @@ ci-check:
 	@$(MAKE) --no-print-directory kit-adoption-selftest
 	@$(MAKE) --no-print-directory port-slots-selftest
 	@$(MAKE) --no-print-directory match-selftest
+	@$(MAKE) --no-print-directory serve-scope-selftest
+	@$(MAKE) --no-print-directory demo-record-selftest
+	@$(MAKE) --no-print-directory demo-record-resume-selftest
+	@$(MAKE) --no-print-directory demo-record-walkplan-selftest
+	@$(MAKE) --no-print-directory pricehistory-cache-selftest
+	@$(MAKE) --no-print-directory pricehistory-offline-selftest
+	@$(MAKE) --no-print-directory repair-born-game-selftest
+	@$(MAKE) --no-print-directory stockimages-cache-selftest
+	@$(MAKE) --no-print-directory sku-name-contradictions-selftest
+	@$(MAKE) --no-print-directory pipeline-trends-archive-ids-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory readiness-agreement
@@ -635,6 +655,16 @@ ci-check-guards-2:
 	@$(MAKE) --no-print-directory kit-adoption-selftest
 	@$(MAKE) --no-print-directory port-slots-selftest
 	@$(MAKE) --no-print-directory match-selftest
+	@$(MAKE) --no-print-directory serve-scope-selftest
+	@$(MAKE) --no-print-directory demo-record-selftest
+	@$(MAKE) --no-print-directory demo-record-resume-selftest
+	@$(MAKE) --no-print-directory demo-record-walkplan-selftest
+	@$(MAKE) --no-print-directory pricehistory-cache-selftest
+	@$(MAKE) --no-print-directory pricehistory-offline-selftest
+	@$(MAKE) --no-print-directory repair-born-game-selftest
+	@$(MAKE) --no-print-directory stockimages-cache-selftest
+	@$(MAKE) --no-print-directory sku-name-contradictions-selftest
+	@$(MAKE) --no-print-directory pipeline-trends-archive-ids-selftest
 	@$(MAKE) --no-print-directory screen-freshness-selftest
 	@$(MAKE) --no-print-directory css-var-check-selftest
 	@$(MAKE) --no-print-directory hand-search-selftest
@@ -1323,6 +1353,45 @@ sku-number-contradictions-selftest:
 	else \
 		echo "sku-number-contradictions-selftest: SKIPPED — this branch does not touch the SKU self-contradiction check or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
 	fi
+
+# Wired into `check` and `ci-check` after a test-health audit found each in neither. Not
+# path gated: each runs in under four seconds, below D247's line for what a scope list is worth.
+
+# scripts/demo-record.py's Server, proved against the output-pipe hang. No network, no store.
+demo-record-selftest:
+	$(PYTHON) scripts/demo-record-selftest.py
+
+# the demo recorder's resume cache of answered routes, proved with a fake collector.
+demo-record-resume-selftest:
+	$(PYTHON) scripts/demo-record-resume-selftest.py
+
+# the demo recorder's walk-plan subject list, proved never to grow with open orders.
+demo-record-walkplan-selftest:
+	$(PYTHON) scripts/demo-record-walkplan-selftest.py
+
+# the price-history cache lifetimes, proved against a fake clock and a counting fetcher.
+pricehistory-cache-selftest:
+	$(PYTHON) scripts/pricehistory-cache-selftest.py
+
+# the price-history market, proved to fail fast once the network is unreachable.
+pricehistory-offline-selftest:
+	$(PYTHON) scripts/pricehistory-offline-selftest.py
+
+# scripts/repair-born-game.py, proved against a throwaway store.
+repair-born-game-selftest:
+	$(PYTHON) scripts/repair-born-game-selftest.py
+
+# stock images, proved to answer offline from a warmed cache and to answer None with none.
+stockimages-cache-selftest:
+	$(PYTHON) scripts/stockimages-cache-selftest.py
+
+# pipeline/sku_name_contradictions.py, proved against literal fixtures.
+sku-name-contradictions-selftest:
+	$(PYTHON) scripts/sku-name-contradictions-selftest.py
+
+# the trends route, proved to reuse the archive's verified product ids.
+pipeline-trends-archive-ids-selftest:
+	$(PYTHON) scripts/pipeline-trends-archive-ids-selftest.py
 
 # Does every card's name still resolve to its photograph? Reads the whole corpus,
 # so it is NOT in `make check`. Three verdicts, and the third is `not known`.

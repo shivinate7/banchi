@@ -5040,7 +5040,7 @@ COMPONENTS = [
                                 "D213", "D215", "D219", "D222", "D231", "D224", "D225",
                                 "D227", "D280", "D234", "D236", "D239", "D240",
                                 "D242", "D243", "D247", "D252", "D253", "D254",
-                                "D256", "D261", "D271", "D275"],
+                                "D256", "D261", "D271", "D275", "D193", "D269", "D295", "D301"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
