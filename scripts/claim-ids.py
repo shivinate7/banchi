@@ -956,6 +956,51 @@ def apply_to_text(text: str, claims: Sequence[Claim]) -> Tuple[str, int]:
     return text, count
 
 
+def entry_gloss(root: Path, claim: Claim) -> str:
+    """STOPGAP (DEBT-shared-merge-tool): up to 6 words of a pending entry's own heading title.
+
+    The docs-audit `rule enforcement` row wants `D<n> (words)` at a cite's first use in a
+    paragraph of CLAUDE.md, and the claim turned a slug into a bare number. Read before the
+    rename, while the file still carries the slug. "" for a kind with no entry file.
+    """
+    d = DIR_KINDS.get(claim.kind)
+    if not d:
+        return ""
+    for path in sorted((root / d.directory).glob("*.md")):
+        m = re.match(r"#+\s+" + re.escape(claim.slug) + r"\s+[\u2014-]\s*(.+)", read(path).split("\n", 1)[0])
+        if m:
+            return " ".join(re.sub(r"[()`]", "", m.group(1)).split()[:6])
+    return ""
+
+
+def gloss_first_uses(text: str, claims: Sequence[Claim], glosses: Dict[str, str]) -> str:
+    """STOPGAP: add ` (gloss)` to a claimed cite at its first use in a paragraph when it has none.
+
+    A paragraph ends at a blank line or starts at a bullet, as the audit reads it. A cite that
+    already has ` (..)` or `, words` after it is left alone, so a gloss is never doubled.
+    """
+    out, seen = [], set()
+    for line in text.split("\n"):
+        if not line.strip() or re.match(r"\s*[-*] ", line):
+            seen = set()
+        if not line.startswith("#"):
+            for c in claims:
+                g = glosses.get(c.slug)
+                if not g:
+                    continue
+
+                def add(m, c=c, g=g):
+                    if c.becomes in seen:
+                        return m.group(0)
+                    seen.add(c.becomes)
+                    if re.match(r"`?( \(|,\s+\w)", line[m.end():]):
+                        return m.group(0)
+                    return f"{c.becomes}{m.group(1)} ({g})"
+                line = re.sub(r"(?<![-\w])" + re.escape(c.becomes) + r"(`?)(?![-\w])", add, line, count=1)
+        out.append(line)
+    return "\n".join(out)
+
+
 def renumber_gates(text: str, claims: Sequence[Claim]) -> str:
     """Turn each claimed step's `0.` marker into its allocated number.
 
@@ -1118,6 +1163,7 @@ def rename_claimed_entries(root: Path, claims: Sequence[Claim], write: bool,
 def perform(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, int]:
     """Substitute every claim across the tree. Returns path -> replacements."""
     touched: Dict[str, int] = {}
+    glosses = {c.slug: entry_gloss(root, c) for c in claims}
     manifest_paths = {root / d.manifest for d in DIR_KINDS.values()}
     for path in text_files(root):
         # A manifest is names, not prose, and `rename_claimed_entries` owns it. Belt and
@@ -1132,6 +1178,8 @@ def perform(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, int]:
             after = renumber_map(after, claims)
         after = rewrite_decision_paths(after, claims)
         after, _ = apply_to_text(after, claims)
+        if path == root / "CLAUDE.md":  # the only file the audit's gloss rule reads
+            after = gloss_first_uses(after, claims, glosses)
         if after == before:
             continue
         touched[str(path.relative_to(root))] = sum(
