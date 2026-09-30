@@ -49,7 +49,7 @@ verify by hand, which is the point: a fixture nobody can check by eye proves tha
 agrees with itself.
 
 WHAT A GREEN T11 DOES NOT MEAN. It does not mean the plan is fast on the owner's store — the
-27.9 ms figure in `docs/specs/order-walk-plan.md` §6 was measured there and is not re-measured
+solve timing in `docs/specs/order-walk-plan.md` §6 was measured there and is not re-measured
 here, because a timing assertion on a shared CI box is a flake rather than a guard. It does not
 mean the screen draws any of this: §7's route and §8's screen are separate work and no code
 here reaches a wire.
@@ -162,7 +162,7 @@ def _pick_ref_for(refs, tally):
     own `tally`) is smallest and still positive, ties broken by placement order (earliest
     first, which the fixtures below express as list order since neither carries `placed_at`
     here). `None` when every ref is already filled — never a fallback to `refs[0]`, which is
-    the diagnosed defect (`docs/specs/order-walk-plan.md` §8, amended)."""
+    the diagnosed defect (`docs/specs/order-walk-plan.md` §8)."""
     best = None
     best_remaining = None
     for ref in refs:
@@ -195,7 +195,7 @@ def _two_order_ledger(sku, wanted_a, wanted_b):
 def _wire_owed(c: Checks) -> None:
     """`_walk_plan_order_ref` (`server/capture_server.py`) puts `owed` on every ref, read off
     the ledger's own `outstanding`, zeroed for a stood-down line exactly as `demand` already
-    filters — the wire half of the fix (`docs/specs/order-walk-plan.md` §8, amended)."""
+    filters — the wire half of the fix (`docs/specs/order-walk-plan.md` §8)."""
     ledger = _two_order_ledger("A", 1, 3)
 
     refs = capture_server._walk_plan_refs(ledger, ["tcg:1", "tcg:2"], "A")
