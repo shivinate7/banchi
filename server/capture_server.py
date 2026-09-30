@@ -16078,12 +16078,18 @@ class CaptureHandler(BaseHTTPRequestHandler):
         # slot pool (a slow client) still takes the photo gate here, so the bound holds either way.
         photo = self.command == "GET" and photo_lane_path(self.path)
         gate = _photo_slots if photo else _slots
-        if not gate.acquire(timeout=files.LOCK_TIMEOUT_SECONDS):
+        began = time.monotonic()
+        busy_before = _supervisor_busy()
+        got_slot = gate.acquire(timeout=files.LOCK_TIMEOUT_SECONDS)
+        slot_wait = time.monotonic() - began
+        files.lock_wait_reset()
+        if not got_slot:
+            self._note_slow(began, slot_wait, "photo" if photo else "slot", busy_before, refused=True)
             self._fail(
                 HTTPStatus.SERVICE_UNAVAILABLE,
                 "photo_busy" if photo else "server_busy",
                 f"The server is busy with {PHOTO_SLOTS if photo else REQUEST_SLOTS} "
-                f"{'photograph, app-file and status ' if photo else ''}requests already, and this one "
+                f"{'photo, file and status ' if photo else ''}requests already, and this one "
                 f"waited {files.LOCK_TIMEOUT_SECONDS:.0f} seconds for a turn. Nothing was read or "
                 f"written. Try again in a moment.",
             )
@@ -16177,6 +16183,27 @@ class CaptureHandler(BaseHTTPRequestHandler):
         finally:
             _inflight_leave()
             gate.release()
+            self._note_slow(began, slot_wait, "photo" if photo else "slot", busy_before)
+
+    def _note_slow(self, began, slot_wait, pool, busy_before, refused=False) -> None:
+        """ONE LINE TO THE SERVER LOG when a request outlasts `SLOW_REQUEST_SECONDS`, naming why.
+
+        The owner sees stalls and the log said nothing. The line splits the total into the two
+        waits this server knows about, the slot (which pool) and the store lock, and says whether
+        the supervisor was rebuilding, syncing or restarting (`_supervisor_busy`). What is left of
+        the total is the work itself. Route only, no query string, no body: nothing about a card.
+        `make status` prints the last few.
+        """
+        total = time.monotonic() - began
+        if total < SLOW_REQUEST_SECONDS:
+            return
+        busy = "+".join(dict.fromkeys(b for b in (busy_before, _supervisor_busy()) if b)) or "no"
+        route = urlparse(self.path).path[:80]
+        files.log_note(
+            f"{SLOW_LINE_PREFIX} {self.command} {route} total={total:.2f}s "
+            f"slot_wait={slot_wait:.2f}s ({pool} pool) lock_wait={files.lock_wait_seconds():.2f}s "
+            f"supervisor_busy={busy}" + (" refused" if refused else "")
+        )
 
     def do_OPTIONS(self) -> None:  # noqa: N802 — BaseHTTPRequestHandler's naming
         """The preflight. It answers 204 for any path, and now not for any origin.
@@ -17284,7 +17311,7 @@ _slots = threading.BoundedSemaphore(REQUEST_SLOTS)
 PHOTO_SLOTS = 4
 _photo_slots = threading.BoundedSemaphore(PHOTO_SLOTS)
 PHOTO_LANE_PREFIXES = ("/photo/", "/assets/")
-# THE SAME LANE CARRIES THE CHEAP, LOCK-FREE READS THE APP POLLS (DEBT11). Four writers parked on
+# THE SAME LANE CARRIES THE LOCK-FREE READS THE APP POLLS (DEBT11). Four writers parked on
 # the store lock hold all four slots for up to `LOCK_TIMEOUT_SECONDS`, and `/status` is what the
 # app asks "is the server alive" with. Each route below was probed on a scratch store with the
 # lock held and answers without it. NOT HERE ON PURPOSE: the heavy lock-free reads (`/orders`,
@@ -17296,15 +17323,37 @@ _SORT_PEEK_BYTES = 64
 # How long a silent connection waits for its first byte before it goes to the slot pool by default.
 SORT_SECONDS = 1.0
 
+# THE SLOW-REQUEST LINE (`CaptureHandler._note_slow`): a request over this many seconds is logged.
+SLOW_REQUEST_SECONDS = 2.0
+# What the line starts with. `scripts/status.py` greps the log for it.
+SLOW_LINE_PREFIX = "slow request:"
+# The supervisor (`scripts/serve.py`) writes this file while it rebuilds the app, syncs the tree
+# or debounces a source change, and deletes it after. Older than this, it is a crash's leftover.
+SUPERVISOR_BUSY_FILE = Path(__file__).resolve().parent.parent / ".serve" / "busy"
+SUPERVISOR_BUSY_MAX_AGE = 300.0
+
+
+def _supervisor_busy() -> str:
+    """What the supervisor says it is doing right now, or an empty string."""
+    try:
+        if time.time() - SUPERVISOR_BUSY_FILE.stat().st_mtime > SUPERVISOR_BUSY_MAX_AGE:
+            return ""
+        return SUPERVISOR_BUSY_FILE.read_text("utf-8").strip()[:40]
+    except OSError:
+        return ""
+
 
 def photo_lane_path(target: str) -> bool:
     """One predicate for both sides: the sorter's peek and `_dispatch`'s gate.
 
     The exact routes are compared as `do_GET` compares them: query dropped, trailing slash dropped.
     """
-    return target.startswith(PHOTO_LANE_PREFIXES) or (
-        (urlparse(target).path.rstrip("/") or "/") in PHOTO_LANE_EXACT
-    )
+    if target.startswith(PHOTO_LANE_PREFIXES):
+        return True
+    try:
+        return (urlparse(target).path.rstrip("/") or "/") in PHOTO_LANE_EXACT
+    except ValueError:  # `//[` is not a URL. `_dispatch` runs this before its `try`, so it must not raise.
+        return False
 
 
 def _sorted_to_photo_lane(peeked: bytes) -> bool:

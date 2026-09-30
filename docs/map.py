@@ -8928,6 +8928,14 @@ COMPONENTS = [
                         "is held by harness T7 `check_photo_cache`. Run by `make design-check`.",
                 "governed_by": ["D26", "D172"],
             },
+            "tests/status-busy.spec.ts": {
+                "does": "a `503 photo_busy` from the shell's `/status` poll leaves the app "
+                        "online (`D207`): `/status` shares the photo lane and can be turned "
+                        "away under a photo flood, and a refusal the server sent is an "
+                        "answer. Only a request with no response draws the offline banner. "
+                        "Run by `make design-check`.",
+                "governed_by": ["D207"],
+            },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "
                         "`margin: 0 auto` centered a screen with a lower `--bn-page-max` "

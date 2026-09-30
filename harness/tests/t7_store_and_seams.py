@@ -29949,6 +29949,14 @@ def check_export_fetch(checks: Checks) -> None:
                     "reason — never a refusal, because this is drawn on the rig's own screen "
                     "and a capture must not stop for a missing convenience",
                 )
+                status, raw, _ = request(port, "GET", "/tcg/sets?game=not-a-game")
+                body = json.loads(raw or b"{}")
+                checks.equal(
+                    (status, body.get("sets")),
+                    (200, []),
+                    "and a game the registry does not know answers the same 200 and an empty "
+                    "list — `game_registry.get` raises `UnknownGame`, and it was a 500",
+                )
 
                 # ------------------------------ THE HINT VOCABULARY IS NOT TCGPLAYER'S
                 #
@@ -37314,9 +37322,9 @@ def check_lockfree_lane(checks: Checks) -> None:
                 ):
                     time.sleep(0.01)
                 held = capture_server.slots_in_use()
-                # `/status` is named here, not read from the constant: an emptied lane must go red
-                # rather than probe nothing.
-                for path in dict.fromkeys(("/status", *capture_server.PHOTO_LANE_EXACT)):
+                # A FIXED LIST, not the constant: a route dropped from `PHOTO_LANE_EXACT` must go red
+                # here rather than leave the probe.
+                for path in ("/status", "/queues", "/capture/sitting", "/games"):
                     results[path] = probe(path)
                 slot_route = probe("/inventory")
         finally:
@@ -37344,6 +37352,97 @@ def check_lockfree_lane(checks: Checks) -> None:
         f"answered and not a lock that never blocked — {slot_route[0]} in {slot_route[1]:.2f}s",
     )
     checks.equal(capture_server.slots_in_use(), 0, "and every slot is given back once the lock frees")
+
+
+def check_lane_survives_bad_target(checks: Checks) -> None:
+    """`photo_lane_path` runs before `_dispatch`'s `try`, so a target `urlparse` rejects must not raise."""
+    import http.client
+
+    checks.note("")
+    checks.note("LANE PREDICATE — a target that is not a URL")
+    try:
+        in_lane = capture_server.photo_lane_path("//[")
+    except ValueError:
+        in_lane = "raised ValueError"
+    checks.equal(in_lane, False, "`//[` is not in the lane and does not raise")
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    thread = _spawn_server(httpd)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1], timeout=5)
+        conn.request("GET", "//[", headers={"Connection": "close"})
+        status = conn.getresponse().status
+        conn.close()
+    except Exception as caught:  # noqa: BLE001 — a dropped socket is the finding
+        status = repr(caught)
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+    checks.ok(isinstance(status, int), f"and the server answers `GET //[` instead of dropping the socket — {status}")
+
+
+def check_slow_request_line(checks: Checks) -> None:
+    """A request parked on the store lock past the threshold logs ONE line that names the lock wait.
+
+    WHAT IT PROVES: the slow-request line (`CaptureHandler._note_slow`) exists, carries the route
+    without a query string, splits the slot wait from the lock wait, and reports what the
+    supervisor's busy file says. WHAT IT DOES NOT: that the supervisor writes that file. A fast
+    request writes no line. The log seam is `files.log_note`, replaced for the length of the check.
+    """
+    checks.note("")
+    checks.note("SLOW REQUEST LINE — a stall names its cause")
+    lines: list = []
+    answer: list = []
+    real_note, real_limit = files.log_note, capture_server.SLOW_REQUEST_SECONDS
+    real_busy = capture_server.SUPERVISOR_BUSY_FILE
+    files.log_note = lines.append
+    capture_server.SLOW_REQUEST_SECONDS = 0.3
+    origin = capture_server.DEFAULT_ALLOWED_ORIGINS[0]
+    with isolated_home() as home:
+        Store().read()
+        capture_server.SUPERVISOR_BUSY_FILE = home / "busy"
+        capture_server.SUPERVISOR_BUSY_FILE.write_text("app-build\n", "utf-8")
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        thread = _spawn_server(httpd)
+        port = httpd.server_address[1]
+        try:
+            request(port, "GET", "/inventory?q=secret-card")  # fast: no line
+            with files.exclusive(files.inventory_dir()):
+                writer = threading.Thread(
+                    target=lambda: answer.append(
+                        request(port, "POST", "/boxes", origin=origin, payload={"name": "slow"})[:2]
+                    ),
+                    daemon=True,
+                )
+                writer.start()
+                time.sleep(0.8)  # parked on the lock; released on leaving the block
+            writer.join(timeout=30)
+        finally:
+            files.log_note = real_note
+            capture_server.SLOW_REQUEST_SECONDS = real_limit
+            capture_server.SUPERVISOR_BUSY_FILE = real_busy
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+    slow = [ln for ln in lines if str(ln).startswith(capture_server.SLOW_LINE_PREFIX)]
+    checks.equal(
+        len(slow), 1,
+        f"exactly one slow-request line: the parked write, not the fast read (log saw {lines!r}, "
+        f"write answered {answer!r})",
+    )
+    line = slow[0] if slow else ""
+    waited = re.search(r"lock_wait=([\d.]+)s", line)
+    checks.ok(
+        "POST /boxes " in line and "secret-card" not in line,
+        f"it names the route and no query string — {line!r}",
+    )
+    checks.ok(
+        bool(waited) and float(waited.group(1)) >= 0.3,
+        f"it names the lock wait, at least the 0.3s threshold — {waited.group(0) if waited else None}",
+    )
+    checks.ok("slot_wait=0" in line and "(slot pool)" in line, "and the slot wait apart from it, with its pool")
+    checks.ok("supervisor_busy=app-build" in line, "and what the supervisor was doing")
 
 
 def check_photo_lane_threads_and_faults(checks: Checks) -> None:
@@ -40909,6 +41008,8 @@ def run() -> Result:
     check_request_slots(checks)
     check_photo_lane(checks)
     check_lockfree_lane(checks)
+    check_lane_survives_bad_target(checks)
+    check_slow_request_line(checks)
     check_photo_lane_threads_and_faults(checks)
     check_connection_close(checks)
     check_crop_preview(checks)

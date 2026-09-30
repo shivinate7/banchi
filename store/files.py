@@ -10,6 +10,7 @@ import errno
 import json
 import os
 import sys
+import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -62,6 +63,18 @@ CODES_LEDGER_NAME = "codes.jsonl"
 
 LOCK_TIMEOUT_SECONDS = 30
 LOCK_POLL_SECONDS = 0.05
+
+# HOW LONG THIS THREAD HAS WAITED FOR THE STORE LOCK, summed over every `exclusive` it entered
+# since the last reset. The server's slow-request line reads it to say whether a stall was the lock.
+_lock_waited = threading.local()
+
+
+def lock_wait_reset() -> None:
+    _lock_waited.seconds = 0.0
+
+
+def lock_wait_seconds() -> float:
+    return getattr(_lock_waited, "seconds", 0.0)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -157,17 +170,20 @@ def exclusive(directory: Path, timeout: float = LOCK_TIMEOUT_SECONDS):
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / LOCK_NAME
     handle = open(path, "a+")  # noqa: SIM115 — the flock lives as long as this fd stays open
-    deadline = time.monotonic() + timeout
+    began = time.monotonic()
+    deadline = began + timeout
     try:
         while True:
             try:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                _lock_waited.seconds = lock_wait_seconds() + (time.monotonic() - began)
                 break
             except OSError as exc:
                 if exc.errno not in (errno.EACCES, errno.EAGAIN):
                     log_note(f"store lock: {type(exc).__name__}: {exc}")
                     raise StoreError("The store could not be locked for writing because the disk or its folder is not available. Check that the disk is available, then try again.") from exc
                 if time.monotonic() > deadline:
+                    _lock_waited.seconds = lock_wait_seconds() + (time.monotonic() - began)
                     raise LockTimeout(
                         f"{path} is locked by another process after {timeout}s — the "
                         f"capture server holds this lock while it writes. Retry, or stop it."

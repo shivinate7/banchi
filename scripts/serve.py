@@ -663,6 +663,23 @@ def write_build_verdict(verdict: str, detail: str = "", root: Path = REPO_ROOT) 
         path.write_text(json.dumps(payload) + "\n", "utf-8")
 
 
+def mark_busy(what: str, root: Path = REPO_ROOT) -> None:
+    """Say what the supervisor is doing, for the capture server's slow-request line.
+
+    `server/capture_server.py:SUPERVISOR_BUSY_FILE` reads this file. A stall while the app builds
+    or a branch syncs then names that cause. `clear_busy` removes it; a crash's leftover expires.
+    """
+    path = state_dir(root) / "busy"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with contextlib.suppress(OSError):
+        path.write_text(what + "\n", "utf-8")
+
+
+def clear_busy(root: Path = REPO_ROOT) -> None:
+    with contextlib.suppress(OSError):
+        (state_dir(root) / "busy").unlink()
+
+
 def read_build_verdict(root: Path = REPO_ROOT) -> dict:
     try:
         loaded = json.loads((state_dir(root) / APP_BUILD_VERDICT).read_text("utf-8"))
@@ -1295,6 +1312,7 @@ class Supervisor:
         if self.sync_tried == branch:
             return branch
         self.sync_tried = branch
+        mark_busy("sync", self.root)
         verdict = primary_sync.sync(self.root, confirm=True)
         for line in verdict.lines:
             log(line)
@@ -1455,11 +1473,16 @@ class Supervisor:
             self.pending.update(changed_between(self.fingerprint, current))
             self.fingerprint = current
             self.quiet_since = time.monotonic()
+            mark_busy("source-change", self.root)
             return
         if self.pending and time.monotonic() - self.quiet_since >= QUIET_SECONDS:
             changed = sorted(self.pending)
             self.pending.clear()
-            self._restart_for(changed)
+            mark_busy("restart", self.root)
+            try:
+                self._restart_for(changed)
+            finally:
+                clear_busy(self.root)
 
     def _check_app(self) -> None:
         """The app's own watch: a change here builds, and restarts nothing (D138).
@@ -1480,6 +1503,7 @@ class Supervisor:
             self.app_fingerprint = current
             self.app_pending = True
             self.app_quiet_since = time.monotonic()
+            mark_busy("app-change", self.root)
             return
         if self.app_pending and time.monotonic() - self.app_quiet_since >= QUIET_SECONDS:
             self.app_pending = False
@@ -1494,10 +1518,12 @@ class Supervisor:
                 # being exactly what a person LOOKS at.
                 branch = self._sync_attempt(branch)
             if branch is not None:
+                clear_busy(self.root)
                 self._stand_down(branch)
                 return
             if app_stale(self.root):
                 log("app source changed — rebuilding")
+                mark_busy("app-build", self.root)
                 build_app(self.root)
                 # THE FINGERPRINT IS NOT RE-TAKEN HERE, and the temptation to is a real bug.
                 # A build takes a second or more and an edit can land inside it; re-reading
@@ -1506,6 +1532,7 @@ class Supervisor:
                 # build writes is in this watch set — `app/dist/` is excluded by
                 # `APP_SOURCE_DIRS` precisely so that it cannot schedule itself — so leaving
                 # the fingerprint alone is both safe and what catches the edit.
+            clear_busy(self.root)
 
     def _touches_self(self, changed: list[str]) -> list[str]:
         """Which of the changed paths are files this supervisor is made of."""
