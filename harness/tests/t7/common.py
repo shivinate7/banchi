@@ -23,12 +23,12 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-import envfile
 
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 from harness.tests import Checks
+from harness.tests.home import isolated_home, no_env_file  # noqa: F401  (isolated_home re-exported)
 from cli import runs
 from identify import sidecar
 from pipeline import join, tcgcsv
@@ -186,25 +186,6 @@ def _seed_sku_table(snapshot, candidates, *, product_line: str = "Pokemon") -> N
 
 
 @contextmanager
-def isolated_home():
-    """A whole store in a temporary directory, restored on the way out.
-
-    Restores the previous value rather than deleting the key, because the harness runs six
-    other tests in this process and leaking a home would point them somewhere unexpected.
-    """
-    previous = os.environ.get(files.HOME_ENV)
-    with tempfile.TemporaryDirectory() as tmp:
-        os.environ[files.HOME_ENV] = tmp
-        try:
-            yield Path(tmp)
-        finally:
-            if previous is None:
-                os.environ.pop(files.HOME_ENV, None)
-            else:
-                os.environ[files.HOME_ENV] = previous
-
-
-@contextmanager
 def hermetic():
     """One check's process-global state, put back on the way out, and the owner's `.env`
     kept out of it.
@@ -228,14 +209,10 @@ def hermetic():
     )
     saved = [dict(cache) for cache in caches]
     environ = dict(os.environ)
-    env_file, from_file, loaded = envfile.ENV_FILE, set(envfile._from_file), envfile._loaded
-    envfile.ENV_FILE = Path(tempfile.gettempdir()) / "t7-hermetic-no-such.env"
     try:
-        yield
+        with no_env_file():
+            yield
     finally:
-        envfile.ENV_FILE, envfile._loaded = env_file, loaded
-        envfile._from_file.clear()
-        envfile._from_file.update(from_file)
         os.environ.clear()
         os.environ.update(environ)
         for cache, before in zip(caches, saved):
