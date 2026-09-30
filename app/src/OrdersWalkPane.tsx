@@ -868,8 +868,13 @@ export function WalkList({
                         </span>
                         <span className="orders-walk-pick">
                           {done ? <Icon name="check" size={14} /> : null}
-                          {done ? 'Picked' : 'Pick'} {line.take.wanted}
-                          {figure.short > 0 ? null : ` of ${figure.of}`}
+                          {/* THE FIGURE IS ONE UNBREAKABLE PART: in a narrow column the word may wrap above it, but
+                              "1 of 1" never breaks to three lines. */}
+                          {done ? 'Picked' : 'Pick'}{' '}
+                          <span className="orders-walk-pick-count">
+                            {line.take.wanted}
+                            {figure.short > 0 ? null : ` of ${figure.of}`}
+                          </span>
                           {figure.short > 0 ? (
                             <>
                               {' '}
