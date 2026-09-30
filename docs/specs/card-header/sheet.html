@@ -164,7 +164,7 @@ body { padding: var(--bn-6); }
 .g-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--bn-1-5); }
 .g-fig { font-family: var(--bn-font-display); font-size: var(--bn-fs-2xl); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--bn-ink); }
 .g-lab { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-2); }
-.g-lead .readage { flex: 1 0 100%; }
+.g-lead .readage { margin-left: var(--bn-0-5); }
 .g-side { display: flex; flex-direction: column; justify-content: center; gap: var(--bn-0-5); padding: var(--bn-2) var(--bn-3); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
 .g-row { display: flex; flex-wrap: wrap; }
 .g-row span + span::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
@@ -313,10 +313,10 @@ function F2(n) {
 function F3(n) {
   const top = `<div class="f-top">${n ? thumb : ''}<div class="f2-title">${bigName}${meta(true)}</div>${kebab}</div>`
   const bar = `<div class="g-bar">
-    <div class="g-lead"><div class="g-head"><span class="g-fig">5</span><span class="g-lab">in the boxes</span></div></div>
-    <div class="g-lead"><div class="g-head"><span class="g-fig live-figure"><span class="bn-dot bn-dot-live" aria-hidden="true"></span>5</span><span class="g-lab">live on TCGplayer</span><span class="readage">read 2 days ago</span></div>
+    <div class="g-lead"><div class="g-head"><span class="g-fig">5</span><span class="g-lab">Stored</span></div></div>
+    <div class="g-lead"><div class="g-head"><span class="g-fig live-figure"><span class="bn-dot bn-dot-live" aria-hidden="true"></span>5</span><span class="g-lab">Live</span><span class="readage" title="Read from TCGplayer 2 days ago">2d ago</span></div>
       <div class="bn-progress bn-progress-sm" role="img" aria-label="5 of 5 may be live"><span style="width:100%"></span></div></div>
-    <div class="g-side"><div class="g-row"><span>8 captured</span><span title="Sold or moved copies, folded away by the hide-sold setting">3 hidden</span></div><div class="g-row"><span>7 sent</span><span>At the ceiling of 5</span></div></div></div>`
+    <div class="g-side"><div class="g-row"><span>Captured 8</span><span title="Sold or moved copies, folded away by the hide-sold setting">Hidden 3</span></div><div class="g-row"><span>Sent 7</span><span title="The most that may be live">Cap 5</span></div></div></div>`
   const body = n ? `<div class="x-body">${copies('')}</div>` : `<div class="x-body">${shotBtn}${copies('')}</div>`
   return `<div class="pane f2 ${n ? 'x-narrow' : 'x-wide x-beside'}"><div class="f-band">${top}${bar}</div>${body}</div>`
 }

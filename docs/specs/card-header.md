@@ -157,3 +157,10 @@ F3 re-ranks the figures. It is F2 with two lead figures and quieter side facts.
 F3. It puts the two figures the owner acts on at the front, with equal weight. It keeps every
 fact and gives the ceiling a picture next to live. The band is about 70px tall under the title.
 Choose F2 if the owner wants the counts as a flat row of equal cells.
+
+### F3 labels (owner's ruling)
+
+One word each. Lead: "Stored" (the box list already says "stored") and "Live" with a short muted
+"2d ago" as the read age. Side: "Captured", "Hidden", "Sent" and "Cap 5" for the ceiling. The
+full meter under Live shows that the cap is reached. The words above that read "in the boxes",
+"live on TCGplayer" and "at the ceiling of" are the earlier wording.
