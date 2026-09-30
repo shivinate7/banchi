@@ -105,14 +105,15 @@
   .orders-cardcol { display: block; }
 }
 @container orders (min-width: 560px) and (max-width: 999px) {
-  /* MID: Inventory's own skeleton, two columns. The list grows to its rows, never a half row at
-     rest; past a tall cap it scrolls inside its card, snapping to a row, with a fade at the foot. */
+  /* MID: Inventory's own skeleton, two columns. The list grows to its rows up to a tall cap, then
+     scrolls inside its card, snapping to a row, so a list that fits never shows a half row. */
   .orders-buyers-panel {
     flex: none;
     max-height: min(60dvh, 26rem);
     scroll-snap-type: y proximity;
   }
-  .orders-buyers-panel .orders-index-item { scroll-snap-align: start; }
+  .orders-buyers-panel .orders-index-item,
+  .orders-buyers-panel .orders-buyers-head { scroll-snap-align: start; }
 }
 @container orders (min-width: 1000px) {
   .orders-layout {

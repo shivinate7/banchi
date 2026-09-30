@@ -268,9 +268,9 @@ export function groupFacetCopies(
   group: BuyerGroup,
   answers: ReadonlyMap<string, ResolvedOrder>,
   facet: UnfillableFacet,
-): { readonly copies: number; readonly orders: number } {
+): { readonly copies: number; readonly orders: number; readonly keys: readonly string[] } {
   let copies = 0
-  let orders = 0
+  const keys: string[] = []
   for (const order of group.open) {
     let here = 0
     for (const line of answers.get(order.key)?.lines ?? []) {
@@ -278,10 +278,10 @@ export function groupFacetCopies(
     }
     if (here > 0) {
       copies += here
-      orders += 1
+      keys.push(order.key)
     }
   }
-  return { copies, orders }
+  return { copies, orders: keys.length, keys }
 }
 
 /** WHAT HOME'S "Cannot be filled" LINE SAYS: every missing copy, and only the open orders that

@@ -339,7 +339,7 @@ export function standing(input: StandingInput): Standing | null {
       say: [
         t(' — '),
         n(unfindable),
-        t(' short across '),
+        t(' unfilled across '),
         n(missingOrders),
         t(missingOrders === 1 ? ' order.' : ' orders.'),
       ],

@@ -4766,3 +4766,67 @@ test('landing view: the last sale leaves the buyer on screen', async ({ page }) 
   await expect(page.locator('.orders-index-row')).toContainText('Ada Lovelace')
   await expect(page.locator('.orders-index-row')).toHaveAttribute('aria-current', 'true')
 })
+
+
+/* ------------------------------------------------------- the buyer list at 820 (D304, Q2b) */
+
+test('at 820 a long buyer list rests with the Walk press in view and 40px, and a short one shows whole rows', async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 1000 })
+  const seeds = Array.from({ length: 16 }, (_, at) =>
+    seededOrder({ number: `L${String(at).padStart(4, '0')}`, buyer: `Buyer ${at}`, status: 'Ready to Ship', placedAt: `2026-08-${String(at + 1).padStart(2, '0')}T00:00:00+00:00`, reason: 'resolved' }),
+  )
+  await open(page, { orders: payloadOf(seeds.map((one) => one.row), seeds.map((one) => one.resolved)) })
+  const panel = page.locator('.orders-buyers-panel')
+  const walk = panel.locator('.orders-walkall')
+  await expect(walk).toBeVisible()
+  await settleMotion(page)
+  /* Scroll down and back up: a snap that skips the head rests at the first row instead. */
+  await panel.evaluate((el) => el.scrollTo({ top: 200, behavior: 'instant' }))
+  await panel.evaluate((el) => el.scrollTo({ top: 0, behavior: 'instant' }))
+  await settleMotion(page)
+  const at = await panel.evaluate((el) => ({ top: el.scrollTop, over: el.scrollHeight > el.clientHeight }))
+  expect(at.over, 'the fixture must overflow the card').toBe(true)
+  expect(at.top, 'snap rested past the Walk head').toBe(0)
+  const [box, card] = await Promise.all([walk.boundingBox(), panel.boundingBox()])
+  expect(box!.height).toBeGreaterThanOrEqual(40)
+  expect(box!.y).toBeGreaterThanOrEqual(card!.y)
+})
+
+test('at 820 a list that fits shows every row whole', async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 1000 })
+  await open(page, { orders: threeBuyerPayload() })
+  const panel = page.locator('.orders-buyers-panel')
+  await expect(panel.locator('.orders-index-item')).toHaveCount(3)
+  const fit = await panel.evaluate((el) => {
+    const cap = el.getBoundingClientRect()
+    return [...el.querySelectorAll('.orders-index-item')].every((row) => {
+      const box = row.getBoundingClientRect()
+      return box.top >= cap.top - 0.5 && box.bottom <= cap.bottom + 0.5
+    })
+  })
+  expect(fit).toBe(true)
+})
+
+test('the position card stays inside the walk column at 1440 and 820', async ({ page }) => {
+  for (const width of [1440, 820]) {
+    await page.setViewportSize({ width, height: 1000 })
+    await open(page, { orders: threeBuyerPayload(), walkPlan: walkPlanOf([walkPlanStop({})]) })
+    const where = page.locator('.walk-pick-where').first()
+    await expect(where).toBeVisible()
+    const over = await where.evaluate((el) => el.getBoundingClientRect().right - (el.closest('.orders-walk') as HTMLElement).getBoundingClientRect().right)
+    expect(over, `overflow at ${width}`).toBeLessThanOrEqual(0.5)
+  }
+})
+
+test('a buyer with one Missing order and one Short order counts two orders, and the rows add to the Home sentence', async ({ page }) => {
+  const unseen = seededOrder({ number: 'M0001', buyer: 'Eve', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'sku_unseen' })
+  const none = seededOrder({ number: 'M0002', buyer: 'Eve', status: 'Ready to Ship', placedAt: '2026-08-02T00:00:00+00:00', reason: 'no_copies_on_hand' })
+  await open(page, { orders: payloadOf([unseen.row, none.row], [{ ...unseen.resolved, outstanding: 1 }, { ...none.resolved, outstanding: 1 }]) })
+  await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
+  const list = page.getByRole('listbox', { name: 'Show' })
+  await list.getByRole('option', { name: /^Missing/ }).click()
+  await list.getByRole('option', { name: /^Short/ }).click()
+  await closeFilters(page)
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-figure')).toHaveText(/2 unfilled in 2 orders$/)
+})

@@ -131,7 +131,7 @@ test('a terminal order never inflates the "cannot be filled" figure, and the cou
 
   // The genuine shortfall alone: 2 copies, 1 order. Never 7 copies — the terminal
   // order's 5 must never reach this sentence. (UX-051/TXT-26: one word, "missing", once.)
-  expect(text).toMatch(/\b2 short across\b/)
+  expect(text).toMatch(/\b2 unfilled across\b/)
   expect(text).not.toMatch(/\b7 copies\b/)
   expect(text).toMatch(/\b1 order\b/)
   expect(text).not.toMatch(/\b2 orders\b/)
@@ -147,9 +147,9 @@ test('the Orders stage tile on Home carries the same figure, joined by `open` an
   // The tile loads `/orders` itself, on its own timer (D121 — every panel loads on its own),
   // so this waits for the resolved note rather than reading whatever text painted first.
   // "missing", the same word the standing line now uses (UX-051).
-  await expect(ordersTile).toContainText('2 missing')
+  await expect(ordersTile).toContainText('2 unfilled')
   const text = (await ordersTile.innerText()).replace(/\s+/g, ' ')
-  expect(text).not.toContain('7 missing')
+  expect(text).not.toContain('7 unfilled')
 })
 
 /* UX-077, AMENDED AT THE PR 2 INTEGRATION (the owner's option c): the "Cannot be filled" press
@@ -238,7 +238,7 @@ test('"Cannot be filled" counts only the orders that miss a copy, and the list i
   const standingRow = page.locator('a.home-standing-row')
   await expect(standingRow).toContainText('Unfillable')
   const said = (await standingRow.innerText()).replace(/\s+/g, ' ')
-  expect(said).toContain('6 short across 3 orders')
+  expect(said).toContain('6 unfilled across 3 orders')
   await expect(standingRow).toHaveAttribute('href', '#/orders?show=missing&show=noneleft&show=short')
   await standingRow.click()
 

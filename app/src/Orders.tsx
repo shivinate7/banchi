@@ -972,8 +972,7 @@ function verdictOf(open: readonly OrderRow[], resolved: readonly ResolvedOrder[]
      line is the only place to see broken out, which the data rule refuses — every number
      stays, as a short labeled figure, never a bare word standing in for all of them. */
   const parts = short > 0 || elsewhere > 0 ? [`${pick} pick`] : []
-  if (short > 0) parts.push(`${short} short`)
-  if (elsewhere > 0) parts.push(`${elsewhere} missing`)
+  if (short + elsewhere > 0) parts.push(`${short + elsewhere} unfilled`)
   return (
     <>
       <strong>{owed}</strong> owed, <strong>{buyers}</strong> {plural(buyers, 'buyer', 'buyers')}
@@ -3576,7 +3575,7 @@ function PullStage({
     const copies = parts.reduce((sum, part) => sum + part.copies, 0)
     if (copies === 0) return null
     const word = picks.length > 1 ? 'unfilled' : { missing: 'missing', noneleft: 'short', short: 'still owed' }[picks[0]!]
-    return { copies, orders: Math.max(...parts.map((part) => part.orders)), word }
+    return { copies, orders: new Set(parts.flatMap((part) => part.keys)).size, word }
   }
 
   const tickFor = (group: BuyerGroup) => {
