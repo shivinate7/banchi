@@ -39,6 +39,8 @@
  *                            `classList.add(...)`: RESERVED_EXACT and RESERVED_PREFIX below.
  *                            `app/src/Gallery.tsx` is exempt from this one rule: it is the kit's
  *                            specimen sheet and draws each kit class raw on purpose
+ *                            (`bn-pick`, `bn-fchip`, `bn-filterchips`, `bn-filterbar`, `bn-sort` and
+ *                            `bn-hidetoggle` are the kit's filter control, D-filters-are-one-kit-control)
  *                R2-date     `toLocaleDateString`, `toLocaleTimeString` or `Intl.DateTimeFormat`
  *                            outside `app/src/dates.ts`. ALSO, BY HEURISTIC: `.toLocaleString(...)`
  *                            with an object-literal argument that names a date or time option
@@ -304,7 +306,7 @@ function countWordedButtons(node, sf) {
 /** The class names only the kit may write. A token equal to one of these is reserved. */
 export const RESERVED_EXACT = ['bn-page', 'bn-head', 'bn-title', 'bn-lede', 'bn-money', 'bn-skeleton', 'bn-select']
 /** The class-name families only the kit may write: any token that starts with one of these. */
-export const RESERVED_PREFIX = ['bn-empty', 'bn-notice', 'bn-sheet', 'bn-modal']
+export const RESERVED_PREFIX = ['bn-empty', 'bn-notice', 'bn-sheet', 'bn-modal', 'bn-pick', 'bn-fchip', 'bn-filterchips', 'bn-filterbar', 'bn-sort', 'bn-hidetoggle']
 
 function reserved(token) {
   if (RESERVED_EXACT.includes(token)) return true
