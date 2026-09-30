@@ -104,7 +104,7 @@ def write_env(path: Path, env: dict, until: str | None = None) -> None:
 
 
 def run_row(mod, root: Path):
-    """One fresh Report() over the fixture `root`, with ROOT patched and the worktree
+    """One fresh Report() over the fixture `root`, with the root moved (`set_root`) and the worktree
     cache cleared so a case run after the previous one sees the disk as it is NOW."""
     saved_root = mod.ROOT
     mod.nested_worktrees.cache_clear()
@@ -115,11 +115,11 @@ def run_row(mod, root: Path):
         # unresolved fixture root disagreed with its own nested worktree's resolved path
         # and `rel()` fell back to printing the absolute path instead of failing loudly,
         # which is precisely the kind of silent miss this row exists to not have.
-        mod.ROOT = root.resolve()
+        mod.set_root(root.resolve())
         report = mod.Report()
         mod.check_subagent_override(report)
     finally:
-        mod.ROOT = saved_root
+        mod.set_root(saved_root)
         mod.nested_worktrees.cache_clear()
     row = next(r for r in report.checks if r.check == "subagent override")
     return row

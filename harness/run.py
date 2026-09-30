@@ -10,7 +10,7 @@ one: this file said EIGHT in three places — the title, the sentence above and 
 paragraph — while `TESTS` below held nine, and `make docs-audit`'s `harness tests` row
 printed "9 registered and documented" throughout, because its other side was the markdown
 and never the file that decides the list. The range and historical claims below are
-deliberately outside the patterns; see `_HARNESS_CLAIMS` in scripts/docs-audit.py.
+deliberately outside the patterns; see `_HARNESS_CLAIMS` in scripts/docs_audit/harness_criteria.py.
 
 T1-T4 are the original contract. T5 (pricing) and T6 (geometry) arrived with batch script
 v2: a wrong price is a distinct failure from a wrong match, and a card the pipeline cannot

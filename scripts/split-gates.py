@@ -12,7 +12,7 @@ GATES.md IS NOT ONE KIND, WHICH decisions AND debts BOTH WERE. Reading it end to
 THREE:
 
   1. THE HARNESS CONTRACT — `### T1` .. `### T9` under `## The harness is the contract`. A
-     test's threshold, cited elsewhere as a bare `Tn` (`_TEST_REF_RE` in docs-audit.py) the
+     test's threshold, cited elsewhere as a bare `Tn` (`_TEST_REF_RE` in docs_audit/harness_criteria.py) the
      same way a build step is cited as `step n`. Kind folder: `contract/`.
   2. GATE RUN RECORDS — `### Gate A/B/C` and their addenda (`### Box 2`, `### The per-run
      reading`) under `## Gates`. Numbers measured about cards, never rewritten to match a
@@ -62,7 +62,7 @@ _GATE_LETTER_RE = re.compile(r"^###\s+Gate\s+([A-Z])\s*[—-]\s*(.+)$")
 # A top-level (unindented) numbered list item — the only shape `## What shipped` and
 # `## What is open` use for a build-order step. Scoped to those two containers by the caller,
 # not by this regex alone, because a numbered list confined to one container is `build order
-# mirror`'s own rule (`_GATES_STEP` in docs-audit.py) and this script re-derives it rather
+# mirror`'s own rule (`_GATES_STEP` in docs_audit/env_map.py) and this script re-derives it rather
 # than importing a docs-audit internal.
 _STEP_RE = re.compile(r"^(\d+)\.\s")
 

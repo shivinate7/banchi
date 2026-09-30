@@ -769,7 +769,7 @@ after="$(branches)"
 actual="$(comm -23 <(printf '%s\n' "$before") <(printf '%s\n' "$after"))"
 
 # NON-VACUITY FIRST. Two empty sets are equal, and an equality over two empty sets is the exact
-# shape of a guard that proves nothing — `corpus_is_empty` in `docs-audit.py` is this repo's
+# shape of a guard that proves nothing — `corpus_is_empty` in `docs_audit/records.py` is this repo's
 # name for it.
 [ -n "$actual" ] \
   && ok "the confirm run really deleted something — the comparison has a subject" \

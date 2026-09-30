@@ -99,7 +99,7 @@ import { CAPTURE_PORT, DEV_PORT } from '../devPort'
  * WeakMap and the ordering hazard together, because the after-phase is guaranteed to pair with
  * the before-phase. What it also removes is the CALL: every spec would import `test` from here
  * instead of from `@playwright/test`, and the seal would run invisibly. A guard that can
- * silently stop running is the failure `scripts/docs-audit.py:check_dispatch` exists about, and
+ * silently stop running is the failure `scripts/docs_audit/dispatch.py:check_dispatch` exists about, and
  * `spec seal` can only read a call somebody can grep for. An explicit line beats a tidy one.
  */
 

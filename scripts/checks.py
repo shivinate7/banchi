@@ -1262,8 +1262,8 @@ CHECKS = (
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes a temporary git repository and worktree. "
                                "The row it proves runs on every commit regardless, in "
-                               "`check_subagent_override` inside docs-audit.py's own "
-                               "unconditional (never `--staged`-narrowed) call list.",
+                               "`check_subagent_override`, a Tier 1 row in `ROWS` "
+                               "(scripts/docs_audit/rows.py), never `--staged`-narrowed.",
         "gates": True,
         "governed_by": ("D18", "D135", "D173", "D178"),
     },

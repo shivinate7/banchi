@@ -68,7 +68,7 @@ A stale entry must be deleted, and the prose list holds more than 14,000 lines o
 
 It never adds an entry. It refuses to write a plan that holds any identity more often than the list that it read. A list that is not JSON, such as one with merge-conflict markers, is not pruned. The pruner prints the recipe and writes nothing: keep either side's list whole, then run the pruner. That works because the list only shrinks. It reads with the rows' own functions, imported, so the pruner and the gate cannot disagree about what is stale. It previews by default, and `ARGS=--write` applies. It is on no hook and in no `make check`, because D18 says "A generator may write. Nothing that writes may gate a commit." It writes data files under `scripts/` only. So it opens no seam in D18's list, which governs the prose files that agents read as argument. `make offenders-prune-selftest` proves it.
 
-The rows read tracked files only. `markdown_files()` in `scripts/docs-audit.py` reads the index in staged mode and `git ls-files` otherwise. So a scratch `.md` file that git does not track never fails `make docs-audit`.
+The rows read tracked files only. `markdown_files()` in `scripts/docs_audit/core.py` reads the index in staged mode and `git ls-files` otherwise. So a scratch `.md` file that git does not track never fails `make docs-audit`.
 
 ### What this cannot see
 

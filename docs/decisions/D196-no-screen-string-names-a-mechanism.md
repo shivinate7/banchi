@@ -16,7 +16,7 @@ OTHER vocabulary that has been drifting onto screen beside it: a decision citati
 card; a repository path (`inventory/prices.json`, `runs/<n>/…`) is a fact about where bytes sit
 on one Mac; and a pipeline-internal noun — "the pipeline", "the resolver", "the model", "the
 server sent", "the join", "the corpus", "the ledger" — names an implementation component
-instead of the outcome it produces. `scripts/docs-audit.py`'s `NO_MECHANISM_WORDS` is the
+instead of the outcome it produces. `scripts/docs_audit/strings.py`'s `NO_MECHANISM_WORDS` is the
 single place that word list is kept, with a comment on every entry saying which internal
 component it is and why it is not the operator's word.
 
