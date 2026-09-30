@@ -506,11 +506,6 @@
 .browse-hero-parts > span { white-space: nowrap; }
 .browse-hero-parts > span + span::before { content: '·'; margin-right: var(--bn-2); color: var(--bn-ink-4); }
 .browse-hero-number { font-family: var(--bn-font-mono); font-weight: 600; color: var(--bn-ink-2); }
-/* The place beside the name, only where the pane is one column (UX-187). */
-.browse-hero-place { display: none; font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-2); }
-@container pane (max-width: 559px) {
-  .browse-hero-place { display: block; }
-}
 /* Side facts: history, quieter than the lead figures, equal to each other. */
 .browse-hero-side {
   display: flex;
@@ -658,7 +653,7 @@
 @container pane (min-width: 560px) {
   .browse-band {
     grid-template-columns: minmax(220px, 34%) minmax(0, 1fr);
-    height: min(720px, max(520px, calc(100dvh - 280px)));
+    min-height: min(720px, max(520px, calc(100dvh - 280px)));
   }
 }
 .browse-shot { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--bn-2); }

@@ -2669,7 +2669,6 @@ export function BoxBrowse({
                   <CardPane
                     row={panelRow}
                     game={game}
-                    place={selectedLabel}
                     /* REVIEW, PR #407: `pointer-events: none` (BoxBrowse.css) blocks the
                      * mouse alone. Tab still reached `CardOps`' "Card actions" button and
                      * Enter opened its menu on `held.current` — the previous box's card,

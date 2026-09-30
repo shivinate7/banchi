@@ -10,12 +10,10 @@ import {
   IconButton,
   Loading,
   matchQuery,
-  Money,
   Notice,
   Page,
   patchViewQuery,
   Pill,
-  ProductLink,
   Sheet,
   Stat,
   useFacetParams,
@@ -33,9 +31,8 @@ import {
 import { absoluteDate, relativeDate } from './dates'
 import { toast } from './kit/toast'
 import { boxTitle } from './kit/data'
-import { CardPane, gameWord, marketTable, photoSrc, type HeroFigures, type MarketRead, type Row } from './CardHero'
+import { CardPane, gameWord, photoSrc, type HeroFigures, type Row } from './CardHero'
 import { CardLocations, layoutsOf } from './CardLocations'
-import { forSale } from './cardState'
 import { Dialog as Overlay } from './kit/overlay'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { orderReasonLabel, orderReasonRemedy } from './orderReasons'
@@ -74,7 +71,6 @@ import {
   getBoxes,
   getInventoryCopies,
   getOrders,
-  getPricing,
   ingestOrders,
   nameOrders,
   previewOrders,
@@ -2642,29 +2638,6 @@ function OrderPickPane({
     setZoomed(false)
   }, [currentRow?.copy.key])
 
-  /* THE MARKET READING, ONE READ PER RUN (the owner's pick, 2026-09-24: B, one quiet line under
-   *  the card, `CardHero.tsx`'s own header names the same ruling). Kept on the pane through this
-   *  rebuild — Q6 dropped the Details fold, not this line, which the owner asked for by name and
-   *  which `orders.spec.ts` still proves. A failed read is a quiet dash. */
-  const [priced, setPriced] = useState<Record<string, MarketRead>>({})
-  const asked = useRef<Set<string>>(new Set())
-  const pricedRun = currentCard?.run ?? null
-  useEffect(() => {
-    if (pricedRun === null || asked.current.has(pricedRun)) return
-    asked.current.add(pricedRun)
-    let live = true
-    getPricing(pricedRun)
-      .then((payload) => {
-        if (live) setPriced((held) => ({ ...held, [pricedRun]: marketTable(payload) }))
-      })
-      .catch(() => {
-        if (live) setPriced((held) => ({ ...held, [pricedRun]: { kind: 'absent', why: 'could not be read' } }))
-      })
-    return () => {
-      live = false
-    }
-  }, [pricedRun])
-
   if (currentRow === null || currentGroup === null) return null
 
   const figure = pickFigureOf(currentRow.take, owedBySku)
@@ -2678,11 +2651,6 @@ function OrderPickPane({
    *  `photo: null`, which `PhotoPanel` draws as its own honest placeholder. */
   const row: Row = { key: currentRow.copy.key, card: currentCard ?? syntheticCard(currentRow) }
   const place = currentRow.copy.place.label
-  const { take } = currentRow
-  const read = currentCard?.run == null ? undefined : priced[currentCard.run]
-  const rawMarket = read?.kind === 'table' && currentCard !== null ? read.rows[`${currentCard.box}/${currentCard.index}`] : null
-  const market = rawMarket === null || rawMarket === undefined || Number.isNaN(Number(rawMarket)) ? null : Number(rawMarket)
-  const liveNow = take.listed === undefined ? null : forSale(take.listed.live, take.sold_here ?? 0)
   /* THE SAME BAND INVENTORY DRAWS (`CardHero.tsx:CardHeroHead`), fed from the walk's own group.
      `hidden` is 0 because the walk folds nothing (`preserveOrder`), and `cap` is null because a take
      carries no ceiling: a screen that cannot say the ceiling draws no meter. */
@@ -2692,7 +2660,6 @@ function OrderPickPane({
       <CardPane
         row={row}
         game={gameWord(row.card)}
-        place={place}
         preChips={
           <span className="orders-pick-chip">
             <Pill tone="accent">
@@ -2720,11 +2687,6 @@ function OrderPickPane({
         }}
         detail={
           <>
-            <p className="orders-card-market">
-              <ProductLink sku={take.sku} name={take.name ?? undefined}>
-                {market === null ? '—' : <Money value={market} />} market, {liveNow === null ? '—' : liveNow} live
-              </ProductLink>
-            </p>
             <CardLocations
               group={currentGroup}
               persona="owner"

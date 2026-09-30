@@ -391,7 +391,6 @@ function HeroLead({ figures }: { readonly figures: HeroFigures }) {
 export function CardHeroHead({
   card,
   game,
-  place = null,
   preChips,
   postChips,
   actions,
@@ -399,9 +398,6 @@ export function CardHeroHead({
 }: {
   readonly card: InventoryCard
   readonly game: string | null
-  /** `positionLabel(card)`, raw — null draws no place line at all. Shown only where the pane
-   *  is one column (`BoxBrowse.css`), same as before the move. */
-  readonly place?: string | null
   /** Before the finish/rarity pills — `BoxBrowse.tsx`'s own printing-chooser chip. */
   readonly preChips?: ReactNode
   /** After the state pill — `BoxBrowse.tsx`'s own review-queue chip. */
@@ -447,7 +443,6 @@ export function CardHeroHead({
           {card.state === IDENTIFIED ? null : <Pill tone={stateTone(card.state)}>{stateLabel(card.state)}</Pill>}
           {postChips}
         </p>
-        {place === null ? null : <p className="browse-hero-place">{sayPlace(place)}</p>}
         {/* THE SIDE FACTS: history, quieter than the lead figures and equal to each other. Hidden
             is drawn at 0 too, so a sale that folds a copy away adds no line (D118). */}
         {figures == null ? null : (
@@ -479,7 +474,6 @@ export function CardHeroHead({
 export type CardPaneProps = {
   readonly row: Row
   readonly game: string | null
-  readonly place?: string | null
   /** `dimPanel` in `BoxBrowse.tsx`: a stale row held on screen while the next one loads. */
   readonly dimmed?: boolean
   readonly preChips?: ReactNode
@@ -496,7 +490,7 @@ export type CardPaneProps = {
   readonly detail: ReactNode
 }
 
-export function CardPane({ row, game, place = null, dimmed = false, preChips, postChips, queued, actions, figures, photo, detail }: CardPaneProps) {
+export function CardPane({ row, game, dimmed = false, preChips, postChips, queued, actions, figures, photo, detail }: CardPaneProps) {
   return (
     <section
       className="bn-panel browse-card"
@@ -504,7 +498,7 @@ export function CardPane({ row, game, place = null, dimmed = false, preChips, po
       data-dimmed={dimmed ? 'true' : undefined}
       inert={dimmed}
     >
-      <CardHeroHead card={row.card} game={game} place={place} preChips={preChips} postChips={postChips} actions={actions} figures={figures} />
+      <CardHeroHead card={row.card} game={game} preChips={preChips} postChips={postChips} actions={actions} figures={figures} />
       {queued}
       <div className="browse-band">
         <div className="browse-shot">

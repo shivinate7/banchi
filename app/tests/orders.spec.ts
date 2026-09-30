@@ -4439,13 +4439,10 @@ test('at 390, choosing a buyer enters walk mode, and Back leaves', async ({ page
   await expect(page.locator(`${VIEW} .orders-filterbar`)).toBeVisible()
 })
 
-test('the card pane carries one quiet market line that opens the product view (the owner picked B)', async ({ page }) => {
+test('the card pane draws no market line: the band holds the Live figure', async ({ page }) => {
   await open(page, { orders: oneOpenOrder(), walkPlan: volcanionPlan() })
-  const line = page.locator('.browse-card .orders-card-market')
-  await expect(line).toBeVisible()
-  /* No reading in this fixture: a quiet dash, never a made-up figure. */
-  await expect(line).toContainText('— market')
-  await expect(line.getByRole('link')).toHaveAttribute('href', /product/)
+  await expect(page.locator('.browse-card .browse-hero-fig').nth(1)).toBeVisible()
+  await expect(page.locator('.browse-card .orders-card-market')).toHaveCount(0)
 })
 
 for (const [width, height] of [

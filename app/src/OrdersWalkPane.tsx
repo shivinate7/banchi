@@ -207,7 +207,12 @@ function sectionsOf(plan: WalkPlan | null, rows: readonly WalkRow[]): WalkSectio
  *  line's own group still answers "how many are there", not "how many are here".
  *  `facts` OVERLAYS A COPY'S REFRESHED PLACE (D58's renumbering after a sale elsewhere in the
  *  same box) — the same map both callers share, off the one hook. */
-function groupOf(take: WalkPlanTake, copies: readonly WalkPlanCopy[], facts: ReadonlyMap<string, Place>): SearchGroup {
+function groupOf(
+  take: WalkPlanTake,
+  copies: readonly WalkPlanCopy[],
+  facts: ReadonlyMap<string, Place>,
+  cards: ReadonlyMap<string, InventoryCard>,
+): SearchGroup {
   return {
     sku: take.sku,
     names: take.name === null ? [] : [take.name],
@@ -227,6 +232,12 @@ function groupOf(take: WalkPlanTake, copies: readonly WalkPlanCopy[], facts: Rea
     rank: 0,
     copies: copies.map((copy): SearchCopy => {
       const fresh = facts.get(copy.key)
+      const place = fresh ?? copy.place
+      /* THE WALK PLAN'S PLACES CARRY NO NEIGHBOURS, ON PURPOSE (`capture_server.py`'s pick
+         constructor answers null for them). The inventory read `Orders.tsx` already holds does, so
+         the row draws the same neighbour line Inventory's does: borrowed from the card at this
+         place, never asked for again. */
+      const neighbors = place.neighbors ?? cards.get(`${place.box}/${place.index}`)?.place?.neighbors ?? null
       return {
         key: copy.key,
         state: copy.state,
@@ -234,7 +245,7 @@ function groupOf(take: WalkPlanTake, copies: readonly WalkPlanCopy[], facts: Rea
         has_photo: copy.has_photo,
         capture_id: copy.capture_id,
         cid: copy.cid,
-        place: fresh ?? copy.place,
+        place: place.neighbors === neighbors ? place : { ...place, neighbors },
       }
     }),
   }
@@ -365,8 +376,8 @@ export function useOrderWalk({
    *  re-sorts it either. */
   const currentGroup: SearchGroup | null = useMemo(() => {
     if (currentRow === null) return null
-    return groupOf(currentRow.take, currentRow.take.copies, facts)
-  }, [currentRow, facts])
+    return groupOf(currentRow.take, currentRow.take.copies, facts, rawCards)
+  }, [currentRow, facts, rawCards])
 
   /** THE CURRENT CARD, WHOLE (§13: inventory's card pane, unchanged) — the real `InventoryCard`
    *  for the row the walk stands on, looked up by the copy's own (possibly refreshed) place,
@@ -585,6 +596,7 @@ export function useOrderWalk({
      *  post-sale facts the pane already does — `groupOf`'s own overlay, shared rather than
      *  copied. */
     facts,
+    rawCards,
   }
 }
 
@@ -766,7 +778,7 @@ export function WalkList({
                        * it sits in the pane, so the struck-out copy's own Undo is drawn right
                        * where the copy is, never only in the pane above. */}
                       <CardLocations
-                        group={groupOf(line.take, line.rows.map((row) => row.copy), walk.facts)}
+                        group={groupOf(line.take, line.rows.map((row) => row.copy), walk.facts, walk.rawCards)}
                         persona="owner"
                         onSell={walk.onSell}
                         busyKey={walk.busyCopy}
