@@ -151,7 +151,7 @@ const PAGE = '/tests/filters/index.html'
 const WIDTHS = [1440, 820, 720, 390] as const
 const HEIGHT: Record<(typeof WIDTHS)[number], number> = { 1440: 900, 820: 1180, 720: 1000, 390: 900 }
 
-const SPECIMENS = ['FilterBar', 'Rail', 'HideToggle', 'SortHeader', 'Highlight'] as const
+const SPECIMENS = ['FilterBar', 'Rail', 'FilterRows', 'HideToggle', 'SortHeader', 'Highlight'] as const
 
 async function open(page: Page, width: (typeof WIDTHS)[number], theme: 'light' | 'dark' = 'light', hash = ''): Promise<void> {
   await page.setViewportSize({ width, height: HEIGHT[width] })
@@ -214,7 +214,7 @@ test.describe('FilterBar', () => {
       const search = await page.locator(`${BAR} .bn-filterbar-search .search-field-box`).evaluate((el) => Math.round(el.getBoundingClientRect().height))
       const trigger = await page.locator(`${BAR} .bn-filterbar-trigger`).evaluate((el) => Math.round(el.getBoundingClientRect().height))
       const overlay = await openTrigger(page, BAR)
-      const inside = await overlay.locator('.bn-pick, .bn-sort-dir, .bn-hidetoggle').evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)))
+      const inside = await overlay.locator('.bn-fchip > .bn-pick, .bn-sort, .bn-hidetoggle').evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)))
       const heights = [search, trigger, ...inside]
       expect(heights.length).toBeGreaterThanOrEqual(7)
       expect(new Set(heights).size, `heights ${heights.join(', ')}`).toBe(1)

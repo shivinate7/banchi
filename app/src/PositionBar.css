@@ -260,10 +260,10 @@
 }
 /* The card's number, centred on the pin and clamped inside the ruler (`left` is set inline).
    Accent ground, `--bn-on-accent` ink, which flips with the theme so both clear contrast.
-   Below the tick numbers' top band, so the two never meet. */
+   Centred on the track's middle. */
 .position-bar-chip {
   position: absolute;
-  top: 62%;
+  top: 50%;
   translate: -50% -50%;
   min-width: 22px;
   height: 18px;

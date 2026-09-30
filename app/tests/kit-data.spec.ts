@@ -241,7 +241,7 @@ for (const theme of ['light', 'dark'] as const) {
 
       /* Every filter control in one bar is one height. */
       const heights = await page
-        .locator('[data-specimen="Filters"] .bn-pick, [data-specimen="Filters"] .bn-fchip-clear, [data-specimen="Sort"] .bn-pick, [data-specimen="Sort"] .bn-sort-dir, [data-specimen="Pick one"] .bn-pick')
+        .locator('[data-specimen="Filters"] .bn-pick, [data-specimen="Filters"] .bn-fchip-clear, [data-specimen="Sort"] .bn-sort, [data-specimen="Pick one"] .bn-pick')
         .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)))
       expect(heights.length).toBeGreaterThanOrEqual(6)
       expect(new Set(heights).size, `heights ${heights.join(', ')}`).toBe(1)

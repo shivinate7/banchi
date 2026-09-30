@@ -1100,6 +1100,7 @@ export function Gallery() {
                   <Meter cells={5} filled={3} end="Cap 5" label="3 of 5" />
                   <Meter cells={5} filled={5} end="Cap 5" label="5 of 5" />
                   <Meter cells={5} filled={6} end="Cap 5, 1 over" tone="warn" label="6 of 5, 1 over" />
+                  <Meter cells={13} filled={14} end="Cap 13, 1 over" tone="warn" label="14 of 13, 1 over" className="kit-meter-wide" />
                 </div>
               </Spec>
             </div>

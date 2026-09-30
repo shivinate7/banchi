@@ -19,7 +19,7 @@
  * one press (Mark sold / Undo) `CardLocations`'s own `renderAction` slot calls per copy.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Icon, IconButton, Kbd, Loading, Notice, Pill } from './kit'
+import { Icon, IconButton, Kbd, Loading, Notice, overlayOpen, Pill } from './kit'
 import { toast } from './kit/toast'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
@@ -336,7 +336,11 @@ export function useOrderWalk({
   useEffect(() => {
     if (plan === planRef.current) return
     planRef.current = plan
-    setCurrent(rowsOf(plan)[0]?.rowKey ?? null)
+    /* A NEW PLAN STARTS ON ITS FIRST ROW, unless the walk already stands on a row this plan holds: a key
+       pressed in the frame the plan landed has moved `current` already, and this effect must not put
+       it back. */
+    const first = rowsOf(plan)
+    setCurrent((held) => (held !== null && first.some((row) => row.rowKey === held) ? held : (first[0]?.rowKey ?? null)))
   }, [plan])
 
   const [facts, setFacts] = useState<ReadonlyMap<string, Place>>(new Map())
@@ -434,11 +438,18 @@ export function useOrderWalk({
   /** The previous or next PICK (one take at one stop), not the previous or next copy: the pane
    *  switches to it at once. Lands on its first copy not yet sold, or its first. Answers the pick's
    *  `takeKey` so the caller can bring its line into view, or null at either end of the walk. */
-  const stepPick = (direction: 1 | -1): string | null => {
+  const stepPick = (direction: 1 | -1, drawn: (takeKey: string) => boolean = () => true): string | null => {
     const lines = allTakeLinesOf(sections)
     if (lines.length === 0) return null
     const at = lines.findIndex((line) => line.rows.some((row) => row.rowKey === current))
-    const next = lines[at === -1 ? 0 : at + direction]
+    /* `current` IS NULL FOR ONE RENDER AFTER A PLAN LANDS (its effect sets it), so the start is the
+       first pick and the step is added to THAT, the way `step` does it: a press in that frame must
+       still move by one. */
+    let to = (at === -1 ? 0 : at) + direction
+    /* A pick the Hide picked fold has taken off the list is not stepped onto: the panel would show a
+       card the walk column does not. */
+    while (lines[to] !== undefined && !drawn(lines[to]!.takeKey)) to += direction
+    const next = lines[to]
     if (next === undefined) return null
     const row = next.rows.find((one) => !soldKeys.has(one.copy.key)) ?? next.rows[0]
     if (row === undefined) return null
@@ -448,20 +459,11 @@ export function useOrderWalk({
 
   const onSell = (copy: SearchCopy, forTake?: WalkPlanTake) => {
     if (busyCopy !== null) return
-    /* THE CARD PANE OFFERS MARK SOLD ON EVERY COPY OF THE TAKE, D212's own copies list — not
-       only the ones physically AT this stop (`here: true`). `rows` flattens only the `here`
-       copies, one per physical reach, so looking THIS press up in `rows` by the pressed
-       copy's own key silently dropped a press on any other copy (the review round's finding
-       5, D171 again): no request, no toast, nothing. `currentRow` is the take the pane is
-       standing on regardless of which of its copies was pressed, and every copy the pane
-       draws a button for belongs to that one take (`currentGroup.copies` is `take.copies`
-       whole) — so it is the right anchor for every press the PANE makes.
-
-       A4 ADDS A SECOND CALLER: `WalkList`'s own rows, one per take, drawn beside the pane
-       rather than only inside it. A row there can belong to a DIFFERENT take than the one the
-       pane happens to be showing, so `currentRow.take` is the wrong anchor for it — `forTake`
-       is how that caller names its own take explicitly. Omitted, the pane's own behaviour is
-       unchanged. */
+    /* EVERY CALLER NAMES ITS TAKE, OR FALLS BACK TO THE PICK THE WALK STANDS ON. The walk column's
+       copy rows pass `forTake` (a row can belong to a different take than the one the panel shows),
+       and the digit keys sell the current pick's copies through `currentLineOf`. The card panel no
+       longer draws copy rows of its own, so `currentRow.take` is only the fallback now: it is the
+       anchor for a press that names no take, and never for a copy the walk column does not draw. */
     const take = forTake ?? currentRow?.take
     if (take === undefined) return
     const order = pickOrderFor(take, ordersByKey, recorded.get(take.sku) ?? new Map())
@@ -633,7 +635,9 @@ function revealPick(takeKey: string): void {
 /** Page to the previous or next pick and bring it into view. The keys and the panel's two arrow
  *  buttons both call it, so they cannot disagree. */
 export function stepPickAndReveal(walk: OrderWalk, direction: 1 | -1): void {
-  const takeKey = walk.stepPick(direction)
+  /* Lines are found in the DOM; where the list is not drawn at all, every pick counts as drawn. */
+  const listDrawn = document.querySelector('[data-take-key]') !== null
+  const takeKey = walk.stepPick(direction, (key) => !listDrawn || document.querySelector(`[data-take-key="${CSS.escape(key)}"]`) !== null)
   if (takeKey !== null) revealPick(takeKey)
 }
 
@@ -650,6 +654,9 @@ export function useWalkKeys(walk: OrderWalk): void {
       if (now.rows.length === 0) return
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return
       if (isEditableTarget(event.target)) return
+      /* A LAYER OVER THE WALK OWNS THE KEYBOARD (the lightbox, a dialog), as the shell's own keys
+         ask. The walk's own card sheet on a phone is not such a layer: it is the walk. */
+      if (overlayOpen() && document.querySelector('[data-bn-overlay]:not(.orders-card-sheet)') !== null) return
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault()
         stepPickAndReveal(now, event.key === 'ArrowRight' ? 1 : -1)
@@ -661,6 +668,11 @@ export function useWalkKeys(walk: OrderWalk): void {
       const copy = groupOf(line.take, line.rows.map((row) => row.copy), now.facts, now.rawCards).copies[Number(event.key) - 1]
       if (copy === undefined || now.soldKeys.has(copy.key) || copy.state === 'sold' || copy.state === 'retired') return
       event.preventDefault()
+      /* ONE SALE AT A TIME: a digit pressed while another sale is in flight says so, never nothing. */
+      if (now.busyCopy !== null) {
+        toast({ kind: 'status', title: 'One sale at a time', body: 'The last one is still being recorded.', ttlMs: 2500 })
+        return
+      }
       now.onSell(copy, line.take)
     }
     window.addEventListener('keydown', onKey)

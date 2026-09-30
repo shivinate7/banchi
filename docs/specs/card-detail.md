@@ -127,7 +127,30 @@ PNGs.
 9. Use `--bn-*` tokens only. Draw every separator in CSS (D218, a typed dot is a defect).
    Run `cd app && npx tsc --noEmit`, `make docs-audit` and `make design-check`.
 
+## The Orders walk
+
+The `#/orders` walk draws the same band and photograph through the same shared components, and
+nothing else on its right panel.
+
+- **The panel is the current pick alone.** It is the head (name, meta line, `Pick N of M`, `For
+  <buyer>`), the band (Stored, Live, Market) and the photograph. It draws no copy rows. The walk
+  column beside it holds each copy's address, neighbors, ruler and Mark sold. The copies list is
+  switched off by leaving out `CardPane`'s `detail`, not by a second component.
+- **Keys, while a walk is open.** `1` to `9` mark the 1st to 9th copy of the current pick sold, in
+  the order the walk column draws them, through the same press as the button (same receipt, toast
+  and Undo). `←` and `→` page to the previous and next pick; the panel switches at once and the
+  walk column scrolls that pick into view (smooth unless motion is reduced). A pick the Hide picked
+  fold has taken off the list is skipped. No key acts in a text field, with a modifier, or under
+  an open layer. A digit pressed while a sale is in flight says so.
+- **Hints.** The digit stands beside each of the current pick's Mark sold buttons, and the panel
+  carries two arrow buttons with the `←` `→` caps.
+- **The band's Market** is a figure beside Live, linking to the product by SKU. `Orders` passes no
+  ceiling, so its Live figure draws no meter.
+
 ## Open
+
+- A copy of a pick that is not at the stop has no pane row now, and the walk column draws only the
+  copies at the stop. The owner is deciding how such a copy is reached.
 
 - The amber state at 3 days is provisional (item 4).
 - The brief's data has 5 stored but draws 3 copy rows. The sheet draws what the brief names. In the product, the

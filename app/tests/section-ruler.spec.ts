@@ -47,7 +47,7 @@ const GAMES: GameRegistry = {
 
 /** A box of `sectionCount` sections, `cardsPerSection` cards each, with the current card at
  *  section 1 (or its last card, for a section smaller than 17 — the owner's own reported case). */
-function buildBox(sectionCount: number, cardsPerSection: number, cardAt?: number) {
+function buildBox(sectionCount: number, cardsPerSection: number, pinAt?: number) {
   const sections_detail = []
   let start = 1
   for (let s = 1; s <= sectionCount; s += 1) {
@@ -55,7 +55,7 @@ function buildBox(sectionCount: number, cardsPerSection: number, cardAt?: number
     start += cardsPerSection
   }
   const boxTotal = sectionCount * cardsPerSection
-  const at = cardAt ?? Math.min(17, cardsPerSection)
+  const at = pinAt ?? Math.min(17, cardsPerSection)
   const card = {
     box: 2,
     index: 1,
@@ -125,8 +125,8 @@ function buildBox(sectionCount: number, cardsPerSection: number, cardAt?: number
   return { card, boxes }
 }
 
-async function open(page: Page, sectionCount: number, cardsPerSection: number, cardAt?: number) {
-  const { card, boxes } = buildBox(sectionCount, cardsPerSection, cardAt)
+async function open(page: Page, sectionCount: number, cardsPerSection: number, pinAt?: number) {
+  const { card, boxes } = buildBox(sectionCount, cardsPerSection, pinAt)
   const cards = { '2/1': card }
 
   await page.route(/\/search\?/, (route) =>
@@ -321,3 +321,14 @@ for (const [label, card] of [['first', 1], ['last', 30]] as const) {
     expect(c.x + c.width, 'the chip ends inside the ruler').toBeLessThanOrEqual(r.x + r.width)
   })
 }
+
+test('the tick number under or next to the pin is hidden, and the chip sits mid-track', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await open(page, 1, 79, 60)
+  const ruler = page.locator('.card-locations-row.is-current .position-bar-sectiontrack')
+  await expect(ruler.locator('.position-bar-chip')).toHaveText('60')
+  await expect(ruler.locator('.position-bar-tick-num')).toHaveText(['10', '20', '30', '40', '50', '70'])
+  const track = (await ruler.boundingBox())!
+  const chip = (await ruler.locator('.position-bar-chip').boundingBox())!
+  expect(Math.abs(chip.y + chip.height / 2 - (track.y + track.height / 2)), 'chip centred on the track').toBeLessThan(1.5)
+})

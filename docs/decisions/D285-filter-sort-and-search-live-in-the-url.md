@@ -70,6 +70,6 @@ both untouched.
 ### Amended 2026-09-25: a URL facet value one screen links to
 
 The owner's option c at the PR 2 integration gives `#/orders` a "Show" value, `missing` ("Missing
-a copy"), and Home's "Cannot be filled" press links to `#/orders?show=missing`. The value lives in
+a copy"), and Home's "Cannot be filled" press links to `#/orders?show=missing&show=noneleft&show=short`. The value lives in
 the URL like every other facet value here. So the link opens the same list that a person gets
 from the option. D287 records the rule behind it.

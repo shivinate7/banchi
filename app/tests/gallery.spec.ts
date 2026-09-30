@@ -1233,3 +1233,25 @@ test('Mark sold is the same tint and the same width on every row', async ({ page
   }
   expect(drawn[0]!.width).toBe(128)
 })
+
+test('a meter with many cells never paints them over its end label at a narrow width', async ({ page }) => {
+  /* A pane of 410px leaves the Live figure little: 13 cells at 14px cannot fit beside "Cap 13,
+     1 over", so the cells shrink and the label wraps under them, and never lies on top of them. */
+  const meter = page.locator('.kit-meter-wide')
+  await meter.evaluate((el) => { (el as HTMLElement).style.width = '100px' })
+  const box = (await meter.boundingBox())!
+  const end = (await meter.locator('.bn-meter-end').boundingBox())!
+  /* THE CELLS THEMSELVES, not their container: a container squeezed to 6px still paints 13 cells. */
+  const cellRects = await meter.locator('.bn-meter-cells > span').evaluateAll((els) =>
+    els.map((el) => {
+      const r = el.getBoundingClientRect()
+      return { x: r.x, y: r.y, right: r.right, bottom: r.bottom }
+    }),
+  )
+  expect(end.x + end.width, 'the label stays inside the meter').toBeLessThanOrEqual(box.x + box.width + 0.5)
+  for (const cell of cellRects) {
+    expect(cell.right, 'a cell stays inside the meter').toBeLessThanOrEqual(box.x + box.width + 0.5)
+    const apart = end.y >= cell.bottom - 0.5 || end.x >= cell.right - 0.5
+    expect(apart, 'no cell is painted over the label').toBe(true)
+  }
+})

@@ -39,8 +39,24 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.nb-end { font-family: var(--bn-font-mono); letter-spacing: var(--bn-tracking-caps); }
 
 /* An unread neighbour, said in words (LOC-28): muted and in the running voice, because it
    names no card a hand can recognise by its face, only a count of cards nothing has read. */
 .nb-unread { color: var(--bn-ink-3); font-style: italic; font-weight: 600; }
+
+/* THE BOX'S END, where a card has no neighbour on one side: a marker in the ruler's own words,
+   not pressable, so a lone neighbour never reads as the other side's. */
+.nb-end {
+  flex: none;
+  padding: 0 var(--bn-2);
+  border-radius: var(--bn-r-xs);
+  background: var(--bn-accent-tint);
+  color: var(--bn-accent);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 600;
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+  line-height: 1.6;
+  pointer-events: none;
+  user-select: none;
+}

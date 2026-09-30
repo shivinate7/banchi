@@ -107,10 +107,11 @@ export function PlaceNeighbors({
        that name apply to the whole line rather than to either name alone. */
     <p className="nb" role="group" aria-label={parts.said}>
       {/* NO WORDS, READ THE WAY THE RULER RUNS (owner ruling): `<- back [N] front ->`. The arrows
-          are CSS on the side group (D218), so each `arrow + name` is one unbreakable unit. At a
-          box's own end the side is an outline BACK or FRONT chip, with no arrow. */}
+          are CSS on the side group (D218), so each `arrow + name` is one unbreakable unit. A lone
+          neighbour keeps its side: the empty side is the box's end, marked BACK or FRONT (the
+          ruler's own words), so `BACK N Next` and `Prev N FRONT` read apart. */}
       {parts.prev === null ? (
-        <span className="bn-pill bn-pill-sm bn-pill-outline nb-end" data-end="back">BACK</span>
+        <span className="nb-end" aria-hidden="true">Back</span>
       ) : (
         <span className="nb-side" data-side="back">
           <Name side={parts.prev} />
@@ -123,7 +124,7 @@ export function PlaceNeighbors({
         </span>
       )}
       {parts.next === null ? (
-        <span className="bn-pill bn-pill-sm bn-pill-outline nb-end" data-end="front">FRONT</span>
+        <span className="nb-end" aria-hidden="true">Front</span>
       ) : (
         <span className="nb-side" data-side="front">
           <Name side={parts.next} />

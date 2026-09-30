@@ -251,6 +251,7 @@
     "D307-owner-rulings-claude-md-points-to.md",
     "D308-no-dates-in-repo-prose.md",
     "D309-empty-state-fills-the-frame.md",
-    "D310-position-ruler-ticks.md"
+    "D310-position-ruler-ticks.md",
+    "D311-filters-are-one-kit-control.md"
   ]
 }

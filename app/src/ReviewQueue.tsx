@@ -43,6 +43,8 @@ import {
   Button,
   EmptyFrame,
   EmptyState,
+  FilterBar,
+  type FilterFacet,
   Icon,
   IconButton,
   Kbd,
@@ -1490,6 +1492,11 @@ export function ReviewQueue() {
     return [...tallies].sort((a, b) => reasonLabel(a[0]).localeCompare(reasonLabel(b[0])) || a[0].localeCompare(b[0]))
   }, [everyone])
   const lens = shape.length > 1 || reasonFilter !== null
+  /* The reason lens is the kit's one filter control (filters-are-one-kit-control): one facet, one pick. */
+  const reasonFacets = useMemo<FilterFacet[]>(
+    () => [{ key: 'reason', label: 'Reason', multiple: false, options: shape.map(([reason, n]) => ({ value: reason, label: reasonLabel(reason), text: reasonLabel(reason), count: n })) }],
+    [shape],
+  )
 
   const done = tally.answered + tally.closed
   const total = everyone.length + done
@@ -1621,28 +1628,15 @@ export function ReviewQueue() {
       )}
 
       {!lens ? null : (
-        <div className="review-filters" role="group" aria-label="Work one reason at a time">
-          {shape.map(([reason, n]) => (
-            <button
-              key={reason}
-              type="button"
-              className="review-filter"
-              aria-pressed={reasonFilter === reason}
-              title={reason}
-              onClick={() => setReasonFilter(reasonFilter === reason ? null : reason)}
-              disabled={disabled}
-            >
-              <span className="review-filter-label">{reasonLabel(reason)}</span>
-              <span className="review-filter-count">{n}</span>
-            </button>
-          ))}
-          {reasonFilter === null ? null : (
-            <button type="button" className="review-filter review-filter-clear" onClick={() => setReasonFilter(null)} disabled={disabled}>
-              <Icon name="x" size={12} />
-              Every reason
-            </button>
-          )}
-        </div>
+        <FilterBar
+          className="review-filters"
+          label="Work one reason at a time"
+          facets={reasonFacets}
+          value={reasonFilter === null ? {} : { reason: [reasonFilter] }}
+          onChange={(next) => setReasonFilter(next.reason?.[0] ?? null)}
+          disabled={disabled}
+          count={{ shown: worklist.length, total: everyone.length, noun: { one: 'card', many: 'cards' }, quietAtRest: true }}
+        />
       )}
 
       {current === null && refusal !== null ? (

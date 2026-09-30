@@ -2042,8 +2042,9 @@ export function BoxBrowse({
           failure: searchFailure,
           /* N5: `SearchField`'s own default, "Card name, number or SKU", cut to "Card na" in
              the rail's own narrow column at 720 and 820 — a raw clip, no ellipsis, off the
-             native `placeholder` attribute. Shorter here, where the column is narrowest. */
-          placeholder: 'Search',
+             native `placeholder` attribute. Shorter here, where the column is narrowest. It carries the
+             box count, so the count line stays quiet until a search or pick narrows the list. */
+          placeholder: `Search ${boxRecords.length.toLocaleString('en-US')} ${boxRecords.length === 1 ? 'box' : 'boxes'}`,
         }}
         count={{
           /* While the chooser is pending, `reachableCount` reads `activeGroups` — which is
@@ -2052,6 +2053,7 @@ export function BoxBrowse({
           shown: chooserActive ? chooserMatchesByShelf.size : reachableCount,
           total: boxRecords.length,
           noun: { one: 'box', many: 'boxes' },
+          quietAtRest: true,
         }}
         sort={{
           options: [

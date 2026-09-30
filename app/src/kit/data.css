@@ -200,11 +200,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
 }
-.bn-pick-value { color: var(--bn-ink); }
-.bn-pick-sizer { visibility: hidden; }
-.bn-pick-placeholder { font-weight: 400; color: var(--bn-ink-3); }
+/* ONE VALUE STYLE (filters-are-one-kit-control): at rest the value, "Any" and a sort's
+   "Most recent" alike read in the secondary ink at one weight, legible and never
+   placeholder-faint. A SET filter changes COLOUR and EDGE (below), never only weight. */
+.bn-pick-value { color: var(--bn-ink-2); font-weight: 500; }
+.bn-pick-sizer { visibility: hidden; font-weight: 500; }
+.bn-pick-placeholder { font-weight: inherit; color: inherit; }
 /* The chevron sits in a slot one control wide, which is the slot a filter's clear press takes
    over once the filter is on. */
 .bn-pick-chev {
@@ -218,10 +220,11 @@
 /* An ACTIVE filter reads as picked from across the room: the accent edge and tint, with its clear
    press joined to it. */
 .bn-fchip { position: relative; display: inline-flex; align-items: stretch; max-width: 100%; }
-.bn-fchip[data-active='true'] > .bn-pick {
+.bn-pick[data-active='true'] {
   border-color: var(--bn-accent);
   background: var(--bn-accent-tint);
 }
+.bn-pick[data-active='true'] .bn-pick-value { color: var(--bn-accent-hover); }
 /* The hover ink, not the accent: the accent on its own tint over the page is 4.29:1 in light,
    and the label is text. */
 .bn-fchip[data-active='true'] > .bn-pick .bn-pick-label { color: var(--bn-accent-hover); }
@@ -268,7 +271,21 @@
 /* SortControl: the key stays in words (a `Select`); the direction is an IconButton
    (D288) and carries no styling of its own here — `.bn-icon-btn` in kit.css is
    the whole of it. */
-.bn-sort { display: inline-flex; align-items: center; gap: var(--bn-1); }
+.bn-sort {
+  display: inline-flex;
+  align-items: stretch;
+  height: var(--bn-control-h);
+  border: 1px solid var(--bn-field-edge, var(--bn-ink-4));
+  border-radius: var(--bn-r);
+  background: var(--bn-surface);
+  transition: border-color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
+}
+/* ONE FIELD: the key and its direction toggle share the sort's own edge, so the direction is a
+   segment at the end of the row and never a loose icon beside it (filters-are-one-kit-control). */
+.bn-sort > .bn-pick { flex: 1; height: 100%; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.bn-sort > .bn-sort-dir { border-radius: 0; border-left: 1px solid var(--bn-field-edge, var(--bn-ink-4)); }
+.bn-sort:hover { border-color: var(--bn-ink-3); }
+.bn-sort:focus-within { border-color: var(--bn-accent); box-shadow: 0 0 0 3px var(--bn-accent-tint-2); }
 
 /* The panel: Capture's open-field body, floating. Above a sheet (61), below a toast (80). */
 .bn-pick-panel {
