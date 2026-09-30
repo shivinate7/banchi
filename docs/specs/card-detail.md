@@ -26,8 +26,8 @@ The panel has two parts.
 - **The right column never arrives late (owner's ruling).** While the copies search is pending, the column draws
   at its final width with a pulsing bar under each label: Stored, Live and Market for a card with a SKU, Stored
   alone for one without. Actions rides the left column's end, so it keeps one x for the life of the card. A press
-  that crossed the old jump went down on the button and came up elsewhere, and no click fired. A search that
-  gives up draws no bars. `app/tests/inventory.spec.ts` holds the x.
+  that crossed the old jump went down on the button and came up elsewhere, and no click fired. The side-facts line holds a bar row and
+  Live holds a meter bar, so nothing below the head moves on resolve. A search that gives up draws no bars. `app/tests/inventory.spec.ts` holds the x.
 - At pane 410 the band stacks. A hairline puts the two figures side by side under the identity lines.
 - Labels are one word each: Stored, Live, Captured, Hidden, Sent, Cap.
 

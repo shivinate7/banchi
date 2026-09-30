@@ -438,6 +438,7 @@ function HeroLeadPending({ listing }: { readonly listing: boolean }) {
             <span className="bn-label">{label}</span>
           </span>
           <Skeleton className="browse-hero-fig-bar" width="3ch" />
+          {label === 'Live' ? <Skeleton className="browse-hero-meter-bar" width="9ch" /> : null}
         </div>
       ))}
     </div>
@@ -512,7 +513,15 @@ export function CardHeroHead({
         </p>
         {/* THE SIDE FACTS: history, quieter than the lead figures and equal to each other. Hidden
             is drawn at 0 too, so a sale that folds a copy away adds no line (D118). */}
-        {figures == null ? null : (
+        {figures == null ? (
+          figuresPending ? (
+            <p className="browse-hero-side" aria-hidden="true" data-pending="true">
+              {(card.sku !== null ? [0, 1, 2] : [0, 1]).map((i) => (
+                <Skeleton key={i} className="browse-hero-side-bar" width="7ch" />
+              ))}
+            </p>
+          ) : null
+        ) : (
           <p className="browse-hero-side">
             <span>
               Captured<b>{figures.group.copies.length}</b>
