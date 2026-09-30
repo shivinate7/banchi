@@ -227,6 +227,15 @@ test.describe('the published demo draws what reviewers grade', () => {
     expect(missing, 'cards whose photograph the build does not carry').toEqual([])
   })
 
+  test('every SKU an order line names has its Sales photo lookup recorded', () => {
+    const bundle = JSON.parse(readFileSync(BUNDLE, 'utf-8')) as { responses: Record<string, unknown> }
+    const keys = Object.keys(bundle.responses)
+    const asked = keys.filter((key) => key.startsWith('/pipeline/price-now?sku='))
+    const missing = asked.filter((key) => !(`/skus/photos?sku=${key.slice('/pipeline/price-now?sku='.length)}` in bundle.responses))
+    expect(asked.length, 'the recording holds no price-now reading').toBeGreaterThan(0)
+    expect(missing, 'SKUs whose /skus/photos answer the bundle lacks; re-run make demo-mirror').toEqual([])
+  })
+
   for (const screen of ['Inventory', 'Review', 'Pricing', 'Home', 'Cards to pull'] as const) {
     test(`${screen} draws its photographs, and every one answers 200`, async ({ page }) => {
       let photos = watchPhotos(page)
