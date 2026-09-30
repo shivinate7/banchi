@@ -1537,7 +1537,7 @@ test('a game whose export needs a set hint says so, in all three states of the f
 test('a set hint that names no set never clips its sub-line, at every width this app is verified at', async ({
   page,
 }) => {
-  /* MEASURED AT REST, NEVER MID-TRANSITION (DEBT36). Below 1280 the shell collapses the sidebar
+  /* MEASURED AT REST, NEVER MID-TRANSITION. Below 1280 the shell collapses the sidebar
      to the rail, and `.bn-shell` animates `grid-template-columns` over `--bn-t-slow`. The PR 2
      CI trace caught this case reading the row and its value about 200ms into that animation at
      820, with the main column still narrowing between the two reads. Reduced motion is base.css's
@@ -1557,7 +1557,7 @@ test('a set hint that names no set never clips its sub-line, at every width this
   const sub = row.locator('.capture-sub')
   await expect(sub).toHaveText(/names no set/i)
 
-  /* MEASURED AT REST, IN ONE FRAME (DEBT36). A resize across 1280 collapses the shell to the
+  /* MEASURED AT REST, IN ONE FRAME. A resize across 1280 collapses the shell to the
      rail a task later (`App.tsx:useRailNarrow`, a `matchMedia` listener into React state), and
      `.bn-shell` then animates `grid-template-columns`. The PR 2 CI trace caught this case at 820
      reading the row, then its value, about 200ms into that collapse: the main column was still
