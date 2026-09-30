@@ -5120,3 +5120,14 @@ test('a digit pressed while a sale is in flight says one sale at a time', async 
   await expect(page.locator('.bn-toast', { hasText: 'One sale at a time' })).toBeVisible()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
 })
+
+test('the pick figure never breaks "1 of 1" across lines in a narrow column', async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 1000 })
+  await open(page, { orders: oneOpenOrder(), walkPlan: volcanionPlan() })
+  const pick = page.locator('.orders-walk-pick').first()
+  await expect(pick).toContainText('1 of 1')
+  await pick.evaluate((el) => { (el as HTMLElement).style.width = '12px' })
+  const count = page.locator('.orders-walk-pick-count').first()
+  const line = await count.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight) || 16)
+  expect((await count.boundingBox())!.height, 'the figure stays on one line').toBeLessThan(line * 1.5)
+})
