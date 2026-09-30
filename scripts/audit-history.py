@@ -80,6 +80,7 @@ AUDIT = ROOT / "scripts" / "docs-audit.py"
 AUDIT_PACKAGE = ROOT / "scripts" / "docs_audit"
 # Data the package reads when it is imported. Trees older than the file lack it, and the
 # auditor dies before it prints a row, so it travels with the instrument like the package.
+# An instrument input the package reads at import goes here, never tree data.
 AUDIT_DATA = ["scripts/machine-words.json", "scripts/machine-words-allow.json"]
 
 # The absence family, and ONLY it. A finding whose subject is simply not in the archived
@@ -110,14 +111,14 @@ def gitignored(target: str) -> bool:
     return done.returncode == 0
 
 
-def subject_absent(where: str, message: str) -> bool:
+def subject_absent(where: str, message: str, injected_data: Tuple[str, ...] = ()) -> bool:
     """True when the finding is an artefact of the tree, not a claim that drifted."""
     # The injected auditor is not part of the tree being measured. Today's docs-audit.py
     # cites D16-D18 in its own comments, so on any tree predating those decisions it
     # reports nine findings against itself — the instrument, not the subject. Caught only
     # because the total ran 36x over the hand-classified baseline: 72 against a known 2.
     injected = where.split(":")[0].split(" ->")[0]
-    if injected in ("scripts/docs-audit.py", *AUDIT_DATA) or injected.startswith("scripts/docs_audit"):
+    if injected in ("scripts/docs-audit.py", *injected_data) or injected.startswith("scripts/docs_audit"):
         return True
     target = _TARGET.search(message)
     # A finding ABOUT an injected package file, such as the old tree's map having no entry for it.
@@ -129,6 +130,12 @@ def subject_absent(where: str, message: str) -> bool:
 
 
 FAILURE: Dict[str, str] = {}  # sha -> why the auditor did not run, read by `main`
+INJECTED: Dict[str, Tuple[str, ...]] = {}  # sha -> AUDIT_DATA files this run copied in
+
+
+def _why(stderr: bytes, fallback: str) -> str:
+    lines = stderr.decode("utf-8", errors="replace").strip().splitlines()
+    return (lines[-1] if lines else fallback)[:200]
 
 
 def audit_tree(sha: str) -> Optional[List[dict]]:
@@ -137,24 +144,28 @@ def audit_tree(sha: str) -> Optional[List[dict]]:
         tree = Path(work)
         archive = subprocess.run(
             ["git", "archive", sha], cwd=str(ROOT),
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
         )
         if archive.returncode != 0:
+            FAILURE[sha] = _why(archive.stderr, f"git archive exit {archive.returncode}")
             return None
         untar = subprocess.run(
             ["tar", "-x", "-C", str(tree)], input=archive.stdout,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False,
         )
         if untar.returncode != 0:
+            FAILURE[sha] = _why(untar.stderr, f"tar exit {untar.returncode}")
             return None
         (tree / "scripts").mkdir(parents=True, exist_ok=True)
         (tree / "scripts" / "docs-audit.py").write_bytes(AUDIT.read_bytes())
         # The package with it, or the entry script has nothing to import. `__pycache__` stays behind.
         shutil.copytree(AUDIT_PACKAGE, tree / "scripts" / "docs_audit",
-                        ignore=shutil.ignore_patterns("__pycache__"))
+                        ignore=shutil.ignore_patterns("__pycache__"), dirs_exist_ok=True)
         for name in AUDIT_DATA:
-            if (ROOT / name).exists():
+            # Only where the tree lacks it: a tree with its own copy is audited with that copy.
+            if (ROOT / name).exists() and not (tree / name).exists():
                 (tree / name).write_bytes((ROOT / name).read_bytes())
+                INJECTED[sha] = INJECTED.get(sha, ()) + (name,)
         done = subprocess.run(
             [sys.executable, str(tree / "scripts" / "docs-audit.py"), "--json"],
             cwd=str(tree), stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
@@ -211,7 +222,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         for row in result:
             seen[row["label"]] = True
             for finding in row["findings"]:
-                if subject_absent(finding["where"], finding["message"]):
+                if subject_absent(finding["where"], finding["message"], INJECTED.get(sha, ())):
                     absent[row["label"]] = absent.get(row["label"], 0) + 1
                     ab += 1
                 else:
