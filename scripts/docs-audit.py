@@ -3091,16 +3091,22 @@ def _is_main_ancestor(commit: str) -> bool:
 
 def _names_from_main(parents: Iterable[str], directory: str) -> Tuple[Set[str], Set[str]]:
     """`(excused, stale)`: the file names under `directory` that the merged-in `parents` hold.
-    THE ONE EXCUSAL, for both modes. A parent that is an ancestor of `origin/main` excuses
+    THE ONE EXCUSAL, read by the staged merge only: a full run needs none, because the
+    merge-base with `origin/main` already holds every main-ancestor parent's names. A parent that is an ancestor of `origin/main` excuses
     its names (main's own numbers); any other parent (a feature branch, a PR head, or local
-    main ahead of a stale `origin/main`) excuses nothing, and its names come back as `stale`
-    so a refusal can say where they came from. An unreadable ref is "not an ancestor"."""
+    main ahead of a stale `origin/main`) excuses nothing, and the names `origin/main` lacks
+    come back as `stale` so a refusal can say where they came from. An unreadable ref is "not an ancestor"."""
     excused: Set[str] = set()
     stale: Set[str] = set()
+    main_held = {Path(p).name for p in
+                 git("ls-tree", "-r", "--name-only", _MERGE_BASE_REFERENCE, "--", directory).splitlines()}
     for parent in parents:
         held = {Path(p).name for p in
                 git("ls-tree", "-r", "--name-only", parent, "--", directory).splitlines()}
-        (excused if _is_main_ancestor(parent) else stale).update(held)
+        if _is_main_ancestor(parent):
+            excused |= held
+        else:
+            stale |= held - main_held
     return excused, stale
 
 
@@ -3152,18 +3158,8 @@ def check_numbered_record_growth(report: Report, staged_only: bool) -> None:
                 Path(p).name for p in
                 git("ls-tree", "-r", "--name-only", base, "--", directory).splitlines()
             )
-            # A FILE A MERGE BROUGHT IN FROM MAIN IS MAIN'S, NOT THE BRANCH'S
-            # (`_names_from_main`). A feature branch merged into an integration branch, or the
-            # PR head that is the second parent of CI's synthetic merge, is not main. A number
-            # the merge commit itself adds, or a commit before the merge, is in no such tree.
-            merged_in: Set[str] = set()
-            for merge in git("rev-list", "--merges", f"{base}..HEAD").splitlines():
-                excused, stale = _names_from_main(
-                    git("rev-list", "--parents", "-n", "1", merge).split()[2:], directory)
-                merged_in |= excused
-                stale_paths.update(f"{directory}/{n}" for n in stale)
             for path in sorted(dirpath.glob("*.md")):
-                if path.name not in base_names and path.name not in merged_in:
+                if path.name not in base_names:
                     candidates.add(f"{directory}/{path.name}")
         where = f"the branch's history since {base[:9]}"
 
