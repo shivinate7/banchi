@@ -4334,10 +4334,11 @@ const NEIGHBORLY: Cards = {
     section: 1,
     sectionStart: 1,
     sectionEnd: 3,
-    /* THE BOX'S FRONT: no card in front of it, so one row and not a pretend `between`. Its
-       neighbour is also the case with NO comma, which must render whole rather than being cut
-       at some other punctuation. */
-    neighbors: { prev: null, next: { index: 4, slot: 3, name: 'Conscription' } },
+    /* A MIDDLE CARD: it has earlier cards in its section, so `prev` is a real neighbour. */
+    neighbors: {
+      prev: { index: 2, slot: 1, name: 'Quiet Ember' },
+      next: { index: 4, slot: 3, name: 'Conscription' },
+    },
   }),
   /* LOC-28'S ROW: two on-hand cards toward the back carry no name. The owner's ruling of
      makes them the neighbour, said as "2 unread cards" (D260), and never walks past them
@@ -4357,6 +4358,13 @@ const NEIGHBORLY: Cards = {
     },
   }),
 }
+
+/* THE BOX'S ENDS, one card each, kept out of `NEIGHBORLY` (its tests index it with `.nth`). */
+const boxEnd = (neighbors: NonNullable<Cards[string]['place']>['neighbors']): Cards => ({
+  '2/1': card({ index: 1, state: 'identified', name: 'Bashful Bloom', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3, neighbors }),
+})
+const BOX_BACK = boxEnd({ prev: null, next: { index: 4, slot: 3, name: 'Conscription' } })
+const BOX_FRONT = boxEnd({ prev: { index: 2, slot: 1, name: 'Quiet Ember' }, next: null })
 
 test('UX-190 — a sale says which card took its number, and the rows hold still', async ({ page }) => {
   const cards: Cards = Object.fromEntries(Object.entries(NEIGHBORLY).map(([key, held]) => [key, { ...held }]))
@@ -5310,14 +5318,14 @@ test('the neighbour names are read as words, not as metadata', async ({ page }) 
 
 test('a card at the back of the box gets one row, not a pretend between', async ({ page }) => {
   await open(page, BOXES, {
-    cards: NEIGHBORLY,
-    search: (query) => searchAnswer(query, NEIGHBORLY),
+    cards: BOX_BACK,
+    search: (query) => searchAnswer(query, BOX_BACK),
   })
 
   /* READ OFF THE COPIES LIST RATHER THAN THE BAND, because both copies of this SKU are drawn
      there unconditionally — so the case needs no fold, no walk and no second selection, and it
      asserts the block at the site that draws it once per copy. */
-  const front = page.locator('.card-locations-owner .nb').nth(1)
+  const front = page.locator('.card-locations-owner .nb').first()
   await expect(front).toBeVisible()
   /* ONE SIDE, NOT A PRETEND BETWEEN: no `back`, and the empty side wears a BACK marker, so
      the line reads `BACK → Next` (`PlaceNeighbors.tsx`). */
@@ -5335,6 +5343,18 @@ test('a card at the back of the box gets one row, not a pretend between', async 
   /* Nothing toward the back: card 1 is at the far back, so this card sits behind its one
      neighbour and in front of nothing (UX-186). */
   await expect(front).toHaveAttribute('aria-label', 'Next: Conscription (first in the box)')
+})
+
+test('a card at the front of the box draws FRONT last, after its one neighbour', async ({ page }) => {
+  await open(page, BOXES, {
+    cards: BOX_FRONT,
+    search: (query) => searchAnswer(query, BOX_FRONT),
+  })
+  const back = page.locator('.card-locations-owner .nb').first()
+  await expect(back.locator('.nb-side')).toHaveAttribute('data-side', 'back')
+  await expect(back.locator(':scope > *').last()).toHaveClass('nb-end')
+  await expect(back.locator('.nb-end')).toHaveText('Front')
+  await expect(back).toHaveAttribute('aria-label', 'Previous: Quiet Ember (last in the box)')
 })
 
 test('an unread neighbour is said in words, and counts as the neighbour (LOC-28)', async ({ page }) => {
