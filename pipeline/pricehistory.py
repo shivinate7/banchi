@@ -1113,28 +1113,30 @@ class Market:
             pass
 
     def refetch(self, url: str, slug: str) -> Dict:
-        """Refetch a catalogue list once per instance, after a miss against the cached one.
+        """Refetch a catalogue list after a miss against the cached one: `get` past any TTL."""
+        return self.get(url, slug, -1, catalog=True)
 
-        The attempt is recorded BEFORE the fetch, so a failing host costs one request, not one
-        per card. A payload with fewer results than the cache held (an empty one included) is
-        never stored: the cache keeps the old list and the caller refuses as before.
+    def get(self, url: str, slug: str, ttl: float, catalog: bool = False) -> Dict:
+        """One home for the catalogue lists' expiry rule (`catalog=True`).
+
+        The attempt is recorded BEFORE the fetch, so with a stale list in hand a failing host
+        costs one request per instance, not one per card, and the stale list is served rather
+        than an error. A payload with fewer results than the stale list held (an empty one
+        included) is never stored: the cache keeps the old list.
         """
-        old = self._cached(slug, float("inf")) or {}
-        if slug in self._attempted:
-            return old
-        self._attempted.add(slug)
-        payload = self.get(url, slug, -1, keep=old)
-        return payload
-
-    def get(self, url: str, slug: str, ttl: float, keep: Optional[Dict] = None) -> Dict:
         payload = self._cached(slug, ttl)
         if payload is not None:
             return payload
+        stale = self._cached(slug, float("inf")) if catalog else None
+        if stale is not None and slug in self._attempted:
+            return stale
         if self._offline is not None:
             # FAIL FAST, NEVER RE-ATTEMPT. The socket has already failed once with no
             # response at all this instance's life — a second, distinct URL over the same
             # dead network fails the identical way, so there is nothing to wait politely
             # before, and no reason to spend the syscall finding that out again.
+            if stale is not None:
+                return stale
             raise self._offline
         if self.requests and self._courtesy_delay:
             time.sleep(self._courtesy_delay)
@@ -1142,11 +1144,14 @@ class Market:
         self.requests += 1
         try:
             payload = self._fetch(url)
-        except Offline as exc:
-            self._offline = exc
+        except PriceHistoryError as exc:
+            if isinstance(exc, Offline):
+                self._offline = exc
+            if stale is not None:
+                return stale
             raise
-        if keep and len(payload.get("results") or ()) < len(keep.get("results") or ()):
-            return keep
+        if stale is not None and len(payload.get("results") or ()) < len(stale.get("results") or ()):
+            return stale
         self._store(slug, payload)
         return payload
 
@@ -1170,7 +1175,8 @@ class Market:
 
     def groups(self, category_id: int) -> Dict[str, object]:
         slug = f"tcgcsv/{int(category_id)}/groups"
-        payload = self.get(f"{CATALOG_HOST}/tcgplayer/{int(category_id)}/groups", slug, GROUPS_TTL_SECONDS)
+        url = f"{CATALOG_HOST}/tcgplayer/{int(category_id)}/groups"
+        payload = self.get(url, slug, GROUPS_TTL_SECONDS, catalog=True)
         return index_by_name(payload.get("results") or ())
 
     def group_id(self, category_id: int, set_name: str) -> int:

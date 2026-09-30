@@ -35364,6 +35364,36 @@ def check_price_history(checks: Checks) -> None:
         "an empty refetch leaves the old cache intact, so a cached card still resolves",
     )
 
+    # An EXPIRED groups cache (two days old): a failing host serves the old list in one
+    # request; an empty payload does not replace it.
+    clock = {"t": 1_000_000.0}
+    aged_home = Path(tempfile.mkdtemp())
+    live["fail"], live["products"] = False, [{"productId": 10, "name": "Alpha"}]
+    live["groups"] = old_groups
+    pricehistory.Market(
+        cache_dir=aged_home, fetcher=_mirror, courtesy_delay=0, now=lambda: clock["t"]
+    ).group_id(3, "Old Set")
+    clock["t"] += 2 * 24 * 60 * 60
+    live["fail"] = True
+    aged = pricehistory.Market(
+        cache_dir=aged_home, fetcher=_mirror, courtesy_delay=0, now=lambda: clock["t"]
+    )
+    resolved = [aged.group_id(3, "Old Set") for _ in range(20)]
+    checks.equal(
+        (resolved[-1], aged.requests), (1, 1),
+        "an expired groups cache and a failing host: the old set still resolves, in 1 request across 20 cards",
+    )
+    live["fail"], live["groups"] = False, []
+    emptied = pricehistory.Market(
+        cache_dir=aged_home, fetcher=_mirror, courtesy_delay=0, now=lambda: clock["t"]
+    )
+    checks.equal(emptied.group_id(3, "Old Set"), 1, "an expired cache and an empty payload: the old list still resolves")
+    checks.equal(
+        pricehistory.Market(cache_dir=aged_home, fetcher=_no_network, courtesy_delay=0, now=lambda: 1_000_001.0).group_id(3, "Old Set"),
+        1,
+        "and the empty payload was never stored",
+    )
+
     # ---------------------------------------------------------------- the parse, on real bytes
     #
     # THE ORDER ASSERTION IS THE POINT OF COMMITTING THIS FILE. Both halves, so a change
