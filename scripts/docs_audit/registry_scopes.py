@@ -433,6 +433,17 @@ def _static_str_list(node: Optional[ast.expr]) -> Optional[List[str]]:
     return out
 
 
+_PARSED: Dict[str, ast.Module] = {}
+
+
+def _parse(source: str) -> ast.Module:
+    """`ast.parse`, once per distinct source text: the commit-path row reads the same few
+    files for every `checks.py` entry, and the self-test runs that row a dozen times."""
+    if source not in _PARSED:
+        _PARSED[source] = ast.parse(source)
+    return _PARSED[source]
+
+
 def _write_evidence(nodes: Iterable[ast.AST], aliases: Dict[str, str]) -> List[str]:
     """Write-shaped `Call` nodes under `nodes`, per the vocabulary argued above."""
     evidence: List[str] = []
@@ -580,7 +591,7 @@ def _package_trees(script: Path, tree: ast.Module) -> List[ast.Module]:
             continue
         for module_path in glob_files(directory, "*.py"):
             try:
-                trees.append(ast.parse(read(module_path)))
+                trees.append(_parse(read(module_path)))
             except SyntaxError:
                 continue
     return trees
@@ -621,7 +632,7 @@ def _commit_path_write_evidence(entry: dict) -> Optional[List[str]]:
         if not exists(path):
             continue
         try:
-            tree = ast.parse(read(path))
+            tree = _parse(read(path))
         except SyntaxError:
             continue
         saw_any = True
