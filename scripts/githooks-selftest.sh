@@ -178,6 +178,19 @@ git add file.txt
 expect allow "PKMNSCAN_MAIN=off commit on main" env PKMNSCAN_MAIN=off git commit -qm "deliberate"
 expect allow "PKMNSCAN_MAIN=off push to main"   env PKMNSCAN_MAIN=off git push -q origin main
 
+echo "  -- a branch push runs the revert guard, and its failure stops the push --"
+# `guard_branch ... || exit 1` is the only thing that carries the revert guard's verdict out of
+# pre-push. The real script is not in this fixture, so a stub stands in: one that fails, and one
+# that passes as the control proving the stub alone does not block anything.
+git branch guard-probe
+mkdir -p scripts
+printf '#!/usr/bin/env python3\nimport sys\nprint("REFUSED: stub revert guard", file=sys.stderr)\nsys.exit(1)\n' \
+  > scripts/revert-audit.py
+expect refuse "a branch push the revert guard fails is refused" git push origin guard-probe
+printf '#!/usr/bin/env python3\n' > scripts/revert-audit.py
+expect allow "control: the same push passes when the guard passes" git push -q origin guard-probe
+rm -rf scripts
+
 echo "  -- a fresh clone is not a violation --"
 # Rule 2, which the header calls out and nothing else here reaches: cloning CREATES main, and
 # a guard that refuses that refuses `git clone`. Cheap to prove, and the alternative is
