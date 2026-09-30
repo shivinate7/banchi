@@ -123,10 +123,29 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('app/package-lock.json') }}
 
+      # THE CAUSE OF THE INSTALL HANGS (measured over the last 120 design-check jobs: 12 took over
+      # 120 s, median 19 s; job 110053275779 had a browser cache HIT and still hung): the browser
+      # cache is fine, but `--with-deps` runs `apt-get install` for ~32 MB of font and mesa
+      # packages, and the runner's azure.archive.ubuntu.com mirror sometimes serves them at
+      # ~100 kB/s. The log stops at a `Get:N` line. This cache holds those .debs so a shard only
+      # downloads what the mirror updated since (apt ignores a cached .deb whose version is stale).
+      - name: Cache the apt packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/apt-archives
+          key: playwright-apt-${{ runner.os }}-${{ hashFiles('app/package-lock.json') }}
+
       - name: Install chromium
         timeout-minutes: 5
         working-directory: app
-        run: npx playwright install --with-deps chromium
+        # BANDAID, ON TOP OF THE CACHE ABOVE: a mirror stall still costs one try. `timeout 120`
+        # kills the stalled attempt and the second one starts from the .debs already fetched.
+        run: |
+          sudo mkdir -p /var/cache/apt/archives
+          sudo cp -n ~/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
+          timeout 120 npx playwright install --with-deps chromium || timeout 120 npx playwright install --with-deps chromium
+          mkdir -p ~/apt-archives
+          cp -n /var/cache/apt/archives/*.deb ~/apt-archives/ 2>/dev/null || true
 
       - name: Prove the built demo draws what reviewers grade
         working-directory: app
