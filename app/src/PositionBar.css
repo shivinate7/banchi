@@ -258,11 +258,11 @@
   background: var(--bn-ink-3);
 }
 /* The card's number beside the pin: accent ground, `--bn-on-accent` ink, which flips with the
-   theme so both clear contrast. Mid-height, below the tick numbers' top band. It flips to the
+   theme so both clear contrast. Centred on the track's middle. It flips to the
    pin's left past the ruler's middle. */
 .position-bar-chip {
   position: absolute;
-  top: 62%;
+  top: 50%;
   left: calc(100% + var(--bn-1));
   translate: 0 -50%;
   padding: 0 var(--bn-1);

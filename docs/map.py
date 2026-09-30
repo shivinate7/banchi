@@ -8903,6 +8903,13 @@ COMPONENTS = [
                         "`make design-check`.",
                 "governed_by": ["D57", "D58", "D118", "D181", "D260", "D264"],
             },
+            "tests/inventory-neighbor-side.spec.ts": {
+                "does": "A card at a box's end names its one neighbor with its side "
+                        "(`D58`, `D260`): the first card reads `Next: X (first in the box)`, the "
+                        "last `Previous: X (last in the box)`, a middle card the two-name form. "
+                        "Reads `placeSentence` through the dev server. Run by `make design-check`.",
+                "governed_by": ["D58", "D260"],
+            },
             "tests/absent-photo.spec.ts": {
                 "does": "A photograph that 404s says so the same way on Review and Pricing "
                         "(`D196`, `D118`): one plain sentence, a Re-shoot link, no address and "
