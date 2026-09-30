@@ -4570,10 +4570,10 @@ test('the lightbox traps focus, closes on Escape, and gives focus back to the ph
   await expect(frame).toBeFocused()
 })
 
-/* "MISSING A COPY" (the owner's option c at the PR 2 integration): a real "Show" option, every
- * buyer who owes at least one copy the store cannot find, whatever that buyer's state. Its count
+/* "FLAGGED" (was "Missing a copy", the owner's option c at the PR 2 integration): a real "Show" option,
+ * every buyer whose product the store has never seen or holds sealed, whatever that buyer's state. Its count
  * is the rows it shows, it is drawn only while it has any, and each row under it says its own
- * missing copies and orders (`orderBuyers.ts:groupMissing`, the rule Home's line sums). */
+ * flagged copies and orders (`orderBuyers.ts:groupMissing`, the rule Home's line sums). */
 test('the Show facet offers "Flagged" (a product never seen, or sealed), counts its buyers, and lists only them', async ({ page }) => {
   const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
   const bob = seededOrder({ number: 'B0002', buyer: 'Bob', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'sku_unseen' })
@@ -4595,7 +4595,7 @@ test('the Show facet offers "Flagged" (a product never seen, or sealed), counts 
   await expect(page.locator('.orders-index-figure')).toHaveText(/1 flagged in 1 order$/)
 })
 
-test('"Short" lists a buyer whose product the store knows but has no copy left of, apart from Missing and Partly picked', async ({ page }) => {
+test('"Short" lists a buyer whose product the store knows but has no copy left of, apart from Flagged and Partly picked', async ({ page }) => {
   const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
   const bob = seededOrder({ number: 'B0002', buyer: 'Bob', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'no_copies_on_hand' })
   const cy = seededOrder({ number: 'C0003', buyer: 'Cy', status: 'Ready to Ship', placedAt: '2026-08-16T00:00:00+00:00', reason: 'sku_unseen' })
@@ -4627,7 +4627,7 @@ test('a buyer whose only unfilled line is a sealed product is listed under Flagg
   await expect(page.locator('.orders-index-row')).toContainText('Dee')
 })
 
-test('"Missing a copy" is not offered while no buyer owes a missing copy', async ({ page }) => {
+test('"Flagged" is not offered while no buyer owes a flagged copy', async ({ page }) => {
   const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
   await open(page, { orders: payloadOf([alice.row], [{ ...alice.resolved, outstanding: 0 }]) })
   await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
@@ -4818,7 +4818,7 @@ test('the position card stays inside the walk column at 1440 and 820', async ({ 
   }
 })
 
-test('a buyer with one Missing order and one Short order counts two orders, and the rows add to the Home sentence', async ({ page }) => {
+test('a buyer with one Flagged order and one Short order counts two orders, and the rows add to the Home sentence', async ({ page }) => {
   const unseen = seededOrder({ number: 'M0001', buyer: 'Eve', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'sku_unseen' })
   const none = seededOrder({ number: 'M0002', buyer: 'Eve', status: 'Ready to Ship', placedAt: '2026-08-02T00:00:00+00:00', reason: 'no_copies_on_hand' })
   await open(page, { orders: payloadOf([unseen.row, none.row], [{ ...unseen.resolved, outstanding: 1 }, { ...none.resolved, outstanding: 1 }]) })
@@ -4840,4 +4840,15 @@ test('an old `show=missing` link still opens the Flagged list', async ({ page })
   await expect(page).toHaveURL(/show=flagged/)
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Dee')
+})
+
+test('a sealed-only buyer wears the plain look tone, a never-seen product the danger tone', async ({ page }) => {
+  const dee = seededOrder({ number: 'D0004', buyer: 'Dee', status: 'Ready to Ship', placedAt: '2026-08-17T00:00:00+00:00', reason: 'not_a_single' })
+  const cy = seededOrder({ number: 'C0003', buyer: 'Cy', status: 'Ready to Ship', placedAt: '2026-08-16T00:00:00+00:00', reason: 'sku_unseen' })
+  await open(page, { orders: payloadOf([dee.row, cy.row], [dee.resolved, cy.resolved]), landing: false })
+  await page.locator('.orders-index-row', { hasText: 'Dee' }).click()
+  await expect(page.locator('.orders-panel')).toContainText('1 flagged')
+  await expect(page.locator('.orders-panel .bn-pill-danger')).toHaveCount(0)
+  await page.locator('.orders-index-row', { hasText: 'Cy' }).click()
+  await expect(page.locator('.orders-panel .bn-pill-danger')).toHaveCount(1)
 })

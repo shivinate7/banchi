@@ -229,7 +229,7 @@ export function worstStatus(group: BuyerGroup, answers: ReadonlyMap<string, Reso
 /** THE ONE RULE FOR "MISSING A COPY" (UX-077, the owner's option c at the PR 2 integration): a
  *  buyer's missing copies are the `outstanding` copies on its OPEN orders (D121), and its missing
  *  orders are the open orders with any. Home's "Cannot be filled" sentence and the Orders "Show"
- *  facet `missing` both read this, so the sentence and the list it opens count the same thing. */
+ *  Flagged, Short and Partly picked facets read the same rule through `groupFacetCopies`, so the sentence and the list it opens count the same thing. */
 export function groupMissing(
   group: BuyerGroup,
   answers: ReadonlyMap<string, ResolvedOrder>,
