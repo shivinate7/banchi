@@ -1,4 +1,4 @@
-## D-precommit-secrets-file — The pre-commit hook refuses a secrets file
+## D312 — The pre-commit hook refuses a secrets file
 
 **The repo pre-commit hook refuses a staged path whose basename is `.env` or starts with `.env.`.**
 It does so in any directory. The one allow is `.env.example`, the template the repo tracks. Nothing else is exempt, and no

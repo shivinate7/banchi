@@ -151,7 +151,7 @@ $(printf '%s\n' "$icloud_dupes" | sed 's/^/    /')
   If a name like this is genuinely intended:  PKMNSCAN_DUPES=off git commit ..."
 fi
 
-# SECRETS FILES (D-precommit-secrets-file, the hook refuses a secrets file). Refused: any staged
+# SECRETS FILES (D312, the hook refuses a secrets file). Refused: any staged
 # path whose basename is `.env` or starts with `.env.`, in any directory. The Claude guard only
 # sees a command that NAMES the file, so `git add -f .` sweeps it in, and Codex runs no Claude
 # hook. This hook is the one guard every tool runs. The one allow is `.env.example`, the template

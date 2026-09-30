@@ -531,7 +531,7 @@ case "$both_out" in
   *) ok "a slug on a ref that is NOT main — silent" ;;
 esac
 
-echo "  -- a secrets file is refused in any directory (D-precommit-secrets-file, the hook refuses a secrets file) --"
+echo "  -- a secrets file is refused in any directory (D312, the hook refuses a secrets file) --"
 git switch -q -c secretstest 2>/dev/null
 mkdir -p sub/deep
 for name in .env .env.local sub/.env sub/deep/.env.production; do
