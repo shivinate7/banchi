@@ -454,36 +454,21 @@ function OwnerRows({
 
   return (
     <section className={['card-locations', 'card-locations-owner', className ?? ''].filter(Boolean).join(' ')}>
-      {!head ? null : (
-      <header className="card-locations-head">
-        <h3 className="bn-section-title card-locations-title">Copies</h3>
-        {/* THE ONE THING THAT RESHUFFLES THIS LIST, and it is a press rather than a consequence.
-            Drawn only once the order has actually gone stale — a control offering to recompute
-            an order that is already current is a button that does nothing, and a permanent one
-            would read as a setting to get right rather than as the state of this list. It sits
-            in the header because the press that made it stale is in the rows beneath it; a
-            re-rank on the walk's own status bar would be across the screen from the hand.
-
-            THE SLOT AROUND IT IS ALWAYS RENDERED AND IS D118's RULE, not tidiness. A control
-            that appears on a press is a row of the header's grid that did not exist a frame
-            ago, and this list sits inside `.browse-band`'s fixed height — so every copy row
-            would go down by the chip's height at the moment of the sale, which is the movement
-            this whole entry exists to stop. The slot holds `--bn-control-h-sm` whether or not
-            there is anything in it. */}
-        <div className="card-locations-rerank-slot">
-          {stale === null || onRerank === undefined ? null : (
-            <Chip
-              icon="refresh"
-              className="card-locations-rerank"
-              title="Ranked before these copies left."
-              onClick={onRerank}
-            >
-              <span>{stale}</span>
-              <span className="card-locations-rerank-go">re-rank</span>
-            </Chip>
-          )}
-        </div>
-      </header>
+      {/* THE ONE THING THAT RESHUFFLES THIS LIST, and it is a press rather than a consequence.
+          Drawn only once the order has actually gone stale — a control offering to recompute an
+          order that is already current is a button that does nothing. The list has no heading
+          to hold it, so it floats over the list's top-right corner, out of flow (D118): it takes
+          no row while absent and moves no copy row when it appears. */}
+      {!head || stale === null || onRerank === undefined ? null : (
+        <Chip
+          icon="refresh"
+          className="card-locations-rerank"
+          title="Ranked before these copies left."
+          onClick={onRerank}
+        >
+          <span>{stale}</span>
+          <span className="card-locations-rerank-go">re-rank</span>
+        </Chip>
       )}
 
       <ul className="card-locations-rows bn-stagger">

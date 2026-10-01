@@ -8418,12 +8418,9 @@ test('undoing the sale takes the staleness back with it', async ({ page }) => {
      dispatched. */
   await expect(page.locator('.inventory-receipt')).toHaveCount(0)
 
-  /* AND THE HEADER IS ASSERTED PRESENT BEFORE THE CHIP IS ASSERTED ABSENT. The undo triggers a
-     re-read and the copies list draws a skeleton with no header at all while that is in flight,
-     so a bare `toHaveCount(0)` on the chip is satisfied by a frame in which NOTHING is drawn —
-     it passes against a build that never releases the hold. The title renders only when the
-     group does, so the pair can only be satisfied by a settled panel with no chip in it. */
-  await expect(page.locator('.card-locations-title')).toBeVisible()
+  /* THE ROWS ARE ASSERTED PRESENT BEFORE THE CHIP IS ASSERTED ABSENT. The undo triggers a re-read
+     and the copies list draws a skeleton with no rows while that is in flight, so a bare
+     `toHaveCount(0)` on the chip is satisfied by a frame in which NOTHING is drawn. */
   await expect(page.locator('.card-locations-row')).toHaveCount(6)
 
   /* PROMPTLY, WHICH IS THE WHOLE OF WHAT THIS CASE ADDS. The chip has to be gone on the frame
@@ -8434,10 +8431,10 @@ test('undoing the sale takes the staleness back with it', async ({ page }) => {
   await expect(page.locator('.card-locations-rerank')).toHaveCount(0, { timeout: 2000 })
 })
 
-test('the control that re-ranks reserves its own room, so appearing moves no copy row', async ({ page }) => {
+test('the control that re-ranks floats out of flow, so appearing moves no copy row', async ({ page }) => {
   /* D118 ON THE NEW CONTROL. It appears on the press that makes the order stale, inside a band
-     whose height is fixed — so an unreserved slot sends every copy row down by the chip's
-     height at the exact moment of the sale, which is the movement this whole change exists to
+     whose height is fixed — so a chip in flow sends every copy row down by its height at the
+     exact moment of the sale, which is the movement this whole change exists to
      stop. Measured on the FIRST ROW's own top edge, inside the scroller. */
   const { store, depart } = stackedStore()
   await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
@@ -8512,7 +8509,7 @@ test('the control that re-ranks reserves its own room, so appearing moves no cop
     return last as unknown as number
   }
   const before = await listTop()
-  expect(before).toBeGreaterThan(0)
+  expect(before).toBeGreaterThanOrEqual(0)
 
   await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.locator('.card-locations-rerank')).toBeVisible()

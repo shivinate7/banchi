@@ -23,17 +23,10 @@
 /* ---------------------------------------------------------------- the owner: dense ---- */
 
 .card-locations-owner {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--bn-3);
-}
-
-.card-locations-owner .card-locations-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: 'title rerank';
-  align-items: baseline;
-  gap: var(--bn-3) var(--bn-4);
 }
 
 /* THE ONE CONTROL THAT RESHUFFLES THIS LIST, beside the heading that names it and drawn only
@@ -48,22 +41,16 @@
 /* D218: `.bn-chip` is already `inline-flex; gap: 6px`, so the gap alone spaces the two spans
    apart; the dot needs only a margin on its own trailing side to clear the label after it. */
 .card-locations-owner .card-locations-rerank-go::before { content: '·'; margin-right: var(--bn-1-5); color: var(--bn-ink-4); }
-.card-locations-owner .card-locations-rerank-slot {
-  grid-area: rerank;
-  align-self: center;
-  justify-self: end;
-  display: flex;
-  align-items: center;
-  /* RESERVED WHETHER OR NOT THE CHIP IS IN IT (D118). The chip appears on a press, and this
-     list scrolls inside a fixed band — an unreserved slot would send every copy row down by
-     the chip's height at the exact moment of the sale. */
-  min-height: var(--bn-control-h-sm);
+/* OUT OF FLOW (D118): the list has no heading to hold the chip, so it sits on the list's top
+   edge, its bottom just inside it, in the band's blank right-hand corner under the hero's facts.
+   It takes no row while absent and moves no copy row when it appears. */
+.card-locations-owner .card-locations-rerank {
+  position: absolute;
+  bottom: calc(100% - var(--bn-1));
+  right: 0;
+  z-index: 1;
+  box-shadow: var(--bn-shadow-2);
 }
-/* Says what the list beneath is. It used to carry a second job — the copy the walk is standing
-   on appeared BOTH in the card above and as a row here, and this heading was what kept that
-   reading as hero-and-list rather than as an accident. D119 deleted the card, so the heading is
-   back to naming one list. */
-.card-locations-owner .card-locations-title { grid-area: title; margin-bottom: calc(-1 * var(--bn-1)); }
 
 .card-locations-owner .card-locations-meta {
   grid-area: meta;
@@ -80,17 +67,7 @@
 .card-locations-owner .card-locations-meta-mono > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 .card-locations-owner .card-locations-cond { font-family: var(--bn-font-ui); }
 .card-locations-owner .card-locations-cond::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
-/* Narrow, the rerank chip takes its own row under the heading and starts at the left edge with
-   everything else — pinned right in a one-column grid it would sit alone against the far margin. */
 @container copies (max-width: 479px) {
-  .card-locations-owner .card-locations-head {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      'title'
-      'rerank';
-    gap: var(--bn-2);
-  }
-  .card-locations-owner .card-locations-rerank-slot { justify-self: start; }
   .card-locations-owner .card-locations-meta { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 }
 
