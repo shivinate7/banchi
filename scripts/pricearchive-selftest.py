@@ -288,7 +288,8 @@ def main() -> int:
        f"the synthetic fixture is {row_total} distinct (sku, range, start) keys, "
        f"{SKU_COUNT} skus x {ROWS_PER_SKU} rows each")
 
-    sample = synthetic_skus[:300]
+    # 31 skus: every 17th plus the last (synthetic-499). Each arm is a full in-memory scan, so 300 cost ~35s.
+    sample = synthetic_skus[::17] + synthetic_skus[-1:]
 
     # THE OLD SCAN, timed on its own instance so building the new index never gets counted
     # against it.
@@ -307,7 +308,7 @@ def main() -> int:
     )
     ok(old_answers == new_answers,
        "IDENTICAL OUTPUT: for_sku answers exactly what the full-table scan it replaces did, "
-       "same buckets, same order, for every one of 300 skus")
+       "same buckets, same order, for every sampled sku")
 
     # upsert stays visible to for_sku — a re-read of an existing key
     # replaces that bucket in the index too, not only in `entries`, and a brand-new key for a

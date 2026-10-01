@@ -178,6 +178,33 @@ def git(*args: str, cwd: Optional[str] = None, input_bytes: Optional[bytes] = No
     return done.stdout.decode("utf-8", errors="replace")
 
 
+def blobs_at(rev: str, paths: Sequence[str], cwd: Optional[str] = None) -> List[str]:
+    """`git show rev:path` for every path, in ONE `cat-file --batch` process rather than one
+    per file (a corpus read was ~1,200 processes). A missing path answers "", as `git` does."""
+    try:
+        done = subprocess.run(["git", "cat-file", "--batch"], cwd=cwd or str(ROOT),
+                              input="".join(f"{rev}:{p}\n" for p in paths).encode("utf-8"),
+                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False)
+    except OSError:
+        return [""] * len(paths)
+    out, at, blobs = done.stdout, 0, []
+    try:
+        for _ in paths:
+            header_end = out.index(b"\n", at)
+            header = out[at:header_end].split()
+            at = header_end + 1
+            if header[-1].isdigit():  # any object has a body: blob, tree or commit
+                size = int(header[-1])
+                blobs.append(out[at:at + size].decode("utf-8", errors="replace")
+                             if header[-2] == b"blob" else "")
+                at += size + 1
+            else:  # `missing`, `ambiguous`
+                blobs.append("")
+    except (ValueError, IndexError):
+        return [""] * len(paths)
+    return blobs
+
+
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
@@ -499,8 +526,8 @@ def corpus_pieces_at(rev: str, cwd: Optional[str] = None, directory: str = DECIS
     manifest_text = git("show", f"{rev}:{manifest}", cwd=cwd)
     if not manifest_text.strip():
         return None
-    return [git("show", f"{rev}:{directory}/{name}", cwd=cwd)
-            for name in corpus_order_at(rev, cwd=cwd, directory=directory, manifest=manifest)]
+    names = corpus_order_at(rev, cwd=cwd, directory=directory, manifest=manifest)
+    return blobs_at(rev, [f"{directory}/{name}" for name in names], cwd=cwd)
 
 
 def corpus_text_at(rev: str, cwd: Optional[str] = None, directory: str = DECISIONS_DIR,
