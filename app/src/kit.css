@@ -1495,7 +1495,9 @@ img.bn-crop[data-cropped='true'] {
   right: var(--bn-4);
   bottom: var(--bn-4);
   display: flex;
-  flex-direction: column;
+  /* The oldest toast sits on the anchor edge and a new one stacks above it, so a toast arriving
+     moves none of the ones already standing. */
+  flex-direction: column-reverse;
   gap: var(--bn-2);
   width: min(380px, calc(100vw - 32px));
   pointer-events: none;

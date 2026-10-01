@@ -205,7 +205,9 @@
   background: var(--bn-surface-2);
 }
 @media (max-width: 639px) { .revenue-tile-art { aspect-ratio: auto; width: 96px; flex: none; } }
-.revenue-tile-art .bn-thumb { width: 100%; height: 100%; border-radius: 0; }
+/* `display: block`, not the kit's inline-grid: an inline box in a block sits on a text baseline, and the
+   strut's descender gap (5px) came and went as the photograph arrived and moved the tile body. */
+.revenue-tile-art .bn-thumb { display: block; width: 100%; height: 100%; border-radius: 0; }
 /* A CATALOGUE (STOCK) PHOTO IS A PRODUCT SHOT WITH ITS OWN WHITE MARGIN AND, ON A CASE, A
    COUNT BADGE NEAR AN EDGE. `cover` (the kit's default, right for a card photograph) crops
    both: the badge ran off the frame and the white margin read as a box floating in the tile.

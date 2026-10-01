@@ -636,10 +636,12 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
 .app-nav { display: contents; }
 
 /* ---- server banner ------------------------------------------------------------------ */
+/* A banner is an overlay, never a row: the slot is sticky and has no height, so the view under it
+   holds its place when the banner comes and goes (docs/specs/stability.md, class D). */
+.bn-banner-slot { position: sticky; top: 0; z-index: 25; height: 0; }
 .bn-banner {
-  position: sticky;
-  top: 0;
-  z-index: 25;
+  position: absolute;
+  inset: 0 0 auto 0;
   display: flex;
   align-items: center;
   gap: var(--bn-3);
@@ -652,7 +654,7 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
 }
 .bn-banner .bn-btn { background: color-mix(in srgb, currentColor 16%, transparent); color: inherit; box-shadow: none; }
 .bn-banner .bn-btn:hover { background: color-mix(in srgb, currentColor 28%, transparent); }
-@media (max-width: 639px) { .bn-banner { top: var(--bn-topbar-h); } }
+@media (max-width: 639px) { .bn-banner-slot { top: var(--bn-topbar-h); } }
 
 /* ---- which-key overlay ------------------------------------------------------------- */
 .bn-whichkey {

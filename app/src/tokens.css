@@ -128,9 +128,9 @@
   --bn-btn-shadow: var(--bn-shadow-1);
 
   /* ---- type -------------------------------------------------------------- */
-  --bn-font-display: 'Manrope', 'Inter', system-ui, sans-serif;
-  --bn-font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --bn-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --bn-font-display: 'Manrope', 'Manrope Fallback', 'Inter', system-ui, sans-serif;
+  --bn-font-ui: 'Inter', 'Inter Fallback', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bn-font-mono: 'JetBrains Mono', 'JetBrains Mono Fallback', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* TYPE ROLES — aliases onto the scale below, never new sizes (UX-067, UX-115). A heading is
      one of three steps; a sentence a person must read is at least 13px; a label (a caps word,
