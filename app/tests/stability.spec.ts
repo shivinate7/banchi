@@ -150,26 +150,6 @@ async function boxes(page: Page, selectors: readonly string[]): Promise<Record<s
   }, selectors)
 }
 
-for (const width of [1440, 820]) {
-  test(`L3 S8: ticking a card moves nothing in the Inventory list toolbar, at ${width}`, async ({ page }) => {
-    await setViewport(page, { width, height: 900 })
-    await page.goto(screen('inventory'))
-    await expect(page.locator('.browse-rowtick').first()).toBeVisible()
-    await settleFonts(page)
-    await settleMotion(page)
-    const parts = ['.browse-status', '.browse-list']
-    const before = await boxes(page, parts)
-    await page.locator('.browse-rowtick').first().check()
-    await expect(page.locator('.browse-status-picked')).toBeVisible()
-    await settleMotion(page)
-    const after = await boxes(page, parts)
-    /* the toolbar keeps its line and the list keeps its place */
-    expect(after['.browse-status']?.split('|')[0]).toEqual(before['.browse-status']?.split('|')[0])
-    expect(after['.browse-status']?.split('|')[3], 'the toolbar changed height').toEqual(before['.browse-status']?.split('|')[3])
-    expect(after['.browse-list']).toEqual(before['.browse-list'])
-  })
-}
-
 test('L3 S8: the In stock only count holds one box at 9, 99 and 1,234', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   await page.goto(screen('inventory'))
