@@ -6077,9 +6077,9 @@ COMPONENTS = [
                                           "remember the choice in `localStorage` under "
                                           "`banchi.theme` — device-local like the camera's "
                                           "deviceId (D27), and nothing about a card.",
-                                  "governed_by": ["D309", "D5", "D13", "D27", "D32", "D50", "D94", "D95",
+                                  "governed_by": ["D5", "D13", "D27", "D32", "D50", "D94", "D95",
                                                   "D117", "D118", "D125", "D196", "D221", "D260",
-                                                  "D269", "D272", "D288", "D300"]},
+                                                  "D269", "D272", "D288", "D300", "D309", "D313"]},
             "src/kit/Icon.tsx": {"does": "one icon set, 73 paths on a 24-unit grid at 1.75 stroke "
                                          "with round joins, drawn in the Lucide idiom so the whole "
                                          "product speaks one line weight. `currentColor` and "
@@ -6920,11 +6920,11 @@ COMPONENTS = [
             # citation stays so a session reading main's history knows they were removed on
             # purpose rather than lost.
             "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23",
-                            "D24", "D26", "D27", "D58", "D31", "D33", "D35", "D38", "D39", "D41",
-                            "D45", "D77", "D86", "D183", "D65", "D67", "D68", "D89", "D90",
-                            "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D277", "D172",
-                            "D181", "D192", "D213", "D218", "D221", "D252", "D259", "D263",
-                            "D264", "D294", "D275", "D285", "D293"]},
+                            "D24", "D26", "D27", "D31", "D33", "D35", "D38", "D39", "D41", "D45",
+                            "D58", "D65", "D67", "D68", "D77", "D86", "D89", "D90", "D92", "D94",
+                            "D99", "D118", "D119", "D125", "D132", "D172", "D181", "D183", "D192",
+                            "D213", "D218", "D221", "D252", "D259", "D263", "D264", "D275", "D277",
+                            "D285", "D293", "D294", "D313"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -7104,8 +7104,8 @@ COMPONENTS = [
                         "lens, the primary action pair and the `Wanted` line, all of which the "
                         "copies list already drew per row. What STAYED is the receipt's "
                         "sentence, which the copy row and the phone action bar both render.",
-                "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31", "D41", "D57", "D118",
-                                "D119", "D125", "D293"],
+                "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31", "D41", "D57", "D118", "D119",
+                                "D125", "D293", "D313"],
             },
             "src/InventorySets.tsx": {
                 "does": "THE OWNER'S \"BY SET\" VIEW (D293), a second view inside "

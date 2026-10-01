@@ -54,7 +54,7 @@ import {
 import { stateLabel } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
-import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, Pill, boxesMostRecentFirst, countFacets, filterRows, type SortValue } from './kit'
+import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, Pill, boxesMostRecentFirst, countFacets, filterRows, useHeld, type SortValue } from './kit'
 import { boxTitle, UNNAMED_BOX } from './kit/data'
 import type { FilterFacet, FilterValue } from './kit/data'
 import { useFacetParams } from './kit/viewState'
@@ -1710,7 +1710,7 @@ export function BoxBrowse({
   }, [sections, awaitingRows])
   const heldDetail = useRef<ReactNode>(null)
   useEffect(() => {
-    if (found !== null) heldDetail.current = detail
+    if (found !== null && detail != null) heldDetail.current = detail
   }, [found, detail])
   /* THE LIST'S OWN HEIGHT, HELD THROUGH THE SAME WINDOW (this collision's fix, found merging
    * against a27c811f/b8bd679b, 2026-09-19). `heldSections` above keeps the CONTENT identical
@@ -1758,9 +1758,19 @@ export function BoxBrowse({
    * purpose (the a4f3594b fix), so this is the one place that stands the previous row back
    * up — DIMMED, never as a claim about the box now named — while that box's own rows are in
    * flight. */
-  const dimPanel = awaitingRows && selectedRow === null && held.current !== null
+  /* AND THE RENDER AFTER THE ROWS LAND (D313, class B). The rows landed and `selected` is re-pointed, but the screen
+   * above learns the new row from `onSelect`, an effect, so for one render `detail` is still null
+   * and the copies column unmounted. The old pane stands, dimmed, until the screen catches up. */
+  const detailLag = found !== null && detail == null && heldDetail.current !== null
+  const dimPanel = held.current !== null && ((awaitingRows && selectedRow === null) || detailLag)
   const panelRow = dimPanel ? held.current : selectedRow
   const panelDetail = dimPanel ? heldDetail.current : detail
+  /* THE HERO'S FIGURES STAND WITH THE ROW. They come from the screen above, which knows only the
+   * selected card's search group, so they go null the instant the press lands and the hero would
+   * lose its figures column (28px) while the dimmed row above them stands. `useHeld` keeps the
+   * last figures for exactly the `dimPanel` window (D313, class B). */
+  const panelFigures = useHeld(figures, dimPanel)
+  const panelFiguresPending = useHeld(figuresPending, dimPanel)
 
   /* What a bulk write would reach: the ticked rows in the box being walked, as indices. */
   const pickedIndices = useMemo(() => {
@@ -2757,8 +2767,8 @@ export function BoxBrowse({
                       ),
                     }}
                     detail={panelDetail}
-                    figures={figures}
-                    figuresPending={figuresPending}
+                    figures={panelFigures}
+                    figuresPending={panelFiguresPending}
                   />
 
                   <CardDetailsSection

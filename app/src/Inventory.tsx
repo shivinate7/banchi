@@ -49,6 +49,7 @@ import {
   SectionPicker,
   UNDO_KEY_LABEL,
   boxesMostRecentFirst,
+  useHeld,
   useUndoHotkey,
 } from './kit'
 import { UNNAMED_BOX } from './kit/data'
@@ -934,6 +935,11 @@ function CopiesPanel({
 
   const settled = results !== null && results.query === (handle ?? '')
 
+  /* THE LAST COPIES LIST, HELD WHILE THIS CARD'S OWN READ IS OUT (D313, class B). Keyed with the
+     store key of the card it answered for, so the held list keeps its own `Viewing` row. */
+  const answered = useMemo(() => (group === null ? null : { group, key: row.key }), [group, row.key])
+  const heldCopies = useHeld(answered, group === null && handle !== null)
+
   /* B1: THE LOADER MUST GIVE UP. `settled` above asks whether the answer ON HAND matches the
      query ON HAND — a strict check the D118 comment above needs to avoid flashing a stale
      group. It says nothing about whether a fetch is actually running, so a query the server
@@ -1025,8 +1031,33 @@ function CopiesPanel({
           (found by key in the stale `results`) and the list stays put while the fetch runs.
           `!gaveUp` rather than `loading || !settled` (B1): the fetch this handle asked for is
           over the moment `loading` goes back to false, whether or not it ever settled. */}
-      {group === null && !gaveUp ? (
+      {/* AND A STEP TO ANOTHER CARD STANDS ON THE LAST COPIES LIST (D313, class B). Its `group` is
+          null until this card's own answer lands, and drawing the skeleton in its place unmounted
+          `CardLocations` for the whole read: at 820 the copies sit under the photograph, so the
+          band lost 160px and the details under it moved twice. The previous card's list stays,
+          dimmed and inert, until the answer is whole. Only the very first read has nothing to stand
+          on, and draws the skeleton. */}
+      {group === null && !gaveUp && heldCopies === null ? (
         <Loading rows={1} className="inventory-looking" label="Reading this card's copies" />
+      ) : null}
+
+      {group === null && !gaveUp && heldCopies !== null ? (
+        <div className="inventory-held" aria-busy="true" inert>
+          <CardLocations
+            group={heldCopies.group}
+            persona="owner"
+            sections={layouts}
+            currentKey={heldCopies.key}
+            listedAt={heldCopies.group.sku === null ? null : (listings[heldCopies.group.sku]?.live_as_of ?? null)}
+            claims={wanted}
+            onSell={onSell}
+            busyKey={busyKey}
+            soldKeys={soldKeys}
+            renderAction={(copy) => renderAction(copy, false)}
+            hideSold={hideSold}
+            frozen={frozen}
+          />
+        </div>
       ) : null}
 
       {group === null && gaveUp ? (

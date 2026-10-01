@@ -55,6 +55,8 @@
 /* the lone copy: a card with no name and no SKU */
 .inventory-lone { min-width: 0; }
 .inventory-looking { display: flex; flex-direction: column; gap: var(--bn-2); }
+/* The last copies list, held while the next card's own read is out (D313, class B): dimmed, never live. */
+.inventory-held { opacity: var(--bn-disabled); pointer-events: none; transition: opacity var(--bn-t-fast) var(--bn-ease); }
 
 /* ---- the retire dialog ---- */
 .inventory-retire-card {

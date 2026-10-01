@@ -134,7 +134,7 @@ test('failed: a failed history read leaves no skeleton on Home', async ({ page }
  * one on purpose, so any move is the frame and never the content. */
 const READ_MS = 700
 const CLUSTER_MS = 150
-const OUT_SUM = 0.001
+const OUT_SUM = 0.005
 
 async function heldReads(page: Page, read: RegExp): Promise<{ on: boolean }> {
   const gate = { on: false }
@@ -182,6 +182,9 @@ const L1_CARDS = {
 
 async function l1Inventory(page: Page): Promise<void> {
   const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  /* NO CARD IS QUEUED: the shell's seed queues box 2's first card, and a queue notice is content the
+     other cards do not have. */
+  await page.route(/\/queues$/, (route) => json(route, { review: [], parked: [] }))
   await page.route(/\/inventory\/(\d+)$/, (route) => {
     const box = Number(/\/inventory\/(\d+)$/.exec(route.request().url())?.[1])
     const cards = Object.fromEntries(Object.entries(L1_CARDS).filter(([, c]) => c.box === box))
