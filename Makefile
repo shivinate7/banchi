@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -404,8 +404,8 @@ audit-history:
 #                   sigil-check + css-var-check + css-var-check-selftest +
 #                   hand-search-selftest + token-literal-check +
 #                   kit-adoption + ignore-check + lint + typecheck + audit-self-test +
-#                   mutate-anchors + githooks-selftest + merge-selftest + revert-selftest +
-#                   claim-selftest + decisions-selftest + debts-selftest + gates-selftest +
+#                   mutate-anchors + githooks-selftest + revert-selftest +
+#                   decisions-selftest + debts-selftest + gates-selftest +
 #                   submission-selftest + cid-selftest + pricearchive-selftest +
 #                   archive-review-selftest + holdings-selftest + identity-checks-selftest +
 #                   price-postings-selftest + product-history-selftest +
@@ -451,9 +451,7 @@ check:
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory mutate-anchors
 	@$(MAKE) --no-print-directory githooks-selftest
-	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory revert-selftest
-	@$(MAKE) --no-print-directory claim-selftest
 	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory debts-selftest
 	@$(MAKE) --no-print-directory gates-selftest
@@ -524,9 +522,7 @@ ci-check:
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory mutate-anchors
 	@$(MAKE) --no-print-directory githooks-selftest
-	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory revert-selftest
-	@$(MAKE) --no-print-directory claim-selftest
 	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory debts-selftest
 	@$(MAKE) --no-print-directory gates-selftest
@@ -615,9 +611,7 @@ ci-check-guards-1:
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory mutate-anchors
 	@$(MAKE) --no-print-directory githooks-selftest
-	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory revert-selftest
-	@$(MAKE) --no-print-directory claim-selftest
 	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory debts-selftest
 	@$(MAKE) --no-print-directory gates-selftest
@@ -839,36 +833,13 @@ githooks-selftest:
 		echo "githooks-selftest: SKIPPED — nothing in this branch reaches scripts/githooks/. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
 	fi
 
-# THE HALF NOBODY CAN REMEMBER, DONE BY A MACHINE. D42 settles that a session performs both
-# halves of a merge on the owner's word — `gh pr merge`, then the local fast-forward — and the
-# local half has TWO correct forms chosen by whether any worktree holds main. Pick wrong and it
-# does not error: `git -C <main tree> pull --ff-only` fast-forwards whatever branch that tree is
-# standing on, moves no protected ref, and trips no hook.
-#
-# THIS DOES NOT REOPEN D42'S "no make target that picks for you". That rejection is about
-# WHETHER TO MERGE, which stays the owner's: a bare `make merge` refuses, `ARGS=<n>` is a free
-# preview that presses nothing, and only `ARGS="<n> --confirm"` acts. What is automated is the
-# state lookup. See D42's amendment.
-#
-# It never sets PKMNSCAN_MAIN and no refusal it prints suggests it — a session typing that
-# variable is doing something else (D42).
-#
-# A STANDING MERGE INSTRUCTION CARRIES A NEEDED REBASE AND FORCE-PUSH, on a branch nobody else
-# holds (owner ruling, 2026-09-18). The session does not stop and ask again for the rebase —
-# only for whether to merge at all.
+# THE SHARED MERGE TOOL (D140, merge claims the record number). `~/.claude/bin/merge` lives in
+# claude-settings and reads `.github/stamp.json`. A bare `make merge` refuses, `ARGS=<n>` is a free
+# preview that presses nothing, and `ARGS="<n> --confirm"` merges (D42, the owner names the act).
+# The tool claims in a temporary worktree, so this checkout need not stand on the PR's branch.
+# It never rebases or force-pushes: a moved head stops it.
 merge:
-	@$(PYTHON) scripts/merge-pr.py $(ARGS)
-
-# HERE AND NOT IN THE GIT HOOK, for githooks-selftest's two reasons exactly: D18, because it
-# writes a bare repo, a clone and a linked worktree; and because it drives the thing that moves
-# main, so a version on the commit path would be exercising that against the real one.
-merge-selftest:
-	@python3 scripts/guard-scope.py classify --target merge-selftest --base origin/main; rc=$$?; \
-	if [ $$rc -ne $(SKIP_CODE) ]; then \
-		bash scripts/merge-selftest.sh; \
-	else \
-		echo "merge-selftest: SKIPPED — nothing in this branch reaches scripts/merge-pr.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
-	fi
+	@~/.claude/bin/merge $(ARGS)
 
 # A MERGE CAN UNDO A RULING WITHOUT ANYBODY WRITING A LINE (D133). PR #221 landed on main from
 # a tree that still held the pre-#218 copy of ten files, its message about `--cap` wording, and
@@ -900,42 +871,6 @@ revert-selftest:
 		python3 scripts/revert-audit.py selftest; \
 	else \
 		echo "revert-selftest: SKIPPED — this branch does not touch scripts/revert-audit.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
-	fi
-
-# A BRANCH DOES NOT TAKE A DECISION NUMBER (D-merge-time-ids). It writes a slug and this
-# allocates the number against main INSIDE `make merge`, which is the first moment the
-# allocation's only input — what main has taken — is knowable. Reach for this by hand only to
-# see what a merge would claim; the merge runs it for you.
-claim-ids:
-	@python3 scripts/claim-ids.py $(ARGS)
-
-# THE OTHER HALF OF THE CLAIM, AND IT IS NOT ABOUT SLUGS (D140, amended 2026-09-11). Once a
-# branch has claimed there is no slug left and `make claim-ids` says `nothing to do` — a true
-# statement about slugs and an incomplete one about safety, because main can take that number
-# afterwards and nothing looks again. It happened TWICE on 2026-09-11, both times caught by a
-# person reading PR titles.
-#
-# IT WRITES NOTHING, so unlike `claim-ids` it may gate: it is in `check` and in `ci-check`, and
-# `make merge` asks for it before every merge, where the fetch above it makes the answer
-# current. IT READS THE LOCAL `origin/main` AND NEVER THE NETWORK — D140 rejects reading open
-# pull requests deliberately, and this needs neither, because the case that bites is the one
-# where the other branch has already LANDED. A clone with no `origin/main` is ALLOWED and says
-# so, which is `revert-guard`'s call for `revert-guard`'s reason.
-#
-# IT CAN ONLY UNDER-REPORT AGAINST A STALE REF, never over-report, which is what makes it safe
-# on the commit-adjacent path: a `make check` whose `origin/main` is a day old misses a
-# collision it would have caught, and invents none. `decision index` is still the backstop.
-claim-stale:
-	@python3 scripts/claim-ids.py --stale
-
-# The claimer, proved where it can actually be wrong: a throwaway repository in which main
-# moves underneath the branch. In `check`, never in the git hook — it writes (D18).
-claim-selftest:
-	@python3 scripts/guard-scope.py classify --target claim-selftest --base origin/main; rc=$$?; \
-	if [ $$rc -ne $(SKIP_CODE) ]; then \
-		python3 scripts/claim-selftest.py; \
-	else \
-		echo "claim-selftest: SKIPPED — nothing in this branch reaches scripts/claim-ids.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
 	fi
 
 # THE CORPUS IS COMPLETE AND STILL ROUND-TRIPS. `docs/decisions/` is one file per entry and
@@ -1104,7 +1039,7 @@ janitor-agent:
 	done; true
 
 # In `check`, never in the git hook: it writes a temp tree and signals the processes it spawned
-# there, which is D18's line. Same standing as merge-selftest and githooks-selftest.
+# there, which is D18's line. Same standing as githooks-selftest.
 janitor-selftest:
 	@python3 scripts/guard-scope.py classify --target janitor-selftest --base origin/main; rc=$$?; \
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
@@ -1181,7 +1116,7 @@ guard-scope-selftest:
 # THE PRIMARY CHECKOUT'S SELF-SYNC, proved by violating it in throwaway clones. It switches
 # branches and moves `refs/heads/main`, which is exactly why it may never be pointed at this
 # clone: the subject of a sync is the PRIMARY tree, and on this machine that is the owner's live
-# rig. In `check` and never in the git hook — D18, the same standing as merge-selftest.
+# rig. In `check` and never in the git hook — D18, the same standing as githooks-selftest.
 sync-selftest:
 	@python3 scripts/guard-scope.py classify --target sync-selftest --base origin/main; rc=$$?; \
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
@@ -1719,7 +1654,7 @@ design-check:
 # The lock itself, exercised by violating it — a holder, a refusal, a wait, and a holder
 # killed with -9 to prove the OS releases what it took. In `check`, never in the git hook: it
 # spawns processes and writes a lock directory under `mktemp -d`, which is D18's line. Same
-# standing as janitor-selftest, merge-selftest and githooks-selftest.
+# standing as janitor-selftest and githooks-selftest.
 suite-lock-selftest:
 	@python3 scripts/guard-scope.py classify --target suite-lock-selftest --base origin/main; rc=$$?; \
 	if [ $$rc -ne $(SKIP_CODE) ]; then \

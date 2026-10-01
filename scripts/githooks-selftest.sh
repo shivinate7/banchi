@@ -437,10 +437,8 @@ esac
 
 # ------------------------------------------- main carrying an unclaimed id, the moment it moves
 #
-# WHY THIS BELONGS IN A HOOK AND NOT ONLY IN scripts/merge-pr.py. `make merge` runs the merge
-# script of whatever checkout invoked it, so a guard inside that script is absent from exactly
-# the checkouts that need it — 24 of the 30 working trees of this clone were behind main's copy
-# of it the day this was written. `core.hooksPath` is one installed directory in the common
+# WHY THIS BELONGS IN A HOOK AND NOT ONLY IN THE MERGE TOOL. A guard inside one checkout's own
+# copy of a script is absent from exactly the checkouts that need it. `core.hooksPath` is one installed directory in the common
 # .git dir, so THIS file is the same file for every one of them, and a main move is the one
 # event all of them share.
 #
@@ -452,7 +450,7 @@ SLUG_MARK="UNCLAIMED ID ON main"
 # THE FIXTURE'S IDS ARE COMPOSED AND NEVER SPELLED. This file sits inside the auditor's own
 # haystack, so a literal `D-...` heading here IS a citation of an entry that does not exist and
 # a literal number is a citation the map would then have to carry under `governed_by`. Both
-# were reported on the first run of this block. scripts/claim-selftest.py composes its fixture
+# were reported on the first run of this block. the claim self-test composed its fixture
 # ids from integers for exactly this reason and records it in the same words.
 SLUG_ID="D-""an-id-nobody-claimed"
 cd "$tmp/work" || exit 1

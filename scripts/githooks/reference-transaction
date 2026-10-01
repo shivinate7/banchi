@@ -89,11 +89,8 @@ zero_oid() {
 # ---------------------------------------------------- what main is carrying, once it has moved
 #
 # THE ONE THING IN THIS CLONE THAT SEES EVERY main MOVE, WHICHEVER CHECKOUT CAUSED IT. That is
-# why the report lives here and not only in scripts/merge-pr.py. `make merge` runs the merge
-# script of whatever checkout invoked it, and on the day this was written 24 of the 30 working
-# trees of this clone were behind main's copy of that script — 16 of them missing the commit
-# that introduced the id claim at all. A guard inside a stale copy is a guard that is not
-# there. `core.hooksPath` points at ONE installed directory in the common .git dir, so this
+# why the report lives here and not only in the merge tool. A guard inside one
+# checkout's own copy of a script is absent from exactly the checkouts that need it. `core.hooksPath` points at ONE installed directory in the common .git dir, so this
 # file is the same file for every one of those trees.
 #
 # IT REPORTS AND IT NEVER REFUSES, WHICH IS THE OPPOSITE OF EVERYTHING ELSE IN THIS FILE. By
@@ -102,8 +99,8 @@ zero_oid() {
 # wrong, which repairs nothing and breaks every read downstream of it. And it fires at
 # `committed`, after the transaction, so a bug in it cannot abort anybody's ref update.
 #
-# THE PATTERN IS DELIBERATELY LOOSER THAN THE CLAIMER'S. scripts/claim-ids.py owns the
-# grammar an id is ALLOCATED by; this only has to notice a heading that is not a number. A
+# THE PATTERN IS DELIBERATELY LOOSER THAN THE CLAIMER'S. the shared merge tool owns the
+# grammar an id is ALLOCATED by (`.github/stamp.json`); this only has to notice a heading that is not a number. A
 # loose reader over-reports, and for a report that is the safe direction — the strict answer
 # is one command away and the message names it.
 if [ "$phase" = "committed" ]; then
@@ -138,10 +135,8 @@ if [ "$phase" = "committed" ]; then
     echo "  NOTHING WAS REFUSED and nothing here is wrong with your command. main carries" >&2
     echo "  this on origin already; holding this clone back would repair nothing." >&2
     echo "" >&2
-    echo "    python3 scripts/claim-ids.py --landed $short   the whole reading" >&2
-    echo "    python3 scripts/merge-pr.py --surface          is THIS checkout's merge current?" >&2
-    echo "" >&2
-    echo "  Repair is a pull request off main: claim-ids.py --ref origin/main --write." >&2
+    echo "  Repair is any pull request off main, merged through \`make merge\`: the shared" >&2
+    echo "  merge tool claims every pending record in the tree it merges." >&2
     echo "" >&2
   done <<EOF
 $lines

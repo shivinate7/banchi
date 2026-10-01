@@ -958,5 +958,5 @@ def entry_parser():
 def set_root(path: Path) -> None:
     """Point every row at another tree. ROOT lives here and each module holds an imported copy,
     so the one name is rebound in all of them. `--self-test` and the callers that audit a
-    fixture (`claim-selftest.py`, `subagent-override-selftest.py`) use it."""
+    fixture (`subagent-override-selftest.py`) use it."""
     module_globals()["ROOT"] = path

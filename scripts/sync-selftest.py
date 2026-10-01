@@ -26,7 +26,7 @@ proved the first would pass against a hook that permitted everything.
 
 IN `make check`, NEVER IN THE GIT HOOK. D18: it writes — temp trees, real commits, real ref
 moves — and nothing that writes may gate a commit. Same standing and same reason as
-`merge-selftest`, `revert-selftest`, `janitor-selftest`, `reap-selftest` and `serve-selftest`.
+`revert-selftest`, `janitor-selftest`, `reap-selftest` and `serve-selftest`.
 """
 
 import importlib.util

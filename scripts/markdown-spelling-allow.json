@@ -432,13 +432,6 @@
         "judgement"
       ]
     },
-    "docs/decisions/*-merge-claims-the-decision-number.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "generalises",
-        "judgement"
-      ]
-    },
     "docs/decisions/*-order-is-taken-once-a-sale-keeps-it.md": {
       "lane": "docs-sweep",
       "SPELLING": [

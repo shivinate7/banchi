@@ -38,7 +38,7 @@ The ranks are stable ids. They are not renumbered, so a citation of a rank keeps
 | 24 | A guard must be proved to fail by a planted defect, starting with the bearer-instrument guard. | Shelved |
 | 25 | Exit 2 means a new question and not a state of the world. | Shelved |
 | 26 | A read of the API key is screened whichever tool performs it. | Shelved in this repo |
-| 28 | Merge only from a checkout whose merge surface is current. | Built: `scripts/merge-pr.py`'s `surface_half` |
+| 28 | Merge only from a checkout whose merge surface is current. | Built, then retired: the shared merge tool updates itself before every merge |
 | 29 | A Playwright fleet takes the machine-wide suite lock. | Shelved |
 | 30 | `ADD_TO_QUANTITY` stays a bare constant on the reprice path. | Shelved |
 | 31 | Two identify batches may not run over one box. | Shelved |
@@ -60,7 +60,7 @@ examined nothing. `as_json` carries `scanned` and a `vacuous` flag. Whether ever
 its denominator, whether the `check dispatch` row requires it, and whether a per-row floor exists is
 unknown.
 
-**Rank 28, built.** `surface_half` refuses a `scripts/merge-pr.py` that is behind `origin/main`'s.
+**Rank 28, built.** The shared merge tool fetches its own latest code before every merge, so no checkout merges with a stale copy.
 
 ## The shelved mechanisms
 

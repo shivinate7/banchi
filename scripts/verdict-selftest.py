@@ -31,7 +31,7 @@ resolves; nothing else travels.
 
 IN `make check`, NEVER IN THE GIT HOOK. D18: it writes, and nothing that writes may run on
 the path that decides whether a commit proceeds. Same placement, and the same reason, as
-`audit-self-test`, `githooks-selftest`, `merge-selftest` and `janitor-selftest`.
+`audit-self-test`, `githooks-selftest` and `janitor-selftest`.
 """
 
 import json

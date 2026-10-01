@@ -71,7 +71,7 @@ DECISION_SPEC = IndexSpec("decisions_corpus.py", "docs/decisions", "CLAUDE.md",
                           DECISION_HEADING_RE, DECISION_LINE_RE)
 
 # `## 188 — Title` (every real entry today) OR `## DEBT<n> — Title` (a newly claimed one —
-# see the block comment above `DEBT_HEADING` in `scripts/claim-ids.py` for why a debt's
+# see the block comment above `DEBT_HEADING` in the shared merge tool for why a debt's
 # heading may or may not carry the word) OR `## DEBT-<slug> — Title` (still unclaimed). The
 # captured group never includes the literal `DEBT`, so the index line always PREFIXES it —
 # `DEBT` + a number = `DEBT<n>`, `DEBT` + a slug = `DEBT-<slug>` — matching every line

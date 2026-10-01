@@ -51,9 +51,11 @@ make reap           # stop what THIS session started, nothing else. Previews. AR
                     #   "port:N --confirm", "match:X --confirm" or "pid:N --confirm". A subagent's bare
                     #   --confirm stops only its own session's pids (D305, the reaper stops only its own).
 make janitor-install # retired: claude-settings' install.sh owns the user's Claude bin directory. Copies nothing.
-make merge          # merge a PR and move main onto it. ARGS=<n> previews. ARGS="<n> --confirm" merges.
-                    #   The owner names the session an Orchestrator first, per turn. It carries a needed
-                    #   rebase and force-push on a branch nobody else holds.
+make merge          # claude-settings' shared merge tool (D140, merge claims the decision number), config in
+                    #   `.github/stamp.json`. ARGS=<n> previews. ARGS="<n> --confirm" merges, and claims record
+                    #   numbers first. The owner names the session an Orchestrator first, per turn. It runs
+                    #   from any checkout, not only the PR's branch. It never rebases or force-pushes:
+                    #   a moved head stops it, so rebase by hand and run it again.
 make janitor        # claude-settings' sweep (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep"): what a finished session left behind. Previews. ARGS=--confirm reaps.
                     #   ARGS=<root> narrows it to one clone. scripts/janitor.py keeps --teardown.
 make janitor-agent  # retired: claude-settings schedules the daily sweep. Prints how to drop the old agent.

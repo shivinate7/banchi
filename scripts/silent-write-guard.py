@@ -165,7 +165,7 @@ def _write_verb(argv: Sequence[str]) -> str:
         return ""
 
     if head == "make" or head.endswith("/make"):
-        # `merge` EXACTLY. `make merge-selftest` is a test of the wrapper and `make claim-ids`
+        # `merge` EXACTLY. `make revert-selftest` is a test and `make merge-base`
         # is not a merge at all; a prefix match here would refuse a self-test for being
         # quiet, which is the kind of finding that teaches a session to reach for the hatch.
         goals = [word for word in argv[1:]

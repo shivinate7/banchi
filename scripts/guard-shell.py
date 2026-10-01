@@ -1630,14 +1630,14 @@ def clause_reset(reading: "shell_parse.Reading", cwd: str) -> Verdict:
 
 # ------------------------------------------------ 9. a narrated wait with nobody watching it
 #
-# `make merge` pushes a claim commit and then waits for THAT COMMIT's checks, which take four
+# `make merge` pushes a claim commit (when a record is pending) and then waits for the checks, which take four
 # to five minutes on this repo (measured across 12 consecutive runs, 2026-09-20). Five to ten
 # minutes of waiting is CORRECT and this clause does not touch it. What it refuses is the one
 # spelling that makes correct waiting indistinguishable from a hang:
 #
 #     make merge ARGS="437 --confirm" 2>&1 | tail -18
 #
-# The wait narrates — `CHECK_HEARTBEAT_SECONDS = 60`, a line a minute naming what it is
+# The wait narrates — the shared merge tool prints a line a minute naming what it is
 # waiting on. A pipe makes the writer's stdout a pipe, Python block-buffers it, and `tail`
 # then keeps only the last few lines of whatever finally arrives. Both halves of the
 # heartbeat's job are lost: nothing appears WHILE it waits, and most of it is thrown away when
@@ -1673,10 +1673,11 @@ _TRUNCATING = {"tail", "head"}
 # THE TABLE IS THE ROSTER, AND THE RESOLVER BELOW READS IT rather than carrying its own copy
 # of the same names — the house rule that an allow list points at the constant the code emits,
 # never at a duplicate of it. Each entry: the name a refusal prints, the `make` goal that runs
-# it, the script that runs underneath that goal, and the heartbeat constant the self-test
-# reconciles the entry against.
+# it, and the command that runs underneath that goal. The self-test reconciles the entry
+# against the Makefile's own recipe. The heartbeat itself belongs to the shared merge tool
+# (claude-settings), which tests it.
 NARRATORS = (
-    ("make merge", "merge", "scripts/merge-pr.py", "CHECK_HEARTBEAT_SECONDS"),
+    ("make merge", "merge", "~/.claude/bin/merge", ""),
 )
 
 
@@ -1684,7 +1685,7 @@ def _narrating(argv: Sequence[str]) -> str:
     """The name of the long, heartbeat-emitting command this stage runs, or `""`.
 
     `merge` EXACTLY, the way `silent-write-guard.py` reads the same word: `make
-    merge-selftest` is a test of the wrapper and is over in seconds, and a prefix match would
+    revert-selftest` is a test and is over in seconds, and a prefix match would
     refuse it for being quiet — which is the finding that teaches a session to reach for the
     hatch.
     """
@@ -1706,12 +1707,12 @@ def _narrating(argv: Sequence[str]) -> str:
             if goal in goals:
                 return name
         return ""
-    # THE SCRIPT RUN DIRECTLY IS THE SAME ACT. `make merge` is a two-line recipe around
-    # `python3 scripts/merge-pr.py`, and a session that has been refused the first spelling
+    # THE SCRIPT RUN DIRECTLY IS THE SAME ACT. `make merge` is a one-line recipe around
+    # `~/.claude/bin/merge`, and a session that has been refused the first spelling
     # reaches for the second.
     for _, _, script, _ in NARRATORS:
-        base = os.path.basename(script)
-        if any(word.endswith(base) for word in argv):
+        tail = "/" + "/".join(script.split("/")[-2:])
+        if any(word.endswith(tail) for word in argv):
             return script
     return ""
 

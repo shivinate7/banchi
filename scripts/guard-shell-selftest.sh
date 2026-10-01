@@ -1045,7 +1045,7 @@ refuses "\`| head\`, the same loss from the other end" "$tmp/main" "make merge A
 refuses "stdout to /dev/null" "$tmp/main" "make merge ARGS=\"437 --confirm\" >/dev/null"
 refuses "into a file nothing in the command reads back" "$tmp/main" "make merge ARGS=\"437 --confirm\" > merge.log"
 refuses "\`tail\` with no count" "$tmp/main" "make merge ARGS=\"437 --confirm\" 2>&1 | tail"
-refuses "the script run directly, which is the same act" "$tmp/main" "python3 scripts/merge-pr.py 437 --confirm | tail -5"
+refuses "the script run directly, which is the same act" "$tmp/main" "~/.claude/bin/merge 437 --confirm | tail -5"
 refuses "buried mid-script behind a \`&&\`" "$tmp/main" "git fetch origin && make merge ARGS=\"437 --confirm\" | tail -30"
 refuses "an env prefix does not launder it" "$tmp/main" "PKMNSCAN_MAIN=off make merge ARGS=\"437 --confirm\" | tail -5"
 
@@ -1069,17 +1069,15 @@ python3 - "$GUARD" "$HERE" <<'ROSTER'
 import importlib.util, pathlib, sys
 spec = importlib.util.spec_from_file_location("guard_shell", sys.argv[1])
 guard = importlib.util.module_from_spec(spec); spec.loader.exec_module(guard)
-here = pathlib.Path(sys.argv[2]).parent
+makefile = (pathlib.Path(sys.argv[2]).parent / "Makefile").read_text(encoding="utf-8")
 bad = 0
-for name, goal, path, constant in guard.NARRATORS:
-    source = here / path
-    if not source.exists():
-        print("MISSING %s, named by the narrate clause for %s" % (path, name)); bad = 1
-    elif constant not in source.read_text(encoding="utf-8"):
-        print("%s no longer carries %s — %s may not narrate any more" % (path, constant, name)); bad = 1
+for name, goal, path, _ in guard.NARRATORS:
+    recipe = makefile.split("\n%s:\n" % goal, 1)[-1].split("\n\n", 1)[0]
+    if path not in recipe:
+        print("the %s recipe no longer runs %s, which the narrate clause names for %s" % (goal, path, name)); bad = 1
 sys.exit(bad)
 ROSTER
-if [ $? -eq 0 ]; then ok "every command the narrate clause names still carries a heartbeat constant in the file that runs it"
+if [ $? -eq 0 ]; then ok "every command the narrate clause names is still what its Makefile recipe runs"
 else bad "the narrate roster names a command that no longer narrates"; fi
 
 echo ""
@@ -1091,12 +1089,12 @@ for case in \
   'make merge ARGS="437 --confirm"' \
   'make merge ARGS=437' \
   'make merge ARGS=437 | tail -20' \
-  'make merge-selftest | tail -5' \
+  'make revert-selftest | tail -5' \
   'make check 2>&1 | tail -40' \
   'make harness | tail -20' \
   'make docs-audit >/dev/null' \
   'git log --oneline -20 | head -5' \
-  'make claim-stale | tail -3' \
+  'make typecheck | tail -3' \
   'make design-check ARGS=--wait | tail -5' \
   'gh pr view 437 --json mergeable | head -1' \
 ; do

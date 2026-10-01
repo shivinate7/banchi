@@ -110,7 +110,7 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 **What it costs is real and is this entry's own subject.** Advancing main reshapes what every live worktree is cut from. What makes it a decision rather than a repeat is the pair of conditions above: an explicit instruction, and only to a commit that was on origin first.
 
-**That rejection is amended, and the sentence moves while the reasoning does not** (owner, 2026-09-01). `make merge` exists — `scripts/merge-pr.py`, `scripts/merge-selftest.sh`.
+**That rejection is amended, and the sentence moves while the reasoning does not** (owner, 2026-09-01). `make merge` exists. It runs the shared merge tool from claude-settings (D140, merge claims the decision number).
 
 **The rejection was aimed at automating the decision, and the decision is untouched.** Whether this pull request gets merged stays the owner's word, per *The word* below: a bare `make merge` refuses and says there is no default and will not be one, `ARGS=<n>` is a preview that presses nothing, and only `ARGS="<n> --confirm"` acts. That is D33's instrument one register down — the route that can spend money refuses without an explicit field, and this refuses without an explicit number and flag.
 
@@ -120,7 +120,7 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 **`make help` lists it, and the plumbing worry is answered by shape rather than by obscurity.** Hiding the target would be security by not-being-listed, which this repo rejects everywhere else, and `CLAUDE.md`'s own rule is that a capability nobody can find is not done. The two raw commands stay in `CLAUDE.md` beside it: the wrapper must not become the only way anyone knows the answer.
 
-**The footgun has a test that was green for the wrong reason first.** `scripts/merge-selftest.sh` builds an origin, a clone and a linked worktree in a temp directory. Its first draft put the other tree on a branch already at the commit a wrong pull would have brought it to, so the assertion could not fail — found by forcing the picker to always choose the pull form and watching it stay green. The branch is one behind its upstream now, that mutation turns it red, and the fixture asserts its own arming. Same lesson `githooks-selftest` records about git's own refusals scoring as a hook's.
+**The footgun has a test that was green for the wrong reason first.** The retired merge self-test built an origin, a clone and a linked worktree in a temp directory. Its first draft put the other tree on a branch already at the commit a wrong pull would have brought it to, so the assertion could not fail — found by forcing the picker to always choose the pull form and watching it stay green. The branch is one behind its upstream now, that mutation turns it red, and the fixture asserts its own arming. Same lesson `githooks-selftest` records about git's own refusals scoring as a hook's.
 
 ### The main checkout going stale
 

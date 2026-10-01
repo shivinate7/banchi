@@ -89,7 +89,7 @@ costs a re-claim on every red. It also holds a number while the branch is red.
 
 ### `--unclaim` resolves which entry is this branch's
 
-`python3 scripts/claim-ids.py --unclaim D<n> --to-slug <slug>` is the remedy the refusal itself
+`--unclaim D<n> --to-slug <slug>`, a flag of the retired local claimer, was the remedy the refusal itself
 names. In the state a lost race produces, it REFUSED. It said there is no single entry file in
 this tree wearing that number.
 
@@ -135,7 +135,7 @@ before it claims anything, and names the command that now runs.
 
 ### Proved by reproducing the state, not by reasoning about it
 
-`scripts/claim-selftest.py` builds tonight's exact shape. Two branches are cut from one
+The claimer self-test built tonight's exact shape. Two branches are cut from one
 commit. Each honestly claims the next free number for its own entry. The winner merges to
 main. The loser MERGES MAIN IN and resolves the conflict. That is what produces two files
 under one number.

@@ -12,7 +12,7 @@
 # processes this script starts itself in their own process groups.
 #
 # WHY IT IS NOT IN THE GIT HOOK. D18: it writes a temp tree and it signals processes. It IS in
-# `make check`, which is exactly janitor-selftest's and merge-selftest's standing.
+# `make check`, which is exactly janitor-selftest's and revert-selftest's standing.
 #
 # THE TWO INCIDENTS ARE CASES HERE, NOT PROSE. `pkill -f <name>` where a stranger also matches,
 # and `for p in $(lsof -ti tcp:PORT); do kill $p; done` where a CLIENT holds the port — both are
