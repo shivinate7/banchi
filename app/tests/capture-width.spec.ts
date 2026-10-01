@@ -108,3 +108,22 @@ for (const theme of ['light', 'dark'] as const) {
     })
   }
 }
+
+// Protects: `setViewport` returns on a final layout; a read right after a resize across the rail breakpoint is not mid-slide.
+test('setViewport leaves the shell columns final across the rail breakpoint', async ({ page }) => {
+  const shell = page.locator('.bn-shell')
+  const read = () => shell.evaluate((e) => getComputedStyle(e).gridTemplateColumns)
+  const readLater = () =>
+    shell.evaluate((e) => new Promise<string>((done) => requestAnimationFrame(() => done(getComputedStyle(e).gridTemplateColumns))))
+  await setViewport(page, { width: 1440, height: 900 })
+  await page.goto('/#/capture')
+  await shell.waitFor()
+  for (const [width, height] of [
+    [820, 1100],
+    [1440, 900],
+  ] as const) {
+    await setViewport(page, { width, height })
+    const first = await read()
+    expect(await readLater(), `columns at ${width} still moving right after setViewport`).toBe(first)
+  }
+})
