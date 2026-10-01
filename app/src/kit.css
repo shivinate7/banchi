@@ -550,9 +550,8 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-kbd-lg { width: 26px; min-width: 26px; height: 26px; padding: 0; font-size: var(--bn-fs-sm); }
 
 /* ---- pills & status -------------------------------------------------------- */
-/* THE PILL'S OWN HEIGHT, NAMED SO A ROW THAT MAY OR MAY NOT HOLD ONE CAN RESERVE IT
-   (D313): `.browse-hero-sub` reads it, so a pill arriving moves nothing. */
-:root { --bn-pill-h: 22px; }
+/* THE PILL'S OWN HEIGHT IS `--bn-pill-h` (tokens.css, D313): a row that may or may not hold a
+   pill reserves it, so a pill arriving moves nothing. */
 .bn-pill {
   display: inline-flex;
   align-items: center;
@@ -569,6 +568,24 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   background: var(--bn-surface-2);
 }
 .bn-pill .bn-icon { width: 12px; height: 12px; }
+/* ---- Slot: the room for content that mounts later (D313) -------------------------------- */
+.bn-slot { display: block; min-width: 0; }
+span.bn-slot { display: inline-block; }
+.bn-slot { min-block-size: 1lh; }
+.bn-slot-ghost { display: contents; visibility: hidden; }
+
+/* ---- Live count: a figure that changes while it is read (D313) ------------------------- */
+/* Tabular figures in a box of `--digits` characters (default 2), so a count that gains or loses a
+   digit never moves what sits beside it. `.bn-count` is the badge; this is the bare figure. */
+.bn-live-count {
+  display: inline-block;
+  min-inline-size: calc(var(--digits, 2) * 1ch);
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bn-live-count-start { text-align: start; }
+
 .bn-pill-accent { color: var(--bn-pill-ink-accent); background: var(--bn-accent-tint); }
 .bn-pill-ok { color: var(--bn-pill-ink-ok); background: var(--bn-ok-tint); }
 .bn-pill-warn { color: var(--bn-pill-ink-warn); background: var(--bn-warn-tint); }
@@ -577,7 +594,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-pill-mono { font-family: var(--bn-font-mono); font-weight: 500; }
 .bn-pill-outline { background: transparent; box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
 /* Inside a button, a tab or a dense row: one small pill rather than a height per screen. */
-.bn-pill-sm { height: 18px; padding: 0 var(--bn-1-5); font-size: var(--bn-fs-2xs); }
+.bn-pill-sm { height: var(--bn-pill-h-sm); padding: 0 var(--bn-1-5); font-size: var(--bn-fs-2xs); }
 .bn-pill-sm .bn-icon { width: 10px; height: 10px; }
 
 /* ---- chip: choose one of a set, filter a list ------------------------------------------- */
@@ -860,7 +877,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   transition: transform var(--bn-t) var(--bn-ease-out);
 }
 .bn-tab[aria-selected='true']::after, .bn-tab[aria-current]::after { transform: scaleX(1); }
-.bn-tab .bn-pill { height: 18px; padding: 0 var(--bn-1-5); font-size: var(--bn-fs-2xs); }
+.bn-tab .bn-pill { height: var(--bn-pill-h-sm); padding: 0 var(--bn-1-5); font-size: var(--bn-fs-2xs); }
 
 /* ---- key/value list ----------------------------------------------------------- */
 .bn-kv { display: grid; grid-template-columns: max-content 1fr; column-gap: var(--bn-4); row-gap: var(--bn-2); align-items: baseline; }

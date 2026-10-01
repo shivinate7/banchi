@@ -293,6 +293,12 @@
   --bn-control-h-lg: 40px;
   --bn-control-h-sm: 28px;
 
+  /* A PILL'S OWN HEIGHT (D313). A line that may or may not hold a pill reserves it
+     (`min-block-size: var(--bn-pill-h)`), and `.bn-pill` reads the same token, so a pill
+     arriving never changes its line's height. `-sm` is the pill inside a button or a tab. */
+  --bn-pill-h: 22px;
+  --bn-pill-h-sm: 18px;
+
   /* ======================================================================
      LEGACY ALIASES — the names every existing stylesheet reads.
      ====================================================================== */

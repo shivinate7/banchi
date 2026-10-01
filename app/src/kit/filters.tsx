@@ -319,7 +319,7 @@ export function HideToggle({
         <Icon name="check" size={11} strokeWidth={3} />
       </span>
       <span className="bn-hidetoggle-label">{children}</span>
-      {count === undefined ? null : <span className="bn-hidetoggle-count">{Number.isFinite(count) ? Math.round(count).toLocaleString('en-US') : '—'}</span>}
+      {count === undefined ? null : <span className="bn-hidetoggle-count bn-live-count">{Number.isFinite(count) ? Math.round(count).toLocaleString('en-US') : '—'}</span>}
     </button>
   )
 }

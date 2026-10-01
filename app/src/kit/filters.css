@@ -87,6 +87,7 @@
 .bn-hidetoggle[aria-pressed='true'] .bn-hidetoggle-mark { background: var(--bn-accent); border-color: var(--bn-accent); }
 .bn-hidetoggle[aria-pressed='true'] .bn-hidetoggle-mark .bn-icon { opacity: 1; }
 .bn-hidetoggle-count {
+  --digits: 5; /* "1,234" is five characters, and 4 held 29px against its 31px: `.bn-live-count` holds the room */
   color: var(--bn-ink-3);
   font-variant-numeric: tabular-nums;
 }

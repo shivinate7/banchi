@@ -344,7 +344,7 @@ export function BoxIdentity({
         {censusStats.length === 0 ? null : (
           <div className="boxops-stats bn-stat-row">
             {censusStats.map((stat) => (
-              <Stat key={stat.key} value={stat.value} label={stat.label} className="boxops-stat" />
+              <Stat key={stat.key} value={stat.value} label={stat.label} className="boxops-stat" valueClassName="bn-live-count bn-live-count-start" />
             ))}
           </div>
         )}

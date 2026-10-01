@@ -6,6 +6,7 @@ import type {
   CandidateRow,
   CatalogLookup,
   Place,
+  PlaceNeighbor,
   QueueEntryWire,
   QueueName,
   QueueRead,
@@ -56,6 +57,7 @@ import {
   ReloadButton,
   Sheet,
   Skeleton,
+  Slot,
   UNDO_KEY_LABEL,
   useUndoHotkey,
 } from './kit'
@@ -2100,9 +2102,9 @@ function Card({
               <span className="review-next-name">{text(next.entry.read.name) ?? 'not identified'}</span>
               {/* A dollar figure is the kit's `Money` (D221, mono); "no market price" is words. */}
               {priceOf(next.entry.market) === null ? (
-                <span className="review-next-price">{priceText(next.entry.market)}</span>
+                <span className="review-next-price bn-live-count bn-live-count-start">{priceText(next.entry.market)}</span>
               ) : (
-                <Money className="review-next-price" value={priceOf(next.entry.market)} />
+                <Money className="review-next-price bn-live-count bn-live-count-start" value={priceOf(next.entry.market)} />
               )}
             </>
           )}
@@ -2666,6 +2668,15 @@ function AbsentPhoto({ sentence, icon, entry }: { sentence: string; icon?: 'imag
   )
 }
 
+/** A place with a neighbour on each side, drawn invisible by `Slot` where a card has none, so the
+ *  caption keeps the height the real order line takes (D313). */
+const GHOST_NEIGHBOR: PlaceNeighbor = { slot: 1, index: 1, name: 'x', unread: 0 }
+const GHOST_PLACE: Place = {
+  label: null, located: true, box: 0, index: 0, slot: null, section: null, card: null, box_name: null,
+  section_start: 0, section_end: null, box_total: 0, fraction: null,
+  neighbors: { prev: GHOST_NEIGHBOR, next: GHOST_NEIGHBOR },
+}
+
 /* The card's address, and the way back to it: this opens THE CARD on Inventory
  * (`#/inventory?box=<n>&card=<cid>`), not the box at its first card (LOC-12). The label names
  * the box by its name (D259), and its accessible name is the place as a
@@ -2719,7 +2730,15 @@ function PositionCaption({ label, box, cid, place }: { label: string; box?: numb
       <Icon name="pin" size={14} />
       <span className="review-caption-body">
         <PositionLabel label={label} flow="run" />
-        <CaptionOrder place={place} />
+        {/* THE ORDER LINE'S ROOM IS KEPT: a card with no neighbours draws none, and the next card's
+            arrival must not change the caption's height (D313). */}
+        <Slot
+          className="review-caption-slot"
+          show={place !== undefined && place.located !== false}
+          ghost={<CaptionOrder place={GHOST_PLACE} />}
+        >
+          <CaptionOrder place={place} />
+        </Slot>
       </span>
     </>
   )

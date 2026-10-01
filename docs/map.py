@@ -5962,8 +5962,8 @@ COMPONENTS = [
                                        "raises the three control heights to a thumb's 40-46px — the "
                                        "POINTER decides, not the width, because an iPad in portrait "
                                        "is 820px wide and all thumb.",
-                               "governed_by": ["D309", "D5", "D13", "D18", "D32", "D50", "D94", "D110",
-                                               "D197", "D272"],
+                               "governed_by": ["D5", "D13", "D18", "D32", "D50", "D94", "D110",
+                                               "D197", "D272", "D309", "D313"],
                                "note": "`scripts/docs-audit.py`'s `design tokens` row reads "
                                        "docs/DESIGN.md's fenced block as hexes, three typefaces, a "
                                        "spacing row and one radius, and merges every `:root` in this "
@@ -6077,9 +6077,9 @@ COMPONENTS = [
                                           "remember the choice in `localStorage` under "
                                           "`banchi.theme` — device-local like the camera's "
                                           "deviceId (D27), and nothing about a card.",
-                                  "governed_by": ["D309", "D5", "D13", "D27", "D32", "D50", "D94", "D95",
+                                  "governed_by": ["D5", "D13", "D27", "D32", "D50", "D94", "D95",
                                                   "D117", "D118", "D125", "D196", "D221", "D260",
-                                                  "D269", "D272", "D288", "D300", "D313"]},
+                                                  "D269", "D272", "D288", "D300", "D309", "D313"]},
             "src/kit/Icon.tsx": {"does": "one icon set, 73 paths on a 24-unit grid at 1.75 stroke "
                                          "with round joins, drawn in the Lucide idiom so the whole "
                                          "product speaks one line weight. `currentColor` and "
@@ -6765,11 +6765,10 @@ COMPONENTS = [
             # GAP_MINUTES rather than restating it, so the undo strip and the library drawing
             # on `#/` mean the same stretch of work by the same measurement.
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
-                            "D34", "D36", "D41", "D183", "D56", "D58", "D65", "D67", "D81", "D92",
-                            "D117", "D118", "D121", "D128", "D144", "D131", "D132", "D142", "D145",
-                            "D153", "D164", "D170", "D172", "D196", "D218", "D259", "D260", "D264",
-                            "D271",
-                            "D299"]},
+                            "D34", "D36", "D41", "D56", "D58", "D65", "D67", "D81", "D92", "D117",
+                            "D118", "D121", "D128", "D131", "D132", "D142", "D144", "D145", "D153",
+                            "D164", "D170", "D172", "D183", "D196", "D218", "D259", "D260", "D264",
+                            "D271", "D299", "D313"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -6784,8 +6783,9 @@ COMPONENTS = [
                                       # the split is floored by `min-height`, so neither can
                                       # move what is around it when a drawer changes.
                                       "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65",
-                                                      "D117", "D118", "D144", "D142", "D164",
-                                                      "D195", "D197", "D205", "D218", "D272", "D275"]},
+                                                      "D117", "D118", "D142", "D144", "D164",
+                                                      "D195", "D197", "D205", "D218", "D272",
+                                                      "D275", "D313"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -6937,11 +6937,9 @@ COMPONENTS = [
                                   "NO BANNER SLOT: `.browse-banner` came with main's envelope walk "
                                   "(D90) and went with it (D97 amended 2026-09-04), along with the "
                                   "only stylesheet that ever filled it.",
-                                  "governed_by": ["D5", "D6", "D13", "D58", "D31", "D32", "D33",
-                                                  "D38", "D39", "D41", "D90", "D117", "D118",
-                                                  "D119", "D132", "D213",
-                                                  "D259",
-                                                  "D289"]},
+                                  "governed_by": ["D5", "D6", "D13", "D31", "D32", "D33", "D38",
+                                                  "D39", "D41", "D58", "D90", "D117", "D118",
+                                                  "D119", "D132", "D213", "D259", "D289", "D313"]},
 
             # ---- 7b's screens. Built 2026-08-13, BEFORE Gate B; routed the same day ----
             #
@@ -7007,8 +7005,8 @@ COMPONENTS = [
                         "body between a fixed heading and a fixed press, sized 640px wide "
                         "because that is what the command's own longest line measures.",
                 "governed_by": ["D5", "D9", "D13", "D23", "D24", "D28", "D29", "D32", "D35", "D37",
-                                "D41", "D77", "D50", "D117", "D118", "D123", "D162", "D259",
-                                "D291", "D313"],
+                                "D41", "D50", "D77", "D117", "D118", "D123", "D162", "D259", "D291",
+                                "D313"],
             },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
@@ -7188,7 +7186,8 @@ COMPONENTS = [
                         "no border of its own, and its sections list is DELETED rather than "
                         "styled — the walk beside it drew the same rows, foldable and tickable, "
                         "while this drew them as inert text.",
-                "governed_by": ["D5", "D20", "D22", "D31", "D38", "D41", "D50", "D83", "D132"],
+                "governed_by": ["D5", "D20", "D22", "D31", "D38", "D41", "D50", "D83", "D132",
+                                "D313"],
             },
             "src/Graveyard.tsx": {
                 "does": "`#/graveyard` (D134, amended by the UX review's graveyard ruling, "
@@ -7741,14 +7740,13 @@ COMPONENTS = [
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D86 is the screen.
                                 "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33",
-                                                "D35", "D36", "D37", "D38", "D39", "D41", "D180",
-                                                "D86", "D51", "D54", "D56", "D58", "D59", "D278",
-                                                "D277", "D89", "D99",
+                                                "D35", "D36", "D37", "D38", "D39", "D41", "D51",
+                                                "D54", "D56", "D58", "D59", "D86", "D89", "D99",
                                                 "D100", "D101", "D103", "D105", "D107", "D109",
-                                                "D115", "D117", "D118", "D125", "D137", "D156",
-                                                "D145", "D168", "D172", "D181", "D196",
-                                                "D210", "D218", "D221", "D269",
-                                                "D273", "D285", "D301"]},
+                                                "D115", "D117", "D118", "D125", "D137", "D145",
+                                                "D156", "D168", "D172", "D180", "D181", "D196",
+                                                "D210", "D218", "D221", "D269", "D273", "D277",
+                                                "D278", "D285", "D301", "D313"]},
             "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, a kit Sheet off #/pricing's header (D168). The owner's own "
                                             "ask: typed prices go stale and there was no way to clear many at once. IT IS A "
                                             "PRESS AND NOT A POLICY: nothing here runs on a clock. The scope is the "
@@ -8074,7 +8072,7 @@ COMPONENTS = [
                                        "spoken for by another line is drawn as spoken for "
                                        "rather than offered twice.",
                                "governed_by": ["D5", "D24", "D38", "D41", "D50", "D63", "D69",
-                                               "D113", "D91", "D117", "D118", "D123", "D193",
+                                               "D91", "D113", "D117", "D118", "D123", "D193",
                                                "D195", "D196", "D203", "D212", "D221", "D270",
                                                "D274", "D289", "D304", "D313"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
@@ -8206,8 +8204,7 @@ COMPONENTS = [
                                         "nested table, and a 390px-only wrap on this screen's "
                                         "own `Segmented` instance, scoped here rather than to "
                                         "the shared kit rule.",
-                                "governed_by": ["D50", "D94", "D117", "D217", "D236",
-                                                "D298"]},
+                                "governed_by": ["D50", "D94", "D117", "D217", "D236", "D298", "D313"]},
             "src/RunFiles.tsx": {"does": "a run's files, as downloads — extracted from RunPanel on "
                                        "2026-08-30 (D54) so two screens can draw them. The `only` "
                                        "prop is the split: the import CSVs go to #/pricing with the "
