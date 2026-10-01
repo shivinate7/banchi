@@ -772,7 +772,8 @@ test('L2 shell: web fonts arriving late swap into the same box (S17)', async ({ 
     .map((k) => ({ k, dw: Math.abs(after[k]!.w / before[k]!.w - 1), dh: Math.abs(after[k]!.h - before[k]!.h) }))
     .filter((d) => d.dw > 0.02 || d.dh > 1)
     .map((d) => `${d.k} width ${(d.dw * 100).toFixed(1)}% height ${d.dh.toFixed(1)}px`)
-  expect(off, 'a probe line changes box when the web face lands').toEqual([])
+  const faces = await page.evaluate(() => [...document.fonts].filter((f) => f.family.includes('Fallback')).map((f) => `${f.family} ${f.weight} ${f.status}`))
+  expect(off, `a probe line changes box when the web face lands. before ${JSON.stringify(before)} after ${JSON.stringify(after)} fallback faces ${JSON.stringify(faces)}`).toEqual([])
 })
 
 test('L2 shell: a Sales podium thumbnail arriving moves nothing (S18)', async ({ page }) => {

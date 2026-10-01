@@ -149,8 +149,13 @@ test('every owner screen is capped above the desk, in both rail states', async (
           const main = document.querySelector('.bn-page:not([data-bn-page-width="auto"]), .ff-column')
           return {
             pageW: main === null ? null : Math.round(main.getBoundingClientRect().width),
-            overflow:
+            /* Clamped at 0: `html { scrollbar-gutter: stable }` reserves the bar's width on a screen
+               too short to scroll, so `clientWidth` counts the gutter and `scrollWidth` does not.
+               The difference is then negative, and a negative is room, not a sideways scroll. */
+            overflow: Math.max(
+              0,
               document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            ),
           }
         })
         expect(shape.pageW, `${where}: no capped column (.bn-page / .ff-column) to measure`)

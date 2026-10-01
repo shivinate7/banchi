@@ -286,7 +286,7 @@
 @font-face {
   font-family: 'Inter Fallback';
   font-weight: 400 599;
-  src: local('Arial'), local('ArialMT'), local('Liberation Sans'), local('Helvetica');
+  src: local('Arial'), local('ArialMT'), local('Liberation Sans'), local('LiberationSans'), local('Arimo'), local('Helvetica');
   size-adjust: 106.27%;
   ascent-override: 91.16%;
   descent-override: 22.70%;
@@ -295,7 +295,7 @@
 @font-face {
   font-family: 'Inter Fallback';
   font-weight: 600 900;
-  src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'), local('Helvetica Bold');
+  src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'), local('LiberationSans-Bold'), local('Arimo Bold'), local('Arimo-Bold'), local('Helvetica Bold');
   size-adjust: 102.53%;
   ascent-override: 94.48%;
   descent-override: 23.52%;
@@ -304,7 +304,7 @@
 @font-face {
   font-family: 'Manrope Fallback';
   font-weight: 400 599;
-  src: local('Arial'), local('ArialMT'), local('Liberation Sans'), local('Helvetica');
+  src: local('Arial'), local('ArialMT'), local('Liberation Sans'), local('LiberationSans'), local('Arimo'), local('Helvetica');
   size-adjust: 100.49%;
   ascent-override: 106.08%;
   descent-override: 29.85%;
@@ -313,7 +313,7 @@
 @font-face {
   font-family: 'Manrope Fallback';
   font-weight: 600 900;
-  src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'), local('Helvetica Bold');
+  src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'), local('LiberationSans-Bold'), local('Arimo Bold'), local('Arimo-Bold'), local('Helvetica Bold');
   size-adjust: 99.57%;
   ascent-override: 107.06%;
   descent-override: 30.13%;
@@ -322,7 +322,7 @@
 @font-face {
   font-family: 'JetBrains Mono Fallback';
   font-weight: 400 599;
-  src: local('Courier New'), local('CourierNewPSMT'), local('Liberation Mono'), local('Courier');
+  src: local('Courier New'), local('CourierNewPSMT'), local('Liberation Mono'), local('LiberationMono'), local('Cousine'), local('Courier');
   size-adjust: 99.98%;
   ascent-override: 102.02%;
   descent-override: 30.00%;
@@ -331,7 +331,7 @@
 @font-face {
   font-family: 'JetBrains Mono Fallback';
   font-weight: 600 900;
-  src: local('Courier New Bold'), local('CourierNewPS-BoldMT'), local('Liberation Mono Bold'), local('Courier Bold');
+  src: local('Courier New Bold'), local('CourierNewPS-BoldMT'), local('Liberation Mono Bold'), local('LiberationMono-Bold'), local('Cousine Bold'), local('Cousine-Bold'), local('Courier Bold');
   size-adjust: 99.98%;
   ascent-override: 102.02%;
   descent-override: 30.00%;
