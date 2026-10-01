@@ -261,6 +261,25 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: python3 scripts/revert-audit.py branch --upstream "origin/$BASE_REF"
 
+  # THE RECORD NUMBERS, CHECKED, NEVER WRITTEN. The shared merge tool (`merge`, claude-settings)
+  # claims a record's number on the pull request branch before the merge, so main never holds a
+  # pending one. Mode `check` refuses a number a branch wrote by hand and, on main, any pending
+  # record. `contents: read` only. NOT a required check: the ruleset names `check` and
+  # `revert-guard`, and `.github/stamp.json`'s `merge.requiredChecks` reads that list.
+  records:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: shivinate7/claude-settings/actions/stamp@2669a531b3a3bedf28f14cb78ca932c58223987c
+        with:
+          mode: check
+          config: .github/stamp.json
+
   # THE WORKFLOWS' OWN LINT. zizmor reads `.github/workflows/` for unpinned actions, persisted
   # checkout tokens, template injection and over-broad permissions. Pinned to one version so a
   # release cannot turn this red on its own. NOT a required check: the ruleset names `check`
