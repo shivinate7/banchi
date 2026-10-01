@@ -7064,10 +7064,11 @@ COMPONENTS = [
                 # the picker. The citations stay so a session reading main's history knows the mode
                 # was removed on purpose rather than lost.
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D28",
-                                "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D86", "D57",
-                                "D58", "D68", "D83", "D90", "D93", "D118", "D119", "D125",
-                                "D132", "D172", "D181", "D192", "D196", "D213", "D218", "D260",
-                                "D264", "D269", "D275", "D285", "D300", "D293"],
+                                "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D57", "D58",
+                                "D68", "D83", "D86", "D90", "D93", "D118", "D119", "D125", "D132",
+                                "D172", "D181", "D192", "D196", "D213", "D218", "D260", "D264",
+                                "D269", "D275", "D285", "D293", "D300",
+                                "D-loading-holds-loaded-size"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
