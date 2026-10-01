@@ -11,7 +11,7 @@ exclusion (`app/tests/layoutShift.ts`). A sum of 0.01 or more fails a loading ca
 allows 0.0005 in the 500 ms after the press.
 
 **Case: loading.** Every area that fills from a read reserves its final box from the first
-paint. The spec reads `ROUTES` at run time and opens every nav screen at 1440 and 820 with each
+paint. The spec reads `ROUTES` at run time and opens every nav screen, plus the Fulfiller's, at 1440 and 820 with each
 read held 800 ms. A new screen is covered with no edit to the spec.
 
 **Case: a sale press.** The press that sells a copy moves nothing. A line that the sale rewrites

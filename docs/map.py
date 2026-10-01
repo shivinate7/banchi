@@ -6159,7 +6159,8 @@ COMPONENTS = [
                                          "top gap, one left edge, and the page is the `bn-page` "
                                          "query container. `Section` draws an h2. A new screen is "
                                          "one ROUTES entry plus a view that returns `<Page>`.",
-                                 "governed_by": ["D57", "D94", "D118", "D197", "D272", "D275", "D288"]},
+                                 "governed_by": ["D57", "D94", "D118", "D197", "D272", "D275",
+                                                 "D288", "D-nothing-moves-unless-moved"]},
             "src/kit/overlay.tsx": {"does": "the kit's overlays: `Sheet`, `Modal`, `Popover` and "
                                             "`ConfirmSheet`, each with one header and one Close, "
                                             "focus kept inside and given back, Escape for the top "

@@ -20,7 +20,7 @@ import type {
   ServerStatus,
 } from './types'
 import { useCardCrop } from './cardCrop'
-import { Button, cropStyle, Icon, Kbd, Loading, Page, Skeleton, type IconName } from './kit'
+import { Button, cropStyle, Icon, Kbd, Loading, Page, Skeleton, SkeletonText, type IconName } from './kit'
 import { boxTitle } from './kit/data'
 import { dayMonth, weekdayDate } from './dates'
 import { pricingTileNote, runsOwingPrice, sendCounts, standing, type Standing } from './standing'
@@ -295,7 +295,7 @@ const HOLD_LAST = '00 Mmm — 000 cards into Box 00 in 00 minutes. 000 an hour.'
 function HistoryFootFrame({ sum = false, ribbon = false, last = false }: { readonly sum?: boolean; readonly ribbon?: boolean; readonly last?: boolean }) {
   const line = (className: string, text: string) => (
     <p className={className} aria-hidden="true">
-      <span className="bn-skeleton home-foot-skel">{text}</span>
+      <SkeletonText>{text}</SkeletonText>
     </p>
   )
   const body = (
@@ -319,15 +319,18 @@ function HistoryFoot({
   sold,
   shelf,
   live,
+  loading,
 }: {
   readonly status: ServerStatus | null
   readonly boxes: number | null
   readonly sold: number | null
   readonly shelf: Record<string, CaptureStamp> | null
+  /** Which reads are still out. A read that failed is not loading: it draws what it drew before the frame existed. */
+  readonly loading: { readonly status: boolean; readonly boxes: boolean; readonly history: boolean }
   readonly live: boolean
 }) {
   const plot: Ribbon | null = useMemo(() => ribbon(sittings(shelf)), [shelf])
-  if (status === null) return <HistoryFootFrame sum ribbon last />
+  if (status === null) return loading.status ? <HistoryFootFrame sum ribbon last /> : <div className="home-foot" />
   const realTotal = photographed(status)
   if (realTotal === 0) {
     return (
@@ -350,7 +353,7 @@ function HistoryFoot({
     <div className="home-foot">
       <p className="home-foot-sum">
         <b>{realTotal.toLocaleString()}</b> photographed
-        {plot === null ? (shelf === null ? <Hold>{' over 00 sittings since 00 Mmm'}</Hold> : null) : (
+        {plot === null ? (loading.history ? <Hold>{' over 00 sittings since 00 Mmm'}</Hold> : null) : (
           <>
             {' over '}
             <b>{plot.blocks.length + (plot.plinth?.sittings ?? 0)}</b>
@@ -362,8 +365,8 @@ function HistoryFoot({
         {/* `on_hand` is nullable BECAUSE a box could not be counted. A sum with a null in it is
             not a sum, so the clause degrades and the sentence does not. */}
         <b>{onHand.toLocaleString()}</b> stored
-        {boxes === null ? <Hold>{' in 00 boxes'}</Hold> : <> in <b>{boxes}</b> {boxes === 1 ? 'box' : 'boxes'}</>}
-        {sold === null ? <Hold>{' - 000 sold'}</Hold> : sold === 0 ? null : (
+        {boxes === null ? (loading.boxes ? <Hold>{' in 00 boxes'}</Hold> : null) : <> in <b>{boxes}</b> {boxes === 1 ? 'box' : 'boxes'}</>}
+        {sold === null ? (loading.boxes ? <Hold>{' - 000 sold'}</Hold> : null) : sold === 0 ? null : (
           <>
             <i aria-hidden="true" />
             {/* THIS STORE'S OWN COUNT, NOT SALES' (UX-019): Sales totals the order ledger,
@@ -376,7 +379,7 @@ function HistoryFoot({
           </>
         )}
       </p>
-      {plot === null ? (shelf === null ? <HistoryFootFrame ribbon last /> : null) : <Ribbon plot={plot} live={live} />}
+      {plot === null ? (loading.history ? <HistoryFootFrame ribbon last /> : null) : <Ribbon plot={plot} live={live} />}
       {newest === null ? null : (
         <p className="home-foot-last">
           <b>{dayMonth(newest.from)}</b>
@@ -760,7 +763,7 @@ export function Home() {
             {status.state === 'ready' && status.value.cards === 0 ? 'Photograph the first box' : 'Capture'}
           </Button>
         </div>
-        <HistoryFoot status={status.state === 'ready' ? status.value : null} boxes={boxCount} sold={sold} shelf={history.state === 'ready' ? history.value : null} live={say?.running ?? false} />
+        <HistoryFoot status={status.state === 'ready' ? status.value : null} boxes={boxCount} sold={sold} shelf={history.state === 'ready' ? history.value : null} live={say?.running ?? false} loading={{ status: status.state === 'loading', boxes: boxes.state === 'loading', history: history.state === 'loading' }} />
       </div>
 
       <section className="home-spine bn-stagger" aria-label="The workflow">
@@ -861,12 +864,12 @@ export function Home() {
                   <a key={run.run} className="home-run" href={`#/runs?run=${encodeURIComponent(run.run)}`} title={run.run}>
                     <span className="home-run-text">
                       {/* D218: found beyond the reader's own list — `runScope.ts:boxLabel`
-                          composes `Box N - Name` off a template literal, so the reader's
+                          composes `Box N · Name` off a template literal, so the reader's
                           plain-string scan never saw it. That composer is shared and stays
                           untouched (same rule as `Position.label`); only the render splits it.
                           `title` cannot hold elements, so it gets the comma-joined form. */}
-                      <span className="home-run-box" title={boxLabel.replace(/ - /g, ', ')}>
-                        {boxLabel.split(' - ').map((part, at) => (
+                      <span className="home-run-box" title={boxLabel.replace(/ · /g, ', ')}>
+                        {boxLabel.split(' · ').map((part, at) => (
                           <span key={at}>{part}</span>
                         ))}
                       </span>

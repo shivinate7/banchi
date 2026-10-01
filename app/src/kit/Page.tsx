@@ -238,6 +238,17 @@ export function Skeleton({
   return <div aria-hidden="true" className={['bn-skeleton', className].filter(Boolean).join(' ')} style={{ ...style, width, height }} />
 }
 
+/** A skeleton bar that takes the box of a sentence. The words set the box (the browser's own face and
+ *  wrapping) and are transparent, so the bar wraps where the loaded sentence will. Write the words in
+ *  the loaded sentence's own grammar (D-nothing-moves-unless-moved). Decorative by construction. */
+export function SkeletonText({ children, className }: { readonly children: string; readonly className?: string }) {
+  return (
+    <span aria-hidden="true" className={['bn-skeleton', 'bn-skeleton-text', className].filter(Boolean).join(' ')}>
+      {children}
+    </span>
+  )
+}
+
 /** A titled part of a page. The title is a heading a screen reader can jump to (UX-095): an h2
  *  on a page, an h3 inside a `Sheet` or `Modal` (whose own title is the h2), or the `level` you
  *  name. `lede` is one line under the title. Every other attribute (`id`, `data-*`, `aria-*`)

@@ -89,7 +89,6 @@ a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate
 /* D218: the separator is CSS content now, not typed into the JSX; the padding above still
    frames it on both sides exactly as it framed the character. */
 .home-foot-sum i::before { content: '·'; }
-.home-foot-skel { color: transparent; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .home-hold { visibility: hidden; }
 .home-foot-quiet { color: var(--bn-ink-3); }
 /* THE ONLY LINK OFF HOME INTO SALES (UX-032): styled as plain text at rest, so it reads as

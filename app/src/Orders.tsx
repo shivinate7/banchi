@@ -16,6 +16,7 @@ import {
   patchViewQuery,
   Pill,
   Sheet,
+  SkeletonText,
   Stat,
   useFacetParams,
   useSortParam,
@@ -948,11 +949,7 @@ const pickOf = (line: ResolvedLine): number => Math.max(0, line.owed - line.outs
 /** The verdict's loading frame: a skeleton bar over a transparent sentence in the verdict's own
  *  grammar, so it takes the verdict's own box. */
 function VerdictHold() {
-  return (
-    <span className="bn-skeleton orders-verdict-hold" aria-hidden="true">
-      00 owed, 00 buyers: 00 pick, 00 unfilled
-    </span>
-  )
+  return <SkeletonText>00 owed, 00 buyers: 00 pick, 00 unfilled</SkeletonText>
 }
 
 function verdictOf(open: readonly OrderRow[], resolved: readonly ResolvedOrder[]): ReactNode {

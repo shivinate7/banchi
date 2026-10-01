@@ -1188,6 +1188,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   background: var(--bn-line);
   min-height: 12px;
 }
+.bn-skeleton-text { color: transparent; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .bn-skeleton::after {
   content: '';
   position: absolute;

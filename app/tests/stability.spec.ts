@@ -88,8 +88,13 @@ for (const one of CASES) {
       await slowReads(page)
       await watchShifts(page)
       await setViewport(page, { width, height: 1000 })
+      /* EVERY NAV SCREEN, PLUS THE FULFILLER'S: `#/fulfillment` is his whole product and has no nav
+         row, so it is named. `#/gallery` stays out on purpose: it is the kit's specimen page, reached
+         from the palette only, and its specimens loop on their own. */
       const routes = (await routesFromNav(page)).filter((r) => !EXCLUDED_FROM_SWEEP.test(r))
-      routes.push(PRODUCT_ROUTE)
+      routes.push(PRODUCT_ROUTE, '#/fulfillment')
+      const blank = Object.entries(EXCUSED).filter(([, why]) => why.trim() === '').map(([key]) => key)
+      expect(blank, 'an exception with no reason: write why, or delete it').toEqual([])
       const over: string[] = []
       const stale: string[] = []
       const table: string[] = []
@@ -107,3 +112,15 @@ for (const one of CASES) {
     })
   }
 }
+
+/* A FAILED READ HOLDS NO FRAME (D-nothing-moves-unless-moved). The history foot's frame stands for a
+   read that is out. A read that failed is not out, so Home draws what it drew before the frame existed
+   and never a skeleton that waits for an answer that is not coming. */
+test('failed: a failed history read leaves no skeleton on Home', async ({ page }) => {
+  await page.route(/\/inventory\/history$/, (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"no"}' }))
+  await page.goto('/#/')
+  await expect(page.locator('.home-foot-sum')).toBeVisible()
+  await page.waitForTimeout(1500)
+  await expect(page.locator('.home-foot .bn-skeleton')).toHaveCount(0)
+  await expect(page.locator('.home-hold')).toHaveCount(0)
+})
