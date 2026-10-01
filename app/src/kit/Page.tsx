@@ -240,7 +240,7 @@ export function Skeleton({
 
 /** A skeleton bar that takes the box of a sentence. The words set the box (the browser's own face and
  *  wrapping) and are transparent, so the bar wraps where the loaded sentence will. Write the words in
- *  the loaded sentence's own grammar (D-nothing-moves-unless-moved). Decorative by construction. */
+ *  the loaded sentence's own grammar (D313). Decorative by construction. */
 export function SkeletonText({ children, className }: { readonly children: string; readonly className?: string }) {
   return (
     <span aria-hidden="true" className={['bn-skeleton', 'bn-skeleton-text', className].filter(Boolean).join(' ')}>

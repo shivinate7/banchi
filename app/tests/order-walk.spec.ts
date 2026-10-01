@@ -358,7 +358,7 @@ test('only the newest pull in the walk offers Undo — the older one reads Sold'
   expect(await slotWidth(), 'the Sold pill widened the action slot').toBe(atRest)
 })
 
-/* A PULL PRESS MOVES NOTHING, MEASURED BY THE BROWSER (D118, D-nothing-moves-unless-moved). The
+/* A PULL PRESS MOVES NOTHING, MEASURED BY THE BROWSER (D118, D313). The
    cases here compare widths; this one reads the browser's own `layout-shift` entries over the
    500 ms after the press, with no input exclusion, so a line that a new string re-flows is seen. */
 test('a pull press causes no layout shift in the half second after it', async ({ page }) => {

@@ -111,7 +111,7 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | `app/tests/page-edge.spec.ts` | Every screen starts its content at one shared left edge, whatever its width cap. | D5, D197 |
 | `app/tests/phone.spec.ts` | The owner-side shell at phone width fits without sideways scroll and keeps every touch target at 40px or more, including menus, sheets and the palette. | D117, D134, D266, D288, D291 |
 | `app/tests/scaffold.spec.ts` | Every route inherits the page frame: one Page, one h1, the page width and top gap tokens, no sideways scroll, one fixed document title. | D121, D275, D276, D291 |
-| `app/tests/stability.spec.ts` | nothing on screen moves unless the person moved it. Case one: a screen holds its final frame from the first paint. | D280 |
+| `app/tests/stability.spec.ts` | nothing on screen moves unless the person moved it. Case one: a screen holds its final frame from the first paint. | D313, D280 |
 | `app/tests/status-busy.spec.ts` | A refusal the server sent to the shell's status poll never draws the offline banner. | D207 |
 | `app/tests/wide.spec.ts` | Screens stay balanced at 1920px and 2560px wide, with no starved field or unbounded prose line. | D27, D123, D275 |
 | `harness/tests/t6_geometry.py` | Card detection finds the card within tolerance across offset, scale and rotation, and refuses when no card is there. | none |

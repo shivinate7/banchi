@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 
-/* THE ONE LAYOUT-SHIFT READER (D-nothing-moves-unless-moved). `stability.spec.ts` reads a screen's
+/* THE ONE LAYOUT-SHIFT READER (D313). `stability.spec.ts` reads a screen's
  * first seconds with it, and the press cases in `inventory.spec.ts` and `orders.spec.ts` read the
  * half second after a press. One observer, so the two cannot disagree about what a shift is.
  *

@@ -1,5 +1,5 @@
 // Protects: nothing on screen moves unless the person moved it. Case one: a screen holds its final frame from the first paint.
-// Governs: D-nothing-moves-unless-moved, D280
+// Governs: D313, D280
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -73,7 +73,7 @@ async function shiftOf(page: Page, route: string): Promise<{ sum: number; shifts
   return { sum: sumOf(shifts), shifts }
 }
 
-/* THE CASE TABLE (D-nothing-moves-unless-moved). A new class of shift is a row here, never a new
+/* THE CASE TABLE (D313). A new class of shift is a row here, never a new
  * file. `name` keys `stability-allow.json` as `<name>:<screen>`. The press cases need a screen's
  * own fixtures, so they sit in that screen's spec and read the same observer (`layoutShift.ts`):
  * the sale press is in `inventory.spec.ts`. */
@@ -113,7 +113,7 @@ for (const one of CASES) {
   }
 }
 
-/* A FAILED READ HOLDS NO FRAME (D-nothing-moves-unless-moved). The history foot's frame stands for a
+/* A FAILED READ HOLDS NO FRAME (D313). The history foot's frame stands for a
    read that is out. A read that failed is not out, so Home draws what it drew before the frame existed
    and never a skeleton that waits for an answer that is not coming. */
 test('failed: a failed history read leaves no skeleton on Home', async ({ page }) => {

@@ -1134,7 +1134,7 @@ export function Revenue() {
       )}
       {/* THE READ IS STILL OUT: the figure, its spark and the four notes are drawn in their own
           classes and held hidden, so the shelf takes the box a full one takes and nothing under
-          it moves when the read lands (D-nothing-moves-unless-moved). */}
+          it moves when the read lands (D313). */}
       {holdingsFailure === null && holdings === null ? (
         <div className="revenue-shelf-hold" aria-hidden="true">
           <Money value={0} className="revenue-shelf-figure" />
@@ -1192,7 +1192,7 @@ export function Revenue() {
 
   if (orders === null) {
     /* The period switch is drawn whole and held hidden and inert, so the header takes the height
-       it has loaded (D-nothing-moves-unless-moved). */
+       it has loaded (D313). */
     return (
       <Page
         title="Sales"

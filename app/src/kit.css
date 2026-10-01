@@ -551,7 +551,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 
 /* ---- pills & status -------------------------------------------------------- */
 /* THE PILL'S OWN HEIGHT, NAMED SO A ROW THAT MAY OR MAY NOT HOLD ONE CAN RESERVE IT
-   (D-nothing-moves-unless-moved): `.browse-hero-sub` reads it, so a pill arriving moves nothing. */
+   (D313): `.browse-hero-sub` reads it, so a pill arriving moves nothing. */
 :root { --bn-pill-h: 22px; }
 .bn-pill {
   display: inline-flex;

@@ -167,7 +167,7 @@ export function Graveyard() {
       toolbar={
         hasRows || loading ? (
           /* While the read is out the toolbar is drawn whole and held hidden and inert, so the
-             list below takes the box it will have (D-nothing-moves-unless-moved). */
+             list below takes the box it will have (D313). */
           <div className="graveyard-toolbar" data-held={loading ? 'true' : undefined} inert={loading}>
             <Segmented value={filter} options={FILTERS.map((f) => ({ value: f.value, label: `${f.label} (${counts[f.value]})` }))} onChange={setFilter} label="Filter by how a card left" />
             <span className="bn-spacer" />

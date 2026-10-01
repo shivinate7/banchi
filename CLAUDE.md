@@ -162,7 +162,7 @@ The legacy aliases at the foot of tokens.css are dead. A new rule may not read o
 - **The mark is generated** (D102, the mark has its own palette). `scripts/build-mark.mjs` writes it. Never put a `border-radius` on it.
 - **`base.css` sets four floors** (D50, feedback is the product's; D118, a press changes what is on screen):
   cursor, response, press and stability. `app/tests/cursor.spec.ts` and `app/tests/inventory.spec.ts` assert them.
-- **Nothing on screen moves unless the person moved it** (D-nothing-moves-unless-moved). A loading area holds its
+- **Nothing on screen moves unless the person moved it** (D313 (Nothing on screen moves unless the)). A loading area holds its
   loaded size from the first paint, by construction and never by a tuned pixel. `app/tests/stability.spec.ts`
   asserts it, one row per case, over every nav screen read from `ROUTES`, plus the Fulfiller's.
 - **One left edge, and only width varies** (D197, a page is anchored to the shell inset). `.bn-page` margin is `0`.

@@ -1985,7 +1985,7 @@ test('the press that sells a copy does not shift while the re-read is in flight'
   expect(sawSkeleton, 'a skeleton was drawn over the standing list').toBe(false)
 })
 
-/* THE PRESS THAT SELLS A COPY MOVES NOTHING, MEASURED BY THE BROWSER (D118, D-nothing-moves-unless-moved).
+/* THE PRESS THAT SELLS A COPY MOVES NOTHING, MEASURED BY THE BROWSER (D118, D313).
  * The cases above compare box positions before and after; this one reads the browser's own
  * `layout-shift` entries over the half second after the press, with no input exclusion. It
  * catches a hero line that a different string re-flows: the sale rewrites "Card 1 of 11" and the
