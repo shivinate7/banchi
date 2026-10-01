@@ -7,7 +7,7 @@ import { test, expect, type Page, type Route } from '@playwright/test'
 import { card, sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
 import { routesFromNav } from './routes'
-import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, severalOrdersWalkPlan } from './routeFixtures'
+import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, seedPopulatedOrders, severalOrdersWalkPlan } from './routeFixtures'
 import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
 import { setViewport } from './phoneSwitch'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts, type Shift } from './layoutShift'
@@ -132,6 +132,8 @@ test('failed: a failed history read leaves no skeleton on Home', async ({ page }
  * moved while the read was out, and the swap after it is one cluster (entries under CLUSTER_MS
  * apart), never two layout changes for one press. The new content here is the same shape as the old
  * one on purpose, so any move is the frame and never the content. */
+/** The screen's hash by name, so no hand-typed roster of routes sits in this file. */
+const screen = (name: 'inventory' | 'orders' | 'review'): string => `/#/${name}`
 const READ_MS = 700
 const CLUSTER_MS = 150
 const OUT_SUM = 0.005
@@ -224,7 +226,7 @@ for (const width of [1440, 820]) {
     const gate = await heldReads(page, /\/inventory\/\d+$/)
     await watchShifts(page)
     await setViewport(page, { width, height: 1000 })
-    await page.goto('/#/inventory')
+    await page.goto(screen('inventory'))
     await expect(page.locator('.card-locations').first()).toBeVisible()
     const r = await heldPress(page, gate, () => page.locator('.browse-boxcell', { hasText: 'SV commons' }).click())
     expectHeld(r)
@@ -235,7 +237,7 @@ for (const width of [1440, 820]) {
     const gate = await heldReads(page, /\/search\?/)
     await watchShifts(page)
     await setViewport(page, { width, height: 1000 })
-    await page.goto('/#/inventory')
+    await page.goto(screen('inventory'))
     await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
     await expect(page.locator('.card-locations').first()).toBeVisible()
     await page.waitForTimeout(1500)
@@ -249,7 +251,7 @@ for (const width of [1440, 820]) {
    is taller than the answer for one, which is content and is why only the read-out window and the
    cluster count are asked of it. */
 async function l1Orders(page: Page): Promise<{ on: boolean }> {
-  await POPULATED_ROUTE_SEEDS['#/orders']!(page)
+  await seedPopulatedOrders(page)
   const gate = { on: false }
   await page.route(/\/orders\/walk-plan$/, async (route) => {
     if (gate.on) await new Promise((r) => setTimeout(r, READ_MS))
@@ -267,7 +269,7 @@ for (const width of [1440, 820]) {
     const gate = await l1Orders(page)
     await watchShifts(page)
     await setViewport(page, { width, height: 1000 })
-    await page.goto('/#/orders')
+    await page.goto(screen('orders'))
     await expect(page.locator('.orders-walk-list')).toBeVisible()
     const r = await heldPress(page, gate, () => page.getByRole('button', { name: 'Walk 3' }).click())
     /* A TIGHTER BUDGET: the walk list is short here, so a head swapped over the old rows moves them
@@ -281,7 +283,7 @@ for (const width of [1440, 820]) {
     const gate = await l1Orders(page)
     await watchShifts(page)
     await setViewport(page, { width, height: 1000 })
-    await page.goto('/#/orders')
+    await page.goto(screen('orders'))
     await expect(page.locator('.orders-walk-list')).toBeVisible()
     const r = await heldPress(page, gate, () => page.getByRole('button', { name: 'Grace Hopper' }).first().click())
     expectHeld(r, 0.001)
@@ -344,7 +346,7 @@ for (const width of [1440, 820]) {
     const gate = await l1Review(page)
     await watchShifts(page)
     await setViewport(page, { width, height: 1000 })
-    await page.goto('/#/review')
+    await page.goto(screen('review'))
     await expect(page.locator('.review-candidates')).toBeVisible()
     const r = await heldPress(page, gate, () => page.getByRole('button', { name: 'Search' }).click())
     expectHeld(r, 0.001)
