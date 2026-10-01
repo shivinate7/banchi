@@ -347,7 +347,9 @@ def _package_imports(rel: str) -> Set[str]:
     """Repo files of LOCAL_PACKAGES that the module `rel` imports, absolute or relative.
 
     Unparseable: every file of the packages, fail safe. Known gap: a module that only a
-    subprocess runs (`-m pkg.mod`, or a script path in argv) is not followed.
+    subprocess runs (`-m pkg.mod`, or a script path in argv) is not followed, and a literal
+    `importlib.import_module("...")` call inside a package module is not followed either
+    (the test-level `_PathCollector` does follow them).
     """
     try:
         tree = ast.parse((ROOT / rel).read_text())
@@ -437,6 +439,9 @@ def scope_for(entry: dict) -> Tuple[dict, ...]:
 # --------------------------------------------------------------------------- classification
 
 
+DIRTY_LINE = "working tree has uncommitted changes; this verdict covers commits only"
+
+
 def classify(target: str, base: Optional[str], head: str) -> Tuple[bool, List[str]]:
     if os.environ.get(HATCH) == "off":
         return True, [f"{HATCH}=off — {target} RUNS."]
@@ -458,9 +463,9 @@ def classify(target: str, base: Optional[str], head: str) -> Tuple[bool, List[st
             subject=f"what `make {target}` reads", noun=target)
         lines = [f"{len(paths)} changed path(s) from {start[:12]} to {head}:"] + list(
             verdict.lines)
-        if browser.git("status", "--porcelain", "--untracked-files=no"):
-            lines.append("working tree has uncommitted changes; this verdict covers commits only")
         if not verdict.run:
+            if browser.git("status", "--porcelain", "--untracked-files=no"):
+                lines.append(DIRTY_LINE)
             lines.append(f"  ({HATCH}=off runs it anyway.)")
         return verdict.run, lines
     except Exception as exc:  # noqa: BLE001 — a scoping bug must cost time, never coverage.
@@ -633,7 +638,7 @@ def selftest() -> int:
     # ---- each fail-open arm, forced through a stub matcher. The real VCS never fails on
     # demand, so without a stub a flipped arm (skip where it must RUN) stays green. The
     # positive control proves the stub can make the gate SKIP at all.
-    def with_stub(**overrides):
+    def with_stub(full=False, **overrides):
         stub = types.SimpleNamespace(
             landing_base=lambda reference, head: "a" * 40,
             changed_paths=lambda start, head: ["app/src/Orders.tsx"],
@@ -645,7 +650,8 @@ def selftest() -> int:
         real = globals()["_browser_scope"]
         globals()["_browser_scope"] = lambda: stub
         try:
-            return classify("reap-selftest", "origin/main", "HEAD")[0]
+            got = classify("reap-selftest", "origin/main", "HEAD")
+            return got if full else got[0]
         finally:
             globals()["_browser_scope"] = real
 
@@ -656,6 +662,12 @@ def selftest() -> int:
     check("no merge-base RUNS", with_stub(landing_base=lambda r, h: None), True)
     check("a failed diff RUNS", with_stub(changed_paths=lambda s, h: None), True)
     check("a classification that raises RUNS", with_stub(changed_paths=boom), True)
+    dirty = lambda *a: " M x\n"  # noqa: E731
+    check("a dirty tree on a SKIP prints the dirty-tree line",
+          DIRTY_LINE in with_stub(full=True, git=dirty)[1], True)
+    run_dirty = with_stub(full=True, git=dirty, changed_paths=lambda s, h: ["scripts/reap.py"])
+    check("a dirty tree on a RUN prints no dirty-tree line",
+          (run_dirty[0], DIRTY_LINE in run_dirty[1]), (True, False))
 
     # ---- the pure half, per target, against `classify_paths` directly — the same shape
     # `serve-scope.py`'s own selftest uses, so a target's derived scope is proved without
