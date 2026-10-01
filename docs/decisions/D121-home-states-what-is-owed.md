@@ -75,9 +75,8 @@ the pace, so a reader who cannot separate the hues loses nothing.
 everywhere else in this product; marking a sitting live for being recent would be the one
 dishonest paint available here.
 
-**The scale is the fastest shown sitting, not the rig.** The rig's own ceiling (5,906 cards an hour,
-0.6095 s per card) was the scale first, and real sittings ran at a tenth of it, so every block drew
-a few pixels tall and read as missing. The dashed line at the top is that full height.
+**The scale is the fastest shown sitting.** It draws at full height, and the dashed line at the top marks that
+height. Every other block is its rate's share of it.
 
 **Fixed in the same change, because it ships into this hero either way**: `Home.css` set
 `pointer-events: none` on `.home-hero-art` with nothing restoring it, so the deck's own `<a>`,
