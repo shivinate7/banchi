@@ -1230,7 +1230,6 @@ export function Revenue() {
         : 'over the selected range'
       : `over ${periodLabel.toLowerCase()}`
   const rangeInvalid = customFrom !== null && customTo !== null && customFrom > customTo
-  const activeBucketLabel = activeRange?.label ?? null
   const bmax = Math.max(...buckets.map((b) => b.gross), 1)
   const podium = products.slice(0, 3)
   const board = products.slice(3, boardExpanded ? products.length : BOARD_SIZE)
