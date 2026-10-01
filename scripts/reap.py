@@ -21,7 +21,7 @@ THREE SESSION NOTES ALREADY WARNED ABOUT THIS AND IT HAPPENED ANYWAY.
 `pkill-f-is-machine-wide.md`, `dont-bounce-the-owners-servers.md` and
 `a-pgrep-waiter-matches-itself.md` are all in this project's memory, all written after earlier
 instances of the same class. A note that has to be remembered is not a guard — which is this
-repo's standing preference everywhere else (D16, D17, D42, D111).
+repo's standing preference everywhere else (D16, D17, D42, and claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep").
 
 THE RULE THAT MAKES A MECHANICAL GUARD POSSIBLE, and the whole reason this is not a heuristic:
 every process an agent session legitimately needs to kill was STARTED BY THAT SESSION and lives
@@ -183,7 +183,7 @@ def checkout_root(start: str) -> str:
 def main_checkout(root: str) -> str:
     """The main working tree of this clone — the one whose `.git` is a directory.
 
-    `janitor.py:main_checkout` verbatim. From a linked worktree this is a DIFFERENT directory,
+    The main working tree is the one whose `.git` is a directory. From a linked worktree this is a DIFFERENT directory,
     which is what makes incident 1 mechanically detectable rather than a matter of judgement.
     """
     got = run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=root)

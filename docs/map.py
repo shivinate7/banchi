@@ -2405,7 +2405,7 @@ COMPONENTS = [
                 # amends. D18 governs its shape — the preview is the read-only mode, and the
                 # act is behind a flag rather than a default. D33 is the instrument the two-step
                 # is borrowed from, one register down from a route that can spend money.
-                "governed_by": ["D18", "D33", "D42", "D140", "D111", "D136", "D158", "D141",
+                "governed_by": ["D18", "D33", "D42", "D140", "D136", "D158", "D141",
                                 "D148", "D176", "D228"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
@@ -2613,21 +2613,13 @@ COMPONENTS = [
             },
             "janitor.py": {
                 "does": "the part of the janitor that is Banchi's own. The machine sweep "
-                        "(branches, worktrees, dead-rooted servers, loose processes, stale "
-                        "registrations, husks) is claude-settings' `janitor/sweep.py`, which "
-                        "`make janitor` runs; this file keeps the three modes that sweep has no "
-                        "equivalent for. TIER 1 ALONE (`--tier1`, and a bare run previews it): "
-                        "a registration `git worktree prune` disowns and a husk directory "
-                        "holding nothing but `.serve/` caches with no process AND NO SESSION in "
-                        "it, pressed with no prompt by the session-end hook. `--branches`: the "
-                        "merged-branch cut, the one lossless act, previewing without "
-                        "`--confirm`. `--teardown TREE`: stop that tree's servers with "
+                        "is claude-settings' `janitor/sweep.py`, which `make janitor` runs; "
+                        "this file keeps one mode. `--teardown TREE`: stop that tree's servers with "
                         "`serve.py down`, never the main checkout's. Liveness is READ from "
-                        "`~/.claude/sessions/<pid>.json` AND from a worktree's own git lock, "
-                        "never inferred from mtimes; see `_same_process` for why every "
-                        "unreadable case resolves to LIVE. Repo-agnostic: no import from this "
-                        "tree, and `--root` points it at any clone.",
-                "governed_by": ["D18", "D42", "D44", "D47", "D138", "D111", "D127", "D305"],
+                        "`~/.claude/sessions/<pid>.json`, never inferred from mtimes; see "
+                        "`_same_process` for why every unreadable case resolves to LIVE. "
+                        "Repo-agnostic: no import from this tree.",
+                "governed_by": ["D18", "D42", "D44", "D47", "D138", "D127", "D305"],
             },
             "serve-selftest.py": {
                 "does": "THE SUPERVISOR'S BUILD JOB, PROVED AGAINST A THROWAWAY TREE (D138). "
@@ -2719,14 +2711,11 @@ COMPONENTS = [
                         "oracle and real processes. The cases that matter are the refusals, "
                         "and each asserts the janitor's own sentence rather than the outcome "
                         "alone: git would refuse some of them by itself, and survival by "
-                        "somebody else's refusal is not coverage. Tier 1 leaves a husk a "
-                        "process or a session is in, and steps over a directory it cannot "
-                        "read. `--branches` cuts only a merged, unheld branch, removes no "
-                        "worktree and fails closed on a layout it cannot read. A leaving "
-                        "session does not count itself as somebody else. The sweep proper is "
-                        "claude-settings' and is proved by its own tests, which is why the "
-                        "arms for dead-rooted servers, loose processes and tier 2 are gone.",
-                "governed_by": ["D18", "D44", "D138", "D111", "D127",
+                        "somebody else's refusal is not coverage. A leaving "
+                        "session does not count itself as somebody else, and an unreadable "
+                        "liveness answer reads as live. The sweep proper is claude-settings' "
+                        "and is proved by its own tests.",
+                "governed_by": ["D18", "D44", "D138", "D127",
                                 "D305"],
             },
             "reap.py": {
@@ -2764,14 +2753,12 @@ COMPONENTS = [
                         "session, for either caller.",
                 # D127 is the decision. D138 is the process it exists to protect — the main
                 # checkout's supervisor and its children are refused even from inside the main
-                # checkout, which is the one place this file overrules its own rule. D111 is
-                # the neighbouring notion it deliberately shares reasoning with rather than
-                # duplicating. D18 keeps its self-test off the commit path: it signals. D305 is
+                # checkout, which is the one place this file overrules its own rule. D18 keeps its self-test off the commit path: it signals. D305 is
                 # the neighbouring "whose is this" question this file now answers more finely
                 # than D305's own any-session reading. D305 is the
                 # 2026-09-27 amendment itself.
                 "governed_by": ["D305", "D18", "D43",
-                                "D138", "D88", "D111", "D127",
+                                "D138", "D88", "D127",
                                 ],
             },
             "reap_mark.py": {
@@ -3497,8 +3484,7 @@ COMPONENTS = [
                         "started in a linked worktree and nothing else — the main checkout's "
                         "server is D138's product and is never touched, a tree another session "
                         "is still standing in is left alone, and the branch and the tree are "
-                        "never touched at all. Then runs janitor.py --tier1 (stale "
-                        "registrations and husks). A supervisor whose tree has just been "
+                        "never touched at all. A supervisor whose tree has just been "
                         "removed is findable only from the process table; that dead-rooted "
                         "read is claude-settings' sweep, which its own SessionEnd hook and "
                         "daily agent run. Fails open on every path.",
@@ -3853,11 +3839,11 @@ COMPONENTS = [
                 # and `pkmnscan.*` both stand and a row demanding one of them would be
                 # demanding a rename that silently discards what a browser holds under the
                 # old spelling.
-                # D111 AND D127 JOIN AS CITED FAILURES, the same shape D70 and D101 already
+                # D127 JOINS AS A CITED FAILURE, the same shape D70 and D101 already
                 # carry above: `check_codex_hooks`'s docstring names the two incidents its
                 # missing hooks would have reopened had the row not backfilled them —
                 # `reap.py --hook` on every `Bash` call (D127) and `session-teardown.sh` on
-                # `WorktreeRemove` (D111's sweep) — because a reader who does not know why
+                # `WorktreeRemove` (the claude-settings janitor sweep) — because a reader who does not know why
                 # those two hooks matter reads a bare roster diff as pedantry. D135 is the
                 # ruling the row enforces: Codex reads the same guards a Claude Code session
                 # does, through `.codex/hooks.json` reconciled against `.claude/settings.json`.
@@ -3871,7 +3857,7 @@ COMPONENTS = [
                                 "D33", "D39", "D41", "D43", "D44", "D47", "D50", "D51", "D60",
                                 "D63", "D65", "D67", "D69", "D70", "D74", "D75", "D76", "D80",
                                 "D81", "D83", "D84", "D86", "D87", "D88", "D90", "D92", "D94",
-                                "D97", "D101", "D102", "D104", "D110", "D111", "D113", "D119",
+                                "D97", "D101", "D102", "D104", "D110", "D113", "D119",
                                 "D122", "D123", "D127", "D132", "D134", "D135", "D136", "D138",
                                 "D140", "D141", "D142", "D144", "D148", "D149", "D155", "D160",
                                 "D161", "D173", "D174", "D177", "D178", "D181", "D182", "D185",
@@ -3903,7 +3889,7 @@ COMPONENTS = [
             "docs_audit/env_map.py": {
                 "does": "The rows over environment variables, hatches, the subagent override, the repo map, the "
                         "hook roster, Codex hooks and the build-order mirror.",
-                "governed_by": ["D2", "D31", "D80", "D111", "D127", "D135", "D140", "D178", "D280"]},
+                "governed_by": ["D2", "D31", "D80", "D127", "D135", "D140", "D178", "D280"]},
             "docs_audit/games.py": {
                 "does": "The rows over game and export vocabulary: the registry against the committed exports, "
                         "coverage, the matrix superset and the join-key shape.",
@@ -4987,7 +4973,7 @@ COMPONENTS = [
                 "governed_by": ["D7", "D16", "D17", "D18", "D25", "D26", "D36", "D42", "D43", "D44",
                                 "D47", "D180", "D138", "D54", "D58", "D60", "D278", "D63", "D65",
                                 "D67", "D68", "D74", "D76", "D80", "D82", "D83", "D86",
-                                "D87", "D88", "D89", "D92", "D104", "D111", "D122", "D123", "D127",
+                                "D87", "D88", "D89", "D92", "D104", "D122", "D123", "D127",
                                 "D133", "D135", "D137", "D158", "D140", "D141",
                                 "D23", "D149", "D277", "D160", "D162", "D166", "D167",
                                 "D171", "D172", "D173", "D176", "D178", "D183", "D189", "D212",
@@ -5069,8 +5055,7 @@ COMPONENTS = [
                 # kept now that the repo has left iCloud for that entry's amended reason: the
                 # hazard belongs to a synced directory, and a tree can be put inside one
                 # without telling this script.
-                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D111",
-                                "D127", "D138", "D158", "D179"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D127", "D138", "D158", "D179"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
