@@ -35,6 +35,7 @@ is close to the situation it exists for.
 from __future__ import annotations
 
 import ast
+import hashlib
 import importlib.util
 import json
 import os
@@ -451,6 +452,46 @@ AUDIT_BLOCKING = "mechanical"  # D16 layer 1: provably wrong, exits 1
 AUDIT_ASKING = "advisory"      # D16 layer 2: a question, exits 2
 
 
+AUDIT_CACHE = ROOT / ".serve" / "status-audit.json"
+
+
+def audit_run(script: Path) -> "subprocess.CompletedProcess[str]":
+    """Run the audit, or replay its last answer when no file moved.
+
+    MEASURED: the audit is 85 checks and ~20 s, spread thin (none over 5 s), so no one
+    step is fixable. The key is every non-ignored file's path, mtime and size. Only a run
+    that printed something is cached, so a broken auditor still reports itself.
+    """
+    listing = git("ls-files", "-co", "--exclude-standard", "-z")
+    key = None
+    if listing:
+        stats = []
+        for name in listing.split("\0"):
+            try:
+                st = os.stat(ROOT / name)
+            except OSError:
+                continue  # tracked but deleted: its absence changes the key
+            stats.append(f"{name}\t{st.st_mtime_ns}\t{st.st_size}")
+        key = hashlib.sha1("\n".join(stats).encode()).hexdigest()
+        try:
+            cached = json.loads(AUDIT_CACHE.read_text())
+            if cached.get("key") == key:
+                return subprocess.CompletedProcess([], 0, cached["stdout"], "")
+        except (OSError, ValueError, AttributeError):
+            pass
+    done = subprocess.run(
+        [sys.executable, str(script), "--json"],
+        cwd=str(ROOT), capture_output=True, text=True, check=False,
+    )
+    if key and done.stdout.strip():
+        try:
+            AUDIT_CACHE.parent.mkdir(exist_ok=True)
+            AUDIT_CACHE.write_text(json.dumps({"key": key, "stdout": done.stdout}))
+        except OSError:
+            pass
+    return done
+
+
 def audit_line() -> List[str]:
     """Run the mechanical docs audit inline and read its `--json`, never its render.
 
@@ -474,10 +515,7 @@ def audit_line() -> List[str]:
     if not found:  # resolve() has already recorded why
         return [field("docs audit", "MISSING: scripts/docs-audit.py")]
     try:
-        done = subprocess.run(
-            [sys.executable, str(found[0]), "--json"],
-            cwd=str(ROOT), capture_output=True, text=True, check=False,
-        )
+        done = audit_run(found[0])
     except OSError as exc:
         return [field("docs audit", f"did not run — {exc}")]
 
