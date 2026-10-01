@@ -1,4 +1,4 @@
-## DEBT-motion-review — no motion designer has reviewed the app's animation
+## DEBT80 — no motion designer has reviewed the app's animation
 
 The app's motion is built screen by screen, by the agent that builds each screen. The design
 system sets the floors: motion is tokens, `prefers-reduced-motion` is honored, a press dips

@@ -1,4 +1,4 @@
-## DEBT-demo-pull-flake — the demo's "Cards to pull" photograph case can fail on a slow runner
+## DEBT79 — the demo's "Cards to pull" photograph case can fail on a slow runner
 
 `app/tests/demo-coverage.spec.ts`, case "Cards to pull draws its photographs", failed once in CI
 (run 36807030451, attempt 1) and passed on a rerun.
