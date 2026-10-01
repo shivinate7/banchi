@@ -244,7 +244,7 @@ test.describe('the published demo draws what reviewers grade', () => {
 
   for (const screen of ['Inventory', 'Review', 'Pricing', 'Home', 'Cards to pull'] as const) {
     test(`${screen} draws its photographs, and every one answers 200`, async ({ page }) => {
-      test.setTimeout(90_000)
+      test.setTimeout(60_000)
       let photos = watchPhotos(page)
       if (screen === 'Cards to pull') {
         // LISTEN ON THE CONTEXT BEFORE THE WINDOW OPENS, NEVER AFTER. This used to attach to the
@@ -278,8 +278,8 @@ test.describe('the published demo draws what reviewers grade', () => {
         }
       }
       // THE FIRST PHOTOGRAPH WAITS ON THE 75 MB `demoServer` CHUNK, so the budget is the chunk's, not the
-      // default 15 s: measured 3 s unthrottled and 14.5 s at 20x CPU throttle (DEMO_CPU_THROTTLE).
-      await expect.poll(() => photos.length, { message: `${screen} asked for no photograph`, timeout: 45_000 }).toBeGreaterThan(0)
+      // default 15 s: 3 s unthrottled, and the case passes with the chunk held back 13 s (DEMO_CHUNK_DELAY_MS).
+      await expect.poll(() => photos.length, { message: `${screen} asked for no photograph`, timeout: 30_000 }).toBeGreaterThan(0)
       expect(photos.filter((photo) => photo.status !== 200)).toEqual([])
       const broken = await page.evaluate(
         () => [...document.images].filter((img) => img.src.includes('/demo/photos/') && img.complete && img.naturalWidth === 0).length,
@@ -381,7 +381,7 @@ test.describe('the published demo draws what reviewers grade', () => {
     await visit(page, 'Orders')
     await page.getByRole('button', { name: /^Walk \d+$/ }).first().click()
     const walk = page.getByRole('list', { name: /cards to pick/i })
-    await expect(walk).toBeVisible({ timeout: 45_000 })
+    await expect(walk).toBeVisible({ timeout: 30_000 })
     // DEBT23's shape: the list container appearing does not mean its rows have. A bare
     // count() right after does not retry, so it can read zero while the rows are still
     // filling in. Wait for a row itself, web-first, before counting.
