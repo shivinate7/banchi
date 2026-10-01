@@ -409,7 +409,7 @@ function compareClause(current: number, previousRows: readonly Sale[] | null, li
   if (previousRows.length === 0) return null
   const previous = sum(previousRows)
   // A divide-by-zero guard: rows exist and still sum to $0.00, so a percentage has no base.
-  if (previous === 0) return current === 0 ? `$0.00 ${before} too` : `${moneyGrouped(current)} more than ${before}`
+  if (previous === 0) return current === 0 ? null : `${moneyGrouped(current)} more than ${before}`
   const change = ((current - previous) / previous) * 100
   return `${change >= 0 ? `up ${change.toFixed(0)}%` : `down ${Math.abs(change).toFixed(0)}%`} on ${before}`
 }
@@ -1203,6 +1203,13 @@ export function Revenue() {
   }
 
   const total = sum(inPeriod)
+  const saidLine = [
+    `${orderCount(inPeriod).toLocaleString()} ${orderCount(inPeriod) === 1 ? 'order' : 'orders'}`,
+    `${inPeriod.reduce((n, x) => n + x.quantity, 0).toLocaleString()} copies`,
+    compareClause(total, inPrevious, partial),
+  ]
+    .filter(Boolean)
+    .join(', ')
   const periodLabel = PERIODS.find((p) => p.value === period)?.label ?? period
   const periodPhrase =
     period === 'custom'
@@ -1275,14 +1282,8 @@ export function Revenue() {
         <div className="revenue-summary-lead">
           <p className="bn-eyebrow">{`Gross, ${periodPhrase}`}</p>
           <Money value={total} className="revenue-summary-figure" />
-          <p className="revenue-verdict-said">
-            {[
-              `${orderCount(inPeriod).toLocaleString()} ${orderCount(inPeriod) === 1 ? 'order' : 'orders'}`,
-              `${inPeriod.reduce((n, s) => n + s.quantity, 0).toLocaleString()} copies`,
-              compareClause(total, inPrevious, partial),
-            ]
-              .filter(Boolean)
-              .join(', ')}
+          <p className="revenue-verdict-said" title={saidLine}>
+            {saidLine}
           </p>
           {dropped === 0 ? null : (
             <p className="revenue-verdict-dropped">

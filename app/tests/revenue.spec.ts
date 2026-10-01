@@ -1050,7 +1050,16 @@ for (const width of [1440, 820]) {
   test(`D313: choosing the All period and back moves nothing above the figures at ${width}`, async ({ page }) => {
     await watchShifts(page)
     await setViewport(page, { width, height: 1000 })
-    await stub(page, generalOrders())
+    /* PRIOR-PERIOD SALES, so 3 months carries a comparison clause and All carries none. */
+    await stub(page, [
+      ...generalOrders(),
+      orderRow({
+        number: 'ORD-PRIOR',
+        placed_at: '2026-05-10T10:00:00+00:00',
+        status: 'Shipped',
+        lines: [line({ sku: '9300003', name: 'Prior sale', quantity: 1, unit_price: '3.00' })],
+      }),
+    ])
     await open(page, '?period=3m')
     await page.waitForTimeout(1200)
     for (const label of ['All', '3 months']) {
@@ -1060,8 +1069,10 @@ for (const width of [1440, 820]) {
       const inWindow = (await readShifts(page)).shifts.slice(seen)
       const beside = inWindow.filter((sh) => sh.moved.some((name) => HELD.test(name)))
       expect(beside, `choosing ${label} moved ${describeShifts(beside)}`).toEqual([])
-      const said = await page.locator('.revenue-verdict-said').boundingBox()
-      expect(said!.height, 'the order line holds one line box').toBeLessThan(24)
+      const said = page.locator('.revenue-verdict-said')
+      if (label === '3 months') await expect(said).toContainText(' on the same stretch before')
+      else await expect(said).not.toContainText('before')
+      expect((await said.boundingBox())!.height, 'the order line holds one line box').toBeLessThan(24)
     }
   })
 }
