@@ -215,6 +215,11 @@ type Stage = {
   readonly tone?: 'accent' | 'warn' | 'ok'
 }
 
+/** A clamped sentence keeps its whole text in its title. */
+const titled = (el: HTMLElement | null) => {
+  if (el) el.title = el.textContent ?? ''
+}
+
 /** The ranked sentence. Renders what `standing.ts` decided and judges nothing itself. */
 function StandingLine({ standing: say }: { readonly standing: Standing | null }) {
   if (say === null) {
@@ -238,7 +243,7 @@ function StandingLine({ standing: say }: { readonly standing: Standing | null })
           <Icon name={say.icon} size={17} />
         </span>
       )}
-      <span className="home-standing-say">
+      <span className="home-standing-say" ref={(el) => titled(el)}>
         <span className="home-standing-lead">{say.lead}</span>
         {say.say.map((part, i) =>
           part.em ? (
@@ -281,7 +286,7 @@ function StandingLine({ standing: say }: { readonly standing: Standing | null })
           `standing.ts` hands over plain sentences only — there is no figure left to draw here,
           so this is a supplementary line, never a second copy of a number 24px below. */}
       {say.behind.length === 0 && say.problem === null ? null : (
-        <p className="home-standing-behind">
+        <p className="home-standing-behind" ref={(el) => titled(el)}>
           {say.behind.map((label, i) => (
             <span key={i} className="home-standing-behind-lab">
               {label}
@@ -364,7 +369,7 @@ function HistoryFoot({
   const newest = plot?.blocks[plot.blocks.length - 1]?.sitting ?? null
   return (
     <div className="home-foot">
-      <p className="home-foot-sum">
+      <p className="home-foot-sum" ref={(el) => titled(el)}>
         <b>{realTotal.toLocaleString()}</b> photographed
         {plot === null ? null : (
           <>
@@ -394,7 +399,7 @@ function HistoryFoot({
       </p>
       {plot === null ? (loading.history ? <HistoryFootFrame ribbon last /> : null) : <Ribbon plot={plot} live={live} />}
       {newest === null ? null : (
-        <p className="home-foot-last">
+        <p className="home-foot-last" ref={(el) => titled(el)}>
           <b>{dayMonth(newest.from)}</b>
           {' — '}
           <b>{newest.cards.toLocaleString()}</b> {newest.cards === 1 ? 'card' : 'cards'}

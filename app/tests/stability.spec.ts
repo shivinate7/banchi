@@ -133,8 +133,20 @@ test('failed: a failed history read leaves no skeleton on Home', async ({ page }
 /* Both stores: the populated seeds, and the shell's bare store of 122 cards over several boxes. Every
    read lands at its own moment, so the foot's clauses (status, boxes, history) land one after another. */
 const LANDS: readonly [RegExp, number][] = [[/\/runs(\?|$)/, 100], [/\/status(\?|$)/, 200], [/\/boxes(\?|$)/, 400], [/\/inventory\/history(\?|$)/, 600]]
-for (const width of [1440, 820]) for (const seeded of [true, false]) {
-  test(`loading: Home holds its frame when its reads land out of order, ${seeded ? 'seeded' : 'bare store'}, at ${width}`, async ({ page }) => {
+/* `wide` blocks the web fonts and draws everything in Verdana, a face wider than the product's, the way a
+   Linux box wraps a sentence that a Mac does not. A frame holds only if its text can never outgrow it. */
+for (const width of [1440, 820]) for (const seeded of [true, false]) for (const wide of [false, true]) {
+  test(`loading: Home holds its frame when its reads land out of order, ${seeded ? 'seeded' : 'bare store'}${wide ? ', wide face' : ''}, at ${width}`, async ({ page }) => {
+    if (wide) {
+      await page.route(/\.(woff2?|ttf)(\?|$)/, (route) => route.abort())
+      await page.addInitScript(() => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const st = document.createElement('style')
+          st.textContent = '*{font-family:Verdana,sans-serif !important}'
+          document.head.append(st)
+        })
+      })
+    }
     if (seeded) for (const seed of Object.values(POPULATED_ROUTE_SEEDS)) await seed(page)
     await page.route(
       () => true,

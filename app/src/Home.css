@@ -71,14 +71,18 @@ a.home-standing-row:hover .home-standing-rule { scale: 1.5 1; }
   place-items: center; background: var(--tone-tint); color: var(--tone); }
 .home-standing-ic-live { animation: bn-breathe var(--bn-t-pulse) var(--bn-ease-loop) infinite; }
 .home-standing-say { flex: 1 1 auto; min-width: 0; font-size: var(--bn-fs-lg); line-height: var(--standing-lh); color: var(--bn-ink-2); }
+/* A LATE SENTENCE NEVER OUTGROWS ITS FRAME (D313): each is clamped to the lines its frame reserves, on any face. The full text is its title. */
+.home-standing-say, .home-foot-sum, .home-foot-last { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--clamp, 1); overflow: hidden; }
+.home-foot-sum { --clamp: 2; }
+.home-standing-say { --clamp: var(--standing-lines, 1); }
 .home-standing-lead { font-weight: 700; color: var(--tone); }
 .home-standing-say strong { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
 .home-standing-go { display: inline-flex; align-items: center; gap: var(--bn-2); flex: none; color: var(--bn-ink-3);
   transition: color var(--bn-t-fast) var(--bn-ease), translate var(--bn-t-fast) var(--bn-ease); }
 a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate: 2px 0; }
 .home-standing-behind { margin: 0; padding-left: var(--bn-5); font-size: var(--bn-fs-md); line-height: var(--standing-lh); color: var(--bn-ink-3);
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--bn-2) var(--bn-4); }
-.home-standing-behind-lab { color: var(--bn-ink-3); }
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-standing-behind-lab { color: var(--bn-ink-3); margin-right: var(--bn-4); }
 .home-standing-problem { margin: 0; padding-left: var(--bn-5); font-size: var(--bn-fs-sm); color: var(--bn-warn);
   display: flex; align-items: center; gap: var(--bn-2); }
 
@@ -88,7 +92,7 @@ a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate
    and the standing line above keeps the only status colour in the region. */
 .home-foot { margin-top: var(--bn-7); padding-top: var(--bn-4); border-top: 1px solid var(--bn-line);
   max-width: 620px; display: flex; flex-direction: column; gap: var(--bn-3); }
-.home-foot-sum { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+.home-foot-sum { margin: 0; font-size: var(--bn-fs-md); line-height: 1.5; color: var(--bn-ink-3); }
 .home-foot-sum b { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
 .home-foot-sum i { font-style: normal; color: var(--bn-ink-3); padding: 0 var(--bn-1-5); }
 /* D218: the separator is CSS content now, not typed into the JSX; the padding above still
