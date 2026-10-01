@@ -1,4 +1,4 @@
-## DEBT-shared-merge-tool — the merge flow belongs in claude-settings
+## DEBT78 — the merge flow belongs in claude-settings
 
 By the owner's word, Banchi's merge flow moves up into claude-settings as a shared merge tool.
 The flow claims numbers before merge. It waits for CI on the claim commit. On failure it reverts

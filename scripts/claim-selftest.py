@@ -2374,7 +2374,7 @@ def main() -> int:
            "neither slug survives in prose after --write", claude_after)
         ok(f"the branch cites {D(3)} (Another) and DEBT2 (A second finding)." in claude_after,
            "both citations were rewritten to their claimed numbers, IN ONE COMMIT, and a cite "
-           "with no gloss gained one from its entry's heading (STOPGAP, DEBT-shared-merge-tool)",
+           "with no gloss gained one from its entry's heading (STOPGAP, DEBT78)",
            claude_after)
         ok(f"already glossed: {D(3)} (kept as written)." in claude_after,
            "a cite that already had a gloss keeps it, undoubled", claude_after)

@@ -957,7 +957,7 @@ def apply_to_text(text: str, claims: Sequence[Claim]) -> Tuple[str, int]:
 
 
 def entry_gloss(root: Path, claim: Claim) -> str:
-    """STOPGAP (DEBT-shared-merge-tool): up to 6 words of a pending entry's own heading title.
+    """STOPGAP (DEBT78): up to 6 words of a pending entry's own heading title.
 
     The docs-audit `rule enforcement` row wants `D<n> (words)` at a cite's first use in a
     paragraph of CLAUDE.md, and the claim turned a slug into a bare number. Read before the
