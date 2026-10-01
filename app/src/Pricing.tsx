@@ -97,7 +97,6 @@ import {
   Retry,
   Segmented,
   Sheet,
-  Slot,
   countFacets,
   filterRows,
   matchQuery,
@@ -2788,6 +2787,7 @@ export function Pricing() {
           {rows.length === 0 ? null : (
             <FilterBar<PricingSortKey>
               className="pricing-filterbar"
+              beside={filtering ? <span className="pricing-filter-note">Filters hide rows only. Send covers all.</span> : undefined}
               facets={facets}
               value={facetPicks}
               onChange={setFacetPicks}
@@ -2796,10 +2796,6 @@ export function Pricing() {
               sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
             />
           )}
-          {/* A SLOT: the note mounts under a press, and the list under it must not move (D313). */}
-          <Slot as="p" className="pricing-filter-note" show={filtering}>
-            Filters hide rows only. Send covers all.
-          </Slot>
           {filtering && drawn.length === 0 ? (
             <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." />
           ) : null}
