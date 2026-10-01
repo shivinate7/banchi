@@ -21,7 +21,7 @@ from .stability import (
 
 _TOKENS = ":root { --bn-font-ui: 'Inter', 'Inter Fallback', system-ui, sans-serif; }"
 _FONTS = (
-    "@font-face { font-family: 'Inter'; src: url('./fonts/inter-latin.woff2') format('woff2'); }\n"
+    "@font-face { font-family: 'Inter'; font-display: optional; src: url('./fonts/inter-latin.woff2') format('woff2'); }\n"
     "@font-face { font-family: 'Inter Fallback'; src: local('Arial'); size-adjust: 106%; ascent-override: 91%; descent-override: 22%; }\n"
 )
 _INDEX = '<link rel="preload" href="./src/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />'
@@ -41,6 +41,8 @@ def run(ok) -> None:
 
     # ------------------------------------------------------------------- G: the fonts
     ok(not font_stability_findings(_TOKENS, _FONTS, _INDEX), "a face with its preload, fallback and stack is clean", str(font_stability_findings(_TOKENS, _FONTS, _INDEX)))
+    ok(any("optional" in f.message for f in font_stability_findings(_TOKENS, _FONTS.replace("font-display: optional;", "font-display: swap;"), _INDEX)), "a face with `font-display: swap` is found", "")
+    ok(any("optional" in f.message for f in font_stability_findings(_TOKENS, _FONTS.replace("font-display: optional;", ""), _INDEX)), "a face with no font-display is found", "")
     ok(any("preload" in f.message for f in font_stability_findings(_TOKENS, _FONTS, "<!-- " + _INDEX + " -->")), "a preload only in a comment is a missing preload", "")
     ok(any("preload" in f.message for f in font_stability_findings(_TOKENS, _FONTS, "")), "no preload link is found", "")
     ok(any("Inter Fallback" in f.message for f in font_stability_findings(_TOKENS, _FONTS.split("\n")[0], _INDEX)), "no fallback face is found", "")

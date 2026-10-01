@@ -116,7 +116,7 @@ def font_families(tokens_css: str) -> List[str]:
 
 
 def font_stability_findings(tokens_css: str, fonts_css: str, index_html: str) -> List[Finding]:
-    """What is missing, for each face the stacks name: a preload for its latin file in the document,
+    """What is missing, for each face the stacks name: `font-display: optional` on every face, a preload for its latin file in the document,
     a metric fallback face in `fonts.css`, and the fallback's name in every stack that names the face."""
     findings: List[Finding] = []
     css = strip_css_comments(fonts_css)
@@ -131,6 +131,10 @@ def font_stability_findings(tokens_css: str, fonts_css: str, index_html: str) ->
         for file in latin:
             if not any(f"./src/{file}" in p and re.search(r"\bas=[\"']font[\"']", p) for p in preloads):
                 findings.append(Finding(rel(INDEX_HTML), f"has no `<link rel=\"preload\" as=\"font\">` for ./src/{file} ({family}). The face is requested when its first glyph is needed, so it swaps in late."))
+        for face in own:
+            if not re.search(r"font-display:\s*optional\b", face):
+                findings.append(Finding(rel(FONTS_CSS), f"declares a {family} face without `font-display: optional`. A face that swaps in after first paint moves every line it sets."))
+                break
         fallbacks = [f for f in faces if re.search(rf"font-family:\s*['\"]{re.escape(fallback)}['\"]", f)]
         needed = ("size-adjust", "ascent-override", "descent-override")
         if not fallbacks or not all(all(n in f for n in needed) for f in fallbacks):
@@ -142,7 +146,7 @@ def font_stability_findings(tokens_css: str, fonts_css: str, index_html: str) ->
 
 
 def check_font_stability(report: Report) -> None:
-    """Each of the three faces is preloaded and has a metric fallback its stack names (class G).
+    """Each of the three faces is `font-display: optional`, preloaded, and has a metric fallback its stack names (class G).
 
     **Blocking.** A face absent from the document's preloads, or a stack that skips the fallback,
     is a fact about the files. The measured size of a swap is the browser case's job.

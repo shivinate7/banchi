@@ -655,7 +655,8 @@ test('L2 shell: a scrollbar coming or going moves nothing sideways (S7)', async 
 test('L2 shell: the offline banner overlays and moves nothing (S6)', async ({ page }) => {
   await watchShifts(page)
   await setViewport(page, { width: 1440, height: 1000 })
-  await page.goto('/#/')
+  /* A screen whose own content does not read the server's status, so a shift here is the banner's. */
+  await page.goto(screen('graveyard'))
   await settleFonts(page)
   const top = () => page.evaluate(() => document.querySelector('.bn-view')!.getBoundingClientRect().top)
   const before = await top()
@@ -670,8 +671,12 @@ test('L2 shell: the offline banner overlays and moves nothing (S6)', async ({ pa
   expect(sumOf(moved), describeShifts(moved)).toBeLessThan(SHELL_BUDGET)
   await page.unroute(/\/status$/)
   await page.route(/\/status$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: STATUS_OK }))
-  await page.getByRole('button', { name: 'Retry' }).click()
-  await expect(page.locator('.bn-banner')).toHaveCount(0)
+  /* A poll still in flight from the refused answer can land after the first Retry and put the banner back, so the press repeats until the banner stays gone. */
+  await expect(async () => {
+    const retry = page.getByRole('button', { name: 'Retry' })
+    if ((await retry.count()) > 0) await retry.click()
+    await expect(page.locator('.bn-banner')).toHaveCount(0, { timeout: 1500 })
+  }).toPass({ timeout: 15_000 })
 })
 
 test('L2 shell: a new toast leaves the older ones where they are (S16)', async ({ page }) => {
@@ -731,10 +736,12 @@ test('L2 shell: a toast past the fifth leaves the others where they are (S16)', 
   expect(await second.boundingBox(), 'the sixth toast does not move the second').toEqual(at)
 })
 
-/* A face that arrives late swaps in for the fallback the stack drew first. The case holds every font file
-   until it lets them go, draws one probe line in each of the three stacks, and measures it before the
-   swap and after. The metric fallback in `fonts.css` is right when the two boxes agree to 2%. */
-test('L2 shell: web fonts arriving late swap into the same box (S17)', async ({ page }) => {
+/* A FACE THAT ARRIVES LATE MOVES NOTHING. The web faces are `font-display: optional`: a face not ready for
+   first paint is never swapped in, so the page keeps what its stack drew first. The case holds every font
+   file until it lets them go, draws one probe line in each of the three stacks, and measures it before and
+   after the files land. The boxes must be the same, and no layout-shift entry may follow the release. The
+   outcome is the same on every platform, whatever fallback face the system supplies. */
+test('L2 shell: web fonts arriving late move nothing (S17)', async ({ page }) => {
   let release: () => void = () => {}
   const gate = new Promise<void>((done) => {
     release = done
@@ -743,6 +750,7 @@ test('L2 shell: web fonts arriving late swap into the same box (S17)', async ({ 
     await gate
     await route.fallback()
   })
+  await watchShifts(page)
   await setViewport(page, { width: 1440, height: 1000 })
   /* `load` waits on the held files (a preload is a load blocker), so the case waits for the commit. */
   await page.goto('/#/', { waitUntil: 'commit' })
@@ -765,15 +773,19 @@ test('L2 shell: web fonts arriving late swap into the same box (S17)', async ({ 
       return out
     })
   const before = await read()
+  /* Past the block period, so a face that lands now would be a late one. */
+  await page.waitForTimeout(500)
+  const mark = await markNow(page)
   release()
   await page.evaluate(() => document.fonts.ready)
+  await page.waitForTimeout(500)
   const after = await read()
+  const moved = (await readShifts(page)).shifts.filter((x) => x.at >= mark)
   const off = Object.keys(before)
-    .map((k) => ({ k, dw: Math.abs(after[k]!.w / before[k]!.w - 1), dh: Math.abs(after[k]!.h - before[k]!.h) }))
-    .filter((d) => d.dw > 0.02 || d.dh > 1)
-    .map((d) => `${d.k} width ${(d.dw * 100).toFixed(1)}% height ${d.dh.toFixed(1)}px`)
-  const faces = await page.evaluate(() => [...document.fonts].filter((f) => f.family.includes('Fallback')).map((f) => `${f.family} ${f.weight} ${f.status}`))
-  expect(off, `a probe line changes box when the web face lands. before ${JSON.stringify(before)} after ${JSON.stringify(after)} fallback faces ${JSON.stringify(faces)}`).toEqual([])
+    .filter((k) => Math.abs(after[k]!.w - before[k]!.w) > 0.01 || Math.abs(after[k]!.h - before[k]!.h) > 0.01)
+    .map((k) => `${k} ${before[k]!.w}x${before[k]!.h} to ${after[k]!.w}x${after[k]!.h}`)
+  expect(off, 'a probe line changes box when the web face lands').toEqual([])
+  expect(sumOf(moved), describeShifts(moved)).toBe(0)
 })
 
 test('L2 shell: a Sales podium thumbnail arriving moves nothing (S18)', async ({ page }) => {
