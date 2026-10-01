@@ -1245,12 +1245,12 @@ export function CaptureScreen() {
    * only (`stampSlot`) and every other thumbnail keeps its URL and its cached bytes. `revision`
    * moves only for a mid-box remove, which shifts every higher slot's bytes. */
   const [revision, setRevision] = useState(0)
-  const slotStamps = useRef(new Map<string, number>())
+  const [slotStamps, setSlotStamps] = useState<Record<string, number>>({})
   const stampSlot = useCallback((box: number, index: number) => {
-    slotStamps.current.set(`${box}/${index}`, (slotStamps.current.get(`${box}/${index}`) ?? 0) + 1)
+    setSlotStamps((prev) => ({ ...prev, [`${box}/${index}`]: (prev[`${box}/${index}`] ?? 0) + 1 }))
   }, [])
   const slotNonce = (box: number, index: number): string =>
-    `${slotStamps.current.get(`${box}/${index}`) ?? 0}.${revision}`
+    `${slotStamps[`${box}/${index}`] ?? 0}.${revision}`
   /* Bumped on every capture the server answered, and only then: the viewfinder flashes
    * on it. Undo bumps `revision` (the photo URL must change) and never this. */
   const [flash, setFlash] = useState(0)

@@ -257,6 +257,9 @@ async function open(
       })
     }
     const higher = Number(allocated[box] ?? 1) - 1 - Number(index)
+    // The store hands the newest index out again once that card is gone (a mid-box delete shifts).
+    const answered = Number(allocated[box] ?? 1)
+    if (higher === 0) allocated[box] = Number(index)
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -270,11 +273,11 @@ async function open(
         parked_deleted: false,
         cache_deleted: true,
         shifted: Math.max(0, higher),
-        next_index: Number(allocated[box] ?? 1) - 1,
+        next_index: answered - 1,
         // D58, R1d: on-hand after this remove. Removing any one card (middle or newest)
         // drops the on-hand count by exactly one, from the same fixture-shape argument the
         // undo stub's own comment makes.
-        on_hand: Number(allocated[box] ?? 1) - 2,
+        on_hand: answered - 2,
       }),
     })
   })
