@@ -156,7 +156,7 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 ### A standing grant to the daily demo refresh
 
-**One more exception, scoped to a path.** The owner ruled that the demo mirror refreshes daily with auto-merge (D295, the public demo is the scrubbed real store). A PR whose whole diff is under `demo-assets/mirror/` merges through the merge tool once CI is green, with no word asked and from no named Orchestrator. `scripts/demo-mirror-daily.py` fences it: it refuses to merge when the diff touches any other path, and never uses `--admin`. Any other PR keeps the rules above.
+**One more exception, scoped to a path.** The owner ruled that the demo mirror refreshes daily with auto-merge (D295, the public demo is the scrubbed real store). A PR merges through the merge tool once CI is green. No word is asked and no Orchestrator is named. Three conditions hold. Its head is `demo/mirror-refresh`. `scripts/demo-mirror-daily.py` opened it after the scrub assert and the fence. Its whole diff is under `demo-assets/mirror/`. `scripts/demo-mirror-daily.py` fences it: it refuses to merge when the diff touches any other path, and never uses `--admin`. Any other PR keeps the rules above.
 
 ### The escape hatch and the evidence
 

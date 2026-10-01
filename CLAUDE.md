@@ -312,7 +312,8 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   `docs/DESIGN.md` is the record. The `design tokens` row of `make docs-audit` locks every name and hex both ways.
 - **Main moves by pull request. A session never commits to it and never pushes it** (D42, main moves by pull request).
   A session merges only after the owner names the act ("merge", not "ship it"). It uses
-  `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
+  `make merge ARGS="<n> --confirm"` with CI green, never `--admin`. One standing exception (D42, main moves by pull request):
+  the daily demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
   Only a session that the owner names an Orchestrator may merge, and only PRs it planned and reviewed.
   The designation is never inherited. A session that is not named asks for the word every time.
   GitHub branch protection also requires `check` and `revert-guard`, with 0 reviews and `strict: false`.

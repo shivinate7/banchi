@@ -14,6 +14,8 @@ outside `demo-assets/mirror/`, checked on the local diff and again on the PR's o
 """
 import argparse
 import datetime
+import fcntl
+import json
 import os
 import plistlib
 import posixpath
@@ -44,6 +46,46 @@ def fence(paths):
         raise Stop("fence: %d path(s) outside %s, first: %s" % (len(bad), ALLOWED, bad[0]))
 
 
+def fence_raw(lines):
+    """`git diff --raw --no-renames` lines: paths inside, and only regular files (no symlink,
+    submodule or mode change). A rename shows as a delete plus an add, so a source outside counts."""
+    paths = []
+    for line in lines:
+        meta, path = line.split("\t", 1)
+        old_mode, new_mode = meta.split()[0].lstrip(":"), meta.split()[1]
+        if old_mode not in ("000000", "100644") or new_mode not in ("000000", "100644"):
+            raise Stop("fence: non-regular file or mode change: %s" % path)
+        paths.append(path)
+    fence(paths)
+    return paths
+
+
+def fence_pr_files(files):
+    """The PR files API rows: filename AND previous_filename must both be inside."""
+    fence([p for f in files for p in (f["filename"], f.get("previous_filename")) if p])
+
+
+def check_head(pr_oid, local_oid):
+    if pr_oid != local_oid:
+        raise Stop("fence: PR head %s is not the fenced local HEAD %s" % (pr_oid[:8], local_oid[:8]))
+
+
+def clear_stale_pr(root):
+    """An open PR on our branch blocks every later push. Red or over a day old: close it and
+    delete the branch. Otherwise stop and name it."""
+    rows = json.loads(sh("gh", "pr", "list", "--head", BRANCH, "--state", "open", "--json",
+                         "number,createdAt,statusCheckRollup", cwd=root) or "[]")
+    for pr in rows:
+        age = datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(
+            pr["createdAt"].replace("Z", "+00:00"))
+        red = any(c.get("conclusion") == "FAILURE" for c in pr["statusCheckRollup"] or [])
+        if not red and age < datetime.timedelta(days=1):
+            raise Stop("open PR #%d on %s still in flight" % (pr["number"], BRANCH))
+        sh("gh", "pr", "close", str(pr["number"]), "--delete-branch", cwd=root)
+    # a leftover remote branch with no open PR would also reject our push
+    sh("git", "push", "origin", "--delete", BRANCH, cwd=root, check=False)
+
+
 def sh(*cmd, cwd=None, check=True):
     r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     if check and r.returncode:
@@ -66,6 +108,7 @@ def main_tree():
 def run(dry):
     root = main_tree()
     wt = root / ".claude" / "worktrees" / ("demo-mirror-daily-%d" % time.time())
+    clear_stale_pr(root)
     sh("git", "fetch", "-q", "origin", "main", cwd=root)
     sh("git", "worktree", "add", "-q", "-B", BRANCH, str(wt), "origin/main", cwd=root)
     try:
@@ -78,8 +121,7 @@ def run(dry):
         sh("git", "add", "--", ALLOWED, cwd=wt)
         sh("git", "commit", "-q", "-m",
            "demo: daily mirror refresh\n\nDone: scrubbed mirror rebuilt.\nNext: auto-merge on green CI.", cwd=wt)
-        paths = sh("git", "diff", "--name-only", "origin/main...HEAD", cwd=wt).splitlines()
-        fence(paths)
+        paths = fence_raw(sh("git", "diff", "--raw", "--no-renames", "origin/main...HEAD", cwd=wt).splitlines())
         stat = sh("git", "diff", "--shortstat", "origin/main...HEAD", cwd=wt)
         if dry:
             return "dry-run ok: would publish %d file(s), %s (mirror step %ds)" % (len(paths), stat, took)
@@ -87,8 +129,16 @@ def run(dry):
         url = sh("gh", "pr", "create", "--base", "main", "--head", BRANCH, "--title",
                  "demo: daily mirror refresh", "--body", "Data-only. Auto-merges on green CI (D295).", cwd=wt)
         num = url.rsplit("/", 1)[-1]
-        fence(sh("gh", "pr", "diff", num, "--name-only", cwd=wt).splitlines())
-        sh(str(MERGE), num, "--confirm", cwd=wt)
+        files = json.loads(sh("gh", "api", "--paginate", "--slurp", "repos/{owner}/{repo}/pulls/%s/files" % num, cwd=wt))
+        fence_pr_files([f for page in files for f in page])
+        check_head(sh("gh", "pr", "view", num, "--json", "headRefOid", "--jq", ".headRefOid", cwd=wt),
+                   sh("git", "rev-parse", "HEAD", cwd=wt))
+        m = subprocess.run([str(MERGE), num, "--confirm"], cwd=wt, capture_output=True, text=True)
+        if m.returncode:
+            reason = (m.stderr or m.stdout).strip()[-300:]
+            if sh("gh", "pr", "view", num, "--json", "state", "--jq", ".state", cwd=wt) == "MERGED":
+                return "merged PR %s; local sync failed: %s" % (num, reason)
+            raise Stop("merge of PR %s failed: %s" % (num, reason))
         return "merged PR %s (mirror step %ds)" % (num, took)
     finally:
         sh("git", "worktree", "remove", "--force", str(wt), cwd=root, check=False)
@@ -155,6 +205,31 @@ def selftest():
         assert refuses(g("diff", "--name-only", "main...HEAD").splitlines()), "red: real diff"
     finally:
         shutil.rmtree(d, ignore_errors=True)
+    # rename-in: the source outside the mirror shows up with --no-renames, and in the PR API
+    assert refuses(["other", ALLOWED + "a"]), "red: rename-in, local"
+    try:
+        fence_pr_files([{"filename": ALLOWED + "a", "previous_filename": "other"}])
+        raise AssertionError("red: rename-in, PR side")
+    except Stop:
+        pass
+    fence_pr_files([{"filename": ALLOWED + "a"}])
+    # symlink, submodule, mode change
+    ok = ":000000 100644 0000000 1111111 A\t" + ALLOWED + "a"
+    fence_raw([ok])
+    for bad in (":000000 120000 0000000 1111111 A\t", ":000000 160000 0000000 1111111 A\t",
+                ":100644 100755 1111111 1111111 M\t"):
+        try:
+            fence_raw([bad + ALLOWED + "a"])
+            raise AssertionError("red: " + bad)
+        except Stop:
+            pass
+    # moved head
+    check_head("abc", "abc")
+    try:
+        check_head("abc", "def")
+        raise AssertionError("red: moved head")
+    except Stop:
+        pass
     print("demo-mirror-daily-selftest: ok")
 
 
@@ -170,6 +245,13 @@ if __name__ == "__main__":
         sys.exit(0)
     if a.agent:
         sys.exit(agent(a.remove))
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+    lock = open(LOG.with_suffix(".lock"), "w")  # noqa: SIM115 held for the process life
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        log("skipped: another run holds the lock")
+        sys.exit(0)
     try:
         log(run(a.dry_run))
     except Stop as e:

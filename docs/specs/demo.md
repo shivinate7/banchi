@@ -352,8 +352,12 @@ on the owner's Mac (main tree only). `scripts/demo-mirror-daily.py` cuts a throw
 fresh origin/main, runs `demo-mirror`, and stops quietly when `demo-assets/mirror/` is unchanged.
 A scrub failure or any error publishes nothing and logs why to `~/.pkmnscan/demo-mirror-daily.log`.
 Otherwise it opens a PR from `demo/mirror-refresh` and merges it on green CI, with no word asked.
-**A mirror-only PR auto-merges on green CI** (D295, D42). The fence is the script's refusal to
-merge a PR whose diff touches any path outside `demo-assets/mirror/`.
+**A PR auto-merges on green CI only under three conditions** (D295, D42). Its head is
+`demo/mirror-refresh`. This script opened it after the scrub assert and the fence. Its whole diff
+is under `demo-assets/mirror/`.
+The fence refuses a path outside it, a rename from outside, and a non-regular file. It also refuses
+a PR head that differs from the local HEAD it fenced. A red PR, or one a day old, on that branch
+is closed first. A lock file stops two runs from overlapping.
 
 **The store never leaves the Mac.** `demo-mirror/`, the raw snapshot, is gitignored. Its comment in
 `.gitignore` records why. `demo-assets/mirror/`, the scrub's output, is the one thing committed. It
