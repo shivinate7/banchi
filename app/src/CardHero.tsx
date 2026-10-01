@@ -323,6 +323,9 @@ export type HeroFigures = {
   readonly listedAt: string | null
   readonly hidden: number
   readonly cap: number | null
+  /** Re-sort button beside Actions. `say` is null while the order is current, which draws nothing.
+   *  Omitted on `#/orders`. */
+  readonly rerank?: { readonly say: string | null; readonly onRerank: () => void }
 }
 
 /** THE MARKET PRICE OF ONE CARD, read once per run off the pricing file (`marketTable`): the band's
@@ -480,6 +483,12 @@ export function CardHeroHead({
       <div className="browse-hero-text">
         <div className="browse-hero-titlerow">
           <h2 className={name === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>{name ?? 'Not identified yet'}</h2>
+          {/* THE RE-SORT BUTTON sits beside Actions, the same IconButton at the same size, so the row's
+              height is the same with it or without it (D118). Shown only while the order is stale;
+              the staleness sentence is its tooltip and accessible name. */}
+          {figures?.rerank?.say == null ? null : (
+            <IconButton icon="refresh" className="browse-hero-rerank" label={`${figures.rerank.say}. Re-rank`} onClick={figures.rerank.onRerank} />
+          )}
           {actions}
         </div>
         {/* THE META LINE: number, set, game, then rarity and finish as outline pills on the SAME

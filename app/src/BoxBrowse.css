@@ -483,7 +483,9 @@
   border-bottom: 1px solid var(--bn-line);
 }
 .browse-hero-text { display: flex; flex-direction: column; gap: var(--bn-1-5); min-width: 0; }
-.browse-hero-titlerow { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--bn-3); }
+.browse-hero-titlerow { display: flex; align-items: flex-start; gap: var(--bn-3); }
+/* The name takes the slack, so the buttons after it sit at the right end however many there are. */
+.browse-hero-titlerow > .browse-hero-name { margin-right: auto; }
 .browse-hero-name {
   font-family: var(--bn-font-display);
   font-size: var(--bn-fs-h2);
