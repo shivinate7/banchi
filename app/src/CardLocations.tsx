@@ -7,7 +7,7 @@ import { PullConfirm } from './PullConfirm'
 import { PositionBar } from './PositionBar'
 import { placePartsOf, sayPlace, sectionCountOf, type Persona } from './position'
 import { collectorNumber } from './cardNumber'
-import { Button, Chip, Icon, Pill } from './kit'
+import { Chip, Icon, IconButton, Pill } from './kit'
 import { RANK_IS_CURRENT, ranksAsLive, ranksAsShown, stalenessSentence, type FrozenRank } from './frozenRank'
 import './CardLocations.css'
 import { forSale, IDENTIFIED, readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
@@ -307,11 +307,12 @@ export function hiddenCopies(
   ).length
 }
 
-/** THE ONE MARK SOLD PRESS, on every copy row in the product (owner ruling, card-detail spec): a
- *  worded 40px button in the kit's tint form, the same width on every row (D195). Inventory's row,
- *  `#/orders`' walk and this list's own fallback all draw it, so one edit changes all three. The
- *  words stay because it is the one primary act in its row; Retire and Move are the icons beside
- *  it. `name` is the accessible name and must contain "Mark sold" (Label in Name). */
+/** THE ONE MARK SOLD PRESS, on every copy row in the product (owner ruling, card-detail spec): the
+ *  vocabulary's `sold` seal with no visible words, 40px tall in a fixed 128px box (D195) and the
+ *  kit's solid accent, so it reads as the one primary beside Retire and Move, which are bare
+ *  icons. Inventory's row, `#/orders`' walk and this list's own fallback all draw it, so one edit
+ *  changes all three. `name` is the accessible name and must contain "Mark sold" (Label in Name);
+ *  the tooltip says it too. */
 export function MarkSoldButton({
   busy,
   disabled,
@@ -324,19 +325,17 @@ export function MarkSoldButton({
   readonly onClick: () => void
 }) {
   return (
-    <Button
-      variant="tint"
-      size="lg"
+    <IconButton
       icon="sold"
-      words="only-primary"
+      label="Mark sold"
+      name={name}
+      size="xl"
       className="card-locations-sell"
-      aria-label={name}
+      style={{ width: 128 }}
       busy={busy}
       disabled={disabled}
       onClick={onClick}
-    >
-      Mark sold
-    </Button>
+    />
   )
 }
 

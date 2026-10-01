@@ -268,13 +268,23 @@
 }
 /* MARK SOLD: one width on every row (D195), so the button does not change size between a row
    holding one action and a row holding three. */
-.card-locations-owner .card-locations-sell { width: 128px; }
+/* Mark sold is icon-only (the seal) but still the row's primary: the kit's solid accent on a
+   wide box. After the Retire and Move colour rules below it, so it wins their ink. */
+.card-locations-owner .card-locations-sell.bn-icon-btn {
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-accent);
+  box-shadow: var(--bn-shadow-1);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
+}
 .card-locations-owner .card-locations-action .inventory-copy-actions { gap: var(--bn-1); flex: 1 1 auto; min-width: 0; }
 /* Retire and Move ride the right edge: the first icon after Mark sold takes the free space. */
 .card-locations-owner .card-locations-sell + .bn-icon-btn { margin-left: auto; }
 /* Retire and Move: bare icons in ink-3, 40px targets. Only the primary is coloured. */
 .card-locations-owner .card-locations-action .bn-icon-btn { color: var(--bn-ink-3); }
 .card-locations-owner .card-locations-action .bn-icon-btn:hover { color: var(--bn-ink); }
+.card-locations-owner .card-locations-action .card-locations-sell.bn-icon-btn:not([data-busy='true']) { color: var(--bn-on-accent); }
+.card-locations-owner .card-locations-action .card-locations-sell.bn-icon-btn:hover { background: var(--bn-accent-hover); box-shadow: var(--bn-shadow-accent); }
+.card-locations-owner .card-locations-action .card-locations-sell.bn-icon-btn:active { background: var(--bn-accent-press); }
 
 /* --------------------------------------------------- the receipt, inside the slot (D119)
    THE SALE'S UNDO LANDS WHERE THE SALE WAS PRESSED, AND IT FITS THE SLOT RATHER THAN MOVING
