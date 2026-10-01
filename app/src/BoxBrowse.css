@@ -1003,4 +1003,6 @@
   .browse-queued .bn-notice a::after { content: ''; position: absolute; inset: -16px -4px; }
 }
 
-.browse-pickmenu { cursor: pointer; border: 0; font: inherit; font-weight: 600; }
+.browse-status-two { flex-direction: column; align-items: stretch; gap: 0; padding: 0; }
+.browse-status-line { display: flex; align-items: center; gap: var(--bn-1); min-height: 34px; padding: var(--bn-1) var(--bn-2); }
+.browse-status-line + .browse-status-line { border-top: 1px solid var(--bn-line); }

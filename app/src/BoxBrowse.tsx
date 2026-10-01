@@ -54,7 +54,7 @@ import {
 import { stateLabel } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
-import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, Popover, boxesMostRecentFirst, countFacets, filterRows, type SortValue } from './kit'
+import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, Pill, boxesMostRecentFirst, countFacets, filterRows, type SortValue } from './kit'
 import { boxTitle, UNNAMED_BOX } from './kit/data'
 import type { FilterFacet, FilterValue } from './kit/data'
 import { useFacetParams } from './kit/viewState'
@@ -776,8 +776,6 @@ export function BoxBrowse({
 
   /* The mass-select, by store key. Not persisted; cleared when the box changes. */
   const [picked, setPicked] = useState<readonly string[]>([])
-  const [pickMenu, setPickMenu] = useState(false)
-  const pickAnchor = useRef<HTMLButtonElement>(null)
 
   /* Which sections are open, by section key. Per-box for free: a section key names a box. */
   const [opened, setOpened] = useState<readonly string[]>([])
@@ -2225,64 +2223,49 @@ export function BoxBrowse({
             )}
           </div>
 
-          <div className="browse-status">
-            {/* While anything is ticked the selection leads the row — the count would only
-                repeat the pill, and the three controls then fit the rail in one line. */}
-            {picked.length > 0 ? (
-              <>
-                <button ref={pickAnchor} type="button" className="bn-pill bn-pill-accent browse-pickmenu" aria-haspopup="menu" aria-expanded={pickMenu} onClick={() => setPickMenu((v) => !v)}>
-                  {picked.length} ticked
-                  <Icon name="chevronDown" size={12} />
+          <div className="browse-status browse-status-two">
+            {/* OPTION F: two fixed lines. The first says what is shown, the second what is ticked, and
+                both are always there, so a tick changes words and never a box. */}
+            <div className="browse-status-line">
+              {sections.length < 2 ? (
+                searching ? null : (
+                  <span className="browse-status-text">
+                    {visible.length.toLocaleString()} {visible.length === 1 ? 'card' : 'cards'}
+                  </span>
+                )
+              ) : (
+                <button className="browse-quiet" type="button" onClick={toggleAllSections}>
+                  <Icon name={anyExpanded ? 'chevronUp' : 'chevronDown'} size={12} />
+                  {anyExpanded ? 'Collapse' : 'Expand'}
                 </button>
-                <Popover open={pickMenu} onClose={() => setPickMenu(false)} anchor={pickAnchor} label="Ticked cards">
-                  <button type="button" className="bn-menu-item" onClick={() => { setPicked([]); setPickMenu(false) }}>Clear ticks</button>
-                  <button type="button" className="bn-menu-item" onClick={() => { tickAllShown(); setPickMenu(false) }}>{shownAllTicked ? 'None' : 'All'}</button>
-                </Popover>
-              </>
-            ) : sections.length < 2 ? (
-              /* Under a search the match sentence carries the local count; a second one is noise. */
-              searching ? null : (
-                <span className="browse-status-text">
-                  {visible.length.toLocaleString()} {visible.length === 1 ? 'card' : 'cards'}
+              )}
+              {searching && loading ? <span className="browse-status-text">Looking…</span> : null}
+              {searching && !loading && results !== null && inQuery.length > 0 ? (
+                <span className="browse-status-text bn-facts">
+                  <span>{visible.length} here</span> <span>{inQuery.length} of {rows?.length ?? 0} match</span>
                 </span>
-              )
-            ) : (
-              <button className="browse-quiet" type="button" onClick={toggleAllSections}>
-                <Icon name={anyExpanded ? 'chevronUp' : 'chevronDown'} size={12} />
-                {/* THE HEADERS BELOW ALREADY COUNT THE SECTIONS (cut list #11, UX-269). */}
-                {anyExpanded ? 'Collapse' : 'Expand'}
+              ) : null}
+              <span className="bn-spacer" />
+              {onShelf.length === 0 || onHideSold === undefined ? null : (
+                <HideToggle checked={hideSold} count={hiddenBySold} className="browse-hidesold" onChange={() => onHideSold()}>
+                  In stock only
+                </HideToggle>
+              )}
+            </div>
+            <div className="browse-status-line">
+              <Pill tone={picked.length > 0 ? 'accent' : 'default'} className="browse-status-picked">
+                {picked.length} ticked
+              </Pill>
+              <button className="browse-quiet" type="button" style={{ visibility: picked.length > 0 ? 'visible' : 'hidden' }} onClick={() => setPicked([])}>
+                clear
               </button>
-            )}
-
-            {searching && loading ? <span className="browse-status-text">Looking…</span> : null}
-            {/* No "nothing matches" line here when this box's own matches are zero — that
-                condition always coincides with `visible.length === 0 && filtered` below,
-                which draws the `EmptyState` with the same message and a way to clear the
-                search besides. Two "no matches" strings stacked for one empty result was
-                the actual defect; the count line stays for the case this box DOES have
-                matches, which the EmptyState never covers. */}
-            {searching && !loading && results !== null && inQuery.length > 0 ? (
-              <span className="browse-status-text bn-facts">
-                <span>{visible.length} here</span> <span>{inQuery.length} of {rows?.length ?? 0} match</span>
-              </span>
-            ) : null}
-
-            {onShelf.length === 0 || onHideSold === undefined ? null : (
-              /* UX-254 (owner's ruling, 2026-09-24: "maybe in stock only should be the toggle
-                 name?"): the words, never the meaning — checked still folds a departed copy
-                 away, on by default (`storedHideSold`), and the count is still what it hides. */
-              <HideToggle checked={hideSold} count={hiddenBySold} className="browse-hidesold" onChange={() => onHideSold()}>
-                In stock only
-              </HideToggle>
-            )}
-
-            <span className="bn-spacer" />
-
-            {visible.length === 0 || picked.length > 0 ? null : (
-              <button className="browse-quiet" type="button" aria-pressed={shownAllTicked} onClick={tickAllShown}>
-                {shownAllTicked ? 'None' : 'All'}
-              </button>
-            )}
+              <span className="bn-spacer" />
+              {visible.length === 0 ? null : (
+                <button className="browse-quiet" type="button" aria-pressed={shownAllTicked} onClick={tickAllShown}>
+                  {shownAllTicked ? 'None' : 'All'}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* EVERY EMPTY STATE BELOW IS GATED ON `!awaitingRows` TOO (the review that caught
