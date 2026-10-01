@@ -442,7 +442,7 @@ function HeroLeadPending({ listing }: { readonly listing: boolean }) {
       <div className="browse-hero-fig">
         {label('Stored')}
         <span className="browse-hero-fig-value">
-          <span className="bn-ghost">00</span>
+          <span className="bn-skeleton bn-ghost">00</span>
         </span>
       </div>
       {listing ? (
@@ -450,20 +450,20 @@ function HeroLeadPending({ listing }: { readonly listing: boolean }) {
           <div className="browse-hero-fig browse-hero-fig-live">
             {label('Live')}
             <span className="browse-hero-fig-value">
-              <span className="bn-ghost">00</span>
+              <span className="bn-skeleton bn-ghost">00</span>
             </span>
             <span className="bn-meter">
               <span className="bn-meter-cells">
                 <span />
               </span>
-              <span className="bn-meter-end bn-ghost">Cap 0</span>
+              <span className="bn-meter-end bn-skeleton bn-ghost">Cap 0</span>
             </span>
           </div>
           <div className="browse-hero-fig">
             {label('Market')}
             <span className="browse-hero-fig-value">
               <span className="bn-datalink">
-                <span className="bn-ghost">$0.00</span>
+                <span className="bn-skeleton bn-ghost">$0.00</span>
               </span>
             </span>
           </div>
@@ -544,14 +544,14 @@ export function CardHeroHead({
         {figures == null ? (
           figuresPending ? (
             <p className="browse-hero-side" aria-hidden="true" data-pending="true">
-              <span className="bn-ghost">
+              <span className="bn-skeleton bn-ghost">
                 Captured<b>0</b>
               </span>
-              <span className="bn-ghost">
+              <span className="bn-skeleton bn-ghost">
                 Hidden<b>0</b>
               </span>
               {card.sku === null ? null : (
-                <span className="bn-ghost">
+                <span className="bn-skeleton bn-ghost">
                   Sent<b>0</b>
                 </span>
               )}
