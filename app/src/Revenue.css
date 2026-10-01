@@ -82,7 +82,8 @@
   animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
 }
 .revenue-month-col:hover { background: var(--bn-hover); }
-.revenue-month-col[aria-pressed='true'] { background: var(--bn-accent-tint); }
+.revenue-month-col[aria-pressed='true'] { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 1.5px var(--bn-accent); }
+.revenue-month-col[aria-pressed='true'] .revenue-month-label { color: var(--bn-ink); font-weight: 600; gap: var(--bn-1); }
 .revenue-month-barwrap {
   display: flex;
   flex-direction: column;
@@ -113,7 +114,6 @@
   flex-wrap: wrap;
 }
 
-.revenue-active-filter { display: flex; align-items: center; gap: var(--bn-2); margin-bottom: var(--bn-4); }
 
 /* ---- the shelf (D236), a column of the summary band -------------------------------------- */
 

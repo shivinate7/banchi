@@ -2557,6 +2557,7 @@ export function Pricing() {
         <SendCard
           runs={loaded}
           copies={progress.outCopies}
+          skus={progress.outRows}
           priceChanges={priceChanges}
           liveMoves={liveMoves}
           settled={!dirty && !saving}
@@ -2795,7 +2796,6 @@ export function Pricing() {
               sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
             />
           )}
-          {filtering ? <p className="pricing-filter-note">Filters hide rows only. Send covers all.</p> : null}
           {filtering && drawn.length === 0 ? (
             <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." />
           ) : null}

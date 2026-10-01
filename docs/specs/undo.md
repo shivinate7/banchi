@@ -195,7 +195,7 @@ question in §11.7 that answered the item.
 | UN-15 | While no card is behind a divider, `U` drops it through `DELETE /boxes/<box>/sections?div=<key>`. | Fast | `CaptureScreen.tsx`, `closeSection`, `Inventory.close_section` | Press `S`, then `U`. The sections are as before. | no |
 
 `Inventory.tsx`'s Move-to-box receipt carries Undo (`undoMove`). It survives until the move is
-built on (`move_built_on`). `BoxOps.tsx`'s batched move (a ticked selection or the whole box, D83)
+built on (`move_built_on`). `BoxOps.tsx`'s batched move (cards picked in its sheet or the whole box, D83)
 has no undo.
 
 ### 11.7 The owner's rulings

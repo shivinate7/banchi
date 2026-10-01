@@ -7145,7 +7145,7 @@ COMPONENTS = [
                         "register one before a card goes into it, rename it, re-divide it, seal "
                         "or re-open it. Its NUMBER is not among them: that would be a renumber, "
                         "which D10 forbids outright. A fifth, D83's Move to box, sits beside Set "
-                        "claims rather than among the four — it acts on the ticked selection or "
+                        "claims rather than among the four — it acts on the cards picked in its own sheet or "
                         "the box's on-hand cards, never on the box object itself, and unlike "
                         "Edit dividers it is not a relabel: the source position becomes a "
                         "permanent tombstone and the card is recorded fresh at a destination. "
@@ -7179,7 +7179,7 @@ COMPONENTS = [
                 "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33",
                                 "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115",
                                 "D118", "D132", "D134", "D181", "D196", "D218", "D259", "D299",
-                                "D300"],
+                                "D300", "D314"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
@@ -7565,7 +7565,7 @@ COMPONENTS = [
             "src/Runs.tsx": {"does": "#/runs: the page chrome, the box picker, the composer, the "
                                      "store-wide reconcile and the stale-listing markdown, with "
                                      "RunPanel beneath them. Owns the SCOPE and nothing else — a strip of "
-                                     "boxes from GET /boxes, and the ticked selection handed over "
+                                     "boxes from GET /boxes, and any selection handed over "
                                      "from #/inventory through runHandoff.ts, validated against "
                                      "the registry on arrival so a deleted box falls through to "
                                      "the picker. NOTHING IS SCOPED ON ARRIVAL and it refuses to "
@@ -7637,8 +7637,8 @@ COMPONENTS = [
                                              "AND NEVER A CAP, on the owner's ruling: above it "
                                              "the confirm says so and offers to raise it, and it "
                                              "never withholds the press. `Runs.tsx` owns the "
-                                             "draft and where a ticked selection came from "
-                                             "(D39 — `#/inventory` keeps the only mass select); "
+                                             "draft and where a carried selection came from "
+                                             "(D39); the list has no ticks, D314; "
                                              "this owns how it is read and everything after the "
                                              "press. THE `needed` START READS A BOX OFF THE "
                                              "ADDRESS TOO: `#/runs?state=captured` (src/standing.ts's "
@@ -9538,13 +9538,12 @@ COMPONENTS = [
                                               "seventy-one cases measuring the uncropped "
                                               "fallback. Named by `app/tests/shell.ts`'s seal; "
                                               "all seventy-one pass against the cropped render.",
-                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D180", "D86",
-                                                      "D51", "D54", "D56", "D57", "D58", "D59",
-                                                      "D278", "D68", "D277",
-                                                      "D92", "D99", "D103", "D115", "D117",
-                                                      "D118", "D156", "D168", "D181", "D196",
-                                                      "D218", "D259", "D269", "D273",
-                                                      "D301"]},
+                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D51", "D54",
+                                                      "D56", "D57", "D58", "D59", "D68", "D86",
+                                                      "D92", "D99", "D103", "D115", "D117", "D118",
+                                                      "D156", "D168", "D180", "D181", "D196",
+                                                      "D218", "D259", "D269", "D273", "D277",
+                                                      "D278", "D301", "D313"]},
             "tests/boxmap.spec.ts": {
                 "does": "the Shelf (`D264`), stubbed: the map draws counts and no money, a "
                         "gap press sends the section, the gap and the aim, U sends the undo, the "
@@ -9564,8 +9563,8 @@ COMPONENTS = [
                         "does not. A dedicated case pins the 390px overflow this build found "
                         "in its own header once a fifth period option existed. Not a harness "
                         "test; `make design-check` runs it.",
-                "governed_by": ["D50", "D278", "D89", "D103", "D118", "D277", "D193", "D201", "D214",
-                                "D217", "D225", "D271", "D196", "D298", "D301"],
+                "governed_by": ["D50", "D89", "D103", "D118", "D193", "D196", "D201", "D214",
+                                "D217", "D225", "D271", "D277", "D278", "D298", "D301", "D313"],
             },
             "tests/demo-coverage.spec.ts": {
                 "does": "the BUILT public demo (`dist-demo/`), served on this checkout's own "
@@ -9682,7 +9681,7 @@ COMPONENTS = [
                                 "D124", "D125", "D132", "D134", "D136", "D142", "D155", "D172",
                                 "D181", "D192", "D195", "D196", "D213", "D218", "D259", "D260",
                                 "D277", "D284", "D288", "D299", "D300", "D310",
-                                "D313"],
+                                "D313", "D314"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

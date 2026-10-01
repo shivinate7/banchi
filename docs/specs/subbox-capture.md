@@ -112,7 +112,7 @@ A departed record in the section does not hold the divider in.
 
 ### 1.5 The two Move-to-box routes
 
-`POST /inventory/<box>/<index>/move` (one card) and `POST /inventory/<box>/move` (ticked cards,
+`POST /inventory/<box>/<index>/move` (one card) and `POST /inventory/<box>/move` (picked cards,
 or a whole box) take two more fields, and both are REQUIRED.
 
 | Field | Type | Meaning |
@@ -136,7 +136,7 @@ Which callers reach the rule:
 | Caller | Path | Reaches the rule? |
 |---|---|---|
 | Move to box, one card (`Inventory.tsx`, `server.ts:moveCard`) | `do_move_card` | Yes. It sends `section`. |
-| Move to box, ticked cards or a whole box (`BoxOps.tsx`, `server.ts:moveCards`) | `do_move_cards` | Yes. It sends `section`. |
+| Move to box, picked cards or a whole box (`BoxOps.tsx`, `server.ts:moveCards`) | `do_move_cards` | Yes. It sends `section`. |
 | Move undo (`{"undo": true}`) | `do_move_card`, then `_unmove_one` | No. It returns before the rule. |
 | The Map's section move | `do_move_sections`, then `_cross`, then `_move_one` with its own slot | No. It names its gap. |
 | The Map's card or range move | `do_move_range`, then `_cross`, then `Inventory.place` | Its own rule, section 1.6. |
@@ -385,7 +385,7 @@ File ownership is in `docs/map.py`.
 Every path on `#/inventory` that moves a card into a box, with no exact drop spot, asks the
 owner to pick a destination section (Q3). The two Move-to-box routes (1.5) are the whole
 surface. `Inventory.tsx`'s `MovePanel` moves one copy, from its own row. `BoxOps.tsx`'s "Move
-to box" moves a ticked selection, or the whole box. D83's range move and the merge are the
+to box" moves cards picked in its sheet, or the whole box. D83's range move and the merge are the
 same one write. The Map's own drag (`moveSections`, `moveRange`) already names an exact gap and
 is out of scope.
 

@@ -5,6 +5,7 @@ import { settleFonts } from './fontsReady'
 import { settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 import { expectOneStagger } from './staggerCheck'
+import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
 
 import type {
   HistoryRange,
@@ -87,7 +88,7 @@ function sendSummary(over: Record<string, unknown> = {}): Record<string, unknown
   }
 }
 
-const sendPress = (page: Page) => page.getByRole('button', { name: /^Send (\d+ cop(y|ies) )?to TCGplayer$/ })
+const sendPress = (page: Page) => page.getByRole('button', { name: /^Send ((all \d+ SKUs|1 SKU) )?to TCGplayer$/ })
 const sendPosts = (wire: Wire[]) => wire.filter((r) => r.method === 'POST' && r.path === '/pipeline/send')
 
 /** One SKU in the shape `cli/cmd_join.py:_pricing_table` writes — every field, not the handful
@@ -1215,11 +1216,11 @@ test('r6: a mixed press counts only the prices typed on this list, and names the
   /* ROUND 6 (B1, B2): A PRICE THE CORPUS HOLDS IS NOT ONE THE OWNER TYPED HERE. The stored
      12.50 may be a Live tab preset or a mark-down never sent; the button does not count it, so
      no send carries it. */
-  await expect(page.getByRole('button', { name: 'Send 3 copies to TCGplayer' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Send 1 SKU to TCGplayer' })).toBeVisible()
   const dunsparce = page.getByLabel('Price for Dunsparce')
   await dunsparce.fill('13.00')
   await dunsparce.press('Tab')
-  const press = page.getByRole('button', { name: 'Send 3 copies and 1 price change' })
+  const press = page.getByRole('button', { name: 'Send 1 SKU and 1 price change' })
   await expect(press).toBeVisible()
   await press.click()
   await expect.poll(() => sendPosts(wire).length).toBe(1)
@@ -1248,7 +1249,7 @@ test('r7: the button names the live copies a new copy moves, and the press names
     ],
     decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '19.99' } },
   })
-  const press = page.getByRole('button', { name: 'Send 1 copy, 2 live copies move to $19.99' })
+  const press = page.getByRole('button', { name: 'Send 1 SKU, 2 live copies move to $19.99' })
   await expect(press).toBeVisible()
   await press.click()
   await expect.poll(() => sendPosts(wire).length).toBe(1)
@@ -1293,7 +1294,7 @@ test('r7: a moved live price is offered back, and one press sends it at the owne
   const dunsparce = page.getByLabel('Price for Dunsparce')
   await dunsparce.fill('30.00')
   await dunsparce.press('Tab')
-  await page.getByRole('button', { name: 'Send 3 copies and 1 price change' }).click()
+  await page.getByRole('button', { name: 'Send 1 SKU and 1 price change' }).click()
   await expect.poll(() => sendPosts(wire).length).toBe(1)
   const offer = page.locator('.send-resend')
   await expect(offer).toContainText('TCGplayer shows $22.03 now. Send $30.00?')
@@ -1325,10 +1326,10 @@ test('r7: undo takes a typed price off the button', async ({ page }) => {
   const dunsparce = page.getByLabel('Price for Dunsparce')
   await dunsparce.fill('13.00')
   await dunsparce.press('Tab')
-  await expect(page.getByRole('button', { name: 'Send 3 copies and 1 price change' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Send 1 SKU and 1 price change' })).toBeVisible()
   await dunsparce.focus()
   await page.keyboard.press('u')
-  await expect(page.getByRole('button', { name: 'Send 3 copies to TCGplayer' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Send 1 SKU to TCGplayer' })).toBeVisible()
 })
 
 /* ROUND 8, R7-2: THE OWNER'S RULING NAMES THE COPIES THAT MOVE AND THEIR PRICE. When a press moves
@@ -1359,7 +1360,7 @@ test('r8: moves to more than one price are listed card by card before the press'
     ],
     decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '19.99', '8608459': '6.00' } },
   })
-  const press = page.getByRole('button', { name: 'Send 2 copies, 5 live copies move to new prices' })
+  const press = page.getByRole('button', { name: 'Send all 2 SKUs, 5 live copies move to new prices' })
   await expect(press).toBeVisible()
   const list = page.locator('.send-moves')
   await expect(list).toContainText('Articuno')
@@ -1393,7 +1394,7 @@ test('r8: live copies with no price are named as a move', async ({ page }) => {
     ],
     decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '19.99' } },
   })
-  await expect(page.getByRole('button', { name: 'Send 1 copy, 2 live copies move to $19.99' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Send 1 SKU, 2 live copies move to $19.99' })).toBeVisible()
 })
 
 /* ROUND 8, R7-3: THE BUTTON COUNTED ANOTHER NUMBER OF LIVE COPIES THAN TCGPLAYER HOLDS. The refusal
@@ -2301,7 +2302,7 @@ test('the solid accent fill is spent on the one thing to do, and never on a row'
   })
   expect(filled.rows).toBe(0)
   expect(filled.buttons).toHaveLength(1)
-  expect(filled.buttons[0]).toMatch(/^Send (\d+ cop(y|ies) )?to TCGplayer$/)
+  expect(filled.buttons[0]).toMatch(/^Send ((all \d+ SKUs|1 SKU) )?to TCGplayer$/)
 })
 
 // -------------------------------------------------- why a row adds nothing (D59)
@@ -3952,7 +3953,7 @@ test('the rows that need the owner come first, each with its reason, and the res
      unpriced row's three do not. The bar and the press both say twelve, which is what the file
      will carry. */
   await expect(page.locator('.pricing-bar-says')).toContainText('12 ready')
-  await expect(sendPress(page)).toHaveText('Send 12 copies to TCGplayer')
+  await expect(sendPress(page)).toHaveText('Send all 4 SKUs to TCGplayer')
 })
 
 test('a price typed far from market gives the row its flag, and the row does not move', async ({ page }) => {
@@ -4438,7 +4439,7 @@ test('F3: a filter narrows the view only, and the Send press carries every row',
   const wire = await open(other, { skus: FILTER_SKUS })
   await other.getByRole('searchbox', { name: 'Search this list' }).fill('dunsparce')
   await expect(other.locator('.pricing-row')).toHaveCount(1)
-  await expect(other.locator('.pricing-filter-note')).toBeVisible()
+  await expect(other.getByText('Filters hide rows only')).toHaveCount(0)
   /* THE BUTTON AND THE REQUEST UNDER A FILTER EQUAL THE UNFILTERED ONES. A send fed the drawn
      rows would name fewer copies and carry a narrower body. */
   await expect(sendPress(other)).toHaveText(label)
@@ -4446,6 +4447,27 @@ test('F3: a filter narrows the view only, and the Send press carries every row',
   await expect.poll(() => sendPosts(wire).length).toBe(1)
   expect(sendPosts(wire)[0]?.body).toEqual(expected)
 })
+
+/* D313: A FILTER ON AND OFF MOVES NOTHING ABOVE THE LIST. The press names every SKU, so no note
+   mounts; what the filter bar and the send bar draw stays where it was. */
+for (const width of [1440, 820]) {
+  test(`D313: a filter on and off moves nothing at ${width}`, async ({ page }) => {
+    await watchShifts(page)
+    await setViewport(page, { width, height: 900 })
+    await open(page, { skus: FILTER_SKUS })
+    await settleFonts(page)
+    await page.waitForTimeout(800)
+    const search = page.getByRole('searchbox', { name: 'Search this list' })
+    for (const [text, rows] of [['dunsparce', 1], ['', 4]] as const) {
+      const from = await markNow(page)
+      await search.fill(text)
+      await expect(page.locator('.pricing-row')).toHaveCount(rows)
+      await page.waitForTimeout(600)
+      const inWindow = (await readShifts(page)).shifts.filter((sh) => sh.at >= from - 100 && sh.at < from + 500)
+      expect(sumOf(inWindow), `the filter moved ${describeShifts(inWindow)}`).toBeLessThan(0.0005)
+    }
+  })
+}
 
 test('F3: the held count on the button and in the bar are one number, a sent row included', async ({ page }) => {
   await open(page, {

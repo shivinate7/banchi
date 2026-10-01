@@ -204,8 +204,8 @@ const auditSource = (mode: Mode) => `(() => {
        box exactly as before. */
     const before = getComputedStyle(t, '::before')
     const hasBefore = before.content !== 'none' && before.content !== ''
-    /* AN ABSOLUTELY POSITIONED ::after PAD COUNTS TOO (screen pass F8): Inventory's row and
-       section ticks draw a 22px box and reach 46px through \`.browse-tick::after { inset: -12px }\`,
+    /* AN ABSOLUTELY POSITIONED ::after PAD COUNTS TOO (screen pass F8): a control with a 22px box
+       reaching 46px through a pad such as \`::after { inset: -12px }\`,
        the same pattern as the IconButton's ::before, and the box alone reported them as 22. Only
        an out-of-flow pseudo counts, so a decorative seam or badge is still judged on the box. */
     const after = getComputedStyle(t, '::after')
@@ -416,8 +416,7 @@ for (const hash of SCREENS) {
 /* AN IPAD IN PORTRAIT IS 820px WIDE AND ALL THUMB (docs/DESIGN.md), and every floor above answers
    at 390. The control-height tokens raise themselves on `(pointer: coarse)` at ANY width, but a
    control that names its own size does not follow them: `pricing-thumb` drew 36px wide, a price
-   input 21px tall, Inventory's row ticks 22, its "All" 39 and Home's run links 38 (screen pass
-   F8). Asked of the BOX, as `#/gallery` is: at 820 the rail and the page sit side by side, so a
+   input 21px tall and Home's run links 38 (screen pass F8). Asked of the BOX, as `#/gallery` is: at 820 the rail and the page sit side by side, so a
    neighbour's pad rightly crowds a probe and only the size is a fact about the control. */
 test.describe('on a touch screen at 820', () => {
   test.use({ hasTouch: true, viewport: { width: 820, height: 1180 } })
