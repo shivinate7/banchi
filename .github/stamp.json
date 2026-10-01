@@ -1,0 +1,74 @@
+{
+  "format": "heading",
+  "defaultBranch": "main",
+  "regenerate": "python3 scripts/index-decisions.py --write && python3 scripts/index-decisions.py --debts --write && python3 scripts/tests_page.py --write",
+  "slugRegex": "[a-z][a-z0-9]*(?:-[a-z0-9]+)+",
+  "kinds": [
+    {
+      "id": "decision",
+      "prefix": "D",
+      "folder": "docs/decisions",
+      "manifest": "docs/decisions/ORDER.json",
+      "manifestKey": "order",
+      "manifestAscii": true,
+      "pendingRegex": "^##\\s+D([0-9-]\\S*)",
+      "numberedRegex": "^##\\s+D([1-9][0-9]{0,2})(?![\\p{L}\\p{N}_])",
+      "idTemplate": "{prefix}{n}",
+      "pad": 0,
+      "filenameTemplate": "{prefix}{n}-{rest}.md",
+      "filenamePad": 3,
+      "pathCite": "`?docs/decisions/{token}[-\\p{L}\\p{N}_]*\\.md`?",
+      "numbering": "max_plus_one"
+    },
+    {
+      "id": "debt",
+      "prefix": "DEBT",
+      "folder": "docs/debts",
+      "manifest": "docs/debts/ORDER.json",
+      "pendingRegex": "^##\\s+DEBT([0-9-]\\S*)",
+      "numberedRegex": "^##\\s+(?:DEBT)?([1-9][0-9]{0,2})(?![\\p{L}\\p{N}_])",
+      "idTemplate": "{prefix}{n}",
+      "pad": 0,
+      "filenameTemplate": "{n}-{rest}.md",
+      "filenamePad": 3,
+      "pathCite": "`?docs/debts/{token}[-\\p{L}\\p{N}_]*\\.md`?",
+      "numbering": "max_plus_one"
+    },
+    {
+      "id": "code",
+      "prefix": "C",
+      "file": "docs/specs/code-cards.md",
+      "pendingRegex": "^##\\s+C([0-9-]\\S*)",
+      "numberedRegex": "^##\\s+C([1-9][0-9]{0,2})(?![\\p{L}\\p{N}_])",
+      "idTemplate": "{prefix}{n}",
+      "pad": 0,
+      "numbering": "max_plus_one"
+    }
+  ],
+  "cite": {
+    "before": "(?<![-\\p{L}\\p{N}_])",
+    "after": "(?![-\\p{L}\\p{N}_])",
+    "glossFirstUse": ["CLAUDE.md"]
+  },
+  "unclaimed": [
+    {
+      "folder": "docs/gates/steps",
+      "pattern": "^0\\.(\\s+`step (?<slug>[a-z][a-z0-9]*(?:-[a-z0-9]+)+)`)",
+      "label": "step",
+      "message": "This engine does not number a step. Number it by hand, the way this repo's own rule says."
+    }
+  ],
+  "walk": {
+    "textSuffixes": [".md", ".py", ".ts", ".tsx", ".css", ".html", ".json", ".txt", ".yml", ".yaml", ".sh", ".js", ".mjs", ".toml"],
+    "skipDirs": [".git", "node_modules", "dist", "dist-demo", "captures", "inventory", "runs", "__pycache__", ".venv", "venv", "test-results", "playwright-report", ".serve", "worktrees", "demo-assets", "harness/images"],
+    "skipDotDirs": true,
+    "extensionlessDirs": ["scripts/githooks"]
+  },
+  "merge": {
+    "method": "merge",
+    "requiredChecks": "protection",
+    "deadlineMinutes": 45,
+    "afterMerge": ["python3 scripts/primary_sync.py --confirm"],
+    "deleteBranch": true
+  }
+}
