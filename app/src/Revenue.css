@@ -45,8 +45,11 @@
   font-size: var(--bn-fs-base);
   color: var(--bn-ink-2);
   margin: var(--bn-1) 0 0;
+  /* ONE LINE AT EVERY PERIOD AND WIDTH (D313): the folded comparison may never add a line box. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.revenue-verdict-prior,
 .revenue-verdict-dropped,
 .revenue-verdict-canceled,
 .revenue-verdict-refunded {
