@@ -514,23 +514,27 @@ export function Pill({
  *  receipt) goes inside a `Slot`; while `show` is false the slot draws nothing and still holds the
  *  block size of what it will hold, so its siblings never move when the content arrives.
  *  `size="line"` holds one text line (`1lh`). `size="pill"` holds a pill (`--bn-pill-h`).
- *  A hidden slot is `aria-hidden` and empty, so a screen reader hears nothing for it. */
+ *  A hidden slot is `aria-hidden` and empty, so a screen reader hears nothing for it. `ghost` is a
+ *  stand-in drawn with `visibility: hidden` while the slot is empty, for content whose height is
+ *  not a plain line or pill: the slot then holds exactly what the real content would. */
 export function Slot({
   show = true,
   size = 'line',
   as: Tag = 'div',
   className,
+  ghost,
   children,
 }: {
   readonly show?: boolean
   readonly size?: 'line' | 'pill'
   readonly as?: 'div' | 'span' | 'p'
   readonly className?: string
+  readonly ghost?: ReactNode
   readonly children?: ReactNode
 }) {
   return (
     <Tag className={['bn-slot', `bn-slot-${size}`, className].filter(Boolean).join(' ')} aria-hidden={show ? undefined : true}>
-      {show ? children : null}
+      {show ? children : ghost === undefined ? null : <span className="bn-slot-ghost">{ghost}</span>}
     </Tag>
   )
 }

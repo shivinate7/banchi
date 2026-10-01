@@ -572,6 +572,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-slot { display: block; min-width: 0; }
 span.bn-slot { display: inline-block; }
 .bn-slot-line { min-block-size: 1lh; }
+.bn-slot-ghost { display: contents; visibility: hidden; }
 .bn-slot-pill { min-block-size: var(--bn-pill-h); display: flex; align-items: center; }
 span.bn-slot-pill { display: inline-flex; }
 
@@ -585,6 +586,7 @@ span.bn-slot-pill { display: inline-flex; }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.bn-live-count-start { text-align: start; }
 
 .bn-pill-accent { color: var(--bn-pill-ink-accent); background: var(--bn-accent-tint); }
 .bn-pill-ok { color: var(--bn-pill-ink-ok); background: var(--bn-ok-tint); }

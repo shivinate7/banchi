@@ -1300,8 +1300,8 @@ export function Revenue() {
           </p>
           {/* A SLOT, NOT A CONDITIONAL: the line is absent for some periods, and a line that
               mounts under a press moves the podium (D313). */}
-          <Slot as="p" className="revenue-verdict-prior" show={compareLine(total, inPrevious, partial) !== null}>
-            {compareLine(total, inPrevious, partial)}
+          <Slot className="revenue-prior-slot" show={compareLine(total, inPrevious, partial) !== null}>
+            <p className="revenue-verdict-prior">{compareLine(total, inPrevious, partial)}</p>
           </Slot>
           {dropped === 0 ? null : (
             <p className="revenue-verdict-dropped">
@@ -1362,9 +1362,11 @@ export function Revenue() {
         {shelfColumn}
       </section>
 
-      <Slot className="revenue-active-filter" show={activeBucketLabel !== null}>
-        <Pill tone="accent">{`${activeBucketLabel} only`}</Pill>
-        <IconButton icon="x" label="Clear the month" onClick={() => setActiveBucket(null)} size="sm" />
+      <Slot className="revenue-filter-slot" show={activeBucketLabel !== null}>
+        <div className="revenue-active-filter">
+          <Pill tone="accent">{`${activeBucketLabel} only`}</Pill>
+          <IconButton icon="x" label="Clear the month" onClick={() => setActiveBucket(null)} size="sm" />
+        </div>
       </Slot>
 
       {/* "BEST SELLERS" NAMED A GROSS-OR-COPIES RANKING. Sorted by "Latest" or "A to Z" it is

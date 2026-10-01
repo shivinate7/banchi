@@ -6765,11 +6765,10 @@ COMPONENTS = [
             # GAP_MINUTES rather than restating it, so the undo strip and the library drawing
             # on `#/` mean the same stretch of work by the same measurement.
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
-                            "D34", "D36", "D41", "D183", "D56", "D58", "D65", "D67", "D81", "D92",
-                            "D117", "D118", "D121", "D128", "D144", "D131", "D132", "D142", "D145",
-                            "D153", "D164", "D170", "D172", "D196", "D218", "D259", "D260", "D264",
-                            "D271",
-                            "D299"]},
+                            "D34", "D36", "D41", "D56", "D58", "D65", "D67", "D81", "D92", "D117",
+                            "D118", "D121", "D128", "D131", "D132", "D142", "D144", "D145", "D153",
+                            "D164", "D170", "D172", "D183", "D196", "D218", "D259", "D260", "D264",
+                            "D271", "D299", "D313"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -6784,8 +6783,9 @@ COMPONENTS = [
                                       # the split is floored by `min-height`, so neither can
                                       # move what is around it when a drawer changes.
                                       "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65",
-                                                      "D117", "D118", "D144", "D142", "D164",
-                                                      "D195", "D197", "D205", "D218", "D272", "D275"]},
+                                                      "D117", "D118", "D142", "D144", "D164",
+                                                      "D195", "D197", "D205", "D218", "D272",
+                                                      "D275", "D313"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -7005,8 +7005,8 @@ COMPONENTS = [
                         "body between a fixed heading and a fixed press, sized 640px wide "
                         "because that is what the command's own longest line measures.",
                 "governed_by": ["D5", "D9", "D13", "D23", "D24", "D28", "D29", "D32", "D35", "D37",
-                                "D41", "D77", "D50", "D117", "D118", "D123", "D162", "D259",
-                                "D291"],
+                                "D41", "D50", "D77", "D117", "D118", "D123", "D162", "D259", "D291",
+                                "D313"],
             },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
@@ -7186,7 +7186,8 @@ COMPONENTS = [
                         "no border of its own, and its sections list is DELETED rather than "
                         "styled — the walk beside it drew the same rows, foldable and tickable, "
                         "while this drew them as inert text.",
-                "governed_by": ["D5", "D20", "D22", "D31", "D38", "D41", "D50", "D83", "D132"],
+                "governed_by": ["D5", "D20", "D22", "D31", "D38", "D41", "D50", "D83", "D132",
+                                "D313"],
             },
             "src/Graveyard.tsx": {
                 "does": "`#/graveyard` (D134, amended by the UX review's graveyard ruling, "
@@ -8071,9 +8072,9 @@ COMPONENTS = [
                                        "spoken for by another line is drawn as spoken for "
                                        "rather than offered twice.",
                                "governed_by": ["D5", "D24", "D38", "D41", "D50", "D63", "D69",
-                                               "D113", "D91", "D117", "D118", "D123", "D193",
+                                               "D91", "D113", "D117", "D118", "D123", "D193",
                                                "D195", "D196", "D203", "D212", "D221", "D270",
-                                               "D274", "D289", "D304"]},
+                                               "D274", "D289", "D304", "D313"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -8203,8 +8204,7 @@ COMPONENTS = [
                                         "nested table, and a 390px-only wrap on this screen's "
                                         "own `Segmented` instance, scoped here rather than to "
                                         "the shared kit rule.",
-                                "governed_by": ["D50", "D94", "D117", "D217", "D236",
-                                                "D298"]},
+                                "governed_by": ["D50", "D94", "D117", "D217", "D236", "D298", "D313"]},
             "src/RunFiles.tsx": {"does": "a run's files, as downloads — extracted from RunPanel on "
                                        "2026-08-30 (D54) so two screens can draw them. The `only` "
                                        "prop is the split: the import CSVs go to #/pricing with the "

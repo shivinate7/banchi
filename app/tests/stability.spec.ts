@@ -144,7 +144,7 @@ async function boxes(page: Page, selectors: readonly string[]): Promise<Record<s
     for (const s of sels) {
       const el = document.querySelector(s)
       const r = el?.getBoundingClientRect()
-      out[s] = r ? `${Math.round(r.top)},${Math.round(r.left)},${Math.round(r.width)},${Math.round(r.height)}` : 'absent'
+      out[s] = r ? `${Math.round(r.top)}|${Math.round(r.left)}|${Math.round(r.width)}|${Math.round(r.height)}` : 'absent'
     }
     return out
   }, selectors)
@@ -221,7 +221,7 @@ for (const width of [1440, 820]) {
     await settleFonts(page)
     await settleMotion(page)
     /* the list's own height and the row's follow the filter on purpose; its top is the claim */
-    const topOf = async () => (await boxes(page, ['.pricing-list']))['.pricing-list']?.split(',')[0]
+    const topOf = async () => (await boxes(page, ['.pricing-list']))['.pricing-list']?.split('|')[0]
     const before = await topOf()
     await page.locator('.pricing-filterbar input[type="search"], .pricing-filterbar input').first().fill('Arti')
     await expect(page.locator('.pricing-filter-note, .bn-slot')).not.toHaveCount(0)
@@ -244,8 +244,8 @@ for (const width of [1440, 820]) {
     await settleMotion(page)
     const after = await boxes(page, parts)
     /* the toolbar keeps its line and the list keeps its place */
-    expect(after['.browse-status']?.split(',')[0]).toEqual(before['.browse-status']?.split(',')[0])
-    expect(after['.browse-status']?.split(',')[3], 'the toolbar changed height').toEqual(before['.browse-status']?.split(',')[3])
+    expect(after['.browse-status']?.split('|')[0]).toEqual(before['.browse-status']?.split('|')[0])
+    expect(after['.browse-status']?.split('|')[3], 'the toolbar changed height').toEqual(before['.browse-status']?.split('|')[3])
     expect(after['.browse-list']).toEqual(before['.browse-list'])
   })
 }
@@ -266,3 +266,147 @@ test('L3 S8: the In stock only count holds two digits, so a digit gained moves n
   })
   expect(width).toBeGreaterThanOrEqual((ch ?? 0) - 0.5)
 })
+
+/** Set `selector`'s content to each variant in turn (as HTML) and read the box `read` names after
+ *  each. The page's own React never sees it: this asks the STYLESHEET whether the box holds when
+ *  its live text changes length, which is the whole of a "fixed line box" (D313, class E). */
+async function boxPerVariant(
+  page: Page,
+  selector: string,
+  variants: readonly string[],
+  read: string,
+): Promise<string[]> {
+  return page.evaluate(
+    ({ selector, variants, read }) => {
+      const el = document.querySelector(selector)
+      const target = document.querySelector(read)
+      if (!el || !target) return ['absent']
+      const keep = el.innerHTML
+      const out: string[] = []
+      for (const html of variants) {
+        el.innerHTML = html
+        const r = (document.querySelector(read) ?? target).getBoundingClientRect()
+        out.push(`${Math.round(r.left)}|${Math.round(r.top)}|${Math.round(r.width)}|${Math.round(r.height)}`)
+      }
+      el.innerHTML = keep
+      return out
+    },
+    { selector, variants, read },
+  )
+}
+
+async function openOrdersWalk(page: Page, width: number): Promise<void> {
+  await setViewport(page, { width, height: 1000 })
+  await POPULATED_ROUTE_SEEDS[`#/${'orders'}`]?.(page)
+  await page.goto(screen('orders'))
+  await expect(page.locator('.orders-walk-pick-count').first()).toBeVisible()
+  await settleFonts(page)
+  await settleMotion(page)
+}
+
+for (const width of [1440, 820]) {
+  test(`L3 S13: the pick count holds one box whatever it says, at ${width}`, async ({ page }) => {
+    await openOrdersWalk(page, width)
+    const first = '.orders-walk-pick-count'
+    const seen = await boxPerVariant(page, first, ['1', '1 of 3', '12 of 12'], first)
+    expect(new Set(seen).size, `the pick count's box: ${seen.join(' | ')}`).toBe(1)
+  })
+
+  test(`L3 S13: the pick chip holds one box whether or not copies are short, at ${width}`, async ({ page }) => {
+    await openOrdersWalk(page, width)
+    const chip = '.orders-pick-chip'
+    await expect(page.locator(chip)).toBeVisible()
+    const seen = await boxPerVariant(
+      page,
+      chip,
+      [
+        '<span class="bn-pill bn-pill-accent">Pick 1 of 2</span>',
+        '<span class="bn-pill bn-pill-accent">Pick 12</span> <span class="bn-pill bn-pill-warn">12 short</span>',
+      ],
+      chip,
+    )
+    expect(new Set(seen.map((s) => s.split('|')[2])).size, `the chip's width: ${seen.join(' | ')}`).toBe(1)
+  })
+}
+
+for (const width of [1440, 820]) {
+  test(`L3 S14: the next card's price holds one box whatever it says, at ${width}`, async ({ page }) => {
+    await setViewport(page, { width, height: 1000 })
+    await POPULATED_ROUTE_SEEDS[`#/${'review'}`]?.(page)
+    await page.goto(screen('review'))
+    await expect(page.locator('.review-next-price')).toBeVisible()
+    await settleFonts(page)
+    await settleMotion(page)
+    const price = '.review-next-price'
+    const seen = await boxPerVariant(page, price, ['$0.10', '$4.20', '$1,234.50'], price)
+    expect(new Set(seen.map((s) => s.split('|')[2])).size, `the price's width: ${seen.join(' | ')}`).toBe(1)
+  })
+
+  test(`L3 S14: the caption keeps its height from a card with no place to one with, at ${width}`, async ({ page }) => {
+    await setViewport(page, { width, height: 1000 })
+    await POPULATED_ROUTE_SEEDS[`#/${'review'}`]?.(page)
+    const entry = (index: number, name: string, place: unknown) => ({
+      position: `Box 2, Section 1, Card ${index}`, box: 2, index, label: `Box 2, Section 1, Card ${index}`,
+      photo: `photos/2/${index}.jpg`, read: { name, number: '025', printed_total: '132', set_hint: 'ME01' },
+      confidence: null, reason: 'no_catalog_row', candidates: [], first_seen: '2026-09-01T12:00:00+00:00',
+      market: '4.20', cleared_by_human: false, ...(place === null ? {} : { place }),
+    })
+    const place = {
+      label: 'Box 2, Section 1, Card 2', located: true, box: 2, index: 2, slot: 2, section: 1, card: 2, box_name: null,
+      section_start: 1, section_end: null, box_total: 3, fraction: 0.5,
+      neighbors: { prev: { name: 'Volcanion', unread: 0 }, next: { name: 'Snorlax', unread: 0 } },
+    }
+    await page.route(/\/queues$/, (route) =>
+      json(route, { review: [entry(1, 'Volcanion', null), entry(2, 'Snorlax', place)], parked: [] }),
+    )
+    await page.goto(screen('review'))
+    await expect(page.locator('.review-position')).toBeVisible()
+    await settleFonts(page)
+    await settleMotion(page)
+    const height = async () => (await boxes(page, ['.review-position']))['.review-position']?.split('|')[3]
+    const without = await height()
+    await page.locator('.review-action', { hasText: 'Skip' }).click()
+    await expect(page.locator('.review-caption-order')).toHaveCount(1)
+    await settleMotion(page)
+    expect(await height(), 'the caption changed height when the order line arrived').toEqual(without)
+  })
+}
+
+for (const width of [1440, 820]) {
+  test(`L3 S15: a box figure that gains a digit moves its siblings nowhere, at ${width}`, async ({ page }) => {
+    await setViewport(page, { width, height: 1000 })
+    await page.goto(screen('inventory'))
+    await expect(page.locator('.boxops-stat').first()).toBeVisible()
+    await settleFonts(page)
+    await settleMotion(page)
+    const seen = await boxPerVariant(page, '.boxops-stat .bn-stat-value', ['9', '10', '100'], '.boxops-stats > :nth-child(2)')
+    expect(new Set(seen.map((s) => s.split('|')[0] + '|' + s.split('|')[1])).size, `the next figure's place: ${seen.join(' | ')}`).toBe(1)
+  })
+}
+
+/* S20 CANNOT RUN A CAMERA HEADLESS: the undo needs a capture, and a capture needs a stream. So this
+ * reads the RESERVED BOX instead: the footer's height with its note slot empty, and with one note
+ * line set into the slot. A slot that holds its room reads the same both times. */
+for (const width of [1440, 820]) {
+  test(`L3 S20: the Capture undo note has its room before it appears, at ${width}`, async ({ page }) => {
+    await setViewport(page, { width, height: 1000 })
+    await page.goto(screen('capture'))
+    await expect(page.locator('.capture-film')).toBeVisible()
+    await settleFonts(page)
+    await settleMotion(page)
+    const heights = await page.evaluate(() => {
+      const film = document.querySelector('.capture-film')
+      if (!film) return ['absent']
+      const home = film.querySelector('.capture-undo-note') ?? film
+      const keep = home.innerHTML
+      const out: string[] = []
+      for (const html of ['', '<p class="capture-quiet">Undid the last capture, back to Box 2, Card 4.</p>']) {
+        home.innerHTML = html
+        out.push(String(Math.round(film.getBoundingClientRect().height)))
+      }
+      home.innerHTML = keep
+      return out
+    })
+    expect(new Set(heights).size, `the film strip's height, empty then noted: ${heights.join(' | ')}`).toBe(1)
+  })
+}

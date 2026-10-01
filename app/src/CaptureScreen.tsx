@@ -56,7 +56,7 @@ import { captureBoxLabel } from './runScope'
 // The one thing this screen takes from the library drawing: how long a pause has to be
 // before it is a different sitting. Imported rather than restated — see `sitting` below.
 import { GAP_MINUTES } from './storeHistory'
-import { Button, ConfirmSheet, Icon, IconButton, Kbd, Notice, Page, Pill, Stat } from './kit'
+import { Button, ConfirmSheet, Icon, IconButton, Kbd, Notice, Page, Pill, Slot, Stat } from './kit'
 import { matchQuery } from './kit/match'
 import { toast } from './kit/toast'
 import { placePartsOf } from './position'
@@ -4842,9 +4842,9 @@ export function CaptureScreen() {
           <div className="capture-film-head">
             <p className="capture-field-name bn-label">
               Recent
-              {undoStack.length > 1 ? (
-                <span className="capture-undo-depth">{undoStack.length} recent</span>
-              ) : null}
+              <Slot as="span" className="capture-undo-depth" show={undoStack.length > 1}>
+                {undoStack.length} recent
+              </Slot>
             </p>
             {undoStack.length === 0 ? null : (
               <p
@@ -4940,7 +4940,10 @@ export function CaptureScreen() {
             </ul>
           )}
 
-          {undoNote === null ? null : (
+          {/* THE NOTE'S ROOM IS KEPT (D313): an undo's answer lands in a slot that is already one
+              line high, so the strip and what sits under it do not move. */}
+          <Slot className="capture-undo-note" show={undoNote !== null}>
+            {undoNote === null ? null : (
             <p className={undoNote.done ? 'capture-quiet capture-note-ok' : 'capture-refused'}>
               {undoNote.done ? <Icon name="undo" size={13} /> : <Icon name="alert" size={13} />}
               {undoNote.did !== undoNote.want ? (
@@ -4959,7 +4962,8 @@ export function CaptureScreen() {
                 </>
               )}
             </p>
-          )}
+            )}
+          </Slot>
           {/* UN-2's fix-after (undo.md 11.1's table row for Capture): once the sitting is
               built on, the strip cannot reach the card any more, so the way back is the
               other route that already reaches it. words="word-only-control" (rule 5): this

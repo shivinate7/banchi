@@ -113,7 +113,10 @@
   flex-wrap: wrap;
 }
 
-.revenue-active-filter { display: flex; align-items: center; gap: var(--bn-2); margin-bottom: var(--bn-4); min-block-size: var(--bn-control-h-sm); }
+.revenue-active-filter { display: flex; align-items: center; gap: var(--bn-2); }
+/* THE ROOMS FOR WHAT A PRESS BRINGS (D313): the "<month> only" row and the prior-period line. */
+.revenue-filter-slot { margin-bottom: var(--bn-4); min-block-size: var(--bn-control-h-sm); }
+.revenue-prior-slot { font-size: var(--bn-fs-sm); }
 
 /* ---- the shelf (D236), a column of the summary band -------------------------------------- */
 

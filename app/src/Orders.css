@@ -403,7 +403,10 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.orders-walk-pick-count { white-space: nowrap; }
+.orders-walk-pick-count { --digits: 8; } /* "12 of 12": the box holds the widest figure (D313) */
+/* THE CHIP HOLDS ITS WIDEST STATE, a pick plus a short pill, so the pills after it never slide
+   when a sale changes the count (D313). */
+.orders-pick-chip { display: inline-flex; align-items: center; gap: var(--bn-1); min-inline-size: 16ch; }
 .orders-walk-for { grid-area: for; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .orders-walk-line.is-done .orders-walk-name,
 .orders-walk-line.is-done .orders-walk-slot { color: var(--bn-ink-3); text-decoration: line-through; }
