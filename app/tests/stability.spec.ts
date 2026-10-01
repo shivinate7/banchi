@@ -679,6 +679,31 @@ test('L2 shell: the offline banner overlays and moves nothing (S6)', async ({ pa
   }).toPass({ timeout: 15_000 })
 })
 
+/* THE SERVER GOING AWAY MOVES NO CONTENT ON HOME (D313). The standing line reads the status, so an
+   offline status changes what it says. It keeps its frame: nothing under it moves. */
+test('L2 shell: Home holds its frame when the server goes offline (S6)', async ({ page }) => {
+  await watchShifts(page)
+  await setViewport(page, { width: 1440, height: 1000 })
+  await page.goto(screen(''))
+  await settleFonts(page)
+  await page.waitForTimeout(2500)
+  const mark = await markNow(page)
+  await page.unroute(/\/status$/)
+  await page.route(/\/status$/, (route) => route.abort())
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await expect(page.locator('.bn-banner')).toBeVisible()
+  await page.waitForTimeout(800)
+  const moved = (await readShifts(page)).shifts.filter((x) => x.at >= mark)
+  expect(sumOf(moved), describeShifts(moved)).toBeLessThan(SHELL_BUDGET)
+  await page.unroute(/\/status$/)
+  await page.route(/\/status$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: STATUS_OK }))
+  await expect(async () => {
+    const retry = page.getByRole('button', { name: 'Retry' })
+    if ((await retry.count()) > 0) await retry.click()
+    await expect(page.locator('.bn-banner')).toHaveCount(0, { timeout: 1500 })
+  }).toPass({ timeout: 15_000 })
+})
+
 test('L2 shell: a new toast leaves the older ones where they are (S16)', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 1000 })
   await page.goto('/#/')
