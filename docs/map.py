@@ -7179,7 +7179,7 @@ COMPONENTS = [
                 "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33",
                                 "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115",
                                 "D118", "D132", "D134", "D181", "D196", "D218", "D259", "D299",
-                                "D300", "D-cards-picked-in-manage-box"],
+                                "D300", "D314"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
@@ -7638,7 +7638,7 @@ COMPONENTS = [
                                              "the confirm says so and offers to raise it, and it "
                                              "never withholds the press. `Runs.tsx` owns the "
                                              "draft and where a carried selection came from "
-                                             "(D39); the list has no ticks, D-cards-picked-in-manage-box; "
+                                             "(D39); the list has no ticks, D314; "
                                              "this owns how it is read and everything after the "
                                              "press. THE `needed` START READS A BOX OFF THE "
                                              "ADDRESS TOO: `#/runs?state=captured` (src/standing.ts's "
@@ -9681,7 +9681,7 @@ COMPONENTS = [
                                 "D124", "D125", "D132", "D134", "D136", "D142", "D155", "D172",
                                 "D181", "D192", "D195", "D196", "D213", "D218", "D259", "D260",
                                 "D277", "D284", "D288", "D299", "D300", "D310",
-                                "D313", "D-cards-picked-in-manage-box"],
+                                "D313", "D314"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

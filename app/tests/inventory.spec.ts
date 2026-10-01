@@ -3310,7 +3310,7 @@ test('the operations are rows on one edge, and the delete is the only bordered o
 
 // ------------------------------------------------------------------------- the mass-select
 
-/* THE LIST CARRIES NO TICKS (D-cards-picked-in-manage-box). Cards for a bulk box action are
+/* THE LIST CARRIES NO TICKS (D314). Cards for a bulk box action are
    picked inside Manage box, in the sheet of the act that uses them. */
 test('the list draws no tick, and Claims states the whole box on its own button', async ({ page }) => {
   await open(page)

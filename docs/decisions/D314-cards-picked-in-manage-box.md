@@ -1,4 +1,4 @@
-## D-cards-picked-in-manage-box — Cards for a bulk box action are picked inside Manage box
+## D314 — Cards for a bulk box action are picked inside Manage box
 
 **The Inventory list carries no ticks.** Cards for a bulk box action are picked inside Manage
 box, in the sheet of the act that uses them. Move and Claims each open on the whole box. "Some

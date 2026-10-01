@@ -94,7 +94,7 @@ viewport. Each row names the element by its class.
 | S5 | Review | Open the lookup (`L` or the Search button), and close it (Esc) | `.review-actions` and `.review-tray` move +94 px, then −158 px, 8 ms apart. Esc moves them +65 px. `CatalogPanel` replaces the candidate list in flow. | B | Confirmed | 0.008 + 0.017 (key). 0.003 + 0.006 (click). 0.005 (Esc) | Held frame, and the actions stay at a fixed place under the stage. |
 | S6 | All screens | The server goes away, then comes back | `.bn-banner` mounts in flow above `.bn-view` (sticky, not fixed). The whole view moves 44 px down, then up. The person did nothing. | D | Confirmed | 0.0255 each way | Overlay, not flow. |
 | S7 | 8 of 12 screens, classic-scrollbar systems | Data lands, or the route changes between a short and a long screen | The document gains or loses a 15 px scrollbar. `.bn-head-actions` and other right-aligned or centered content moves 9–15 px across. The routes are Home, Pricing, Orders, Sales, Inventory, Graveyard, Fulfillment and Capture. Codes goes the other way. | F | Confirmed (bars forced) | dx 15 px; CLS up to 0.09 with A1 | `scrollbar-gutter: stable`. |
-| S8 | Inventory, list toolbar | Tick a row; toggle "In stock only" | Tick mounts "1 ticked" and "clear" chips into `.browse-status`. At 820 "All" wraps to its own line, and the list moves 30 px. The toggle's count changes width (dx 60–67 px), and that also wraps "All". | C + E | Resolved | 0.019 at 1440. 0.034–0.038 at 820 | The list carries no ticks (D-cards-picked-in-manage-box), so the toolbar never gains chips. |
+| S8 | Inventory, list toolbar | Tick a row; toggle "In stock only" | Tick mounts "1 ticked" and "clear" chips into `.browse-status`. At 820 "All" wraps to its own line, and the list moves 30 px. The toggle's count changes width (dx 60–67 px), and that also wraps "All". | C + E | Resolved | 0.019 at 1440. 0.034–0.038 at 820 | The list carries no ticks (D314), so the toolbar never gains chips. |
 | S9 | Sales | Pick a month column | Nothing mounts. The chosen bar takes a ring, a bold label and a cross in place, and pressing it again shows every month. | C | Resolved by the notes-at-the-act change | 0 | Held frame: the state lives on the bar that exists. `revenue.spec.ts` holds the D313 case. |
 | S10 | Sales | Choose the "All" period | `.revenue-verdict-canceled` mounts. The podium, shelf, months and bar head move 22 px. | C | Confirmed | 0.0001 at 1440. 0.014 at 820 | Reserved slot (one line box). |
 | S11 | Pricing | Any filter, such as "Held" | Nothing mounts. The Send press always names every SKU it carries, so the filter note is gone. | C | Resolved by the notes-at-the-act change | 0 | Held frame: the note's words moved onto the Send press. `pricing.spec.ts` holds the D313 case. |
@@ -167,7 +167,7 @@ There are no offenders.
 
 | Screen | Element | Defect |
 |---|---|---|
-| Inventory, 820 | `.browse-status` "All" | Resolved by D-cards-picked-in-manage-box: the toolbar has no "All" and no tick chips. |
+| Inventory, 820 | `.browse-status` "All" | Resolved by D314: the toolbar has no "All" and no tick chips. |
 | Inventory, Sales, Pricing, Review, Orders at 1440 | `.bn-btn` (24–34 px), `.bn-seg-item` (24–28 px), `.browse-row` (32 px), `.browse-quiet` (24 px), `.bn-hidetoggle` (28 px) | Many desktop controls are under 40 px tall. The owner ruled that the 40 px floor stays touch-only (CLAUDE.md: "anything a thumb presses"), so these stand. |
 | Fulfillment, box list | `.ff-box` rows | The place line ("RB Origins · Section 1 · Card 1") is set larger than the card name above it (32 px/600 against 26 px/800). Deferred by the owner. |
 
@@ -230,7 +230,7 @@ must fail on today's `main` at S2, S3, S4, S8, S9, S11 and S12 before any fix la
 
 **Built.** Each fixed row has its own case in `app/tests/stability.spec.ts`, red before the fix and green after.
 - Fixed: S1 and the Fulfiller's Today block, S2–S7, S12–S15, S17–S20, the S16 arrival and expiry, and Home's read order.
-- S8 and the 820 "All" row: the list carries no ticks (D-cards-picked-in-manage-box).
+- S8 and the 820 "All" row: the list carries no ticks (D314).
 - S9 and S11 (the filter notes): the notes move to the act. The Send button counts SKUs, and the chosen month carries its own clear in the chart. Their cases live in `pricing.spec.ts` and `revenue.spec.ts`.
 - Open:
   - The Pick list still moves the Fulfiller's boxes once when more than one card is owed (DEBT82).
