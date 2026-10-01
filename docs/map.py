@@ -4945,6 +4945,17 @@ COMPONENTS = [
                 # no address at all). D216 is why the recording runs offline.
                 "governed_by": ["D61", "D70", "D193", "D216", "D295", "D301"],
             },
+            "demo-mirror-daily.py": {
+                "does": "the daily demo refresh on the owner's Mac. Cuts a throwaway worktree "
+                        "from origin/main, runs `make demo-mirror`, and publishes only a "
+                        "change under `demo-assets/mirror/`. `fence()` refuses any path "
+                        "outside it, on the local diff and on the PR's own diff, before the "
+                        "merge tool runs. Logs one verdict line per run. `--agent` installs "
+                        "the daily launchd job (main tree only), `--selftest` proves the "
+                        "fence red then green.",
+                # D42 holds the standing grant to auto-merge a mirror-only PR.
+                "governed_by": ["D42", "D70", "D295"],
+            },
             "demo-histories.py": {
                 "does": "`make demo-histories`: records every demo card's price history, all "
                         "four ranges, from infinite-api into a NEW dated directory under "

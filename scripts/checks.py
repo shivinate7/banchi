@@ -1350,6 +1350,17 @@ CHECKS = (
         "governed_by": ("D18",),
     },
     {
+        "target": "demo-mirror-daily-selftest",
+        "runs": "python3 scripts/demo-mirror-daily.py --selftest",
+        "asserts": "The daily mirror's fence refuses a diff that touches any path outside demo-assets/mirror/ (sibling prefix, traversal and a real diff included) and passes a mirror-only one.",
+        "needs": ("python3",),
+        "writes": '',
+        "commit_path": False,
+        "why_off_commit_path": "D18: a self-test that runs on demand in `make check`, never in the git hook. It is fast and path-gated nowhere.",
+        "gates": True,
+        "governed_by": ("D18", "D295"),
+    },
+    {
         "target": "demo-record-resume-selftest",
         "runs": "$(PYTHON) scripts/demo-record-resume-selftest.py",
         "asserts": 'An interrupted demo recording resumes from its cache of answered routes instead of starting again, against the real functions and a fake collector.',

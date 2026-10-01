@@ -100,3 +100,12 @@ mirror has never read that bundle since this entry. `demo-determinism-selftest` 
 `demo-freshness` gated neither, but read the same dead bundle. All three retire together.
 `demo-determinism.py` and `demo-freshness.py` are gone from the tree. None of the three ever
 tested the mirror this entry publishes.
+
+**Amended (standing grant, daily refresh).** The owner's ruling: the demo's data refreshes DAILY and
+AUTOMATICALLY, with auto-merge. A mirror-only PR auto-merges on green CI through the merge tool, with
+no word asked each time. The grant covers only a PR with head `demo/mirror-refresh`, opened by
+`scripts/demo-mirror-daily.py` after the scrub assert and the fence, whose whole diff is under
+`demo-assets/mirror/`. `make demo-mirror-agent` installs the daily job on the owner's Mac. The safety
+is a fence in `scripts/demo-mirror-daily.py`: it refuses to merge a PR whose diff touches any path
+outside `demo-assets/mirror/`. `assert_scrubbed` still gates publishing, and a failure or any error
+publishes nothing. The grant is recorded in D42's grant terms too.
