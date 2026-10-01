@@ -8604,3 +8604,110 @@ for (const width of [1280, 820]) test(`Actions does not move when the copies sea
   await expect(page.locator('.browse-hero-side:not([data-pending])')).toBeVisible()
   expect(await yOf()).toEqual(pendingY)
 })
+
+/* ----------------------------------------------------------------------------------- D118 */
+
+/* HOLDING AN ARROW KEY THROUGH THE WALK, THEN LETTING GO, MUST NOT MOVE THE COPIES LIST.
+ *
+ * THE DEFECT: the copy rows entered with `bn-page-in`, which translates each row 6px. The list is
+ * a scroll-snap container (`scroll-snap-type: y proximity`, rows `scroll-snap-align: start`), and
+ * a snap target that is moving is a snap position that is moving: the browser re-snapped the list
+ * on every frame of the entry, so its `scrollTop` crept 6 to 0 and every row wobbled about a pixel
+ * either side of its place. A card whose copies overflow the band (3 or more) is the shape.
+ * Sifting is where it shows, because the rows land once, after the key is let go, with nothing
+ * else moving.
+ *
+ * The probe samples every animation frame, which is the only sampler that cannot step over the
+ * wobble (the same argument `installCopiesWatch` makes). */
+function siftCards(): Cards {
+  const cards: Cards = {}
+  /* Cards 1-40 each carry their own SKU, so every step lands on a card the last answer did not
+     hold. A SKU's later copies sit past card 40, `n % 4 + 1` copies in all, so its cap
+     (`min(4, copies)`) runs 1 to 4 down the walk. */
+  let at = 41
+  for (let n = 1; n <= 40; n += 1) {
+    const copies = (n % 4) + 1
+    const place = [n, ...Array.from({ length: copies - 1 }, () => at++)]
+    for (const i of place) cards[`2/${i}`] = card({ index: i, state: 'identified', name: `Sift ${n}`, sku: String(9000000 + n), section: 1, sectionStart: 1, sectionEnd: 100 })
+  }
+  return cards
+}
+const SIFT_BOXES = { boxes: [{ ...BOXES.boxes[0], fill: 100, next_index: 101, cards: 100, on_hand: 100, sold: 0, retired: 0, sections: [1], sections_detail: [{ section: 1, start: 1, end: 100, count: 100 }] }] }
+
+type RowFrame = { tops: number[]; scroll: number }
+
+/** Every animation frame's copy-row tops and the list's `scrollTop`, from `go`'s start until `ms`
+ *  after it finishes. A frame with no rows is the skeleton and is kept, so a gap is visible. */
+async function rowFrames(page: Page, go: () => Promise<void>, ms: number): Promise<RowFrame[]> {
+  await page.evaluate(() => {
+    const frames: RowFrame[] = []
+    ;(window as unknown as { __rowFrames: RowFrame[] }).__rowFrames = frames
+    const tick = () => {
+      const rows = [...document.querySelectorAll('.card-locations-row')]
+      frames.push({
+        tops: rows.map((row) => row.getBoundingClientRect().top),
+        scroll: document.querySelector('.card-locations-rows')?.scrollTop ?? -1,
+      })
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  })
+  await go()
+  await page.waitForTimeout(ms)
+  return await page.evaluate(() => (window as unknown as { __rowFrames: RowFrame[] }).__rowFrames)
+}
+
+/** A key held down: a keydown every 30ms, `repeat` set after the first, a keyup at the end. */
+async function holdKey(page: Page, key: string, presses: number): Promise<void> {
+  await page.evaluate(
+    ([name, count]) =>
+      new Promise<void>((done) => {
+        let n = 0
+        const timer = setInterval(() => {
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: name as string, repeat: n > 0, bubbles: true, cancelable: true }))
+          n += 1
+          if (n >= (count as number)) {
+            clearInterval(timer)
+            window.dispatchEvent(new KeyboardEvent('keyup', { key: name as string, bubbles: true }))
+            done()
+          }
+        }, 30)
+      }),
+    [key, presses] as const,
+  )
+}
+
+/** The frames after the last one that had NO row (the skeleton): that is the landing. */
+function landing(frames: RowFrame[]): RowFrame[] {
+  const gap = frames.map((frame) => frame.tops.length).lastIndexOf(0)
+  return frames.slice(gap + 1)
+}
+
+for (const how of ['held arrow key', 'click']) test(`the copies list does not move when it lands after a ${how}`, async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, SIFT_BOXES, { cards: siftCards(), search: (query) => searchAnswer(query, siftCards()) })
+  /* A real server answers in tens of milliseconds, not none. */
+  await page.route(/\/search/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    return route.fallback()
+  })
+  await expandAll(page)
+  await expect(page.locator('.card-locations-row').first()).toBeVisible()
+  await settled(page)
+  /* Card 14 holds three copies, which overflow the band. */
+  const frames = await rowFrames(
+    page,
+    how === 'click'
+      ? async () => { await page.locator('.browse-row').nth(13).click() }
+      : () => holdKey(page, 'ArrowRight', 13),
+    700,
+  )
+  const landed = landing(frames)
+  expect(landed.length, 'the rows never landed').toBeGreaterThan(20)
+  expect(Math.max(...landed.map((frame) => frame.tops.length)), 'the card must overflow the band').toBeGreaterThanOrEqual(3)
+  const last = landed[landed.length - 1] as RowFrame
+  const moved = landed
+    .map((frame, at) => ({ at, drift: Math.max(...frame.tops.map((top, i) => Math.abs(top - (last.tops[i] ?? top)))), scroll: frame.scroll }))
+    .filter((frame) => frame.drift > 0.01 || frame.scroll !== last.scroll)
+  expect(moved, 'rows moved after they landed').toEqual([])
+})
