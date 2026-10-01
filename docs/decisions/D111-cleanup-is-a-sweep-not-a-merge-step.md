@@ -35,7 +35,7 @@ teardown. The supervisor waits on nobody, because D138 makes it outlive the sess
 Every link is individually defensible, which is why this never looked like a bug.
 
 **So the fix is a sweep and not another hook on the merge.** Only something re-runnable at an
-arbitrary moment can collect what a one-shot structurally could not. the sweep is
+arbitrary moment can collect what a one-shot structurally could not. The sweep is
 that, and the merge is left alone: it needs no new state, because a branch becomes reapable the
 moment origin's copy is deleted, which the merge already does.
 

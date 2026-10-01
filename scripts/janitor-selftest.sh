@@ -7,7 +7,7 @@
 # the fixture has to be disposable. So it gets a temp clone, a fake liveness oracle and real
 # processes in their own process groups.
 #
-# THE SWEEP PROPER IS NOT HERE. Dead-rooted servers, loose processes, worktrees and tier 2 are
+# THE SWEEP PROPER IS NOT HERE. Dead-rooted servers, loose processes and the worktree, branch and process reap are
 # claude-settings' `janitor/sweep.py`, proved by its own `test_sweep.py`. What this file keeps
 # is the three modes that sweep has no equivalent for: tier 1 alone (`--tier1`), the lossless
 # branch cut (`--branches`), and one tree's teardown (`--teardown`).
@@ -231,13 +231,13 @@ td_other="$(python3 "$JANITOR" --teardown "$tmp/td/.claude/worktrees/leaving" \
 said "AND A RECORD THAT IS NO RELATION STILL DOES — the exclusion is the chain, not everybody" \
      "still here" "$td_other"
 
-# ------------------------------------------- `--branches`: TIER 2'S LOSSLESS SUBSET, UNATTENDED
+# ------------------------------------------- `--branches`: THE FULL SWEEP'S LOSSLESS SUBSET, UNATTENDED
 #
 # ITS OWN FIXTURE, because every assertion here is about what SURVIVES, and the sweeps above
 # have already reaped their own tree's branches by this point. A clone of its own is the only
 # way to state "this and nothing else was cut" and have it mean anything.
 echo
-echo "  -- --branches: the one part of tier 2 a hook may run --"
+echo "  -- --branches: the one part of the full sweep a hook may run --"
 git init -q -b main "$tmp/br"
 cd "$tmp/br" || exit 1
 git config user.email selftest@example.com

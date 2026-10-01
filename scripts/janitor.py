@@ -3,7 +3,7 @@
 stale registrations, its husks, and its merged branches (D111, cleanup is a sweep).
 
 claude-settings' `janitor/sweep.py` owns the rest: dead-rooted servers, loose processes, and
-tier 2 (worktrees, branches, processes). `make janitor` runs it. What stays here is the part
+the worktree, branch and process reap. `make janitor` runs it. What stays here is the part
 `sweep.py` has no mode for. It cannot press tier 1 alone, cut branches alone, or stop one tree's
 supervisor with `serve.py down` (D138, the supervisor's job).
 
@@ -70,7 +70,7 @@ def _real(path: str) -> str:
 
     EVERY PATH THAT ENTERS FROM OUTSIDE GOES THROUGH HERE, AND A SYMLINK IS WHY. On this
     machine `/tmp` is `/private/tmp` and `/var` is `/private/var`, so `git worktree list`
-    answers with the resolved spelling while a session record and a `--confine` argument
+    answers with the resolved spelling while a session record and a caller's argument
     carry whatever the caller typed. Comparing the two as strings said "no session in this
     tree" for every tree in a temp fixture — the self-test caught it, and the same trap is
     live wherever a checkout sits under a symlinked parent. `server/ports.py:slot_for`
@@ -279,7 +279,7 @@ def servers_under(tree: str, skip: Set[int],
     worktree, the SHELL that started the sweep is standing in that very tree — so the tree
     would report "a server is running out of it" about the sweep asking the question, and a
     genuinely reapable tree could never be offered while anybody swept from inside it.
-    `loose_processes` had the answer already: exclude this process and every ancestor of it.
+    The answer is to exclude this process and every ancestor of it.
 
     `table` and `dirs` are passed in by `sweep` so that every tree and every husk is judged
     against ONE sample of the process table. Read per call, twenty trees meant twenty `ps` runs
@@ -586,14 +586,13 @@ def sweep(root: str, sessions_dir: Path, press: bool) -> Tuple[int, int, int]:
 
     Pressed by `--tier1` (what `session-teardown.sh` runs) and `--confirm`; a bare run previews
     and changes nothing, which is what `status.py` and the header promise. Dead-rooted servers,
-    loose processes and tier 2 (worktrees, branches, processes) are claude-settings'
+    loose processes and the worktree, branch and process reap are claude-settings'
     `janitor/sweep.py`. `pending` is always 0: tier 1 waits on no human word.
     """
     mine = os.getpid()
     oracle = live_sessions(sessions_dir)
     sessions = oracle.sessions
     trees = worktrees(root)
-    main_tree = main_checkout(root)
     live_roots = {tree.path for tree in trees}
 
     # ONE SAMPLE OF THE PROCESS TABLE FOR THE WHOLE SWEEP. Every placement question below is
@@ -604,8 +603,7 @@ def sweep(root: str, sessions_dir: Path, press: bool) -> Tuple[int, int, int]:
     table = _process_table()
     dirs = _working_dirs({pid for pid, _ in table})
     # The sweep's own chain, for `servers_under`'s reason. `_process_tree` is a second `ps`
-    # because only it carries the parent link; `loose_processes` computes its own for the same
-    # reason and the two agree because nothing between them presses anything.
+    # because only it carries the parent link.
     family = set(_chain(_process_tree(), mine))
     family.add(mine)
 
@@ -658,17 +656,18 @@ def sweep(root: str, sessions_dir: Path, press: bool) -> Tuple[int, int, int]:
 
 
 def cut_merged_branches(root: str, confirm: bool) -> Tuple[int, int]:
-    """(cut, kept). Tier 2's ONE provably-lossless act, and nothing else in tier 2.
+    """(cut, kept). The ONE provably-lossless act of the full sweep, and nothing else.
 
-    THE SUBSET THAT NEEDS NO HUMAN WORD, WHICH IS WHY IT CAN RUN FROM A HOOK. Tier 2 does three
-    things: it stops loose processes, it removes worktrees, and it cuts branches. The first two
+    THE SUBSET THAT NEEDS NO HUMAN WORD, WHICH IS WHY IT CAN RUN FROM A HOOK. The full sweep
+    (claude-settings') does three things: it stops loose processes, it removes worktrees, and it
+    cuts branches. The first two
     are judgement calls about what somebody might still be using. The third is not. A branch
     reaches `reapable_branches`' `cut` list only when main is a descendant of every commit on it
     — `git branch -D` there removes a label and destroys nothing, because every object it named
-    is reachable from main. That is the same ancestry test `make janitor ARGS=--confirm`
+    is reachable from main. That is the same ancestry test claude-settings' sweep
     already runs, called here and not reimplemented.
 
-    SO THE WORD TIER 2 WAITS ON IS ABOUT THE OTHER TWO. Deleting a worktree can cost uncommitted
+    SO THE WORD THE FULL SWEEP WAITS ON IS ABOUT THE OTHER TWO. Deleting a worktree can cost uncommitted
     work the sweep failed to see, and stopping a process can cost a run somebody wanted. Neither
     risk exists here, and holding a lossless act behind the same word as a lossy one is what
     left nine merged branches sitting on this disk with nobody to press it.
@@ -731,7 +730,7 @@ def teardown(tree: str, sessions_dir: Path) -> int:
     # Python process — a grandchild of the `claude` process whose record still sits in
     # `~/.claude/sessions`. Comparing the two pids could never match, so the leaving session
     # counted as "somebody else still here" and the teardown declined to stop anything, every
-    # time. `loose_processes` already had the shape of the answer: exclude the sweep's own
+    # time. The shape of the answer is to exclude the sweep's own
     # CHAIN. Anything unreadable still keeps the servers up — `_chain` over an empty table
     # yields this pid alone, which is the old behaviour and the cautious one.
     mine = os.getpid()
@@ -772,7 +771,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="press tier 1 (and, with --branches, the cut). Without it, a preview.")
     parser.add_argument("--branches", action="store_true",
                         help="cut every branch main already carries, and do nothing else. "
-                             "The one part of tier 2 that destroys nothing, so it needs no "
+                             "The one part of the full sweep that destroys nothing, so it needs no "
                              "word and a hook may run it. Previews without --confirm.")
     parser.add_argument("--tier1", action="store_true",
                         help="the provably-dead only — no preview, no prompt. What a hook runs.")

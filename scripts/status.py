@@ -1046,38 +1046,9 @@ def icloud() -> List[str]:
 
 
 def leftovers() -> List[str]:
-    """What a finished session left behind in this clone, counted and never acted on (D111).
-
-    Reported here for icloud()'s reason exactly: it is a fact you should know and need not act
-    on, and without a line like this it is invisible to every normal command.
-
-    IT RUNS claude-settings' SWEEP AS A PREVIEW, which presses nothing: `make status` must never
-    be a thing that changes the tree. The sweep is claude-settings' (`~/.claude/janitor/
-    sweep.py`, or CLAUDE_JANITOR_SWEEP), so this is silent where it is not installed. Its own
-    summary is read, never recomputed here: the count is the sum of its `reap` rows.
-    """
-    sweep = Path(os.environ.get("CLAUDE_JANITOR_SWEEP") or Path.home() / ".claude" / "janitor" / "sweep.py")
-    common = git("rev-parse", "--path-format=absolute", "--git-common-dir")
-    if not sweep.is_file() or not common:
-        return []
-    try:
-        done = subprocess.run(
-            [sys.executable, str(sweep), str(Path(common).parent)],
-            cwd=str(ROOT), capture_output=True, text=True, check=False, timeout=120,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return []
-    waiting = 0
-    for line in done.stdout.splitlines():
-        parts = line.split()
-        if len(parts) == 3 and parts[0] == "reap" and parts[2].isdigit():
-            waiting += int(parts[2])
-    if not waiting:
-        return []
-    return [
-        field("Left behind", "{0} branch(es) and worktree(s) a sweep would reap".format(waiting)),
-        cont("`make janitor` lists them; ARGS=--confirm reaps them"),
-    ]
+    """A pointer, never a count (D111). The sweep that counts is claude-settings' and takes
+    minutes on this machine, so `make status` does not run it."""
+    return [field("Left behind", "`make janitor` lists what a finished session left")]
 
 
 INSTALLED_JANITOR = Path.home() / ".claude" / "bin"

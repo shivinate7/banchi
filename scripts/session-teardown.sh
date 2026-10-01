@@ -66,9 +66,9 @@ python3 "$janitor" --teardown "$tree" 2>/dev/null || true
 if git -C "$tree" rev-parse --show-toplevel >/dev/null 2>&1; then
   python3 "$janitor" --root "$tree" --tier1 2>/dev/null || true
 
-  # AND THE ONE PART OF TIER 2 THAT DESTROYS NOTHING. A branch reaches this list only when main
+  # AND THE ONE PART OF THE FULL SWEEP THAT DESTROYS NOTHING. A branch reaches this list only when main
   # is a descendant of every commit on it, so `git branch -D` removes a label and no object.
-  # The word tier 2 waits on is about the other two halves of it — removing a worktree can cost
+  # The word the full sweep waits on is about the other two halves of it — removing a worktree can cost
   # uncommitted work, stopping a process can cost a run somebody wanted — and holding a
   # lossless act behind the same word as a lossy one is what left nine merged branches on this
   # disk with nobody to press it.
