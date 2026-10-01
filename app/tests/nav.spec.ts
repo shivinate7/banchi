@@ -119,6 +119,7 @@ async function stub(page: Page, cards: unknown[] = []) {
    * above — it calls `getRecentCards`, `GET /inventory/recent?limit=N`. Empty, matching this
    * ring's own `cards` default of `[]`: nothing here asserts on the hero deck's contents. */
   await page.route(/\/inventory\/recent(\?|$)/, (route) => json(route, { cards: {} }))
+  await page.route(/\/inventory\/history$/, (route) => json(route, { cards: {} }))
   /* `GET /boxes` IS THE UNION OF THE REGISTRY AND WHATEVER `cards` NAMES (D20's own rule —
    * "a box existed only because a card named one" — is what `do_boxes` answers with in
    * production). This fixture's registry is always empty, so deriving the boxes list from

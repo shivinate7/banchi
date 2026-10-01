@@ -2293,6 +2293,13 @@ class Inventory:
         rows = self.cards.top("captured_at", limit, ("box", "idx", "cid"))
         return [(key, int(box), int(idx), cid) for key, (box, idx, cid) in rows]
 
+    def capture_history(self) -> List[Tuple[str, str, int, str]]:
+        """`(key, captured_at, box, state)` of every captured card, newest first. Column
+        values only, off the `captured_at` index, no `Card` built, for Home's history
+        ribbon, which clusters sittings from the timestamps alone."""
+        rows = self.cards.top("captured_at", len(self.cards), ("captured_at", "box", "state"))
+        return [(key, stamp, int(box), state) for key, (stamp, box, state) in rows]
+
     def newest_sitting(self, gap_seconds: float) -> List[str]:
         """The keys of the newest sitting, oldest first (UN-2, D164).
 
