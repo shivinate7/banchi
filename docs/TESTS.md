@@ -174,7 +174,7 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | `scripts/verdict-selftest.py` | The design-check reporter really writes its verdict file when Playwright runs it. | D18 |
 | `scripts/githooks-selftest.sh` | The main-branch guard hooks refuse a local move and a push of main, proved in a throwaway repository. | D18, D42 |
 | `scripts/guard-shell-selftest.sh` | The shell guard refuses each of its mistakes, proved by committing each mistake in a throwaway repository. | D18 |
-| `scripts/janitor-selftest.sh` | The janitor presses only what is provably dead, cuts only merged branches, and tears down only a leaving tree, proved on a throwaway clone with real processes. | none |
+| `scripts/janitor-selftest.sh` | The janitor tears down only a leaving tree, and reads every unreadable liveness answer as live, proved with real processes. | none |
 | `scripts/merge-selftest.sh` | The local half of the merge command moves main only as intended, proved in a throwaway repository. | D18, D42 |
 | `scripts/reap-selftest.sh` | The reap command stops only processes this session started and refuses every other process. | D18, D138 |
 | `scripts/silent-write-selftest.sh` | The silent-write guard refuses a git write whose output is thrown away, proved by reproducing the 2026-09-12 incident. | D18 |
