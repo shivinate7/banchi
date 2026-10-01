@@ -4866,7 +4866,7 @@ export function CaptureScreen() {
           ) : (
             <ul className="capture-undo-list">
               {undoStack.map((target, at) => (
-                <li key={`${target.box}/${target.index}`} style={{ animationDelay: `${at * 30}ms` }}>
+                <li key={`${target.box}/${target.index}`} className="bn-stagger-item" style={{ '--i': at } as CSSProperties}>
                   {/* THE CELL WRAPS TWO SIBLING BUTTONS RATHER THAN NESTING ONE INSIDE THE
                       OTHER — an interactive element cannot hold a second one and stay valid,
                       and the two mean different things: the row still walks the plan back to

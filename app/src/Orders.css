@@ -453,7 +453,6 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   padding: var(--bn-5);
   overflow: visible;
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
-  animation-delay: var(--delay, 0ms);
   transition: box-shadow var(--bn-t) var(--bn-ease);
 }
 
@@ -755,7 +754,6 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
      the delay is the card's, inherited, so a pick fades with its card rather than inside an
      invisible one. */
   animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
-  animation-delay: var(--delay, 0ms);
   transition: background-color var(--bn-t-fast) var(--bn-ease), opacity var(--bn-t) var(--bn-ease);
 }
 .orders-pick:hover { background: var(--bn-hover); }

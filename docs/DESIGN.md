@@ -127,7 +127,7 @@ MOTION                          --bn-t-fast 120ms · --bn-t 200ms · --bn-t-slow
 --bn-ease-out                   cubic-bezier(0,0,.2,1)     something arriving
 --bn-ease-spring                cubic-bezier(.34,1.4,.44,1) a chevron, a check, a dialog
 --bn-stagger 30ms · --bn-stagger-cap 12   one cadence for every list
---bn-t-draw 480ms · --bn-t-emphasis 600ms · --bn-t-pulse 1.8s · --bn-t-spin 0.7s
+--bn-t-flash 200ms · --bn-t-draw 480ms · --bn-t-emphasis 600ms · --bn-t-pulse 1.8s · --bn-t-spin 0.7s
 --bn-disabled 0.45              the one opacity a disabled pressable wears
 
 NOT PAINT                       (two colours the reader never sees as colour, named so they
@@ -222,11 +222,11 @@ that nothing about a card or the store lives in browser storage.
 shadows and the button ground. It redefines nothing else**, so no component sheet ever learns
 which theme it is in. A rule that needs to know has got the token wrong.
 
-**The flip is one mechanism for the whole page.** The toggle stamps
-`html[data-theme-switching]` for `--bn-t-slow` and `app/src/base.css` eases background,
-color, border, shadow, fill and stroke together, then the attribute comes off and components
-keep their own transitions. A cross-fade on `<body>` alone was measured as a two-speed flip —
-dark panels on a light ground for a third of a second.
+**The flip is one crossfade of whole-page snapshots.** The toggle wraps the flip in
+`document.startViewTransition`, and `app/src/base.css` times the fade at `--bn-t`. No colour
+passes through grey, because the browser blends two finished pictures. With no API, or under
+reduced motion, the theme flips in one frame. Per-node transitions were measured as a flat
+grey page for about 60ms.
 
 **Dark is not a filter over light, and three families are drawn rather than derived.** The
 accent lightens (`#3d5af1` → `#7f90ff`) because an indigo that carries white text on paper

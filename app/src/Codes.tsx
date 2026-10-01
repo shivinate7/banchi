@@ -1127,7 +1127,7 @@ export function Codes() {
               ) : (
                 <ul className="codes-product-list">
                   {(allProducts || !productsFold ? ledger.by_product : ledger.by_product.slice(0, PRODUCT_FOLD)).map((row, i) => (
-                    <li key={row.product} className="codes-product" style={{ '--delay': `${80 + i * 30}ms` } as CSSProperties}>
+                    <li key={row.product} className="codes-product bn-stagger-item" style={{ '--i': i } as CSSProperties}>
                       <span className="codes-product-name">{row.display}</span>
                       <Pill tone={laneTone(row.lane)}>{laneLabel(row.lane)}</Pill>
                       <span className="codes-product-n">{row.count.toLocaleString()}</span>
@@ -1271,7 +1271,7 @@ export function Codes() {
                             const shown = revealAll || revealed.has(e.code)
                             const lane = laneOf(e)
                             return (
-                              <tr key={e.code} className={`codes-row is-${e.state}`} style={{ animationDelay: `${Math.min(i, 24) * 16}ms` }}>
+                              <tr key={e.code} className={`codes-row bn-stagger-item is-${e.state}`} style={{ '--i': i } as CSSProperties}>
                                 <td data-th="Code">
                                   <button
                                     type="button"
@@ -1754,7 +1754,7 @@ function LotsTable({ lots, boxes }: { readonly lots: readonly LotReceipt[]; read
         </thead>
         <tbody>
           {lots.map((l, i) => (
-            <tr key={l.lot_id} className="codes-row" style={{ animationDelay: `${Math.min(i, 24) * 16}ms` }}>
+            <tr key={l.lot_id} className="codes-row bn-stagger-item" style={{ '--i': i } as CSSProperties}>
               <td data-th="Lot" className="codes-mono">
                 {l.lot_id}
               </td>

@@ -123,7 +123,7 @@ a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate
         color-mix(in srgb, var(--bn-ink-4) 30%, var(--bn-bg)));
   transform-box: fill-box; transform-origin: bottom;
   animation: home-ribbon-grow 520ms var(--bn-ease-spring) backwards;
-  animation-delay: calc(140ms + var(--n) * 70ms);
+  animation-delay: calc(min(var(--n), var(--bn-stagger-cap)) * var(--bn-stagger));
   transition: fill var(--bn-t-fast) var(--bn-ease);
 }
 @keyframes home-ribbon-grow { from { scale: 1 0; opacity: 0 } to { scale: 1 1; opacity: 1 } }

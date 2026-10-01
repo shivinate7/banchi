@@ -1,3 +1,4 @@
+import { flushSync } from 'react-dom'
 import { Component, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ComponentType, ErrorInfo, ReactNode } from 'react'
 import { isEditableTarget } from './keys'
@@ -483,15 +484,14 @@ function useTheme(): [Theme, () => void] {
     return () => media.removeEventListener('change', follow)
   }, [])
   const toggle = useCallback(() => {
-    // One cross-fade for the whole page (base.css reads this), then components keep their own.
-    const root = document.documentElement
-    root.setAttribute('data-theme-switching', 'true')
-    window.setTimeout(() => root.removeAttribute('data-theme-switching'), 360)
-    setTheme((previous) => {
-      const next: Theme = previous === 'dark' ? 'light' : 'dark'
+    const next: Theme = document.documentElement.hasAttribute('data-theme') ? 'light' : 'dark'
+    const flip = () => {
       applyTheme(next)
-      return next
-    })
+      flushSync(() => setTheme(next))
+    }
+    // One 200ms crossfade of whole-page snapshots (base.css times it). No API, or reduced motion: one frame.
+    if (!document.startViewTransition || window.matchMedia('(prefers-reduced-motion: reduce)').matches) flip()
+    else document.startViewTransition(flip)
   }, [])
   return [theme, toggle]
 }

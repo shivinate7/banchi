@@ -276,17 +276,15 @@
   align-items: center;
   padding: var(--bn-1-5) var(--bn-2);
   border-radius: var(--bn-r);
-  /* `--delay` is set inline per row; the bar inside reads the same variable, so it grows as its
-     row fades in rather than while the row is still hidden */
+  /* the bar below reads the row's `--i`, so it grows as its row fades in */
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
-  animation-delay: var(--delay, 0ms);
 }
 .codes-product:hover { background: var(--bn-hover); }
 .codes-product-name { grid-area: name; font-size: var(--bn-fs-md); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .codes-product .bn-pill { grid-area: lane; height: 20px; }
 .codes-product-n { grid-area: n; text-align: right; font-family: var(--bn-font-display); font-weight: 800; font-size: var(--bn-fs-base); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .codes-product-bar { grid-area: bar; height: 3px; border-radius: 2px; background: var(--bn-surface-2); overflow: hidden; }
-.codes-product-bar > span { display: block; height: 100%; border-radius: 2px; background: var(--bn-ink-4); transform-origin: left; animation: codes-grow var(--bn-t-slow) var(--bn-ease-out) backwards; animation-delay: var(--delay, 0ms); }
+.codes-product-bar > span { display: block; height: 100%; border-radius: 2px; background: var(--bn-ink-4); transform-origin: left; animation: codes-grow var(--bn-t-slow) var(--bn-ease-out) backwards; animation-delay: calc(min(var(--i, 0), var(--bn-stagger-cap)) * var(--bn-stagger)); }
 .codes-product-bar.is-premium > span { background: var(--bn-accent); }
 .codes-product-bar.is-none > span { background: var(--bn-warn); }
 /* past five kinds the list folds, and the disclosure sits at the foot of the column */

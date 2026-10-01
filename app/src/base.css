@@ -26,22 +26,14 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* The theme flips in one frame. A cross-fade on <body> ALONE was a two-speed flip — dark
-   panels on a light ground for a third of a second — so the fade is one mechanism for every
-   surface: the toggle stamps `data-theme-switching` on <html> for --bn-t-slow and every
-   colour on the page eases together, then the attribute comes off and components keep their
-   own transitions. */
-html[data-theme-switching],
-html[data-theme-switching] *,
-html[data-theme-switching] *::before,
-html[data-theme-switching] *::after {
-  transition:
-    background-color var(--bn-t-slow) var(--bn-ease),
-    color var(--bn-t-slow) var(--bn-ease),
-    border-color var(--bn-t-slow) var(--bn-ease),
-    box-shadow var(--bn-t-slow) var(--bn-ease),
-    fill var(--bn-t-slow) var(--bn-ease),
-    stroke var(--bn-t-slow) var(--bn-ease);
+/* The theme flips in one 200ms crossfade. `App.tsx`'s `toggle` wraps the flip in
+   `document.startViewTransition`, so the browser blends a snapshot of the old theme over the new
+   one and no colour passes through grey. Without the API, or under reduced motion, the flip is
+   one frame and this rule never runs. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--bn-t);
+  animation-timing-function: var(--bn-ease);
 }
 
 #root {

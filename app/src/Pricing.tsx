@@ -3051,8 +3051,8 @@ function PricingRow({
       .join(', ') || null
   return (
     <div
-      className="pricing-row"
-      style={{ '--i': String(Math.min(index, 14)) } as CSSProperties}
+      className="pricing-row bn-stagger-item"
+      style={{ '--i': index } as CSSProperties}
       onPointerEnter={() => onHover(true)}
       onPointerLeave={() => onHover(false)}
       data-answer={withheld ? 'held' : typeof standing === 'string' ? 'typed' : 'suggested'}

@@ -4,6 +4,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
+import { expectOneStagger } from './staggerCheck'
 
 import type {
   HistoryRange,
@@ -4457,4 +4458,11 @@ test('F3: the held count on the button and in the bar are one number, a sent row
   })
   await expect(page.getByRole('button', { name: 'Held 2' })).toBeVisible()
   await expect(page.locator('.pricing-bar-says')).toContainText('2 held')
+})
+
+test('every pricing row waits min(i, cap) * the one shared stagger', async ({ page }) => {
+  const skus = Array.from({ length: 15 }, (_, i) => sku({ sku: String(8700000 + i) }))
+  await open(page, { skus })
+  await expect(page.locator('.pricing-row')).toHaveCount(15)
+  await expectOneStagger(page, '.pricing-row', 15)
 })
