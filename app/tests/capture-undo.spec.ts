@@ -546,6 +546,29 @@ test('the stack is the whole sitting, newest first, and reaches the 13th row', a
   await expect(page.locator('.capture-undo-depth')).toHaveText('23 recent')
 })
 
+/* DEBT54: AN UNDO REFETCHES NO OTHER ROW'S PHOTOGRAPH, AND A REUSED SLOT SHOWS ITS NEW ONE.
+ * A nameless row is drawn off the slot, so its `?v=` is the only thing that tells a browser the
+ * bytes moved. Undo rewrites one slot; the capture that takes the index back rewrites it again. */
+test('an undo keeps every other thumbnail URL, and a reused slot gets a new one', async ({
+  page,
+}) => {
+  await open(page)
+  await shoot(page, 3)
+  const thumb = (n: number) => rows(page).nth(n).locator('img.capture-undo-thumb')
+  const before = [await thumb(1).getAttribute('src'), await thumb(2).getAttribute('src')]
+  const old3 = await thumb(0).getAttribute('src')
+
+  await page.keyboard.press('u')
+  await expect(rows(page)).toHaveCount(2)
+  expect([await thumb(0).getAttribute('src'), await thumb(1).getAttribute('src')]).toEqual(before)
+
+  await shootInto(page, 3, 3, 1) // lands on index 3 again: same slot, new bytes
+  await expect(rows(page)).toHaveCount(3)
+  const new3 = await thumb(0).getAttribute('src')
+  expect(new3).not.toBe(old3)
+  expect([await thumb(1).getAttribute('src'), await thumb(2).getAttribute('src')]).toEqual(before)
+})
+
 /* UN-15: A DIVIDER'S OWN UNDO. `S`/"Section" appends a divider (`openSection`), and `U`
  * takes that one divider back out through `closeSection`, "while no card is behind it"
  * (undo.md 11.1). Never through `updateBox({ sections })`: that route reads card counts, and
