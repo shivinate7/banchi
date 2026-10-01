@@ -1362,12 +1362,6 @@ export function Revenue() {
         {shelfColumn}
       </section>
 
-      <Slot className="revenue-filter-slot" show={activeBucketLabel !== null}>
-        <div className="revenue-active-filter">
-          <Pill tone="accent">{`${activeBucketLabel} only`}</Pill>
-          <IconButton icon="x" label="Clear the month" onClick={() => setActiveBucket(null)} size="sm" />
-        </div>
-      </Slot>
 
       {/* "BEST SELLERS" NAMED A GROSS-OR-COPIES RANKING. Sorted by "Latest" or "A to Z" it is
           not a ranking of the best sellers at all — a bare rename to whatever the mock said
@@ -1376,6 +1370,12 @@ export function Revenue() {
           control beside it. */}
       <div className="revenue-bar-head">
         <h2 className="bn-h2">Sold</h2>
+        {activeBucketLabel === null ? null : (
+          <div className="revenue-active-filter">
+            <Pill tone="accent">{`${activeBucketLabel} only`}</Pill>
+            <IconButton icon="x" label="Clear the month" onClick={() => setActiveBucket(null)} size="sm" />
+          </div>
+        )}
         <Segmented
           label="Singles or sealed"
           value={view}
