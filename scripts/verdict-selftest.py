@@ -83,7 +83,14 @@ test('the sentinel is on disk while the run is in flight', async () => {{
 FAILING_SPEC = """import { expect, test } from '@playwright/test'
 
 test('a failure this script expects to see reported', async () => {
-  expect('alpha').toBe('beta')
+  // The message is forced to carry an ANSI colour and a NUL byte, because the reporter's
+  // stripping is only proved by a message that has them to strip.
+  try {
+    expect('alpha').toBe('beta')
+  } catch (error) {
+    ;(error as Error).message = '\\u001b[31mred\\u001b[0m nul\\u0000byte ' + (error as Error).message
+    throw error
+  }
 })
 """
 
@@ -218,6 +225,8 @@ def main() -> int:
                 ok("beta" in message and "alpha" in message, "the error text survives", message)
                 # The three properties that made the raw log unreadable, asserted on the
                 # thing that replaced it. `grep -a` existed because of the second one.
+                ok("red" in message and "nul" in message and "byte" in message,
+                   "the forced colour and NUL probe text reached the message, so the two checks below have something to strip", repr(message))
                 ok("\x1b" not in message, "no ANSI escapes in it", repr(message))
                 ok("\x00" not in message, "no NUL bytes in it", repr(message))
                 ok(json.dumps(got).isprintable() or True, "and the whole payload is JSON, by construction")

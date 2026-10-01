@@ -58,6 +58,7 @@ import os
 import re
 import sys
 import tempfile
+import types
 from pathlib import Path
 from typing import List, Optional, Sequence, Set, Tuple
 
@@ -111,6 +112,10 @@ ROSTER = (
 )
 
 TARGETS = {entry["target"] for entry in ROSTER}
+
+# The exit code that means SKIP. Every other non-zero exit is a crash, and a crash must RUN the
+# test. The Makefile's `SKIP_CODE` is checked against this, so the two cannot drift.
+SKIP_EXIT = 3
 
 
 def _browser_scope():
@@ -458,6 +463,20 @@ def selftest() -> int:
     check("every roster target is wired into the Makefile", sorted(TARGETS - wired), [])
     check("every wired target is on the roster", sorted(wired - TARGETS), [])
 
+    # ---- the recipes skip on the classifier's skip code and nothing else. A recipe that reads
+    # the exit as a boolean turns a crashed classifier into a SKIP, which is a fail-closed
+    # gate wearing a fail-open comment.
+    calls = re.findall(r"^\t@?(?:if )?python3 scripts/(?:guard|serve)-scope\.py classify",
+                       makefile, re.M)
+    shaped = re.findall(
+        r"^\t@python3 scripts/(?:guard|serve)-scope\.py classify[^\n]*; rc=\$\$\?; \\$\n"
+        r"\tif \[ \$\$rc -ne \$\(SKIP_CODE\) \]; then \\$",
+        makefile, re.M)
+    check("every path-gated recipe skips only on SKIP_CODE", (len(shaped), len(calls)),
+          (len(calls), len(calls)))
+    check("the Makefile's SKIP_CODE is the classifier's own skip exit",
+          f"SKIP_CODE := {SKIP_EXIT}\n" in makefile, True)
+
     # ---- a drift IS caught: a subject added to a fixture's imports is picked up with no
     # edit to this file, proving the mapping is read fresh rather than cached anywhere.
     with tempfile.TemporaryDirectory() as tmp:
@@ -555,6 +574,32 @@ def selftest() -> int:
     check("no merge-base with a nonexistent head runs",
           classify("reap-selftest", "origin/main", missing_head)[0], True)
 
+    # ---- each fail-open arm, forced through a stub matcher. The real VCS never fails on
+    # demand, so without a stub a flipped arm (skip where it must RUN) stays green. The
+    # positive control proves the stub can make the gate SKIP at all.
+    def with_stub(**overrides):
+        stub = types.SimpleNamespace(
+            landing_base=lambda reference, head: "a" * 40,
+            changed_paths=lambda start, head: ["app/src/Orders.tsx"],
+            git_reader=lambda start, head: (lambda side, path: ""),
+            classify_paths=browser.classify_paths)
+        for name, value in overrides.items():
+            setattr(stub, name, value)
+        real = globals()["_browser_scope"]
+        globals()["_browser_scope"] = lambda: stub
+        try:
+            return classify("reap-selftest", "origin/main", "HEAD")[0]
+        finally:
+            globals()["_browser_scope"] = real
+
+    def boom(*args):
+        raise RuntimeError("forced")
+
+    check("stub control: an unrelated change SKIPS", with_stub(), False)
+    check("no merge-base RUNS", with_stub(landing_base=lambda r, h: None), True)
+    check("a failed diff RUNS", with_stub(changed_paths=lambda s, h: None), True)
+    check("a classification that raises RUNS", with_stub(changed_paths=boom), True)
+
     # ---- the pure half, per target, against `classify_paths` directly — the same shape
     # `serve-scope.py`'s own selftest uses, so a target's derived scope is proved without
     # needing a real commit for every case.
@@ -620,7 +665,7 @@ def main() -> int:
         should_run, lines = classify(args.target, args.base, args.head)
         for line in lines:
             print(line)
-        return 0 if should_run else 3
+        return 0 if should_run else SKIP_EXIT
     parser.print_help()
     return 2
 

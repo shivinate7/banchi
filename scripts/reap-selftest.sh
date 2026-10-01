@@ -338,11 +338,11 @@ echo "  -- incident 2: lsof -ti returns clients as well as listeners --"
 # `lsof` IS DECLARED IN scripts/checks.py:NEEDS AND IS NOT ASSUMED HERE. This suite runs on
 # `ubuntu-latest` as well as on the owner's Mac, and a runner image without it would fail every
 # case below for a reason that has nothing to do with the guard. The skip is LOUD and counts as
-# neither a pass nor a failure — the vale target's bargain, taken for the same reason. Note that
+# a FAILURE: a required case that did not run must never end green. Note that
 # reap.py itself degrades correctly without lsof rather than opening a hole: with no working
 # directory to read, a process carrying no absolute path in its argv is UNKNOWN and refused.
 if ! command -v lsof >/dev/null 2>&1; then
-  say "SKIP" "lsof is absent — the port cases cannot be posed on this machine at all"
+  bad "SKIPPED, and a skipped required case is a failure: lsof is absent, so the port cases cannot be posed"
   port=""
 else
 # AND THE PORT IS A RESERVATION, NOT A READING, FOR THE TAG'S REASON ONE CLAUSE OVER. Probing
@@ -689,7 +689,7 @@ echo "  -- the bare run: another checkout of this clone, nested inside this one 
 # trees holding a live session.
 git -C "$tmp/checkout" -c user.email=t@t -c user.name=t commit -q --allow-empty -m base 2>/dev/null
 if ! git -C "$tmp/checkout" worktree add -q "$tmp/checkout/.wt" -b nested 2>/dev/null; then
-  say "SKIP" "git worktree add failed — the nesting arm cannot be posed here"
+  bad "SKIPPED, and a skipped required case is a failure: worktree add failed, so the nesting arm cannot be posed"
 else
 sleeper "$tmp/checkout/.wt/$nested_script"
 nested_pid="$(spawn "$tmp/checkout/.wt/$nested_script" "$tmp/checkout/.wt")"

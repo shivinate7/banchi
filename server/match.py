@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from functools import lru_cache
 from typing import Dict, Iterable, List, Optional, Sequence, TypedDict, Union
 
 Number = Union[str, int, float, None]
@@ -84,7 +85,8 @@ _SKU_SHAPE = re.compile(r"^[0-9]{3,}$")
 _HYPHEN_BETWEEN_DIGITS = re.compile(r"([0-9])-(?=[0-9])")
 
 
-def fold_text(value: str) -> str:
+@lru_cache(maxsize=8192)
+def _fold_str(value: str) -> str:
     """Rule 1: NFKC, NFKD, no Unicode marks, lower case, no apostrophes, every other run of
     non-alphanumeric characters becomes one space, trimmed.
 
@@ -102,7 +104,7 @@ def fold_text(value: str) -> str:
     performs (`Mn`/`Mc`/`Me` all start with `M`), so this now agrees with the browser on
     every mark, spacing or not.
     """
-    value = unicodedata.normalize("NFKC", str(value))
+    value = unicodedata.normalize("NFKC", value)
     value = unicodedata.normalize("NFKD", value)
     value = "".join(ch for ch in value if unicodedata.category(ch)[0] != "M")
     value = value.lower()
@@ -117,6 +119,11 @@ def fold_text(value: str) -> str:
             out.append(" ")
             spaced = True
     return "".join(out).strip()
+
+
+def fold_text(value: str) -> str:
+    """`_fold_str` (rule 1, cached: a pure function of one string, called per card per query) on `str(value)`."""
+    return _fold_str(str(value))
 
 
 def compact_text(value: str) -> str:
