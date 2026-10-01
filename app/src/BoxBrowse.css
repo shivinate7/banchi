@@ -141,8 +141,8 @@
   place-items: center;
   color: var(--bn-ink-3);
 }
-.browse-hidesold { flex: 0 1 auto; min-width: 0; }
-.browse-hidesold .bn-hidetoggle-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.browse-hidesold { flex: none; }
+
 /* ONE TOOLBAR LINE (UX-269): in the walk's status line the toggle takes the line's own small
    height and type, so `tick shown` no longer wraps alone onto a second row. */
 .browse-status .bn-hidetoggle {
@@ -205,10 +205,10 @@
   display: flex;
   /* NEVER WRAPS (D313): a tick mounts two chips on this line, and a wrap sent "All" to a second
      line and moved the list 28px. The toggle's label gives way instead (`.browse-hidesold`). */
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--bn-1);
-  min-height: 34px;
+  min-height: 65px;
   padding: var(--bn-1) var(--bn-2);
   border-bottom: 1px solid var(--bn-line);
   font-size: var(--bn-fs-xs);
