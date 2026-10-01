@@ -51,18 +51,16 @@ import type { Page } from '@playwright/test'
  */
 export const SETTLE_MAX_MS = 5000
 
-/* `within` narrows the wait to animations on that selector's own elements:
- * `setViewport` waits on the shell alone, because a transition elsewhere on a live screen can
- * stay `running` for good and would hang a wait on the whole document. */
-export async function settleMotion(page: Page, within?: string): Promise<void> {
+export async function settleMotion(page: Page): Promise<void> {
   await page.waitForFunction(
-    ([maxMs, scope]) =>
-      (scope === null ? document.getAnimations() : Array.from(document.querySelectorAll(scope)).flatMap((el) => el.getAnimations()))
+    (maxMs) =>
+      document
+        .getAnimations()
         .filter((one) => (one.effect?.getTiming().iterations ?? 1) !== Infinity)
         .filter((one) => one.timeline === document.timeline)
         .filter((one) => Number(one.effect?.getComputedTiming().endTime ?? 0) <= maxMs)
         .every((one) => one.playState === 'finished'),
-    [SETTLE_MAX_MS, within ?? null] as const,
+    SETTLE_MAX_MS,
   )
 }
 

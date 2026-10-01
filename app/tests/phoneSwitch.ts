@@ -25,5 +25,5 @@ export async function setViewport(page: Page, size: { width: number; height: num
      animates its columns. Two frames let the flip land; `settleMotion` then waits the slide out,
      so the next layout read sees one layout. */
   await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))))
-  await settleMotion(page, '.bn-shell')
+  await settleMotion(page)
 }
