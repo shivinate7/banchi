@@ -295,7 +295,7 @@ contrast. It takes about 260ms to reach dark. Every element on the page runs six
 transitions at once, and a 360ms timer removes them.
 
 **Built:** `App.tsx`'s `toggle` wraps the flip in `startViewTransition`; `base.css` times it at
-`--bn-t`. `app/tests/motion-theme-flash.spec.ts` samples the body colour through the switch.
+`--bn-t`. `app/tests/motion-theme-flash.spec.ts` samples the body color through the switch.
 
 **After:** `document.startViewTransition` takes one snapshot of the old theme and fades it out
 over the new one in 200ms. No color passes through gray, because the two themes are drawn

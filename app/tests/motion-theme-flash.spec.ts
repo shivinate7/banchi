@@ -13,9 +13,9 @@ test.beforeEach(async ({ page }) => {
 })
 
 /* docs/specs/motion.md, P4 and P5. THE THEME GUARD SAMPLES THE BODY'S OWN COLOUR EVERY FRAME OF
- * THE SWITCH. The old flip eased every node's colours at once and the page went mid-grey for ~60ms,
- * so a sample landed on a colour that is neither theme's ground. A View Transition draws two whole
- * snapshots, so `body` itself is never in between: its computed colour is the old ground or the new. */
+ * THE SWITCH. The old flip eased every node's colors at once and the page went mid-gray for ~60ms,
+ * so a sample landed on a color that is neither theme's ground. A View Transition draws two whole
+ * snapshots, so `body` itself is never in between: its computed color is the old ground or the new. */
 const GROUND = async (page: import('@playwright/test').Page) =>
   page.evaluate(() => {
     const read = (theme: 'light' | 'dark') => {
@@ -32,7 +32,7 @@ const GROUND = async (page: import('@playwright/test').Page) =>
   })
 
 for (const from of ['light', 'dark'] as const) {
-  test(`the theme switch from ${from} never shows a body colour of neither theme`, async ({ page }) => {
+  test(`the theme switch from ${from} never shows a body color of neither theme`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: from })
     await setViewport(page, { width: 1440, height: 900 })
     await page.goto('/#/')
@@ -44,19 +44,19 @@ for (const from of ['light', 'dark'] as const) {
     const seen = await page.evaluate(async () => {
       const toggle = [...document.querySelectorAll<HTMLElement>('button')].find((b) => b.textContent?.trim() === 'Theme')
       if (!toggle) throw new Error('no theme toggle')
-      const colours = new Set<string>()
+      const colors = new Set<string>()
       let running = true
       const sample = () => {
-        colours.add(getComputedStyle(document.body).backgroundColor)
+        colors.add(getComputedStyle(document.body).backgroundColor)
         if (running) requestAnimationFrame(sample)
       }
       sample()
       toggle.click()
       await new Promise((r) => setTimeout(r, 700))
       running = false
-      return [...colours]
+      return [...colors]
     })
-    for (const colour of seen) expect([ground.light, ground.dark], `sampled ${colour}`).toContain(colour)
+    for (const color of seen) expect([ground.light, ground.dark], `sampled ${color}`).toContain(color)
     expect(seen.length, 'the theme did flip').toBeGreaterThan(0)
   })
 }

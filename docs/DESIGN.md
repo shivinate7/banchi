@@ -223,10 +223,10 @@ shadows and the button ground. It redefines nothing else**, so no component shee
 which theme it is in. A rule that needs to know has got the token wrong.
 
 **The flip is one crossfade of whole-page snapshots.** The toggle wraps the flip in
-`document.startViewTransition`, and `app/src/base.css` times the fade at `--bn-t`. No colour
-passes through grey, because the browser blends two finished pictures. With no API, or under
+`document.startViewTransition`, and `app/src/base.css` times the fade at `--bn-t`. No color
+passes through gray, because the browser blends two finished pictures. With no API, or under
 reduced motion, the theme flips in one frame. Per-node transitions were measured as a flat
-grey page for about 60ms.
+gray page for about 60ms.
 
 **Dark is not a filter over light, and three families are drawn rather than derived.** The
 accent lightens (`#3d5af1` → `#7f90ff`) because an indigo that carries white text on paper
