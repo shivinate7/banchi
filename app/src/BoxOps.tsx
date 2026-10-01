@@ -396,7 +396,7 @@ export function BoxIdentity({
 export type PickSection = {
   readonly key: string
   readonly title: string
-  readonly cards: readonly { readonly index: number; readonly label: string }[]
+  readonly cards: readonly { readonly index: number; readonly label: string; readonly departed?: boolean }[]
 }
 const NO_CARDS: readonly PickSection[] = []
 
@@ -486,14 +486,22 @@ export function BoxOps({
       ? ''
       : `Believed live at TCGplayer, store-wide. None older than ${readingAgo(readAt)}; exact age is on the release plan below.`
 
-  const everyIndex = cards.flatMap((section) => section.cards.map((card) => card.index))
+  /* A MOVE REACHES ON-HAND CARDS ONLY. Claims reaches departed records too, listed in their own
+     group, so one sold card can be corrected alone. */
+  const pool: readonly PickSection[] = (() => {
+    const live = cards
+      .map((section) => ({ ...section, cards: section.cards.filter((card) => card.departed !== true) }))
+      .filter((section) => section.cards.length > 0)
+    if (editing !== 'claims') return live
+    const gone = cards.flatMap((section) => section.cards.filter((card) => card.departed === true))
+    return gone.length === 0 ? live : [...live, { key: 'departed', title: 'Sold or moved out', cards: gone }]
+  })()
+  const everyIndex = pool.flatMap((section) => section.cards.map((card) => card.index))
   /* Every card picked is the whole box, so the write sends no list. */
   const selection = narrowed === null || narrowed.length === everyIndex.length ? [] : narrowed
   const emptyPick = narrowed !== null && narrowed.length === 0
   const picker =
-    cards.length === 0 ? null : (
-      <CardPicker sections={cards} picked={narrowed} onChange={setNarrowed} />
-    )
+    pool.length === 0 ? null : <CardPicker sections={pool} picked={narrowed} onChange={setNarrowed} />
   const scope =
     selection.length > 0
       ? `the ${count(selection.length, 'selected card', 'selected cards')}`
@@ -1032,12 +1040,12 @@ function CardPicker({
             <span className="boxops-picker-count" aria-live="polite">
               {picked.length} of {all.length} picked
             </span>
-            <button type="button" className="browse-quiet" onClick={() => onChange(all)}>
+            <Button size="sm" variant="quiet" onClick={() => onChange(all)}>
               All
-            </button>
-            <button type="button" className="browse-quiet" onClick={() => onChange([])}>
+            </Button>
+            <Button size="sm" variant="quiet" onClick={() => onChange([])}>
               None
-            </button>
+            </Button>
           </div>
           <ul className="boxops-picker-list">
             {sections.map((section) => {

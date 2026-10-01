@@ -1748,14 +1748,13 @@ export function BoxBrowse({
   const panelRow = dimPanel ? held.current : selectedRow
   const panelDetail = dimPanel ? heldDetail.current : detail
 
-  /* What Manage box may narrow a Move or a Claims write to: this box's on-hand cards, by section
+  /* What Manage box may narrow a Move or a Claims write to: this box's cards, by section
    * and in box order, off every row of the shelf and not the filtered list. */
   const manageCards = useMemo<PickSection[]>(() => {
     if (rows === null || typeof shelf !== 'number') return []
     const mine = rows.filter(
       (row) =>
         row.card.box === shelf &&
-        !hasDeparted(row.card) &&
         typeof row.card.index === 'number' &&
         Number.isFinite(row.card.index),
     )
@@ -1764,7 +1763,11 @@ export function BoxBrowse({
       title: section.title,
       cards: section.rows.map((row) => {
         const name = nameOf(row.card)
-        return { index: row.card.index as number, label: name === null ? rowSlot(row) : `${rowSlot(row)} ${name}` }
+        return {
+          index: row.card.index as number,
+          label: name === null ? rowSlot(row) : `${rowSlot(row)} ${name}`,
+          departed: hasDeparted(row.card),
+        }
       }),
     }))
   }, [rows, shelf])

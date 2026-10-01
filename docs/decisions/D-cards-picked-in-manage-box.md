@@ -12,5 +12,6 @@ that act's receipt and way back. A tick count in a toolbar was drawn to build on
 two writes, and it changed the toolbar's size.
 
 **What stays.** `moveCards` and `applyBoxClaims` take the same indices as before. Nothing about
-a card is stored on the device. The picker lists on-hand cards only: a departed record has no
-position to move or claim.
+a card is stored on the device. Move lists on-hand cards only. Claims also lists departed records,
+in their own group "Sold or moved out", so one can be claimed alone. A departed record can be
+claimed, not moved.

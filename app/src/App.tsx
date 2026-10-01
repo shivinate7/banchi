@@ -178,7 +178,6 @@ const INVENTORY_KEYS: ScreenKeys = {
     { keys: ['←', '→'], does: 'Step to the card before or after this one' },
     { keys: ['PgUp', 'PgDn'], does: 'Jump by section', when: 'with the card list focused' },
     { keys: ['Home', 'End'], does: 'Go to the first or last card', when: 'with the card list focused' },
-    { keys: ['X'], does: 'Tick the selected card', when: 'with the card list focused' },
     { keys: ['Esc'], does: 'Close the open sheet or panel' },
     { keys: ['U'], does: 'Undo the newest sale, retirement, or move' },
     { keys: ['U'], does: 'Undo the section move', when: 'on the Shelf, while its receipt is open' },

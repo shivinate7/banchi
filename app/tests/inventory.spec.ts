@@ -3395,6 +3395,46 @@ test('the box claim sends only the switched-on fields, over only the cards picke
   expect(put?.body).toEqual({ set_hint: 'SV09', indices: [1, 2] })
 })
 
+test('Claims can fix one departed card alone, and Move never lists it', async ({ page }) => {
+  const wire = await open(page)
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /^Claims/ }).click()
+  const picker = page.locator('.boxops-picker')
+  await picker.getByRole('button', { name: 'Some cards' }).click()
+  await picker.getByRole('button', { name: 'None' }).click()
+  const gone = picker.locator('.boxops-picker-group', { hasText: 'Sold or moved out' })
+  await expect(gone).toHaveCount(1)
+  await gone.locator('.boxops-picker-card input').first().check()
+  await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
+  await page.getByRole('textbox', { name: 'Note' }).fill('sold copy')
+  await page.getByRole('button', { name: /^Apply to/ }).click()
+  const put = wire.find((sent) => sent.method === 'PUT')
+  expect(put?.body).toEqual({ note: 'sold copy', indices: [4] })
+
+})
+
+test('Move lists on-hand cards only', async ({ page }) => {
+  await open(page)
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /^Move,/ }).click()
+  await expect(page.locator('.boxops-picker').getByRole('button', { name: /^Whole box, 5 cards/ })).toBeVisible()
+  await page.locator('.boxops-picker').getByRole('button', { name: 'Some cards' }).click()
+  await expect(page.locator('.boxops-picker-group', { hasText: 'Sold or moved out' })).toHaveCount(0)
+})
+
+test('every card picked in the Claims sheet is the whole box and sends no indices key', async ({ page }) => {
+  const wire = await open(page)
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /^Claims/ }).click()
+  await expect(page.locator('.boxops-picker').getByRole('button', { name: /^Whole box, 7 cards/ })).toBeVisible()
+  await page.locator('.boxops-picker').getByRole('button', { name: 'Some cards' }).click()
+  await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
+  await page.getByRole('textbox', { name: 'Note' }).fill('all')
+  await page.getByRole('button', { name: /^Apply to/ }).click()
+  const put = wire.find((sent) => sent.method === 'PUT')
+  expect(put?.body).toEqual({ note: 'all' })
+})
+
 test('Move on two cards picked in the sheet sends exactly those indices', async ({ page }) => {
   await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
   const sent: { path: string; body: unknown }[] = []

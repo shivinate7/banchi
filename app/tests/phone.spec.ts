@@ -204,8 +204,8 @@ const auditSource = (mode: Mode) => `(() => {
        box exactly as before. */
     const before = getComputedStyle(t, '::before')
     const hasBefore = before.content !== 'none' && before.content !== ''
-    /* AN ABSOLUTELY POSITIONED ::after PAD COUNTS TOO (screen pass F8): Inventory's row and
-       section ticks draw a 22px box and reach 46px through \`.browse-tick::after { inset: -12px }\`,
+    /* AN ABSOLUTELY POSITIONED ::after PAD COUNTS TOO (screen pass F8): a control with a 22px box
+       reaching 46px through a pad such as \`::after { inset: -12px }\`,
        the same pattern as the IconButton's ::before, and the box alone reported them as 22. Only
        an out-of-flow pseudo counts, so a decorative seam or badge is still judged on the box. */
     const after = getComputedStyle(t, '::after')
