@@ -405,14 +405,13 @@ function windowsOf(
  *  back". `likeForLike` names a window this function did not choose: the caller has already
  *  cut the prior period down to the SAME number of elapsed days the current one has had, so
  *  the wording says so rather than letting a shorter slice masquerade as the whole thing. */
-function compareLine(current: number, previousRows: readonly Sale[] | null, likeForLike: boolean): string | null {
+function compareLine(current: number, previousRows: readonly Sale[] | null, likeForLike: boolean): string {
   if (previousRows === null) return 'No earlier period to compare it against yet.'
   if (previousRows.length === 0) {
-    /* F5 verbiage cut (row 127): the in-progress case is deleted outright — the month strip's
-       own absent bar already shows there is nothing before this one. The closed-period case
-       keeps its sentence, since a closed period drawing a real zero bar is a fact worth
-       stating rather than an obvious gap. */
-    return likeForLike ? null : 'Nothing is recorded for the period before this one.'
+    /* D313: THE PRIOR LINE IS STATED AT EVERY PERIOD, so choosing "All" (which always has one)
+       never mounts a line and shoves the chart down. An empty prior window says so, whether or
+       not the current one is still forming. */
+    return 'Nothing is recorded for the period before this one.'
   }
   const previous = sum(previousRows)
   // `likeForLike` means THIS window is still forming, not the PRIOR one — the prior window is
@@ -1297,9 +1296,7 @@ export function Revenue() {
           <p className="revenue-verdict-said">
             {`${orderCount(inPeriod).toLocaleString()} ${orderCount(inPeriod) === 1 ? 'order' : 'orders'}, ${inPeriod.reduce((n, s) => n + s.quantity, 0).toLocaleString()} copies`}
           </p>
-          {compareLine(total, inPrevious, partial) === null ? null : (
-            <p className="revenue-verdict-prior">{compareLine(total, inPrevious, partial)}</p>
-          )}
+          <p className="revenue-verdict-prior">{compareLine(total, inPrevious, partial)}</p>
           {dropped === 0 ? null : (
             <p className="revenue-verdict-dropped">
               {`${dropped.toLocaleString()} ${dropped === 1 ? 'line has' : 'lines have'} no usable date and ${dropped === 1 ? 'is' : 'are'} left out of every figure here.`}

@@ -439,14 +439,12 @@ test('a previous period that sums to exactly zero never renders Infinity% or NaN
   expect(text).toContain('$5.00 more')
 })
 
-test('the like-for-like case draws no prior-period line at all, when there is nothing to compare against over the same stretch', async ({ page }) => {
-  // Every sale is in 2026 — "this year" compared against the same number of days last year
-  // finds nothing there at all. F5 verbiage cut (row 127): this in-progress case is now a
-  // deleted sentence, not a shortened one — the month strip's own absent bar already shows
-  // it, so `.revenue-verdict-prior` does not render at all here.
+test('the like-for-like case still says nothing is recorded before, so the line never mounts (D313)', async ({ page }) => {
+  // Every sale is in 2026, so "this year" has nothing before it over the same stretch. The line
+  // stays and says so: a line that comes and goes with the period shoves the chart (S10).
   await stub(page, generalOrders())
   await open(page, '?period=ytd')
-  await expect(page.locator('.revenue-verdict-prior')).toHaveCount(0)
+  await expect(page.locator('.revenue-verdict-prior')).toHaveText('Nothing is recorded for the period before this one.')
 })
 
 test('no horizontal scroll at 390, with Custom selected — the fifth period option is the widest state', async ({ page }) => {
@@ -1040,6 +1038,27 @@ for (const width of [1440, 820]) {
       const beside = inWindow.filter((sh) => sh.moved.some((name) => HELD.test(name)))
       expect(beside, `the press moved ${describeShifts(beside)}`).toEqual([])
       expect(inWindow.length, `the swap took more than one frame: ${describeShifts(inWindow)}`).toBeLessThanOrEqual(1)
+    }
+  })
+}
+
+/* D313 (S10): CHOOSING "ALL" AND CHOOSING BACK MOVES NOTHING ABOVE OR BESIDE THE SUMMARY. The
+   summary's lines are each stated at every period, so the box never mounts or unmounts. What is
+   below the summary may swap once (the figures change). */
+for (const width of [1440, 820]) {
+  test(`D313: choosing the All period and back moves nothing above the figures at ${width}`, async ({ page }) => {
+    await watchShifts(page)
+    await setViewport(page, { width, height: 1000 })
+    await stub(page, generalOrders())
+    await open(page, '?period=3m')
+    await page.waitForTimeout(1200)
+    for (const label of ['All', '3 months']) {
+      const seen = (await readShifts(page)).shifts.length
+      await page.getByRole('group', { name: 'Period' }).getByText(label, { exact: true }).click()
+      await page.waitForTimeout(700)
+      const inWindow = (await readShifts(page)).shifts.slice(seen)
+      const beside = inWindow.filter((sh) => sh.moved.some((name) => HELD.test(name)))
+      expect(beside, `choosing ${label} moved ${describeShifts(beside)}`).toEqual([])
     }
   })
 }
