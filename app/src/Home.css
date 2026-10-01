@@ -31,7 +31,7 @@
    floor is a TINT and never a fill: an accent fill spends the element's only colour channel,
    so a danger condition comes out the same cheerful blue as a clear one. */
 .home-standing { margin-top: var(--bn-4); max-width: 620px; display: flex; flex-direction: column; gap: var(--bn-3); }
-.home-standing-skel { margin-top: var(--bn-4); max-width: 620px; }
+.home-standing-skel-bar { flex: 1 1 auto; height: var(--bn-3); max-width: 60%; }
 .home-standing[data-tone='danger'] { --tone: var(--bn-danger); --tone-tint: var(--bn-danger-tint); }
 .home-standing[data-tone='warn']   { --tone: var(--bn-warn);   --tone-tint: var(--bn-warn-tint); }
 .home-standing[data-tone='live']   { --tone: var(--bn-live);   --tone-tint: var(--bn-live-tint); }
@@ -89,6 +89,8 @@ a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate
 /* D218: the separator is CSS content now, not typed into the JSX; the padding above still
    frames it on both sides exactly as it framed the character. */
 .home-foot-sum i::before { content: '·'; }
+.home-foot-skel { color: transparent; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.home-hold { visibility: hidden; }
 .home-foot-quiet { color: var(--bn-ink-3); }
 /* THE ONLY LINK OFF HOME INTO SALES (UX-032): styled as plain text at rest, so it reads as
    part of the sentence and not as a stray button, and picks up the accent only on hover —

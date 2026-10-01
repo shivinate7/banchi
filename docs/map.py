@@ -9040,6 +9040,22 @@ COMPONENTS = [
                 "governed_by": ["D121", "D172", "D192"],
                 "note": "Proved red first on main: one sitting, one block, and no `card=`.",
             },
+            "tests/load-shift.spec.ts": {
+                "does": ("every nav screen, read from `ROUTES` through the sidebar, plus "
+                    "`#/product` with a SKU, at 1440 and 820 with each read held 800ms. Sums "
+                    "the browser's `layout-shift` entries over the first 3s with no input "
+                    "exclusion and fails a screen at 0.01 or more. Names what moved. "
+                    "`load-shift-allow.json` is the shrinking exception list, and an entry "
+                    "that now passes fails. Not a harness test; `make design-check` runs it."),
+                "governed_by": ["D-loading-holds-loaded-size", "D280"],
+                "note": "Proved red first on main: Home, Graveyard, Revenue and Review shifted.",
+            },
+            "tests/load-shift-allow.json": {
+                "does": ("the shrinking list `load-shift.spec.ts` reads, route -> reason. "
+                    "A screen on it is measured and not failed. An entry whose screen now "
+                    "passes fails the spec, so the list only shrinks."),
+                "governed_by": ["D-loading-holds-loaded-size"],
+            },
             "tests/home.spec.ts": {
                 "does": "`#/`'s 'cannot be filled' figure against a mixed ledger: one order "
                         "still open and short 2 copies, one order the feed already reports "
