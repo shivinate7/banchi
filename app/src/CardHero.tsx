@@ -42,7 +42,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ReadingAge } from './CardLocations'
 import { collectorNumber } from './cardNumber'
 import { forSale, IDENTIFIED, readingAgo, readingAgoShort, readingExact, stateLabel, stateTone, staleReading } from './cardState'
-import { Button, Chip, Icon, IconButton, Meter, Money, Pill, ProductLink, Skeleton } from './kit'
+import { Button, Icon, IconButton, Meter, Money, Pill, ProductLink, Skeleton } from './kit'
 import { toast } from './kit/toast'
 import { money } from './money'
 import { relativeDate, toDate } from './dates'
@@ -483,6 +483,12 @@ export function CardHeroHead({
       <div className="browse-hero-text">
         <div className="browse-hero-titlerow">
           <h2 className={name === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>{name ?? 'Not identified yet'}</h2>
+          {/* THE RE-SORT BUTTON sits beside Actions, the same IconButton at the same size, so the row's
+              height is the same with it or without it (D118). Shown only while the order is stale;
+              the staleness sentence is its tooltip and accessible name. */}
+          {figures?.rerank?.say == null ? null : (
+            <IconButton icon="refresh" className="browse-hero-rerank" label={`${figures.rerank.say}. Re-rank`} onClick={figures.rerank.onRerank} />
+          )}
           {actions}
         </div>
         {/* THE META LINE: number, set, game, then rarity and finish as outline pills on the SAME
@@ -525,7 +531,7 @@ export function CardHeroHead({
             </p>
           ) : null
         ) : (
-          <p className="browse-hero-side" data-rerank={figures.rerank === undefined ? undefined : ''}>
+          <p className="browse-hero-side">
             <span>
               Captured<b>{figures.group.copies.length}</b>
             </span>
@@ -536,11 +542,6 @@ export function CardHeroHead({
               <span>
                 Sent<b>{figures.group.listed.pushed}</b>
               </span>
-            )}
-            {figures.rerank?.say == null ? null : (
-              <Chip icon="refresh" className="browse-hero-rerank" title={`${figures.rerank.say}. Ranked before these copies left.`} onClick={figures.rerank.onRerank}>
-                <span className="browse-hero-rerank-say">{figures.rerank.say}. Re-rank</span>
-              </Chip>
             )}
           </p>
         )}

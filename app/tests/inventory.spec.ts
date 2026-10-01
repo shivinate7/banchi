@@ -7835,7 +7835,7 @@ test('a sale leaves every other row where it was, and the sold row in its own pl
   expect(await walkOrder(page)).toEqual(['#38', '#39', '#40'])
 
   /* And the control says how stale the order is, rather than the list quietly reshuffling. */
-  await expect(page.locator('.browse-hero-rerank')).toContainText('Order is 1 copy stale')
+  await expect(page.locator('.browse-hero-rerank')).toHaveAttribute('aria-label', /Order is 1 copy stale/)
 })
 
 test('and the re-rank is what moves it — the same sale, with the order taken again', async ({ page }) => {
@@ -7941,7 +7941,7 @@ test('the receipt has no clock (UN-5): a sale still offers Undo a faked minute l
   await expect(labels).toHaveCount(6)
   expect(await copyOrder(page)).toEqual(['Was at Box 7, Section 1, Card 38', ...before.slice(1)])
   /* And the control is still offering the re-rank, because nothing has taken a new order. */
-  await expect(page.locator('.browse-hero-rerank')).toContainText('Order is 1 copy stale')
+  await expect(page.locator('.browse-hero-rerank')).toHaveAttribute('aria-label', /Order is 1 copy stale/)
 
   /* NOW A NEWER SALE (the delta review round's own item 6, reversing finding #12): the
      owner's ruling is that undo lasts "until it's built on", on every sold row, the same
@@ -8027,7 +8027,7 @@ test('a retirement holds its row too, and it is the freeze alone that does it', 
   expect(walkBefore).toEqual(['#38', '#39', '#40'])
   expect(await walkOrder(page)).toEqual(['#38', '#39', '#40'])
   /* One sentence for both doors: a retirement is a copy leaving, and the order is stale by it. */
-  await expect(page.locator('.browse-hero-rerank')).toContainText('Order is 1 copy stale')
+  await expect(page.locator('.browse-hero-rerank')).toHaveAttribute('aria-label', /Order is 1 copy stale/)
 })
 
 test('a new search takes a new order, so the staleness never carries across answers', async ({ page }) => {
@@ -8407,7 +8407,7 @@ test('undoing the sale takes the staleness back with it', async ({ page }) => {
   await expect(page.locator('.card-locations-row .card-locations-identity').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
 
   await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
-  await expect(page.locator('.browse-hero-rerank')).toContainText('Order is 1 copy stale')
+  await expect(page.locator('.browse-hero-rerank')).toHaveAttribute('aria-label', /Order is 1 copy stale/)
 
   /* NOTHING LEFT THE BOX AFTER ALL, so there is nothing for a re-rank to recompute — a
      staleness figure that survived an undo would be offering to re-rank a store that never
@@ -8487,14 +8487,14 @@ test('the control that re-ranks appearing moves no copy row', async ({ page }) =
           last = await page.evaluate(() => {
             const list = document.querySelector('.card-locations-rows')
             const panel = document.querySelector('.card-locations-owner')
-            const side = document.querySelector('.browse-hero-side')
+            const side = document.querySelector('.browse-hero-titlerow')
             if (list === null || panel === null || side === null) return null
             /* The HEADER's height, read as the gap between the panel's own top and the first
                row — two rects taken in the same frame, so the scroll cancels and no
                offsetParent is assumed. `offsetTop` was the first build and moved 535 -> 637 on
                a press that changed nothing about the header, because the scroller it is
                measured from is not the panel. */
-            /* AND THE FACTS LINE THE CHIP LIVES IN: its own height, and the gap from its top to
+            /* AND THE TITLE ROW THE BUTTON LIVES IN: its own height, and the gap from its top to
                the first row, so a chip that grew the line moves a row and says which. */
             const sideRect = side.getBoundingClientRect()
             return `line ${Math.round(sideRect.height)}, rows ${Math.round(list.getBoundingClientRect().top - sideRect.top)}`
@@ -8514,17 +8514,16 @@ test('the control that re-ranks appearing moves no copy row', async ({ page }) =
   }
   /* THE BASELINE IS TAKEN ONCE THE BAND HAS STOPPED SETTLING. The hero's figures and the photo
      arrive after the rows, and a read taken mid-arrival gave "rows 166" against "rows 35" on a
-     CI shard: a baseline in the wrong layout, not a chip that moved anything. Two reads 300ms
-     apart that agree are the settled one. */
+     CI shard: a baseline in the wrong layout, not a chip that moved anything. A read that still
+     agrees after 300ms is the settled one. */
   let before = await listTop()
-  await expect
-    .poll(async () => {
-      const again = await listTop()
-      const same = again === before
-      before = again
-      return same
-    }, { intervals: [300], timeout: 5000 })
-    .toBe(true)
+  for (let i = 0; i < 20; i++) {
+    await page.waitForTimeout(300)
+    const again = await listTop()
+    if (again === before) break
+    before = again
+  }
+  expect(await listTop(), 'the band never stopped settling').toBe(before)
   expect(before).toMatch(/^line \d+, rows \d+$/)
 
   await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
