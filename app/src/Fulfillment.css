@@ -453,9 +453,12 @@
 }
 .ff-skel-search { height: 64px; margin-bottom: var(--bn-5); }
 .ff-skel-row { height: 88px; }
+.ff-skel-owed { height: 530px; border-radius: 22px; }
 .ff-skel-copy { height: 420px; border-radius: 22px; }
-/* The today card's own footprint, so the figure does not shove the search down when it lands. */
-.ff-skel-today { height: 148px; border-radius: 22px; }
+/* The today tile while the orders read is out: the loaded tile's own elements, hidden, so the
+   box is the loaded box. */
+.ff-today-wait { background: var(--bn-surface-2); box-shadow: none; animation: none; }
+.ff-today-wait > * { visibility: hidden; }
 
 /* ---- Pulled today ----------------------------------------------------------------------- */
 .ff-done-list { list-style: none; display: flex; flex-direction: column; gap: var(--bn-2); }

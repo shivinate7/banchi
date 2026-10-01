@@ -1,3 +1,1 @@
-{
-  "loading:#/fulfillment": "The Today block loads after the cards. Its skeleton (.ff-skel-today) is a typed 148px, and the loaded block runs from a 100px sentence to a tile, so everything under it moves (0.09 at 1440, 0.24 at 820). Needs a frame built from the loaded block own elements. Not fixed here: a separate lane."
-}
+{}

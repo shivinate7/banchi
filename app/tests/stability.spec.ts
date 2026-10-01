@@ -149,3 +149,18 @@ for (const width of [1440, 820]) test(`loading: Home holds its frame when its re
      clause move by a fraction of a pixel (0.0001). A box that moves is 0.004 or more. */
   expect(sum, describeShifts(shifts)).toBeLessThan(BUDGET / 20)
 })
+
+// L-fulfiller
+/* A RECOVERY DOES NOT WAIT ON THE STATE IT RECOVERS. The orders and walk-plan reads have no
+   timeout. When they never answer, the boxes still show and still open, and the Pick list's
+   frame is all that waits. */
+test('fulfiller: the boxes show and open while the orders read never answers', async ({ page }) => {
+  for (const seed of Object.values(POPULATED_ROUTE_SEEDS)) await seed(page)
+  await page.route(/\/orders(\/walk-plan)?$/, () => new Promise<void>(() => {}))
+  await page.goto('/#/fulfillment')
+  const head = page.locator('.ff-box-head').first()
+  await expect(head).toBeVisible()
+  await head.click()
+  await expect(head).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.locator('.ff-owed-wait')).toHaveCount(1)
+})
