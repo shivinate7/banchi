@@ -8238,9 +8238,9 @@ COMPONENTS = [
                                             "`counts.cards_in` is a box's running total rewritten "
                                             "on every re-join, so nine real manifests sum to 1,908 "
                                             "against 1,625 records). A block is as wide as its "
-                                            "minutes and as tall as its cards an hour, so its AREA "
-                                            "is its card count and the marks still sum to the "
-                                            "figure printed above them. `photographed` is "
+                                            "minutes and as tall as its cards an hour against the "
+                                            "fastest shown sitting, which draws at full height. "
+                                            "`photographed` is "
                                             "`status.cards - states.moved`, never the sum over "
                                             "`boxes[].cards`, which counts both halves of D83's "
                                             "move.",

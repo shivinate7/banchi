@@ -12,8 +12,8 @@ sealEveryTest({ store: true, cards: 260 })
  * history, so they must agree, and agree with the three sittings seeded. SHOTS=<dir> also
  * writes pictures. */
 /* Three realistic sittings, the way the owner's store looks: 60 to 120 cards each at a few
- * hundred an hour, on three different days. Heights are cards an hour against the rig ceiling,
- * so a thin seed (ten cards at 36 an hour) draws blocks too short to see. */
+ * hundred an hour, on three different days. Heights are cards an hour against the fastest
+ * sitting, which draws at full plot height. */
 function sitting(day: string, start: string, count: number, perHour: number): string[] {
   const t0 = Date.parse(`${day}T${start}:00Z`)
   return Array.from({ length: count }, (_, i) => new Date(t0 + (i * 3_600_000) / perHour).toISOString())
@@ -46,10 +46,21 @@ for (const [w, h] of [[1440, 900], [820, 1100]] as const) {
       const blocks = await page.locator('.home-ribbon-blk').count()
       expect(Number(said![1]), 'sittings in the sentence').toBe(3)
       expect(blocks, 'blocks drawn').toBe(3)
+      const sizes: { width: number; height: number }[] = []
       for (const box of await page.locator('.home-ribbon-blk').all()) {
         const r = await box.boundingBox()
         expect(r !== null && r.width > 1 && r.height > 1, `a block has a visible size, got ${JSON.stringify(r)}`).toBe(true)
+        sizes.push(r!)
       }
+      /* The fastest sitting (900 an hour, the second) is the plot's full height; the others are
+         their rate's share of it: 600/900 and 450/900. */
+      const top = (await page.locator('.home-ribbon-ceil').boundingBox())!.y
+      const rule = (await page.locator('.home-ribbon-axis').boundingBox())!.y
+      const plot = rule - top
+      const [a, b, c] = sizes.map((z) => z.height)
+      expect(b, 'fastest block is the plot height').toBeCloseTo(plot, 0)
+      expect(a! / b!, 'slower block is proportionally shorter').toBeCloseTo(600 / 900, 1)
+      expect(c! / b!, 'slowest block is proportionally shorter').toBeCloseTo(450 / 900, 1)
     })
   }
 }

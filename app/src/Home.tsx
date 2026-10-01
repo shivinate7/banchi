@@ -367,7 +367,7 @@ function Ribbon({ plot, live }: { readonly plot: Ribbon; readonly live: boolean 
       viewBox="0 0 620 56"
       preserveAspectRatio="none"
       role="img"
-      aria-label={`${plot.blocks.length} sittings. Each block is as wide as the minutes it took and as tall as the cards an hour it ran at, so its area is its card count. Below the rule, a tick a sitting on the real calendar.`}
+      aria-label={`${plot.blocks.length} sittings. Each block is as wide as the minutes it took and as tall as the cards an hour it ran at, the fastest sitting full height and the rest scaled to it. Below the rule, a tick a sitting on the real calendar.`}
     >
       <line className="home-ribbon-ceil" x1="0" y1="0.5" x2="620" y2="0.5" />
       <g className="home-ribbon-blocks">

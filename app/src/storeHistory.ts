@@ -27,11 +27,6 @@ import type { CaptureStamp, ServerStatus } from './types'
  * a measurement rather than a preference. */
 export const GAP_MINUTES = 30
 
-/** The rig's own measured cadence — `docs/specs/motion-trigger.md`, 0.6095 s a card — as an
- *  hourly rate. It is the ribbon's ceiling because it is a PHYSICAL fact about the machine
- *  rather than a maximum chosen to make the drawing look full. */
-export const RIG_CEILING_PER_HOUR = 3600 / 0.6095
-
 const GONE = new Set(['sold', 'retired', 'moved'])
 
 export type Sitting = {
@@ -92,9 +87,11 @@ export function sittings(cards: Record<string, CaptureStamp> | null, gapMinutes 
 /* ─── THE RIBBON ────────────────────────────────────────────────────────────────────────────
  *
  * Each block is as WIDE as the minutes that sitting took and as TALL as the cards an hour it
- * ran at, so its AREA is its card count — `minutes × rate ÷ 60 = cards` is an identity, which
- * is what lets the marks still sum to the figure printed above them while the height carries
- * something the figure does not.
+ * ran at, RELATIVE TO THE FASTEST SHOWN SITTING: that one draws at full height and every other
+ * is its rate's share of it. So height reads as pace against the best sitting on screen, and a
+ * block's area is its card count only up to one shared scale, no longer in absolute cards. The
+ * rig's physical ceiling (5,906 an hour) was dropped as the scale because real sittings run at
+ * a tenth of it, which drew every block a few pixels tall.
  *
  * THE AXIS IS CUMULATIVE MINUTES AT THE RIG, not the calendar. On the owner's store 113
  * minutes of work are spread across 9.4 days, so a calendar axis puts every block at 0.84% of
@@ -114,7 +111,7 @@ export type Block = {
   readonly y: number
   readonly w: number
   readonly h: number
-  /** 0..1 of the rig ceiling — the pace ramp's mix, and redundant with `h` on purpose so a
+  /** 0..1 of the fastest shown sitting's rate — the pace ramp's mix, and redundant with `h` on purpose so a
    *  reader who cannot separate the hues loses nothing. */
   readonly pace: number
   readonly newest: boolean
@@ -144,13 +141,14 @@ export function ribbon(all: readonly Sitting[]): Ribbon | null {
   const shown = all.slice(-WINDOW)
   const older = all.slice(0, all.length - shown.length)
   const totalMinutes = shown.reduce((s, x) => s + x.minutes, 0)
+  const fastest = Math.max(0, ...shown.map((s) => s.rate ?? 0))
 
   /* Widths are shares of the shown window's minutes. A window of durationless sittings has no
      width to share out at all, and draws as ticks alone rather than as a division by zero. */
   let x = 0
   const blocks: Block[] = shown.map((s, i) => {
     const w = totalMinutes > 0 ? (s.minutes / totalMinutes) * VIEW_W : 0
-    const pace = s.rate === null ? 0 : Math.min(1, s.rate / RIG_CEILING_PER_HOUR)
+    const pace = s.rate === null || fastest === 0 ? 0 : s.rate / fastest
     const h = pace * BAND_H
     const block: Block = {
       key: s.from,
