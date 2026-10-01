@@ -352,3 +352,28 @@ for (const width of [1440, 820]) {
     expectHeld(r, 0.001)
   })
 }
+
+/* THE KEYS WAIT TOO. `inert` stops the pointer, never a window keydown, so while the walk stands on
+   the old buyer's plan a digit would sell a copy of the old buyer's pick. Nothing is written and
+   nothing steps until the new plan lands. */
+for (const width of [1440, 820]) {
+  test(`held frame: no walk key acts on the old plan while the new one is out, at ${width}`, async ({ page }) => {
+    const gate = await l1Orders(page)
+    const writes: string[] = []
+    page.on('request', (r) => {
+      if (r.method() === 'POST' && /\/orders\/pull$/.test(r.url())) writes.push(r.url())
+    })
+    await setViewport(page, { width, height: 1000 })
+    await page.goto(screen('orders'))
+    await expect(page.locator('.orders-walk-list')).toBeVisible()
+    gate.on = true
+    await page.getByRole('button', { name: 'Grace Hopper' }).first().click()
+    await expect(page.locator('.orders-walk[aria-busy="true"]')).toHaveCount(1)
+    await page.keyboard.press('1')
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('j')
+    await page.waitForTimeout(300)
+    expect(writes, 'a key sold a copy from the old plan').toEqual([])
+    gate.on = false
+  })
+}

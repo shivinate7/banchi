@@ -3336,7 +3336,7 @@ function PullStage({
   const shownKeys = useHeld(walkedKeys, walk.pending)
   const shownWalking = useHeld(walking, walk.pending)
   const shownGroup = allGroups.find((group) => group.key === shownKey) ?? null
-  const walkHeld = walk.pending && walk.plan !== null
+  const walkHeld = walk.held
 
   /* A TOAST OR `U` UNDO REACHES THIS MOUNTED WALK — the review round's finding 2. Neither
    *  path calls `walk.undoCopy` (they write through `undoFromToast`, module-level, with no
@@ -3400,7 +3400,7 @@ function PullStage({
   useEffect(() => {
     if (walk.rows.length === 0) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey) return
+      if (walk.held || event.metaKey || event.ctrlKey || event.altKey) return
       const target = event.target as HTMLElement | null
       if (target !== null && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return
       const step = event.key === 'j' || event.key === 'J' ? 1 : event.key === 'k' || event.key === 'K' ? -1 : 0

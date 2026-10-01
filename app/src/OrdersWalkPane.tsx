@@ -619,6 +619,8 @@ export function useOrderWalk({
   return {
     loading,
     pending: keysSig !== settledSig,
+    /** The old plan stands, dimmed, while the new one is out: no key may act on it (D313). */
+    held: keysSig !== settledSig && plan !== null,
     failure,
     plan,
     rows,
@@ -679,7 +681,7 @@ export function useWalkKeys(walk: OrderWalk): void {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const now = held.current
-      if (now.rows.length === 0) return
+      if (now.rows.length === 0 || now.held) return
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return
       if (isEditableTarget(event.target)) return
       /* A LAYER OVER THE WALK OWNS THE KEYBOARD (the lightbox, a dialog), as the shell's own keys
