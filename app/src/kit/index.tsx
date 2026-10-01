@@ -509,6 +509,32 @@ export function Pill({
   )
 }
 
+/* ---- Slot ------------------------------------------------------------------------- */
+/** A PLACE THAT ALWAYS TAKES ITS ROOM (D313). Content that mounts later (a pill, a chip, a note, a
+ *  receipt) goes inside a `Slot`; while `show` is false the slot draws nothing and still holds the
+ *  block size of what it will hold, so its siblings never move when the content arrives.
+ *  `size="line"` holds one text line (`1lh`). `size="pill"` holds a pill (`--bn-pill-h`).
+ *  A hidden slot is `aria-hidden` and empty, so a screen reader hears nothing for it. */
+export function Slot({
+  show = true,
+  size = 'line',
+  as: Tag = 'div',
+  className,
+  children,
+}: {
+  readonly show?: boolean
+  readonly size?: 'line' | 'pill'
+  readonly as?: 'div' | 'span' | 'p'
+  readonly className?: string
+  readonly children?: ReactNode
+}) {
+  return (
+    <Tag className={['bn-slot', `bn-slot-${size}`, className].filter(Boolean).join(' ')} aria-hidden={show ? undefined : true}>
+      {show ? children : null}
+    </Tag>
+  )
+}
+
 /* ---- Meter --------------------------------------------------------------------------- */
 /** A count against a ceiling: one cell for each unit the ceiling allows, filled up to `filled`,
  *  and an end label that says what the ceiling is ("Cap 5"). Over the ceiling it draws every cell

@@ -7,7 +7,7 @@ import {
 import type { HoldingsRange, HoldingsTotal, HoldingsValuePayload, OrderLineWire, OrderRow } from './types'
 import {
   Button, CardThumb, EmptyState, IconButton, Money, Notice, Page, Pill,
-  ProductLink, ReloadButton, Segmented, SortHeader, type SortValue,
+  ProductLink, ReloadButton, Segmented, Slot, SortHeader, type SortValue,
 } from './kit'
 import { moneyGrouped } from './money'
 import { absoluteDate, monthOf, saleDate, weekOf } from './dates'
@@ -1298,9 +1298,11 @@ export function Revenue() {
           <p className="revenue-verdict-said">
             {`${orderCount(inPeriod).toLocaleString()} ${orderCount(inPeriod) === 1 ? 'order' : 'orders'}, ${inPeriod.reduce((n, s) => n + s.quantity, 0).toLocaleString()} copies`}
           </p>
-          {compareLine(total, inPrevious, partial) === null ? null : (
-            <p className="revenue-verdict-prior">{compareLine(total, inPrevious, partial)}</p>
-          )}
+          {/* A SLOT, NOT A CONDITIONAL: the line is absent for some periods, and a line that
+              mounts under a press moves the podium (D313). */}
+          <Slot as="p" className="revenue-verdict-prior" show={compareLine(total, inPrevious, partial) !== null}>
+            {compareLine(total, inPrevious, partial)}
+          </Slot>
           {dropped === 0 ? null : (
             <p className="revenue-verdict-dropped">
               {`${dropped.toLocaleString()} ${dropped === 1 ? 'line has' : 'lines have'} no usable date and ${dropped === 1 ? 'is' : 'are'} left out of every figure here.`}
@@ -1360,12 +1362,10 @@ export function Revenue() {
         {shelfColumn}
       </section>
 
-      {activeBucketLabel === null ? null : (
-        <div className="revenue-active-filter">
-          <Pill tone="accent">{`${activeBucketLabel} only`}</Pill>
-          <IconButton icon="x" label="Clear the month" onClick={() => setActiveBucket(null)} size="sm" />
-        </div>
-      )}
+      <Slot className="revenue-active-filter" show={activeBucketLabel !== null}>
+        <Pill tone="accent">{`${activeBucketLabel} only`}</Pill>
+        <IconButton icon="x" label="Clear the month" onClick={() => setActiveBucket(null)} size="sm" />
+      </Slot>
 
       {/* "BEST SELLERS" NAMED A GROSS-OR-COPIES RANKING. Sorted by "Latest" or "A to Z" it is
           not a ranking of the best sellers at all — a bare rename to whatever the mock said

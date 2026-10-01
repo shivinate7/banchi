@@ -154,6 +154,7 @@ STAGE — DARK IN BOTH THEMES     the viewfinder and the photo heroes
 
 SHELL                           --bn-sidebar-w 236 · --bn-rail-w 64 · --bn-topbar-h 52
 --bn-control-h 34 · -lg 40 · -sm 28      → 42 · 46 · 40 under a coarse pointer
+--bn-pill-h 22 · -sm 18                  a pill's height. A line that may hold a pill reserves it.
 PAGE WIDTH                      --bn-page-w 1600 · -rows 1344
                                 a CAP, not a breakpoint: 1536 and 1280 of content
 --bn-page-top                   = --bn-6 (24), = --bn-4 (16) below 768. The one gap above

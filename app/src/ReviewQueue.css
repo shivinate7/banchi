@@ -154,7 +154,7 @@
 
 /* The reason lens is the kit's `FilterChips`; this only spaces it from the page. */
 .review-filters { margin: calc(-1 * var(--bn-2)) 0 var(--bn-3); }
-.review-queue-toggle .bn-pill { height: 18px; padding: 0 var(--bn-1-5); }
+.review-queue-toggle .bn-pill { height: var(--bn-pill-h-sm); padding: 0 var(--bn-1-5); }
 
 /* ---- body ------------------------------------------------------------------ */
 .review-body {

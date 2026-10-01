@@ -5962,8 +5962,8 @@ COMPONENTS = [
                                        "raises the three control heights to a thumb's 40-46px — the "
                                        "POINTER decides, not the width, because an iPad in portrait "
                                        "is 820px wide and all thumb.",
-                               "governed_by": ["D309", "D5", "D13", "D18", "D32", "D50", "D94", "D110",
-                                               "D197", "D272"],
+                               "governed_by": ["D5", "D13", "D18", "D32", "D50", "D94", "D110",
+                                               "D197", "D272", "D309", "D313"],
                                "note": "`scripts/docs-audit.py`'s `design tokens` row reads "
                                        "docs/DESIGN.md's fenced block as hexes, three typefaces, a "
                                        "spacing row and one radius, and merges every `:root` in this "
@@ -6077,9 +6077,9 @@ COMPONENTS = [
                                           "remember the choice in `localStorage` under "
                                           "`banchi.theme` — device-local like the camera's "
                                           "deviceId (D27), and nothing about a card.",
-                                  "governed_by": ["D309", "D5", "D13", "D27", "D32", "D50", "D94", "D95",
+                                  "governed_by": ["D5", "D13", "D27", "D32", "D50", "D94", "D95",
                                                   "D117", "D118", "D125", "D196", "D221", "D260",
-                                                  "D269", "D272", "D288", "D300"]},
+                                                  "D269", "D272", "D288", "D300", "D309", "D313"]},
             "src/kit/Icon.tsx": {"does": "one icon set, 73 paths on a 24-unit grid at 1.75 stroke "
                                          "with round joins, drawn in the Lucide idiom so the whole "
                                          "product speaks one line weight. `currentColor` and "
@@ -6937,11 +6937,9 @@ COMPONENTS = [
                                   "NO BANNER SLOT: `.browse-banner` came with main's envelope walk "
                                   "(D90) and went with it (D97 amended 2026-09-04), along with the "
                                   "only stylesheet that ever filled it.",
-                                  "governed_by": ["D5", "D6", "D13", "D58", "D31", "D32", "D33",
-                                                  "D38", "D39", "D41", "D90", "D117", "D118",
-                                                  "D119", "D132", "D213",
-                                                  "D259",
-                                                  "D289"]},
+                                  "governed_by": ["D5", "D6", "D13", "D31", "D32", "D33", "D38",
+                                                  "D39", "D41", "D58", "D90", "D117", "D118",
+                                                  "D119", "D132", "D213", "D259", "D289", "D313"]},
 
             # ---- 7b's screens. Built 2026-08-13, BEFORE Gate B; routed the same day ----
             #
@@ -7741,14 +7739,13 @@ COMPONENTS = [
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D86 is the screen.
                                 "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33",
-                                                "D35", "D36", "D37", "D38", "D39", "D41", "D180",
-                                                "D86", "D51", "D54", "D56", "D58", "D59", "D278",
-                                                "D277", "D89", "D99",
+                                                "D35", "D36", "D37", "D38", "D39", "D41", "D51",
+                                                "D54", "D56", "D58", "D59", "D86", "D89", "D99",
                                                 "D100", "D101", "D103", "D105", "D107", "D109",
-                                                "D115", "D117", "D118", "D125", "D137", "D156",
-                                                "D145", "D168", "D172", "D181", "D196",
-                                                "D210", "D218", "D221", "D269",
-                                                "D273", "D285", "D301"]},
+                                                "D115", "D117", "D118", "D125", "D137", "D145",
+                                                "D156", "D168", "D172", "D180", "D181", "D196",
+                                                "D210", "D218", "D221", "D269", "D273", "D277",
+                                                "D278", "D285", "D301", "D313"]},
             "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, a kit Sheet off #/pricing's header (D168). The owner's own "
                                             "ask: typed prices go stale and there was no way to clear many at once. IT IS A "
                                             "PRESS AND NOT A POLICY: nothing here runs on a clock. The scope is the "
