@@ -2268,7 +2268,7 @@ export function BoxBrowse({
                  name?"): the words, never the meaning — checked still folds a departed copy
                  away, on by default (`storedHideSold`), and the count is still what it hides. */
               <HideToggle checked={hideSold} count={hiddenBySold} className="browse-hidesold" onChange={() => onHideSold()}>
-                In stock only
+                In stock
               </HideToggle>
             )}
 
