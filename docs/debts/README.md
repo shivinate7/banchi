@@ -50,7 +50,6 @@ DEBT31 The path guard never reads code, so a decision cited by path in a comment
 DEBT32 The archive sweep stays a press, and the owner intends to schedule it eventually
 DEBT33 An answered queue entry can never resurface, even when it is wrong
 DEBT34 Categories and products never expire, on a membership claim this store cannot re-check on its own
-DEBT36 A layout read taken while the page still moves is wrong
 DEBT38 a section move's receipt names no owed cards and no next capture
 DEBT39 the public demo refuses every box map move
 DEBT40 a divider save can move a divider past departed records
@@ -61,7 +60,6 @@ DEBT46 a search with a typo finds nothing, and no near match is offered
 DEBT48 code-side mechanization left open
 DEBT49 `_copies_out` and `_committed_keys` cost a full-table pass per call
 DEBT50 git and gh CLI traps hit from this checkout
-DEBT54 the 13th-row undo walk times out under load
 DEBT58 the Lane H palette record is on a branch, not in main
 DEBT59 an unreadable live claim has no way out on screen
 DEBT60 the demo builds with Hide unpullable forced off
@@ -82,4 +80,5 @@ DEBT74 the mark's four HELD base parameters were never compared
 DEBT75 the first ask for a cold catalog group answers nothing
 DEBT76 the walk's card sheet on a phone has no Mark sold
 DEBT77 every phone-width spec is off
+DEBT78 the merge flow belongs in claude-settings
 ```

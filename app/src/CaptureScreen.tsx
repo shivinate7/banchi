@@ -620,10 +620,10 @@ function describe(err: unknown): Note {
  * THE TEST IS WHETHER THE NAME CHANGED THE ADDRESS, never whether a cid was passed. `photoUrl`
  * ignores one in the demo build, where the nonce is still owed, and answers null for a
  * `moved:`/`nophoto:` name, which draws no image at all. */
-function photoSrc(box: number, index: number, ref: PhotoRef, revision: number): string | undefined {
+function photoSrc(box: number, index: number, ref: PhotoRef, nonce: string): string | undefined {
   const url = photoUrl(box, index, ref)
   if (url === null) return undefined
-  return url.includes('?') ? url : `${url}?v=${revision}`
+  return url.includes('?') ? url : `${url}?v=${nonce}`
 }
 
 function blurActive(): void {
@@ -1241,7 +1241,16 @@ export function CaptureScreen() {
    * a second note region one row down would say the same thing twice in two places. */
   const [removeConfirm, setRemoveConfirm] = useState<UndoTarget | null>(null)
   const [removeBusy, setRemoveBusy] = useState(false)
+  /* THE SLOT NONCE IS PER SLOT. A capture or an undo rewrites one slot, so it stamps that slot
+   * only (`stampSlot`) and every other thumbnail keeps its URL and its cached bytes. `revision`
+   * moves only for a mid-box remove, which shifts every higher slot's bytes. */
   const [revision, setRevision] = useState(0)
+  const [slotStamps, setSlotStamps] = useState<Record<string, number>>({})
+  const stampSlot = useCallback((box: number, index: number) => {
+    setSlotStamps((prev) => ({ ...prev, [`${box}/${index}`]: (prev[`${box}/${index}`] ?? 0) + 1 }))
+  }, [])
+  const slotNonce = (box: number, index: number): string =>
+    `${slotStamps[`${box}/${index}`] ?? 0}.${revision}`
   /* Bumped on every capture the server answered, and only then: the viewfinder flashes
    * on it. Undo bumps `revision` (the photo URL must change) and never this. */
   const [flash, setFlash] = useState(0)
@@ -2966,7 +2975,7 @@ export function CaptureScreen() {
           // window from now rather than from whenever the pick was first made.
           touchSectionPick(selectedDiv, layoutToken ?? null)
         }
-        setRevision((prev) => prev + 1)
+        stampSlot(card.box, card.index)
         setFlash((prev) => prev + 1)
         setUndoNote(null)
         // UN-15: a card behind the divider is "built on" (undo.md 11.1) — this capture is in
@@ -3031,6 +3040,7 @@ export function CaptureScreen() {
     sectionsDetail,
     selectedDiv,
     setHint,
+    stampSlot,
     touchSectionPick,
   ])
 
@@ -3078,7 +3088,7 @@ export function CaptureScreen() {
             ),
           )
           setNextIndex((prev) => ({ ...prev, [String(target.box)]: target.index }))
-          setRevision((prev) => prev + 1)
+          stampSlot(target.box, target.index)
           // Whatever the replay note said is about a card that may be the one just deleted,
           // and a stale sentence about a position that no longer exists is worse than none.
           setReplayed(null)
@@ -3125,7 +3135,7 @@ export function CaptureScreen() {
         setBusy(false)
       }
     },
-    [patchOnHand, patchSectionCount, undoStack],
+    [patchOnHand, patchSectionCount, stampSlot, undoStack],
   )
 
   /** UN-15: takes the divider back out through `closeSection`, by its own key — the keyed
@@ -4349,7 +4359,7 @@ export function CaptureScreen() {
               <img
                 key={last.card.key}
                 className="capture-media"
-                src={photoSrc(last.card.box, last.card.index, last.card, revision)}
+                src={photoSrc(last.card.box, last.card.index, last.card, slotNonce(last.card.box, last.card.index))}
                 alt={`Capture at ${last.card.label}`}
               />
             )}
@@ -4877,7 +4887,7 @@ export function CaptureScreen() {
                     >
                       <img
                         className="capture-undo-thumb capture-undo-thumb-portrait"
-                        src={photoSrc(target.box, target.index, { cid: target.cid, capture_id: target.captureId }, revision)}
+                        src={photoSrc(target.box, target.index, { cid: target.cid, capture_id: target.captureId }, slotNonce(target.box, target.index))}
                         alt=""
                       />
                       {/* THE DRAWER GOES IN THE CAPTION, WHICH IS ALREADY ABSOLUTE — `left: 0;

@@ -27,7 +27,6 @@
     "032-the-archive-sweep-stays-a-press-and-the-owner-intends.md",
     "033-an-answered-queue-entry-can-never-resurface-even-when-wrong.md",
     "034-the-catalogue-cache-never-expires-on-a-membership-claim.md",
-    "036-a-layout-read-taken-while-the-page-still-moves-is-wrong.md",
     "038-a-section-move-receipt-names-no-owed-cards-and-no-next-capture.md",
     "039-the-public-demo-refuses-every-box-map-move.md",
     "040-a-divider-save-can-move-a-divider-past-departed-records.md",
@@ -38,7 +37,6 @@
     "048-code-side-mechanization-left-open.md",
     "049-copies-out-full-table-pass-per-call.md",
     "050-git-and-gh-cli-traps.md",
-    "054-capture-undo-13th-row-flake.md",
     "058-h-palettes-unlanded.md",
     "059-unreadable-claim-no-remedy.md",
     "060-demo-walk-recording.md",
@@ -58,6 +56,7 @@
     "074-logo-base-parameters-held-never-swept.md",
     "075-stock-image-first-ask-cold.md",
     "076-phone-walk-sheet-no-mark-sold.md",
-    "077-phone-specs-off.md"
+    "077-phone-specs-off.md",
+    "078-shared-merge-tool.md"
   ]
 }

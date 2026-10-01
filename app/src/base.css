@@ -219,6 +219,12 @@ summary::-webkit-details-marker { display: none; }
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  /* A 0.01ms duration on the default `transition-property: all` is a LIVE transition on every
+     property that changes, `scrollbar-color` (set on `*` above) included. Measured on the
+     capture screen: across the rail breakpoint the lockup's svg path and circles each held a
+     `running` `scrollbar-color` transition that never finished, so a wait on every animation
+     hung. Zero specificity: any rule that names its own `transition` still wins. */
+  *, *::before, *::after { transition-property: none; }
   /* …except the loops that CARRY MEANING. A busy ring frozen at a partial arc is a disabled
      button, so the rings keep turning, and slower than they turn at rest: a request for less
      motion never makes a thing move faster. The skeleton's shimmer and the live dot's pulse are

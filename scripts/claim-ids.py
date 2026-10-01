@@ -956,6 +956,67 @@ def apply_to_text(text: str, claims: Sequence[Claim]) -> Tuple[str, int]:
     return text, count
 
 
+def entry_gloss(root: Path, claim: Claim) -> str:
+    """STOPGAP (DEBT78): up to 6 words of a pending entry's own heading title.
+
+    The docs-audit `rule enforcement` row wants `D<n> (words)` at a cite's first use in a
+    paragraph of CLAUDE.md, and the claim turned a slug into a bare number. Read before the
+    rename, while the file still carries the slug. "" for a kind with no entry file.
+    """
+    d = DIR_KINDS.get(claim.kind)
+    if not d:
+        return ""
+    for path in sorted((root / d.directory).glob("*.md")):
+        m = re.match(r"#+\s+" + re.escape(claim.slug) + r"\s+[\u2014-]\s*(.+)", read(path).split("\n", 1)[0])
+        if m:
+            return title_gloss(m.group(1))
+    return ""
+
+
+def title_gloss(title: str) -> str:
+    """STOPGAP: the gloss a claim writes for an entry title. `--unclaim` strips exactly this."""
+    return " ".join(re.sub(r"[()`]", "", title).split()[:6])
+
+
+def claimed_gloss(root: Path, u: "Unclaim") -> str:
+    """The gloss `entry_gloss` wrote for this claimed entry, read from its heading now."""
+    if u.kind not in DIR_KINDS or not u.old_name:
+        return ""
+    path = root / DIR_KINDS[u.kind].directory / u.old_name
+    if not path.exists():
+        return ""
+    m = re.match(r"#+\s+" + re.escape(u.token) + r"\s+[\u2014-]\s*(.+)", read(path).split("\n", 1)[0])
+    return title_gloss(m.group(1)) if m else ""
+
+
+def gloss_first_uses(text: str, claims: Sequence[Claim], glosses: Dict[str, str]) -> str:
+    """STOPGAP: add ` (gloss)` to a claimed cite at its first use in a paragraph when it has none.
+
+    A paragraph ends at a blank line or starts at a bullet, as the audit reads it. A cite that
+    already has ` (..)` or `, words` after it is left alone, so a gloss is never doubled.
+    """
+    out, seen = [], set()
+    for line in text.split("\n"):
+        if not line.strip() or re.match(r"\s*[-*] ", line):
+            seen = set()
+        if not line.startswith("#"):
+            for c in claims:
+                g = glosses.get(c.slug)
+                if not g:
+                    continue
+
+                def add(m, c=c, g=g, seen=seen):
+                    if c.becomes in seen:
+                        return m.group(0)
+                    seen.add(c.becomes)
+                    if re.match(r"`?( \(|,\s+\w)", m.string[m.end():]):
+                        return m.group(0)
+                    return f"{c.becomes}{m.group(1)} ({g})"
+                line = re.sub(r"(?<![-\w])" + re.escape(c.becomes) + r"(`?)(?![-\w])", add, line, count=1)
+        out.append(line)
+    return "\n".join(out)
+
+
 def renumber_gates(text: str, claims: Sequence[Claim]) -> str:
     """Turn each claimed step's `0.` marker into its allocated number.
 
@@ -1118,6 +1179,7 @@ def rename_claimed_entries(root: Path, claims: Sequence[Claim], write: bool,
 def perform(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, int]:
     """Substitute every claim across the tree. Returns path -> replacements."""
     touched: Dict[str, int] = {}
+    glosses = {c.slug: entry_gloss(root, c) for c in claims}
     manifest_paths = {root / d.manifest for d in DIR_KINDS.values()}
     for path in text_files(root):
         # A manifest is names, not prose, and `rename_claimed_entries` owns it. Belt and
@@ -1132,6 +1194,8 @@ def perform(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, int]:
             after = renumber_map(after, claims)
         after = rewrite_decision_paths(after, claims)
         after, _ = apply_to_text(after, claims)
+        if path == root / "CLAUDE.md":  # the only file the audit's gloss rule reads
+            after = gloss_first_uses(after, claims, glosses)
         if after == before:
             continue
         touched[str(path.relative_to(root))] = sum(
@@ -1574,14 +1638,15 @@ def unrenumber_map(text: str, u: Unclaim) -> str:
     return pattern.sub('"n": "' + u.slug + '"', text, count=1)
 
 
-def apply_unclaim_to_text(text: str, u: Unclaim) -> Tuple[str, int]:
+def apply_unclaim_to_text(text: str, u: Unclaim, gloss: str = "") -> Tuple[str, int]:
     """`apply_to_text`'s own bound, run with the token and the replacement swapped.
 
     THE SAME `(?<![-\\w])...(?![-\\w])` GUARD, reused rather than rebuilt, is the whole point:
     a hand-rolled reverse would have to remember the `\\b`-boundary bug independently, and
     this one cannot forget it because it is not a second implementation.
     """
-    pattern = re.compile(r"(?<![-\w])" + re.escape(u.token) + r"(?![-\w])")
+    tail = r"(?: \(" + re.escape(gloss) + r"\))?" if gloss else ""  # STOPGAP: the gloss the claim added
+    pattern = re.compile(r"(?<![-\w])" + re.escape(u.token) + r"(?![-\w])" + tail)
     return pattern.subn(u.becomes, text)
 
 
@@ -1710,9 +1775,11 @@ def perform_unclaim(root: Path, u: Unclaim, write: bool,
     # `CLAUDE.md` (`DirKind.index_stub`).
     index_path = root / DIR_KINDS[u.kind].index_stub if u.kind in DIR_KINDS else None
     guard = guard or {}
+    gloss = claimed_gloss(root, u)
     for path in text_files(root):
         if path in manifest_paths:
             continue
+        g = gloss if path == root / "CLAUDE.md" else ""
         rel = str(path.relative_to(root))
         before = read(path)
         keep = guard.get(rel) or set()
@@ -1731,7 +1798,7 @@ def perform_unclaim(root: Path, u: Unclaim, write: bool,
                     continue
                 line = unrenumber_gates(line, u) if path == root / GATES else line
                 line = unrenumber_map(line, u) if path == root / MAP else line
-                line, got = apply_unclaim_to_text(line, u)
+                line, got = apply_unclaim_to_text(line, u, g)
                 hits += got
                 kept.append(line)
             after = "\n".join(kept)
@@ -1743,7 +1810,7 @@ def perform_unclaim(root: Path, u: Unclaim, write: bool,
                 after = unrenumber_map(after, u)
             if path == index_path:
                 after = unindex(after, u)
-            after, hits = apply_unclaim_to_text(after, u)
+            after, hits = apply_unclaim_to_text(after, u, g)
         if after == before:
             continue
         touched[str(path.relative_to(root))] = hits or 1

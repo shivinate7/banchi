@@ -306,6 +306,9 @@ async function open(
     // leaves `N - 1` on hand — the same number `store/master.py`'s own `_Places.total`
     // would answer for this fixture's shape.
     const deletedIndex = Number(path.split('/').pop())
+    // The store hands the newest index out again once that card is gone.
+    const deletedBox = path.split('/')[2] ?? ''
+    if (deletedIndex === (allocated[deletedBox] ?? 1) - 1) allocated[deletedBox] = deletedIndex
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -544,6 +547,29 @@ test('the stack is the whole sitting, newest first, and reaches the 13th row', a
 
   // And the heading counts the whole sitting, not a capped figure.
   await expect(page.locator('.capture-undo-depth')).toHaveText('23 recent')
+})
+
+/* AN UNDO REFETCHES NO OTHER ROW'S PHOTOGRAPH, AND A REUSED SLOT SHOWS ITS NEW ONE.
+ * A nameless row is drawn off the slot, so its `?v=` is the only thing that tells a browser the
+ * bytes moved. Undo rewrites one slot; the capture that takes the index back rewrites it again. */
+test('an undo keeps every other thumbnail URL, and a reused slot gets a new one', async ({
+  page,
+}) => {
+  await open(page)
+  await shoot(page, 3)
+  const thumb = (n: number) => rows(page).nth(n).locator('img.capture-undo-thumb')
+  const before = [await thumb(1).getAttribute('src'), await thumb(2).getAttribute('src')]
+  const old3 = await thumb(0).getAttribute('src')
+
+  await page.keyboard.press('u')
+  await expect(rows(page)).toHaveCount(2)
+  expect([await thumb(0).getAttribute('src'), await thumb(1).getAttribute('src')]).toEqual(before)
+
+  await shootInto(page, 3, 3, 1) // lands on index 3 again: same slot, new bytes
+  await expect(rows(page)).toHaveCount(3)
+  const new3 = await thumb(0).getAttribute('src')
+  expect(new3).not.toBe(old3)
+  expect([await thumb(1).getAttribute('src'), await thumb(2).getAttribute('src')]).toEqual(before)
 })
 
 /* UN-15: A DIVIDER'S OWN UNDO. `S`/"Section" appends a divider (`openSection`), and `U`

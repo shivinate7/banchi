@@ -4375,7 +4375,7 @@ test('UX-190 — a sale says which card took its number, and the rows hold still
   await page.locator('.browse-row').nth(2).click()
   const rects = async () =>
     page.locator('.browse-row').evaluateAll((rows) => rows.map((row) => Math.round(row.getBoundingClientRect().top)))
-  /* THE PRESS IS BROUGHT INTO VIEW BEFORE THE ROWS ARE READ (DEBT36, the PR 2 CI trace). On the
+  /* THE PRESS IS BROUGHT INTO VIEW BEFORE THE ROWS ARE READ (the PR 2 CI trace). On the
      Ubuntu runner the copies panel loads the current copy's row below the 720px fold, so
      Playwright's own click scrolled the page 77px to reach Mark sold, and every row read 77px
      higher after the sale although the sale moved nothing. The scroll is the test's, so it now
