@@ -4,17 +4,24 @@ import { test, expect } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { setViewport } from './phoneSwitch'
 
-sealEveryTest({ store: true, cards: 10 })
+sealEveryTest({ store: true, cards: 260 })
 
-/* Ten captures in three sittings (gaps of hours), against a deck that holds three cards. Home
+/* Two hundred and sixty captures in three sittings (gaps of days), against a deck that holds three cards. Home
  * once drew its ribbon from the deck's three cards, so any store read as one sitting and one
  * block. The sitting count in the sentence and the blocks drawn under it come off the same
  * history, so they must agree, and agree with the three sittings seeded. SHOTS=<dir> also
  * writes pictures. */
+/* Three realistic sittings, the way the owner's store looks: 60 to 120 cards each at a few
+ * hundred an hour, on three different days. Heights are cards an hour against the rig ceiling,
+ * so a thin seed (ten cards at 36 an hour) draws blocks too short to see. */
+function sitting(day: string, start: string, count: number, perHour: number): string[] {
+  const t0 = Date.parse(`${day}T${start}:00Z`)
+  return Array.from({ length: count }, (_, i) => new Date(t0 + (i * 3_600_000) / perHour).toISOString())
+}
 const STAMPS = [
-  '2026-09-13T09:00:00+00:00', '2026-09-13T09:02:00+00:00', '2026-09-13T09:04:00+00:00', '2026-09-13T09:06:00+00:00',
-  '2026-09-14T14:00:00+00:00', '2026-09-14T14:05:00+00:00', '2026-09-14T14:10:00+00:00',
-  '2026-09-16T20:00:00+00:00', '2026-09-16T20:03:00+00:00', '2026-09-16T20:05:00+00:00',
+  ...sitting('2026-09-13', '09:00', 120, 600),
+  ...sitting('2026-09-14', '14:00', 80, 900),
+  ...sitting('2026-09-16', '20:00', 60, 450),
 ]
 
 for (const [w, h] of [[1440, 900], [820, 1100]] as const) {
@@ -39,6 +46,10 @@ for (const [w, h] of [[1440, 900], [820, 1100]] as const) {
       const blocks = await page.locator('.home-ribbon-blk').count()
       expect(Number(said![1]), 'sittings in the sentence').toBe(3)
       expect(blocks, 'blocks drawn').toBe(3)
+      for (const box of await page.locator('.home-ribbon-blk').all()) {
+        const r = await box.boundingBox()
+        expect(r !== null && r.width > 1 && r.height > 1, `a block has a visible size, got ${JSON.stringify(r)}`).toBe(true)
+      }
     })
   }
 }
