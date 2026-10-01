@@ -6,7 +6,7 @@ import {
 } from './server'
 import type { HoldingsRange, HoldingsTotal, HoldingsValuePayload, OrderLineWire, OrderRow } from './types'
 import {
-  Button, CardThumb, EmptyState, IconButton, Money, Notice, Page, Pill,
+  Button, CardThumb, EmptyState, Icon, IconButton, Money, Notice, Page, Pill,
   ProductLink, ReloadButton, Segmented, SortHeader, type SortValue,
 } from './kit'
 import { moneyGrouped } from './money'
@@ -1337,7 +1337,7 @@ export function Revenue() {
               data-current={b.inProgress}
               aria-pressed={activeBucket === b.key}
               style={{ '--i': i } as CSSProperties}
-              title={`${b.orders.toLocaleString()} ${b.orders === 1 ? 'order' : 'orders'}`}
+              title={activeBucket === b.key ? 'Show every month' : `${b.orders.toLocaleString()} ${b.orders === 1 ? 'order' : 'orders'}`}
               onClick={() => setActiveBucket((cur) => (cur === b.key ? null : b.key))}
             >
               <span className="revenue-month-barwrap">
@@ -1352,6 +1352,7 @@ export function Revenue() {
               <span className="revenue-month-label">
                 {b.label}
                 {b.inProgress ? <Pill size="sm" tone="accent">Partial</Pill> : null}
+                {activeBucket === b.key ? <Icon name="x" size={12} aria-hidden="true" /> : null}
               </span>
             </button>
           ))}
@@ -1360,12 +1361,6 @@ export function Revenue() {
         {shelfColumn}
       </section>
 
-      {activeBucketLabel === null ? null : (
-        <div className="revenue-active-filter">
-          <Pill tone="accent">{`${activeBucketLabel} only`}</Pill>
-          <IconButton icon="x" label="Clear the month" onClick={() => setActiveBucket(null)} size="sm" />
-        </div>
-      )}
 
       {/* "BEST SELLERS" NAMED A GROSS-OR-COPIES RANKING. Sorted by "Latest" or "A to Z" it is
           not a ranking of the best sellers at all — a bare rename to whatever the mock said
