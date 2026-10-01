@@ -148,6 +148,13 @@ async function visitFulfiller(page: Page): Promise<Page> {
     page.waitForEvent('popup'),
     page.locator('.bn-side').getByRole('link', { name: 'Pull' }).first().click(),
   ])
+  // DEMO_CPU_THROTTLE=<rate> slows the window the way a slow phone or a loaded CI runner does,
+  // to reproduce the race this file's photograph case once lost: the screen asks for no photograph
+  // until the demo's 75 MB `demoServer` chunk has arrived and parsed, which is seconds, not ms.
+  if (process.env.DEMO_CPU_THROTTLE) {
+    const cdp = await fulfiller.context().newCDPSession(fulfiller)
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.DEMO_CPU_THROTTLE) })
+  }
   await fulfiller.locator('main, body').first().waitFor()
   await fulfiller.waitForTimeout(600)
   return fulfiller
