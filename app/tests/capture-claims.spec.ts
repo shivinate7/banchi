@@ -1419,11 +1419,15 @@ test('Clear asks first: cancel and Esc change nothing, confirm and Enter clear',
   expect(await storedSetup(page)).toMatchObject({ box: 3, setHint: 'MEG' })
 
   await page.getByRole('button', { name: 'Clear' }).click()
+  // Ready: the sheet is drawn and first focus has landed, so its key listeners are attached.
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused()
   await page.keyboard.press('Escape')
   await expect(dialog).toHaveCount(0)
   await expect(hintRow).toContainText('MEG')
 
   await page.getByRole('button', { name: 'Clear' }).click()
+  // Ready: the sheet is drawn and first focus has landed, so its key listeners are attached.
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(dialog).toHaveCount(0)
   await expect(hintRow).toContainText('None')

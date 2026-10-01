@@ -36,8 +36,8 @@ with `elementFromPoint`. It stays, and it now also asserts that the drawer draws
 BUILT by the shell lane of the 2026-09-23 overhaul, beside the palette changes in
 D276 (amends D95, the shell is a rail, a palette and a reference sheet). The drawer is
 the kit's `Sheet` now, so it is modal and holds focus (UX-014). Its last group holds Cards to
-pull, the theme toggle and the server line. `--bn-drawer-foot-h` is gone. the design's tap sweep in
-`app/tests/phone.spec.ts` is still skipped (DEBT29). A new case in that file asserts that the
+pull, the theme toggle and the server line. `--bn-drawer-foot-h` is gone. the tap sweep in
+`app/tests/phone.spec.ts` waits on the drawer closing, never on a page load. A new case in that file asserts that the
 drawer draws no fixed foot. It also asserts that every screen in the drawer shows without a
 scroll at 390x844.
 
