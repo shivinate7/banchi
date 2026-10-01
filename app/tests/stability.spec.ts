@@ -129,7 +129,7 @@ test('failed: a failed history read leaves no skeleton on Home', async ({ page }
    pressable row or as plain prose by what the other reads say. Equal 800ms holds hide that race. Here
    the runs read lands first and the status second, so the line is drawn twice. Its row keeps one
    height, so nothing below it moves. */
-test('loading: Home holds its frame when its reads land out of order', async ({ page }) => {
+for (const width of [1440, 820]) test(`loading: Home holds its frame when its reads land out of order, at ${width}`, async ({ page }) => {
   for (const seed of Object.values(POPULATED_ROUTE_SEEDS)) await seed(page)
   await page.route(
     () => true,
@@ -143,7 +143,9 @@ test('loading: Home holds its frame when its reads land out of order', async ({ 
     },
   )
   await watchShifts(page)
-  await setViewport(page, { width: 1440, height: 1000 })
+  await setViewport(page, { width, height: 1000 })
   const { sum, shifts } = await shiftOf(page, '#/')
-  expect(sum, describeShifts(shifts)).toBeLessThan(BUDGET)
+  /* Not zero: the foot's sentence grows left to right as its clauses land, and the words after a
+     clause move by a fraction of a pixel (0.0001). A box that moves is 0.004 or more. */
+  expect(sum, describeShifts(shifts)).toBeLessThan(BUDGET / 20)
 })

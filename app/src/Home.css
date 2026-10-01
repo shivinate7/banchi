@@ -40,7 +40,8 @@
 
 .home-standing-row {
   position: relative; display: flex; align-items: center; gap: var(--bn-3);
-  min-height: 58px; padding: var(--bn-3) var(--bn-4) var(--bn-3) var(--bn-5);
+  /* Two lines of the sentence: it wraps in the narrow column, and the skeleton cannot know. */
+  min-height: calc(2 * 1.35 * var(--bn-fs-lg) + 2 * var(--bn-3)); padding: var(--bn-3) var(--bn-4) var(--bn-3) var(--bn-5);
   border-radius: var(--bn-r-lg); background: var(--bn-surface); color: var(--bn-ink);
   text-decoration: none; overflow: hidden;
   box-shadow: inset 0 0 0 1px var(--bn-line), var(--bn-shadow-1);
@@ -53,7 +54,7 @@ a.home-standing-row:hover { box-shadow: inset 0 0 0 1px var(--bn-line-strong), i
 a.home-standing-row:active { translate: 0 1px; }
 /* A row that cannot be pressed is prose, not a control. */
 .home-standing-row[data-press='no'] { background: transparent; box-shadow: none; padding-top: 0; padding-bottom: 0; }
-/* The prose row keeps the pressable row's 58px floor: a read landing can turn prose into a press, and the row must not change height (D313). */
+/* The prose row keeps the pressable row's floor: a read landing can turn prose into a press, and the row must not change height (D313). */
 .home-standing-row[data-press='no'] .home-standing-rule { top: 2px; bottom: 2px; width: 3px; border-radius: var(--bn-r-full); }
 
 /* D118: a pointer state repaints, it never re-lays out. The rule thickens on hover with
