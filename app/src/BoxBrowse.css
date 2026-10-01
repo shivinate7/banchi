@@ -547,9 +547,11 @@
 .browse-hero-fig-live .bn-meter-end { line-height: var(--bn-4); }
 .browse-hero-fig-live .bn-meter-cells { gap: var(--bn-0-5); flex: none; }
 .browse-hero-fig-live .bn-meter-cells > span { min-width: 0; width: auto; }
-/* A STAND-IN FOR TEXT NOT YET KNOWN: real text in the real face, painted by the kit's `.bn-skeleton` (bar and shimmer), so the box is the
+/* A STAND-IN FOR TEXT NOT YET KNOWN: real text in the real face, covered by the kit's `Skeleton` (bar and shimmer), so the box is the
    one the answer will occupy. Never read aloud: its parent is `aria-hidden`. */
 .bn-ghost, .bn-ghost * { color: transparent; user-select: none; }
+.bn-ghost { position: relative; }
+.bn-ghost > .bn-ghost-bar { position: absolute; inset: 0; min-height: 0; }
 /* Under 520px of pane width the band stacks: the figures sit side by side under the identity. */
 @container pane (max-width: 520px) {
   .browse-hero-head { grid-template-columns: minmax(0, 1fr); padding: var(--bn-4); }

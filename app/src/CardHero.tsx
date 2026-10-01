@@ -42,7 +42,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ReadingAge } from './CardLocations'
 import { collectorNumber } from './cardNumber'
 import { forSale, IDENTIFIED, readingAgo, readingAgoShort, readingExact, stateLabel, stateTone, staleReading } from './cardState'
-import { Button, Icon, IconButton, Meter, Money, Pill, ProductLink } from './kit'
+import { Button, Icon, IconButton, Meter, Money, Pill, ProductLink, Skeleton } from './kit'
 import { toast } from './kit/toast'
 import { money } from './money'
 import { relativeDate, toDate } from './dates'
@@ -423,6 +423,17 @@ function HeroLead({ figures, market }: { readonly figures: HeroFigures; readonly
   )
 }
 
+/** STAND-IN TEXT: the text sets the box (the browser's own font, so the size is right on any
+ *  platform) and is hidden, and the kit's `Skeleton` is laid over it for the bar and its shimmer. */
+function Ghost({ children, className }: { readonly children: ReactNode; readonly className?: string }) {
+  return (
+    <span className={['bn-ghost', className].filter(Boolean).join(' ')}>
+      {children}
+      <Skeleton className="bn-ghost-bar" />
+    </span>
+  )
+}
+
 /** THE LEAD COLUMN WHILE THE COPIES SEARCH IS STILL ASKING (D118, a press changes what is on
  *  screen). The real column adds itself when the answer lands, and Actions, which rides the
  *  identity column's end, used to jump ~380px left under a press. This holds the column at its
@@ -442,7 +453,7 @@ function HeroLeadPending({ listing }: { readonly listing: boolean }) {
       <div className="browse-hero-fig">
         {label('Stored')}
         <span className="browse-hero-fig-value">
-          <span className="bn-skeleton bn-ghost">00</span>
+          <Ghost>00</Ghost>
         </span>
       </div>
       {listing ? (
@@ -450,20 +461,20 @@ function HeroLeadPending({ listing }: { readonly listing: boolean }) {
           <div className="browse-hero-fig browse-hero-fig-live">
             {label('Live')}
             <span className="browse-hero-fig-value">
-              <span className="bn-skeleton bn-ghost">00</span>
+              <Ghost>00</Ghost>
             </span>
             <span className="bn-meter">
               <span className="bn-meter-cells">
                 <span />
               </span>
-              <span className="bn-meter-end bn-skeleton bn-ghost">Cap 0</span>
+              <Ghost className="bn-meter-end">Cap 0</Ghost>
             </span>
           </div>
           <div className="browse-hero-fig">
             {label('Market')}
             <span className="browse-hero-fig-value">
               <span className="bn-datalink">
-                <span className="bn-skeleton bn-ghost">$0.00</span>
+                <Ghost>$0.00</Ghost>
               </span>
             </span>
           </div>
@@ -543,19 +554,19 @@ export function CardHeroHead({
             is drawn at 0 too, so a sale that folds a copy away adds no line (D118). */}
         {figures == null ? (
           figuresPending ? (
-            <p className="browse-hero-side" aria-hidden="true" data-pending="true">
-              <span className="bn-skeleton bn-ghost">
+            <div className="browse-hero-side" aria-hidden="true" data-pending="true">
+              <Ghost>
                 Captured<b>0</b>
-              </span>
-              <span className="bn-skeleton bn-ghost">
+              </Ghost>
+              <Ghost>
                 Hidden<b>0</b>
-              </span>
+              </Ghost>
               {card.sku === null ? null : (
-                <span className="bn-skeleton bn-ghost">
+                <Ghost>
                   Sent<b>0</b>
-                </span>
+                </Ghost>
               )}
-            </p>
+            </div>
           ) : null
         ) : (
           <p className="browse-hero-side">
