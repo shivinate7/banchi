@@ -6972,10 +6972,10 @@ COMPONENTS = [
                         "else on this screen; the mid-box delete is deliberately not on it. "
                         "The re-check sheet owns it the same way, and for the same reason.",
                 "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26",
-                                "D28", "D29", "D32", "D33", "D35", "D37", "D77", "D55", "D67",
-                                "D87", "D117", "D118", "D137", "D162", "D164", "D167",
-                                "D172", "D174", "D180", "D284", "D218", "D221", "D252", "D253",
-                                "D259", "D288", "D291"],
+                                "D28", "D29", "D32", "D33", "D35", "D37", "D55", "D67", "D77",
+                                "D87", "D117", "D118", "D137", "D162", "D164", "D167", "D172",
+                                "D174", "D180", "D218", "D221", "D252", "D253", "D259", "D284",
+                                "D288", "D291", "D-loading-holds-loaded-size"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of

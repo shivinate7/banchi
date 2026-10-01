@@ -2474,8 +2474,12 @@ export function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoos
       {failed !== null ? (
         <Notice tone="danger">{failed}</Notice>
       ) : lookup === null ? (
+        /* AS MANY BARS AS THE LIST SHOWS BEFORE "Show more" (`MAX_KEYED_CANDIDATES`, the same
+           constant `revealed` starts at), so the rows' first frame is the frame a full list
+           takes and the actions under it move nothing (D-loading-holds-loaded-size). A search
+           that matches fewer shrinks the list: that case is named in the decision. */
         <div className="review-candidates" aria-busy="true">
-          {[0, 1, 2].map((i) => (
+          {Array.from({ length: MAX_KEYED_CANDIDATES }, (_, i) => (
             <Skeleton key={i} className="review-candidate-skeleton" />
           ))}
         </div>

@@ -48,6 +48,31 @@ async function watchShifts(page: Page): Promise<void> {
   })
 }
 
+/** A store with priced holdings, so the shelf draws its figure and spark. The shell's default
+ *  answers "nothing priced", which is a thinner frame than a real store's. */
+async function pricedShelf(page: Page): Promise<void> {
+  await page.route(/\/pipeline\/holdings-value(\?|$)/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        range: 'month',
+        width_days: 30,
+        history_begins: '2026-08-01',
+        at: '2026-09-19T00:00:00+00:00',
+        on_hand_names: 10,
+        series: [],
+        totals: [
+          { start: '2026-08-01', value: '100.00', priced_names: 8, unpriced_names: 2, gap_before: false },
+          { start: '2026-09-01', value: '120.00', priced_names: 9, unpriced_names: 1, gap_before: false },
+        ],
+        unmarked: { names: 1 },
+        sealed_excluded: { names: 2, reason: 'sealed product has no card record' },
+      }),
+    }),
+  )
+}
+
 async function slowReads(page: Page): Promise<void> {
   await page.route(
     () => true,
@@ -74,6 +99,7 @@ for (const width of [1440, 820]) {
   test(`load shift under a slow server at ${width}`, async ({ page }) => {
     test.setTimeout(240_000)
     for (const seed of Object.values(POPULATED_ROUTE_SEEDS)) await seed(page)
+    await pricedShelf(page)
     await slowReads(page)
     await watchShifts(page)
     await setViewport(page, { width, height: 1000 })
