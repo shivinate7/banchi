@@ -44,6 +44,15 @@ function carried(copies: number, prices: number): string {
   ].filter((part): part is string => part !== null)
   return parts.join(' and ')
 }
+/** What the PRESS says it carries: every SKU the list holds ready, whatever a filter draws
+ *  (the filter note, moved onto the act). Copies stay in the bar's own line beside it. */
+function pressCarries(skus: number, copies: number, prices: number): string {
+  const parts = [
+    copies > 0 || prices === 0 ? (skus === 1 ? '1 SKU' : `all ${skus} SKUs`) : null,
+    prices > 0 ? plural(prices, 'price change', 'price changes') : null,
+  ].filter((part): part is string => part !== null)
+  return parts.join(' and ')
+}
 const DAY_MS = 24 * 60 * 60 * 1000
 
 /** The failures a second press can fix. Everything else is a refusal: pressing again gets the
@@ -466,6 +475,7 @@ function openReceipts(sends: readonly SendSummary[]): SendSummary[] {
 export function SendCard({
   runs,
   copies,
+  skus,
   priceChanges = [],
   liveMoves = [],
   settled,
@@ -477,6 +487,8 @@ export function SendCard({
   readonly runs: readonly string[]
   /** Copies the worklist says are ready, for the button's words. Null when not known. */
   readonly copies: number | null
+  /** SKUs those copies are on: the count the press names. */
+  readonly skus: number
   /** Cards already live whose typed price this press changes (the mixed send). The server
    *  decides against a fresh read; this is the worklist's count, for the button's words. */
   readonly priceChanges?: readonly PriceChange[]
@@ -631,14 +643,14 @@ export function SendCard({
                "Send 1 copy, 2 live copies move to $19.99". */
             (
               <>
-                {`Send ${carried(copies ?? 0, priceChanges.length)}, `}
+                {`Send ${pressCarries(skus, copies ?? 0, priceChanges.length)}, `}
                 <MovesPhrase moves={liveMoves} />
               </>
             )
           : priceChanges.length > 0
-            ? `Send ${carried(copies ?? 0, priceChanges.length)}`
+            ? `Send ${pressCarries(skus, copies ?? 0, priceChanges.length)}`
             : copies !== null && copies > 0
-              ? `Send ${plural(copies, 'copy', 'copies')} to TCGplayer`
+              ? `Send ${pressCarries(skus, copies, 0)} to TCGplayer`
               : 'Send to TCGplayer'
 
   const takeBack = async (stamp: string) => {

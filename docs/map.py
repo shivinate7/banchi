@@ -9538,13 +9538,12 @@ COMPONENTS = [
                                               "seventy-one cases measuring the uncropped "
                                               "fallback. Named by `app/tests/shell.ts`'s seal; "
                                               "all seventy-one pass against the cropped render.",
-                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D180", "D86",
-                                                      "D51", "D54", "D56", "D57", "D58", "D59",
-                                                      "D278", "D68", "D277",
-                                                      "D92", "D99", "D103", "D115", "D117",
-                                                      "D118", "D156", "D168", "D181", "D196",
-                                                      "D218", "D259", "D269", "D273",
-                                                      "D301"]},
+                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D51", "D54",
+                                                      "D56", "D57", "D58", "D59", "D68", "D86",
+                                                      "D92", "D99", "D103", "D115", "D117", "D118",
+                                                      "D156", "D168", "D180", "D181", "D196",
+                                                      "D218", "D259", "D269", "D273", "D277",
+                                                      "D278", "D301", "D313"]},
             "tests/boxmap.spec.ts": {
                 "does": "the Shelf (`D264`), stubbed: the map draws counts and no money, a "
                         "gap press sends the section, the gap and the aim, U sends the undo, the "
@@ -9564,8 +9563,8 @@ COMPONENTS = [
                         "does not. A dedicated case pins the 390px overflow this build found "
                         "in its own header once a fifth period option existed. Not a harness "
                         "test; `make design-check` runs it.",
-                "governed_by": ["D50", "D278", "D89", "D103", "D118", "D277", "D193", "D201", "D214",
-                                "D217", "D225", "D271", "D196", "D298", "D301"],
+                "governed_by": ["D50", "D89", "D103", "D118", "D193", "D196", "D201", "D214",
+                                "D217", "D225", "D271", "D277", "D278", "D298", "D301", "D313"],
             },
             "tests/demo-coverage.spec.ts": {
                 "does": "the BUILT public demo (`dist-demo/`), served on this checkout's own "
