@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import multiprocessing
+import os
+import signal
 import tempfile
 from pathlib import Path
 
@@ -25,6 +28,10 @@ from .spelling import (
 )
 
 
+def _die(item):
+    os.kill(os.getpid(), signal.SIGKILL)
+
+
 def run(ok) -> None:
     batch = [("def colour_map(): pass\n", ".py"), ("const x = 1\n", ".ts")] * 20
     ok(
@@ -32,6 +39,12 @@ def run(ok) -> None:
         and spelling_findings_many(batch)[0] != [],
         "the forked whole-tree read finds what the in-process read finds, in order",
     )
+    try:
+        spelling_findings_many(batch, timeout=3, worker=_die)
+        died = False
+    except multiprocessing.TimeoutError:
+        died = True
+    ok(died, "a worker killed mid-task raises instead of blocking the parent forever")
     ok(
         bool(_RAW_COLOR_RE.search("color: #1E40AF;")) and not _RAW_COLOR_RE.search("var(--accent)"),
         "the literal pattern matches a hex and not a token reference",
