@@ -2,15 +2,17 @@
 
 This spec answers DEBT80 (no motion designer has reviewed the app's animation). It holds the
 inventory of every animated surface, the recordings, the principles, the token set those
-principles imply, the findings and the proposals. The owner picks the proposals. Nothing in this
-file is built yet. DEBT80 stays open until the picked changes land.
+principles imply, the findings and the proposals. The owner picks the proposals. P2, P4 and P5
+are built. DEBT80 stays open until the rest land.
 
 `docs/specs/motion-trigger.md` is a different subject: the camera's motion trigger, not animation.
 
 ## STATUS
 
 - Inventory, recordings, findings and proposals: written.
-- Product code: not changed. Every change below is a proposal.
+- P2 (one stagger), P4 (theme crossfade), P5 (lighter capture flash): BUILT.
+- P1 and P5 were not picked at first; P1 stays as today until picked. P3 waits on load stability.
+- The other proposals are not built.
 - DEBT80: open.
 
 ## 1. How the recordings were made
@@ -257,12 +259,16 @@ inside `--bn-t-emphasis`. They rise less (about 40px) and stay inside the action
 color reads `--bn-ok` at full strength in light. The tooltip waits until the burst ends. The
 frame and the toast do not change.
 
-### P2. One stagger for every list
+### P2. One stagger for every list (BUILT)
 
 **Before:** no recording shows it, because the demo store's lists are short. The arithmetic is
 the evidence. Seventeen call sites set their own delay: 16, 25, 30, 35, 40, 70 and 90ms a step.
 Outside the dormant Codes screen, five have no cap: the `CaptureScreen` recent strip, `RunFiles`,
 two `ReviewQueue` lists and the `Fulfillment` boxes. The Home ribbon has no cap either.
+
+**Built:** every list entry reads `.bn-stagger` (on the list) or `.bn-stagger-item` (on the
+entry, when its parent is not the list) and `--i`. `app/tests/staggerCheck.ts` asserts the
+delay on two screens.
 
 **After:** every list reads `.bn-stagger` and `--i`. 30ms a row, cap 12, so no list waits more
 than 360ms for its last row. The Home ribbon grows as one sweep over `--bn-t-draw`.
@@ -279,7 +285,7 @@ a person returns to between every task.
 the deck at rest, with a 200ms fade only. The rise drops to `--bn-rise`. The whole entry ends
 inside `--bn-t-emphasis`.
 
-### P4. The theme flips in one composited fade
+### P4. The theme flips in one composited fade (BUILT)
 
 **Before:** `docs/specs/motion/theme-crossfade.png` (real time, not slowed); video
 `captures/motion/theme.webm`.
@@ -288,18 +294,24 @@ At about 60ms the whole page is a flat mid-gray: dark panels on a gray ground, t
 contrast. It takes about 260ms to reach dark. Every element on the page runs six color
 transitions at once, and a 360ms timer removes them.
 
+**Built:** `App.tsx`'s `toggle` wraps the flip in `startViewTransition`; `base.css` times it at
+`--bn-t`. `app/tests/motion-theme-flash.spec.ts` samples the body colour through the switch.
+
 **After:** `document.startViewTransition` takes one snapshot of the old theme and fades it out
 over the new one in 200ms. No color passes through gray, because the two themes are drawn
 whole and blended as images. No per-node transitions run. Where the API is missing, or under
 reduced motion, the theme flips in one frame.
 
-### P5. A lighter capture flash
+### P5. A lighter capture flash (BUILT)
 
 **Before:** `docs/specs/motion/capture-flash.png`; video `captures/motion/capture-flash.webm`.
 
 Each shot whites out the viewfinder at 0.9 opacity and fades over 380ms. The rig fires every
 610ms (`storeHistory.RIG_CEILING_PER_HOUR`), so the frame is bright for a large part of every
 cycle. The operator watches this frame to see the card settle.
+
+**Built:** `.bn-flash` peaks at 0.6 over `--bn-t-flash`; reduced motion shows no flash.
+`app/tests/motion-theme-flash.spec.ts` reads both numbers off the real animation.
 
 **After:** peak 0.6, over `--bn-t-flash` (200ms). It still says "taken" on every shot. The card
 is back in view well before the next one.
