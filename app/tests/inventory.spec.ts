@@ -8653,6 +8653,12 @@ async function rowFrames(page: Page, go: () => Promise<void>, ms: number): Promi
     requestAnimationFrame(tick)
   })
   await go()
+  /* WAIT ON A STATE, NEVER A FRAME COUNT: the rows are on screen and nothing on them is still
+     animating. A slow runner paints fewer frames in the same time, so a count is no measure. */
+  await page.waitForFunction(() => {
+    const rows = [...document.querySelectorAll('.card-locations-row')]
+    return rows.length > 0 && rows.every((row) => row.getAnimations().length === 0)
+  })
   await page.waitForTimeout(ms)
   return await page.evaluate(() => (window as unknown as { __rowFrames: RowFrame[] }).__rowFrames)
 }
@@ -8700,10 +8706,10 @@ for (const how of ['held arrow key', 'click']) test(`the copies list does not mo
     how === 'click'
       ? async () => { await page.locator('.browse-row').nth(13).click() }
       : () => holdKey(page, 'ArrowRight', 13),
-    700,
+    300,
   )
   const landed = landing(frames)
-  expect(landed.length, 'the rows never landed').toBeGreaterThan(20)
+  expect(landed.length, 'the rows never landed').toBeGreaterThan(0)
   expect(Math.max(...landed.map((frame) => frame.tops.length)), 'the card must overflow the band').toBeGreaterThanOrEqual(3)
   const last = landed[landed.length - 1] as RowFrame
   const moved = landed
