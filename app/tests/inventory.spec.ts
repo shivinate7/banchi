@@ -1684,6 +1684,37 @@ function copyRow(page: Page, place: string) {
     .filter({ has: page.locator(`[aria-label="${place}"]`) })
 }
 
+test('Undo stands in Mark sold\'s own frame, and the sale never moves the row', async ({ page }) => {
+  const { store, sell } = sellableStore()
+  await open(page, BOXES, store)
+
+  const row = copyRow(page, CARD_1)
+  const box = (sel: string) => row.locator(sel).evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    return { left: Math.round(r.left), width: Math.round(r.width), height: Math.round(r.height) }
+  })
+  /* `offsetTop`, not the viewport top: Playwright's own click scrolls the page. */
+  const rowBox = () => row.evaluate((el) => ({ top: (el as HTMLElement).offsetTop, height: Math.round(el.getBoundingClientRect().height) }))
+  const markSold = await box('.card-locations-sell')
+  const before = await rowBox()
+
+  await row.getByRole('button', { name: 'Mark sold' }).click()
+  sell('2/1')
+  /* The burst is on screen: a bill never takes a pointer event, and nothing about the row moves. */
+  await expect(row.locator('.card-locations-bill').first()).toBeAttached()
+  const pe = await row.locator('.card-locations-bill, .card-locations-flash').evaluateAll((els) => els.map((el) => getComputedStyle(el).pointerEvents))
+  expect(pe.length).toBeGreaterThan(1)
+  expect(new Set(pe)).toEqual(new Set(['none']))
+  const undo = row.getByRole('button', { name: 'Undo sale' })
+  await expect(undo).toBeVisible()
+  expect(await rowBox()).toEqual(before)
+
+  /* SAME LEFT, WIDTH AND HEIGHT AS MARK SOLD: the swap never changes the frame (D118, D195). */
+  expect(await box('.card-locations-undo')).toEqual(markSold)
+  await expect(row.locator('.card-locations-bill')).toHaveCount(0)
+  expect(await rowBox()).toEqual(before)
+})
+
 test('one press marks a copy sold, with no panel in between', async ({ page }) => {
   const { store, sell } = sellableStore()
   const wire = await open(page, BOXES, store)
@@ -2095,7 +2126,7 @@ test('the row that sold the copy becomes the way to take it back', async ({ page
 
   /* The slot draws `Undo` ALONE — no `Retire` beside it, because the server refuses the
      retirement of a sold card and a control that can only fail is not a control. */
-  const rowUndo = row.getByRole('button', { name: 'Undo the sale at' })
+  const rowUndo = row.getByRole('button', { name: 'Undo sale:' })
   await expect(rowUndo).toBeVisible()
   await expect(row.getByRole('button', { name: 'Retire' })).toHaveCount(0)
   await expect(row.getByRole('button', { name: 'Mark sold' })).toHaveCount(0)
@@ -2172,7 +2203,7 @@ test('U undoes the newest sale, wherever the hand is', async ({ page }) => {
 
   const row = copyRow(page, CARD_1)
   await row.getByRole('button', { name: 'Mark sold' }).click()
-  await expect(row.getByRole('button', { name: 'Undo the sale at' })).toBeVisible()
+  await expect(row.getByRole('button', { name: 'Undo sale:' })).toBeVisible()
 
   // The hand is nowhere in particular — on the page heading, not in any field.
   await page.getByRole('heading', { name: 'Inventory' }).click()
@@ -2190,7 +2221,7 @@ test('u typed into the search field does not undo the sale', async ({ page }) =>
 
   const row = copyRow(page, CARD_1)
   await row.getByRole('button', { name: 'Mark sold' }).click()
-  const rowUndo = row.getByRole('button', { name: 'Undo the sale at' })
+  const rowUndo = row.getByRole('button', { name: 'Undo sale:' })
   await expect(rowUndo).toBeVisible()
 
   await page.getByRole('searchbox').click()
@@ -7946,7 +7977,7 @@ test('the receipt has no clock (UN-5): a sale still offers Undo a faked minute l
      opposite of what a clock-gated receipt would show. */
   await page.clock.runFor(60_000)
   await expect(page.locator('.inventory-receipt')).toHaveCount(1)
-  await expect(page.getByRole('button', { name: /^Undo the sale at/ })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: /^Undo sale:/ })).toHaveCount(1)
 
   /* STILL SIX ROWS, STILL IN THE SAME ORDER, AND THE SOLD ONE STILL AT THE TOP — the freeze
      (D132) holds the row's place either way; what changed is that its Undo did not leave with
@@ -7961,17 +7992,17 @@ test('the receipt has no clock (UN-5): a sale still offers Undo a faked minute l
      way Fulfillment's "Pulled today" list already keeps every sale of a session undoable.
      Card 39 is sold second. */
   await copyRow(page, 'Box 7, Section 1, Card 39').getByRole('button', { name: 'Mark sold' }).click()
-  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 39' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Undo sale: Box 7, Section 1, Card 39' })).toHaveCount(1)
   /* Card 38's own Undo STAYS — it is not built on by anything, so it is still reversible even
      though it is no longer the newest sale. */
-  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 38' })).toHaveCount(1)
-  await expect(page.getByRole('button', { name: /^Undo the sale at/ })).toHaveCount(2)
+  await expect(page.getByRole('button', { name: 'Undo sale: Box 7, Section 1, Card 38' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: /^Undo sale:/ })).toHaveCount(2)
 
   /* `U` AND THE TOAST STILL REACH ONLY THE NEWEST (39), never 38 — "newest-only" survives
      for the one fast path, even though both rows now draw their own control. */
   await page.keyboard.press('u')
-  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 39' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 38' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Undo sale: Box 7, Section 1, Card 39' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Undo sale: Box 7, Section 1, Card 38' })).toHaveCount(1)
 })
 
 test('a retirement holds its row too, and it is the freeze alone that does it', async ({ page }) => {

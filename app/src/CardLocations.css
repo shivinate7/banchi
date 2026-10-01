@@ -268,13 +268,20 @@
 }
 /* MARK SOLD: one width on every row (D195), so the button does not change size between a row
    holding one action and a row holding three. */
-/* Mark sold is icon-only (the seal) but still the row's primary: the kit's solid accent on a
-   wide box. After the Retire and Move colour rules below it, so it wins their ink. */
+/* MARK SOLD, icon-only (the seal), still the row's primary. At rest a tint; hover fills the accent
+   in from the left with an inset box-shadow (`background-image` cannot animate) and the seal grows
+   a little; the press dip is base.css's own `translate`. Every animated property is named. */
 .card-locations-owner .card-locations-sell.bn-icon-btn {
   border-radius: var(--bn-r-lg);
-  background: var(--bn-accent);
-  box-shadow: var(--bn-shadow-1);
-  transition: background-color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
+  background: var(--bn-accent-tint);
+  box-shadow: inset 0 0 0 0 var(--bn-accent);
+  transition:
+    box-shadow var(--bn-t) var(--bn-ease-out),
+    color var(--bn-t) var(--bn-ease-out),
+    background-color var(--bn-t) var(--bn-ease-out);
+}
+.card-locations-owner .card-locations-sell .bn-icon {
+  transition: transform var(--bn-t) var(--bn-ease-out);
 }
 .card-locations-owner .card-locations-action .inventory-copy-actions { gap: var(--bn-1); flex: 1 1 auto; min-width: 0; }
 /* Retire and Move ride the right edge: the first icon after Mark sold takes the free space. */
@@ -282,9 +289,74 @@
 /* Retire and Move: bare icons in ink-3, 40px targets. Only the primary is coloured. */
 .card-locations-owner .card-locations-action .bn-icon-btn { color: var(--bn-ink-3); }
 .card-locations-owner .card-locations-action .bn-icon-btn:hover { color: var(--bn-ink); }
-.card-locations-owner .card-locations-action .card-locations-sell.bn-icon-btn:not([data-busy='true']) { color: var(--bn-on-accent); }
-.card-locations-owner .card-locations-action .card-locations-sell.bn-icon-btn:hover { background: var(--bn-accent-hover); box-shadow: var(--bn-shadow-accent); }
-.card-locations-owner .card-locations-action .card-locations-sell.bn-icon-btn:active { background: var(--bn-accent-press); }
+.card-locations-owner .card-locations-action .card-locations-sell.bn-icon-btn:not([data-busy='true']) { color: var(--bn-accent-hover); }
+.card-locations-owner .card-locations-action .card-locations-sell.bn-icon-btn:hover {
+  background: var(--bn-accent-tint);
+  box-shadow: inset 128px 0 0 0 var(--bn-accent);
+}
+.card-locations-owner .card-locations-action .card-locations-sell.bn-icon-btn:hover:not([data-busy='true']) { color: var(--bn-on-accent); }
+.card-locations-owner .card-locations-sell:hover .bn-icon { transform: scale(1.15); }
+
+/* UNDO SALE: Mark sold's own 128x40 frame as a neutral outline with the undo glyph, so it can
+   never read as "sell again" and the slot never changes size under the press (D118, D195). */
+.card-locations-owner .card-locations-undo-wrap { position: relative; display: inline-flex; flex: none; }
+.card-locations-owner .card-locations-action .card-locations-undo.bn-icon-btn {
+  border-radius: var(--bn-r-lg);
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--bn-ink-4);
+  color: var(--bn-ink-2);
+  transition:
+    background-color var(--bn-t) var(--bn-ease-out),
+    box-shadow var(--bn-t) var(--bn-ease-out),
+    color var(--bn-t) var(--bn-ease-out);
+}
+.card-locations-owner .card-locations-action .card-locations-undo.bn-icon-btn:hover {
+  background: var(--bn-hover);
+  box-shadow: inset 0 0 0 1.5px var(--bn-ink-3);
+  color: var(--bn-ink);
+}
+/* THE SALE'S ONE-SHOT, over the Undo frame: Mark sold's accent, the seal giving way to a check,
+   then the frame beneath showing. Never a loop, never a pointer target, never in the flow. */
+.card-locations-owner .card-locations-flash {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-accent);
+  color: var(--bn-on-accent);
+  pointer-events: none;
+  animation: bn-sale-flash calc(var(--bn-t) * 5) var(--bn-ease-out) both;
+}
+.card-locations-owner .card-locations-flash > .bn-icon { grid-area: 1 / 1; }
+.card-locations-owner .card-locations-flash-seal { animation: bn-sale-seal var(--bn-t) var(--bn-ease-out) both; }
+.card-locations-owner .card-locations-flash-check { animation: bn-sale-check calc(var(--bn-t) * 2) var(--bn-ease-out) both; }
+@keyframes bn-sale-flash { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes bn-sale-seal { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.4); } }
+@keyframes bn-sale-check { 0%, 30% { opacity: 0; transform: scale(0.4); } 60%, 100% { opacity: 1; transform: scale(1.15); } }
+.card-locations-owner .card-locations-bill {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  color: var(--bn-ok);
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0;
+  animation: bn-sale-bill calc(var(--bn-t) * 4) var(--bn-ease-out) forwards;
+}
+@keyframes bn-sale-bill {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.6) rotate(0); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.1) rotate(var(--rot)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-locations-owner .card-locations-flash,
+  .card-locations-owner .card-locations-bill { display: none; }
+  .card-locations-owner .card-locations-sell.bn-icon-btn,
+  .card-locations-owner .card-locations-sell .bn-icon,
+  .card-locations-owner .card-locations-action .card-locations-undo.bn-icon-btn { transition: none; }
+}
 
 /* --------------------------------------------------- the receipt, inside the slot (D119)
    THE SALE'S UNDO LANDS WHERE THE SALE WAS PRESSED, AND IT FITS THE SLOT RATHER THAN MOVING

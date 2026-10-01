@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
 import type { BoxRecord, SearchCopy, SearchGroup, SectionDetail } from './types'
 import { isDeparted, photoUrl, placeSentence } from './server'
@@ -317,11 +317,15 @@ export function MarkSoldButton({
   busy,
   disabled,
   name,
+  saleKey,
   onClick,
 }: {
   readonly busy: boolean
   readonly disabled: boolean
   readonly name?: string
+  /** The copy's key. A press notes it, so the Undo that stands where this button was plays the
+   *  sale's burst once (`UndoSaleButton`); a row loaded already sold never does. */
+  readonly saleKey?: string
   readonly onClick: () => void
 }) {
   return (
@@ -334,8 +338,87 @@ export function MarkSoldButton({
       style={{ width: 128 }}
       busy={busy}
       disabled={disabled}
-      onClick={onClick}
+      onClick={() => {
+        if (saleKey !== undefined) FRESH_SALES.set(saleKey, Date.now())
+        onClick()
+      }}
     />
+  )
+}
+
+/* THE SALE JUST PRESSED, by copy key. `MarkSoldButton` writes it, `UndoSaleButton` reads it once
+   on mount and clears it, so the burst plays for the press and never for a row that was already
+   sold when it was drawn. A press that never lands leaves a stale key, so it expires. */
+const FRESH_SALES = new Map<string, number>()
+const FRESH_MS = 15000
+const BILL_COUNT = 8
+
+/** THE UNDO THAT STANDS WHERE MARK SOLD WAS: the same 128x40 frame (D195, D118), as a neutral
+ *  outline with the undo glyph, so it never reads as "sell again". Right after a press, a flash
+ *  in Mark sold's own accent plays the seal giving way to a check and fading into that frame,
+ *  with drawn bills flying up and out. The flash and the bills are `pointer-events: none` and
+ *  absolutely placed, so they never take a click and never move the row; reduced motion drops
+ *  both and the frame is simply there. */
+export function UndoSaleButton({
+  saleKey,
+  name,
+  busy,
+  disabled,
+  kbd,
+  onClick,
+}: {
+  readonly saleKey: string
+  readonly name: string
+  readonly busy: boolean
+  readonly disabled: boolean
+  readonly kbd?: string
+  readonly onClick: () => void
+}) {
+  const [fresh, setFresh] = useState(() => {
+    const at = FRESH_SALES.get(saleKey)
+    return at !== undefined && Date.now() - at < FRESH_MS
+  })
+  useEffect(() => {
+    FRESH_SALES.delete(saleKey)
+  }, [saleKey])
+  return (
+    <span className="card-locations-undo-wrap">
+      <IconButton
+        icon="undo"
+        label="Undo sale"
+        name={name}
+        size="xl"
+        className="card-locations-undo"
+        style={{ width: 128 }}
+        busy={busy}
+        disabled={disabled}
+        kbd={kbd}
+        onClick={onClick}
+      />
+      {fresh ? (
+        <>
+          <span className="card-locations-flash" aria-hidden="true" onAnimationEnd={() => setFresh(false)}>
+            <Icon name="sold" size={20} className="card-locations-flash-seal" />
+            <Icon name="check" size={20} className="card-locations-flash-check" />
+          </span>
+          {Array.from({ length: BILL_COUNT }, (_, i) => (
+            <span
+              key={i}
+              className="card-locations-bill"
+              aria-hidden="true"
+              style={{
+                ['--dx' as string]: `${(i - (BILL_COUNT - 1) / 2) * 16}px`,
+                ['--dy' as string]: `${-(46 + (i % 3) * 18)}px`,
+                ['--rot' as string]: `${(i % 2 ? 1 : -1) * (20 + i * 8)}deg`,
+                animationDelay: `${i * 25}ms`,
+              }}
+            >
+              <Icon name="bill" size={22} />
+            </span>
+          ))}
+        </>
+      ) : null}
+    </span>
   )
 }
 
@@ -635,6 +718,7 @@ function OwnerRows({
                   <MarkSoldButton
                     busy={busyKey === copy.key}
                     disabled={busyKey !== null && busyKey !== copy.key}
+                    saleKey={copy.key}
                     onClick={() => onSell(copy)}
                   />
                 )}

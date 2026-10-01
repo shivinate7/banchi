@@ -29,7 +29,7 @@ import {
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
 import { useViewParam } from './kit/viewState'
-import { CardLocations, hiddenCopies, layoutsOf, MarkSoldButton } from './CardLocations'
+import { CardLocations, hiddenCopies, layoutsOf, MarkSoldButton, UndoSaleButton } from './CardLocations'
 import type { HeroFigures } from './CardHero'
 import { InventorySets } from './InventorySets'
 import { PositionBar } from './PositionBar'
@@ -1130,11 +1130,9 @@ function Action({
         {/* ICON, U IN THE TOOLTIP (ICONOGRAPHY): Undo is reversed by pressing it again, so it
             keeps no words in either sector — the row and the phone bar both read it from the
             sentence beside it. */}
-        <IconButton
-          size="xl"
-          icon="undo"
-          label="Undo"
-          name={`Undo the sale at ${standing.place}`}
+        <UndoSaleButton
+          saleKey={copy.key}
+          name={`Undo sale: ${standing.place}`}
           busy={busy}
           disabled={busyKey !== null && !busy}
           kbd={undoKeyOn ? UNDO_KEY_LABEL : undefined}
@@ -1170,6 +1168,7 @@ function Action({
           busy={busy}
           disabled={busyKey !== null && !busy}
           name={copy.place.label === null ? undefined : `Mark sold: ${sayPlace(copy.place.label)}`}
+          saleKey={copy.key}
           onClick={() => onSell(copy)}
         />
       )}
