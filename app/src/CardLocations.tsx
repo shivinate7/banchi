@@ -378,7 +378,7 @@ export function UndoSaleButton({
     /* The Mark sold that held focus is gone, so focus would drop to the body: a sale hands it to
        the Undo, and a keyboard user can take it back at once. */
     if (wasFresh) button.current?.focus()
-  }, [saleKey])
+  }, [saleKey, wasFresh])
   return (
     <span className="card-locations-undo-wrap">
       <IconButton
