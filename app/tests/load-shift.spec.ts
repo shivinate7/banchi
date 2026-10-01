@@ -1,5 +1,8 @@
 // Protects: a screen that loads late holds its final frame from the first paint, so nothing moves when data lands.
 // Governs: D-loading-holds-loaded-size, D280
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
@@ -7,7 +10,6 @@ import { routesFromNav } from './routes'
 import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE } from './routeFixtures'
 import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
 import { setViewport } from './phoneSwitch'
-import allow from './load-shift-allow.json'
 
 /* LOAD-TIME LAYOUT SHIFT, PER SCREEN, UNDER A SLOW SERVER.
  *
@@ -16,6 +18,9 @@ import allow from './load-shift-allow.json'
  * recent-input exclusion over the first 3s of the document, and the sources name what moved.
  * The measure is the browser's own, so a font or a CI box cannot tune it. */
 sealEveryTest({ store: true, cards: 122 })
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+const EXCUSED = JSON.parse(readFileSync(resolve(HERE, 'load-shift-allow.json'), 'utf8')) as Record<string, string>
 
 const SLOW_MS = 800
 const WINDOW_MS = 3000
@@ -74,7 +79,7 @@ for (const width of [1440, 820]) {
     await setViewport(page, { width, height: 1000 })
     const routes = (await routesFromNav(page)).filter((r) => !EXCLUDED_FROM_SWEEP.test(r))
     routes.push(PRODUCT_ROUTE)
-    const excused = allow as Record<string, string>
+    const excused = EXCUSED
     const over: string[] = []
     const stale: string[] = []
     const table: string[] = []

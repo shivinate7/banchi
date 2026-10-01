@@ -7199,8 +7199,8 @@ COMPONENTS = [
                         "`positionOf` and the Where column both go through "
                         "`storeKey.ts:storeKeyText` — `B9 #3`, D68's own spelling — rather "
                         "than composing `#{index}` by hand.",
-                "governed_by": ["D26", "D58", "D68", "D83", "D92", "D134", "D196",
-                                "D218", "D259"],
+                "governed_by": ["D26", "D58", "D68", "D83", "D92", "D134", "D196", "D218", "D259",
+                                "D-loading-holds-loaded-size"],
             },
             "src/Graveyard.css": {
                 "does": "a smaller sheet than a working screen's, because this one has no "
