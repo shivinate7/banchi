@@ -255,7 +255,7 @@ DIFFERENT FEATURE BRANCH, not the default — and that is what stays refused.
 `_default_branch(remote, cwd)` answers what this checkout treats as `<remote>`'s default,
 preferring git's own record of it — `refs/remotes/<remote>/HEAD`, the ref a real `git clone` (or
 `git remote set-head <remote> -a`) sets — and falling back, when that ref has never been
-written, to the same rule `scripts/janitor.py:default_branch` already uses for the primary
+written, to the same rule the claude-settings sweep uses for the primary
 checkout: the first of `main`, `master` that exists as a local branch. Nothing here guesses — an
 unreadable remote and an absent local branch both answer `""`, which never equals a real tracked
 name, so that case is refused exactly as it always was. `clause_push` then exempts a mismatch
@@ -263,7 +263,7 @@ only when `tracked == _default_branch(remote, where)`; every other mismatch, inc
 incident's own, reaches the refusal unchanged.
 
 **Why git's own record first, and a documented constant never.**
-`janitor.py:default_branch` already answers this question for the
+The claude-settings sweep already answers this question for the
 primary checkout, so a hardcoded `"main"` here would have been a second, divergent answer to a
 question this tree had already settled once — the "ask whether the primitive exists" rule this
 same file's own opening section restates from CLAUDE.md. But `janitor.py`'s answer is local-only

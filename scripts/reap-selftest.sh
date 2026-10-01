@@ -12,7 +12,7 @@
 # processes this script starts itself in their own process groups.
 #
 # WHY IT IS NOT IN THE GIT HOOK. D18: it writes a temp tree and it signals processes. It IS in
-# `make check`, which is exactly janitor-selftest's and merge-selftest's standing.
+# `make check`, which is exactly janitor-selftest's and revert-selftest's standing.
 #
 # THE TWO INCIDENTS ARE CASES HERE, NOT PROSE. `pkill -f <name>` where a stranger also matches,
 # and `for p in $(lsof -ti tcp:PORT); do kill $p; done` where a CLIENT holds the port — both are
@@ -439,7 +439,7 @@ echo "  -- a root that would contain everything --"
 
 # THIS IS THE HOLE THE USER-LEVEL INSTALL EXPOSED, and it could not have been found from inside
 # a clone: `git rev-parse --show-toplevel` always answers there, so the fallback never ran. The
-# moment `make janitor-install` put the hook in the user's own `~/.claude/settings.json` it began
+# moment a user-level hook ran the guard, it began
 # firing in directories that are not repositories, and the fallback adopted the HOME DIRECTORY as
 # "this checkout" — under which the owner's live capture server sits. Measured 2026-09-10: the
 # exact command of incident 1, judged from `$HOME`, resolved that server to OURS.

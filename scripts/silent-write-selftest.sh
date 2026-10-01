@@ -294,8 +294,8 @@ if real_command 'git merge-tree HEAD HEAD >/dev/null 2>&1'; then
 fi
 
 allows "\`gh pr view\` is a read"               "gh pr view 300 --json mergeable 2>/dev/null"
-allows "\`make merge-selftest\` is not \`make merge\`" "make merge-selftest >/dev/null 2>&1"
-allows "\`make claim-ids\` is not a merge"       "make claim-ids >/dev/null 2>&1"
+allows "\`make revert-selftest\` is not \`make merge\`" "make revert-selftest >/dev/null 2>&1"
+allows "\`make merge-base\` is not a merge"        "make merge-base >/dev/null 2>&1"
 
 echo ""
 echo "  a write whose output survives is none of this guard's business"

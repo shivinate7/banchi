@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -22,7 +23,6 @@ from .core import (
     exists,
     gates_text,
     git,
-    literals_from_module,
     python_files,
     read,
     rel,
@@ -62,7 +62,7 @@ _ID_DIGITS = r"[1-9][0-9]{0,2}"
 # AND AN ID IS A SLUG WHILE THE BRANCH THAT WRITES IT IS OPEN (D140, rewritten 2026-09-11).
 # A number cannot be allocated on a branch, because the allocation's whole input — what main
 # has taken — is not knowable until the merge. So a branch writes its heading as a slug and
-# cites it that way, `scripts/claim-ids.py` substitutes the number at merge time, and the
+# cites it that way, the shared merge tool substitutes the number at merge time, and the
 # thirteen renumber events in this repo's history have no way to happen.
 #
 # NEVER NAME A LIVE SLUG IN A COMMENT OR A FIXTURE. The claim is exhaustive text replacement,
@@ -256,7 +256,7 @@ def decision_heading_lines_across(paths: Iterable[Path], letter: str) -> List[Tu
 def decision_id_code_haystack() -> List[Path]:
     """Every non-markdown file `decision ids in code` reads for a D/C citation.
 
-    ITS OWN FUNCTION, SO `scripts/claim-ids.py`'s SELF-TEST CAN CALL IT DIRECTLY, rather than
+    ITS OWN FUNCTION, SO the claim self-test CAN CALL IT DIRECTLY, rather than
     retyping the suffix list this scan reads. The claimer's own walk once skipped every
     dotted directory (`.claude/skills/`), so a slug cited in
     `.claude/skills/text-density/SKILL.md` survived a claim commit unrewritten and this very
@@ -351,7 +351,7 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
     # reason: it was the one real extension in this tree that cites decisions and nothing
     # opened it. `app/eslint.config.js` alone carries six of them, every one valid — so this
     # widen reports nothing today, which is the point. What it would have caught is what a
-    # branch found by hand the day `scripts/claim-ids.py` landed: that file was outside the
+    # branch found by hand the day the shared merge tool landed: that file was outside the
     # CLAIMER's suffix set too, so a SLUG written there survived the merge and became a
     # citation of an entry that had just been given a number. Both sets gained `.js` together.
     #
@@ -385,7 +385,7 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
 # has taken, and a branch cannot have that: every renumber in this repo's history is one
 # branch reading `origin/main`, taking the next free id, and being wrong the moment another
 # branch merged first. Thirteen of those are recorded in D140, and D16 carries three entries
-# numbered `## D50` at once. So a branch writes a SLUG and `scripts/claim-ids.py` substitutes
+# numbered `## D50` at once. So a branch writes a SLUG and the shared merge tool substitutes
 # the number inside `make merge`, against main as it stands then.
 #
 # THIS ROW REPLACED `renumbered ids` AND `vacated ids`, WHICH ARE DELETED. Both existed to
@@ -416,7 +416,7 @@ _STRICT_SLUG_HEADING = re.compile(r"^##\s+[DC]" + _ID_SLUG + r"\b")
 # DEBT'S OWN PAIR, ONE WORD OVER: `docs/debts/` joined the claim path (D140's scheme, the
 # owner's word), so a pending debt slug carries the identical malformed-heading risk one
 # letter's worth wider — `## DEBT-pad` is one segment and would be silently invisible to
-# `scripts/claim-ids.py` the same way `## D-pad` already is.
+# the shared merge tool the same way `## D-pad` already is.
 _LOOSE_SLUG_HEADING_DEBT = re.compile(r"^##\s+(DEBT-\S+)")
 _STRICT_SLUG_HEADING_DEBT = re.compile(r"^##\s+DEBT" + _ID_SLUG + r"\b")
 # NOT `\bstep `: a hyphen is a non-word character, so `\b` fires INSIDE `runs-step` and
@@ -438,7 +438,7 @@ def is_main(ref_name: str, named: str, head: str, origin_main: str) -> bool:
     a worktree commonly has no local `main` at all (D42's merge discipline keeps it checked
     out elsewhere), and `GITHUB_REF_NAME` exists only in Actions.
 
-    COMMIT EQUALITY IS THE DETACHED-HEAD RULE AND NOTHING ELSE (D148). A NAMED
+    COMMIT EQUALITY IS THE DETACHED-HEAD RULE AND NOTHING ELSE. A NAMED
     branch is not main however recently it was cut, and this is where a false YES came from: a
     branch cut from main and not yet committed to sits AT origin/main, so equality called it
     main. `id claims` then refused its FIRST commit — the one commit that introduces the slug —
@@ -488,7 +488,7 @@ def check_id_claims(report: Report) -> None:
                         f"{rel(path)}:{number}",
                         f"`{loose.group(1)}` is not a claimable id, so this heading is not an "
                         f"entry: no row reports on it, no citation of it resolves, and "
-                        f"`scripts/claim-ids.py` will not allocate it a number. A slug is two or "
+                        f"the merge tool will not allocate it a number. A slug is two or "
                         f"more lowercase segments, never one — `D-pad` is prose.",
                     ))
                     continue
@@ -522,8 +522,8 @@ def check_id_claims(report: Report) -> None:
             "  A slug is a branch's placeholder and `make merge` is what turns it into a "
             "number (D140). One on main means a claim half-landed — every "
             "citation of it now resolves to nothing.\n"
-            "  Repair: `python3 scripts/claim-ids.py --ref origin/main --write` on a branch, "
-            "then a pull request.".format(
+            "  Repair: a pull request off main, merged through `make merge`, which claims "
+            "every pending record.".format(
                 len(unclaimed), ", ".join(f"`{name}`" for name in unclaimed)),
         ))
 
@@ -542,20 +542,20 @@ def check_id_claims(report: Report) -> None:
 # `docs/debts/<n>-*.md` file with a real number in its own name, D140's exact violation
 # ("never allocate a numbered record on a branch. Write a slug. Claim the number at merge.").
 # That is how a debt entry once collided: lane B2 added
-# `docs/debts/048-...md` straight, and `scripts/claim-ids.py` independently planned the
+# `docs/debts/048-...md` straight, and the shared merge tool independently planned the
 # SAME number for a pending slug.
 #
 # THE SANCTIONED CLAIM IS ALSO A NUMBERED FILE APPEARING, and the first version of this row
-# could not tell the two apart: `merge-pr.py:claim_half` runs `claim-ids.py --write`
-# (`rename_claimed_entries` — a plain filesystem rename, no `git mv`), `git add -A`, then a
+# could not tell the two apart: the shared merge tool's claim step runs the claimer
+# (the claimer's rename — a plain filesystem rename, no `git mv`), `git add -A`, then a
 # commit through this very pre-commit hook, and that FIRST commit refused itself. So the
 # question is never "is a numbered file new", it is "did a slug become this exact file" —
 # and git already answers that for free: `--name-status -M` reports a content rename
 # (`R<score>`, both paths) wherever a deleted slug file and an added numbered file are
-# similar enough, which `rename_claimed_entries`'s output always is — only the heading line
+# similar enough, which the claimer's rename's output always is — only the heading line
 # and the filename change. `_sanctioned_rename` checks the one thing worth checking beyond
 # that: the DESCRIPTIVE TAIL survives unchanged (`D-<tail>.md` -> `D<n>-<tail>.md`,
-# `DEBT-<tail>.md` -> `<n>-<tail>.md`), the exact shape `rename_claimed_entries` writes.
+# `DEBT-<tail>.md` -> `<n>-<tail>.md`), the exact shape the claimer's rename writes.
 #
 # THE COMPARISON IS SCOPED TO WHAT THIS PASS ACTUALLY DECIDES, never the whole branch
 # against `origin/main`: in `--staged` mode that is `git diff --cached`, this commit's own
@@ -580,8 +580,8 @@ _NUMBER_OF_DEBT = re.compile(r"^([0-9]+)-")
 
 def _sanctioned_rename(old_name: str, new_name: str, kind: str,
                        held: Optional[Set[str]] = None) -> bool:
-    """Whether `old_name -> new_name` allocates no number: either `claim-ids.py:
-    rename_claimed_entries`'s OWN rename (the unclaimed slug file becoming the numbered file
+    """Whether `old_name -> new_name` allocates no number: either the claimer's
+    OWN rename (the unclaimed slug file becoming the numbered file
     with the IDENTICAL descriptive tail), or a RETITLE, the same number under a new
     descriptive tail. A retitle is sanctioned only when the base already holds that number
     (`held`), so adding a new numbered file and then renaming it is still an allocation.
@@ -603,7 +603,7 @@ def _sanctioned_rename(old_name: str, new_name: str, kind: str,
 # A LOW THRESHOLD ON PURPOSE. `-M`'s default (50%) misses a genuine rename over a SHORT
 # entry: a two-line slug file becoming a two-line numbered file can measure well under 50%
 # similar by git's own heuristic (measured: 7% on a real claim, over a fixture-sized debt
-# entry), and that read as a plain add-plus-delete — the exact shape `merge-pr.py:claim_half`
+# entry), and that read as a plain add-plus-delete — the exact shape the merge tool's claim step
 # produces for a short entry, and the exact shape that refused its OWN claim commit before
 # this fix. Correctness never comes from the threshold: `_sanctioned_rename` below still
 # demands the EXACT descriptive tail on both sides, so a low threshold only widens which
@@ -777,7 +777,7 @@ def check_numbered_record_growth(report: Report, staged_only: bool) -> None:
         # ONE DIFF PER COMMIT IN RANGE, so a rename lands in the one step that actually made
         # it, plus one trailing diff for whatever is uncommitted (HEAD vs the working tree) —
         # `check_numbered_record_growth` runs in a full pass over the disk, same as every
-        # other full-mode row, so an uncommitted `claim-ids.py --write` still reads clean.
+        # other full-mode row, so an uncommitted the merge tool's claim still reads clean.
         commits = [c for c in git("rev-list", "--reverse", f"{base}..HEAD").splitlines() if c]
         chain = [base] + commits
         diff_texts = [
@@ -823,7 +823,7 @@ def check_numbered_record_growth(report: Report, staged_only: bool) -> None:
                 new_path,
                 f"is a NUMBERED {kind} record with no matching slug rename behind it (D140). "
                 f"A branch never allocates a number by hand — write a slug instead and "
-                f"`scripts/claim-ids.py` claims the number at the merge, which git sees as a "
+                f"the merge tool claims the number at the merge, which git sees as a "
                 f"RENAME from the slug file with the same descriptive tail." + remedy,
             ))
     report.add("numbered record growth", MECHANICAL, findings,
@@ -835,12 +835,12 @@ def check_numbered_record_growth(report: Report, staged_only: bool) -> None:
 # --------------------------------------------------- the claimer speaks the same vocabulary
 
 # TWO DECLARATIONS AND A READER, this repo's standing answer to a shape it keeps meeting.
-# `scripts/claim-ids.py` cannot be imported here — this file parses rather than imports so it
-# never runs project code, and it is what gates every commit — so the slug grammar is written
-# once in each and reconciled. A widen that reaches one of them leaves the other refusing an
-# id the first just allocated, which is silent in both directions.
+# The shared merge tool reads its slug grammar from `.github/stamp.json`'s `slugRegex`, and this
+# auditor writes it again as `_STEP_SLUG`, so the two are reconciled. A widen that reaches one of
+# them leaves the other refusing an id the first just allocated, which is silent in both
+# directions.
 
-CLAIMER = ROOT / "scripts" / "claim-ids.py"
+CLAIMER = ROOT / ".github" / "stamp.json"
 
 
 def check_claim_vocabulary(report: Report) -> None:
@@ -849,14 +849,17 @@ def check_claim_vocabulary(report: Report) -> None:
         report.add("claim vocabulary", MECHANICAL,
                    [Finding(rel(CLAIMER), "does not exist, so no branch can claim an id.")])
         return
-    theirs = literals_from_module(CLAIMER).get("SLUG")
+    try:
+        theirs = json.loads(CLAIMER.read_text(encoding="utf-8")).get("slugRegex")
+    except ValueError:
+        theirs = None
     # `_ID_SLUG` is the same grammar with the leading hyphen that separates it from the
     # letter; `_STEP_SLUG` is it bare, because a step wears no letter.
     if theirs != _STEP_SLUG:
         findings.append(Finding(
             rel(CLAIMER),
-            "declares SLUG as {0!r}; scripts/docs-audit.py's `_STEP_SLUG` is {1!r}.\n"
-            "  The auditor decides what is an id and the claimer decides what gets a number. "
+            "declares slugRegex as {0!r}; scripts/docs-audit.py's `_STEP_SLUG` is {1!r}.\n"
+            "  The auditor decides what is an id and the merge tool decides what gets a number. "
             "Disagreeing, one of them refuses an id the other just allocated.".format(
                 theirs, _STEP_SLUG)))
     elif _ID_SLUG != "-" + _STEP_SLUG:
@@ -865,9 +868,7 @@ def check_claim_vocabulary(report: Report) -> None:
             "`_ID_SLUG` is not `_STEP_SLUG` with the separating hyphen in front of it: "
             "{0!r} against {1!r}.".format(_ID_SLUG, _STEP_SLUG)))
     report.add("claim vocabulary", MECHANICAL, findings,
-               "one slug grammar, declared in the auditor and in the claimer",
-               # Two declarations, and the row exists because they can disagree: the
-               # claimer's SLUG and this file's _STEP_SLUG / _ID_SLUG pair.
+               "one slug grammar, declared in the auditor and in the merge tool's config",
                scanned=2)
 
 
@@ -1022,7 +1023,7 @@ def check_debts_headings(report: Report) -> None:
     may ALSO be an unclaimed slug (`## DEBT-<slug>`, the entry's own placeholder before
     `make merge` allocates it a number) or a newly claimed entry's own `## DEBT<n>` — the
     citation form, since a debt's claimed heading may or may not carry the word (see the
-    block comment above `DEBT_HEADING` in `scripts/claim-ids.py`). Every real entry today
+    block comment above `DEBT_HEADING` in the shared merge tool). Every real entry today
     still heads itself bare (`## <n>`), and stays addressable exactly as before. The
     duplicate-number check below only ever compares NUMBERS, so a slug heading is never a
     candidate collision with one — a filename collision between two branches' slugs is
@@ -1083,7 +1084,7 @@ def check_debt_index(report: Report) -> None:
     A DEBT NOW CARRIES THE IDENTICAL CLAIM-AT-MERGE EXEMPTION A DECISION DOES (D140's own
     scheme, the owner's word: "they just get assigned numbers upon merge with CI"). A branch
     adding a finding writes `## DEBT-<slug>` in its own file and cites `DEBT-<slug>`;
-    `scripts/claim-ids.py` allocates the number at merge time and rewrites the heading and
+    the shared merge tool allocates the number at merge time and rewrites the heading and
     every citation, exactly as it already does for a decision — see `_is_unclaimed_debt` and
     `_decision_index_findings`, which this row now reuses rather than re-implementing its own
     copy of the comparison.
@@ -1099,7 +1100,7 @@ def check_debt_index(report: Report) -> None:
     corpus = _debts_corpus()
     # THREE HEADING SHAPES: a real entry's bare `## <n>`, a newly claimed `## DEBT<n>` (its
     # heading matches its citation, like a decision's — see the block comment above
-    # `DEBT_HEADING` in `scripts/claim-ids.py`), and an unclaimed `## DEBT-<slug>`. The
+    # `DEBT_HEADING` in the shared merge tool), and an unclaimed `## DEBT-<slug>`. The
     # captured id is always normalized to its WITH-`DEBT`-letter form, matching what the
     # index itself always spells.
     heading_re = re.compile(r"^##\s+((?:DEBT)?\d+|DEBT" + _ID_SLUG + r")\s*[—-]\s*(.+)$")
@@ -1141,7 +1142,7 @@ _DEBT_RE = re.compile(r"\bDEBT(" + _ID_ANY + r")\b")
 def debt_heading_idents() -> Set[str]:
     """Every debt id with a heading, WITH its `DEBT` letter — `## <n>`/`## DEBT<n>` (a claimed
     entry, either spelling — see the block comment above `DEBT_HEADING` in
-    `scripts/claim-ids.py`) and `## DEBT-<slug>` (a pending one), normalized to `DEBT<n>` /
+    the shared merge tool) and `## DEBT-<slug>` (a pending one), normalized to `DEBT<n>` /
     `DEBT-<slug>`.
 
     THE DEBTS TWIN OF `decision_heading_lines_across`, read straight off the corpus files

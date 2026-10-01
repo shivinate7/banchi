@@ -13,9 +13,9 @@ The recipe is now the product, then the tooling's proof of itself.
 1. `harness` — the nine verification tests. First, because it is what the product does.
 2. `docs-audit` — the mechanical rows over the tree.
 3. `claim-stale`, `revert-guard`, `port-agreement`, `set-hint-agreement`, `screen-freshness`, `sigil-check`, `ignore-check`, `lint`, `vale`, `typecheck` — every check that reads the code and says something about it.
-4. `audit-self-test`, `githooks-selftest`, `merge-selftest`, `revert-selftest`, `claim-selftest`, `decisions-selftest`, `janitor-selftest`, `reap-selftest`, `suite-lock-selftest`, `serve-selftest`, `verdict-selftest` — the eleven that prove a GUARD works.
+4. `audit-self-test`, `githooks-selftest`, `revert-selftest`, `decisions-selftest`, `janitor-selftest`, `reap-selftest`, `suite-lock-selftest`, `serve-selftest`, `verdict-selftest` — the nine that prove a GUARD works.
 
-**The principle: a check that spawns a process can fail for a reason outside the tree, and a check that reads a file cannot.** The eleven in group 4 build throwaway clones, take machine-wide locks, bind ports and send signals; every one can go red because another worktree on this Mac was busy, which D122 and D157 both record happening. The twelve in groups 1 to 3 answer from the tree alone.
+**The principle: a check that spawns a process can fail for a reason outside the tree, and a check that reads a file cannot.** The nine in group 4 build throwaway clones, take machine-wide locks, bind ports and send signals; every one can go red because another worktree on this Mac was busy, which D122 and D157 both record happening. The twelve in groups 1 to 3 answer from the tree alone.
 
 **Putting the environment-sensitive targets last means a flake can no longer hide a real defect.** It can only delay news of one already reported.
 

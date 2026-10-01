@@ -1445,6 +1445,19 @@ test('a card with no name and no SKU still offers both doors', async ({ page }) 
   const doors = page.locator('.card-locations-row.is-current .card-locations-action')
   await expect(doors.getByRole('button', { name: 'Mark sold' })).toBeVisible()
   await expect(doors.getByRole('button', { name: 'Retire' })).toBeVisible()
+
+  /* THE ACTION ROW'S EDGES: Mark sold on the row's left content edge, the icons on the right one. */
+  const edges = await page.locator('.card-locations-row.is-current').evaluate((row) => {
+    const cs = getComputedStyle(row)
+    const r = row.getBoundingClientRect()
+    const left = r.left + parseFloat(cs.paddingLeft)
+    const right = r.right - parseFloat(cs.paddingRight)
+    const sell = row.querySelector('.card-locations-sell')!.getBoundingClientRect().left
+    const icons = [...row.querySelectorAll('.card-locations-action .bn-icon-btn')]
+    return { dLeft: sell - left, dRight: right - icons[icons.length - 1]!.getBoundingClientRect().right }
+  })
+  expect(Math.abs(edges.dLeft)).toBeLessThanOrEqual(1)
+  expect(Math.abs(edges.dRight)).toBeLessThanOrEqual(1)
 })
 
 test('a card with no name and no SKU is a one-copy list, not a special case', async ({ page }) => {
@@ -1670,6 +1683,66 @@ function copyRow(page: Page, place: string) {
     .locator('.card-locations-owner .card-locations-row')
     .filter({ has: page.locator(`[aria-label="${place}"]`) })
 }
+
+test('Undo stands in Mark sold\'s own frame, and the sale never moves the row', async ({ page }) => {
+  const { store, sell } = sellableStore()
+  await open(page, BOXES, store)
+
+  const row = copyRow(page, CARD_1)
+  const box = (sel: string) => row.locator(sel).evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    return { left: Math.round(r.left), width: Math.round(r.width), height: Math.round(r.height) }
+  })
+  /* `offsetTop`, not the viewport top: Playwright's own click scrolls the page. */
+  const rowBox = () => row.evaluate((el) => ({ top: (el as HTMLElement).offsetTop, height: Math.round(el.getBoundingClientRect().height) }))
+  const markSold = await box('.card-locations-sell')
+  const before = await rowBox()
+
+  await row.getByRole('button', { name: 'Mark sold' }).click()
+  sell('2/1')
+  /* The burst is on screen: a bill never takes a pointer event, and nothing about the row moves. */
+  await expect(row.locator('.card-locations-bill').first()).toBeAttached()
+  /* Listening starts the moment the bills exist. THE BURST ENDS WITH ITS LAST BILL, whatever the clock says: count each bill's own end and
+     read the count at the moment the bills leave. Ending on the FIRST bill's animationend, or on
+     a child's bubbling up, removes them with most of the bills still in flight. */
+  const ended = row.evaluate(
+    (el) =>
+      new Promise<number>((done) => {
+        let ends = 0
+        el.querySelectorAll('.card-locations-bill').forEach((bill) => bill.addEventListener('animationend', () => (ends += 1)))
+        const watch = new MutationObserver(() => {
+          if (el.querySelector('.card-locations-bill') === null) {
+            watch.disconnect()
+            done(ends)
+          }
+        })
+        watch.observe(el, { childList: true, subtree: true })
+      }),
+  )
+  const pe = await row.locator('.card-locations-bill').evaluateAll((els) => els.map((el) => getComputedStyle(el).pointerEvents))
+  expect(pe.length).toBeGreaterThan(1)
+  expect(new Set(pe)).toEqual(new Set(['none']))
+  const undo = row.getByRole('button', { name: 'Undo sale' })
+  await expect(undo).toBeVisible()
+  /* FOCUS FOLLOWS THE SALE: Mark sold is gone, so the Undo takes it and a keyboard user can undo at once. */
+  await expect(undo).toBeFocused()
+  expect(await ended, 'the burst ended before every bill had').toBe(pe.length)
+  expect(await rowBox()).toEqual(before)
+
+  /* SAME LEFT, WIDTH AND HEIGHT AS MARK SOLD: the swap never changes the frame (D118, D195). */
+  expect(await box('.card-locations-undo')).toEqual(markSold)
+  expect(await rowBox()).toEqual(before)
+})
+
+test('a row that loads already sold draws no bills and does not move focus', async ({ page }) => {
+  await open(page)
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
+  await expect(page.locator('.card-locations-row.is-current')).toBeVisible()
+  await expect(page.locator('.card-locations-bill')).toHaveCount(0)
+  /* Nothing here took focus from wherever it was (the walk row just clicked), least of all an Undo. */
+  await expect(page.locator('.card-locations-undo:focus, .card-locations-row :focus')).toHaveCount(0)
+})
 
 test('one press marks a copy sold, with no panel in between', async ({ page }) => {
   const { store, sell } = sellableStore()
@@ -2082,7 +2155,7 @@ test('the row that sold the copy becomes the way to take it back', async ({ page
 
   /* The slot draws `Undo` ALONE — no `Retire` beside it, because the server refuses the
      retirement of a sold card and a control that can only fail is not a control. */
-  const rowUndo = row.getByRole('button', { name: 'Undo the sale at' })
+  const rowUndo = row.getByRole('button', { name: 'Undo sale:' })
   await expect(rowUndo).toBeVisible()
   await expect(row.getByRole('button', { name: 'Retire' })).toHaveCount(0)
   await expect(row.getByRole('button', { name: 'Mark sold' })).toHaveCount(0)
@@ -2159,7 +2232,7 @@ test('U undoes the newest sale, wherever the hand is', async ({ page }) => {
 
   const row = copyRow(page, CARD_1)
   await row.getByRole('button', { name: 'Mark sold' }).click()
-  await expect(row.getByRole('button', { name: 'Undo the sale at' })).toBeVisible()
+  await expect(row.getByRole('button', { name: 'Undo sale:' })).toBeVisible()
 
   // The hand is nowhere in particular — on the page heading, not in any field.
   await page.getByRole('heading', { name: 'Inventory' }).click()
@@ -2177,7 +2250,7 @@ test('u typed into the search field does not undo the sale', async ({ page }) =>
 
   const row = copyRow(page, CARD_1)
   await row.getByRole('button', { name: 'Mark sold' }).click()
-  const rowUndo = row.getByRole('button', { name: 'Undo the sale at' })
+  const rowUndo = row.getByRole('button', { name: 'Undo sale:' })
   await expect(rowUndo).toBeVisible()
 
   await page.getByRole('searchbox').click()
@@ -7835,7 +7908,7 @@ test('a sale leaves every other row where it was, and the sold row in its own pl
   expect(await walkOrder(page)).toEqual(['#38', '#39', '#40'])
 
   /* And the control says how stale the order is, rather than the list quietly reshuffling. */
-  await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
+  await expect(page.locator('.browse-hero-rerank')).toHaveAttribute('aria-label', /Order is 1 copy stale/)
 })
 
 test('and the re-rank is what moves it — the same sale, with the order taken again', async ({ page }) => {
@@ -7854,7 +7927,7 @@ test('and the re-rank is what moves it — the same sale, with the order taken a
   const before = await copyOrder(page)
 
   await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
-  await expect(page.locator('.card-locations-rerank')).toBeVisible()
+  await expect(page.locator('.browse-hero-rerank')).toBeVisible()
   /* The re-read, waited for by the one string only it can produce — see the case above. */
   await expect(
     page.locator('.card-locations-row .card-locations-identity[aria-label="Was at Box 7, Section 1, Card 38"]'),
@@ -7864,10 +7937,10 @@ test('and the re-rank is what moves it — the same sale, with the order taken a
   expect(await copyOrder(page)).toEqual(['Was at Box 7, Section 1, Card 38', ...before.slice(1)])
 
   /* THE PRESS THE OWNER CHOOSES, and the only thing in this screen that reshuffles the list. */
-  await page.locator('.card-locations-rerank').click()
+  await page.locator('.browse-hero-rerank').click()
 
   /* The control goes with the staleness it was reporting — the order is current again. */
-  await expect(page.locator('.card-locations-rerank')).toHaveCount(0)
+  await expect(page.locator('.browse-hero-rerank')).toHaveCount(0)
 
   /* STILL SIX ROWS, AND THAT IS D132's RULE RATHER THAN THE FREEZE: a copy sold from THIS
      screen is drawn while its receipt stands, so the press that sold it is still on screen with
@@ -7933,7 +8006,7 @@ test('the receipt has no clock (UN-5): a sale still offers Undo a faked minute l
      opposite of what a clock-gated receipt would show. */
   await page.clock.runFor(60_000)
   await expect(page.locator('.inventory-receipt')).toHaveCount(1)
-  await expect(page.getByRole('button', { name: /^Undo the sale at/ })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: /^Undo sale:/ })).toHaveCount(1)
 
   /* STILL SIX ROWS, STILL IN THE SAME ORDER, AND THE SOLD ONE STILL AT THE TOP — the freeze
      (D132) holds the row's place either way; what changed is that its Undo did not leave with
@@ -7941,24 +8014,24 @@ test('the receipt has no clock (UN-5): a sale still offers Undo a faked minute l
   await expect(labels).toHaveCount(6)
   expect(await copyOrder(page)).toEqual(['Was at Box 7, Section 1, Card 38', ...before.slice(1)])
   /* And the control is still offering the re-rank, because nothing has taken a new order. */
-  await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
+  await expect(page.locator('.browse-hero-rerank')).toHaveAttribute('aria-label', /Order is 1 copy stale/)
 
   /* NOW A NEWER SALE (the delta review round's own item 6, reversing finding #12): the
      owner's ruling is that undo lasts "until it's built on", on every sold row, the same
      way Fulfillment's "Pulled today" list already keeps every sale of a session undoable.
      Card 39 is sold second. */
   await copyRow(page, 'Box 7, Section 1, Card 39').getByRole('button', { name: 'Mark sold' }).click()
-  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 39' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Undo sale: Box 7, Section 1, Card 39' })).toHaveCount(1)
   /* Card 38's own Undo STAYS — it is not built on by anything, so it is still reversible even
      though it is no longer the newest sale. */
-  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 38' })).toHaveCount(1)
-  await expect(page.getByRole('button', { name: /^Undo the sale at/ })).toHaveCount(2)
+  await expect(page.getByRole('button', { name: 'Undo sale: Box 7, Section 1, Card 38' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: /^Undo sale:/ })).toHaveCount(2)
 
   /* `U` AND THE TOAST STILL REACH ONLY THE NEWEST (39), never 38 — "newest-only" survives
      for the one fast path, even though both rows now draw their own control. */
   await page.keyboard.press('u')
-  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 39' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 38' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Undo sale: Box 7, Section 1, Card 39' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Undo sale: Box 7, Section 1, Card 38' })).toHaveCount(1)
 })
 
 test('a retirement holds its row too, and it is the freeze alone that does it', async ({ page }) => {
@@ -8027,7 +8100,7 @@ test('a retirement holds its row too, and it is the freeze alone that does it', 
   expect(walkBefore).toEqual(['#38', '#39', '#40'])
   expect(await walkOrder(page)).toEqual(['#38', '#39', '#40'])
   /* One sentence for both doors: a retirement is a copy leaving, and the order is stale by it. */
-  await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
+  await expect(page.locator('.browse-hero-rerank')).toHaveAttribute('aria-label', /Order is 1 copy stale/)
 })
 
 test('a new search takes a new order, so the staleness never carries across answers', async ({ page }) => {
@@ -8048,7 +8121,7 @@ test('a new search takes a new order, so the staleness never carries across answ
   await page.getByRole('searchbox').fill('Thievul')
   await expect(page.locator('.card-locations-row .card-locations-identity').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
-  await expect(page.locator('.card-locations-rerank')).toBeVisible()
+  await expect(page.locator('.browse-hero-rerank')).toBeVisible()
   /* The re-read, waited for by the one string only it can produce — the chip lands off the
      sale's own response and says nothing about whether the store has answered yet. */
   await expect(
@@ -8077,7 +8150,7 @@ test('a new search takes a new order, so the staleness never carries across answ
     'Box 2, Section 2, Card 1',
   )
   await expect(page.locator('.card-locations-row .card-locations-identity')).toHaveCount(6)
-  await expect(page.locator('.card-locations-rerank')).toHaveCount(0)
+  await expect(page.locator('.browse-hero-rerank')).toHaveCount(0)
   /* And the order is the one a fresh answer computes: box 7 is down to two live copies, which
      ties box 2 section 2, so box 2's pair leads — the reshuffle that the freeze was holding off
      and that a new search is entitled to make. */
@@ -8407,7 +8480,7 @@ test('undoing the sale takes the staleness back with it', async ({ page }) => {
   await expect(page.locator('.card-locations-row .card-locations-identity').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
 
   await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
-  await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
+  await expect(page.locator('.browse-hero-rerank')).toHaveAttribute('aria-label', /Order is 1 copy stale/)
 
   /* NOTHING LEFT THE BOX AFTER ALL, so there is nothing for a re-rank to recompute — a
      staleness figure that survived an undo would be offering to re-rank a store that never
@@ -8418,12 +8491,9 @@ test('undoing the sale takes the staleness back with it', async ({ page }) => {
      dispatched. */
   await expect(page.locator('.inventory-receipt')).toHaveCount(0)
 
-  /* AND THE HEADER IS ASSERTED PRESENT BEFORE THE CHIP IS ASSERTED ABSENT. The undo triggers a
-     re-read and the copies list draws a skeleton with no header at all while that is in flight,
-     so a bare `toHaveCount(0)` on the chip is satisfied by a frame in which NOTHING is drawn —
-     it passes against a build that never releases the hold. The title renders only when the
-     group does, so the pair can only be satisfied by a settled panel with no chip in it. */
-  await expect(page.locator('.card-locations-title')).toBeVisible()
+  /* THE ROWS ARE ASSERTED PRESENT BEFORE THE CHIP IS ASSERTED ABSENT. The undo triggers a re-read
+     and the copies list draws a skeleton with no rows while that is in flight, so a bare
+     `toHaveCount(0)` on the chip is satisfied by a frame in which NOTHING is drawn. */
   await expect(page.locator('.card-locations-row')).toHaveCount(6)
 
   /* PROMPTLY, WHICH IS THE WHOLE OF WHAT THIS CASE ADDS. The chip has to be gone on the frame
@@ -8431,13 +8501,13 @@ test('undoing the sale takes the staleness back with it', async ({ page }) => {
      inside the default fifteen seconds — measured by dumping the header, which showed the chip
      present at this point and absent by the time a default assertion gave up waiting. So the
      window is the assertion. */
-  await expect(page.locator('.card-locations-rerank')).toHaveCount(0, { timeout: 2000 })
+  await expect(page.locator('.browse-hero-rerank')).toHaveCount(0, { timeout: 2000 })
 })
 
-test('the control that re-ranks reserves its own room, so appearing moves no copy row', async ({ page }) => {
+test('the control that re-ranks appearing moves no copy row', async ({ page }) => {
   /* D118 ON THE NEW CONTROL. It appears on the press that makes the order stale, inside a band
-     whose height is fixed — so an unreserved slot sends every copy row down by the chip's
-     height at the exact moment of the sale, which is the movement this whole change exists to
+     whose height is fixed — so a chip in flow sends every copy row down by its height at the
+     exact moment of the sale, which is the movement this whole change exists to
      stop. Measured on the FIRST ROW's own top edge, inside the scroller. */
   const { store, depart } = stackedStore()
   await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
@@ -8448,7 +8518,7 @@ test('the control that re-ranks reserves its own room, so appearing moves no cop
   await page.getByRole('searchbox').fill('Thievul')
   const rows = page.locator('.card-locations-row')
   await expect(rows).toHaveCount(6)
-  await expect(page.locator('.card-locations-rerank')).toHaveCount(0)
+  await expect(page.locator('.browse-hero-rerank')).toHaveCount(0)
   /* BOXBROWSE'S OWN RAIL SEARCH IS A SEPARATE `useSearch()` FROM THE COPIES LIST'S, and the
      count above proves only the second one has settled. Waiting on it alone races the first:
      it can still be mid-debounce when the press below fires, and its FIRST real answer — which
@@ -8482,21 +8552,25 @@ test('the control that re-ranks reserves its own room, so appearing moves no cop
      until both nodes are present, and only THEN takes the measurement this case is actually
      about. A press that genuinely left the panel gone still fails, past the poll's window,
      with the same detail a single throw would have given. */
-  const listTop = async (): Promise<number> => {
-    let last: number | null = null
+  const listTop = async (): Promise<string> => {
+    let last: string | null = null
     await expect
       .poll(
         async () => {
           last = await page.evaluate(() => {
             const list = document.querySelector('.card-locations-rows')
             const panel = document.querySelector('.card-locations-owner')
-            if (list === null || panel === null) return null
+            const title = document.querySelector('.browse-hero-titlerow')
+            if (list === null || panel === null || title === null) return null
             /* The HEADER's height, read as the gap between the panel's own top and the first
                row — two rects taken in the same frame, so the scroll cancels and no
                offsetParent is assumed. `offsetTop` was the first build and moved 535 -> 637 on
                a press that changed nothing about the header, because the scroller it is
                measured from is not the panel. */
-            return Math.round(list.getBoundingClientRect().top - panel.getBoundingClientRect().top)
+            /* AND THE TITLE ROW THE BUTTON LIVES IN: its own height, and the gap from its top to
+               the first row, so the title row growing moves a row and says which. */
+            const titleRect = title.getBoundingClientRect()
+            return `line ${Math.round(titleRect.height)}, rows ${Math.round(list.getBoundingClientRect().top - titleRect.top)}`
           })
           return last
         },
@@ -8509,41 +8583,26 @@ test('the control that re-ranks reserves its own room, so appearing moves no cop
       .not.toBeNull()
     // The poll above only resolves once `last` is non-null, so this cast is the assertion's
     // own guarantee, not a hope.
-    return last as unknown as number
+    return last as unknown as string
   }
-  const before = await listTop()
-  expect(before).toBeGreaterThan(0)
+  /* THE BASELINE IS TAKEN ONCE THE BAND HAS STOPPED SETTLING. The hero's figures and the photo
+     arrive after the rows, and a read taken mid-arrival gave "rows 166" against "rows 35" on a
+     CI shard: a baseline in the wrong layout, not a chip that moved anything. A read that still
+     agrees after 300ms is the settled one. */
+  let before = await listTop()
+  for (let i = 0; i < 20; i++) {
+    await page.waitForTimeout(300)
+    const again = await listTop()
+    if (again === before) break
+    before = again
+  }
+  expect(await listTop(), 'the band never stopped settling').toBe(before)
+  expect(before).toMatch(/^line \d+, rows \d+$/)
 
   await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
-  await expect(page.locator('.card-locations-rerank')).toBeVisible()
+  await expect(page.locator('.browse-hero-rerank')).toBeVisible()
   const after = await listTop()
   expect(after).toBe(before)
-})
-
-test('the re-rank control clears the thumb floor on a phone', async ({ page }) => {
-  /* D117's floor, on a control that did not exist when it was written: 40px under 767px, met by
-     `--bn-control-h-sm` in the token file rather than by a number in `CardLocations.css`. */
-  await setViewport(page, { width: 390, height: 844 })
-  const { store, depart } = stackedStore()
-  /* `settle` because a phone draws the walk inside a drawer and `open`'s default wait is a
-     section fold, which is not on screen here — waiting for it would fail on the arrangement
-     rather than on the claim.
-
-     AND NO SEARCH, WHICH IS NOT A SHORTCUT. Below 768 the searchbox lives in the rail DRAWER
-     and is not on screen until the drawer is opened, so typing into it here times out on the
-     shell rather than on this control. It is also not needed: the copies list runs its own
-     query off the selected card's SKU, so the sale makes the order stale exactly as it does at
-     1440 and the chip is drawn the same way. */
-  await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
-    route: '/#/inventory?box=2',
-    hideSold: true,
-    settle: '.card-locations-owner',
-  })
-  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
-  const chip = page.locator('.card-locations-rerank')
-  await expect(chip).toBeVisible()
-  const box = await chip.boundingBox()
-  expect(box?.height ?? 0).toBeGreaterThanOrEqual(40)
 })
 
 /* ----------------------------------------------------------------------------------- D218 */
@@ -8604,3 +8663,168 @@ for (const width of [1280, 820]) test(`Actions does not move when the copies sea
   await expect(page.locator('.browse-hero-side:not([data-pending])')).toBeVisible()
   expect(await yOf()).toEqual(pendingY)
 })
+
+/* ----------------------------------------------------------------------------------- D118 */
+
+/* HOLDING AN ARROW KEY THROUGH THE WALK, THEN LETTING GO, MUST NOT MOVE THE COPIES LIST.
+ *
+ * THE DEFECT: the copy rows entered with `bn-page-in`, which translates each row 6px. The list is
+ * a scroll-snap container (`scroll-snap-type: y proximity`, rows `scroll-snap-align: start`), and
+ * a snap target that is moving is a snap position that is moving: the browser re-snapped the list
+ * on every frame of the entry, so its `scrollTop` crept 6 to 0 and every row wobbled about a pixel
+ * either side of its place. A card whose copies overflow the band (3 or more) is the shape.
+ * Sifting is where it shows, because the rows land once, after the key is let go, with nothing
+ * else moving.
+ *
+ * The probe samples every animation frame, which is the only sampler that cannot step over the
+ * wobble (the same argument `installCopiesWatch` makes). */
+function siftCards(): Cards {
+  const cards: Cards = {}
+  /* Cards 1-40 each carry their own SKU, so every step lands on a card the last answer did not
+     hold. A SKU's later copies sit past card 40, `n % 4 + 1` copies in all, so its cap
+     (`min(4, copies)`) runs 1 to 4 down the walk. */
+  let at = 41
+  for (let n = 1; n <= 40; n += 1) {
+    const copies = (n % 4) + 1
+    const place = [n, ...Array.from({ length: copies - 1 }, () => at++)]
+    for (const i of place) cards[`2/${i}`] = card({ index: i, state: 'identified', name: `Sift ${n}`, sku: String(9000000 + n), section: 1, sectionStart: 1, sectionEnd: 100 })
+  }
+  return cards
+}
+const SIFT_BOXES = { boxes: [{ ...BOXES.boxes[0], fill: 100, next_index: 101, cards: 100, on_hand: 100, sold: 0, retired: 0, sections: [1], sections_detail: [{ section: 1, start: 1, end: 100, count: 100 }] }] }
+
+type RowFrame = { tops: number[]; scroll: number }
+
+/** Every animation frame's copy-row tops and the list's `scrollTop`, from `go`'s start until `ms`
+ *  after it finishes. A frame with no rows is the skeleton and is kept, so a gap is visible. */
+async function rowFrames(page: Page, go: () => Promise<void>, ms: number): Promise<RowFrame[]> {
+  await page.evaluate(() => {
+    const frames: RowFrame[] = []
+    ;(window as unknown as { __rowFrames: RowFrame[] }).__rowFrames = frames
+    const tick = () => {
+      const rows = [...document.querySelectorAll('.card-locations-row')]
+      frames.push({
+        tops: rows.map((row) => row.getBoundingClientRect().top),
+        scroll: document.querySelector('.card-locations-rows')?.scrollTop ?? -1,
+      })
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  })
+  await go()
+  /* WAIT ON A STATE, NEVER A FRAME COUNT: the rows are on screen and nothing on them is still
+     animating. A slow runner paints fewer frames in the same time, so a count is no measure. */
+  await page.waitForFunction(() => {
+    const rows = [...document.querySelectorAll('.card-locations-row')]
+    return rows.length > 0 && rows.every((row) => row.getAnimations().length === 0)
+  })
+  await page.waitForTimeout(ms)
+  return await page.evaluate(() => (window as unknown as { __rowFrames: RowFrame[] }).__rowFrames)
+}
+
+/** A key held down: a keydown every 30ms, `repeat` set after the first, a keyup at the end. */
+async function holdKey(page: Page, key: string, presses: number): Promise<void> {
+  await page.evaluate(
+    ([name, count]) =>
+      new Promise<void>((done) => {
+        let n = 0
+        const timer = setInterval(() => {
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: name as string, repeat: n > 0, bubbles: true, cancelable: true }))
+          n += 1
+          if (n >= (count as number)) {
+            clearInterval(timer)
+            window.dispatchEvent(new KeyboardEvent('keyup', { key: name as string, bubbles: true }))
+            done()
+          }
+        }, 30)
+      }),
+    [key, presses] as const,
+  )
+}
+
+/** The frames after the last one that had NO row (the skeleton): that is the landing. */
+function landing(frames: RowFrame[]): RowFrame[] {
+  const gap = frames.map((frame) => frame.tops.length).lastIndexOf(0)
+  return frames.slice(gap + 1)
+}
+
+for (const how of ['held arrow key', 'click']) test(`the copies list does not move when it lands after a ${how}`, async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, SIFT_BOXES, { cards: siftCards(), search: (query) => searchAnswer(query, siftCards()) })
+  /* A real server answers in tens of milliseconds, not none. */
+  await page.route(/\/search/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    return route.fallback()
+  })
+  await expandAll(page)
+  await expect(page.locator('.card-locations-row').first()).toBeVisible()
+  await settled(page)
+  /* Card 14 holds three copies, which overflow the band. */
+  const frames = await rowFrames(
+    page,
+    how === 'click'
+      ? async () => { await page.locator('.browse-row').nth(13).click() }
+      : () => holdKey(page, 'ArrowRight', 13),
+    300,
+  )
+  const landed = landing(frames)
+  expect(landed.length, 'the rows never landed').toBeGreaterThan(0)
+  expect(Math.max(...landed.map((frame) => frame.tops.length)), 'the card must overflow the band').toBeGreaterThanOrEqual(3)
+  const last = landed[landed.length - 1] as RowFrame
+  const moved = landed
+    .map((frame, at) => ({ at, drift: Math.max(...frame.tops.map((top, i) => Math.abs(top - (last.tops[i] ?? top)))), scroll: frame.scroll }))
+    .filter((frame) => frame.drift > 0.01 || frame.scroll !== last.scroll)
+  expect(moved, 'rows moved after they landed').toEqual([])
+})
+
+/* THE LEAD COLUMN IS ONE WIDTH FOR EVERY CAP (D118). `Meter` drew a 14px cell per unit of cap
+ * and sized the Live figure, so the lead column, the identity column and Actions' x changed from
+ * card to card, and a held key reflowed the band at every landing. Caps 1 to 4 come from the
+ * fixture's copy counts; 40 with 12 over is the answer rewritten, because the real ceiling is a
+ * server number and a cap that large is the case a one-cell-per-unit strip cannot fit. */
+for (const [width, scheme] of [[1440, 'light'], [1440, 'dark'], [820, 'light'], [820, 'dark']] as const) {
+  test(`the lead column and Actions do not change width with the cap, at ${width} ${scheme}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme })
+    await setViewport(page, { width, height: 900 })
+    const cards = siftCards()
+    await open(page, SIFT_BOXES, {
+      cards,
+      search: (query) => {
+        const answer = searchAnswer(query, cards)
+        for (const group of answer.groups) {
+          if (group.sku === '9000012') Object.assign(group, { listable: 40, listed: { ...group.listed, live: 52 } })
+        }
+        return answer
+      },
+    })
+    await expandAll(page)
+    const seen: { cap: string; lead: number; live: number; actions: number; end: number; endFits: boolean }[] = []
+    /* Walk cards 1 to 12: caps 2, 3, 4, 1 over and over, and card 12 at 40. */
+    for (let n = 0; n < 12; n += 1) {
+      await page.locator('.browse-row').nth(n).click()
+      await expect(page.locator('.browse-hero-lead:not([data-pending]) .bn-meter')).toBeVisible()
+      await settled(page)
+      const meter = page.locator('.browse-hero-fig[data-read] .bn-meter')
+      const lead = (await page.locator('.browse-hero-lead').boundingBox())!
+      const live = (await page.locator('.browse-hero-fig[data-read]').boundingBox())!
+      const actions = (await page.getByRole('button', { name: 'Actions' }).boundingBox())!
+      const end = (await meter.locator('.bn-meter-end').boundingBox())!
+      seen.push({
+        cap: (await meter.getAttribute('aria-label')) ?? '',
+        lead: Math.round(lead.width),
+        live: Math.round(live.width),
+        actions: Math.round(actions.x),
+        end: Math.round(end.height),
+        endFits: end.x >= live.x - 0.5 && end.x + end.width <= live.x + live.width + 0.5,
+      })
+    }
+    expect(new Set(seen.map((one) => one.cap)).size, 'the walk must reach more than one cap').toBeGreaterThan(3)
+    expect(seen.some((one) => one.cap.includes('cap 40, 12 over')), 'cap 40 was never reached').toBe(true)
+    expect(new Set(seen.map((one) => one.lead)), JSON.stringify(seen)).toHaveProperty('size', 1)
+    expect(new Set(seen.map((one) => one.live))).toHaveProperty('size', 1)
+    expect(new Set(seen.map((one) => one.actions))).toHaveProperty('size', 1)
+    expect(new Set(seen.map((one) => one.end)), 'the cap text must stay on one line').toHaveProperty('size', 1)
+    expect(seen.filter((one) => !one.endFits), 'the cap text must stay inside the figure').toEqual([])
+    await page.locator('.browse-hero-head').screenshot({ path: test.info().outputPath(`lead-${width}-${scheme}.png`) })
+  })
+}

@@ -255,13 +255,13 @@ SHIPPED = [
               "docs/specs/one-process.md §10 is the list."},
     # `n` IS A SLUG UNTIL THE MERGE CLAIMS IT (D140). A branch cannot allocate a
     # step number any more than it can allocate a decision number — the input is what main has
-    # taken — so this carries the slug and `scripts/claim-ids.py` substitutes it inside
+    # taken — so this carries the slug and the shared merge tool substitutes it inside
     # `make merge`, here and in the `0.` marker docs/GATES.md wears for the same reason.
     {"n": 23, "on": "2026-09-11",
      "title": "The number is claimed at the merge, not guessed on the branch",
      "note": "D140 and D80. A branch writes its entry's heading as a slug "
               "and cites it; "
-              "scripts/claim-ids.py allocates max+1 against main INSIDE make merge, commits the "
+              "the shared merge tool allocates max+1 against main INSIDE make merge, commits the "
               "substitution to the PR branch, waits for that commit's checks, and only then "
               "merges. Covers all three id namespaces — decisions, the code-card track's C "
               "entries, and this build order. WHAT IT RETIRED: docs-audit's `renumbered ids` and "
@@ -2296,7 +2296,7 @@ COMPONENTS = [
                         "nothing and exits 0 whatever it finds — by then the pull request is "
                         "merged and origin carries the slug regardless, so holding this clone "
                         "back would repair nothing. It lives here rather than only in "
-                        "scripts/merge-pr.py for the one property no script in a checkout has: "
+                        "the merge tool for the one property no script in a checkout has: "
                         "core.hooksPath is a single installed directory in the common .git "
                         "dir, so every working tree of this clone runs THIS copy, and 24 of "
                         "the 30 were behind main's merge script the day it was written.",
@@ -2361,93 +2361,6 @@ COMPONENTS = [
                 # repository.
                 "governed_by": ["D42", "D133"],
                 "note": "Extensionless, unscanned, listed by hand — see the sibling above.",
-            },
-            "merge-pr.py": {
-                "does": "`make merge` — D42's whole operation: `gh pr merge`, then the local "
-                        "move of refs/heads/main onto the commit that produced. Refuses without "
-                        "a PR number somebody typed; a bare `ARGS=<n>` is a preview that presses "
-                        "nothing and only `--confirm` acts. It fetches origin FIRST and then "
-                        "asserts the merge commit is an ancestor of refs/remotes/origin/main — "
-                        "the same predicate reference-transaction evaluates at `prepared` — so "
-                        "the hook is never asked to refuse. Idempotent on a PR already merged, "
-                        "which is what makes a failed local half re-runnable rather than a "
-                        "handoff. THE CLAIM COMMIT'S WAIT NAMES THE COMMIT, since "
-                        "2026-09-11: it polls that SHA's own check runs until the SUBJECT SET "
-                        "is non-empty, complete, no fewer than the parent carried and unchanged "
-                        "across two reads, and REFUSES on an empty answer, an unreadable one "
-                        "or a deadline. SINCE 2026-09-19 (owner's word: 'wait on required "
-                        "checks only') the subject is `main`'s own required contexts, read from "
-                        "GitHub AT RUN TIME (`required_contexts`, never a typed list) — a red "
-                        "run that is already visible still refuses it, required or not, but a "
-                        "non-required run left running does not hold the merge, and the merge "
-                        "names it by name at the moment it proceeds. An unreadable protection "
-                        "endpoint or an empty `contexts` answer both fail CLOSED to the old, "
-                        "unnarrowed wait. It asked `gh pr checks <n>` until 2026-09-11, which "
-                        "answers about a pull request out of the PREVIOUS head's runs and "
-                        "exited 0 at once — two live merges went out unwatched on 2026-09-11. "
-                        "IT IS BRACKETED BY TWO GUARDS OVER ITSELF since 2026-09-12 "
-                        "(D140), because `make merge` runs the "
-                        "copy of THIS FILE belonging to whatever checkout invoked it: 24 of "
-                        "this clone's 30 working trees were behind main's copy that day, 16 "
-                        "of them missing the claim entirely, and such a copy merges, moves "
-                        "main and reports success with the claim simply not performed. "
-                        "`surface_half` refuses before anything is pressed when this "
-                        "checkout is BEHIND — never when it merely DIFFERS, which is the "
-                        "branch that is developing the merge — over a surface derived from "
-                        "this file's own `scripts/*.py` constants. `landed_half` then reads "
-                        "what main landed with and makes it the exit status. No escape hatch, "
-                        "deliberately: the fix is one `git merge origin/main`. "
-                        "THEN IT DELETES THE HEAD BRANCH, since 2026-09-05: on origin "
-                        "unconditionally, and in this clone only when no worktree holds it and "
-                        "it is an ancestor of main. Before that it deleted neither, and 125 "
-                        "merged pull requests had left 85 branches on origin and 106 here.",
-                # D42 governs it twice over: the operation it performs and the rejection it
-                # amends. D18 governs its shape — the preview is the read-only mode, and the
-                # act is behind a flag rather than a default. D33 is the instrument the two-step
-                # is borrowed from, one register down from a route that can spend money.
-                "governed_by": ["D18", "D33", "D42", "D140", "D111", "D136", "D158", "D141",
-                                "D148", "D176", "D228"],
-                "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
-                        "is explicit that a session reaching for that variable has left the "
-                        "amendment behind; this needs no hatch because allow rule 3 already "
-                        "permits the move it makes. WHAT IT AUTOMATES IS THE STATE LOOKUP AND "
-                        "NOT THE DECISION — the local half has two correct forms and the wrong "
-                        "one does not error, it fast-forwards whatever branch the main tree is "
-                        "standing on, moves no protected ref and trips no hook. Nothing here "
-                        "resolves a path relative to itself: the repository is the one "
-                        "`git rev-parse` answers for from the caller's directory, which is what "
-                        "lets the self-test point it at a temporary clone. THE CLEANUP IS NOT "
-                        "`gh pr merge --delete-branch` AND THE DIFFERENCE IS THE POINT: that "
-                        "flag also deletes the local branch, and to do it gh may switch the "
-                        "current working tree to the base branch — underneath a local half "
-                        "whose entire job is deciding which tree main moves in. So it runs "
-                        "after that half has succeeded, and `--cut <branch>` is its seam, the "
-                        "way `--local <rev>` is the other half's.",
-            },
-            "merge-selftest.sh": {
-                "does": "merge-pr.py's local half, against an origin, a clone and a linked "
-                        "worktree built and destroyed for the run. Thirty-eight assertions: "
-                        "both forms of the move, a dirty main worktree, a commit origin does "
-                        "not carry, an unknown rev, a bare invocation — and the footgun, main "
-                        "checked out nowhere while another tree sits on a branch that is "
-                        "BEHIND its upstream. NINE OF THEM ARE THE STALE CHECKOUT, since "
-                        "2026-09-12 (D140), built as one "
-                        "progression rather than six repositories because the arms that "
-                        "matter are the ones that must NOT fire: main moves on something "
-                        "unrelated (allowed), main takes a capability in the merge (refused, "
-                        "naming the file, both blobs and the commit), the branch merges main "
-                        "(allowed), the branch EDITS the merge itself (allowed — the pull "
-                        "request that wrote this), and main moves under it again (refused, "
-                        "naming the derived second file).",
-                "governed_by": ["D18", "D42", "D140", "D176", "D158"],
-                "note": "THE FOOTGUN CASE WAS GREEN FOR THE WRONG REASON WHEN IT WAS FIRST "
-                        "WRITTEN, and the fixture carries the repair in a comment. The other "
-                        "tree sat on a branch already at the commit a wrong pull would have "
-                        "brought it to, so the assertion could not fail — proved by forcing the "
-                        "picker to always choose the pull form and watching it stay green. The "
-                        "branch is now one behind its upstream, the same mutation turns it red, "
-                        "and the fixture asserts its own arming. Same lesson githooks-selftest "
-                        "records about git's own refusals scoring as the hook's.",
             },
             "js-breakpoints.py": {
                 "does": "the pure extraction, IMPORT-GRAPH PAIRING and comparison behind "
@@ -2612,60 +2525,14 @@ COMPONENTS = [
                 "governed_by": ["D43", "D47", "D138"],
             },
             "janitor.py": {
-                "does": "the sweep: what a finished session left behind, and — where it is "
-                        "provably dead — reaped. Two tiers. TIER 1 needs no confirmation "
-                        "because it cannot be live: a process whose own script has been "
-                        "deleted, a registration `git worktree prune` disowns, a husk "
-                        "directory holding nothing but `.serve/` caches with no process AND "
-                        "NO SESSION in it. A BARE RUN PRESSES NOTHING AT ALL since 2026-09-19 "
-                        "— it previews both tiers, which is what its own header and "
-                        "status.py's have always claimed and what the code did not do; tier 1 "
-                        "is pressed by `--tier1`, which the session-end hook runs, and by "
-                        "`--confirm`. TIER 2 previews and waits for `--confirm`: a merged branch "
-                        "no tree holds, a worktree with no session in it, and — since "
-                        "2026-09-12 — a PROCESS nothing owns. Liveness is READ "
-                        "from `~/.claude/sessions/<pid>.json` AND from a worktree's own git "
-                        "LOCK, never inferred from mtimes — see `_same_process` for the "
-                        "timezone bug that made every session read as dead, and for why every "
-                        "unreadable case resolves to LIVE. The records alone are NOT the whole "
-                        "answer: a session that spawns agents registers one `cwd` and locks "
-                        "several trees, so on 2026-09-19 the sweep printed `reaped` over two "
-                        "locked trees a live pid had claimed, one carrying uncommitted work, "
-                        "and only `git worktree remove`'s own refusal stopped it. `worktrees` "
-                        "reads the lock, `_lock_lines` reports its reason and checks the pid "
-                        "it names, and a locked tree is never a candidate. "
-                        "`--teardown` is the half a session-end hook runs. Repo-agnostic: no "
-                        "import from this tree, and `--root` points it at any clone. "
-                        "OWNERSHIP IS THAT SAME READ, POINTED AT A DIFFERENT QUESTION: not "
-                        "\"is this tree busy\" but \"does anything still own this process\". "
-                        "Every other test here is about a tree, a branch or a registration and "
-                        "tier 1 asks whether a thing can be live at all, so a background loop "
-                        "whose session had ended read as live, leave it alone — one merged "
-                        "pull requests for 3 h 58 m out from under its own successor and "
-                        "nothing in this repo could see it. `loose_processes` names only what "
-                        "it can PROVE a session started, by `_SESSION_MARK` in the argv of the "
-                        "process or an ancestor, so the owner's own hand-started server is "
-                        "passed over in silence rather than guessed at. IT CAN NEVER NAME THE "
-                        "MAIN CHECKOUT'S SERVER, BY CONSTRUCTION: being in a LINKED worktree "
-                        "is a requirement to be offered, not an exclusion applied afterwards, "
-                        "so no ordering and no failed `main_checkout()` lookup can let D138's "
-                        "process through — proved with the session oracle EMPTY, and since "
-                        "2026-09-19 an unreadable `main_checkout()` refuses the whole of tier "
-                        "2 rather than letting the main tree fall into `linked`. Tier 2 and "
-                        "not tier 1, because tier 1 asks for no word. A process a live session "
-                        "still owns, older than `STALE_HOURS`, is reported and never reaped at "
-                        "any flag. THE TREE VERDICT IS PLANNED BEFORE IT IS PRINTED OR "
-                        "PRESSED, so `held` is the same set in a preview and in a `--confirm`: "
-                        "the old build discarded a branch from it only after a successful "
-                        "removal, inside `if confirm`, so a preview could not name a branch "
-                        "the word would delete and two were lost to dangling objects. The "
-                        "outcome of a removal is reported AFTER the attempt, never before.",
-                # D44 is the asymmetry it inherits — provably dead is reaped, doubtful is only
-                # ever reported. D18 keeps it off the gate: with icloud-sweep it is one of the
-                # two targets here that can delete a file. D138 is what it must not undo — the
-                # main checkout's supervisor is the product and is never touched. D42 is why a
-                # branch is judged by ancestry rather than by `git branch -d`.
-                "governed_by": ["D18", "D42", "D44", "D47", "D138", "D111", "D127", "D305"],
+                "does": "the part of the janitor that is Banchi's own. The machine sweep "
+                        "is claude-settings' `janitor/sweep.py`, which `make janitor` runs; "
+                        "this file keeps one mode. `--teardown TREE`: stop that tree's servers with "
+                        "`serve.py down`, never the main checkout's. Liveness is READ from "
+                        "`~/.claude/sessions/<pid>.json`, never inferred from mtimes; see "
+                        "`_same_process` for why every unreadable case resolves to LIVE. "
+                        "Repo-agnostic: no import from this tree.",
+                "governed_by": ["D18", "D42", "D44", "D47", "D138", "D127", "D305"],
             },
             "serve-selftest.py": {
                 "does": "THE SUPERVISOR'S BUILD JOB, PROVED AGAINST A THROWAWAY TREE (D138). "
@@ -2753,30 +2620,15 @@ COMPONENTS = [
                 "tested_by": [],
             },
             "janitor-selftest.sh": {
-                "does": "proves janitor.py against a throwaway origin, clone and seven linked "
-                        "worktrees, with a fake liveness oracle and real processes "
-                        "confined to the fixture by `--confine`. The cases that matter are the "
-                        "refusals, and each asserts the janitor's own sentence rather than the "
-                        "outcome alone — git would refuse some of them by itself, and survival "
-                        "by somebody else's refusal is not coverage. 121 arms. SOME OF ITS "
-                        "PROCESSES CARRY A FAKE SHELL SNAPSHOT, because that is how "
-                        "`loose_processes` proves a session started something, and the most "
-                        "important case in the file is the one that must NOT fire: a "
-                        "long-lived marked process in the fixture's MAIN checkout owned by no "
-                        "session, which is what `make launch-agent` leaves running over the "
-                        "owner's real store. It is given the mark deliberately, so that being "
-                        "in the main checkout is the ONLY thing between it and a reap. A "
-                        "BYSTANDER LEADING THE GROUP an offered process sits in is what makes "
-                        "`_stop`'s leader-only rule load-bearing, and the child's path travels "
-                        "in the ENVIRONMENT rather than argv so the parent is not placed "
-                        "beside it. Mutation-tested: five guards removed one at a time, all "
-                        "five caught; then twelve arms over the ownership finding, eleven "
-                        "caught — the survivor under-signals and is recorded in the entry "
-                        "rather than explained away. That run also exposed two arms of its own "
-                        "that proved nothing: a needle looking for `janitor.py` in a line "
-                        "`_shorten` truncates first, and `ps -axww -o command= -p <pid>`, "
-                        "where BSD's `-a` overrides `-p` and prints the whole machine.",
-                "governed_by": ["D18", "D44", "D138", "D111", "D127",
+                "does": "proves janitor.py against a throwaway clone, with a fake liveness "
+                        "oracle and real processes. The cases that matter are the refusals, "
+                        "and each asserts the janitor's own sentence rather than the outcome "
+                        "alone: git would refuse some of them by itself, and survival by "
+                        "somebody else's refusal is not coverage. A leaving "
+                        "session does not count itself as somebody else, and an unreadable "
+                        "liveness answer reads as live. The sweep proper is claude-settings' "
+                        "and is proved by its own tests.",
+                "governed_by": ["D18", "D44", "D138", "D127",
                                 "D305"],
             },
             "reap.py": {
@@ -2791,7 +2643,7 @@ COMPONENTS = [
                         "capture_server.py` is allowed when the only match is yours and refused "
                         "when it is not. Fails OPEN on its own bugs and CLOSED on a target it "
                         "cannot place. Repo-agnostic and imports nothing from this tree, so "
-                        "`make janitor-install` can copy it out to cover every project. THE "
+                        "it covers any checkout it is pointed at. THE "
                         "BARE SWEEP ASKS THE SAME QUESTION THE VERDICT ANSWERS since "
                         "2026-09-12: `pids_under` read argv alone while `verdict_for` reads "
                         "argv AND the working directory, so a process started by a relative "
@@ -2814,14 +2666,12 @@ COMPONENTS = [
                         "session, for either caller.",
                 # D127 is the decision. D138 is the process it exists to protect — the main
                 # checkout's supervisor and its children are refused even from inside the main
-                # checkout, which is the one place this file overrules its own rule. D111 is
-                # the neighbouring notion it deliberately shares reasoning with rather than
-                # duplicating. D18 keeps its self-test off the commit path: it signals. D305 is
+                # checkout, which is the one place this file overrules its own rule. D18 keeps its self-test off the commit path: it signals. D305 is
                 # the neighbouring "whose is this" question this file now answers more finely
                 # than D305's own any-session reading. D305 is the
                 # 2026-09-27 amendment itself.
                 "governed_by": ["D305", "D18", "D43",
-                                "D138", "D88", "D111", "D127",
+                                "D138", "D88", "D127",
                                 ],
             },
             "reap_mark.py": {
@@ -2842,7 +2692,7 @@ COMPONENTS = [
                         "D138 pattern rather than inventing a second one. The owner is "
                         "`CLAUDE_CODE_SESSION_ID`, read directly rather than re-deriving D305's "
                         "Bash-wrapper fragment, which only ever answered ANY session. Never "
-                        "installed to `~/.claude/bin` and never imported outside this checkout.",
+                        "run from this repo's `.claude/settings.json` and never imported outside this checkout.",
                 "governed_by": ["D43", "D138", "D127", "D305"],
             },
             "cid-selftest.py": {
@@ -3348,7 +3198,7 @@ COMPONENTS = [
                         "DECIDES. The verb roster is deliberately "
                         "short and every exemption is a measured false positive: reads, "
                         "`--dry-run`, `--abort`/`--quit`, a bare `git fetch`, `git merge-tree` "
-                        "and `make merge-selftest` all pass. Fails OPEN on its own bugs; "
+                        "and `make revert-selftest` all pass. Fails OPEN on its own bugs; "
                         "`PKMNSCAN_SILENT=off` is the hatch and every refusal prints it.",
                 # D127 is the guard beside it whose fail-open asymmetry this one honours
                 # unchanged. D42 is the operation it most often protects — a silenced
@@ -3519,7 +3369,7 @@ COMPONENTS = [
                 "does": "a mutation runner over five of this repo's guards "
                         "(guard-shell.py, silent-write-guard.py, reap.py, primary_sync.py, "
                         "revert-audit.py), built because the hand-kept arm counts drift — "
-                        "`checks.py`'s own claim-selftest entry says a sentence claimed "
+                        "a sentence once claimed "
                         "sixteen arms over a file that held eighteen, caught by a person "
                         "rather than a check. It copies each guard, applies one literal "
                         "mutation at a time from a table anchored to real source text, and "
@@ -3547,9 +3397,10 @@ COMPONENTS = [
                         "started in a linked worktree and nothing else — the main checkout's "
                         "server is D138's product and is never touched, a tree another session "
                         "is still standing in is left alone, and the branch and the tree are "
-                        "never touched at all. Then runs janitor.py --tier1, because a "
-                        "supervisor whose tree has just been removed is findable only from the "
-                        "process table: `.serve/` went with the tree. Fails open on every path.",
+                        "never touched at all. A supervisor whose tree has just been "
+                        "removed is findable only from the process table; that dead-rooted "
+                        "read is claude-settings' sweep, which its own SessionEnd hook and "
+                        "daily agent run. Fails open on every path.",
                 # D138 is the behaviour it is careful not to break; D18 keeps it off the commit
                 # path, exactly as the SessionStart guard beside it is kept off.
                 "governed_by": ["D18", "D138"],
@@ -3901,11 +3752,11 @@ COMPONENTS = [
                 # and `pkmnscan.*` both stand and a row demanding one of them would be
                 # demanding a rename that silently discards what a browser holds under the
                 # old spelling.
-                # D111 AND D127 JOIN AS CITED FAILURES, the same shape D70 and D101 already
+                # D127 JOINS AS A CITED FAILURE, the same shape D70 and D101 already
                 # carry above: `check_codex_hooks`'s docstring names the two incidents its
                 # missing hooks would have reopened had the row not backfilled them —
                 # `reap.py --hook` on every `Bash` call (D127) and `session-teardown.sh` on
-                # `WorktreeRemove` (D111's sweep) — because a reader who does not know why
+                # `WorktreeRemove` (the claude-settings janitor sweep) — because a reader who does not know why
                 # those two hooks matter reads a bare roster diff as pedantry. D135 is the
                 # ruling the row enforces: Codex reads the same guards a Claude Code session
                 # does, through `.codex/hooks.json` reconciled against `.claude/settings.json`.
@@ -3919,9 +3770,9 @@ COMPONENTS = [
                                 "D33", "D39", "D41", "D43", "D44", "D47", "D50", "D51", "D60",
                                 "D63", "D65", "D67", "D69", "D70", "D74", "D75", "D76", "D80",
                                 "D81", "D83", "D84", "D86", "D87", "D88", "D90", "D92", "D94",
-                                "D97", "D101", "D102", "D104", "D110", "D111", "D113", "D119",
+                                "D97", "D101", "D102", "D104", "D110", "D113", "D119",
                                 "D122", "D123", "D127", "D132", "D134", "D135", "D136", "D138",
-                                "D140", "D141", "D142", "D144", "D148", "D149", "D155", "D160",
+                                "D140", "D141", "D142", "D144", "D149", "D155", "D160",
                                 "D161", "D173", "D174", "D177", "D178", "D181", "D182", "D185",
                                 "D191", "D192", "D196", "D210", "D213", "D215", "D218", "D245",
                                 "D247", "D248", "D277", "D280", "D284", "D305"],
@@ -3951,7 +3802,7 @@ COMPONENTS = [
             "docs_audit/env_map.py": {
                 "does": "The rows over environment variables, hatches, the subagent override, the repo map, the "
                         "hook roster, Codex hooks and the build-order mirror.",
-                "governed_by": ["D2", "D31", "D80", "D111", "D127", "D135", "D140", "D178", "D280"]},
+                "governed_by": ["D2", "D31", "D80", "D127", "D135", "D140", "D178", "D280"]},
             "docs_audit/games.py": {
                 "does": "The rows over game and export vocabulary: the registry against the committed exports, "
                         "coverage, the matrix superset and the join-key shape.",
@@ -3976,7 +3827,7 @@ COMPONENTS = [
             "docs_audit/records.py": {
                 "does": "The rows over the decision, gate and debt records: decision ids, id claims, numbering "
                         "growth, heading structure and the debts index.",
-                "governed_by": ["D2", "D50", "D60", "D92", "D140", "D148", "D149", "D160", "D182"]},
+                "governed_by": ["D2", "D50", "D60", "D92", "D140", "D149", "D160", "D182"]},
             "docs_audit/registry_scopes.py": {
                 "does": "The rows over the check registry, the commit path, the suite lock, the browser, spec, "
                         "serve and guard scopes, and how callers invoke the audit.",
@@ -4020,7 +3871,7 @@ COMPONENTS = [
                 "governed_by": []},
             "docs_audit/selftest_records.py": {
                 "does": "Self-test cases for the records rows, called by `selftest.self_test`.",
-                "governed_by": ["D9", "D24", "D70", "D92", "D101", "D140", "D148"]},
+                "governed_by": ["D9", "D24", "D70", "D92", "D101", "D140"]},
             "docs_audit/selftest_registry_scopes.py": {
                 "does": "Self-test cases for the registry scopes rows, called by `selftest.self_test`.",
                 "governed_by": []},
@@ -4043,68 +3894,6 @@ COMPONENTS = [
                 "does": "The rows over screen strings: mechanism words, the typed interpunct, the offender-list "
                         "ratchet and views opsec.",
                 "governed_by": ["D24", "D41", "D134", "D177", "D196", "D210", "D218", "D280", "D284"]},
-            "claim-ids.py": {
-                "does": "allocate the numbers this branch's SLUG ids will take, and "
-                        "substitute them (D140). A branch cannot allocate a "
-                        "decision number — the allocation's only input is what main has "
-                        "taken, which is not knowable until the merge — so a branch writes "
-                        "its heading as a two-segment slug, or a `0.` list marker carrying one, "
-                        "and this runs INSIDE `make merge` against main as it stands then. "
-                        "PREVIEWS BY DEFAULT; `--write` performs it. The substitution is "
-                        "exhaustive text replacement of a token that occurs nowhere else in "
-                        "the tree — measured zero collisions of either shape the day the "
-                        "vocabulary was chosen — so there is no judgement in it, which is the "
-                        "whole argument for doing it here rather than by hand. `max + 1` and "
-                        "never the lowest free id: D80 culled step 12 and rules the hole "
-                        "correct, and reusing it would resurrect every `step 12` in the tree "
-                        "onto a step that is not the one meant. IT WRITES, so it is not on "
-                        "the commit path (D18) and not in `make check`; `make claim-selftest` "
-                        "is, against a throwaway repository. "
-                        "AND IT ANSWERS A SECOND QUESTION SINCE D140 WAS AMENDED 2026-09-11: "
-                        "`--stale` reports allocated ids this branch ADDS since its merge "
-                        "base that the ref has taken in the meantime, and exits 3. The "
-                        "claimer is a no-op once a branch has claimed — no slug is left, so "
-                        "it said `nothing to do` while the number it allocated could have "
-                        "been taken by main since, which happened twice on 2026-09-11 and "
-                        "was caught both times by a person reading PR titles. It REPORTS and "
-                        "never repairs: an un-claim has to happen before a merge and never "
-                        "after, or the substitution reaches main's own copy. That half writes "
-                        "nothing, so it IS in `make check` and `make ci-check` as "
-                        "`make claim-stale`, and `make merge` asks for it before every merge. "
-                        "AND A THIRD, SINCE 2026-09-12: `--landed <rev>` reports every "
-                        "unclaimed id a COMMIT carries and exits 3. Every other reader here "
-                        "asks about a checkout; the invariant the whole design rests on — "
-                        "main carries no slug — is a claim about main's own trees, and it "
-                        "failed twice with nothing asking that question "
-                        "(D140). It reports and never repairs, "
-                        "for `--stale`'s reason turned around: a substitution made after the "
-                        "merge reaches main's own copy of the entry. "
-                        "AND A FOURTH, THE EXACT INVERSE: `--unclaim <id>` puts an "
-                        "already-claimed id back to slug form — the remedy `--stale`'s own "
-                        "text names and nothing performed until this. Built as the literal "
-                        "inverse of the forward substitution, reusing `apply_to_text`'s own "
-                        "boundary rather than a second implementation. A decision derives its "
-                        "own slug from its entry's filename; a codes id or a build step needs "
-                        "`--to-slug`, because neither keeps its slug anywhere else once "
-                        "claimed. The safety gate compares the claimed HEADING between this "
-                        "tree and `--ref`, not raw presence — refusing a flat presence check "
-                        "would refuse the one case this exists to answer, where this branch's "
-                        "own number collides with an UNRELATED entry `ref` independently "
-                        "claimed. Reproducing that incident also found `stale_claims` reading "
-                        "the flat `docs/decisions/` stub instead of the corpus directory for "
-                        "the decision namespace — silently blind to every decision collision "
-                        "since D160 split the corpus — fixed alongside it.",
-                # D140 IS THE FAILURE THIS REPLACES and D16 the rule its audit rows answer to.
-                # D80 is cited for the allocator's direction — the culled step 12 is why this
-                # is max+1 rather than lowest-free — and D47/D135 for the symlink the walk
-                # skips, `AGENTS.md` being the same file as `CLAUDE.md` under another name.
-                # D18 is why it is not in `make check`: it writes. D160 and D182 are the corpus
-                # split `--unclaim` and the fixed `stale_claims` both have to read through; D186
-                # and D188 are the real, landed entries the incident this file's own docstring
-                # narrates is about.
-                "governed_by": ["D16", "D18", "D42", "D47", "D60", "D140", "D80", "D135",
-                                "D160", "D182", "D185", "D186", "D188", "D295"],
-            },
             "catalog-refresh.py": {
                 "does": "build-order step 9, piece 1 (D15): shallow-clone "
                         "PokemonTCG/pokemon-tcg-data, diff it against the committed "
@@ -4158,52 +3947,6 @@ COMPONENTS = [
                         "NEVER BEEN RUN ON THIS CHECKOUT — filling a double-digit-gigabyte "
                         "mirror is the owner's call, not a default any target reaches for.",
                 "governed_by": ["D15"],
-            },
-            "claim-selftest.py": {
-                "does": "scripts/claim-ids.py proved against a throwaway repository in which "
-                        "MAIN MOVES underneath the branch — the only condition that can tell "
-                        "an allocation against the ref from one against the branch's own "
-                        "copy, and therefore the only one worth building a repository for. "
-                        "SEVENTY-SIX arms, twenty-nine of them mutation-tested — fourteen "
-                        "arms and seven mutants cover the staleness half (D140, amended "
-                        "2026-09-11), where a branch claims honestly and main takes the "
-                        "number underneath it, and twenty-five arms and six mutants cover the "
-                        "claim commit's WAIT, which asked about the pull REQUEST rather than "
-                        "about the commit and read an empty answer as a clean one "
-                        "(D148). Those last run the real claim half against "
-                        "a fake `gh` on PATH that answers `gh pr checks` green and instantly, "
-                        "so the query that was wrong PASSES there rather than merely behaving "
-                        "differently. The count in this sentence said sixteen over a file that "
-                        "held eighteen, which is what an uncounted prose number does. "
-                        "THE BOUNDARY ARM FOUND A "
-                        "REAL BUG IN THE UNMUTATED CODE: `\\b` fires between a letter and a "
-                        "hyphen, so a slug was being substituted inside a longer slug that "
-                        "extended it, leaving a number with a tail on it. In `make check`, "
-                        "never in the git hook — it writes (D18). "
-                        "THIRTY-THREE MORE ARMS PROVE `--unclaim`: the round trip is "
-                        "byte-identical across all three namespaces, the safety gate refuses "
-                        "when `ref`'s copy IS this entry and does nothing when it does, the "
-                        "boundary reuse holds on the way back too, and the actual 2026-09-12 "
-                        "incident is rebuilt end to end — two branches independently claiming "
-                        "the same next-free number for two UNRELATED entries, `--stale` "
-                        "catching it (once `stale_claims` was fixed to read the corpus "
-                        "directory rather than the flat stub), `--unclaim` reverting the "
-                        "loser cleanly, and a normal re-plan landing it on a fresh number "
-                        "with zero hand-editing.",
-                # D140 is the ruling; D18 is why it is off the commit path; D16
-                # is the severity rule its subject's rows answer to; D80 is the allocator's
-                # direction, max+1 rather than lowest-free, because a culled id's citations
-                # would come back onto a step that is not the one meant.
-                # D1, D2 and D18 are cited by this file rather than governing it: the fixture's own
-                # entries are composed from integers for exactly this reason, and the two that
-                # survive are in the prose that explains why. The superset rule reads a citation
-                # literally, which is the trade docs-audit.py's own entry records.
-                # D160, D186 and D188 are the same worked example claim-ids.py's own entry
-                # carries — the fixture's directory-corpus arms build a real D160 shape, and
-                # the incident arm's own prose names the two real, landed entries it replays.
-                "governed_by": ["D1", "D2", "D16", "D18", "D47", "D60", "D80", "D135", "D136",
-                                "D140", "D141", "D148", "D160", "D185", "D186",
-                                "D188", "D249", "D295"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -4418,7 +4161,7 @@ COMPONENTS = [
                         "to get from `docs/debts/`. `path_for(n)` accepts the bare number "
                         "or the `DEBT<n>` id form. A debt now joins D140's claim-at-merge "
                         "scheme too, reusing the decision machinery: a branch writes "
-                        "`## DEBT-<slug>` in its own file and `scripts/claim-ids.py` "
+                        "`## DEBT-<slug>` in its own file and the shared merge tool "
                         "allocates the number at merge time. `HEADING_RE` reads either "
                         "spelling a claimed entry may carry (bare or `DEBT`-prefixed). Reads "
                         "and never writes; stdlib only.",
@@ -5035,7 +4778,7 @@ COMPONENTS = [
                 "governed_by": ["D7", "D16", "D17", "D18", "D25", "D26", "D36", "D42", "D43", "D44",
                                 "D47", "D180", "D138", "D54", "D58", "D60", "D278", "D63", "D65",
                                 "D67", "D68", "D74", "D76", "D80", "D82", "D83", "D86",
-                                "D87", "D88", "D89", "D92", "D104", "D111", "D122", "D123", "D127",
+                                "D87", "D88", "D89", "D92", "D104", "D122", "D123", "D127",
                                 "D133", "D135", "D137", "D158", "D140", "D141",
                                 "D23", "D149", "D277", "D160", "D162", "D166", "D167",
                                 "D171", "D172", "D173", "D176", "D178", "D183", "D189", "D212",
@@ -5117,8 +4860,7 @@ COMPONENTS = [
                 # kept now that the repo has left iCloud for that entry's amended reason: the
                 # hazard belongs to a synced directory, and a tree can be put inside one
                 # without telling this script.
-                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D111",
-                                "D127", "D138", "D158", "D179"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D127", "D138", "D158", "D179"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
@@ -9868,8 +9610,8 @@ COMPONENTS = [
                                 "D41", "D43", "D45", "D55", "D57", "D58", "D63", "D67", "D68",
                                 "D83", "D86", "D89", "D92", "D101", "D115", "D117", "D118", "D119",
                                 "D124", "D125", "D132", "D134", "D136", "D142", "D155", "D172",
-                                "D181", "D192", "D196", "D213", "D218", "D259", "D260", "D277",
-                                "D284", "D288", "D299", "D300", "D310"],
+                                "D181", "D192", "D195", "D196", "D213", "D218", "D259", "D260",
+                                "D277", "D284", "D288", "D299", "D300", "D310"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

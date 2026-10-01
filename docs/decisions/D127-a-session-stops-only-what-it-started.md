@@ -24,7 +24,7 @@ project's memory carries `pkill-f-is-machine-wide.md` (a worktree cleanup that k
 tree's servers), `dont-bounce-the-owners-servers.md` (the `restart` target killing the live capture
 server mid-request) and `a-pgrep-waiter-matches-itself.md`. **A note that has to be remembered is not a guard**, which is the preference this repo already acts on everywhere else — D16 checks the
 docs mechanically rather than asking, D42 refuses a move of `main` in a hook rather than in a
-sentence, D111 sweeps rather than reminding.
+sentence, claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep" sweeps rather than reminding.
 
 ### The rule
 
@@ -104,26 +104,23 @@ under this checkout, `--confirm` stops it, and `port:N` / `match:X` / `pid:N` na
 **and it prints what it refused and why**, which is the half a `pkill` that quietly does the right
 thing on a good day can never do.
 
-**IT DOES NOT DUPLICATE `janitor.py`, AND IT WAS BUILT NOT TO.** D111's sweep owns the
+**IT DOES NOT DUPLICATE `janitor.py`, AND IT WAS BUILT NOT TO.** The claude-settings sweep (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep") owns the
 neighbouring question — what a FINISHED session left behind, on its own schedule, across trees
 and branches and orphans. This owns one signal at the moment it is sent. What they share is the
 reasoning, and where the shapes matched the code was copied WITH its argument rather than
 re-derived: `_real` and its symlink trap, the process table, the leader-only `killpg`. Neither
 grew a second, disagreeing notion of what is safe to stop.
 
-**It imports nothing from this tree**, for `janitor.py`'s reason: `make janitor-install` copies
-both out to the user's own `~/.claude` so a user-level hook covers every project on the machine, and a copy
-that imported from this checkout would be broken everywhere else. **The repo's own `.claude/settings.json` carries the hook as well**, so the guard is armed in this tree and in
-every worktree cut from it with no per-machine step at all — the two halves being the same
-bargain `make hooks` and `make janitor-install` already make, and `make status` compares the
-installed copy byte for byte.
+**It imports nothing from this tree**, for `janitor.py`'s reason: both stay repo-agnostic so a hook can
+point them at any checkout. **The repo's own `.claude/settings.json` carries the hook as well**, so the guard is armed in this tree and in
+every worktree cut from it with no per-machine step at all — the repo's copy is the only one, run from `scripts/`.
 
 ### Amended 2026-09-10, the same day: a root may not be a directory that contains everything
 
 **The user-level install exposed a hole the repo-level one structurally could not.** Inside a
 clone `git rev-parse --show-toplevel` always answers, so `checkout_root`'s fallback — the current
-directory, when there is no git top level — never ran. The moment `make janitor-install` put this
-hook in the owner's own `~/.claude/settings.json` it began firing in directories that are not
+directory, when there is no git top level — never ran. The moment a user-level
+hook ran this guard it began firing in directories that are not
 repositories at all, and there the fallback **adopted the home directory as "this checkout"**.
 
 **Measured from `/Users/shivinate` on the owner's Mac, minutes after the install:** `pgrep -f

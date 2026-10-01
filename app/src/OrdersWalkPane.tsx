@@ -19,13 +19,13 @@
  * one press (Mark sold / Undo) `CardLocations`'s own `renderAction` slot calls per copy.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Icon, IconButton, Kbd, Loading, Notice, overlayOpen, Pill } from './kit'
+import { Button, Icon, Kbd, Loading, Notice, overlayOpen, Pill } from './kit'
 import { toast } from './kit/toast'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
 import { isEditableTarget } from './keys'
-import { CardLocations, MarkSoldButton } from './CardLocations'
+import { CardLocations, MarkSoldButton, UndoSaleButton } from './CardLocations'
 import { describeFailure, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
@@ -888,7 +888,7 @@ export function WalkList({
                        * detail on every row") — box, section and card, the neighbours, the
                        * strip and the ruler, and Mark sold, reused whole from `CardLocations`
                        * rather than forked (D304).
-                       * `head={false}` draws the rows alone: the heading, the stats and the SKU
+                       * The rows draw alone: the heading, the stats and the SKU
                        * line already sit above, in this same button. FINDING #16 (the Opus
                        * review round) is answered by THIS, not by a row-level Undo of its own
                        * any more — `renderAction` puts `RowAction` on every copy here exactly as
@@ -903,7 +903,6 @@ export function WalkList({
                         sections={sections}
                         currentKey={walk.currentRow?.copy.key}
                         preserveOrder
-                        head={false}
                         className="walk-pick-where"
                         renderAction={(copy) => {
                           /* THE DIGIT THAT MARKS THIS COPY, on the current pick's rows only: the keys act on the pick the
@@ -937,7 +936,6 @@ export function WalkList({
                               sections={sections}
                               currentKey={walk.currentRow?.copy.key}
                               preserveOrder
-                              head={false}
                               className="walk-pick-where"
                               renderAction={(copy) => {
                                 const at = keyedCopiesOf(line, walk.openSpares).findIndex((one) => one.key === copy.key)
@@ -976,6 +974,7 @@ export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk
     const press = (
       <MarkSoldButton
         name={`Mark sold: ${where}`}
+        saleKey={copy.key}
         busy={busy}
         disabled={walk.busyCopy !== null && !busy}
         onClick={() => walk.onSell(copy, take)}
@@ -990,10 +989,9 @@ export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk
     )
   }
   return (
-    <IconButton
-      icon="undo"
-      label="Undo"
-      name={`Undo: ${where}`}
+    <UndoSaleButton
+      saleKey={copy.key}
+      name={`Undo sale: ${where}`}
       busy={busy}
       disabled={walk.busyCopy !== null && !busy}
       onClick={() => walk.undoCopy(copy.key)}

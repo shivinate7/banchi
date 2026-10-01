@@ -131,6 +131,8 @@ const PATHS = {
   /* A zero-length "dot" renders at exactly `strokeWidth` (1.75 units, under 1.2px at 16px) —
      invisible (review, round 2). Each dot is a short vertical stroke instead: with the round
      cap it reads as a small pill, legible at 14-16px. */
+  /* A banknote: the cash that flies off a sale. One meaning, drawn in the line weight of the rest. */
+  bill: 'M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z M12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z M6 12h.01 M18 12h.01',
   grip: 'M9 5.3v1.4 M9 11.3v1.4 M9 17.3v1.4 M15 5.3v1.4 M15 11.3v1.4 M15 17.3v1.4',
 } as const
 
@@ -153,6 +155,7 @@ export const ICON_MEANINGS: Partial<Record<keyof typeof PATHS, string>> = {
   sortAsc: 'Sort low to high',
   sortDesc: 'Sort high to low',
   moveTo: 'Move to a box',
+  bill: 'Cash flying off a sale: the Mark sold burst',
   grip: 'Drag to reorder',
   copy: 'Copy to the clipboard',
   download: 'Save a file to disk',

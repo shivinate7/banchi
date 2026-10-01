@@ -1116,7 +1116,7 @@ def check_codex_hooks(report: Report) -> None:
     MEASURED AT THE MOMENT THIS ROW WAS WRITTEN: the two files already disagreed.
     `.claude/settings.json` runs `scripts/reap.py --hook` on every `Bash` call (D127, added
     2026-09-10 for the pkill/lsof incidents) and `scripts/session-teardown.sh` on
-    `WorktreeRemove` (added with D111's sweep) — `.codex/hooks.json` was written a day
+    `WorktreeRemove` (added with the janitor sweep, claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep") — `.codex/hooks.json` was written a day
     earlier, on 2026-09-09, and has neither. A Codex session could run an unrestricted
     `pkill` this repo's own Claude sessions cannot, and its `git worktree remove` would
     never notify a supervisor to stop. Both are added to `.codex/hooks.json` in the same
@@ -1315,7 +1315,7 @@ def check_map_sections(report: Report) -> None:
 # A STEP IS ITS LIST MARKER, AND AN UNCLAIMED ONE CANNOT BE (D80 amended 2026-09-11).
 # Markdown has no ordered-list marker that can hold `merge-time-ids`, so a step whose number is
 # not allocated yet is written with a `0.` marker carrying its slug in backticks, and
-# `scripts/claim-ids.py` rewrites both the marker and the token at merge time:
+# the shared merge tool rewrites both the marker and the token at merge time:
 #
 #   a `0.` marker, then the slug in backticks after the word `step`, then the title.
 #

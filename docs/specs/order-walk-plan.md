@@ -458,7 +458,7 @@ Inventory's: `Orders`, one line under it, and a count chip at top right.
 
 ### The main pane
 
-Inventory's card pane: `CardHero.tsx:CardPane` for the head, and `CardLocations` (`head={false}`)
+Inventory's card pane: `CardHero.tsx:CardPane` for the head, and `CardLocations`
 for every on-hand copy with its position facts. The walk's chosen copy comes first (D212). The
 copies in the section that the operator stands in come first. The order is held for the walk
 (section 8). A sale refreshes the positions as Inventory already does. No Details fold sits on

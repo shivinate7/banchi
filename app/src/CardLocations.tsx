@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { BoxRecord, SearchCopy, SearchGroup, SectionDetail } from './types'
 import { isDeparted, photoUrl, placeSentence } from './server'
@@ -7,8 +7,8 @@ import { PullConfirm } from './PullConfirm'
 import { PositionBar } from './PositionBar'
 import { placePartsOf, sayPlace, sectionCountOf, type Persona } from './position'
 import { collectorNumber } from './cardNumber'
-import { Button, Chip, Icon, Pill } from './kit'
-import { RANK_IS_CURRENT, ranksAsLive, ranksAsShown, stalenessSentence, type FrozenRank } from './frozenRank'
+import { Icon, IconButton, Pill } from './kit'
+import { RANK_IS_CURRENT, ranksAsLive, ranksAsShown, type FrozenRank } from './frozenRank'
 import './CardLocations.css'
 import { forSale, IDENTIFIED, readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
 
@@ -224,11 +224,6 @@ export type CardLocationsProps = {
    *  is what `#/gallery` and the lone-copy fallback want. Owner skin only. */
   frozen?: FrozenRank
 
-  /** Take a new order. Drawn as a control only while `frozen` holds something, and it is the
-   *  only thing on this screen that reshuffles the list (D28's shape: the operator says when).
-   *  Omitted draws no control, which is the kit sheet's case. */
-  onRerank?: () => void
-
   /** Where a copy's photograph comes from. Omitted by every screen in the product, which is
    *  how they all get D6's `GET /photo/<box>/<index>` and stay the single caller shape.
    *
@@ -246,7 +241,7 @@ export type CardLocationsProps = {
   photoSrc?: (copy: SearchCopy) => string
 
   /** DRAW `group.copies` IN EXACTLY THE ORDER GIVEN — no fullest-section rank, no sold-copy
-   *  fold or sink. `hideSold`/`frozen`/`onRerank` are irrelevant under it and nothing is
+   *  fold or sink. `hideSold`/`frozen` are irrelevant under it and nothing is
    *  hidden. For a caller whose own order is already load-bearing and answers a question this
    *  ranking would only re-ask — the walk's solver order, "this stop's copies first, then
    *  ascending (box, index)" (`docs/specs/order-walk-plan.md` §8's 2026-09-19 ruling,
@@ -257,12 +252,6 @@ export type CardLocationsProps = {
    *  scope a rule to its usage (the walk's row `min-height`, D118) without it reaching
    *  `#/inventory` or `#/fulfillment`. Omitted, the section carries its usual two classes only. */
   className?: string
-
-  /** Draw the heading, the stats and the SKU line. Owner skin only. Defaults to `true`, so
-   *  every existing caller renders exactly as before. `false` draws the row list alone, for a
-   *  caller that already carries its own heading — the walk row, which draws one `CardLocations`
-   *  per pick and cannot repeat "Every copy of this card" on each one. */
-  head?: boolean
 }
 
 export function CardLocations(props: CardLocationsProps) {
@@ -307,36 +296,125 @@ export function hiddenCopies(
   ).length
 }
 
-/** THE ONE MARK SOLD PRESS, on every copy row in the product (owner ruling, card-detail spec): a
- *  worded 40px button in the kit's tint form, the same width on every row (D195). Inventory's row,
- *  `#/orders`' walk and this list's own fallback all draw it, so one edit changes all three. The
- *  words stay because it is the one primary act in its row; Retire and Move are the icons beside
- *  it. `name` is the accessible name and must contain "Mark sold" (Label in Name). */
+/** THE ONE MARK SOLD PRESS, on every copy row in the product (owner ruling, card-detail spec): the
+ *  vocabulary's `sold` seal with no visible words, 40px tall in a fixed 128px box (D195) and the
+ *  kit's solid accent, so it reads as the one primary beside Retire and Move, which are bare
+ *  icons. Inventory's row, `#/orders`' walk and this list's own fallback all draw it, so one edit
+ *  changes all three. `name` is the accessible name and must contain "Mark sold" (Label in Name);
+ *  the tooltip says it too. */
 export function MarkSoldButton({
   busy,
   disabled,
   name,
+  saleKey,
   onClick,
 }: {
   readonly busy: boolean
   readonly disabled: boolean
   readonly name?: string
+  /** The copy's key. A press notes it, so the Undo that stands where this button was plays the
+   *  sale's burst once (`UndoSaleButton`); a row loaded already sold never does. */
+  readonly saleKey?: string
   readonly onClick: () => void
 }) {
   return (
-    <Button
-      variant="tint"
-      size="lg"
+    <IconButton
       icon="sold"
-      words="only-primary"
+      label="Mark sold"
+      name={name}
+      size="xl"
       className="card-locations-sell"
-      aria-label={name}
+      style={{ width: 'var(--sale-w)' }}
       busy={busy}
       disabled={disabled}
-      onClick={onClick}
-    >
-      Mark sold
-    </Button>
+      onClick={() => {
+        if (saleKey !== undefined) FRESH_SALES.set(saleKey, Date.now())
+        onClick()
+      }}
+    />
+  )
+}
+
+/* THE SALE JUST PRESSED, by copy key. `MarkSoldButton` writes it, `UndoSaleButton` reads it once
+   on mount and clears it, so the burst plays for the press and never for a row that was already
+   sold when it was drawn. A press that never lands leaves a stale key, so it expires. */
+const FRESH_SALES = new Map<string, number>()
+/** A sale that failed never plays its burst: its key is dropped. */
+export function clearFreshSale(key: string): void {
+  FRESH_SALES.delete(key)
+}
+const FRESH_MS = 15000
+const BILL_COUNT = 8
+
+/** THE UNDO THAT STANDS WHERE MARK SOLD WAS: the same frame (`--sale-w` by 40px, D195, D118), as a
+ *  neutral outline with the undo glyph, so it never reads as "sell again". Right after a press,
+ *  drawn bills fly up and out of it, once. They are `pointer-events: none` and absolutely placed,
+ *  so they never take a click and never move the row; reduced motion drops them and the frame is
+ *  simply there. Focus moves here after a press. */
+export function UndoSaleButton({
+  saleKey,
+  name,
+  busy,
+  disabled,
+  kbd,
+  onClick,
+}: {
+  readonly saleKey: string
+  readonly name: string
+  readonly busy: boolean
+  readonly disabled: boolean
+  readonly kbd?: string
+  readonly onClick: () => void
+}) {
+  const [wasFresh] = useState(() => {
+    const at = FRESH_SALES.get(saleKey)
+    return at !== undefined && Date.now() - at < FRESH_MS
+  })
+  /* Reduced motion draws no bills at all; the frame is simply there. */
+  const [fresh, setFresh] = useState(wasFresh && !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const button = useRef<HTMLButtonElement | HTMLAnchorElement>(null)
+  useEffect(() => {
+    FRESH_SALES.delete(saleKey)
+    /* The Mark sold that held focus is gone, so focus would drop to the body: a sale hands it to
+       the Undo, and a keyboard user can take it back at once. */
+    if (wasFresh) button.current?.focus()
+  }, [saleKey, wasFresh])
+  return (
+    <span className="card-locations-undo-wrap">
+      <IconButton
+        icon="undo"
+        label="Undo sale"
+        name={name}
+        size="xl"
+        className="card-locations-undo"
+        ref={button}
+        busy={busy}
+        disabled={disabled}
+        kbd={kbd}
+        onClick={onClick}
+      />
+      {fresh
+        ? Array.from({ length: BILL_COUNT }, (_, i) => (
+            <span
+              key={i}
+              className="card-locations-bill"
+              aria-hidden="true"
+              /* The LAST bill's own end ends the burst; a child's end bubbling up cannot. */
+              onAnimationEnd={(e) => {
+                if (e.target === e.currentTarget && i === BILL_COUNT - 1) setFresh(false)
+              }}
+              style={{
+                ['--dx' as string]: `${(i - (BILL_COUNT - 1) / 2) * 16}px`,
+                ['--dy' as string]: `${-(46 + (i % 3) * 18)}px`,
+                ['--rot' as string]: `${(i % 2 ? 1 : -1) * (20 + i * 8)}deg`,
+                animationDelay: `${i * 25}ms`,
+              }}
+            >
+              <Icon name="bill" size={22} />
+            </span>
+          ))
+        : null}
+    </span>
   )
 }
 
@@ -382,10 +460,8 @@ function OwnerRows({
   renderAction,
   hideSold = false,
   frozen = RANK_IS_CURRENT,
-  onRerank,
   preserveOrder = false,
   className,
-  head = true,
 }: Omit<CardLocationsProps, 'persona'>) {
   /* WHICH COPIES ARE DRAWN, AND IN WHAT ORDER (D132). Rule 1 below used to say no copy is
      dropped for being sold; the owner amended that on 2026-09-10 — a sold copy is not a place
@@ -438,12 +514,6 @@ function OwnerRows({
   const drawn = preserveOrder
     ? group.copies
     : [...[...standing].sort(byFullest), ...(hideSold ? [] : group.copies.filter(sinks))]
-  /* HOW STALE THE ORDER IS, counted over the copies THIS LIST draws. `frozen` is the screen's —
-     one press makes the box rail stale too — and a sentence saying `3 copies stale` over a list
-     that holds one of them would be counting somebody else's cards. */
-  const staleHere = group.copies.filter((copy) => frozen.has(copy.key)).length
-  const stale = stalenessSentence(staleHere)
-
   /* THE SLOT-COLUMN RESERVATION IS RETIRED (the owner's ruling, 2026-09-25, Direction B): the
      card figure no longer sits in a column of its own beside a separate path — `RowIdentity`
      runs box, section and card as one line, so there is no second column for a wider key to
@@ -454,38 +524,6 @@ function OwnerRows({
 
   return (
     <section className={['card-locations', 'card-locations-owner', className ?? ''].filter(Boolean).join(' ')}>
-      {!head ? null : (
-      <header className="card-locations-head">
-        <h3 className="bn-section-title card-locations-title">Copies</h3>
-        {/* THE ONE THING THAT RESHUFFLES THIS LIST, and it is a press rather than a consequence.
-            Drawn only once the order has actually gone stale — a control offering to recompute
-            an order that is already current is a button that does nothing, and a permanent one
-            would read as a setting to get right rather than as the state of this list. It sits
-            in the header because the press that made it stale is in the rows beneath it; a
-            re-rank on the walk's own status bar would be across the screen from the hand.
-
-            THE SLOT AROUND IT IS ALWAYS RENDERED AND IS D118's RULE, not tidiness. A control
-            that appears on a press is a row of the header's grid that did not exist a frame
-            ago, and this list sits inside `.browse-band`'s fixed height — so every copy row
-            would go down by the chip's height at the moment of the sale, which is the movement
-            this whole entry exists to stop. The slot holds `--bn-control-h-sm` whether or not
-            there is anything in it. */}
-        <div className="card-locations-rerank-slot">
-          {stale === null || onRerank === undefined ? null : (
-            <Chip
-              icon="refresh"
-              className="card-locations-rerank"
-              title="Ranked before these copies left."
-              onClick={onRerank}
-            >
-              <span>{stale}</span>
-              <span className="card-locations-rerank-go">re-rank</span>
-            </Chip>
-          )}
-        </div>
-      </header>
-      )}
-
       <ul className="card-locations-rows bn-stagger">
         {drawn.map((copy, i) => {
           const sold = isSold(copy, soldKeys)
@@ -636,6 +674,7 @@ function OwnerRows({
                   <MarkSoldButton
                     busy={busyKey === copy.key}
                     disabled={busyKey !== null && busyKey !== copy.key}
+                    saleKey={copy.key}
                     onClick={() => onSell(copy)}
                   />
                 )}

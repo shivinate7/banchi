@@ -26,7 +26,7 @@ path. The pin stays: a slot can collide with another worktree's, and a free sock
 
 IN `make check`, NEVER IN THE GIT HOOK. D18: it writes, and nothing that writes may gate a
 commit. Same placement and same reason as `audit-self-test`, `githooks-selftest`,
-`merge-selftest`, `janitor-selftest` and `verdict-selftest`.
+`janitor-selftest` and `verdict-selftest`.
 """
 
 import contextlib

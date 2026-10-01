@@ -82,7 +82,7 @@ def _sort_ids(ids) -> List[str]:
     adding a decision entry is a branch adding citations of it, which is exactly what makes
     the row refuse the commit that sends an operator here.
 
-    A SLUG SORTS WHERE ITS NUMBER WILL. `scripts/claim-ids.py` allocates `max + 1`, never the
+    A SLUG SORTS WHERE ITS NUMBER WILL. the shared merge tool allocates `max + 1`, never the
     lowest free id, so the id a slug becomes lands after every number already in the list —
     the list is sorted before the claim and after it, and the claim's exhaustive text
     substitution never has to reorder anything.
@@ -234,10 +234,10 @@ def selftest() -> int:
     def d(number: int) -> str:
         return "D" + str(number)
 
-    # AND A SLUG IS COMPOSED FOR A SECOND REASON ON TOP OF THAT ONE. `scripts/claim-ids.py`
+    # AND A SLUG IS COMPOSED FOR A SECOND REASON ON TOP OF THAT ONE. the shared merge tool
     # substitutes a slug by exhaustive text replacement, so a fixture that spells a live one
     # is rewritten into an assertion about a number the moment that branch merges — the trap
-    # `claim-ids.py`'s own vocabulary block records paying twice. Composed, the token occurs
+    # the old claimer's vocabulary block records paying twice. Composed, the token occurs
     # nowhere on disk and no claim can reach it.
     def slug(*segments: str) -> str:
         return "D-" + "-".join(segments)

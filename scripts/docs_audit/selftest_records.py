@@ -41,7 +41,7 @@ def run(ok) -> None:
     # A RENUMBER IS A TITLE THAT KEPT ITS NAME AND CHANGED ITS ID, and this is the reader of
     # that. The git walk around it needs a repository; this does not, and it is where the
     # logic that could be wrong lives (D140).
-    # WHICH TREE AM I, asked without a repository (D148). The case that was
+    # WHICH TREE AM I, asked without a repository. The case that was
     # wrong is the third: a NAMED branch sitting at origin/main, which is every branch between
     # `git checkout -b` and its first commit.
     print("\nwhich checkout is main, over the four readings that can say so")

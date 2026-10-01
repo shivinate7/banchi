@@ -509,8 +509,9 @@ export function Pill({
  *  and an end label that says what the ceiling is ("Cap 5"). Over the ceiling it draws every cell
  *  filled and NO cell past the ceiling, and the caller's end label carries the excess
  *  (`tone="warn"`). `label` is the spoken form, since the cells are drawn and never read.
- *  ponytail: one cell per unit, so a ceiling in the dozens draws a long strip; cap the cells or
- *  switch to a bar if a ceiling that large ever ships. */
+ *  By default a cell is at most 14px, so a ceiling in the dozens draws a long strip that wraps. A
+ *  caller that must hold one width gives the meter a fixed track and lets the cells share it
+ *  (`.browse-hero-fig-live` in `BoxBrowse.css`). */
 export function Meter({
   cells,
   filled,

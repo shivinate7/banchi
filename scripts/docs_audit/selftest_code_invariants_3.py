@@ -332,32 +332,32 @@ def run(ok) -> None:
        str(_run_commit_path()))
 
     # Arm 3: scope. The same write-shaped mutant, planted in an OFF-commit-path script,
-    # is not this row's business — `claim_stale`'s entry carries `commit_path: False` and a
+    # is not this row's business — `revert-selftest`'s entry carries `commit_path: False` and a
     # `why_off_commit_path`, and this row must not start grading its writes.
-    claim_ids_path = ROOT / "scripts" / "claim-ids.py"
-    if claim_ids_path.exists():
-        claim_original = claim_ids_path.read_text(encoding="utf-8")
-        claim_bak = claim_ids_path.with_suffix(".py.bak")
+    offpath_script = ROOT / "scripts" / "revert-audit.py"
+    if offpath_script.exists():
+        offpath_original = offpath_script.read_text(encoding="utf-8")
+        offpath_bak = offpath_script.with_suffix(".py.bak")
         needle = "def main("
-        idx = claim_original.find(needle)
-        ok(idx != -1, "scripts/claim-ids.py has a main() this arm can mutate near")
+        idx = offpath_original.find(needle)
+        ok(idx != -1, "scripts/revert-audit.py has a main() this arm can mutate near")
         if idx != -1:
-            insertion_point = claim_original.index("\n", idx) + 1
-            mutated_claim = (
-                claim_original[:insertion_point]
-                + '    Path("/tmp/claim-ids-selftest-mutant").write_text("mutated")\n'
-                + claim_original[insertion_point:]
+            insertion_point = offpath_original.index("\n", idx) + 1
+            mutated_offpath = (
+                offpath_original[:insertion_point]
+                + '    Path("/tmp/revert-audit-selftest-mutant").write_text("mutated")\n'
+                + offpath_original[insertion_point:]
             )
-            ok(mutated_claim != claim_original,
-               "arm 3 mutation actually changed scripts/claim-ids.py")
-            claim_bak.write_text(claim_original, encoding="utf-8")
+            ok(mutated_offpath != offpath_original,
+               "arm 3 mutation actually changed scripts/revert-audit.py")
+            offpath_bak.write_text(offpath_original, encoding="utf-8")
             try:
-                claim_ids_path.write_text(mutated_claim, encoding="utf-8")
+                offpath_script.write_text(mutated_offpath, encoding="utf-8")
                 findings = _run_commit_path()
             finally:
-                claim_ids_path.write_text(claim_original, encoding="utf-8")
-                claim_bak.unlink()
-            ok(not [f for f in findings if "claim-stale" in f.where],
+                offpath_script.write_text(offpath_original, encoding="utf-8")
+                offpath_bak.unlink()
+            ok(not [f for f in findings if "revert-selftest" in f.where],
                "an off-commit-path check writing is not this row's business — no finding "
                "names it",
                str(findings))

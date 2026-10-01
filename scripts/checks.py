@@ -432,21 +432,6 @@ CHECKS = (
         "governed_by": ("D18", "D42"),
     },
     {
-        "target": "merge-selftest",
-        "runs": "bash scripts/merge-selftest.sh",
-        "asserts": "scripts/merge-pr.py's local half, against a throwaway origin, clone and "
-                   "second worktree. The case that matters is the footgun D42 names: main "
-                   "checked out NOWHERE while a feature branch sits in the other tree, where "
-                   "the wrong command silently fast-forwards that branch and trips no hook.",
-        "needs": ("python3", "bash", "git"),
-        "writes": "a bare repo, a clone and a linked worktree, all under `mktemp -d`.",
-        "commit_path": False,
-        "why_off_commit_path": "D18 — it writes — and githooks-selftest's second reason applies "
-                               "unchanged: it drives the thing that moves main.",
-        "gates": True,
-        "governed_by": ("D18", "D42"),
-    },
-    {
         "target": "revert-selftest",
         "runs": "python3 scripts/revert-audit.py selftest",
         "asserts": "The revert guard, against a throwaway origin and clone that rebuild the "
@@ -463,40 +448,6 @@ CHECKS = (
                                "drives the guard by defeating it.",
         "gates": True,
         "governed_by": ("D18", "D42", "D133"),
-    },
-    {
-        "target": "claim-selftest",
-        "runs": "python3 scripts/claim-selftest.py",
-        "asserts": "scripts/claim-ids.py against a throwaway repository in which MAIN MOVES "
-                   "underneath the branch, which is the only condition that can tell an "
-                   "allocation against the ref from an allocation against the branch's own "
-                   "copy. FORTY-TWO arms — the count in this sentence said sixteen over a "
-                   "file that held eighteen, which is what a prose count does. Fourteen of "
-                   "them cover the staleness half (D140, amended 2026-09-11): a branch claims "
-                   "honestly, main takes the number underneath it, and the check must go red "
-                   "and NAME it. Mutation-tested on twelve — five when the claimer landed, "
-                   "seven over the staleness half and eight over the tree precondition, none "
-                   "of which survived. The boundary "
-                   "arm found a real bug in the unmutated code — `\\b` fires between a letter "
-                   "and a hyphen, so one slug was substituted inside another that extended "
-                   "it; the staleness arms found a second, that reading the baseline from the "
-                   "REF rather than the merge base makes every collision cancel itself out. "
-                   "SINCE 2026-09-20 IT ALSO COVERS THE WAIT'S SECOND QUESTION: whether the "
-                   "pull request can still merge while the wait is happening. A branch that "
-                   "goes CONFLICTING under it ends the wait early and says main moved, and "
-                   "`UNKNOWN` — which GitHub answers routinely while it computes — never "
-                   "does. Every no-news arm runs over a roster that NEVER COMPLETES, because "
-                   "one that goes green in two reads never reaches the mergeability reader at "
-                   "all and passes whatever it answers. That defect was live here until a "
-                   "mutation survived it.",
-        "needs": ("python3", "git"),
-        "writes": "a temporary directory it makes and removes.",
-        "commit_path": False,
-        "why_off_commit_path": "D18: it writes, and nothing that writes may run on the path "
-                               "that decides whether a commit proceeds. It also builds three "
-                               "git repositories, which the hook has no business doing.",
-        "gates": True,
-        "governed_by": ("D16", "D18", "D140"),
     },
     {
         "target": "decisions-selftest",
@@ -998,16 +949,14 @@ CHECKS = (
     {
         "target": "janitor-selftest",
         "runs": "bash scripts/janitor-selftest.sh",
-        "asserts": "scripts/janitor.py, against a throwaway clone with real worktrees, a fake "
-                   "liveness oracle and real processes in their own process groups. The cases "
-                   "that matter are the refusals: a worktree with a live session in it, a "
-                   "branch that is unmerged and on no remote, and a husk directory something "
-                   "is still running under. Each asserts the janitor's OWN sentence, because "
-                   "git would refuse some of them on its own and survival by somebody else's "
-                   "refusal is not coverage.",
+        "asserts": "scripts/janitor.py (--teardown), against a throwaway "
+                   "clone with a fake liveness oracle and real processes in their own process "
+                   "groups. The cases that matter: a leaving session must not count itself as "
+                   "somebody else, and every unreadable liveness answer reads as live. The "
+                   "machine sweep is claude-settings' and is proved there.",
         "needs": ("python3", "bash", "git"),
-        "writes": "a bare repo, a clone, four linked worktrees and four short-lived processes, "
-                  "all under `mktemp -d` and all confined to it by `--confine`.",
+        "writes": "a clone, a linked worktree or two and a few short-lived processes, all "
+                  "under `mktemp -d`.",
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes, and it signals processes. It drives the one "
                                "tool here besides icloud-sweep that can delete a worktree.",
@@ -1032,7 +981,7 @@ CHECKS = (
         "why_off_commit_path": "D18 — it writes, and it signals processes. It drives the one "
                                "guard here that can refuse a shell command outright.",
         "gates": True,
-        "governed_by": ("D18", "D138", "D111", "D127"),
+        "governed_by": ("D18", "D138", "D127"),
     },
     {
         "target": "silent-write-selftest",
@@ -1046,7 +995,7 @@ CHECKS = (
                    "guard survives is the false positives, and each is RUN in the fixture "
                    "before it is scored: `git rev-parse … 2>/dev/null`, `git fetch origin -q "
                    "2>/dev/null`, `git merge --abort 2>/dev/null`, `git merge-tree`, "
-                   "`make merge-selftest`, and a quoted `>/dev/null` inside a commit message. "
+                   "`make revert-selftest`, and a quoted `>/dev/null` inside a commit message. "
                    "The refusal's own text is scored too — a refusal that does not print "
                    "`PKMNSCAN_SILENT=off` fails here.",
         "needs": ("python3", "bash", "git"),
@@ -1186,7 +1135,7 @@ CHECKS = (
                   "live rig with a capture server kept alive at login over their real store.",
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes, and what it writes are branch switches and "
-                               "ref moves. Same standing as merge-selftest beside it.",
+                               "ref moves. Same standing as revert-selftest beside it.",
         "gates": True,
         "governed_by": ("D18", "D42", "D43", "D138", "D158"),
     },

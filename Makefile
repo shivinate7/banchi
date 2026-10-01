@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -404,8 +404,8 @@ audit-history:
 #                   sigil-check + css-var-check + css-var-check-selftest +
 #                   hand-search-selftest + token-literal-check +
 #                   kit-adoption + ignore-check + lint + typecheck + audit-self-test +
-#                   mutate-anchors + githooks-selftest + merge-selftest + revert-selftest +
-#                   claim-selftest + decisions-selftest + debts-selftest + gates-selftest +
+#                   mutate-anchors + githooks-selftest + revert-selftest +
+#                   decisions-selftest + debts-selftest + gates-selftest +
 #                   submission-selftest + cid-selftest + pricearchive-selftest +
 #                   archive-review-selftest + holdings-selftest + identity-checks-selftest +
 #                   price-postings-selftest + product-history-selftest +
@@ -451,9 +451,7 @@ check:
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory mutate-anchors
 	@$(MAKE) --no-print-directory githooks-selftest
-	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory revert-selftest
-	@$(MAKE) --no-print-directory claim-selftest
 	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory debts-selftest
 	@$(MAKE) --no-print-directory gates-selftest
@@ -503,7 +501,7 @@ check:
 # This exists because nothing ever re-ran the gate: `make check` failed in every fresh checkout
 # for 121 commits — `tsc` needed `app/demo/bundle.json`, which `make demo-record` writes and
 # nothing tracks — and no one noticed, because the only trees it was run in had made a recording.
-# A gate with no re-checker is the same defect D111 records one register up.
+# A gate with no re-checker is the same defect claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep" records one register up.
 #
 # ONE ROW IS ABSENT AND IT IS NOT AN OVERSIGHT:
 #   vale     needs a binary that is not on the runner, and it never gated a commit anyway.
@@ -524,9 +522,7 @@ ci-check:
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory mutate-anchors
 	@$(MAKE) --no-print-directory githooks-selftest
-	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory revert-selftest
-	@$(MAKE) --no-print-directory claim-selftest
 	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory debts-selftest
 	@$(MAKE) --no-print-directory gates-selftest
@@ -615,9 +611,7 @@ ci-check-guards-1:
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory mutate-anchors
 	@$(MAKE) --no-print-directory githooks-selftest
-	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory revert-selftest
-	@$(MAKE) --no-print-directory claim-selftest
 	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory debts-selftest
 	@$(MAKE) --no-print-directory gates-selftest
@@ -839,36 +833,13 @@ githooks-selftest:
 		echo "githooks-selftest: SKIPPED — nothing in this branch reaches scripts/githooks/. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
 	fi
 
-# THE HALF NOBODY CAN REMEMBER, DONE BY A MACHINE. D42 settles that a session performs both
-# halves of a merge on the owner's word — `gh pr merge`, then the local fast-forward — and the
-# local half has TWO correct forms chosen by whether any worktree holds main. Pick wrong and it
-# does not error: `git -C <main tree> pull --ff-only` fast-forwards whatever branch that tree is
-# standing on, moves no protected ref, and trips no hook.
-#
-# THIS DOES NOT REOPEN D42'S "no make target that picks for you". That rejection is about
-# WHETHER TO MERGE, which stays the owner's: a bare `make merge` refuses, `ARGS=<n>` is a free
-# preview that presses nothing, and only `ARGS="<n> --confirm"` acts. What is automated is the
-# state lookup. See D42's amendment.
-#
-# It never sets PKMNSCAN_MAIN and no refusal it prints suggests it — a session typing that
-# variable is doing something else (D42).
-#
-# A STANDING MERGE INSTRUCTION CARRIES A NEEDED REBASE AND FORCE-PUSH, on a branch nobody else
-# holds (owner ruling, 2026-09-18). The session does not stop and ask again for the rebase —
-# only for whether to merge at all.
+# THE SHARED MERGE TOOL (D140, merge claims the record number). `~/.claude/bin/merge` lives in
+# claude-settings and reads `.github/stamp.json`. A bare `make merge` refuses, `ARGS=<n>` is a free
+# preview that presses nothing, and `ARGS="<n> --confirm"` merges (D42, the owner names the act).
+# The tool claims in a temporary worktree, so this checkout need not stand on the PR's branch.
+# It never rebases or force-pushes: a moved head stops it.
 merge:
-	@$(PYTHON) scripts/merge-pr.py $(ARGS)
-
-# HERE AND NOT IN THE GIT HOOK, for githooks-selftest's two reasons exactly: D18, because it
-# writes a bare repo, a clone and a linked worktree; and because it drives the thing that moves
-# main, so a version on the commit path would be exercising that against the real one.
-merge-selftest:
-	@python3 scripts/guard-scope.py classify --target merge-selftest --base origin/main; rc=$$?; \
-	if [ $$rc -ne $(SKIP_CODE) ]; then \
-		bash scripts/merge-selftest.sh; \
-	else \
-		echo "merge-selftest: SKIPPED — nothing in this branch reaches scripts/merge-pr.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
-	fi
+	@~/.claude/bin/merge $(ARGS)
 
 # A MERGE CAN UNDO A RULING WITHOUT ANYBODY WRITING A LINE (D133). PR #221 landed on main from
 # a tree that still held the pre-#218 copy of ten files, its message about `--cap` wording, and
@@ -900,42 +871,6 @@ revert-selftest:
 		python3 scripts/revert-audit.py selftest; \
 	else \
 		echo "revert-selftest: SKIPPED — this branch does not touch scripts/revert-audit.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
-	fi
-
-# A BRANCH DOES NOT TAKE A DECISION NUMBER (D-merge-time-ids). It writes a slug and this
-# allocates the number against main INSIDE `make merge`, which is the first moment the
-# allocation's only input — what main has taken — is knowable. Reach for this by hand only to
-# see what a merge would claim; the merge runs it for you.
-claim-ids:
-	@python3 scripts/claim-ids.py $(ARGS)
-
-# THE OTHER HALF OF THE CLAIM, AND IT IS NOT ABOUT SLUGS (D140, amended 2026-09-11). Once a
-# branch has claimed there is no slug left and `make claim-ids` says `nothing to do` — a true
-# statement about slugs and an incomplete one about safety, because main can take that number
-# afterwards and nothing looks again. It happened TWICE on 2026-09-11, both times caught by a
-# person reading PR titles.
-#
-# IT WRITES NOTHING, so unlike `claim-ids` it may gate: it is in `check` and in `ci-check`, and
-# `make merge` asks for it before every merge, where the fetch above it makes the answer
-# current. IT READS THE LOCAL `origin/main` AND NEVER THE NETWORK — D140 rejects reading open
-# pull requests deliberately, and this needs neither, because the case that bites is the one
-# where the other branch has already LANDED. A clone with no `origin/main` is ALLOWED and says
-# so, which is `revert-guard`'s call for `revert-guard`'s reason.
-#
-# IT CAN ONLY UNDER-REPORT AGAINST A STALE REF, never over-report, which is what makes it safe
-# on the commit-adjacent path: a `make check` whose `origin/main` is a day old misses a
-# collision it would have caught, and invents none. `decision index` is still the backstop.
-claim-stale:
-	@python3 scripts/claim-ids.py --stale
-
-# The claimer, proved where it can actually be wrong: a throwaway repository in which main
-# moves underneath the branch. In `check`, never in the git hook — it writes (D18).
-claim-selftest:
-	@python3 scripts/guard-scope.py classify --target claim-selftest --base origin/main; rc=$$?; \
-	if [ $$rc -ne $(SKIP_CODE) ]; then \
-		python3 scripts/claim-selftest.py; \
-	else \
-		echo "claim-selftest: SKIPPED — nothing in this branch reaches scripts/claim-ids.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
 	fi
 
 # THE CORPUS IS COMPLETE AND STILL ROUND-TRIPS. `docs/decisions/` is one file per entry and
@@ -1083,35 +1018,28 @@ icloud-sweep:
 # whether a commit proceeds. Nor is leftover exhaust a defect to fail a commit over — it is a
 # condition the owner's own sessions create on their own schedule.
 #
-# TIER 1 IS REAPED WITHOUT ASKING AND TIER 2 IS NOT. A process whose own script has been deleted
-# cannot be live; a worktree that merely LOOKS idle can be, and was, twice, on the day this was
-# written. `make status` reports the count. Reaping tier 2 is opt-in: `make janitor ARGS=--confirm`.
-#
-# "WITHOUT ASKING" MEANS WITHOUT A PROMPT, NOT WITHOUT BEING ASKED, AND THAT DISTINCTION WAS
-# LOST UNTIL 2026-09-19. A BARE `make janitor` previews BOTH tiers and presses nothing, which
-# is what janitor.py's own header and `status.py:janitor()` have always said and what the code
-# did not do — the bare run SIGTERMed orphans, ran `git worktree prune` and deleted husks, at
-# the head of every session, because `make status` runs it. Tier 1 is still pressed with no
-# prompt by whatever names it: `--tier1`, which `session-teardown.sh` runs at every session
-# end, and `--confirm`.
-# EXIT 1 IS NOT A FAILURE HERE, AND THAT DIFFERS FROM icloud-sweep ON PURPOSE. The sweep exits 1
-# when something is waiting on `--confirm`, which for a preview is the ORDINARY answer rather
-# than a rare finding — a conflict copy is unusual, a reapable worktree is Tuesday. So `make`
-# swallows 1 and nothing else: a crash, a refusal to run, any code above 1 still fails loudly.
-# The code itself is kept because a scheduled caller wants to know whether there is work.
+# THE MACHINE'S SWEEP IS claude-settings', NOT THIS REPO'S (owner's ruling: Banchi repoints the
+# janitor at claude-settings, then deletes what claude-settings now owns). `make janitor` runs
+# its `janitor/sweep.py`, a PREVIEW unless ARGS=--confirm: branches, worktrees, dead-rooted
+# servers, loose processes, stale registrations and husks, across every checkout under
+# ~/Developer. ARGS=<root> narrows it to one clone. CLAUDE_JANITOR_SWEEP names another copy.
+# What stays in scripts/janitor.py is one tree's teardown. `session-teardown.sh` runs it.
 janitor:
-	@python3 scripts/janitor.py $(ARGS); s=$$?; [ $$s -le 1 ] || exit $$s
+	@python3 "$${CLAUDE_JANITOR_SWEEP:-$$HOME/.claude/janitor/sweep.py}" $(ARGS)
 
-# THE SWEEP ON A SCHEDULE, because the two events that run it are both known to miss. A tree
-# abandoned by a session that died is removed by nobody, so `WorktreeRemove` never fires for
-# it, and `.claude/settings.json` already calls `SessionEnd` unreliable at app quit and machine
-# sleep. Writes to ~/Library and so is on no hook and in no check, exactly as `launch-agent` is
-# (D18). Main checkout only: a plist naming a worktree outlives the worktree.
+# THE DAILY SWEEP IS claude-settings' TOO: its own launch agent, com.claude-settings.janitor.
+# daily-sweep, replaces this repo's com.pkmnscan.janitor.<hash>. This target no longer installs
+# anything. It says what to retire, and it retires nothing: unloading a launch agent is the
+# owner's act, not a make target's.
 janitor-agent:
-	@python3 scripts/janitor.py --install-agent $(ARGS)
+	@echo "claude-settings owns the daily sweep: com.claude-settings.janitor.daily-sweep."
+	@echo "Banchi's own agent is retired. To drop the one an earlier install left, run:"
+	@for p in $$HOME/Library/LaunchAgents/com.pkmnscan.janitor.*.plist; do \
+		[ -e "$$p" ] && echo "  launchctl bootout gui/$$(id -u) $$p && rm $$p"; \
+	done; true
 
 # In `check`, never in the git hook: it writes a temp tree and signals the processes it spawned
-# there, which is D18's line. Same standing as merge-selftest and githooks-selftest.
+# there, which is D18's line. Same standing as githooks-selftest.
 janitor-selftest:
 	@python3 scripts/guard-scope.py classify --target janitor-selftest --base origin/main; rc=$$?; \
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
@@ -1188,7 +1116,7 @@ guard-scope-selftest:
 # THE PRIMARY CHECKOUT'S SELF-SYNC, proved by violating it in throwaway clones. It switches
 # branches and moves `refs/heads/main`, which is exactly why it may never be pointed at this
 # clone: the subject of a sync is the PRIMARY tree, and on this machine that is the owner's live
-# rig. In `check` and never in the git hook — D18, the same standing as merge-selftest.
+# rig. In `check` and never in the git hook — D18, the same standing as githooks-selftest.
 sync-selftest:
 	@python3 scripts/guard-scope.py classify --target sync-selftest --base origin/main; rc=$$?; \
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
@@ -1556,27 +1484,12 @@ guard-shell-selftest:
 
 .PHONY: guard-shell-selftest
 
-# THE SWEEP, WHERE EVERY REPO CAN REACH IT. `~/.claude/settings.json` hooks apply to every
-# session in every project, but the command they name has to exist without this checkout in
-# sight — so the two files are COPIED, exactly as `make hooks` copies the git hooks out of the
-# tree rather than pointing at it. A copy can go stale, which is why `make status` compares it
-# and says so, the same way it reports a stale hooks-armed directory. One press, once per
-# machine; run it again after this tree's copy changes.
+# RETIRED. `~/.claude/bin` is claude-settings' install.sh's, and its guard refuses a session's
+# write there. Banchi's own hooks run `scripts/session-teardown.sh` and `scripts/reap.py` from
+# the repo, so nothing here needs a copy. This target copies nothing.
 janitor-install:
-	@mkdir -p $$HOME/.claude/bin
-	@cp scripts/janitor.py scripts/session-teardown.sh scripts/reap.py $$HOME/.claude/bin/
-	@chmod +x $$HOME/.claude/bin/janitor.py $$HOME/.claude/bin/session-teardown.sh $$HOME/.claude/bin/reap.py
-	@echo "installed to ~/.claude/bin: janitor.py, session-teardown.sh, reap.py"
-	@echo "  hook it up once, in ~/.claude/settings.json, so it covers every repo:"
-	@echo '    "SessionEnd":     [{"hooks": [{"type": "command", "timeout": 60,'
-	@echo '                        "command": "$$HOME/.claude/bin/session-teardown.sh"}]}]'
-	@echo '    "WorktreeRemove": [{"hooks": [{"type": "command", "timeout": 60,'
-	@echo '                        "command": "$$HOME/.claude/bin/session-teardown.sh"}]}]'
-	@echo '    "PreToolUse":     [{"matcher": "Bash", "hooks": [{"type": "command",'
-	@echo '                        "command": "$$HOME/.claude/bin/reap.py --hook"}]}]'
-	@echo '  then the sweep reaches any clone: ~/.claude/bin/janitor.py --root <path>'
-	@echo '  and the kill guard covers every project, not just this one. Both copies can go'
-	@echo '  stale; `make status` compares them and says so.'
+	@echo "claude-settings' install.sh owns ~/.claude/bin. This target copies nothing."
+	@echo "Banchi's hooks run scripts/session-teardown.sh and scripts/reap.py from the repo."
 
 # IS THE LAN URL STILL GOOD? The owner reaches this product from a phone at
 # `http://pkmnscan.lan:8000`, and nothing in this repo knows that name — the DHCP reservation
@@ -1741,7 +1654,7 @@ design-check:
 # The lock itself, exercised by violating it — a holder, a refusal, a wait, and a holder
 # killed with -9 to prove the OS releases what it took. In `check`, never in the git hook: it
 # spawns processes and writes a lock directory under `mktemp -d`, which is D18's line. Same
-# standing as janitor-selftest, merge-selftest and githooks-selftest.
+# standing as janitor-selftest and githooks-selftest.
 suite-lock-selftest:
 	@python3 scripts/guard-scope.py classify --target suite-lock-selftest --base origin/main; rc=$$?; \
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
