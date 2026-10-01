@@ -141,7 +141,7 @@
   place-items: center;
   color: var(--bn-ink-3);
 }
-.browse-hidesold { flex: none; }
+.browse-hidesold { flex: 0 1 auto; min-width: 0; }
 .browse-hidesold .bn-hidetoggle-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* ONE TOOLBAR LINE (UX-269): in the walk's status line the toggle takes the line's own small
    height and type, so `tick shown` no longer wraps alone onto a second row. */
@@ -1003,10 +1003,4 @@
   .browse-queued .bn-notice a::after { content: ''; position: absolute; inset: -16px -4px; }
 }
 
-.browse-pick-x { display: inline-grid; place-items: center; width: 16px; height: 16px; margin: 0 -4px 0 2px; border-radius: var(--bn-r-full); color: inherit; }
-.browse-pick-x:hover { background: var(--bn-accent-tint-2); }
-/* option D: tighter inline padding so pill, toggle and None share one 268px line */
-.browse-status { padding-inline: var(--bn-1-5); gap: 2px; }
-.browse-status .browse-quiet { padding: 0 var(--bn-1-5); }
-.browse-status .bn-hidetoggle { padding: 0 var(--bn-1-5); gap: var(--bn-1-5); }
-.browse-status .bn-hidetoggle-count { --digits: 3; }
+.browse-pickmenu { cursor: pointer; border: 0; font: inherit; font-weight: 600; }

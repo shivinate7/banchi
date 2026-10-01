@@ -54,7 +54,7 @@ import {
 import { stateLabel } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
-import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, Pill, boxesMostRecentFirst, countFacets, filterRows, type SortValue } from './kit'
+import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, Popover, boxesMostRecentFirst, countFacets, filterRows, type SortValue } from './kit'
 import { boxTitle, UNNAMED_BOX } from './kit/data'
 import type { FilterFacet, FilterValue } from './kit/data'
 import { useFacetParams } from './kit/viewState'
@@ -776,6 +776,8 @@ export function BoxBrowse({
 
   /* The mass-select, by store key. Not persisted; cleared when the box changes. */
   const [picked, setPicked] = useState<readonly string[]>([])
+  const [pickMenu, setPickMenu] = useState(false)
+  const pickAnchor = useRef<HTMLButtonElement>(null)
 
   /* Which sections are open, by section key. Per-box for free: a section key names a box. */
   const [opened, setOpened] = useState<readonly string[]>([])
@@ -2228,12 +2230,14 @@ export function BoxBrowse({
                 repeat the pill, and the three controls then fit the rail in one line. */}
             {picked.length > 0 ? (
               <>
-                <Pill tone="accent" className="browse-status-picked">
+                <button ref={pickAnchor} type="button" className="bn-pill bn-pill-accent browse-pickmenu" aria-haspopup="menu" aria-expanded={pickMenu} onClick={() => setPickMenu((v) => !v)}>
                   {picked.length} ticked
-                  <button className="browse-pick-x" type="button" aria-label="Clear the ticks" onClick={() => setPicked([])}>
-                    <Icon name="x" size={10} />
-                  </button>
-                </Pill>
+                  <Icon name="chevronDown" size={12} />
+                </button>
+                <Popover open={pickMenu} onClose={() => setPickMenu(false)} anchor={pickAnchor} label="Ticked cards">
+                  <button type="button" className="bn-menu-item" onClick={() => { setPicked([]); setPickMenu(false) }}>Clear ticks</button>
+                  <button type="button" className="bn-menu-item" onClick={() => { tickAllShown(); setPickMenu(false) }}>{shownAllTicked ? 'None' : 'All'}</button>
+                </Popover>
               </>
             ) : sections.length < 2 ? (
               /* Under a search the match sentence carries the local count; a second one is noise. */
@@ -2274,7 +2278,7 @@ export function BoxBrowse({
 
             <span className="bn-spacer" />
 
-            {visible.length === 0 ? null : (
+            {visible.length === 0 || picked.length > 0 ? null : (
               <button className="browse-quiet" type="button" aria-pressed={shownAllTicked} onClick={tickAllShown}>
                 {shownAllTicked ? 'None' : 'All'}
               </button>
