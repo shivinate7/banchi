@@ -525,7 +525,11 @@ export function CardHeroHead({
           {/* THE RE-SORT BUTTON sits beside Actions, the same IconButton at the same size, so the row's
               height is the same with it or without it (D118). Shown only while the order is stale;
               the staleness sentence is its tooltip and accessible name. */}
-          {figures?.rerank?.say == null ? null : (
+          {/* ITS ROOM IS KEPT WHILE IT IS ABSENT (D313): the button mounts after a sale, and on a wide
+              face the name wrapped to a second line to make room, growing the hero. */}
+          {figures?.rerank?.say == null ? (
+            <span className="browse-hero-rerank-room" aria-hidden="true" style={{ inlineSize: 28, flex: 'none' }} />
+          ) : (
             <IconButton icon="refresh" className="browse-hero-rerank" label={`${figures.rerank.say}. Re-rank`} onClick={figures.rerank.onRerank} />
           )}
           {actions}

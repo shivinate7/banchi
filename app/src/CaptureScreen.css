@@ -1021,7 +1021,9 @@
 }
 .capture-film-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3); flex-wrap: wrap; padding: 0 var(--bn-0-5); }
 .capture-film-hint { display: flex; align-items: center; gap: var(--bn-1-5); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
-.capture-undo-depth { margin-left: var(--bn-1-5); font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--bn-ink-3); }
+.capture-undo-note { font-size: var(--bn-fs-sm); line-height: 1.45; } /* one `.capture-quiet` line (D313) */
+/* NOT `.bn-live-count`: the words "12 recent" are the figure, so the floor is the whole phrase */
+.capture-undo-depth { min-inline-size: 9ch; margin-left: var(--bn-1-5); font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--bn-ink-3); }
 .capture-film-empty { display: flex; align-items: flex-start; gap: var(--bn-2); padding: var(--bn-1-5) var(--bn-1) var(--bn-1); font-size: var(--bn-fs-sm); }
 .capture-film-empty .bn-icon { color: var(--bn-ink-4); }
 /* UN-1: THE WHOLE SITTING SCROLLS INSIDE THE STRIP RATHER THAN GROWING THE PAGE (D164's cap

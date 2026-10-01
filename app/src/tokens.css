@@ -128,9 +128,9 @@
   --bn-btn-shadow: var(--bn-shadow-1);
 
   /* ---- type -------------------------------------------------------------- */
-  --bn-font-display: 'Manrope', 'Inter', system-ui, sans-serif;
-  --bn-font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --bn-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --bn-font-display: 'Manrope', 'Manrope Fallback', 'Inter', system-ui, sans-serif;
+  --bn-font-ui: 'Inter', 'Inter Fallback', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bn-font-mono: 'JetBrains Mono', 'JetBrains Mono Fallback', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* TYPE ROLES — aliases onto the scale below, never new sizes (UX-067, UX-115). A heading is
      one of three steps; a sentence a person must read is at least 13px; a label (a caps word,
@@ -292,6 +292,12 @@
   --bn-control-h: 34px;
   --bn-control-h-lg: 40px;
   --bn-control-h-sm: 28px;
+
+  /* A PILL'S OWN HEIGHT (D313). A line that may or may not hold a pill reserves it
+     (`min-block-size: var(--bn-pill-h)`), and `.bn-pill` reads the same token, so a pill
+     arriving never changes its line's height. `-sm` is the pill inside a button or a tab. */
+  --bn-pill-h: 22px;
+  --bn-pill-h-sm: 18px;
 
   /* ======================================================================
      LEGACY ALIASES — the names every existing stylesheet reads.

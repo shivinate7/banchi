@@ -358,7 +358,7 @@ export function severalOrders(): OrdersPayload {
  *  itself on landing (§13's own fallback-to-first-shown rule): the walk pane is real screen
  *  area on `#/orders` now (`docs/specs/order-walk-plan.md` §13), so a ceiling pinned without it
  *  would bound the screen MINUS the pane it added, not the screen. */
-function severalOrdersWalkPlan(): WalkPlan {
+export function severalOrdersWalkPlan(): WalkPlan {
   const p = place()
   return {
     cost: 'default',

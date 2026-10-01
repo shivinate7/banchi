@@ -215,6 +215,11 @@ type Stage = {
   readonly tone?: 'accent' | 'warn' | 'ok'
 }
 
+/** A clamped sentence keeps its whole text in its title. */
+const titled = (el: HTMLElement | null) => {
+  if (el) el.title = el.textContent ?? ''
+}
+
 /** The ranked sentence. Renders what `standing.ts` decided and judges nothing itself. */
 function StandingLine({ standing: say }: { readonly standing: Standing | null }) {
   if (say === null) {
@@ -238,7 +243,7 @@ function StandingLine({ standing: say }: { readonly standing: Standing | null })
           <Icon name={say.icon} size={17} />
         </span>
       )}
-      <span className="home-standing-say">
+      <span className="home-standing-say" ref={(el) => titled(el)}>
         <span className="home-standing-lead">{say.lead}</span>
         {say.say.map((part, i) =>
           part.em ? (
@@ -281,7 +286,7 @@ function StandingLine({ standing: say }: { readonly standing: Standing | null })
           `standing.ts` hands over plain sentences only — there is no figure left to draw here,
           so this is a supplementary line, never a second copy of a number 24px below. */}
       {say.behind.length === 0 && say.problem === null ? null : (
-        <p className="home-standing-behind">
+        <p className="home-standing-behind" ref={(el) => titled(el)}>
           {say.behind.map((label, i) => (
             <span key={i} className="home-standing-behind-lab">
               {label}
@@ -324,11 +329,6 @@ function HistoryFootFrame({ sum = false, ribbon = false, last = false }: { reado
   return sum ? <div className="home-foot">{body}</div> : body
 }
 
-/** Words the loaded sentence will gain, held invisibly in its own grammar until they land. */
-function Hold({ children }: { readonly children: string }) {
-  return <span className="home-hold" aria-hidden="true">{children}</span>
-}
-
 function HistoryFoot({
   status,
   boxes,
@@ -346,7 +346,9 @@ function HistoryFoot({
   readonly live: boolean
 }) {
   const plot: Ribbon | null = useMemo(() => ribbon(sittings(shelf)), [shelf])
-  if (status === null) return loading.status ? <HistoryFootFrame sum ribbon last /> : <div className="home-foot" />
+  /* THE SENTENCE IS DRAWN ONCE, WHEN EVERY READ IT NEEDS HAS LANDED. Clause by clause it reflowed: a
+     clause that wrapped a line moved the link after it. Until then the frame stands, in its final shape. */
+  if (status === null || loading.boxes || loading.history) return loading.status || loading.boxes || loading.history ? <HistoryFootFrame sum ribbon last /> : <div className="home-foot" />
   const realTotal = photographed(status)
   if (realTotal === 0) {
     return (
@@ -367,9 +369,9 @@ function HistoryFoot({
   const newest = plot?.blocks[plot.blocks.length - 1]?.sitting ?? null
   return (
     <div className="home-foot">
-      <p className="home-foot-sum">
+      <p className="home-foot-sum" ref={(el) => titled(el)}>
         <b>{realTotal.toLocaleString()}</b> photographed
-        {plot === null ? (loading.history ? <Hold>{' over 00 sittings since 00 Mmm'}</Hold> : null) : (
+        {plot === null ? null : (
           <>
             {' over '}
             <b>{plot.blocks.length + (plot.plinth?.sittings ?? 0)}</b>
@@ -381,8 +383,8 @@ function HistoryFoot({
         {/* `on_hand` is nullable BECAUSE a box could not be counted. A sum with a null in it is
             not a sum, so the clause degrades and the sentence does not. */}
         <b>{onHand.toLocaleString()}</b> stored
-        {boxes === null ? (loading.boxes ? <Hold>{' in 00 boxes'}</Hold> : null) : <> in <b>{boxes}</b> {boxes === 1 ? 'box' : 'boxes'}</>}
-        {sold === null ? (loading.boxes ? <Hold>{' - 000 sold'}</Hold> : null) : sold === 0 ? null : (
+        {boxes === null ? null : <> in <b>{boxes}</b> {boxes === 1 ? 'box' : 'boxes'}</>}
+        {sold === null ? null : sold === 0 ? null : (
           <>
             <i aria-hidden="true" />
             {/* THIS STORE'S OWN COUNT, NOT SALES' (UX-019): Sales totals the order ledger,
@@ -397,7 +399,7 @@ function HistoryFoot({
       </p>
       {plot === null ? (loading.history ? <HistoryFootFrame ribbon last /> : null) : <Ribbon plot={plot} live={live} />}
       {newest === null ? null : (
-        <p className="home-foot-last">
+        <p className="home-foot-last" ref={(el) => titled(el)}>
           <b>{dayMonth(newest.from)}</b>
           {' — '}
           <b>{newest.cards.toLocaleString()}</b> {newest.cards === 1 ? 'card' : 'cards'}
@@ -570,7 +572,10 @@ export function Home() {
   /* THE STANDING LINE. The policy is `standing.ts`; this only hands it the readings and
      keeps the three non-values apart, which is the whole of what that module needs to obey
      its null invariant. */
-  const say = standing({
+  /* DRAWN ONCE, WHEN EVERY READ IT RANKS ON HAS ANSWERED (D313). Ranked read by read, the sentence was
+     re-drawn each time one landed, and its words moved. Until then the frame stands. */
+  const settled = [status, orders, pricing, runs, book].every((r) => r.state !== 'loading')
+  const say = !settled ? null : standing({
     status: status.state === 'ready' ? status.value : null,
     statusFailed: status.state === 'failed',
     orders: orders.state === 'ready' ? orders.value : null,

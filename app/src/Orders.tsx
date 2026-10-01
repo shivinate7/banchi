@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
 import {
   Button,
@@ -19,6 +19,7 @@ import {
   SkeletonText,
   Stat,
   useFacetParams,
+  useHeld,
   useSortParam,
   useUndoHotkey,
   useViewFlag,
@@ -2772,16 +2773,15 @@ function PullStage({
    *  `OrderPickPane`'s own comment) — because a render that takes one of those early returns
    *  skips every hook declared after it. Declared up here, both run on every render regardless of
    *  which return this function takes. */
-  const [orderBody, setOrderBody] = useState<HTMLDivElement | null>(null)
-  const [narrow, setNarrow] = useState(false)
-  useLayoutEffect(() => {
-    if (orderBody === null) return
-    const read = () => setNarrow(orderBody.getBoundingClientRect().width < 560)
-    read()
-    const ro = new ResizeObserver(read)
-    ro.observe(orderBody)
-    return () => ro.disconnect()
-  }, [orderBody])
+  /* THE PHONE THRESHOLD IS CSS (a container query, D123), never a width read on render: a measured
+   *  width picks its layout after the first paint, and the column then moves under the hand
+   *  (D313, class J). `.orders-cardcol` is drawn from 560px of column up and hidden under it, and
+   *  both panes stay mounted. The one JS read is at the PRESS, in `openCardSheet`: a tap on a walk
+   *  row opens the card in a sheet only where the column has no room to draw it beside the walk. */
+  const orderBody = useRef<HTMLDivElement | null>(null)
+  const openCardSheet = () => {
+    if ((orderBody.current?.getBoundingClientRect().width ?? Infinity) < 560) setCardSheetOpen(true)
+  }
   /** THE CARD SHEET (phone only): closed until a walk row is tapped (`WalkList`'s own `onPick`).
    *  Left open across a pick — stepping to the next row updates the same sheet's content rather
    *  than closing it, the way `currentRow` already re-renders the sticky desk pane in place. */
@@ -3325,6 +3325,19 @@ function PullStage({
 
   const walk = useOrderWalk({ walkedKeys, ordersByKey, rawCards, onPull: onWalkPull, onUndo: onWalkUndo })
 
+  /* THE WALK HOLDS ITS OLD FRAME WHILE ITS PLAN IS OUT (D313, class B). A press that changes the
+   *  walked set asks `POST /orders/walk-plan`, and the plan state keeps the old plan until the new
+   *  one lands, so the rows already stood. Everything that DESCRIBES the walk did not: the head, the
+   *  buyer count, the chip and walk mode itself followed the press at once, over the old rows. Each
+   *  of them reads the held value below, so one press is one swap, drawn when the plan is whole. The
+   *  buyer list and the selection highlight stay live: they are the pressed control's own spot. */
+  const shownKey = useHeld(selectedKey, walk.pending)
+  const shownTicked = useHeld(walkTicked, walk.pending)
+  const shownKeys = useHeld(walkedKeys, walk.pending)
+  const shownWalking = useHeld(walking, walk.pending)
+  const shownGroup = allGroups.find((group) => group.key === shownKey) ?? null
+  const walkHeld = walk.held
+
   /* A TOAST OR `U` UNDO REACHES THIS MOUNTED WALK — the review round's finding 2. Neither
    *  path calls `walk.undoCopy` (they write through `undoFromToast`, module-level, with no
    *  access to this hook's state), so without this the walk's own tally never learned that a
@@ -3387,7 +3400,7 @@ function PullStage({
   useEffect(() => {
     if (walk.rows.length === 0) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey) return
+      if (walk.held || event.metaKey || event.ctrlKey || event.altKey) return
       const target = event.target as HTMLElement | null
       if (target !== null && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return
       const step = event.key === 'j' || event.key === 'J' ? 1 : event.key === 'k' || event.key === 'K' ? -1 : 0
@@ -3622,10 +3635,10 @@ function PullStage({
   /* WHO THE WALK IS FOR, AND WHAT IT STILL WANTS OF EACH CARD. `walkedBuyers` counts the
      selected buyer and every ticked one; `owedBySku` is the "of N" on every walk row. */
   const walkedGroups = allGroups.filter(
-    (group) => group.key === selectedKey || walkTicked.has(group.key),
+    (group) => group.key === shownKey || shownTicked.has(group.key),
   )
   const owedBySku = new Map<string, number>()
-  for (const key of walkedKeys) {
+  for (const key of shownKeys) {
     // A stood-down line owes zero on the walk (`pipeline/walkplan.py:demand`'s own filter,
     // the owner's ruling 2026-09-17) — `ResolvedLine.owed` does not know this, so it is
     // read here off the same `OrderLineProgress.closed_at` the ledger stores. `!= null`
@@ -3641,7 +3654,7 @@ function PullStage({
       owedBySku.set(line.sku, (owedBySku.get(line.sku) ?? 0) + line.owed)
     }
   }
-  const cardsToPull = [...walkedKeys].reduce(
+  const cardsToPull = [...shownKeys].reduce(
     (sum, key) => sum + (answers.get(key)?.lines ?? []).reduce((s, line) => s + pickOf(line), 0),
     0,
   )
@@ -3654,14 +3667,14 @@ function PullStage({
           {cardsToPull} {plural(cardsToPull, 'card', 'cards')} to pick
         </p>
       </div>
-    ) : selectedGroup === null ? null : (
-      <OrderPanel group={selectedGroup} answers={answers} status={statusByGroup.get(selectedGroup.key) ?? 'done'} onManage={() => setManageOpen(true)} />
+    ) : shownGroup === null ? null : (
+      <OrderPanel group={shownGroup} answers={answers} status={statusByGroup.get(shownGroup.key) ?? 'done'} onManage={() => setManageOpen(true)} />
     )
 
-  const buyerDone = walkedGroups.length === 1 && selectedGroup !== null && selectedGroup.open.length === 0
+  const buyerDone = walkedGroups.length === 1 && shownGroup !== null && shownGroup.open.length === 0
 
   const walkColumn = (
-    <section className="bn-panel orders-walk" aria-label="The walk" ref={walkRef} tabIndex={-1}>
+    <section className="bn-panel orders-walk" aria-label="The walk" ref={walkRef} tabIndex={-1} aria-busy={walkHeld ? 'true' : undefined} inert={walkHeld}>
       <header className="orders-walk-head">{walkHead}</header>
       {walkNote === null ? null : (
         <p className="orders-walk-note" role="status">
@@ -3672,7 +3685,7 @@ function PullStage({
       {buyerDone ? (
         <div className="orders-walk-done">
           <p>
-            <Icon name="check" size={16} /> All {selectedGroup.orders.reduce((sum, one) => sum + one.recorded, 0)} sold.
+            <Icon name="check" size={16} /> All {shownGroup.orders.reduce((sum, one) => sum + one.recorded, 0)} sold.
           </p>
           <a className="bn-btn bn-btn-primary" href="#/shipping">
             <Icon name="truck" size={16} />
@@ -3703,7 +3716,7 @@ function PullStage({
             owedBySku={owedBySku}
             showBuyers={walkedGroups.length > 1}
             sections={sections}
-            onPick={narrow ? () => setCardSheetOpen(true) : undefined}
+            onPick={openCardSheet}
           />
         </>
       )}
@@ -3716,14 +3729,14 @@ function PullStage({
   const nextRow = walk.rows.find((row) => !walk.soldKeys.has(row.copy.key)) ?? null
 
   const chipWords = [
-    walkedGroups.length > 1 ? `${walkedGroups.length} buyers` : selectedGroup === null ? 'Choose a buyer' : buyerLabel(selectedGroup),
+    walkedGroups.length > 1 ? `${walkedGroups.length} buyers` : shownGroup === null ? 'Choose a buyer' : buyerLabel(shownGroup),
     `${cardsToPull} ${plural(cardsToPull, 'card', 'cards')} to pick`,
     ...(nextRow === null || nextRow.copy.place.label === null ? [] : [`next: ${sayPlace(nextRow.copy.place.label)}`]),
   ]
 
   return (
-    <div className={walking ? 'orders-stage is-walking' : 'orders-stage'}>
-      <WalkLinePublisher words={walking && selectedGroup !== null ? chipWords : null} />
+    <div className={shownWalking ? 'orders-stage is-walking' : 'orders-stage'}>
+      <WalkLinePublisher words={shownWalking && shownGroup !== null ? chipWords : null} />
       {filterBar}
       {failure === null ? null : <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />}
       {/* THE DEGRADED MAP, SAID ONCE (UX-266), in the kit's notice shape. The ledger answered and
@@ -3735,7 +3748,7 @@ function PullStage({
           </Button>
         </Notice>
       ) : null}
-      <div className="orders-body" ref={setOrderBody}>
+      <div className="orders-body" ref={orderBody}>
         <button type="button" className="orders-skip-link" onClick={() => walkRef.current?.focus()}>
           Skip to the walk
         </button>
@@ -3758,26 +3771,22 @@ function PullStage({
           {/* DOM order is the desk's visual order (buyers, walk, card), so Tab reads as the eye does. */}
           {walkColumn}
           {/* Q4: ON A PHONE THE CARD IS A SHEET, opened by a tap on a walk row (`WalkList`'s
-              `onPick` above), never drawn inline — `narrow` is the one JS width read this file
-              needs, because a portal cannot be placed by a container query. At 560px of column
-              and up the pane goes back to its usual sticky column beside the walk. */}
-          {narrow ? null : (
-            <div className="orders-cardcol">
-              <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} />
-            </div>
-          )}
+              `onPick` above). The column below 560px hides this pane in CSS (a container query);
+              the press asks the width once, in `openCardSheet`. At 560px of column and up the pane
+              is its usual sticky column beside the walk. */}
+          <div className="orders-cardcol" aria-busy={walkHeld ? 'true' : undefined} inert={walkHeld}>
+            <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} />
+          </div>
         </div>
       </div>
-      {!narrow ? null : (
-        <Sheet
-          open={cardSheetOpen}
-          onClose={() => setCardSheetOpen(false)}
-          title={walk.currentRow?.take.name ?? 'The card'}
-          className="orders-card-sheet"
-        >
-          <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} />
-        </Sheet>
-      )}
+      <Sheet
+        open={cardSheetOpen}
+        onClose={() => setCardSheetOpen(false)}
+        title={walk.currentRow?.take.name ?? 'The card'}
+        className="orders-card-sheet"
+      >
+        <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} />
+      </Sheet>
 
       <Sheet open={buyersOpen} onClose={() => setBuyersOpen(false)} title="Buyers" icon="list" className="orders-buyers-sheet">
         {buyerList}

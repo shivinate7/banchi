@@ -605,10 +605,12 @@ export function Fulfillment() {
       try {
         const payload = await getOrders()
         if (!livePage) return
-        setOrders(payload.orders)
         const openKeys = payload.orders.filter((order) => order.open).map((order) => order.key)
         const freshPlan = openKeys.length === 0 ? null : await walkPlan(openKeys)
         if (!livePage) return
+        /* One commit: `orders` alone, with no plan yet, drew a "waiting, but 0 copies are not in
+           the boxes" sentence for one frame and then the figure tile (the load shake). */
+        setOrders(payload.orders)
         setPlan(freshPlan)
         setOrdersFailed(false)
       } catch {
@@ -1048,6 +1050,19 @@ export function Fulfillment() {
     </header>
   )
 
+  /* The loaded Today tile's own elements, hidden: loading and loaded share one box. Hidden from
+     assistive tech too, so it never reads as an empty landmark. */
+  const todayFrame = (
+    <section className="ff-today ff-today-wait" aria-hidden="true">
+      <div className="ff-today-text">
+        <p className="ff-today-figure">
+          <b className="ff-today-num">0</b>{' '}
+          <span className="ff-today-words">pick</span>
+        </p>
+      </div>
+    </section>
+  )
+
   let body: ReactNode
   let wide = false
 
@@ -1073,7 +1088,7 @@ export function Fulfillment() {
         {header}
         <div className="ff-loading" aria-busy="true">
           <p className="fulfillment-say ff-loading-say">Getting the cards.</p>
-          <span className="ff-skel ff-skel-today" />
+          {todayFrame}
           <span className="ff-skel ff-skel-search" />
           <span className="ff-skel ff-skel-row" />
           <span className="ff-skel ff-skel-row" />
@@ -1316,11 +1331,7 @@ export function Fulfillment() {
     /* ---- today: what the orders still owe, and whether it can all be found ------------- */
     let today: ReactNode
     if (orders === null) {
-      today = ordersFailed ? null : (
-        <div className="ff-loading" aria-busy="true">
-          <span className="ff-skel ff-skel-today" />
-        </div>
-      )
+      today = ordersFailed ? null : todayFrame
     } else if (openOrderKeys.length === 0) {
       /* No order is open at all — the ONE state allowed to say "nothing waits" (the owner's
          own review finding, UX-001: a green "nothing waits" while orders are open and unread
@@ -1456,7 +1467,21 @@ export function Fulfillment() {
               </section>
             )}
 
-            {owed.length === 0 ? null : (
+            {orders === null && !ordersFailed ? (
+              /* The Pick list lands above the boxes when the orders read ends. The boxes show at
+                 once, so a frame in the list's own shape (its heading, one card) holds its place. */
+              <section className="ff-owed ff-owed-wait" aria-hidden="true">
+                <h2 className="ff-h2">
+                  <span className="ff-h2-icon">
+                    <Icon name="cart" size={18} />
+                  </span>
+                  Pick
+                </h2>
+                <div className="ff-found ff-owed-list">
+                  <span className="ff-skel ff-skel-owed" />
+                </div>
+              </section>
+            ) : owed.length === 0 ? null : (
               <section className="ff-owed" aria-label="Pick">
                 <h2 className="ff-h2">
                   <span className="ff-h2-icon">

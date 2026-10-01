@@ -40,6 +40,12 @@
          downloading with the document; the href is relative so `make demo-static`'s
          `/<repo>/` base reaches it. -->
     <link rel="stylesheet" href="./src/fonts.css" />
+    <!-- The latin cut of each face, requested with the document rather than when the first glyph
+         needs it, so the swap from the metric fallback (`fonts.css`) is as short as the network
+         allows. `crossorigin` is required for a font even from this origin. -->
+    <link rel="preload" href="./src/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="./src/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="./src/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin />
   </head>
   <body>
     <div id="root"></div>

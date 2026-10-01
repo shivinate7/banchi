@@ -81,4 +81,5 @@ DEBT75 the first ask for a cold catalog group answers nothing
 DEBT76 the walk's card sheet on a phone has no Mark sold
 DEBT77 every phone-width spec is off
 DEBT81 The first `make status` after an edit is slow
+DEBT82 The Fulfiller's boxes slide once when the Pick list lands
 ```

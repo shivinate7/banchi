@@ -1,0 +1,106 @@
+{
+  "entries": [
+    {
+      "file": "app/src/App.css",
+      "selector": ".bn-shell",
+      "property": "grid-template-columns",
+      "reason": "The rail fold. The person asked for it, and it is their own press at that spot."
+    },
+    {
+      "file": "app/src/App.css",
+      "selector": ".bn-brand-slot",
+      "property": "width",
+      "reason": "The rail fold: the brand slot is part of the folding column."
+    },
+    {
+      "file": "app/src/App.css",
+      "selector": ".bn-brand-slot",
+      "property": "height",
+      "reason": "The rail fold: the brand slot is part of the folding column."
+    },
+    {
+      "file": "app/src/BoxBrowse.css",
+      "selector": ".browse-boxcell-bar > span",
+      "property": "width",
+      "reason": "Fills inside a fixed-size track; no sibling moves."
+    },
+    {
+      "file": "app/src/BoxOps.css",
+      "selector": ".boxops-mark",
+      "property": "left",
+      "reason": "An indicator moving along its own track; the track holds its size."
+    },
+    {
+      "file": "app/src/CaptureScreen.css",
+      "selector": ".capture-meter-fill",
+      "property": "width",
+      "reason": "Fills inside a fixed-size track; no sibling moves."
+    },
+    {
+      "file": "app/src/CaptureScreen.css",
+      "selector": ".capture-pauseplay",
+      "property": "top",
+      "reason": "Absolute in the camera stage; it takes no flow space."
+    },
+    {
+      "file": "app/src/CaptureScreen.css",
+      "selector": ".capture-pauseplay",
+      "property": "left",
+      "reason": "Absolute in the camera stage; it takes no flow space."
+    },
+    {
+      "file": "app/src/CaptureScreen.css",
+      "selector": ".capture-pauseplay",
+      "property": "width",
+      "reason": "Absolute in the camera stage; it takes no flow space."
+    },
+    {
+      "file": "app/src/CaptureScreen.css",
+      "selector": ".capture-pauseplay",
+      "property": "height",
+      "reason": "Absolute in the camera stage; it takes no flow space."
+    },
+    {
+      "file": "app/src/CaptureScreen.css",
+      "selector": ".capture-pauseplay",
+      "property": "padding",
+      "reason": "Absolute in the camera stage; it takes no flow space."
+    },
+    {
+      "file": "app/src/Home.css",
+      "selector": ".home-box-bar > span",
+      "property": "width",
+      "reason": "Fills inside a fixed-size track; no sibling moves."
+    },
+    {
+      "file": "app/src/PositionBar.css",
+      "selector": ".position-bar-marker",
+      "property": "left",
+      "reason": "An indicator moving along its own track; the track holds its size."
+    },
+    {
+      "file": "app/src/PositionBar.css",
+      "selector": ".position-bar-cell",
+      "property": "left",
+      "reason": "An indicator moving along its own track; the track holds its size."
+    },
+    {
+      "file": "app/src/PositionBar.css",
+      "selector": ".position-bar-chip",
+      "property": "left",
+      "reason": "An indicator moving along its own track; the track holds its size."
+    },
+    {
+      "file": "app/src/kit.css",
+      "selector": ".bn-progress > span",
+      "property": "width",
+      "reason": "Fills inside a fixed-size track; no sibling moves."
+    },
+    {
+      "file": "app/src/kit.css",
+      "selector": ".home-deck-photo.bn-crop[data-cropped='true']",
+      "property": "width",
+      "reason": "Animates its crop width inside the deck photo's own window."
+    }
+  ]
+}
