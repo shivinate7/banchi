@@ -35,12 +35,6 @@
         "centre"
       ]
     },
-    "docs/debts/029-the-drawers-tap-sweep-is-skipped-because-it-races-itself.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "centre"
-      ]
-    },
     "docs/debts/033-an-answered-queue-entry-can-never-resurface-even-when-wrong.md": {
       "lane": "docs-sweep",
       "SPELLING": [

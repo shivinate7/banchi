@@ -299,7 +299,8 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
     # reads it too, so follow those imports to a fixed point. A sibling PACKAGE (a directory with
     # an `__init__.py`, such as `scripts/docs_audit/`) counts whole as `<dir>/**`, and each of its
     # modules is walked for its own imports. Known gap: importlib-by-path loads and
-    # `from . import` are not followed.
+    # `from . import` inside `scripts/` are not followed (inside LOCAL_PACKAGES they are:
+    # see `_package_imports`).
     queue = [h for h in resolved if h.startswith("scripts/") and h.endswith(".py")]
     # The test itself is walked too: a self-test that is a thin script over a package imports it.
     try:
@@ -342,6 +343,56 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
     return tuple(sorted(resolved))
 
 
+def _package_imports(rel: str) -> Set[str]:
+    """Repo files of LOCAL_PACKAGES that the module `rel` imports, absolute or relative.
+
+    Unparseable: every file of the packages, fail safe. Known gap: a module that only a
+    subprocess runs (`-m pkg.mod`, or a script path in argv) is not followed.
+    """
+    try:
+        tree = ast.parse((ROOT / rel).read_text())
+    except (OSError, SyntaxError):
+        return {str(q.relative_to(ROOT)) for p in LOCAL_PACKAGES for q in (ROOT / p).rglob("*.py")}
+    found: Set[str] = set()
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Import):
+            pairs = [(a.name, [""]) for a in n.names]
+        elif isinstance(n, ast.ImportFrom):
+            base = n.module or ""
+            if n.level:  # `from .x import y`: resolve against this file's package
+                up = Path(rel).parts[:-1]
+                up = up[:len(up) - (n.level - 1)]
+                base = ".".join(up + ((n.module,) if n.module else ()))
+            pairs = [(base, [a.name for a in n.names])]
+        else:
+            continue
+        for mod, names in pairs:
+            if mod.split(".")[0] not in LOCAL_PACKAGES:
+                continue
+            stem = mod.replace(".", "/")
+            parts = stem.split("/")  # Python runs every parent package's `__init__` first
+            for i in range(1, len(parts)):
+                if (ROOT / "/".join(parts[:i]) / "__init__.py").is_file():
+                    found.add("/".join(parts[:i]) + "/__init__.py")
+            for cand in [stem] + [f"{stem}/{a}" for a in names]:
+                for f in (f"{cand}.py", f"{cand}/__init__.py"):
+                    if (ROOT / f).is_file():
+                        found.add(f)
+    return found
+
+
+def _follow_package_imports(resolved: Set[str], start: Sequence[str]) -> Set[str]:
+    """`resolved` plus every package module reached transitively from `start` and from its own
+    .py members: a planted raise in `store/rows.py` reaches a test that only imports `store.db`."""
+    out = set(resolved)
+    queue = [f for f in [*start, *resolved] if f.endswith(".py")]
+    while queue:
+        for f in _package_imports(queue.pop()) - out:
+            out.add(f)
+            queue.append(f)
+    return out
+
+
 def subjects_for(entry: dict) -> Tuple[str, ...]:
     """Every local file one roster entry's test reads.
 
@@ -357,7 +408,7 @@ def subjects_for(entry: dict) -> Tuple[str, ...]:
             subjects.update(derive_subjects(part))
         subjects = {s for s in subjects
                     if not s.startswith(package + "/") or s.endswith("/**")}
-    return tuple(sorted(subjects))
+    return tuple(sorted(_follow_package_imports(subjects, [entry["test"]])))
 
 
 def scope_for(entry: dict) -> Tuple[dict, ...]:
@@ -407,6 +458,8 @@ def classify(target: str, base: Optional[str], head: str) -> Tuple[bool, List[st
             subject=f"what `make {target}` reads", noun=target)
         lines = [f"{len(paths)} changed path(s) from {start[:12]} to {head}:"] + list(
             verdict.lines)
+        if browser.git("status", "--porcelain", "--untracked-files=no"):
+            lines.append("working tree has uncommitted changes; this verdict covers commits only")
         if not verdict.run:
             lines.append(f"  ({HATCH}=off runs it anyway.)")
         return verdict.run, lines
@@ -585,6 +638,7 @@ def selftest() -> int:
             landing_base=lambda reference, head: "a" * 40,
             changed_paths=lambda start, head: ["app/src/Orders.tsx"],
             git_reader=lambda start, head: (lambda side, path: ""),
+            git=lambda *args: "",
             classify_paths=browser.classify_paths)
         for name, value in overrides.items():
             setattr(stub, name, value)
@@ -622,6 +676,12 @@ def selftest() -> int:
           verdict("cid-selftest", ["store/photos.py"]), True)
     check("cid-selftest skips on an unrelated screen change",
           verdict("cid-selftest", ["app/src/Orders.tsx"]), False)
+    check("cid-selftest runs on store/rows.py, which it reaches only through imports of imports",
+          verdict("cid-selftest", ["store/rows.py"]), True)
+    check("identity-checks-selftest runs on pipeline/__init__.py, a parent of what it imports",
+          verdict("identity-checks-selftest", ["pipeline/__init__.py"]), True)
+    check("reap-selftest still skips on a leaf module it never imports",
+          verdict("reap-selftest", ["identify/batch.py"]), False)
     check("githooks-selftest runs on a hook this reader never sees as a literal path",
           verdict("githooks-selftest", ["scripts/githooks/pre-push"]), True)
     check("an empty diff runs every target",
