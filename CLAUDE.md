@@ -232,7 +232,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   `banchi.orders.last-check`.
   `app/eslint.config.js` bans `localStorage` outside `useCamera.ts` and `deviceMemory.ts`.
 
-  `sessionStorage` is a separate store. It holds `banchi.session.captureId` and `banchi.run-scope` (D39, a run's scope is a selection handed off).
+  `sessionStorage` is a separate store. It holds `banchi.session.captureId`, `banchi.session.homeDeck` (the Home deck already played this sitting) and `banchi.run-scope` (D39, a run's scope is a selection handed off).
   The `storage keys` row of `make docs-audit` reconciles this roster (D27, session state is device-local).
 - **No duplicate SKU rows in an import file.** Aggregate by SKU. `Add to Quantity` equals the copy count. There is no standing
   cap (D7, duplicates aggregate by SKU). A send may ask for one (`emit --cap N`) or for a quantity (`emit --quantity SKU=N`).

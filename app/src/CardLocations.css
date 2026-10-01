@@ -277,7 +277,7 @@
   pointer-events: none;
   z-index: 5;
   opacity: 0;
-  animation: bn-sale-bill var(--bn-t-draw) var(--bn-ease-out) forwards;
+  animation: bn-sale-bill calc(var(--bn-t) * 4) var(--bn-ease-out) forwards;
   animation-delay: calc(var(--i) * var(--bn-stagger));
 }
 @keyframes bn-sale-bill {

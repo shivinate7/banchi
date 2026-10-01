@@ -213,8 +213,6 @@ export type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'chi
   /** A keycap, shown inside the tooltip beside the label and set as `aria-keyshortcuts` on
    *  the button itself — an icon-only control has no room on its face to spare for one. */
   readonly kbd?: string
-  /** Hold the tooltip back: a burst is playing on the button, and the tip would open over it. */
-  readonly quiet?: boolean
 }
 
 export function IconButton({
@@ -227,7 +225,6 @@ export function IconButton({
   pressed,
   badge,
   kbd,
-  quiet,
   className,
   type = 'button',
   href,
@@ -263,7 +260,7 @@ export function IconButton({
      the press already changed the card under it. Cleared on the next mouseleave or blur, so
      hovering away and back — or tabbing off and back — reads it again. */
   const [dismissed, setDismissed] = useState(false)
-  const visible = !quiet && !dismissed && (hovering || focusVisible || longPress)
+  const visible = !dismissed && (hovering || focusVisible || longPress)
   const longPressFired = useRef(false)
   const timer = useRef<number | null>(null)
   const btnRef = useRef<HTMLButtonElement | HTMLAnchorElement>(null)

@@ -12,8 +12,9 @@ built.
 
 - Every finding in section 5 is BUILT, except the per-screen skeleton shapes under finding 19.
   They wait for the owner to name the screens that matter.
-- P1 (calmer sale), P2 (one stagger), P3 (deck once a sitting), P4 (theme crossfade) and
-  P5 (lighter capture flash) are BUILT. Section 6 says how.
+- P2 (one stagger), P3 (deck once a sitting), P4 (theme crossfade) and P5 (lighter capture
+  flash) are BUILT. P1 (calmer sale) was not picked, so the sale stays as it was. Section 6
+  says how.
 - The `raw motion` row of `make docs-audit` refuses a raw duration or easing outside
   `app/src/tokens.css`. Its allow list is empty.
 
@@ -136,7 +137,7 @@ same job). Status is BUILT where a verdict changed code.
 | 26 | Generic enters, `.bn-stagger` | keep | BUILT: the one stagger, plus `.bn-stagger-item`. |
 | 27 | Lightbox | keep | Unchanged. |
 | 28 | Crop reveal | keep | Unchanged. |
-| 29 | Mark sold burst and Undo | adjust | BUILT, see P1. |
+| 29 | Mark sold burst and Undo | adjust | Not picked: see P1. |
 | 30 | Card location rows | keep | Unchanged. |
 | 31 | Home deck | adjust | BUILT, see P3. |
 | 32 | Home ribbon | adjust | BUILT: the delay is `min(n, cap)` times the stagger, and the grow is `--bn-t-draw`. |
@@ -160,15 +161,16 @@ Duplicate keyframes are gone: `rv-verdict-in`, `codes-row-in` and `graveyard-row
 
 ## 6. The five picked changes
 
-- **P1, a calmer sale (BUILT).** Five bills, each `--bn-t-draw`, one stagger apart, so the
-  burst ends at 600ms, inside `--bn-t-emphasis`. They rise about 36px and stay in the action
-  row. The Undo tooltip waits until the burst ends (`IconButton`'s `quiet`).
+- **P1, a calmer sale (NOT PICKED).** The proposal was five bills of `--bn-t-draw`, one
+  stagger apart, rising about 36px, with the Undo tooltip held until the burst ends. The sale
+  stays as it is: eight bills, 800ms each, the tooltip as it was.
 - **P2, one stagger for every list (BUILT).** Every list entry reads `.bn-stagger` or
   `.bn-stagger-item` with `--i`. No file keeps a local step or a missing cap.
 - **P3, the Home deck plays once a sitting (BUILT).** The first visit to Home in a page
   session plays the full deck in two staggers per card, ending at about 400ms. Later visits
-  fade the deck in at rest over `--bn-t`, with no rise. The flag is a module variable in
-  `Home.tsx`, not a stored key, so a page reload plays the deck once more.
+  fade the deck in at rest over `--bn-t`, with no rise. The flag is the
+  `banchi.session.homeDeck` key in `sessionStorage`, so a reload inside a sitting does not
+  replay it.
 - **P4, the theme flips in one composited fade (BUILT).** `App.tsx`'s `toggle` wraps the flip
   in `document.startViewTransition`. `base.css` times the fade at `--bn-t`. No color passes
   through gray, because the browser blends two finished pictures. Without the API, or under
