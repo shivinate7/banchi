@@ -309,6 +309,7 @@ for (const width of [1440, 820]) {
     await openOrdersWalk(page, width)
     const first = '.orders-walk-pick-count'
     const seen = await boxPerVariant(page, first, ['1', '1 of 3', '12 of 12'], first)
+    expect(seen, 'the element must exist').not.toContain('absent')
     expect(new Set(seen).size, `the pick count's box: ${seen.join(' | ')}`).toBe(1)
   })
 
@@ -373,14 +374,31 @@ for (const width of [1440, 820]) {
 }
 
 for (const width of [1440, 820]) {
-  test(`L3 S15: a box figure that gains a digit moves its siblings nowhere, at ${width}`, async ({ page }) => {
+  test(`L3 S15: a box figure that gains a digit moves its sibling nowhere, at ${width}`, async ({ page }) => {
     await setViewport(page, { width, height: 1000 })
     await page.goto(screen('inventory'))
     await expect(page.locator('.boxops-stat').first()).toBeVisible()
     await settleFonts(page)
     await settleMotion(page)
-    const seen = await boxPerVariant(page, '.boxops-stat .bn-stat-value', ['9', '10', '100'], '.boxops-stats > :nth-child(2)')
-    expect(new Set(seen.map((s) => s.split('|')[0] + '|' + s.split('|')[1])).size, `the next figure's place: ${seen.join(' | ')}`).toBe(1)
+    /* the figure beside a short label ("sold") gains a digit: the next stat keeps its place */
+    const seen = await page.evaluate(() => {
+      const stats = [...document.querySelectorAll('.boxops-stats > .boxops-stat')]
+      const [one, next] = stats
+      if (!one || !next) return ['absent']
+      const label = one.querySelector('.bn-stat-label')
+      const value = one.querySelector('.bn-stat-value')
+      if (!label || !value) return ['absent']
+      label.textContent = 'sold'
+      const out: string[] = []
+      for (const text of ['9', '10', '999']) {
+        value.textContent = text
+        const r = next.getBoundingClientRect()
+        out.push(`${Math.round(r.left)}|${Math.round(r.top)}`)
+      }
+      return out
+    })
+    expect(seen, 'both figures must exist').not.toContain('absent')
+    expect(new Set(seen).size, `the next figure's place: ${seen.join(' ; ')}`).toBe(1)
   })
 }
 
