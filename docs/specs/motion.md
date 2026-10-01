@@ -34,7 +34,7 @@ Two limits of the method:
 - Headless Chromium gives the capture screen no camera frames. The capture flash is a CSS
   animation on one `span.bn-flash`. The recording mounts that same span by hand.
 
-Dark was recorded where colour carries the motion: the sale burst and the theme cross-fade.
+Dark was recorded where color carries the motion: the sale burst and the theme cross-fade.
 Reduced motion was recorded for the sale burst and a route change.
 
 ## 2. Inventory
@@ -49,10 +49,10 @@ its CSS and code.
 
 | # | Surface | Where | What moves | Rec |
 |---|---|---|---|---|
-| 1 | Response floor | `base.css`, the control list under "RESPONSE FLOOR" | colour, border, fill and shadow, `--bn-t-fast` `--bn-ease` | nav-hover |
+| 1 | Response floor | `base.css`, the control list under "RESPONSE FLOOR" | color, border, fill and shadow, `--bn-t-fast` `--bn-ease` | nav-hover |
 | 2 | Press floor | `base.css`, the `:active` list under "PRESS FLOOR" | `translate: 0 1px`, not eased | button-press |
 | 3 | Reduced-motion floor | `base.css`, `@media (prefers-reduced-motion: reduce)` | crushes every duration; three spinners keep turning | sale-burst-reduced, route-change-reduced |
-| 4 | Theme cross-fade | `base.css` `html[data-theme-switching]`; `App.tsx` `toggle` (360 ms timer) | six colour properties on every node, `--bn-t-slow` | theme, theme-dark |
+| 4 | Theme cross-fade | `base.css` `html[data-theme-switching]`; `App.tsx` `toggle` (360 ms timer) | six color properties on every node, `--bn-t-slow` | theme, theme-dark |
 | 5 | Route change | `kit.css` `.bn-page` (`bn-page-in`) | the page fades and rises 6px, `--bn-t-slow` `--bn-ease-out`; no exit | route-change |
 | 6 | Sidebar fold to rail | `App.css` `.bn-shell` (`grid-template-columns`), `.bn-brand-slot`, `.bn-brand-lockup` children | the column width and the lockup, `--bn-t-slow` | rail-fold |
 | 7 | Nav link hover | `App.css` `.bn-nav-link`, `.bn-nav-link .bn-icon` | the pill fades `--bn-t-fast`; the icon springs `--bn-t` | nav-hover |
@@ -66,7 +66,7 @@ its CSS and code.
 
 | # | Surface | Where | What moves | Rec |
 |---|---|---|---|---|
-| 13 | Button, chip, segment, input | `kit.css` `.bn-btn`, `.bn-chip`, `.bn-seg-item`, `.bn-input` | colour and shadow `--bn-t-fast` | button-press |
+| 13 | Button, chip, segment, input | `kit.css` `.bn-btn`, `.bn-chip`, `.bn-seg-item`, `.bn-input` | color and shadow `--bn-t-fast` | button-press |
 | 14 | Busy ring | `kit.css` `.bn-btn[data-busy='true']::after` (`bn-spin`, `--bn-t-spin`) | a loop | — |
 | 15 | Check mark | `kit.css` `.bn-check input::before` | spring `--bn-t-fast` | — |
 | 16 | Tab underline | `kit.css` `.bn-tab::after` | `--bn-t` `--bn-ease-out` | — |
@@ -131,7 +131,7 @@ time, and it must be cheap.
 | Live loop | 1.8s | ease-in-out | four different loops. |
 
 **Spring is for one small thing that pops.** A check, a chip, a receipt. A spring overshoots, so
-it reads as "landed". It does not suit a large surface: a dialog that overshoots its centre is
+it reads as "landed". It does not suit a large surface: a dialog that overshoots its center is
 a page that wobbles. Sheets use `--bn-ease`, dialogs use `--bn-ease-spring`, and they are the
 same role.
 
@@ -189,7 +189,7 @@ same job), **remove**.
 | 1 | Response floor | keep | — | Recorded: the nav pill eases in over 120ms and the cursor never waits. |
 | 2 | Press floor | keep | — | Recorded: the 1px dip lands on the first frame. |
 | 3 | Reduced-motion floor | keep | — | Recorded: a route change is instant and the sale draws no bills. The spinner exception is right. |
-| 4 | Theme cross-fade | replace | One View Transition cross-fade of the whole page, 200ms, in place of six transitions on every node. The 360ms timer goes. | Recorded: the page passes through a flat grey at about 60ms, darker panels on a mid-grey ground. Every node runs six transitions at once. The 360ms timer is a copy of `--bn-t-slow`. |
+| 4 | Theme cross-fade | replace | One View Transition cross-fade of the whole page, 200ms, in place of six transitions on every node. The 360ms timer goes. | Recorded: the page passes through a flat gray at about 60ms, darker panels on a mid-gray ground. Every node runs six transitions at once. The 360ms timer is a copy of `--bn-t-slow`. |
 | 5 | Route change | adjust | `--bn-t-slow` to 280ms. Inner lists inside the page stop rising. | Recorded: the page is readable by 120ms and settled by 260ms. Parts arrive at three speeds (list, photo, pane), because inner enters run on top of the page's own. |
 | 6 | Rail fold | adjust | `--bn-t-layout` (240ms). | Recorded: the content column reflows on every frame for 320ms; the card photo grows as it goes. Shorter makes the reflow pass faster. |
 | 7 | Nav link hover | keep | — | Recorded: the icon spring and the pill fade agree. |
@@ -254,7 +254,7 @@ start at once, and the operator's next press is often the next card's Mark sold.
 
 **After:** five bills, each 480ms (`--bn-t-draw`), 20ms apart, so the burst ends near 560ms and
 inside `--bn-t-emphasis`. They rise less (about 40px) and stay inside the action row. The bill
-colour reads `--bn-ok` at full strength in light. The tooltip waits until the burst ends. The
+color reads `--bn-ok` at full strength in light. The tooltip waits until the burst ends. The
 frame and the toast do not change.
 
 ### P2. One stagger for every list
@@ -284,12 +284,12 @@ inside `--bn-t-emphasis`.
 **Before:** `docs/specs/motion/theme-crossfade.png` (real time, not slowed); video
 `captures/motion/theme.webm`.
 
-At about 60ms the whole page is a flat mid-grey: dark panels on a grey ground, text at low
-contrast. It takes about 260ms to reach dark. Every element on the page runs six colour
+At about 60ms the whole page is a flat mid-gray: dark panels on a gray ground, text at low
+contrast. It takes about 260ms to reach dark. Every element on the page runs six color
 transitions at once, and a 360ms timer removes them.
 
 **After:** `document.startViewTransition` takes one snapshot of the old theme and fades it out
-over the new one in 200ms. No colour passes through grey, because the two themes are drawn
+over the new one in 200ms. No color passes through gray, because the two themes are drawn
 whole and blended as images. No per-node transitions run. Where the API is missing, or under
 reduced motion, the theme flips in one frame.
 
