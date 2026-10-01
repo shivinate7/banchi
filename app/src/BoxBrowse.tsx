@@ -2230,10 +2230,10 @@ export function BoxBrowse({
               <>
                 <Pill tone="accent" className="browse-status-picked">
                   {picked.length} ticked
+                  <button className="browse-pick-x" type="button" aria-label="Clear the ticks" onClick={() => setPicked([])}>
+                    <Icon name="x" size={10} />
+                  </button>
                 </Pill>
-                <button className="browse-quiet" type="button" onClick={() => setPicked([])}>
-                  clear
-                </button>
               </>
             ) : sections.length < 2 ? (
               /* Under a search the match sentence carries the local count; a second one is noise. */
