@@ -313,6 +313,7 @@ test('clicking a month filters the product table to it, and Clear removes the fi
   await expect(chosen).toContainText('Jul 2026')
   await expect(chosen.locator('svg')).toHaveCount(1)
   await expect(chosen).toHaveAttribute('title', 'Show every month')
+  await expect(page.getByRole('button', { name: 'Jul 2026, show every month' })).toHaveCount(1)
   expect(await productNames(page)).toEqual(['Charizard ex'])
 
   await chosen.click()
@@ -1024,12 +1025,14 @@ for (const width of [1440, 820]) {
     const bar = page.locator('.revenue-month-col', { hasText: 'Jul 2026' })
     for (const expected of ['true', null]) {
       const from = await markNow(page)
-      await bar.click()
-      await page.mouse.move(0, 0)
+      /* THE WINDOW OPENS 100ms EARLY: a shift is stamped at its frame's start, which can fall
+         before the task that caused it. */
+      await bar.evaluate((el) => (el as HTMLElement).click())
       if (expected === null) await expect(bar).not.toHaveAttribute('aria-pressed', 'true')
       else await expect(bar).toHaveAttribute('aria-pressed', 'true')
       await page.waitForTimeout(600)
-      const inWindow = (await readShifts(page)).shifts.filter((sh) => sh.at >= from && sh.at < from + 500)
+      await expect(page.locator('.revenue-active-filter')).toHaveCount(0)
+      const inWindow = (await readShifts(page)).shifts.filter((sh) => sh.at >= from - 100 && sh.at < from + 500)
       expect(sumOf(inWindow), `the press moved ${describeShifts(inWindow)}`).toBeLessThan(0.0005)
     }
   })

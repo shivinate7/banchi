@@ -1335,6 +1335,7 @@ export function Revenue() {
               className="revenue-month-col"
               data-current={b.inProgress}
               aria-pressed={activeBucket === b.key}
+              aria-label={activeBucket === b.key ? `${b.label}, show every month` : undefined}
               style={{ '--i': i } as CSSProperties}
               title={activeBucket === b.key ? 'Show every month' : `${b.orders.toLocaleString()} ${b.orders === 1 ? 'order' : 'orders'}`}
               onClick={() => setActiveBucket((cur) => (cur === b.key ? null : b.key))}

@@ -4463,7 +4463,7 @@ for (const width of [1440, 820]) {
       await search.fill(text)
       await expect(page.locator('.pricing-row')).toHaveCount(rows)
       await page.waitForTimeout(600)
-      const inWindow = (await readShifts(page)).shifts.filter((sh) => sh.at >= from && sh.at < from + 500)
+      const inWindow = (await readShifts(page)).shifts.filter((sh) => sh.at >= from - 100 && sh.at < from + 500)
       expect(sumOf(inWindow), `the filter moved ${describeShifts(inWindow)}`).toBeLessThan(0.0005)
     }
   })

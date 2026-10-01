@@ -114,7 +114,6 @@
   flex-wrap: wrap;
 }
 
-.revenue-active-filter { display: flex; align-items: center; gap: var(--bn-2); margin-bottom: var(--bn-4); }
 
 /* ---- the shelf (D236), a column of the summary band -------------------------------------- */
 
