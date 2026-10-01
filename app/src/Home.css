@@ -52,7 +52,8 @@
 a.home-standing-row:hover { box-shadow: inset 0 0 0 1px var(--bn-line-strong), inset 0 0 0 200px var(--bn-hover), var(--bn-shadow-2); }
 a.home-standing-row:active { translate: 0 1px; }
 /* A row that cannot be pressed is prose, not a control. */
-.home-standing-row[data-press='no'] { background: transparent; box-shadow: none; min-height: 34px; padding-top: 0; padding-bottom: 0; }
+.home-standing-row[data-press='no'] { background: transparent; box-shadow: none; padding-top: 0; padding-bottom: 0; }
+/* The prose row keeps the pressable row's 58px floor: a read landing can turn prose into a press, and the row must not change height (D313). */
 .home-standing-row[data-press='no'] .home-standing-rule { top: 2px; bottom: 2px; width: 3px; border-radius: var(--bn-r-full); }
 
 /* D118: a pointer state repaints, it never re-lays out. The rule thickens on hover with
