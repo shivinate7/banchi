@@ -358,6 +358,10 @@ export type ServerStatus = {
 /** One card in `GET /inventory`. Mirrors `store/master.py:Card` field for field, because
  *  the server serialises that dataclass with `asdict` — plus the three decorated fields
  *  below, which the dataclass does not carry and `do_inventory` adds on the way out. */
+/** What `GET /inventory/history` carries per card: the three fields `storeHistory.sittings`
+ *  reads, and nothing else. */
+export type CaptureStamp = Pick<InventoryCard, 'captured_at' | 'box' | 'state'>
+
 export type InventoryCard = {
   box: number
   index: number

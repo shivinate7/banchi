@@ -4,6 +4,7 @@ import {
   getOrders,
   getPricingCorpus,
   getPricingWorklist,
+  getCaptureHistory,
   getRecentCards,
   getRuns,
   getStatus,
@@ -11,6 +12,7 @@ import {
 } from './server'
 import type {
   BoxRecord,
+  CaptureStamp,
   InventoryCard,
   OrdersPayload,
   PricingWorklist,
@@ -283,7 +285,7 @@ function HistoryFoot({
   readonly status: ServerStatus | null
   readonly boxes: number | null
   readonly sold: number | null
-  readonly shelf: Record<string, InventoryCard> | null
+  readonly shelf: Record<string, CaptureStamp> | null
   readonly live: boolean
 }) {
   const plot: Ribbon | null = useMemo(() => ribbon(sittings(shelf)), [shelf])
@@ -452,6 +454,9 @@ export function Home() {
      map (D192, item 2) — on its own load so no panel above waits on it, and `deckFromCards`
      below applies exactly the same filter/sort/slice it always has over the smaller result. */
   const shelf = useLoad<Record<string, InventoryCard>>(async () => (await getRecentCards(DECK_DEPTH)).cards)
+  /* THE HISTORY RIBBON NEEDS EVERY CARD'S `captured_at`, which the deck's three cards cannot
+     give: three cards are one sitting, one block. Its own lean read, its own load. */
+  const history = useLoad<Record<string, CaptureStamp>>(async () => (await getCaptureHistory()).cards)
   const fromCards = deckFromCards(shelf.state === 'ready' ? shelf.value : null)
   const deck = fromCards.length > 0 ? (lastNamedDeck = fromCards) : lastNamedDeck
   const deckBox = newestBox(boxes.state === 'ready' ? boxes.value : null)
@@ -628,7 +633,7 @@ export function Home() {
           ) : (
             <a
               className="home-deck"
-              href={`#/inventory?box=${frontCard?.box ?? deckBox.box}`}
+              href={`#/inventory?box=${frontCard?.box ?? deckBox.box}${frontCard?.cid ? `&card=${encodeURIComponent(frontCard.cid)}` : ''}`}
               aria-label={
                 frontCard === null
                   ? `The last cards photographed into ${boxDisplayName(deckBox)}. Open the box on Inventory.`
@@ -717,7 +722,7 @@ export function Home() {
             {status.state === 'ready' && status.value.cards === 0 ? 'Photograph the first box' : 'Capture'}
           </Button>
         </div>
-        <HistoryFoot status={status.state === 'ready' ? status.value : null} boxes={boxCount} sold={sold} shelf={shelf.state === 'ready' ? shelf.value : null} live={say?.running ?? false} />
+        <HistoryFoot status={status.state === 'ready' ? status.value : null} boxes={boxCount} sold={sold} shelf={history.state === 'ready' ? history.value : null} live={say?.running ?? false} />
       </div>
 
       <section className="home-spine bn-stagger" aria-label="The workflow">

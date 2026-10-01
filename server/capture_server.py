@@ -3775,6 +3775,19 @@ def do_inventory_recent(limit: int) -> dict:
     return {"cards": cards}
 
 
+def do_inventory_history() -> dict:
+    """`GET /inventory/history`: every captured card's `captured_at`, `box` and `state`,
+    keyed like `do_inventory`, and nothing else. Home's history ribbon clusters sittings
+    from these three fields (`app/src/storeHistory.ts:sittings`); the hero deck's top-K
+    read cannot answer it."""
+    return {
+        "cards": {
+            key: {"captured_at": at, "box": box, "state": state}
+            for key, at, box, state in Store().read().inventory.capture_history()
+        }
+    }
+
+
 def do_inventory_copies(payload: dict) -> dict:
     """`POST /inventory/copies` — every on-hand copy of the requested SKUs, store-wide, in
     `do_inventory`'s own per-card shape (DEBT27, site 1 — `Orders.tsx:indexStore`).
@@ -16259,6 +16272,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
                         "limit must be at least 1.",
                     )
                 return self._json(HTTPStatus.OK, do_inventory_recent(limit))
+            if path == "/inventory/history":
+                return self._json(HTTPStatus.OK, do_inventory_history())
             if path == "/queues":
                 return self._json(HTTPStatus.OK, do_queues())
             if path == "/capture/sitting":

@@ -9031,6 +9031,15 @@ COMPONENTS = [
                 "governed_by": ["D121", "D275"],
                 "note": "Proved red first on main: the gap measured about 250px.",
             },
+            "tests/home-history.spec.ts": {
+                "does": "`#/`'s history ribbon over ten captures in three sittings, 1440 and "
+                        "820, both themes: the sentence's sitting count and the blocks drawn "
+                        "both read 3, though the hero deck holds three cards. Also the deck "
+                        "link carries `&card=<cid>` of the front card. Not a harness test; "
+                        "`make design-check` runs it.",
+                "governed_by": ["D121", "D172", "D192"],
+                "note": "Proved red first on main: one sitting, one block, and no `card=`.",
+            },
             "tests/home.spec.ts": {
                 "does": "`#/`'s 'cannot be filled' figure against a mixed ledger: one order "
                         "still open and short 2 copies, one order the feed already reports "

@@ -18,6 +18,7 @@ import type {
   GameRegistry,
   GroupAnswerResult,
   Inventory,
+  CaptureStamp,
   InventoryCard,
   InventoryFacetFilter,
   PhotoReclaimResult,
@@ -881,6 +882,13 @@ export async function getRecentCards(limit: number): Promise<{ cards: Record<str
   return (await request(`/inventory/recent?limit=${limit}`, NO_CACHE)) as {
     cards: Record<string, InventoryCard>
   }
+}
+
+/** Every captured card's `captured_at`, `box` and `state`, keyed like `getInventory()` and
+ *  nothing more: Home's history ribbon clusters sittings from these (`storeHistory.sittings`),
+ *  and the hero deck's top-K read cannot answer it. */
+export async function getCaptureHistory(): Promise<{ cards: Record<string, CaptureStamp> }> {
+  return (await request('/inventory/history', NO_CACHE)) as { cards: Record<string, CaptureStamp> }
 }
 
 /** Every on-hand copy of the given SKUs, store-wide, in `getInventory()`'s own per-card

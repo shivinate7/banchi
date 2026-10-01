@@ -1,4 +1,4 @@
-import type { InventoryCard, ServerStatus } from './types'
+import type { CaptureStamp, ServerStatus } from './types'
 
 /* THE STORE'S OWN HISTORY — what the library is, and how it was made.
  *
@@ -50,7 +50,7 @@ export type Sitting = {
 }
 
 /** Cluster the card map into sittings, oldest first. */
-export function sittings(cards: Record<string, InventoryCard> | null, gapMinutes = GAP_MINUTES): Sitting[] {
+export function sittings(cards: Record<string, CaptureStamp> | null, gapMinutes = GAP_MINUTES): Sitting[] {
   if (cards === null) return []
   const stamped = Object.values(cards)
     .filter((c) => typeof c.captured_at === 'string' && c.captured_at !== '')
