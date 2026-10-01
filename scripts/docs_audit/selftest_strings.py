@@ -76,7 +76,7 @@ def run(ok) -> None:
         # No node or app/node_modules/typescript is a read that could not run: unknown,
         # never a crash and never an ok. The node arm below runs whenever the toolchain is present.
         if _user_strings_toolchain_missing():
-            print(f"  UNKNOWN the extractor arm of this self-test did not run: {UNKNOWN_NO_TOOLCHAIN}")
+            ok.unknown(f"the extractor arm of this self-test did not run: {UNKNOWN_NO_TOOLCHAIN}")
         else:
             # THE DEFAULT CALL — no widening flags, exactly what `no mechanism on screen` uses —
             # proves the two new channels stay OFF unless a caller asks for them, which is the
@@ -180,7 +180,7 @@ def run(ok) -> None:
             ok(len(refused) == 1,
                "RED without the growth key: counted with its scope, the re-key reads as growth",
                f"{refused}")
-            more = {"Two.tsx": {TYPED_INTERPUNCT_RULE: before["Two.tsx"][TYPED_INTERPUNCT_RULE]
+            more = {"Two.tsx": {TYPED_INTERPUNCT_RULE: before.get("Two.tsx", {}).get(TYPED_INTERPUNCT_RULE, [])
                                 + ["Second: ·"]}}
             refused, _ = _typed_interpunct_growth(before, more, dot_rules, [])
             ok(len(refused) == 1,

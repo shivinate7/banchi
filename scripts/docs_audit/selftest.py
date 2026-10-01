@@ -34,6 +34,15 @@ def self_test() -> int:
                 for line in detail.splitlines():
                     print(f"       {line}")
 
+    unknown: List[str] = []
+
+    def skipped(label: str) -> None:
+        """A case that could not run (no toolchain): counted and named at the end, never an ok."""
+        print(f"  UNKNOWN {label}")
+        unknown.append(label)
+
+    ok.unknown = skipped  # type: ignore[attr-defined]
+
     print("docs-audit self-test")
     print("=" * 72)
     selftest_records.run(ok)
@@ -53,5 +62,8 @@ def self_test() -> int:
     if failures:
         print(f"{len(failures)} self-test {'failure' if len(failures) == 1 else 'failures'}")
         return 1
-    print("self-test clean")
+    if unknown:
+        print(f"self-test clean, {len(unknown)} UNKNOWN (node arm skipped: run make worktree-setup)")
+    else:
+        print("self-test clean")
     return 0
