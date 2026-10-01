@@ -42,7 +42,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ReadingAge } from './CardLocations'
 import { collectorNumber } from './cardNumber'
 import { forSale, IDENTIFIED, readingAgo, readingAgoShort, readingExact, stateLabel, stateTone, staleReading } from './cardState'
-import { Button, Icon, IconButton, Meter, Money, Pill, ProductLink, Skeleton } from './kit'
+import { Button, Icon, IconButton, Meter, Money, Pill, ProductLink } from './kit'
 import { toast } from './kit/toast'
 import { money } from './money'
 import { relativeDate, toDate } from './dates'
@@ -426,21 +426,49 @@ function HeroLead({ figures, market }: { readonly figures: HeroFigures; readonly
 /** THE LEAD COLUMN WHILE THE COPIES SEARCH IS STILL ASKING (D118, a press changes what is on
  *  screen). The real column adds itself when the answer lands, and Actions, which rides the
  *  identity column's end, used to jump ~380px left under a press. This holds the column at its
- *  final width instead: a bar where each figure will land, the same three the resolved band draws
- *  (Stored, Live, Market) for a card with a SKU and Stored alone for one without (D119, no SKU, no
- *  listing figures). The kit's `Skeleton` pulses and stands still under reduced motion. */
+ *  final size by drawing THE SAME ELEMENTS as `HeroLead`, with stand-in text the browser sets in
+ *  the same face and hides (`.bn-ghost`): the figures' heights and widths come from the browser's
+ *  own font, so the two states agree on any platform rather than by a tuned number. Stored, Live
+ *  and Market for a card with a SKU, Stored alone for one without (D119, no SKU, no listing
+ *  figures). */
 function HeroLeadPending({ listing }: { readonly listing: boolean }) {
+  const label = (text: string) => (
+    <span className="browse-hero-fig-label">
+      <span className="bn-label">{text}</span>
+    </span>
+  )
   return (
     <div className="browse-hero-lead" aria-hidden="true" data-pending="true">
-      {(listing ? ['Stored', 'Live', 'Market'] : ['Stored']).map((label) => (
-        <div key={label} className={label === 'Live' ? 'browse-hero-fig browse-hero-fig-live' : 'browse-hero-fig'}>
-          <span className="browse-hero-fig-label">
-            <span className="bn-label">{label}</span>
-          </span>
-          <Skeleton className="browse-hero-fig-bar" width="3ch" />
-          {label === 'Live' ? <Skeleton className="browse-hero-meter-bar" width="9ch" /> : null}
-        </div>
-      ))}
+      <div className="browse-hero-fig">
+        {label('Stored')}
+        <span className="browse-hero-fig-value">
+          <span className="bn-ghost">00</span>
+        </span>
+      </div>
+      {listing ? (
+        <>
+          <div className="browse-hero-fig browse-hero-fig-live">
+            {label('Live')}
+            <span className="browse-hero-fig-value">
+              <span className="bn-ghost">00</span>
+            </span>
+            <span className="bn-meter">
+              <span className="bn-meter-cells">
+                <span />
+              </span>
+              <span className="bn-meter-end bn-ghost">Cap 0</span>
+            </span>
+          </div>
+          <div className="browse-hero-fig">
+            {label('Market')}
+            <span className="browse-hero-fig-value">
+              <span className="bn-datalink">
+                <span className="bn-ghost">$0.00</span>
+              </span>
+            </span>
+          </div>
+        </>
+      ) : null}
     </div>
   )
 }
@@ -516,9 +544,17 @@ export function CardHeroHead({
         {figures == null ? (
           figuresPending ? (
             <p className="browse-hero-side" aria-hidden="true" data-pending="true">
-              {(card.sku !== null ? [0, 1, 2] : [0, 1]).map((i) => (
-                <Skeleton key={i} className="browse-hero-side-bar" width="7ch" />
-              ))}
+              <span className="bn-ghost">
+                Captured<b>0</b>
+              </span>
+              <span className="bn-ghost">
+                Hidden<b>0</b>
+              </span>
+              {card.sku === null ? null : (
+                <span className="bn-ghost">
+                  Sent<b>0</b>
+                </span>
+              )}
             </p>
           ) : null
         ) : (
