@@ -15,3 +15,5 @@ phone.
 time.
 
 **Closes when:** the owner turns phone back on. The fix is one edit, `PHONE_SPECS_ON = true`.
+
+The drawer tap sweep in `app/tests/phone.spec.ts` was fixed from code reading. It is proven only locally with the switch flipped, and has never run or been reproduced on CI.
