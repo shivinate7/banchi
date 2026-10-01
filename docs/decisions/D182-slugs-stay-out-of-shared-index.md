@@ -14,7 +14,7 @@
 
 **The fix exempts only what is genuinely provisional.** `_is_unclaimed(ident)` is true exactly when `ident` matches `_ID_SLUG` (`D` followed by a hyphenated slug, never a bare number) — the same pattern D140 already uses to mean "not yet claimed." `_decision_index_findings` — pulled out of `check_decision_index` as a pure function so `--self-test` can drive it without a filesystem — skips the "has a heading but is not in the index" finding only for an unclaimed id. Every other case this row ever caught is unchanged: a CLAIMED (numeric) entry missing from the index still fails, a stray index line naming no heading still fails, a title mismatch still fails, an out-of-order index still fails, an empty index is still refused outright.
 
-**A branch's workflow is now: write the entry file, cite the slug wherever code or prose needs to reference it, and touch neither `ORDER.json` nor CLAUDE.md's index block.** `make claim-ids`'s own doc line — *"a branch writes its entry's heading as a two-segment slug, cites it everywhere"* — meant citing the slug in the branch's OWN files, and is unaffected; it never meant hand-editing either shared file, and that reading is what this entry corrects.
+**A branch's workflow is now: write the entry file, cite the slug wherever code or prose needs to reference it, and touch neither `ORDER.json` nor CLAUDE.md's index block.** The retired claimer's own doc line — *"a branch writes its entry's heading as a two-segment slug, cites it everywhere"* — meant citing the slug in the branch's OWN files, and is unaffected; it never meant hand-editing either shared file, and that reading is what this entry corrects.
 
 ### Proved by merge, not only by unit test
 

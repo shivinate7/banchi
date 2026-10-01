@@ -118,7 +118,7 @@ re-read `serve.py` but not the module it decides with would be running half of o
   **That is the ceiling the owner reopened**, and it is gone. The ahead/behind/dirty report under
   it is **kept and not redundant**: the sync refuses rather than discards, and in a refusal those
   counts are exactly what a session needs.
-- **`scripts/merge-pr.py`'s local half**, which closes a hole rather than adding a convenience.
+- **The shared merge tool's local half**, which closes a hole rather than adding a convenience.
   `local_plan`'s first branch — main checked out in no worktree, the ordinary state of a clone
   with ~30 worktrees on branches — moves `refs/heads/main` with a refspec while standing in no
   tree. So the merge completed, main was current, and the primary checkout was still parked.
@@ -229,7 +229,7 @@ standing behind another guard, with nothing able to reach it.
 arm can reach is a gate nothing is watching.
 
 **A third half broke a neighbour's fixture, and how it broke it is the finding.**
-`scripts/merge-selftest.sh` parks its primary checkout on `feature` for nearly every arm, so the
+The retired merge self-test parked its primary checkout on `feature` for nearly every arm, so the
 new rig half SUCCEEDED in the first local-half arm, switched that tree onto main — and the footgun
 arm two sections later then found main checked out in a worktree, correctly picked the pull form,
 and failed an assertion about the refspec form that had nothing wrong with it.

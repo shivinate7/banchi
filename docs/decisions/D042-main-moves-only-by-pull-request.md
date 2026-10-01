@@ -110,7 +110,7 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 **What it costs is real and is this entry's own subject.** Advancing main reshapes what every live worktree is cut from. What makes it a decision rather than a repeat is the pair of conditions above: an explicit instruction, and only to a commit that was on origin first.
 
-**That rejection is amended, and the sentence moves while the reasoning does not** (owner, 2026-09-01). `make merge` exists — `scripts/merge-pr.py`, `scripts/merge-selftest.sh`.
+**That rejection is amended, and the sentence moves while the reasoning does not** (owner, 2026-09-01). `make merge` exists. It runs the shared merge tool from claude-settings (D140, merge claims the decision number).
 
 **The rejection was aimed at automating the decision, and the decision is untouched.** Whether this pull request gets merged stays the owner's word, per *The word* below: a bare `make merge` refuses and says there is no default and will not be one, `ARGS=<n>` is a preview that presses nothing, and only `ARGS="<n> --confirm"` acts. That is D33's instrument one register down — the route that can spend money refuses without an explicit field, and this refuses without an explicit number and flag.
 
@@ -120,7 +120,7 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 **`make help` lists it, and the plumbing worry is answered by shape rather than by obscurity.** Hiding the target would be security by not-being-listed, which this repo rejects everywhere else, and `CLAUDE.md`'s own rule is that a capability nobody can find is not done. The two raw commands stay in `CLAUDE.md` beside it: the wrapper must not become the only way anyone knows the answer.
 
-**The footgun has a test that was green for the wrong reason first.** `scripts/merge-selftest.sh` builds an origin, a clone and a linked worktree in a temp directory. Its first draft put the other tree on a branch already at the commit a wrong pull would have brought it to, so the assertion could not fail — found by forcing the picker to always choose the pull form and watching it stay green. The branch is one behind its upstream now, that mutation turns it red, and the fixture asserts its own arming. Same lesson `githooks-selftest` records about git's own refusals scoring as a hook's.
+**The footgun has a test that was green for the wrong reason first.** The retired merge self-test built an origin, a clone and a linked worktree in a temp directory. Its first draft put the other tree on a branch already at the commit a wrong pull would have brought it to, so the assertion could not fail — found by forcing the picker to always choose the pull form and watching it stay green. The branch is one behind its upstream now, that mutation turns it red, and the fixture asserts its own arming. Same lesson `githooks-selftest` records about git's own refusals scoring as a hook's.
 
 ### The main checkout going stale
 
@@ -164,7 +164,7 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 **What would reopen this: GitHub Pro, or the repository going public.** Either makes rulesets available, and the honest response is to add one requiring a pull request on main and keep both hooks — the server gate for what reaches the repository, these for what reaches this clone's main. Not either/or: the two incidents were one of each.
 
-**Amended 2026-09-19.** The premise here — "the server-side guard is not for sale" — went false, twice over. Both are done rather than hypothetical. Branch protection has required `check` and `revert-guard` since 2026-09-11 (D148's amendment). And `gh api /repos/shivinate7/banchi` answers `"private": false`. The repository is public, on the owner's own separate decision. The subscription this entry's opening measurement paid to avoid is no longer the question. Server-side rulesets exist and are required now.
+**Amended 2026-09-19.** The premise here — "the server-side guard is not for sale" — went false, twice over. Both are done rather than hypothetical. Branch protection has required `check` and `revert-guard` since 2026-09-11. And `gh api /repos/shivinate7/banchi` answers `"private": false`. The repository is public, on the owner's own separate decision. The subscription this entry's opening measurement paid to avoid is no longer the question. Server-side rulesets exist and are required now.
 
 What this protected — main moving from inside this clone, unreviewed — is caught remotely too. A required check on a PR is the server-side gate this entry once could not buy. **What the two local hooks still cover is the one thing a required check cannot see: a local ref move that never goes through `git push`.** `reference-transaction` catches a fast-forward, a rebase, or a `branch -f` of `refs/heads/main`, before any network call exists to gate. `pre-push` is now the redundant one. A direct push it refuses would also fail remotely. It stays, because a local guard costs nothing to keep. The local guard's ground is narrower now: not "the only gate there is," but "the one gate a `git update-ref` never reaches."
 

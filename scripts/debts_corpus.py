@@ -9,7 +9,7 @@ the same bytes, exactly as `scripts/decisions_corpus.py` already does for `docs/
 IDS ARE `§<n>` INSIDE THE CORPUS AND `DEBT<n>` EVERYWHERE ELSE (`docs/debts/`'s own "cite
 by id" rule). A NUMBER IS NOW CLAIMED AT THE MERGE, REUSING THE DECISION MACHINERY (D140):
 a branch writing a new finding gives it a slug heading, `## DEBT-<slug>`, in its own file
-`docs/debts/DEBT-<slug>.md`, and cites it as `DEBT-<slug>`. `scripts/claim-ids.py` allocates
+`docs/debts/DEBT-<slug>.md`, and cites it as `DEBT-<slug>`. the shared merge tool allocates
 the next free debt number at merge time exactly as it does for a decision slug, renames the
 file to `<n>-<tail>.md` (no letter — every real entry already sorts this way) and rewrites
 every citation to `DEBT<n>`. `HEADING_RE` below reads either spelling a CLAIMED entry may
@@ -38,7 +38,7 @@ MANIFEST = DIRECTORY / "ORDER.json"
 STUB = ROOT / "docs" / "debts" / "README.md"
 
 # OPTIONAL `DEBT`: a real entry heads itself bare (`## 11`), and one claimed through
-# `scripts/claim-ids.py`'s scheme heads itself `## DEBT<n>` (its heading matches its
+# the shared merge tool's scheme heads itself `## DEBT<n>` (its heading matches its
 # citation, same as a decision's) — see that file's own comment above `DEBT_HEADING`. Either
 # way the captured group is the bare number, so `path_for`/`idents` need no change.
 HEADING_RE = re.compile(r"^##\s+(?:DEBT)?([0-9]+)\b")

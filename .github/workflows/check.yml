@@ -151,7 +151,7 @@ jobs:
       matrix:
         target: [ci-check-product, ci-check-static, ci-check-guards-1, ci-check-guards-2]
     steps:
-      # The self-tests build throwaway clones and read `git worktree list`, and `merge-selftest`
+      # The self-tests build throwaway clones and read `git worktree list`, and `revert-selftest`
       # walks main against a fixture origin. Full history is not needed for any of that, but a
       # detached single commit is: `renumbered ids` compares this branch against main.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -180,7 +180,7 @@ jobs:
           pip install -r requirements.txt
           npm ci --prefix app
 
-      # `git config user.*` because merge-selftest and janitor-selftest COMMIT inside their own
+      # `git config user.*` because revert-selftest and janitor-selftest COMMIT inside their own
       # temp fixtures, and a runner has no identity by default. Fixture-local, and neither test
       # ever touches this checkout.
       - name: Identify git
@@ -275,7 +275,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - uses: shivinate7/claude-settings/actions/stamp@2669a531b3a3bedf28f14cb78ca932c58223987c
+      - uses: shivinate7/claude-settings/actions/stamp@ef49ddeabee11e3f6d1ddb20091926dfc3c9bc47
         with:
           mode: check
           config: .github/stamp.json

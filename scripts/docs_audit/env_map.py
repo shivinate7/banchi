@@ -1315,7 +1315,7 @@ def check_map_sections(report: Report) -> None:
 # A STEP IS ITS LIST MARKER, AND AN UNCLAIMED ONE CANNOT BE (D80 amended 2026-09-11).
 # Markdown has no ordered-list marker that can hold `merge-time-ids`, so a step whose number is
 # not allocated yet is written with a `0.` marker carrying its slug in backticks, and
-# `scripts/claim-ids.py` rewrites both the marker and the token at merge time:
+# the shared merge tool rewrites both the marker and the token at merge time:
 #
 #   a `0.` marker, then the slug in backticks after the word `step`, then the title.
 #

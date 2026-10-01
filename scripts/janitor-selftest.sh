@@ -10,7 +10,7 @@
 # `test_sweep.py`. What this file keeps is one tree's teardown (`--teardown`) and the liveness
 # reads it stands on.
 # WHY IT IS NOT IN THE GIT HOOK. D18: it writes. It IS in `make check`, which is exactly
-# `merge-selftest`'s standing.
+# `revert-selftest`'s standing.
 #
 # THE CASES THAT MATTER ARE THE REFUSALS, asserted on the janitor's own sentence, because git
 # refuses some of them on its own and survival by somebody else's refusal is not coverage.

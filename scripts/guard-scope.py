@@ -2,8 +2,8 @@
 """DOES THIS CHANGE REACH WHAT ONE OF THE ROSTER'S GUARD SELF-TESTS PROVES?
 
 Measured on this Mac, 2026-09-20: `make check` is 163.85s. Fifteen guard self-tests —
-`reap-selftest`, `claim-selftest`, `guard-shell-selftest`, `sync-selftest`, `audit-self-test`,
-`janitor-selftest`, `merge-selftest`, `githooks-selftest`, `silent-write-selftest`,
+`reap-selftest`, `guard-shell-selftest`, `sync-selftest`, `audit-self-test`,
+`janitor-selftest`, `githooks-selftest`, `silent-write-selftest`,
 `verdict-selftest`, `revert-selftest`, `suite-lock-selftest`, `submission-selftest`,
 `screen-freshness-selftest` and `cid-selftest` — cost 76.6s of that, 47%, against a
 ten-test product harness of 21.75s. A guard self-test proves a MECHANISM. It cannot catch a
@@ -84,12 +84,10 @@ LOCAL_PACKAGES = ("store", "cli", "pipeline", "identify", "geometry", "codes", "
 # skip.
 ROSTER = (
     {"target": "reap-selftest", "test": "scripts/reap-selftest.sh"},
-    {"target": "claim-selftest", "test": "scripts/claim-selftest.py"},
     {"target": "guard-shell-selftest", "test": "scripts/guard-shell-selftest.sh"},
     {"target": "sync-selftest", "test": "scripts/sync-selftest.py"},
     {"target": "audit-self-test", "test": "scripts/docs-audit.py", "package": "scripts/docs_audit"},
     {"target": "janitor-selftest", "test": "scripts/janitor-selftest.sh"},
-    {"target": "merge-selftest", "test": "scripts/merge-selftest.sh"},
     {"target": "githooks-selftest", "test": "scripts/githooks-selftest.sh"},
     {"target": "silent-write-selftest", "test": "scripts/silent-write-selftest.sh"},
     {"target": "verdict-selftest", "test": "scripts/verdict-selftest.py"},
@@ -513,7 +511,7 @@ def selftest() -> int:
     check("silent-write-selftest reaches shell_parse.py through its guard's import",
           "scripts/shell_parse.py" in derive_subjects(ROOT / "scripts/silent-write-selftest.sh"),
           True)
-    for target in ("claim-selftest", "silent-write-selftest", "audit-self-test"):
+    for target in ("silent-write-selftest", "audit-self-test"):
         entry = next(e for e in ROSTER if e["target"] == target)
         check(f"{target} reaches the docs_audit package through docs-audit.py's import",
               "scripts/docs_audit/**" in subjects_for(entry), True)
@@ -682,8 +680,6 @@ def selftest() -> int:
           verdict("reap-selftest", ["scripts/reap.py"]), True)
     check("reap-selftest skips on an unrelated screen change",
           verdict("reap-selftest", ["app/src/Orders.tsx"]), False)
-    check("claim-selftest runs on scripts/claim-ids.py",
-          verdict("claim-selftest", ["scripts/claim-ids.py"]), True)
     check("cid-selftest runs on store/photos.py",
           verdict("cid-selftest", ["store/photos.py"]), True)
     check("cid-selftest skips on an unrelated screen change",

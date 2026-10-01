@@ -553,7 +553,7 @@ def _sync(root: Path, confirm: bool, fetch: bool) -> Verdict:
         merged = _git(subject, "merge", "--ff-only", ORIGIN_MAIN_REF)
         if not merged.ok:
             # PART 1 MAY ALREADY HAVE HAPPENED, AND THAT IS SAID RATHER THAN SWALLOWED. This is
-            # `scripts/merge-pr.py:local_half`'s bargain in as many words: an incomplete
+            # the merge tool's bargain in as many words: an incomplete
             # operation reported as one, never a rollback that invents a third state.
             done = "the tree is now on main; " if switch_needed else ""
             return _refuse(

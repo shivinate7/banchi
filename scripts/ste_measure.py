@@ -281,7 +281,7 @@ LABEL_CHARS = 72
 
 # A DECISION ENTRY'S FILE IS KEYED BY ITS TAIL, NOT ITS NUMBER, for the same reason as the
 # fold above: the claim renames `docs/decisions/D-<slug>.md` to `D<nnn>-<slug>.md`
-# (`scripts/claim-ids.py:rename_claimed_entries`). Both names key to
+# (the claimer's rename). Both names key to
 # `docs/decisions/*-<slug>.md`, which holds no decision token for the claim to rewrite.
 _DECISION_FILE = re.compile(r"^docs/decisions/D(?:\d+)?-(?P<tail>[^/]+\.md)$")
 
