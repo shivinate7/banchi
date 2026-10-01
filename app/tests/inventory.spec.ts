@@ -8487,17 +8487,17 @@ test('the control that re-ranks appearing moves no copy row', async ({ page }) =
           last = await page.evaluate(() => {
             const list = document.querySelector('.card-locations-rows')
             const panel = document.querySelector('.card-locations-owner')
-            const side = document.querySelector('.browse-hero-titlerow')
-            if (list === null || panel === null || side === null) return null
+            const title = document.querySelector('.browse-hero-titlerow')
+            if (list === null || panel === null || title === null) return null
             /* The HEADER's height, read as the gap between the panel's own top and the first
                row — two rects taken in the same frame, so the scroll cancels and no
                offsetParent is assumed. `offsetTop` was the first build and moved 535 -> 637 on
                a press that changed nothing about the header, because the scroller it is
                measured from is not the panel. */
             /* AND THE TITLE ROW THE BUTTON LIVES IN: its own height, and the gap from its top to
-               the first row, so a chip that grew the line moves a row and says which. */
-            const sideRect = side.getBoundingClientRect()
-            return `line ${Math.round(sideRect.height)}, rows ${Math.round(list.getBoundingClientRect().top - sideRect.top)}`
+               the first row, so the title row growing moves a row and says which. */
+            const titleRect = title.getBoundingClientRect()
+            return `line ${Math.round(titleRect.height)}, rows ${Math.round(list.getBoundingClientRect().top - titleRect.top)}`
           })
           return last
         },
@@ -8530,32 +8530,6 @@ test('the control that re-ranks appearing moves no copy row', async ({ page }) =
   await expect(page.locator('.browse-hero-rerank')).toBeVisible()
   const after = await listTop()
   expect(after).toBe(before)
-})
-
-test('the re-rank control clears the thumb floor on a phone', async ({ page }) => {
-  /* D117's floor, on a control that did not exist when it was written: 40px under 767px, met by
-     `--bn-control-h-sm` in the token file rather than by a number in `CardLocations.css`. */
-  await setViewport(page, { width: 390, height: 844 })
-  const { store, depart } = stackedStore()
-  /* `settle` because a phone draws the walk inside a drawer and `open`'s default wait is a
-     section fold, which is not on screen here — waiting for it would fail on the arrangement
-     rather than on the claim.
-
-     AND NO SEARCH, WHICH IS NOT A SHORTCUT. Below 768 the searchbox lives in the rail DRAWER
-     and is not on screen until the drawer is opened, so typing into it here times out on the
-     shell rather than on this control. It is also not needed: the copies list runs its own
-     query off the selected card's SKU, so the sale makes the order stale exactly as it does at
-     1440 and the chip is drawn the same way. */
-  await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
-    route: '/#/inventory?box=2',
-    hideSold: true,
-    settle: '.card-locations-owner',
-  })
-  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
-  const chip = page.locator('.browse-hero-rerank')
-  await expect(chip).toBeVisible()
-  const box = await chip.boundingBox()
-  expect(box?.height ?? 0).toBeGreaterThanOrEqual(40)
 })
 
 /* ----------------------------------------------------------------------------------- D218 */

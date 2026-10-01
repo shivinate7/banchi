@@ -323,8 +323,8 @@ export type HeroFigures = {
   readonly listedAt: string | null
   readonly hidden: number
   readonly cap: number | null
-  /** The re-sort chip at the end of the side facts. `say` is null while the order is current,
-   *  which draws no chip. Omitted (`#/orders`) leaves the line exactly as it was. */
+  /** Re-sort button beside Actions. `say` is null while the order is current, which draws nothing.
+   *  Omitted on `#/orders`. */
   readonly rerank?: { readonly say: string | null; readonly onRerank: () => void }
 }
 
