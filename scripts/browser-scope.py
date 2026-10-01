@@ -1013,12 +1013,25 @@ def classify_specs_revisions(base: str, head: str) -> SpecVerdict:
 SPEC_TIMES = ROOT / "scripts" / "browser-spec-times.json"
 
 
+def spec_cost(specs: Sequence[str], times: Dict[str, float]) -> Dict[str, float]:
+    """Seconds per spec. A spec with no measured time is given the MEDIAN of those that have
+    one, so a new spec is packed and never refused. The nightly `shard-refresh --write`
+    replaces the default with a measured time."""
+    known = sorted(times[Path(s).name] for s in specs if Path(s).name in times)
+    median = known[len(known) // 2] if known else 1.0
+    return {s: times.get(Path(s).name, median) for s in specs}
+
+
+def stale_times(specs: Sequence[str], times: Dict[str, float]) -> List[str]:
+    """Timed names that no spec file carries. The file cannot rot in this direction."""
+    names = {Path(s).name for s in specs}
+    return sorted(n for n in times if n not in names)
+
+
 def pack_shards(specs: Sequence[str], shards: int, times: Dict[str, float]):
     """`[[load, [spec, ...]], ...]`: each spec, slowest first (ties by name), onto the
-    lightest shard. A spec with no measured time is given the mean of those that have one."""
-    known = [times[Path(s).name] for s in specs if Path(s).name in times]
-    mean = sum(known) / len(known) if known else 1.0
-    cost = {s: times.get(Path(s).name, mean) for s in specs}
+    lightest shard. Costs come from `spec_cost`."""
+    cost = spec_cost(specs, times)
     bins: List[list] = [[0.0, []] for _ in range(shards)]
     for spec in sorted(specs, key=lambda s: (-cost[s], s)):
         lightest = min(bins, key=lambda b: b[0])
@@ -1051,8 +1064,20 @@ def shard_refresh(files: Sequence[str], write: bool) -> int:
 def shard_selftest_cases(ok: Callable[[bool, str], None]) -> None:
     print("\nthe shards, by time")
     times, specs = load_spec_times(), all_specs()
-    ok(all(Path(s).name in times for s in specs if "demo-coverage" not in s),
-       "every spec has a measured time (demo-coverage never ran in the sample, so it is exempt)")
+    defaulted = [s for s in specs if Path(s).name not in times]
+    print(f"  {len(defaulted)} of {len(specs)} specs are timed by the median default, not measured")
+    ok(True, "every spec has a time, measured or defaulted")
+    ok(stale_times(specs, times) == [], "no timed entry names a spec that no longer exists")
+    ok(stale_times(specs, {**times, "gone.spec.ts": 5.0}) == ["gone.spec.ts"],
+       "a stale timed entry is caught")
+    fresh = specs + ["app/tests/brand-new.spec.ts"]
+    ok(stale_times(fresh, times) == stale_times(specs, times)
+       and spec_cost(fresh, times)["app/tests/brand-new.spec.ts"]
+       == sorted(times[Path(s).name] for s in specs if Path(s).name in times)[
+           len([s for s in specs if Path(s).name in times]) // 2],
+       "a new untimed spec passes and costs the median")
+    ok(any("app/tests/brand-new.spec.ts" in b[1] for b in pack_shards(fresh, 6, times)),
+       "a new untimed spec lands on a shard")
     for m in (6, 3):
         bins = pack_shards(specs, m, times)
         ok(sorted(s for _, files in bins for s in files) == specs,
@@ -1060,7 +1085,7 @@ def shard_selftest_cases(ok: Callable[[bool, str], None]) -> None:
         loads = [b[0] for b in bins]
         # A whole spec is indivisible, so the best possible slowest shard is the mean
         # or the largest spec, whichever is bigger.
-        floor = max(sum(loads) / m, max(times.get(Path(s).name, 0) for s in specs))
+        floor = max(sum(loads) / m, max(spec_cost(specs, times).values()))
         ok(max(loads) <= floor * 1.1,
            f"{m} shards: slowest {max(loads):.0f}s within 10% of the best possible {floor:.0f}s")
     ok([b[1] for b in pack_shards(specs, 6, times)]
