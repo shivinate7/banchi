@@ -888,7 +888,7 @@ export function WalkList({
                        * detail on every row") — box, section and card, the neighbours, the
                        * strip and the ruler, and Mark sold, reused whole from `CardLocations`
                        * rather than forked (D304).
-                       * `head={false}` draws the rows alone: the heading, the stats and the SKU
+                       * The rows draw alone: the heading, the stats and the SKU
                        * line already sit above, in this same button. FINDING #16 (the Opus
                        * review round) is answered by THIS, not by a row-level Undo of its own
                        * any more — `renderAction` puts `RowAction` on every copy here exactly as
@@ -903,7 +903,6 @@ export function WalkList({
                         sections={sections}
                         currentKey={walk.currentRow?.copy.key}
                         preserveOrder
-                        head={false}
                         className="walk-pick-where"
                         renderAction={(copy) => {
                           /* THE DIGIT THAT MARKS THIS COPY, on the current pick's rows only: the keys act on the pick the
@@ -937,7 +936,6 @@ export function WalkList({
                               sections={sections}
                               currentKey={walk.currentRow?.copy.key}
                               preserveOrder
-                              head={false}
                               className="walk-pick-where"
                               renderAction={(copy) => {
                                 const at = keyedCopiesOf(line, walk.openSpares).findIndex((one) => one.key === copy.key)

@@ -42,7 +42,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ReadingAge } from './CardLocations'
 import { collectorNumber } from './cardNumber'
 import { forSale, IDENTIFIED, readingAgo, readingAgoShort, readingExact, stateLabel, stateTone, staleReading } from './cardState'
-import { Button, Icon, IconButton, Meter, Money, Pill, ProductLink, Skeleton } from './kit'
+import { Button, Chip, Icon,IconButton, Meter, Money, Pill, ProductLink, Skeleton } from './kit'
 import { toast } from './kit/toast'
 import { money } from './money'
 import { relativeDate, toDate } from './dates'
@@ -323,6 +323,9 @@ export type HeroFigures = {
   readonly listedAt: string | null
   readonly hidden: number
   readonly cap: number | null
+  /** The re-sort chip at the end of the side facts. `say` is null while the order is current,
+   *  which draws no chip. Omitted (`#/orders`) leaves the line exactly as it was. */
+  readonly rerank?: { readonly say: string | null; readonly onRerank: () => void }
 }
 
 /** THE MARKET PRICE OF ONE CARD, read once per run off the pricing file (`marketTable`): the band's
@@ -522,7 +525,7 @@ export function CardHeroHead({
             </p>
           ) : null
         ) : (
-          <p className="browse-hero-side">
+          <p className="browse-hero-side" data-rerank={figures.rerank === undefined ? undefined : ''}>
             <span>
               Captured<b>{figures.group.copies.length}</b>
             </span>
@@ -533,6 +536,12 @@ export function CardHeroHead({
               <span>
                 Sent<b>{figures.group.listed.pushed}</b>
               </span>
+            )}
+            {figures.rerank?.say == null ? null : (
+              <Chip icon="refresh" className="browse-hero-rerank" title={`${figures.rerank.say}. Ranked before these copies left.`} onClick={figures.rerank.onRerank}>
+                <span className="browse-hero-rerank-say">{figures.rerank.say}. </span>
+                Re-rank
+              </Chip>
             )}
           </p>
         )}

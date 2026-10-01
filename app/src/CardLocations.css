@@ -23,33 +23,9 @@
 /* ---------------------------------------------------------------- the owner: dense ---- */
 
 .card-locations-owner {
-  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--bn-3);
-}
-
-/* THE ONE CONTROL THAT RESHUFFLES THIS LIST, beside the heading that names it and drawn only
-   once the order has gone stale. A Chip and not a Button: it reports a STATE of this list and
-   offers to change it, which is the chip's job beside `Hide sold` on the walk — a solid button
-   here would read as the panel's primary action, above the sales that are the actual work.
-
-   NO HEIGHT OF ITS OWN. `.bn-chip` reads `--bn-control-h-sm`, which the token file raises to
-   40px under 640px and on any coarse pointer, so the thumb floor is met by the kit rather than
-   by a number typed here. `align-self: center` because the row's other cell is a heading on a
-   baseline and a chip has no baseline worth sharing. */
-/* D218: `.bn-chip` is already `inline-flex; gap: 6px`, so the gap alone spaces the two spans
-   apart; the dot needs only a margin on its own trailing side to clear the label after it. */
-.card-locations-owner .card-locations-rerank-go::before { content: '·'; margin-right: var(--bn-1-5); color: var(--bn-ink-4); }
-/* OUT OF FLOW (D118): the list has no heading to hold the chip, so it sits on the list's top
-   edge, its bottom just inside it, in the band's blank right-hand corner under the hero's facts.
-   It takes no row while absent and moves no copy row when it appears. */
-.card-locations-owner .card-locations-rerank {
-  position: absolute;
-  bottom: calc(100% - var(--bn-1));
-  right: 0;
-  z-index: 1;
-  box-shadow: var(--bn-shadow-2);
 }
 
 .card-locations-owner .card-locations-meta {

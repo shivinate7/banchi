@@ -1620,7 +1620,7 @@ export function Gallery() {
                 note="No heading, stats or SKU line — the rows alone, for the walk's own row. LOOSE_GROUP here, not GROUP: the departed and pooled row counts above are asserted page-wide."
               >
                 <div className="kit-copies">
-                  <CardLocations group={LOOSE_GROUP} persona="owner" onSell={noop} busyKey={null} soldKeys={new Set()} head={false} />
+                  <CardLocations group={LOOSE_GROUP} persona="owner" onSell={noop} busyKey={null} soldKeys={new Set()} />
                 </div>
               </Spec>
             </div>

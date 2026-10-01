@@ -43,7 +43,7 @@ The panel has two parts.
 
 ### A copy row
 
-The copies list has no heading (owner's ruling). The re-sort chip shows only while the order is stale. It sits out of flow on the list's top edge, in the band's right-hand corner. It takes no row when absent, and no copy row moves when it appears (D118).
+The copies list has no heading (owner's ruling). The re-sort chip shows only while the order is stale. It ends the band's facts line (Captured, Hidden, Sent). Its outer box is one text line, so the line keeps its height and no copy row moves when it appears (D118). The staleness sentence is the chip's tooltip and accessible name.
 
 The row keeps every fact that the built row has:
 

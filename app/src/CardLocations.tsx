@@ -7,8 +7,8 @@ import { PullConfirm } from './PullConfirm'
 import { PositionBar } from './PositionBar'
 import { placePartsOf, sayPlace, sectionCountOf, type Persona } from './position'
 import { collectorNumber } from './cardNumber'
-import { Button, Chip, Icon, Pill } from './kit'
-import { RANK_IS_CURRENT, ranksAsLive, ranksAsShown, stalenessSentence, type FrozenRank } from './frozenRank'
+import { Button, Icon, Pill } from './kit'
+import { RANK_IS_CURRENT, ranksAsLive, ranksAsShown, type FrozenRank } from './frozenRank'
 import './CardLocations.css'
 import { forSale, IDENTIFIED, readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
 
@@ -224,11 +224,6 @@ export type CardLocationsProps = {
    *  is what `#/gallery` and the lone-copy fallback want. Owner skin only. */
   frozen?: FrozenRank
 
-  /** Take a new order. Drawn as a control only while `frozen` holds something, and it is the
-   *  only thing on this screen that reshuffles the list (D28's shape: the operator says when).
-   *  Omitted draws no control, which is the kit sheet's case. */
-  onRerank?: () => void
-
   /** Where a copy's photograph comes from. Omitted by every screen in the product, which is
    *  how they all get D6's `GET /photo/<box>/<index>` and stay the single caller shape.
    *
@@ -246,7 +241,7 @@ export type CardLocationsProps = {
   photoSrc?: (copy: SearchCopy) => string
 
   /** DRAW `group.copies` IN EXACTLY THE ORDER GIVEN — no fullest-section rank, no sold-copy
-   *  fold or sink. `hideSold`/`frozen`/`onRerank` are irrelevant under it and nothing is
+   *  fold or sink. `hideSold`/`frozen` are irrelevant under it and nothing is
    *  hidden. For a caller whose own order is already load-bearing and answers a question this
    *  ranking would only re-ask — the walk's solver order, "this stop's copies first, then
    *  ascending (box, index)" (`docs/specs/order-walk-plan.md` §8's 2026-09-19 ruling,
@@ -257,12 +252,6 @@ export type CardLocationsProps = {
    *  scope a rule to its usage (the walk's row `min-height`, D118) without it reaching
    *  `#/inventory` or `#/fulfillment`. Omitted, the section carries its usual two classes only. */
   className?: string
-
-  /** Draw the heading, the stats and the SKU line. Owner skin only. Defaults to `true`, so
-   *  every existing caller renders exactly as before. `false` draws the row list alone, for a
-   *  caller that already carries its own heading — the walk row, which draws one `CardLocations`
-   *  per pick and cannot repeat "Every copy of this card" on each one. */
-  head?: boolean
 }
 
 export function CardLocations(props: CardLocationsProps) {
@@ -382,10 +371,8 @@ function OwnerRows({
   renderAction,
   hideSold = false,
   frozen = RANK_IS_CURRENT,
-  onRerank,
   preserveOrder = false,
   className,
-  head = true,
 }: Omit<CardLocationsProps, 'persona'>) {
   /* WHICH COPIES ARE DRAWN, AND IN WHAT ORDER (D132). Rule 1 below used to say no copy is
      dropped for being sold; the owner amended that on 2026-09-10 — a sold copy is not a place
@@ -438,12 +425,6 @@ function OwnerRows({
   const drawn = preserveOrder
     ? group.copies
     : [...[...standing].sort(byFullest), ...(hideSold ? [] : group.copies.filter(sinks))]
-  /* HOW STALE THE ORDER IS, counted over the copies THIS LIST draws. `frozen` is the screen's —
-     one press makes the box rail stale too — and a sentence saying `3 copies stale` over a list
-     that holds one of them would be counting somebody else's cards. */
-  const staleHere = group.copies.filter((copy) => frozen.has(copy.key)).length
-  const stale = stalenessSentence(staleHere)
-
   /* THE SLOT-COLUMN RESERVATION IS RETIRED (the owner's ruling, 2026-09-25, Direction B): the
      card figure no longer sits in a column of its own beside a separate path — `RowIdentity`
      runs box, section and card as one line, so there is no second column for a wider key to
@@ -454,23 +435,6 @@ function OwnerRows({
 
   return (
     <section className={['card-locations', 'card-locations-owner', className ?? ''].filter(Boolean).join(' ')}>
-      {/* THE ONE THING THAT RESHUFFLES THIS LIST, and it is a press rather than a consequence.
-          Drawn only once the order has actually gone stale — a control offering to recompute an
-          order that is already current is a button that does nothing. The list has no heading
-          to hold it, so it floats over the list's top-right corner, out of flow (D118): it takes
-          no row while absent and moves no copy row when it appears. */}
-      {!head || stale === null || onRerank === undefined ? null : (
-        <Chip
-          icon="refresh"
-          className="card-locations-rerank"
-          title="Ranked before these copies left."
-          onClick={onRerank}
-        >
-          <span>{stale}</span>
-          <span className="card-locations-rerank-go">re-rank</span>
-        </Chip>
-      )}
-
       <ul className="card-locations-rows bn-stagger">
         {drawn.map((copy, i) => {
           const sold = isSold(copy, soldKeys)

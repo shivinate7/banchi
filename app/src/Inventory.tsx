@@ -54,7 +54,7 @@ import {
 import { UNNAMED_BOX } from './kit/data'
 import { dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
-import { RANK_IS_CURRENT, type FrozenRank } from './frozenRank'
+import { RANK_IS_CURRENT, stalenessSentence, type FrozenRank } from './frozenRank'
 import { Dialog as Overlay } from './kit/overlay'
 import './Inventory.css'
 
@@ -778,7 +778,6 @@ function InventoryWalk({
           renderAction={actionFor}
           hideSold={hideSold}
           frozen={frozen}
-          onRerank={rerank}
         />
       </div>
     )
@@ -793,6 +792,12 @@ function InventoryWalk({
           listedAt: heroGroup.sku === null ? null : (listings[heroGroup.sku]?.live_as_of ?? null),
           hidden: hiddenCopies(heroGroup, { soldKeys, hideSold, currentKey: selected.key, frozen }),
           cap: heroGroup.listable,
+          /* HOW STALE THE ORDER IS, counted over the copies THIS card holds: `frozen` is the
+             screen's, and a sentence saying `3 copies stale` would count somebody else's cards. */
+          rerank: {
+            say: stalenessSentence(heroGroup.copies.filter((copy) => frozen.has(copy.key)).length),
+            onRerank: rerank,
+          },
         }
 
   return (
@@ -881,7 +886,6 @@ function CopiesPanel({
   renderAction,
   hideSold,
   frozen,
-  onRerank,
 }: {
   row: Row
   layouts: ReadonlyMap<number, readonly SectionDetail[]>
@@ -898,7 +902,6 @@ function CopiesPanel({
   renderAction: (copy: SearchCopy, primary: boolean) => ReactNode
   hideSold: boolean
   frozen: FrozenRank
-  onRerank: () => void
 }) {
   const { query, setQuery, results, loading, failure, reload } = useSearch()
 
@@ -1046,7 +1049,6 @@ function CopiesPanel({
           renderAction={(copy) => renderAction(copy, false)}
           hideSold={hideSold}
           frozen={frozen}
-          onRerank={onRerank}
         />
       )}
     </section>
