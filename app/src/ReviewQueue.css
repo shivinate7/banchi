@@ -526,6 +526,8 @@
 /* ---- candidate rows ----------------------------------------------------------- */
 .review-candidates { list-style: none; display: flex; flex-direction: column; gap: var(--bn-2); }
 .review-candidates > li { animation: bn-fade var(--bn-t-slow) var(--bn-ease-out) both; }
+/* The candidates, held while the lookup's rows are out (D313, class B): dimmed, never live. */
+.review-candidates[aria-busy='true'] { opacity: var(--bn-disabled); pointer-events: none; transition: opacity var(--bn-t-fast) var(--bn-ease); }
 .review-candidate {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;

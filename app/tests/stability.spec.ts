@@ -3,14 +3,14 @@
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { test, expect, type Page } from '@playwright/test'
-import { sealEveryTest } from './shell'
+import { test, expect, type Page, type Route } from '@playwright/test'
+import { card, sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
 import { routesFromNav } from './routes'
-import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE } from './routeFixtures'
+import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, seedPopulatedOrders, severalOrdersWalkPlan } from './routeFixtures'
 import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
 import { setViewport } from './phoneSwitch'
-import { describeShifts, readShifts, sumOf, watchShifts, type Shift } from './layoutShift'
+import { describeShifts, markNow, readShifts, sumOf, watchShifts, type Shift } from './layoutShift'
 
 /* LAYOUT SHIFT, PER CASE. THE FIRST CASE IS LOAD TIME, PER SCREEN, UNDER A SLOW SERVER.
  *
@@ -164,3 +164,256 @@ test('fulfiller: the boxes show and open while the orders read never answers', a
   await expect(head).toHaveAttribute('aria-expanded', 'true')
   await expect(page.locator('.ff-owed-wait')).toHaveCount(1)
 })
+
+// L1 held frame
+/* A READ AFTER A PRESS HOLDS THE OLD FRAME (D313, class B). A press that needs a read keeps what was
+ * on screen, dimmed and busy, until the answer lands, then swaps once. Every row below holds the
+ * press's read READ_MS, then asks two things of the browser's own `layout-shift` entries: nothing
+ * moved while the read was out, and the swap after it is one cluster (entries under CLUSTER_MS
+ * apart), never two layout changes for one press. The new content here is the same shape as the old
+ * one on purpose, so any move is the frame and never the content. */
+/** The screen's hash by name, so no hand-typed roster of routes sits in this file. */
+const screen = (name: 'inventory' | 'orders' | 'review'): string => `/#/${name}`
+const READ_MS = 700
+const CLUSTER_MS = 150
+const OUT_SUM = 0.005
+
+async function heldReads(page: Page, read: RegExp): Promise<{ on: boolean }> {
+  const gate = { on: false }
+  await page.route(read, async (route) => {
+    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS))
+    await route.fallback()
+  })
+  return gate
+}
+
+/** Press, then read the shifts of the read-out window and of the swap that follows it. */
+async function heldPress(page: Page, gate: { on: boolean }, press: () => Promise<void>) {
+  await page.waitForTimeout(800)
+  gate.on = true
+  const from = await markNow(page)
+  await press()
+  await page.waitForTimeout(READ_MS * 2 + 400)
+  gate.on = false
+  const all = (await readShifts(page)).shifts.filter((s) => s.at >= from)
+  const out = all.filter((s) => s.at < from + READ_MS - 150)
+  const swap = all.filter((s) => s.at >= from + READ_MS - 150)
+  let clusters = 0
+  let last = -Infinity
+  for (const s of swap) {
+    if (s.at - last > CLUSTER_MS) clusters += 1
+    last = s.at
+  }
+  return { out, swap, clusters }
+}
+
+function expectHeld(r: { out: Shift[]; swap: Shift[]; clusters: number }, budget = OUT_SUM): void {
+  expect(sumOf(r.out), `it moved while the read was out: ${describeShifts(r.out)}`).toBeLessThan(budget)
+  expect(r.clusters, `one press, ${r.clusters} layout changes after the read: ${describeShifts(r.swap)}`).toBeLessThanOrEqual(1)
+}
+
+/* ONE STORE FOR THE INVENTORY ROWS: every card carries a SKU, so each one answers a copies read, and
+   every card is the same shape, so a card step or a box switch changes the content and nothing else. */
+const L1_CARDS = {
+  '2/1': card({ box: 2, index: 1, section: 1, card: 1, name: 'Volcanion', state: 'identified', sku: '9000001', boxName: 'SV commons', boxTotal: 4 }),
+  '2/2': card({ box: 2, index: 2, section: 1, card: 2, name: 'Thievul', state: 'identified', sku: '9000002', boxName: 'SV commons', boxTotal: 4 }),
+  '2/3': card({ box: 2, index: 3, section: 2, card: 3, name: 'Eiscue', state: 'identified', sku: '9000003', boxName: 'SV commons', boxTotal: 4 }),
+  '2/4': card({ box: 2, index: 4, section: 2, card: 4, name: 'Pikachu', state: 'identified', sku: '9000004', boxName: 'SV commons', boxTotal: 4 }),
+  '5/1': card({ box: 5, index: 1, section: 1, card: 1, name: 'Zacian', state: 'identified', sku: '9000005', boxTotal: 1 }),
+}
+
+async function l1Inventory(page: Page): Promise<void> {
+  const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  /* NO CARD IS QUEUED: the shell's seed queues box 2's first card, and a queue notice is content the
+     other cards do not have. */
+  await page.route(/\/queues$/, (route) => json(route, { review: [], parked: [] }))
+  await page.route(/\/inventory\/(\d+)$/, (route) => {
+    const box = Number(/\/inventory\/(\d+)$/.exec(route.request().url())?.[1])
+    const cards = Object.fromEntries(Object.entries(L1_CARDS).filter(([, c]) => c.box === box))
+    return json(route, { version: 2, cards, listings: {} })
+  })
+  await page.route(/\/search\?/, (route) => {
+    const q = (new URL(route.request().url()).searchParams.get('q') ?? '').toLowerCase()
+    const hit = Object.values(L1_CARDS).filter((c) => c.sku === q || (c.name ?? '').toLowerCase() === q)
+    const skus = [...new Set(hit.map((c) => c.sku))]
+    return json(route, {
+      query: q,
+      groups: skus.map((sku) => {
+        const held = Object.entries(L1_CARDS).filter(([, c]) => c.sku === sku)
+        const copies = held.map(([key, c]) => ({ key, state: c.state, state_at: c.state_at, has_photo: true, place: c.place }))
+        return {
+          sku,
+          names: [...new Set(held.map(([, c]) => c.name))],
+          number: '090',
+          printed_total: '132',
+          set_hint: 'ME01',
+          condition: 'Near Mint',
+          listed: { pushed: 0, staged: 0, live: 0 },
+          sold_here: 0,
+          live_as_of: null,
+          on_hand: copies.length,
+          listable: copies.length,
+          copies,
+        }
+      }),
+    })
+  })
+}
+
+for (const width of [1440, 820]) {
+  test(`held frame: switching the box holds the old box until its read lands, at ${width}`, async ({ page }) => {
+    await l1Inventory(page)
+    const gate = await heldReads(page, /\/inventory\/\d+$/)
+    await watchShifts(page)
+    await setViewport(page, { width, height: 1000 })
+    await page.goto(screen('inventory'))
+    await expect(page.locator('.card-locations').first()).toBeVisible()
+    const r = await heldPress(page, gate, () => page.locator('.browse-boxcell', { hasText: 'SV commons' }).click())
+    expectHeld(r)
+  })
+
+  test(`held frame: stepping to the next card holds the copies until their read lands, at ${width}`, async ({ page }) => {
+    await l1Inventory(page)
+    const gate = await heldReads(page, /\/search\?/)
+    await watchShifts(page)
+    await setViewport(page, { width, height: 1000 })
+    await page.goto(screen('inventory'))
+    await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
+    await expect(page.locator('.card-locations').first()).toBeVisible()
+    await page.waitForTimeout(1500)
+    const r = await heldPress(page, gate, () => page.keyboard.press('ArrowRight'))
+    expectHeld(r)
+  })
+}
+
+/* ORDERS: THE WALK OPENS OVER A READ. `Walk 3` asks the plan for three buyers' orders, so the walk
+   holds the buyer it showed until the answer lands, then swaps once. The answer for several buyers
+   is taller than the answer for one, which is content and is why only the read-out window and the
+   cluster count are asked of it. */
+async function l1Orders(page: Page): Promise<{ on: boolean }> {
+  await seedPopulatedOrders(page)
+  const gate = { on: false }
+  await page.route(/\/orders\/walk-plan$/, async (route) => {
+    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS))
+    const keys = (route.request().postDataJSON() as { keys: string[] }).keys
+    const plan = severalOrdersWalkPlan()
+    const stop = plan.stops[0]!
+    if (keys.length > 1) stop.takes = [0, 1, 2].map((i) => ({ ...stop.takes[0]!, sku: `919148${i}` }))
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(plan) })
+  })
+  return gate
+}
+
+for (const width of [1440, 820]) {
+  test(`held frame: opening the walk over several buyers holds the walk until its plan lands, at ${width}`, async ({ page }) => {
+    const gate = await l1Orders(page)
+    await watchShifts(page)
+    await setViewport(page, { width, height: 1000 })
+    await page.goto(screen('orders'))
+    await expect(page.locator('.orders-walk-list')).toBeVisible()
+    const r = await heldPress(page, gate, () => page.getByRole('button', { name: 'Walk 3' }).click())
+    /* A TIGHTER BUDGET: the walk list is short here, so a head swapped over the old rows moves them
+       by a few hundredths at most. Nothing else on this screen moves in the window. */
+    expectHeld(r, 0.001)
+  })
+
+  /* AND ONE BUYER: under 1000px a buyer press is also the walk's own mode (the page folds to the
+     walk), so the fold waits for the plan too and the page changes once. */
+  test(`held frame: selecting a buyer holds the screen until the walk's plan lands, at ${width}`, async ({ page }) => {
+    const gate = await l1Orders(page)
+    await watchShifts(page)
+    await setViewport(page, { width, height: 1000 })
+    await page.goto(screen('orders'))
+    await expect(page.locator('.orders-walk-list')).toBeVisible()
+    const r = await heldPress(page, gate, () => page.getByRole('button', { name: 'Grace Hopper' }).first().click())
+    expectHeld(r, 0.001)
+  })
+}
+
+/* REVIEW: THE LOOKUP OPENS OVER A READ. `Search` replaces the candidate list with the export's rows,
+   which are asked for when it opens. The candidates stay, dimmed, until the rows land, so the
+   actions under the stage hold their place and the swap is one change. */
+async function l1Review(page: Page): Promise<{ on: boolean }> {
+  const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  const candidates = [0, 1, 2].map((at) => ({
+    sku: `860800${at}`,
+    name: 'Snorlax',
+    set: 'ME01',
+    number: '014/132',
+    condition: 'Near Mint',
+    market: `${at + 4}.00`,
+  }))
+  await page.route(/\/queues$/, (route) =>
+    json(route, {
+      review: [
+        {
+          position: 'Box 2, Section 1, Card 1',
+          box: 2,
+          index: 1,
+          label: 'Box 2, Section 1, Card 1',
+          photo: 'photos/2/1.jpg',
+          read: { name: 'Snorlax', number: '014/132', printed_total: '132', set_hint: 'ME01' },
+          confidence: 'high',
+          reason: 'set_ambiguous',
+          candidates,
+          first_seen: '2026-09-01T12:00:00+00:00',
+          market: '4.00',
+          cleared_by_human: false,
+        },
+      ],
+      parked: [],
+    }),
+  )
+  const gate = { on: false }
+  await page.route(/\/review\/\d+\/\d+\/catalog/, async (route) => {
+    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS))
+    json(route, {
+      box: 2,
+      index: 1,
+      game: 'pokemon',
+      query: 'Snorlax',
+      searched: false,
+      rows: candidates.map((one) => ({ ...one, name: 'Snorlax lookup' })),
+      found: 3,
+      truncated: false,
+    })
+  })
+  return gate
+}
+
+for (const width of [1440, 820]) {
+  test(`held frame: opening the lookup holds the candidates until its rows land, at ${width}`, async ({ page }) => {
+    const gate = await l1Review(page)
+    await watchShifts(page)
+    await setViewport(page, { width, height: 1000 })
+    await page.goto(screen('review'))
+    await expect(page.locator('.review-candidates')).toBeVisible()
+    const r = await heldPress(page, gate, () => page.getByRole('button', { name: 'Search' }).click())
+    expectHeld(r, 0.001)
+  })
+}
+
+/* THE KEYS WAIT TOO. `inert` stops the pointer, never a window keydown, so while the walk stands on
+   the old buyer's plan a digit would sell a copy of the old buyer's pick. Nothing is written and
+   nothing steps until the new plan lands. */
+for (const width of [1440, 820]) {
+  test(`held frame: no walk key acts on the old plan while the new one is out, at ${width}`, async ({ page }) => {
+    const gate = await l1Orders(page)
+    const writes: string[] = []
+    page.on('request', (r) => {
+      if (r.method() === 'POST' && /\/orders\/pull$/.test(r.url())) writes.push(r.url())
+    })
+    await setViewport(page, { width, height: 1000 })
+    await page.goto(screen('orders'))
+    await expect(page.locator('.orders-walk-list')).toBeVisible()
+    gate.on = true
+    await page.getByRole('button', { name: 'Grace Hopper' }).first().click()
+    await expect(page.locator('.orders-walk[aria-busy="true"]')).toHaveCount(1)
+    await page.keyboard.press('1')
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('j')
+    await page.waitForTimeout(300)
+    expect(writes, 'a key sold a copy from the old plan').toEqual([])
+    gate.on = false
+  })
+}

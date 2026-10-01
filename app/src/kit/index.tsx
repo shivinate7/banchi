@@ -1150,6 +1150,20 @@ export function useLeave(open: boolean, ms = 140): { readonly mounted: boolean; 
   return { mounted, leaving }
 }
 
+/* ---- Held frame --------------------------------------------------------------------------------- */
+/** THE HELD FRAME (D313, class B): the last settled `value` while a read is out. A press that
+ *  needs a read keeps the old content on screen until the new content can be drawn whole, so the
+ *  area never draws a frame of another size in between. Dim the held content and mark it
+ *  `aria-busy` and `inert`: it is a transition, never a claim about what the press chose.
+ *
+ *  `pending` is true from the render that sees the press until the render that holds the answer.
+ *  The held value is state, written during render, so the first frame of the press already holds. */
+export function useHeld<T>(value: T, pending: boolean): T {
+  const [held, setHeld] = useState(value)
+  if (!pending && !Object.is(held, value)) setHeld(value)
+  return pending ? held : value
+}
+
 /* ---- Crop --------------------------------------------------------------------------------------- */
 /* A RIG PHOTOGRAPH IS MOSTLY STAND, and every screen that draws one small has the same problem:
    the card sits at [126, 741, 1770, 3038] inside a 2160x3840 frame, so nearly a fifth of the

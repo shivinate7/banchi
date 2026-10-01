@@ -6079,7 +6079,7 @@ COMPONENTS = [
                                           "deviceId (D27), and nothing about a card.",
                                   "governed_by": ["D309", "D5", "D13", "D27", "D32", "D50", "D94", "D95",
                                                   "D117", "D118", "D125", "D196", "D221", "D260",
-                                                  "D269", "D272", "D288", "D300"]},
+                                                  "D269", "D272", "D288", "D300", "D313"]},
             "src/kit/Icon.tsx": {"does": "one icon set, 73 paths on a 24-unit grid at 1.75 stroke "
                                          "with round joins, drawn in the Lucide idiom so the whole "
                                          "product speaks one line weight. `currentColor` and "
@@ -6924,7 +6924,7 @@ COMPONENTS = [
                             "D45", "D77", "D86", "D183", "D65", "D67", "D68", "D89", "D90",
                             "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D277", "D172",
                             "D181", "D192", "D213", "D218", "D221", "D252", "D259", "D263",
-                            "D264", "D294", "D275", "D285", "D293"]},
+                            "D264", "D294", "D275", "D285", "D293", "D313"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -7008,7 +7008,7 @@ COMPONENTS = [
                         "because that is what the command's own longest line measures.",
                 "governed_by": ["D5", "D9", "D13", "D23", "D24", "D28", "D29", "D32", "D35", "D37",
                                 "D41", "D77", "D50", "D117", "D118", "D123", "D162", "D259",
-                                "D291"],
+                                "D291", "D313"],
             },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
@@ -7105,7 +7105,7 @@ COMPONENTS = [
                         "copies list already drew per row. What STAYED is the receipt's "
                         "sentence, which the copy row and the phone action bar both render.",
                 "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31", "D41", "D57", "D118",
-                                "D119", "D125", "D293"],
+                                "D119", "D125", "D293", "D313"],
             },
             "src/InventorySets.tsx": {
                 "does": "THE OWNER'S \"BY SET\" VIEW (D293), a second view inside "
@@ -8076,7 +8076,7 @@ COMPONENTS = [
                                "governed_by": ["D5", "D24", "D38", "D41", "D50", "D63", "D69",
                                                "D113", "D91", "D117", "D118", "D123", "D193",
                                                "D195", "D196", "D203", "D212", "D221", "D270",
-                                               "D274", "D289", "D304"]},
+                                               "D274", "D289", "D304", "D313"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -8138,7 +8138,7 @@ COMPONENTS = [
                                    "governed_by": ["D24", "D57", "D58", "D93", "D97", "D118",
                                                    "D132", "D164", "D171", "D181", "D193", "D195",
                                                    "D212", "D218", "D220", "D252", "D260", "D263",
-                                                   "D277", "D278", "D279", "D296", "D304"]},
+                                                   "D277", "D278", "D279", "D296", "D304", "D313"]},
             "src/Shipping.tsx": {"does": "`#/shipping`: NINE LINES THAT POINT THE ROUTE AT THE "
                                          "HUB — `<OrdersHub stage=\'ship\'/>`. The stage itself "
                                          "is src/OrdersShipStage.tsx, which `Orders.tsx` "

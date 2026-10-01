@@ -291,6 +291,11 @@ export function useOrderWalk({
   currentSig.current = keysSig
   const [plan, setPlan] = useState<WalkPlan | null>(null)
   const [loading, setLoading] = useState(false)
+  /* THE KEY SET THE LAST READ ANSWERED, whether it landed or failed. `pending` is true from the
+     render that sees a new key set until the render that holds its answer, which is one render
+     BEFORE `loading` turns on (that is set in the effect below), so a caller that holds its old
+     frame through `pending` never draws the new buyer over the old plan (D313, class B). */
+  const [settledSig, setSettledSig] = useState('')
   const [failure, setFailure] = useState<Failure | null>(null)
   const live = useRef(true)
   useEffect(() => {
@@ -305,6 +310,7 @@ export function useOrderWalk({
       setPlan(null)
       setLoading(false)
       setFailure(null)
+      setSettledSig('')
       return
     }
     setLoading(true)
@@ -319,7 +325,10 @@ export function useOrderWalk({
         if (current()) setFailure(describeFailure(err))
       })
       .finally(() => {
-        if (current()) setLoading(false)
+        if (current()) {
+          setLoading(false)
+          setSettledSig(asked)
+        }
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keysSig])
@@ -609,6 +618,9 @@ export function useOrderWalk({
 
   return {
     loading,
+    pending: keysSig !== settledSig,
+    /** The old plan stands, dimmed, while the new one is out: no key may act on it (D313). */
+    held: keysSig !== settledSig && plan !== null,
     failure,
     plan,
     rows,
@@ -669,7 +681,7 @@ export function useWalkKeys(walk: OrderWalk): void {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const now = held.current
-      if (now.rows.length === 0) return
+      if (now.rows.length === 0 || now.held) return
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return
       if (isEditableTarget(event.target)) return
       /* A LAYER OVER THE WALK OWNS THE KEYBOARD (the lightbox, a dialog), as the shell's own keys

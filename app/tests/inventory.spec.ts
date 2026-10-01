@@ -8731,7 +8731,7 @@ function siftCards(): Cards {
 }
 const SIFT_BOXES = { boxes: [{ ...BOXES.boxes[0], fill: 100, next_index: 101, cards: 100, on_hand: 100, sold: 0, retired: 0, sections: [1], sections_detail: [{ section: 1, start: 1, end: 100, count: 100 }] }] }
 
-type RowFrame = { tops: number[]; scroll: number }
+type RowFrame = { tops: number[]; scroll: number; held: boolean }
 
 /** Every animation frame's copy-row tops and the list's `scrollTop`, from `go`'s start until `ms`
  *  after it finishes. A frame with no rows is the skeleton and is kept, so a gap is visible. */
@@ -8744,6 +8744,8 @@ async function rowFrames(page: Page, go: () => Promise<void>, ms: number): Promi
       frames.push({
         tops: rows.map((row) => row.getBoundingClientRect().top),
         scroll: document.querySelector('.card-locations-rows')?.scrollTop ?? -1,
+        /* THE PREVIOUS CARD'S LIST, HELD WHILE THIS CARD'S READ IS OUT (D313): not this card's rows. */
+        held: rows[0]?.closest('.inventory-held') != null,
       })
       requestAnimationFrame(tick)
     }
@@ -8754,7 +8756,7 @@ async function rowFrames(page: Page, go: () => Promise<void>, ms: number): Promi
      animating. A slow runner paints fewer frames in the same time, so a count is no measure. */
   await page.waitForFunction(() => {
     const rows = [...document.querySelectorAll('.card-locations-row')]
-    return rows.length > 0 && rows.every((row) => row.getAnimations().length === 0)
+    return rows.length > 0 && rows.every((row) => row.getAnimations().length === 0 && row.closest('.inventory-held') === null)
   })
   await page.waitForTimeout(ms)
   return await page.evaluate(() => (window as unknown as { __rowFrames: RowFrame[] }).__rowFrames)
@@ -8780,9 +8782,10 @@ async function holdKey(page: Page, key: string, presses: number): Promise<void> 
   )
 }
 
-/** The frames after the last one that had NO row (the skeleton): that is the landing. */
+/** The frames after the last one that had no row of this card's own: the skeleton, or the previous
+ *  card's list standing dimmed while the read is out (D313). That is the landing. */
 function landing(frames: RowFrame[]): RowFrame[] {
-  const gap = frames.map((frame) => frame.tops.length).lastIndexOf(0)
+  const gap = frames.map((frame) => frame.tops.length === 0 || frame.held).lastIndexOf(true)
   return frames.slice(gap + 1)
 }
 

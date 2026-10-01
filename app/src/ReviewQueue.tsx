@@ -2074,7 +2074,14 @@ function Card({
   const parts = sentence(entry)
   const busy = activity !== null
   const claims = claimsOf(entry)
-  const head = showCatalog ? null : sharedHead(entry.candidates)
+  /* THE LOOKUP'S ROWS ARE A READ, AND THE CANDIDATES STAND UNTIL THEY LAND (D313, class B). `Search`
+     opens the lookup at once, but its rows are asked for when it opens; drawing the empty panel in
+     the candidates' place changed the stage's height for the whole read and again when the rows
+     arrived, so the actions under it moved twice. A card with no candidates has nothing to stand
+     on and draws the panel at once. */
+  const lookupHeld = showCatalog && lookup === null && lookupFailed === null && entry.candidates.length > 0
+  const catalogDrawn = showCatalog && !lookupHeld
+  const head = catalogDrawn ? null : sharedHead(entry.candidates)
   /* The one reason whose chips restated its own sentence was the finish disagreement, and
    * the sentence was hidden under them. That reason is retired, so every card draws its
    * sentence and nothing is conditional on which one it is. */
@@ -2143,7 +2150,7 @@ function Card({
           })}
         </p>
 
-        {showCatalog ? (
+        {catalogDrawn ? (
           <CatalogPanel lookup={lookup} failed={lookupFailed} typed={typed} onTyped={onTyped} onSearch={onSearch} onChoose={onChooseCatalog} overruling={looking} busy={busy} />
         ) : (
           <>
@@ -2156,7 +2163,7 @@ function Card({
                 </span>
               </div>
             )}
-            <ul className="review-candidates">
+            <ul className="review-candidates" aria-busy={lookupHeld ? 'true' : undefined} inert={lookupHeld}>
               {entry.candidates.map((candidate, at) => (
                 <li key={`${candidate.sku}:${at}`} className="bn-stagger-item" style={{ '--i': at } as CSSProperties}>
                   <CandidateButton candidate={candidate} at={at} shared={head !== null} tags={tagsFor(entry, claims, candidate)} onChoose={() => onChoose(candidate)} disabled={busy} />
