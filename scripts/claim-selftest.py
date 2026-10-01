@@ -2329,7 +2329,8 @@ def main() -> int:
         write(dwork, "docs/debts/" + SDEBT + ".md", f"## {SDEBT} — A second finding\n\nbody\n")
         write(dwork, "CLAUDE.md",
              f"# Fixture\n\nmain cites {D(2)} and step 2 and {C(1)}.\n\n```\n{D(1)} First\n"
-             f"{D(2)} Second\n```\n\nthe branch cites {SD2} and {SDEBT}.\n")
+             f"{D(2)} Second\n```\n\nthe branch cites {SD2} and {SDEBT}.\n"
+             f"\nalready glossed: {SD2} (kept as written).\n")
         git(dwork, "add", "-A")
         git(dwork, "commit", "-qm", "a decision and a debt, one branch")
 
@@ -2343,8 +2344,12 @@ def main() -> int:
         claude_after = (dwork / "CLAUDE.md").read_text(encoding="utf-8")
         ok(SD2 not in claude_after and SDEBT not in claude_after,
            "neither slug survives in prose after --write", claude_after)
-        ok(f"the branch cites {D(3)} and DEBT2." in claude_after,
-           "both citations were rewritten to their claimed numbers, IN ONE COMMIT", claude_after)
+        ok(f"the branch cites {D(3)} (Another) and DEBT2 (A second finding)." in claude_after,
+           "both citations were rewritten to their claimed numbers, IN ONE COMMIT, and a cite "
+           "with no gloss gained one from its entry's heading (STOPGAP, DEBT-shared-merge-tool)",
+           claude_after)
+        ok(f"already glossed: {D(3)} (kept as written)." in claude_after,
+           "a cite that already had a gloss keeps it, undoubled", claude_after)
         ok("DEBT2" in (dwork / "docs/debts/README.md").read_text(encoding="utf-8"),
            "the debt index (docs/debts/README.md) was ALSO regenerated, alongside the decision index — "
            "settle_corpus settles both directory corpora in the same claim, D18's write-time half")
