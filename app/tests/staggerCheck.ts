@@ -16,8 +16,8 @@ export async function expectOneStagger(page: Page, rowSelector: string, minRows:
   expect(minRows).toBeGreaterThan(cap)
   const delays = await rows.evaluateAll((els) =>
     els.map((el) => {
-      const d = getComputedStyle(el).animationDelay.split(',')[0]!.trim()
-      return d.endsWith('ms') ? parseFloat(d) : parseFloat(d) * 1000
+      const first = /^\s*(-?[\d.]+)(ms|s)/.exec(getComputedStyle(el).animationDelay)
+      return first === null ? NaN : first[2] === 'ms' ? parseFloat(first[1]!) : parseFloat(first[1]!) * 1000
     }),
   )
   delays.forEach((ms, i) => expect(ms, `row ${i} of ${rowSelector}`).toBeCloseTo(Math.min(i, cap) * step, 0))
