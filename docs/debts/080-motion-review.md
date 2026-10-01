@@ -12,8 +12,8 @@ moved a snap list.
 
 **Why it is not fixed:** a professional review is out of scope for now, by the owner's word.
 The Mark sold button's sale animation (a drawn-bills burst, then a framed Undo) is the newest
-motion. Review it first.
+motion, with its reverse: a quick undo plays the same bills back into Mark sold. Review both first.
 
 **Closes when:** a motion-design pass reviews every animated surface (the row entries, the
-press and hover states, the sale burst, the sheets and the skeletons) and its findings land
+press and hover states, the sale burst and its reverse on a quick undo, the sheets and the skeletons) and its findings land
 as tokens, spec changes or new debts.

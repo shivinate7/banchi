@@ -19,13 +19,13 @@
  * one press (Mark sold / Undo) `CardLocations`'s own `renderAction` slot calls per copy.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Icon, Kbd, Loading, Notice, overlayOpen, Pill } from './kit'
+import { Button, Icon, Loading, Notice, overlayOpen, Pill } from './kit'
 import { toast } from './kit/toast'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
 import { isEditableTarget } from './keys'
-import { CardLocations, MarkSoldButton, UndoSaleButton } from './CardLocations'
+import { CardLocations, MarkSoldButton, UndoSaleButton, markFreshSale, clearFreshSale } from './CardLocations'
 import { describeFailure, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
@@ -493,6 +493,8 @@ export function useOrderWalk({
     const target: PullTarget | null = copy.capture_id === null ? null : { box: copy.place.box, index: copy.place.index, capture_id: copy.capture_id }
     if (target === null) return
     setBusyCopy(copy.key)
+    /* THE SALE IS NOTED HERE, not in the button: a digit key reaches this too, and its Undo plays the burst. */
+    markFreshSale(copy.key)
     void (async () => {
       const refresh = staleAfter(target.box, copy.key)
       const outcome = await onPull({
@@ -507,6 +509,7 @@ export function useOrderWalk({
         refresh,
       })
       if (!live.current) return
+      if (!outcome.ok) clearFreshSale(copy.key)
       if (outcome.ok) {
         absorb(outcome.refreshed)
         setRecorded((prev) => {
@@ -971,21 +974,16 @@ export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk
   /* MARK SOLD IS INVENTORY'S OWN PRESS (`CardLocations.tsx:MarkSoldButton`), so a change to it
      reaches the walk with no second edit. Undo is the icon it always was. */
   if (!undo) {
-    const press = (
+    /* THE KEY IS IN THE TOOLTIP, never on the face: the button is one width on every row (D195). */
+    return (
       <MarkSoldButton
         name={`Mark sold: ${where}`}
         saleKey={copy.key}
+        kbd={hint}
         busy={busy}
         disabled={walk.busyCopy !== null && !busy}
         onClick={() => walk.onSell(copy, take)}
       />
-    )
-    /* THE KEY CAP STANDS BESIDE THE BUTTON, not in it: the button is one width on every row (D195). */
-    return hint === undefined ? press : (
-      <span className="walk-keyhint">
-        <Kbd>{hint}</Kbd>
-        {press}
-      </span>
     )
   }
   return (

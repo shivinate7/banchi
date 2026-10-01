@@ -220,8 +220,7 @@
      or nothing at all stands here after a sale, and a 40px control is what the row reserves. */
   min-height: var(--bn-control-h-lg);
   /* AND ITS WIDTH: what stands here after a press (a `Sold` pill, an `Undo`) is narrower than the
-     128px button plus the digit key cap that may stand beside it (`walk-keyhint`), and the slot may not
-     shrink under it (D118). */
+     128px button, and the slot may not shrink under it (D118). */
   min-width: 160px;
 }
 /* THE SALE BUTTONS ARE SCOPED TO THEIR OWN CLASSES, never to the row: the phone's action bar and
@@ -280,8 +279,12 @@
   opacity: 0;
   animation: bn-sale-bill calc(var(--bn-t) * 4) var(--bn-ease-out) forwards;
 }
+/* A QUICK UNDO PLAYS THE SAME BILLS BACKWARDS, into the Mark sold it gives back. Same keyframes, so
+   the two can never drift; the fade at both ends is what lets them arrive without a pop. */
+.card-locations-bill.is-reverse { animation-direction: reverse; }
 @keyframes bn-sale-bill {
-  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.6) rotate(0); }
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6) rotate(0); }
+  10% { opacity: 1; }
   70% { opacity: 1; }
   100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.1) rotate(var(--rot)); }
 }

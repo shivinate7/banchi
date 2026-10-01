@@ -29,7 +29,7 @@ import {
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
 import { useViewParam } from './kit/viewState'
-import { CardLocations, hiddenCopies, layoutsOf, MarkSoldButton, UndoSaleButton, clearFreshSale } from './CardLocations'
+import { CardLocations, hiddenCopies, layoutsOf, MarkSoldButton, UndoSaleButton, clearFreshSale, markFreshSale } from './CardLocations'
 import type { HeroFigures } from './CardHero'
 import { InventorySets } from './InventorySets'
 import { PositionBar } from './PositionBar'
@@ -441,6 +441,7 @@ function InventoryWalk({
       if (busyKey !== null) return
       setBusyKey(copy.key)
       setRetiring(null)
+      markFreshSale(copy.key)
 
       const seat = {
         key: copy.key,

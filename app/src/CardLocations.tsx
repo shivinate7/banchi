@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { BoxRecord, SearchCopy, SearchGroup, SectionDetail } from './types'
 import { isDeparted, photoUrl, placeSentence } from './server'
@@ -307,16 +307,29 @@ export function MarkSoldButton({
   disabled,
   name,
   saleKey,
+  kbd,
   onClick,
 }: {
   readonly busy: boolean
   readonly disabled: boolean
   readonly name?: string
-  /** The copy's key. A press notes it, so the Undo that stands where this button was plays the
-   *  sale's burst once (`UndoSaleButton`); a row loaded already sold never does. */
+  /** The copy's key. The sell path notes the sale (`markFreshSale`), so the Undo that stands where
+   *  this button was plays the burst once (`UndoSaleButton`). A quick undo plays it back in here:
+   *  the button mounts holding the reversed bills (`isFreshUndo`). A row loaded already sold
+   *  never plays either. */
   readonly saleKey?: string
+  /** The key that presses it, shown in the tooltip (`IconButton`'s own `kbd`), never on the face. */
+  readonly kbd?: string
   readonly onClick: () => void
 }) {
+  const [back, setBack] = useState(false)
+  /* READ IN AN EFFECT, NOT A RENDER: the Undo's own cleanup (which stamps the undo) runs in the same
+     commit that mounts this, after this renders. A layout effect runs after it, before paint. */
+  useLayoutEffect(() => {
+    if (saleKey === undefined) return
+    SALE_AT.delete(saleKey)
+    if (isFreshUndo(saleKey)) setBack(true)
+  }, [saleKey])
   return (
     <IconButton
       icon="sold"
@@ -327,8 +340,12 @@ export function MarkSoldButton({
       style={{ width: 'var(--sale-w)' }}
       busy={busy}
       disabled={disabled}
+      kbd={kbd}
+      burst={back ? <SaleBills reverse onDone={() => setBack(false)} /> : null}
       onClick={() => {
-        if (saleKey !== undefined) FRESH_SALES.set(saleKey, Date.now())
+        /* A press on the button is a sale like any other. `markFreshSale` is idempotent, so the
+           sell path that follows (`onSell`) may note it again. */
+        if (saleKey !== undefined) markFreshSale(saleKey)
         onClick()
       }}
     />
@@ -339,12 +356,64 @@ export function MarkSoldButton({
    on mount and clears it, so the burst plays for the press and never for a row that was already
    sold when it was drawn. A press that never lands leaves a stale key, so it expires. */
 const FRESH_SALES = new Map<string, number>()
+/* WHEN EACH SALE WAS PRESSED, kept after the Undo mounts: an undo inside `FRESH_MS` of it plays the
+   burst backwards. `UNDONE_AT` is the Undo's own unmount, read once by the Mark sold that takes its
+   place in the same commit (`isFreshUndo`). */
+const SALE_AT = new Map<string, number>()
+const UNDONE_AT = new Map<string, number>()
+/** EVERY SELL PATH CALLS THIS: the button, the walk's digit keys, Inventory's own press. */
+export function markFreshSale(key: string): void {
+  const now = Date.now()
+  FRESH_SALES.set(key, now)
+  SALE_AT.set(key, now)
+}
 /** A sale that failed never plays its burst: its key is dropped. */
 export function clearFreshSale(key: string): void {
   FRESH_SALES.delete(key)
+  SALE_AT.delete(key)
 }
+/** The sale's burst window, and the window in which an undo plays it backwards. */
 const FRESH_MS = 15000
+/** The Undo leaves and Mark sold arrives in one commit, so this only has to cover that. */
+const UNDONE_MS = 1000
 const BILL_COUNT = 8
+function reducedMotion(): boolean {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+/** True for a quick undo: the sale was pressed inside `FRESH_MS` and its Undo has just left. It
+ *  expires on its own (`UNDONE_MS`), so a double-run effect reads it twice and nothing spends it. */
+function isFreshUndo(key: string): boolean {
+  const at = UNDONE_AT.get(key)
+  return at !== undefined && Date.now() - at < UNDONE_MS && !reducedMotion()
+}
+
+/** THE DRAWN BILLS, one set for both directions. Forward they fly out of the Undo; `reverse` runs
+ *  the same keyframes backwards, into the Mark sold the undo gives back. The LAST bill's own end
+ *  ends the burst; a child's end bubbling up cannot. */
+function SaleBills({ reverse = false, onDone }: { readonly reverse?: boolean; readonly onDone: () => void }) {
+  return (
+    <>
+      {Array.from({ length: BILL_COUNT }, (_, i) => (
+        <span
+          key={i}
+          className={reverse ? 'card-locations-bill is-reverse' : 'card-locations-bill'}
+          aria-hidden="true"
+          onAnimationEnd={(e) => {
+            if (e.target === e.currentTarget && i === BILL_COUNT - 1) onDone()
+          }}
+          style={{
+            ['--dx' as string]: `${(i - (BILL_COUNT - 1) / 2) * 16}px`,
+            ['--dy' as string]: `${-(46 + (i % 3) * 18)}px`,
+            ['--rot' as string]: `${(i % 2 ? 1 : -1) * (20 + i * 8)}deg`,
+            animationDelay: `${i * 25}ms`,
+          }}
+        >
+          <Icon name="bill" size={22} />
+        </span>
+      ))}
+    </>
+  )
+}
 
 /** THE UNDO THAT STANDS WHERE MARK SOLD WAS: the same frame (`--sale-w` by 40px, D195, D118), as a
  *  neutral outline with the undo glyph, so it never reads as "sell again". Right after a press,
@@ -371,14 +440,25 @@ export function UndoSaleButton({
     return at !== undefined && Date.now() - at < FRESH_MS
   })
   /* Reduced motion draws no bills at all; the frame is simply there. */
-  const [fresh, setFresh] = useState(wasFresh && !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const [fresh, setFresh] = useState(wasFresh && !reducedMotion())
   const button = useRef<HTMLButtonElement | HTMLAnchorElement>(null)
   useEffect(() => {
     FRESH_SALES.delete(saleKey)
+    UNDONE_AT.delete(saleKey)
     /* The Mark sold that held focus is gone, so focus would drop to the body: a sale hands it to
        the Undo, and a keyboard user can take it back at once. */
     if (wasFresh) button.current?.focus()
   }, [saleKey, wasFresh])
+  /* THE UNDO LEAVING, BY ANY PATH (a click, `U`, a toast), inside the sale's window: the Mark sold that
+     stands here next plays the burst backwards. A LAYOUT cleanup, so it runs before that Mark sold's
+     own layout effect reads it in the same commit. */
+  useLayoutEffect(
+    () => () => {
+      const at = SALE_AT.get(saleKey)
+      if (at !== undefined && Date.now() - at < FRESH_MS) UNDONE_AT.set(saleKey, Date.now())
+    },
+    [saleKey],
+  )
   return (
     <span className="card-locations-undo-wrap">
       <IconButton
@@ -393,27 +473,7 @@ export function UndoSaleButton({
         kbd={kbd}
         onClick={onClick}
       />
-      {fresh
-        ? Array.from({ length: BILL_COUNT }, (_, i) => (
-            <span
-              key={i}
-              className="card-locations-bill"
-              aria-hidden="true"
-              /* The LAST bill's own end ends the burst; a child's end bubbling up cannot. */
-              onAnimationEnd={(e) => {
-                if (e.target === e.currentTarget && i === BILL_COUNT - 1) setFresh(false)
-              }}
-              style={{
-                ['--dx' as string]: `${(i - (BILL_COUNT - 1) / 2) * 16}px`,
-                ['--dy' as string]: `${-(46 + (i % 3) * 18)}px`,
-                ['--rot' as string]: `${(i % 2 ? 1 : -1) * (20 + i * 8)}deg`,
-                animationDelay: `${i * 25}ms`,
-              }}
-            >
-              <Icon name="bill" size={22} />
-            </span>
-          ))
-        : null}
+      {fresh ? <SaleBills onDone={() => setFresh(false)} /> : null}
     </span>
   )
 }
