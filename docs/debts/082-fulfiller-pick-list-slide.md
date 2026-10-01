@@ -1,4 +1,4 @@
-## DEBT-fulfiller-pick-list-slide — The Fulfiller's boxes slide once when the Pick list lands
+## DEBT82 — The Fulfiller's boxes slide once when the Pick list lands
 
 **With more than one owed card, the box list moves once when the orders read ends.** The Pick list sits above the boxes, and its height is the number of owed cards times a card's own height. That number is known only when the walk plan lands. `Fulfillment` draws a frame in the list's shape, heading plus one card, so the boxes hold still when exactly one card is owed.
 
