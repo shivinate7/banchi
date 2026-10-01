@@ -130,26 +130,29 @@ test('failed: a failed history read leaves no skeleton on Home', async ({ page }
    pressable row or as plain prose by what the other reads say. Equal 800ms holds hide that race. Here
    the runs read lands first and the status second, so the line is drawn twice. Its row keeps one
    height, so nothing below it moves. */
-for (const width of [1440, 820]) test(`loading: Home holds its frame when its reads land out of order, at ${width}`, async ({ page }) => {
-  for (const seed of Object.values(POPULATED_ROUTE_SEEDS)) await seed(page)
-  await page.route(
-    () => true,
-    async (route) => {
-      const type = route.request().resourceType()
-      if (type === 'fetch' || type === 'xhr') {
-        const url = route.request().url()
-        await new Promise((r) => setTimeout(r, /\/runs(\?|$)/.test(url) ? 100 : /\/status(\?|$)/.test(url) ? 200 : SLOW_MS))
-      }
-      await route.fallback()
-    },
-  )
-  await watchShifts(page)
-  await setViewport(page, { width, height: 1000 })
-  const { sum, shifts } = await shiftOf(page, '#/')
-  /* Not zero: the foot's sentence grows left to right as its clauses land, and the words after a
-     clause move by a fraction of a pixel (0.0001). A box that moves is 0.004 or more. */
-  expect(sum, describeShifts(shifts)).toBeLessThan(BUDGET / 20)
-})
+/* Both stores: the populated seeds, and the shell's bare store of 122 cards over several boxes. Every
+   read lands at its own moment, so the foot's clauses (status, boxes, history) land one after another. */
+const LANDS: readonly [RegExp, number][] = [[/\/runs(\?|$)/, 100], [/\/status(\?|$)/, 200], [/\/boxes(\?|$)/, 400], [/\/inventory\/history(\?|$)/, 600]]
+for (const width of [1440, 820]) for (const seeded of [true, false]) {
+  test(`loading: Home holds its frame when its reads land out of order, ${seeded ? 'seeded' : 'bare store'}, at ${width}`, async ({ page }) => {
+    if (seeded) for (const seed of Object.values(POPULATED_ROUTE_SEEDS)) await seed(page)
+    await page.route(
+      () => true,
+      async (route) => {
+        const type = route.request().resourceType()
+        if (type === 'fetch' || type === 'xhr') {
+          const url = route.request().url()
+          await new Promise((r) => setTimeout(r, LANDS.find(([re]) => re.test(url))?.[1] ?? SLOW_MS))
+        }
+        await route.fallback()
+      },
+    )
+    await watchShifts(page)
+    await setViewport(page, { width, height: 1000 })
+    const { sum, shifts } = await shiftOf(page, '#/')
+    expect(sum, describeShifts(shifts)).toBe(0)
+  })
+}
 
 // L-fulfiller
 /* A RECOVERY DOES NOT WAIT ON THE STATE IT RECOVERS. The orders and walk-plan reads have no
