@@ -1046,7 +1046,7 @@ def icloud() -> List[str]:
 
 
 def leftovers() -> List[str]:
-    """A pointer, never a count (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md (The janitor is one machine-wide sweep)). The sweep that counts is claude-settings' and takes
+    """A pointer, never a count (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep"). The sweep that counts is claude-settings' and takes
     minutes on this machine, so `make status` does not run it."""
     return [field("Left behind", "`make janitor` lists what a finished session left")]
 

@@ -9,7 +9,7 @@
 #
 # The pins going stale was the SYMPTOM. This file is the cause: there was no watcher. That is
 # `check.yml`'s own lesson one register up — a mechanism that is thorough, correct, and never
-# re-evaluated — and the same shape as claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md (The janitor is one machine-wide sweep), which is why session exhaust is swept
+# re-evaluated — and the same shape as claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep", which is why session exhaust is swept
 # rather than hoped about.
 #
 # IT OPENS PULL REQUESTS AND IT MERGES NOTHING. D42 keeps main moving by pull request on the

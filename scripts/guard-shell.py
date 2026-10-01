@@ -1297,7 +1297,7 @@ def _default_branch(remote: str, cwd: str) -> str:
     to, which matters for a fork workflow whose fork defaults to a different branch than
     `origin`'s. A throwaway repo that has never had that symbolic ref written (this guard's
     own selftest fixture, most `git init`-then-`push` clones) falls back to the same rule
-    `scripts/janitor.py:default_branch` already uses for the primary checkout: the first of
+    the claude-settings sweep uses for the primary checkout: the first of
     `main`, `master` that exists as a local branch. Nothing here is a guess dressed as a
     read — an unreadable remote and an absent local branch both return "", and the caller
     treats that exactly like the pre-2026-09-13 code did: no exemption, still refused.

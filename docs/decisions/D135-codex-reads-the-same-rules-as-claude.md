@@ -44,7 +44,7 @@ confirms it rather than excusing its absence.
 **`.codex/hooks.json` and `.claude/settings.json`'s `hooks` block disagreed on arrival.**
 Codex's file was written 2026-09-09; `.claude/settings.json` gained a `Bash`-matched
 `scripts/reap.py --hook` PreToolUse entry the next day (D127, for the pkill/lsof incidents)
-and has always carried `scripts/session-teardown.sh` on `WorktreeRemove` (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md (The janitor is one machine-wide sweep)),
+and has always carried `scripts/session-teardown.sh` on `WorktreeRemove` (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep"),
 neither of which `.codex/hooks.json` had. A Codex session could have run an unrestricted
 `pkill` a Claude Code session in this repo cannot, and a worktree it removed would never
 notify a supervisor to stop. Both are added to `.codex/hooks.json` in the same change that

@@ -503,7 +503,7 @@ check:
 # This exists because nothing ever re-ran the gate: `make check` failed in every fresh checkout
 # for 121 commits — `tsc` needed `app/demo/bundle.json`, which `make demo-record` writes and
 # nothing tracks — and no one noticed, because the only trees it was run in had made a recording.
-# A gate with no re-checker is the same defect claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md (The janitor is one machine-wide sweep) records one register up.
+# A gate with no re-checker is the same defect claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep" records one register up.
 #
 # ONE ROW IS ABSENT AND IT IS NOT AN OVERSIGHT:
 #   vale     needs a binary that is not on the runner, and it never gated a commit anyway.

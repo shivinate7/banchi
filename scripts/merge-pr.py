@@ -1499,7 +1499,7 @@ def cut_branch(root: str, branch: str, confirm: bool) -> None:
         # delete is skipped exactly when it is wanted — and nothing here ever came back to ask
         # again. `make janitor` is what asks again: the branch is an ancestor of main and its
         # remote copy has just been deleted above, so the sweep reaps it the moment no tree
-        # holds it. Nothing is recorded to make that happen; the sweep re-derives it (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md (The janitor is one machine-wide sweep)).
+        # holds it. Nothing is recorded to make that happen; the sweep re-derives it (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep").
         say("  {0}: kept — checked out in {1}.".format(branch, held),
             "    `make janitor` takes it once that tree is gone.")
         return
