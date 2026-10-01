@@ -79,8 +79,8 @@ FAILS OPEN, LIKE EVERYTHING ELSE THIS INCIDENT TOUCHES. No checkout, no writable
 none of these may stop the real command from running; they leave the process unmarked, which
 `reap.py` treats exactly like a process nothing here has ever heard of.
 
-NEVER INSTALLED AND NEVER IMPORTED FROM OUTSIDE THIS CHECKOUT. `make janitor-install` copies
-`reap.py` alone to `~/.claude/bin` so its hook covers every project on the machine; this script
+NEVER INSTALLED AND NEVER IMPORTED FROM OUTSIDE THIS CHECKOUT. `reap.py` stays one file
+so its hook covers any checkout; this script
 is a Banchi launcher's own business and reads nothing `reap.py` does not already read back.
 `scripts/serve.py` imports `write_mark` below directly — a normal in-repo import, not a copy,
 since `serve.py` is never installed anywhere either.

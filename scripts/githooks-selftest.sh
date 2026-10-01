@@ -308,7 +308,7 @@ git branch -D wt-one wt-two 2>/dev/null >/dev/null || true
 # A REPOSITORY THAT DOES NOT USE `main` IS NOT IN VIOLATION, and this is the one case the fixture
 # above cannot make: `main` exists there by construction, so the hook's gate on `main` being a real
 # local branch is unfalsifiable in it — mutating that gate out left all twenty-five other cases
-# green. It matters because `make janitor-install` puts this repo's hooks in front of other
+# green. It matters because a user-level hook can put this repo's hooks in front of other
 # checkouts, and a warning that fired in every `master`-based repository is a warning somebody
 # switches off — which takes D42's refusals and the three opsec rules with it.
 #

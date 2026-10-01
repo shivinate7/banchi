@@ -45,10 +45,8 @@ EOF
 [ "${reason:--}" = "clear" ] && exit 0     # the session continues; its servers are still wanted
 [ -d "$tree" ] || exit 0
 
-# BESIDE ITSELF FIRST, THEN ITS OWN REPO. `make janitor-install` copies this file and
-# `janitor.py` into `~/.claude/bin` so a user-level hook can run them in a repo that has never
-# heard of this one; the installed pair has to find each other with no checkout in sight. The
-# repo path is the fallback, which is what this file uses when it runs from the tree.
+# BESIDE ITSELF FIRST, THEN ITS OWN REPO. Both files run from this repo's `scripts/`, so
+# `janitor.py` sits beside this one; the repo path is the fallback.
 mine="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || exit 0
 janitor="$mine/janitor.py"
 [ -f "$janitor" ] || janitor="$(dirname "$mine")/scripts/janitor.py"

@@ -50,7 +50,7 @@ make up             # the server, detached, one process. ARGS=--restart bounces 
 make reap           # stop what THIS session started, nothing else. Previews. ARGS="--confirm",
                     #   "port:N --confirm", "match:X --confirm" or "pid:N --confirm". A subagent's bare
                     #   --confirm stops only its own session's pids (D305, the reaper stops only its own).
-make janitor-install # copy the teardown (janitor.py, session-teardown.sh) and reap.py to the user's home Claude bin directory.
+make janitor-install # retired: claude-settings' install.sh owns the user's Claude bin directory. Copies nothing.
 make merge          # merge a PR and move main onto it. ARGS=<n> previews. ARGS="<n> --confirm" merges.
                     #   The owner names the session an Orchestrator first, per turn. It carries a needed
                     #   rebase and force-push on a branch nobody else holds.

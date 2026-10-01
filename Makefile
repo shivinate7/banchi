@@ -1550,27 +1550,12 @@ guard-shell-selftest:
 
 .PHONY: guard-shell-selftest
 
-# THE SWEEP, WHERE EVERY REPO CAN REACH IT. `~/.claude/settings.json` hooks apply to every
-# session in every project, but the command they name has to exist without this checkout in
-# sight — so the two files are COPIED, exactly as `make hooks` copies the git hooks out of the
-# tree rather than pointing at it. A copy can go stale, which is why `make status` compares it
-# and says so, the same way it reports a stale hooks-armed directory. One press, once per
-# machine; run it again after this tree's copy changes.
+# RETIRED. `~/.claude/bin` is claude-settings' install.sh's, and its guard refuses a session's
+# write there. Banchi's own hooks run `scripts/session-teardown.sh` and `scripts/reap.py` from
+# the repo, so nothing here needs a copy. This target copies nothing.
 janitor-install:
-	@mkdir -p $$HOME/.claude/bin
-	@cp scripts/janitor.py scripts/session-teardown.sh scripts/reap.py $$HOME/.claude/bin/
-	@chmod +x $$HOME/.claude/bin/janitor.py $$HOME/.claude/bin/session-teardown.sh $$HOME/.claude/bin/reap.py
-	@echo "installed to ~/.claude/bin: janitor.py, session-teardown.sh, reap.py"
-	@echo "  hook it up once, in ~/.claude/settings.json, so it covers every repo:"
-	@echo '    "SessionEnd":     [{"hooks": [{"type": "command", "timeout": 60,'
-	@echo '                        "command": "$$HOME/.claude/bin/session-teardown.sh"}]}]'
-	@echo '    "WorktreeRemove": [{"hooks": [{"type": "command", "timeout": 60,'
-	@echo '                        "command": "$$HOME/.claude/bin/session-teardown.sh"}]}]'
-	@echo '    "PreToolUse":     [{"matcher": "Bash", "hooks": [{"type": "command",'
-	@echo '                        "command": "$$HOME/.claude/bin/reap.py --hook"}]}]'
-	@echo '  then the teardown, tier 1 and branch cut reach any clone: ~/.claude/bin/janitor.py --root <path>'
-	@echo '  and the kill guard covers every project, not just this one. The machine sweep is'
-	@echo '  claude-settings'"'"' (`make janitor`). The copies can go stale; `make status` compares them.'
+	@echo "claude-settings' install.sh owns ~/.claude/bin. This target copies nothing."
+	@echo "Banchi's hooks run scripts/session-teardown.sh and scripts/reap.py from the repo."
 
 # IS THE LAN URL STILL GOOD? The owner reaches this product from a phone at
 # `http://pkmnscan.lan:8000`, and nothing in this repo knows that name — the DHCP reservation

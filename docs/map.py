@@ -2741,7 +2741,7 @@ COMPONENTS = [
                         "capture_server.py` is allowed when the only match is yours and refused "
                         "when it is not. Fails OPEN on its own bugs and CLOSED on a target it "
                         "cannot place. Repo-agnostic and imports nothing from this tree, so "
-                        "`make janitor-install` can copy it out to cover every project. THE "
+                        "it covers any checkout it is pointed at. THE "
                         "BARE SWEEP ASKS THE SAME QUESTION THE VERDICT ANSWERS since "
                         "2026-09-12: `pids_under` read argv alone while `verdict_for` reads "
                         "argv AND the working directory, so a process started by a relative "
@@ -2792,7 +2792,7 @@ COMPONENTS = [
                         "D138 pattern rather than inventing a second one. The owner is "
                         "`CLAUDE_CODE_SESSION_ID`, read directly rather than re-deriving D305's "
                         "Bash-wrapper fragment, which only ever answered ANY session. Never "
-                        "installed to `~/.claude/bin` and never imported outside this checkout.",
+                        "run from this repo's `.claude/settings.json` and never imported outside this checkout.",
                 "governed_by": ["D43", "D138", "D127", "D305"],
             },
             "cid-selftest.py": {

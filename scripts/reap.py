@@ -53,9 +53,8 @@ schedule, this decides one signal at the moment it is sent. What they share is t
 the code was copied with its argument rather than re-derived (`_real`, the process table, the
 leader-only `killpg`).
 
-IT IS REPO-AGNOSTIC AND IMPORTS NOTHING FROM THIS TREE, for `janitor.py`'s reason: `make
-janitor-install` copies it to `~/.claude/bin` so a user-level hook covers every project on the
-machine, and a copy that imported from this checkout would be broken everywhere else.
+IT IS REPO-AGNOSTIC AND IMPORTS NOTHING FROM THIS TREE, for `janitor.py`'s reason: a hook can
+point it at any checkout, and an import from this one would break there.
 
 THE ESCAPE HATCH IS `PKMNSCAN_KILL=off` AND IT IS PRINTED IN EVERY REFUSAL, per the house rule
 `PKMNSCAN_MAIN=off` set. A guard that is routinely bypassed is worse than none — CLAUDE.md says
@@ -162,7 +161,7 @@ def checkout_root(start: str) -> str:
 
     AND THE FALLBACK MAY NOT BE A DIRECTORY THAT CONTAINS EVERYTHING, which is a hole this file
     shipped with and which only the USER-LEVEL install could expose. Inside a clone
-    `git rev-parse` always answers, so the fallback never ran; the moment `make janitor-install`
+    `git rev-parse` always answers, so the fallback never ran; the moment a user-level hook
     put this hook in the user's own `~/.claude/settings.json` it began firing in directories that
     are not repositories at all. **Measured from `/Users/shivinate` on 2026-09-10**: the fallback
     adopted the home directory as "this checkout", and `pgrep -f capture_server.py` — the exact
@@ -827,10 +826,9 @@ def _quote_aware_split(cmd: str, delimiters: str) -> List[str]:
     COPIED, NOT IMPORTED, from `scripts/shell_parse.py:split_segments`. That file's own header
     explains why a shared piece is copied rather than re-derived when the copy cannot import
     the original: "when one of these needs to change, change it THERE first and copy the
-    result back." This file's reason not to import is its own module docstring — `make
-    janitor-install` copies `reap.py` ALONE to `~/.claude/bin` so the kill guard covers every
-    project on the machine, and a copy that imported `scripts/shell_parse.py` would be broken
-    the moment it left this checkout. EXTENDED past the original's four delimiters (`;`, `|`,
+    result back." This file's reason not to import is its own module docstring — `reap.py`
+    stays ONE FILE so the kill guard covers any checkout, and one that imported
+    `scripts/shell_parse.py` would break the moment it left this checkout. EXTENDED past the original's four delimiters (`;`, `|`,
     `&&`, `\\n`) to the fuller set this file has always split on — `(`, `)`, `{`, `}`, a
     backtick and a bare `&` — because a quoted one of any of them must not start a new segment
     either. `2026-09-24`'s defect was `grep -nciE "process|pid|kill"`: the OLD regex-based

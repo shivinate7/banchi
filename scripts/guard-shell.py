@@ -385,8 +385,7 @@ def _sanctioned_outside(target: str) -> str:
     """Why a path outside this checkout is nevertheless a legitimate write, or `""`.
 
     THE USER'S OWN `~/.claude` IS NOT THIS CHECKOUT AND IS NOT A MISTAKE: memory files live
-    there, `make janitor-install` deliberately copies two scripts into it, and user-level
-    settings are the point of it.
+    there, and user-level settings are the point of it.
 
     A TEMP DIRECTORY IS SANCTIONED ONLY WHILE IT IS NOT ITSELF A CHECKOUT, and that
     qualification is load-bearing twice over. Every self-test in this repo builds its fixture
@@ -400,7 +399,7 @@ def _sanctioned_outside(target: str) -> str:
         return "a device, which is not a file in any checkout"
     dot_claude = _real(str(Path.home() / ".claude"))
     if _under(target, dot_claude):
-        return "the user's own ~/.claude — memory, settings, and `make janitor-install`'s copies"
+        return "the user's own ~/.claude — memory and settings"
     for root in _temp_roots():
         if _under(target, root):
             holder = _repo_holding(target)
