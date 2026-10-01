@@ -23,10 +23,9 @@
      a half rows") over the walk, which takes the rest of the column's height. The card pane
      sits beside it, sticky.
    - narrow (under 560px, a phone): the buyer chip, then the walk. THE CARD IS NEVER DRAWN
-     INLINE HERE — a tap on a walk row opens it in a sheet instead (Q4). `Orders.tsx` decides
-     the sheet-vs-inline choice in JS (a portal cannot be placed by a container query); this file
-     only ever hides `.orders-cardcol`'s own grid area at this width, in case anything is ever
-     rendered into it here by mistake. */
+     INLINE HERE — a tap on a walk row opens it in a sheet instead (Q4). This file hides
+     `.orders-cardcol` at this width and draws it from 560px (the container query below, no width
+     read on render, D313); `Orders.tsx` asks the width once, at the press, to pick the sheet. */
 .orders-body { container-type: inline-size; container-name: orders; min-width: 0; }
 .orders-layout {
   display: grid;
@@ -41,6 +40,13 @@
 .orders-buyers-panel { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .orders-cardcol { grid-area: card; display: none; min-width: 0; container: pane / inline-size; }
 .orders-walk { grid-area: walk; min-width: 0; }
+/* THE WALK'S OLD FRAME, WHILE ITS PLAN IS OUT (D313, class B): dimmed and dead until the answer lands. */
+.orders-walk[aria-busy='true'],
+.orders-cardcol[aria-busy='true'] {
+  opacity: var(--bn-disabled);
+  pointer-events: none;
+  transition: opacity var(--bn-t-fast) var(--bn-ease);
+}
 
 /* The skip link (interaction review, "32 tab stops"): off screen until a Tab lands on it, then
    one press moves focus past the filter bar and the buyer list to the walk. */
@@ -162,10 +168,10 @@
    needs.
 
    THE CARD PANE'S OWN NARROW SHAPE IS LANE A5'S — D304,
-   Q4: the walk with the card in a sheet on a phone. Under 560px of column `Orders.tsx` never
-   mounts `.orders-cardcol` at all (a JS width read, `narrow` — a portal cannot be placed by a
-   container query), so this block's own `'card' 'walk'` areas below draw nothing into `card`
-   at that width; a tap on a walk row opens the pane in a sheet instead. Between 560 and 999,
+   Q4: the walk with the card in a sheet on a phone. Under 560px of column `.orders-cardcol` is
+   `display: none` (a container query, never a width read on render), so this block's own
+   `'card' 'walk'` areas below draw nothing into `card` at that width; a tap on a walk row opens
+   the pane in a sheet instead. Between 560 and 999,
    walking still shows the card here, in full, beside the walk — the same `.browse-card`
    `Inventory.tsx` draws everywhere else. */
 .orders-walkline { display: none; }

@@ -7,7 +7,7 @@ import { test, expect, type Page, type Route } from '@playwright/test'
 import { card, sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
 import { routesFromNav } from './routes'
-import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE } from './routeFixtures'
+import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, severalOrdersWalkPlan } from './routeFixtures'
 import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
 import { setViewport } from './phoneSwitch'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts, type Shift } from './layoutShift'
@@ -165,8 +165,8 @@ async function heldPress(page: Page, gate: { on: boolean }, press: () => Promise
   return { out, swap, clusters }
 }
 
-function expectHeld(r: { out: Shift[]; swap: Shift[]; clusters: number }): void {
-  expect(sumOf(r.out), `it moved while the read was out: ${describeShifts(r.out)}`).toBeLessThan(OUT_SUM)
+function expectHeld(r: { out: Shift[]; swap: Shift[]; clusters: number }, budget = OUT_SUM): void {
+  expect(sumOf(r.out), `it moved while the read was out: ${describeShifts(r.out)}`).toBeLessThan(budget)
   expect(r.clusters, `one press, ${r.clusters} layout changes after the read: ${describeShifts(r.swap)}`).toBeLessThanOrEqual(1)
 }
 
@@ -241,5 +241,49 @@ for (const width of [1440, 820]) {
     await page.waitForTimeout(1500)
     const r = await heldPress(page, gate, () => page.keyboard.press('ArrowRight'))
     expectHeld(r)
+  })
+}
+
+/* ORDERS: THE WALK OPENS OVER A READ. `Walk 3` asks the plan for three buyers' orders, so the walk
+   holds the buyer it showed until the answer lands, then swaps once. The answer for several buyers
+   is taller than the answer for one, which is content and is why only the read-out window and the
+   cluster count are asked of it. */
+async function l1Orders(page: Page): Promise<{ on: boolean }> {
+  await POPULATED_ROUTE_SEEDS['#/orders']!(page)
+  const gate = { on: false }
+  await page.route(/\/orders\/walk-plan$/, async (route) => {
+    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS))
+    const keys = (route.request().postDataJSON() as { keys: string[] }).keys
+    const plan = severalOrdersWalkPlan()
+    const stop = plan.stops[0]!
+    if (keys.length > 1) stop.takes = [0, 1, 2].map((i) => ({ ...stop.takes[0]!, sku: `919148${i}` }))
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(plan) })
+  })
+  return gate
+}
+
+for (const width of [1440, 820]) {
+  test(`held frame: opening the walk over several buyers holds the walk until its plan lands, at ${width}`, async ({ page }) => {
+    const gate = await l1Orders(page)
+    await watchShifts(page)
+    await setViewport(page, { width, height: 1000 })
+    await page.goto('/#/orders')
+    await expect(page.locator('.orders-walk-list')).toBeVisible()
+    const r = await heldPress(page, gate, () => page.getByRole('button', { name: 'Walk 3' }).click())
+    /* A TIGHTER BUDGET: the walk list is short here, so a head swapped over the old rows moves them
+       by a few hundredths at most. Nothing else on this screen moves in the window. */
+    expectHeld(r, 0.001)
+  })
+
+  /* AND ONE BUYER: under 1000px a buyer press is also the walk's own mode (the page folds to the
+     walk), so the fold waits for the plan too and the page changes once. */
+  test(`held frame: selecting a buyer holds the screen until the walk's plan lands, at ${width}`, async ({ page }) => {
+    const gate = await l1Orders(page)
+    await watchShifts(page)
+    await setViewport(page, { width, height: 1000 })
+    await page.goto('/#/orders')
+    await expect(page.locator('.orders-walk-list')).toBeVisible()
+    const r = await heldPress(page, gate, () => page.getByRole('button', { name: 'Grace Hopper' }).first().click())
+    expectHeld(r, 0.001)
   })
 }
