@@ -516,20 +516,24 @@
   color: var(--bn-ink-3);
 }
 .browse-hero-side b { color: var(--bn-ink); font-weight: 600; font-variant-numeric: tabular-nums; margin-left: var(--bn-1); }
-/* THE RE-SORT CHIP ENDS THE FACTS LINE, and the line never grows for it (D118). The chip keeps
-   its own height (`--bn-control-h-sm`, 40px on touch). `.bn-chip` has `line-height: 1`, so `1lh`
-   here is the chip's font size. The block margin shrinks the chip's outer box to that size,
-   which is shorter than the facts' text line, so the text still sets the line's height with the
-   chip or without. `nowrap` so it cannot fall to a second line. */
-.browse-hero-side[data-rerank] { flex-wrap: nowrap; align-items: center; }
+/* THE RE-SORT CHIP ENDS THE FACTS LINE, OUT OF FLOW (D118). The facts' column is only just wide
+   enough for the facts at 1280, so any chip placed in the flex line would wrap it, and a line
+   that wraps is a line that grows on the press. Absolutely placed, the chip takes no width and no
+   height: it sits in the grid gap between this column and the figures, its right edge on the
+   gap's far side, so it covers neither the facts nor the figures. Icon only, for the same width. */
+.browse-hero-side[data-rerank] { position: relative; }
 .browse-hero-rerank {
-  margin-left: auto;
-  margin-block: calc((1lh - var(--bn-control-h-sm)) / 2);
-  min-width: 0;
-  white-space: nowrap;
+  position: absolute;
+  /* `translate` is the press dip's (base.css), so the centring is arithmetic. */
+  top: calc(50% - var(--bn-control-h-sm) / 2);
+  right: calc(-1 * var(--bn-6));
+  width: var(--bn-control-h-sm);
+  padding: 0;
+  justify-content: center;
+  z-index: 1;
 }
-/* HOW STALE THE ORDER IS is the chip's accessible name and its tooltip; the line is too short to
-   print it. Visually hidden, still read aloud. */
+/* HOW STALE THE ORDER IS, and the verb, are the chip's accessible name and its tooltip. Visually
+   hidden, still read aloud. */
 .browse-hero-rerank-say { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 /* The two lead figures, equal weight, split by a hairline. */
 .browse-hero-lead { display: grid; grid-auto-flow: column; grid-auto-columns: auto; align-items: start; }
@@ -564,6 +568,7 @@
     margin-top: var(--bn-2);
   }
   .browse-hero-side { order: 3; }
+  .browse-hero-rerank { right: 0; }
   .browse-hero-fig { min-width: 0; }
 }
 .browse-queuechip { text-decoration: none; }

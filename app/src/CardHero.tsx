@@ -539,8 +539,7 @@ export function CardHeroHead({
             )}
             {figures.rerank?.say == null ? null : (
               <Chip icon="refresh" className="browse-hero-rerank" title={`${figures.rerank.say}. Ranked before these copies left.`} onClick={figures.rerank.onRerank}>
-                <span className="browse-hero-rerank-say">{figures.rerank.say}. </span>
-                Re-rank
+                <span className="browse-hero-rerank-say">{figures.rerank.say}. Re-rank</span>
               </Chip>
             )}
           </p>

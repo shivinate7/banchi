@@ -8512,7 +8512,19 @@ test('the control that re-ranks appearing moves no copy row', async ({ page }) =
     // own guarantee, not a hope.
     return last as unknown as string
   }
-  const before = await listTop()
+  /* THE BASELINE IS TAKEN ONCE THE BAND HAS STOPPED SETTLING. The hero's figures and the photo
+     arrive after the rows, and a read taken mid-arrival gave "rows 166" against "rows 35" on a
+     CI shard: a baseline in the wrong layout, not a chip that moved anything. Two reads 300ms
+     apart that agree are the settled one. */
+  let before = await listTop()
+  await expect
+    .poll(async () => {
+      const again = await listTop()
+      const same = again === before
+      before = again
+      return same
+    }, { intervals: [300], timeout: 5000 })
+    .toBe(true)
   expect(before).toMatch(/^line \d+, rows \d+$/)
 
   await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
