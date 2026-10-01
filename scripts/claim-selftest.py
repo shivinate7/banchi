@@ -16,6 +16,7 @@ and never in the git hook: it writes, into a directory it creates and destroys (
 
 from __future__ import annotations
 
+import atexit
 import contextlib
 import importlib.util
 import io
@@ -375,7 +376,7 @@ GATES_MAIN = "## What shipped\n\n1. ~~First step~~ — done.\n2. ~~Second step~~
 MAP_MAIN = 'SHIPPED = [\n    {"n": 1, "title": "First"},\n    {"n": 2, "title": "Second"},\n]\n'
 
 
-def build(tmp: Path) -> Path:
+def build_fresh(tmp: Path) -> Path:
     origin = tmp / "origin.git"
     work = tmp / "work"
     seed = tmp / "seed"
@@ -396,7 +397,34 @@ def build(tmp: Path) -> Path:
     return work
 
 
+_TEMPLATES: dict = {}
+
+
+def cached(builder, tmp: Path) -> Path:
+    """Build each fixture once, then copy it per case: the cases spent ~190 git calls rebuilding
+    two identical repos. The copy is origin.git + work with the remote URL re-pointed by text."""
+    if builder not in _TEMPLATES:
+        base = Path(tempfile.mkdtemp(prefix="claim-template-"))
+        atexit.register(shutil.rmtree, str(base), True)
+        builder(base)
+        _TEMPLATES[builder] = base
+    base = _TEMPLATES[builder]
+    shutil.copytree(base / "origin.git", tmp / "origin.git", symlinks=True)
+    shutil.copytree(base / "work", tmp / "work", symlinks=True)
+    config = tmp / "work" / ".git" / "config"
+    config.write_text(config.read_text().replace(str(base / "origin.git"), str(tmp / "origin.git")))
+    return tmp / "work"
+
+
+def build(tmp: Path) -> Path:
+    return cached(build_fresh, tmp)
+
+
 def build_split(tmp: Path) -> Path:
+    return cached(build_split_fresh, tmp)
+
+
+def build_split_fresh(tmp: Path) -> Path:
     """Like `build`, but the decision corpus is a DIRECTORY with a manifest — the shape this
     repo actually has since D160, and the only shape `--unclaim` can act on for a decision id:
     it is the entry's own FILENAME that survives a claim once the heading is overwritten with
