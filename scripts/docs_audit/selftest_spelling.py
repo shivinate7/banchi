@@ -75,6 +75,20 @@ def run(ok) -> None:
         "TSX: an arithmetic delay is found, a named variable is not",
         "",
     )
+    for bad, why, is_tsx in [
+        (".a { transition: opacity 1S; }", "an upper-case unit", False),
+        (".a { transition: opacity 200MS EASE; }", "upper-case unit and keyword", False),
+        (".a { -webkit-transition: opacity 200ms; }", "a -webkit- transition", False),
+        (".a { -webkit-animation: x 2s linear; }", "a -webkit- animation", False),
+        ("style={{ transition: 'opacity 200ms ease' }}", "a TSX transition shorthand", True),
+        ("style={{ animation: 'x 2s linear' }}", "a TSX animation shorthand", True),
+        ("style={{ transitionDuration: 200 }}", "a unitless TSX duration", True),
+        ("el.animate(frames, { duration: 300 })", "an animate() duration", True),
+        ("el.animate(frames, 300)", "an animate() number", True),
+        ("el.style.transition = 'opacity 180ms'", "a style.transition assignment", True),
+    ]:
+        ok(bool(raw_motion_literals(bad, tsx=is_tsx)), f"{why} is found", bad)
+    ok(not raw_motion_literals(".a { animation: x var(--x, 300ms) var(--bn-ease-linear); }"), "a var() fallback stays allowed on purpose", "")
     motion_report = Report()
     check_raw_motion(motion_report)
     motion_rows = {row.check: row.findings for row in motion_report.checks}

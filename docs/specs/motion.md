@@ -59,7 +59,6 @@ role follows. `app/src/tokens.css` holds the values, and `docs/DESIGN.md` locks 
 | One-shot flash | `--bn-t-flash` | 200ms | `--bn-ease-out` | the capture flash. |
 | Highlight | `--bn-t-highlight` | 700ms | `--bn-ease-out` | a price cell that just changed. |
 | Draw | `--bn-t-draw` | 480ms | `--bn-ease-out` | a bar, a line or a check drawing in, and a sale bill. |
-| Emphasis | `--bn-t-emphasis` | 600ms | `--bn-ease-out`, or `--bn-ease-spring` for one element | the ceiling of a whole rare result, delays included. |
 | Live loop | `--bn-t-pulse` | 1.8s | `--bn-ease-loop` | `bn-pulse` (a dot) and `bn-breathe` (anything else). |
 | Busy ring | `--bn-t-spin` | 0.7s | `--bn-ease-linear` | `bn-spin`. |
 | Sweep | `--bn-t-shimmer` | 1.4s | `--bn-ease-loop` | a skeleton, an indeterminate bar. |

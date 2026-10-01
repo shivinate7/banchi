@@ -231,7 +231,6 @@
   --bn-stagger-cap: 12;
   --bn-t-flash: 200ms;       /* the capture flash, one shot */
   --bn-t-draw: 480ms;        /* a bar or a line drawing in */
-  --bn-t-emphasis: 600ms;    /* a hero settling, a figure landing */
   --bn-t-pulse: 1.8s;        /* a live dot */
   --bn-t-spin: 0.7s;         /* a busy ring */
   --bn-t-shimmer: 1.4s;      /* a skeleton sweep, an indeterminate bar */

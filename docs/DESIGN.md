@@ -133,7 +133,7 @@ MOTION                          --bn-t-fast 120ms · --bn-t 200ms · --bn-t-slow
 --bn-ease-linear                linear                     a pace the data sets
 --bn-rise                       6px                        the one enter distance
 --bn-stagger 30ms · --bn-stagger-cap 12   one cadence for every list
---bn-t-flash 200ms · --bn-t-draw 480ms · --bn-t-emphasis 600ms · --bn-t-pulse 1.8s · --bn-t-spin 0.7s
+--bn-t-flash 200ms · --bn-t-draw 480ms · --bn-t-pulse 1.8s · --bn-t-spin 0.7s
 --bn-t-shimmer 1.4s · --bn-t-highlight 700ms · --bn-t-instant 0.01ms (the reduced-motion floor)
 --bn-disabled 0.45              the one opacity a disabled pressable wears
 

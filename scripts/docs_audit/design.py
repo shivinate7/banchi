@@ -582,24 +582,39 @@ def check_raw_color(report: Report) -> None:
 # `linear`). WHAT IS NOT READ, ON PURPOSE: a `var(--x, <fallback>)` span, because the number
 # there belongs to a custom property a script sets per use (a drain's length, a settle window);
 # a zero time (`0s`, `0ms`), which is no duration at all; and a delay written as
-# `calc(var(--bn-stagger) * n)`, which reads the token. TSX is read for the same four camelCase
-# style props with a numeric literal in them. A justified exception lives in
+# `calc(var(--bn-stagger) * n)`, which reads the token. A `var(--x, 300ms)` FALLBACK IS ALLOWED
+# ON PURPOSE: the number belongs to a property a script sets, and the fallback is only its
+# default. Units and keywords are read case-insensitively, and a `-webkit-` or `-moz-` prefix is
+# read like the plain property. TSX is read for: the camelCase props (`transition`,
+# `animation` and their Delay, Duration and TimingFunction forms) given a string or a bare number
+# that carries a literal, `el.style.transition = '...'`, and `el.animate(...)` with a literal
+# duration or delay. A justified exception lives in
 # `scripts/motion-literal-allow.json`: each entry names a file and the literal, carries its
 # reason, and is itself a finding once it matches nothing. The list only shrinks.
 
 MOTION_ALLOW = ROOT / "scripts" / "motion-literal-allow.json"
-_MOTION_DECL_RE = re.compile(r"(?:^|[{;\s])((?:transition|animation)(?:-[a-z-]+)?)\s*:\s*([^;{}]+)")
+_MOTION_DECL_RE = re.compile(r"(?:^|[{;\s])((?:-webkit-|-moz-)?(?:transition|animation)(?:-[a-z-]+)?)\s*:\s*([^;{}]+)", re.I)
 _MOTION_SKIP_PROPS = {
     "transition-property", "transition-behavior", "animation-name", "animation-iteration-count",
     "animation-fill-mode", "animation-direction", "animation-play-state", "animation-timeline",
     "animation-range",
 }
-_MOTION_TIME_RE = re.compile(r"(?<![\w.-])(\d*\.?\d+)(ms|s)\b")
+_MOTION_TIME_RE = re.compile(r"(?<![\w.-])(\d*\.?\d+)(ms|s)\b", re.I)
 _MOTION_EASE_RE = re.compile(
-    r"cubic-bezier\(|steps\(|(?<![\w-])(?:ease|ease-in|ease-out|ease-in-out|linear|step-start|step-end)(?![\w-])"
+    r"cubic-bezier\(|steps\(|(?<![\w-])(?:ease|ease-in|ease-out|ease-in-out|linear|step-start|step-end)(?![\w-])",
+    re.I,
 )
-_MOTION_TSX_RE = re.compile(
-    r"\b(?:animation|transition)(?:Delay|Duration|TimingFunction)\s*:\s*(`[^`]*`|'[^']*'|\"[^\"]*\")"
+_STR = r"(`[^`]*`|'[^']*'|\"[^\"]*\")"
+_MOTION_TSX_RES = (
+    # a style prop given a string: `transition: 'opacity 200ms ease'`, `animationDelay: `${i * 30}ms``
+    re.compile(r"\b(?:animation|transition)(?:Delay|Duration|TimingFunction)?\s*[:=]\s*" + _STR),
+    # `el.style.transition = '...'`
+    re.compile(r"\.style\.(?:animation|transition)(?:Delay|Duration|TimingFunction)?\s*=\s*" + _STR),
+    # a bare number, which a style object reads as milliseconds
+    re.compile(r"\b(?:animation|transition)(?:Delay|Duration)\s*[:=]\s*(\d[\d.]*)\b"),
+    # `el.animate(frames, { duration: 300 })` and `el.animate(frames, 300)`
+    re.compile(r"\.animate\([^;]{0,400}?\b(?:duration|delay)\s*:\s*(\d[\d.]*|`[^`]*\d[^`]*`)"),
+    re.compile(r"\.animate\([^;{}]{0,400}?,\s*(\d[\d.]*)\s*\)"),
 )
 
 
@@ -626,17 +641,18 @@ def raw_motion_literals(text: str, tsx: bool = False) -> List[Tuple[int, str]]:
     row and by its self-test."""
     found: List[Tuple[int, str]] = []
     if tsx:
-        for m in _MOTION_TSX_RE.finditer(text):
-            body = re.sub(r"\$\{\s*[\w.]+\s*\}", "", m.group(1))
-            body = _without_var(body)
-            for lit in re.findall(r"\d+(?:\.\d+)?|cubic-bezier|steps|ease\w*|linear", body):
-                if lit not in ("0",):
-                    found.append((text[: m.start()].count("\n") + 1, m.group(1)))
-                    break
+        for pattern in _MOTION_TSX_RES:
+            for m in pattern.finditer(text):
+                body = re.sub(r"\$\{\s*[\w.]+\s*\}", "", m.group(1))
+                body = _without_var(body)
+                for lit in re.findall(r"\d+(?:\.\d+)?|cubic-bezier|steps|ease\w*|linear", body, re.I):
+                    if lit != "0":
+                        found.append((text[: m.start()].count("\n") + 1, m.group(1)))
+                        break
         return found
     css = strip_css_comments(text)
     for m in _MOTION_DECL_RE.finditer(css):
-        if m.group(1) in _MOTION_SKIP_PROPS:
+        if m.group(1).lower().replace("-webkit-", "").replace("-moz-", "") in _MOTION_SKIP_PROPS:
             continue
         value = _without_var(m.group(2))
         hits = [t.group(0) for t in _MOTION_TIME_RE.finditer(value) if float(t.group(1)) != 0]
