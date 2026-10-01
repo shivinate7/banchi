@@ -3651,7 +3651,7 @@ function PullStage({
   const buyerDone = walkedGroups.length === 1 && selectedGroup !== null && selectedGroup.open.length === 0
 
   const walkColumn = (
-    <section className="orders-walk" aria-label="The walk" ref={walkRef} tabIndex={-1}>
+    <section className="bn-panel orders-walk" aria-label="The walk" ref={walkRef} tabIndex={-1}>
       <header className="orders-walk-head">{walkHead}</header>
       {walkNote === null ? null : (
         <p className="orders-walk-note" role="status">
