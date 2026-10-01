@@ -381,7 +381,7 @@ function HeroLead({ figures, market }: { readonly figures: HeroFigures; readonly
       </div>
       {listing ? (
         <div
-          className="browse-hero-fig"
+          className="browse-hero-fig browse-hero-fig-live"
           data-read={read ? 'true' : 'false'}
           title={
             group.sold_here > 0
@@ -426,24 +426,63 @@ function HeroLead({ figures, market }: { readonly figures: HeroFigures; readonly
   )
 }
 
+/** STAND-IN TEXT: the text sets the box (the browser's own font, so the size is right on any
+ *  platform) and is hidden, and the kit's `Skeleton` is laid over it for the bar and its shimmer. */
+function Ghost({ children, className }: { readonly children: ReactNode; readonly className?: string }) {
+  return (
+    <span className={['bn-ghost', className].filter(Boolean).join(' ')}>
+      {children}
+      <Skeleton className="bn-ghost-bar" />
+    </span>
+  )
+}
+
 /** THE LEAD COLUMN WHILE THE COPIES SEARCH IS STILL ASKING (D118, a press changes what is on
  *  screen). The real column adds itself when the answer lands, and Actions, which rides the
  *  identity column's end, used to jump ~380px left under a press. This holds the column at its
- *  final width instead: a bar where each figure will land, the same three the resolved band draws
- *  (Stored, Live, Market) for a card with a SKU and Stored alone for one without (D119, no SKU, no
- *  listing figures). The kit's `Skeleton` pulses and stands still under reduced motion. */
+ *  final size by drawing THE SAME ELEMENTS as `HeroLead`, with stand-in text the browser sets in
+ *  the same face and hides (`.bn-ghost`): the figures' heights and widths come from the browser's
+ *  own font, so the two states agree on any platform rather than by a tuned number. Stored, Live
+ *  and Market for a card with a SKU, Stored alone for one without (D119, no SKU, no listing
+ *  figures). */
 function HeroLeadPending({ listing }: { readonly listing: boolean }) {
+  const label = (text: string) => (
+    <span className="browse-hero-fig-label">
+      <span className="bn-label">{text}</span>
+    </span>
+  )
   return (
     <div className="browse-hero-lead" aria-hidden="true" data-pending="true">
-      {(listing ? ['Stored', 'Live', 'Market'] : ['Stored']).map((label) => (
-        <div key={label} className="browse-hero-fig">
-          <span className="browse-hero-fig-label">
-            <span className="bn-label">{label}</span>
-          </span>
-          <Skeleton className="browse-hero-fig-bar" width="3ch" />
-          {label === 'Live' ? <Skeleton className="browse-hero-meter-bar" width="9ch" /> : null}
-        </div>
-      ))}
+      <div className="browse-hero-fig">
+        {label('Stored')}
+        <span className="browse-hero-fig-value">
+          <Ghost>00</Ghost>
+        </span>
+      </div>
+      {listing ? (
+        <>
+          <div className="browse-hero-fig browse-hero-fig-live">
+            {label('Live')}
+            <span className="browse-hero-fig-value">
+              <Ghost>00</Ghost>
+            </span>
+            <span className="bn-meter">
+              <span className="bn-meter-cells">
+                <span />
+              </span>
+              <Ghost className="bn-meter-end">Cap 0</Ghost>
+            </span>
+          </div>
+          <div className="browse-hero-fig">
+            {label('Market')}
+            <span className="browse-hero-fig-value">
+              <span className="bn-datalink">
+                <Ghost>$0.00</Ghost>
+              </span>
+            </span>
+          </div>
+        </>
+      ) : null}
     </div>
   )
 }
@@ -524,11 +563,19 @@ export function CardHeroHead({
             is drawn at 0 too, so a sale that folds a copy away adds no line (D118). */}
         {figures == null ? (
           figuresPending ? (
-            <p className="browse-hero-side" aria-hidden="true" data-pending="true">
-              {(card.sku !== null ? [0, 1, 2] : [0, 1]).map((i) => (
-                <Skeleton key={i} className="browse-hero-side-bar" width="7ch" />
-              ))}
-            </p>
+            <div className="browse-hero-side" aria-hidden="true" data-pending="true">
+              <Ghost>
+                Captured<b>0</b>
+              </Ghost>
+              <Ghost>
+                Hidden<b>0</b>
+              </Ghost>
+              {card.sku === null ? null : (
+                <Ghost>
+                  Sent<b>0</b>
+                </Ghost>
+              )}
+            </div>
           ) : null
         ) : (
           <p className="browse-hero-side">

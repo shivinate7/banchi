@@ -104,8 +104,13 @@
   /* The ruler's marks ring themselves in the ground they stand on. */
   --pb-knockout: var(--bn-surface-2);
   transition: background-color var(--bn-t-fast) var(--bn-ease);
-  animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
+  /* FADE ONLY, NEVER A TRANSLATE (D118). This list is a scroll-snap container and a row is a snap
+     target, so a row that moves is a snap position that moves: `bn-page-in`'s 6px `translateY`
+     made the browser re-snap the list every frame, `scrollTop` crept 6 to 0 and the rows
+     wobbled under the hand once a held arrow key was let go. Opacity moves no geometry. */
+  animation: card-locations-row-in var(--bn-t) var(--bn-ease-out) backwards;
 }
+@keyframes card-locations-row-in { from { opacity: 0; } }
 .card-locations-owner .card-locations-row.is-nobar {
   grid-template-areas:
     'place'

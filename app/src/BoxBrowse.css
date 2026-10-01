@@ -521,9 +521,6 @@
 /* The two lead figures, equal weight, split by a hairline. */
 .browse-hero-lead { display: grid; grid-auto-flow: column; grid-auto-columns: auto; align-items: start; }
 .browse-hero-fig { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 112px; }
-.browse-hero-side-bar { height: 1lh; min-height: 0; }
-.browse-hero-meter-bar { font-size: var(--bn-fs-xs); height: 1.14em; min-height: 0; margin-top: var(--bn-1-5); }
-.browse-hero-fig-bar { height: var(--bn-fs-3xl); margin-top: var(--bn-1); }
 .browse-hero-fig + .browse-hero-fig { border-left: 1px solid var(--bn-line); padding-left: var(--bn-5); margin-left: var(--bn-5); }
 .browse-hero-fig-label { display: flex; align-items: center; gap: var(--bn-2); min-height: var(--bn-4); }
 .browse-hero-fig-label .bn-dot { width: 6px; height: 6px; }
@@ -541,6 +538,22 @@
 .browse-hero-fig-value .bn-datalink { display: inline-flex; align-items: center; min-width: var(--bn-control-h-lg); min-height: var(--bn-control-h-lg); color: inherit; text-decoration: none; }
 .browse-hero-age { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; }
 .browse-hero-fig .bn-meter { margin-top: var(--bn-1-5); }
+/* THE LIVE FIGURE IS ONE WIDTH FOR EVERY CAP (D118). Its meter drew one 14px cell per unit of cap
+   and set the figure's width, so the lead column, and with it the identity column and Actions,
+   changed width from card to card; a walk with a held key reflowed the band on every landing.
+   Now the figure is a fixed track, the cells share it (a cap of 40 is a finer strip, not a longer
+   one) and the "Cap N" text sits under it, so neither the width nor the height depends on cap. */
+.browse-hero-fig-live { width: calc(var(--bn-10) * 2); }
+.browse-hero-fig-live .bn-meter { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: var(--bn-1); }
+/* One line of text is a fixed token tall, so the resolved meter and its placeholder agree on any font. */
+.browse-hero-fig-live .bn-meter-end { line-height: var(--bn-4); }
+.browse-hero-fig-live .bn-meter-cells { gap: var(--bn-0-5); flex: none; }
+.browse-hero-fig-live .bn-meter-cells > span { min-width: 0; width: auto; }
+/* A STAND-IN FOR TEXT NOT YET KNOWN: real text in the real face, covered by the kit's `Skeleton` (bar and shimmer), so the box is the
+   one the answer will occupy. Never read aloud: its parent is `aria-hidden`. */
+.bn-ghost, .bn-ghost * { color: transparent; user-select: none; }
+.bn-ghost { position: relative; }
+.bn-ghost > .bn-ghost-bar { position: absolute; inset: 0; min-height: 0; }
 /* Under 520px of pane width the band stacks: the figures sit side by side under the identity. */
 @container pane (max-width: 520px) {
   .browse-hero-head { grid-template-columns: minmax(0, 1fr); padding: var(--bn-4); }
@@ -552,6 +565,7 @@
   }
   .browse-hero-side { order: 3; }
   .browse-hero-fig { min-width: 0; }
+  .browse-hero-fig-live { width: auto; }
 }
 .browse-queuechip { text-decoration: none; }
 .browse-queuechip:hover { text-decoration: none; filter: brightness(0.95); }
