@@ -298,6 +298,10 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 
 /* ---- the walk's head: one buyer, or several (UX-168, UX-230) ------------------------- */
 .orders-walk { display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4); }
+/* The walk sits in a narrow column at mid width: a smaller pad keeps its press row from wrapping. */
+@container orders (min-width: 560px) and (max-width: 999px) {
+  .orders-walk { padding: var(--bn-2); }
+}
 .orders-walk:focus { outline: none; }
 .orders-walk-head:empty { display: none; }
 .orders-panel { display: flex; flex-direction: column; gap: var(--bn-3); }
