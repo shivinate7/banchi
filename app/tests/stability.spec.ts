@@ -166,6 +166,9 @@ test('fulfiller: the boxes show and open while the orders read never answers', a
   await expect(page.locator('.ff-owed-wait')).toHaveCount(1)
 })
 
+/** A screen's address by name, so this file types no route list of its own (the roster is `ROUTES`). */
+const screen = (name: string): string => `/#/${name}`
+
 // L1 held frame
 /* A READ AFTER A PRESS HOLDS THE OLD FRAME (D313, class B). A press that needs a read keeps what was
  * on screen, dimmed and busy, until the answer lands, then swaps once. Every row below holds the
@@ -173,8 +176,6 @@ test('fulfiller: the boxes show and open while the orders read never answers', a
  * moved while the read was out, and the swap after it is one cluster (entries under CLUSTER_MS
  * apart), never two layout changes for one press. The new content here is the same shape as the old
  * one on purpose, so any move is the frame and never the content. */
-/** The screen's hash by name, so no hand-typed roster of routes sits in this file. */
-const screen = (name: 'inventory' | 'orders' | 'review'): string => `/#/${name}`
 const READ_MS = 700
 const CLUSTER_MS = 150
 const OUT_SUM = 0.005
@@ -427,8 +428,6 @@ for (const width of [1440, 820]) {
 const json = (route: Route, body: unknown) =>
   route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
 
-/** A screen's address, built so this block types no route list of its own (the roster is `ROUTES`). */
-const screen = (name: string) => `/#/${name}`
 
 /** Top, left, width and height of each selector's first match, rounded to a pixel. */
 async function boxes(page: Page, selectors: readonly string[]): Promise<Record<string, string>> {

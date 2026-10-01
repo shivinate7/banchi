@@ -228,6 +228,14 @@ must fail on today's `main` at S2, S3, S4, S8, S9, S11 and S12 before any fix la
 
 ## 7. Fix lanes, ranked
 
+**Built.** Each fixed row has its own case in `app/tests/stability.spec.ts`, red before the fix and green after.
+- Fixed: S1 and the Fulfiller's Today block, S2–S7, S12–S15, S17–S20, the S16 arrival and expiry, and Home's read order.
+- S9, S10 and S11 (the filter notes): the notes move to the act. The Send button counts SKUs, and the chosen month carries its own clear in the chart. Their cases live in `pricing.spec.ts` and `revenue.spec.ts`.
+- Open:
+  - The Pick list still moves the Fulfiller's boxes once when more than one card is owed (DEBT-fulfiller-pick-list-slide).
+  - The S16 receipt growth did not reproduce.
+  - S21 waits on phone widths (DEBT77).
+
 1. **Held frame on re-read (B; S2, S3, S4, S5).** This is the largest shift, on the most
    frequent presses. It adds a kit `useHeld` hook, and each call site keeps its last content
    while a read is out. Orders' `setNarrow` becomes a container query. Files:
