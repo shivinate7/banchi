@@ -208,10 +208,13 @@
    clicked. A press changes what a slot holds; it may not change how big the slot is. */
 .card-locations-owner .card-locations-action {
   grid-area: action;
-  justify-self: end;
-  display: inline-flex;
+  /* THE PRIMARY (Mark sold, or Undo once it is pressed, its reverse) SITS ON THE ROW'S LEFT
+     CONTENT EDGE, under the title and the ruler. The slot spans the row so Retire and Move can
+     stay on the right edge. */
+  justify-self: stretch;
+  display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: var(--bn-1);
   /* THE FOOT KEEPS ITS HEIGHT WHEN THE CONTROL BECOMES ITS OWN RESULT (D118): a pill, an `Undo`
      or nothing at all stands here after a sale, and a 40px control is what the row reserves. */
@@ -221,13 +224,78 @@
      shrink under it (D118). */
   min-width: 160px;
 }
-/* MARK SOLD: one width on every row (D195), so the button does not change size between a row
-   holding one action and a row holding three. */
-.card-locations-owner .card-locations-sell { width: 128px; }
-.card-locations-owner .card-locations-action .inventory-copy-actions { gap: var(--bn-1); }
+/* THE SALE BUTTONS ARE SCOPED TO THEIR OWN CLASSES, never to the row: the phone's action bar and
+   any other slot draw them too, and a rule under `.card-locations-owner` left them unstyled there.
+   ONE WIDTH for Mark sold and its Undo (D195), the hover fill's reach too. The `!important` beats
+   `IconButton`'s inline face width. */
+.card-locations-sell, .card-locations-undo-wrap { --sale-w: 128px; }
+.card-locations-sell.bn-icon-btn, .card-locations-undo.bn-icon-btn {
+  width: var(--sale-w) !important;
+  border-radius: var(--bn-r-lg);
+}
+/* MARK SOLD, icon-only (the seal), still the row's primary. At rest a tint; hover fills the accent
+   in from the left with an inset box-shadow (`background-image` cannot animate) and the seal grows
+   a little; the press dip is base.css's own `translate`. Every animated property is named. */
+.card-locations-sell.bn-icon-btn {
+  background: var(--bn-accent-tint);
+  box-shadow: inset 0 0 0 0 var(--bn-accent);
+  transition:
+    box-shadow var(--bn-t) var(--bn-ease-out),
+    color var(--bn-t) var(--bn-ease-out),
+    background-color var(--bn-t) var(--bn-ease-out);
+}
+.card-locations-sell .bn-icon { transition: transform var(--bn-t) var(--bn-ease-out); }
+.card-locations-sell.bn-icon-btn:not([data-busy='true']) { color: var(--bn-accent-hover); }
+.card-locations-sell.bn-icon-btn:hover { box-shadow: inset var(--sale-w) 0 0 0 var(--bn-accent); }
+.card-locations-sell.bn-icon-btn:hover:not([data-busy='true']) { color: var(--bn-on-accent); }
+.card-locations-sell:hover .bn-icon { transform: scale(1.15); }
+
+/* UNDO SALE: Mark sold's own frame as a neutral outline with the undo glyph, so it can never read
+   as "sell again" and the slot never changes size under the press (D118, D195). */
+.card-locations-undo-wrap { position: relative; display: inline-flex; flex: none; }
+.card-locations-undo.bn-icon-btn {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--bn-ink-4);
+  color: var(--bn-ink-2);
+  transition:
+    background-color var(--bn-t) var(--bn-ease-out),
+    box-shadow var(--bn-t) var(--bn-ease-out),
+    color var(--bn-t) var(--bn-ease-out);
+}
+.card-locations-undo.bn-icon-btn:hover {
+  background: var(--bn-hover);
+  box-shadow: inset 0 0 0 1.5px var(--bn-ink-3);
+  color: var(--bn-ink);
+}
+/* THE SALE'S BURST: drawn bills flying up out of the Undo frame, once. Never a loop, never a pointer
+   target, never in the flow. Reduced motion renders none of them (`UndoSaleButton`). */
+.card-locations-bill {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  color: var(--bn-ok);
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0;
+  animation: bn-sale-bill calc(var(--bn-t) * 4) var(--bn-ease-out) forwards;
+}
+@keyframes bn-sale-bill {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.6) rotate(0); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.1) rotate(var(--rot)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-locations-sell.bn-icon-btn,
+  .card-locations-sell .bn-icon,
+  .card-locations-undo.bn-icon-btn { transition: none; }
+}
+.card-locations-owner .card-locations-action .inventory-copy-actions { gap: var(--bn-1); flex: 1 1 auto; min-width: 0; }
+/* Retire and Move ride the right edge: the first icon after Mark sold takes the free space. */
+.card-locations-owner .card-locations-sell + .bn-icon-btn { margin-left: auto; }
 /* Retire and Move: bare icons in ink-3, 40px targets. Only the primary is coloured. */
-.card-locations-owner .card-locations-action .bn-icon-btn { color: var(--bn-ink-3); }
-.card-locations-owner .card-locations-action .bn-icon-btn:hover { color: var(--bn-ink); }
+.card-locations-owner .card-locations-action .bn-icon-btn:not(.card-locations-sell, .card-locations-undo) { color: var(--bn-ink-3); }
+.card-locations-owner .card-locations-action .bn-icon-btn:not(.card-locations-sell, .card-locations-undo):hover { color: var(--bn-ink); }
 
 /* --------------------------------------------------- the receipt, inside the slot (D119)
    THE SALE'S UNDO LANDS WHERE THE SALE WAS PRESSED, AND IT FITS THE SLOT RATHER THAN MOVING
@@ -249,7 +317,7 @@
   flex: 1 1 auto;
   min-width: 0;
   gap: var(--bn-2);
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 

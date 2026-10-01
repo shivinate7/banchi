@@ -29,7 +29,7 @@ import {
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
 import { useViewParam } from './kit/viewState'
-import { CardLocations, hiddenCopies, layoutsOf, MarkSoldButton } from './CardLocations'
+import { CardLocations, hiddenCopies, layoutsOf, MarkSoldButton, UndoSaleButton, clearFreshSale } from './CardLocations'
 import type { HeroFigures } from './CardHero'
 import { InventorySets } from './InventorySets'
 import { PositionBar } from './PositionBar'
@@ -461,6 +461,7 @@ function InventoryWalk({
         })
         setReloads((n) => n + 1)
       } catch (err) {
+        clearFreshSale(copy.key)
         if (refusalCode(err) === ALREADY_SOLD) {
           setSold((held) => (held.includes(copy.key) ? held : [...held, copy.key]))
           /* ANOTHER DEVICE SOLD IT, AND THE ROW STILL MAY NOT MOVE. The re-read is about to
@@ -1132,16 +1133,27 @@ function Action({
         {/* ICON, U IN THE TOOLTIP (ICONOGRAPHY): Undo is reversed by pressing it again, so it
             keeps no words in either sector — the row and the phone bar both read it from the
             sentence beside it. */}
-        <IconButton
-          size="xl"
-          icon="undo"
-          label="Undo"
-          name={`Undo the sale at ${standing.place}`}
-          busy={busy}
-          disabled={busyKey !== null && !busy}
-          kbd={undoKeyOn ? UNDO_KEY_LABEL : undefined}
-          onClick={() => onUndo(standing)}
-        />
+        {primary ? (
+          <IconButton
+            icon="undo"
+            label="Undo"
+            name={`Undo the sale at ${standing.place}`}
+            size="xl"
+            busy={busy}
+            disabled={busyKey !== null && !busy}
+            kbd={undoKeyOn ? UNDO_KEY_LABEL : undefined}
+            onClick={() => onUndo(standing)}
+          />
+        ) : (
+          <UndoSaleButton
+            saleKey={copy.key}
+            name={`Undo sale: ${standing.place}`}
+            busy={busy}
+            disabled={busyKey !== null && !busy}
+            kbd={undoKeyOn ? UNDO_KEY_LABEL : undefined}
+            onClick={() => onUndo(standing)}
+          />
+        )}
       </span>
     )
   }
@@ -1172,6 +1184,7 @@ function Action({
           busy={busy}
           disabled={busyKey !== null && !busy}
           name={copy.place.label === null ? undefined : `Mark sold: ${sayPlace(copy.place.label)}`}
+          saleKey={copy.key}
           onClick={() => onSell(copy)}
         />
       )}

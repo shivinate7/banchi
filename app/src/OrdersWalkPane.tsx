@@ -19,13 +19,13 @@
  * one press (Mark sold / Undo) `CardLocations`'s own `renderAction` slot calls per copy.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Icon, IconButton, Kbd, Loading, Notice, overlayOpen, Pill } from './kit'
+import { Button, Icon, Kbd, Loading, Notice, overlayOpen, Pill } from './kit'
 import { toast } from './kit/toast'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
 import { isEditableTarget } from './keys'
-import { CardLocations, MarkSoldButton } from './CardLocations'
+import { CardLocations, MarkSoldButton, UndoSaleButton } from './CardLocations'
 import { describeFailure, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
@@ -974,6 +974,7 @@ export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk
     const press = (
       <MarkSoldButton
         name={`Mark sold: ${where}`}
+        saleKey={copy.key}
         busy={busy}
         disabled={walk.busyCopy !== null && !busy}
         onClick={() => walk.onSell(copy, take)}
@@ -988,10 +989,9 @@ export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk
     )
   }
   return (
-    <IconButton
-      icon="undo"
-      label="Undo"
-      name={`Undo: ${where}`}
+    <UndoSaleButton
+      saleKey={copy.key}
+      name={`Undo sale: ${where}`}
       busy={busy}
       disabled={walk.busyCopy !== null && !busy}
       onClick={() => walk.undoCopy(copy.key)}

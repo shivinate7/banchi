@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { BoxRecord, SearchCopy, SearchGroup, SectionDetail } from './types'
 import { isDeparted, photoUrl, placeSentence } from './server'
@@ -7,7 +7,7 @@ import { PullConfirm } from './PullConfirm'
 import { PositionBar } from './PositionBar'
 import { placePartsOf, sayPlace, sectionCountOf, type Persona } from './position'
 import { collectorNumber } from './cardNumber'
-import { Button, Icon, Pill } from './kit'
+import { Icon, IconButton, Pill } from './kit'
 import { RANK_IS_CURRENT, ranksAsLive, ranksAsShown, type FrozenRank } from './frozenRank'
 import './CardLocations.css'
 import { forSale, IDENTIFIED, readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
@@ -296,36 +296,125 @@ export function hiddenCopies(
   ).length
 }
 
-/** THE ONE MARK SOLD PRESS, on every copy row in the product (owner ruling, card-detail spec): a
- *  worded 40px button in the kit's tint form, the same width on every row (D195). Inventory's row,
- *  `#/orders`' walk and this list's own fallback all draw it, so one edit changes all three. The
- *  words stay because it is the one primary act in its row; Retire and Move are the icons beside
- *  it. `name` is the accessible name and must contain "Mark sold" (Label in Name). */
+/** THE ONE MARK SOLD PRESS, on every copy row in the product (owner ruling, card-detail spec): the
+ *  vocabulary's `sold` seal with no visible words, 40px tall in a fixed 128px box (D195) and the
+ *  kit's solid accent, so it reads as the one primary beside Retire and Move, which are bare
+ *  icons. Inventory's row, `#/orders`' walk and this list's own fallback all draw it, so one edit
+ *  changes all three. `name` is the accessible name and must contain "Mark sold" (Label in Name);
+ *  the tooltip says it too. */
 export function MarkSoldButton({
   busy,
   disabled,
   name,
+  saleKey,
   onClick,
 }: {
   readonly busy: boolean
   readonly disabled: boolean
   readonly name?: string
+  /** The copy's key. A press notes it, so the Undo that stands where this button was plays the
+   *  sale's burst once (`UndoSaleButton`); a row loaded already sold never does. */
+  readonly saleKey?: string
   readonly onClick: () => void
 }) {
   return (
-    <Button
-      variant="tint"
-      size="lg"
+    <IconButton
       icon="sold"
-      words="only-primary"
+      label="Mark sold"
+      name={name}
+      size="xl"
       className="card-locations-sell"
-      aria-label={name}
+      style={{ width: 'var(--sale-w)' }}
       busy={busy}
       disabled={disabled}
-      onClick={onClick}
-    >
-      Mark sold
-    </Button>
+      onClick={() => {
+        if (saleKey !== undefined) FRESH_SALES.set(saleKey, Date.now())
+        onClick()
+      }}
+    />
+  )
+}
+
+/* THE SALE JUST PRESSED, by copy key. `MarkSoldButton` writes it, `UndoSaleButton` reads it once
+   on mount and clears it, so the burst plays for the press and never for a row that was already
+   sold when it was drawn. A press that never lands leaves a stale key, so it expires. */
+const FRESH_SALES = new Map<string, number>()
+/** A sale that failed never plays its burst: its key is dropped. */
+export function clearFreshSale(key: string): void {
+  FRESH_SALES.delete(key)
+}
+const FRESH_MS = 15000
+const BILL_COUNT = 8
+
+/** THE UNDO THAT STANDS WHERE MARK SOLD WAS: the same frame (`--sale-w` by 40px, D195, D118), as a
+ *  neutral outline with the undo glyph, so it never reads as "sell again". Right after a press,
+ *  drawn bills fly up and out of it, once. They are `pointer-events: none` and absolutely placed,
+ *  so they never take a click and never move the row; reduced motion drops them and the frame is
+ *  simply there. Focus moves here after a press. */
+export function UndoSaleButton({
+  saleKey,
+  name,
+  busy,
+  disabled,
+  kbd,
+  onClick,
+}: {
+  readonly saleKey: string
+  readonly name: string
+  readonly busy: boolean
+  readonly disabled: boolean
+  readonly kbd?: string
+  readonly onClick: () => void
+}) {
+  const [wasFresh] = useState(() => {
+    const at = FRESH_SALES.get(saleKey)
+    return at !== undefined && Date.now() - at < FRESH_MS
+  })
+  /* Reduced motion draws no bills at all; the frame is simply there. */
+  const [fresh, setFresh] = useState(wasFresh && !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const button = useRef<HTMLButtonElement | HTMLAnchorElement>(null)
+  useEffect(() => {
+    FRESH_SALES.delete(saleKey)
+    /* The Mark sold that held focus is gone, so focus would drop to the body: a sale hands it to
+       the Undo, and a keyboard user can take it back at once. */
+    if (wasFresh) button.current?.focus()
+  }, [saleKey])
+  return (
+    <span className="card-locations-undo-wrap">
+      <IconButton
+        icon="undo"
+        label="Undo sale"
+        name={name}
+        size="xl"
+        className="card-locations-undo"
+        ref={button}
+        busy={busy}
+        disabled={disabled}
+        kbd={kbd}
+        onClick={onClick}
+      />
+      {fresh
+        ? Array.from({ length: BILL_COUNT }, (_, i) => (
+            <span
+              key={i}
+              className="card-locations-bill"
+              aria-hidden="true"
+              /* The LAST bill's own end ends the burst; a child's end bubbling up cannot. */
+              onAnimationEnd={(e) => {
+                if (e.target === e.currentTarget && i === BILL_COUNT - 1) setFresh(false)
+              }}
+              style={{
+                ['--dx' as string]: `${(i - (BILL_COUNT - 1) / 2) * 16}px`,
+                ['--dy' as string]: `${-(46 + (i % 3) * 18)}px`,
+                ['--rot' as string]: `${(i % 2 ? 1 : -1) * (20 + i * 8)}deg`,
+                animationDelay: `${i * 25}ms`,
+              }}
+            >
+              <Icon name="bill" size={22} />
+            </span>
+          ))
+        : null}
+    </span>
   )
 }
 
@@ -585,6 +674,7 @@ function OwnerRows({
                   <MarkSoldButton
                     busy={busyKey === copy.key}
                     disabled={busyKey !== null && busyKey !== copy.key}
+                    saleKey={copy.key}
                     onClick={() => onSell(copy)}
                   />
                 )}
