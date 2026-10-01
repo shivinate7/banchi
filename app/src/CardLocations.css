@@ -250,10 +250,13 @@
    clicked. A press changes what a slot holds; it may not change how big the slot is. */
 .card-locations-owner .card-locations-action {
   grid-area: action;
-  justify-self: end;
-  display: inline-flex;
+  /* THE PRIMARY (Mark sold, or Undo once it is pressed, its reverse) SITS ON THE ROW'S LEFT
+     CONTENT EDGE, under the title and the ruler. The slot spans the row so Retire and Move can
+     stay on the right edge. */
+  justify-self: stretch;
+  display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: var(--bn-1);
   /* THE FOOT KEEPS ITS HEIGHT WHEN THE CONTROL BECOMES ITS OWN RESULT (D118): a pill, an `Undo`
      or nothing at all stands here after a sale, and a 40px control is what the row reserves. */
@@ -266,7 +269,9 @@
 /* MARK SOLD: one width on every row (D195), so the button does not change size between a row
    holding one action and a row holding three. */
 .card-locations-owner .card-locations-sell { width: 128px; }
-.card-locations-owner .card-locations-action .inventory-copy-actions { gap: var(--bn-1); }
+.card-locations-owner .card-locations-action .inventory-copy-actions { gap: var(--bn-1); flex: 1 1 auto; min-width: 0; }
+/* Retire and Move ride the right edge: the first icon after Mark sold takes the free space. */
+.card-locations-owner .card-locations-sell + .bn-icon-btn { margin-left: auto; }
 /* Retire and Move: bare icons in ink-3, 40px targets. Only the primary is coloured. */
 .card-locations-owner .card-locations-action .bn-icon-btn { color: var(--bn-ink-3); }
 .card-locations-owner .card-locations-action .bn-icon-btn:hover { color: var(--bn-ink); }
@@ -291,7 +296,7 @@
   flex: 1 1 auto;
   min-width: 0;
   gap: var(--bn-2);
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 

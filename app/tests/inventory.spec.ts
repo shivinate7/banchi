@@ -1445,6 +1445,19 @@ test('a card with no name and no SKU still offers both doors', async ({ page }) 
   const doors = page.locator('.card-locations-row.is-current .card-locations-action')
   await expect(doors.getByRole('button', { name: 'Mark sold' })).toBeVisible()
   await expect(doors.getByRole('button', { name: 'Retire' })).toBeVisible()
+
+  /* THE ACTION ROW'S EDGES: Mark sold on the row's left content edge, the icons on the right one. */
+  const edges = await page.locator('.card-locations-row.is-current').evaluate((row) => {
+    const cs = getComputedStyle(row)
+    const r = row.getBoundingClientRect()
+    const left = r.left + parseFloat(cs.paddingLeft)
+    const right = r.right - parseFloat(cs.paddingRight)
+    const sell = row.querySelector('.card-locations-sell')!.getBoundingClientRect().left
+    const icons = [...row.querySelectorAll('.card-locations-action .bn-icon-btn')]
+    return { dLeft: sell - left, dRight: right - icons[icons.length - 1]!.getBoundingClientRect().right }
+  })
+  expect(Math.abs(edges.dLeft)).toBeLessThanOrEqual(1)
+  expect(Math.abs(edges.dRight)).toBeLessThanOrEqual(1)
 })
 
 test('a card with no name and no SKU is a one-copy list, not a special case', async ({ page }) => {
