@@ -399,37 +399,19 @@ function windowsOf(
   }
 }
 
-/** One line in the verdict's own smaller-type comparison. `previousRows === null` reads as
- *  "no prior period at all" (the `all time` control has nothing before it) — a different
- *  fact from `previousRows` being empty, which is "the store has no ORDERS recorded that far
- *  back". `likeForLike` names a window this function did not choose: the caller has already
- *  cut the prior period down to the SAME number of elapsed days the current one has had, so
- *  the wording says so rather than letting a shorter slice masquerade as the whole thing. */
-function compareLine(current: number, previousRows: readonly Sale[] | null, likeForLike: boolean): string {
-  if (previousRows === null) return 'No earlier period to compare it against yet.'
-  if (previousRows.length === 0) {
-    /* D313: THE PRIOR LINE IS STATED AT EVERY PERIOD, so choosing "All" (which always has one)
-       never mounts a line and shoves the chart down. An empty prior window says so, whether or
-       not the current one is still forming. */
-    return 'Nothing is recorded for the period before this one.'
-  }
+/** The comparison, folded onto the order line as a trailing clause (D313: the summary never gains
+ *  or loses a line). `null` says nothing: no prior period (`previousRows === null`, the All
+ *  control), or nothing recorded before. `likeForLike` names a prior window
+ *  already cut to the same elapsed days, so the wording says "stretch" rather than "period". */
+function compareClause(current: number, previousRows: readonly Sale[] | null, likeForLike: boolean): string | null {
+  if (previousRows === null) return null
+  const before = likeForLike ? 'the same stretch before' : 'the period before'
+  if (previousRows.length === 0) return null
   const previous = sum(previousRows)
-  // `likeForLike` means THIS window is still forming, not the PRIOR one — the prior window is
-  // a closed stretch cut down to the same elapsed length for a fair comparison, and "so far"
-  // belongs to the one that has not finished, never to the one already over (defect fix).
-  const lead = likeForLike
-    ? 'Over the same stretch, the period before this one made'
-    : 'The period before this one made'
-  // A REAL DIVIDE-BY-ZERO GUARD: rows exist and still sum to exactly $0.00 — free lines are
-  // real and are not filtered out. A percentage has no base to divide by here, so this says
-  // the dollar amount plainly instead of rendering `Infinity%` or `NaN%`.
-  if (previous === 0) {
-    if (current === 0) return `${lead} ${moneyGrouped(0)} too.`
-    return `${lead} ${moneyGrouped(0)}; this one has already made ${moneyGrouped(current)} more.`
-  }
+  // A divide-by-zero guard: rows exist and still sum to $0.00, so a percentage has no base.
+  if (previous === 0) return current === 0 ? `$0.00 ${before} too` : `${moneyGrouped(current)} more than ${before}`
   const change = ((current - previous) / previous) * 100
-  const said = change >= 0 ? `up ${change.toFixed(0)}%` : `down ${Math.abs(change).toFixed(0)}%`
-  return `${lead} ${moneyGrouped(previous)}, ${said}.`
+  return `${change >= 0 ? `up ${change.toFixed(0)}%` : `down ${Math.abs(change).toFixed(0)}%`} on ${before}`
 }
 
 type Bucket = {
@@ -914,7 +896,7 @@ export function Revenue() {
 
   const elapsedEnd = nominalEnd.getTime() < now.getTime() ? nominalEnd : now
   // `partial`: the NOMINAL window (a full calendar year, the current month) has not actually
-  // finished yet — this is what compareLine truncates the prior window against.
+  // finished yet — this is what compareClause truncates the prior window against.
   const partial = elapsedEnd.getTime() < nominalEnd.getTime()
   // `nowInScope`: the SELECTION reaches all the way to today, so its current bucket may be
   // empty and still belongs on the strip. True for every preset and for `all time` (both are
@@ -1294,9 +1276,14 @@ export function Revenue() {
           <p className="bn-eyebrow">{`Gross, ${periodPhrase}`}</p>
           <Money value={total} className="revenue-summary-figure" />
           <p className="revenue-verdict-said">
-            {`${orderCount(inPeriod).toLocaleString()} ${orderCount(inPeriod) === 1 ? 'order' : 'orders'}, ${inPeriod.reduce((n, s) => n + s.quantity, 0).toLocaleString()} copies`}
+            {[
+              `${orderCount(inPeriod).toLocaleString()} ${orderCount(inPeriod) === 1 ? 'order' : 'orders'}`,
+              `${inPeriod.reduce((n, s) => n + s.quantity, 0).toLocaleString()} copies`,
+              compareClause(total, inPrevious, partial),
+            ]
+              .filter(Boolean)
+              .join(', ')}
           </p>
-          <p className="revenue-verdict-prior">{compareLine(total, inPrevious, partial)}</p>
           {dropped === 0 ? null : (
             <p className="revenue-verdict-dropped">
               {`${dropped.toLocaleString()} ${dropped === 1 ? 'line has' : 'lines have'} no usable date and ${dropped === 1 ? 'is' : 'are'} left out of every figure here.`}

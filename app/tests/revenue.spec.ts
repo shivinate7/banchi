@@ -431,7 +431,7 @@ test('a previous period that sums to exactly zero never renders Infinity% or NaN
   ])
   await open(page, '?period=custom&from=2026-08-01&to=2026-08-31')
 
-  const prior = page.locator('.revenue-verdict-prior')
+  const prior = page.locator('.revenue-verdict-said')
   await expect(prior).toBeVisible()
   const text = await prior.innerText()
   expect(text).not.toContain('Infinity')
@@ -439,12 +439,13 @@ test('a previous period that sums to exactly zero never renders Infinity% or NaN
   expect(text).toContain('$5.00 more')
 })
 
-test('the like-for-like case still says nothing is recorded before, so the line never mounts (D313)', async ({ page }) => {
-  // Every sale is in 2026, so "this year" has nothing before it over the same stretch. The line
-  // stays and says so: a line that comes and goes with the period shoves the chart (S10).
+test('the comparison is folded into the order line, and no separate prior line exists (D313)', async ({ page }) => {
+  // Every sale is in 2026, so "this year" has nothing before it over the same stretch: the order
+  // line says nothing more. A separate line that comes and goes with the period shoves the chart (S10).
   await stub(page, generalOrders())
   await open(page, '?period=ytd')
-  await expect(page.locator('.revenue-verdict-prior')).toHaveText('Nothing is recorded for the period before this one.')
+  await expect(page.locator('.revenue-verdict-prior')).toHaveCount(0)
+  await expect(page.locator('.revenue-verdict-said')).toHaveText(/^\d+ orders?, \d+ copies$/)
 })
 
 test('no horizontal scroll at 390, with Custom selected — the fifth period option is the widest state', async ({ page }) => {
@@ -605,9 +606,9 @@ test('the prior-period line never says "So far" about the CLOSED prior period (d
     }),
   ])
   await open(page)
-  const prior = page.locator('.revenue-verdict-prior')
-  await expect(prior).toContainText('Over the same stretch, the period before this one made $10.00')
-  await expect(prior).not.toContainText('So far, the period before this one made')
+  const prior = page.locator('.revenue-verdict-said')
+  await expect(prior).toContainText('down 50% on the same stretch before')
+  await expect(page.locator('.revenue-verdict-prior')).toHaveCount(0)
 })
 
 /* --------------------------------------------------------- then against now (D225) */
@@ -1059,6 +1060,8 @@ for (const width of [1440, 820]) {
       const inWindow = (await readShifts(page)).shifts.slice(seen)
       const beside = inWindow.filter((sh) => sh.moved.some((name) => HELD.test(name)))
       expect(beside, `choosing ${label} moved ${describeShifts(beside)}`).toEqual([])
+      const said = await page.locator('.revenue-verdict-said').boundingBox()
+      expect(said!.height, 'the order line holds one line box').toBeLessThan(24)
     }
   })
 }
