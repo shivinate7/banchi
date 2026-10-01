@@ -35,7 +35,7 @@ teardown. The supervisor waits on nobody, because D138 makes it outlive the sess
 Every link is individually defensible, which is why this never looked like a bug.
 
 **So the fix is a sweep and not another hook on the merge.** Only something re-runnable at an
-arbitrary moment can collect what a one-shot structurally could not. `scripts/janitor.py` is
+arbitrary moment can collect what a one-shot structurally could not. The sweep is
 that, and the merge is left alone: it needs no new state, because a branch becomes reapable the
 moment origin's copy is deleted, which the merge already does.
 
@@ -94,6 +94,24 @@ essentially any `npm run dev` on the machine, in any tree. `_sweep_orphans` sign
 group on the strength of that answer. It is the last absolute path now, which keeps the two
 that were already right. Found by reading rather than by an incident; there was live material
 for it at the time.
+
+**THE SWEEP IS CLAUDE-SETTINGS' NOW, AND THIS REPO KEEPS THREE MODES.** The owner's ruling:
+Banchi repoints the machine's janitor at claude-settings, then deletes what claude-settings now
+owns. The problem above is not Banchi's (see "IT IS NOT BANCHI'S PROBLEM"), so its sweep lives where
+every repository can reach it: claude-settings' `janitor/sweep.py`, run by `make janitor`, by
+that repo's SessionEnd hook and by its daily launch agent (`com.claude-settings.janitor.
+daily-sweep`). Deleted from `scripts/janitor.py` as covered there: the dead-rooted server
+read, the loose-process read, and all of tier 2 (worktrees, branches, processes), with
+`make janitor-agent` and the self-test arms for each. What stays, because `sweep.py` has no mode
+for it: tier 1 alone (`--tier1`, stale registrations and husks, pressed with no prompt, where
+`sweep.py --confirm` also removes worktrees); `--branches` (the lossless branch cut, where
+`sweep.py --confirm` also removes worktrees); and `--teardown` (`serve.py down` in a leaving
+tree, D138). Two things were lost in the move and are named here: the loose-process read is
+report-only in `sweep.py` where this repo's tier 2 stopped what it could prove a session
+started, and the WorktreeRemove hook no longer reaps a dead-rooted supervisor, because
+`sweep.py` runs on SessionEnd and on the schedule only. What protects the outcome now:
+`sweep.py` keeps anything it cannot read, and the husk and registration reads that remain here
+keep the same refusals under `scripts/janitor-selftest.sh`.
 
 **What retires this:** a console app that tears down what a session started, or a merge that can
 finish its own local half. Neither is available, and the second one cannot be — the branch is

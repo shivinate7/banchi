@@ -172,14 +172,11 @@ orchestrator or a subagent. A raw kill that would hit a pid tagged to another se
 BLOCKED, the same as an explicit `make reap` targeting it would be refused. Case 4's wider
 orchestrator allowance has no equivalent here. There is nothing here for it to apply to.
 
-### `make janitor-install`
+### No install
 
-Reinstall after this change. `reap.py` grew the ownership read. The installed hook reads
-`.serve/owners/` inside whatever checkout it is asked about. The installed copy of `reap.py`
-alone is enough for it, and for the CLI, to see a project's own marks. But `make
-janitor-install` copies `reap.py` byte for byte. A stale installed copy keeps judging by
-checkout alone. It never sees a mark this way. Run `make janitor-install` again on this
-machine, once, after this change lands.
+`reap.py` reads `.serve/owners/` inside whatever checkout it is asked about, so it sees a
+project's own marks from the repo's own copy. Nothing is installed: the user's Claude bin directory is
+claude-settings' install.sh's, and `make janitor-install` copies nothing.
 
 Reap's "under this checkout" is the verdict's own test; a nested worktree is another checkout.
 

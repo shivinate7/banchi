@@ -439,7 +439,7 @@ echo "  -- a root that would contain everything --"
 
 # THIS IS THE HOLE THE USER-LEVEL INSTALL EXPOSED, and it could not have been found from inside
 # a clone: `git rev-parse --show-toplevel` always answers there, so the fallback never ran. The
-# moment `make janitor-install` put the hook in the user's own `~/.claude/settings.json` it began
+# moment a user-level hook ran the guard, it began
 # firing in directories that are not repositories, and the fallback adopted the HOME DIRECTORY as
 # "this checkout" — under which the owner's live capture server sits. Measured 2026-09-10: the
 # exact command of incident 1, judged from `$HOME`, resolved that server to OURS.
