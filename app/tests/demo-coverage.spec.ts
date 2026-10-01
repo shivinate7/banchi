@@ -246,12 +246,21 @@ test.describe('the published demo draws what reviewers grade', () => {
 
   for (const screen of ['Inventory', 'Review', 'Pricing', 'Home', 'Cards to pull'] as const) {
     test(`${screen} draws its photographs, and every one answers 200`, async ({ page }) => {
+      test.setTimeout(90_000)
       let photos = watchPhotos(page)
       if (screen === 'Cards to pull') {
-        const fulfiller = await visitFulfiller(page)
-        photos = watchPhotos(fulfiller)
-        await fulfiller.reload()
-        page = fulfiller
+        // LISTEN ON THE CONTEXT BEFORE THE WINDOW OPENS, NEVER AFTER. This used to attach to the
+        // popup once it had loaded and then `reload()` it to see its photographs again, which
+        // loaded the 75 MB `demoServer` chunk a second time and started the poll's clock before
+        // that chunk had even arrived. On a loaded runner the second load alone outlasted the poll
+        // (run 36807030451). A context listener sees the popup's first request, so nothing reloads.
+        photos = []
+        const opener = page
+        page.context().on('response', (response) => {
+          if (response.frame()?.page() !== opener && response.url().includes('/demo/photos/'))
+            photos.push({ url: response.url(), status: response.status() })
+        })
+        page = await visitFulfiller(page)
       } else await visit(page, screen)
       // REAL, NOT STALE (2026-09-27, D295 full mirror): the owner's real review queue has
       // zero cards still owed an answer right now (every open entry's card has since
@@ -270,7 +279,9 @@ test.describe('the published demo draws what reviewers grade', () => {
           return
         }
       }
-      await expect.poll(() => photos.length, { message: `${screen} asked for no photograph` }).toBeGreaterThan(0)
+      // THE FIRST PHOTOGRAPH WAITS ON THE 75 MB `demoServer` CHUNK, so the budget is the chunk's, not the
+      // default 15 s: measured 3 s unthrottled and 14.5 s at 20x CPU throttle (DEMO_CPU_THROTTLE).
+      await expect.poll(() => photos.length, { message: `${screen} asked for no photograph`, timeout: 45_000 }).toBeGreaterThan(0)
       expect(photos.filter((photo) => photo.status !== 200)).toEqual([])
       const broken = await page.evaluate(
         () => [...document.images].filter((img) => img.src.includes('/demo/photos/') && img.complete && img.naturalWidth === 0).length,
