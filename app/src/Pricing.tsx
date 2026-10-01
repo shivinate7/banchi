@@ -2739,6 +2739,7 @@ export function Pricing() {
           <EmptyState icon="check" title="Everything is sent" body="Every copy is at TCGplayer, held, or has left its box." />
         )
 
+  const hiddenCount = rows.length - drawn.reduce((sum, group) => sum + group.rows.length, 0)
   const showList = table !== null && (table.length > 0 || liveTab)
 
   /* THE OVERLAYS SIT BESIDE THE PAGE, NOT IN IT: `Page` draws `empty` in place of its children,
@@ -2861,6 +2862,9 @@ export function Pricing() {
               </section>
             ))}
           </div>
+          {filtering && drawn.length > 0 && hiddenCount > 0 ? (
+            <p className="pricing-filter-note pricing-filter-foot">{`${hiddenCount} more ${hiddenCount === 1 ? 'item is' : 'items are'} hidden by the filter and still go out in a send.`}</p>
+          ) : null}
           </>
         )}
       </div>
