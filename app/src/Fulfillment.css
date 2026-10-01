@@ -71,7 +71,6 @@
   flex-direction: column;
   align-items: stretch;
   gap: var(--bn-7);
-  transition: max-width var(--bn-t-slow) var(--bn-ease);
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
 .ff-column[data-wide='true'] { max-width: var(--ff-col-wide); }

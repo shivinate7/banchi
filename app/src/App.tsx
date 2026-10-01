@@ -1447,14 +1447,16 @@ export function App() {
       <div className="bn-shell-main">
         <PhoneBar onPalette={() => setPalette(true)} />
         {server === 'offline' ? (
-          <div className="bn-banner" role="alert">
-            <Icon name="alert" size={16} />
-            <span className="bn-grow">
-              Banchi can’t reach the server. Screens will show stale or empty data until it answers.
-            </span>
-            <Button size="sm" variant="quiet" icon="refresh" onClick={retry}>
-              Retry
-            </Button>
+          <div className="bn-banner-slot">
+            <div className="bn-banner" role="alert">
+              <Icon name="alert" size={16} />
+              <span className="bn-grow">
+                Banchi can’t reach the server. Screens will show stale or empty data until it answers.
+              </span>
+              <Button size="sm" variant="quiet" icon="refresh" onClick={retry}>
+                Retry
+              </Button>
+            </div>
           </div>
         ) : null}
         <div key={path} className="bn-view">

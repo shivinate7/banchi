@@ -20,7 +20,7 @@ export type Toast = {
   readonly leaving?: boolean
 }
 type ToastInput = Omit<Toast, 'id' | 'ttlMs' | 'leaving'> & { readonly ttlMs?: number }
-/** How long a dismissed toast stays mounted to fold away — kit.css's `bn-toast-out` (--bn-t). */
+/** How long a dismissed toast takes to fade — kit.css's `bn-toast-out` (--bn-t). */
 const LEAVE_MS = 220
 
 type Listener = (toasts: readonly Toast[]) => void
@@ -32,14 +32,18 @@ function emit(): void {
   for (const listener of listeners) listener(toasts)
 }
 
+/** A dismissed toast fades and keeps its box, so no toast someone can see moves. The boxes go
+ *  together, once every toast in the stack has faded. */
 export function dismissToast(id: number): void {
   const hit = toasts.find((t) => t.id === id)
   if (hit === undefined || hit.leaving) return
   toasts = toasts.map((t) => (t.id === id ? { ...t, leaving: true } : t))
   emit()
   window.setTimeout(() => {
-    toasts = toasts.filter((t) => t.id !== id)
-    emit()
+    if (toasts.every((t) => t.leaving)) {
+      toasts = []
+      emit()
+    }
   }, LEAVE_MS)
 }
 
@@ -47,8 +51,11 @@ export function toast(input: ToastInput): number {
   const id = nextId++
   const ttlMs = input.ttlMs ?? (input.kind === 'receipt' ? 20000 : input.kind === 'refusal' ? 0 : 5000)
   const next: Toast = { ...input, id, ttlMs }
-  toasts = [...toasts.slice(-4), next]
+  toasts = [...toasts, next]
   emit()
+  /* Past five standing toasts the oldest fades, like a dismissed one: it never leaves the stack under the others. */
+  const standing = toasts.filter((t) => !t.leaving)
+  if (standing.length > 5 && standing[0] !== undefined) dismissToast(standing[0].id)
   if (ttlMs > 0) window.setTimeout(() => dismissToast(id), ttlMs)
   return id
 }
@@ -72,7 +79,7 @@ export function Toaster() {
   return (
     <div className="bn-toasts" aria-live="polite">
       {list.map((t) => (
-        <div key={t.id} className={`bn-toast bn-toast-${t.kind}${t.tone === 'danger' ? ' bn-toast-fault' : ''}`} role={t.kind === 'refusal' ? 'alert' : 'status'} data-leaving={t.leaving ? 'true' : undefined}>
+        <div key={t.id} className={`bn-toast bn-toast-${t.kind}${t.tone === 'danger' ? ' bn-toast-fault' : ''}`} role={t.kind === 'refusal' ? 'alert' : 'status'} data-leaving={t.leaving ? 'true' : undefined} aria-hidden={t.leaving ? true : undefined}>
           <Icon name={t.icon ?? ICONS[t.kind]} size={16} className="bn-toast-icon" />
           <div className="bn-toast-text">
             <div className="bn-toast-title">{t.title}</div>

@@ -14,6 +14,7 @@ from . import selftest_paths_commands_2
 from . import selftest_status_reach
 from . import selftest_design
 from . import selftest_spelling
+from . import selftest_stability
 from . import selftest_env_map
 from . import selftest_registry_scopes
 from . import selftest_code_invariants_1
@@ -51,6 +52,7 @@ def self_test() -> int:
     selftest_status_reach.run(ok)
     selftest_design.run(ok)
     selftest_spelling.run(ok)
+    selftest_stability.run(ok)
     selftest_env_map.run(ok)
     selftest_registry_scopes.run(ok)
     selftest_code_invariants_1.run(ok)

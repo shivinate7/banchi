@@ -10,6 +10,9 @@
 
 html {
   height: 100%;
+  /* The document scrollbar's width is always reserved, so a screen that gains or loses one (data
+     lands, the route changes) never moves its content sideways. */
+  scrollbar-gutter: stable;
   -webkit-text-size-adjust: 100%;
   text-rendering: optimizeLegibility;
 }
