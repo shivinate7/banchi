@@ -2553,7 +2553,7 @@ export function Pricing() {
   const bar =
     !liveTab && loaded.length > 0 ? (
       <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send to TCGplayer">
-        <p className="pricing-bar-says">{summary.join(', ')}</p>
+        <p className="pricing-bar-says">{filtering ? `Send covers all: ${summary.join(', ')}` : summary.join(', ')}</p>
         <SendCard
           runs={loaded}
           copies={progress.outCopies}
@@ -2795,7 +2795,6 @@ export function Pricing() {
               sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
             />
           )}
-          {filtering ? <p className="pricing-filter-note">Filters hide rows only. Send covers all.</p> : null}
           {filtering && drawn.length === 0 ? (
             <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." />
           ) : null}
