@@ -299,7 +299,8 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
     # reads it too, so follow those imports to a fixed point. A sibling PACKAGE (a directory with
     # an `__init__.py`, such as `scripts/docs_audit/`) counts whole as `<dir>/**`, and each of its
     # modules is walked for its own imports. Known gap: importlib-by-path loads and
-    # `from . import` are not followed.
+    # `from . import` inside `scripts/` are not followed (inside LOCAL_PACKAGES they are:
+    # see `_package_imports`).
     queue = [h for h in resolved if h.startswith("scripts/") and h.endswith(".py")]
     # The test itself is walked too: a self-test that is a thin script over a package imports it.
     try:
@@ -345,7 +346,8 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
 def _package_imports(rel: str) -> Set[str]:
     """Repo files of LOCAL_PACKAGES that the module `rel` imports, absolute or relative.
 
-    Unparseable: every file of the packages, fail safe.
+    Unparseable: every file of the packages, fail safe. Known gap: a module that only a
+    subprocess runs (`-m pkg.mod`, or a script path in argv) is not followed.
     """
     try:
         tree = ast.parse((ROOT / rel).read_text())
@@ -368,6 +370,10 @@ def _package_imports(rel: str) -> Set[str]:
             if mod.split(".")[0] not in LOCAL_PACKAGES:
                 continue
             stem = mod.replace(".", "/")
+            parts = stem.split("/")  # Python runs every parent package's `__init__` first
+            for i in range(1, len(parts)):
+                if (ROOT / "/".join(parts[:i]) / "__init__.py").is_file():
+                    found.add("/".join(parts[:i]) + "/__init__.py")
             for cand in [stem] + [f"{stem}/{a}" for a in names]:
                 for f in (f"{cand}.py", f"{cand}/__init__.py"):
                     if (ROOT / f).is_file():
@@ -669,6 +675,8 @@ def selftest() -> int:
           verdict("cid-selftest", ["app/src/Orders.tsx"]), False)
     check("cid-selftest runs on store/rows.py, which it reaches only through imports of imports",
           verdict("cid-selftest", ["store/rows.py"]), True)
+    check("identity-checks-selftest runs on pipeline/__init__.py, a parent of what it imports",
+          verdict("identity-checks-selftest", ["pipeline/__init__.py"]), True)
     check("reap-selftest still skips on a leaf module it never imports",
           verdict("reap-selftest", ["identify/batch.py"]), False)
     check("githooks-selftest runs on a hook this reader never sees as a literal path",
