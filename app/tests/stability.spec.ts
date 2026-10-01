@@ -124,3 +124,18 @@ test('failed: a failed history read leaves no skeleton on Home', async ({ page }
   await expect(page.locator('.home-foot .bn-skeleton')).toHaveCount(0)
   await expect(page.locator('.home-hold')).toHaveCount(0)
 })
+
+// L-fulfiller
+/* A RECOVERY DOES NOT WAIT ON THE STATE IT RECOVERS. The orders and walk-plan reads have no
+   timeout. When they never answer, the boxes still show and still open, and the Pick list's
+   frame is all that waits. */
+test('fulfiller: the boxes show and open while the orders read never answers', async ({ page }) => {
+  for (const seed of Object.values(POPULATED_ROUTE_SEEDS)) await seed(page)
+  await page.route(/\/orders(\/walk-plan)?$/, () => new Promise<void>(() => {}))
+  await page.goto('/#/fulfillment')
+  const head = page.locator('.ff-box-head').first()
+  await expect(head).toBeVisible()
+  await head.click()
+  await expect(head).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.locator('.ff-owed-wait')).toHaveCount(1)
+})

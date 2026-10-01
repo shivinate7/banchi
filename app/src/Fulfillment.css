@@ -453,6 +453,7 @@
 }
 .ff-skel-search { height: 64px; margin-bottom: var(--bn-5); }
 .ff-skel-row { height: 88px; }
+.ff-skel-owed { height: 530px; border-radius: 22px; }
 .ff-skel-copy { height: 420px; border-radius: 22px; }
 /* The today tile while the orders read is out: the loaded tile's own elements, hidden, so the
    box is the loaded box. */
