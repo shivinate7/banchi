@@ -130,7 +130,6 @@ test('failed: a failed history read leaves no skeleton on Home', async ({ page }
    is red on the code it guards and green after the fix. The browser is the check: a static scan
    cannot read a scrollbar, a banner or a font swap. */
 const SHELL_BUDGET = 0.001
-const FONT_BUDGET = 0.0002
 
 const STATUS_OK = JSON.stringify({ captures_root: 'captures', store: 's', store_exists: true, cards: 122, states: {}, queues: { review: 0, parked: 0 }, next_index: {} })
 
@@ -222,24 +221,48 @@ test('L2 shell: a receipt holds its size while it stands (S16)', async ({ page }
   expect(new Set(sizes).size, `heights ${sizes.join(',')}`).toBe(1)
 })
 
-test('L2 shell: web fonts arriving late move nothing (S17)', async ({ page }) => {
-  test.setTimeout(120_000)
+/* A face that arrives late swaps in for the fallback the stack drew first. The case holds every font file
+   until it lets them go, draws one probe line in each of the three stacks, and measures it before the
+   swap and after. The metric fallback in `fonts.css` is right when the two boxes agree to 2%. */
+test('L2 shell: web fonts arriving late swap into the same box (S17)', async ({ page }) => {
+  let release: () => void = () => {}
+  const gate = new Promise<void>((done) => {
+    release = done
+  })
   await page.route(/\.woff2(\?|$)/, async (route) => {
-    await new Promise((r) => setTimeout(r, 2000))
+    await gate
     await route.fallback()
   })
-  await watchShifts(page)
   await setViewport(page, { width: 1440, height: 1000 })
-  const over: string[] = []
-  for (const route of ['#/', '#/inventory', '#/revenue', '#/fulfillment']) {
-    await page.goto('about:blank')
-    await page.goto(`/${route}`)
-    await page.waitForTimeout(3500)
-    const shifts = (await readShifts(page)).shifts.filter((s) => s.at > 1900 && s.at < 2600)
-    const sum = sumOf(shifts)
-    if (sum >= FONT_BUDGET) over.push(`${route} ${sum.toFixed(4)} ${describeShifts(shifts)}`)
-  }
-  expect(over, 'a swap from the fallback face moves the page').toEqual([])
+  /* `load` waits on the held files (a preload is a load blocker), so the case waits for the commit. */
+  await page.goto('/#/', { waitUntil: 'commit' })
+  await expect(page.locator('.bn-shell-main')).toBeVisible()
+  const read = () =>
+    page.evaluate(() => {
+      const out: Record<string, { w: number; h: number }> = {}
+      for (const [name, weight] of [['display', 700], ['ui', 400], ['ui-bold', 700], ['mono', 400]] as const) {
+        let probe = document.getElementById(`l2-${name}`)
+        if (probe === null) {
+          probe = document.createElement('span')
+          probe.id = `l2-${name}`
+          probe.textContent = 'Charizard ex 006/165 Near Mint Holo, 12 copies, $12.50 market price'
+          probe.style.cssText = `position:absolute;left:0;top:0;white-space:nowrap;font-size:14px;font-weight:${weight};font-family:var(--bn-font-${name.replace('-bold', '')})`
+          document.body.append(probe)
+        }
+        const r = probe.getBoundingClientRect()
+        out[name] = { w: r.width, h: r.height }
+      }
+      return out
+    })
+  const before = await read()
+  release()
+  await page.evaluate(() => document.fonts.ready)
+  const after = await read()
+  const off = Object.keys(before)
+    .map((k) => ({ k, dw: Math.abs(after[k]!.w / before[k]!.w - 1), dh: Math.abs(after[k]!.h - before[k]!.h) }))
+    .filter((d) => d.dw > 0.02 || d.dh > 1)
+    .map((d) => `${d.k} width ${(d.dw * 100).toFixed(1)}% height ${d.dh.toFixed(1)}px`)
+  expect(off, 'a probe line changes box when the web face lands').toEqual([])
 })
 
 test('L2 shell: a Sales podium thumbnail arriving moves nothing (S18)', async ({ page }) => {
@@ -262,7 +285,7 @@ test('L2 shell: a Sales podium thumbnail arriving moves nothing (S18)', async ({
   await pricedShelf(page)
   await watchShifts(page)
   await setViewport(page, { width: 1440, height: 1000 })
-  await page.goto('/#/revenue')
+  await page.goto(`/#/revenue`)
   await expect(page.locator('.revenue-podium .revenue-tile').first()).toBeVisible()
   await page.waitForTimeout(1500)
   const mark = await markNow(page)

@@ -3878,6 +3878,9 @@ COMPONENTS = [
             "docs_audit/selftest_spelling.py": {
                 "does": "Self-test cases for the spelling rows, called by `selftest.self_test`.",
                 "governed_by": []},
+            "docs_audit/selftest_stability.py": {
+                "does": "Self-test cases for the stability rows, called by `selftest.self_test`.",
+                "governed_by": ["D313"]},
             "docs_audit/selftest_status_reach.py": {
                 "does": "Self-test cases for the status reach rows, called by `selftest.self_test`.",
                 "governed_by": ["D7"]},
@@ -3887,6 +3890,11 @@ COMPONENTS = [
             "docs_audit/spelling.py": {
                 "does": "The American-spelling reader and the shell-substitution row.",
                 "governed_by": ["D60", "D88", "D280"]},
+            "docs_audit/stability.py": {
+                "does": "The rows that read the causes of screen shake out of the source: the stable scrollbar "
+                        "gutter, the font preloads and metric fallbacks, transitions on layout properties and "
+                        "hover or focus rules that resize a box.",
+                "governed_by": ["D280", "D313"]},
             "docs_audit/status_reach.py": {
                 "does": "The closed-vocabulary, tested-by reach and status-source rows.",
                 "governed_by": []},
