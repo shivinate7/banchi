@@ -145,14 +145,6 @@ SOURCES = (
                "is where its state belongs",
     },
     {
-        "path": "scripts/janitor.py",
-        "kind": "file",
-        "requires": (),
-        "why": "counts what a finished session left behind — run by leftovers() below. Run "
-               "rather than reimplemented, for icloud-sweep's reason: the rule that decides "
-               "what is REAPABLE lives in one file, and it is the rule that must not drift",
-    },
-    {
         "path": "scripts/serve.py",
         "kind": "defs",
         "requires": ("report", "live_pid"),
@@ -1054,82 +1046,9 @@ def icloud() -> List[str]:
 
 
 def leftovers() -> List[str]:
-    """What a finished session left behind in this clone, counted and never acted on (D111).
-
-    Reported here for icloud()'s reason exactly: it is a fact you should know and need not act
-    on, and without a line like this it is invisible to every normal command. That invisibility
-    is measured — 73 local branches and four orphaned supervisors accumulated over weeks before
-    anybody looked, and the oldest of the four had been restarting against a deleted directory
-    for a week.
-
-    IT RUNS THE PREVIEW, WHICH PRESSES NOTHING. Tier 1 reaps on its own in a real sweep, so this
-    reports rather than sweeps: `make status` must never be a thing that changes the tree. The
-    count it shows is what is waiting on `--confirm`.
-    """
-    found = resolve("scripts/janitor.py")
-    if not found:
-        return []
-    done = subprocess.run(
-        [sys.executable, str(found[0])],
-        cwd=str(ROOT), capture_output=True, text=True, check=False,
-    )
-    waiting = ""
-    for line in done.stdout.splitlines():
-        if line.startswith("janitor:") and "waiting on --confirm" in line:
-            waiting = line.split("(", 1)[1].rstrip(")").strip()
-    if not waiting:
-        return []
-    return [
-        field("Left behind", waiting),
-        cont("`make janitor` lists them; ARGS=--confirm reaps them"),
-    ]
-
-
-INSTALLED_JANITOR = Path.home() / ".claude" / "bin"
-
-# What `make janitor-install` copies out of this tree, so a user-level hook can run it in a repo
-# that has never heard of this one. IT WAS A PAIR UNTIL 2026-09-10 and `reap.py` joined it with
-# D127 — the kill guard has the same shape of problem the sweep does: it is worth having in every
-# project, and a hook in the user's own `~/.claude` cannot name a path inside this checkout. A
-# file added to the recipe and not to this tuple is a copy nothing would ever call stale.
-JANITOR_INSTALLED_FILES = ("janitor.py", "session-teardown.sh", "reap.py")
-
-
-def janitor_install() -> List[str]:
-    """Whether the copy every OTHER repo runs still matches this tree (D111).
-
-    THE COPY IS THE POINT AND THE COPY IS THE HAZARD, which is exactly `make hooks`'s bargain
-    and is reported here the same way. A user-level hook has to name a command that exists with
-    no checkout in sight, so the files are copied rather than pointed at — and a copy drifts
-    silently, which is the failure this whole sweep exists to stop happening to worktrees.
-
-    Silent when nothing is installed: not installing is a choice, not a defect. `make janitor`
-    still works in this checkout either way.
-    """
-    installed = [INSTALLED_JANITOR / name for name in JANITOR_INSTALLED_FILES]
-    if not any(path.exists() for path in installed):
-        return []
-    missing = [path.name for path in installed if not path.exists()]
-    if missing:
-        return [
-            field("Hooks copy", "INCOMPLETE — {0} missing".format(", ".join(missing))),
-            cont("Fix: make janitor-install"),
-        ]
-    stale = []
-    for path in installed:
-        try:
-            if path.read_bytes() != (ROOT / "scripts" / path.name).read_bytes():
-                stale.append(path.name)
-        except OSError:  # unreadable is not a claim that it differs
-            continue
-    if stale:
-        return [
-            field("Hooks copy", "differs from this tree: {0}".format(", ".join(stale))),
-            cont("Expected on a branch that changed them. Otherwise the copy your other"),
-            cont("repos' hooks run is not the copy this tree tests."),
-            cont("Fix: make janitor-install"),
-        ]
-    return [field("Hooks copy", "~/.claude/bin matches this tree")]
+    """A pointer, never a count (D111). The sweep that counts is claude-settings' and takes
+    minutes on this machine, so `make status` does not run it."""
+    return [field("Left behind", "`make janitor` lists what a finished session left")]
 
 
 SLOW_SHOWN = 5
@@ -1230,7 +1149,7 @@ def render() -> str:
     lines += blind_spots(mapdata)
     lines.append(field("the map", "`make map` renders docs/map.py — a package, a path, a"))
     lines.append(cont("decision id, or `--stale` for prose its file has outrun."))
-    lines += ["", "REPO"] + repo() + hooks() + guards() + ports_and_store() + icloud() + leftovers() + janitor_install()
+    lines += ["", "REPO"] + repo() + hooks() + guards() + ports_and_store() + icloud() + leftovers()
     lines += ["", "SERVING"] + serving() + slow_requests()
     lines += ["", "STORE"] + store()
 

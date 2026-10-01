@@ -2612,59 +2612,21 @@ COMPONENTS = [
                 "governed_by": ["D43", "D47", "D138"],
             },
             "janitor.py": {
-                "does": "the sweep: what a finished session left behind, and — where it is "
-                        "provably dead — reaped. Two tiers. TIER 1 needs no confirmation "
-                        "because it cannot be live: a process whose own script has been "
-                        "deleted, a registration `git worktree prune` disowns, a husk "
-                        "directory holding nothing but `.serve/` caches with no process AND "
-                        "NO SESSION in it. A BARE RUN PRESSES NOTHING AT ALL since 2026-09-19 "
-                        "— it previews both tiers, which is what its own header and "
-                        "status.py's have always claimed and what the code did not do; tier 1 "
-                        "is pressed by `--tier1`, which the session-end hook runs, and by "
-                        "`--confirm`. TIER 2 previews and waits for `--confirm`: a merged branch "
-                        "no tree holds, a worktree with no session in it, and — since "
-                        "2026-09-12 — a PROCESS nothing owns. Liveness is READ "
-                        "from `~/.claude/sessions/<pid>.json` AND from a worktree's own git "
-                        "LOCK, never inferred from mtimes — see `_same_process` for the "
-                        "timezone bug that made every session read as dead, and for why every "
-                        "unreadable case resolves to LIVE. The records alone are NOT the whole "
-                        "answer: a session that spawns agents registers one `cwd` and locks "
-                        "several trees, so on 2026-09-19 the sweep printed `reaped` over two "
-                        "locked trees a live pid had claimed, one carrying uncommitted work, "
-                        "and only `git worktree remove`'s own refusal stopped it. `worktrees` "
-                        "reads the lock, `_lock_lines` reports its reason and checks the pid "
-                        "it names, and a locked tree is never a candidate. "
-                        "`--teardown` is the half a session-end hook runs. Repo-agnostic: no "
-                        "import from this tree, and `--root` points it at any clone. "
-                        "OWNERSHIP IS THAT SAME READ, POINTED AT A DIFFERENT QUESTION: not "
-                        "\"is this tree busy\" but \"does anything still own this process\". "
-                        "Every other test here is about a tree, a branch or a registration and "
-                        "tier 1 asks whether a thing can be live at all, so a background loop "
-                        "whose session had ended read as live, leave it alone — one merged "
-                        "pull requests for 3 h 58 m out from under its own successor and "
-                        "nothing in this repo could see it. `loose_processes` names only what "
-                        "it can PROVE a session started, by `_SESSION_MARK` in the argv of the "
-                        "process or an ancestor, so the owner's own hand-started server is "
-                        "passed over in silence rather than guessed at. IT CAN NEVER NAME THE "
-                        "MAIN CHECKOUT'S SERVER, BY CONSTRUCTION: being in a LINKED worktree "
-                        "is a requirement to be offered, not an exclusion applied afterwards, "
-                        "so no ordering and no failed `main_checkout()` lookup can let D138's "
-                        "process through — proved with the session oracle EMPTY, and since "
-                        "2026-09-19 an unreadable `main_checkout()` refuses the whole of tier "
-                        "2 rather than letting the main tree fall into `linked`. Tier 2 and "
-                        "not tier 1, because tier 1 asks for no word. A process a live session "
-                        "still owns, older than `STALE_HOURS`, is reported and never reaped at "
-                        "any flag. THE TREE VERDICT IS PLANNED BEFORE IT IS PRINTED OR "
-                        "PRESSED, so `held` is the same set in a preview and in a `--confirm`: "
-                        "the old build discarded a branch from it only after a successful "
-                        "removal, inside `if confirm`, so a preview could not name a branch "
-                        "the word would delete and two were lost to dangling objects. The "
-                        "outcome of a removal is reported AFTER the attempt, never before.",
-                # D44 is the asymmetry it inherits — provably dead is reaped, doubtful is only
-                # ever reported. D18 keeps it off the gate: with icloud-sweep it is one of the
-                # two targets here that can delete a file. D138 is what it must not undo — the
-                # main checkout's supervisor is the product and is never touched. D42 is why a
-                # branch is judged by ancestry rather than by `git branch -d`.
+                "does": "the part of the janitor that is Banchi's own. The machine sweep "
+                        "(branches, worktrees, dead-rooted servers, loose processes, stale "
+                        "registrations, husks) is claude-settings' `janitor/sweep.py`, which "
+                        "`make janitor` runs; this file keeps the three modes that sweep has no "
+                        "equivalent for. TIER 1 ALONE (`--tier1`, and a bare run previews it): "
+                        "a registration `git worktree prune` disowns and a husk directory "
+                        "holding nothing but `.serve/` caches with no process AND NO SESSION in "
+                        "it, pressed with no prompt by the session-end hook. `--branches`: the "
+                        "merged-branch cut, the one lossless act, previewing without "
+                        "`--confirm`. `--teardown TREE`: stop that tree's servers with "
+                        "`serve.py down`, never the main checkout's. Liveness is READ from "
+                        "`~/.claude/sessions/<pid>.json` AND from a worktree's own git lock, "
+                        "never inferred from mtimes; see `_same_process` for why every "
+                        "unreadable case resolves to LIVE. Repo-agnostic: no import from this "
+                        "tree, and `--root` points it at any clone.",
                 "governed_by": ["D18", "D42", "D44", "D47", "D138", "D111", "D127", "D305"],
             },
             "serve-selftest.py": {
@@ -2753,29 +2715,17 @@ COMPONENTS = [
                 "tested_by": [],
             },
             "janitor-selftest.sh": {
-                "does": "proves janitor.py against a throwaway origin, clone and seven linked "
-                        "worktrees, with a fake liveness oracle and real processes "
-                        "confined to the fixture by `--confine`. The cases that matter are the "
-                        "refusals, and each asserts the janitor's own sentence rather than the "
-                        "outcome alone — git would refuse some of them by itself, and survival "
-                        "by somebody else's refusal is not coverage. 121 arms. SOME OF ITS "
-                        "PROCESSES CARRY A FAKE SHELL SNAPSHOT, because that is how "
-                        "`loose_processes` proves a session started something, and the most "
-                        "important case in the file is the one that must NOT fire: a "
-                        "long-lived marked process in the fixture's MAIN checkout owned by no "
-                        "session, which is what `make launch-agent` leaves running over the "
-                        "owner's real store. It is given the mark deliberately, so that being "
-                        "in the main checkout is the ONLY thing between it and a reap. A "
-                        "BYSTANDER LEADING THE GROUP an offered process sits in is what makes "
-                        "`_stop`'s leader-only rule load-bearing, and the child's path travels "
-                        "in the ENVIRONMENT rather than argv so the parent is not placed "
-                        "beside it. Mutation-tested: five guards removed one at a time, all "
-                        "five caught; then twelve arms over the ownership finding, eleven "
-                        "caught — the survivor under-signals and is recorded in the entry "
-                        "rather than explained away. That run also exposed two arms of its own "
-                        "that proved nothing: a needle looking for `janitor.py` in a line "
-                        "`_shorten` truncates first, and `ps -axww -o command= -p <pid>`, "
-                        "where BSD's `-a` overrides `-p` and prints the whole machine.",
+                "does": "proves janitor.py against a throwaway clone, with a fake liveness "
+                        "oracle and real processes. The cases that matter are the refusals, "
+                        "and each asserts the janitor's own sentence rather than the outcome "
+                        "alone: git would refuse some of them by itself, and survival by "
+                        "somebody else's refusal is not coverage. Tier 1 leaves a husk a "
+                        "process or a session is in, and steps over a directory it cannot "
+                        "read. `--branches` cuts only a merged, unheld branch, removes no "
+                        "worktree and fails closed on a layout it cannot read. A leaving "
+                        "session does not count itself as somebody else. The sweep proper is "
+                        "claude-settings' and is proved by its own tests, which is why the "
+                        "arms for dead-rooted servers, loose processes and tier 2 are gone.",
                 "governed_by": ["D18", "D44", "D138", "D111", "D127",
                                 "D305"],
             },
@@ -2791,7 +2741,7 @@ COMPONENTS = [
                         "capture_server.py` is allowed when the only match is yours and refused "
                         "when it is not. Fails OPEN on its own bugs and CLOSED on a target it "
                         "cannot place. Repo-agnostic and imports nothing from this tree, so "
-                        "`make janitor-install` can copy it out to cover every project. THE "
+                        "it covers any checkout it is pointed at. THE "
                         "BARE SWEEP ASKS THE SAME QUESTION THE VERDICT ANSWERS since "
                         "2026-09-12: `pids_under` read argv alone while `verdict_for` reads "
                         "argv AND the working directory, so a process started by a relative "
@@ -2842,7 +2792,7 @@ COMPONENTS = [
                         "D138 pattern rather than inventing a second one. The owner is "
                         "`CLAUDE_CODE_SESSION_ID`, read directly rather than re-deriving D305's "
                         "Bash-wrapper fragment, which only ever answered ANY session. Never "
-                        "installed to `~/.claude/bin` and never imported outside this checkout.",
+                        "run from this repo's `.claude/settings.json` and never imported outside this checkout.",
                 "governed_by": ["D43", "D138", "D127", "D305"],
             },
             "cid-selftest.py": {
@@ -3547,9 +3497,11 @@ COMPONENTS = [
                         "started in a linked worktree and nothing else — the main checkout's "
                         "server is D138's product and is never touched, a tree another session "
                         "is still standing in is left alone, and the branch and the tree are "
-                        "never touched at all. Then runs janitor.py --tier1, because a "
-                        "supervisor whose tree has just been removed is findable only from the "
-                        "process table: `.serve/` went with the tree. Fails open on every path.",
+                        "never touched at all. Then runs janitor.py --tier1 (stale "
+                        "registrations and husks). A supervisor whose tree has just been "
+                        "removed is findable only from the process table; that dead-rooted "
+                        "read is claude-settings' sweep, which its own SessionEnd hook and "
+                        "daily agent run. Fails open on every path.",
                 # D138 is the behaviour it is careful not to break; D18 keeps it off the commit
                 # path, exactly as the SessionStart guard beside it is kept off.
                 "governed_by": ["D18", "D138"],
@@ -9868,8 +9820,8 @@ COMPONENTS = [
                                 "D41", "D43", "D45", "D55", "D57", "D58", "D63", "D67", "D68",
                                 "D83", "D86", "D89", "D92", "D101", "D115", "D117", "D118", "D119",
                                 "D124", "D125", "D132", "D134", "D136", "D142", "D155", "D172",
-                                "D181", "D192", "D196", "D213", "D218", "D259", "D260", "D277",
-                                "D284", "D288", "D299", "D300", "D310"],
+                                "D181", "D192", "D195", "D196", "D213", "D218", "D259", "D260",
+                                "D277", "D284", "D288", "D299", "D300", "D310"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

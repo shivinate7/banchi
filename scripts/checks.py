@@ -998,16 +998,18 @@ CHECKS = (
     {
         "target": "janitor-selftest",
         "runs": "bash scripts/janitor-selftest.sh",
-        "asserts": "scripts/janitor.py, against a throwaway clone with real worktrees, a fake "
-                   "liveness oracle and real processes in their own process groups. The cases "
-                   "that matter are the refusals: a worktree with a live session in it, a "
-                   "branch that is unmerged and on no remote, and a husk directory something "
-                   "is still running under. Each asserts the janitor's OWN sentence, because "
+        "asserts": "scripts/janitor.py (tier 1, --branches, --teardown), against a throwaway "
+                   "clone with a fake liveness oracle and real processes in their own process "
+                   "groups. The cases that matter are the refusals: a husk directory something "
+                   "is still running under or a session is standing in, a branch that is "
+                   "unmerged or held by a worktree, and a leaving session that must not count "
+                   "itself as somebody else. Each asserts the janitor's OWN sentence, because "
                    "git would refuse some of them on its own and survival by somebody else's "
-                   "refusal is not coverage.",
+                   "refusal is not coverage. The machine sweep is claude-settings' and is "
+                   "proved there.",
         "needs": ("python3", "bash", "git"),
-        "writes": "a bare repo, a clone, four linked worktrees and four short-lived processes, "
-                  "all under `mktemp -d` and all confined to it by `--confine`.",
+        "writes": "a clone, a linked worktree or two and a few short-lived processes, all "
+                  "under `mktemp -d`.",
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes, and it signals processes. It drives the one "
                                "tool here besides icloud-sweep that can delete a worktree.",

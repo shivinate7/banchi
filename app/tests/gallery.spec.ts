@@ -1222,20 +1222,21 @@ test('axe finds nothing on the kit at 390 and 1440 in both themes, but what is l
   expect(stale, 'listed violations that are gone: take them off the list').toEqual([])
 })
 
-test('Mark sold is the same tint and the same width on every row', async ({ page }) => {
-  /* OWNER RULING (card-detail spec): one worded control, no chosen copy. Read as computed style so a
+test('Mark sold is the same icon-only accent button and the same width on every row', async ({ page }) => {
+  /* OWNER RULING (card-detail spec): one control, no chosen copy, an icon with no visible words (the accessible name stays). Read as computed style so a
      row that drifts to another variant or width goes red. */
   const sells = page.locator('.card-locations-owner .card-locations-sell')
   expect(await sells.count()).toBeGreaterThan(1)
   const drawn = await sells.evaluateAll((els) =>
     els.map((el) => {
       const s = getComputedStyle(el)
-      return { bg: s.backgroundColor, ink: s.color, width: Math.round(el.getBoundingClientRect().width), tint: el.classList.contains('bn-btn-tint') }
+      return { bg: s.backgroundColor, ink: s.color, width: Math.round(el.getBoundingClientRect().width), iconOnly: el.classList.contains('bn-icon-btn') && (el.textContent ?? '').trim() === '', name: el.getAttribute('aria-label') ?? '' }
     }),
   )
   for (const one of drawn) {
-    expect(one.tint, 'every row uses the kit tint variant').toBe(true)
-    expect(one).toEqual(drawn[0])
+    expect(one.iconOnly, 'every row draws the seal with no visible text').toBe(true)
+    expect(one.name).toContain('Mark sold')
+    expect({ ...one, name: '' }).toEqual({ ...drawn[0]!, name: '' })
   }
   expect(drawn[0]!.width).toBe(128)
 })

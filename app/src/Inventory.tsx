@@ -29,7 +29,7 @@ import {
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
 import { useViewParam } from './kit/viewState'
-import { CardLocations, hiddenCopies, layoutsOf, MarkSoldButton } from './CardLocations'
+import { CardLocations, hiddenCopies, layoutsOf, MarkSoldButton, UndoSaleButton, clearFreshSale } from './CardLocations'
 import type { HeroFigures } from './CardHero'
 import { InventorySets } from './InventorySets'
 import { PositionBar } from './PositionBar'
@@ -54,7 +54,7 @@ import {
 import { UNNAMED_BOX } from './kit/data'
 import { dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
-import { RANK_IS_CURRENT, type FrozenRank } from './frozenRank'
+import { RANK_IS_CURRENT, stalenessSentence, type FrozenRank } from './frozenRank'
 import { Dialog as Overlay } from './kit/overlay'
 import './Inventory.css'
 
@@ -461,6 +461,7 @@ function InventoryWalk({
         })
         setReloads((n) => n + 1)
       } catch (err) {
+        clearFreshSale(copy.key)
         if (refusalCode(err) === ALREADY_SOLD) {
           setSold((held) => (held.includes(copy.key) ? held : [...held, copy.key]))
           /* ANOTHER DEVICE SOLD IT, AND THE ROW STILL MAY NOT MOVE. The re-read is about to
@@ -778,7 +779,6 @@ function InventoryWalk({
           renderAction={actionFor}
           hideSold={hideSold}
           frozen={frozen}
-          onRerank={rerank}
         />
       </div>
     )
@@ -793,6 +793,12 @@ function InventoryWalk({
           listedAt: heroGroup.sku === null ? null : (listings[heroGroup.sku]?.live_as_of ?? null),
           hidden: hiddenCopies(heroGroup, { soldKeys, hideSold, currentKey: selected.key, frozen }),
           cap: heroGroup.listable,
+          /* HOW STALE THE ORDER IS, counted over the copies THIS card holds: `frozen` is the
+             screen's, and a sentence saying `3 copies stale` would count somebody else's cards. */
+          rerank: {
+            say: stalenessSentence(heroGroup.copies.filter((copy) => frozen.has(copy.key)).length),
+            onRerank: rerank,
+          },
         }
 
   return (
@@ -881,7 +887,6 @@ function CopiesPanel({
   renderAction,
   hideSold,
   frozen,
-  onRerank,
 }: {
   row: Row
   layouts: ReadonlyMap<number, readonly SectionDetail[]>
@@ -898,7 +903,6 @@ function CopiesPanel({
   renderAction: (copy: SearchCopy, primary: boolean) => ReactNode
   hideSold: boolean
   frozen: FrozenRank
-  onRerank: () => void
 }) {
   const { query, setQuery, results, loading, failure, reload } = useSearch()
 
@@ -1046,7 +1050,6 @@ function CopiesPanel({
           renderAction={(copy) => renderAction(copy, false)}
           hideSold={hideSold}
           frozen={frozen}
-          onRerank={onRerank}
         />
       )}
     </section>
@@ -1130,16 +1133,27 @@ function Action({
         {/* ICON, U IN THE TOOLTIP (ICONOGRAPHY): Undo is reversed by pressing it again, so it
             keeps no words in either sector — the row and the phone bar both read it from the
             sentence beside it. */}
-        <IconButton
-          size="xl"
-          icon="undo"
-          label="Undo"
-          name={`Undo the sale at ${standing.place}`}
-          busy={busy}
-          disabled={busyKey !== null && !busy}
-          kbd={undoKeyOn ? UNDO_KEY_LABEL : undefined}
-          onClick={() => onUndo(standing)}
-        />
+        {primary ? (
+          <IconButton
+            icon="undo"
+            label="Undo"
+            name={`Undo the sale at ${standing.place}`}
+            size="xl"
+            busy={busy}
+            disabled={busyKey !== null && !busy}
+            kbd={undoKeyOn ? UNDO_KEY_LABEL : undefined}
+            onClick={() => onUndo(standing)}
+          />
+        ) : (
+          <UndoSaleButton
+            saleKey={copy.key}
+            name={`Undo sale: ${standing.place}`}
+            busy={busy}
+            disabled={busyKey !== null && !busy}
+            kbd={undoKeyOn ? UNDO_KEY_LABEL : undefined}
+            onClick={() => onUndo(standing)}
+          />
+        )}
       </span>
     )
   }
@@ -1170,6 +1184,7 @@ function Action({
           busy={busy}
           disabled={busyKey !== null && !busy}
           name={copy.place.label === null ? undefined : `Mark sold: ${sayPlace(copy.place.label)}`}
+          saleKey={copy.key}
           onClick={() => onSell(copy)}
         />
       )}

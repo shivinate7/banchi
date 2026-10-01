@@ -1083,32 +1083,26 @@ icloud-sweep:
 # whether a commit proceeds. Nor is leftover exhaust a defect to fail a commit over — it is a
 # condition the owner's own sessions create on their own schedule.
 #
-# TIER 1 IS REAPED WITHOUT ASKING AND TIER 2 IS NOT. A process whose own script has been deleted
-# cannot be live; a worktree that merely LOOKS idle can be, and was, twice, on the day this was
-# written. `make status` reports the count. Reaping tier 2 is opt-in: `make janitor ARGS=--confirm`.
-#
-# "WITHOUT ASKING" MEANS WITHOUT A PROMPT, NOT WITHOUT BEING ASKED, AND THAT DISTINCTION WAS
-# LOST UNTIL 2026-09-19. A BARE `make janitor` previews BOTH tiers and presses nothing, which
-# is what janitor.py's own header and `status.py:janitor()` have always said and what the code
-# did not do — the bare run SIGTERMed orphans, ran `git worktree prune` and deleted husks, at
-# the head of every session, because `make status` runs it. Tier 1 is still pressed with no
-# prompt by whatever names it: `--tier1`, which `session-teardown.sh` runs at every session
-# end, and `--confirm`.
-# EXIT 1 IS NOT A FAILURE HERE, AND THAT DIFFERS FROM icloud-sweep ON PURPOSE. The sweep exits 1
-# when something is waiting on `--confirm`, which for a preview is the ORDINARY answer rather
-# than a rare finding — a conflict copy is unusual, a reapable worktree is Tuesday. So `make`
-# swallows 1 and nothing else: a crash, a refusal to run, any code above 1 still fails loudly.
-# The code itself is kept because a scheduled caller wants to know whether there is work.
+# THE MACHINE'S SWEEP IS claude-settings', NOT THIS REPO'S (owner's ruling: Banchi repoints the
+# janitor at claude-settings, then deletes what claude-settings now owns). `make janitor` runs
+# its `janitor/sweep.py`, a PREVIEW unless ARGS=--confirm: branches, worktrees, dead-rooted
+# servers, loose processes, stale registrations and husks, across every checkout under
+# ~/Developer. ARGS=<root> narrows it to one clone. CLAUDE_JANITOR_SWEEP names another copy.
+# What stays in scripts/janitor.py is what sweep.py has no mode for: tier 1 alone, the lossless
+# branch cut and one tree's teardown. `session-teardown.sh` runs those three.
 janitor:
-	@python3 scripts/janitor.py $(ARGS); s=$$?; [ $$s -le 1 ] || exit $$s
+	@python3 "$${CLAUDE_JANITOR_SWEEP:-$$HOME/.claude/janitor/sweep.py}" $(ARGS)
 
-# THE SWEEP ON A SCHEDULE, because the two events that run it are both known to miss. A tree
-# abandoned by a session that died is removed by nobody, so `WorktreeRemove` never fires for
-# it, and `.claude/settings.json` already calls `SessionEnd` unreliable at app quit and machine
-# sleep. Writes to ~/Library and so is on no hook and in no check, exactly as `launch-agent` is
-# (D18). Main checkout only: a plist naming a worktree outlives the worktree.
+# THE DAILY SWEEP IS claude-settings' TOO: its own launch agent, com.claude-settings.janitor.
+# daily-sweep, replaces this repo's com.pkmnscan.janitor.<hash>. This target no longer installs
+# anything. It says what to retire, and it retires nothing: unloading a launch agent is the
+# owner's act, not a make target's.
 janitor-agent:
-	@python3 scripts/janitor.py --install-agent $(ARGS)
+	@echo "claude-settings owns the daily sweep: com.claude-settings.janitor.daily-sweep."
+	@echo "Banchi's own agent is retired. To drop the one an earlier install left, run:"
+	@for p in $$HOME/Library/LaunchAgents/com.pkmnscan.janitor.*.plist; do \
+		[ -e "$$p" ] && echo "  launchctl bootout gui/$$(id -u) $$p && rm $$p"; \
+	done; true
 
 # In `check`, never in the git hook: it writes a temp tree and signals the processes it spawned
 # there, which is D18's line. Same standing as merge-selftest and githooks-selftest.
@@ -1556,27 +1550,12 @@ guard-shell-selftest:
 
 .PHONY: guard-shell-selftest
 
-# THE SWEEP, WHERE EVERY REPO CAN REACH IT. `~/.claude/settings.json` hooks apply to every
-# session in every project, but the command they name has to exist without this checkout in
-# sight — so the two files are COPIED, exactly as `make hooks` copies the git hooks out of the
-# tree rather than pointing at it. A copy can go stale, which is why `make status` compares it
-# and says so, the same way it reports a stale hooks-armed directory. One press, once per
-# machine; run it again after this tree's copy changes.
+# RETIRED. `~/.claude/bin` is claude-settings' install.sh's, and its guard refuses a session's
+# write there. Banchi's own hooks run `scripts/session-teardown.sh` and `scripts/reap.py` from
+# the repo, so nothing here needs a copy. This target copies nothing.
 janitor-install:
-	@mkdir -p $$HOME/.claude/bin
-	@cp scripts/janitor.py scripts/session-teardown.sh scripts/reap.py $$HOME/.claude/bin/
-	@chmod +x $$HOME/.claude/bin/janitor.py $$HOME/.claude/bin/session-teardown.sh $$HOME/.claude/bin/reap.py
-	@echo "installed to ~/.claude/bin: janitor.py, session-teardown.sh, reap.py"
-	@echo "  hook it up once, in ~/.claude/settings.json, so it covers every repo:"
-	@echo '    "SessionEnd":     [{"hooks": [{"type": "command", "timeout": 60,'
-	@echo '                        "command": "$$HOME/.claude/bin/session-teardown.sh"}]}]'
-	@echo '    "WorktreeRemove": [{"hooks": [{"type": "command", "timeout": 60,'
-	@echo '                        "command": "$$HOME/.claude/bin/session-teardown.sh"}]}]'
-	@echo '    "PreToolUse":     [{"matcher": "Bash", "hooks": [{"type": "command",'
-	@echo '                        "command": "$$HOME/.claude/bin/reap.py --hook"}]}]'
-	@echo '  then the sweep reaches any clone: ~/.claude/bin/janitor.py --root <path>'
-	@echo '  and the kill guard covers every project, not just this one. Both copies can go'
-	@echo '  stale; `make status` compares them and says so.'
+	@echo "claude-settings' install.sh owns ~/.claude/bin. This target copies nothing."
+	@echo "Banchi's hooks run scripts/session-teardown.sh and scripts/reap.py from the repo."
 
 # IS THE LAN URL STILL GOOD? The owner reaches this product from a phone at
 # `http://pkmnscan.lan:8000`, and nothing in this repo knows that name — the DHCP reservation

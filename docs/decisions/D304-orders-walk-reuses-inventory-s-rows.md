@@ -23,7 +23,7 @@ copies already pulled; Home's Cannot be filled press opens all three.
 
 **Q3, the row detail.** Full detail on every pick row: box, section and card, the section
 strip, the ruler, and the neighbor names, on every copy row. Each row reuses
-`CardLocations` (`head={false}`) rather than a walk-only row. This restores D220's original
+`CardLocations` rather than a walk-only row. This restores D220's original
 point 3. The built screen had shipped a `WalkList` that drew only the slot number and the
 name.
 
