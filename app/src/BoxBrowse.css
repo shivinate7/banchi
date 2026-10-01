@@ -1002,3 +1002,8 @@
   .browse-queued .bn-notice a { position: relative; }
   .browse-queued .bn-notice a::after { content: ''; position: absolute; inset: -16px -4px; }
 }
+/* option G: tighter inline padding, 3-digit count, so the whole row fits at 268px */
+.browse-status { padding-inline: var(--bn-1-5); gap: 2px; }
+.browse-status .browse-quiet { padding: 0 var(--bn-1-5); }
+.browse-status .bn-hidetoggle { padding: 0 var(--bn-1-5); gap: var(--bn-1-5); }
+.browse-status .bn-hidetoggle-count { --digits: 3; }
