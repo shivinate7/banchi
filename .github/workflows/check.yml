@@ -275,7 +275,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - uses: shivinate7/claude-settings/actions/stamp@2669a531b3a3bedf28f14cb78ca932c58223987c
+      - uses: shivinate7/claude-settings/actions/stamp@ef49ddeabee11e3f6d1ddb20091926dfc3c9bc47
         with:
           mode: check
           config: .github/stamp.json
