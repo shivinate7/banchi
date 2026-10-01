@@ -1,4 +1,4 @@
-## DEBT81 — The first `make status` after an edit is slow
+## DEBT-status-speed — The first `make status` after an edit is slow
 
 **A cold `make status` takes about 20 s.** `audit_run` in `scripts/status.py` replays the last docs-audit answer only when no non-ignored file has changed. The first run after any edit runs all 85 checks again, and that is 21.5 s of a 22 s run.
 
