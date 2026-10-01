@@ -30,7 +30,6 @@ from .spelling import (
     MARKDOWN_SPELLING_EXCLUDE,
     MARKDOWN_SPELLING_RULE,
     SPELLING_SUFFIXES,
-    spelling_findings,
     spelling_findings_many,
 )
 from .strings import (
