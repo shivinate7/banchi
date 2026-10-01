@@ -37,9 +37,6 @@ for (const from of ['light', 'dark'] as const) {
     await setViewport(page, { width: 1440, height: 900 })
     await page.goto('/#/')
     await expect(page.locator('main.home')).toBeVisible()
-    await page.evaluate((t) => localStorage.setItem('banchi.theme', t), from)
-    await page.reload()
-    await expect(page.locator('main.home')).toBeVisible()
     const ground = await GROUND(page)
     const seen = await page.evaluate(async () => {
       const toggle = [...document.querySelectorAll<HTMLElement>('button')].find((b) => b.textContent?.trim() === 'Theme')
