@@ -94,6 +94,11 @@ async function serveDemo(page: Page): Promise<string> {
   const base = basePath()
   await page.context().route(`${DEV_URL}${base}**`, async (route) => {
     const url = new URL(route.request().url())
+    // DEMO_CHUNK_DELAY_MS=<ms> holds back the 75 MB `demoServer` chunk the way a cold host or a loaded
+    // runner does (run 36807030451). Deterministic where a CPU throttle is not: the first photograph
+    // of every screen is requested only after that chunk has arrived and parsed.
+    if (/\/demoServer-[^/]*\.js$/.test(url.pathname) && process.env.DEMO_CHUNK_DELAY_MS)
+      await new Promise((done) => setTimeout(done, Number(process.env.DEMO_CHUNK_DELAY_MS)))
     if (PREVIEW !== null) {
       const response = await route.fetch({ url: `${PREVIEW}${url.pathname}` })
       await route.fulfill({ response })
@@ -148,13 +153,6 @@ async function visitFulfiller(page: Page): Promise<Page> {
     page.waitForEvent('popup'),
     page.locator('.bn-side').getByRole('link', { name: 'Pull' }).first().click(),
   ])
-  // DEMO_CPU_THROTTLE=<rate> slows the window the way a slow phone or a loaded CI runner does,
-  // to reproduce the race this file's photograph case once lost: the screen asks for no photograph
-  // until the demo's 75 MB `demoServer` chunk has arrived and parsed, which is seconds, not ms.
-  if (process.env.DEMO_CPU_THROTTLE) {
-    const cdp = await fulfiller.context().newCDPSession(fulfiller)
-    await cdp.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.DEMO_CPU_THROTTLE) })
-  }
   await fulfiller.locator('main, body').first().waitFor()
   await fulfiller.waitForTimeout(600)
   return fulfiller
@@ -257,7 +255,7 @@ test.describe('the published demo draws what reviewers grade', () => {
         photos = []
         const opener = page
         page.context().on('response', (response) => {
-          if (response.frame()?.page() !== opener && response.url().includes('/demo/photos/'))
+          if (response.url().includes('/demo/photos/') && response.frame()?.page() !== opener)
             photos.push({ url: response.url(), status: response.status() })
         })
         page = await visitFulfiller(page)
