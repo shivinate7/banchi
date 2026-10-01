@@ -50,12 +50,13 @@ make up             # the server, detached, one process. ARGS=--restart bounces 
 make reap           # stop what THIS session started, nothing else. Previews. ARGS="--confirm",
                     #   "port:N --confirm", "match:X --confirm" or "pid:N --confirm". A subagent's bare
                     #   --confirm stops only its own session's pids (D305, the reaper stops only its own).
-make janitor-install # copy the sweep and reap to the user's home Claude bin directory.
+make janitor-install # copy the teardown (janitor.py, session-teardown.sh) and reap.py to the user's home Claude bin directory.
 make merge          # merge a PR and move main onto it. ARGS=<n> previews. ARGS="<n> --confirm" merges.
                     #   The owner names the session an Orchestrator first, per turn. It carries a needed
                     #   rebase and force-push on a branch nobody else holds.
-make janitor        # what a finished session left behind. Previews. ARGS=--confirm reaps.
-make janitor-agent  # that sweep daily, unattended (main tree only). ARGS=--remove.
+make janitor        # claude-settings' sweep (D111, cleanup is a sweep): what a finished session left behind. Previews. ARGS=--confirm reaps.
+                    #   ARGS=<root> narrows it to one clone. scripts/janitor.py keeps tier 1 alone, --branches and --teardown.
+make janitor-agent  # retired: claude-settings schedules the daily sweep. Prints how to drop the old agent.
 make launch-agent   # start the server at login (main tree only). ARGS=--remove. It keeps the server alive over the real store.
 make dev            # Vite with hot reload. Runs beside `make up`.
 make server         # Python capture server alone. Blocks.

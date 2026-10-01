@@ -145,14 +145,6 @@ SOURCES = (
                "is where its state belongs",
     },
     {
-        "path": "scripts/janitor.py",
-        "kind": "file",
-        "requires": (),
-        "why": "counts what a finished session left behind — run by leftovers() below. Run "
-               "rather than reimplemented, for icloud-sweep's reason: the rule that decides "
-               "what is REAPABLE lives in one file, and it is the rule that must not drift",
-    },
-    {
         "path": "scripts/serve.py",
         "kind": "defs",
         "requires": ("report", "live_pid"),
@@ -1057,30 +1049,33 @@ def leftovers() -> List[str]:
     """What a finished session left behind in this clone, counted and never acted on (D111).
 
     Reported here for icloud()'s reason exactly: it is a fact you should know and need not act
-    on, and without a line like this it is invisible to every normal command. That invisibility
-    is measured — 73 local branches and four orphaned supervisors accumulated over weeks before
-    anybody looked, and the oldest of the four had been restarting against a deleted directory
-    for a week.
+    on, and without a line like this it is invisible to every normal command.
 
-    IT RUNS THE PREVIEW, WHICH PRESSES NOTHING. Tier 1 reaps on its own in a real sweep, so this
-    reports rather than sweeps: `make status` must never be a thing that changes the tree. The
-    count it shows is what is waiting on `--confirm`.
+    IT RUNS claude-settings' SWEEP AS A PREVIEW, which presses nothing: `make status` must never
+    be a thing that changes the tree. The sweep is claude-settings' (`~/.claude/janitor/
+    sweep.py`, or CLAUDE_JANITOR_SWEEP), so this is silent where it is not installed. Its own
+    summary is read, never recomputed here: the count is the sum of its `reap` rows.
     """
-    found = resolve("scripts/janitor.py")
-    if not found:
+    sweep = Path(os.environ.get("CLAUDE_JANITOR_SWEEP") or Path.home() / ".claude" / "janitor" / "sweep.py")
+    common = git("rev-parse", "--path-format=absolute", "--git-common-dir")
+    if not sweep.is_file() or not common:
         return []
-    done = subprocess.run(
-        [sys.executable, str(found[0])],
-        cwd=str(ROOT), capture_output=True, text=True, check=False,
-    )
-    waiting = ""
+    try:
+        done = subprocess.run(
+            [sys.executable, str(sweep), str(Path(common).parent)],
+            cwd=str(ROOT), capture_output=True, text=True, check=False, timeout=120,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    waiting = 0
     for line in done.stdout.splitlines():
-        if line.startswith("janitor:") and "waiting on --confirm" in line:
-            waiting = line.split("(", 1)[1].rstrip(")").strip()
+        parts = line.split()
+        if len(parts) == 3 and parts[0] == "reap" and parts[2].isdigit():
+            waiting += int(parts[2])
     if not waiting:
         return []
     return [
-        field("Left behind", waiting),
+        field("Left behind", "{0} branch(es) and worktree(s) a sweep would reap".format(waiting)),
         cont("`make janitor` lists them; ARGS=--confirm reaps them"),
     ]
 
