@@ -42,7 +42,7 @@
   border-radius: var(--bn-r-full);
   border: 2px solid var(--bn-ink-3);
   border-right-color: transparent;
-  animation: bn-spin var(--bn-t-spin) linear infinite;
+  animation: bn-spin var(--bn-t-spin) var(--bn-ease-linear) infinite;
 }
 
 .search-field-input {

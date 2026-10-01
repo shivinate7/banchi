@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
 import {
   describeFailure,
@@ -633,10 +633,10 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
       <button
         key={row.run}
         type="button"
-        className={`run-row${open ? ' run-row-open' : ''}`}
+        className={`run-row bn-stagger-item${open ? ' run-row-open' : ''}`}
         aria-current={open ? 'true' : undefined}
         onClick={() => onOpenRun(open ? null : row.run)}
-        style={{ animationDelay: `${Math.min(i, 10) * 35}ms` }}
+        style={{ '--i': i } as CSSProperties}
         /* D196: the run's own directory name is a repository path, never a user-visible
            string. The box label plus the time (row-side, below) already tell two runs
            apart; the raw id still rides the tooltip, the same pattern `claim()`'s

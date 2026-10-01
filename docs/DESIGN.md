@@ -122,12 +122,19 @@ RADIUS                          --bn-r-xs 4 · -sm 6 · --bn-r 8 · -lg 12 · -x
                                 -2xl-sm named 2026-09-20: 18px split the xl/2xl gap at 9 call
                                 sites independently before this row existed.
 
-MOTION                          --bn-t-fast 120ms · --bn-t 200ms · --bn-t-slow 320ms
+MOTION                          --bn-t-fast 120ms · --bn-t 200ms · --bn-t-slow 280ms · --bn-t-layout 240ms
+                                A duration is a ROLE: hover and exit, a small enter, a page or sheet
+                                enter, a layout move. `docs/specs/motion.md` holds the role table.
 --bn-ease                       cubic-bezier(.2,0,0,1)     the default
 --bn-ease-out                   cubic-bezier(0,0,.2,1)     something arriving
---bn-ease-spring                cubic-bezier(.34,1.4,.44,1) a chevron, a check, a dialog
+--bn-ease-in                    cubic-bezier(.4,0,1,1)     something leaving
+--bn-ease-spring                cubic-bezier(.34,1.4,.44,1) a chevron, a check, a small pop
+--bn-ease-loop                  ease-in-out                a loop that never ends
+--bn-ease-linear                linear                     a pace the data sets
+--bn-rise                       6px                        the one enter distance
 --bn-stagger 30ms · --bn-stagger-cap 12   one cadence for every list
---bn-t-draw 480ms · --bn-t-emphasis 600ms · --bn-t-pulse 1.8s · --bn-t-spin 0.7s
+--bn-t-flash 200ms · --bn-t-draw 480ms · --bn-t-pulse 1.8s · --bn-t-spin 0.7s
+--bn-t-shimmer 1.4s · --bn-t-highlight 700ms · --bn-t-instant 0.01ms (the reduced-motion floor)
 --bn-disabled 0.45              the one opacity a disabled pressable wears
 
 NOT PAINT                       (two colours the reader never sees as colour, named so they
@@ -222,11 +229,11 @@ that nothing about a card or the store lives in browser storage.
 shadows and the button ground. It redefines nothing else**, so no component sheet ever learns
 which theme it is in. A rule that needs to know has got the token wrong.
 
-**The flip is one mechanism for the whole page.** The toggle stamps
-`html[data-theme-switching]` for `--bn-t-slow` and `app/src/base.css` eases background,
-color, border, shadow, fill and stroke together, then the attribute comes off and components
-keep their own transitions. A cross-fade on `<body>` alone was measured as a two-speed flip —
-dark panels on a light ground for a third of a second.
+**The flip is one crossfade of whole-page snapshots.** The toggle wraps the flip in
+`document.startViewTransition`, and `app/src/base.css` times the fade at `--bn-t`. No color
+passes through gray, because the browser blends two finished pictures. With no API, or under
+reduced motion, the theme flips in one frame. Per-node transitions were measured as a flat
+gray page for about 60ms.
 
 **Dark is not a filter over light, and three families are drawn rather than derived.** The
 accent lightens (`#3d5af1` → `#7f90ff`) because an indigo that carries white text on paper
@@ -380,7 +387,7 @@ vanished state until it does.
 
 - **One cadence for every list.** `.bn-stagger` reads `--i` off each child and waits
   `min(i, 12) × 30ms`, so the arithmetic leaves the JSX and no two lists disagree.
-- **120 / 200 / 320ms.** A hover or a color is `--bn-t-fast`; something that moves is
+- **120 / 200 / 280ms.** A hover or a color is `--bn-t-fast`; something that moves is
   `--bn-t`; something that arrives over the page is `--bn-t-slow`.
 - **`prefers-reduced-motion` is honoured, with four exemptions that are named.** The busy
   ring, the skeleton shimmer, the live dot and the capture spinners keep turning at 1.4s

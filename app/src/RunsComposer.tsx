@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 
 import {
   cropPreview,
@@ -879,10 +879,10 @@ export function RunsComposer({
                           <button
                             key={record.box}
                             type="button"
-                            className="runs-box"
+                            className="runs-box bn-stagger-item"
                             aria-pressed={on}
                             onClick={() => onToggleBox(record.box)}
-                            style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}
+                            style={{ '--i': i } as CSSProperties}
                           >
                             <span className="runs-box-num" aria-hidden="true">
                               {record.box}

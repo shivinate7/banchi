@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from 'react'
 
 import { readUpload } from './csvUpload'
 import { Button, EmptyFrame, EmptyState, Icon, IconButton, Money, Notice, OrderLink, type IconName } from './kit'
@@ -614,8 +614,8 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                     return (
                       <li
                         key={row.order}
-                        className={`shipping-row shipping-row-${row.lane}`}
-                        style={{ animationDelay: `${Math.min(at, 12) * 30}ms` }}
+                        className={`shipping-row bn-stagger-item shipping-row-${row.lane}`}
+                        style={{ '--i': at } as CSSProperties}
                       >
                         <div className="shipping-row-top">
                           <span className="shipping-order">

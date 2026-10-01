@@ -9,7 +9,7 @@
 **AMENDED 2026-09-06: THE ROSTER IS SPELLED HERE, BECAUSE IT NEVER WAS.** The sentence above promised the keys were "named here", and they were named only as English — *box number, set hint, finish claim, rarity claim, capture id* — while the app spelled them `pkmnscan.session.*`. A key described but never spelled is a key no search finds. Measured 2026-09-06: seven of the eight keys under this carve-out appeared in no markdown file in this repo, and two of those had never been described either, having arrived after this entry was written — `game` (D21's per-card claim, which is not the set hint beside it) and `product` (C10's sealed-product claim, `booster` / `etb` / `collection_box`). The whole set, as the app spells it after the rename the amendment below records:
 
 ```
-banchi.session.captureId  banchi.run-scope
+banchi.session.captureId  banchi.run-scope  banchi.session.homeDeck
 ```
 
 `app/src/CaptureScreen.tsx`'s `SESSION_KEYS` declares the first and `app/src/runHandoff.ts` the second, and **`make docs-audit`'s `storage keys` row now holds this roster against them**: a key the code writes that no markdown file names fails the commit. That is the bar `check_env_names` already sets for environment variables and it is deliberately the same low one — nothing mechanical can judge whether an explanation is any good, which is the semantic half D16 gives to a person, but it can hold that the key was written down once, on purpose, where a reader looking for it would find it. It is a bar this entry could not meet on the day it claimed to.
@@ -27,6 +27,8 @@ banchi.session.captureId  banchi.run-scope
 **A second use joined the carve-out on 2026-08-29, and it is a handoff rather than a memory** (D39). `banchi.run-scope` carries a box and the cards ticked in it from `#/inventory` to `#/runs`, because the pipeline moved to a route of its own and the one mass-select in the product did not. It qualifies on this entry's own test — device-local, meaningless anywhere else, not a fact about where a card IS — and it is `sessionStorage` for the same reason everything else here is: a tick list that outlived the browser would be a filter over a spend button that nobody alive remembered setting.
 
 **It differs from the four above in what a reload means.** Those exist so a reload does not lose the shift. This one exists so a reload does not silently WIDEN what the next press pays for, and it is cleared deliberately on three routes rather than expiring: the operator's control, picking a box, and arriving from `#/inventory` with nothing ticked. `app/src/runHandoff.ts` is the one module that reads or writes it.
+
+**A third key joined for the Home deck (`docs/specs/motion.md`, P3).** `banchi.session.homeDeck` says the deck's full entry already played in this sitting, so a reload inside the sitting does not replay it. It names no card, box or position, and a new sitting should play the deck again, which is why it is session scope and not device scope. `app/src/Home.tsx` declares it.
 
 `useCamera.ts` already argues this carve-out informally for the device id and the rotation chip; this entry generalizes what that file worked out and makes it checkable.
 

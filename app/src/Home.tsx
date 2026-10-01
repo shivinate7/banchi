@@ -126,6 +126,22 @@ const FOCUS = 0.34
 
 /* The last named deck this tab drew: a revisit shows it by name until the fresh read lands. */
 let lastNamedDeck: DeckCard[] = []
+/** The deck's full entry plays on the first visit to Home of a sitting; later visits, and a reload, fade in at rest. */
+const DECK_KEY = 'banchi.session.homeDeck'
+function deckPlayed(): boolean {
+  try {
+    return sessionStorage.getItem(DECK_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+function markDeckPlayed(): void {
+  try {
+    sessionStorage.setItem(DECK_KEY, '1')
+  } catch {
+    /* storage unavailable: the deck just plays again */
+  }
+}
 
 /** The newest box that holds cards, named under the hero. NO PHOTOGRAPH IS ASKED FOR FROM IT:
  *  a slot's occupant is unknown until the card read answers, and a card with no photograph
@@ -407,6 +423,8 @@ function Ribbon({ plot, live }: { readonly plot: Ribbon; readonly live: boolean 
 }
 
 export function Home() {
+  const [restDeck] = useState(deckPlayed)
+  useEffect(markDeckPlayed, [])
   const status = useLoad<ServerStatus>(getStatus)
   const boxes = useLoad<BoxRecord[]>(async () => (await getBoxes()).boxes)
   /* BOXES LIST MOST RECENT FIRST (the owner's ruling, 2026-09-23), off the SAME store
@@ -621,7 +639,7 @@ export function Home() {
   ]
 
   const deckArt = (
-    <div className="home-hero-art">
+    <div className="home-hero-art" data-rest={restDeck ? 'true' : undefined}>
       {front === undefined || deckBox === null ? (
             /* Nothing photographed yet: the frames alone, and no name. A deck that invents a
                card is the defect this replaced. */

@@ -31,7 +31,7 @@
   .bn-page { padding: var(--bn-4) var(--bn-4) var(--bn-10); }
 }
 @keyframes bn-page-in {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(var(--bn-rise)); }
   to { opacity: 1; transform: none; }
 }
 
@@ -77,8 +77,15 @@
    the pricing lane's files rather than one near-identical rule per file. */
 .bn-dotline { display: inline-flex; align-items: center; flex-wrap: wrap; }
 .bn-dotline > span:not(:last-child)::after { content: '·'; margin-left: var(--bn-2); color: var(--bn-ink-4); }
-/* One cadence for every list: give each child `style="--i: <index>"` and it waits its turn. */
-.bn-stagger > * { animation-delay: calc(min(var(--i, 0), var(--bn-stagger-cap)) * var(--bn-stagger)); }
+/* One cadence for every list: give each child `style="--i: <index>"` and it waits its turn.
+   `.bn-stagger` on the parent, or `.bn-stagger-item` on a child whose parent is not the list.
+   An entry inside a page FADES and does not rise: the page already rose, and a list rising on
+   top of it was three speeds at once. !important because a component's own `animation`
+   shorthand resets both name and delay. */
+.bn-stagger > *, .bn-stagger-item {
+  animation-name: bn-fade !important;
+  animation-delay: calc(min(var(--i, 0), var(--bn-stagger-cap)) * var(--bn-stagger)) !important;
+}
 
 /* ---- page header --------------------------------------------------------- */
 .bn-head {
@@ -509,7 +516,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   border: 2px solid currentColor;
   border-right-color: transparent;
   color: var(--bn-ink-3);
-  animation: bn-spin var(--bn-t-spin) linear infinite;
+  animation: bn-spin var(--bn-t-spin) var(--bn-ease-linear) infinite;
 }
 .bn-btn-primary[data-busy='true']::after, .bn-btn-danger-solid[data-busy='true']::after { color: var(--bn-on-accent); }
 @keyframes bn-spin { to { transform: rotate(360deg); } }
@@ -644,11 +651,13 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-dot-ok { background: var(--bn-ok); }
 .bn-dot-warn { background: var(--bn-warn); }
 .bn-dot-danger { background: var(--bn-danger); }
-.bn-dot-live { background: var(--bn-live); box-shadow: 0 0 0 0 var(--bn-live-tint); animation: bn-pulse var(--bn-t-pulse) ease-out infinite; }
+.bn-dot-live { background: var(--bn-live); box-shadow: 0 0 0 0 var(--bn-live-tint); animation: bn-pulse var(--bn-t-pulse) var(--bn-ease-out) infinite; }
 .bn-dot-accent { background: var(--bn-accent); }
 /* The live dot at rest: it keeps its colour and stops the pulse. A modifier, so `bn-dot-live`
    itself is unchanged for every screen that wants the beat. */
 .bn-dot-still { animation: none; box-shadow: none; }
+/* ONE LOOP FOR "LIVE" on anything that is not a dot: an icon, a bar segment, a standing line. */
+@keyframes bn-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 @keyframes bn-pulse {
   0% { box-shadow: 0 0 0 0 var(--bn-live-tint); }
   70% { box-shadow: 0 0 0 8px transparent; }
@@ -1166,7 +1175,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   inset: 0;
   transform-origin: left;
   background: currentColor;
-  animation: bn-drain var(--receipt-ms, 20s) linear forwards;
+  animation: bn-drain var(--receipt-ms, 20s) var(--bn-ease-linear) forwards;
 }
 @keyframes bn-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 /* Under reduced motion the drain would finish instantly at scaleX(0) — an EMPTY bar for the
@@ -1191,13 +1200,13 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   inset: 0;
   transform: translateX(-100%);
   background: linear-gradient(90deg, transparent, var(--bn-line-strong), transparent);
-  animation: bn-shimmer 1.4s ease-in-out infinite;
+  animation: bn-shimmer var(--bn-t-shimmer) var(--bn-ease-loop) infinite;
 }
 @keyframes bn-shimmer { to { transform: translateX(100%); } }
 
 /* ---- progress ------------------------------------------------------------------------ */
 .bn-progress { height: 6px; border-radius: 3px; background: var(--bn-surface-2); overflow: hidden; }
-.bn-progress > span { display: block; height: 100%; border-radius: 3px; background: var(--bn-accent); transition: width var(--bn-t-slow) var(--bn-ease); }
+.bn-progress > span { display: block; height: 100%; border-radius: 3px; background: var(--bn-accent); transition: width var(--bn-t-layout) var(--bn-ease); }
 .bn-progress-ok > span { background: var(--bn-ok); }
 /* A SMALL SIZE (S9), read off the two hand-rolled bars this composes with: Orders' own
    `.orders-order-progress .bn-progress` override (height: 5px) and Inventory's
@@ -1269,7 +1278,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   border-radius: var(--bn-r-xl);
   background: var(--bn-surface);
   box-shadow: var(--bn-shadow-3);
-  animation: bn-dialog-in var(--bn-t-slow) var(--bn-ease-spring) backwards;
+  animation: bn-dialog-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
 @keyframes bn-dialog-in {
   from { opacity: 0; transform: translate(-50%, -50%) scale(0.96) translateY(8px); }
@@ -1342,17 +1351,17 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 
 /* Leaving. `useLeave(open)` in kit/index.tsx keeps the node mounted for --bn-t-fast with
    `data-leaving` set; these are the only `forwards` animations in the kit (see the header). */
-.bn-scrim[data-leaving] { animation: bn-fade-out var(--bn-t-fast) var(--bn-ease) forwards; pointer-events: none; }
-.bn-sheet[data-leaving] { animation: bn-sheet-out var(--bn-t-fast) var(--bn-ease) forwards; pointer-events: none; }
+.bn-scrim[data-leaving] { animation: bn-fade-out var(--bn-t-fast) var(--bn-ease-in) forwards; pointer-events: none; }
+.bn-sheet[data-leaving] { animation: bn-sheet-out var(--bn-t-fast) var(--bn-ease-in) forwards; pointer-events: none; }
 .bn-sheet-left[data-leaving] { animation-name: bn-sheet-out-left; }
 .bn-sheet-bottom[data-leaving] { animation-name: bn-sheet-down; }
-.bn-dialog[data-leaving] { animation: bn-dialog-out var(--bn-t-fast) var(--bn-ease) forwards; pointer-events: none; }
-.bn-menu[data-leaving] { animation: bn-pop-out var(--bn-t-fast) var(--bn-ease) forwards; pointer-events: none; }
+.bn-dialog[data-leaving] { animation: bn-dialog-out var(--bn-t-fast) var(--bn-ease-in) forwards; pointer-events: none; }
+.bn-menu[data-leaving] { animation: bn-pop-out var(--bn-t-fast) var(--bn-ease-in) forwards; pointer-events: none; }
 @keyframes bn-pop-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-4px) scale(0.98); } }
 /* The leave half of the bottom-rise above — same 639 (kit-frame-2, 2026-09-24), same reason. */
 @media (max-width: 639px) {
   .bn-sheet:not(.bn-drawer)[data-leaving] { animation-name: bn-sheet-down; }
-  .bn-dialog[data-leaving] { animation: bn-sheet-down var(--bn-t-fast) var(--bn-ease) forwards; }
+  .bn-dialog[data-leaving] { animation: bn-sheet-down var(--bn-t-fast) var(--bn-ease-in) forwards; }
 }
 
 /* ---- the kit's overlays: one header, one body, one foot (kit/overlay.tsx) --------------------
@@ -1472,8 +1481,8 @@ img.bn-crop[data-cropped='true'] {
 /* ---- utility animations --------------------------------------------------------------------- */
 .bn-anim-in { animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards; }
 .bn-anim-pop { animation: bn-pop var(--bn-t) var(--bn-ease-spring) backwards; }
-@keyframes bn-flash { 0% { opacity: 0.9; } 100% { opacity: 0; } }
-.bn-flash { position: absolute; inset: 0; background: var(--bn-flash); opacity: 0; pointer-events: none; animation: bn-flash 380ms var(--bn-ease-out) backwards; }
+@keyframes bn-flash { 0% { opacity: 0.6; } 100% { opacity: 0; } }
+.bn-flash { position: absolute; inset: 0; background: var(--bn-flash); opacity: 0; pointer-events: none; animation: bn-flash var(--bn-t-flash) var(--bn-ease-out) backwards; }
 
 /* ---- toast stack ------------------------------------------------------------------------- */
 .bn-toasts {
@@ -1509,7 +1518,7 @@ img.bn-crop[data-cropped='true'] {
 }
 :root[data-theme='dark'] .bn-toast { background: var(--bn-surface); color: var(--bn-ink); box-shadow: var(--bn-shadow-3); }
 /* A dismissed toast folds away so the ones beneath it slide up rather than jump. */
-.bn-toast[data-leaving] { animation: bn-toast-out var(--bn-t) var(--bn-ease) forwards; pointer-events: none; }
+.bn-toast[data-leaving] { animation: bn-toast-out var(--bn-t) var(--bn-ease-in) forwards; pointer-events: none; }
 @keyframes bn-toast-out {
   from { opacity: 1; max-height: 140px; }
   to { opacity: 0; transform: translateY(6px) scale(0.98); max-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: calc(-1 * var(--bn-2)); }
@@ -1559,7 +1568,7 @@ img.bn-crop[data-cropped='true'] {
   background: currentColor;
   opacity: 0.35;
   transform-origin: left;
-  animation: bn-drain linear forwards;
+  animation: bn-drain var(--bn-ease-linear) forwards;
 }
 
 /* A keycap is a promise about a keyboard; a phone has none (UX-040). Two things hide on a coarse

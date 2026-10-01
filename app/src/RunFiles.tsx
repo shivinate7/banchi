@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { Icon, type IconName } from './kit'
 import { runFileUrl } from './server'
 import type { RunFile } from './types'
@@ -49,10 +50,10 @@ export function RunFiles({
           return (
             <a
               key={file.name}
-              className={`run-file${file.is_import ? ' run-file-import' : ''}`}
+              className={`run-file bn-stagger-item${file.is_import ? ' run-file-import' : ''}`}
               href={runFileUrl(run, file.name)}
               download={file.name}
-              style={{ animationDelay: `${i * 30}ms` }}
+              style={{ '--i': i } as CSSProperties}
             >
               <span className="run-file-icon">
                 <Icon name={kind.icon} size={16} />

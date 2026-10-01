@@ -4503,7 +4503,7 @@ function OrderLineRow({
               stopKey={copy.pick.place.label === null ? `pooled/${copy.pick.place.game ?? ''}` : `box/${copy.pick.box}`}
               lit={lit}
               lead={leadKey}
-              delay={Math.min(at, 8) * 24}
+              at={at}
             />
           ))}
           {/* ONE CONTROL, BOTH WAYS. Collapsed it names how many it holds and which drawer they
@@ -4717,7 +4717,7 @@ function PickLine({
   onPull,
   name,
   showOrder,
-  delay,
+  at,
   hideCondition,
   stopKey,
   lit,
@@ -4731,7 +4731,7 @@ function PickLine({
   readonly onPull: PullHandler
   readonly name: string | null
   readonly showOrder?: boolean
-  readonly delay?: number
+  readonly at: number
   /** Set where the line's heading already carries this copy's condition. */
   readonly hideCondition?: boolean
   /** Which block of the line's map this copy belongs to, so the block and its rows can be read
@@ -4748,7 +4748,7 @@ function PickLine({
   const full = `${pick.card_name ?? line.line.name ?? line.sku}${pick.condition === null ? '' : ` (${pick.condition})`}`
   return (
     <li
-      className={`orders-pick${pick.held_by !== null ? ' orders-pick-is-held' : ''}`}
+      className={`orders-pick bn-stagger-item${pick.held_by !== null ? ' orders-pick-is-held' : ''}`}
       data-offered={offered === true ? 'true' : undefined}
       data-box={pick.box}
       data-index={pick.index}
@@ -4756,7 +4756,7 @@ function PickLine({
       data-pressing={pressing ? 'true' : undefined}
       data-lit={stopKey !== undefined && lit === stopKey ? 'true' : undefined}
       data-lead={stopKey !== undefined && lead === stopKey ? 'true' : undefined}
-      style={delay === undefined ? undefined : ({ '--delay': `${delay}ms` } as CSSProperties)}
+      style={{ '--i': at } as CSSProperties}
     >
       <span className="orders-pick-place">
         {pick.place.label === null ? (

@@ -213,14 +213,10 @@
   border-radius: var(--bn-r);
   box-shadow: var(--bn-shadow-3);
   cursor: zoom-in;
-  animation: rv-photo-in var(--bn-t-slow) var(--bn-ease-out) both;
+  animation: bn-fade var(--bn-t-slow) var(--bn-ease-out) both;
 }
 /* Opacity only: the <img> box is what the loupe aims off and what the spec measures, so
    it must not be scaled while it enters. */
-@keyframes rv-photo-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
 
 /* The 1:1 loupe. `background-size: auto` paints the stored frame at natural size; the
    position picks which natural pixel sits under the pointer. Hidden at rest. */
@@ -409,11 +405,7 @@
   max-width: 760px;
   /* `backwards`, never `both`: the close dialog and its scrim are `position: fixed` inside
      this column, and a retained end-state transform would make this their containing block. */
-  animation: rv-verdict-in var(--bn-t) var(--bn-ease-out) backwards;
-}
-@keyframes rv-verdict-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: none; }
+  animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
 }
 .review-question { display: flex; flex-direction: column; gap: var(--bn-1-5); }
 .review-question-title {
@@ -533,11 +525,7 @@
 
 /* ---- candidate rows ----------------------------------------------------------- */
 .review-candidates { list-style: none; display: flex; flex-direction: column; gap: var(--bn-2); }
-.review-candidates > li { animation: rv-row-in var(--bn-t-slow) var(--bn-ease-out) both; }
-@keyframes rv-row-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+.review-candidates > li { animation: bn-fade var(--bn-t-slow) var(--bn-ease-out) both; }
 .review-candidate {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
@@ -632,7 +620,7 @@
   border-radius: 50%;
   border: 2px solid var(--bn-line-strong);
   border-top-color: var(--bn-accent);
-  animation: bn-spin 0.7s linear infinite;
+  animation: bn-spin var(--bn-t-spin) var(--bn-ease-linear) infinite;
 }
 
 /* The close panel: a dialog on a desktop, a sheet on a phone. Digits and Escape are the
@@ -962,7 +950,7 @@
   background: var(--rv-well);
   box-shadow: var(--bn-shadow-2);
 }
-.review-group-cell { display: flex; flex-direction: column; gap: var(--bn-1-5); animation: rv-verdict-in var(--bn-t-slow) var(--bn-ease-out) both; }
+.review-group-cell { display: flex; flex-direction: column; gap: var(--bn-1-5); animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) both; }
 .review-group-photo { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: var(--bn-r); box-shadow: var(--bn-shadow-2); }
 .review-group-absent {
   aspect-ratio: 9 / 16;
@@ -1010,11 +998,11 @@
   animation: rv-pop var(--bn-t-slow) var(--bn-ease-spring) both;
 }
 .review-done-empty .bn-empty-art .bn-icon { width: 38px; height: 38px; }
-.review-done-empty .bn-empty-art path { stroke-dasharray: 32; stroke-dashoffset: 32; animation: rv-draw 560ms var(--bn-ease-out) 220ms forwards; }
-.review-done-empty .bn-empty-title { font-size: var(--bn-fs-3xl); font-weight: 800; letter-spacing: -0.02em; animation: rv-verdict-in var(--bn-t-slow) var(--bn-ease-out) 120ms both; }
-.review-done-empty .bn-empty-body { animation: rv-verdict-in var(--bn-t-slow) var(--bn-ease-out) 220ms both; }
+.review-done-empty .bn-empty-art path { stroke-dasharray: 32; stroke-dashoffset: 32; animation: rv-draw var(--bn-t-draw) var(--bn-ease-out) calc(var(--bn-stagger) * 7) forwards; }
+.review-done-empty .bn-empty-title { font-size: var(--bn-fs-3xl); font-weight: 800; letter-spacing: -0.02em; animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) calc(var(--bn-stagger) * 4) both; }
+.review-done-empty .bn-empty-body { animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) calc(var(--bn-stagger) * 7) both; }
 .review-done-tally::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
-.review-done-empty .bn-empty-actions { animation: rv-verdict-in var(--bn-t-slow) var(--bn-ease-out) 320ms both; }
+.review-done-empty .bn-empty-actions { animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) calc(var(--bn-stagger) * 10) both; }
 .review-done-session { padding: 0 var(--bn-4) var(--bn-2); }
 .review-done-session .bn-rule { margin-bottom: var(--bn-2); }
 @keyframes rv-pop {

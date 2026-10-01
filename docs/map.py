@@ -5974,10 +5974,9 @@ COMPONENTS = [
                                      "specificity, so every per-screen choice outranks them and "
                                      "nothing here can take a cursor away from a stylesheet that "
                                      "named one. TWO THINGS IT GAINED WITH BANCHI: the theme flip is "
-                                     "one mechanism for the whole page — `html[data-theme-switching]` "
-                                     "eases every color together for --bn-t-slow, because a "
-                                     "cross-fade on <body> alone drew dark panels on a light ground "
-                                     "for a third of a second — and the reduced-motion rule EXEMPTS "
+                                     "one crossfade of whole-page snapshots (`startViewTransition`, "
+                                     "timed here at --bn-t), because easing every node drew a "
+                                     "flat grey page for about 60ms — and the reduced-motion rule EXEMPTS "
                                      "the four loops that carry meaning (the busy ring, the skeleton "
                                      "shimmer, the live dot, the two capture spinners), slowed to "
                                      "1.4s rather than frozen, because a ring stopped at a partial "
@@ -6291,8 +6290,8 @@ COMPONENTS = [
                                     "three off a typed field. "
                                     "THE THEME LIVES HERE (2026-09): `useTheme` follows the "
                                     "system until a choice is stored, the toggle stamps "
-                                    "`data-theme` on <html> and `data-theme-switching` for one "
-                                    "beat so base.css can ease the whole page at once. "
+                                    "`data-theme` on <html> inside `startViewTransition`, so the "
+                                    "browser crossfades the whole page at once. "
                                     "D138'S NOTICE IS A TOAST NOW — `useServer` holds the "
                                     "`onServerBoot` subscription that `ServerReloaded.tsx` used "
                                     "to, and raises a `status` toast; it still SUBSCRIBES and "
@@ -9022,6 +9021,24 @@ COMPONENTS = [
                         "number in one expression, every call site in the product sits below "
                         "it, and shipping the display cut into a 32px rail is section 9's own "
                         "measured failure. Observed red under `size < 64` -> `size < 16`.",
+            },
+            "tests/motion-theme-flash.spec.ts": {
+                "does": "two motion guards from `docs/specs/motion.md`. The theme switch, from "
+                        "light and from dark, samples the body's own background every frame and "
+                        "refuses any colour that is neither theme's ground, which the old "
+                        "per-node fade painted mid-grey. The capture flash reads the real "
+                        "`.bn-flash` animation and asserts its peak opacity and its duration, "
+                        "which must be `--bn-t-flash`. Not a harness test; `make design-check` "
+                        "runs it.",
+                "governed_by": ["D50"],
+                "note": "Proved red first on main: the body sampled mid-grey, and the flash was 0.9 over 380ms.",
+            },
+            "tests/staggerCheck.ts": {
+                "does": "one helper, `expectOneStagger`: every row of a list has an "
+                        "`animation-delay` of min(i, `--bn-stagger-cap`) times `--bn-stagger`, "
+                        "both read from the tokens. `pricing.spec.ts` and `run-panel.spec.ts` "
+                        "call it, so two screens hold the one cadence. Not a harness test.",
+                "governed_by": ["D50"],
             },
             "tests/home-deck.spec.ts": {
                 "does": "`#/`'s verdict sits within 64px of the greeting at 1440 and 820, both "
