@@ -124,6 +124,8 @@ const FOCUS = 0.34
 
 /* The last named deck this tab drew: a revisit shows it by name until the fresh read lands. */
 let lastNamedDeck: DeckCard[] = []
+/* PROTOTYPE (P3): the deck's entrance has played in this tab. A return only fades. */
+let deckEntered = false
 
 /** The newest box that holds cards, named under the hero. NO PHOTOGRAPH IS ASKED FOR FROM IT:
  *  a slot's occupant is unknown until the card read answers, and a card with no photograph
@@ -412,6 +414,7 @@ export function Home() {
      box holding the most cards, then the number — read once on mount, the way that screen
      reads it, since this panel is a summary and never the place a pick gets recorded. */
   const [recency] = useState<ReadonlyMap<number, string>>(() => storedBoxRecency())
+  const [deckReturn] = useState(() => deckEntered)
   /* A NAME FOR A BOX NUMBER THIS SCREEN DID NOT ALREADY HAVE ONE FOR — the hero's card-based
      pass (`deckFromCards`) can front a card from a DIFFERENT box than `deckFromBoxes`'s own
      "newest box", so its fallback needs a lookup rather than `deckBox`'s own record. */
@@ -615,8 +618,11 @@ export function Home() {
     },
   ]
 
+  useEffect(() => {
+    if (front !== undefined) deckEntered = true
+  }, [front])
   const deckArt = (
-    <div className="home-hero-art">
+    <div className="home-hero-art" data-return={deckReturn ? 'true' : undefined}>
       {front === undefined || deckBox === null ? (
             /* Nothing photographed yet: the frames alone, and no name. A deck that invents a
                card is the defect this replaced. */

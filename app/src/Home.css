@@ -227,7 +227,14 @@ a.home-deck { pointer-events: auto; }
 .home-deck-card-no > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1); opacity: 0.6; }
 /* `from` only, on purpose: each card lands on ITS OWN rotation, which a `to { transform: none }`
    would strip. The end of an enter animation is the element's resting style. */
-@keyframes home-deck-in { from { opacity: 0; transform: translateY(14px); } }
+/* PROTOTYPE (P3). First visit: the same entrance, shorter and shallower, over in --bn-t-emphasis
+   (cards 0/60/120/180ms + 420ms, address 300ms + 300ms). Return: a 200ms fade, no rise, no delay. */
+.home-deck-card { animation-duration: var(--bn-t-draw); }
+.home-deck-address { animation-delay: 300ms; animation-duration: 300ms; }
+.home-hero-art[data-return='true'] .home-deck-card,
+.home-hero-art[data-return='true'] .home-deck-address { animation: home-deck-fade var(--bn-t) var(--bn-ease-out) backwards; animation-delay: 0ms; }
+@keyframes home-deck-fade { from { opacity: 0; } }
+@keyframes home-deck-in { from { opacity: 0; transform: translateY(8px); } }
 @media (max-width: 767px) {
   /* Hidden WITHOUT `display: none`: Chromium's full-page capture matches this media query for
      a frame, and a display toggle restarts the deck's enter animations — so every screenshot
