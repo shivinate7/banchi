@@ -226,7 +226,6 @@
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
 .browse-quiet:hover { background: var(--bn-surface-2); color: var(--bn-ink); }
-.browse-status-picked { height: 20px; }
 
 .browse-empty .bn-empty { padding: var(--bn-6) var(--bn-4); }
 .browse-empty .bn-empty-title { font-size: var(--bn-fs-base); }
@@ -312,57 +311,8 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.browse-sectcount[data-empty='true'] { visibility: hidden; }
-.browse-sectcount {
-  flex: none;
-  min-width: 22px;
-  height: 18px;
-  padding: 0 var(--bn-1-5);
-  border-radius: var(--bn-r-full);
-  background: var(--bn-surface-2);
-  font-size: var(--bn-fs-xs);
-  font-weight: 600;
-  color: var(--bn-ink-3);
-  display: inline-grid;
-  place-items: center;
-  font-variant-numeric: tabular-nums;
-}
 
-/* the ticks: the kit's checkbox look (`.bn-check input`, kit.css), on a bare input — 16px to
-   match it exactly rather than a drifted 15px copy. */
-.browse-tick {
-  appearance: none;
-  flex: none;
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  border-radius: 4px;
-  border: 1.5px solid var(--bn-line-strong);
-  background: var(--bn-surface);
-  display: grid;
-  place-content: center;
-  cursor: pointer;
-  transition: background-color var(--bn-t-fast), border-color var(--bn-t-fast), transform var(--bn-t-fast) var(--bn-ease-spring);
-}
-.browse-tick::before {
-  content: '';
-  width: 9px;
-  height: 9px;
-  transform: scale(0);
-  transition: transform var(--bn-t-fast) var(--bn-ease-spring);
-  background: var(--bn-on-accent);
-  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
-}
-.browse-tick:checked { background: var(--bn-accent); border-color: var(--bn-accent); }
-.browse-tick:checked::before { transform: scale(1); }
-.browse-tick:indeterminate { background: var(--bn-accent); border-color: var(--bn-accent); }
-.browse-tick:indeterminate::before { transform: scale(1); clip-path: polygon(0 40%, 100% 40%, 100% 60%, 0 60%); }
-.browse-tick:active { transform: scale(0.9); }
 .browse-rowline { display: flex; align-items: center; gap: var(--bn-2); padding-left: var(--bn-3); }
-.browse-rowline .browse-rowtick { opacity: 0.55; transition: opacity var(--bn-t-fast) var(--bn-ease); }
-.browse-rowline:hover .browse-rowtick,
-.browse-rowline .browse-rowtick:checked,
-.browse-rowline .browse-rowtick:focus-visible { opacity: 1; }
 
 /* one line per card */
 .browse-row {
@@ -936,19 +886,6 @@
   .browse-row { min-height: 44px; padding-top: var(--bn-2); padding-bottom: var(--bn-2); }
   .browse-row-name { font-size: var(--bn-fs-base); }
   .browse-sectfold { min-height: 44px; }
-  .browse-tick { width: 22px; height: 22px; border-radius: 5px; }
-  .browse-tick::before { width: 10px; height: 10px; }
-  /* THE TICK'S OWN HIT AREA REACHES PAST ITS DRAWN BOX — and until 2026-09-07 it only reached
-     three ways (D117). The row button is a SIBLING in the same grid and paints later, so it took
-     every press in the 12px to the tick's right: the pseudo-element was there, under the row,
-     doing nothing on that side. Measured at 390, the tick answered 46px tall and 34px wide.
-     `z-index` on a positioned element is what puts the pad above the sibling it was drawn to
-     overlap; without it the intent is in the stylesheet and not on the screen. */
-  .browse-rowtick,
-  .browse-secttick { position: relative; z-index: 1; }
-  .browse-rowtick::after,
-  .browse-secttick::after { content: ''; position: absolute; inset: -12px; }
-  .browse-rowline .browse-rowtick { opacity: 0.8; }
   .browse-quiet { height: var(--bn-control-h-lg); min-width: 40px; justify-content: center; padding: 0 var(--bn-3); font-size: var(--bn-fs-sm); }
   .browse-status { gap: var(--bn-1) var(--bn-2); }
   /* the context bar's search button and the rail sheet's input are thumb-sized too */

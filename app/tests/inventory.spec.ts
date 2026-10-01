@@ -3310,98 +3310,71 @@ test('the operations are rows on one edge, and the delete is the only bordered o
 
 // ------------------------------------------------------------------------- the mass-select
 
-test('ticking rows narrows what a box-wide claim will reach, and says so on the button', async ({
+/* THE LIST CARRIES NO TICKS (D-cards-picked-in-manage-box). Cards for a bulk box action are
+   picked inside Manage box, in the sheet of the act that uses them. */
+test('the list draws no tick, and Claims states the whole box on its own button', async ({ page }) => {
+  await open(page)
+  await expandAll(page)
+  await expect(page.locator('.browse-row').first()).toBeVisible()
+  await expect(page.locator('input[type="checkbox"].browse-rowtick, .browse-secttick, .browse-status-picked')).toHaveCount(0)
+  await expect(page.locator('.browse-sectcount')).toHaveCount(0)
+
+  await openBoxOps(page)
+  /* SEVEN, not the five on hand: the sweep is over RECORDS, and a departed card's claim is
+     as correctable as any other — D58 changed which cards a NUMBER counts, not which cards a
+     write reaches. The accessible name is asserted beside the visible one: the label and the
+     detail are grid items with no text node between them. */
+  const claims = page.getByRole('button', { name: /^Claims/ })
+  await expect(claims.locator('.boxops-op-label')).toHaveText('Claims')
+  await expect(claims.locator('.boxops-op-detail')).toHaveText('7 cards')
+  await expect(claims).toHaveAttribute('aria-label', 'Claims, 7 cards')
+})
+
+test('the card picker in the Claims sheet starts whole, narrows by card and by section, and refuses none', async ({
   page,
 }) => {
   await open(page)
   await openBoxOps(page)
+  await page.getByRole('button', { name: /^Claims/ }).click()
+  const picker = page.locator('.boxops-picker')
+  await expect(picker.getByRole('button', { name: /^Whole box/ })).toHaveAttribute('aria-pressed', 'true')
+  await expect(picker.locator('.boxops-picker-list')).toHaveCount(0)
 
-  /* THE SCOPE MOVED OFF THE LABEL AND ONTO THE ROW'S DETAIL (2026-08-26), and this case moved
-     with it rather than being loosened. What it guards is unchanged and is the whole reason it
-     exists: what a bulk write will reach is stated ON the control, before the press, and it
-     narrows when rows are ticked. What changed is the register — the quantity is drawn in the
-     utility face at the far edge of the row instead of set in bold body type inside a sentence
-     — so the assertion reads the two spans rather than one concatenated string.
+  await picker.getByRole('button', { name: 'Some cards' }).click()
+  const cards = picker.locator('.boxops-picker-card input')
+  const total = await cards.count()
+  expect(total).toBeGreaterThan(1)
+  await expect(picker.locator('.boxops-picker-count')).toHaveText(`${total} of ${total} picked`)
 
-     THE ACCESSIBLE NAME IS ASSERTED BESIDE THE VISIBLE ONE, which the old shape got for free
-     and this one does not: the label and the detail are grid items with no text node between
-     them, so the computed name would concatenate to `Set claims5 cards` without the explicit
-     `aria-label` that `Op` supplies. A promise that holds on screen and not in the accessibility
-     tree is half a promise, and the number-on-the-control rule is D20's. */
-  const claims = page.getByRole('button', { name: /^Claims/ })
-  await expect(claims.locator('.boxops-op-label')).toHaveText('Claims')
-  /* SEVEN, not the five on hand: the sweep is over RECORDS, and a departed card's claim is
-     as correctable as any other — D58 changed which cards a NUMBER counts, not which cards a
-     write reaches. */
-  await expect(claims.locator('.boxops-op-detail')).toHaveText('7 cards')
-  await expect(claims).toHaveAttribute('aria-label', 'Claims, 7 cards')
+  await cards.nth(0).uncheck()
+  await expect(picker.locator('.boxops-picker-count')).toHaveText(`${total - 1} of ${total} picked`)
+  await expect(picker.locator('.boxops-picker-head input').first()).toHaveJSProperty('indeterminate', true)
 
-  /* THE TICKING HAPPENS IN THE WALK AND THE CONTROL LIVES IN A SHEET OVER IT, so the sheet is
-     shut to reach the rows and opened again to read what they did to the control. That is the
-     operator's own sequence, and the promise it is being held to is unchanged: the scope is
-     stated ON the control, before the press, and it narrows when rows are ticked. */
-  await closeBoxOps(page)
-  await expandAll(page)
-  await page.locator('.browse-rowtick').nth(0).check()
-  await page.locator('.browse-rowtick').nth(2).check()
-  await expect(page.locator('.browse-status-picked')).toHaveText('2 ticked')
+  await picker.getByRole('button', { name: 'None' }).click()
+  await expect(picker.locator('.boxops-picker-count')).toHaveText(`0 of ${total} picked`)
+  await picker.locator('.boxops-picker-head input').first().check()
+  await expect(picker.locator('.boxops-picker-head input').first()).toHaveJSProperty('indeterminate', false)
+  await picker.getByRole('button', { name: 'None' }).click()
 
-  await openBoxOps(page)
-  await expect(claims.locator('.boxops-op-detail')).toHaveText('2 ticked')
-  await expect(claims).toHaveAttribute('aria-label', 'Claims, 2 ticked')
-
-  /* AND THE ROW DID NOT CHANGE WIDTH WHILE IT SAID SO. The old label grew and shrank by ~150px
-     with the selection, which is what `boxops-actions-lone` existed to keep off the delete's
-     row; a full-measure row cannot, and only the detail moves. Asserted because it is the
-     property that let that guard be retired. */
-  /* THE LITERAL 360 WENT WHEN THE WALK'S TRACK DID (2026-08-29). It was the map column's width,
-     and that column is now `minmax(285px, 22fr)` — 299px at 1440 and 285px at the 1280 this
-     suite runs at. Pinning the number again would pin the RATIO to this case, so what is
-     asserted is the property the number was standing in for: the row is a full measure, and it
-     does not resize when the selection changes. That is stronger than the literal was, because a
-     literal goes green on a row that happens to be 360px for a different reason. */
-  const width = (await claims.boundingBox())?.width
-  const opWidth = await page.locator('.boxops-op').first().evaluate((el: HTMLElement) => el.offsetWidth)
-  /* `offsetWidth` is an integer and a bounding box is not, so they agree to the pixel and not to
-     the sixteenth of one. Same claim: the row is exactly as wide as its siblings. */
-  expect(width).toBeCloseTo(opWidth ?? -1, 0)
-
-  /* THE STABILITY HALF, WHICH IS WHAT THE OLD LITERAL ACTUALLY BOUGHT. The label used to grow
-     and shrink by ~150px with the selection; only `.boxops-op-detail` may move now. The sheet
-     is shut to change the selection, for the reason above, and opened again to measure. */
-  await closeBoxOps(page)
-  await page.locator('.browse-rowtick').nth(2).uncheck()
-  await openBoxOps(page)
-  await expect(claims.locator('.boxops-op-detail')).toHaveText('1 ticked')
-  await expect(page.locator('.boxops-op').first()).toHaveJSProperty('offsetWidth', opWidth)
-
-  await closeBoxOps(page)
-  await page.locator('.browse-rowtick').nth(2).check()
-
-  /* A fold may hide a row but must never hide what a bulk write would reach, so the section
-     header carries its own share of the count.
-     `2/5` AND NOT `2/3`: the denominator counts RECORDS, and section 1 holds five of them —
-     three cards and two departures. It is deliberately not the on-hand count, because what
-     it is a share of is what the button beside it would write to, and a claim on a sold
-     card is as correctable as any other (D58 moved which cards carry a NUMBER, not which
-     cards a write reaches). */
-  await expect(page.locator('.browse-sectcount').nth(0)).toHaveText('2/5')
+  await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
+  await page.getByRole('textbox', { name: 'Note' }).fill('x')
+  await page.getByRole('button', { name: /^Apply to/ }).click()
+  await expect(page.locator('.bn-notice', { hasText: 'Pick at least one card' })).toBeVisible()
 })
 
-test('the box claim sends only the ticked fields, over only the ticked indices', async ({
+test('the box claim sends only the switched-on fields, over only the cards picked in the sheet', async ({
   page,
 }) => {
   const wire = await open(page)
-  /* The ticking is done in the walk, with the Manage sheet shut: it is modal over the screen,
-     and a scrim between the operator and the rows is the point of one. */
-  await expandAll(page)
-  await page.locator('.browse-rowtick').nth(0).check()
-  await page.locator('.browse-rowtick').nth(2).check()
-
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Claims/ }).click()
+  await page.locator('.boxops-picker').getByRole('button', { name: 'Some cards' }).click()
+  await page.locator('.boxops-picker').getByRole('button', { name: 'None' }).click()
+  const cards = page.locator('.boxops-picker-card input')
+  await cards.nth(0).check()
+  await cards.nth(1).check()
 
-  // Nothing armed yet: an editor that opened with a field ticked would write to every card in
+  // Nothing armed yet: an editor that opened with a field on would write to every card in
   // scope on the first press.
   await page.getByRole('button', { name: /^Apply to/ }).click()
   /* The refusal is a notice in the editor rather than a machine line, and it says the same two
@@ -3418,12 +3391,78 @@ test('the box claim sends only the ticked fields, over only the ticked indices',
   const put = wire.find((sent) => sent.method === 'PUT')
   expect(put?.path).toBe('/inventory/2')
   /* Exactly one claim and the two indices. `game`, `variant`, `rarity_claim` and `note` are
-     ABSENT rather than null — absent leaves a claim alone and null clears it, and a form that
-     sent all five would flatten a box the first time somebody fixed one field. */
-  expect(put?.body).toEqual({ set_hint: 'SV09', indices: [1, 3] })
+     ABSENT rather than null — absent leaves a claim alone and null clears it. */
+  expect(put?.body).toEqual({ set_hint: 'SV09', indices: [1, 2] })
 })
 
-test('a claim with nothing ticked reaches the whole box, and never sends an empty list', async ({
+test('Claims can fix one departed card alone, and Move never lists it', async ({ page }) => {
+  const wire = await open(page)
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /^Claims/ }).click()
+  const picker = page.locator('.boxops-picker')
+  await picker.getByRole('button', { name: 'Some cards' }).click()
+  await picker.getByRole('button', { name: 'None' }).click()
+  const gone = picker.locator('.boxops-picker-group', { hasText: 'Sold or moved out' })
+  await expect(gone).toHaveCount(1)
+  await gone.locator('.boxops-picker-card input').first().check()
+  await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
+  await page.getByRole('textbox', { name: 'Note' }).fill('sold copy')
+  await page.getByRole('button', { name: /^Apply to/ }).click()
+  const put = wire.find((sent) => sent.method === 'PUT')
+  expect(put?.body).toEqual({ note: 'sold copy', indices: [4] })
+
+})
+
+test('Move lists on-hand cards only', async ({ page }) => {
+  await open(page)
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /^Move,/ }).click()
+  await expect(page.locator('.boxops-picker').getByRole('button', { name: /^Whole box, 5 cards/ })).toBeVisible()
+  await page.locator('.boxops-picker').getByRole('button', { name: 'Some cards' }).click()
+  await expect(page.locator('.boxops-picker-group', { hasText: 'Sold or moved out' })).toHaveCount(0)
+})
+
+test('every card picked in the Claims sheet is the whole box and sends no indices key', async ({ page }) => {
+  const wire = await open(page)
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /^Claims/ }).click()
+  await expect(page.locator('.boxops-picker').getByRole('button', { name: /^Whole box, 7 cards/ })).toBeVisible()
+  await page.locator('.boxops-picker').getByRole('button', { name: 'Some cards' }).click()
+  await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
+  await page.getByRole('textbox', { name: 'Note' }).fill('all')
+  await page.getByRole('button', { name: /^Apply to/ }).click()
+  const put = wire.find((sent) => sent.method === 'PUT')
+  expect(put?.body).toEqual({ note: 'all' })
+})
+
+test('Move on two cards picked in the sheet sends exactly those indices', async ({ page }) => {
+  await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
+  const sent: { path: string; body: unknown }[] = []
+  await page.route(/\/inventory\/\d+\/move$/, async (route) => {
+    sent.push({ path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ box: 2, to_box: 7, moved: 2, cards: [] }),
+    })
+  })
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /^Move,/ }).click()
+  await page.locator('.boxops-picker').getByRole('button', { name: 'Some cards' }).click()
+  await page.locator('.boxops-picker').getByRole('button', { name: 'None' }).click()
+  const cards = page.locator('.boxops-picker-card input')
+  await cards.nth(0).check()
+  await cards.nth(1).check()
+  await page.locator('.bn-field .bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
+  await page.locator('.bn-section-pick-item').click()
+  await page.locator('.boxops-sheet').getByRole('button', { name: 'Move', exact: true }).click()
+  await expect(page.locator('.boxops-sheet')).toContainText('Moved 2 cards')
+  expect(sent).toHaveLength(1)
+  expect(sent[0]?.body).toMatchObject({ to_box: 7, indices: [1, 2] })
+})
+
+test('a claim over the whole box, and never sends an empty list', async ({
   page,
 }) => {
   const wire = await open(page)

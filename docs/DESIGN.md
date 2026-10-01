@@ -946,7 +946,7 @@ stands as evidence about the days it was taken and none of it is rewritten; what
 the finding — the tallest thing this product draws was being fitted into a column whose question
 is *where is this card*, and each fix moved it somewhere that was better on one axis. What
 remains here is `BoxRuns`: one row saying whether anything is running over this box, and the
-control that hands the ticked selection over. **It must never become two rows**, for the reason
+control that hands a carried selection over. **It must never become two rows**, for the reason
 the whole sequence above documents.
 
 **AND ON 2026-08-29 IT MOVED AGAIN, TO THE HEADER ROW, WHICH IS THIS FILE'S OWN RULE APPLIED TO

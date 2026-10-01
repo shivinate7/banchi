@@ -36,7 +36,7 @@ import {
   undoSale,
   failureTone,
 } from './server'
-import { BoxIdentity, BoxOps, ClaimEditor, type ClaimPatch } from './BoxOps'
+import { BoxIdentity, BoxOps, ClaimEditor, type ClaimPatch, type PickSection } from './BoxOps'
 import { reasonLabel } from './reasons'
 import { RailFrame } from './RailFrame'
 import {
@@ -441,7 +441,7 @@ const STEPS = [
 ] as const
 
 /* The deep keys, list-scoped: PageUp/PageDown move by section boundary, Home/End to the ends
- * of the current filter, X ticks the current card. */
+ * of the current filter. */
 const SECTION_KEYS = [
   { key: 'PageUp', label: 'PgUp', delta: -1 },
   { key: 'PageDown', label: 'PgDn', delta: 1 },
@@ -451,8 +451,6 @@ const EDGE_KEYS = [
   { key: 'Home', label: 'Home', last: false },
   { key: 'End', label: 'End', last: true },
 ] as const
-
-const TICK_KEY = { key: 'x', label: 'X' } as const
 
 /* Is the person typing? A checkbox takes no text, so a focused one must not kill the arrows. */
 function isTyping(target: EventTarget | null): boolean {
@@ -775,7 +773,6 @@ export function BoxBrowse({
   const [shelf, setShelf] = useState<Shelf | null>(null)
 
   /* The mass-select, by store key. Not persisted; cleared when the box changes. */
-  const [picked, setPicked] = useState<readonly string[]>([])
 
   /* Which sections are open, by section key. Per-box for free: a section key names a box. */
   const [opened, setOpened] = useState<readonly string[]>([])
@@ -1506,11 +1503,6 @@ export function BoxBrowse({
     })
   }, [visible, filtered, results, rankedKeys])
 
-  /* The ticks are the box's, so they go when the box does. */
-  useEffect(() => {
-    setPicked([])
-  }, [shelf])
-
   /* One step, in the walk's own order. Both ends stop. */
   const stepSelection = useCallback(
     (delta: 1 | -1) => {
@@ -1569,12 +1561,6 @@ export function BoxBrowse({
   const onListKeys = (event: ReactKeyboardEvent<HTMLUListElement>) => {
     if (event.metaKey || event.ctrlKey || event.altKey) return
     if (isTyping(event.target)) return
-
-    if (event.key.toLowerCase() === TICK_KEY.key) {
-      event.preventDefault()
-      if (selected !== null) toggleTick(selected)
-      return
-    }
 
     const edge = EDGE_KEYS.find((candidate) => candidate.key === event.key)
     const jumpTo = SECTION_KEYS.find((candidate) => candidate.key === event.key)
@@ -1772,19 +1758,29 @@ export function BoxBrowse({
   const panelFigures = useHeld(figures, dimPanel)
   const panelFiguresPending = useHeld(figuresPending, dimPanel)
 
-  /* What a bulk write would reach: the ticked rows in the box being walked, as indices. */
-  const pickedIndices = useMemo(() => {
+  /* What Manage box may narrow a Move or a Claims write to: this box's cards, by section
+   * and in box order, off every row of the shelf and not the filtered list. */
+  const manageCards = useMemo<PickSection[]>(() => {
     if (rows === null || typeof shelf !== 'number') return []
-    return rows
-      .filter(
-        (row) =>
-          picked.includes(row.key) &&
-          row.card.box === shelf &&
-          typeof row.card.index === 'number' &&
-          Number.isFinite(row.card.index),
-      )
-      .map((row) => row.card.index)
-  }, [rows, picked, shelf])
+    const mine = rows.filter(
+      (row) =>
+        row.card.box === shelf &&
+        typeof row.card.index === 'number' &&
+        Number.isFinite(row.card.index),
+    )
+    return sectionsOf(mine).map((section) => ({
+      key: section.key,
+      title: section.title,
+      cards: section.rows.map((row) => {
+        const name = nameOf(row.card)
+        return {
+          index: row.card.index as number,
+          label: name === null ? rowSlot(row) : `${rowSlot(row)} ${name}`,
+          departed: hasDeparted(row.card),
+        }
+      }),
+    }))
+  }, [rows, shelf])
 
   const isOpen = (section: Section) => opened.includes(section.key)
   const anyExpanded = sections.some((section) => opened.includes(section.key))
@@ -1798,25 +1794,6 @@ export function BoxBrowse({
         ? held.filter((key) => key !== section.key)
         : [...held, section.key],
     )
-
-  const toggleTick = (key: string) =>
-    setPicked((held) => (held.includes(key) ? held.filter((k) => k !== key) : [...held, key]))
-
-  const tickSection = (section: Section, on: boolean) =>
-    setPicked((held) => {
-      const keys = section.rows.map((row) => row.key)
-      const rest = held.filter((key) => !keys.includes(key))
-      return on ? [...rest, ...keys] : rest
-    })
-
-  const shownAllTicked = visible.length > 0 && visible.every((row) => picked.includes(row.key))
-
-  const tickAllShown = () =>
-    setPicked((held) => {
-      const keys = visible.map((row) => row.key)
-      const rest = held.filter((key) => !keys.includes(key))
-      return shownAllTicked ? rest : [...rest, ...keys]
-    })
 
   /* The section the mark lands in is opened as a consequence of the move — including the
    * first one, so the walk never arrives with its selection hidden. A fold the operator asked
@@ -2234,18 +2211,7 @@ export function BoxBrowse({
           </div>
 
           <div className="browse-status">
-            {/* While anything is ticked the selection leads the row — the count would only
-                repeat the pill, and the three controls then fit the rail in one line. */}
-            {picked.length > 0 ? (
-              <>
-                <Pill tone="accent" className="browse-status-picked">
-                  {picked.length} ticked
-                </Pill>
-                <button className="browse-quiet" type="button" onClick={() => setPicked([])}>
-                  clear
-                </button>
-              </>
-            ) : sections.length < 2 ? (
+            {sections.length < 2 ? (
               /* Under a search the match sentence carries the local count; a second one is noise. */
               searching ? null : (
                 <span className="browse-status-text">
@@ -2282,13 +2248,6 @@ export function BoxBrowse({
               </HideToggle>
             )}
 
-            <span className="bn-spacer" />
-
-            {visible.length === 0 ? null : (
-              <button className="browse-quiet" type="button" aria-pressed={shownAllTicked} onClick={tickAllShown}>
-                {shownAllTicked ? 'None' : 'All'}
-              </button>
-            )}
           </div>
 
           {/* EVERY EMPTY STATE BELOW IS GATED ON `!awaitingRows` TOO (the review that caught
@@ -2360,32 +2319,9 @@ export function BoxBrowse({
                   tab order so a key cannot either — a transition is drawn, never acted on. */}
               {displaySections.map((section) => {
                 const open = isOpen(section)
-                const ticked = section.rows.filter((row) => picked.includes(row.key)).length
-                /* The pill counts what the title's range counts — the cards on hand. A
-                 * departed record has no slot, so it is in the tick's population and in the
-                 * title, and not in the figure beside a range it is not part of. */
-                const onHand = section.rows.filter((row) => !hasDeparted(row.card)).length
-                const gone = section.rows.length - onHand
-                const census =
-                  gone === 0
-                    ? `${section.rows.length} ${section.rows.length === 1 ? 'card' : 'cards'}`
-                    : `${onHand} on hand, ${gone} departed, ${section.rows.length} records`
                 return (
                   <li className="browse-group" key={section.key}>
                     <div className="browse-secthead">
-                      <input
-                        className="browse-secttick browse-tick"
-                        type="checkbox"
-                        checked={ticked > 0 && ticked === section.rows.length}
-                        ref={(node) => {
-                          if (node !== null)
-                            node.indeterminate = ticked > 0 && ticked < section.rows.length
-                        }}
-                        /* SAID ONCE (UX-271): the section and its count are the fold's own name,
-                           beside this, so the tick names only what it ticks. */
-                        aria-label={`Tick all of ${section.parts.head}`}
-                        onChange={(event) => tickSection(section, event.target.checked)}
-                      />
                       <button
                         className="browse-sectfold"
                         type="button"
@@ -2394,17 +2330,6 @@ export function BoxBrowse({
                       >
                         <Icon name="chevronRight" size={14} className="browse-sectmark" />
                         <SectionTitle parts={section.parts} />
-                        {/* ONE COUNT PER HEADER (cut list #9): the title already says how many
-                            cards. The badge draws only a tick count, and keeps its slot while
-                            empty, so a tick moves nothing in the header (D118). */}
-                        <span
-                          className="browse-sectcount"
-                          data-empty={ticked === 0 ? 'true' : undefined}
-                          aria-hidden={ticked === 0 ? 'true' : undefined}
-                          title={ticked === 0 ? undefined : `${ticked} of ${section.rows.length} ticked; ${census}`}
-                        >
-                          {ticked === 0 ? '' : `${ticked}/${section.rows.length}`}
-                        </span>
                       </button>
                     </div>
                     {!open ? null : (
@@ -2416,13 +2341,6 @@ export function BoxBrowse({
                               className={departed ? 'browse-rowline is-departed' : 'browse-rowline'}
                               key={row.key}
                             >
-                              <input
-                                className="browse-rowtick browse-tick"
-                                type="checkbox"
-                                checked={picked.includes(row.key)}
-                                aria-label={`Tick ${departed ? `departed ${rowSlot(row)}` : rowSlot(row)}`}
-                                onChange={() => toggleTick(row.key)}
-                              />
                               <button
                                 className="browse-row"
                                 type="button"
@@ -2825,7 +2743,7 @@ export function BoxBrowse({
       {shelfBox === null ? null : (
         <BoxOps
           record={shelfBox}
-          selection={pickedIndices}
+          cards={manageCards}
           boxes={boxRecords}
           listings={listings}
           open={manage}
