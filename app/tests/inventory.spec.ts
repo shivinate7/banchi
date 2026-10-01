@@ -7,6 +7,7 @@ import { sealEveryTest } from './shell'
 import { settled, whatMoved } from './motionSettled'
 import { iconTip } from './iconTooltip'
 import { phoneOff, setViewport } from './phoneSwitch'
+import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
 
 /* THE OWNER'S ONE VIEW OF STORED CARDS, asserted where nothing else can reach it.
  *
@@ -1982,6 +1983,43 @@ test('the press that sells a copy does not shift while the re-read is in flight'
 
   expect([...seenTops], 'the copies list moved while the re-read was in flight').toEqual([topsBefore])
   expect(sawSkeleton, 'a skeleton was drawn over the standing list').toBe(false)
+})
+
+/* THE PRESS THAT SELLS A COPY MOVES NOTHING, MEASURED BY THE BROWSER (D118, D313).
+ * The cases above compare box positions before and after; this one reads the browser's own
+ * `layout-shift` entries over the half second after the press, with no input exclusion. It
+ * catches a hero line that a different string re-flows: the sale rewrites "Card 1 of 11" and the
+ * position-bar numbers, and a line box that follows its text moves the band under it by a few
+ * pixels. The window opens at the press and closes 500ms later. */
+test('the press that sells a copy causes no layout shift in the half second after it', async ({ page }) => {
+  const { store, sell, depart } = sellableStore()
+  /* NO FINISH PILL: the fixture's cards carry one, which already makes the hero's meta row a pill
+     high. A card with none is the case where the sale's own state pill arrives in an empty row. */
+  for (const held of Object.values(store.cards)) (held as { metadata_finish: unknown }).metadata_finish = null
+  await watchShifts(page)
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, BOXES, store, () => PRICING, movesOnSale(() => {
+    sell('2/1')
+    depart('2/1')
+  }))
+  /* AND NO QUEUE CHIP, which is a pill too: the card is in no queue. */
+  await page.route(/\/queues$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ review: [], parked: [] }) }),
+  )
+  await page.reload()
+  const row = page.locator('.card-locations-row.is-current')
+  await expect(row).toBeVisible()
+  const press = row.getByRole('button', { name: 'Mark sold' })
+  await press.scrollIntoViewIfNeeded()
+  await page.waitForTimeout(1000)
+
+  const from = await markNow(page)
+  await press.click()
+  await expect(row.locator('.position-bar')).toHaveAttribute('data-gone', 'true')
+  await page.waitForTimeout(600)
+
+  const inWindow = (await readShifts(page)).shifts.filter((s) => s.at >= from && s.at < from + 500)
+  expect(sumOf(inWindow), `the press moved ${describeShifts(inWindow)}`).toBeLessThan(0.0005)
 })
 
 /* A KEY WIDE ENOUGH TO BE SEEN. The fixture above walks box 2 card 1, whose departed key is

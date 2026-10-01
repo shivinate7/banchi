@@ -71,7 +71,7 @@
 .shipping-drop-body { font-size: var(--bn-fs-base); color: var(--bn-ink-3); max-width: 46ch; }
 .shipping-drop-link { color: var(--bn-accent); font-weight: 600; text-decoration: underline; text-underline-offset: 0.15em; }
 .shipping-drop-progress { position: absolute; left: var(--bn-6); right: var(--bn-6); bottom: var(--bn-4); }
-.shipping-drop-progress > span { width: 40%; animation: shipping-indeterminate 1.2s linear infinite; }
+.shipping-drop-progress > span { width: 40%; animation: shipping-indeterminate var(--bn-t-shimmer) var(--bn-ease-linear) infinite; }
 @keyframes shipping-indeterminate {
   from { transform: translateX(-100%); }
   to { transform: translateX(250%); }
@@ -89,8 +89,8 @@
   box-shadow: var(--bn-shadow-1);
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
-.shipping-guide:nth-child(2) { animation-delay: 60ms; }
-.shipping-guide:nth-child(3) { animation-delay: 120ms; }
+.shipping-guide:nth-child(2) { animation-delay: calc(var(--bn-stagger) * 1); }
+.shipping-guide:nth-child(3) { animation-delay: calc(var(--bn-stagger) * 2); }
 .shipping-guide-unjudged { box-shadow: var(--bn-shadow-1); outline: 1.5px dashed var(--bn-warn); outline-offset: -1.5px; }
 .shipping-guide-icon {
   width: 32px;

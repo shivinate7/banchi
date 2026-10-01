@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent demo-mirror-daily-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -488,6 +488,7 @@ check:
 	@$(MAKE) --no-print-directory match-selftest
 	@$(MAKE) --no-print-directory serve-scope-selftest
 	@$(MAKE) --no-print-directory demo-record-selftest
+	@$(MAKE) --no-print-directory demo-mirror-daily-selftest
 	@$(MAKE) --no-print-directory demo-record-resume-selftest
 	@$(MAKE) --no-print-directory demo-record-walkplan-selftest
 	@$(MAKE) --no-print-directory pricehistory-cache-selftest
@@ -560,6 +561,7 @@ ci-check:
 	@$(MAKE) --no-print-directory match-selftest
 	@$(MAKE) --no-print-directory serve-scope-selftest
 	@$(MAKE) --no-print-directory demo-record-selftest
+	@$(MAKE) --no-print-directory demo-mirror-daily-selftest
 	@$(MAKE) --no-print-directory demo-record-resume-selftest
 	@$(MAKE) --no-print-directory demo-record-walkplan-selftest
 	@$(MAKE) --no-print-directory pricehistory-cache-selftest
@@ -651,6 +653,7 @@ ci-check-guards-2:
 	@$(MAKE) --no-print-directory match-selftest
 	@$(MAKE) --no-print-directory serve-scope-selftest
 	@$(MAKE) --no-print-directory demo-record-selftest
+	@$(MAKE) --no-print-directory demo-mirror-daily-selftest
 	@$(MAKE) --no-print-directory demo-record-resume-selftest
 	@$(MAKE) --no-print-directory demo-record-walkplan-selftest
 	@$(MAKE) --no-print-directory pricehistory-cache-selftest
@@ -1289,6 +1292,10 @@ sku-number-contradictions-selftest:
 demo-record-selftest:
 	$(PYTHON) scripts/demo-record-selftest.py
 
+# the daily mirror's path fence, proved red on a path outside demo-assets/mirror/, then green. No network, no store.
+demo-mirror-daily-selftest:
+	@python3 scripts/demo-mirror-daily.py --selftest
+
 # the demo recorder's resume cache of answered routes, proved with a fake collector.
 demo-record-resume-selftest:
 	$(PYTHON) scripts/demo-record-resume-selftest.py
@@ -1823,6 +1830,12 @@ demo-mirror:
 # for iterating on the scrub or the recorder without paying the snapshot cost again.
 demo-mirror-rebuild:
 	@$(PYTHON) scripts/demo-mirror.py --home $(DEMO_HOME)
+
+# THE DAILY REFRESH (D295, demo.md §13): a launchd job on the owner's Mac, main tree only. It runs
+# `demo-mirror` in a throwaway worktree and auto-merges a mirror-only PR on green CI. ARGS=--remove
+# takes the job out. ARGS=--dry-run is not this target's: run `python3 scripts/demo-mirror-daily.py --dry-run`.
+demo-mirror-agent:
+	@python3 scripts/demo-mirror-daily.py --agent $(ARGS)
 
 # CI's own step: the committed scrub, installed into app/demo/ and app/public/demo/photos/.
 # Reads no store and contacts no network. `demo-static` builds from this.

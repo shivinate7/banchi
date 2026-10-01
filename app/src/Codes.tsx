@@ -1094,8 +1094,8 @@ export function Codes() {
                       .map((s, i) => (
                         <span
                           key={s.key}
-                          className={`codes-lanebar-seg is-${s.key}`}
-                          style={{ flexGrow: s.n, animationDelay: `${120 + i * 90}ms` }}
+                          className={`codes-lanebar-seg bn-stagger-item is-${s.key}`}
+                          style={{ flexGrow: s.n, '--i': i } as CSSProperties}
                           // D218: a `title=` attribute cannot hold elements, so this is a
                           // sentence — count then label — rather than a typed separator.
                           title={`${s.n.toLocaleString()} ${s.label.toLowerCase()}`}
@@ -1127,7 +1127,7 @@ export function Codes() {
               ) : (
                 <ul className="codes-product-list">
                   {(allProducts || !productsFold ? ledger.by_product : ledger.by_product.slice(0, PRODUCT_FOLD)).map((row, i) => (
-                    <li key={row.product} className="codes-product" style={{ '--delay': `${80 + i * 30}ms` } as CSSProperties}>
+                    <li key={row.product} className="codes-product bn-stagger-item" style={{ '--i': i } as CSSProperties}>
                       <span className="codes-product-name">{row.display}</span>
                       <Pill tone={laneTone(row.lane)}>{laneLabel(row.lane)}</Pill>
                       <span className="codes-product-n">{row.count.toLocaleString()}</span>
@@ -1162,7 +1162,7 @@ export function Codes() {
               body="Decode a box's code-card photographs."
               meta="Free"
               tone="accent"
-              delay={0}
+              at={0}
               onOpen={() => openSheet('scan')}
             />
             <TaskCard
@@ -1176,7 +1176,7 @@ export function Codes() {
                 </>
               }
               tone="warn"
-              delay={50}
+              at={1}
               onOpen={() => openSheet('hand')}
             />
             <TaskCard
@@ -1185,7 +1185,7 @@ export function Codes() {
               body="A whole box, shipped, with its listing, packing slip and manifest."
               meta={lots.length === 0 ? 'No lots built yet' : `${plural(lots.length, 'lot')} built`}
               tone="ok"
-              delay={100}
+              at={2}
               onOpen={() => openSheet('lot')}
             />
           </section>
@@ -1271,7 +1271,7 @@ export function Codes() {
                             const shown = revealAll || revealed.has(e.code)
                             const lane = laneOf(e)
                             return (
-                              <tr key={e.code} className={`codes-row is-${e.state}`} style={{ animationDelay: `${Math.min(i, 24) * 16}ms` }}>
+                              <tr key={e.code} className={`codes-row bn-stagger-item is-${e.state}`} style={{ '--i': i } as CSSProperties}>
                                 <td data-th="Code">
                                   <button
                                     type="button"
@@ -1705,7 +1705,7 @@ function TaskCard({
   body,
   meta,
   tone,
-  delay,
+  at,
   onOpen,
 }: {
   readonly icon: IconName
@@ -1713,11 +1713,11 @@ function TaskCard({
   readonly body: string
   readonly meta: ReactNode
   readonly tone: 'accent' | 'warn' | 'ok'
-  readonly delay: number
+  readonly at: number
   readonly onOpen: () => void
 }) {
   return (
-    <button type="button" className={`codes-task is-${tone}`} onClick={onOpen} style={{ animationDelay: `${delay}ms` }}>
+    <button type="button" className={`codes-task bn-stagger-item is-${tone}`} onClick={onOpen} style={{ '--i': at } as CSSProperties}>
       <span className="codes-task-icon">
         <Icon name={icon} size={20} />
       </span>
@@ -1754,7 +1754,7 @@ function LotsTable({ lots, boxes }: { readonly lots: readonly LotReceipt[]; read
         </thead>
         <tbody>
           {lots.map((l, i) => (
-            <tr key={l.lot_id} className="codes-row" style={{ animationDelay: `${Math.min(i, 24) * 16}ms` }}>
+            <tr key={l.lot_id} className="codes-row bn-stagger-item" style={{ '--i': i } as CSSProperties}>
               <td data-th="Lot" className="codes-mono">
                 {l.lot_id}
               </td>

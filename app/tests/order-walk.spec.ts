@@ -3,6 +3,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
+import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
 
 import type {
   OrdersPayload,
@@ -355,6 +356,26 @@ test('only the newest pull in the walk offers Undo — the older one reads Sold'
   await expect(rows.nth(0).getByRole('button', { name: 'Undo' })).toHaveCount(0)
   await expect(rows.nth(0).locator('.bn-pill', { hasText: 'Sold' })).toBeVisible()
   expect(await slotWidth(), 'the Sold pill widened the action slot').toBe(atRest)
+})
+
+/* A PULL PRESS MOVES NOTHING, MEASURED BY THE BROWSER (D118, D313). The
+   cases here compare widths; this one reads the browser's own `layout-shift` entries over the
+   500 ms after the press, with no input exclusion, so a line that a new string re-flows is seen. */
+test('a pull press causes no layout shift in the half second after it', async ({ page }) => {
+  await watchShifts(page)
+  const wire = await open(page)
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  await expect(rows.nth(0)).toBeVisible()
+  await page.waitForTimeout(1000)
+
+  const from = await markNow(page)
+  await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
+  await expect(rows.nth(0).getByRole('button', { name: 'Undo' })).toBeVisible()
+  await page.waitForTimeout(600)
+
+  const inWindow = (await readShifts(page)).shifts.filter((s) => s.at >= from && s.at < from + 500)
+  expect(sumOf(inWindow), `the press moved ${describeShifts(inWindow)}`).toBeLessThan(0.0005)
 })
 
 /* -------------------------------------------------------------------------------------- 2 */

@@ -154,6 +154,10 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 **The grant is to the ORCHESTRATING session, and only for PRs it stood behind.** It covers a PR only when that session put the PR's plan to the owner and reviewed its diff — never a worker or a peer session merging a PR of its own, which still needs the word exactly as above. It is exercised only through `make merge ARGS="<n> --confirm"`, from a checkout standing on the PR's own branch, only once CI is green, and never with `--admin`. A later session — a new orchestrator, or the same one returned to a fresh batch — re-asks; the grant does not carry forward on its own.
 
+### A standing grant to the daily demo refresh
+
+**One more exception, scoped to a path.** The owner ruled that the demo mirror refreshes daily with auto-merge (D295, the public demo is the scrubbed real store). A PR merges through the merge tool once CI is green. No word is asked and no Orchestrator is named. Three conditions hold. Its head is `demo/mirror-refresh`. `scripts/demo-mirror-daily.py` opened it after the scrub assert and the fence. Its whole diff is under `demo-assets/mirror/`. `scripts/demo-mirror-daily.py` fences it: it refuses to merge when the diff touches any other path, and never uses `--admin`. Any other PR keeps the rules above.
+
 ### The escape hatch and the evidence
 
 **`PKMNSCAN_MAIN=off`**, spelled the way `PKMNSCAN_GATE=off` and `PKMNSCAN_DOCS=off` already are. One variable, printed in every refusal, because a guard with no visible way past it gets disarmed at the config instead — and a disarmed `core.hooksPath` takes the three opsec rules with it, the trade D16 already refused for the docs audit.

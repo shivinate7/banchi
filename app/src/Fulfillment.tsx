@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
 import type {
   InventoryCard,
@@ -1475,9 +1475,9 @@ export function Fulfillment() {
                     const group = owedGroup(item)
                     return (
                       <div
-                        className="ff-owed-card"
+                        className="ff-owed-card bn-stagger-item"
                         key={item.key}
-                        style={{ animationDelay: `${Math.min(at, 8) * 40}ms` }}
+                        style={{ '--i': at } as CSSProperties}
                       >
                         <p className="fulfillment-say ff-owed-pick">
                           <b className="ff-owed-pick-num">Pick {item.wanted}</b>
@@ -1542,7 +1542,7 @@ export function Fulfillment() {
                   {boxes.map((group, at) => {
                     const open = openBoxes.includes(group.box)
                     return (
-                      <div className="ff-box" key={group.box} style={{ animationDelay: `${at * 40}ms` }}>
+                      <div className="ff-box bn-stagger-item" key={group.box} style={{ '--i': at } as CSSProperties}>
                         <button
                           className="ff-box-head"
                           type="button"

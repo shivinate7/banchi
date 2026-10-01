@@ -405,7 +405,7 @@ function SaleBills({ reverse = false, onDone }: { readonly reverse?: boolean; re
             ['--dx' as string]: `${(i - (BILL_COUNT - 1) / 2) * 16}px`,
             ['--dy' as string]: `${-(46 + (i % 3) * 18)}px`,
             ['--rot' as string]: `${(i % 2 ? 1 : -1) * (20 + i * 8)}deg`,
-            animationDelay: `${i * 25}ms`,
+            ['--i' as string]: i,
           }}
         >
           <Icon name="bill" size={22} />

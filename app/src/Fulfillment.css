@@ -96,8 +96,8 @@
   visibility: hidden;
   content-visibility: hidden;
   transition:
-    visibility 0s linear var(--bn-t),
-    content-visibility 0s linear var(--bn-t);
+    visibility 0s var(--bn-ease-linear) var(--bn-t),
+    content-visibility 0s var(--bn-ease-linear) var(--bn-t);
   transition-behavior: allow-discrete;
 }
 
@@ -449,7 +449,7 @@
   inset: 0;
   transform: translateX(-100%);
   background: linear-gradient(90deg, transparent, var(--bn-surface-3), transparent);
-  animation: bn-shimmer 1.4s ease-in-out infinite;
+  animation: bn-shimmer var(--bn-t-shimmer) var(--bn-ease-loop) infinite;
 }
 .ff-skel-search { height: 64px; margin-bottom: var(--bn-5); }
 .ff-skel-row { height: 88px; }
@@ -695,7 +695,7 @@
   inset: 0;
   transform: translateX(-100%);
   background: linear-gradient(90deg, transparent, var(--bn-stage-bg-2), transparent);
-  animation: bn-shimmer 1.4s ease-in-out infinite;
+  animation: bn-shimmer var(--bn-t-shimmer) var(--bn-ease-loop) infinite;
 }
 .fulfillment-photo {
   display: block;
@@ -1269,7 +1269,7 @@
   border-radius: 4px;
   background: var(--ff-fill);
   transform-origin: left;
-  animation: bn-drain var(--ff-window, 20s) linear forwards;
+  animation: bn-drain var(--ff-window, 20s) var(--bn-ease-linear) forwards;
 }
 .ff-receipt-secs {
   font-size: var(--ff-fs-base);
@@ -1314,7 +1314,7 @@
   .ff-receipt-compact .ff-undo { width: auto; justify-self: start; }
 }
 
-.ff-check path { stroke-dasharray: 26; stroke-dashoffset: 26; animation: ff-draw 360ms var(--bn-ease-out) 120ms forwards; }
+.ff-check path { stroke-dasharray: 26; stroke-dashoffset: 26; animation: ff-draw var(--bn-t-draw) var(--bn-ease-out) calc(var(--bn-stagger) * 4) forwards; }
 
 /* ---- the big photo ------------------------------------------------------------------------ */
 .ff-zoom {

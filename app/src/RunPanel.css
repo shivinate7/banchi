@@ -223,7 +223,7 @@
 .runs-stepper-done .runs-stepper-track { background: var(--bn-accent); }
 .runs-detail-panel[data-reconciled] .runs-stepper-done .runs-stepper-track { background: var(--bn-ok); }
 .runs-stepper-current .runs-stepper-track { background: var(--bn-accent); }
-.runs-stepper-live .runs-stepper-track { background: var(--bn-live); animation: runs-breathe var(--bn-t-pulse) ease-out infinite; }
+.runs-stepper-live .runs-stepper-track { background: var(--bn-live); animation: bn-breathe var(--bn-t-pulse) var(--bn-ease-loop) infinite; }
 .runs-stepper-label {
   display: inline-flex;
   align-items: center;
