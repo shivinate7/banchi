@@ -1001,3 +1001,5 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
   .bn-cmdk-input input { min-height: var(--bn-control-h-sm); }
   .bn-cmdk-item { min-height: var(--bn-control-h-sm); }
 }
+
+.bn-banner-slot { top: calc(100dvh - 44px); }
