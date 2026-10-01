@@ -203,22 +203,41 @@ test('L2 shell: a new toast leaves the older ones where they are (S16)', async (
   expect(await first.boundingBox(), 'the first toast holds its place under two newer ones').toEqual(at)
 })
 
-test('L2 shell: a receipt holds its size while it stands (S16)', async ({ page }) => {
+const sendToast = (page: Page, i: number, ttlMs: number) =>
+  page.evaluate(
+    async ([n, ttl]) => {
+      const { toast } = await import(/* @vite-ignore */ ['/src/kit', 'toast.tsx'].join('/'))
+      toast({ kind: 'receipt', title: `Sold card ${n}`, body: 'Marked sold.', ttlMs: ttl, action: { label: 'Undo', kbd: 'U', onPress: () => {} } })
+    },
+    [i, ttlMs] as const,
+  )
+
+test('L2 shell: a toast expiring leaves the others where they are (S16)', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 1000 })
   await page.goto('/#/')
   await settleFonts(page)
-  await page.evaluate(async () => {
-    const { toast } = await import(/* @vite-ignore */ ['/src/kit', 'toast.tsx'].join('/'))
-    toast({ kind: 'receipt', title: 'Sold Charizard ex', body: 'Marked sold. Undo puts it back.', action: { label: 'Undo', kbd: 'U', onPress: () => {} } })
-  })
-  const one = page.locator('.bn-toast')
-  await expect(one).toBeVisible()
-  const sizes: number[] = []
-  for (let i = 0; i < 8; i += 1) {
-    sizes.push(await one.evaluate((el) => (el as HTMLElement).offsetHeight))
-    await page.waitForTimeout(100)
-  }
-  expect(new Set(sizes).size, `heights ${sizes.join(',')}`).toBe(1)
+  await sendToast(page, 1, 900)
+  await sendToast(page, 2, 20000)
+  const second = page.locator('.bn-toast', { hasText: 'Sold card 2' })
+  await expect(second).toBeVisible()
+  await page.waitForTimeout(300)
+  const at = await second.boundingBox()
+  await page.waitForTimeout(1500)
+  expect(await second.boundingBox(), 'the second toast holds its place when the first expires').toEqual(at)
+})
+
+test('L2 shell: a toast past the fifth leaves the others where they are (S16)', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 1000 })
+  await page.goto('/#/')
+  await settleFonts(page)
+  for (const i of [1, 2, 3, 4, 5]) await sendToast(page, i, 20000)
+  const second = page.locator('.bn-toast', { hasText: 'Sold card 2' })
+  await expect(second).toBeVisible()
+  await page.waitForTimeout(500)
+  const at = await second.boundingBox()
+  await sendToast(page, 6, 20000)
+  await page.waitForTimeout(600)
+  expect(await second.boundingBox(), 'the sixth toast does not move the second').toEqual(at)
 })
 
 /* A face that arrives late swaps in for the fallback the stack drew first. The case holds every font file

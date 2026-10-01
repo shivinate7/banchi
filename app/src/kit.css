@@ -1523,11 +1523,12 @@ img.bn-crop[data-cropped='true'] {
   animation: bn-receipt-in var(--bn-t-slow) var(--bn-ease-spring) backwards;
 }
 :root[data-theme='dark'] .bn-toast { background: var(--bn-surface); color: var(--bn-ink); box-shadow: var(--bn-shadow-3); }
-/* A dismissed toast folds away so the ones beneath it slide up rather than jump. */
+/* A dismissed toast fades and keeps its box (opacity and transform only), so the toasts beside it hold
+   their places. The stack drops the boxes together once every toast has faded. */
 .bn-toast[data-leaving] { animation: bn-toast-out var(--bn-t) var(--bn-ease-in) forwards; pointer-events: none; }
 @keyframes bn-toast-out {
-  from { opacity: 1; max-height: 140px; }
-  to { opacity: 0; transform: translateY(6px) scale(0.98); max-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: calc(-1 * var(--bn-2)); }
+  from { opacity: 1; }
+  to { opacity: 0; transform: translateY(6px) scale(0.98); }
 }
 .bn-toast-icon { flex: none; margin-top: var(--bn-0-5); opacity: 0.85; }
 .bn-toast-ok .bn-toast-icon { color: var(--bn-ok); opacity: 1; }
