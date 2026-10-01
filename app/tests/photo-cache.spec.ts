@@ -63,6 +63,7 @@ test('Home asks for no photograph before the card read answers, or of a card tha
     )
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ cards }) })
   })
+  await page.route(/\/inventory\/history$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"cards":{}}' }))
   const boxesRead = page.waitForResponse(/\/boxes$/)
   await page.goto('/')
   await boxesRead

@@ -4849,7 +4849,7 @@ test('the key 2 marks the second copy of the current pick sold, and Undo puts it
   const wire = await open(page, { orders: oneOpenOrder(), walkPlan: twoCopyPlan() })
   await expect(page.locator(`${CURRENT_PICK} .card-locations-row`)).toHaveCount(2)
   /* THE HINT: the digit stands beside each of the current pick's presses. */
-  await expect(page.locator(`${CURRENT_PICK} .walk-keyhint .bn-kbd`)).toHaveText(['1', '2'])
+  await expect.poll(() => page.locator(`${CURRENT_PICK} .card-locations-sell`).evaluateAll((els) => els.map((el) => el.getAttribute('aria-keyshortcuts')))).toEqual(['1', '2'])
   await page.keyboard.press('2')
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBeGreaterThan(0)
   expect(wire.find((one) => one.path.endsWith('/orders/pull'))?.body).toMatchObject({
@@ -5029,7 +5029,7 @@ test('a spare copy sells from the opened fold with its digit, and the order coun
 
   await page.getByRole('button', { name: '1 more elsewhere' }).click()
   await expect(page.locator(`${CURRENT_PICK} .card-locations-row`)).toHaveCount(2)
-  await expect(page.locator(`${CURRENT_PICK} .walk-keyhint .bn-kbd`)).toHaveText(['1', '2'])
+  await expect.poll(() => page.locator(`${CURRENT_PICK} .card-locations-sell`).evaluateAll((els) => els.map((el) => el.getAttribute('aria-keyshortcuts')))).toEqual(['1', '2'])
   await page.keyboard.press('2')
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
   expect(wire.find((one) => one.path.endsWith('/orders/pull'))?.body).toMatchObject({
@@ -5073,9 +5073,9 @@ test('a sold spare\'s own row Undo reverses it', async ({ page }) => {
 test('digits reach the spares only while the fold is open', async ({ page }) => {
   const wire = await open(page, { orders: oneOpenOrder(), walkPlan: sparePlan(), pull: SPARE_PULL })
   await page.getByRole('button', { name: '1 more elsewhere' }).click()
-  await expect(page.locator(`${CURRENT_PICK} .walk-keyhint .bn-kbd`)).toHaveText(['1', '2'])
+  await expect.poll(() => page.locator(`${CURRENT_PICK} .card-locations-sell`).evaluateAll((els) => els.map((el) => el.getAttribute('aria-keyshortcuts')))).toEqual(['1', '2'])
   await page.getByRole('button', { name: '1 more elsewhere' }).click()
-  await expect(page.locator(`${CURRENT_PICK} .walk-keyhint .bn-kbd`)).toHaveText(['1'])
+  await expect.poll(() => page.locator(`${CURRENT_PICK} .card-locations-sell`).evaluateAll((els) => els.map((el) => el.getAttribute('aria-keyshortcuts')))).toEqual(['1'])
   await page.keyboard.press('2')
   expect(wire.filter((one) => one.path.endsWith('/orders/pull'))).toHaveLength(0)
 })
@@ -5083,7 +5083,7 @@ test('digits reach the spares only while the fold is open', async ({ page }) => 
 test('at 820 a picked line keeps its slot numbers clear of the struck name', async ({ page }) => {
   await setViewport(page, { width: 820, height: 1000 })
   await open(page, { orders: oneOpenOrder(), walkPlan: twoCopyPlan(), pull: SPARE_PULL })
-  await expect(page.locator('.walk-keyhint').first()).toBeVisible()
+  await expect(page.locator('.card-locations-sell[aria-keyshortcuts]').first()).toBeVisible()
   await page.keyboard.press('1')
   const line = page.locator('.orders-walk-line').first()
   await expect(line).toHaveClass(/is-done/)
@@ -5107,7 +5107,7 @@ test('paging with the arrows skips a pick the Hide picked fold has taken off the
     }),
   ])
   await open(page, { orders: oneOpenOrder(), walkPlan: three, pull: SPARE_PULL })
-  await expect(page.locator('.walk-keyhint').first()).toBeVisible()
+  await expect(page.locator('.card-locations-sell[aria-keyshortcuts]').first()).toBeVisible()
   await page.keyboard.press('1')
   await expect(page.locator('.orders-walk-line').first()).toHaveClass(/is-done/)
   const hide = page.getByRole('button', { name: /^Picked/ })
@@ -5129,7 +5129,7 @@ test('a digit pressed while a sale is in flight says one sale at a time', async 
     await new Promise((settled) => setTimeout(settled, 1500))
     await route.fallback()
   })
-  await expect(page.locator('.walk-keyhint').first()).toBeVisible()
+  await expect(page.locator('.card-locations-sell[aria-keyshortcuts]').first()).toBeVisible()
   await page.keyboard.press('1')
   await page.keyboard.press('2')
   await expect(page.locator('.bn-toast', { hasText: 'One sale at a time' })).toBeVisible()
@@ -5145,4 +5145,78 @@ test('the pick figure never breaks "1 of 1" across lines in a narrow column', as
   const count = page.locator('.orders-walk-pick-count').first()
   const line = await count.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight) || 16)
   expect((await count.boundingBox())!.height, 'the figure stays on one line').toBeLessThan(line * 1.5)
+})
+
+/* THE SALE'S BURST, FORWARD AND BACK, ON THE WALK. The 1/2 keys reach `onSell` and never the button,
+   so the burst is noted in the sell path, not in the button's onClick. */
+const BILLS = '.card-locations-bill'
+const REVERSE_BILLS = '.card-locations-bill.is-reverse'
+
+test('a sale by key draws the bills', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder(), walkPlan: twoCopyPlan() })
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-row`)).toHaveCount(2)
+  await page.keyboard.press('1')
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-undo`).first()).toBeVisible()
+  await expect(page.locator(`${CURRENT_PICK} ${BILLS}`).first()).toBeAttached()
+})
+
+test('a quick undo plays the bills back, by click and by key; a late one plays none', async ({ page }) => {
+  await page.addInitScript(() => {
+    const real = Date.now.bind(Date)
+    ;(window as unknown as { __skew: number }).__skew = 0
+    Date.now = () => real() + (window as unknown as { __skew: number }).__skew
+  })
+  await open(page, { orders: oneOpenOrder(), walkPlan: twoCopyPlan() })
+  const undo = page.locator(`${CURRENT_PICK} .card-locations-undo`)
+  const sold = page.locator(`${CURRENT_PICK} .card-locations-sell`)
+  await expect(sold).toHaveCount(2)
+  await page.keyboard.press('1')
+  await expect(undo).toHaveCount(1)
+  await expect(page.locator(BILLS)).toHaveCount(0)
+  await undo.click()
+  await expect(sold).toHaveCount(2)
+  await expect(page.locator(REVERSE_BILLS).first()).toBeAttached()
+  /* The burst ends on the last bill's own end, and takes its bills with it. */
+  await expect(page.locator(BILLS)).toHaveCount(0)
+  /* THE SAME BY KEY. */
+  await page.keyboard.press('1')
+  await expect(undo).toHaveCount(1)
+  await page.keyboard.press('u')
+  await expect(sold).toHaveCount(2)
+  await expect(page.locator(REVERSE_BILLS).first()).toBeAttached()
+  await expect(page.locator(BILLS)).toHaveCount(0)
+  /* AFTER THE WINDOW, an undo stays as it is today. */
+  await page.keyboard.press('1')
+  await expect(undo).toHaveCount(1)
+  await page.evaluate(() => { (window as unknown as { __skew: number }).__skew = 16000 })
+  await undo.click()
+  await expect(sold).toHaveCount(2)
+  await expect(page.locator(BILLS)).toHaveCount(0)
+})
+
+/* THE WHEEL OVER A COPY ROW SCROLLS THE PAGE, as on Inventory: no list under the rows keeps a wheel of its own. */
+test('the wheel over a copy row scrolls the page, never a list inside it', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 420 })
+  const copies = Array.from({ length: 9 }, (_, i) =>
+    walkPlanCopy({ index: 30 + i, slot: 30 + i, card: 30 + i, label: `Box 3, Section 2, Card ${30 + i}`, capture_id: `cap-${i}` }),
+  )
+  await open(page, { orders: oneOpenOrder(), walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ copies })] })]) })
+  const row = page.locator(`${CURRENT_PICK} .card-locations-row`).first()
+  await expect(row).toBeVisible()
+  const box = (await row.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  const tops = () =>
+    page.evaluate(() => ({
+      page: document.scrollingElement!.scrollTop,
+      inner: [...document.querySelectorAll('*')].filter((el) => el !== document.scrollingElement && el.scrollTop > 0).length,
+    }))
+  await page.mouse.wheel(0, 120)
+  await expect.poll(async () => (await tops()).page).toBeGreaterThan(0)
+  expect((await tops()).inner).toBe(0)
+  /* A LIST THAT COULD SCROLL, even while its rows happen to fit: a taller card would trap the wheel in it
+     (`overscroll-behavior: contain`) and the page would stop moving. Nothing under the pick may be a scroller. */
+  const scrollers = await page.locator(CURRENT_PICK).evaluate((line) =>
+    [line, ...line.querySelectorAll('*')].filter((el) => /auto|scroll/.test(getComputedStyle(el).overflowY)).map((el) => el.className),
+  )
+  expect(scrollers).toEqual([])
 })

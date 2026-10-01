@@ -758,8 +758,18 @@ function recent(limit: number): Dict {
   return { cards: Object.fromEntries(picked) }
 }
 
+/** `GET /inventory/history` — three fields a card, DERIVED from the whole-store read like `recent`. */
+function history(): Dict {
+  return {
+    cards: Object.fromEntries(
+      Object.entries(cards()).map(([key, c]) => [key, { captured_at: c.captured_at, box: c.box, state: c.state }]),
+    ),
+  }
+}
+
 /** Every GET: the recording under its canonical key, or one of the re-sliced reads. */
 function read(path: string): unknown {
+  if (path === '/inventory/history') return history()
   if (path.startsWith('/inventory/recent?')) return recent(Number(new URLSearchParams(path.slice(path.indexOf('?'))).get('limit')) || 3)
   const entry = responses[canonical(path)]
   if (entry !== undefined) return entry.body

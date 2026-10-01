@@ -8238,9 +8238,9 @@ COMPONENTS = [
                                             "`counts.cards_in` is a box's running total rewritten "
                                             "on every re-join, so nine real manifests sum to 1,908 "
                                             "against 1,625 records). A block is as wide as its "
-                                            "minutes and as tall as its cards an hour, so its AREA "
-                                            "is its card count and the marks still sum to the "
-                                            "figure printed above them. `photographed` is "
+                                            "minutes and as tall as its cards an hour against the "
+                                            "fastest shown sitting, which draws at full height. "
+                                            "`photographed` is "
                                             "`status.cards - states.moved`, never the sum over "
                                             "`boxes[].cards`, which counts both halves of D83's "
                                             "move.",
@@ -9030,6 +9030,15 @@ COMPONENTS = [
                         "test; `make design-check` runs it.",
                 "governed_by": ["D121", "D275"],
                 "note": "Proved red first on main: the gap measured about 250px.",
+            },
+            "tests/home-history.spec.ts": {
+                "does": "`#/`'s history ribbon over ten captures in three sittings, 1440 and "
+                        "820, both themes: the sentence's sitting count and the blocks drawn "
+                        "both read 3, though the hero deck holds three cards. Also the deck "
+                        "link carries `&card=<cid>` of the front card. Not a harness test; "
+                        "`make design-check` runs it.",
+                "governed_by": ["D121", "D172", "D192"],
+                "note": "Proved red first on main: one sitting, one block, and no `card=`.",
             },
             "tests/home.spec.ts": {
                 "does": "`#/`'s 'cannot be filled' figure against a mixed ledger: one order "

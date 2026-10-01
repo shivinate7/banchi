@@ -213,6 +213,9 @@ export type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'chi
   /** A keycap, shown inside the tooltip beside the label and set as `aria-keyshortcuts` on
    *  the button itself — an icon-only control has no room on its face to spare for one. */
   readonly kbd?: string
+  /** Absolutely placed decoration drawn inside the face (the sale's bills): never takes a click,
+   *  never moves the layout. */
+  readonly burst?: ReactNode
 }
 
 export function IconButton({
@@ -225,6 +228,7 @@ export function IconButton({
   pressed,
   badge,
   kbd,
+  burst,
   className,
   type = 'button',
   href,
@@ -296,6 +300,7 @@ export function IconButton({
           {badge}
         </span>
       ) : null}
+      {burst}
     </>
   )
   /* PORTALLED TO `<body>` (round 3) — see the block comment above `IconButton`. Always

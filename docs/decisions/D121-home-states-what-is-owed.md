@@ -56,11 +56,10 @@ A sitting is recovered from `captured_at`, which is present on all 1,625 of them
 **The 30-minute gap is a measurement and not a preference**: 5 minutes gives 12 sittings,
 15 gives 7, and 30, 60, 120 and 240 all give 6.
 
-**THE DRAWING IS A RIBBON AND A RUG, AND ITS AREA IS ITS CARDS.** Each block is as wide as the
-minutes that sitting took and as tall as the cards an hour it ran at, so `minutes × rate ÷ 60 =
-cards` is an identity and the marks still sum to the figure printed above them while the height
-carries something that figure cannot. Read back off the drawn geometry the six blocks give
-543 / 172 / 152 / 138 / 555 / 65, which are the true counts. The axis is CUMULATIVE MINUTES
+**THE DRAWING IS A RIBBON AND A RUG, AND HEIGHT IS PACE AGAINST THE FASTEST SITTING.** Each block is
+as wide as the minutes that sitting took and as tall as the cards an hour it ran at, scaled so the
+fastest shown sitting draws at full height (owner's ruling). Area is cards only up to that one shared
+scale, so the marks no longer read as absolute counts. The axis is CUMULATIVE MINUTES
 because 113 minutes inside 9.4 days is 0.84% of the width — a calendar axis draws every block
 as a hairline, 2.1px at the widest and 0.04px at the newest. The calendar is not dropped but
 demoted to the rug below the rule, where a constant-size tick is the only mark that survives
@@ -76,9 +75,8 @@ the pace, so a reader who cannot separate the hues loses nothing.
 everywhere else in this product; marking a sitting live for being recent would be the one
 dishonest paint available here.
 
-**The ceiling is a physical fact.** Full height is 5,906 cards an hour — the rig's own measured
-0.6095 s per card. Without the ceiling drawn, a block 1.5px tall reads as a MISSING block rather
-than as a slow sitting, which is the opposite of the truth.
+**The scale is the fastest shown sitting.** It draws at full height, and the dashed line at the top marks that
+height. Every other block is its rate's share of it.
 
 **Fixed in the same change, because it ships into this hero either way**: `Home.css` set
 `pointer-events: none` on `.home-hero-art` with nothing restoring it, so the deck's own `<a>`,
