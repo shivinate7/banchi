@@ -324,7 +324,7 @@ export function MarkSoldButton({
       name={name}
       size="xl"
       className="card-locations-sell"
-      style={{ width: 'var(--sale-w)' }}
+      style={SALE_FACE}
       busy={busy}
       disabled={disabled}
       onClick={() => {
@@ -345,6 +345,10 @@ export function clearFreshSale(key: string): void {
 }
 const FRESH_MS = 15000
 const BILL_COUNT = 8
+
+/** THE ONE PLACE Mark sold's and Undo's width is set (D195): inline, because `IconButton` sets its face
+ *  width inline and a stylesheet rule could only beat that with `!important`. `--sale-w` is the CSS's. */
+const SALE_FACE = { width: 'var(--sale-w)' } as const
 
 /** THE UNDO THAT STANDS WHERE MARK SOLD WAS: the same frame (`--sale-w` by 40px, D195, D118), as a
  *  neutral outline with the undo glyph, so it never reads as "sell again". Right after a press,
@@ -387,6 +391,7 @@ export function UndoSaleButton({
         name={name}
         size="xl"
         className="card-locations-undo"
+        style={SALE_FACE}
         ref={button}
         busy={busy}
         disabled={disabled}
