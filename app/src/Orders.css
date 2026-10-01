@@ -297,7 +297,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-index-figure b { font-family: var(--bn-font-display); font-size: var(--bn-fs-base); font-weight: 800; color: var(--bn-ink); margin-right: var(--bn-0-75); }
 
 /* ---- the walk's head: one buyer, or several (UX-168, UX-230) ------------------------- */
-.orders-walk { display: flex; flex-direction: column; gap: var(--bn-3); }
+.orders-walk { display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4); }
 .orders-walk:focus { outline: none; }
 .orders-walk-head:empty { display: none; }
 .orders-panel { display: flex; flex-direction: column; gap: var(--bn-3); }
