@@ -605,10 +605,12 @@ export function Fulfillment() {
       try {
         const payload = await getOrders()
         if (!livePage) return
-        setOrders(payload.orders)
         const openKeys = payload.orders.filter((order) => order.open).map((order) => order.key)
         const freshPlan = openKeys.length === 0 ? null : await walkPlan(openKeys)
         if (!livePage) return
+        /* One commit: `orders` alone, with no plan yet, drew a "waiting, but 0 copies are not in
+           the boxes" sentence for one frame and then the figure tile (the load shake). */
+        setOrders(payload.orders)
         setPlan(freshPlan)
         setOrdersFailed(false)
       } catch {
@@ -1317,9 +1319,15 @@ export function Fulfillment() {
     let today: ReactNode
     if (orders === null) {
       today = ordersFailed ? null : (
-        <div className="ff-loading" aria-busy="true">
-          <span className="ff-skel ff-skel-today" />
-        </div>
+        /* The loaded tile's own elements, hidden: loading and loaded share one box. */
+        <section className="ff-today ff-today-wait" aria-label="Today" aria-busy="true">
+          <div className="ff-today-text">
+            <p className="ff-today-figure">
+              <b className="ff-today-num">0</b>{' '}
+              <span className="ff-today-words">pick</span>
+            </p>
+          </div>
+        </section>
       )
     } else if (openOrderKeys.length === 0) {
       /* No order is open at all — the ONE state allowed to say "nothing waits" (the owner's
@@ -1517,7 +1525,14 @@ export function Fulfillment() {
               </section>
             )}
 
-            {cards.length === 0 ? (
+            {orders === null && !ordersFailed ? (
+              /* The Pick list lands above the boxes when the orders read ends, and the boxes would
+                 move under it. They draw once it has: a frame holds their place. */
+              <div className="ff-loading" aria-busy="true">
+                <span className="ff-skel ff-skel-row" />
+                <span className="ff-skel ff-skel-row" />
+              </div>
+            ) : cards.length === 0 ? (
               <div className="ff-empty">
                 <span className="ff-empty-art">
                   <Icon name="box" size={30} />
@@ -1586,7 +1601,7 @@ export function Fulfillment() {
               </section>
             )}
 
-            {unplaced === 0 ? null : (
+            {unplaced === 0 || (orders === null && !ordersFailed) ? null : (
               <p className="fulfillment-say ff-say ff-unplaced">
                 {unplaced === 1
                   ? '1 card for sale is not shown here, because its place is missing. Ask for help with that one.'
