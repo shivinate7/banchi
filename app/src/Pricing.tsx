@@ -97,7 +97,6 @@ import {
   Retry,
   Segmented,
   Sheet,
-  Slot,
   countFacets,
   filterRows,
   matchQuery,
@@ -2796,10 +2795,7 @@ export function Pricing() {
               sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
             />
           )}
-          {/* A SLOT: the note mounts under a press, and the list under it must not move (D313). */}
-          <Slot as="p" className="pricing-filter-note" show={filtering}>
-            Filters hide rows only. Send covers all.
-          </Slot>
+          {filtering ? <p className="pricing-filter-note">Filters hide rows only. Send covers all.</p> : null}
           {filtering && drawn.length === 0 ? (
             <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." />
           ) : null}
