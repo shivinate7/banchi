@@ -217,7 +217,7 @@ const RECORDED = {
     'getSoldPrices',
     // D192: the per-box read replacing the whole-store
     // `getInventory` on `#/inventory`, and the lean top-K deck read for Home's hero.
-    'getInventoryBox', 'getRecentCards',
+    'getInventoryBox', 'getRecentCards', 'getCaptureHistory',
     // The per-product view's own read (D227): archive-first, live
     // fallback only for a SKU the archive has never swept. Read-only, like every other
     // entry in this list.

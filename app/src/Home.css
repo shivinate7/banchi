@@ -112,8 +112,7 @@ a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate
 
 .home-ribbon { width: 100%; height: 56px; display: block; }
 .home-ribbon-axis { stroke: var(--bn-line-strong); stroke-width: 1; }
-/* The rig's own ceiling. Without it a 1.5px block reads as a MISSING block rather than as a
-   slow sitting, which is the opposite of the truth. */
+/* Full height: the fastest shown sitting reaches it, and the rest scale to it. */
 .home-ribbon-ceil { stroke: var(--bn-line); stroke-width: 1; stroke-dasharray: 2 4; }
 /* The pace ramp: the faster the sitting, the closer to accent. Composited against the page
    ground rather than left transparent — stacked alpha at sub-pixel widths paints a false

@@ -1245,6 +1245,22 @@ def check_inventory_recent_route(checks: Checks) -> None:
             "however deep the deck asks",
         )
 
+def check_inventory_history_route(checks: Checks) -> None:
+    """`GET /inventory/history` answers every card's `captured_at`, `box` and `state`, never
+    a top-K: Home's history ribbon clusters sittings from it, and a deck-sized sample reads
+    any store as one sitting."""
+    checks.note("")
+    checks.note("HISTORY ROUTE — server/capture_server.py:do_inventory_history")
+    with isolated_home():
+        for at in range(1, 7):
+            capture_server.do_capture(capture_payload(1, capture_id=f"h{at}", set_hint="sv9"))
+        cards = capture_server.do_inventory_history()["cards"]
+        checks.equal(len(cards), 6, "every captured card, not a deck-sized sample")
+        checks.equal(
+            sorted(cards["1/1"]), ["box", "captured_at", "state"],
+            "three fields a card and nothing else",
+        )
+
 # -------------------------------------------------------------------------- place block
 
 
@@ -2907,6 +2923,7 @@ CHECKS = (
     check_inventory_box_route,
     check_rows_scoped_after_full_load,
     check_inventory_recent_route,
+    check_inventory_history_route,
     check_box_names,
     check_box_claims,
     check_box_claim_product,

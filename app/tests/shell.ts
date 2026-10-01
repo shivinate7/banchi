@@ -538,6 +538,17 @@ async function stubStore(page: Page): Promise<void> {
     )
     return json(route, { cards })
   })
+  /* `GET /inventory/history`: Home's history ribbon, three fields a card. */
+  await page.route(/\/inventory\/history$/, (route) =>
+    json(route, {
+      cards: Object.fromEntries(
+        Object.entries(CARDS).map(([key, c]) => {
+          const { captured_at, box, state } = c as { captured_at: string | null; box: number; state: string }
+          return [key, { captured_at, box, state }]
+        }),
+      ),
+    }),
+  )
   await page.route(/\/search\?/, (route) => json(route, { query: '', groups: [] }))
 
   /* THE QUEUES, THE RUNS, THE WORKLIST, THE LEDGER AND THE ORDERS, each empty and each with
