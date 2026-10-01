@@ -496,10 +496,13 @@
   overflow-wrap: anywhere;
 }
 .browse-hero-name.is-unnamed { color: var(--bn-ink-3); font-weight: 600; }
+/* `min-height` IS THE PILL'S, because a sale adds the card's state pill to this row and a row that
+   holds none is a text line shorter: the hero below it moved 3.5px on the press. */
 .browse-hero-sub {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  min-height: var(--bn-pill-h);
   gap: var(--bn-1-5) var(--bn-2);
   font-size: var(--bn-fs-sm);
   color: var(--bn-ink-3);

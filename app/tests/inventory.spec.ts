@@ -1993,12 +1993,22 @@ test('the press that sells a copy does not shift while the re-read is in flight'
  * pixels. The window opens at the press and closes 500ms later. */
 test('the press that sells a copy causes no layout shift in the half second after it', async ({ page }) => {
   const { store, sell, depart } = sellableStore()
+  /* NO FINISH PILL: the fixture's cards carry one, which already makes the hero's meta row a pill
+     high. A card with none is the case where the sale's own state pill arrives in an empty row. */
+  for (const held of Object.values(store.cards)) (held as { metadata_finish: unknown }).metadata_finish = null
   await watchShifts(page)
+  await setViewport(page, { width: 1440, height: 900 })
   await open(page, BOXES, store, () => PRICING, movesOnSale(() => {
     sell('2/1')
     depart('2/1')
   }))
+  /* AND NO QUEUE CHIP, which is a pill too: the card is in no queue. */
+  await page.route(/\/queues$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ review: [], parked: [] }) }),
+  )
+  await page.reload()
   const row = page.locator('.card-locations-row.is-current')
+  await expect(row).toBeVisible()
   const press = row.getByRole('button', { name: 'Mark sold' })
   await press.scrollIntoViewIfNeeded()
   await page.waitForTimeout(1000)
