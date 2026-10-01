@@ -93,7 +93,7 @@ viewport. Each row names the element by its class.
 | S4 | Inventory, 820 only | Step card to card (← / →, or a row click) | `.card-locations` unmounts for about 210 ms while the copies read is out. `.browse-band` shrinks 527→347 px, and `.browse-details` moves −180 px, then +180 px. At 1440 the copies sit beside the photo, so the band does not change height. | B | Confirmed (frame by frame) | 0.031 twice for each step | Held frame in `CardLocations`: keep the last copies mounted while the read is out. |
 | S5 | Review | Open the lookup (`L` or the Search button), and close it (Esc) | `.review-actions` and `.review-tray` move +94 px, then −158 px, 8 ms apart. Esc moves them +65 px. `CatalogPanel` replaces the candidate list in flow. | B | Confirmed | 0.008 + 0.017 (key). 0.003 + 0.006 (click). 0.005 (Esc) | Held frame, and the actions stay at a fixed place under the stage. |
 | S6 | All screens | The server goes away, then comes back | `.bn-banner` mounts in flow above `.bn-view` (sticky, not fixed). The whole view moves 44 px down, then up. The person did nothing. | D | Confirmed | 0.0255 each way | Overlay, not flow. |
-| S7 | 8 of 12 screens, classic-scrollbar systems | Data lands, or the route changes between a short and a long screen | The document gains or loses a 15 px scrollbar. `.bn-head-actions` and other right-aligned or centred content moves 9–15 px across. The routes are Home, Pricing, Orders, Sales, Inventory, Graveyard, Fulfillment and Capture. Codes goes the other way. | F | Confirmed (bars forced) | dx 15 px; CLS up to 0.09 with A1 | `scrollbar-gutter: stable`. |
+| S7 | 8 of 12 screens, classic-scrollbar systems | Data lands, or the route changes between a short and a long screen | The document gains or loses a 15 px scrollbar. `.bn-head-actions` and other right-aligned or centered content moves 9–15 px across. The routes are Home, Pricing, Orders, Sales, Inventory, Graveyard, Fulfillment and Capture. Codes goes the other way. | F | Confirmed (bars forced) | dx 15 px; CLS up to 0.09 with A1 | `scrollbar-gutter: stable`. |
 | S8 | Inventory, list toolbar | Tick a row; toggle "In stock only" | Tick mounts "1 ticked" and "clear" chips into `.browse-status`. At 820 "All" wraps to its own line, and the list moves 30 px. The toggle's count changes width (dx 60–67 px), and that also wraps "All". | C + E | Confirmed | 0.019 at 1440. 0.034–0.038 at 820 | Reserved slot for the tick chips. Fixed line box for the toolbar: "All" goes to a slot that cannot wrap. |
 | S9 | Sales | Pick a month column | A "<month> only" pill row mounts above "Sold". `.revenue-podium` and `.revenue-bar-head` move 40 px. | C | Confirmed | 0.012–0.066 | Reserved slot, or the filter pill moves into the bar head that exists already. |
 | S10 | Sales | Choose the "All" period | `.revenue-verdict-canceled` mounts. The podium, shelf, months and bar head move 22 px. | C | Confirmed | 0.0001 at 1440. 0.014 at 820 | Reserved slot (one line box). |
@@ -201,23 +201,23 @@ font, an image, a scrollbar, a banner or a toast never moves content (this spec)
 
 | Class | Check | Mechanized? |
 |---|---|---|
-| A | `app/tests/load-shift.spec.ts` (the `load-stability` lane). It must stop excluding `#/fulfillment`, or a Fulfillment-only case must cover S1. | Yes |
-| B, C, C′, E | **`app/tests/interaction-shift.spec.ts`** (new). A press registry beside `ROUTES` (`app/tests/routePresses.ts`) names each screen's primary presses and keys. The spec runs each press at 1440 and 820 and sums `layout-shift` entries including `hadRecentInput`. It leaves out sources inside the pressed control's own region and inside `.bn-toasts`. It fails a sum of 0.005 or more, and it fails two entries inside 300 ms after one press. A new screen with no registry entry fails. Exceptions are a shrinking allow list (D280). | Yes |
+| A | `app/tests/stability.spec.ts` (D313, nothing moves unless the person moved it). It must stop excluding `#/fulfillment`, or a Fulfillment-only case must cover S1. | Yes |
+| B, C, C′, E | New rows in `app/tests/stability.spec.ts`. A press registry beside `ROUTES` (to be built, in the same spec) names each screen's primary presses and keys. The spec runs each press at 1440 and 820 and sums `layout-shift` entries including `hadRecentInput`. It leaves out sources inside the pressed control's own region and inside `.bn-toasts`. It fails a sum of 0.005 or more, and it fails two entries inside 300 ms after one press. A new screen with no registry entry fails. Exceptions are a shrinking allow list (D280). | Yes |
 | D | A spec refuses `/status`, asserts the banner shows, and asserts 0 shift on `.bn-view`. A toast case sends three receipts and asserts the first toast's rect holds. | Yes |
 | F | A `docs-audit` row asserts `scrollbar-gutter: stable` on `html` in `base.css`. The spec above also runs once with classic bars forced. | Yes |
 | G | A `docs-audit` row asserts a preload link for each face in `app/index.html` and a metric fallback in `fonts.css`. A spec with fonts held 2 s asserts a sum under 0.001. | Yes |
 | H | A spec holds images 2.5 s on every route and asserts 0 shift. A static scan of `<img>` cannot see a frame class, so the browser is the check. | Yes (in the browser) |
 | I | A `docs-audit` row scans `app/src/**/*.css` for `transition` or `transition-property` that names a layout property. The allow list names the contained and intended selectors in §4.3, and it only shrinks. | Yes |
-| J | No lint. A `ResizeObserver` or a measured width can be correct (`Lockup`, the tooltip). The interaction-shift spec catches the effect. | Through the effect only |
+| J | No lint. A `ResizeObserver` or a measured width can be correct (`Lockup`, the tooltip). The stability spec catches the effect. | Through the effect only |
 | K | A `docs-audit` row refuses a `:hover`, `:focus` or `:active` rule that sets a layout property. It is clean today. The row must first go red on a planted case. | Yes |
 | C (static) | A lint for "a conditional element in flow with no reserved slot" is **not proposed as a gate**. The scan finds 204 `cond ? <El/> : null` mounts in `app/src` (47 that look like status). It cannot read whether the parent reserves the space. It would flag correct code and teach readers to skip it. The browser spec is the check. | No (static); yes (in the browser) |
 
 **NOT MECHANIZED:** whether a measured move is "the direct result of the press at that spot". A
 machine can bound the region by the pressed control's own subtree, but it cannot tell an
-intended disclosure from a push. The registry's allow list holds that judgement, one named entry
+intended disclosure from a push. The registry's allow list holds that judgment, one named entry
 for each press.
 
-Trust a new guard only after it goes red on the defect it guards. The interaction-shift spec
+Trust a new guard only after it goes red on the defect it guards. The stability spec
 must fail on today's `main` at S2, S3, S4, S8, S9, S11 and S12 before any fix lane lands.
 
 ## 6. Out of scope
@@ -246,7 +246,6 @@ must fail on today's `main` at S2, S3, S4, S8, S9, S11 and S12 before any fix la
    `app/src/CardHero.tsx`, `app/src/BoxBrowse.tsx`, `app/src/BoxBrowse.css`,
    `app/src/BoxOps.css`, `app/src/Revenue.tsx`, `app/src/Pricing.tsx`, `app/src/Pricing.css`,
    `app/src/Orders.tsx`, `app/src/ReviewQueue.tsx`, `app/src/CaptureScreen.tsx`.
-4. **The guard (§5).** Add `app/tests/interaction-shift.spec.ts`,
-   `app/tests/routePresses.ts` and `app/tests/interaction-shift-allow.json`. The spec lands
-   first, red on today's `main`, with every finding in its allow list. Each fix lane deletes its
-   own entries. Lanes 1–3 run in parallel after it.
+4. **The guard (§5).** Each fix lane adds its own rows to `app/tests/stability.spec.ts` (D313,
+   nothing moves unless the person moved it), red on `main` before its fix and green after. A
+   lane deletes its own entries from `app/tests/stability-allow.json`. Lanes 1–3 run in parallel.
