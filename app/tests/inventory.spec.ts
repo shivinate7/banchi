@@ -1702,11 +1702,16 @@ test('Undo stands in Mark sold\'s own frame, and the sale never moves the row', 
   sell('2/1')
   /* The burst is on screen: a bill never takes a pointer event, and nothing about the row moves. */
   await expect(row.locator('.card-locations-bill').first()).toBeAttached()
-  const pe = await row.locator('.card-locations-bill, .card-locations-flash').evaluateAll((els) => els.map((el) => getComputedStyle(el).pointerEvents))
+  const pe = await row.locator('.card-locations-bill').evaluateAll((els) => els.map((el) => getComputedStyle(el).pointerEvents))
   expect(pe.length).toBeGreaterThan(1)
   expect(new Set(pe)).toEqual(new Set(['none']))
   const undo = row.getByRole('button', { name: 'Undo sale' })
   await expect(undo).toBeVisible()
+  /* FOCUS FOLLOWS THE SALE: Mark sold is gone, so the Undo takes it and a keyboard user can undo at once. */
+  await expect(undo).toBeFocused()
+  /* THE BURST OUTLIVES ITS FASTEST PART: a child's `animationend` bubbling up once ended it early. */
+  await page.waitForTimeout(400)
+  expect(await row.locator('.card-locations-bill').count(), 'the burst ended before the bills did').toBeGreaterThan(0)
   expect(await rowBox()).toEqual(before)
 
   /* SAME LEFT, WIDTH AND HEIGHT AS MARK SOLD: the swap never changes the frame (D118, D195). */

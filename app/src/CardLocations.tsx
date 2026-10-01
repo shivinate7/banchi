@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { BoxRecord, SearchCopy, SearchGroup, SectionDetail } from './types'
 import { isDeparted, photoUrl, placeSentence } from './server'
@@ -335,7 +335,7 @@ export function MarkSoldButton({
       name={name}
       size="xl"
       className="card-locations-sell"
-      style={{ width: 128 }}
+      style={{ width: 'var(--sale-w)' }}
       busy={busy}
       disabled={disabled}
       onClick={() => {
@@ -353,12 +353,11 @@ const FRESH_SALES = new Map<string, number>()
 const FRESH_MS = 15000
 const BILL_COUNT = 8
 
-/** THE UNDO THAT STANDS WHERE MARK SOLD WAS: the same 128x40 frame (D195, D118), as a neutral
- *  outline with the undo glyph, so it never reads as "sell again". Right after a press, a flash
- *  in Mark sold's own accent plays the seal giving way to a check and fading into that frame,
- *  with drawn bills flying up and out. The flash and the bills are `pointer-events: none` and
- *  absolutely placed, so they never take a click and never move the row; reduced motion drops
- *  both and the frame is simply there. */
+/** THE UNDO THAT STANDS WHERE MARK SOLD WAS: the same frame (`--sale-w` by 40px, D195, D118), as a
+ *  neutral outline with the undo glyph, so it never reads as "sell again". Right after a press,
+ *  drawn bills fly up and out of it, once. They are `pointer-events: none` and absolutely placed,
+ *  so they never take a click and never move the row; reduced motion drops them and the frame is
+ *  simply there. Focus moves here after a press. */
 export function UndoSaleButton({
   saleKey,
   name,
@@ -378,8 +377,13 @@ export function UndoSaleButton({
     const at = FRESH_SALES.get(saleKey)
     return at !== undefined && Date.now() - at < FRESH_MS
   })
+  const button = useRef<HTMLButtonElement | HTMLAnchorElement>(null)
+  const wasFresh = useRef(fresh)
   useEffect(() => {
     FRESH_SALES.delete(saleKey)
+    /* The Mark sold that held focus is gone, so focus would drop to the body: a sale hands it to
+       the Undo, and a keyboard user can take it back at once. */
+    if (wasFresh.current) button.current?.focus()
   }, [saleKey])
   return (
     <span className="card-locations-undo-wrap">
@@ -389,7 +393,8 @@ export function UndoSaleButton({
         name={name}
         size="xl"
         className="card-locations-undo"
-        style={{ width: 128 }}
+        ref={button}
+        style={{ width: 'var(--sale-w)' }}
         busy={busy}
         disabled={disabled}
         kbd={kbd}
@@ -397,15 +402,15 @@ export function UndoSaleButton({
       />
       {fresh ? (
         <>
-          <span className="card-locations-flash" aria-hidden="true" onAnimationEnd={() => setFresh(false)}>
-            <Icon name="sold" size={20} className="card-locations-flash-seal" />
-            <Icon name="check" size={20} className="card-locations-flash-check" />
-          </span>
           {Array.from({ length: BILL_COUNT }, (_, i) => (
             <span
               key={i}
               className="card-locations-bill"
               aria-hidden="true"
+              /* The LAST bill's own end ends the burst; a child's end bubbling up cannot. */
+              onAnimationEnd={(e) => {
+                if (e.target === e.currentTarget && i === BILL_COUNT - 1) setFresh(false)
+              }}
               style={{
                 ['--dx' as string]: `${(i - (BILL_COUNT - 1) / 2) * 16}px`,
                 ['--dy' as string]: `${-(46 + (i % 3) * 18)}px`,
