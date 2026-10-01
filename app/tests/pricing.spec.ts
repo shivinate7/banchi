@@ -4453,7 +4453,7 @@ test('F3: a filter narrows the view only, and the Send press carries every row',
 for (const width of [1440, 820]) {
   test(`D313: a filter on and off moves nothing at ${width}`, async ({ page }) => {
     await watchShifts(page)
-    await page.setViewportSize({ width, height: 900 })
+    await setViewport(page, { width, height: 900 })
     await open(page, { skus: FILTER_SKUS })
     await settleFonts(page)
     await page.waitForTimeout(800)
