@@ -10,7 +10,7 @@ import { routesFromNav } from './routes'
 import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE } from './routeFixtures'
 import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
 import { setViewport } from './phoneSwitch'
-import { describeShifts, readShifts, sumOf, watchShifts, type Shift } from './layoutShift'
+import { describeShifts, markNow, readShifts, sumOf, watchShifts, type Shift } from './layoutShift'
 
 /* LAYOUT SHIFT, PER CASE. THE FIRST CASE IS LOAD TIME, PER SCREEN, UNDER A SLOW SERVER.
  *
@@ -123,4 +123,160 @@ test('failed: a failed history read leaves no skeleton on Home', async ({ page }
   await page.waitForTimeout(1500)
   await expect(page.locator('.home-foot .bn-skeleton')).toHaveCount(0)
   await expect(page.locator('.home-hold')).toHaveCount(0)
+})
+
+// L2 shell
+/* THE SHELL AND GLOBAL CAUSES OF SHAKE (docs/specs/stability.md classes D, F, G, H, I). Each case
+   is red on the code it guards and green after the fix. The browser is the check: a static scan
+   cannot read a scrollbar, a banner or a font swap. */
+const SHELL_BUDGET = 0.001
+const FONT_BUDGET = 0.0002
+
+const STATUS_OK = JSON.stringify({ captures_root: 'captures', store: 's', store_exists: true, cards: 122, states: {}, queues: { review: 0, parked: 0 }, next_index: {} })
+
+/* Playwright's headless Chromium starts with `--hide-scrollbars`, so a document scrollbar never takes
+   width and the case would pass on any code. This case launches its own browser without the flag. A
+   platform that draws overlay bars (macOS by default) has no gutter to reserve, so the case skips
+   there and runs where bars are classic (Linux CI, Windows). */
+test('L2 shell: a scrollbar coming or going moves nothing sideways (S7)', async ({ playwright, baseURL }) => {
+  const browser = await playwright.chromium.launch({ ignoreDefaultArgs: ['--hide-scrollbars'] })
+  try {
+    const page = await browser.newPage({ baseURL, viewport: { width: 1440, height: 3000 } })
+    await page.goto('/#/')
+    await expect(page.locator('.bn-shell-main')).toBeVisible()
+    await settleFonts(page)
+    const probe = () =>
+      page.evaluate(() => ({ main: document.querySelector('.bn-shell-main')!.getBoundingClientRect().width, bar: innerWidth - document.documentElement.clientWidth }))
+    const short = await probe()
+    await page.evaluate(() => {
+      const pad = document.createElement('div')
+      pad.style.height = '9000px'
+      document.body.append(pad)
+    })
+    const tall = await probe()
+    test.skip(tall.bar === 0 && short.bar === 0, 'this platform draws overlay scrollbars: no width to reserve')
+    expect(tall.main, 'the shell is one width with or without a document scrollbar').toBe(short.main)
+  } finally {
+    await browser.close()
+  }
+})
+
+
+test('L2 shell: the offline banner overlays and moves nothing (S6)', async ({ page }) => {
+  await watchShifts(page)
+  await setViewport(page, { width: 1440, height: 1000 })
+  await page.goto('/#/')
+  await settleFonts(page)
+  const top = () => page.evaluate(() => document.querySelector('.bn-view')!.getBoundingClientRect().top)
+  const before = await top()
+  const mark = await markNow(page)
+  await page.unroute(/\/status$/)
+  await page.route(/\/status$/, (route) => route.abort())
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await expect(page.locator('.bn-banner')).toBeVisible()
+  await page.waitForTimeout(600)
+  expect(await top(), 'the view holds its place under the banner').toBe(before)
+  const moved = (await readShifts(page)).shifts.filter((s) => s.at >= mark)
+  expect(sumOf(moved), describeShifts(moved)).toBeLessThan(SHELL_BUDGET)
+  await page.unroute(/\/status$/)
+  await page.route(/\/status$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: STATUS_OK }))
+  await page.getByRole('button', { name: 'Retry' }).click()
+  await expect(page.locator('.bn-banner')).toHaveCount(0)
+})
+
+test('L2 shell: a new toast leaves the older ones where they are (S16)', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 1000 })
+  await page.goto('/#/')
+  await settleFonts(page)
+  const send = (n: number) =>
+    page.evaluate(async (i) => {
+      const { toast } = await import(/* @vite-ignore */ ['/src/kit', 'toast.tsx'].join('/'))
+      toast({ kind: 'receipt', title: `Sold card ${i}`, body: 'Marked sold.', action: { label: 'Undo', kbd: 'U', onPress: () => {} } })
+    }, n)
+  const first = page.locator('.bn-toast').first()
+  await send(1)
+  await expect(first).toBeVisible()
+  await page.waitForTimeout(500)
+  const at = await first.boundingBox()
+  await send(2)
+  await send(3)
+  await page.waitForTimeout(500)
+  expect(await first.boundingBox(), 'the first toast holds its place under two newer ones').toEqual(at)
+})
+
+test('L2 shell: a receipt holds its size while it stands (S16)', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 1000 })
+  await page.goto('/#/')
+  await settleFonts(page)
+  await page.evaluate(async () => {
+    const { toast } = await import(/* @vite-ignore */ ['/src/kit', 'toast.tsx'].join('/'))
+    toast({ kind: 'receipt', title: 'Sold Charizard ex', body: 'Marked sold. Undo puts it back.', action: { label: 'Undo', kbd: 'U', onPress: () => {} } })
+  })
+  const one = page.locator('.bn-toast')
+  await expect(one).toBeVisible()
+  const sizes: number[] = []
+  for (let i = 0; i < 8; i += 1) {
+    sizes.push(await one.evaluate((el) => (el as HTMLElement).offsetHeight))
+    await page.waitForTimeout(100)
+  }
+  expect(new Set(sizes).size, `heights ${sizes.join(',')}`).toBe(1)
+})
+
+test('L2 shell: web fonts arriving late move nothing (S17)', async ({ page }) => {
+  test.setTimeout(120_000)
+  await page.route(/\.woff2(\?|$)/, async (route) => {
+    await new Promise((r) => setTimeout(r, 2000))
+    await route.fallback()
+  })
+  await watchShifts(page)
+  await setViewport(page, { width: 1440, height: 1000 })
+  const over: string[] = []
+  for (const route of ['#/', '#/inventory', '#/revenue', '#/fulfillment']) {
+    await page.goto('about:blank')
+    await page.goto(`/${route}`)
+    await page.waitForTimeout(3500)
+    const shifts = (await readShifts(page)).shifts.filter((s) => s.at > 1900 && s.at < 2600)
+    const sum = sumOf(shifts)
+    if (sum >= FONT_BUDGET) over.push(`${route} ${sum.toFixed(4)} ${describeShifts(shifts)}`)
+  }
+  expect(over, 'a swap from the fallback face moves the page').toEqual([])
+})
+
+test('L2 shell: a Sales podium thumbnail arriving moves nothing (S18)', async ({ page }) => {
+  const STOCK = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
+  await page.route(STOCK, async (route) => {
+    await new Promise((r) => setTimeout(r, 2000))
+    await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88"><rect width="63" height="88" fill="#ccc"/></svg>' })
+  })
+  const order = {
+    key: 'TCGplayer:ORD-1', source: 'TCGplayer', number: 'ORD-1', placed_at: '2026-09-10T10:00:00+00:00', status: 'Shipped',
+    first_seen: '2026-09-10T10:05:00+00:00', changed_at: null, buyer: 'Ada', wanted: 1, recorded: 1, open: false, terminal: true, progress: [],
+    lines: [{ sku: '9100001', quantity: 1, name: 'Charizard ex', number: '006', printing: 'Holo', condition: 'Near Mint', rarity: 'Rare', unit_price: '12.50', kind: null }],
+  }
+  await page.route(/\/orders$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ summary: '1 order', orders: [order], resolution: { orders: [], counts: { resolved: 0, short: 0, no_copies_on_hand: 0, sku_unknown: 0, sku_unseen: 0, not_a_single: 0 } } }) }),
+  )
+  await page.route(/\/skus\/photos\?/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ photos: {}, stock_photos: { '9100001': STOCK } }) }),
+  )
+  await pricedShelf(page)
+  await watchShifts(page)
+  await setViewport(page, { width: 1440, height: 1000 })
+  await page.goto('/#/revenue')
+  await expect(page.locator('.revenue-podium .revenue-tile').first()).toBeVisible()
+  await page.waitForTimeout(1500)
+  const mark = await markNow(page)
+  await expect(page.locator('.revenue-podium .bn-thumb-img').first()).toBeVisible({ timeout: 8000 })
+  await page.waitForTimeout(600)
+  const moved = (await readShifts(page)).shifts.filter((s) => s.at >= mark)
+  expect(sumOf(moved), describeShifts(moved)).toBe(0)
+})
+
+test('L2 shell: the Fulfiller column does not animate its width (S19)', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 1000 })
+  await page.goto('/#/fulfillment')
+  const column = page.locator('.ff-column')
+  await expect(column).toBeVisible()
+  const props = await column.evaluate((el) => getComputedStyle(el).transitionProperty)
+  expect(props, 'a layout transition moves the content on every frame').not.toMatch(/max-width|width|height|margin|padding/)
 })
