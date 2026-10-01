@@ -1702,6 +1702,7 @@ test('Undo stands in Mark sold\'s own frame, and the sale never moves the row', 
   sell('2/1')
   /* The burst is on screen: a bill never takes a pointer event, and nothing about the row moves. */
   await expect(row.locator('.card-locations-bill').first()).toBeAttached()
+  const t0 = Date.now()
   const pe = await row.locator('.card-locations-bill').evaluateAll((els) => els.map((el) => getComputedStyle(el).pointerEvents))
   expect(pe.length).toBeGreaterThan(1)
   expect(new Set(pe)).toEqual(new Set(['none']))
@@ -1709,15 +1710,27 @@ test('Undo stands in Mark sold\'s own frame, and the sale never moves the row', 
   await expect(undo).toBeVisible()
   /* FOCUS FOLLOWS THE SALE: Mark sold is gone, so the Undo takes it and a keyboard user can undo at once. */
   await expect(undo).toBeFocused()
-  /* THE BURST OUTLIVES ITS FASTEST PART: a child's `animationend` bubbling up once ended it early. */
-  await page.waitForTimeout(400)
+  /* THE BURST LASTS ABOUT A SECOND: a bill runs 800ms and the last starts 175ms late, so the bills
+     are still there at 900ms and gone by 1100ms. Ending on the FIRST bill's animationend, or on
+     a child's bubbling up, breaks the first half. */
+  await page.waitForTimeout(Math.max(0, 880 - (Date.now() - t0)))
   expect(await row.locator('.card-locations-bill').count(), 'the burst ended before the bills did').toBeGreaterThan(0)
+  await expect(row.locator('.card-locations-bill')).toHaveCount(0, { timeout: 400 })
   expect(await rowBox()).toEqual(before)
 
   /* SAME LEFT, WIDTH AND HEIGHT AS MARK SOLD: the swap never changes the frame (D118, D195). */
   expect(await box('.card-locations-undo')).toEqual(markSold)
-  await expect(row.locator('.card-locations-bill')).toHaveCount(0)
   expect(await rowBox()).toEqual(before)
+})
+
+test('a row that loads already sold draws no bills and does not move focus', async ({ page }) => {
+  await open(page)
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
+  await expect(page.locator('.card-locations-row.is-current')).toBeVisible()
+  await expect(page.locator('.card-locations-bill')).toHaveCount(0)
+  /* Nothing here took focus from wherever it was (the walk row just clicked), least of all an Undo. */
+  await expect(page.locator('.card-locations-undo:focus, .card-locations-row :focus')).toHaveCount(0)
 })
 
 test('one press marks a copy sold, with no panel in between', async ({ page }) => {

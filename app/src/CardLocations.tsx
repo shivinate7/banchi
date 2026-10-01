@@ -350,6 +350,10 @@ export function MarkSoldButton({
    on mount and clears it, so the burst plays for the press and never for a row that was already
    sold when it was drawn. A press that never lands leaves a stale key, so it expires. */
 const FRESH_SALES = new Map<string, number>()
+/** A sale that failed never plays its burst: its key is dropped. */
+export function clearFreshSale(key: string): void {
+  FRESH_SALES.delete(key)
+}
 const FRESH_MS = 15000
 const BILL_COUNT = 8
 
@@ -373,17 +377,18 @@ export function UndoSaleButton({
   readonly kbd?: string
   readonly onClick: () => void
 }) {
-  const [fresh, setFresh] = useState(() => {
+  const [wasFresh] = useState(() => {
     const at = FRESH_SALES.get(saleKey)
     return at !== undefined && Date.now() - at < FRESH_MS
   })
+  /* Reduced motion draws no bills at all; the frame is simply there. */
+  const [fresh, setFresh] = useState(wasFresh && !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const button = useRef<HTMLButtonElement | HTMLAnchorElement>(null)
-  const wasFresh = useRef(fresh)
   useEffect(() => {
     FRESH_SALES.delete(saleKey)
     /* The Mark sold that held focus is gone, so focus would drop to the body: a sale hands it to
        the Undo, and a keyboard user can take it back at once. */
-    if (wasFresh.current) button.current?.focus()
+    if (wasFresh) button.current?.focus()
   }, [saleKey])
   return (
     <span className="card-locations-undo-wrap">
@@ -394,15 +399,13 @@ export function UndoSaleButton({
         size="xl"
         className="card-locations-undo"
         ref={button}
-        style={{ width: 'var(--sale-w)' }}
         busy={busy}
         disabled={disabled}
         kbd={kbd}
         onClick={onClick}
       />
-      {fresh ? (
-        <>
-          {Array.from({ length: BILL_COUNT }, (_, i) => (
+      {fresh
+        ? Array.from({ length: BILL_COUNT }, (_, i) => (
             <span
               key={i}
               className="card-locations-bill"
@@ -420,9 +423,8 @@ export function UndoSaleButton({
             >
               <Icon name="bill" size={22} />
             </span>
-          ))}
-        </>
-      ) : null}
+          ))
+        : null}
     </span>
   )
 }
