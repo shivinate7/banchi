@@ -5,6 +5,7 @@
 
 .orders-hub .bn-verdict { overflow-wrap: anywhere; }
 .orders-hub .bn-verdict strong { color: var(--bn-ink); font-weight: 700; }
+.orders-verdict-hold { color: transparent; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .orders-stage { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
 /* Add orders and Cards to pull: two small squares on the filter bar's line. */
 .orders-store-controls { display: inline-flex; align-items: center; gap: var(--bn-2); }

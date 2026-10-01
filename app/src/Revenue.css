@@ -477,3 +477,6 @@
   .revenue-summary { grid-template-columns: minmax(0, 1fr); gap: var(--bn-5); margin-bottom: var(--bn-5); }
   .revenue-months { min-height: 96px; }
 }
+
+/* A switch held for a read still in flight: drawn, so it takes its own box, and shown to no one. */
+.revenue-period[data-held] { visibility: hidden; }

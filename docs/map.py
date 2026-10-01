@@ -8050,12 +8050,12 @@ COMPONENTS = [
                                        "seam — including the buyer's name, which "
                                        "OrdersShipStage.tsx still does not draw.",
                                "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39",
-                                               "D51", "D57", "D58", "D61", "D63", "D69",
-                                               "D91", "D93", "D97", "D103", "D113",
-                                               "D118", "D123", "D132", "D277", "D171", "D181",
-                                               "D192", "D193", "D284", "D195", "D196", "D203",
-                                               "D296", "D212", "D218", "D220", "D221", "D259",
-                                               "D270", "D271", "D274", "D285", "D304"]},
+                                               "D51", "D57", "D58", "D61", "D63", "D69", "D91",
+                                               "D93", "D97", "D103", "D113", "D118", "D123", "D132",
+                                               "D171", "D181", "D192", "D193", "D195", "D196",
+                                               "D203", "D212", "D218", "D220", "D221", "D259",
+                                               "D270", "D271", "D274", "D277", "D284", "D285",
+                                               "D296", "D304", "D-loading-holds-loaded-size"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -8177,10 +8177,11 @@ COMPONENTS = [
                                         "the in-progress bucket is marked, and period, sort, "
                                         "search and the active bucket all round-trip through "
                                         "the URL.",
-                                "governed_by": ["D50", "D278", "D69", "D86", "D89", "D103", "D105",
-                                                "D118", "D125", "D277", "D189", "D193", "D284",
-                                                "D201", "D214", "D217", "D219", "D225", "D236",
-                                                "D196", "D285", "D298", "D301"]},
+                                "governed_by": ["D50", "D69", "D86", "D89", "D103", "D105", "D118",
+                                                "D125", "D189", "D193", "D196", "D201", "D214",
+                                                "D217", "D219", "D225", "D236", "D277", "D278",
+                                                "D284", "D285", "D298", "D301",
+                                                "D-loading-holds-loaded-size"]},
             "src/Revenue.css": {"does": "the summary band, podium, mix tile, board rows and "
                                         "product table's own layout, `--bn-*` only "
                                         "(D298's Direction B). The month bars "

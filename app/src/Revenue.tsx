@@ -1178,7 +1178,21 @@ export function Revenue() {
   }
 
   if (orders === null) {
-    return <Page title="Sales" icon="dollar" className="revenue" loading />
+    /* The period switch is drawn whole and held hidden and inert, so the header takes the height
+       it has loaded (D-loading-holds-loaded-size). */
+    return (
+      <Page
+        title="Sales"
+        icon="dollar"
+        className="revenue"
+        loading
+        actions={
+          <div className="revenue-period" data-held="true" inert>
+            <Segmented label="Period" value={period} options={PERIOD_TABS} onChange={handlePeriod} />
+          </div>
+        }
+      />
+    )
   }
 
   if (sales.length === 0) {
