@@ -1058,8 +1058,11 @@ def shard_selftest_cases(ok: Callable[[bool, str], None]) -> None:
         ok(sorted(s for _, files in bins for s in files) == specs,
            f"{m} shards hold every spec exactly once")
         loads = [b[0] for b in bins]
-        ok(max(loads) <= min(loads) * 1.1,
-           f"{m} shards balance within 10% by time ({min(loads):.0f}..{max(loads):.0f}s)")
+        # A whole spec is indivisible, so the best possible slowest shard is the mean
+        # or the largest spec, whichever is bigger.
+        floor = max(sum(loads) / m, max(times.get(Path(s).name, 0) for s in specs))
+        ok(max(loads) <= floor * 1.1,
+           f"{m} shards: slowest {max(loads):.0f}s within 10% of the best possible {floor:.0f}s")
     ok([b[1] for b in pack_shards(specs, 6, times)]
        == [b[1] for b in pack_shards(list(reversed(specs)), 6, times)],
        "the split does not depend on input order")
