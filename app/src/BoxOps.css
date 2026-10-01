@@ -366,3 +366,32 @@
 .boxops-editor-lead { margin: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-2); line-height: 1.5; }
 .boxops-editor-lead b { font-weight: 600; color: var(--bn-ink); }
 .boxops-section-names { display: flex; flex-direction: column; gap: var(--bn-3); }
+
+/* ---- the card picker: narrows a Move or a Claims write, inside its own sheet ---- */
+.boxops-picker { display: flex; flex-direction: column; gap: var(--bn-2); }
+.boxops-picker-bar { display: flex; align-items: center; gap: var(--bn-2); }
+.boxops-picker-count { flex: 1 1 auto; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+.boxops-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--bn-line);
+  border-radius: var(--bn-r);
+}
+.boxops-picker-list ul { list-style: none; margin: 0; padding: 0; }
+.boxops-picker-group + .boxops-picker-group { border-top: 1px solid var(--bn-line); }
+.boxops-picker-head {
+  display: flex;
+  width: 100%;
+  padding: var(--bn-1-5) var(--bn-3);
+  background: var(--bn-surface-2);
+  font-size: var(--bn-fs-xs);
+  font-weight: 700;
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+  color: var(--bn-ink-2);
+}
+.boxops-picker-card { display: flex; padding: var(--bn-1-5) var(--bn-3) var(--bn-1-5) var(--bn-6); font-variant-numeric: tabular-nums; }
+.boxops-picker-card:hover { background: var(--bn-hover); }

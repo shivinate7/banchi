@@ -744,6 +744,8 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 }
 .bn-check input:checked { background: var(--bn-accent); border-color: var(--bn-accent); }
 .bn-check input:checked::before { transform: scale(1); }
+.bn-check input:indeterminate { background: var(--bn-accent); border-color: var(--bn-accent); }
+.bn-check input:indeterminate::before { transform: scale(1); clip-path: polygon(0 40%, 100% 40%, 100% 60%, 0 60%); }
 
 /* ---- segmented control ------------------------------------------------------ */
 .bn-seg {

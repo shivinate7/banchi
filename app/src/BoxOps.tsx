@@ -33,7 +33,7 @@ import {
 import { nonEmptySections, spansOf } from './position'
 import { ReadingAge } from './CardLocations'
 import { readingAgo } from './cardState'
-import { Button, Icon, IconButton, Notice, Pill, Select, SectionPicker, Stat, boxesMostRecentFirst, type IconName } from './kit'
+import { Button, Icon, IconButton, Notice, Pill, Segmented, Select, SectionPicker, Stat, boxesMostRecentFirst, type IconName } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { toast } from './kit/toast'
 import { Dialog as Overlay } from './kit/overlay'
@@ -393,12 +393,19 @@ export function BoxIdentity({
 
 /* ------------------------------------------------------------------------ the sheet ---- */
 
+export type PickSection = {
+  readonly key: string
+  readonly title: string
+  readonly cards: readonly { readonly index: number; readonly label: string }[]
+}
+const NO_CARDS: readonly PickSection[] = []
+
 type Editing = 'name' | 'sections' | 'section-names' | 'claims' | 'move' | null
 
 export function BoxOps({
   record,
   onChanged,
-  selection = [],
+  cards = NO_CARDS,
   boxes = [],
   listings = NO_LISTINGS,
   open,
@@ -406,9 +413,9 @@ export function BoxOps({
 }: {
   record: BoxRecord
   onChanged: () => void
-  /** The indices the walk currently has ticked, in this box. Empty means the whole box — the
-   *  widening happens here, where the scope sentence on the control says so. */
-  selection?: readonly number[]
+  /** The box's on-hand cards by section, for narrowing a Move or a Claims write inside its own
+   *  sheet. The default is the whole box; the scope sentence on the control says which. */
+  cards?: readonly PickSection[]
   /** The registry, for the move's destination picker. */
   boxes?: readonly BoxRecord[]
   /** Every SKU's listing record, off `GET /inventory`. Read for the reading age beside this
@@ -432,6 +439,8 @@ export function BoxOps({
   /* D132 — one draft per section, keyed by ordinal, seeded from what the wire says now. */
   const [sectionNames, setSectionNames] = useState<Record<number, string>>({})
   const [editing, setEditing] = useState<Editing>(null)
+  /* The narrowing: `null` is the whole box, a list is those card positions only. */
+  const [narrowed, setNarrowed] = useState<readonly number[] | null>(null)
   const [draft, setDraft] = useState('')
   const [refused, setRefused] = useState<string | null>(null)
   const [claimed, setClaimed] = useState<BoxClaimResult | null>(null)
@@ -477,12 +486,24 @@ export function BoxOps({
       ? ''
       : `Believed live at TCGplayer, store-wide. None older than ${readingAgo(readAt)}; exact age is on the release plan below.`
 
+  const everyIndex = cards.flatMap((section) => section.cards.map((card) => card.index))
+  /* Every card picked is the whole box, so the write sends no list. */
+  const selection = narrowed === null || narrowed.length === everyIndex.length ? [] : narrowed
+  const emptyPick = narrowed !== null && narrowed.length === 0
+  const picker =
+    cards.length === 0 ? null : (
+      <CardPicker sections={cards} picked={narrowed} onChange={setNarrowed} />
+    )
   const scope =
     selection.length > 0
       ? `the ${count(selection.length, 'selected card', 'selected cards')}`
       : `all ${count(record.cards, 'card', 'cards')} in ${record.name ?? UNNAMED_BOX}`
 
   const applyClaims = async (patch: ClaimPatch) => {
+    if (emptyPick) {
+      setRefused('Pick at least one card, or choose the whole box.')
+      return
+    }
     const result = await write(() =>
       applyBoxClaims(record.box, patch, selection.length > 0 ? [...selection] : undefined),
     )
@@ -502,6 +523,10 @@ export function BoxOps({
    * with something true to say about a destination this component cannot check. */
   const doMove = async () => {
     const toBox = Number.parseInt(moveTo.trim(), 10)
+    if (emptyPick) {
+      setRefused('Pick at least one card, or choose the whole box.')
+      return
+    }
     if (!Number.isInteger(toBox) || toBox < 1) {
       setRefused('Choose a destination box.')
       return
@@ -571,6 +596,7 @@ export function BoxOps({
     setProposed(null)
     setClaimed(null)
     setMoved(null)
+    setNarrowed(null)
     setMoveTo('')
     setSectionDiv(null)
     setEditing(which)
@@ -704,39 +730,27 @@ export function BoxOps({
               </div>
             </section>
 
-            {selection.length > 0 || record.cards > 0 || (record.on_hand ?? 0) > 0 ? (
+            {record.cards > 0 || (record.on_hand ?? 0) > 0 ? (
               <section className="boxops-group">
                 <h3 className="bn-label">
                   Cards
-                  {selection.length > 0 ? (
-                    <Pill tone="accent">{selection.length} ticked</Pill>
-                  ) : (
-                    <span className="boxops-group-note">All</span>
-                  )}
+                  <span className="boxops-group-note">Whole box, or pick some inside</span>
                 </h3>
                 <div className="boxops-ops">
-                  {selection.length > 0 || record.cards > 0 ? (
+                  {record.cards > 0 ? (
                     <Op
                       icon="pencil"
                       label="Claims"
-                      detail={
-                        selection.length > 0
-                          ? `${selection.length} ticked`
-                          : count(record.cards, 'card', 'cards')
-                      }
+                      detail={count(record.cards, 'card', 'cards')}
                       busy={busy}
                       onClick={() => startEdit('claims')}
                     />
                   ) : null}
-                  {selection.length > 0 || (record.on_hand ?? 0) > 0 ? (
+                  {(record.on_hand ?? 0) > 0 ? (
                     <Op
                       icon="moveTo"
                       label="Move"
-                      detail={
-                        selection.length > 0
-                          ? `${selection.length} ticked`
-                          : count(record.on_hand ?? 0, 'card', 'cards')
-                      }
+                      detail={count(record.on_hand ?? 0, 'card', 'cards')}
                       busy={busy}
                       onClick={() => startEdit('move')}
                     />
@@ -775,6 +789,8 @@ export function BoxOps({
           </>
         ) : editing === 'claims' ? (
           <EditorFrame title="Set claims" onBack={closeEdit}>
+            {picker}
+            {refused === null ? null : <Notice tone="warn" title={refused} />}
             <ClaimEditor
               scope={scope}
               game={null}
@@ -806,6 +822,7 @@ export function BoxOps({
           </EditorFrame>
         ) : editing === 'move' ? (
           <EditorFrame title="Move to box" onBack={closeEdit}>
+            {picker}
             <div className="bn-field">
               {others.length > 0 ? (
                 <Select
@@ -971,6 +988,95 @@ function Census({
         {value === null ? '—' : value.toLocaleString()}
         {note === undefined ? null : <span className="boxops-census-note">{note}</span>}
       </dd>
+    </div>
+  )
+}
+
+/* THE CARDS A MOVE OR A CLAIM REACHES, PICKED BESIDE THE ACT (the list carries no ticks). It
+ * opens on the whole box; "Some cards" starts with every card picked, so narrowing is unpicking.
+ * A section's check is partial while some of its cards are picked. */
+function CardPicker({
+  sections,
+  picked,
+  onChange,
+}: {
+  sections: readonly PickSection[]
+  picked: readonly number[] | null
+  onChange: (next: readonly number[] | null) => void
+}) {
+  const all = sections.flatMap((section) => section.cards.map((card) => card.index))
+  const held = new Set(picked ?? [])
+  const set = (next: Set<number>) => onChange(all.filter((index) => next.has(index)))
+  const toggle = (indices: readonly number[], on: boolean) => {
+    const next = new Set(held)
+    for (const index of indices) {
+      if (on) next.add(index)
+      else next.delete(index)
+    }
+    set(next)
+  }
+  return (
+    <div className="boxops-picker">
+      <Segmented
+        label="Cards to include"
+        value={picked === null ? 'all' : 'some'}
+        options={[
+          { value: 'all', label: `Whole box, ${count(all.length, 'card', 'cards')}` },
+          { value: 'some', label: 'Some cards' },
+        ]}
+        onChange={(next) => onChange(next === 'all' ? null : all)}
+      />
+      {picked === null ? null : (
+        <>
+          <div className="boxops-picker-bar">
+            <span className="boxops-picker-count" aria-live="polite">
+              {picked.length} of {all.length} picked
+            </span>
+            <button type="button" className="browse-quiet" onClick={() => onChange(all)}>
+              All
+            </button>
+            <button type="button" className="browse-quiet" onClick={() => onChange([])}>
+              None
+            </button>
+          </div>
+          <ul className="boxops-picker-list">
+            {sections.map((section) => {
+              const indices = section.cards.map((card) => card.index)
+              const n = indices.filter((index) => held.has(index)).length
+              return (
+                <li key={section.key} className="boxops-picker-group">
+                  <label className="bn-check boxops-picker-head">
+                    <input
+                      type="checkbox"
+                      checked={n > 0 && n === indices.length}
+                      ref={(node) => {
+                        if (node !== null) node.indeterminate = n > 0 && n < indices.length
+                      }}
+                      aria-label={`All of ${section.title}`}
+                      onChange={(event) => toggle(indices, event.target.checked)}
+                    />
+                    <span>{section.title}</span>
+                  </label>
+                  <ul>
+                    {section.cards.map((card) => (
+                      <li key={card.index}>
+                        <label className="bn-check boxops-picker-card">
+                          <input
+                            type="checkbox"
+                            checked={held.has(card.index)}
+                            onChange={(event) => toggle([card.index], event.target.checked)}
+                          />
+                          <span>{card.label}</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              )
+            })}
+          </ul>
+        </>
+      )}
     </div>
   )
 }
