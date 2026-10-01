@@ -287,3 +287,66 @@ for (const width of [1440, 820]) {
     expectHeld(r, 0.001)
   })
 }
+
+/* REVIEW: THE LOOKUP OPENS OVER A READ. `Search` replaces the candidate list with the export's rows,
+   which are asked for when it opens. The candidates stay, dimmed, until the rows land, so the
+   actions under the stage hold their place and the swap is one change. */
+async function l1Review(page: Page): Promise<{ on: boolean }> {
+  const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  const candidates = [0, 1, 2].map((at) => ({
+    sku: `860800${at}`,
+    name: 'Snorlax',
+    set: 'ME01',
+    number: '014/132',
+    condition: 'Near Mint',
+    market: `${at + 4}.00`,
+  }))
+  await page.route(/\/queues$/, (route) =>
+    json(route, {
+      review: [
+        {
+          position: 'Box 2, Section 1, Card 1',
+          box: 2,
+          index: 1,
+          label: 'Box 2, Section 1, Card 1',
+          photo: 'photos/2/1.jpg',
+          read: { name: 'Snorlax', number: '014/132', printed_total: '132', set_hint: 'ME01' },
+          confidence: 'high',
+          reason: 'set_ambiguous',
+          candidates,
+          first_seen: '2026-09-01T12:00:00+00:00',
+          market: '4.00',
+          cleared_by_human: false,
+        },
+      ],
+      parked: [],
+    }),
+  )
+  const gate = { on: false }
+  await page.route(/\/review\/\d+\/\d+\/catalog/, async (route) => {
+    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS))
+    json(route, {
+      box: 2,
+      index: 1,
+      game: 'pokemon',
+      query: 'Snorlax',
+      searched: false,
+      rows: candidates.map((one) => ({ ...one, name: 'Snorlax lookup' })),
+      found: 3,
+      truncated: false,
+    })
+  })
+  return gate
+}
+
+for (const width of [1440, 820]) {
+  test(`held frame: opening the lookup holds the candidates until its rows land, at ${width}`, async ({ page }) => {
+    const gate = await l1Review(page)
+    await watchShifts(page)
+    await setViewport(page, { width, height: 1000 })
+    await page.goto('/#/review')
+    await expect(page.locator('.review-candidates')).toBeVisible()
+    const r = await heldPress(page, gate, () => page.getByRole('button', { name: 'Search' }).click())
+    expectHeld(r, 0.001)
+  })
+}
