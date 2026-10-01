@@ -224,7 +224,7 @@ for (const width of [1440, 820]) {
     const topOf = async () => (await boxes(page, ['.pricing-list']))['.pricing-list']?.split('|')[0]
     const before = await topOf()
     await page.locator('.pricing-filterbar input[type="search"], .pricing-filterbar input').first().fill('Arti')
-    await expect(page.locator('.pricing-filter-note, .bn-slot')).not.toHaveCount(0)
+    await expect(page.locator('.pricing-filter-note')).toBeVisible()
     await settleMotion(page)
     expect(await topOf()).toEqual(before)
   })
@@ -250,21 +250,15 @@ for (const width of [1440, 820]) {
   })
 }
 
-test('L3 S8: the In stock only count holds two digits, so a digit gained moves nothing beside it', async ({ page }) => {
+test('L3 S8: the In stock only count holds one box at 9, 99 and 1,234', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   await page.goto(screen('inventory'))
-  const count = page.locator('.browse-hidesold .bn-hidetoggle-count')
-  await expect(count).toBeVisible()
+  const count = '.browse-hidesold .bn-hidetoggle-count'
+  await expect(page.locator(count)).toBeVisible()
   await settleFonts(page)
-  const [width, ch] = await count.evaluate((el) => {
-    const probe = document.createElement('span')
-    probe.style.cssText = 'position:absolute;visibility:hidden;width:2ch;font:inherit'
-    el.appendChild(probe)
-    const two = probe.getBoundingClientRect().width
-    probe.remove()
-    return [el.getBoundingClientRect().width, two]
-  })
-  expect(width).toBeGreaterThanOrEqual((ch ?? 0) - 0.5)
+  const seen = await boxPerVariant(page, count, ['9', '99', '1,234'], count)
+  expect(seen, 'the count must exist').not.toContain('absent')
+  expect(new Set(seen.map((s) => s.split('|')[2])).size, `the count's width: ${seen.join(' ; ')}`).toBe(1)
 })
 
 /** Set `selector`'s content to each variant in turn (as HTML) and read the box `read` names after
@@ -326,6 +320,7 @@ for (const width of [1440, 820]) {
       ],
       chip,
     )
+    expect(seen, 'the chip must exist').not.toContain('absent')
     expect(new Set(seen.map((s) => s.split('|')[2])).size, `the chip's width: ${seen.join(' | ')}`).toBe(1)
   })
 }

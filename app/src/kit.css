@@ -571,10 +571,8 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 /* ---- Slot: the room for content that mounts later (D313) -------------------------------- */
 .bn-slot { display: block; min-width: 0; }
 span.bn-slot { display: inline-block; }
-.bn-slot-line { min-block-size: 1lh; }
+.bn-slot { min-block-size: 1lh; }
 .bn-slot-ghost { display: contents; visibility: hidden; }
-.bn-slot-pill { min-block-size: var(--bn-pill-h); display: flex; align-items: center; }
-span.bn-slot-pill { display: inline-flex; }
 
 /* ---- Live count: a figure that changes while it is read (D313) ------------------------- */
 /* Tabular figures in a box of `--digits` characters (default 2), so a count that gains or loses a

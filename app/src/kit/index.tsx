@@ -513,27 +513,26 @@ export function Pill({
 /** A PLACE THAT ALWAYS TAKES ITS ROOM (D313). Content that mounts later (a pill, a chip, a note, a
  *  receipt) goes inside a `Slot`; while `show` is false the slot draws nothing and still holds the
  *  block size of what it will hold, so its siblings never move when the content arrives.
- *  `size="line"` holds one text line (`1lh`). `size="pill"` holds a pill (`--bn-pill-h`).
+ *  The slot holds one text line (`1lh`) at least; a caller whose content is taller names it in its
+ *  own class (`min-block-size`), or passes a `ghost`.
  *  A hidden slot is `aria-hidden` and empty, so a screen reader hears nothing for it. `ghost` is a
  *  stand-in drawn with `visibility: hidden` while the slot is empty, for content whose height is
  *  not a plain line or pill: the slot then holds exactly what the real content would. */
 export function Slot({
   show = true,
-  size = 'line',
   as: Tag = 'div',
   className,
   ghost,
   children,
 }: {
   readonly show?: boolean
-  readonly size?: 'line' | 'pill'
   readonly as?: 'div' | 'span' | 'p'
   readonly className?: string
   readonly ghost?: ReactNode
   readonly children?: ReactNode
 }) {
   return (
-    <Tag className={['bn-slot', `bn-slot-${size}`, className].filter(Boolean).join(' ')} aria-hidden={show ? undefined : true}>
+    <Tag className={['bn-slot', className].filter(Boolean).join(' ')} aria-hidden={show ? undefined : true}>
       {show ? children : ghost === undefined ? null : <span className="bn-slot-ghost">{ghost}</span>}
     </Tag>
   )
@@ -1004,6 +1003,7 @@ export function Stat({
   size,
   money,
   className,
+  valueClassName,
 }: {
   readonly value: ReactNode
   readonly label: ReactNode
@@ -1015,10 +1015,12 @@ export function Stat({
    *  base size (omitted) is unchanged at 22:12. */
   readonly size?: 'sm' | 'xs'
   readonly className?: string
+  /** Extra classes on the figure itself, for `.bn-live-count` where it may gain a digit. */
+  readonly valueClassName?: string
 }) {
   return (
     <div className={['bn-stat', size ? `bn-stat-${size}` : '', className].filter(Boolean).join(' ')}>
-      <span className={money ? 'bn-stat-value bn-money' : 'bn-stat-value'}>{value}</span>
+      <span className={['bn-stat-value', money ? 'bn-money' : '', valueClassName].filter(Boolean).join(' ')}>{value}</span>
       <span className="bn-stat-label">{label}</span>
     </div>
   )

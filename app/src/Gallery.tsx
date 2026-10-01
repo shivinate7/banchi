@@ -7,7 +7,7 @@ import { PositionLabel } from './PositionLabel'
 import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import {
-  Button, Chip, ConfirmSheet, EmptyState, Icon, IconButton, Kbd, Loading, Lockup, Logo, Modal, Money, Notice, Page, PageUndo, Pill, Popover, Refusal, ReloadButton, Retry, Slot,
+  Button, Chip, ConfirmSheet, EmptyState, Icon, IconButton, Kbd, Loading, Lockup, Logo, Modal, Money, Notice, Page, PageUndo, Pill, Popover, Refusal, ReloadButton, Retry,
   KeyHint, Meter, Section, SectionPicker, Segmented, Select, Sheet, Stat, StatusSlot, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
   type ButtonSize, type ButtonVariant, type IconName, type PillTone,
 } from './kit'
@@ -304,28 +304,6 @@ const RADII = ['xs', 'sm', '', 'lg', 'xl', '2xl', 'full'] as const
 const VARIANTS: readonly ButtonVariant[] = ['default', 'primary', 'ghost', 'quiet', 'danger', 'danger-solid', 'ok', 'tint']
 const SIZES: readonly ButtonSize[] = ['sm', 'md', 'lg', 'xl']
 const TONES: readonly PillTone[] = ['default', 'accent', 'ok', 'warn', 'danger', 'live']
-
-/** The slot and the live count, pressed: the dashed box is the room the slot holds, and the line
- *  under it does not move when the pill arrives or the count gains a digit. */
-function SlotSpecimen() {
-  const [on, setOn] = useState(false)
-  return (
-    <div className="kit-row kit-row-wrap">
-      <div className="kit-slot-demo">
-        <Slot size="pill" show={on}>
-          <Pill tone="accent">3 ticked</Pill>
-        </Slot>
-        <span>The line below the slot holds still.</span>
-      </div>
-      <Button size="sm" variant="ghost" onClick={() => setOn((v) => !v)}>
-        {on ? 'Empty the slot' : 'Fill the slot'}
-      </Button>
-      <span>
-        Live count <span className="bn-live-count">{on ? 128 : 7}</span> cards
-      </span>
-    </div>
-  )
-}
 
 // ------------------------------------------------------------------------- scaffolding
 
@@ -1105,9 +1083,6 @@ export function Gallery() {
                     parked
                   </Pill>
                 </div>
-              </Spec>
-              <Spec label="slot and live count: room kept for what arrives">
-                <SlotSpecimen />
               </Spec>
               <Spec label="dots">
                 <div className="kit-row kit-row-wrap">

@@ -57,9 +57,7 @@
   line-height: 1.05;
   /* THE FIGURE HOLDS THREE DIGITS (D313): a sale or a capture that adds a digit, up to 999, moves
      the stat beside it nowhere. Four figures must still fit the 300px rail on one row. */
-  --digits: 3;
-  min-inline-size: calc(var(--digits) * 1ch);
-  font-variant-numeric: tabular-nums;
+  --digits: 3; /* `.bn-live-count` (kit.css) holds the room */
 }
 .boxops-stat .bn-stat-label {
   font-size: var(--bn-fs-xs);

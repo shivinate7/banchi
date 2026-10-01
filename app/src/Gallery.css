@@ -333,7 +333,3 @@
 .kit-meanings { grid-template-columns: max-content minmax(0, 1fr); margin-top: var(--bn-4); }
 .kit-meaning { display: contents; }
 .kit-meaning dt { display: inline-flex; align-items: center; gap: var(--bn-2); }
-
-/* The slot specimen: the dashed box is the slot's reserved room, drawn so it can be seen. */
-.kit-slot-demo { display: flex; flex-direction: column; gap: var(--bn-1); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
-.kit-slot-demo .bn-slot { outline: 1px dashed var(--bn-line-strong); outline-offset: 2px; align-self: flex-start; min-inline-size: 90px; }

@@ -6,6 +6,7 @@ import type {
   CandidateRow,
   CatalogLookup,
   Place,
+  PlaceNeighbor,
   QueueEntryWire,
   QueueName,
   QueueRead,
@@ -2662,11 +2663,12 @@ function AbsentPhoto({ sentence, icon, entry }: { sentence: string; icon?: 'imag
 
 /** A place with a neighbour on each side, drawn invisible by `Slot` where a card has none, so the
  *  caption keeps the height the real order line takes (D313). */
-const GHOST_PLACE = {
+const GHOST_NEIGHBOR: PlaceNeighbor = { slot: 1, index: 1, name: 'x', unread: 0 }
+const GHOST_PLACE: Place = {
   label: null, located: true, box: 0, index: 0, slot: null, section: null, card: null, box_name: null,
   section_start: 0, section_end: null, box_total: 0, fraction: null,
-  neighbors: { prev: { name: 'x', unread: 0 }, next: { name: 'x', unread: 0 } },
-} as unknown as Place
+  neighbors: { prev: GHOST_NEIGHBOR, next: GHOST_NEIGHBOR },
+}
 
 /* The card's address, and the way back to it: this opens THE CARD on Inventory
  * (`#/inventory?box=<n>&card=<cid>`), not the box at its first card (LOC-12). The label names
