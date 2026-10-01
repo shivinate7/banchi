@@ -2553,7 +2553,7 @@ export function Pricing() {
   const bar =
     !liveTab && loaded.length > 0 ? (
       <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send to TCGplayer">
-        <p className="pricing-bar-says">{filtering ? `Send covers all: ${summary.join(', ')}` : summary.join(', ')}</p>
+        <p className="pricing-bar-says">{summary.join(', ')}</p>
         <SendCard
           runs={loaded}
           copies={progress.outCopies}

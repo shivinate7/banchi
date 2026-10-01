@@ -638,7 +638,7 @@ export function SendCard({
           : priceChanges.length > 0
             ? `Send ${carried(copies ?? 0, priceChanges.length)}`
             : copies !== null && copies > 0
-              ? `Send ${plural(copies, 'copy', 'copies')} to TCGplayer`
+              ? `Send all ${plural(copies, 'copy', 'copies')} to TCGplayer`
               : 'Send to TCGplayer'
 
   const takeBack = async (stamp: string) => {
