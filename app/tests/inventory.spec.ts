@@ -8760,6 +8760,6 @@ for (const [width, scheme] of [[1440, 'light'], [1440, 'dark'], [820, 'light'], 
     expect(new Set(seen.map((one) => one.actions))).toHaveProperty('size', 1)
     expect(new Set(seen.map((one) => one.end)), 'the cap text must stay on one line').toHaveProperty('size', 1)
     expect(seen.filter((one) => !one.endFits), 'the cap text must stay inside the figure').toEqual([])
-    await page.screenshot({ path: test.info().outputPath(`lead-${width}-${scheme}.png`) })
+    await page.locator('.browse-hero-head').screenshot({ path: test.info().outputPath(`lead-${width}-${scheme}.png`) })
   })
 }
