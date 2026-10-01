@@ -1116,7 +1116,7 @@ def check_codex_hooks(report: Report) -> None:
     MEASURED AT THE MOMENT THIS ROW WAS WRITTEN: the two files already disagreed.
     `.claude/settings.json` runs `scripts/reap.py --hook` on every `Bash` call (D127, added
     2026-09-10 for the pkill/lsof incidents) and `scripts/session-teardown.sh` on
-    `WorktreeRemove` (added with D111's sweep) — `.codex/hooks.json` was written a day
+    `WorktreeRemove` (added with the janitor sweep, claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md (The janitor is one machine-wide sweep)) — `.codex/hooks.json` was written a day
     earlier, on 2026-09-09, and has neither. A Codex session could run an unrestricted
     `pkill` this repo's own Claude sessions cannot, and its `git worktree remove` would
     never notify a supervisor to stop. Both are added to `.codex/hooks.json` in the same

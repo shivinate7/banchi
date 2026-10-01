@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
-# `make janitor-selftest` — scripts/janitor.py (tier 1, --branches, --teardown), proved against a throwaway clone.
-# Protects: The janitor presses only what is provably dead, cuts only merged branches, and tears down only a leaving tree, proved on a throwaway clone with real processes.
+# `make janitor-selftest` — scripts/janitor.py (--teardown), proved against a throwaway clone.
+# Protects: The janitor tears down only a leaving tree, and reads every unreadable liveness answer as live, proved with real processes.
 #
-# WHY THIS EXISTS. What stays in janitor.py deletes directories and signals nothing, but it
-# still cannot be proved against this repo: the cases worth proving are the destructive ones and
-# the fixture has to be disposable. So it gets a temp clone, a fake liveness oracle and real
-# processes in their own process groups.
+# WHY THIS EXISTS. janitor.py signals processes, so the cases worth proving cannot run against
+# this repo. It gets a temp clone, a fake liveness oracle and real processes in their own
+# process groups.
 #
-# THE SWEEP PROPER IS NOT HERE. Dead-rooted servers, loose processes and the worktree, branch and process reap are
-# claude-settings' `janitor/sweep.py`, proved by its own `test_sweep.py`. What this file keeps
-# is the three modes that sweep has no equivalent for: tier 1 alone (`--tier1`), the lossless
-# branch cut (`--branches`), and one tree's teardown (`--teardown`).
-#
+# THE SWEEP PROPER IS NOT HERE. It is claude-settings' `janitor/sweep.py`, proved by its own
+# `test_sweep.py`. What this file keeps is one tree's teardown (`--teardown`) and the liveness
+# reads it stands on.
 # WHY IT IS NOT IN THE GIT HOOK. D18: it writes. It IS in `make check`, which is exactly
 # `merge-selftest`'s standing.
 #
@@ -86,102 +83,13 @@ not_said() {
   esac
 }
 
-# --------------------------------------------------------------------------- the fixture
-# Built with the hooks unarmed: the fixture is not the thing under test.
-git init -q -b main "$tmp/work"
-cd "$tmp/work" || exit 1
-git config user.email selftest@example.com
-git config user.name  selftest
-git config commit.gpgsign false
-echo one > file.txt
-git add file.txt
-git commit -qm seed
-
-# husks: directories under .claude/worktrees that git does not know about
-mkdir -p "$tmp/work/.claude/worktrees/husk-quiet/.serve"
-echo log > "$tmp/work/.claude/worktrees/husk-quiet/.serve/capture.log"
-mkdir -p "$tmp/work/.claude/worktrees/husk-busy/.serve"
-echo log > "$tmp/work/.claude/worktrees/husk-busy/.serve/capture.log"
 
 # the fake liveness oracle. The process points at a file that exists, so nothing here is an
 # orphan by accident.
-mkdir -p "$tmp/sessions"
 touch "$tmp/marker.py"
-now_ms="$(python3 -c 'import time; print(int(time.time()*1000))')"
 busy_pid="$(plain_spawn "$tmp/marker.py")"; kids="$kids $busy_pid"
-
-# a process holding the busy husk open. Its marker sits INSIDE `.serve/` so the directory's
-# contents stay a subset of HUSK_NAMES — put it beside `.serve/` and the directory stops
-# being a husk at all, and the case would pass without ever testing anything.
-touch "$tmp/work/.claude/worktrees/husk-busy/.serve/keep.py"
-husk_pid="$(plain_spawn "$tmp/work/.claude/worktrees/husk-busy/.serve/keep.py")"; kids="$kids $husk_pid"
-
-# A DIRECTORY UNDER `.claude/worktrees/` THAT CANNOT BE READ AT ALL. `husks` listed every entry
-# with a bare `entry.iterdir()`, and an unreadable one raises — out of TIER 1, which runs
-# unattended at every session end. It is not a husk and it is not reaped; it is stepped over.
-mkdir -p "$tmp/work/.claude/worktrees/husk-sealed"
-chmod 0000 "$tmp/work/.claude/worktrees/husk-sealed"
-
-# A HUSK WITH A SESSION STANDING IN IT. A session whose worktree was pruned out from under it
-# is left standing in exactly this: a directory git no longer registers, holding only `.serve/`.
-mkdir -p "$tmp/work/.claude/worktrees/husk-session/.serve"
-echo log > "$tmp/work/.claude/worktrees/husk-session/.serve/capture.log"
-husk_session_pid="$(plain_spawn "$tmp/marker.py")"; kids="$kids $husk_session_pid"
-cat > "$tmp/sessions/$husk_session_pid.json" <<JSON
-{"pid": $husk_session_pid, "cwd": "$tmp/work/.claude/worktrees/husk-session",
- "startedAt": $now_ms, "name": "fixture-in-a-husk"}
-JSON
-
-# A STALE REGISTRATION: git lists a worktree whose directory is gone.
-git branch gone-tree
-git worktree add -q "$tmp/work/.claude/worktrees/gone" gone-tree 2>/dev/null
-rm -rf "$tmp/work/.claude/worktrees/gone"
-
-sleep 0.5
-
-echo
-echo "  -- the fixture arms the cases --"
-alive "$busy_pid"   && ok "the fixture session's pid is alive"   || bad "the fixture is wrong — session pid is dead"
-alive "$husk_pid"   && ok "the busy husk's process is running"   || bad "the fixture is wrong — the husk process is dead"
-git worktree list | grep -q "/gone " \
-  && ok "git still registers the removed worktree — the prune arm has a subject" \
-  || bad "the fixture is wrong — no stale registration, so the prune arm tests nothing"
-
-# ------------------------------------------------------------------------------- PREVIEW
-echo
-echo "  -- preview presses nothing --"
-prev="$(python3 "$JANITOR" --root "$tmp/work" --sessions "$tmp/sessions" 2>&1)"
-said "the quiet husk is offered"            "would reap" "$prev"
-said "the stale registration is offered"    "registration" "$prev"
-[ -d "$tmp/work/.claude/worktrees/husk-quiet" ] \
-  && ok "PREVIEW LEFT the quiet husk alone" || bad "preview removed the quiet husk"
-git worktree list | grep -q "/gone " \
-  && ok "PREVIEW LEFT the stale registration alone" || bad "preview pruned the registration"
-
-# ------------------------------------------------------------------------------ TIER 1
-echo
-echo "  -- tier 1: the provably dead, no confirmation --"
-t1="$(python3 "$JANITOR" --root "$tmp/work" --sessions "$tmp/sessions" --tier1 2>&1)"
-sleep 0.5
-alive "$busy_pid"   && ok "TIER 1 LEFT the live session's process alone" || bad "tier 1 killed the session's process"
-alive "$husk_pid"   && ok "TIER 1 LEFT the husk's process alone"         || bad "tier 1 killed the husk's process"
-[ ! -d "$tmp/work/.claude/worktrees/husk-quiet" ] \
-  && ok "the quiet husk was reaped" || bad "the quiet husk survived"
-git worktree list | grep -q "/gone " \
-  && bad "the stale registration survived tier 1" || ok "the stale registration was pruned"
-# NON-VACUITY FOR THE SEALED DIRECTORY: the quiet husk sorts after `husk-sealed`, so a raise on
-# the sealed one would have taken tier 1 down before ever reaching it.
-[ -d "$tmp/work/.claude/worktrees/husk-sealed" ] \
-  && ok "AND THE UNREADABLE DIRECTORY WAS STEPPED OVER, not deleted and not fatal" \
-  || bad "a directory the sweep could not even list was removed"
-[ -d "$tmp/work/.claude/worktrees/husk-busy" ] \
-  && ok "THE BUSY HUSK SURVIVED — it would only come back" || bad "the busy husk was reaped under a running process"
-said "the busy husk says why it was kept" "it would come back" "$t1"
-[ -d "$tmp/work/.claude/worktrees/husk-session" ] \
-  && ok "A HUSK WITH A LIVE SESSION IN IT SURVIVED TIER 1 — no process was running under it" \
-  || bad "tier 1 deleted a directory a live session is standing in, with no preview and no prompt"
-said "and it says a session is the reason" "a session is live in it (fixture-in-a-husk)" "$t1"
-
+python3 -c 'import time; time.sleep(0.5)'
+alive "$busy_pid" && ok "the fixture session's pid is alive" || bad "the fixture is wrong — session pid is dead"
 
 # ------------------------------------------------- THE LEAVING SESSION IS ITS OWN ANCESTOR
 #
@@ -231,119 +139,6 @@ td_other="$(python3 "$JANITOR" --teardown "$tmp/td/.claude/worktrees/leaving" \
 said "AND A RECORD THAT IS NO RELATION STILL DOES — the exclusion is the chain, not everybody" \
      "still here" "$td_other"
 
-# ------------------------------------------- `--branches`: THE FULL SWEEP'S LOSSLESS SUBSET, UNATTENDED
-#
-# ITS OWN FIXTURE, because every assertion here is about what SURVIVES, and the sweeps above
-# have already reaped their own tree's branches by this point. A clone of its own is the only
-# way to state "this and nothing else was cut" and have it mean anything.
-echo
-echo "  -- --branches: the one part of the full sweep a hook may run --"
-git init -q -b main "$tmp/br"
-cd "$tmp/br" || exit 1
-git config user.email selftest@example.com
-git config user.name  selftest
-git config commit.gpgsign false
-echo one > file.txt
-git add file.txt
-git commit -qm seed
-
-git branch br-merged-loose                       # main has every commit, nobody holds it -> CUT
-git branch br-merged-held                        # main has every commit, a tree holds it -> KEPT
-git worktree add -q "$tmp/br/.claude/worktrees/held" br-merged-held 2>/dev/null
-git branch backup/br-keepme                      # named backup/ -> never considered
-# AN IDLE TREE, CLEAN AND SESSIONLESS — exactly what claude-settings' sweep removes under --confirm.
-# Without one here, "no worktree was removed" is a claim over an empty set: the only branch
-# this mode cuts has no tree by construction, so a mode that DID remove trees would pass.
-git branch br-idle-tree
-git worktree add -q "$tmp/br/.claude/worktrees/idle" br-idle-tree 2>/dev/null
-git checkout -q -b br-unmerged
-echo two > only-here.txt
-git add only-here.txt
-git commit -qm "a commit main does not have"
-git checkout -q main
-
-out="$(python3 "$JANITOR" --root "$tmp/br" --branches 2>&1)"
-said "a bare --branches PREVIEWS the cut" "would reap br-merged-loose" "$out"
-if git -C "$tmp/br" show-ref --quiet refs/heads/br-merged-loose; then
-  ok "and presses nothing — the branch is still there after the preview"
-else
-  bad "the PREVIEW cut a branch"
-fi
-
-trees_before="$(git -C "$tmp/br" worktree list | wc -l | tr -d ' ')"
-out="$(python3 "$JANITOR" --root "$tmp/br" --branches --confirm 2>&1)"
-said "--branches --confirm cuts the merged, unheld branch" "reaped    br-merged-loose" "$out"
-
-# A HELD BRANCH IS NOT CONSIDERED AT ALL, WHICH IS STRONGER THAN "IT SURVIVED". `git branch -D`
-# refuses a branch checked out in a linked worktree on its own, so survival alone passes even
-# when `held` is not consulted — measured: dropping `held` entirely left every arm here green.
-# What only the real protection produces is SILENCE about that branch.
-case "$out" in
-  *br-merged-held*) bad "--branches considered a branch a worktree is standing on" ;;
-  *) ok "and says nothing at all about the branch a worktree holds — the held set is \
-consulted, rather than git's own refusal being leaned on after the fact" ;;
-esac
-
-if git -C "$tmp/br" show-ref --quiet refs/heads/br-merged-loose; then
-  bad "br-merged-loose survived --branches --confirm"
-else
-  ok "br-merged-loose is gone, and every object it named is reachable from main"
-fi
-for keep in br-merged-held br-unmerged backup/br-keepme main; do
-  if git -C "$tmp/br" show-ref --quiet "refs/heads/$keep"; then
-    ok "$keep survived — held, unmerged, backup/ and main are each protected"
-  else
-    bad "$keep WAS CUT — --branches took something it had no business taking"
-  fi
-done
-
-# THE LOSSLESS CLAIM IS THE WHOLE ARGUMENT FOR RUNNING THIS WITH NOBODY WATCHING, so it is
-# asserted rather than stated: the worktree is still there and its files are still in it. The
-# full sweep removes trees; this mode may not, whatever it decides about branches.
-trees_now="$(git -C "$tmp/br" worktree list | wc -l | tr -d ' ')"
-if [ "$trees_now" = "$trees_before" ] \
-   && [ -f "$tmp/br/.claude/worktrees/held/file.txt" ] \
-   && [ -f "$tmp/br/.claude/worktrees/idle/file.txt" ]; then
-  ok "no worktree was removed — the IDLE one the sweep would have taken is still here, \
-which is what makes this mode's blast radius branches and nothing else"
-else
-  bad "--branches removed a worktree ($trees_before trees before, $trees_now after)"
-fi
-
-# AND IT IS IDEMPOTENT, which is what lets a hook run it on every session end without a second
-# thought about how many times it has already run.
-out="$(python3 "$JANITOR" --root "$tmp/br" --branches --confirm 2>&1)"
-case "$out" in
-  *reaped*) bad "a second run cut something — it is not idempotent" ;;
-  *) ok "a second run cuts nothing and says nothing — safe on every session end" ;;
-esac
-
-# FAILS CLOSED ON A LAYOUT IT CANNOT READ, AND THE SUBJECT HAS TO EXIST FOR THAT TO MEAN
-# ANYTHING. `held` comes from `git worktree list`: with no trees, no branch is protected and
-# every one becomes eligible, which is the one way this mode could cut something somebody is
-# standing on. The first build of this arm copied the clone AFTER the cut above, so there was
-# no cuttable branch left in it and the assertion passed over an empty set — green, and about
-# nothing. This one makes a fresh cuttable branch first, then takes the tree list away, so the
-# guard is the only thing standing between it and a cut.
-git -C "$tmp/br" branch br-blind-subject
-out="$(python3 - "$JANITOR" "$tmp/br" <<'BLIND'
-import importlib.util, sys
-spec = importlib.util.spec_from_file_location("janitor", sys.argv[1])
-j = importlib.util.module_from_spec(spec); sys.modules["janitor"] = j
-spec.loader.exec_module(j)
-j.worktrees = lambda root: []          # exactly what an unreadable `git worktree list` gives
-print(j.cut_merged_branches(sys.argv[2], True))
-BLIND
-)"
-said "a tree list it cannot read cuts nothing — the protection fails CLOSED" \
-     "every branch" "$out"
-if git -C "$tmp/br" show-ref --quiet refs/heads/br-blind-subject; then
-  ok "and the branch it would have cut is still there — the arm had a real subject"
-else
-  bad "the blinded run cut br-blind-subject — the guard did not hold"
-fi
-cd "$tmp/work" || exit 1
-
 # ------------------------------------------------------------- THE LIVENESS FAIL-LIVE ARMS
 # A false "dead" deletes a tree somebody is working in, and no real process raises EPERM or
 # hides from `ps` on demand, so the arms that answer LIVE on anything unreadable are forced
@@ -388,18 +183,6 @@ said "an unparseable ps answer reads as the same process"   "same-bad-ps True" "
 said "a record with no startedAt reads as the same process" "same-no-startedat True" "$out"
 said "control: a start time that disagrees is a new process" "same-mismatch False" "$out"
 
-# ------------------------------------------------------------------------- NOT A REPO
-echo
-echo "  -- a directory that is not a clone --"
-mkdir -p "$tmp/plain"
-out="$(python3 "$JANITOR" --root "$tmp/plain" 2>&1)"
-status=$?
-case "$status:$out" in
-  0:*) bad "a non-repository was accepted" ;;
-  *REFUSED:*) ok "a non-repository is refused, with the marker" ;;
-  *) bad "refused, but not by the janitor (no REFUSED: marker)"
-     printf '%s\n' "$out" | sed 's/^/         /' ;;
-esac
 
 echo
 if [ "$fail" -eq 0 ]; then

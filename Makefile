@@ -503,7 +503,7 @@ check:
 # This exists because nothing ever re-ran the gate: `make check` failed in every fresh checkout
 # for 121 commits — `tsc` needed `app/demo/bundle.json`, which `make demo-record` writes and
 # nothing tracks — and no one noticed, because the only trees it was run in had made a recording.
-# A gate with no re-checker is the same defect D111 records one register up.
+# A gate with no re-checker is the same defect claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md (The janitor is one machine-wide sweep) records one register up.
 #
 # ONE ROW IS ABSENT AND IT IS NOT AN OVERSIGHT:
 #   vale     needs a binary that is not on the runner, and it never gated a commit anyway.
@@ -1088,8 +1088,7 @@ icloud-sweep:
 # its `janitor/sweep.py`, a PREVIEW unless ARGS=--confirm: branches, worktrees, dead-rooted
 # servers, loose processes, stale registrations and husks, across every checkout under
 # ~/Developer. ARGS=<root> narrows it to one clone. CLAUDE_JANITOR_SWEEP names another copy.
-# What stays in scripts/janitor.py is what sweep.py has no mode for: tier 1 alone, the lossless
-# branch cut and one tree's teardown. `session-teardown.sh` runs those three.
+# What stays in scripts/janitor.py is one tree's teardown. `session-teardown.sh` runs it.
 janitor:
 	@python3 "$${CLAUDE_JANITOR_SWEEP:-$$HOME/.claude/janitor/sweep.py}" $(ARGS)
 

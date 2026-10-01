@@ -24,7 +24,7 @@ project's memory carries `pkill-f-is-machine-wide.md` (a worktree cleanup that k
 tree's servers), `dont-bounce-the-owners-servers.md` (the `restart` target killing the live capture
 server mid-request) and `a-pgrep-waiter-matches-itself.md`. **A note that has to be remembered is not a guard**, which is the preference this repo already acts on everywhere else — D16 checks the
 docs mechanically rather than asking, D42 refuses a move of `main` in a hook rather than in a
-sentence, D111 sweeps rather than reminding.
+sentence, claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md (The janitor is one machine-wide sweep) sweeps rather than reminding.
 
 ### The rule
 
@@ -104,7 +104,7 @@ under this checkout, `--confirm` stops it, and `port:N` / `match:X` / `pid:N` na
 **and it prints what it refused and why**, which is the half a `pkill` that quietly does the right
 thing on a good day can never do.
 
-**IT DOES NOT DUPLICATE `janitor.py`, AND IT WAS BUILT NOT TO.** D111's sweep owns the
+**IT DOES NOT DUPLICATE `janitor.py`, AND IT WAS BUILT NOT TO.** The claude-settings sweep (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md (The janitor is one machine-wide sweep)) owns the
 neighbouring question — what a FINISHED session left behind, on its own schedule, across trees
 and branches and orphans. This owns one signal at the moment it is sent. What they share is the
 reasoning, and where the shapes matched the code was copied WITH its argument rather than

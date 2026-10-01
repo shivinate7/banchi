@@ -5,7 +5,7 @@
 # 2026-09-06 that turned out to matter — `tsc --noEmit` needed `app/demo/bundle.json`, a file
 # `make demo-record` writes and `.gitignore` excludes, so `make check` FAILED IN EVERY FRESH
 # CHECKOUT, main included, for 121 commits. Nobody saw it because every tree it was run in had
-# made a recording. That is D111's shape one register up: a mechanism that is thorough, correct
+# made a recording. That is the shape of claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md (The janitor is one machine-wide sweep) one register up: a mechanism that is thorough, correct
 # and never re-evaluated.
 #
 # A fresh runner is the point. It has no venv, no banked cache, no image mirror and no recording

@@ -54,8 +54,8 @@ make janitor-install # retired: claude-settings' install.sh owns the user's Clau
 make merge          # merge a PR and move main onto it. ARGS=<n> previews. ARGS="<n> --confirm" merges.
                     #   The owner names the session an Orchestrator first, per turn. It carries a needed
                     #   rebase and force-push on a branch nobody else holds.
-make janitor        # claude-settings' sweep (D111, cleanup is a sweep): what a finished session left behind. Previews. ARGS=--confirm reaps.
-                    #   ARGS=<root> narrows it to one clone. scripts/janitor.py keeps tier 1 alone, --branches and --teardown.
+make janitor        # claude-settings' sweep (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md (The janitor is one machine-wide sweep)): what a finished session left behind. Previews. ARGS=--confirm reaps.
+                    #   ARGS=<root> narrows it to one clone. scripts/janitor.py keeps --teardown.
 make janitor-agent  # retired: claude-settings schedules the daily sweep. Prints how to drop the old agent.
 make launch-agent   # start the server at login (main tree only). ARGS=--remove. It keeps the server alive over the real store.
 make dev            # Vite with hot reload. Runs beside `make up`.

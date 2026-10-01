@@ -44,7 +44,7 @@ confirms it rather than excusing its absence.
 **`.codex/hooks.json` and `.claude/settings.json`'s `hooks` block disagreed on arrival.**
 Codex's file was written 2026-09-09; `.claude/settings.json` gained a `Bash`-matched
 `scripts/reap.py --hook` PreToolUse entry the next day (D127, for the pkill/lsof incidents)
-and has always carried `scripts/session-teardown.sh` on `WorktreeRemove` (D111's sweep),
+and has always carried `scripts/session-teardown.sh` on `WorktreeRemove` (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md (The janitor is one machine-wide sweep)),
 neither of which `.codex/hooks.json` had. A Codex session could have run an unrestricted
 `pkill` a Claude Code session in this repo cannot, and a worktree it removed would never
 notify a supervisor to stop. Both are added to `.codex/hooks.json` in the same change that
@@ -69,8 +69,7 @@ is asserted here.
 `.codex/hooks.json` tracked and brought to parity with `.claude/settings.json`'s hook roster;
 the `codex hooks` mechanical row in `scripts/docs-audit.py`, a `ROWS` entry and
 covered by `--self-test`; the stale allowlist line removed; the `.gitignore` line for
-`.codex/config.toml`; `docs/map.py`'s `governed_by` for `docs-audit.py` extended with D111,
-D127 and this entry.
+`.codex/config.toml`; `docs/map.py`'s `governed_by` for `docs-audit.py` extended with D127 and this entry.
 
 **RECORDED**: this entry, and the CLAUDE.md paragraph naming it.
 
