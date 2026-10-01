@@ -16,6 +16,7 @@ import {
   patchViewQuery,
   Pill,
   Sheet,
+  SkeletonText,
   Stat,
   useFacetParams,
   useSortParam,
@@ -944,6 +945,12 @@ function joinPhrases(parts: string[]): string {
  *  could not offer. The one home of this arithmetic (the headline, the walk's count and the
  *  landing view's "pullable" all read it). */
 const pickOf = (line: ResolvedLine): number => Math.max(0, line.owed - line.outstanding)
+
+/** The verdict's loading frame: a skeleton bar over a transparent sentence in the verdict's own
+ *  grammar, so it takes the verdict's own box. */
+function VerdictHold() {
+  return <SkeletonText>00 owed, 00 buyers: 00 pick, 00 unfilled</SkeletonText>
+}
 
 function verdictOf(open: readonly OrderRow[], resolved: readonly ResolvedOrder[]): ReactNode {
   const owed = open.reduce((sum, order) => sum + Math.max(0, order.wanted - order.recorded), 0)
@@ -2151,6 +2158,9 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   const orders = payload?.orders ?? []
   const open = orders.filter((one) => one.open)
   const populated = payload !== null && orders.length > 0
+  /* Still reading the ledger. The verdict's own slot is held, because a ledger with orders in it
+     (the common one) draws a verdict where this draws the lede (D-nothing-moves-unless-moved). */
+  const reading = payload === null && failure === null
 
   /* The well: the textarea, "Read this paste", and — beside the list — "Fetch from TCGplayer".
      Under the empty state the fetch is the EmptyState's own action, so the well there carries
@@ -2239,8 +2249,8 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     <Page
       icon="cart"
       className={hub.walkLine === null ? 'orders-hub orders' : 'orders-hub orders is-walking'}
-      verdict={populated ? verdictOf(open, payload?.resolution.orders ?? []) : undefined}
-      lede={populated ? undefined : 'Which copies each buyer gets, and where they are.'}
+      verdict={populated ? verdictOf(open, payload?.resolution.orders ?? []) : reading ? <VerdictHold /> : undefined}
+      lede={populated || reading ? undefined : 'Which copies each buyer gets, and where they are.'}
       /* THE WALK LINE (walk mode, under 1000px of column): who, how many, what is next, opening
          the buyer list, and one press out of the walk. CSS draws it only there. Out of the walk
          the header holds no press at all: an empty slot would still take a row at 390. */

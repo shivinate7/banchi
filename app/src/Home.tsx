@@ -20,7 +20,7 @@ import type {
   ServerStatus,
 } from './types'
 import { useCardCrop } from './cardCrop'
-import { Button, cropStyle, Icon, Kbd, Loading, Page, type IconName } from './kit'
+import { Button, cropStyle, Icon, Kbd, Loading, Page, Skeleton, SkeletonText, type IconName } from './kit'
 import { boxTitle } from './kit/data'
 import { dayMonth, weekdayDate } from './dates'
 import { pricingTileNote, runsOwingPrice, sendCounts, standing, type Standing } from './standing'
@@ -217,7 +217,17 @@ type Stage = {
 
 /** The ranked sentence. Renders what `standing.ts` decided and judges nothing itself. */
 function StandingLine({ standing: say }: { readonly standing: Standing | null }) {
-  if (say === null) return <Loading rows={1} shape="rows" className="home-standing-skel" />
+  if (say === null) {
+    /* The row's own element, so its box is the row's own rule. */
+    return (
+      <div className="home-standing home-standing-skel" role="status" aria-busy="true">
+        <span className="bn-sr">Loading</span>
+        <div className="home-standing-row" aria-hidden="true">
+          <Skeleton className="home-standing-skel-bar" />
+        </div>
+      </div>
+    )
+  }
   /* A row that cannot be pressed is PROSE, not a control: it drops the surface, the ring and
      the shadow, so the shape says whether there is work before the colour or the words do. */
   const body = (
@@ -291,21 +301,52 @@ function StandingLine({ standing: say }: { readonly standing: Standing | null })
 
 /** The library, and how it was made. Achromatic but for the pace ramp — see `storeHistory.ts`
  *  for why width is minutes and height is cards an hour. */
+/** The foot's loading frame, drawn in the foot's own elements so each takes its box from its own
+ *  rule. A line is a skeleton bar over a TRANSPARENT sentence in the loaded sentence's own grammar,
+ *  so it wraps where the loaded one wraps. The ribbon holds `.home-ribbon`'s height. No pixel is
+ *  written here. With `sum` it is the whole foot. Without, it is the history a foot that has its
+ *  sum is still waiting on. */
+const HOLD_SUM = '0,000 photographed over 00 sittings since 00 Mmm - 0,000 stored in 00 boxes - 000 sold'
+const HOLD_LAST = '00 Mmm — 000 cards into Box 00 in 00 minutes. 000 an hour.'
+function HistoryFootFrame({ sum = false, ribbon = false, last = false }: { readonly sum?: boolean; readonly ribbon?: boolean; readonly last?: boolean }) {
+  const line = (className: string, text: string) => (
+    <p className={className} aria-hidden="true">
+      <SkeletonText>{text}</SkeletonText>
+    </p>
+  )
+  const body = (
+    <>
+      {sum ? line('home-foot-sum', HOLD_SUM) : null}
+      {ribbon ? <Skeleton className="home-ribbon" /> : null}
+      {last ? line('home-foot-last', HOLD_LAST) : null}
+    </>
+  )
+  return sum ? <div className="home-foot">{body}</div> : body
+}
+
+/** Words the loaded sentence will gain, held invisibly in its own grammar until they land. */
+function Hold({ children }: { readonly children: string }) {
+  return <span className="home-hold" aria-hidden="true">{children}</span>
+}
+
 function HistoryFoot({
   status,
   boxes,
   sold,
   shelf,
   live,
+  loading,
 }: {
   readonly status: ServerStatus | null
   readonly boxes: number | null
   readonly sold: number | null
   readonly shelf: Record<string, CaptureStamp> | null
+  /** Which reads are still out. A read that failed is not loading: it draws what it drew before the frame existed. */
+  readonly loading: { readonly status: boolean; readonly boxes: boolean; readonly history: boolean }
   readonly live: boolean
 }) {
   const plot: Ribbon | null = useMemo(() => ribbon(sittings(shelf)), [shelf])
-  if (status === null) return <div className="home-foot" />
+  if (status === null) return loading.status ? <HistoryFootFrame sum ribbon last /> : <div className="home-foot" />
   const realTotal = photographed(status)
   if (realTotal === 0) {
     return (
@@ -328,7 +369,7 @@ function HistoryFoot({
     <div className="home-foot">
       <p className="home-foot-sum">
         <b>{realTotal.toLocaleString()}</b> photographed
-        {plot === null ? null : (
+        {plot === null ? (loading.history ? <Hold>{' over 00 sittings since 00 Mmm'}</Hold> : null) : (
           <>
             {' over '}
             <b>{plot.blocks.length + (plot.plinth?.sittings ?? 0)}</b>
@@ -340,8 +381,8 @@ function HistoryFoot({
         {/* `on_hand` is nullable BECAUSE a box could not be counted. A sum with a null in it is
             not a sum, so the clause degrades and the sentence does not. */}
         <b>{onHand.toLocaleString()}</b> stored
-        {boxes === null ? null : <> in <b>{boxes}</b> {boxes === 1 ? 'box' : 'boxes'}</>}
-        {sold === null || sold === 0 ? null : (
+        {boxes === null ? (loading.boxes ? <Hold>{' in 00 boxes'}</Hold> : null) : <> in <b>{boxes}</b> {boxes === 1 ? 'box' : 'boxes'}</>}
+        {sold === null ? (loading.boxes ? <Hold>{' - 000 sold'}</Hold> : null) : sold === 0 ? null : (
           <>
             <i aria-hidden="true" />
             {/* THIS STORE'S OWN COUNT, NOT SALES' (UX-019): Sales totals the order ledger,
@@ -354,7 +395,7 @@ function HistoryFoot({
           </>
         )}
       </p>
-      {plot === null ? null : <Ribbon plot={plot} live={live} />}
+      {plot === null ? (loading.history ? <HistoryFootFrame ribbon last /> : null) : <Ribbon plot={plot} live={live} />}
       {newest === null ? null : (
         <p className="home-foot-last">
           <b>{dayMonth(newest.from)}</b>
@@ -740,7 +781,7 @@ export function Home() {
             {status.state === 'ready' && status.value.cards === 0 ? 'Photograph the first box' : 'Capture'}
           </Button>
         </div>
-        <HistoryFoot status={status.state === 'ready' ? status.value : null} boxes={boxCount} sold={sold} shelf={history.state === 'ready' ? history.value : null} live={say?.running ?? false} />
+        <HistoryFoot status={status.state === 'ready' ? status.value : null} boxes={boxCount} sold={sold} shelf={history.state === 'ready' ? history.value : null} live={say?.running ?? false} loading={{ status: status.state === 'loading', boxes: boxes.state === 'loading', history: history.state === 'loading' }} />
       </div>
 
       <section className="home-spine bn-stagger" aria-label="The workflow">

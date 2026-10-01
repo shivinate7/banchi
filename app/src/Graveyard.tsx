@@ -143,6 +143,7 @@ export function Graveyard() {
   const windowed = visible.slice(0, shown)
 
   const hasRows = rows !== null && rows.length > 0
+  const loading = rows === null && failure === null
 
   return (
     <Page
@@ -150,7 +151,7 @@ export function Graveyard() {
       icon="history"
       className="graveyard"
       actions={<ReloadButton onReload={() => void load()} busy={retrying} />}
-      loading={rows === null && failure === null}
+      loading={loading}
       status={
         failure !== null && rows !== null ? (
           <div className="graveyard-failure bn-anim-pop">
@@ -164,8 +165,10 @@ export function Graveyard() {
         ) : undefined
       }
       toolbar={
-        hasRows ? (
-          <div className="graveyard-toolbar">
+        hasRows || loading ? (
+          /* While the read is out the toolbar is drawn whole and held hidden and inert, so the
+             list below takes the box it will have (D-nothing-moves-unless-moved). */
+          <div className="graveyard-toolbar" data-held={loading ? 'true' : undefined} inert={loading}>
             <Segmented value={filter} options={FILTERS.map((f) => ({ value: f.value, label: `${f.label} (${counts[f.value]})` }))} onChange={setFilter} label="Filter by how a card left" />
             <span className="bn-spacer" />
             <SearchField value={query} onChange={setQuery} persona="owner" label="Find in the graveyard" placeholder="Search" />

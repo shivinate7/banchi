@@ -133,6 +133,7 @@
 }
 .revenue-shelf-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-2); }
 .revenue-shelf-figure { font-size: var(--bn-fs-2xl); font-weight: 600; }
+.revenue-shelf-hold { display: contents; visibility: hidden; }
 .revenue-shelf-note { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); margin: 0; max-width: 260px; }
 .revenue-holdings-spark-empty { height: 56px; border-radius: var(--bn-r-sm); background: var(--bn-surface-2); }
 
@@ -477,3 +478,6 @@
   .revenue-summary { grid-template-columns: minmax(0, 1fr); gap: var(--bn-5); margin-bottom: var(--bn-5); }
   .revenue-months { min-height: 96px; }
 }
+
+/* A switch held for a read still in flight: drawn, so it takes its own box, and shown to no one. */
+.revenue-period[data-held] { visibility: hidden; }

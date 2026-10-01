@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type {
   BoxRecord,
@@ -971,7 +971,10 @@ function CopiesPanel({
   }, [bandGroup, onGroup])
 
   const bandPending = handle !== null && group === null && !gaveUp && (loading || !settled)
-  useEffect(() => {
+  /* A LAYOUT EFFECT, SO THE PARENT'S FRAME HOLDS THE COLUMN FROM THE FIRST PAINT. A passive effect
+     reports this after the card has painted without its figures column, and the column then adds
+     itself and moves the photograph (D-nothing-moves-unless-moved). */
+  useLayoutEffect(() => {
     onPending(bandPending)
   }, [bandPending, onPending])
 
