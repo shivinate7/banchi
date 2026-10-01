@@ -969,8 +969,24 @@ def entry_gloss(root: Path, claim: Claim) -> str:
     for path in sorted((root / d.directory).glob("*.md")):
         m = re.match(r"#+\s+" + re.escape(claim.slug) + r"\s+[\u2014-]\s*(.+)", read(path).split("\n", 1)[0])
         if m:
-            return " ".join(re.sub(r"[()`]", "", m.group(1)).split()[:6])
+            return title_gloss(m.group(1))
     return ""
+
+
+def title_gloss(title: str) -> str:
+    """STOPGAP: the gloss a claim writes for an entry title. `--unclaim` strips exactly this."""
+    return " ".join(re.sub(r"[()`]", "", title).split()[:6])
+
+
+def claimed_gloss(root: Path, u: "Unclaim") -> str:
+    """The gloss `entry_gloss` wrote for this claimed entry, read from its heading now."""
+    if u.kind not in DIR_KINDS or not u.old_name:
+        return ""
+    path = root / DIR_KINDS[u.kind].directory / u.old_name
+    if not path.exists():
+        return ""
+    m = re.match(r"#+\s+" + re.escape(u.token) + r"\s+[\u2014-]\s*(.+)", read(path).split("\n", 1)[0])
+    return title_gloss(m.group(1)) if m else ""
 
 
 def gloss_first_uses(text: str, claims: Sequence[Claim], glosses: Dict[str, str]) -> str:
@@ -1622,14 +1638,15 @@ def unrenumber_map(text: str, u: Unclaim) -> str:
     return pattern.sub('"n": "' + u.slug + '"', text, count=1)
 
 
-def apply_unclaim_to_text(text: str, u: Unclaim) -> Tuple[str, int]:
+def apply_unclaim_to_text(text: str, u: Unclaim, gloss: str = "") -> Tuple[str, int]:
     """`apply_to_text`'s own bound, run with the token and the replacement swapped.
 
     THE SAME `(?<![-\\w])...(?![-\\w])` GUARD, reused rather than rebuilt, is the whole point:
     a hand-rolled reverse would have to remember the `\\b`-boundary bug independently, and
     this one cannot forget it because it is not a second implementation.
     """
-    pattern = re.compile(r"(?<![-\w])" + re.escape(u.token) + r"(?![-\w])")
+    tail = r"(?: \(" + re.escape(gloss) + r"\))?" if gloss else ""  # STOPGAP: the gloss the claim added
+    pattern = re.compile(r"(?<![-\w])" + re.escape(u.token) + r"(?![-\w])" + tail)
     return pattern.subn(u.becomes, text)
 
 
@@ -1758,9 +1775,11 @@ def perform_unclaim(root: Path, u: Unclaim, write: bool,
     # `CLAUDE.md` (`DirKind.index_stub`).
     index_path = root / DIR_KINDS[u.kind].index_stub if u.kind in DIR_KINDS else None
     guard = guard or {}
+    gloss = claimed_gloss(root, u)
     for path in text_files(root):
         if path in manifest_paths:
             continue
+        g = gloss if path == root / "CLAUDE.md" else ""
         rel = str(path.relative_to(root))
         before = read(path)
         keep = guard.get(rel) or set()
@@ -1779,7 +1798,7 @@ def perform_unclaim(root: Path, u: Unclaim, write: bool,
                     continue
                 line = unrenumber_gates(line, u) if path == root / GATES else line
                 line = unrenumber_map(line, u) if path == root / MAP else line
-                line, got = apply_unclaim_to_text(line, u)
+                line, got = apply_unclaim_to_text(line, u, g)
                 hits += got
                 kept.append(line)
             after = "\n".join(kept)
@@ -1791,7 +1810,7 @@ def perform_unclaim(root: Path, u: Unclaim, write: bool,
                 after = unrenumber_map(after, u)
             if path == index_path:
                 after = unindex(after, u)
-            after, hits = apply_unclaim_to_text(after, u)
+            after, hits = apply_unclaim_to_text(after, u, g)
         if after == before:
             continue
         touched[str(path.relative_to(root))] = hits or 1

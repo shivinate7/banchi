@@ -2124,7 +2124,7 @@ def main() -> int:
            winner_file.read_text(encoding="utf-8") if winner_file else "")
 
         claude_after = claude_b.read_text(encoding="utf-8")
-        ok(f"main's own prose cites {shared} here." in claude_after,
+        ok(f"main's own prose cites {shared} (The winner) here." in claude_after,
            "main's own prose citation is untouched — a half-reversed claim is worse than an "
            "unreversed one, and this is the half that was wrong", claude_after)
         ok(f"this branch's own prose cites {lost} here." in claude_after,
