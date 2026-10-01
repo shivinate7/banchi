@@ -226,11 +226,10 @@
 }
 /* THE SALE BUTTONS ARE SCOPED TO THEIR OWN CLASSES, never to the row: the phone's action bar and
    any other slot draw them too, and a rule under `.card-locations-owner` left them unstyled there.
-   ONE WIDTH for Mark sold and its Undo (D195), the hover fill's reach too. The `!important` beats
-   `IconButton`'s inline face width. */
+   ONE WIDTH for Mark sold and its Undo (D195), the hover fill's reach too. `--sale-w` is the value;
+   `CardLocations.tsx`'s `SALE_FACE` is the one place it becomes a width. */
 .card-locations-sell, .card-locations-undo-wrap { --sale-w: 128px; }
 .card-locations-sell.bn-icon-btn, .card-locations-undo.bn-icon-btn {
-  width: var(--sale-w) !important;
   border-radius: var(--bn-r-lg);
 }
 /* MARK SOLD, icon-only (the seal), still the row's primary. At rest a tint; hover fills the accent
