@@ -216,10 +216,15 @@
   /* ---- motion ------------------------------------------------------------ */
   --bn-t-fast: 120ms;
   --bn-t: 200ms;
-  --bn-t-slow: 320ms;
+  --bn-t-slow: 280ms;
+  --bn-t-layout: 240ms;      /* a width or a column moving layout: the rail fold, a progress bar */
   --bn-ease: cubic-bezier(0.2, 0, 0, 1);
   --bn-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --bn-ease-in: cubic-bezier(0.4, 0, 1, 1);  /* leaving: it speeds up as it goes */
   --bn-ease-spring: cubic-bezier(0.34, 1.4, 0.44, 1);
+  --bn-ease-loop: ease-in-out;   /* a loop that never ends: breathe, shimmer */
+  --bn-ease-linear: linear;      /* a pace the data sets: a drain, a spin, a scroll-driven fade */
+  --bn-rise: 6px;                /* the one enter distance */
   /* one cadence for every list: row i waits min(i, cap) * stagger. `.bn-stagger` in kit.css
      reads `--i` off each child so the arithmetic leaves the JSX */
   --bn-stagger: 30ms;
@@ -229,6 +234,9 @@
   --bn-t-emphasis: 600ms;    /* a hero settling, a figure landing */
   --bn-t-pulse: 1.8s;        /* a live dot */
   --bn-t-spin: 0.7s;         /* a busy ring */
+  --bn-t-shimmer: 1.4s;      /* a skeleton sweep, an indeterminate bar */
+  --bn-t-highlight: 700ms;   /* a cell that just changed, flashing once */
+  --bn-t-instant: 0.01ms;    /* the reduced-motion floor: long enough to fire the end events */
   --bn-disabled: 0.45;       /* the one opacity a disabled pressable wears */
 
 

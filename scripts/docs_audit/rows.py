@@ -28,6 +28,7 @@ from .design import (
     check_design_tokens,
     check_js_breakpoints,
     check_raw_color,
+    check_raw_motion,
 )
 from .dispatch import check_coupling, check_dispatch, check_subject_counts
 from .env_map import (
@@ -217,6 +218,7 @@ ROWS: Tuple[AuditRow, ...] = (
     AuditRow("status sources", 2, check_status_sources, ()),
     AuditRow("design tokens", 1, check_design_tokens, ()),
     AuditRow("raw color", 1, check_raw_color, ()),
+    AuditRow("raw motion", 1, check_raw_motion, ()),
     AuditRow("breakpoints", 1, check_breakpoints, ()),
     AuditRow("breakpoint columns", 3, check_breakpoint_columns, ()),
     AuditRow("js breakpoints", 1, check_js_breakpoints, ()),

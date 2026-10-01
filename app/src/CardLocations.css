@@ -108,9 +108,8 @@
      target, so a row that moves is a snap position that moves: `bn-page-in`'s 6px `translateY`
      made the browser re-snap the list every frame, `scrollTop` crept 6 to 0 and the rows
      wobbled under the hand once a held arrow key was let go. Opacity moves no geometry. */
-  animation: card-locations-row-in var(--bn-t) var(--bn-ease-out) backwards;
+  animation: bn-fade var(--bn-t) var(--bn-ease-out) backwards;
 }
-@keyframes card-locations-row-in { from { opacity: 0; } }
 .card-locations-owner .card-locations-row.is-nobar {
   grid-template-areas:
     'place'
@@ -278,7 +277,8 @@
   pointer-events: none;
   z-index: 5;
   opacity: 0;
-  animation: bn-sale-bill calc(var(--bn-t) * 4) var(--bn-ease-out) forwards;
+  animation: bn-sale-bill var(--bn-t-draw) var(--bn-ease-out) forwards;
+  animation-delay: calc(var(--i) * var(--bn-stagger));
 }
 @keyframes bn-sale-bill {
   0% { opacity: 1; transform: translate(-50%, -50%) scale(0.6) rotate(0); }

@@ -206,9 +206,9 @@ summary::-webkit-details-marker { display: none; }
 /* Motion floor. Anyone who asked for less gets less. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
-    animation-duration: 0.01ms !important;
+    animation-duration: var(--bn-t-instant) !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: var(--bn-t-instant) !important;
     scroll-behavior: auto !important;
   }
   /* A 0.01ms duration on the default `transition-property: all` is a LIVE transition on every
@@ -226,7 +226,7 @@ summary::-webkit-details-marker { display: none; }
   .bn-btn[data-busy='true']::after,
   .capture-frame-spinner,
   .review-spinner {
-    animation-duration: 1.4s !important;
+    animation-duration: var(--bn-t-shimmer) !important;
     animation-iteration-count: infinite !important;
   }
 }

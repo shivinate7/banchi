@@ -296,7 +296,7 @@
   box-shadow: 0 0 0 3px var(--bn-accent-tint-2);
 }
 .pricing-field:focus-within .pricing-input { color: var(--bn-ink); }
-.pricing-price.is-flash .pricing-field { animation: pricing-flash var(--bn-t-spin) var(--bn-ease-out) both; }
+.pricing-price.is-flash .pricing-field { animation: pricing-flash var(--bn-t-highlight) var(--bn-ease-out) both; }
 @keyframes pricing-flash {
   0% { background-color: var(--bn-accent-tint-2); border-color: var(--bn-accent); }
   100% { background-color: var(--bn-surface-2); }

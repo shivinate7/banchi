@@ -7,7 +7,7 @@
   grid-template-columns: var(--bn-sidebar-w) minmax(0, 1fr);
   min-height: 100vh;
   min-height: 100dvh;
-  transition: grid-template-columns var(--bn-t-slow) var(--bn-ease);
+  transition: grid-template-columns var(--bn-t-layout) var(--bn-ease);
 }
 .bn-shell[data-rail='true'] { grid-template-columns: var(--bn-rail-w) minmax(0, 1fr); }
 
@@ -134,7 +134,7 @@
   flex: none;
   width: calc(var(--bn-rail-mark) + var(--bn-brand-open) * (var(--bn-lockup-w) - var(--bn-rail-mark)));
   height: calc(var(--bn-rail-mark) + var(--bn-brand-open) * (var(--bn-lockup-h) - var(--bn-rail-mark)));
-  transition: width var(--bn-t-slow) var(--bn-ease), height var(--bn-t-slow) var(--bn-ease);
+  transition: width var(--bn-t-layout) var(--bn-ease), height var(--bn-t-layout) var(--bn-ease);
 }
 /* Both drawings sit on the slot's centre, because the centre is the one thing that survives the
    swap. They cannot morph — a ~600-point tapered outline and a 4-command stroked wire are
@@ -532,7 +532,7 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
   from { opacity: 0; transform: translateX(-50%) translateY(-6px) scale(0.98); }
   to { opacity: 1; transform: translateX(-50%); }
 }
-.bn-cmdk[data-leaving] { animation: bn-cmdk-out var(--bn-t-fast) var(--bn-ease) forwards; pointer-events: none; }
+.bn-cmdk[data-leaving] { animation: bn-cmdk-out var(--bn-t-fast) var(--bn-ease-in) forwards; pointer-events: none; }
 @keyframes bn-cmdk-out {
   from { opacity: 1; transform: translateX(-50%); }
   to { opacity: 0; transform: translateX(-50%) translateY(-4px) scale(0.98); }
@@ -688,7 +688,7 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
 .bn-whichkey-grid { display: grid; grid-template-columns: repeat(5, auto); gap: var(--bn-2) var(--bn-4); }
 .bn-whichkey-item { display: inline-flex; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-md); font-weight: 500; white-space: nowrap; }
 .bn-whichkey .bn-kbd { background: transparent; color: var(--bn-accent); border-color: currentColor; }
-.bn-whichkey-drain { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--bn-accent); transform-origin: left; animation: bn-drain linear forwards; }
+.bn-whichkey-drain { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--bn-accent); transform-origin: left; animation: bn-drain var(--bn-ease-linear) forwards; }
 @media (max-width: 639px) { .bn-whichkey-grid { grid-template-columns: repeat(2, auto); } }
 
 /* ---- bottom tab bar (phones) --------------------------------------------------------- */
@@ -982,7 +982,7 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
   }
   @media (max-width: 639px) {
     .bn-drawer .bn-nav {
-      animation: bn-navfade linear both;
+      animation: bn-navfade var(--bn-ease-linear) both;
       animation-timeline: scroll(self block);
     }
   }

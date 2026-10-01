@@ -344,7 +344,7 @@ export function clearFreshSale(key: string): void {
   FRESH_SALES.delete(key)
 }
 const FRESH_MS = 15000
-const BILL_COUNT = 8
+const BILL_COUNT = 5
 
 /** THE UNDO THAT STANDS WHERE MARK SOLD WAS: the same frame (`--sale-w` by 40px, D195, D118), as a
  *  neutral outline with the undo glyph, so it never reads as "sell again". Right after a press,
@@ -391,6 +391,7 @@ export function UndoSaleButton({
         busy={busy}
         disabled={disabled}
         kbd={kbd}
+        quiet={fresh}
         onClick={onClick}
       />
       {fresh
@@ -405,9 +406,9 @@ export function UndoSaleButton({
               }}
               style={{
                 ['--dx' as string]: `${(i - (BILL_COUNT - 1) / 2) * 16}px`,
-                ['--dy' as string]: `${-(46 + (i % 3) * 18)}px`,
+                ['--dy' as string]: `${-(28 + (i % 3) * 8)}px`,
                 ['--rot' as string]: `${(i % 2 ? 1 : -1) * (20 + i * 8)}deg`,
-                animationDelay: `${i * 25}ms`,
+                ['--i' as string]: i,
               }}
             >
               <Icon name="bill" size={22} />

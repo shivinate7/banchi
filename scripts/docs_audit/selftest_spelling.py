@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 
 from .core import ROOT, Report, _STAGED_PATHS, markdown_files, module_globals, rel
-from .design import _RAW_COLOR_RE, check_raw_color
+from .design import _RAW_COLOR_RE, check_raw_color, check_raw_motion, raw_motion_literals
 from .rules import (
     _markdown_spelling_found,
     _spelling_markdown_files,
@@ -58,6 +58,27 @@ def run(ok) -> None:
         "this repo's own stylesheets read every color from a token",
         str(by_label["raw color"]),
     )
+
+    # --------------------------------------------------------------- raw motion
+    print("\na raw duration or easing is found, and a token read is not")
+    planted = ".a { transition: opacity 180ms; }\n.b { animation: x var(--bn-t) cubic-bezier(0,0,1,1); }"
+    ok(
+        [lit for _, lit in raw_motion_literals(planted)] == ["180ms", "cubic-bezier("],
+        "a planted `transition: opacity 180ms` and a raw cubic-bezier are both found",
+        str(raw_motion_literals(planted)),
+    )
+    clean = ".a { transition: opacity var(--bn-t) var(--bn-ease); animation: d var(--r, 20s) var(--bn-ease-linear) 0s; animation-delay: calc(var(--bn-stagger) * 2); }"
+    ok(not raw_motion_literals(clean), "token reads, a var() fallback, a zero time and a stagger calc are not", str(raw_motion_literals(clean)))
+    ok(
+        len(raw_motion_literals("style={{ animationDelay: `${i * 30}ms` }}", tsx=True)) == 1
+        and not raw_motion_literals("style={{ animationDuration: `${CHORD_MS}ms` }}", tsx=True),
+        "TSX: an arithmetic delay is found, a named variable is not",
+        "",
+    )
+    motion_report = Report()
+    check_raw_motion(motion_report)
+    motion_rows = {row.check: row.findings for row in motion_report.checks}
+    ok(not motion_rows["raw motion"], "this repo's own sources read every duration and easing from a token", str(motion_rows["raw motion"]))
 
     # ------------------------------------------------------------ identifier spelling
     #

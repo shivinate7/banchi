@@ -163,8 +163,8 @@
   box-shadow: var(--bn-shadow-1);
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) both;
 }
-.capture-card-stack { animation-delay: 60ms; }
-.capture-card-rig { animation-delay: 90ms; }
+.capture-card-stack { animation-delay: calc(var(--bn-stagger) * 2); }
+.capture-card-rig { animation-delay: calc(var(--bn-stagger) * 3); }
 .capture-card-label { padding: var(--bn-0-5) var(--bn-1-5) var(--bn-0-5); }
 
 /* The Rig panel's own disclosure — Game, Camera, Rotation and Trigger fold behind this once a
@@ -663,11 +663,7 @@
   -webkit-backdrop-filter: blur(8px);
 }
 .capture-lamp .bn-icon { width: 13px; height: 13px; }
-.capture-lamp.is-live .bn-icon { animation: capture-blink 1.6s ease-in-out infinite; }
-@keyframes capture-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
+.capture-lamp.is-live .bn-icon { animation: bn-breathe var(--bn-t-pulse) var(--bn-ease-loop) infinite; }
 
 .capture-meter {
   display: flex;
@@ -684,7 +680,7 @@
   height: 100%;
   border-radius: 3px;
   background: var(--vf-ink-3);
-  transition: width 160ms linear, background-color var(--bn-t-fast) var(--bn-ease);
+  transition: width var(--bn-t-fast) var(--bn-ease-linear), background-color var(--bn-t-fast) var(--bn-ease);
 }
 .capture-meter.is-present .capture-meter-fill { background: var(--bn-ok); }
 .capture-meter-tick { position: absolute; left: 50%; top: -3px; width: 2px; height: 12px; border-radius: 1px; background: var(--bn-warn); }
@@ -756,7 +752,7 @@
   stroke-dashoffset: 125.7;
   transform: rotate(-90deg);
   transform-origin: 50% 50%;
-  animation: capture-ring var(--cap-settle-ms, 520ms) linear forwards;
+  animation: capture-ring var(--cap-settle-ms, 520ms) var(--bn-ease-linear) forwards;
 }
 @keyframes capture-ring { to { stroke-dashoffset: 0; } }
 
@@ -893,7 +889,7 @@
   border-radius: 50%;
   border: 2.5px solid var(--bn-line-strong);
   border-top-color: var(--vf-ink);
-  animation: bn-spin var(--bn-t-spin) linear infinite;
+  animation: bn-spin var(--bn-t-spin) var(--bn-ease-linear) infinite;
   margin-bottom: var(--bn-1);
 }
 
@@ -955,7 +951,7 @@
   min-height: 0;
   min-width: 0;
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) both;
-  animation-delay: 60ms;
+  animation-delay: calc(var(--bn-stagger) * 2);
 }
 .capture-panel-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-2); min-height: 24px; padding: 0 var(--bn-0-5); }
 .capture-written { animation-duration: var(--bn-t-slow); }
@@ -981,8 +977,7 @@
   background: var(--bn-stage-bg);
   box-shadow: var(--bn-shadow-2);
 }
-.capture-frame-last .capture-media { animation: capture-fade var(--bn-t) var(--bn-ease-out) both; }
-@keyframes capture-fade { from { opacity: 0; } }
+.capture-frame-last .capture-media { animation: bn-fade var(--bn-t) var(--bn-ease-out) both; }
 .capture-frame-note-last { color: var(--bn-ink-3); }
 .capture-frame-note-last .capture-frame-glyph { background: var(--bn-accent-tint); color: var(--bn-accent); }
 .capture-frame-note-last .capture-frame-title { color: var(--bn-ink); font-size: var(--bn-fs-base); }
@@ -1022,7 +1017,7 @@
   background: var(--bn-surface);
   box-shadow: var(--bn-shadow-1);
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) both;
-  animation-delay: 30ms;
+  animation-delay: calc(var(--bn-stagger) * 1);
 }
 .capture-film-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3); flex-wrap: wrap; padding: 0 var(--bn-0-5); }
 .capture-film-hint { display: flex; align-items: center; gap: var(--bn-1-5); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }

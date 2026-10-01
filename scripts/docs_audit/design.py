@@ -571,6 +571,120 @@ def check_raw_color(report: Report) -> None:
                scanned=sheets)
 
 
+# ------------------------------------------------------------------------- raw motion
+#
+# MOTION IS TOKENS (CLAUDE.md), AND `docs/specs/motion.md` IS THE ROLE TABLE. A duration or an
+# easing written as a literal in a stylesheet is a surface that no retune of `app/src/tokens.css`
+# will ever reach, which is how 7 different stagger steps and 4 "live" loops grew. This row reads
+# every `transition` and `animation` declaration (and their -duration, -delay and
+# -timing-function longhands) outside tokens.css and refuses a time literal (`180ms`, `.4s`), a
+# `cubic-bezier(`, `steps(` or an easing keyword (`ease`, `ease-in`, `ease-out`, `ease-in-out`,
+# `linear`). WHAT IS NOT READ, ON PURPOSE: a `var(--x, <fallback>)` span, because the number
+# there belongs to a custom property a script sets per use (a drain's length, a settle window);
+# a zero time (`0s`, `0ms`), which is no duration at all; and a delay written as
+# `calc(var(--bn-stagger) * n)`, which reads the token. TSX is read for the same four camelCase
+# style props with a numeric literal in them. A justified exception lives in
+# `scripts/motion-literal-allow.json`: each entry names a file and the literal, carries its
+# reason, and is itself a finding once it matches nothing. The list only shrinks.
+
+MOTION_ALLOW = ROOT / "scripts" / "motion-literal-allow.json"
+_MOTION_DECL_RE = re.compile(r"(?:^|[{;\s])((?:transition|animation)(?:-[a-z-]+)?)\s*:\s*([^;{}]+)")
+_MOTION_SKIP_PROPS = {
+    "transition-property", "transition-behavior", "animation-name", "animation-iteration-count",
+    "animation-fill-mode", "animation-direction", "animation-play-state", "animation-timeline",
+    "animation-range",
+}
+_MOTION_TIME_RE = re.compile(r"(?<![\w.-])(\d*\.?\d+)(ms|s)\b")
+_MOTION_EASE_RE = re.compile(
+    r"cubic-bezier\(|steps\(|(?<![\w-])(?:ease|ease-in|ease-out|ease-in-out|linear|step-start|step-end)(?![\w-])"
+)
+_MOTION_TSX_RE = re.compile(
+    r"\b(?:animation|transition)(?:Delay|Duration|TimingFunction)\s*:\s*(`[^`]*`|'[^']*'|\"[^\"]*\")"
+)
+
+
+def _without_var(value: str) -> str:
+    """`value` with every `var(...)` span, fallback included, removed."""
+    out: List[str] = []
+    depth = 0
+    i = 0
+    while i < len(value):
+        if depth == 0 and value.startswith("var(", i):
+            depth = 1
+            i += 4
+            continue
+        if depth:
+            depth += {"(": 1, ")": -1}.get(value[i], 0)
+        else:
+            out.append(value[i])
+        i += 1
+    return "".join(out)
+
+
+def raw_motion_literals(text: str, tsx: bool = False) -> List[Tuple[int, str]]:
+    """Every raw duration or easing in `text`, as (line, literal). One definition, read by the
+    row and by its self-test."""
+    found: List[Tuple[int, str]] = []
+    if tsx:
+        for m in _MOTION_TSX_RE.finditer(text):
+            body = re.sub(r"\$\{\s*[\w.]+\s*\}", "", m.group(1))
+            body = _without_var(body)
+            for lit in re.findall(r"\d+(?:\.\d+)?|cubic-bezier|steps|ease\w*|linear", body):
+                if lit not in ("0",):
+                    found.append((text[: m.start()].count("\n") + 1, m.group(1)))
+                    break
+        return found
+    css = strip_css_comments(text)
+    for m in _MOTION_DECL_RE.finditer(css):
+        if m.group(1) in _MOTION_SKIP_PROPS:
+            continue
+        value = _without_var(m.group(2))
+        hits = [t.group(0) for t in _MOTION_TIME_RE.finditer(value) if float(t.group(1)) != 0]
+        hits += [e.group(0) for e in _MOTION_EASE_RE.finditer(value)]
+        line = css[: m.start(1)].count("\n") + 1
+        found.extend((line, hit) for hit in hits)
+    return found
+
+
+def check_raw_motion(report: Report) -> None:
+    """A duration or an easing written as a literal where a token should be read."""
+    import json
+
+    if not exists(APP_STYLES):
+        report.add("raw motion", MECHANICAL, [],
+                   f"{rel(APP_STYLES)} is not there, so no stylesheet was read", scanned=0)
+        return
+    try:
+        allow = json.loads(read(MOTION_ALLOW))["entries"] if exists(MOTION_ALLOW) else []
+    except (ValueError, KeyError):
+        allow = []
+    used: Set[int] = set()
+    findings: List[Finding] = []
+    files = 0
+    sources = [(p, False) for p in sorted(APP_STYLES.glob("*.css")) if p != TOKENS_CSS]
+    sources += [(p, True) for p in sorted(APP_STYLES.rglob("*.ts*")) if "markPalettes" not in p.name]
+    for path, tsx in sources:
+        files += 1
+        for line, literal in raw_motion_literals(read(path), tsx):
+            index = next((i for i, e in enumerate(allow)
+                          if e.get("file") == rel(path) and e.get("value") == literal), None)
+            if index is not None:
+                used.add(index)
+                continue
+            findings.append(Finding(
+                f"{rel(path)}:{line}",
+                f"writes `{literal}` as a raw duration or easing. Name a role token from "
+                f"app/src/tokens.css (`--bn-t-*`, `--bn-ease-*`, `--bn-stagger`) — and if no token "
+                f"means what you mean, the missing token is the finding (docs/specs/motion.md)."))
+    for i, entry in enumerate(allow):
+        if i not in used:
+            findings.append(Finding(rel(MOTION_ALLOW), f"entry {entry!r} matches nothing, so it is stale. Delete it."))
+    report.add("raw motion", MECHANICAL, findings,
+               f"{len(findings)} raw durations or easings outside tokens.css" if findings
+               else f"every duration and easing in {files} files comes from a token ({len(allow)} allow-listed)",
+               scanned=files)
+
+
 # --------------------------------------------------------------- the breakpoint vocabulary
 #
 # MEASURED BEFORE IT WAS WRITTEN, 2026-09-07: 124 `@media` and 16 `@container` blocks across

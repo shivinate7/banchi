@@ -63,8 +63,7 @@ a.home-standing-row:active { translate: 0 1px; }
 a.home-standing-row:hover .home-standing-rule { scale: 1.5 1; }
 .home-standing-ic { width: 34px; height: 34px; border-radius: var(--bn-r-sm); flex: none; display: grid;
   place-items: center; background: var(--tone-tint); color: var(--tone); }
-.home-standing-ic-live { animation: home-standing-pulse var(--bn-t-pulse) ease-in-out infinite; }
-@keyframes home-standing-pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.4 } }
+.home-standing-ic-live { animation: bn-breathe var(--bn-t-pulse) var(--bn-ease-loop) infinite; }
 .home-standing-say { flex: 1 1 auto; min-width: 0; font-size: var(--bn-fs-lg); line-height: 1.35; color: var(--bn-ink-2); }
 .home-standing-lead { font-weight: 700; color: var(--tone); }
 .home-standing-say strong { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -122,15 +121,15 @@ a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate
   fill: color-mix(in srgb, var(--bn-accent) calc(var(--pace) * 1%),
         color-mix(in srgb, var(--bn-ink-4) 30%, var(--bn-bg)));
   transform-box: fill-box; transform-origin: bottom;
-  animation: home-ribbon-grow 520ms var(--bn-ease-spring) backwards;
+  animation: home-ribbon-grow var(--bn-t-draw) var(--bn-ease-spring) backwards;
   animation-delay: calc(min(var(--n), var(--bn-stagger-cap)) * var(--bn-stagger));
   transition: fill var(--bn-t-fast) var(--bn-ease);
 }
 @keyframes home-ribbon-grow { from { scale: 1 0; opacity: 0 } to { scale: 1 1; opacity: 1 } }
 /* Vermilion means LIVE everywhere else in this product. It is spent here only while a run is
    actually running, and never to mark a sitting for being recent. */
-.home-ribbon-blk-live { fill: var(--bn-live); animation: home-ribbon-grow 520ms var(--bn-ease-spring) backwards,
-  home-standing-pulse var(--bn-t-pulse) ease-in-out infinite; }
+.home-ribbon-blk-live { fill: var(--bn-live); animation: home-ribbon-grow var(--bn-t-draw) var(--bn-ease-spring) backwards,
+  bn-breathe var(--bn-t-pulse) var(--bn-ease-loop) infinite; }
 .home-ribbon:hover .home-ribbon-blk { fill: color-mix(in srgb, var(--bn-ink-4) 22%, var(--bn-bg)); }
 .home-ribbon .home-ribbon-blk:hover { fill: var(--bn-ink); }
 .home-ribbon-tick { fill: color-mix(in srgb, var(--bn-ink-4) 55%, var(--bn-bg)); }
@@ -161,17 +160,17 @@ a.home-deck { pointer-events: auto; }
   background: var(--bn-surface);
   box-shadow: var(--bn-shadow-2);
   border: 1px solid var(--bn-line);
-  animation: home-deck-in var(--bn-t-emphasis) var(--bn-ease-out) backwards;
+  animation: home-deck-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
-.home-deck-card-3 { transform: rotate(-9deg) translate(-26px, 10px); opacity: 0.55; animation-delay: 60ms; }
-.home-deck-card-2 { transform: rotate(-4deg) translate(-12px, 4px); opacity: 0.8; animation-delay: 120ms; }
+.home-deck-card-3 { transform: rotate(-9deg) translate(-26px, 10px); opacity: 0.55; }
+.home-deck-card-2 { transform: rotate(-4deg) translate(-12px, 4px); opacity: 0.8; animation-delay: var(--bn-stagger); }
 .home-deck-card-1 {
   transform: rotate(3deg);
   padding: var(--bn-3);
   display: flex;
   flex-direction: column;
   gap: var(--bn-2);
-  animation-delay: 180ms;
+  animation-delay: calc(var(--bn-stagger) * 2);
 }
 /* A REAL PHOTOGRAPH, so this is a frame around an image rather than a painted rectangle.
    `cover` because the deck's aspect is the deck's, not the camera's, and a card photographed
@@ -218,8 +217,8 @@ a.home-deck { pointer-events: auto; }
   letter-spacing: 0.02em;
   white-space: nowrap;
   box-shadow: var(--bn-shadow-3);
-  animation: home-deck-in var(--bn-t-emphasis) var(--bn-ease-spring) backwards;
-  animation-delay: 420ms;
+  animation: home-deck-in var(--bn-t-slow) var(--bn-ease-spring) backwards;
+  animation-delay: calc(var(--bn-stagger) * 4);
 }
 .home-deck-address .bn-icon { color: var(--bn-stage-live); }
 .home-deck-card-no { color: var(--bn-stage-accent); }
@@ -227,7 +226,12 @@ a.home-deck { pointer-events: auto; }
 .home-deck-card-no > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1); opacity: 0.6; }
 /* `from` only, on purpose: each card lands on ITS OWN rotation, which a `to { transform: none }`
    would strip. The end of an enter animation is the element's resting style. */
-@keyframes home-deck-in { from { opacity: 0; transform: translateY(14px); } }
+@keyframes home-deck-in { from { opacity: 0; transform: translateY(var(--bn-rise)); } }
+@keyframes home-deck-rest { from { opacity: 0; } }
+/* A LATER VISIT: the deck is already known, so it fades in at rest and nothing rises. Home is the
+   screen a person returns to between every task. `Home`'s `deckPlayed` says which visit this is. */
+.home-hero-art[data-rest] .home-deck-card,
+.home-hero-art[data-rest] .home-deck-address { animation: home-deck-rest var(--bn-t) var(--bn-ease-out) backwards; animation-delay: 0s; }
 @media (max-width: 767px) {
   /* Hidden WITHOUT `display: none`: Chromium's full-page capture matches this media query for
      a frame, and a display toggle restarts the deck's enter animations — so every screenshot

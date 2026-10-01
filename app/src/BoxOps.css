@@ -188,7 +188,7 @@
   border-radius: 50%;
   border: 2px solid var(--bn-line-strong);
   border-top-color: var(--bn-accent);
-  animation: bn-spin var(--bn-t-spin) linear infinite;
+  animation: bn-spin var(--bn-t-spin) var(--bn-ease-linear) infinite;
 }
 .boxops-op-danger { color: var(--bn-danger); }
 .boxops-op-danger .boxops-op-icon { background: var(--bn-danger-tint); color: var(--bn-danger); }
