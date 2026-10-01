@@ -54,7 +54,7 @@ import {
 import { stateLabel } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
-import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, Pill, boxesMostRecentFirst, countFacets, filterRows, useHeld, type SortValue } from './kit'
+import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, boxesMostRecentFirst, countFacets, filterRows, useHeld, type SortValue } from './kit'
 import { boxTitle, UNNAMED_BOX } from './kit/data'
 import type { FilterFacet, FilterValue } from './kit/data'
 import { useFacetParams } from './kit/viewState'

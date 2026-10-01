@@ -168,8 +168,8 @@ There are no offenders.
 | Screen | Element | Defect |
 |---|---|---|
 | Inventory, 820 | `.browse-status` "All" | Resolved by D-cards-picked-in-manage-box: the toolbar has no "All" and no tick chips. |
-| Inventory, Sales, Pricing, Review, Orders at 1440 | `.bn-btn` (24–34 px), `.bn-seg-item` (24–28 px), `.browse-row` (32 px), `.browse-quiet` (24 px), `.bn-hidetoggle` (28 px) | Many desktop controls are under 40 px tall. CLAUDE.md's 40 px floor names "anything a thumb presses". Whether it binds at 1440 is the owner's call. |
-| Fulfillment, box list | `.ff-box` rows | The place line ("RB Origins · Section 1 · Card 1") is set larger than the card name above it. Check whether this is intended. |
+| Inventory, Sales, Pricing, Review, Orders at 1440 | `.bn-btn` (24–34 px), `.bn-seg-item` (24–28 px), `.browse-row` (32 px), `.browse-quiet` (24 px), `.bn-hidetoggle` (28 px) | Many desktop controls are under 40 px tall. The owner ruled that the 40 px floor stays touch-only (CLAUDE.md: "anything a thumb presses"), so these stand. |
+| Fulfillment, box list | `.ff-box` rows | The place line ("RB Origins · Section 1 · Card 1") is set larger than the card name above it (32 px/600 against 26 px/800). Deferred by the owner. |
 
 ### 4.7 Counts
 
@@ -230,9 +230,11 @@ must fail on today's `main` at S2, S3, S4, S8, S9, S11 and S12 before any fix la
 
 **Built.** Each fixed row has its own case in `app/tests/stability.spec.ts`, red before the fix and green after.
 - Fixed: S1 and the Fulfiller's Today block, S2–S7, S12–S15, S17–S20, the S16 arrival and expiry, and Home's read order.
-- S9, S10 and S11 (the filter notes): the notes move to the act. The Send button counts SKUs, and the chosen month carries its own clear in the chart. Their cases live in `pricing.spec.ts` and `revenue.spec.ts`.
+- S8 and the 820 "All" row: the list carries no ticks (D-cards-picked-in-manage-box).
+- S9 and S11 (the filter notes): the notes move to the act. The Send button counts SKUs, and the chosen month carries its own clear in the chart. Their cases live in `pricing.spec.ts` and `revenue.spec.ts`.
 - Open:
   - The Pick list still moves the Fulfiller's boxes once when more than one card is owed (DEBT82).
+  - S10 (Sales "All" period, the canceled line) is not fixed. Its slot was reverted with the notes.
   - The S16 receipt growth did not reproduce.
   - S21 waits on phone widths (DEBT77).
 

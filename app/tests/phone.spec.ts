@@ -416,8 +416,7 @@ for (const hash of SCREENS) {
 /* AN IPAD IN PORTRAIT IS 820px WIDE AND ALL THUMB (docs/DESIGN.md), and every floor above answers
    at 390. The control-height tokens raise themselves on `(pointer: coarse)` at ANY width, but a
    control that names its own size does not follow them: `pricing-thumb` drew 36px wide, a price
-   input 21px tall, Inventory's row ticks 22, its "All" 39 and Home's run links 38 (screen pass
-   F8). Asked of the BOX, as `#/gallery` is: at 820 the rail and the page sit side by side, so a
+   input 21px tall and Home's run links 38 (screen pass F8). Asked of the BOX, as `#/gallery` is: at 820 the rail and the page sit side by side, so a
    neighbour's pad rightly crowds a probe and only the size is a fact about the control. */
 test.describe('on a touch screen at 820', () => {
   test.use({ hasTouch: true, viewport: { width: 820, height: 1180 } })
