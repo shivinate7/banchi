@@ -3772,7 +3772,7 @@ COMPONENTS = [
                                 "D81", "D83", "D84", "D86", "D87", "D88", "D90", "D92", "D94",
                                 "D97", "D101", "D102", "D104", "D110", "D113", "D119",
                                 "D122", "D123", "D127", "D132", "D134", "D135", "D136", "D138",
-                                "D140", "D141", "D142", "D144", "D148", "D149", "D155", "D160",
+                                "D140", "D141", "D142", "D144", "D149", "D155", "D160",
                                 "D161", "D173", "D174", "D177", "D178", "D181", "D182", "D185",
                                 "D191", "D192", "D196", "D210", "D213", "D215", "D218", "D245",
                                 "D247", "D248", "D277", "D280", "D284", "D305"],
@@ -3827,7 +3827,7 @@ COMPONENTS = [
             "docs_audit/records.py": {
                 "does": "The rows over the decision, gate and debt records: decision ids, id claims, numbering "
                         "growth, heading structure and the debts index.",
-                "governed_by": ["D2", "D50", "D60", "D92", "D140", "D148", "D149", "D160", "D182"]},
+                "governed_by": ["D2", "D50", "D60", "D92", "D140", "D149", "D160", "D182"]},
             "docs_audit/registry_scopes.py": {
                 "does": "The rows over the check registry, the commit path, the suite lock, the browser, spec, "
                         "serve and guard scopes, and how callers invoke the audit.",
@@ -3871,7 +3871,7 @@ COMPONENTS = [
                 "governed_by": []},
             "docs_audit/selftest_records.py": {
                 "does": "Self-test cases for the records rows, called by `selftest.self_test`.",
-                "governed_by": ["D9", "D24", "D70", "D92", "D101", "D140", "D148"]},
+                "governed_by": ["D9", "D24", "D70", "D92", "D101", "D140"]},
             "docs_audit/selftest_registry_scopes.py": {
                 "does": "Self-test cases for the registry scopes rows, called by `selftest.self_test`.",
                 "governed_by": []},

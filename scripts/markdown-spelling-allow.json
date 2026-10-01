@@ -85,12 +85,6 @@
         "honour"
       ]
     },
-    "docs/decisions/*-claim-spends-only-on-possible-merges.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "judgement"
-      ]
-    },
     "docs/decisions/*-a-departed-card-s-label-names-its-record.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -570,13 +564,6 @@
       "SPELLING": [
         "behaviour",
         "unlabelled"
-      ]
-    },
-    "docs/decisions/*-unknown-claim-status-never-passes.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behaviour",
-        "behaviour"
       ]
     },
     "docs/decisions/*-token-literals-are-caught-by-family.md": {

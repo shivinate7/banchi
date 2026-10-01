@@ -438,7 +438,7 @@ def is_main(ref_name: str, named: str, head: str, origin_main: str) -> bool:
     a worktree commonly has no local `main` at all (D42's merge discipline keeps it checked
     out elsewhere), and `GITHUB_REF_NAME` exists only in Actions.
 
-    COMMIT EQUALITY IS THE DETACHED-HEAD RULE AND NOTHING ELSE (D148). A NAMED
+    COMMIT EQUALITY IS THE DETACHED-HEAD RULE AND NOTHING ELSE. A NAMED
     branch is not main however recently it was cut, and this is where a false YES came from: a
     branch cut from main and not yet committed to sits AT origin/main, so equality called it
     main. `id claims` then refused its FIRST commit — the one commit that introduces the slug —
