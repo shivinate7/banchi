@@ -3,14 +3,14 @@
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { test, expect, type Page } from '@playwright/test'
-import { sealEveryTest } from './shell'
+import { test, expect, type Page, type Route } from '@playwright/test'
+import { card, sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
 import { routesFromNav } from './routes'
 import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE } from './routeFixtures'
 import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
 import { setViewport } from './phoneSwitch'
-import { describeShifts, readShifts, sumOf, watchShifts, type Shift } from './layoutShift'
+import { describeShifts, markNow, readShifts, sumOf, watchShifts, type Shift } from './layoutShift'
 
 /* LAYOUT SHIFT, PER CASE. THE FIRST CASE IS LOAD TIME, PER SCREEN, UNDER A SLOW SERVER.
  *
@@ -124,3 +124,119 @@ test('failed: a failed history read leaves no skeleton on Home', async ({ page }
   await expect(page.locator('.home-foot .bn-skeleton')).toHaveCount(0)
   await expect(page.locator('.home-hold')).toHaveCount(0)
 })
+
+// L1 held frame
+/* A READ AFTER A PRESS HOLDS THE OLD FRAME (D313, class B). A press that needs a read keeps what was
+ * on screen, dimmed and busy, until the answer lands, then swaps once. Every row below holds the
+ * press's read READ_MS, then asks two things of the browser's own `layout-shift` entries: nothing
+ * moved while the read was out, and the swap after it is one cluster (entries under CLUSTER_MS
+ * apart), never two layout changes for one press. The new content here is the same shape as the old
+ * one on purpose, so any move is the frame and never the content. */
+const READ_MS = 700
+const CLUSTER_MS = 150
+const OUT_SUM = 0.001
+
+async function heldReads(page: Page, read: RegExp): Promise<{ on: boolean }> {
+  const gate = { on: false }
+  await page.route(read, async (route) => {
+    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS))
+    await route.fallback()
+  })
+  return gate
+}
+
+/** Press, then read the shifts of the read-out window and of the swap that follows it. */
+async function heldPress(page: Page, gate: { on: boolean }, press: () => Promise<void>) {
+  await page.waitForTimeout(800)
+  gate.on = true
+  const from = await markNow(page)
+  await press()
+  await page.waitForTimeout(READ_MS * 2 + 400)
+  gate.on = false
+  const all = (await readShifts(page)).shifts.filter((s) => s.at >= from)
+  const out = all.filter((s) => s.at < from + READ_MS - 150)
+  const swap = all.filter((s) => s.at >= from + READ_MS - 150)
+  let clusters = 0
+  let last = -Infinity
+  for (const s of swap) {
+    if (s.at - last > CLUSTER_MS) clusters += 1
+    last = s.at
+  }
+  return { out, swap, clusters }
+}
+
+function expectHeld(r: { out: Shift[]; swap: Shift[]; clusters: number }): void {
+  expect(sumOf(r.out), `it moved while the read was out: ${describeShifts(r.out)}`).toBeLessThan(OUT_SUM)
+  expect(r.clusters, `one press, ${r.clusters} layout changes after the read: ${describeShifts(r.swap)}`).toBeLessThanOrEqual(1)
+}
+
+/* ONE STORE FOR THE INVENTORY ROWS: every card carries a SKU, so each one answers a copies read, and
+   every card is the same shape, so a card step or a box switch changes the content and nothing else. */
+const L1_CARDS = {
+  '2/1': card({ box: 2, index: 1, section: 1, card: 1, name: 'Volcanion', state: 'identified', sku: '9000001', boxName: 'SV commons', boxTotal: 4 }),
+  '2/2': card({ box: 2, index: 2, section: 1, card: 2, name: 'Thievul', state: 'identified', sku: '9000002', boxName: 'SV commons', boxTotal: 4 }),
+  '2/3': card({ box: 2, index: 3, section: 2, card: 3, name: 'Eiscue', state: 'identified', sku: '9000003', boxName: 'SV commons', boxTotal: 4 }),
+  '2/4': card({ box: 2, index: 4, section: 2, card: 4, name: 'Pikachu', state: 'identified', sku: '9000004', boxName: 'SV commons', boxTotal: 4 }),
+  '5/1': card({ box: 5, index: 1, section: 1, card: 1, name: 'Zacian', state: 'identified', sku: '9000005', boxTotal: 1 }),
+}
+
+async function l1Inventory(page: Page): Promise<void> {
+  const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  await page.route(/\/inventory\/(\d+)$/, (route) => {
+    const box = Number(/\/inventory\/(\d+)$/.exec(route.request().url())?.[1])
+    const cards = Object.fromEntries(Object.entries(L1_CARDS).filter(([, c]) => c.box === box))
+    return json(route, { version: 2, cards, listings: {} })
+  })
+  await page.route(/\/search\?/, (route) => {
+    const q = (new URL(route.request().url()).searchParams.get('q') ?? '').toLowerCase()
+    const hit = Object.values(L1_CARDS).filter((c) => c.sku === q || (c.name ?? '').toLowerCase() === q)
+    const skus = [...new Set(hit.map((c) => c.sku))]
+    return json(route, {
+      query: q,
+      groups: skus.map((sku) => {
+        const held = Object.entries(L1_CARDS).filter(([, c]) => c.sku === sku)
+        const copies = held.map(([key, c]) => ({ key, state: c.state, state_at: c.state_at, has_photo: true, place: c.place }))
+        return {
+          sku,
+          names: [...new Set(held.map(([, c]) => c.name))],
+          number: '090',
+          printed_total: '132',
+          set_hint: 'ME01',
+          condition: 'Near Mint',
+          listed: { pushed: 0, staged: 0, live: 0 },
+          sold_here: 0,
+          live_as_of: null,
+          on_hand: copies.length,
+          listable: copies.length,
+          copies,
+        }
+      }),
+    })
+  })
+}
+
+for (const width of [1440, 820]) {
+  test(`held frame: switching the box holds the old box until its read lands, at ${width}`, async ({ page }) => {
+    await l1Inventory(page)
+    const gate = await heldReads(page, /\/inventory\/\d+$/)
+    await watchShifts(page)
+    await setViewport(page, { width, height: 1000 })
+    await page.goto('/#/inventory')
+    await expect(page.locator('.card-locations').first()).toBeVisible()
+    const r = await heldPress(page, gate, () => page.locator('.browse-boxcell', { hasText: 'SV commons' }).click())
+    expectHeld(r)
+  })
+
+  test(`held frame: stepping to the next card holds the copies until their read lands, at ${width}`, async ({ page }) => {
+    await l1Inventory(page)
+    const gate = await heldReads(page, /\/search\?/)
+    await watchShifts(page)
+    await setViewport(page, { width, height: 1000 })
+    await page.goto('/#/inventory')
+    await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
+    await expect(page.locator('.card-locations').first()).toBeVisible()
+    await page.waitForTimeout(1500)
+    const r = await heldPress(page, gate, () => page.keyboard.press('ArrowRight'))
+    expectHeld(r)
+  })
+}
