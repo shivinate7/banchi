@@ -727,19 +727,11 @@ test('leaving a scrolled screen lands the next one at the top', async ({ page })
  * touching this file, and a route this sweep cannot reach fails by name instead of by a session
  * finding it by hand.
  */
-/* SKIPPED 2026-09-17, DELIBERATELY AND TEMPORARILY, AND IT IS A BANDAID (DEBT29).
-   THE SUBJECT IS SOUND AND THE TEST'S OWN TIMING IS NOT. It failed three times on CI — shard 2
-   of 3, twice on PR #375's head and once on its claim commit — always here, always
-   `page.goto: net::ERR_ABORTED; maybe frame was detached?`, and it passes on the rig every
-   time. Shards 1 and 3 never fail. So the runner is slower than the rig and the loop's own
-   `page.goto('/')` is very likely racing the navigation the tap before it started; that is a
-   hypothesis nobody has yet confirmed, which is exactly why this is skipped rather than
-   "fixed" by a session guessing.
-   WHAT IS UNGUARDED WHILE THIS SLEEPS: that every drawer row is reachable by a thumb at 390
-   and 360, and that the drawer's foot does not sit over a row's centre. That is the defect
-   that made Codes unreachable by touch, so this is not a test anybody should leave off for
-   long. `make design-check` reports it as skipped rather than silently passing. */
-test.skip('every drawer route is reachable by tap, at two phone heights', async ({ page }) => {
+/* THE TAP'S OWN RESULT IS WAITED ON, NOT A FRESH PAGE LOAD. The loop used to `goto('/')`
+   straight after the URL assertion, while the tapped screen's own fetches were still in flight,
+   and a slower runner aborted that load (`net::ERR_ABORTED`). Now the drawer closing is the tap's
+   state, and the next row is reached by reopening the drawer in the same document. */
+test('every drawer route is reachable by tap, at two phone heights', async ({ page }) => {
   for (const size of [{ width: 390, height: 844 }, { width: 360, height: 780 }]) {
     await setViewport(page, size)
 
@@ -771,7 +763,7 @@ test.skip('every drawer route is reachable by tap, at two phone heights', async 
       ).toBe(false)
       await link.click()
       await expect(page).toHaveURL(new RegExp(`${hash}$`))
-      await page.goto('/')
+      await expect(page.locator('.bn-drawer')).toBeHidden()
       await page.getByText('More', { exact: true }).click()
       await expect(page.locator('.bn-drawer')).toBeVisible()
     }
@@ -783,8 +775,7 @@ test.skip('every drawer route is reachable by tap, at two phone heights', async 
  * Cards to pull, the theme and the server line are the last rows of the one scrolling list, so
  * nothing covers the end of it. And on this file's own phone every SCREEN in the drawer shows
  * without a scroll: before, Graveyard and Codes sat under the foot with a 32px fade as the only
- * cue. Not skipped, unlike the tap sweep above: it navigates nowhere, so it has none of that
- * sweep's race. */
+ * cue. It navigates nowhere. */
 test('the drawer has no fixed foot, and every screen in it shows without a scroll', async ({ page }) => {
   await setViewport(page, PHONE)
   await page.goto('/')

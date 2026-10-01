@@ -453,6 +453,9 @@ def history(count: int) -> int:
 
 
 def selftest() -> int:
+    # HERMETIC: a hatch inherited from the environment (CI sets it on every push to main)
+    # would make this self-test's own SKIP cases run. Its cases set the hatch themselves.
+    os.environ.pop("PKMNSCAN_BROWSER_SCOPE", None)
     failures: List[str] = []
 
     def ok(condition: bool, label: str) -> None:
