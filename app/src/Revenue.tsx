@@ -1132,6 +1132,19 @@ export function Revenue() {
           {holdingsFailure}
         </Notice>
       )}
+      {/* THE READ IS STILL OUT: the figure, its spark and the four notes are drawn in their own
+          classes and held hidden, so the shelf takes the box a full one takes and nothing under
+          it moves when the read lands (D313). */}
+      {holdingsFailure === null && holdings === null ? (
+        <div className="revenue-shelf-hold" aria-hidden="true">
+          <Money value={0} className="revenue-shelf-figure" />
+          <p className="revenue-shelf-note">00 of 00 priced</p>
+          <div className="revenue-spark" />
+          <p className="revenue-shelf-note">Daily, over the last 00 days</p>
+          <p className="revenue-shelf-note">00 never priced</p>
+          <p className="revenue-shelf-note">00 sealed</p>
+        </div>
+      ) : null}
       {holdingsFailure !== null || holdings === null ? null : latestHoldingsTotal === null ? (
         <p className="revenue-shelf-note">Nothing on hand has a price yet.</p>
       ) : (
@@ -1178,7 +1191,21 @@ export function Revenue() {
   }
 
   if (orders === null) {
-    return <Page title="Sales" icon="dollar" className="revenue" loading />
+    /* The period switch is drawn whole and held hidden and inert, so the header takes the height
+       it has loaded (D313). */
+    return (
+      <Page
+        title="Sales"
+        icon="dollar"
+        className="revenue"
+        loading
+        actions={
+          <div className="revenue-period" data-held="true" inert>
+            <Segmented label="Period" value={period} options={PERIOD_TABS} onChange={handlePeriod} />
+          </div>
+        }
+      />
+    )
   }
 
   if (sales.length === 0) {

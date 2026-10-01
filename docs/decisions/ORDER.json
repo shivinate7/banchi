@@ -248,6 +248,7 @@
     "D309-empty-state-fills-the-frame.md",
     "D310-position-ruler-ticks.md",
     "D311-filters-are-one-kit-control.md",
-    "D312-precommit-secrets-file.md"
+    "D312-precommit-secrets-file.md",
+    "D313-nothing-moves-unless-moved.md"
   ]
 }

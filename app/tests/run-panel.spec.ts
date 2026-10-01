@@ -3,6 +3,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { runRow } from './routeFixtures'
+import { expectOneStagger } from './staggerCheck'
 import { boxTitle } from '../src/kit/dataRules'
 
 /* THE PIPELINE IS REACHABLE FROM A SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
@@ -3095,4 +3096,11 @@ test('a poll that moves no phase leaves the step the owner opened open', async (
   await page.clock.fastForward(4500)
   await expect.poll(() => polls).toBeGreaterThan(before)
   await expect(head).toHaveAttribute('aria-expanded', 'true')
+})
+
+test('every run row waits min(i, cap) * the one shared stagger', async ({ page }) => {
+  const runs = Array.from({ length: 15 }, (_, i) => runRow({ run: `2026-08-24-box9-${String(i + 1).padStart(2, '0')}` }))
+  await open(page, { runs })
+  await expect(page.locator('.run-row').first()).toBeVisible()
+  await expectOneStagger(page, '.run-row', 15)
 })

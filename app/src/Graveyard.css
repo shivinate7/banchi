@@ -9,6 +9,8 @@
   flex-wrap: wrap;
   padding: var(--bn-3) 0;
 }
+/* A toolbar held for a read still in flight: drawn, so it takes its own box, and shown to no one. */
+.graveyard-toolbar[data-held] { visibility: hidden; }
 @media (max-width: 767px) {
   .graveyard-toolbar { flex-direction: column; align-items: stretch; }
   .graveyard-toolbar .bn-spacer { display: none; }
@@ -47,7 +49,7 @@
     to { mask-image: linear-gradient(90deg, transparent 0, black 24px, black 100%); }
   }
   @media (max-width: 767px) {
-    .graveyard-toolbar .bn-seg { animation: graveyard-seg-edgefade linear both; animation-timeline: scroll(self inline); }
+    .graveyard-toolbar .bn-seg { animation: graveyard-seg-edgefade var(--bn-ease-linear) both; animation-timeline: scroll(self inline); }
   }
 }
 
@@ -100,11 +102,7 @@
    never wraps twice on its own line at this column's width. */
 .graveyard-condition { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.graveyard-row { animation: graveyard-row-in var(--bn-t-slow) var(--bn-ease-out) backwards; }
-@keyframes graveyard-row-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: none; }
-}
+.graveyard-row { animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards; }
 
 .graveyard-when { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); white-space: nowrap; }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { PositionLabel } from './PositionLabel'
 import { isEditableTarget } from './keys'
 import type {
@@ -1963,7 +1963,7 @@ function GroupConfirm({
 
       <ul className="review-group-grid">
         {offer.rows.map((row, at) => (
-          <li key={row.key} className="review-group-cell" style={{ animationDelay: `${Math.min(at, 24) * 25}ms` }}>
+          <li key={row.key} className="review-group-cell bn-stagger-item" style={{ '--i': at } as CSSProperties}>
             {row.entry.box < 1 ||
             row.entry.photo === null ||
             photoUrl(row.entry.box, row.entry.index, row.entry) === null ||
@@ -2158,7 +2158,7 @@ function Card({
             )}
             <ul className="review-candidates">
               {entry.candidates.map((candidate, at) => (
-                <li key={`${candidate.sku}:${at}`} style={{ animationDelay: `${at * 40}ms` }}>
+                <li key={`${candidate.sku}:${at}`} className="bn-stagger-item" style={{ '--i': at } as CSSProperties}>
                   <CandidateButton candidate={candidate} at={at} shared={head !== null} tags={tagsFor(entry, claims, candidate)} onChoose={() => onChoose(candidate)} disabled={busy} />
                 </li>
               ))}
@@ -2474,8 +2474,12 @@ export function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoos
       {failed !== null ? (
         <Notice tone="danger">{failed}</Notice>
       ) : lookup === null ? (
+        /* AS MANY BARS AS THE LIST SHOWS BEFORE "Show more" (`MAX_KEYED_CANDIDATES`, the same
+           constant `revealed` starts at), so the rows' first frame is the frame a full list
+           takes and the actions under it move nothing (D313). A search
+           that matches fewer shrinks the list: that case is named in the decision. */
         <div className="review-candidates" aria-busy="true">
-          {[0, 1, 2].map((i) => (
+          {Array.from({ length: MAX_KEYED_CANDIDATES }, (_, i) => (
             <Skeleton key={i} className="review-candidate-skeleton" />
           ))}
         </div>
@@ -2486,7 +2490,7 @@ export function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoos
       ) : (
         <ul className="review-candidates">
           {shown.map((row, at) => (
-            <li key={`${row.sku}:${at}`} style={{ animationDelay: `${at * 40}ms` }}>
+            <li key={`${row.sku}:${at}`} className="bn-stagger-item" style={{ '--i': at } as CSSProperties}>
               <CandidateButton candidate={row} at={at} shared={false} tags={[]} onChoose={() => onChoose(row)} disabled={busy} fromCatalog />
             </li>
           ))}

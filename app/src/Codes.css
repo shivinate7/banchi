@@ -177,11 +177,11 @@
 
 .codes-stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--bn-4); }
 .codes-stat { gap: var(--bn-1-5); padding-top: var(--bn-0-5); animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards; }
-.codes-stat:nth-child(2) { animation-delay: 40ms; }
-.codes-stat:nth-child(3) { animation-delay: 80ms; }
-.codes-stat:nth-child(4) { animation-delay: 120ms; }
-.codes-stat:nth-child(5) { animation-delay: 160ms; }
-.codes-stat:nth-child(6) { animation-delay: 200ms; }
+.codes-stat:nth-child(2) { animation-delay: calc(var(--bn-stagger) * 1); }
+.codes-stat:nth-child(3) { animation-delay: calc(var(--bn-stagger) * 2); }
+.codes-stat:nth-child(4) { animation-delay: calc(var(--bn-stagger) * 3); }
+.codes-stat:nth-child(5) { animation-delay: calc(var(--bn-stagger) * 4); }
+.codes-stat:nth-child(6) { animation-delay: calc(var(--bn-stagger) * 5); }
 .codes-stat .bn-stat-value { font-size: var(--bn-fs-4xl); letter-spacing: -0.03em; }
 .codes-stat .bn-stat-label { display: flex; flex-direction: column; gap: 1px; font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-2); }
 .codes-stat-sub { font-size: var(--bn-fs-sm); font-weight: 400; color: var(--bn-ink-3); }
@@ -276,17 +276,15 @@
   align-items: center;
   padding: var(--bn-1-5) var(--bn-2);
   border-radius: var(--bn-r);
-  /* `--delay` is set inline per row; the bar inside reads the same variable, so it grows as its
-     row fades in rather than while the row is still hidden */
+  /* the bar below reads the row's `--i`, so it grows as its row fades in */
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
-  animation-delay: var(--delay, 0ms);
 }
 .codes-product:hover { background: var(--bn-hover); }
 .codes-product-name { grid-area: name; font-size: var(--bn-fs-md); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .codes-product .bn-pill { grid-area: lane; height: 20px; }
 .codes-product-n { grid-area: n; text-align: right; font-family: var(--bn-font-display); font-weight: 800; font-size: var(--bn-fs-base); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .codes-product-bar { grid-area: bar; height: 3px; border-radius: 2px; background: var(--bn-surface-2); overflow: hidden; }
-.codes-product-bar > span { display: block; height: 100%; border-radius: 2px; background: var(--bn-ink-4); transform-origin: left; animation: codes-grow var(--bn-t-slow) var(--bn-ease-out) backwards; animation-delay: var(--delay, 0ms); }
+.codes-product-bar > span { display: block; height: 100%; border-radius: 2px; background: var(--bn-ink-4); transform-origin: left; animation: codes-grow var(--bn-t-slow) var(--bn-ease-out) backwards; animation-delay: calc(min(var(--i, 0), var(--bn-stagger-cap)) * var(--bn-stagger)); }
 .codes-product-bar.is-premium > span { background: var(--bn-accent); }
 .codes-product-bar.is-none > span { background: var(--bn-warn); }
 /* past five kinds the list folds, and the disclosure sits at the foot of the column */
@@ -393,8 +391,7 @@
 .codes-table th:first-child, .codes-table td:first-child { padding-left: var(--bn-5); }
 .codes-table th:last-child, .codes-table td:last-child { padding-right: var(--bn-5); }
 .codes-table td { font-size: var(--bn-fs-md); }
-.codes-row { animation: codes-row-in var(--bn-t-slow) var(--bn-ease-out) backwards; }
-@keyframes codes-row-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.codes-row { animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards; }
 .codes-row.is-delivered td, .codes-row.is-dead td { color: var(--bn-ink-3); }
 .codes-row.is-dead .codes-code { text-decoration: line-through; text-decoration-color: var(--bn-danger); }
 .codes-mono { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
@@ -448,11 +445,10 @@
   letter-spacing: 0.04em;
   color: var(--bn-ink-3);
   font-variant-numeric: tabular-nums;
-  animation: codes-fade var(--bn-t-fast) var(--bn-ease-out) backwards;
+  animation: bn-fade var(--bn-t-fast) var(--bn-ease-out) backwards;
 }
 .codes-code.is-shown { color: var(--bn-ink); }
 .codes-code.is-odd { text-decoration: underline dotted var(--bn-warn); text-underline-offset: 3px; }
-@keyframes codes-fade { from { opacity: 0.2; } to { opacity: 1; } }
 .codes-code-btn {
   display: inline-flex;
   align-items: center;

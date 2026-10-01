@@ -67,12 +67,8 @@
 .runs-stagebar > span[data-state='done'] { background: var(--bn-accent); }
 .runs-stagebar > span[data-state='current'] { background: var(--bn-accent-tint-2); }
 /* The live segment breathes on the kit dot's own period, so the pill beside it never drifts out of phase. */
-.runs-stagebar > span[data-state='live'] { background: var(--bn-live); animation: runs-breathe var(--bn-t-pulse) ease-out infinite; }
+.runs-stagebar > span[data-state='live'] { background: var(--bn-live); animation: bn-breathe var(--bn-t-pulse) var(--bn-ease-loop) infinite; }
 .runs-stagebar-done > span[data-state='done'] { background: var(--bn-ok); }
-@keyframes runs-breathe {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
 .runs-pill-live .bn-dot { width: 6px; height: 6px; }
 
 /* ---- log well ------------------------------------------------------------- */
@@ -598,7 +594,7 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--bn-money);
-  animation: runs-money-in 420ms var(--bn-ease-spring) backwards;
+  animation: runs-money-in var(--bn-t-slow) var(--bn-ease-spring) backwards;
 }
 @keyframes runs-money-in {
   from { opacity: 0; transform: translateY(10px) scale(0.96); }
@@ -645,7 +641,7 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
   gap: var(--bn-2);
   padding: var(--bn-2) 0;
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
-  animation-delay: 160ms;
+  animation-delay: calc(var(--bn-stagger) * 5);
 }
 .run-button-money {
   min-width: min(100%, 320px);

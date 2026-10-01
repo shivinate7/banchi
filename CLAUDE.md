@@ -73,6 +73,8 @@ make demo           # seed a demo store and record the wire. Read `docs/specs/de
 make demo-seed      # the store alone. Refuses with PKMNSCAN_HOME unset.
 make demo-record    # the bundle alone, on a throwaway server and port.
 make demo-mirror SOURCE=<checkout>  # owner's Mac only: scrub, crop, commit `demo-assets/mirror/`.
+make demo-mirror-agent  # owner's Mac, main tree only: a daily launchd job that refreshes the mirror
+                    #   and auto-merges a mirror-only PR on green CI (D295, the public demo is the scrubbed real store). ARGS=--remove removes it.
 make demo-mirror-install  # CI's step: install the committed scrub. No store, no network.
 make demo-static    # demo-mirror-install, then a static build to dist-demo/.
 make demo-preview   # serve dist-demo/ as a static host would.
@@ -160,6 +162,9 @@ The legacy aliases at the foot of tokens.css are dead. A new rule may not read o
 - **The mark is generated** (D102, the mark has its own palette). `scripts/build-mark.mjs` writes it. Never put a `border-radius` on it.
 - **`base.css` sets four floors** (D50, feedback is the product's; D118, a press changes what is on screen):
   cursor, response, press and stability. `app/tests/cursor.spec.ts` and `app/tests/inventory.spec.ts` assert them.
+- **Nothing on screen moves unless the person moved it** (D313 (Nothing on screen moves unless the)). A loading area holds its
+  loaded size from the first paint, by construction and never by a tuned pixel. `app/tests/stability.spec.ts`
+  asserts it, one row per case, over every nav screen read from `ROUTES`, plus the Fulfiller's.
 - **One left edge, and only width varies** (D197, a page is anchored to the shell inset). `.bn-page` margin is `0`.
   `app/tests/page-edge.spec.ts` asserts it.
 - **Same-role stacked buttons share a width** (D195, same-role buttons share a width). `app/tests/button-stack.spec.ts` asserts it.
@@ -232,7 +237,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   `banchi.orders.last-check`.
   `app/eslint.config.js` bans `localStorage` outside `useCamera.ts` and `deviceMemory.ts`.
 
-  `sessionStorage` is a separate store. It holds `banchi.session.captureId` and `banchi.run-scope` (D39, a run's scope is a selection handed off).
+  `sessionStorage` is a separate store. It holds `banchi.session.captureId`, `banchi.session.homeDeck` (the Home deck already played this sitting) and `banchi.run-scope` (D39, a run's scope is a selection handed off).
   The `storage keys` row of `make docs-audit` reconciles this roster (D27, session state is device-local).
 - **No duplicate SKU rows in an import file.** Aggregate by SKU. `Add to Quantity` equals the copy count. There is no standing
   cap (D7, duplicates aggregate by SKU). A send may ask for one (`emit --cap N`) or for a quantity (`emit --quantity SKU=N`).
@@ -310,7 +315,8 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   `docs/DESIGN.md` is the record. The `design tokens` row of `make docs-audit` locks every name and hex both ways.
 - **Main moves by pull request. A session never commits to it and never pushes it** (D42, main moves by pull request).
   A session merges only after the owner names the act ("merge", not "ship it"). It uses
-  `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
+  `make merge ARGS="<n> --confirm"` with CI green, never `--admin`. One standing exception (D42, main moves by pull request):
+  the daily demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
   Only a session that the owner names an Orchestrator may merge, and only PRs it planned and reviewed.
   The designation is never inherited. A session that is not named asks for the word every time.
   GitHub branch protection also requires `check` and `revert-guard`, with 0 reviews and `strict: false`.
