@@ -8431,7 +8431,7 @@ test('undoing the sale takes the staleness back with it', async ({ page }) => {
   await expect(page.locator('.browse-hero-rerank')).toHaveCount(0, { timeout: 2000 })
 })
 
-test('the control that re-ranks floats out of flow, so appearing moves no copy row', async ({ page }) => {
+test('the control that re-ranks appearing moves no copy row', async ({ page }) => {
   /* D118 ON THE NEW CONTROL. It appears on the press that makes the order stale, inside a band
      whose height is fixed — so a chip in flow sends every copy row down by its height at the
      exact moment of the sale, which is the movement this whole change exists to

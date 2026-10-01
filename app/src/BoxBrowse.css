@@ -517,9 +517,10 @@
 }
 .browse-hero-side b { color: var(--bn-ink); font-weight: 600; font-variant-numeric: tabular-nums; margin-left: var(--bn-1); }
 /* THE RE-SORT CHIP ENDS THE FACTS LINE, and the line never grows for it (D118). The chip keeps
-   its own height (`--bn-control-h-sm`, 40px on touch); a block margin of half the difference
-   from the text's line height makes its outer box exactly one line, so the line is the same
-   height with the chip or without. `nowrap` so it cannot fall to a second line. */
+   its own height (`--bn-control-h-sm`, 40px on touch). `.bn-chip` has `line-height: 1`, so `1lh`
+   here is the chip's font size. The block margin shrinks the chip's outer box to that size,
+   which is shorter than the facts' text line, so the text still sets the line's height with the
+   chip or without. `nowrap` so it cannot fall to a second line. */
 .browse-hero-side[data-rerank] { flex-wrap: nowrap; align-items: center; }
 .browse-hero-rerank {
   margin-left: auto;

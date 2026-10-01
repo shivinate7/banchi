@@ -1614,15 +1614,6 @@ export function Gallery() {
                   photoSrc={() => SPECIMEN_PHOTO}
                 />
               </Spec>
-              <Spec
-                name="locations-owner-head-off"
-                label="owner, head off, for a caller with its own heading"
-                note="No heading, stats or SKU line — the rows alone, for the walk's own row. LOOSE_GROUP here, not GROUP: the departed and pooled row counts above are asserted page-wide."
-              >
-                <div className="kit-copies">
-                  <CardLocations group={LOOSE_GROUP} persona="owner" onSell={noop} busyKey={null} soldKeys={new Set()} />
-                </div>
-              </Spec>
             </div>
           </Section>
         </div>
