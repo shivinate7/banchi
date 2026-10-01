@@ -347,6 +347,14 @@ Three commands, three machines:
 `^Jane Doe \d+$`. Every address field must be blank or exactly "123 Demo Way". The workflow does not
 repeat it.
 
+**The mirror refreshes daily and merges itself.** `make demo-mirror-agent` installs a launchd job
+on the owner's Mac (main tree only). `scripts/demo-mirror-daily.py` cuts a throwaway worktree from
+fresh origin/main, runs `demo-mirror`, and stops quietly when `demo-assets/mirror/` is unchanged.
+A scrub failure or any error publishes nothing and logs why to `~/.pkmnscan/demo-mirror-daily.log`.
+Otherwise it opens a PR from `demo/mirror-refresh` and merges it on green CI, with no word asked.
+**A mirror-only PR auto-merges on green CI** (D295, D42). The fence is the script's refusal to
+merge a PR whose diff touches any path outside `demo-assets/mirror/`.
+
 **The store never leaves the Mac.** `demo-mirror/`, the raw snapshot, is gitignored. Its comment in
 `.gitignore` records why. `demo-assets/mirror/`, the scrub's output, is the one thing committed. It
 stands on the same footing as `demo-assets/photos/` and `demo-assets/extra/photos/`: a tracked

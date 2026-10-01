@@ -73,6 +73,8 @@ make demo           # seed a demo store and record the wire. Read `docs/specs/de
 make demo-seed      # the store alone. Refuses with PKMNSCAN_HOME unset.
 make demo-record    # the bundle alone, on a throwaway server and port.
 make demo-mirror SOURCE=<checkout>  # owner's Mac only: scrub, crop, commit `demo-assets/mirror/`.
+make demo-mirror-agent  # owner's Mac, main tree only: a daily launchd job that refreshes the mirror
+                    #   and auto-merges a mirror-only PR on green CI (D295, the public demo is the scrubbed real store). ARGS=--remove removes it.
 make demo-mirror-install  # CI's step: install the committed scrub. No store, no network.
 make demo-static    # demo-mirror-install, then a static build to dist-demo/.
 make demo-preview   # serve dist-demo/ as a static host would.
