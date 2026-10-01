@@ -6975,7 +6975,7 @@ COMPONENTS = [
                                 "D28", "D29", "D32", "D33", "D35", "D37", "D55", "D67", "D77",
                                 "D87", "D117", "D118", "D137", "D162", "D164", "D167", "D172",
                                 "D174", "D180", "D218", "D221", "D252", "D253", "D259", "D284",
-                                "D288", "D291", "D-loading-holds-loaded-size"],
+                                "D288", "D291", "D-nothing-moves-unless-moved"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -7068,7 +7068,7 @@ COMPONENTS = [
                                 "D68", "D83", "D86", "D90", "D93", "D118", "D119", "D125", "D132",
                                 "D172", "D181", "D192", "D196", "D213", "D218", "D260", "D264",
                                 "D269", "D275", "D285", "D293", "D300",
-                                "D-loading-holds-loaded-size"],
+                                "D-nothing-moves-unless-moved"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -7201,7 +7201,7 @@ COMPONENTS = [
                         "`storeKey.ts:storeKeyText` — `B9 #3`, D68's own spelling — rather "
                         "than composing `#{index}` by hand.",
                 "governed_by": ["D26", "D58", "D68", "D83", "D92", "D134", "D196", "D218", "D259",
-                                "D-loading-holds-loaded-size"],
+                                "D-nothing-moves-unless-moved"],
             },
             "src/Graveyard.css": {
                 "does": "a smaller sheet than a working screen's, because this one has no "
@@ -8056,7 +8056,7 @@ COMPONENTS = [
                                                "D171", "D181", "D192", "D193", "D195", "D196",
                                                "D203", "D212", "D218", "D220", "D221", "D259",
                                                "D270", "D271", "D274", "D277", "D284", "D285",
-                                               "D296", "D304", "D-loading-holds-loaded-size"]},
+                                               "D296", "D304", "D-nothing-moves-unless-moved"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -8182,7 +8182,7 @@ COMPONENTS = [
                                                 "D125", "D189", "D193", "D196", "D201", "D214",
                                                 "D217", "D219", "D225", "D236", "D277", "D278",
                                                 "D284", "D285", "D298", "D301",
-                                                "D-loading-holds-loaded-size"]},
+                                                "D-nothing-moves-unless-moved"]},
             "src/Revenue.css": {"does": "the summary band, podium, mix tile, board rows and "
                                         "product table's own layout, `--bn-*` only "
                                         "(D298's Direction B). The month bars "
@@ -9042,21 +9042,28 @@ COMPONENTS = [
                 "governed_by": ["D121", "D172", "D192"],
                 "note": "Proved red first on main: one sitting, one block, and no `card=`.",
             },
-            "tests/load-shift.spec.ts": {
-                "does": ("every nav screen, read from `ROUTES` through the sidebar, plus "
+            "tests/stability.spec.ts": {
+                "does": ("the case table for layout shift. Case `loading`: every nav screen, read from `ROUTES` through the sidebar, plus "
                     "`#/product` with a SKU, at 1440 and 820 with each read held 800ms. Sums "
                     "the browser's `layout-shift` entries over the first 3s with no input "
                     "exclusion and fails a screen at 0.01 or more. Names what moved. "
-                    "`load-shift-allow.json` is the shrinking exception list, and an entry "
+                    "`stability-allow.json` is the shrinking exception list, and an entry "
                     "that now passes fails. Not a harness test; `make design-check` runs it."),
-                "governed_by": ["D-loading-holds-loaded-size", "D280"],
+                "governed_by": ["D-nothing-moves-unless-moved", "D280"],
                 "note": "Proved red first on main: Home, Graveyard, Revenue and Review shifted.",
             },
-            "tests/load-shift-allow.json": {
-                "does": ("the shrinking list `load-shift.spec.ts` reads, route -> reason. "
+            "tests/layoutShift.ts": {
+                "does": ("the one reader of the browser's `layout-shift` entries: "
+                    "`watchShifts` (an init script), `readShifts`, `sumOf`, `describeShifts` "
+                    "and `markNow`. `stability.spec.ts` and the press cases in "
+                    "`inventory.spec.ts` share it, so no two specs disagree on what a shift is."),
+                "governed_by": ["D-nothing-moves-unless-moved"],
+            },
+            "tests/stability-allow.json": {
+                "does": ("the shrinking list `stability.spec.ts` reads, `<case>:<route>` -> reason. "
                     "A screen on it is measured and not failed. An entry whose screen now "
                     "passes fails the spec, so the list only shrinks."),
-                "governed_by": ["D-loading-holds-loaded-size"],
+                "governed_by": ["D-nothing-moves-unless-moved"],
             },
             "tests/home.spec.ts": {
                 "does": "`#/`'s 'cannot be filled' figure against a mixed ledger: one order "
@@ -9638,7 +9645,8 @@ COMPONENTS = [
                                 "D83", "D86", "D89", "D92", "D101", "D115", "D117", "D118", "D119",
                                 "D124", "D125", "D132", "D134", "D136", "D142", "D155", "D172",
                                 "D181", "D192", "D195", "D196", "D213", "D218", "D259", "D260",
-                                "D277", "D284", "D288", "D299", "D300", "D310"],
+                                "D277", "D284", "D288", "D299", "D300", "D310",
+                                "D-nothing-moves-unless-moved"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

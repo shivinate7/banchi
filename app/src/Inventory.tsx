@@ -972,7 +972,7 @@ function CopiesPanel({
   const bandPending = handle !== null && group === null && !gaveUp && (loading || !settled)
   /* A LAYOUT EFFECT, SO THE PARENT'S FRAME HOLDS THE COLUMN FROM THE FIRST PAINT. A passive effect
      reports this after the card has painted without its figures column, and the column then adds
-     itself and moves the photograph (D-loading-holds-loaded-size). */
+     itself and moves the photograph (D-nothing-moves-unless-moved). */
   useLayoutEffect(() => {
     onPending(bandPending)
   }, [bandPending, onPending])

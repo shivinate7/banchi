@@ -2162,7 +2162,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   const open = orders.filter((one) => one.open)
   const populated = payload !== null && orders.length > 0
   /* Still reading the ledger. The verdict's own slot is held, because a ledger with orders in it
-     (the common one) draws a verdict where this draws the lede (D-loading-holds-loaded-size). */
+     (the common one) draws a verdict where this draws the lede (D-nothing-moves-unless-moved). */
   const reading = payload === null && failure === null
 
   /* The well: the textarea, "Read this paste", and — beside the list — "Fetch from TCGplayer".
