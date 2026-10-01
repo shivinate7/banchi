@@ -124,3 +124,28 @@ test('failed: a failed history read leaves no skeleton on Home', async ({ page }
   await expect(page.locator('.home-foot .bn-skeleton')).toHaveCount(0)
   await expect(page.locator('.home-hold')).toHaveCount(0)
 })
+
+/* READ ORDER MOVES NOTHING ON HOME (D313). The standing line draws as soon as the status lands, as a
+   pressable row or as plain prose by what the other reads say. Equal 800ms holds hide that race. Here
+   the runs read lands first and the status second, so the line is drawn twice. Its row keeps one
+   height, so nothing below it moves. */
+for (const width of [1440, 820]) test(`loading: Home holds its frame when its reads land out of order, at ${width}`, async ({ page }) => {
+  for (const seed of Object.values(POPULATED_ROUTE_SEEDS)) await seed(page)
+  await page.route(
+    () => true,
+    async (route) => {
+      const type = route.request().resourceType()
+      if (type === 'fetch' || type === 'xhr') {
+        const url = route.request().url()
+        await new Promise((r) => setTimeout(r, /\/runs(\?|$)/.test(url) ? 100 : /\/status(\?|$)/.test(url) ? 200 : SLOW_MS))
+      }
+      await route.fallback()
+    },
+  )
+  await watchShifts(page)
+  await setViewport(page, { width, height: 1000 })
+  const { sum, shifts } = await shiftOf(page, '#/')
+  /* Not zero: the foot's sentence grows left to right as its clauses land, and the words after a
+     clause move by a fraction of a pixel (0.0001). A box that moves is 0.004 or more. */
+  expect(sum, describeShifts(shifts)).toBeLessThan(BUDGET / 20)
+})

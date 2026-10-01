@@ -30,7 +30,7 @@
    One sentence naming what the store is waiting on, ranked by `standing.ts`. The emphasis
    floor is a TINT and never a fill: an accent fill spends the element's only colour channel,
    so a danger condition comes out the same cheerful blue as a clear one. */
-.home-standing { margin-top: var(--bn-4); max-width: 620px; display: flex; flex-direction: column; gap: var(--bn-3); }
+.home-standing { --standing-lh: 1.35; --standing-ic: 34px; margin-top: var(--bn-4); max-width: 620px; display: flex; flex-direction: column; gap: var(--bn-3); }
 .home-standing-skel-bar { flex: 1 1 auto; height: var(--bn-3); max-width: 60%; }
 .home-standing[data-tone='danger'] { --tone: var(--bn-danger); --tone-tint: var(--bn-danger-tint); }
 .home-standing[data-tone='warn']   { --tone: var(--bn-warn);   --tone-tint: var(--bn-warn-tint); }
@@ -40,7 +40,8 @@
 
 .home-standing-row {
   position: relative; display: flex; align-items: center; gap: var(--bn-3);
-  min-height: 58px; padding: var(--bn-3) var(--bn-4) var(--bn-3) var(--bn-5);
+  /* The icon or one line of the sentence, plus the press padding (58px). The skeleton cannot know the sentence, so the row never changes height (D313). */
+  min-height: calc(max(var(--standing-ic), var(--standing-lines, 1) * var(--standing-lh) * var(--bn-fs-lg)) + 2 * var(--bn-3)); padding: var(--bn-3) var(--bn-4) var(--bn-3) var(--bn-5);
   border-radius: var(--bn-r-lg); background: var(--bn-surface); color: var(--bn-ink);
   text-decoration: none; overflow: hidden;
   box-shadow: inset 0 0 0 1px var(--bn-line), var(--bn-shadow-1);
@@ -52,7 +53,9 @@
 a.home-standing-row:hover { box-shadow: inset 0 0 0 1px var(--bn-line-strong), inset 0 0 0 200px var(--bn-hover), var(--bn-shadow-2); }
 a.home-standing-row:active { translate: 0 1px; }
 /* A row that cannot be pressed is prose, not a control. */
-.home-standing-row[data-press='no'] { background: transparent; box-shadow: none; min-height: 34px; padding-top: 0; padding-bottom: 0; }
+.home-standing-row[data-press='no'] { background: transparent; box-shadow: none; padding-top: 0; padding-bottom: 0; /* keeps the press row's floor: a read landing can turn prose into a press (D313) */ }
+/* The narrow layout wraps the sentence, so its floor is two lines. */
+@media (max-width: 1099px) { .home-standing-row { --standing-lines: 2; } }
 .home-standing-row[data-press='no'] .home-standing-rule { top: 2px; bottom: 2px; width: 3px; border-radius: var(--bn-r-full); }
 
 /* D118: a pointer state repaints, it never re-lays out. The rule thickens on hover with
@@ -61,10 +64,10 @@ a.home-standing-row:active { translate: 0 1px; }
 .home-standing-rule { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--tone);
   transform-origin: left center; transition: scale var(--bn-t-fast) var(--bn-ease); }
 a.home-standing-row:hover .home-standing-rule { scale: 1.5 1; }
-.home-standing-ic { width: 34px; height: 34px; border-radius: var(--bn-r-sm); flex: none; display: grid;
+.home-standing-ic { width: var(--standing-ic); height: var(--standing-ic); border-radius: var(--bn-r-sm); flex: none; display: grid;
   place-items: center; background: var(--tone-tint); color: var(--tone); }
 .home-standing-ic-live { animation: bn-breathe var(--bn-t-pulse) var(--bn-ease-loop) infinite; }
-.home-standing-say { flex: 1 1 auto; min-width: 0; font-size: var(--bn-fs-lg); line-height: 1.35; color: var(--bn-ink-2); }
+.home-standing-say { flex: 1 1 auto; min-width: 0; font-size: var(--bn-fs-lg); line-height: var(--standing-lh); color: var(--bn-ink-2); }
 .home-standing-lead { font-weight: 700; color: var(--tone); }
 .home-standing-say strong { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
 .home-standing-go { display: inline-flex; align-items: center; gap: var(--bn-2); flex: none; color: var(--bn-ink-3);
