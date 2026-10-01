@@ -8711,3 +8711,55 @@ for (const how of ['held arrow key', 'click']) test(`the copies list does not mo
     .filter((frame) => frame.drift > 0.01 || frame.scroll !== last.scroll)
   expect(moved, 'rows moved after they landed').toEqual([])
 })
+
+/* THE LEAD COLUMN IS ONE WIDTH FOR EVERY CAP (D118). `Meter` drew a 14px cell per unit of cap
+ * and sized the Live figure, so the lead column, the identity column and Actions' x changed from
+ * card to card, and a held key reflowed the band at every landing. Caps 1 to 4 come from the
+ * fixture's copy counts; 40 with 12 over is the answer rewritten, because the real ceiling is a
+ * server number and a cap that large is the case a one-cell-per-unit strip cannot fit. */
+for (const [width, scheme] of [[1440, 'light'], [1440, 'dark'], [820, 'light'], [820, 'dark']] as const) {
+  test(`the lead column and Actions do not change width with the cap, at ${width} ${scheme}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme })
+    await setViewport(page, { width, height: 900 })
+    const cards = siftCards()
+    await open(page, SIFT_BOXES, {
+      cards,
+      search: (query) => {
+        const answer = searchAnswer(query, cards)
+        for (const group of answer.groups) {
+          if (group.sku === '9000012') Object.assign(group, { listable: 40, listed: { ...group.listed, live: 52 } })
+        }
+        return answer
+      },
+    })
+    await expandAll(page)
+    const seen: { cap: string; lead: number; live: number; actions: number; end: number; endFits: boolean }[] = []
+    /* Walk cards 1 to 12: caps 2, 3, 4, 1 over and over, and card 12 at 40. */
+    for (let n = 0; n < 12; n += 1) {
+      await page.locator('.browse-row').nth(n).click()
+      await expect(page.locator('.browse-hero-lead:not([data-pending]) .bn-meter')).toBeVisible()
+      await settled(page)
+      const meter = page.locator('.browse-hero-fig[data-read] .bn-meter')
+      const lead = (await page.locator('.browse-hero-lead').boundingBox())!
+      const live = (await page.locator('.browse-hero-fig[data-read]').boundingBox())!
+      const actions = (await page.getByRole('button', { name: 'Actions' }).boundingBox())!
+      const end = (await meter.locator('.bn-meter-end').boundingBox())!
+      seen.push({
+        cap: (await meter.getAttribute('aria-label')) ?? '',
+        lead: Math.round(lead.width),
+        live: Math.round(live.width),
+        actions: Math.round(actions.x),
+        end: Math.round(end.height),
+        endFits: end.x >= live.x - 0.5 && end.x + end.width <= live.x + live.width + 0.5,
+      })
+    }
+    expect(new Set(seen.map((one) => one.cap)).size, 'the walk must reach more than one cap').toBeGreaterThan(3)
+    expect(seen.some((one) => one.cap.includes('cap 40, 12 over')), 'cap 40 was never reached').toBe(true)
+    expect(new Set(seen.map((one) => one.lead)), JSON.stringify(seen)).toHaveProperty('size', 1)
+    expect(new Set(seen.map((one) => one.live))).toHaveProperty('size', 1)
+    expect(new Set(seen.map((one) => one.actions))).toHaveProperty('size', 1)
+    expect(new Set(seen.map((one) => one.end)), 'the cap text must stay on one line').toHaveProperty('size', 1)
+    expect(seen.filter((one) => !one.endFits), 'the cap text must stay inside the figure').toEqual([])
+    await page.screenshot({ path: test.info().outputPath(`lead-${width}-${scheme}.png`) })
+  })
+}

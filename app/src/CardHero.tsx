@@ -378,7 +378,7 @@ function HeroLead({ figures, market }: { readonly figures: HeroFigures; readonly
       </div>
       {listing ? (
         <div
-          className="browse-hero-fig"
+          className="browse-hero-fig browse-hero-fig-live"
           data-read={read ? 'true' : 'false'}
           title={
             group.sold_here > 0
@@ -433,7 +433,7 @@ function HeroLeadPending({ listing }: { readonly listing: boolean }) {
   return (
     <div className="browse-hero-lead" aria-hidden="true" data-pending="true">
       {(listing ? ['Stored', 'Live', 'Market'] : ['Stored']).map((label) => (
-        <div key={label} className="browse-hero-fig">
+        <div key={label} className={label === 'Live' ? 'browse-hero-fig browse-hero-fig-live' : 'browse-hero-fig'}>
           <span className="browse-hero-fig-label">
             <span className="bn-label">{label}</span>
           </span>
