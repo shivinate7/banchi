@@ -8,8 +8,8 @@ the claim. Then it merges. Before-merge becomes the default for every repo.
 
 **Upstream today:** claude-settings' `actions/stamp` stamps after merge, and only q_max uses it.
 
-**Blocker, open:** the claude-settings README says `actions/` stops working for other repos
-when claude-settings goes private.
+**No blocker:** by the owner's word, claude-settings never goes private, so its `actions/` stay
+callable from every repo.
 
 **Stopgap:** `scripts/claim-ids.py` writes a gloss at a claimed cite's first use in CLAUDE.md
 (`gloss_first_uses`), so the docs-audit `rule enforcement` row passes after a claim.
