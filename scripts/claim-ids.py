@@ -1005,11 +1005,11 @@ def gloss_first_uses(text: str, claims: Sequence[Claim], glosses: Dict[str, str]
                 if not g:
                     continue
 
-                def add(m, c=c, g=g):
+                def add(m, c=c, g=g, seen=seen):
                     if c.becomes in seen:
                         return m.group(0)
                     seen.add(c.becomes)
-                    if re.match(r"`?( \(|,\s+\w)", line[m.end():]):
+                    if re.match(r"`?( \(|,\s+\w)", m.string[m.end():]):
                         return m.group(0)
                     return f"{c.becomes}{m.group(1)} ({g})"
                 line = re.sub(r"(?<![-\w])" + re.escape(c.becomes) + r"(`?)(?![-\w])", add, line, count=1)
