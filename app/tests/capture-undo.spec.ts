@@ -549,7 +549,7 @@ test('the stack is the whole sitting, newest first, and reaches the 13th row', a
   await expect(page.locator('.capture-undo-depth')).toHaveText('23 recent')
 })
 
-/* DEBT54: AN UNDO REFETCHES NO OTHER ROW'S PHOTOGRAPH, AND A REUSED SLOT SHOWS ITS NEW ONE.
+/* AN UNDO REFETCHES NO OTHER ROW'S PHOTOGRAPH, AND A REUSED SLOT SHOWS ITS NEW ONE.
  * A nameless row is drawn off the slot, so its `?v=` is the only thing that tells a browser the
  * bytes moved. Undo rewrites one slot; the capture that takes the index back rewrites it again. */
 test('an undo keeps every other thumbnail URL, and a reused slot gets a new one', async ({
