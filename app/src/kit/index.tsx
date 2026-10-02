@@ -1060,7 +1060,7 @@ export function Logo({
   readonly className?: string
   /** SCRATCH PREVIEW: `card` is the card alone, `both` the card in its two brackets, no tile.
    *  The viewBox crops to the part and `size` is then the HEIGHT. */
-  readonly part?: 'tile' | 'card' | 'both'
+  readonly part?: 'tile' | 'card' | 'card-small' | 'both'
   /** One-shot sheen across the card (`.logo-glint`, animated in PlaceNeighbors.css). */
   readonly glint?: boolean
 }) {
@@ -1074,7 +1074,7 @@ export function Logo({
   const vb: readonly [number, number, number, number] =
     part === 'card'
       ? [CARD.x, CARD.y, CARD.w, CARD.h]
-      : part === 'both'
+      : part === 'both' || part === 'card-small'
         ? [21, 14.5, 58, 71]
         : [0, 0, 100, 100]
 
@@ -1152,7 +1152,7 @@ export function Logo({
           </g>
         </>
       )}
-      {part !== 'card' && (
+      {(part === 'tile' || part === 'both') && (
         <g className="logo-brackets">
           {bracket}
           <g transform="rotate(180 50 50)">{bracket}</g>

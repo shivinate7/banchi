@@ -65,7 +65,8 @@ import './PlaceNeighbors.css'
  * THE EPITHET IS DEMOTED AND NEVER DROPPED: 61 of 99 champions carry more than one — Master
  * Yi has 14 — so `Master Yi` alone names fourteen different cards and is not an identity. */
 /* SCRATCH PREVIEW: `?nbmark=card|both` picks the shape. */
-const MARK_PART = new URLSearchParams(window.location.search).get('nbmark') === 'card' ? 'card' : 'both'
+const MARK_QUERY = new URLSearchParams(window.location.search).get('nbmark')
+const MARK_PART = MARK_QUERY === 'card' || MARK_QUERY === 'card-small' ? MARK_QUERY : 'both'
 
 function seam(name: string): [string, string | null] {
   const at = name.indexOf(', ')
