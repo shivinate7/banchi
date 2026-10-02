@@ -866,3 +866,83 @@ test('L2 shell: the Fulfiller column does not animate its width (S19)', async ({
   const props = await column.evaluate((el) => getComputedStyle(el).transitionProperty)
   expect(props, 'a layout transition moves the content on every frame').not.toMatch(/max-width|width|height|margin|padding/)
 })
+
+
+/* A SALE NEVER MOVES THE CARD HEADER (D313). The sale press sits in the location panel; the Sold chip it
+   draws in the header's facts row used to wrap onto a line of its own and push the stats, the photo and
+   the panel down by one line. `wide` is Verdana with the web fonts blocked, the face that wraps on Linux.
+   The chip set is a foil finish and a rarity, beside a set name long enough to fill the row, the one place a
+   chip arriving wraps. The sidebar is open (it narrows the header); the facts row must stay one pill tall. */
+const HERO_PARTS = ['.browse-hero-head', '.browse-hero-sub', '.browse-hero-side', '.browse-photo-frame', '.card-locations'] as const
+const HINT = 'Spiritforged Unleashed'
+for (const width of [1440, 820]) for (const wide of [false, true]) {
+  test(`held frame: marking a copy sold and undoing it moves nothing in the card header${wide ? ', wide face' : ''}, at ${width}`, async ({ page }) => {
+    test.setTimeout(120_000)
+    if (wide) {
+      await page.route(/\.(woff2?|ttf)(\?|$)/, (route) => route.abort())
+      await page.addInitScript(() => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const st = document.createElement('style')
+          st.textContent = '*{font-family:Verdana,sans-serif !important}'
+          document.head.append(st)
+        })
+      })
+    }
+    await l1Inventory(page)
+    /* The sidebar open narrows the header, which is where the chip wraps; seeded before first paint. */
+    await page.addInitScript((value) => {
+      try {
+        /* eslint-disable-next-line no-restricted-syntax -- seeding the shell's own device key, as `page-edge.spec.ts:withRail` does. */
+        window.localStorage.setItem('banchi.rail', value)
+      } catch {
+        /* unreadable storage reads as never chosen */
+      }
+    }, 'wide')
+    const mine = L1_CARDS['2/1'] as Record<string, unknown>
+    const kept = { ...mine }
+    Object.assign(mine, { metadata_finish: 'foil', rarity_claim: ['Common'], game: 'riftbound', number: '047', printed_total: '221' })
+    try {
+      const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+      await page.route(/\/inventory\/2\/1\/sold$/, (route) => {
+        const undo = (route.request().postDataJSON() as { undo?: boolean } | null)?.undo === true
+        mine.state = undo ? 'identified' : 'sold'
+        return json(route, { position: '2/1', box: 2, index: 1, undone: undo, state: mine.state, previous_state: undo ? 'sold' : 'identified', restores_to: undo ? null : 'identified', listing: null, card: null })
+      })
+      await setViewport(page, { width, height: 1000 })
+      const read = () =>
+        page.evaluate((sels) => sels.map((s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return r ? [s, r.x, r.y, r.width, r.height] : [s] }), [...HERO_PARTS])
+      const oneRow = () =>
+        page.evaluate(() => {
+          const sub = document.querySelector('.browse-hero-sub')?.getBoundingClientRect().height ?? 0
+          const pill = document.querySelector('.browse-hero-sub .bn-pill')?.getBoundingClientRect().height ?? -1
+          return Math.abs(sub - pill) < 1
+        })
+      const bad: string[] = []
+      {
+        mine.state = 'identified'
+        mine.set_hint = HINT
+        await page.goto('about:blank')
+        await page.goto(screen('inventory'))
+        await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
+        await expect(page.locator('.card-locations').first()).toBeVisible()
+        await settleFonts(page)
+        await page.waitForTimeout(500)
+        const before = await read()
+        if (!(await oneRow())) bad.push('before: the facts row is not one pill tall')
+        await page.getByRole('button', { name: /Mark sold/ }).first().click()
+        await expect(page.locator('.browse-hero-sub')).toContainText('Sold')
+        await page.waitForTimeout(500)
+        if (JSON.stringify(await read()) !== JSON.stringify(before)) bad.push('sale')
+        if (!(await oneRow())) bad.push('sale: the facts row is not one pill tall')
+        await page.getByRole('button', { name: /^Undo/ }).first().click()
+        await expect(page.locator('.browse-hero-sub')).not.toContainText('Sold')
+        await page.waitForTimeout(500)
+        if (JSON.stringify(await read()) !== JSON.stringify(before)) bad.push('undo')
+        if (!(await oneRow())) bad.push('undo: the facts row is not one pill tall')
+      }
+      expect(bad, 'these moved the card header').toEqual([])
+    } finally {
+      Object.assign(mine, kept)
+    }
+  })
+}
