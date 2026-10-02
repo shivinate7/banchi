@@ -122,7 +122,7 @@
   }
   .orders-buyers-panel .orders-index-item { scroll-snap-align: start; }
 }
-/* DESIGN PASS A: Inventory's own skeleton at the desk too. The rail holds the buyers, the open
+/* Inventory's own skeleton at the desk too. The rail holds the buyers, the open
    buyer's panel and the walk; the pane is Inventory's hero, photograph beside every copy. */
 @container orders (min-width: 1000px) {
   .orders-layout {
@@ -364,9 +364,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 }
 .orders-walk-sectcount { margin-left: auto; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
 .orders-walk-rows { list-style: none; display: flex; flex-direction: column; gap: var(--bn-3); }
-/* A4: the press stays one flex item, and the copies underneath it (`.walk-pick-where`) wrap
-   onto their own full-width row rather than sitting beside it — the shape
-   the orders-a mock already worked out. */
+/* One line a card, as Inventory's card list. The copies are in the pane beside it. */
 .orders-walk-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-1); }
 .orders-walk-press {
   display: grid;
@@ -386,7 +384,6 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   background: transparent;
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
-.orders-walk-line > .walk-pick-where { flex: 1 1 100%; min-width: 0; }
 .orders-walk-press:hover { background: var(--bn-hover); }
 .orders-walk-press[aria-current='true'] { background: var(--bn-accent-tint); }
 .orders-walk-slot { grid-area: slot; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bn-ink-2); }
@@ -420,19 +417,10 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-walk-line.is-done .orders-walk-pick { color: var(--bn-ok); }
 .orders-walk-empty { padding: var(--bn-3); font-size: var(--bn-fs-md); }
 
-/* ---- every here-copy, under its own row (A4, point 3) --------------------------------
-   D304. `CardLocations` is reused whole, head
-   off — this block is only the seam `mock.css` already measured: its own `copies` container
-   (so a narrow walk column gets the same reflow `#/inventory`'s rail does, never the width
-   `.orders-walk` happens to have at the desk), and
-   a box name that keeps one line here, since the walk names the take's own card once already. */
-.walk-pick-where { margin: 0 0 var(--bn-2) var(--bn-2); container: copies / inline-size; }
-.walk-pick-where .card-locations-identity-box { white-space: nowrap; }
-
 /* ---- the card pane: `CardHero.tsx:CardPane` and `CardLocations.tsx:CardLocations`, reused
    whole (D304, lane A3) ---------------------
    Their own CSS lives in `CardHero.css` and `CardLocations.css`. This screen adds nothing of
-   its own beyond `.walk-pick-where` above: no `.orders-card-*` class draws any more. */
+   its own beyond the spares fold: no `.orders-card-*` class draws any more. */
 
 /* ---- 40px hit areas at every width (UX-267) ------------------------------------------ */
 .orders-walkall,
@@ -1188,23 +1176,11 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 /* The card pane's own paging: two arrow buttons around the two key caps. */
 .orders-pick-nav { display: flex; align-items: center; justify-content: center; gap: var(--bn-3); padding: var(--bn-3) 0; }
 .orders-pick-keys { display: inline-flex; gap: var(--bn-1); }
-/* THE WALK'S COPY ROWS DO NOT SCROLL ON THEIR OWN. The list's own scroll serves Inventory's fixed hero
-   band (D118, `CardLocations.css`); on Orders the walk column is the page's, so the wheel over a row
-   scrolls the page. */
-.walk-pick-where .card-locations-rows {
-  overflow: visible;
-  overscroll-behavior: auto;
-  scroll-snap-type: none;
-  mask-image: none;
-  -webkit-mask-image: none;
-  padding-bottom: 0;
-}
-
-/* The spares fold under a pick line: a quiet 40px press, and the same copy rows when open. */
-.orders-walk-line > .orders-walk-spares { flex: 1 1 100%; min-width: 0; margin: 0 0 var(--bn-2) var(--bn-2); }
+/* The spares fold under the pane's copy rows: a quiet press; opened, they are more rows in the same list. */
+.orders-walk-spares { margin-top: var(--bn-2); }
 .orders-walk-spares > .bn-btn { color: var(--bn-ink-3); }
 
-/* DESIGN PASS A: the walk in the rail reads as Inventory's card list, one line a card. */
+/* The walk in the rail reads as Inventory's card list, one line a card. */
 @container orders (min-width: 560px) {
   .orders-walk-press { grid-template-columns: 6ch minmax(0, 1fr) auto; min-height: var(--bn-control-h); padding: var(--bn-1) var(--bn-2); }
   .orders-walk-slot { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1213,7 +1189,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   .orders-walk-tools { flex-wrap: wrap; }
 }
 
-/* DESIGN PASS C: the order's strip above the hero. One row; it scrolls sideways, never wraps. */
+/* The order's strip above the hero. One row; it scrolls sideways, never wraps. */
 .orders-cardcol { flex-direction: column; gap: var(--bn-3); }
 @container orders (min-width: 560px) { .orders-cardcol { display: flex; } }
 .orders-strip { display: flex; align-items: center; gap: var(--bn-3); min-width: 0; padding: var(--bn-3); border-radius: var(--bn-r-lg); background: var(--bn-surface); box-shadow: var(--bn-shadow-1); }

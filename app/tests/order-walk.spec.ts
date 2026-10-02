@@ -322,9 +322,9 @@ async function open(page: Page, options: { plan?: WalkPlan; orders?: OrdersPaylo
   return wire
 }
 
-/* The pick the walk stands on, in the walk column: the copies' rows and their presses live there now
-   (the card pane holds the head, the band and the photograph only). */
-const CURRENT_PICK = '.orders-walk-line:has(.orders-walk-press[aria-current="true"])'
+/* The pick the walk stands on: its copies' rows and their presses are in the card pane, beside the
+   photograph. The rail's line carries the card and its count only. */
+const CURRENT_PICK = '.orders-cardcol'
 
 sealEveryTest()
 

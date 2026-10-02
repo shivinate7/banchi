@@ -593,8 +593,8 @@ two agree on digit runs and case, and may differ on punctuation and accents.
 
 ## 18. Design pass: why Orders reads a step behind
 
-**Status: proposed, not built.** Prototypes sit on scratch branches `scratch/orders-pass-a`,
-`-b` and `-c`. Nothing here is ruled until the owner picks.
+**Status: C is built. A and B are not built.** The owner picked C. A is inside C. B is
+dropped. The prototypes sat on scratch branches `scratch/orders-pass-a`, `-b` and `-c`.
 
 ### What the good screens do that Orders does not
 
@@ -637,3 +637,25 @@ demo mirror:
 
 **C.** It is Inventory's screen, as section 13 asks, so the two screens stay one design, and
 the strip answers the one question Inventory never has to: what does this buyer get.
+
+### What C is, as built
+
+- **The rail** holds the buyers, the open buyer's panel and the walk, one line a card. The line
+  carries no copies. The section count is a plain count: no fold control, because the strip
+  already shows the whole order.
+- **The pane** is `CardPane`. `CardLocations` is its `detail`, so the photograph sits beside the
+  copies. Mark sold stays the small per-copy icon press, with the tick on a picked card. No
+  large primary press is added.
+- **The spares fold again.** The pane draws the copies at the stop. A quiet "N more elsewhere"
+  press under them opens the rest in the same list (`useOrderWalk`'s `currentWhere`).
+- **The digit keys follow the pane.** `useWalkKeys` and the key caps read one list,
+  `keyedCopiesOf`: the copies at the stop, then the opened spares. They do nothing while a read
+  is out (`OrderWalk.held`).
+- **The strip** is `WalkStrip` in `OrdersWalkPane.tsx`. It draws one photograph per take in walk
+  order, rings the current one, ticks a picked one and ends with "N not in boxes". A press shows
+  that card in the pane. A one-card order with nothing missing draws no strip. A card the
+  inventory read has not answered draws the no-photo state.
+- **Nothing moves unless the person moved it (D313).** The strip, the pane and the panel read the
+  held plan and the held buyer (`useHeld`) while a read is out. The strip's photographs sit in
+  the kit's fixed thumbnail frames. `app/tests/stability.spec.ts` holds the rows for buyer open,
+  buyer step, sale and undo at 1440 and 820, each with a wide face.

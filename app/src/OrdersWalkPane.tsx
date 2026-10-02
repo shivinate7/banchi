@@ -19,13 +19,13 @@
  * one press (Mark sold / Undo) `CardLocations`'s own `renderAction` slot calls per copy.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, CardThumb, Icon, Loading, Notice, overlayOpen, Pill } from './kit'
+import { CardThumb, Icon, Loading, Notice, overlayOpen, Pill } from './kit'
 import { toast } from './kit/toast'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
 import { isEditableTarget } from './keys'
-import { CardLocations, MarkSoldButton, UndoSaleButton, markFreshSale, clearFreshSale } from './CardLocations'
+import { MarkSoldButton, UndoSaleButton, markFreshSale, clearFreshSale } from './CardLocations'
 import { describeFailure, photoUrl, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
@@ -36,7 +36,6 @@ import type {
   PullTarget,
   SearchCopy,
   SearchGroup,
-  SectionDetail,
   WalkPlan,
   WalkPlanCopy,
   WalkPlanStop,
@@ -404,6 +403,17 @@ export function useOrderWalk({
     return groupOf(currentRow.take, currentRow.take.copies, facts, rawCards)
   }, [currentRow, facts, rawCards])
 
+  /** WHERE THE CURRENT PICK'S COPIES ARE, in the order the digit keys reach them: the copies at its stop,
+   *  then, only while its fold is open, its spares (`keyedCopiesOf`). The pane draws this one group and
+   *  the keys read the same list, so a key cap sits on exactly the copy it sells. */
+  const currentLine = currentRow === null ? null : (allTakeLinesOf(sections).find((line) => line.rows.some((row) => row.rowKey === currentRow.rowKey)) ?? null)
+  const currentWhere: SearchGroup | null = useMemo(() => {
+    if (currentRow === null || currentLine === null) return null
+    return groupOf(currentRow.take, keyedCopiesOf(currentLine, openSpares), facts, rawCards)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `currentLine` is rebuilt per render; its inputs are these.
+  }, [currentRow, sections, openSpares, facts, rawCards])
+  const currentSpares = currentLine === null ? 0 : sparesOf(currentLine.take).length
+
   /** THE CURRENT CARD, WHOLE (§13: inventory's card pane, unchanged) — the real `InventoryCard`
    *  for the row the walk stands on, looked up by the copy's own (possibly refreshed) place,
    *  never by the take's synthesised `SearchGroup`, which carries only what the wire needs for
@@ -628,6 +638,8 @@ export function useOrderWalk({
     current,
     currentRow,
     currentGroup,
+    currentWhere,
+    currentSpares,
     currentCard,
     select,
     step,
@@ -772,25 +784,15 @@ export function takeBuyers(take: WalkPlanTake): string {
 export function WalkList({
   walk,
   hideSold,
-  collapsed = false,
   owedBySku,
   showBuyers,
-  sections,
   onPick,
-  compact = false,
 }: {
-  /** Design pass A: the rail draws the row alone; the pane beside it draws where each copy is. */
-  readonly compact?: boolean
   readonly walk: OrderWalk
   readonly hideSold: boolean
-  readonly collapsed?: boolean
   /** What the walked orders still want of each SKU, across every stop. The "of N". */
   readonly owedBySku: ReadonlyMap<string, number>
   readonly showBuyers: boolean
-  /** Each box's own divider layout (A4), the SAME one `getBoxes()` read `Orders.tsx` already
-   *  turns into a map for the pane's own `CardLocations` — never a second read for the walk
-   *  list's copies. Optional; the strip is honest without it (`PositionBar`'s own contract). */
-  readonly sections?: ReadonlyMap<number, readonly SectionDetail[]>
   /** LANE A5, Q4: on a phone, a tap opens the card in a sheet. `Orders.tsx` passes this only
    *  while its own column reads narrow — `WalkList` never reads a width itself. Undefined at a
    *  desk width, where the pane sits beside the walk already and needs no sheet to open. */
@@ -849,125 +851,60 @@ export function WalkList({
               <SectionTitle parts={section.parts} />
               <span className="orders-walk-sectcount">{shown.length}</span>
             </div>
-            {collapsed ? null : (
-              <ul className="orders-walk-rows">
-                {shown.map((line) => {
-                  const picked = line.take.copies.filter((copy) => walk.soldKeys.has(copy.key)).length
-                  const done = picked >= line.take.wanted
-                  const figure = pickFigureOf(line.take, owedBySku)
-                  const spares = sparesOf(line.take)
-                  const spareOpen = walk.openSpares.has(line.takeKey)
-                  const current = line.rows.some((row) => row.rowKey === walk.current)
-                  const slots = line.rows.map((row) => row.copy.place.card).filter((card): card is number => card !== null)
-                  const next = line.rows.find((row) => !walk.soldKeys.has(row.copy.key)) ?? line.rows[0]
-                  return (
-                    <li className={done ? 'orders-walk-line is-done' : 'orders-walk-line'} key={line.takeKey} data-take-key={line.takeKey}>
-                      <button
-                        className="orders-walk-press"
-                        type="button"
-                        aria-current={current ? 'true' : undefined}
-                        onClick={() => {
-                          if (next === undefined) return
-                          walk.select(next.rowKey)
-                          onPick?.()
-                        }}
-                      >
-                        <span className="orders-walk-slot">
-                          {slots.length === 0 ? '—' : slots.map((slot) => `#${slot}`).join(', ')}
-                          {/* MORE CANDIDATES HERE THAN THE TAKE WANTS: every copy is fungible
-                           * (D212), so listing two card numbers for a "Pick 1" read as "take
-                           * both" (review, finding 2 — Allen's #61/#62 row named neither copy
-                           * as the one to pull). Saying so, tersely, is the fix the wording
-                           * ruling asks for over a full explanation. */}
-                          {slots.length > line.take.wanted ? <span className="orders-walk-slot-either"> (either)</span> : null}
+            <ul className="orders-walk-rows">
+              {shown.map((line) => {
+                const picked = line.take.copies.filter((copy) => walk.soldKeys.has(copy.key)).length
+                const done = picked >= line.take.wanted
+                const figure = pickFigureOf(line.take, owedBySku)
+                const current = line.rows.some((row) => row.rowKey === walk.current)
+                const slots = line.rows.map((row) => row.copy.place.card).filter((card): card is number => card !== null)
+                const next = line.rows.find((row) => !walk.soldKeys.has(row.copy.key)) ?? line.rows[0]
+                return (
+                  <li className={done ? 'orders-walk-line is-done' : 'orders-walk-line'} key={line.takeKey} data-take-key={line.takeKey}>
+                    <button
+                      className="orders-walk-press"
+                      type="button"
+                      aria-current={current ? 'true' : undefined}
+                      onClick={() => {
+                        if (next === undefined) return
+                        walk.select(next.rowKey)
+                        onPick?.()
+                      }}
+                    >
+                      <span className="orders-walk-slot">
+                        {slots.length === 0 ? '—' : slots.map((slot) => `#${slot}`).join(', ')}
+                        {/* MORE CANDIDATES HERE THAN THE TAKE WANTS: every copy is fungible
+                         * (D212), so listing two card numbers for a "Pick 1" read as "take
+                         * both" (review, finding 2 — Allen's #61/#62 row named neither copy
+                         * as the one to pull). Saying so, tersely, is the fix the wording
+                         * ruling asks for over a full explanation. */}
+                        {slots.length > line.take.wanted ? <span className="orders-walk-slot-either"> (either)</span> : null}
+                      </span>
+                      <span className={line.take.name === null ? 'orders-walk-name is-unnamed' : 'orders-walk-name'}>
+                        {line.take.name ?? 'Not identified yet'}
+                      </span>
+                      <span className="orders-walk-pick">
+                        {done ? <Icon name="check" size={14} /> : null}
+                        {/* THE FIGURE IS ONE UNBREAKABLE PART: in a narrow column the word may wrap above it, but
+                            "1 of 1" never breaks to three lines. */}
+                        {done ? 'Picked' : 'Pick'}{' '}
+                        <span className="orders-walk-pick-count bn-live-count bn-live-count-start">
+                          {line.take.wanted}
+                          {figure.short > 0 ? null : ` of ${figure.of}`}
                         </span>
-                        <span className={line.take.name === null ? 'orders-walk-name is-unnamed' : 'orders-walk-name'}>
-                          {line.take.name ?? 'Not identified yet'}
-                        </span>
-                        <span className="orders-walk-pick">
-                          {done ? <Icon name="check" size={14} /> : null}
-                          {/* THE FIGURE IS ONE UNBREAKABLE PART: in a narrow column the word may wrap above it, but
-                              "1 of 1" never breaks to three lines. */}
-                          {done ? 'Picked' : 'Pick'}{' '}
-                          <span className="orders-walk-pick-count bn-live-count bn-live-count-start">
-                            {line.take.wanted}
-                            {figure.short > 0 ? null : ` of ${figure.of}`}
-                          </span>
-                          {figure.short > 0 ? (
-                            <>
-                              {' '}
-                              <Pill tone="warn">{figure.short} short</Pill>
-                            </>
-                          ) : null}
-                        </span>
-                        {showBuyers ? <span className="orders-walk-for">{takeBuyers(line.take)}</span> : null}
-                      </button>
-                      {/* A4: EVERY here-COPY, AS INVENTORY DRAWS IT (the owner's Q3, "full
-                       * detail on every row") — box, section and card, the neighbours, the
-                       * strip and the ruler, and Mark sold, reused whole from `CardLocations`
-                       * rather than forked (D304).
-                       * The rows draw alone: the heading, the stats and the SKU
-                       * line already sit above, in this same button. FINDING #16 (the Opus
-                       * review round) is answered by THIS, not by a row-level Undo of its own
-                       * any more — `renderAction` puts `RowAction` on every copy here exactly as
-                       * it sits in the pane, so the struck-out copy's own Undo is drawn right
-                       * where the copy is, never only in the pane above. */}
-                      {compact ? null : <CardLocations
-                        group={groupOf(line.take, line.rows.map((row) => row.copy), walk.facts, walk.rawCards)}
-                        persona="owner"
-                        onSell={walk.onSell}
-                        busyKey={walk.busyCopy}
-                        soldKeys={walk.soldKeys}
-                        sections={sections}
-                        currentKey={walk.currentRow?.copy.key}
-                        preserveOrder
-                        className="walk-pick-where"
-                        renderAction={(copy) => {
-                          /* THE DIGIT THAT MARKS THIS COPY, on the current pick's rows only: the keys act on the pick the
-                             walk stands on. */
-                          const at = keyedCopiesOf(line, walk.openSpares).findIndex((one) => one.key === copy.key)
-                          return <RowAction walk={walk} copy={copy} take={line.take} hint={current && at >= 0 && at < 9 ? String(at + 1) : undefined} />
-                        }}
-                      />}
-                      {/* THE SPARES, FOLDED (the owner's ruling): copies of this take the solver did not pick.
-                          Opened, they are the same copy rows, sold through the same press, and the digit keys
-                          continue into them. */}
-                      {compact || spares.length === 0 ? null : (
-                        <div className="orders-walk-spares">
-                          <Button
-                            variant="ghost"
-                            size="lg"
-                            iconRight={spareOpen ? 'chevronUp' : 'chevronDown'}
-                            aria-expanded={spareOpen}
-                            words="not-in-vocabulary"
-                            onClick={() => walk.toggleSpares(line.takeKey)}
-                          >
-                            {spares.length} more elsewhere
-                          </Button>
-                          {!spareOpen ? null : (
-                            <CardLocations
-                              group={groupOf(line.take, spares, walk.facts, walk.rawCards)}
-                              persona="owner"
-                              onSell={walk.onSell}
-                              busyKey={walk.busyCopy}
-                              soldKeys={walk.soldKeys}
-                              sections={sections}
-                              currentKey={walk.currentRow?.copy.key}
-                              preserveOrder
-                              className="walk-pick-where"
-                              renderAction={(copy) => {
-                                const at = keyedCopiesOf(line, walk.openSpares).findIndex((one) => one.key === copy.key)
-                                return <RowAction walk={walk} copy={copy} take={line.take} hint={current && at >= 0 && at < 9 ? String(at + 1) : undefined} />
-                              }}
-                            />
-                          )}
-                        </div>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
+                        {figure.short > 0 ? (
+                          <>
+                            {' '}
+                            <Pill tone="warn">{figure.short} short</Pill>
+                          </>
+                        ) : null}
+                      </span>
+                      {showBuyers ? <span className="orders-walk-for">{takeBuyers(line.take)}</span> : null}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
           </li>
         )
       })}
@@ -1014,7 +951,7 @@ export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk
 
 /* ------------------------------------------------------------- design pass C: the strip */
 
-/** DESIGN PASS C (scratch, not for merge): the open buyer's whole order as one strip of
+/** The open buyer's whole order as one strip of
  *  photographs above Inventory's hero, in the walk's order. A press shows that card in the hero.
  *  A picked card is ticked. What no box holds closes the strip as one count. */
 export function WalkStrip({ walk, notInBoxes }: { readonly walk: OrderWalk; readonly notInBoxes: number }) {
@@ -1028,6 +965,10 @@ export function WalkStrip({ walk, notInBoxes }: { readonly walk: OrderWalk; read
           const name = line.take.name ?? 'Not identified yet'
           const done = pickedAllOf(line, walk.soldKeys)
           const current = line.rows.some((row) => row.rowKey === walk.current)
+          /* THE PANE'S OWN LOOKUP: a card the inventory read has not answered draws no photograph, a pooled
+             copy never does (D24, opsec). */
+          const place = first === undefined ? null : (walk.facts.get(first.copy.key) ?? first.copy.place)
+          const card = place === null ? null : (walk.rawCards.get(`${place.box}/${place.index}`) ?? null)
           return (
             <li key={line.takeKey}>
               <button
@@ -1037,7 +978,7 @@ export function WalkStrip({ walk, notInBoxes }: { readonly walk: OrderWalk; read
                 title={name}
                 onClick={() => first !== undefined && walk.select(first.rowKey)}
               >
-                <CardThumb src={first === undefined ? null : photoUrl(first.copy.place.box, first.copy.place.index, first.copy)} alt={name} size="md" />
+                <CardThumb src={card === null ? null : photoUrl(card.box, card.index, card)} alt={name} size="md" />
                 <span className="orders-strip-count">{done ? <Icon name="check" size={12} /> : null}{line.take.wanted}</span>
               </button>
             </li>

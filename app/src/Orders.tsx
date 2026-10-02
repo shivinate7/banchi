@@ -2625,7 +2625,7 @@ function OrderPickPane({
   readonly owedBySku: ReadonlyMap<string, number>
   readonly showBuyers: boolean
 }) {
-  const { currentRow, currentGroup, currentCard } = walk
+  const { currentRow, currentGroup, currentWhere, currentCard } = walk
 
   const [broken, setBroken] = useState(false)
   const [zoomed, setZoomed] = useState(false)
@@ -2634,7 +2634,9 @@ function OrderPickPane({
     setZoomed(false)
   }, [currentRow?.copy.key])
 
-  if (currentRow === null || currentGroup === null) return null
+  if (currentRow === null || currentGroup === null || currentWhere === null) return null
+  const where = currentWhere
+  const spareOpen = walk.openSpares.has(currentRow.takeKey)
 
   const figure = pickFigureOf(currentRow.take, owedBySku)
   /* THE HEAD RESOLVES FROM `take` UNTIL `rawCards` DOES — `currentCard` is null only
@@ -2673,20 +2675,38 @@ function OrderPickPane({
         postChips={showBuyers ? <Pill>For {takeBuyers(currentRow.take)}</Pill> : undefined}
         figures={figures}
         detail={
-          <CardLocations
-            group={currentGroup}
-            persona="owner"
-            onSell={walk.onSell}
-            busyKey={walk.busyCopy}
-            soldKeys={walk.soldKeys}
-            sections={sections}
-            currentKey={currentRow.copy.key}
-            preserveOrder
-            renderAction={(copy) => {
-              const at = currentGroup.copies.findIndex((one) => one.key === copy.key)
-              return <RowAction walk={walk} copy={copy} take={currentRow.take} hint={at >= 0 && at < 9 ? String(at + 1) : undefined} />
-            }}
-          />
+          <>
+            <CardLocations
+              group={where}
+              persona="owner"
+              onSell={walk.onSell}
+              busyKey={walk.busyCopy}
+              soldKeys={walk.soldKeys}
+              sections={sections}
+              currentKey={currentRow.copy.key}
+              preserveOrder
+              renderAction={(copy) => {
+                const at = where.copies.findIndex((one) => one.key === copy.key)
+                return <RowAction walk={walk} copy={copy} take={currentRow.take} hint={at >= 0 && at < 9 ? String(at + 1) : undefined} />
+              }}
+            />
+            {/* THE SPARES, FOLDED (the owner's ruling): copies of this pick the solver did not choose. Opened, they
+                are more copy rows in the same list, sold through the same press, and the digits continue into them. */}
+            {walk.currentSpares === 0 ? null : (
+              <div className="orders-walk-spares">
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  iconRight={spareOpen ? 'chevronUp' : 'chevronDown'}
+                  aria-expanded={spareOpen}
+                  words="not-in-vocabulary"
+                  onClick={() => walk.toggleSpares(currentRow.takeKey)}
+                >
+                  {walk.currentSpares} more elsewhere
+                </Button>
+              </div>
+            )}
+          </>
         }
         photo={{
           label: place,
@@ -3237,7 +3257,6 @@ function PullStage({
    *  toggle independently (`WalkList`'s own chevron stays decorative), so one boolean answers
    *  for the whole list. Not persisted — a fresh mount always opens expanded, matching what
    *  this list has always drawn. */
-  const [sectionsCollapsed, setSectionsCollapsed] = useState(false)
   const toggleWalkTick = (key: string) =>
     setWalkTicked((prev) => {
       const next = new Set(prev)
@@ -3676,7 +3695,7 @@ function PullStage({
     0,
   )
 
-  /* DESIGN PASS C: the copies the walked orders want that no box holds. */
+  /* The strip's closing count: the copies the walked orders want that no box holds. */
   let notInBoxes = 0
   for (const key of shownKeys) for (const line of answers.get(key)?.lines ?? []) notInBoxes += Math.max(0, line.outstanding)
 
@@ -3716,15 +3735,9 @@ function PullStage({
       ) : (
         <>
           <div className="orders-walk-tools">
-            {walk.sections.length < 2 ? (
-              <span className="orders-walk-count">
-                {walk.sections.length} {plural(walk.sections.length, 'section', 'sections')}
-              </span>
-            ) : (
-              <Button variant="quiet" size="sm" icon={sectionsCollapsed ? 'chevronDown' : 'chevronUp'} onClick={() => setSectionsCollapsed((v) => !v)}>
-                {sectionsCollapsed ? 'Open' : 'Fold'} {walk.sections.length} sections
-              </Button>
-            )}
+            <span className="orders-walk-count">
+              {walk.sections.length} {plural(walk.sections.length, 'section', 'sections')}
+            </span>
             <span className="bn-spacer" />
             <HideToggle checked={hideSold} onChange={setHideSold} count={walk.soldKeys.size}>
               Picked
@@ -3733,12 +3746,9 @@ function PullStage({
           <WalkList
             walk={walk}
             hideSold={hideSold}
-            collapsed={sectionsCollapsed}
             owedBySku={owedBySku}
             showBuyers={walkedGroups.length > 1}
-            sections={sections}
             onPick={openCardSheet}
-            compact
           />
         </>
       )}
