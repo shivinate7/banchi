@@ -2524,6 +2524,10 @@ export type PricingPayload = {
    *  Optional, because a server older than 2026-08-29 answers without it and this type is cast
    *  rather than validated. */
   written_at?: number
+  /** The market price at which a held SKU is in the top tenth of the store, as a string, or null
+   *  (an empty store, or no held SKU with a reading). The server computes it (`pipeline/holdings.py`),
+   *  so the screen compares one card's price to it and ranks nothing. Optional for an older server. */
+  held_market_cutoff?: string | null
 }
 
 /* ------------------------------------------------- the cross-run pricing worklist (D86) */

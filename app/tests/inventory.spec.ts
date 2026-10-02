@@ -5480,6 +5480,55 @@ test('the neighbour row marks this card with the Banchi card, and the row does n
   expect(await inRow()).toEqual(before)
 })
 
+/* THE GLINT GATE: the card's own Market figure at or above the server's `held_market_cutoff`. */
+const GATED: Cards = (() => {
+  const near = { prev: { index: 18, slot: 17, name: 'Galio, Indefaticable' }, next: { index: 20, slot: 19, name: 'Evelynn, Entrancing' } }
+  const priced = { state: 'identified', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3, run: PRICED_RUN, neighbors: near }
+  return {
+    '2/1': card({ index: 1, name: 'Thievul', ...priced }),
+    '2/2': card({ index: 2, name: 'Thievul', ...priced, neighbors: { prev: near.prev, next: { index: 21, slot: 20, name: 'Ahri, Alluring' } } }),
+    '2/4': card({ index: 4, state: 'identified', name: 'Eiscue', sku: '8937371', section: 2, sectionStart: 4, sectionEnd: 4, run: PRICED_RUN, neighbors: near }),
+  }
+})()
+
+const gated = (cutoff: string | null) => async (page: Page) => {
+  await open(page, BOXES, { cards: GATED, search: (query) => searchAnswer(query, GATED) }, () => ({ ...PRICING, held_market_cutoff: cutoff }))
+}
+const GLINTS = () => document.getAnimations().filter((a) => (a as CSSAnimation).animationName === 'nb-glint').length
+
+for (const [cutoff, plays, why] of [
+  ['5.47', true, 'a card AT the cutoff (ties glint)'],
+  ['5.00', true, 'a card above the cutoff'],
+  ['6.00', false, 'a card below the cutoff'],
+  [null, false, 'no cutoff at all (an empty store)'],
+] as const) {
+  test(`the mark glints on a card change: ${why}`, async ({ page }) => {
+    await gated(cutoff)(page)
+    await expect(page.locator('.card-locations-row.is-current .nb-here svg')).toBeVisible()
+    await expect(() => expect(page.evaluate(GLINTS)).resolves.toBe(0)).toPass({ timeout: 3000 })
+    await page.locator('.browse-row').nth(1).click()
+    if (plays) {
+      /* Applied on the change, then removed when it has played once. */
+      await expect(() => expect(page.evaluate(GLINTS)).resolves.toBeGreaterThan(0)).toPass({ timeout: 2000 })
+      await expect(() => expect(page.evaluate(GLINTS)).resolves.toBe(0)).toPass({ timeout: 3000 })
+    } else {
+      await page.waitForTimeout(400)
+      expect(await page.evaluate(GLINTS)).toBe(0)
+    }
+  })
+}
+
+test('a card with no market reading never glints, whatever the cutoff', async ({ page }) => {
+  await gated('0.01')(page)
+  await expect(page.locator('.card-locations-row.is-current .nb-here svg')).toBeVisible()
+  /* 2/4 (Eiscue) has a null market in the run's table. */
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).first().click()
+  await expect(page.locator('.card-locations-row.is-current .nb')).toHaveAttribute('aria-label', /Galio/)
+  await page.waitForTimeout(400)
+  expect(await page.evaluate(GLINTS)).toBe(0)
+})
+
 test('the glint is off until a caller gates it on', async ({ page }) => {
   await open(page, BOXES, { cards: NEIGHBORLY, search: (query) => searchAnswer(query, NEIGHBORLY) })
   await expect(page.locator('.card-locations-owner .nb-here svg')).not.toHaveCount(0)

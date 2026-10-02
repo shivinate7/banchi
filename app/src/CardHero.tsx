@@ -123,7 +123,7 @@ export function claimList(claim: string | string[] | null): string[] {
 /* ------------------------------------------------------------------------------ the market */
 
 export type MarketRead =
-  | { kind: 'table'; at: number | null; rows: Record<string, string | null> }
+  | { kind: 'table'; at: number | null; rows: Record<string, string | null>; cutoff: string | null }
   | { kind: 'absent'; why: string }
 
 export function marketTable(payload: PricingPayload): MarketRead {
@@ -133,7 +133,7 @@ export function marketTable(payload: PricingPayload): MarketRead {
       rows[`${at.box}/${at.index}`] = priced.snap?.market ?? null
     }
   }
-  return { kind: 'table', at: payload.written_at ?? null, rows }
+  return { kind: 'table', at: payload.written_at ?? null, rows, cutoff: payload.held_market_cutoff ?? null }
 }
 
 function marketText(card: InventoryCard, read: MarketRead | undefined): string {
@@ -333,6 +333,14 @@ export type HeroFigures = {
  *  same figure from the same read. Null while it loads, on a failed read, and where the run holds no
  *  row for this card: the band draws a quiet dash and never a made-up figure. */
 export function useMarketPrice(card: InventoryCard): number | null {
+  return useMarketRead(card).price
+}
+
+/** THE CARD'S MARKET PRICE AND THE STORE'S TOP-TENTH CUTOFF, off the one pricing read. `cutoff` is the
+ *  server's `held_market_cutoff` (`pipeline/holdings.py`), a price and never a list of prices, so the
+ *  screen ranks nothing. Both are null while loading, on a failed read, and for a card the run has no
+ *  figure for: nothing is guessed. */
+export function useMarketRead(card: InventoryCard): { price: number | null; cutoff: number | null } {
   const run = card.run ?? null
   const [read, setRead] = useState<{ run: string; table: MarketRead } | null>(null)
   useEffect(() => {
@@ -349,10 +357,19 @@ export function useMarketPrice(card: InventoryCard): number | null {
       live = false
     }
   }, [run])
-  if (run === null || read === null || read.run !== run || read.table.kind !== 'table') return null
+  if (run === null || read === null || read.run !== run || read.table.kind !== 'table') {
+    return { price: null, cutoff: null }
+  }
   const raw = read.table.rows[`${card.box}/${card.index}`]
   const price = raw === null || raw === undefined ? NaN : Number(raw)
-  return Number.isNaN(price) ? null : price
+  const cut = read.table.cutoff === null ? NaN : Number(read.table.cutoff)
+  return { price: Number.isNaN(price) ? null : price, cutoff: Number.isNaN(cut) ? null : cut }
+}
+
+/** Whether the card is in the top tenth of the store by market price: at or above the cutoff, ties in.
+ *  False with no price or no cutoff. */
+export function inTopTenth({ price, cutoff }: { price: number | null; cutoff: number | null }): boolean {
+  return price !== null && cutoff !== null && price >= cutoff
 }
 
 /** Stored and Live, the two lead figures. A group with no SKU has no listing, so it draws no Live
