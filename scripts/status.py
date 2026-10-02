@@ -135,17 +135,6 @@ SOURCES = (
                "one file",
     },
     {
-        "path": "scripts/stop-gate.sh",
-        "kind": "file",
-        "requires": (),
-        "why": "whether the per-turn harness gate is armed, and its own reason if not — run "
-               "by guards() below through its `--status` flag. That flag exists to answer "
-               "exactly this and had no caller anywhere: not in the Makefile, not here, not "
-               "in checks.py, not in either hook roster. A guard that has stood down prints "
-               "nothing while it is standing down, so the one output a cold session reads "
-               "is where its state belongs",
-    },
-    {
         "path": "scripts/serve.py",
         "kind": "defs",
         "requires": ("report", "live_pid"),
@@ -761,7 +750,7 @@ def hatch_uses(where: Path) -> List[str]:
 
 
 def guards() -> List[str]:
-    """Which guards are standing down right now, and whether the turn gate is armed.
+    """Which guards are standing down right now.
 
     **A GUARD SWITCHED OFF IS INVISIBLE BY CONSTRUCTION.** Every hatch in this repo is
     printed by the refusal it lifts — which means that when it is SET, no refusal happens,
@@ -769,15 +758,9 @@ def guards() -> List[str]:
     `PKMNSCAN_DOCS=off` exported in a shell profile, a launchd plist or a wrapper kills one
     of the only two checks on the commit path in every session from then on.
 
-    So the two things that cannot report themselves are reported here, where a cold session
+    So the thing that cannot report itself is reported here, where a cold session
     starts. `env | grep PKMNSCAN` is the one-line version of the first half and nobody runs
     it unprompted.
-
-    **`scripts/stop-gate.sh --status` existed to answer the second and had no caller.** It
-    is the per-turn harness gate — armed or disarmed, with its own reason — and it was
-    reachable from no Makefile target, no status output, and neither hook roster. Run
-    rather than reimplemented, for `icloud-sweep`'s reason: the rule that decides whether
-    the gate is armed lives in one file.
 
     GATES NOTHING. This script's job is saying what state you are actually in.
     """
@@ -796,17 +779,6 @@ def guards() -> List[str]:
 
     lines += hatch_uses(ROOT)
 
-    gate = resolve("scripts/stop-gate.sh")
-    if gate:
-        try:
-            done = subprocess.run(
-                [str(gate[0]), "--status"], cwd=str(ROOT),
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=15, check=False,
-            )
-            answer = done.stdout.decode("utf-8", errors="replace").strip() or "no answer"
-        except (OSError, subprocess.SubprocessError) as exc:
-            answer = f"could not be asked — {exc}"
-        lines.append(field("turn gate", answer))
     return lines
 
 

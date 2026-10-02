@@ -79,7 +79,7 @@ make demo-mirror-install  # CI's step: install the committed scrub. No store, no
 make demo-static    # demo-mirror-install, then a static build to dist-demo/.
 make demo-preview   # serve dist-demo/ as a static host would.
 make check          # the whole suite, product first, guard self-tests last. `make explain` lists it.
-make ci-check       # the same targets as `check`, as CI runs them on a fresh clone.
+make ci-check       # the same list as `check`, from `scripts/checks.py`. CI runs it as four shards, `revert-guard` apart.
 make css-var-check  # a `var(--x)` with no fallback and no definition. PKMNSCAN_CSS_VARS=off skips it.
 make token-literal-check  # a CSS literal equal to a design token, ratcheted per file. PKMNSCAN_TOKEN_LITERALS=off skips it.
 make catalog-refresh  # re-clone pokemon-tcg-data into vendor/. Writes. ARGS=--dry-run.
