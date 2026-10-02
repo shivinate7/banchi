@@ -454,7 +454,9 @@
      the stats, the photo and the panel down. The set and game text gives way first (an ellipsis, its full text
      is the title); the finish and rarity chips clip next; the state chip never shrinks. */
   flex-wrap: nowrap;
-  overflow: hidden;
+  /* `clip`, not `hidden`: its margin keeps the 2px ring and 2px offset of a focused chip (base.css) inside the paint. */
+  overflow: clip;
+  overflow-clip-margin: var(--bn-1);
   align-items: center;
   min-height: var(--bn-pill-h);
   gap: var(--bn-1-5) var(--bn-2);

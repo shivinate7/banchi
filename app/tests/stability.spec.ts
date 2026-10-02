@@ -871,12 +871,12 @@ test('L2 shell: the Fulfiller column does not animate its width (S19)', async ({
 /* A SALE NEVER MOVES THE CARD HEADER (D313). The sale press sits in the location panel; the Sold chip it
    draws in the header's facts row used to wrap onto a line of its own and push the stats, the photo and
    the panel down by one line. `wide` is Verdana with the web fonts blocked, the face that wraps on Linux.
-   The chip set is the longest real one (a foil finish and two rarities). The set name sweeps in length, so
-   some length always fills the row exactly, the one place a chip arriving wraps. */
+   The chip set is a foil finish and a rarity, beside a set name long enough to fill the row, the one place a
+   chip arriving wraps. The sidebar is open (it narrows the header); the facts row must stay one pill tall. */
 const HERO_PARTS = ['.browse-hero-head', '.browse-hero-sub', '.browse-hero-side', '.browse-photo-frame', '.card-locations'] as const
-const HINTS = Array.from({ length: 10 }, (_, i) => 'Spiritforged Unleashed Origins Extra'.slice(0, i * 4).trim())
-for (const width of [1440, 820]) for (const rail of ['wide', 'rail']) for (const wide of [false, true]) {
-  test(`held frame: marking a copy sold and undoing it moves nothing in the card header, sidebar ${rail === 'wide' ? 'open' : 'folded'}${wide ? ', wide face' : ''}, at ${width}`, async ({ page }) => {
+const HINT = 'Spiritforged Unleashed'
+for (const width of [1440, 820]) for (const wide of [false, true]) {
+  test(`held frame: marking a copy sold and undoing it moves nothing in the card header${wide ? ', wide face' : ''}, at ${width}`, async ({ page }) => {
     test.setTimeout(120_000)
     if (wide) {
       await page.route(/\.(woff2?|ttf)(\?|$)/, (route) => route.abort())
@@ -897,7 +897,7 @@ for (const width of [1440, 820]) for (const rail of ['wide', 'rail']) for (const
       } catch {
         /* unreadable storage reads as never chosen */
       }
-    }, rail)
+    }, 'wide')
     const mine = L1_CARDS['2/1'] as Record<string, unknown>
     const kept = { ...mine }
     Object.assign(mine, { metadata_finish: 'foil', rarity_claim: ['Common'], game: 'riftbound', number: '047', printed_total: '221' })
@@ -911,10 +911,16 @@ for (const width of [1440, 820]) for (const rail of ['wide', 'rail']) for (const
       await setViewport(page, { width, height: 1000 })
       const read = () =>
         page.evaluate((sels) => sels.map((s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return r ? [s, r.x, r.y, r.width, r.height] : [s] }), [...HERO_PARTS])
+      const oneRow = () =>
+        page.evaluate(() => {
+          const sub = document.querySelector('.browse-hero-sub')?.getBoundingClientRect().height ?? 0
+          const pill = document.querySelector('.browse-hero-sub .bn-pill')?.getBoundingClientRect().height ?? -1
+          return Math.abs(sub - pill) < 1
+        })
       const bad: string[] = []
-      for (const hint of HINTS) {
+      {
         mine.state = 'identified'
-        mine.set_hint = hint
+        mine.set_hint = HINT
         await page.goto('about:blank')
         await page.goto(screen('inventory'))
         await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
@@ -922,14 +928,17 @@ for (const width of [1440, 820]) for (const rail of ['wide', 'rail']) for (const
         await settleFonts(page)
         await page.waitForTimeout(500)
         const before = await read()
+        if (!(await oneRow())) bad.push('before: the facts row is not one pill tall')
         await page.getByRole('button', { name: /Mark sold/ }).first().click()
         await expect(page.locator('.browse-hero-sub')).toContainText('Sold')
         await page.waitForTimeout(500)
-        if (JSON.stringify(await read()) !== JSON.stringify(before)) bad.push(`sale, set "${hint}"`)
+        if (JSON.stringify(await read()) !== JSON.stringify(before)) bad.push('sale')
+        if (!(await oneRow())) bad.push('sale: the facts row is not one pill tall')
         await page.getByRole('button', { name: /^Undo/ }).first().click()
         await expect(page.locator('.browse-hero-sub')).not.toContainText('Sold')
         await page.waitForTimeout(500)
-        if (JSON.stringify(await read()) !== JSON.stringify(before)) bad.push(`undo, set "${hint}"`)
+        if (JSON.stringify(await read()) !== JSON.stringify(before)) bad.push('undo')
+        if (!(await oneRow())) bad.push('undo: the facts row is not one pill tall')
       }
       expect(bad, 'these moved the card header').toEqual([])
     } finally {

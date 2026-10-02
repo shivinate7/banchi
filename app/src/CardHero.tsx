@@ -549,12 +549,12 @@ export function CardHeroHead({
           </span>
           {preChips}
           {claimList(card.metadata_finish).map((finish) => (
-            <Pill key={`f-${finish}`} icon="sparkles" outline>
+            <Pill key={`f-${finish}`} icon="sparkles" outline title={titleCase(finish)}>
               {titleCase(finish)}
             </Pill>
           ))}
           {claimList(card.rarity_claim).map((rarity) => (
-            <Pill key={`r-${rarity}`} outline>
+            <Pill key={`r-${rarity}`} outline title={titleCase(rarity)}>
               {titleCase(rarity)}
             </Pill>
           ))}

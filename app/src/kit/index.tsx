@@ -480,8 +480,11 @@ export function Pill({
   mono,
   outline,
   className,
+  title,
   children,
 }: {
+  /** The full text, for a row that clips the pill. */
+  readonly title?: string
   readonly tone?: PillTone
   /** `sm` (18px) is the pill inside a button, a tab or a dense row. */
   readonly size?: 'sm' | 'md'
@@ -502,7 +505,7 @@ export function Pill({
     .filter(Boolean)
     .join(' ')
   return (
-    <span className={classes}>
+    <span className={classes} title={title}>
       {icon ? <Icon name={icon} size={size === 'sm' ? 10 : 12} /> : null}
       {children}
     </span>
