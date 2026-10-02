@@ -137,12 +137,13 @@ export function Page({
   )
 }
 
-/** Where things stand. One sentence, directly under the title. */
+/** Where things stand, directly under the title: one sentence, or a row of `Stat`s (Orders).
+ *  A `div`, so a `Stat`'s own block may sit in it. */
 export function Verdict({ children, className }: { readonly children: ReactNode; readonly className?: string }) {
   return (
-    <p className={['bn-verdict', className].filter(Boolean).join(' ')} role="status">
+    <div className={['bn-verdict', className].filter(Boolean).join(' ')} role="status">
       {children}
-    </p>
+    </div>
   )
 }
 

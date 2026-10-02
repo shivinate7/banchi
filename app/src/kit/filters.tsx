@@ -95,6 +95,10 @@ export type FilterBarProps<K extends string = string> = {
   /** A screen's own control, drawn beside the search at every width: the rail's collapse
    *  press, a reload. One control, not a toolbar. */
   readonly beside?: ReactNode
+  /** A screen's own press for the rows the count counts (Orders' Walk), drawn after the Filters
+   *  trigger and just before the count line. The count is last, so a count that changes width
+   *  moves nothing. One control, not a toolbar. */
+  readonly action?: ReactNode
   /** The group's own label, for the facet row and the phone sheet's title. Defaults to
    *  "Filters". */
   readonly label?: string
@@ -172,6 +176,7 @@ export function FilterBar<K extends string = string>({
   sort,
   hide: hideProp,
   beside,
+  action,
   label = 'Filters',
   compact = 'popover',
   disabled = false,
@@ -268,6 +273,7 @@ export function FilterBar<K extends string = string>({
             )}
           </div>
         ) : null}
+        {action === undefined || action === null ? null : <div className="bn-filterbar-action">{action}</div>}
       </div>
 
       {search?.failure === undefined || search.failure === null ? null : (
