@@ -49,6 +49,7 @@
 
 import { filterByQuery } from './kit/match'
 import { ServerError } from './server'
+import type { GraveyardPayload } from './types'
 
 type Recorded = { status: number; body: unknown }
 type Dict = Record<string, unknown>
@@ -787,6 +788,11 @@ function read(path: string): unknown {
   if (route === '/pipeline/price-now') return priceNow(params.getAll('sku').filter((s) => s !== ''))
   if (route === '/skus/photos') return skuPhotos(params.getAll('sku').filter((s) => s !== ''))
   if (route === '/search') return search(params.get('q') ?? '')
+  /* THE BURIED HALF OF THE ONE RECORDED GRAVEYARD, filtered as the route filters it. */
+  const graveyard = responses['/graveyard']
+  if (route === '/graveyard' && params.get('buried') === '1' && graveyard !== undefined) {
+    return { departed: (graveyard.body as GraveyardPayload).departed.filter((row) => row.buried) }
+  }
   notRecorded()
 }
 

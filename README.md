@@ -44,7 +44,6 @@ make up                     # serve the app; open the link it prints
 | Shipping | `#/shipping` |  |
 | Sales | `#/revenue` |  |
 | Inventory | `#/inventory` |  |
-| Graveyard | `#/graveyard` |  |
 | Codes | `#/codes` |  |
 | Cards to pull | `#/fulfillment` | Off-nav |
 | Kit | `#/gallery` | Off-nav |

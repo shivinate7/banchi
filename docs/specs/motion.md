@@ -150,10 +150,10 @@ same job). Status is BUILT where a verdict changed code.
 | 40 | Orders and Shipping | adjust | BUILT: one idiom (`--i`), and the guide steps are staggers. |
 | 41 | Runs | adjust | BUILT: rows on the stagger, `bn-breathe`, and money that enters on `--bn-t-slow`. |
 | 42 | Fulfiller | adjust | BUILT: owed cards and boxes on the stagger, and `ff-draw` on `--bn-t-draw`. The Fulfiller's floors in `docs/DESIGN.md` hold. |
-| 43 | Pricing, Sales, Graveyard, Product | adjust | BUILT: `pricing-flash` on `--bn-t-highlight`, and Pricing rows on the stagger. |
+| 43 | Pricing, Sales, Product | adjust | BUILT: `pricing-flash` on `--bn-t-highlight`, and Pricing rows on the stagger. |
 | 44 | Codes (dormant) | adjust | BUILT: rows, bars, task cards and stats on the stagger. |
 
-Duplicate keyframes are gone: `rv-verdict-in`, `codes-row-in` and `graveyard-row-in` are
+Duplicate keyframes are gone: `rv-verdict-in` and `codes-row-in` are
 `bn-page-in`. `rv-row-in`, `rv-photo-in`, `card-locations-row-in`, `capture-fade` and
 `codes-fade` are `bn-fade`. `capture-blink`, `runs-breathe` and `home-standing-pulse` are
 `bn-breathe`.

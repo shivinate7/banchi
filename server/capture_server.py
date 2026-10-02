@@ -1311,7 +1311,7 @@ BOX_DELETED = master.BOX_DELETED
 # record IS the history, and it survives the box by being buried here rather than by the
 # box standing undeletable forever. ONE LINE PER DEPARTED RECORD, WITH A `position` KEY —
 # unlike `box_deleted`'s summary, this is the retained record itself and not a duplicate of
-# one, so it carries the record whole rather than a count. `#/graveyard` reads these lines
+# one, so it carries the record whole rather than a count. Inventory's Deleted boxes shelf reads these lines
 # merged with the sold/retired/moved records still standing in boxes nobody has deleted.
 BURIED = "buried"
 
@@ -6842,7 +6842,7 @@ def do_delete_box(box: int) -> dict:
     carries, usually none). That line is what "a history log" means for a card leaving
     through a deleted box: it is no longer a row anywhere, it is not undoable, and its
     photograph goes with everything else in the box — but what it was, and how and when
-    it left, is not lost. `#/graveyard` reads these lines (D134, amended 2026-09-26: it filters a
+    it left, is not lost. Inventory's Deleted boxes shelf reads these lines (D134, amended 2026-09-26: it filters a
     `moved` one out — see `do_graveyard` — a moved card is alive elsewhere, not departed),
     merged with every sold/retired record still standing in a box nobody has deleted, so
     one screen answers both.
@@ -6949,7 +6949,7 @@ def do_delete_box(box: int) -> dict:
                     # (D145). `box_name` beside it is already frozen for this
                     # reason; the number is the one field here that is handed straight back
                     # out to the next drawer (D20), so on its own it cannot say which `Box 1`
-                    # this card was buried out of. Nothing draws it — `#/graveyard` reads the
+                    # this card was buried out of. Nothing draws it — Inventory's Deleted boxes shelf reads the
                     # name — and it is what lets a later question be answered at all.
                     bid=registered.bid if registered is not None else None,
                     index=at,
@@ -7051,7 +7051,7 @@ def _departed_row(
     buried,
     buried_at,
 ) -> dict:
-    """One `#/graveyard` row, the same shape whether it came from a live box or a burial
+    """One departed row, the same shape whether it came from a live box or a burial
     line (D134) — the merge point `do_graveyard` exists to make, so the screen reads one
     kind of record rather than two.
 
@@ -7080,10 +7080,12 @@ def _departed_row(
     }
 
 
-def do_graveyard() -> dict:
-    """Every card that TRULY LEFT the store: sold or retired, newest departure first
-    (D134, amended by the UX review's graveyard ruling, 2026-09-26, verbatim: "Move Moved
-    out of Graveyard").
+def do_graveyard(buried_only: bool = False) -> dict:
+    """The sold and retired records the store keeps, newest departure first, in one shape
+    (D134, amended by the UX review's graveyard ruling, verbatim: "Move Moved out of
+    Graveyard"). With `buried_only` it answers the `buried` half alone: the records whose box
+    was deleted, which Inventory's Deleted boxes shelf reads. That path skips the in-box half,
+    so it builds no standing row and joins no order for a record the client would drop.
 
     MOVED IS NOT A DEPARTURE. A moved record is a tombstone at its old key — the card
     itself is alive at `moved_to`, in another box, exactly as sellable as it ever was.
@@ -7130,7 +7132,7 @@ def do_graveyard() -> dict:
     _DEPARTED_STATES = tuple(s for s in master.TERMINAL_STATES if s != master.MOVED)
 
     rows: List[dict] = []
-    for state in _DEPARTED_STATES:
+    for state in () if buried_only else _DEPARTED_STATES:
         for card in inventory.cards.where(state=state):
             registered = inventory.box(card.box)
             order = None
@@ -16385,7 +16387,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # D134's graveyard: an exact string, matched by no other route's pattern, over
             # a lock-free read on both its sources.
             if path == "/graveyard":
-                return self._json(HTTPStatus.OK, do_graveyard())
+                params = parse_qs(parsed.query)
+                return self._json(HTTPStatus.OK, do_graveyard(buried_only=params.get("buried") == ["1"]))
             if path == "/games":
                 return self._json(HTTPStatus.OK, do_games())
             # D69's order screen. An exact string and therefore no ordering hazard, and a

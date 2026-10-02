@@ -18,7 +18,6 @@ import { CaptureScreen } from './CaptureScreen'
 import { RunsRedirect } from './Runs'
 import { ReviewQueue } from './ReviewQueue'
 import { Inventory } from './Inventory'
-import { Graveyard } from './Graveyard'
 import { Pricing } from './Pricing'
 import { Orders } from './Orders'
 import { Shipping } from './Shipping'
@@ -240,7 +239,6 @@ export const ROUTES: readonly Route[] = [
    * `route rosters`, and every spec's pinned roster), so it is a deliberate edit and never a
    * side effect. */
   { path: '/inventory', label: 'Inventory', icon: 'box', view: Inventory, persona: 'owner', group: 'library', hotkey: 'i', nav: true, tab: true, keywords: 'boxes find a card where search sold retire move', keys: INVENTORY_KEYS },
-  { path: '/graveyard', label: 'Graveyard', icon: 'headstone', view: Graveyard, persona: 'owner', group: 'library', hotkey: 'g', nav: true, keywords: 'sold retired moved buried departed history gone deleted box' },
   { path: '/codes', label: 'Codes', icon: 'qr', view: Codes, persona: 'owner', group: 'library', hotkey: 'd', nav: true, keywords: 'code cards qr redeem read a box', keys: CODES_KEYS },
   { path: '/fulfillment', label: 'Cards to pull', icon: 'hand', view: Fulfillment, persona: 'fulfiller', group: 'aside', keywords: 'hand-off pull fulfiller new tab', keys: FULFILLMENT_KEYS },
   { path: '/gallery', label: 'Kit', icon: 'grid', view: Gallery, persona: 'owner', group: 'aside', keywords: 'component kit design system tokens' },

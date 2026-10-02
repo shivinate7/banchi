@@ -50,8 +50,8 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | File | Protects | Governs |
 | --- | --- | --- |
 | `app/tests/boxmap.spec.ts` | The box map edit mode queues every drag as a draft, writes nothing until Confirm, and then sends the whole draft as one request with fresh digests. | D264 |
+| `app/tests/deleted-boxes.spec.ts` | Inventory's Deleted boxes shelf lists the records of deleted boxes, the old Graveyard tab is gone, and a moved card names where it came from. | D134, D196, D313 |
 | `app/tests/empty-section.spec.ts` | A section with no cards is hidden from the Inventory ruler, its caption and the box header, and stays reachable in the move picker. | none |
-| `app/tests/graveyard.spec.ts` | The Graveyard shows its three tabs with the right cards in each, and Inventory shows where a moved card came from. | D134, D196 |
 | `app/tests/inventory-neighbor-side.spec.ts` | a card at a box's end says which side its one neighbor is on, and never reads as the other side's. | D58, D260 |
 | `app/tests/inventory-sets.spec.ts` | The Inventory "By set" view shows one set at a time, switches by picker, takes quantity from the server, and opens the box walk on a tap. | D172, D264, D285, D293, D301 |
 | `app/tests/inventory.spec.ts` | Every Inventory capability (walk, search, copies, box operations, claims, sold) is reachable from a screen and sends the right request. | D10 |

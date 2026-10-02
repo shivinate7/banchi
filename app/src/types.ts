@@ -427,7 +427,7 @@ export type InventoryCard = {
   /** THE OLD POSITION A TRANSPLANT CARRIES (`store/master.py:Card.moved_from`), ALREADY ON
    *  THIS WIRE AND NEVER TYPED HERE UNTIL THE UX REVIEW'S GRAVEYARD RULING. Set only on the
    *  card a move CREATED, not on the tombstone it left behind — `"box/index"`, the same key
-   *  shape `#/graveyard`'s `moved_to` carries. `null` for a card captured where it stands.
+   *  shape `moved_to` carries. `null` for a card captured where it stands.
    *  `Inventory.tsx`/`BoxBrowse.tsx` read it to say where a card was moved in from; nothing
    *  writes it back. */
   moved_from: string | null
@@ -949,7 +949,7 @@ export type MoveCardsResult = {
  *  `buried` is D134's amendment to ruling 3 (2026-09-11): a sold, retired or moved record no
  *  longer blocks this delete — it is buried, and `cards` counts it same as before while
  *  `buried` says how many of those `cards` left through a departure door rather than as
- *  ordinary on-hand junk. `#/graveyard` is where a buried record is read afterward. */
+ *  ordinary on-hand junk. Inventory's Deleted boxes shelf is where a buried record is read afterward. */
 export type BoxDeleteResult = {
   deleted_box: number
   cards: number

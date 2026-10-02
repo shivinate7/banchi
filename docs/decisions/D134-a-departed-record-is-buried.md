@@ -52,18 +52,20 @@ longer blocks the delete — it is **buried** first.
    first. The two sources never overlap by construction: a record moves from the first to
    the second exactly once, at the moment its box is deleted, and there is no route back.
 
-5. **`#/graveyard`, the twelfth route.** `app/src/Graveyard.tsx` + `.css`, modelled on
-   `Codes.tsx`'s fetch-a-list shape: a Segmented filter (All/Sold/Retired/Moved/Buried), a
-   text search over name, number, SKU and box name, and a `.bn-table` that becomes a
-   stacked card at 639px. Read-only — no photograph (buried cards have none, and the
-   screen stays out of `scripts/views.txt`'s exposure rows), no price, no control that
-   writes. `library` group, hotkey `g`.
+5. **No tab. Buried records live on Inventory's Deleted boxes shelf.** The owner's word: "A:
+   delete the tab". `app/src/DeletedBoxes.tsx` draws the shelf at the foot of Inventory's box rail.
+   Its walk groups the records of deleted boxes by the box they sat in. Its record pane is
+   `CardPane`. It reads the buried half of `GET /graveyard`. It is read-only: no photograph (it
+   went with the box) and no control that writes. Sold cards stay on Sales and on Inventory with
+   `In stock only` off. Retired cards stay on Inventory. `#/graveyard` is not a route, and an old
+   link is the not-found page. `docs/specs/graveyard.md` holds the build.
 
 6. **The Manage box sheet's delete panel draws the new boundary.** `BoxOps.tsx:DeleteBox`'s
-   pre-emptive `Notice` no longer says a sold or retired card refuses the box; it says how
-   many departed records will be buried and that their photographs will be deleted, and
-   names only a listing hold as a real refusal. The success toast's receipt gains a buried
-   count. `BoxDeleteResult.buried` is the wire field both read.
+   pre-emptive `Notice` no longer says a sold or retired card refuses the box. It says how
+   many sold or retired records will stay on the Deleted boxes shelf, and names only a
+   listing hold as a real refusal. The success toast's receipt says the same count. Both read
+   the box's own `sold` and `retired` figures, because `BoxDeleteResult.buried` also counts
+   moved tombstones, which the shelf never shows.
 
 ### What is lost, stated rather than discovered later
 
@@ -75,8 +77,7 @@ practical change is that the box no longer has to stand forever for the undo opt
 existing; the undo option and the box now go together.
 
 **The departed rows and copies-list entries for that box on `#/inventory`.** A buried record
-is not a row anywhere a box is rendered — only `#/graveyard` reads it. Searching by name
-still finds it there.
+is not a row anywhere a box is rendered. Only the Deleted boxes shelf reads it.
 
 **D36's realign by digest, for a run still un-joined over a deleted box.** A moved card's
 digest and its photograph both travel with the transplant, so realign still works for those.
@@ -124,16 +125,14 @@ store writes.
 1. **`GET /graveyard` filters `moved` out of both its sources.** The in-box half reads
    `master.TERMINAL_STATES` minus `MOVED`. The buried half skips any `buried` event whose
    `state` is `moved`. A moved record, standing or buried, no longer reaches this route.
-2. **`#/graveyard`'s filter row drops from five tabs to three: All, Sold, Retired.** No
-   Moved tab and no Buried tab. `buried` is a fact about the box, not a third way a card
-   left. It now draws as a small quiet tag on the Where cell. The words are plain: "Its box
-   was deleted." The screen never types the pipeline noun "buried" itself (D196).
+2. **A buried record shows as sold or retired, never as a third way a card left.** `buried`
+   is a fact about the box. The screen names the box and never types the pipeline noun
+   "buried" itself (D196).
 3. **A moved card is found from the card ITSELF, on `#/inventory`.** `Card.moved_from`
    (`store/master.py`) was already on the wire, unread by any screen. `CardHero.tsx`'s
    `CardDetailsSection` (shared by `BoxBrowse.tsx`'s card pane) grows one Provenance fact,
    "Moved from". It names the old box by name (D259), or "another box" when that box is
-   gone. That is the same honest fallback `Graveyard.tsx`'s own `movedToName` already used
-   for `moved_to`.
+   gone. The fallback is the honest "another box", never the digits.
 4. **`docs/specs/` and this entry are the record of the narrowing.**
 
 **What is unchanged:** a moved tombstone is still buried. It still keeps its digest and
