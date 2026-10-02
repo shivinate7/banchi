@@ -4260,8 +4260,9 @@ test('the keyboard sheet lists the keys the rows answer, and nothing the screen 
   await expect(sheet).toBeVisible()
   /* THE SNAP KEYS ARE THE COLUMNS THE ROW DRAWS (m, l, and n on the Live tab), and T OPENS THE
      PRODUCT VIEW WITH ONE PRESS (the delta review, R3-4). */
-  await expect(sheet).toContainText('Open')
-  await expect(sheet).toContainText('Lowest')
+  await expect(sheet).toContainText('Open the product page for this card')
+  await expect(sheet).toContainText('Put the lowest price in this card')
+  await expect(sheet.getByText('Save this price and go to the next card')).toHaveCount(1)
   await expect(sheet).not.toContainText('Low with shipping')
   await expect(sheet).not.toContainText('Direct low')
   await expect(sheet).not.toContainText('Hold to read')

@@ -690,7 +690,7 @@ test('the panel is open on arrival, with all four commands named and reachable',
      person arrives, and the press that reaches them is on the screen rather than behind
      anything. That is `CLAUDE.md`'s route-is-not-a-feature test, and it is what the fold
      assertion was ever standing in for. */
-  await expect(page.locator('.runs-lede')).toContainText('Paid')
+  await expect(page.locator('.runs-lede')).toHaveCount(0)
 
   const identify = page.locator('.runs-actions').getByRole('button', { name: /^Identify/ })
   await expect(identify).toBeVisible()
@@ -754,7 +754,7 @@ test('the four steps are named before any run exists', async ({ page }) => {
   await open(page, { runs: [] })
 
   await expect(page.locator('.run-empty')).toContainText('No runs yet')
-  await expect(page.locator('.runs-lede')).toContainText('Paid')
+  await expect(page.locator('.runs-lede')).toHaveCount(0)
   const empty = page.locator('.runs-detail-empty')
   await expect(empty).toContainText('Identify a box first')
   await expect(empty).toContainText('Matching and pricing do not')
@@ -1467,7 +1467,7 @@ test('a run that names no drawer at all draws none, rather than a number off a f
      null, which is the row saying "this run does not say" — and it is the honest rendering of a
      manifest that names no drawer. The capture directory in this fixture is `.../box6`, which is
      exactly the string the deleted regex would have read `6` out of. */
-  await expect(page.locator('.run-row-scope')).toHaveText('—')
+  await expect(page.locator('.run-row-scope')).toHaveText('This run has no box on record.')
 })
 
 // ------------------------------------------------------------------- several drawers

@@ -87,6 +87,13 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.run-list-key {
+  margin: 0;
+  padding: var(--bn-2) var(--bn-5);
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+  border-bottom: 1px solid var(--bn-line);
+}
 .run-list {
   display: flex;
   flex-direction: column;
