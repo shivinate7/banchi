@@ -6,6 +6,7 @@ import ast
 import io
 import os
 import re
+import subprocess
 import tokenize
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -430,7 +431,13 @@ def check_readme_blocks(report: Report) -> None:
             findings.append(Finding("README.md", "has no generated block; the `routes` block is gone."))
         if mod.render(text) != text:
             findings.append(Finding("README.md", "a generated block is stale. Run `python3 scripts/readme_gen.py --write`."))
-    report.add("readme blocks", MECHANICAL, findings, f"{blocks} generated block(s) match their source", scanned=blocks)
+    # Every `--flag` on a `./pkmnscan <command>` line in README appears in that command's `--help`.
+    for sub, rest in re.findall(r"^\./pkmnscan\s+(\w+)(.*)$", read(ROOT / "README.md"), re.M):
+        out = subprocess.run([str(ROOT / "pkmnscan"), sub, "--help"], capture_output=True, text=True).stdout
+        for flag in re.findall(r"--[\w-]+", rest.split("#")[0]):
+            if flag not in out:
+                findings.append(Finding("README.md", f"`./pkmnscan {sub}` shows `{flag}`, which `--help` does not list."))
+    report.add("readme blocks", MECHANICAL, findings, f"{blocks} generated block(s) match their source; its flags are in --help", scanned=blocks)
 
 
 def check_route_rosters(report: Report) -> None:

@@ -13,7 +13,8 @@ reaches no real store ([`docs/specs/demo.md`](docs/specs/demo.md)).
 
 ## Quick start
 
-You need Python 3.12, Node.js 22, `make` and `git`.
+You need `make`, `git`, and the Python and Node.js versions that CI pins in
+[`check.yml`](.github/workflows/check.yml).
 
 ```sh
 git clone https://github.com/shivinate7/banchi.git pkmnscan
@@ -54,8 +55,7 @@ and network. `?` in the app lists the keyboard shortcuts.
 <!-- /gen -->
 
 Each screen's spec is in [`docs/specs/`](docs/specs/). Every step also runs from the terminal.
-`./pkmnscan --help` lists the commands. A command that writes shows a preview first, and you
-add `--write` to apply it.
+`./pkmnscan --help` lists the commands, and `<command> --help` lists its flags.
 
 ```sh
 ./pkmnscan identify --dry-run <capture-dir>   # check everything, spend nothing
