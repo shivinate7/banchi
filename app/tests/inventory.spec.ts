@@ -4561,6 +4561,26 @@ test('S1 — bringing a card back names the box, never its number', async ({ pag
   expect(sent?.body).toEqual({ undo: true })
 })
 
+test('the card Actions menu takes focus, moves by arrow keys, and Escape returns it', async ({ page }) => {
+  /* `BoxBrowse.tsx:CardOps` was a hand-rolled menu: focus stayed on the page behind it and Tab
+   * left it. It is the kit `Popover` now. Focus lands on the first item, the arrows walk the
+   * items, Tab past the last closes it, and Escape puts focus back on the button. */
+  await open(page)
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
+  const trigger = page.getByRole('button', { name: 'Actions' })
+  await trigger.click()
+  const items = page.getByRole('menuitem')
+  await expect(items.first()).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(items.nth(1)).toBeFocused()
+  await page.keyboard.press('ArrowUp')
+  await expect(items.first()).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(items).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+})
+
 test('UN-7 — a sale built on is refused, and "This card is still here" is a different write', async ({
   page,
 }) => {
