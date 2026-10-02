@@ -4540,6 +4540,14 @@ COMPONENTS = [
                         "in `make check`, on `catalog-index-selftest`'s precedent: what it "
                         "writes is already verified by a gate that runs on every commit.",
             },
+            "readme_gen.py": {
+                "does": "Regenerates README.md's `<!-- gen:NAME -->` blocks from their sources. "
+                        "Today one block: the screen table, read from `ROUTES` in `App.tsx` "
+                        "through the `route rosters` row's own reader. Previews by default, "
+                        "`--write` applies. It gates nothing: the `readme blocks` row "
+                        "renders in memory and compares.",
+                "governed_by": ["D18"],
+            },
             "tests_page.py": {
                 "does": "`make tests-page` — writes `docs/TESTS.md`, one page of what "
                         "each test file protects. It reads the `Protects:` and `Governs:` lines "

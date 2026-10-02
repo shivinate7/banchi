@@ -308,7 +308,7 @@ def expected_rosters() -> Tuple[Dict[str, List[str]], List[Finding]]:
 def _route_prose_findings() -> List[Finding]:
     """The route lists in prose, against `ROUTES`, both ways.
 
-    README's `## Use it` table must name every route, and mark `Off-nav` on exactly the
+    README's `## Usage` table must name every route, and mark `Off-nav` on exactly the
     `aside` routes. A route added, dropped or moved off the nav fails until the prose follows.
     CLAUDE.md no longer lists routes: `ROUTES` is the one roster.
     """
@@ -332,9 +332,9 @@ def _route_prose_findings() -> List[Finding]:
     readme = ROOT / "README.md"
     if exists(readme):
         text = read(readme)
-        part = text.split("## Use it", 1)[-1]
+        part = text.split("## Usage", 1)[-1]
         table = re.findall(r"^\|[^|\n]*\|\s*`(#/[^`]*)`\s*\|(.*)$", part, re.M)
-        diff(rel(readme), "the `## Use it` route table", {r for r, _ in table}, want)
+        diff(rel(readme), "the `## Usage` route table", {r for r, _ in table}, want)
         diff(rel(readme), "the table's `Off-nav` rows", {r for r, rest in table if "Off-nav" in rest}, aside)
     return out
 
@@ -411,6 +411,26 @@ def check_test_purposes(report: Report) -> None:
         f"{len(files)} test files carry a Protects line, and docs/TESTS.md matches them",
         scanned=len(files),
     )
+
+
+def check_readme_blocks(report: Report) -> None:
+    """README's `<!-- gen:NAME -->` blocks equal what `scripts/readme_gen.py` renders from the source.
+
+    Reads only (D18). A stale block is a finding; `python3 scripts/readme_gen.py --write` fixes it.
+    """
+    mod = _sibling("readme_gen.py")
+    findings: List[Finding] = []
+    blocks = 0
+    if mod is None:
+        findings.append(Finding("scripts/readme_gen.py", "is missing or unreadable."))
+    else:
+        text = read(ROOT / "README.md")
+        blocks = len(mod.BLOCK.findall(text))
+        if blocks == 0:
+            findings.append(Finding("README.md", "has no generated block; the `routes` block is gone."))
+        if mod.render(text) != text:
+            findings.append(Finding("README.md", "a generated block is stale. Run `python3 scripts/readme_gen.py --write`."))
+    report.add("readme blocks", MECHANICAL, findings, f"{blocks} generated block(s) match their source", scanned=blocks)
 
 
 def check_route_rosters(report: Report) -> None:
