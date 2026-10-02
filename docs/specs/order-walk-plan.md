@@ -655,6 +655,11 @@ the strip answers the one question Inventory never has to: what does this buyer 
   order, rings the current one, ticks a picked one and ends with "N not in boxes". A press shows
   that card in the pane. A one-card order with nothing missing draws no strip. A card the
   inventory read has not answered draws the no-photo state.
+- **The pane never scrolls inside itself.** Its band keeps Inventory's height as a floor and grows
+  past it. From 1000px the column is sticky, and a column taller than the window turns sticky off
+  (`data-tall`) so the page's own scroll reaches every copy.
+- **A digit sells only what can be seen.** Below the pane's breakpoint the pane is hidden until
+  the card sheet opens, and the keys do nothing until it does.
 - **Nothing moves unless the person moved it (D313).** The strip, the pane and the panel read the
   held plan and the held buyer (`useHeld`) while a read is out. The strip's photographs sit in
   the kit's fixed thumbnail frames. `app/tests/stability.spec.ts` holds the rows for buyer open,

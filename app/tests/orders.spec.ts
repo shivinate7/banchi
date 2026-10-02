@@ -5239,3 +5239,43 @@ test('the wheel over a copy row scrolls the page, never a list inside it', async
   )
   expect(scrollers).toEqual([])
 })
+
+/* A TALL PANE IS REACHED BY THE PAGE'S OWN SCROLL. The column is sticky from 1000px, and a sticky column taller
+   than the window holds its top edge, so its lower copies come into view only at the very end of a long rail.
+   Three copies at the stop and three spares, opened, are taller than 900px, and ninety more picks make the rail longer than the pane, the case where
+   a sticky column holds its top: the last Mark sold must come into view by the wheel, well before the page ends. */
+test('a pane taller than the window reaches its last copy by page scroll, at 1440 by 900', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const at = (i: number, here: boolean) =>
+    walkPlanCopy({ box: 3 + (here ? 0 : 6), index: 30 + i, slot: 30 + i, card: 30 + i, label: `Box ${3 + (here ? 0 : 6)}, Section 2, Card ${30 + i}`, capture_id: `cap-${here ? 'h' : 's'}${i}`, key: `${3 + (here ? 0 : 6)}/${30 + i}`, here })
+  const copies = [...Array.from({ length: 3 }, (_, i) => at(i, true)), ...Array.from({ length: 3 }, (_, i) => at(i, false))]
+  await open(page, { orders: oneOpenOrder(), walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ copies }), ...Array.from({ length: 90 }, (_, i) => walkPlanTake({ sku: `92000${i}`, name: `Filler ${i}`, copies: [walkPlanCopy({ index: 60 + i, slot: 60 + i, card: 60 + i, label: `Box 3, Section 2, Card ${60 + i}`, capture_id: `cap-f${i}`, key: `3/${60 + i}` })] }))] })]) })
+  await page.getByRole('button', { name: '3 more elsewhere' }).click()
+  const sells = page.locator(`${CURRENT_PICK} .card-locations-sell`)
+  await expect(sells).toHaveCount(6)
+  await page.evaluate(() => window.scrollTo(0, 0))
+  const last = sells.last()
+  const inView = () => last.evaluate((el) => { const r = el.getBoundingClientRect(); return r.height > 0 && r.top >= 0 && r.bottom <= window.innerHeight })
+  await page.mouse.move(900, 500)
+  for (let i = 0; i < 40 && !(await inView()); i += 1) {
+    await page.mouse.wheel(0, 300)
+    await page.waitForTimeout(60)
+  }
+  expect(await inView(), 'the last copy never came into view by the wheel').toBe(true)
+  /* NOT ONLY AT THE END OF THE PAGE: a pinned column releases its lower half only when the whole rail has scrolled by. */
+  const { top, end } = await page.evaluate(() => ({ top: document.scrollingElement!.scrollTop, end: document.scrollingElement!.scrollHeight - innerHeight }))
+  expect(top, `the last copy came into view only at ${top} of ${end}`).toBeLessThan(end - 500)
+  await expect(page.locator('.orders-cardcol')).toHaveAttribute('data-tall', 'true')
+})
+
+/* A KEY MUST NOT SELL A COPY NOBODY CAN SEE. Below the pane's breakpoint the pane is hidden in CSS until the
+   card sheet opens (a phone-width spec is off by the owner's switch, so the hidden state is forced here with the
+   same `display: none` the container query sets). */
+test('a digit sells nothing while the pane is hidden and the sheet is closed', async ({ page }) => {
+  const wire = await open(page, { orders: oneOpenOrder(), walkPlan: twoCopyPlan() })
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-row`)).toHaveCount(2)
+  await page.addStyleTag({ content: '.orders-cardcol { display: none !important; }' })
+  await page.keyboard.press('1')
+  await page.waitForTimeout(400)
+  expect(wire.filter((one) => one.path.endsWith('/orders/pull'))).toHaveLength(0)
+})

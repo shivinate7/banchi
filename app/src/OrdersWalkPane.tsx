@@ -705,6 +705,10 @@ export function useWalkKeys(walk: OrderWalk): void {
         return
       }
       if (!/^[1-9]$/.test(event.key) || event.repeat) return
+      /* THE PANE IS HIDDEN BELOW ITS BREAKPOINT until the sheet opens, and a key must not sell a copy nobody can see.
+         The CSS decides when it is drawn, so ask the CSS: no second copy of the breakpoint here to drift. */
+      const pane = document.querySelector('.orders-cardcol')
+      if ((pane === null || getComputedStyle(pane).display === 'none') && document.querySelector('.orders-card-sheet') === null) return
       const line = currentLineOf(now)
       if (line === null) return
       const copy = groupOf(line.take, keyedCopiesOf(line, now.openSpares), now.facts, now.rawCards).copies[Number(event.key) - 1]

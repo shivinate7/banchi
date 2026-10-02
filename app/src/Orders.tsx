@@ -2806,6 +2806,29 @@ function PullStage({
    *  both panes stay mounted. The one JS read is at the PRESS, in `openCardSheet`: a tap on a walk
    *  row opens the card in a sheet only where the column has no room to draw it beside the walk. */
   const orderBody = useRef<HTMLDivElement | null>(null)
+  /* A PANE TALLER THAN THE WINDOW IS NOT STICKY, and never scrolls inside itself (the owner: no inner scroll on
+   *  copy rows). A sticky column holds its top edge, so its lower copies (spares open, many copies) could never be
+   *  reached; `data-tall` hands it back to the page's own scroll. A callback ref, for the reason above. */
+  const tallWatch = useRef<(() => void) | null>(null)
+  const cardcolRef = useCallback((node: HTMLDivElement | null) => {
+    tallWatch.current?.()
+    tallWatch.current = null
+    if (node === null) return
+    const mark = () => {
+      if (node.hasAttribute('data-tall')) {
+        // Static, so its height is its own: it stays static until it fits again.
+        if (node.getBoundingClientRect().height <= window.innerHeight - 32) node.removeAttribute('data-tall')
+      } else if (node.getBoundingClientRect().height > window.innerHeight - 32) node.setAttribute('data-tall', 'true')
+    }
+    mark()
+    const watch = new ResizeObserver(mark)
+    watch.observe(node)
+    window.addEventListener('resize', mark)
+    tallWatch.current = () => {
+      watch.disconnect()
+      window.removeEventListener('resize', mark)
+    }
+  }, [])
   const openCardSheet = () => {
     if ((orderBody.current?.getBoundingClientRect().width ?? Infinity) < 560) setCardSheetOpen(true)
   }
@@ -3806,7 +3829,7 @@ function PullStage({
               `onPick` above). The column below 560px hides this pane in CSS (a container query);
               the press asks the width once, in `openCardSheet`. At 560px of column and up the pane
               is its usual sticky column beside the walk. */}
-          <div className="orders-cardcol" aria-busy={walkHeld ? 'true' : undefined} inert={walkHeld}>
+          <div className="orders-cardcol" ref={cardcolRef} aria-busy={walkHeld ? 'true' : undefined} inert={walkHeld}>
             <WalkStrip walk={walk} notInBoxes={notInBoxes} />
             <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} sections={sections} />
           </div>

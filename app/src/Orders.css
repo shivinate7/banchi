@@ -133,6 +133,7 @@
   }
   .orders-buyers-panel { flex: none; max-height: min(40dvh, 22rem); }
   .orders-cardcol { position: sticky; top: var(--bn-4); }
+  .orders-cardcol[data-tall] { position: static; }
 }
 @container orders (min-width: 560px) {
   .orders-walk { padding: var(--bn-3); }
@@ -1176,6 +1177,11 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 /* The card pane's own paging: two arrow buttons around the two key caps. */
 .orders-pick-nav { display: flex; align-items: center; justify-content: center; gap: var(--bn-3); padding: var(--bn-3) 0; }
 .orders-pick-keys { display: inline-flex; gap: var(--bn-1); }
+/* THE BAND KEEPS INVENTORY'S HEIGHT AS ITS FLOOR AND GROWS PAST IT (D118). Inventory fixes the band and lets its copy
+   list scroll; here no list scrolls, so a pick with many copies makes the band taller and the page carries it. */
+@container pane (min-width: 560px) {
+  .orders-cardcol .browse-band { height: auto; min-height: min(720px, max(520px, calc(100dvh - 280px))); }
+}
 /* THE PANE'S COPY ROWS DO NOT SCROLL ON THEIR OWN. The list's own scroll serves Inventory's fixed hero band
    (D118, `CardLocations.css`); here the column is sticky in the page, so the wheel over a row scrolls the page. */
 .orders-cardcol .card-locations-rows {
