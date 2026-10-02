@@ -51,6 +51,10 @@ import type { Page } from '@playwright/test'
  */
 export const SETTLE_MAX_MS = 5000
 
+/** Two animation frames: what a press or a read changed has been laid out and painted. A condition, not a guessed pause. */
+export const afterPaint = (page: Page): Promise<void> =>
+  page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))))
+
 export async function settleMotion(page: Page): Promise<void> {
   await page.waitForFunction(
     (maxMs) =>
