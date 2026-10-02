@@ -4189,11 +4189,65 @@ for (const [market, listed] of [['4.00', '3.80'], ['10.00', '9.50']] as [string,
     await page.getByRole('button', { name: 'Change' }).click()
     const sheet = page.getByRole('dialog', { name: 'Pricing rule' })
     const row = sheet.locator('.pricing-rule-row', { hasText: 'Market −5%' })
-    await expect(row).toContainText(`$${market}`)
+    await expect(row).toContainText(`Articuno - 161/159 at $${market}`)
     await expect(row).toContainText(`$${listed}`)
-    await expect(sheet.locator('.pricing-rule-row', { hasText: 'TCG Low −1%' })).not.toContainText('A card at')
+    await expect(sheet.locator('.pricing-rule-row', { hasText: 'TCG Low −1%' })).not.toContainText('lists at')
   })
 }
+
+test('rule panel: the Overview and the checked row agree, also after Custom is pressed before typing', async ({ page }) => {
+  await open(page)
+  await page.getByRole('button', { name: 'Change' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Pricing rule' })
+  const overview = sheet.locator('.bn-set-census-cell', { hasText: 'Rule' }).first()
+  await sheet.getByRole('button', { name: 'Custom', exact: true }).click()
+  await expect(sheet.getByRole('button', { name: 'Custom', exact: true })).toHaveAttribute('aria-expanded', 'true')
+  await expect(overview).toContainText('Match market')
+  await expect(sheet.getByRole('button', { name: 'Match market, in force' })).toBeVisible()
+  await sheet.getByRole('button', { name: 'Market −5%', exact: true }).click()
+  await expect(overview).toContainText('Market −5%')
+  await expect(sheet.getByRole('button', { name: 'Market −5%, in force' })).toBeVisible()
+})
+
+test('rule panel: undoing a custom rule closes Custom and clears its draft', async ({ page }) => {
+  await open(page)
+  await page.getByRole('button', { name: 'Change' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Pricing rule' })
+  await sheet.getByRole('button', { name: 'Custom', exact: true }).click()
+  const pct = sheet.getByLabel('Percentage')
+  await pct.fill('10')
+  await pct.press('Enter')
+  await expect(sheet.getByRole('button', { name: 'Custom, in force' })).toBeVisible()
+  await page.locator('.bn-toast:not([data-leaving])', { hasText: 'Pricing rule changed' }).getByRole('button', { name: 'Undo' }).click()
+  await expect(sheet.getByRole('button', { name: 'Match market, in force' })).toBeVisible()
+  await expect(sheet.getByLabel('Percentage')).toHaveCount(0)
+  await sheet.getByRole('button', { name: 'Custom', exact: true }).click()
+  await expect(sheet.getByLabel('Percentage')).toHaveValue('')
+})
+
+test('rule panel: a newer rule change retires the older toast, so Undo cannot clobber it', async ({ page }) => {
+  const wire = await open(page)
+  await page.getByRole('button', { name: 'Change' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Pricing rule' })
+  await sheet.getByRole('button', { name: 'Market −5%', exact: true }).click()
+  await sheet.getByRole('button', { name: 'TCG Low −1%', exact: true }).click()
+  const live = page.locator('.bn-toast:not([data-leaving])', { hasText: 'Pricing rule changed' })
+  await expect(live).toHaveCount(1)
+  await live.getByRole('button', { name: 'Undo' }).click()
+  await expect.poll(() => sentPolicy(wire).rule).toBe('undercut:5')
+})
+
+test('rule panel: the example card is the same under every lens', async ({ page }) => {
+  await open(page)
+  await page.getByRole('button', { name: 'Change' }).click()
+  const row = page.getByRole('dialog', { name: 'Pricing rule' }).locator('.pricing-rule-row', { hasText: 'Market −5%' })
+  const before = await row.locator('.pricing-rule-says').innerText()
+  await page.keyboard.press('Escape')
+  const lens = page.getByRole('radio', { name: /^Not selling/ })
+  if (await lens.count()) await lens.click()
+  await page.getByRole('button', { name: 'Change' }).click()
+  await expect(page.getByRole('dialog', { name: 'Pricing rule' }).locator('.pricing-rule-row', { hasText: 'Market −5%' }).locator('.pricing-rule-says')).toHaveText(before)
+})
 
 test('a product name opens the one product view, and T opens it from the keyboard', async ({ page }) => {
   await page.route(/\/pipeline\/products\/[^/]+\/history$/, async (route) =>

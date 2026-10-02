@@ -111,7 +111,7 @@ import {
   useViewParam,
 } from './kit'
 import type { FilterFacet, SortOption, SortValue } from './kit'
-import { toast } from './kit/toast'
+import { dismissToast, toast } from './kit/toast'
 import './Pricing.css'
 import { SendCard } from './SendCard'
 import { ABSENT_SENTENCE, AbsentPhotoNote, gameLabel, noPhotoSentence } from './CardHero'
@@ -872,6 +872,7 @@ export function Pricing() {
   const [saving, setSaving] = useState(false)
   const [undo, setUndo] = useState<Undo[]>([])
   const nextUndoId = useRef(1)
+  const toastOfField = useRef(new Map<string, number>())
   const [holdFor, setHoldFor] = useState<string | null>(null)
   const holdAnchor = useRef<HTMLElement | null>(null)
   const holdButtons = useRef(new Map<string, HTMLButtonElement>())
@@ -1082,7 +1083,14 @@ export function Pricing() {
   const recordUndo = useCallback((entry: UndoEntry, title: string, body: string) => {
     const id = nextUndoId.current++
     setUndo((stack) => [{ id, ...entry } as Undo, ...stack].slice(0, UNDO_DEPTH))
-    toast({ kind: 'receipt', title, body, ttlMs: 8000, action: { label: 'Undo', kbd: 'U', onPress: () => undoByIdRef.current(id) } })
+    /* ONE FIELD, ONE LIVE TOAST: an older toast's Undo would write its own "before" over a
+     * newer change, so a newer change on the same field retires the older toast. */
+    const field = entry.kind === 'runcut' ? `runcut:${entry.run}` : entry.kind
+    dismissToast(toastOfField.current.get(field) ?? -1)
+    toastOfField.current.set(
+      field,
+      toast({ kind: 'receipt', title, body, ttlMs: 8000, action: { label: 'Undo', kbd: 'U', onPress: () => undoByIdRef.current(id) } }),
+    )
   }, [])
 
   /** Set the STORE-WIDE cut-off. BOTH KEYS, ALWAYS: the line and what the half below it lists at
@@ -1863,6 +1871,9 @@ export function Pricing() {
         setBook((current) =>
           current === null ? current : { ...current, policy: { ...current.policy, rule: top.before.rule, basis: top.before.basis } },
         )
+        setPressedCustom(false)
+        setCustomBad(null)
+        setCustomDraft(parseCustomRule(top.before.rule, top.before.basis) ?? { kind: 'undercut', pct: '', basis: 'market' })
         /* The unanswered fields show the rule's figure, so they go back to the old rule's. */
         const was = PRESETS.find((p) => p.rule === top.before.rule && p.basis === top.before.basis)
         for (const row of rows) {
@@ -2331,7 +2342,8 @@ export function Pricing() {
   const activePreset = PRESETS.find((p) => p.rule === doc?.rule && p.basis === doc?.basis) ?? null
   const standingCustom = activePreset === null ? parseCustomRule(doc?.rule, doc?.basis) : null
   const customOn = pressedCustom || standingCustom !== null
-  const ruleSegment = customOn ? CUSTOM_KEY : (activePreset?.key ?? '')
+  /* THE RULE IN FORCE, FROM THE POLICY ONLY. Pressing Custom opens its inputs and claims nothing. */
+  const ruleSegment = activePreset?.key ?? (standingCustom !== null ? CUSTOM_KEY : '')
   const standingKey = standingCustom === null ? null : `${standingCustom.kind}:${standingCustom.pct}:${standingCustom.basis}`
   useEffect(() => {
     if (standingKey === null || customSeed.current === standingKey) return
@@ -2355,22 +2367,23 @@ export function Pricing() {
     [applyPreset],
   )
 
-  /* ONE REAL CARD PER PRESET: its basis price in, the server's own figure out. No arithmetic here. */
+  /* ONE REAL CARD PER PRESET, from the whole worklist so a lens never swaps it: its basis price
+     in, the server's own figure out. No arithmetic here. */
   const examples = useMemo(() => {
-    const out: Record<string, { from: string; to: string } | null> = {}
+    const out: Record<string, { name: string; from: string; to: string } | null> = {}
     for (const preset of PRESETS) {
       out[preset.key] = null
-      for (const row of rows) {
+      for (const row of partitioned) {
         const from = preset.basis === 'low' ? row.snap.low : row.snap.market
         const to = row.presets[preset.key]
         if (row.bucket === 'listable' && from !== null && typeof to === 'string') {
-          out[preset.key] = { from, to }
+          out[preset.key] = { name: row.name, from, to }
           break
         }
       }
     }
     return out
-  }, [rows])
+  }, [partitioned])
 
   const subCount = subThresholdSkus(rows).length
   const roster = work?.roster ?? []
@@ -2958,7 +2971,7 @@ export function Pricing() {
         open={ruleOpen}
         onClose={() => setRuleOpen(false)}
         ruleSegment={ruleSegment}
-        ruleName={activePreset?.label ?? (customOn ? 'Custom' : 'Not set')}
+        ruleName={activePreset?.label ?? (standingCustom !== null ? 'Custom' : 'Not set')}
         examples={examples}
         onRule={pickRule}
         customOn={customOn}
@@ -3425,7 +3438,7 @@ function RuleSheet({
   ruleSegment: string
   ruleName: string
   /** What each preset lists one real card at, from the figures the server priced. */
-  examples: Record<string, { from: string; to: string } | null>
+  examples: Record<string, { name: string; from: string; to: string } | null>
   onRule: (key: string) => void
   customOn: boolean
   customDraft: CustomRule
@@ -3474,7 +3487,7 @@ function RuleSheet({
                 {example === null || example === undefined ? null : (
                   <>
                     {' '}
-                    A card at <Money value={Number(example.from)} /> lists at <Money value={Number(example.to)} />.
+                    {example.name} at <Money value={Number(example.from)} /> lists at <Money value={Number(example.to)} />.
                   </>
                 )}
               </p>
@@ -3483,9 +3496,10 @@ function RuleSheet({
         })}
         <div className="pricing-rule-row">
           <SettingsOp
-            icon={customOn ? 'check' : 'pencil'}
+            icon={ruleSegment === CUSTOM_KEY ? 'check' : 'pencil'}
             label="Custom"
-            said={customOn ? 'Custom, in force' : 'Custom'}
+            expanded={customOn}
+            said={ruleSegment === CUSTOM_KEY ? 'Custom, in force' : 'Custom'}
             busy={false}
             onClick={() => onRule(CUSTOM_KEY)}
           />
