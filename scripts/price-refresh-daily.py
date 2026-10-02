@@ -3,8 +3,10 @@
 
 Downloads the owner's own live listings once (`server/pipeline_routes.py:do_live_export`, the
 one live fetch D104 made), which stores a dated file under `inventory/.live/` and refreshes the
-readings table. It then writes a one-line note (`pipeline/pricerefresh.py`) that `#/pricing`
-shows, so a failed or missing run is on screen and never a silent stale state.
+readings table. It then preloads the Trends strips for the rows still waiting
+(`do_price_trends_preload`, through the Trends press's own route and pace, D278). Each leaves a
+note (`pipeline/pricerefresh.py`) that `#/pricing` shows, so a failed or partial run is on screen
+and never a silent stale state.
 
 FREE, AND IT CHANGES NO PRICE. The fetch reads one page of the seller portal and writes nothing
 at TCGplayer. It calls no paid read and no archive sweep: the sweep stays a press (D224, DEBT32).
@@ -49,9 +51,11 @@ def run():
     note = pricerefresh.run(pipeline_routes.do_live_export)
     if note["ok"]:
         log("read %d live rows" % note["live_rows"])
-        return 0
-    log("failed, readings unchanged: %s %s" % (note["code"], note["message"]))
-    return 1
+    else:
+        log("failed, readings unchanged: %s %s" % (note["code"], note["message"]))
+    trends = pricerefresh.preload(pipeline_routes.do_price_trends_preload)
+    log("trends: read %d of %d%s" % (trends["read"], trends["asked"], "" if trends["ok"] else ", failed: " + trends["message"]))
+    return 0 if note["ok"] and trends["ok"] else 1
 
 
 if __name__ == "__main__":

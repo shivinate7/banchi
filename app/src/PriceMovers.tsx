@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react'
 import { Button, Icon, Money, ProductLink } from './kit'
 import { getPriceMovers } from './server'
 import { relativeDate } from './dates'
-import type { PriceMover, PriceMoversPayload } from './types'
+import type { PriceMover, PriceMoversPayload, TrendsPreloadNote } from './types'
 import './PriceMovers.css'
 
 /** A signed fraction the server computed, as a whole percentage. Ink, never arithmetic on money. */
@@ -51,6 +51,22 @@ function readLine(read: PriceMoversPayload | null | 'failed'): { text: string; f
   return { text: `Prices were read ${when}.${unchecked}`, failed: false }
 }
 
+/** How the overnight Trends read ended, in one clamped line. A partial read says how many of how
+ *  many, a failed one carries its sentence, and the date is relative. Empty while loading and on
+ *  the live lens, so the line holds its height in every state. */
+function trendsLine(note: TrendsPreloadNote | null, loading: boolean): { text: string; failed: boolean } {
+  if (loading) return { text: '\u00a0', failed: false }
+  if (note === null) return { text: 'No overnight trends read has run yet. Press Trends to read them now.', failed: false }
+  const when = relativeDate(note.at * 1000)
+  if (!note.ok) {
+    return { text: `The overnight trends read failed ${when}; ${note.read} of ${note.asked} cards were read. ${note.message}`, failed: true }
+  }
+  if (note.read < note.asked) {
+    return { text: `Trends were read ${when} for ${note.read} of ${note.asked} cards. The rest had no history to read.`, failed: true }
+  }
+  return { text: `Trends were read ${when} for ${note.read} ${note.read === 1 ? 'card' : 'cards'}. Press Trends to refresh.`, failed: false }
+}
+
 function MoverRow({ row }: { row: PriceMover }) {
   const label = row.name ?? row.sku
   const detail = [row.set, row.number, row.condition].filter(Boolean).join(', ')
@@ -75,7 +91,13 @@ function MoverRow({ row }: { row: PriceMover }) {
   )
 }
 
-export function PriceMovers() {
+export function PriceMovers({
+  trendsNote,
+  trendsLoading,
+}: {
+  readonly trendsNote: TrendsPreloadNote | null
+  readonly trendsLoading: boolean
+}) {
   const [read, setRead] = useState<PriceMoversPayload | null | 'failed'>(null)
   const [open, setOpen] = useState(false)
 
@@ -95,6 +117,7 @@ export function PriceMovers() {
 
   const moved = read !== null && read !== 'failed' ? read.movers : []
   const line = readLine(read)
+  const trends = trendsLine(trendsNote, trendsLoading)
   return (
     <section className="pricemovers" aria-label="Price moves since first seen">
       <div className="pricemovers-head">
@@ -108,6 +131,10 @@ export function PriceMovers() {
       <p className="pricemovers-read" data-failed={line.failed ? 'true' : undefined} title={line.text.trim() === '' ? undefined : line.text}>
         {line.failed ? <Icon name="alert" size={14} /> : null}
         <span className="pricemovers-read-text">{line.text}</span>
+      </p>
+      <p className="pricemovers-read" data-failed={trends.failed ? 'true' : undefined} title={trends.text.trim() === '' ? undefined : trends.text}>
+        {trends.failed ? <Icon name="alert" size={14} /> : null}
+        <span className="pricemovers-read-text">{trends.text}</span>
       </p>
       {open && moved.length > 0 ? (
         <ul className="pricemovers-list">

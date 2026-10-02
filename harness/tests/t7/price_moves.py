@@ -140,12 +140,30 @@ def check_price_refresh_note(checks: Checks) -> None:
         if saved is not None:
             os.environ["TCGPLAYER_STORE_COOKIE"] = saved
 
-    checks.equal(daily_path_reaches(SCRIPT.read_text()), (True, {"do_live_export"}), FENCE_LABEL)
+    checks.equal(
+        daily_path_reaches(SCRIPT.read_text()), (True, {"do_live_export", "do_price_trends_preload"}), FENCE_LABEL,
+    )
     checks.equal(
         daily_path_reaches(SCRIPT.read_text().replace("pipeline_routes.do_live_export", "pipeline_routes.do_pipeline_export")),
-        (True, {"do_pipeline_export"}),
+        (True, {"do_pipeline_export", "do_price_trends_preload"}),
         "the callee check reads the callee: a swapped-in paid export is seen",
     )
+    checks.equal(
+        preload_calls(), {"do_pipeline_worklist", "do_pipeline_trends"},
+        "the overnight preload calls the worklist and the Trends press's own route and nothing else",
+    )
+
+
+def preload_calls():
+    """Every `do_*` function `do_price_trends_preload` calls, read off its own source."""
+    source = Path(pipeline_routes.__file__).read_text()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.FunctionDef) and node.name == "do_price_trends_preload":
+            return {
+                n.func.id for n in ast.walk(node)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id.startswith("do_")
+            }
+    return set()
 
 
 FENCE_LABEL = (
@@ -171,7 +189,77 @@ def daily_path_reaches(source: str):
     return reached == {"pipeline.pricerefresh", "server.pipeline_routes"}, touched
 
 
+def check_price_trends_preload(checks: Checks) -> None:
+    """The overnight Trends read asks what the press asks, saves it with its date, and says when
+    it was partial or failed.
+
+    ONLY THE WORKLIST AND THE TRENDS ROUTE ARE STUBBED: the preload's own row choice (not
+    `at_cap`), door choice (the last run holding the row), chunking and note are the code under
+    test, so each of those is a red case below.
+    """
+    from http import HTTPStatus
+
+    checks.note("")
+    checks.note("TRENDS PRELOAD — the press's rows, door and pace; saved with a date; partial said")
+
+    rows = [{"sku": "S%02d" % i, "at_cap": False, "in": [{"run": "old"}, {"run": "new"}]} for i in range(10)]
+    rows.append({"sku": "CAPPED", "at_cap": True, "in": [{"run": "new"}]})
+    asked = []
+    mode = {"fail": False, "refuse": "S03"}
+
+    def worklist(_wanted):
+        return {"skus": rows}
+
+    def trends(door, skus):
+        asked.append((door, list(skus)))
+        if mode["fail"]:
+            raise pipeline_routes.PipelineRefusal(HTTPStatus.CONFLICT, "pricing_not_written", "Run new has no prices file yet.")
+        refused = {s: "no product" for s in skus if s == mode["refuse"]}
+        return {"skus": {s: {"ranges": [{"range": "month", "points": [s]}]} for s in skus if s not in refused}, "refused": refused}
+
+    real = pipeline_routes.do_pipeline_worklist, pipeline_routes.do_pipeline_trends
+    pipeline_routes.do_pipeline_worklist, pipeline_routes.do_pipeline_trends = worklist, trends
+    try:
+        with isolated_home():
+            note = pricerefresh.preload(pipeline_routes.do_price_trends_preload, now=1000)
+            checks.equal(
+                [(d, len(c)) for d, c in asked], [("new", 8), ("new", 2)],
+                "rows are read through the last run that holds them, 8 at a time, and the at-cap row is never asked",
+            )
+            checks.ok("CAPPED" not in sum((c for _, c in asked), []), "the at-cap row is not read")
+            checks.equal(
+                (note["ok"], note["asked"], note["read"], note["refused"]), (True, 10, 9, 1),
+                "the note counts asked, read and refused, so a partial read is visible",
+            )
+            saved = pipeline_routes.do_pipeline_saved_trends()
+            checks.equal(
+                (len(saved["skus"]), saved["skus"]["S00"]["at"], "S03" in saved["skus"], saved["note"]["read"]),
+                (9, 1000, False, 9),
+                "the saved strips carry the second they were read, and a refused SKU is not saved",
+            )
+
+            mode["fail"] = True
+            failed = pricerefresh.preload(pipeline_routes.do_price_trends_preload, now=2000)
+            after = pipeline_routes.do_pipeline_saved_trends()
+            checks.ok(
+                failed["ok"] is False and failed["read"] == 0 and "no prices file" in failed["message"],
+                "a refused run is a failed note carrying its sentence", str(failed),
+            )
+            checks.equal(
+                (len(after["skus"]), after["skus"]["S00"]["at"]), (9, 1000),
+                "a failed read keeps the last good strips and their old date",
+            )
+            pricerefresh.run(lambda: {"live_rows": 1}, now=3000)
+            checks.equal(
+                (pricerefresh.read_status() or {}).get("trends", {}).get("ok"), False,
+                "the live read's note keeps the trends note beside it",
+            )
+    finally:
+        pipeline_routes.do_pipeline_worklist, pipeline_routes.do_pipeline_trends = real
+
+
 CHECKS = (
     check_price_movers,
     check_price_refresh_note,
+    check_price_trends_preload,
 )

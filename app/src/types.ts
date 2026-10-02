@@ -4641,6 +4641,22 @@ export type PriceRefreshNote =
   | { at: number; ok: true; live_rows: number }
   | { at: number; ok: false; code: string; message: string }
 
+/** One SKU's strip as the daily job saved it, with the second it was read. */
+export type SavedTrend = { at: number; ranges: TrendRange[] }
+
+/** How the overnight Trends read ended. `read` below `asked` is a partial read. */
+export type TrendsPreloadNote = {
+  at: number
+  ok: boolean
+  asked: number
+  read: number
+  refused: number
+  message: string
+}
+
+/** `GET /pipeline/trends-saved`: a local read, no market request. */
+export type SavedTrendsPayload = { skus: Record<string, SavedTrend>; note: TrendsPreloadNote | null }
+
 /** `GET /pipeline/movers`. `unmeasured` counts listed SKUs with no baseline or no reading. */
 export type PriceMoversPayload = {
   threshold: string

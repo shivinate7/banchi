@@ -1384,7 +1384,7 @@ COMPONENTS = [
                                   "never dropped or guessed. A read: nothing it returns "
                                   "changes a price.",
                           "governed_by": ["D189", "D219"]},
-            "pricerefresh.py": {"does": "the daily market read's note. `run` calls the one live "
+            "pricerefresh.py": {"does": "the daily market read's notes and saved Trends strips. `run` calls the one live "
                                         "fetch it is handed and writes `inventory/"
                                         "price-refresh.json` either way, so a failed or missing "
                                         "read is visible on `#/pricing` and never a silent stale "
@@ -4991,14 +4991,15 @@ COMPONENTS = [
             },
             "price-refresh-daily.py": {
                 "does": "the daily market read on the owner's Mac: one free live fetch "
-                        "(`do_live_export`), then the note `#/pricing` shows. Calls no paid "
+                        "(`do_live_export`), then the overnight Trends preload "
+                        "(`do_price_trends_preload`), each leaving a note `#/pricing` shows. Calls no paid "
                         "read and no archive sweep, and changes no price. `--agent` installs "
                         "the daily launchd job (main tree only), `--agent --remove` removes it. "
                         "The installer is `launchagent.py`'s; `demo-mirror-daily.py` keeps its own copy (D295 fence).",
                 "note": "PROVED BY T7's `price_moves` group: the note is written on success and "
                         "on refusal, and the script's own imports are asserted to reach only "
                         "the note writer and the live fetch's module.",
-                "governed_by": ["D104", "D189", "D224", "D295"],
+                "governed_by": ["D104", "D189", "D224", "D278", "D295"],
             },
             "demo-mirror-daily.py": {
                 "does": "the daily demo refresh on the owner's Mac. Cuts a throwaway worktree "

@@ -6650,12 +6650,11 @@ def do_pipeline_trends(name: str, skus: Sequence[str] = ()) -> dict:
     2026-08-31 by asking for the graphs on every row. This is the route that entry specified,
     built to the shape it specified, and D277 records what the answer cost.
 
-    IT IS STILL A PRESS AND THAT IS THE WHOLE OF D278 THAT SURVIVES INTACT. Nothing polls
-    this and no render fires it: a screen that read it on mount would turn every visit to
-    `#/pricing` into ~92 requests at a free public mirror for readings nobody asked for,
-    which is the one way D278 said this feature could become rude. What changed is the
-    GRANULARITY of the press — one for the list instead of one per card — and not whether
-    there is one.
+    A PRESS, AND AN OVERNIGHT READ BY THE OWNER'S WORD (D278). No render fires it: a screen that
+    read it on mount would turn every visit to `#/pricing` into ~92 requests at a free public
+    mirror for readings nobody asked for. The Trends press stays, to refresh. The daily job also
+    walks it overnight (`do_price_trends_preload`) at this route's own pace and saves the result,
+    which `#/pricing` then draws at first paint from a local file.
 
     IT SKIPS THE ROWS THIS RUN CAN ADD NOTHING FOR, on the owner's instruction of the same
     day: *"I don't need the prices for the rows that have none left."* `at_cap` is the field
@@ -6816,6 +6815,69 @@ def _trends_for_entries(
             for sku, reading in readings.items()
         },
         "refused": refused,
+    }
+
+
+#: How many SKUs one preload request asks about: `app/src/Pricing.tsx`'s `TREND_CHUNK`, so the
+#: overnight walk asks exactly what the Trends press would, in the same sized steps.
+TREND_PRELOAD_CHUNK = 8
+
+
+def do_price_trends_preload() -> dict:
+    """The daily job's overnight Trends read: the strip for every row `#/pricing`'s Trends press
+    would read, through the SAME route that press calls (`do_pipeline_trends`), by the owner's word.
+
+    ROWS AND DOORS ARE THE PRESS'S OWN. The rows are the unsent worklist's (`do_pipeline_worklist`,
+    every open run) that are not `at_cap`, each read through the last run that holds it, which is
+    `loadTrends`' rule in `app/src/Pricing.tsx`. The pace is `pricehistory.Market`'s own courtesy
+    delay, inside `do_pipeline_trends`; this adds no faster loop and no second reader.
+
+    FREE, READ-ONLY, AND NEVER ON A RENDER. It is reached only by `scripts/price-refresh-daily.py`
+    (a visit to `#/pricing` still fires no request at the market host) and calls nothing that
+    spends, sweeps or writes a price. The test for that reads this function's own calls.
+
+    A failed step is named, never dropped: a refused run lands in `failed` and its rows in
+    `refused`, and the caller's note says how many of how many were read.
+    """
+    work = do_pipeline_worklist([])
+    by_door: Dict[str, List[str]] = {}
+    for row in work["skus"]:
+        legs = row.get("in") or []
+        door = legs[-1].get("run") if legs else None
+        if door and not row.get("at_cap"):
+            by_door.setdefault(str(door), []).append(str(row["sku"]))
+    read: Dict[str, list] = {}
+    refused: Dict[str, str] = {}
+    failed: List[str] = []
+    for door, skus in by_door.items():
+        for at in range(0, len(skus), TREND_PRELOAD_CHUNK):
+            chunk = skus[at:at + TREND_PRELOAD_CHUNK]
+            try:
+                answer = do_pipeline_trends(door, chunk)
+            except PipelineRefusal as caught:
+                failed.append(f"{door}: {caught}")
+                refused.update({sku: str(caught) for sku in chunk})
+                continue
+            read.update({sku: found["ranges"] for sku, found in answer["skus"].items()})
+            refused.update(answer["refused"])
+    return {
+        "asked": sum(len(skus) for skus in by_door.values()),
+        "skus": read,
+        "refused": refused,
+        "failed": failed,
+    }
+
+
+def do_pipeline_saved_trends() -> dict:
+    """`GET /pipeline/trends-saved` — the strips the daily job saved, and how that read ended.
+
+    A PLAIN LOCAL READ: two small files, no socket, no market request. `#/pricing` draws it at
+    first paint, so a visit fires no request at the market host (D278). `note` is the preload's
+    own note, or null if no overnight read has ever run.
+    """
+    return {
+        "skus": pricerefresh.read_trends(),
+        "note": (pricerefresh.read_status() or {}).get("trends"),
     }
 
 

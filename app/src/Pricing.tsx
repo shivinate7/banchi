@@ -17,6 +17,7 @@ import {
   getMarkdowns,
   getPriceHistory,
   getPriceTrends,
+  getSavedTrends,
   markdownFileUrl,
   markdownListings,
   markdownTrends,
@@ -52,6 +53,7 @@ import type {
   Unreachable,
   LiveMove,
   PricingSku,
+  SavedTrendsPayload,
   RunDetail,
   RunSummary,
   WithheldRecord,
@@ -464,6 +466,12 @@ function usePhone(): boolean {
  *  forms this repo's names take are parenthesised ("Calm Rune (R02a)") and a trailing "- "
  *  ("Garganacl - 084/132"), both anchored at the end of the string — never a bare substring
  *  match. */
+/** A saved strip as a row's trend read, or undefined where the job saved none. */
+function savedRead(saved: SavedTrendsPayload | null, sku: string): TrendRead | undefined {
+  const found = saved?.skus[sku]
+  return found === undefined ? undefined : { kind: 'read', ranges: found.ranges }
+}
+
 function numberSuffix(number: string): RegExp | null {
   const trimmed = number.trim()
   if (trimmed === '') return null
@@ -872,6 +880,23 @@ export function Pricing() {
   /* The trend strip (D277), cleared when the loaded set changes. */
   const [trends, setTrends] = useState<Record<string, TrendRead>>({})
   const [trendRun, setTrendRun] = useState<{ total: number; done: number; reading: boolean } | null>(null)
+  /* THE STRIPS THE DAILY JOB SAVED OVERNIGHT, read once from a local file at first paint. It fires
+     no request at the market host, so a visit still costs the mirror nothing (D278). The Trends
+     press below overwrites a row's strip with a fresh read. */
+  const [saved, setSaved] = useState<SavedTrendsPayload | null>(null)
+  useEffect(() => {
+    let alive = true
+    getSavedTrends()
+      .then((payload) => {
+        if (alive) setSaved(payload)
+      })
+      .catch(() => {
+        /* No saved strips is not a failure of this screen; the Trends press still reads. */
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
   const trendWalk = useRef(0)
   const [note, setNote] = useState<{ sku: string; text: string } | null>(null)
   /** Holding: the held rows alone (UX-212). */
@@ -2759,7 +2784,7 @@ export function Pricing() {
     >
       <div className="pricing-body" data-live={liveTab ? 'true' : undefined}>
         {bar}
-        <PriceMovers />
+        <PriceMovers trendsNote={liveTab || saved === null ? null : saved.note} trendsLoading={liveTab || saved === null} />
         {ruleLine}
         {/* UN-11: outlives the toast, and a reload. Gone once a send has carried a cleared
             SKU (`clear_built_on`) — the next read finds no `last_clear`. */}
@@ -2834,7 +2859,7 @@ export function Pricing() {
                     asking={liveTab ? (askingOf.get(sku.sku) ?? null) : undefined}
                     note={note !== null && note.sku === sku.sku ? note.text : null}
                     readAge={ageWords(source.readAtOf(sku))}
-                    trend={trends[sku.sku]}
+                    trend={trends[sku.sku] ?? (liveTab ? undefined : savedRead(saved, sku.sku))}
                     asked={sendQty[sku.sku] ?? ''}
                     onAsked={(text) => setAsked(sku.sku, text)}
                     holding={holdFor === sku.sku}

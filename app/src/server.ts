@@ -112,6 +112,7 @@ import type {
   HoldingsRange,
   HoldingsValuePayload,
   PriceMoversPayload,
+  SavedTrendsPayload,
   RunMatchAnswer,
 } from './types'
 
@@ -3320,6 +3321,15 @@ export async function getHoldingsValue(range: HoldingsRange = 'month'): Promise<
  */
 export async function getPriceMovers(): Promise<PriceMoversPayload> {
   return (await request('/pipeline/movers', NO_CACHE)) as PriceMoversPayload
+}
+
+/**
+ * The Trends strips the daily job saved overnight, and how that read ended
+ * (`GET /pipeline/trends-saved`, D278). A local read with no market request, so `#/pricing` may
+ * draw it at first paint. The Trends press (`getPriceTrends`) stays, to refresh.
+ */
+export async function getSavedTrends(): Promise<SavedTrendsPayload> {
+  return (await request('/pipeline/trends-saved', NO_CACHE)) as SavedTrendsPayload
 }
 
 /** One SKU's answer from `getSkuPhotos` — the first on-hand copy of that SKU that still
