@@ -40,7 +40,8 @@
  *                            `app/src/Gallery.tsx` is exempt from this one rule: it is the kit's
  *                            specimen sheet and draws each kit class raw on purpose
  *                            (`bn-pick`, `bn-fchip`, `bn-filterchips`, `bn-filterbar`, `bn-sort` and
- *                            `bn-hidetoggle` are the kit's filter control, D311)
+ *                            `bn-hidetoggle` are the kit's filter control, D311; `bn-set-*` is the settings
+ *                            sheet's rows, figures, editor frame and card picker, `kit/settings.tsx`)
  *                R2-date     `toLocaleDateString`, `toLocaleTimeString` or `Intl.DateTimeFormat`
  *                            outside `app/src/dates.ts`. ALSO, BY HEURISTIC: `.toLocaleString(...)`
  *                            with an object-literal argument that names a date or time option
@@ -306,7 +307,7 @@ function countWordedButtons(node, sf) {
 /** The class names only the kit may write. A token equal to one of these is reserved. */
 export const RESERVED_EXACT = ['bn-page', 'bn-head', 'bn-title', 'bn-lede', 'bn-money', 'bn-skeleton', 'bn-select']
 /** The class-name families only the kit may write: any token that starts with one of these. */
-export const RESERVED_PREFIX = ['bn-empty', 'bn-notice', 'bn-sheet', 'bn-modal', 'bn-pick', 'bn-fchip', 'bn-filterchips', 'bn-filterbar', 'bn-sort', 'bn-hidetoggle']
+export const RESERVED_PREFIX = ['bn-empty', 'bn-notice', 'bn-sheet', 'bn-modal', 'bn-pick', 'bn-fchip', 'bn-filterchips', 'bn-filterbar', 'bn-sort', 'bn-hidetoggle', 'bn-set-']
 
 function reserved(token) {
   if (RESERVED_EXACT.includes(token)) return true
@@ -1453,6 +1454,12 @@ function selfTest() {
     ].join('\n')
     const hits = analyze(tree({ 'app/src/S.tsx': src })).violations.filter((v) => v.rule === 'R2-class').map((v) => v.detail)
     return ['bn-money', 'bn-empty-state', 'bn-notice', 'bn-skeleton', 'bn-sheet-left'].every((t) => hits.includes(t))
+  })
+  add('a sheet that hand-rolls the settings parts (bn-set-op, bn-set-picker) is red, and a bn-settings-ish class is green', () => {
+    const red = analyze(tree({ 'app/src/S.tsx': 'export const S = () => <button className="bn-set-op"><ul className="bn-set-picker-list" /></button>\n' })).violations
+      .filter((v) => v.rule === 'R2-class').map((v) => v.detail)
+    return red.includes('bn-set-op') && red.includes('bn-set-picker-list') &&
+      green(outcome(tree({ 'app/src/S.tsx': 'export const S = () => <div className="bn-settings-ish bn-set" />\n' })))
   })
   add('a class that only shares a prefix with an exact reservation is green (bn-page-head, bn-money-ish)', () =>
     green(outcome(tree({ 'app/src/S.tsx': 'export const S = () => <div className="bn-page-head bn-money-ish bn-headline" />\n' }))))

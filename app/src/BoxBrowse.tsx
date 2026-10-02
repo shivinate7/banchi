@@ -36,7 +36,7 @@ import {
   undoSale,
   failureTone,
 } from './server'
-import { BoxIdentity, BoxOps, ClaimEditor, type ClaimPatch, type PickSection } from './BoxOps'
+import { BoxIdentity, BoxOps, ClaimEditor, type ClaimPatch } from './BoxOps'
 import { reasonLabel } from './reasons'
 import { RailFrame } from './RailFrame'
 import {
@@ -54,7 +54,7 @@ import {
 import { stateLabel } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
-import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, boxesMostRecentFirst, countFacets, filterRows, useHeld, type SortValue } from './kit'
+import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, boxesMostRecentFirst, countFacets, filterRows, useHeld, type PickGroup, type SortValue } from './kit'
 import { boxTitle, UNNAMED_BOX } from './kit/data'
 import type { FilterFacet, FilterValue } from './kit/data'
 import { useFacetParams } from './kit/viewState'
@@ -1760,7 +1760,7 @@ export function BoxBrowse({
 
   /* What Manage box may narrow a Move or a Claims write to: this box's cards, by section
    * and in box order, off every row of the shelf and not the filtered list. */
-  const manageCards = useMemo<PickSection[]>(() => {
+  const manageCards = useMemo<PickGroup[]>(() => {
     if (rows === null || typeof shelf !== 'number') return []
     const mine = rows.filter(
       (row) =>
