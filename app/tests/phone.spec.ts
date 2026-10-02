@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { afterPaint, settleMotion } from './motionSettled'
 import { POPULATED_ROUTE_SEEDS, seedPopulatedGraveyard } from './routeFixtures'
 import { routesFromNav } from './routes'
 import { PHONE_OFF_REASON, PHONE_SPECS_ON, setViewport } from './phoneSwitch'
@@ -309,7 +310,7 @@ async function sweep(page: Page, where: string, mode: Mode = 'probe'): Promise<s
     }, height * 0.9)
     if (next.after <= next.before) break
     y = next.after
-    await page.waitForTimeout(120)
+    await afterPaint(page)
   }
   void y
   return found
@@ -405,7 +406,7 @@ for (const hash of SCREENS) {
   test(`${hash} holds the thumb floor at 390, and does not scroll sideways`, async ({ page }) => {
     await setViewport(page, PHONE)
     await page.goto(hash)
-    await page.waitForTimeout(400)
+    await settleMotion(page)
     const failures = await sweep(page, hash, hash === '#/gallery' ? 'box' : 'probe')
     const over = await overflow(page)
     expect(over, `${hash} scrolls sideways by ${over}px at 390 — CLAUDE.md: "No horizontal page scroll at 390."`).toBeLessThanOrEqual(0)
@@ -431,7 +432,7 @@ test.describe('on a touch screen at 820', () => {
     for (const hash of routes) {
       if (hash.endsWith('/fulfillment')) continue // his screen draws no shell and holds its own 44px floor
       await page.goto(hash)
-      await page.waitForTimeout(400)
+      await settleMotion(page)
       failures.push(...(await sweep(page, hash, 'box')))
       const over = await overflow(page)
       expect(over, `${hash} scrolls sideways by ${over}px at 820`).toBeLessThanOrEqual(0)
@@ -452,13 +453,13 @@ test('the phone shell holds the floor: the drawer, the palette and the tab bar',
 
   await page.getByText('More', { exact: true }).click()
   await expect(page.locator('.bn-drawer')).toBeVisible()
-  await page.waitForTimeout(300)
+  await settleMotion(page)
   failures.push(...(await sweep(page, 'drawer')))
 
   await page.keyboard.press('Escape')
   await page.keyboard.press('Meta+k')
   await expect(page.locator('.bn-cmdk')).toBeVisible()
-  await page.waitForTimeout(300)
+  await settleMotion(page)
   failures.push(...(await sweep(page, 'palette')))
 
   expect(failures, failures.join('\n')).toEqual([])
@@ -482,12 +483,12 @@ test('the sheets and menus a phone opens hold the floor too', async ({ page }) =
   }
 
   await page.goto(find('/inventory'))
-  await page.waitForTimeout(600)
+  await settleMotion(page)
   const chip = page.locator('.browse-boxchip')
   if (await chip.count()) {
     await chip.click()
     await expect(page.locator('.browse-railsheet')).toBeVisible()
-    await page.waitForTimeout(400)
+    await settleMotion(page)
     failures.push(...(await sweep(page, "inventory's box sheet")))
     // the ticks draw at 22px and take the tap at 46 through a negative-inset `::after` — the
     // probe is what tells those apart from a genuinely small control
@@ -498,11 +499,11 @@ test('the sheets and menus a phone opens hold the floor too', async ({ page }) =
      own screen, so it never appears in the drawer's own roster — the Runs sheet opens over
      `#/review` instead, at the address its own redirect lands on. */
   await page.goto(`${find('/review')}?runs=1`)
-  await page.waitForTimeout(600)
+  await settleMotion(page)
   const identify = page.getByRole('button', { name: /Identify a box/i }).first()
   if (await identify.count()) {
     await identify.click()
-    await page.waitForTimeout(500)
+    await settleMotion(page)
     failures.push(...(await sweep(page, "runs' composer sheet")))
   }
 
@@ -560,13 +561,13 @@ test('"Check first" mounts the composer over the runs sheet in one commit, and t
     return hit as string
   }
   await page.goto(find('/review'))
-  await page.waitForTimeout(400)
+  await settleMotion(page)
   await page.locator('.review-identify-open').click()
   // Both layers ARE open (D291's own "opened in the same commit" case) -- this is the fact the
   // sweep below has to get right, not a precondition to relax away.
   await expect(page.locator('.runs-composer')).toBeVisible()
   await expect(page.locator('.review-runs-sheet')).toBeVisible()
-  await page.waitForTimeout(300)
+  await settleMotion(page)
 
   const failures = await sweep(page, 'the "Check first" composer, opened in the same commit as the runs sheet')
   expect(failures, failures.join('\n')).toEqual([])
@@ -612,7 +613,7 @@ test('the shutter clears the phone tab bar on first paint, with a real safe-area
     await page.goto(capture as string)
     // First paint, not a settled one: no interaction, just long enough for the shell and the
     // stage to lay out.
-    await page.waitForTimeout(400)
+    await afterPaint(page)
 
     const insetPx = await page.evaluate(() => {
       const probe = document.createElement('div')
@@ -698,7 +699,7 @@ test('leaving a scrolled screen lands the next one at the top', async ({ page })
   await page.keyboard.press(',')
   await page.keyboard.press('i')
   await expect(page.locator('main.inventory')).toBeVisible()
-  await page.waitForTimeout(400)
+  await settleMotion(page)
   const tall = await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight + 300)
   expect(tall, 'Inventory rendered too short to prove anything — the 122-card fixture is not drawing rows').toBe(true)
   expect(await page.evaluate(() => window.scrollY)).toBe(0)
@@ -820,7 +821,7 @@ test('graveyard filter row never bleeds the page at 390, whether it fits or scro
      a `ROUTE-ROSTER` marker means "derive this list, or say which roster it pins." One route
      named once is neither. */
   await page.goto(`#/graveyard`)
-  await page.waitForTimeout(400)
+  await settleMotion(page)
 
   const seg = page.locator('.graveyard-toolbar .bn-seg')
   await expect(seg).toBeVisible()
