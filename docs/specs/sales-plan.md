@@ -93,6 +93,39 @@ It is off-nav. The route's own SKU field is the control a person finds without a
   fixed fact, so the width is stated beside any comparison.
 - **Nothing reaches back more than 357 days**, and the chart states the date its own history begins.
 
+### The posted-price view (OPEN: two placements, the owner picks)
+
+DEBT68. `price_postings` (D243) records every posted price, one row per SKU per press. A view
+is gated on one SKU holding a second posting, because one posting is a point and draws no
+history. Measured on the owner's store: 103 rows over 103 distinct SKUs, so the gate is closed.
+Build either option below only after the gate query reads rows above distinct SKUs. Both
+options need one new read route over `store/postings.py`, one client function in
+`app/src/server.ts` and one wire type in `app/src/types.ts`. Neither writes.
+
+Rules both options keep: a posted price is a third kind of observation, never joined to the
+market line or the fills (D278). It is drawn as a held step, because a price stays until the
+next press. Money uses `.bn-money` (D221). Kit pieces and `--bn-*` tokens only. A chart or
+table holds its size from first paint (D313, nothing moves unless the person moved it).
+
+**Option A: a third series on the product chart.** Each range chart on `#/product` gets a dashed
+ink step line with one hollow square per posting. The legend gains one entry. The price axis
+widens to include postings.
+- Gain: asked price sits against the market line and the sale diamonds, so "I asked too high" is
+  one glance. It is per SKU, the grain of D212, and reuses the page D227 argued for.
+- Loss: it answers one product at a time. The owner must already know which SKU to open. It adds
+  a fourth mark to four stacked charts, and a flat step line under a spiking market line reads as noise.
+
+**Option B: a Sales section.** A section on `#/revenue`, below the sold products, titled
+"What you asked". One row per re-priced name: posts, first asked, latest asked, change, average
+sold at. Each name links to `#/product`.
+- Gain: it answers "which cards did I re-price, and did it help" across the store at once. It
+  needs no chart and no new mark.
+- Loss: it shows the ends of a history, not its shape. It sits on a gross-revenue screen (D214)
+  and so risks reading as a profit claim. The period control then needs a rule for posts outside it.
+
+Both can ship. B finds the SKU and A shows its shape. Mock images were made on demo data with
+fabricated postings. They are not part of the repo.
+
 ## 4. The archive (BUILT)
 
 The price-history source has a hard ceiling of 357 days. Everything older is gone, and everything
