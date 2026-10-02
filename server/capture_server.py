@@ -85,6 +85,8 @@
                                            SKU rather than by a run — archive-first, live only
                                            when the archive has never swept this SKU
                                            (D227)
+    GET    /pipeline/products/<sku>/realized   what this seller got for that product against the
+                                           archived market on each sale date. Read-only (DEBT70)
     POST   /pipeline/runs/<name>/<step>    join | emit | reconcile. Free, run in the request
     GET    /pipeline/markdowns             every stale-listing markdown, newest first (D100)
     POST   /pipeline/markdowns             which live listings are not selling, and what each
@@ -706,6 +708,7 @@ _RUN_TRENDS_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/trends$")
 # and requires non-empty; this pattern is a coarser first filter, same as every other ID
 # pattern in this file).
 _PRODUCT_HISTORY_RE = re.compile(r"^/pipeline/products/([A-Za-z0-9._-]+)/history$")
+_PRODUCT_REALIZED_RE = re.compile(r"^/pipeline/products/([A-Za-z0-9._-]+)/realized$")
 # What a fetch WOULD ask TCGplayer for, before one is pressed (D76). Same hazard as the
 # three above and the same remedy: `scope` is `[a-z]+`, so `_RUN_STEP_RE` would answer it
 # `no_such_step` if this were declared after it. GET only — it presses nothing.
@@ -16597,6 +16600,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK,
                     pipeline_routes.do_pipeline_trends(match.group(1), asked),
+                )
+            match = _PRODUCT_REALIZED_RE.match(path)
+            if match:
+                # DEBT70: the owner's own sale prices against the archive. Read-only.
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_product_realized(match.group(1)),
                 )
             match = _PRODUCT_HISTORY_RE.match(path)
             if match:
