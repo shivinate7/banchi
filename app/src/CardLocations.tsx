@@ -7,7 +7,7 @@ import { PullConfirm } from './PullConfirm'
 import { PositionBar } from './PositionBar'
 import { placePartsOf, sayPlace, sectionCountOf, type Persona } from './position'
 import { collectorNumber } from './cardNumber'
-import { Icon, IconButton, Pill } from './kit'
+import { Icon, IconButton, Pill, type LogoVariant } from './kit'
 import { RANK_IS_CURRENT, ranksAsLive, ranksAsShown, type FrozenRank } from './frozenRank'
 import './CardLocations.css'
 import { forSale, IDENTIFIED, readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
@@ -247,6 +247,10 @@ export type CardLocationsProps = {
    *  ascending (box, index)" (`docs/specs/order-walk-plan.md` §8's 2026-09-19 ruling,
    *  `OrdersWalk.tsx`). Omitted, every existing caller ranks exactly as it always has. */
   preserveOrder?: boolean
+
+  /** The palette of the mark in each neighbour row (`kit/rarityMarks.ts:markFor`, the caller's
+   *  game and rarity). Omitted, the mark's default. Owner skin only. */
+  mark?: LogoVariant
 
   /** An extra class on the outer `<section>` — a CSS seam so a caller's own stylesheet can
    *  scope a rule to its usage (the walk's row `min-height`, D118) without it reaching
@@ -526,6 +530,7 @@ function OwnerRows({
   hideSold = false,
   frozen = RANK_IS_CURRENT,
   preserveOrder = false,
+  mark,
   className,
 }: Omit<CardLocationsProps, 'persona'>) {
   /* WHICH COPIES ARE DRAWN, AND IN WHAT ORDER (D132). Rule 1 below used to say no copy is
@@ -679,7 +684,7 @@ function OwnerRows({
                 )}
               </span>
 
-              {pooled ? null : <PlaceNeighbors place={copy.place} departed={departed} />}
+              {pooled ? null : <PlaceNeighbors place={copy.place} departed={departed} mark={mark} />}
 
               {noBar ? null : (
                 <PositionBar

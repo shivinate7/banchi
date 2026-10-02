@@ -1,6 +1,6 @@
 # The Banchi mark
 
-**Status: BUILT.** Six marks are locked at the display cut (section 9). The small cut is drawn,
+**Status: BUILT.** Seven marks are locked at the display cut (section 9). The small cut is drawn,
 swept and shipping (section 11). The lockup is built and generated (sections 13 and 14). The mark,
 the lockup, the browser tab and the app icons are all wired into the app (D102).
 
@@ -134,8 +134,8 @@ Three more rules come from judging by eye:
 
 ## 9. The locked set
 
-Six marks. The default is bluesteel. Geometry, sheen and the L pair are section 3's and do not
-vary across the set. Sheen is **0.15** on all six.
+Seven marks. The default is bluesteel. Geometry, sheen and the L pair are section 3's and do not
+vary across the set. Sheen is **0.15** on all seven.
 
 | mark | prism | ground | bracket | card base |
 | --- | --- | --- | --- | --- |
@@ -145,6 +145,7 @@ vary across the set. Sheen is **0.15** on all six.
 | yellow gold | `#FFD97A #F0A82E #C9821E #FFEFC0 #B36F18` | `#141619` → `#000000` | pale gold | `#C98A2E` |
 | white gold | `#FFFBF2 #EFE6D2 #DCD0B8 #FFFFFF #C9BCA2` | `#141619` → `#000000` | pale gold | `#D8D2C4` |
 | rose gold | `#FFD9C8 #F0B49A #DE9070 #FFE9DF #C87A5C` | `#141619` → `#000000` | **rose** | `#D99878` |
+| orange | `#FFCB94 #F58A2E #D0600F #FFE4C8 #B34E08` | `#141619` → `#000000` | **amber** | `#DB7A22` |
 
 The bracket gradients:
 
@@ -153,9 +154,11 @@ The bracket gradients:
 | chrome | `#FFFFFF #B8C8D8 #F2F8FF #8FA4B8` |
 | pale gold | `#FFFBEE #E8CE8A #FFFDF6 #C0A254` |
 | rose | `#FFF0E8 #E8B49C #FFF8F4 #C88A6C` |
+| amber | `#FFF1E2 #F0B27A #FFF8F0 #CC8142` |
 
 - **The three cool marks take ground B (0.39).** Ground A is not rejected. It is an unchosen
   option, and its hexes are in section 3.
+- **Orange joins the warm family and takes true black.** It is the owner's color for Riftbound's Epic gem. Its prism is the yellow-gold ramp turned toward red, and its bracket is `amber`: paler than the prism and warmer than pale gold, so the L still reads against black and the mark stays one object, not a gold mark with an orange card.
 - **The gold family takes true black.** The tonal rule gives gold an espresso brown, and true
   black is what makes a gold foil read as lit.
 - **`rose` names two palettes**: a four-stop bracket gradient and a five-stop prism. Neither is

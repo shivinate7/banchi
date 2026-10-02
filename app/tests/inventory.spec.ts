@@ -5465,6 +5465,19 @@ test('the neighbour row marks this card with the Banchi card, and the row does n
   expect((await band.boundingBox())?.y).toBe(box?.y)
 })
 
+test('the neighbour mark wears the shown card\'s rarity palette', async ({ page }) => {
+  const cards: Cards = {
+    '2/1': card({
+      index: 1, state: 'identified', name: 'Test Card', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3,
+      game: 'riftbound', catalogRarity: 'Epic',
+      neighbors: { prev: { index: 18, slot: 17, name: 'Galio, Indefaticable' }, next: { index: 20, slot: 19, name: 'Evelynn, Entrancing' } },
+    }),
+  }
+  await open(page, BOXES, { cards, search: (query) => searchAnswer(query, cards) })
+  /* Epic is the orange mark (rarityMarks.ts); its prism's middle stop is #F58A2E. */
+  await expect(page.locator('.card-locations-row.is-current .nb-here stop[stop-color="#F58A2E"]')).toHaveCount(1)
+})
+
 test('the glint is off until a caller gates it on', async ({ page }) => {
   await open(page, BOXES, { cards: NEIGHBORLY, search: (query) => searchAnswer(query, NEIGHBORLY) })
   await expect(page.locator('.card-locations-owner .nb-here svg')).not.toHaveCount(0)
