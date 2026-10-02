@@ -282,7 +282,8 @@ export function FilterBar<K extends string = string>({
 
       {count.quietAtRest === true && words.length === 0 && count.shown === count.total ? null : (
         <FilterCount shown={count.shown} total={count.total} noun={count.noun} filters={words} onClear={clearable ? clearAll : undefined} />
-      )}    </div>
+      )}
+    </div>
   )
 }
 

@@ -871,7 +871,7 @@ const STATUS_PILL: Record<Status, { label: string; tone: PillTone; icon: IconNam
   done: { label: 'Done', tone: 'default', icon: 'check' },
 }
 
-/** The five sorts (`D296`, the owner's pick, 2026-09-25): when the buyer's newest
+/** The six sorts (`D296`, the owner's pick, 2026-09-25): when the buyer's newest
  *  order was placed (FLT-01: a press re-sorts at once), the buyer's own order total, how many
  *  copies are still owed, the buyer's name, and the fewest drawers to open for them. A buyer
  *  whose every owed copy is in the boxes leads every one of these. At rest the key is `waited`,

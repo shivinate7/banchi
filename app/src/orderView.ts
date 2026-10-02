@@ -57,7 +57,7 @@ function placedAtMs(placedAt: string | null): number {
   return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed
 }
 
-/* ---- the five sorts (`D296`, the owner's pick, 2026-09-25) -------------------------
+/* ---- the six sorts (`D296`, the owner's pick, 2026-09-25) -------------------------
  *
  * `placed` is the original D296 sort. The other four are the owner's own four picks, verbatim:
  * "Dollar value, Card count, Buyer name, Fewest drawers to open". Each ranks BUYERS — the group,
@@ -82,7 +82,7 @@ function placedAtMs(placedAt: string | null): number {
  * (`GroupTake`/`takeOrder`/`applyTake` below) at every EXPLICIT input (a sort press, a filter, a
  * search keystroke) and holds it across a write's own re-render. `placed` and `buyer` need no
  * such freeze on their own — neither field moves under a pull — but the position snapshot
- * covers every key uniformly rather than freezing three of five and not the other two. */
+ * covers every key uniformly rather than freezing three of six and not the other three. */
 
 /* `waited` is the at-rest key (D296): the buyer's EARLIEST open order, so the buyer who has
  * waited longest comes first. `placed` stays the buyer's NEWEST order, on purpose (D296 ruling 1). */

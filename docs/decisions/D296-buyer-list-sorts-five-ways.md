@@ -1,4 +1,4 @@
-## D296 — Buyer list sorts five ways
+## D296 — Buyer list sorts six ways
 
 **The owner's request, verbatim, 2026-09-25:**
 
@@ -33,7 +33,7 @@ The owner then picked all four suggestions offered back to him: **Dollar value, 
    filter or search press retakes the order.
 
 3. **Ties break by placed date, newest first, on every key.** This is the owner's own words
-   for this task, read as the one tiebreak all five keys share.
+   for this task, read as the one tiebreak all six keys share.
 
 4. **Fewest drawers reuses the walk planner's own solve.** It is never a second box-counting
    pass. `POST /orders/walk-plan` (`pipeline/walkplan.py`) already answers, for a set of
@@ -52,7 +52,7 @@ The owner then picked all four suggestions offered back to him: **Dollar value, 
    not the same fact as a buyer standing at one drawer. This sort does not tell them apart
    from each other, only from a buyer standing at one or more.
 
-6. **Three of the five keys read mutable fields, and a freeze protects all five alike.**
+6. **Three of the six keys read mutable fields, and a freeze protects all six alike.**
    Dollar value and Card count read `OrderLineWire.quantity`/`unit_price` against what a pull
    has recorded. Fewest drawers reads a network answer that also changes under a pull.
    Picking any of the three would re-rank the list under the operator's hand the moment a
@@ -60,7 +60,7 @@ The owner then picked all four suggestions offered back to him: **Dollar value, 
    (`GroupTake`/`takeOrder`/`applyTake` in `orderView.ts`) is taken at every EXPLICIT input —
    a sort press, a facet, a search keystroke. It is held across a write's own re-render. This
    generalizes D181's "a press may reorder, nothing else may" to every key alike. It does not
-   freeze three of five and leave `placed`/`buyer` unguarded by mere convention. The snapshot
+   freeze three of six and leave `placed`/`buyer` unguarded by mere convention. The snapshot
    also retakes the moment a freshly-picked Fewest-drawers sort's own walk-plan answer lands.
    That fetch is the one this press itself asked for. It is not held back by the freeze that
    guards against a pull. The first rows to land are taken too: the first render has no ledger,
