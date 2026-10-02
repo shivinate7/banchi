@@ -2,7 +2,7 @@
 
 Code cards are dormant, and this is what arms on the day one is photographed. A `pokemon_code` card (`located: False`, `catalogued: True`, `join_key: name_only`, `prompt: pokemon_code_v1` in `pipeline/games.py`) goes through `identify`, `join` and `emit` like any singles card, and `cli/cmd_identify.CODE_GAME` names it. Its photograph lands in `captures/cards/box<n>/` beside every located card's.
 
-`located: false` suppresses the position label and bar on every owner screen and the photograph on none. `PricingSku.positions` (`app/src/types.ts`) is `{box, index, label}` with no `located` and no `game`, so `#/pricing` cannot filter. `server/pipeline_routes._relabel_positions` fixed the caption only.
+`located: false` suppresses the position label and bar on every owner screen and the photograph on none. `PricingSku.positions` (`app/src/types.ts`) is `{box, index, label, cid?, capture_id?}` with no `located` and no `game`, so `#/pricing` cannot filter. `server/pipeline_routes._relabel_positions` fixed the caption only.
 
 | screen | state |
 |---|---|
