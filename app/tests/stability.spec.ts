@@ -1012,3 +1012,82 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
     expect(bad, 'these moved something the person did not move').toEqual([])
   })
 }
+
+/* ORDERS: THE STRIP, THE HERO AND THE PANEL HOLD THEIR FRAMES (D313). The walk draws the open buyer's
+   photographs in a strip over Inventory's card view. Opening a buyer, stepping to the next one, a sale
+   and its undo move none of the three until the person moves them: while the plan is out the old buyer
+   stands in the same boxes, and a sale or an undo leaves every box where it was. The plan here has
+   three takes for every buyer, so the strip is drawn. `wide` is Verdana with the web fonts blocked. */
+const STRIP_PARTS = ['.orders-strip', '.orders-cardcol .browse-band', '.orders-cardcol .browse-photo-frame', '.orders-panel', '.orders-pick-nav'] as const
+for (const width of [1440, 820]) for (const wide of [false, true]) {
+  const via = (name: string) => `held frame: ${name}${wide ? ', wide face' : ''}, at ${width}`
+  const stripScreen = async (page: Page): Promise<{ gate: { on: boolean }; boxes: () => Promise<string> }> => {
+    if (wide) {
+      await page.route(/\.(woff2?|ttf)(\?|$)/, (route) => route.abort())
+      await page.addInitScript(() => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const st = document.createElement('style')
+          st.textContent = '*{font-family:Verdana,sans-serif !important}'
+          document.head.append(st)
+        })
+      })
+    }
+    await seedPopulatedOrders(page)
+    const gate = { on: false }
+    await page.route(/\/orders\/walk-plan$/, async (route) => {
+      if (gate.on) await new Promise((r) => setTimeout(r, READ_MS))
+      const plan = severalOrdersWalkPlan()
+      const stop = plan.stops[0]!
+      stop.takes = [0, 1, 2].map((i) => ({ ...stop.takes[0]!, sku: `919148${i}` }))
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(plan) })
+    })
+    await setViewport(page, { width, height: 1000 })
+    await watchShifts(page)
+    const boxes = () =>
+      page.evaluate((sels) => JSON.stringify(sels.map((s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return r ? [s, r.x, r.y + window.scrollY, r.width, r.height] : [s] })), [...STRIP_PARTS])
+    return { gate, boxes }
+  }
+
+  for (const [name, press] of [
+    ['opening a buyer', (page: Page) => page.getByRole('button', { name: 'Grace Hopper' }).first().click()],
+    ['stepping to the next buyer', (page: Page) => page.keyboard.press('ArrowDown')],
+  ] as const) {
+    test(via(`${name} holds the strip, the hero and the panel until the plan lands`), async ({ page }) => {
+      const { gate, boxes } = await stripScreen(page)
+      await page.goto(screen('orders'))
+      await expect(page.locator('.orders-strip')).toBeVisible()
+      await settleFonts(page)
+      await settleMotion(page)
+      const before = await boxes()
+      const r = await heldPress(page, gate, async () => {
+        await press(page)
+        await page.waitForTimeout(250)
+        expect(await boxes(), 'a box moved while the plan was out').toBe(before)
+      })
+      expectHeld(r, 0.001)
+    })
+  }
+
+  test(via('a sale and its undo move neither the strip, the hero nor the panel'), async ({ page }) => {
+    const { boxes } = await stripScreen(page)
+    await page.route(/\/orders\/pull$/, (route) => {
+      const undo = (route.request().postDataJSON() as { undo?: boolean } | null)?.undo === true
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ undone: undo, order_key: severalOrders().orders[0]!.key, sku: '9191480', newly: undo ? -1 : 1, recorded: undo ? 0 : 1, outstanding: undo ? 1 : 0, places: [], sales: [] }) })
+    })
+    await page.goto(screen('orders'))
+    await expect(page.locator('.orders-strip')).toBeVisible()
+    await settleFonts(page)
+    await settleMotion(page)
+    const before = await boxes()
+    const bad: string[] = []
+    await page.getByRole('button', { name: /Mark sold/ }).first().click()
+    await expect(page.locator('.orders-strip-card.is-done').first()).toBeVisible()
+    await settleMotion(page)
+    if ((await boxes()) !== before) bad.push('sale')
+    await page.getByRole('button', { name: /^Undo/ }).first().click()
+    await expect(page.locator('.orders-strip-card.is-done')).toHaveCount(0)
+    await settleMotion(page)
+    if ((await boxes()) !== before) bad.push('undo')
+    expect(bad, 'these moved something the person did not move').toEqual([])
+  })
+}

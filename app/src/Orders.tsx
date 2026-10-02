@@ -35,7 +35,7 @@ import { absoluteDate, relativeDate } from './dates'
 import { toast } from './kit/toast'
 import { boxTitle } from './kit/data'
 import { CardPane, gameWord, photoSrc, type HeroFigures, type Row } from './CardHero'
-import { layoutsOf } from './CardLocations'
+import { CardLocations, layoutsOf } from './CardLocations'
 import { Dialog as Overlay } from './kit/overlay'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { orderReasonLabel, orderReasonRemedy } from './orderReasons'
@@ -87,7 +87,7 @@ import {
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
-import { pickFigureOf, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
+import { pickFigureOf, RowAction, WalkStrip, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
 import type {
   BoxRecord,
   IngestResult,
@@ -2617,13 +2617,15 @@ function OrderPickPane({
   owedBySku,
   showBuyers,
   boxes,
+  sections,
 }: {
+  readonly sections?: ReadonlyMap<number, readonly SectionDetail[]>
   readonly boxes: readonly BoxRecord[]
   readonly walk: OrderWalk
   readonly owedBySku: ReadonlyMap<string, number>
   readonly showBuyers: boolean
 }) {
-  const { currentRow, currentGroup, currentCard } = walk
+  const { currentRow, currentGroup, currentWhere, currentCard } = walk
 
   const [broken, setBroken] = useState(false)
   const [zoomed, setZoomed] = useState(false)
@@ -2632,7 +2634,9 @@ function OrderPickPane({
     setZoomed(false)
   }, [currentRow?.copy.key])
 
-  if (currentRow === null || currentGroup === null) return null
+  if (currentRow === null || currentGroup === null || currentWhere === null) return null
+  const where = currentWhere
+  const spareOpen = walk.openSpares.has(currentRow.takeKey)
 
   const figure = pickFigureOf(currentRow.take, owedBySku)
   /* THE HEAD RESOLVES FROM `take` UNTIL `rawCards` DOES — `currentCard` is null only
@@ -2670,6 +2674,40 @@ function OrderPickPane({
         }
         postChips={showBuyers ? <Pill>For {takeBuyers(currentRow.take)}</Pill> : undefined}
         figures={figures}
+        detail={
+          <>
+            <CardLocations
+              group={where}
+              persona="owner"
+              onSell={walk.onSell}
+              busyKey={walk.busyCopy}
+              soldKeys={walk.soldKeys}
+              sections={sections}
+              currentKey={currentRow.copy.key}
+              preserveOrder
+              renderAction={(copy) => {
+                const at = where.copies.findIndex((one) => one.key === copy.key)
+                return <RowAction walk={walk} copy={copy} take={currentRow.take} hint={at >= 0 && at < 9 ? String(at + 1) : undefined} />
+              }}
+            />
+            {/* THE SPARES, FOLDED (the owner's ruling): copies of this pick the solver did not choose. Opened, they
+                are more copy rows in the same list, sold through the same press, and the digits continue into them. */}
+            {walk.currentSpares === 0 ? null : (
+              <div className="orders-walk-spares">
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  iconRight={spareOpen ? 'chevronUp' : 'chevronDown'}
+                  aria-expanded={spareOpen}
+                  words="not-in-vocabulary"
+                  onClick={() => walk.toggleSpares(currentRow.takeKey)}
+                >
+                  {walk.currentSpares} more elsewhere
+                </Button>
+              </div>
+            )}
+          </>
+        }
         photo={{
           label: place,
           absent: broken,
@@ -2768,6 +2806,29 @@ function PullStage({
    *  both panes stay mounted. The one JS read is at the PRESS, in `openCardSheet`: a tap on a walk
    *  row opens the card in a sheet only where the column has no room to draw it beside the walk. */
   const orderBody = useRef<HTMLDivElement | null>(null)
+  /* A PANE TALLER THAN THE WINDOW IS NOT STICKY, and never scrolls inside itself (the owner: no inner scroll on
+   *  copy rows). A sticky column holds its top edge, so its lower copies (spares open, many copies) could never be
+   *  reached; `data-tall` hands it back to the page's own scroll. A callback ref, for the reason above. */
+  const tallWatch = useRef<(() => void) | null>(null)
+  const cardcolRef = useCallback((node: HTMLDivElement | null) => {
+    tallWatch.current?.()
+    tallWatch.current = null
+    if (node === null) return
+    const mark = () => {
+      if (node.hasAttribute('data-tall')) {
+        // Static, so its height is its own: it stays static until it fits again.
+        if (node.getBoundingClientRect().height <= window.innerHeight - 32) node.removeAttribute('data-tall')
+      } else if (node.getBoundingClientRect().height > window.innerHeight - 32) node.setAttribute('data-tall', 'true')
+    }
+    mark()
+    const watch = new ResizeObserver(mark)
+    watch.observe(node)
+    window.addEventListener('resize', mark)
+    tallWatch.current = () => {
+      watch.disconnect()
+      window.removeEventListener('resize', mark)
+    }
+  }, [])
   const openCardSheet = () => {
     if ((orderBody.current?.getBoundingClientRect().width ?? Infinity) < 560) setCardSheetOpen(true)
   }
@@ -3219,7 +3280,6 @@ function PullStage({
    *  toggle independently (`WalkList`'s own chevron stays decorative), so one boolean answers
    *  for the whole list. Not persisted — a fresh mount always opens expanded, matching what
    *  this list has always drawn. */
-  const [sectionsCollapsed, setSectionsCollapsed] = useState(false)
   const toggleWalkTick = (key: string) =>
     setWalkTicked((prev) => {
       const next = new Set(prev)
@@ -3658,6 +3718,10 @@ function PullStage({
     0,
   )
 
+  /* The strip's closing count: the copies the walked orders want that no box holds. */
+  let notInBoxes = 0
+  for (const key of shownKeys) for (const line of answers.get(key)?.lines ?? []) notInBoxes += Math.max(0, line.outstanding)
+
   const walkHead =
     walkedGroups.length > 1 ? (
       <div className="orders-walk-crowd">
@@ -3694,15 +3758,9 @@ function PullStage({
       ) : (
         <>
           <div className="orders-walk-tools">
-            {walk.sections.length < 2 ? (
-              <span className="orders-walk-count">
-                {walk.sections.length} {plural(walk.sections.length, 'section', 'sections')}
-              </span>
-            ) : (
-              <Button variant="quiet" size="sm" icon={sectionsCollapsed ? 'chevronDown' : 'chevronUp'} onClick={() => setSectionsCollapsed((v) => !v)}>
-                {sectionsCollapsed ? 'Open' : 'Fold'} {walk.sections.length} sections
-              </Button>
-            )}
+            <span className="orders-walk-count">
+              {walk.sections.length} {plural(walk.sections.length, 'section', 'sections')}
+            </span>
             <span className="bn-spacer" />
             <HideToggle checked={hideSold} onChange={setHideSold} count={walk.soldKeys.size}>
               Picked
@@ -3711,10 +3769,8 @@ function PullStage({
           <WalkList
             walk={walk}
             hideSold={hideSold}
-            collapsed={sectionsCollapsed}
             owedBySku={owedBySku}
             showBuyers={walkedGroups.length > 1}
-            sections={sections}
             onPick={openCardSheet}
           />
         </>
@@ -3773,8 +3829,9 @@ function PullStage({
               `onPick` above). The column below 560px hides this pane in CSS (a container query);
               the press asks the width once, in `openCardSheet`. At 560px of column and up the pane
               is its usual sticky column beside the walk. */}
-          <div className="orders-cardcol" aria-busy={walkHeld ? 'true' : undefined} inert={walkHeld}>
-            <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} />
+          <div className="orders-cardcol" ref={cardcolRef} aria-busy={walkHeld ? 'true' : undefined} inert={walkHeld}>
+            <WalkStrip walk={walk} notInBoxes={notInBoxes} />
+            <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} sections={sections} />
           </div>
         </div>
       </div>
@@ -3784,7 +3841,7 @@ function PullStage({
         title={walk.currentRow?.take.name ?? 'The card'}
         className="orders-card-sheet"
       >
-        <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} />
+        <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} sections={sections} />
       </Sheet>
 
       <Sheet open={buyersOpen} onClose={() => setBuyersOpen(false)} title="Buyers" icon="list" className="orders-buyers-sheet">

@@ -322,9 +322,9 @@ async function open(page: Page, options: { plan?: WalkPlan; orders?: OrdersPaylo
   return wire
 }
 
-/* The pick the walk stands on, in the walk column: the copies' rows and their presses live there now
-   (the card pane holds the head, the band and the photograph only). */
-const CURRENT_PICK = '.orders-walk-line:has(.orders-walk-press[aria-current="true"])'
+/* The pick the walk stands on: its copies' rows and their presses are in the card pane, beside the
+   photograph. The rail's line carries the card and its count only. */
+const CURRENT_PICK = '.orders-cardcol'
 
 sealEveryTest()
 
@@ -552,7 +552,7 @@ function twoStopTwoSkuPlan(): WalkPlan {
   ])
 }
 
-test('every walk row draws its own here-copies, and Mark sold on one sends that row\'s own take', async ({
+test('a walk row draws no copies, a press shows its card in the pane, and Mark sold there sends that row\'s own take', async ({
   page,
 }) => {
   const SKU_B = '9191487'
@@ -592,22 +592,21 @@ test('every walk row draws its own here-copies, and Mark sold on one sends that 
     ),
   })
 
-  // EVERY WALK ROW'S OWN LOCATION DETAIL: box, section and card, neighbours and the ruler,
-  // reused whole from `CardLocations` (D304).
-  const walkRows = page.locator('.orders-walk-list .card-locations-row')
-  await expect(walkRows).toHaveCount(2)
-  for (const row of [walkRows.nth(0), walkRows.nth(1)]) {
-    await expect(row.locator('.card-locations-identity')).toBeVisible()
-    await expect(row.locator('.nb')).toBeVisible()
-    await expect(row.locator('.position-bar[data-depth="on"]')).toBeVisible()
-  }
-  await expect(walkRows.nth(0)).toContainText('RB Epics')
-  await expect(walkRows.nth(1)).toContainText('WB1 R2')
+  // THE RAIL LINE IS ONE LINE A CARD: the copies, with box, section, neighbours and ruler, are the pane's
+  // (`CardLocations`, reused whole), for the card the walk stands on.
+  await expect(page.locator('.orders-walk-list .card-locations-row')).toHaveCount(0)
+  const paneRows = page.locator('.orders-cardcol .card-locations-row')
+  await expect(paneRows).toHaveCount(1)
+  await expect(paneRows.first()).toContainText('RB Epics')
+  await expect(paneRows.first().locator('.card-locations-identity')).toBeVisible()
+  await expect(paneRows.first().locator('.position-bar[data-depth="on"]')).toBeVisible()
 
-  // THE WALK LANDS ON THE FIRST STOP (Volcanion). Pressing Mark sold on the SECOND row —
-  // Tricksy Tentacles, a take the pane is not showing — must record THAT take's own SKU and
-  // THAT copy's own target, never the pane's current one.
-  await walkRows.nth(1).getByRole('button', { name: 'Mark sold' }).click()
+  // THE WALK LANDS ON THE FIRST STOP (Volcanion). A press on the SECOND row shows Tricksy Tentacles in
+  // the pane, and Mark sold there must record THAT take's own SKU and THAT copy's own target.
+  await page.locator('.orders-walk-press', { hasText: 'Tricksy Tentacles' }).click()
+  await expect(paneRows).toHaveCount(1)
+  await expect(paneRows.first()).toContainText('WB1 R2')
+  await paneRows.first().getByRole('button', { name: 'Mark sold' }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
   const sent = wire.find((one) => one.path.endsWith('/orders/pull'))
   expect(sent?.body).toMatchObject({
