@@ -111,9 +111,8 @@ on:
   # out without having to remember to look.
   push:
     branches: [main]
-  # THE NIGHTLY FULL RUN (the required-checks entry in docs/decisions/, D136). A merge is
-  # allowed without the browser matrix because this run re-checks main at night and flags the
-  # owner with an issue. It runs every check and every browser shard: no path scope skips
+  # THE NIGHTLY FULL RUN (the required-checks entry in docs/decisions/, D136). `check` fails
+  # on a red browser matrix; this run still re-checks main at night and flags the owner with an issue. It runs every check and every browser shard: no path scope skips
   # anything on a schedule or a dispatch (see the scope hatches on the steps below).
   schedule:
     - cron: '17 3 * * *'
@@ -221,23 +220,30 @@ jobs:
         run: make ${{ matrix.target }}
 
   # THE REQUIRED CHECK. The ruleset names `check`, so this job keeps that name and passes only
-  # when every shard passed. `if: always()` because a job that `needs` a red shard is otherwise
-  # SKIPPED, and a skipped required check reads as not run; the test is `== 'success'` on every
-  # result, so a failed, skipped or cancelled shard all fail it.
+  # when every shard passed AND the browser matrix did not fail. `if: always()` because a job
+  # that `needs` a red job is otherwise SKIPPED, and a skipped required check reads as not run.
+  # Shards must be `success`. `design-check` may also be `skipped`, and only because its own
+  # `if:` skipped it (`browser-scope` said no browser can reach the change, or `already-passed`
+  # found this tree green): `failure` and `cancelled` fail `check`. The matrix is advisory no
+  # more. ponytail: the smallest in-repo gate; it can move to claude-settings'
+  # `actions/all-jobs-passed` once that is merged.
   check:
-    needs: [ci-check]
+    needs: [ci-check, design-check]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: every shard succeeded
+      - name: every shard succeeded and the browser matrix did not fail
         env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
+          SHARDS: ${{ needs.ci-check.result }}
+          BROWSER: ${{ needs.design-check.result }}
         run: |
-          echo "shard results: ${RESULTS}"
-          for r in ${RESULTS}; do
-            [ "${r}" = "success" ] || { echo "a shard did not succeed"; exit 1; }
-          done
+          echo "shard result: ${SHARDS}; browser matrix result: ${BROWSER}"
+          [ "${SHARDS}" = "success" ] || { echo "a shard did not succeed"; exit 1; }
+          case "${BROWSER}" in
+            success|skipped) ;;
+            *) echo "the browser matrix ${BROWSER}"; exit 1 ;;
+          esac
 
   # D133's guard as its own check on the PR, so a refusal reads as what it is rather than as one
   # red line inside ninety seconds of `make ci-check` (which runs it too, as `revert-guard`).
