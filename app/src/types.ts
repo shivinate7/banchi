@@ -2247,6 +2247,35 @@ export type ProductHistoryPayload = {
   never_sold: boolean
 }
 
+/** One sale against the archived market on its date (`GET /pipeline/products/<sku>/realized`,
+ *  DEBT70). Dates and money only: the server drops every buyer field while parsing. */
+export type RealizedRow = {
+  day: string
+  quantity: number
+  price: string
+  market: string | null
+  refunded: boolean
+  condition: string
+  finish: string
+}
+
+export type RealizedPayload =
+  | { sku: string; configured: false }
+  | {
+      sku: string
+      configured: true
+      file: string
+      product_id: number | null
+      product_skus: number
+      left_out: { not_a_sale: number; not_usd: number; unreadable: number }
+      rows: RealizedRow[]
+      units: number
+      refunded: number
+      no_market: number
+      realized_avg: string | null
+      market_avg: string | null
+    }
+
 /** ONE RANGE'S NAMES — `GET /pipeline/holdings-value?range=<range>`, D236. UNSOLD STOCK, never
  *  sold-then-against-now (that is D225's `SoldPricesLookup`, a different figure this must
  *  never merge with). The four ranges overlap on the calendar and are NEVER merged or

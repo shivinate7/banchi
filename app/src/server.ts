@@ -67,6 +67,7 @@ import type {
   RunDetail,
   PriceHistoryPayload,
   ProductHistoryPayload,
+  RealizedPayload,
   PricingPayload,
   PricingCorpus,
   PricingClearable,
@@ -3227,6 +3228,15 @@ export async function getProductHistory(sku: string): Promise<ProductHistoryPayl
     `/pipeline/products/${encodeURIComponent(sku)}/history`,
     NO_CACHE,
   )) as ProductHistoryPayload
+}
+
+/** What this seller got for the product, against the archived market on each sale date
+ *  (DEBT70). Read-only. `configured: false` when the server was given no sales export. */
+export async function getProductRealized(sku: string): Promise<RealizedPayload> {
+  return (await request(
+    `/pipeline/products/${encodeURIComponent(sku)}/realized`,
+    NO_CACHE,
+  )) as RealizedPayload
 }
 
 /**

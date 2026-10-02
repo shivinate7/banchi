@@ -47,8 +47,8 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { describeFailure, getOrders, getProductHistory, search, type Failure, failureTone } from './server'
-import type { OrderLineWire, OrderRow, ProductHistoryPayload, ProductHistoryRange, SearchGroup } from './types'
+import { describeFailure, getOrders, getProductHistory, getProductRealized, search, type Failure, failureTone } from './server'
+import type { OrderLineWire, OrderRow, ProductHistoryPayload, ProductHistoryRange, RealizedPayload, SearchGroup } from './types'
 import {
   Chip, EmptyState, IconButton, Loading, Money, Notice, Page, Pill, Sep, Sheet,
   registerSheet, sheetHref, type SheetHostProps, type SheetProps,
@@ -480,7 +480,82 @@ export function ProductHistoryView({ sku, onSwitchSku }: { readonly sku: string;
           </table>
         </section>
       ) : null}
+
+      <RealizedSection sku={payload.sku} />
     </div>
+  )
+}
+
+/** What this seller got against the market on each sale date (DEBT70). Its own fetch, so a
+ *  missing export never blocks the chart. Read-only. */
+function RealizedSection({ sku }: { readonly sku: string }) {
+  const [payload, setPayload] = useState<RealizedPayload | null>(null)
+  const [failure, setFailure] = useState<Failure | null>(null)
+  useEffect(() => {
+    let alive = true
+    setPayload(null)
+    setFailure(null)
+    getProductRealized(sku)
+      .then((p) => alive && setPayload(p))
+      .catch((err) => alive && setFailure(describeFailure(err)))
+    return () => {
+      alive = false
+    }
+  }, [sku])
+
+  if (failure !== null) return <Notice tone={failureTone(failure)} code={failure.code}>{failure.message}</Notice>
+  if (payload === null) return <Loading shape="rows" rows={1} label="Reading your sales" />
+  if (!payload.configured) {
+    return (
+      <section className="producthistory-realized">
+        <h3>What you got</h3>
+        <p className="producthistory-note">No sales export is chosen for this server, so your own sale prices are not shown.</p>
+      </section>
+    )
+  }
+  const num = (v: string | null) => (v === null ? null : Number(v))
+  const gap = payload.realized_avg !== null && payload.market_avg !== null ? Number(payload.realized_avg) - Number(payload.market_avg) : null
+  return (
+    <section className="producthistory-realized">
+      <h3>What you got</h3>
+      {payload.rows.length === 0 ? (
+        <p className="producthistory-note">No sale of this product is in {payload.file}.</p>
+      ) : (
+        <>
+          <p className="producthistory-note">
+            Your sale price against the market on the day it sold. {payload.units} {payload.units === 1 ? 'copy' : 'copies'} compared
+            {payload.refunded > 0 ? `, ${payload.refunded} refunded left out` : ''}
+            {payload.no_market > 0 ? `, ${payload.no_market} from before the archive left out` : ''}.
+            {payload.product_skus > 1 ? ' This product has several conditions; the market is the one on this page.' : ''}
+          </p>
+          <dl className="producthistory-realized-totals">
+            <div><dt>You got, per copy</dt><dd><Money value={num(payload.realized_avg)} /></dd></div>
+            <div><dt>Market, per copy</dt><dd><Money value={num(payload.market_avg)} /></dd></div>
+            <div><dt>Difference</dt><dd><Money value={gap} signed /></dd></div>
+          </dl>
+          <table className="bn-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th className="num">Copies</th>
+                <th className="num">You got</th>
+                <th className="num">Market that day</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payload.rows.map((r, i) => (
+                <tr key={i}>
+                  <td>{r.day}{r.refunded ? ' (refunded)' : ''}</td>
+                  <td className="num">{r.quantity}</td>
+                  <td className="num"><Money value={Number(r.price)} /></td>
+                  <td className="num"><Money value={num(r.market)} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </section>
   )
 }
 
