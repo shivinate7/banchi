@@ -4252,7 +4252,7 @@ test('#/inventory renders its own known shell unchanged by any of this', async (
      fixture worth one route table), so they are stubbed by hand here, the same way `?order=`'s
      own case above does for `#/orders`. */
   // Inventory's Deleted boxes shelf reads the burial lines; this store has none.
-  await page.route(/\/graveyard$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"departed":[]}' }))
+  await page.route(/\/graveyard(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"departed":[]}' }))
   await page.route(/\/queues$/, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"review":[],"parked":[]}' }),
   )

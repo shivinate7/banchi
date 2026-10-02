@@ -1,6 +1,6 @@
 // Protects: Inventory's Deleted boxes shelf lists the records of deleted boxes, the old Graveyard tab is gone, and a moved card names where it came from.
 // Governs: D134, D196, D313
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Page, type Route } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 
@@ -122,6 +122,68 @@ test.describe('the Deleted boxes shelf', () => {
     await page.getByRole('button', { name: 'Records from deleted boxes' }).click()
     await expect(page.getByRole('heading', { name: 'Thievul' })).toBeVisible()
     expect(await first.boundingBox(), 'the first box cell moved when the shelf was pressed').toEqual(before)
+  })
+})
+
+test.describe('the Deleted boxes shelf in a store with nothing on hand', () => {
+  test('a store with no box still reaches its records, and opens on them', async ({ page }) => {
+    await openInventory(page, DEPARTED, { boxes: { boxes: [] } })
+    await expect(page.getByRole('button', { name: 'Records from deleted boxes' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Thievul' })).toBeVisible()
+    await expect(page.getByText('No boxes yet')).toHaveCount(0)
+  })
+
+  test('a store whose boxes hold no card still reaches its records', async ({ page }) => {
+    const empty = { boxes: [{ ...BOXES.boxes[1]! }] }
+    await openInventory(page, DEPARTED, { boxes: empty })
+    await page.getByRole('button', { name: 'Records from deleted boxes' }).click()
+    await expect(page.getByRole('heading', { name: 'Thievul' })).toBeVisible()
+  })
+})
+
+test.describe('the Deleted boxes shelf reads and steps like a box', () => {
+  test('a failed read says so and tries again; the walk marks the record the pane shows; arrows step it', async ({ page }) => {
+    let failing = true
+    await openInventory(page, DEPARTED, {
+      graveyard: (route) => {
+        if (failing) return route.abort()
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: DEPARTED }) })
+      },
+    })
+    await expect(page.getByText('The records from deleted boxes could not be read.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Records from deleted boxes' })).toHaveCount(0)
+    failing = false
+    await page.getByRole('button', { name: 'Try again' }).click()
+    await page.getByRole('button', { name: 'Records from deleted boxes' }).click()
+
+    const marked = page.locator('.browse-list .browse-row[aria-current="true"]')
+    await expect(marked).toHaveCount(1)
+    await expect(marked).toContainText('Thievul')
+    await expect(page.getByRole('heading', { name: 'Thievul' })).toBeVisible()
+
+    await page.keyboard.press('ArrowRight')
+    await expect(marked).toContainText('Ambessa')
+    await expect(page.getByRole('heading', { name: 'Ambessa, Respected and Feared' })).toBeVisible()
+    await page.keyboard.press('ArrowLeft')
+    await expect(page.getByRole('heading', { name: 'Thievul' })).toBeVisible()
+  })
+
+  test('a late answer moves nothing: the screen waits for it before drawing the rail (D313)', async ({ page }) => {
+    await openInventory(page, DEPARTED, {
+      graveyard: async (route) => {
+        await new Promise((resume) => setTimeout(resume, 1500))
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: DEPARTED }) })
+      },
+    })
+    const cells = page.locator('.browse-boxcell')
+    const walk = page.locator('.browse-walk')
+    await expect(walk).toBeVisible()
+    await page.waitForTimeout(500) // the page's entrance has settled
+    const before = await walk.boundingBox()
+    // The shelf may arrive after the first box cell did, but the walk beneath must not move for it.
+    await expect(page.getByRole('button', { name: 'Records from deleted boxes' })).toBeVisible()
+    expect(await walk.boundingBox(), 'the walk moved when the shelf arrived').toEqual(before)
+    await expect(cells).toHaveCount(3)
   })
 })
 
@@ -254,10 +316,17 @@ function searchAnswer(query: string): { query: string; groups: unknown[] } {
   return { query, groups: [] }
 }
 
-async function openInventory(page: Page, departedRows: unknown[] = []): Promise<void> {
+async function openInventory(
+  page: Page,
+  departedRows: unknown[] = [],
+  options: { boxes?: unknown; graveyard?: (route: Route) => unknown } = {},
+): Promise<void> {
   // Inventory reads the burial lines for its Deleted boxes shelf, so every case answers `GET /graveyard`.
-  await page.route(/\/graveyard$/, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: departedRows }) }),
+  await page.route(
+    /\/graveyard(\?.*)?$/,
+    options.graveyard ??
+      ((route) =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: departedRows }) })),
   )
   await page.route(/\/photo\/\d+\/\d+/, (route) =>
     route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG }),
@@ -266,7 +335,7 @@ async function openInventory(page: Page, departedRows: unknown[] = []): Promise<
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ runs: [] }) }),
   )
   await page.route(/\/boxes$/, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(BOXES) }),
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(options.boxes ?? BOXES) }),
   )
   // BOTH BOXES, NOT ONLY THE ONE THE FIRST TEST NEEDS. `BOXES` registers two open boxes
   // (`Common bulk` and the empty `Rares`), and the rail's own recency/prefetch can ask for

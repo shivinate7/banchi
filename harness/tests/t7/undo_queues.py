@@ -1794,6 +1794,14 @@ def check_graveyard(checks: Checks) -> None:
             f"rows were: {rows!r}",
         )
 
+        only = capture_server.do_graveyard(buried_only=True)["departed"]
+        checks.ok(
+            len(only) == 1 and only[0]["buried"] is True and only[0]["name"] == "Alpha",
+            "`buried_only` answers the deleted box's record alone — the standing retirement is "
+            "not built, so a sale or a retire never pays for rows the shelf would drop",
+            f"rows were: {only!r}",
+        )
+
 
 def check_listing_release(checks: Checks) -> None:
     """GET /boxes/<box>/listings and its release — D34, the door the delete gate lacked.

@@ -28,8 +28,11 @@ record is buried) point 5 says where its records live now. The shelf is built.
   links to its price history (`#/product`).
 - The photograph slot says once that the photograph went with the box (`PhotoPanel`'s `gone`).
   The pane has no card actions and no Details disclosure.
-- It reads the buried half of `GET /graveyard` through `getGraveyard`. No new route. A failed read
-  leaves the shelf out, like a failed box registry.
+- It reads `GET /graveyard?buried=1`, which answers the records of deleted boxes alone and builds
+  no standing row. No new route. A failed read draws a Notice with Try again.
+- The screen waits for that read before it draws the rail, so the shelf never arrives late and
+  moves the walk (D313). A store with no box on hand still draws the rail for its shelf, and opens
+  on it when it is the only one. The arrow keys step the records as they step a box's walk.
 - Leaving the shelf for a box holds the shelf, dimmed, until that box answers (D313).
 - `Manage box`'s delete panel and receipt name the shelf, and count only sold and retired records.
   A moved tombstone is buried too. A moved card is alive elsewhere, so the shelf never shows it.

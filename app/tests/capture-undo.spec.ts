@@ -748,7 +748,7 @@ test('a capture built on its sitting refuses, and offers Manage box', async ({ p
    * otherwise needs. Stubbed here, not globally: this is the one test in this file that
    * ever lets the hash leave `#/capture`. */
   // Inventory's Deleted boxes shelf reads the burial lines; this store has none.
-  await page.route(/\/graveyard$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"departed":[]}' }))
+  await page.route(/\/graveyard(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"departed":[]}' }))
   await page.route(/\/queues$/, (route) =>
     route.fulfill({
       status: 200,

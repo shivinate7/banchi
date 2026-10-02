@@ -2234,7 +2234,8 @@ export async function deleteBox(box: number): Promise<BoxDeleteResult> {
 }
 
 /**
- * Every departed card the store still knows about, newest departure first (D134).
+ * The sold and retired records the store keeps, newest departure first (D134). `buriedOnly`
+ * asks for the records of deleted boxes alone, which is all the Deleted boxes shelf reads.
  *
  * TWO SOURCES, ONE SHAPE. A sold, retired or moved record can be standing in a box nobody
  * has deleted — the same records `#/inventory` already draws as departed — or it can be the
@@ -2242,10 +2243,10 @@ export async function deleteBox(box: number): Promise<BoxDeleteResult> {
  * `DepartedCard.buried` is which one a row came from; nothing else about the shape differs,
  * and a record is never counted from both sources at once.
  *
- * Free and read-only. Inventory's Deleted boxes shelf is the one screen that calls this.
+ * Free and read-only.
  */
-export async function getGraveyard(): Promise<GraveyardPayload> {
-  return (await request('/graveyard')) as GraveyardPayload
+export async function getGraveyard(options: { buriedOnly?: boolean } = {}): Promise<GraveyardPayload> {
+  return (await request(options.buriedOnly === true ? '/graveyard?buried=1' : '/graveyard')) as GraveyardPayload
 }
 
 /**

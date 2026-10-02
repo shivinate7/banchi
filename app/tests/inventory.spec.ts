@@ -767,7 +767,7 @@ async function open(
 
   /* The Deleted boxes shelf reads the burial lines. This fixture has no deleted box, so none: the
      shelf has its own cases in `deleted-boxes.spec.ts`. */
-  await page.route(/\/graveyard$/, (route) =>
+  await page.route(/\/graveyard(\?.*)?$/, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: [] }) }),
   )
 
@@ -1237,7 +1237,7 @@ sealEveryTest()
  * screen fires with no shelf resolved — `/boxes`, `/queues`, `/orders`, `/graveyard` — and nothing else,
  * so an unstubbed read the fix accidentally starts would fail loudly through `sealCapture`. */
 test('a zero-box store renders "No boxes yet" instead of loading forever', async ({ page }) => {
-  await page.route(/\/graveyard$/, (route) =>
+  await page.route(/\/graveyard(\?.*)?$/, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: [] }) }),
   )
   await page.route(/\/boxes$/, (route) =>

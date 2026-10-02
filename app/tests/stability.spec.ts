@@ -319,7 +319,7 @@ const L1_BURIED = [
 for (const width of [1440, 820]) {
   test(`held frame: pressing the Deleted boxes shelf swaps the walk once, at ${width}`, async ({ page }) => {
     await l1Inventory(page)
-    await page.route(/\/graveyard$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: L1_BURIED }) }))
+    await page.route(/\/graveyard(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: L1_BURIED }) }))
     const gate = await heldReads(page, /\/inventory\/\d+$/)
     await watchShifts(page)
     await setViewport(page, { width, height: 1000 })
@@ -331,7 +331,7 @@ for (const width of [1440, 820]) {
 
   test(`held frame: leaving the Deleted boxes shelf for a box holds the shelf until the read lands, at ${width}`, async ({ page }) => {
     await l1Inventory(page)
-    await page.route(/\/graveyard$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: L1_BURIED }) }))
+    await page.route(/\/graveyard(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: L1_BURIED }) }))
     const gate = await heldReads(page, /\/inventory\/\d+$/)
     await watchShifts(page)
     await setViewport(page, { width, height: 1000 })

@@ -7006,10 +7006,12 @@ def _departed_row(
     }
 
 
-def do_graveyard() -> dict:
-    """Every card that TRULY LEFT the store: sold or retired, newest departure first
-    (D134, amended by the UX review's graveyard ruling, 2026-09-26, verbatim: "Move Moved
-    out of Graveyard").
+def do_graveyard(buried_only: bool = False) -> dict:
+    """The sold and retired records the store keeps, newest departure first, in one shape
+    (D134, amended by the UX review's graveyard ruling, verbatim: "Move Moved out of
+    Graveyard"). With `buried_only` it answers the `buried` half alone: the records whose box
+    was deleted, which Inventory's Deleted boxes shelf reads. That path skips the in-box half,
+    so it builds no standing row and joins no order for a record the client would drop.
 
     MOVED IS NOT A DEPARTURE. A moved record is a tombstone at its old key — the card
     itself is alive at `moved_to`, in another box, exactly as sellable as it ever was.
@@ -7056,7 +7058,7 @@ def do_graveyard() -> dict:
     _DEPARTED_STATES = tuple(s for s in master.TERMINAL_STATES if s != master.MOVED)
 
     rows: List[dict] = []
-    for state in _DEPARTED_STATES:
+    for state in () if buried_only else _DEPARTED_STATES:
         for card in inventory.cards.where(state=state):
             registered = inventory.box(card.box)
             order = None
@@ -16311,7 +16313,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # D134's graveyard: an exact string, matched by no other route's pattern, over
             # a lock-free read on both its sources.
             if path == "/graveyard":
-                return self._json(HTTPStatus.OK, do_graveyard())
+                params = parse_qs(parsed.query)
+                return self._json(HTTPStatus.OK, do_graveyard(buried_only=params.get("buried") == ["1"]))
             if path == "/games":
                 return self._json(HTTPStatus.OK, do_games())
             # D69's order screen. An exact string and therefore no ordering hazard, and a

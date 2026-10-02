@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { getGraveyard } from './server'
+import { describeFailure, getGraveyard, type Failure } from './server'
 import type { DepartedCard, InventoryCard } from './types'
 import { Icon } from './kit'
 import { CardPane, gameWord, type Row } from './CardHero'
@@ -68,30 +68,38 @@ function rowsOf(buried: readonly DepartedCard[]): { box: string; record: Departe
   )
 }
 
-/** The key the walk lands on and the pane opens: the first record, until one is picked. */
-export function firstBuriedKey(buried: readonly DepartedCard[]): string | null {
-  const first = rowsOf(buried)[0]
-  return first === undefined ? null : first.row.key
+/** The keys of the records in the walk's own order, so the walk, the pane and the arrow keys agree
+ *  on which record is first and which is next. */
+export function buriedKeys(buried: readonly DepartedCard[]): string[] {
+  return rowsOf(buried).map((entry) => entry.row.key)
 }
 
-/** The records from deleted boxes, or null until the read lands. A failed read leaves the shelf
- *  out, the way a failed box registry leaves its facts out: the rest of the screen is whole. */
-export function useBuried(reloadToken: number): readonly DepartedCard[] | null {
+/** The records from deleted boxes, or null until the read lands. A failed read is `failure`, which
+ *  the screen draws with a Try again that calls `retry`. */
+export function useBuried(reloadToken: number): {
+  readonly buried: readonly DepartedCard[] | null
+  readonly failure: Failure | null
+  readonly retry: () => void
+} {
   const [buried, setBuried] = useState<readonly DepartedCard[] | null>(null)
+  const [failure, setFailure] = useState<Failure | null>(null)
+  const [tries, setTries] = useState(0)
   useEffect(() => {
     let live = true
-    getGraveyard()
+    getGraveyard({ buriedOnly: true })
       .then((payload) => {
-        if (live) setBuried(payload.departed.filter((record) => record.buried))
+        if (!live) return
+        setBuried(payload.departed.filter((record) => record.buried))
+        setFailure(null)
       })
-      .catch(() => {
-        // Deliberately nothing, the same as the registry read beside it.
+      .catch((err: unknown) => {
+        if (live) setFailure(describeFailure(err))
       })
     return () => {
       live = false
     }
-  }, [reloadToken])
-  return buried
+  }, [reloadToken, tries])
+  return { buried, failure, retry: () => setTries((n) => n + 1) }
 }
 
 function howLeft(record: DepartedCard): string {
@@ -121,7 +129,7 @@ export function DeletedWalk({
       <div className="browse-box-head">
         <div className="browse-shelfnote">
           <span className="boxops-identity-num">Deleted boxes</span>
-          <p>Cards that had sold or been retired when their box was deleted. The record stays.</p>
+          <p>Cards sold or retired before their box was deleted.</p>
         </div>
       </div>
       <div className="browse-status">

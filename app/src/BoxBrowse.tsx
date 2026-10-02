@@ -51,7 +51,7 @@ import {
   type MarketRead,
   type Row,
 } from './CardHero'
-import { DeletedPane, DeletedWalk, useBuried } from './DeletedBoxes'
+import { buriedKeys, DeletedPane, DeletedWalk, useBuried } from './DeletedBoxes'
 import { stateLabel } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
@@ -1140,8 +1140,32 @@ export function BoxBrowse({
   /* THE DELETED BOXES SHELF CLOSES THE LIST, AND ONLY WHEN NOTHING NARROWS IT. A search and a
    * facet pick name live cards, which a buried record is not, so under either the shelf is not
    * offered and a walk standing on it moves on like any shelf the answer leaves out. */
-  const buried = useBuried(reloads + reloadToken)
+  const { buried, failure: buriedFailure, retry: retryBuried } = useBuried(reloads + reloadToken)
   const [deletedKey, setDeletedKey] = useState<string | null>(null)
+  /* THE WALK AND THE PANE READ ONE ANSWER: the record picked, else the first. The arrow keys step it
+   * as they step a box's walk, and the row in view is kept in view within the rail. */
+  const deletedKeys = useMemo(() => (buried === null ? [] : buriedKeys(buried)), [buried])
+  const shownDeletedKey =
+    deletedKey !== null && deletedKeys.includes(deletedKey) ? deletedKey : (deletedKeys[0] ?? null)
+  useEffect(() => {
+    if (shelf !== 'deleted' || deletedKeys.length === 0) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const step = STEPS.find((candidate) => candidate.key === event.key)
+      if (step === undefined || isTyping(event.target)) return
+      event.preventDefault()
+      const at = Math.max(0, deletedKeys.indexOf(shownDeletedKey ?? ''))
+      const next = deletedKeys[Math.min(deletedKeys.length - 1, Math.max(0, at + step.delta))]
+      if (next !== undefined) setDeletedKey(next)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [shelf, deletedKeys, shownDeletedKey])
+  useEffect(() => {
+    if (shelf !== 'deleted') return
+    const current = mapRef.current?.querySelector('.browse-list [aria-current="true"]')
+    if (current instanceof HTMLElement) scrollWithin(current, mapRef.current, 'nearest')
+  }, [shelf, shownDeletedKey])
   const shelves = useMemo(() => {
     const base = shelvesOf(inQuery, reachableBoxes, order)
     return buried !== null && buried.length > 0 && !filtered && !facetActive ? [...base, 'deleted' as const] : base
@@ -1484,7 +1508,7 @@ export function BoxBrowse({
       shelfSource.current = 'search'
       /* NEVER THE DELETED SHELF BY DEFAULT: it can reach `shelves` before the box registry does,
          and a walk that opened on it would never fetch a box. Only a press lands there. */
-      return pool.find((candidate) => candidate !== 'deleted') ?? null
+      return pool.find((candidate) => candidate !== 'deleted') ?? (boxesAnswered ? (pool[0] ?? null) : null)
     })
   }, [shelves, boxesAnswered, filtered, results, rankedGroups, frozen])
 
@@ -2201,7 +2225,7 @@ export function BoxBrowse({
       )}
 
       {onDeleted ? (
-        <DeletedWalk buried={buried} selected={deletedKey} onPick={setDeletedKey} dimmed={holdDeleted} />
+        <DeletedWalk buried={buried} selected={shownDeletedKey} onPick={setDeletedKey} dimmed={holdDeleted} />
       ) : shelf === null || shelf === 'deleted' ? null : (
         <div className="browse-walk bn-panel">
           <div className="browse-box-head">
@@ -2494,6 +2518,11 @@ export function BoxBrowse({
    * boxes exist" apart from "the registry has not answered yet." Read off `boxRecords`
    * rather than `shelves` so a search with zero matching boxes never falls into this branch. */
   const noBoxesYet = boxesAnswered && boxRecords.length === 0
+  /* A STORE WITH NO CARD ON HAND STILL HAS ITS DELETED BOXES: the rail draws for them, so their records are reachable. */
+  /* AND THE SCREEN WAITS FOR THEM, so the shelf never arrives after first paint and pushes the walk
+   * under it down (D313): until the read has answered or failed, the loading shape stands. */
+  const buriedPending = buried === null && buriedFailure === null
+  const buriedOnly = boxesAnswered && storeCards === 0 && buried !== null && buried.length > 0
 
   return (
     <section className="browse">
@@ -2505,7 +2534,15 @@ export function BoxBrowse({
         </Notice>
       )}
 
-      {rows === null && failure === null && !noBoxesYet ? (
+      {buriedFailure === null ? null : (
+        <Notice tone={failureTone(buriedFailure)} title={`The records from deleted boxes could not be read. ${buriedFailure.message}`} code={buriedFailure.code}>
+          <Button size="sm" icon="refresh" onClick={retryBuried}>
+            Try again
+          </Button>
+        </Notice>
+      )}
+
+      {(rows === null && failure === null && !noBoxesYet) || (boxesAnswered && buriedPending && failure === null) ? (
         <div className="browse-body browse-body-loading">
           {/* THE KIT'S LOADING SHAPE (D275): the rail's rows, then the card. */}
           <Loading rows={6} label="Reading the inventory" />
@@ -2513,7 +2550,7 @@ export function BoxBrowse({
         </div>
       ) : null}
 
-      {rows === null && failure === null && noBoxesYet ? (
+      {rows === null && failure === null && noBoxesYet && !buriedOnly && !buriedPending ? (
         <div className="bn-panel">
           <EmptyState
             icon="box"
@@ -2528,7 +2565,7 @@ export function BoxBrowse({
         </div>
       ) : null}
 
-      {rows !== null && boxesAnswered && storeCards === 0 ? (
+      {rows !== null && boxesAnswered && storeCards === 0 && !buriedOnly && !buriedPending ? (
         <div className="bn-panel">
           <EmptyState
             icon="camera"
@@ -2549,7 +2586,7 @@ export function BoxBrowse({
        * `rows.length === 0` here used to mean "the whole store is empty" back when `rows`
        * held the whole store; now it just as often means "this one box is empty," which is
        * `.browse-empty`'s own case inside the panel below, not a reason to hide the rail. */}
-      {rows !== null && storeCards > 0 ? (
+      {((rows !== null && storeCards > 0) || buriedOnly) && !buriedPending ? (
         <>
           {phone ? (
             <div className="browse-mobilebar">
@@ -2573,7 +2610,7 @@ export function BoxBrowse({
 
             <div className="browse-side">
               {onDeleted ? (
-                <DeletedPane buried={buried} selected={deletedKey} dimmed={holdDeleted} />
+                <DeletedPane buried={buried} selected={shownDeletedKey} dimmed={holdDeleted} />
               ) : panelRow === null ? (
                 <div className="bn-panel">
                   {chooserActive && searchGroups !== null ? (
