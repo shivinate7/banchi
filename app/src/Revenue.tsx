@@ -1487,6 +1487,37 @@ export function Revenue() {
             </section>
           )}
 
+          {/* MOCK ONLY: fabricated postings. Not real data. */}
+          <section className="revenue-posted">
+            <h2 className="bn-h2">What you asked</h2>
+            <p className="revenue-market-note">Posted price over time, for names you have re-priced. Sold figures are what buyers paid.</p>
+            <div className="revenue-table-wrap">
+              <table className="bn-table">
+                <thead>
+                  <tr><th>Name</th><th className="num">Posts</th><th className="num">First asked</th><th className="num">Latest asked</th><th className="num">Change</th><th className="num">Sold at, average</th></tr>
+                </thead>
+                <tbody>
+                  {products.slice(0, 6).map((row, i) => {
+                    const first = Math.round(row.lastPrice * (1.25 - i * 0.03) * 20) / 20
+                    const latest = Math.round(row.lastPrice * (i % 3 === 2 ? 1.08 : 0.97) * 20) / 20
+                    const posts = 2 + (i % 3)
+                    const delta = latest - first
+                    return (
+                      <tr key={row.sku}>
+                        <td><ProductLink sku={row.sku} name={row.name}>{row.name}</ProductLink></td>
+                        <td className="num">{posts}</td>
+                        <td className="num"><Money value={first} /></td>
+                        <td className="num"><Money value={latest} /></td>
+                        <td className="num">{delta === 0 ? 'No change' : <>{delta > 0 ? 'Up ' : 'Down '}<Money value={Math.abs(delta)} /></>}</td>
+                        <td className="num"><Money value={row.gross / Math.max(row.copies, 1)} /></td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
           <section className="revenue-products">
             <div className="revenue-market-refresh">
               <Button

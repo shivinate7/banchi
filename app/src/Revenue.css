@@ -486,3 +486,5 @@
 
 /* A switch held for a read still in flight: drawn, so it takes its own box, and shown to no one. */
 .revenue-period[data-held] { visibility: hidden; }
+
+.revenue-posted { display: flex; flex-direction: column; gap: var(--bn-3); margin-block: var(--bn-6); }

@@ -130,6 +130,18 @@ function timeScale(fromMs: number, toMs: number, w: number): (ms: number) => num
   return (ms: number) => ((ms - fromMs) / span) * w
 }
 
+/* MOCK ONLY: fabricated postings derived from the market points. Not real data. */
+type Posting = { at: number; price: number }
+function mockPostings(range: ProductHistoryRange): Posting[] {
+  const pts = range.points.filter((p) => p.at && p.market !== null)
+  if (pts.length < 8) return []
+  const pick: [number, number][] = [[0.25, 1.15], [0.5, 1.05], [0.72, 0.97], [0.9, 1.0]]
+  return pick.map(([f, k]) => {
+    const pt = pts[Math.floor(f * (pts.length - 1))]!
+    return { at: new Date(pt.at as string).getTime(), price: Math.round(Number(pt.market) * k * 20) / 20 }
+  })
+}
+
 function ProductChart({ range, fills, w = 640, h = 160 }: { range: ProductHistoryRange; fills: readonly Fill[]; w?: number; h?: number }) {
   const parsed = useMemo(() => {
     const starts = range.points.map((p) => (p.at ? new Date(p.at).getTime() : null))
@@ -145,6 +157,7 @@ function ProductChart({ range, fills, w = 640, h = 160 }: { range: ProductHistor
     const prices = [
       ...range.points.flatMap((p) => [p.market, p.low, p.high].map((v) => (v === null ? null : Number(v)))),
       ...relevant.map((f) => f.unitPrice),
+      ...mockPostings(range).map((q) => q.price),
     ].filter((v): v is number => v !== null && Number.isFinite(v))
     if (prices.length === 0) return null
     const lo = Math.min(...prices)
@@ -211,6 +224,27 @@ function ProductChart({ range, fills, w = 640, h = 160 }: { range: ProductHistor
           points={segment.map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`).join(' ')}
         />
       ))}
+      {/* MOCK: the posted price, a held step, one square per posting */}
+      {(() => {
+        const q = mockPostings(range)
+        if (q.length === 0) return null
+        let d = ''
+        q.forEach((pt, i) => {
+          const px = x(pt.at), py = y(pt.price)
+          d += i === 0 ? `M${px} ${py}` : ` V${py}`
+          d += ` H${i + 1 < q.length ? x(q[i + 1]!.at) : w}`
+        })
+        return (
+          <>
+            <path className="producthistory-posted-line" d={d} />
+            {q.map((pt, i) => (
+              <rect key={`post-${i}`} className="producthistory-posted-mark" x={x(pt.at) - 4} y={y(pt.price) - 4} width={8} height={8}>
+                <title>{`${saleDate(new Date(pt.at))} — posted at ${money(pt.price)}`}</title>
+              </rect>
+            ))}
+          </>
+        )
+      })()}
       {/* THE OWNER'S OWN FILLS — exact, one diamond per sale, at its real date and price.
           Never joined to the market line or to each other: D212's grain is the SKU, not an
           order, and each mark is one fact, not a trend. */}
@@ -262,6 +296,7 @@ function Legend() {
   return (
     <div className="producthistory-legend">
       <span><span className="producthistory-legend-line" /> Market bucket (aggregate — many transactions this store never saw)</span>
+      <span><span className="producthistory-legend-posted" aria-hidden="true" /> Your posted price (held until you post again)</span>
       <span><span className="producthistory-legend-diamond" aria-hidden="true" /> Your sale (exact — one order, one price)</span>
     </div>
   )

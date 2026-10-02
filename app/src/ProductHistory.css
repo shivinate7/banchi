@@ -212,3 +212,7 @@
   color: var(--bn-ink);
   margin: 0;
 }
+
+.producthistory-posted-line { fill: none; stroke: var(--bn-ink); stroke-width: 1.5; stroke-dasharray: 5 3; }
+.producthistory-posted-mark { fill: var(--bn-surface); stroke: var(--bn-ink); stroke-width: 1.5; }
+.producthistory-legend-posted { display: inline-block; width: 18px; height: 0; border-top: 2px dashed var(--bn-ink); }
