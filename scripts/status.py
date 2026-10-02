@@ -453,14 +453,16 @@ AUDIT_ASKING = "advisory"      # D16 layer 2: a question, exits 2
 
 
 AUDIT_CACHE = ROOT / ".serve" / "status-audit.json"
+AUDIT_MODE = "--commit"  # the quick rows; part of the cache key
 
 
 def audit_run(script: Path) -> "subprocess.CompletedProcess[str]":
     """Run the audit, or replay its last answer when no file moved.
 
-    MEASURED: the audit is 85 checks and ~20 s, spread thin (none over 5 s), so no one
-    step is fixable. The key is every non-ignored file's path, mtime and size. Only a run
-    that printed something is cached, so a broken auditor still reports itself.
+    MEASURED: the full audit is ~19 s cold, spread thin, so no one step is fixable. It runs
+    with `--commit` (the quick rows, ~11 s). The key is the mode plus every non-ignored
+    file's path, mtime and size, so a quick answer is never replayed as a full one. Only a
+    run that printed something is cached, so a broken auditor still reports itself.
     """
     listing = git("ls-files", "-co", "--exclude-standard", "-z")
     key = None
@@ -472,7 +474,7 @@ def audit_run(script: Path) -> "subprocess.CompletedProcess[str]":
             except OSError:
                 continue  # tracked but deleted: its absence changes the key
             stats.append(f"{name}\t{st.st_mtime_ns}\t{st.st_size}")
-        key = hashlib.sha1("\n".join(stats).encode()).hexdigest()
+        key = hashlib.sha1("\n".join([AUDIT_MODE, *stats]).encode()).hexdigest()
         try:
             cached = json.loads(AUDIT_CACHE.read_text())
             if cached.get("key") == key:
@@ -480,7 +482,7 @@ def audit_run(script: Path) -> "subprocess.CompletedProcess[str]":
         except (OSError, ValueError, AttributeError):
             pass
     done = subprocess.run(
-        [sys.executable, str(script), "--json"],
+        [sys.executable, str(script), AUDIT_MODE, "--json"],
         cwd=str(ROOT), capture_output=True, text=True, check=False,
     )
     if key and done.stdout.strip():
@@ -567,10 +569,10 @@ def audit_line() -> List[str]:
         )
 
     if not failing and not asking:
-        return [field("docs audit", f"clean · {len(rows)} checks")]
+        return [field("docs audit", f"clean · {len(rows)} quick checks — `make docs-audit` runs the full set")]
     verdict = f"{len(failing)} FAILING" if failing else f"{len(asking)} question(s)"
     return [
-        field("docs audit", f"{verdict} · {len(clean)} clean — run `make docs-audit`"),
+        field("docs audit", f"{verdict} · {len(clean)} clean (quick checks) — run `make docs-audit` for the full set"),
     ]
 
 
