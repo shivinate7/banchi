@@ -925,6 +925,11 @@ def _empty_send_refusal(console: str, trimmed: list, step: str, code: int = 1) -
             f"was {step}.{held}",
         )
     last = (console.strip().splitlines() or [""])[-1]
+    if "UnreadableClaim" in console:  # a claim that went unreadable after the pre-check
+        print(f"unreadable claim: {last}", file=sys.stderr)
+        return PipelineRefusal(
+            HTTPStatus.CONFLICT, "claim_unreadable", pipeline_routes.UNREADABLE_CLAIM_SENTENCE
+        )
     return PipelineRefusal(
         HTTPStatus.CONFLICT,
         "write_refused",
@@ -1089,8 +1094,23 @@ def _price_refused(refused: Sequence[dict], step: str) -> Optional[PipelineRefus
     )
 
 
+def _refuse_unreadable_claim() -> None:
+    """A live claim the store cannot read blocks the press, by name and without the machine's words.
+
+    Its SKUs are unknown, so it could conflict with anything. The keys go to stderr; the screen
+    gets one sentence and the release control (`do_release_unreadable`).
+    """
+    try:
+        Store().read().send_claims.live()
+    except files.UnreadableClaim as exc:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT, "claim_unreadable", pipeline_routes._unreadable_claim_sentence(exc)
+        ) from None
+
+
 def _send(payload: dict, directories: Sequence[Path], download: bool) -> dict:
     step = "written" if download else "sent"
+    _refuse_unreadable_claim()
 
     # 1-2. THE GATE. Refuses before anything is written.
     live_name, live_path = _fetch_live(step)
@@ -1536,12 +1556,16 @@ def do_release_unreadable(key: str, payload: dict) -> dict:
     as a tombstone and `do_restore_unreadable` puts it back, so the receipt has a way back.
     """
     if payload.get("confirm") is not True:
-        raise PipelineRefusal(
-            HTTPStatus.BAD_REQUEST,
-            "confirm_required",
-            "Releasing this record lets the next send list its copies again. If its send is still "
-            "going, or its file is waiting at TCGplayer, they could be listed twice. Confirm it first.",
+        # THE OWNER'S RULING, "allow, with a warning": a mark-down's claim protects cards whose
+        # price change is not confirmed yet, and the confirm says so.
+        said = (
+            "These cards' price change is not confirmed yet, and a send could run over it once this "
+            "record is released. Confirm it first."
+            if str(key).startswith(MARKDOWN_CLAIM)
+            else "Releasing this record lets the next send list its copies again. If its send is still "
+            "going, or its file is waiting at TCGplayer, they could be listed twice. Confirm it first."
         )
+        raise PipelineRefusal(HTTPStatus.BAD_REQUEST, "confirm_required", said)
     if not UNREADABLE_KEY.fullmatch(str(key)):
         raise PipelineRefusal(HTTPStatus.BAD_REQUEST, "claim_key_invalid", f"{key!r} is not a record key.")
     with Store().write() as writable:
@@ -2025,6 +2049,7 @@ def do_markdown_send(stamp: str, payload: dict) -> dict:
     has to send a price again to free the cards.
     """
     directory = pipeline_routes._open_markdown(stamp)
+    _refuse_unreadable_claim()
     if not (directory / cmd_reprice.IMPORT).is_file():
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,

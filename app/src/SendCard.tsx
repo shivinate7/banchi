@@ -828,7 +828,11 @@ export function SendCard({
           }
         >
           {`A send saved at ${clockTime(row.started_at)} cannot be read, so Banchi cannot tell which copies it holds. `}
-          {armed === row.key ? 'If that send is still going, or its file waits in TCGplayer, releasing could list copies twice.' : 'Release it once you know that send is over.'}
+          {armed === row.key
+            ? row.kind === 'markdown'
+              ? "These cards' price change is not confirmed yet, and a send could run over it once this record is released."
+              : 'If that send is still going, or its file waits in TCGplayer, releasing could list copies twice.'
+            : 'Release it once you know that send is over.'}
         </Notice>
       ))}
       {freed === null ? null : (

@@ -2479,7 +2479,7 @@ def check_send_review_r3(checks: Checks) -> None:
             send_routes.do_send({"runs": [run_dir.name], "confirm": True})
             blocked = False
         except Exception as exc:  # noqa: BLE001
-            blocked = getattr(exc, "code", "") == "write_refused" and "UnreadableClaim" in str(exc)
+            blocked = getattr(exc, "code", "") == "claim_unreadable" and "UnreadableClaim" not in str(exc)
         checks.ok(blocked, "F5d: AN UNREADABLE LIVE CLAIM BLOCKS THE PRESS, it is never skipped")
         checks.equal(
             Store().read().send_claims.entries.source.count(),
@@ -2497,6 +2497,17 @@ def check_send_review_r3(checks: Checks) -> None:
             "confirm_required",
             "F5d: release asks for a confirm",
         )
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_release_unreadable("md-20260901-101500", {})),
+            "confirm_required",
+            "F5d: a mark-down's claim asks for a confirm too",
+        )
+        try:
+            send_routes.do_release_unreadable("md-20260901-101500", {})
+            said = ""
+        except pipeline_routes.PipelineRefusal as caught:
+            said = str(caught)
+        checks.ok("price change is not confirmed" in said, "F5d: and that confirm says the price change is unconfirmed")
         checks.equal(
             _route_refusal(lambda: send_routes.do_release_unreadable("no-such", {"confirm": True})),
             "no_such_unreadable_claim",
@@ -2523,6 +2534,21 @@ def check_send_review_r3(checks: Checks) -> None:
         send_routes.do_release_unreadable("bad-row", {"confirm": True})
         sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
         checks.ok(sent["stamp"], "F5d: RELEASE FREES THE PRESS: it sends")
+
+    # ------------- F5e: a READABLE live claim cannot be released from here (DEBT59)
+    with _case(checks, "F5e: a readable claim is not releasable by key"), isolated_home():
+        with Store().write() as writable:
+            writable.send_claims.claim("20260901-101500", sendclaims.KIND_LISTING, {"S1": 1}, pid=os.getpid())
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_release_unreadable("20260901-101500", {"confirm": True})),
+            "no_such_unreadable_claim",
+            "F5e: A READABLE CLAIM IS REFUSED, and it is the held send's own way out that frees it",
+        )
+        checks.equal(
+            [claim.stamp for claim in Store().read().send_claims.live()],
+            ["20260901-101500"],
+            "F5e: and the claim is still live",
+        )
 
     # ------------- F5c: a copy `set_state` could not stamp is named in the emit result
     with _case(checks, "F5c: unstamped copies are named"):
