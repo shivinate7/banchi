@@ -4608,7 +4608,12 @@ export type SendsStatus = {
   now: string
   /** Live send records the server could not read. Its list drew the rest. */
   unreadable_claims: number
+  /** Each of those records, by key, for the release control. */
+  unreadable: UnreadableClaim[]
 }
+
+/** A live send record the server cannot read. Only its indexed facts survive. */
+export type UnreadableClaim = { key: string; kind: string; started_at: string }
 
 export type SendAnswer = { send: SendSummary; console: string }
 

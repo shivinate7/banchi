@@ -1496,6 +1496,7 @@ def do_sends() -> dict:
         if state_of(record, now) in ("waiting", "unknown", "written")
     ]
     pending += _markdown_waits()
+    unreadable = _unreadable_claims()
     check_at = min((moment for moment in pending if moment is not None and moment > now), default=None)
     return {
         "sends": shown,
@@ -1508,18 +1509,65 @@ def do_sends() -> dict:
         "now": _iso(now),
         # A live claim that will not parse is skipped above and flagged here (DEBT59). The
         # count is what the screen says; the keys are for the log.
-        "unreadable_claims": len(_unreadable_claims()),
+        "unreadable_claims": len(unreadable),
+        "unreadable": unreadable,
     }
 
 
-def _unreadable_claims() -> List[str]:
-    """Keys of live send claims that will not parse. Read after `live(strict=False)`."""
+def _unreadable_claims() -> List[dict]:
+    """Key, kind and start of each live send claim that will not parse (DEBT59)."""
     claims = Store().read().send_claims
     claims.live(strict=False)
-    bad = claims.unreadable()
+    bad = claims.unreadable_rows()
     if bad:
-        print(f"unreadable send claim rows: {', '.join(bad)}", file=sys.stderr)
+        print(f"unreadable send claim rows: {', '.join(row['key'] for row in bad)}", file=sys.stderr)
     return bad
+
+
+UNREADABLE_KEY = re.compile(r"[A-Za-z0-9._-]+")
+
+
+def do_release_unreadable(key: str, payload: dict) -> dict:
+    """`POST /pipeline/sends/unreadable/<key>/release` — free a live claim the store cannot read.
+
+    AN UNREADABLE CLAIM STILL BLOCKS every press until this runs, because its SKUs are unknown
+    (`SendClaims.overlap` raises). Releasing it can cost a double listing if its press is still
+    going or its upload waits in TCGplayer's Staged list, so it takes a `confirm`. The row stays
+    as a tombstone and `do_restore_unreadable` puts it back, so the receipt has a way back.
+    """
+    if payload.get("confirm") is not True:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "confirm_required",
+            "Releasing this record lets the next send list its copies again. If its send is still "
+            "going, or its file is waiting at TCGplayer, they could be listed twice. Confirm it first.",
+        )
+    if not UNREADABLE_KEY.fullmatch(str(key)):
+        raise PipelineRefusal(HTTPStatus.BAD_REQUEST, "claim_key_invalid", f"{key!r} is not a record key.")
+    with Store().write() as writable:
+        writable.send_claims.live(strict=False)
+        row = next((r for r in writable.send_claims.unreadable_rows() if r["key"] == key), None)
+        if row is None or not writable.send_claims.release_unreadable(key, "operator"):
+            raise PipelineRefusal(
+                HTTPStatus.NOT_FOUND,
+                "no_such_unreadable_claim",
+                "That record is not waiting any more. It may have been released already. Nothing changed.",
+            )
+    return {"released": row, "status": do_sends()}
+
+
+def do_restore_unreadable(key: str, payload: dict) -> dict:
+    """`POST /pipeline/sends/unreadable/<key>/restore` — the way back from the release above."""
+    if not UNREADABLE_KEY.fullmatch(str(key)):
+        raise PipelineRefusal(HTTPStatus.BAD_REQUEST, "claim_key_invalid", f"{key!r} is not a record key.")
+    with Store().write() as writable:
+        if not writable.send_claims.restore_unreadable(key):
+            raise PipelineRefusal(
+                HTTPStatus.NOT_FOUND,
+                "nothing_to_restore",
+                "That record was not released from here, or is already back. Nothing changed.",
+            )
+    return {"restored": key, "status": do_sends()}
 
 
 def do_send_file(stamp: str, name: str) -> bytes:
