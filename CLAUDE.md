@@ -39,7 +39,7 @@ make map            # docs/map.py rendered. ARGS=<package|path|D<n>|--stale|--de
                     #   ARGS="D<n> --full" prints that entry verbatim.
 make explain        # what `make check` runs, and what each row is worth. ARGS=<target>.
 make serve-scope    # first path gate, read by `make serve-selftest`. ARGS=list | "classify --base <rev>".
-                    #   PKMNSCAN_SERVE_SCOPE=off runs it anyway.
+                    #   PKMNSCAN_SERVE_SCOPE=all runs it anyway (run-everything, not a hatch).
 make guard-scope    # second path gate, read by each gated self-test. ARGS=list | classify.
 make orient         # ARGS=<file.tsx> [--name <C>]: which component draws it. Run before briefing a screen.
 make map-fix        # adds a file's cited decision ids to docs/map.py. Previews. ARGS=--write.
@@ -302,7 +302,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **Opsec.** A live unredeemed code card is a bearer instrument. No code-card photo in a listing, README,
   screenshot or commit. `scripts/githooks/pre-commit` enforces it, armed by `make hooks`.
 - **Nine shell mistakes are refused before they run** by `scripts/guard-shell.py --hook` on Bash and Write/Edit (D135, Codex reads the same rules).
-  Each clause fails open on its own bugs. Each has an escape hatch that its refusal names: `PKMNSCAN_CHECKOUT`, `PKMNSCAN_TREE`, `PKMNSCAN_GH`,
+  Each clause fails open on its own bugs. A tool call that sets a real `PKMNSCAN_*=off` is refused as owner-only, with no switch named, unless it is a recovery lever (`PKMNSCAN_KILL`, `PKMNSCAN_SUITE_LOCK`, `PKMNSCAN_SERVE_MAIN`, `PKMNSCAN_SYNC`). Only the owner's terminal and CI set the rest (D042 (main moves by pull request) and D179 (shell mistakes are refused by resolving)). `PKMNSCAN_OWNER_ONLY=off` lifts that clause for the guard's own self-test. Each has an owner-held escape hatch, never printed to an agent: `PKMNSCAN_CHECKOUT`, `PKMNSCAN_TREE`, `PKMNSCAN_GH`,
   `PKMNSCAN_LINK`, `PKMNSCAN_WAIT`, `PKMNSCAN_PUSH`, `PKMNSCAN_STASH`, `PKMNSCAN_RESET`, `PKMNSCAN_NARRATE`
   (D235, the heartbeat is refused a pipe). The ninth clause names its subjects, a short per-incident roster
   that the self-test reconciles. The other eight resolve what a command would do. `make guard-shell-selftest` proves each one in a throwaway repo.

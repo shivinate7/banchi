@@ -917,8 +917,7 @@ def main(argv: Sequence[str]) -> int:
 
     if not ok:
         print(
-            f"Escape hatch: `{HATCH}=off` skips this check, printed here so it is never a "
-            f"silent workaround."
+            "Bypass: owner-only: ask the owner to run this command."
         )
         return 1
 

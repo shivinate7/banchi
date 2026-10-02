@@ -81,8 +81,8 @@ broken roster then fails locally, not only in the audit.
 
 **IT FAILS OPEN, IN EVERY DIRECTION**, mirroring `serve-scope.py` exactly. No merge-base
 runs it. An unreadable diff runs it. An EMPTY diff runs it. An unscoped target name runs
-it. Any exception raised while deriving a subject runs it. `PKMNSCAN_GUARD_SCOPE=off` turns
-the whole gate off for every target at once. Every skip prints that it exists.
+it. Any exception raised while deriving a subject runs it. `PKMNSCAN_GUARD_SCOPE=all` runs
+every target at once. It adds checks, so it is not a hatch. Every skip prints that it exists.
 
 **WHAT THIS DOES NOT COVER.** A guard script reached only through a path this reader
 cannot see is invisible to `derive_subjects`. That includes a dynamic `getattr`. It also

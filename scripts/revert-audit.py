@@ -482,7 +482,7 @@ def guard(upstream: str, head: str, window: int, cwd: Optional[str] = None, out=
     print("", file=out)
     print("  If the branch never meant to touch the file:  git checkout " + upstream + " -- <path>", file=out)
     print("  If it means to put the file back:             say so, in a commit message, by file name.", file=out)
-    print(f"  Escape hatch, deliberate and loud:            {ESCAPE}=off", file=out)
+    print("  Bypass:                                       owner-only: ask the owner to run this command.", file=out)
     print("", file=out)
     return 1
 

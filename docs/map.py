@@ -4453,7 +4453,7 @@ COMPONENTS = [
                         "its throwaway tree — and three entries beyond it each carry a "
                         "`beyond_carry` sentence. It imports the globbing and the recipe "
                         "narrowing from `browser-scope.py` rather than copying them. "
-                        "`PKMNSCAN_SERVE_SCOPE=off` runs the test regardless.",
+                        "`PKMNSCAN_SERVE_SCOPE=all` runs the test regardless.",
                 "governed_by": ["D18", "D138", "D141"],
                 "note": "THE OWNER RULED THIS ONE IN AND PATH GATING IN GENERAL OUT, "
                         "2026-09-17. `serve-selftest` is 70.1s of `make check`'s 187.5 — 37% "
@@ -4479,7 +4479,7 @@ COMPONENTS = [
                         "`ROSTER` names which targets are gated (`make guard-scope ARGS=list` prints them), on `serve-scope.py`'s "
                         "own precedent of naming its one target by hand. It imports the "
                         "globbing and the recipe narrowing from `browser-scope.py`. "
-                        "`PKMNSCAN_GUARD_SCOPE=off` runs every target regardless.",
+                        "`PKMNSCAN_GUARD_SCOPE=all` runs every target regardless.",
                 "governed_by": ["D18", "D247"],
                 "note": "D247 is the argument: what a "
                         "guard self-test can and cannot catch, why a separate audit found all "

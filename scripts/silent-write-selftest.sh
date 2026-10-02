@@ -351,6 +351,7 @@ echo ""
 echo "  the escape hatch, in both of PKMNSCAN_KILL's two forms"
 
 allows "inline in the command"  "PKMNSCAN_SILENT=off git commit -m x >/dev/null 2>&1"
+refuses "a mere mention does not lift it" "echo PKMNSCAN_SILENT=off; git commit -m x >/dev/null 2>&1"
 
 out="$(printf '%s' "git commit -m x >/dev/null 2>&1" \
       | python3 -c 'import json,sys; print(json.dumps({"tool_input":{"command":sys.stdin.read()}}))' \

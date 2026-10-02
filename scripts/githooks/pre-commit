@@ -105,7 +105,7 @@ if [ "${PKMNSCAN_HOOKS:-}" != "off" ]; then
       make hooks
 
   This tree's scripts/githooks matches main, so that is safe to run here.
-  Bypass once with:  PKMNSCAN_HOOKS=off git commit ..."
+  Bypass: owner-only: ask the owner to run this command."
     fi
   fi
 fi
@@ -148,7 +148,7 @@ if [ -n "$icloud_dupes" ]; then
 $(printf '%s\n' "$icloud_dupes" | sed 's/^/    /')
   These are duplicates iCloud wrote beside the real file, not files anyone authored.
   Delete them — the tracked original is the one you want.
-  If a name like this is genuinely intended:  PKMNSCAN_DUPES=off git commit ..."
+  Bypass: owner-only: ask the owner to run this command."
 fi
 
 # SECRETS FILES (D312, the hook refuses a secrets file). Refused: any staged
@@ -202,7 +202,7 @@ if [ "${PKMNSCAN_LINKS:-}" != "off" ]; then
   Committed, that path is baked into the tree — and in the working tree it names, it
   points at itself. Checking it out replaces the real directory with a loop, silently.
   This is how the image mirror was lost (D47). Ignore the path instead of tracking it.
-  If it is genuinely intended:  PKMNSCAN_LINKS=off git commit ..."
+  Bypass: owner-only: ask the owner to run this command."
         ;;
       *)
         resolved="$(cd "$root/$(dirname "$link")" 2>/dev/null && cd "$(dirname "$target")" 2>/dev/null && pwd -P || true)"
@@ -210,7 +210,7 @@ if [ "${PKMNSCAN_LINKS:-}" != "off" ]; then
           "$root"|"$root"/*|"") ;;
           *) fail "symlink pointing outside the repository staged: $link -> $target
   It resolves to $resolved, which no clone on another machine will have.
-  If it is genuinely intended:  PKMNSCAN_LINKS=off git commit ..." ;;
+  Bypass: owner-only: ask the owner to run this command." ;;
         esac
         ;;
     esac
@@ -263,14 +263,14 @@ if [ "${#image_paths[@]}" -gt 0 ] && [ "${PKMNSCAN_QR:-}" != "off" ]; then
       fail "a staged image carries a decodable QR, or could not be checked.
   Code-card photos are bearer instruments and must never reach a tracked path, wherever the
   file lands.
-  Bypass once with:  PKMNSCAN_QR=off git commit ..."
+  Bypass: owner-only: ask the owner to run this command."
     fi
   else
     fail "python3 is unavailable, so staged image(s) could not be checked for a QR:
   $(printf '%s\n' "${image_paths[@]}" | tr '\n' ' ')
   Unavailable is not the same as clear — a scanner that cannot run is not evidence an image
   is free of a live code.
-  Bypass once with:  PKMNSCAN_QR=off git commit ..."
+  Bypass: owner-only: ask the owner to run this command."
   fi
 fi
 
@@ -330,7 +330,7 @@ if [ "${PKMNSCAN_DOCS:-}" != "off" ] && [ -f scripts/docs-audit.py ] && command 
       fail "the markdown disagrees with the code — see the findings above.
   Fix the reference, or the code it points at. Do not edit a doc purely to get
   past this hook (D16).
-  Bypass once with:  PKMNSCAN_DOCS=off git commit ..."
+  Bypass: owner-only: ask the owner to run this command."
       ;;
     2)
       echo "$audit_out"
@@ -395,7 +395,7 @@ if [ "${PKMNSCAN_SIGIL:-}" != "off" ] && [ -f scripts/sigil-check.py ] && comman
   Draw the slot (D58's count); keep the index for addressing. If the key really is
   what belongs there, say so on the line or in the comment above it:
       sigil-ok: <why this record has no slot to draw instead>
-  Bypass once with:  PKMNSCAN_SIGIL=off git commit ..."
+  Bypass: owner-only: ask the owner to run this command."
       ;;
     *)
       echo "WARNING: scripts/sigil-check.py exited $sigil_status — the sigil check did not run." >&2

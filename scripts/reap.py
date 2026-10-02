@@ -53,7 +53,7 @@ schedule, this decides one signal at the moment it is sent. What they share is t
 the code was copied with its argument rather than re-derived (`_real`, the process table, the
 leader-only `killpg`).
 
-IT IS REPO-AGNOSTIC AND IMPORTS NOTHING FROM THIS TREE, for `janitor.py`'s reason: a hook can
+IT IS REPO-AGNOSTIC AND IMPORTS ONLY `guard-shell.py`'s hatch reader (absent: the hatch is not read), for `janitor.py`'s reason: a hook can
 point it at any checkout, and an import from this one would break there.
 
 THE ESCAPE HATCH IS `PKMNSCAN_KILL=off` AND IT IS PRINTED IN EVERY REFUSAL, per the house rule
@@ -79,6 +79,22 @@ import sys
 import time
 from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Sequence, Set, Tuple
+
+
+def _hatch_set_by(name: str, command: str) -> bool:
+    """Whether `command` REALLY sets `name=off`: guard-shell's `_hatches_set`, the one parser.
+
+    A mention in an argument, comment or quoted string does not count. Unloadable: not set.
+    """
+    try:
+        import importlib.util
+        here = os.path.dirname(os.path.abspath(__file__))
+        spec = importlib.util.spec_from_file_location("guard_shell", os.path.join(here, "guard-shell.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return name in mod._hatches_set(command)
+    except Exception:                                         # noqa: BLE001 — fail open
+        return False
 
 WIDTH = 76
 
@@ -1039,7 +1055,7 @@ def hook(payload: dict) -> int:
     command = str(payload.get("tool_input", {}).get("command", "") or "")
     if not command:
         return 0
-    if os.environ.get("PKMNSCAN_KILL") == "off" or "PKMNSCAN_KILL=off" in command:
+    if os.environ.get("PKMNSCAN_KILL") == "off" or _hatch_set_by("PKMNSCAN_KILL", command):
         return 0
 
     intent = read_command(command)

@@ -1797,6 +1797,29 @@ def clause_narrate(reading: "shell_parse.Reading") -> Verdict:
 
 # ------------------------------------------------------------------------------ the verdict
 
+#: THE RECOVERY LEVERS: the hatches an agent may still set, because each one frees a stuck
+#: session (a wedged process, a held lock, a main that will not sync). Every other
+#: `PKMNSCAN_*=off` is the owner's to set, from the owner's terminal, never from a tool call.
+RECOVERY_LEVERS = frozenset({"PKMNSCAN_KILL", "PKMNSCAN_SUITE_LOCK", "PKMNSCAN_SERVE_MAIN",
+                             "PKMNSCAN_SYNC"})
+OWNER_ONLY = "owner-only: ask the owner to run this command"
+
+
+def clause_owner_only(command: str) -> Verdict:
+    """Refuse a REAL `PKMNSCAN_*=off` in an agent's command, naming no switch (owner's word).
+
+    Read by `_hatches_set`, so a mention is not a setting. A tool call is the only thing this
+    sees: the owner's terminal, CI and the self-tests (subprocesses, not tool calls) pass.
+    """
+    if os.environ.get("PKMNSCAN_OWNER_ONLY") == "off":      # the self-test hook only
+        return Verdict([], [])
+    blocked = [name for name in _hatches_set(command) if name not in RECOVERY_LEVERS]
+    if not blocked:
+        return Verdict([], [])
+    return Verdict([Refusal("owner-only", ["  This command switches a guard off. " + OWNER_ONLY + "."],
+                            "REFUSED: a guard switch is the owner's to set.")], [])
+
+
 def read_command(command: str, cwd: str, backgrounded: bool = False) -> Verdict:
     """Every refusal this command earns, and every note about what could not be read.
 
@@ -1806,6 +1829,9 @@ def read_command(command: str, cwd: str, backgrounded: bool = False) -> Verdict:
     if shell_parse is None:
         return Verdict([], ["scripts/shell_parse.py could not be imported, so this guard has "
                             "no opinion about anything"])
+    owner = clause_owner_only(command)
+    if owner.refusals:
+        return owner
     # A BACKGROUNDED COMMAND IS NEVER SKIPPED, and that is not caution — it is the fifth
     # clause's whole subject. `bash scratchpad/autodrive.sh` names none of these words: the
     # `while`/`sleep` was in the FILE, and the early return read the command as uninteresting
@@ -1856,7 +1882,8 @@ def render(refusals: Sequence[Refusal]) -> str:
         lines.append(refusal.heading)
         lines.extend(refusal.lines)
         lines.append("")
-        lines.append("  {0}=off runs the command anyway.".format(HATCH[refusal.clause]))
+        if refusal.clause != "owner-only":
+            lines.append("  Bypass: owner-only: ask the owner to run this command.")
     return "\n".join(lines)
 
 
