@@ -28,6 +28,11 @@ test.describe('money()', () => {
     expect(money(null)).toBe('—')
     expect(money(undefined)).toBe('—')
   })
+
+  test('says the same dash for a figure that is not a finite number', () => {
+    expect(money(NaN)).toBe('—')
+    expect(money(Infinity)).toBe('—')
+  })
 })
 
 test.describe('moneyField', () => {

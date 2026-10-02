@@ -9211,6 +9211,18 @@ COMPONENTS = [
                         "Run by `make design-check`.",
                 "governed_by": ["D221"],
             },
+            "tests/revenue-math.spec.ts": {
+                "does": "`src/revenueMath.ts`'s `salesOf` and `sum`, pure, no browser: gross is "
+                        "quantity times price, canceled orders and lines closed as not shipping "
+                        "are left out, an unpriced line is never a guessed price, and the result "
+                        "carries no profit field. Run by `make design-check`.",
+                "governed_by": ["D214", "D225", "D298"],
+            },
+            "src/revenueMath.ts": {
+                "does": "the gross arithmetic `Revenue.tsx` draws, moved out unchanged so a test "
+                        "can call it: `salesOf` turns orders into sales, `sum` adds their gross.",
+                "governed_by": ["D214", "D225", "D298"],
+            },
             "tests/match.spec.ts": {
                 "does": "`kit/match.cases.json`'s case table, run data-driven, one Playwright test "
                         "per row: `matchQuery` against every case, pure, no browser. The other half "
