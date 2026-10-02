@@ -229,13 +229,19 @@
 .bn-nav { display: flex; flex-direction: column; gap: var(--bn-1); flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-top: var(--bn-2); }
 .bn-nav-group { display: flex; flex-direction: column; gap: var(--bn-0-5); }
 .bn-nav-group + .bn-nav-group { margin-top: var(--bn-3); }
+/* THE THREE LABELLED GROUPS EACH READ THEIR OWN SLOT of the nav tokens (`tokens.css`). The slots
+   default to the one accent and the one ink, so only a palette tells the groups apart. Home and
+   the drawer's extra group name no slot and fall back to the fallbacks written in the rules below. */
+.bn-nav-group:nth-of-type(2) { --nav-label: var(--bn-nav-label-2); --nav-hover: var(--bn-nav-hover-2); --nav-accent: var(--bn-nav-accent-2); --nav-tint: var(--bn-nav-tint-2); }
+.bn-nav-group:nth-of-type(3) { --nav-label: var(--bn-nav-label-3); --nav-hover: var(--bn-nav-hover-3); --nav-accent: var(--bn-nav-accent-3); --nav-tint: var(--bn-nav-tint-3); }
+.bn-nav-group:nth-of-type(4) { --nav-label: var(--bn-nav-label-4); --nav-hover: var(--bn-nav-hover-4); --nav-accent: var(--bn-nav-accent-4); --nav-tint: var(--bn-nav-tint-4); }
 .bn-nav-group-label {
   padding: var(--bn-1) var(--bn-3);
   font-size: var(--bn-fs-2xs);
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--bn-ink-3);
+  color: var(--nav-label, var(--bn-ink-3));
   white-space: nowrap;
   transition: opacity var(--bn-t) var(--bn-ease);
 }
@@ -260,11 +266,11 @@
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease),
               box-shadow var(--bn-t-fast) var(--bn-ease);
 }
-.bn-nav-link:hover { background: var(--bn-hover); color: var(--bn-ink); text-decoration: none; }
+.bn-nav-link:hover { background: var(--bn-hover); color: var(--nav-hover, var(--bn-ink)); text-decoration: none; }
 .bn-nav-link .bn-icon { flex: none; color: var(--bn-ink-3); transition: color var(--bn-t-fast), transform var(--bn-t) var(--bn-ease-spring); }
 .bn-nav-link:hover .bn-icon { color: var(--bn-ink); }
-.bn-nav-link[aria-current='page'] { color: var(--bn-accent); background: var(--bn-accent-tint); font-weight: 600; }
-.bn-nav-link[aria-current='page'] .bn-icon { color: var(--bn-accent); }
+.bn-nav-link[aria-current='page'] { color: var(--nav-accent, var(--bn-accent)); background: var(--nav-tint, var(--bn-accent-tint)); font-weight: 600; }
+.bn-nav-link[aria-current='page'] .bn-icon { color: var(--nav-accent, var(--bn-accent)); }
 /* THE PAGE YOU ARE ON STILL ANSWERS THE POINTER, and until 2026-09-07 it was the largest group
    of controls in the product that did not — nine of the twenty-two, one per route, measured by
    hovering all 315 controls the eleven routes draw (D50).
@@ -303,7 +309,7 @@
   bottom: 8px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: var(--bn-accent);
+  background: var(--nav-accent, var(--bn-accent));
 }
 .bn-nav-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; transition: opacity var(--bn-t) var(--bn-ease); }
 /* THE KEYCAPS READ AT FULL INK (the kit-frame review): at 55% they measured under 4.5:1. The

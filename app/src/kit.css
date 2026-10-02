@@ -792,10 +792,13 @@ span.bn-slot { display: inline-block; }
 .bn-seg-item[aria-pressed='true'],
 .bn-seg-item[aria-selected='true'],
 .bn-seg-item[aria-current] {
-  color: var(--bn-ink);
-  background: var(--bn-surface);
+  color: var(--bn-seg-active-ink);
+  background: var(--bn-seg-active-bg);
   box-shadow: var(--bn-shadow-1);
 }
+.bn-seg-item:nth-of-type(2)[aria-pressed='true'],
+.bn-seg-item:nth-of-type(2)[aria-selected='true'],
+.bn-seg-item:nth-of-type(2)[aria-current] { background: var(--bn-seg-active-bg-2); }
 /* THE SMALL SIZE (S10): `.bn-seg`'s 3px padding plus the item's own 28px put a segmented
    control at 34px total beside 28px search/select controls in the same row. Sized so the
    two totals match exactly: 2px padding + a 24px item = 28px, `--bn-control-h-sm`'s own

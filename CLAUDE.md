@@ -230,7 +230,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **Real CSV libraries only.** PapaParse (JS), `csv` (Python). Never `split(",")`.
 - **Not a Claude artifact.** No `window.storage`, no `facingMode: "environment"`, nothing about a card in `localStorage`.
   **Eleven keys are stored on the device**, each a fact about this machine and not a card. `app/src/useCamera.ts`
-  holds `banchi.capture.deviceId` and `banchi.capture.rotation`. `app/src/deviceMemory.ts` holds `banchi.theme`,
+  holds `banchi.capture.deviceId` and `banchi.capture.rotation`. `app/src/deviceMemory.ts` holds `banchi.theme` (a `THEMES` id: light, dark, abyssal-bloom or carnival-midway),
   `banchi.rail`, `banchi.orders.fetch-filter`, `banchi.inventory.hide-sold`, `banchi.box-recency`,
   `banchi.capture.setup` (six values as one document, D142, the setup outlives the browser), `banchi.capture.sections` (kept until the sitting
   ends, D164, the undo stack is the sitting) and `banchi.runs.spend-notice` (a notice, never a cap, D180, a press names the cards). `app/src/Orders.tsx` holds

@@ -2,13 +2,13 @@ import { flushSync } from 'react-dom'
 import { Component, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ComponentType, ErrorInfo, ReactNode } from 'react'
 import { isEditableTarget } from './keys'
-import { rememberRail, storedRail, storedTheme } from './deviceMemory'
+import { nextTheme, rememberRail, storedRail, storedTheme, themeLabel } from './deviceMemory'
 import { getStatus, onServerBoot, onServerReachable, ServerError } from './server'
 import { useSearch } from './useSearch'
 import { matchQuery } from './kit/match'
 import { usePoll } from './usePoll'
 import { Button, Icon, IconButton, Kbd, Lockup, Modal, Page, PageRouteContext, Sheet, SheetHost,
-  applyTheme, openSheet, overlayOpen, readTheme, type IconName, type Theme } from './kit'
+  appliedTheme, applyTheme, openSheet, overlayOpen, readTheme, stampTheme, type IconName, type Theme } from './kit'
 import { BLOCK, PARAMS, ROMAN_TRACK_SOLVED } from './kit/lockupGeometry'
 import { Toaster, toast } from './kit/toast'
 import { SearchField } from './SearchField'
@@ -473,8 +473,7 @@ function useTheme(): [Theme, () => void] {
     const follow = () => {
       if (storedTheme() !== null) return
       const next: Theme = media.matches ? 'dark' : 'light'
-      if (next === 'dark') document.documentElement.setAttribute('data-theme', 'dark')
-      else document.documentElement.removeAttribute('data-theme')
+      stampTheme(next)
       setTheme(next)
     }
     follow()
@@ -482,7 +481,7 @@ function useTheme(): [Theme, () => void] {
     return () => media.removeEventListener('change', follow)
   }, [])
   const toggle = useCallback(() => {
-    const next: Theme = document.documentElement.hasAttribute('data-theme') ? 'light' : 'dark'
+    const next = nextTheme(appliedTheme())
     const flip = () => {
       applyTheme(next)
       flushSync(() => setTheme(next))
@@ -1178,7 +1177,7 @@ function Sidebar({
           <span className="bn-side-foot-text">Go to</span>
           <Kbd>⌘K</Kbd>
         </Button>
-        <Button variant="ghost" icon={theme === 'dark' ? 'sun' : 'moon'} onClick={onToggleTheme}>
+        <Button variant="ghost" icon={theme === 'light' ? 'moon' : 'sun'} onClick={onToggleTheme} title={`Switch to ${themeLabel(nextTheme(theme))}`}>
           <span className="bn-side-foot-text">Theme</span>
         </Button>
       </div>
@@ -1281,8 +1280,8 @@ function Drawer({ open, path, onClose, theme, onToggleTheme }: { open: boolean; 
               <Icon name="external" size={14} className="bn-faint" />
             </a>
           ))}
-          <button type="button" className="bn-nav-link" onClick={onToggleTheme}>
-            <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
+          <button type="button" className="bn-nav-link" onClick={onToggleTheme} title={`Switch to ${themeLabel(nextTheme(theme))}`}>
+            <Icon name={theme === 'light' ? 'moon' : 'sun'} size={18} />
             <span className="bn-nav-text">Theme</span>
           </button>
         </div>
@@ -1403,7 +1402,7 @@ export function App() {
       run: r.persona === 'fulfiller' ? () => window.open(`#${r.path}`, '_blank', 'noopener') : () => go(r.path),
     }))
     const extras: Command[] = [
-      { id: 'theme', group: 'Appearance', label: theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', icon: theme === 'dark' ? 'sun' : 'moon', run: toggleTheme },
+      { id: 'theme', group: 'Appearance', label: `Switch to ${themeLabel(nextTheme(theme))}`, icon: theme === 'light' ? 'moon' : 'sun', run: toggleTheme },
       { id: 'rail', group: 'Appearance', label: rail ? 'Expand the sidebar' : 'Collapse the sidebar', icon: 'columns', hint: '⌘ .', run: toggleRail },
       { id: 'keys', group: 'Help', label: 'Keyboard shortcuts', icon: 'keyboard', hint: '?', keywords: 'hotkeys bindings reference cheatsheet keys shortcut arrow leader', run: () => setKeysOpen(true) },
     ]

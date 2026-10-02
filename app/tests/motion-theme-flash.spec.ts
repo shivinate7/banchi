@@ -18,17 +18,21 @@ test.beforeEach(async ({ page }) => {
  * snapshots, so `body` itself is never in between: its computed color is the old ground or the new. */
 const GROUND = async (page: import('@playwright/test').Page) =>
   page.evaluate(() => {
-    const read = (theme: 'light' | 'dark') => {
+    const read = (theme: 'light' | 'dark', palette: string | null) => {
       const root = document.documentElement
-      const had = root.getAttribute('data-theme')
+      const had: [string | null, string | null] = [root.getAttribute('data-theme'), root.getAttribute('data-palette')]
       if (theme === 'dark') root.setAttribute('data-theme', 'dark')
       else root.removeAttribute('data-theme')
+      if (palette) root.setAttribute('data-palette', palette)
+      else root.removeAttribute('data-palette')
       const c = getComputedStyle(document.body).backgroundColor
-      if (had === null) root.removeAttribute('data-theme')
-      else root.setAttribute('data-theme', had)
+      if (had[0] === null) root.removeAttribute('data-theme')
+      else root.setAttribute('data-theme', had[0])
+      if (had[1] === null) root.removeAttribute('data-palette')
+      else root.setAttribute('data-palette', had[1])
       return c
     }
-    return { light: read('light'), dark: read('dark') }
+    return { light: read('light', null), dark: read('dark', null), abyssal: read('dark', 'abyssal-bloom') }
   })
 
 for (const from of ['light', 'dark'] as const) {
@@ -53,7 +57,9 @@ for (const from of ['light', 'dark'] as const) {
       running = false
       return [...colors]
     })
-    for (const color of seen) expect([ground.light, ground.dark], `sampled ${color}`).toContain(color)
+    // the button cycles light, dark, Abyssal Bloom: from light the switch ends on dark, from dark on Abyssal Bloom
+    const pair = from === 'light' ? [ground.light, ground.dark] : [ground.dark, ground.abyssal]
+    for (const color of seen) expect(pair, `sampled ${color}`).toContain(color)
     expect(seen.length, 'the theme did flip').toBeGreaterThan(0)
   })
 }
