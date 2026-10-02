@@ -1,6 +1,6 @@
-## D-mark-color-by-rarity — The neighbour mark takes its card's rarity color
+## D-mark-color-by-rarity — The neighbor mark takes its card's rarity color
 
-**The mark in the neighbour row wears the palette of the shown card's rarity. `app/src/kit/rarityMarks.ts` is the one home of the (game, rarity, palette) table.**
+**The mark in the neighbor row wears the palette of the shown card's rarity. `app/src/kit/rarityMarks.ts` is the one home of the (game, rarity, palette) table.**
 
 The owner ruled the mapping, and the table in `rarityMarks.ts` is the ruling. `markFor(game, rarity)` reads it. `Inventory` passes the result to `CardLocations` as `mark`, which hands it to `PlaceNeighbors`. Nothing else names a rarity's color.
 
