@@ -516,10 +516,11 @@ for (const width of [1440, 820]) {
 
 }
 
-/* The seeded walk's card is a Riftbound Epic, so the row holds the parts, the finish, the rarity, then the For and pick chips.
+/* The seeded walk is a Riftbound Epic card: the row holds the parts, the finish, the rarity, then the For and pick chips. The plan has
+   two takes of the same card, so the REAL set text stays and only the pick chip changes: "Pick 1 of 1", then "Pick 3" and "2 short".
    `wide` is Verdana with the web fonts blocked, the face that wraps on Linux. */
 for (const width of [1440, 820]) for (const wide of [false, true]) {
-  test(`L3 S13: the pick chip ends the facts row, so its change moves no chip left of it${wide ? ', wide face' : ''}, at ${width}`, async ({ page }) => {
+  test(`L3 S13: stepping to a bigger pick moves no chip left of the pick chip, real set text${wide ? ', wide face' : ''}, at ${width}`, async ({ page }) => {
     if (wide) {
       await page.route(/\.(woff2?|ttf)(\?|$)/, (route) => route.abort())
       await page.addInitScript(() => {
@@ -530,56 +531,85 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
         })
       })
     }
-    const epic = { ...card({ box: 3, index: 21, section: 2, card: 17, name: 'Volcanion', state: 'identified', sku: '9191486', boxName: 'RB Epics', boxTotal: 133 }), rarity_claim: 'epic', metadata_finish: 'foil', game: 'riftbound', condition: 'Near Mint' }
-    await page.route(/\/inventory\/copies$/, (route) => json(route, { cards: { '3/21': epic }, listings: {} }))
-    await openOrdersWalk(page, width)
+    const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+    const epic = (index: number) => ({ ...card({ box: 3, index, section: 2, card: 17, name: 'Volcanion', state: 'identified', sku: '9191486', boxName: 'RB Epics', boxTotal: 133 }), rarity_claim: 'epic', metadata_finish: 'foil', game: 'riftbound', condition: 'Near Mint' })
+    await page.route(/\/inventory\/copies$/, (route) => json(route, { cards: { '3/21': epic(21), '3/22': epic(22) }, listings: {} }))
+    await setViewport(page, { width, height: 1000 })
+    await seedPopulatedOrders(page)
+    const plan = severalOrdersWalkPlan()
+    const first = plan.stops[0]!.takes[0]!
+    plan.stops[0]!.takes.push({ ...first, sku: '9191487', wanted: 3, copies: [{ ...first.copies[0]!, key: '3/22', place: { ...first.copies[0]!.place, index: 22 } }] })
+    await page.route(/\/orders\/walk-plan$/, (route) => json(route, plan))
+    await page.goto(screen('orders'))
     await expect(page.locator('.orders-pick-chip')).toBeVisible()
-    const r = await page.evaluate(() => {
-      const row = document.querySelector('.browse-hero-sub') as HTMLElement
-      const pick = row.querySelector('.orders-pick-chip') as HTMLElement
-      const keep = pick.innerHTML
-      const partsEl = row.querySelector('.browse-hero-parts') as HTMLElement
-      const keepParts = partsEl.innerHTML
-      /* ROOM: the set text is cut to the number, so the row has slack and only the pick chip's own width is under test. */
-      partsEl.innerHTML = '<span>025</span>'
-      const chips = () => [...row.children] as HTMLElement[]
-      /* ON A ROW WITH NO ROOM the set text, then the finish and rarity pills, give way first (BoxBrowse.css, `.browse-hero-sub`), by design. */
-      const pills = () => chips().filter((c) => c !== pick && !c.classList.contains('browse-hero-parts'))
-      const lefts = () => pills().map((c) => c.getBoundingClientRect().left)
-      const gapsOf = () => pills().map((c) => c.getBoundingClientRect().left - (c.previousElementSibling as HTMLElement).getBoundingClientRect().right)
-      const rects = (el: Element) => [...el.children].map((c) => c.getBoundingClientRect())
-      const lineTops = () => new Set(chips().map((c) => Math.round(c.getBoundingClientRect().top + c.getBoundingClientRect().height / 2)))
-      pick.innerHTML = '<span class="bn-pill bn-pill-accent">Pick 2 of 2</span>'
-      const before = lefts()
-      const gapsBefore = gapsOf()
-      const shortWordsGap = (() => {
-        const k = rects(pick)
-        return pick.getBoundingClientRect().width - k.reduce((n, c) => n + c.width, 0)
-      })()
-      const onelineBefore = lineTops().size
-      pick.innerHTML = '<span class="bn-pill bn-pill-accent">Pick 1</span> <span class="bn-pill bn-pill-warn">1 short</span>'
-      const after = lefts()
-      const gapsAfter = gapsOf()
-      const onelineAfter = lineTops().size
-      pick.innerHTML = keep
-      partsEl.innerHTML = keepParts
-      const kids = chips()
-      const gap = parseFloat(getComputedStyle(row).columnGap)
-      const rarity = kids.filter((c) => c.classList.contains('bn-pill-outline')).pop()
-      const next = rarity ? kids[kids.indexOf(rarity) + 1] : undefined
-      const rarityGap = rarity && next ? next.getBoundingClientRect().left - rarity.getBoundingClientRect().right : null
-      return { before, after, gapsAfter, gapsBefore, lastIsPick: kids[kids.length - 1] === pick, onelineBefore, onelineAfter, gap, rarityGap, hasRarity: !!rarity, shortWordsGap }
-    })
-    expect(r.lastIsPick, 'the pick chip is the last thing in the facts row').toBe(true)
-    expect(r.after, 'a pill left of the pick chip moved').toEqual(r.before)
-    expect(r.gapsAfter, 'a gap between pills opened or closed').toEqual(r.gapsBefore)
-    expect(r.gapsAfter.every((g) => Math.abs(g - r.gap) < 1), 'every gap is the row gap').toBe(true)
-    expect([r.onelineBefore, r.onelineAfter], 'the facts row kept one line').toEqual([1, 1])
-    expect(r.hasRarity, 'the seeded card has a rarity chip').toBe(true)
-    expect(r.rarityGap, 'the gap after the rarity chip is the row gap, no blank box').toBeCloseTo(r.gap, 0)
-    expect(r.shortWordsGap, 'the pick chip is its pills and nothing else: no reserved blank').toBeCloseTo(0, 0)
+    await settleFonts(page)
+    await settleMotion(page)
+    const read = () =>
+      page.evaluate(() => {
+        const row = document.querySelector('.browse-hero-sub') as HTMLElement
+        const kids = [...row.children] as HTMLElement[]
+        const pick = row.querySelector('.orders-pick-chip') as HTMLElement
+        const live = (pick.querySelector('.orders-pick-live') ?? pick) as HTMLElement
+        const before = kids.filter((c) => c !== pick)
+        const mid = before[before.length - 1]
+        return {
+          text: live.textContent ?? '',
+          lefts: before.map((c) => Math.round(c.getBoundingClientRect().left * 10) / 10),
+          last: kids[kids.length - 1] === pick,
+          tops: new Set(kids.map((c) => Math.round(c.getBoundingClientRect().top + c.getBoundingClientRect().height / 2))).size,
+          gapToPick: mid ? pick.getBoundingClientRect().left - mid.getBoundingClientRect().right : null,
+          gap: parseFloat(getComputedStyle(row).columnGap),
+          kinds: before.map((c) => c.className),
+        }
+      })
+    const a = await read()
+    await page.keyboard.press('ArrowRight')
+    await expect(page.locator('.orders-pick-chip')).toContainText('2 short')
+    await settleMotion(page)
+    const b = await read()
+    expect(a.text, 'the first pick says "of"').toContain('of 1')
+    expect(b.text).toContain('Pick 3')
+    expect(a.last && b.last, 'the pick chip is the last thing in the facts row').toBe(true)
+    expect(a.kinds.some((k) => k.includes('bn-pill-outline')), 'the card has a finish and a rarity chip').toBe(true)
+    expect(b.lefts, 'the parts, finish, rarity or For chip moved when the pick chip grew').toEqual(a.lefts)
+    expect([a.tops, b.tops], 'the facts row kept one line').toEqual([1, 1])
+    expect(b.gapToPick, 'no blank box between the last chip and the pick chip').toBeCloseTo(b.gap, 0)
   })
 }
+
+/* A SALE MOUNTS THE STATE PILL BEFORE THE FOR AND PICK CHIPS (the card is no longer identified once the store is re-read). Like
+   Inventory's S12 it is new content, so the set text gives way for it, but the pick chip stays last and its figures hold, the row keeps one
+   line and Sold keeps its own width (it never shrinks). */
+test('L3 S13: a sale mounts Sold before the pick chip, which stays last, on one line, at 820', async ({ page }) => {
+  const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  let sold = false
+  const epic = (state: string) => ({ ...card({ box: 3, index: 21, section: 2, card: 17, name: 'Volcanion', state, sku: '9191486', boxName: 'RB Epics', boxTotal: 133 }), rarity_claim: 'epic', metadata_finish: 'foil', game: 'riftbound', condition: 'Near Mint' })
+  await page.route(/\/inventory\/copies$/, (route) => json(route, { cards: { '3/21': epic(sold ? 'sold' : 'identified') }, listings: {} }))
+  await page.route(/\/orders\/pull$/, (route) => {
+    sold = true
+    return json(route, { undone: false, order_key: severalOrders().orders[0]!.key, sku: '9191486', newly: 1, recorded: 1, outstanding: 0, places: [], sales: [] })
+  })
+  await setViewport(page, { width: 820, height: 1000 })
+  await seedPopulatedOrders(page)
+  await page.goto(screen('orders'))
+  await expect(page.locator('.orders-pick-chip')).toBeVisible()
+  await settleFonts(page)
+  await page.keyboard.press('1')
+  await expect(page.locator('.browse-hero-sub')).toContainText('Sold')
+  await settleMotion(page)
+  const r = await page.evaluate(() => {
+    const row = document.querySelector('.browse-hero-sub') as HTMLElement
+    const kids = [...row.children] as HTMLElement[]
+    const state = kids.find((c) => c.textContent === 'Sold') as HTMLElement
+    return {
+      stateBeforePick: kids.indexOf(state) === kids.length - 2,
+      pickLast: kids[kids.length - 1]?.classList.contains('orders-pick-chip') === true,
+      unclipped: state.scrollWidth <= state.clientWidth,
+      lines: new Set(kids.map((c) => Math.round(c.getBoundingClientRect().top + c.getBoundingClientRect().height / 2))).size,
+    }
+  })
+  expect(r, 'Sold sits just before the pick chip, whole, on one line').toEqual({ stateBeforePick: true, pickLast: true, unclipped: true, lines: 1 })
+})
 
 for (const width of [1440, 820]) {
   test(`L3 S14: the next card's price holds one box whatever it says, at ${width}`, async ({ page }) => {

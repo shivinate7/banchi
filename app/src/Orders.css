@@ -408,8 +408,12 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   font-variant-numeric: tabular-nums;
 }
 .orders-walk-pick-count { --digits: 8; } /* "12 of 12": the box holds the widest figure (D313) */
-/* The pick chip ends the facts row, so its width change moves nothing (D313). */
-.orders-pick-chip { display: inline-flex; align-items: center; gap: var(--bn-1); }
+/* The pick chip ends the facts row and holds its widest state in one grid cell: the live pills and each reserve share cell 1/1,
+   the reserves are invisible, so no blank box shows beyond the live pills (D313). */
+.orders-pick-chip { display: inline-grid; font-variant-numeric: tabular-nums; }
+.orders-pick-live, .orders-pick-reserve { grid-area: 1 / 1; display: inline-flex; align-items: center; gap: var(--bn-1); }
+.orders-pick-reserve { visibility: hidden; pointer-events: none; }
+.orders-pick-reserve > .bn-pill::before { content: attr(data-text); }
 .orders-walk-for { grid-area: for; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .orders-walk-line.is-done .orders-walk-name,
 .orders-walk-line.is-done .orders-walk-slot { color: var(--bn-ink-3); text-decoration: line-through; }

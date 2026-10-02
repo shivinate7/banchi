@@ -2634,6 +2634,14 @@ function OrderPickPane({
     setZoomed(false)
   }, [currentRow?.copy.key])
 
+  /* THE PICK CHIP HOLDS ITS WIDEST STATE FROM THE FIRST PAINT (D313). The set text before it is the row's elastic part
+     (`.browse-hero-parts`), so a chip that grows ("Pick 1 of 3" to "Pick 3 of 3", or "Pick 3" and "2 short") would shrink it
+     and slide every chip after it. The peak only rises, so a sale that lowers the figures never narrows the reserve. */
+  const peak = useRef({ n: 1, short: 0 })
+  for (const r of walk.rows) {
+    const f = pickFigureOf(r.take, owedBySku)
+    peak.current = { n: Math.max(peak.current.n, r.take.wanted, f.of), short: Math.max(peak.current.short, f.short) }
+  }
   if (currentRow === null || currentGroup === null || currentWhere === null) return null
   const where = currentWhere
   const spareOpen = walk.openSpares.has(currentRow.takeKey)
@@ -2665,15 +2673,27 @@ function OrderPickPane({
           <>
             {showBuyers ? <Pill>For {takeBuyers(currentRow.take)}</Pill> : null}
             <span className="orders-pick-chip">
-              <Pill tone="accent">
-                Pick {currentRow.take.wanted}
-                {figure.short > 0 ? null : ` of ${figure.of}`}
-              </Pill>
-              {figure.short > 0 ? (
-                <>
-                  {' '}
-                  <Pill tone="warn">{figure.short} short</Pill>
-                </>
+              <span className="orders-pick-live">
+                <Pill tone="accent">
+                  Pick {currentRow.take.wanted}
+                  {figure.short > 0 ? null : ` of ${figure.of}`}
+                </Pill>
+                {figure.short > 0 ? (
+                  <>
+                    {' '}
+                    <Pill tone="warn">{figure.short} short</Pill>
+                  </>
+                ) : null}
+              </span>
+              {/* THE RESERVE: empty pills whose text is paint (`::before`), so it is never read, never selected and never in the text. */}
+              <span className="orders-pick-reserve" aria-hidden="true">
+                <span className="bn-pill" data-text={`Pick ${peak.current.n} of ${peak.current.n}`} />
+              </span>
+              {peak.current.short > 0 ? (
+                <span className="orders-pick-reserve" aria-hidden="true">
+                  <span className="bn-pill" data-text={`Pick ${peak.current.n}`} />
+                  <span className="bn-pill" data-text={`${peak.current.short} short`} />
+                </span>
               ) : null}
             </span>
           </>
