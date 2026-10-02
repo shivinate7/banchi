@@ -1,6 +1,6 @@
 /* HOW THE BUYER LIST IS SORTED AND FILTERED — the owner's ruling read as an ORDERING, not a
- * HIDING: "Ready to Ship" leads, newest first within a group, everything else stays reachable
- * behind the status control. A default that silently dropped a row would be D103's refused
+ * HIDING: a buyer whose every owed copy is in the boxes leads, oldest order first at rest, and
+ * everything else stays reachable behind the status control (D296). A default that silently dropped a row would be D103's refused
  * shape ("staleness is a filter and not a gate") landing here too, so nothing here ever removes
  * a group from `shownGroups` on its own — narrowing is only ever a person's press.
  *
@@ -15,7 +15,7 @@
  * predicate (departed or not) — a fourth copy of that arithmetic drifts the day one call site
  * gains a term the snapshot cannot see. Neither premise holds here: the buyer list has exactly
  * ONE call site, and what can change out from under it is not a per-row boolean but the ORDER
- * ITSELF — a status transition that moves a group between the Ready-to-Ship bucket and the
+ * ITSELF — a status transition that moves a group between the ready bucket and the
  * rest, a changed sort direction, or an arrival that inserts a new group in the middle. A
  * position snapshot (`OrderTake`, group key -> index) is the smallest state that can answer
  * "did the live order actually change" for a comparator with two keys and insertions, which a
@@ -51,17 +51,6 @@ export function statusVocabulary(orders: readonly OrderRow[]): StatusOption[] {
     .sort((a, b) => b.count - a.count || a.status.localeCompare(b.status))
 }
 
-function isReadyToShip(status: string | null): boolean {
-  return (status ?? '').trim().toLowerCase() === 'ready to ship'
-}
-
-/** Does this group carry a Ready-to-Ship order among its OPEN orders — what leads the default
- *  ordering. Read off `open` rather than every order: a buyer's closed history should not drag
- *  a settled group to the front because one of their old orders once said "Ready to Ship". */
-export function groupIsReadyToShip(group: BuyerGroup): boolean {
-  return group.open.some((order) => isReadyToShip(order.status))
-}
-
 function placedAtMs(placedAt: string | null): number {
   if (placedAt === null) return Number.NEGATIVE_INFINITY
   const parsed = Date.parse(placedAt)
@@ -75,12 +64,11 @@ function placedAtMs(placedAt: string | null): number {
  * never one order — by an aggregate over the group's OPEN orders (D193), matching every other
  * figure this screen already counts per buyer (`groupMissing`, `verdictOf`).
  *
- * THE READY-TO-SHIP LEAD IS A GROUPING, NOT A SORT, AND IS KEPT ACROSS EVERY KEY. D296 built it
- * as a bucket the comparator checks BEFORE its own tiebreak, never as a special case of the
- * `placed` metric — `compareGroups` below still checks `ready` first, whichever key is asked
- * for, so a Ready-to-Ship buyer leads even under Dollar value or Buyer name. That is a finding,
- * not a guess: nothing about the four new keys touches the bucket check, and moving it inside a
- * `case 'placed':` arm would have been the alternative this file rejects.
+ * THE READY LEAD IS A GROUPING, NOT A SORT, AND IS KEPT ACROSS EVERY KEY (D296). A buyer whose
+ * every owed copy is in the boxes is a bucket the comparator checks BEFORE its own key, so a
+ * ready buyer leads even under Dollar value or Buyer name. The caller says who is ready
+ * (`Orders.tsx` reads the buyer's pull status), so this module stays a pure comparator. At rest
+ * the key is `placed`, oldest first.
  *
  * TIES BREAK BY PLACED DATE, NEWEST FIRST, on every key — the owner's own words for this task.
  * For `placed` itself this is a no-op (the tiebreak is the same field the primary key already
@@ -197,12 +185,12 @@ function primaryDiff(key: OrderSortKey, inputs: OrderSortInputs, a: BuyerGroup, 
   }
 }
 
-/** The whole comparator: Ready-to-Ship groups first (a grouping, kept across every key — see
- *  the section banner above), then the picked key in the picked direction, then `placed_at`
+/** The whole comparator: ready groups first (a grouping, kept across every key — see the
+ *  section banner above), then the picked key in the picked direction, then `placed_at`
  *  descending as the one tiebreak every key shares. */
 export function compareGroups(
   sort: SortValue<OrderSortKey>,
-  ready: (group: BuyerGroup) => boolean = groupIsReadyToShip,
+  ready: (group: BuyerGroup) => boolean,
   inputs: OrderSortInputs = DEFAULT_SORT_INPUTS,
 ): (a: BuyerGroup, b: BuyerGroup) => number {
   return (a, b) => {
@@ -218,11 +206,11 @@ export function compareGroups(
 
 /** The live-sorted list for the current view — no freeze, no filter. What a fresh take would
  *  produce right now. `ready` lets a screen hold a buyer it just finished where it stood
- *  (FLT-22): a finished buyer has no open order left to say Ready to ship. */
+ *  (FLT-22): a finished buyer has no open order left to say it is ready. */
 export function sortGroups(
   groups: readonly BuyerGroup[],
   sort: SortValue<OrderSortKey>,
-  ready: (group: BuyerGroup) => boolean = groupIsReadyToShip,
+  ready: (group: BuyerGroup) => boolean,
   inputs: OrderSortInputs = DEFAULT_SORT_INPUTS,
 ): BuyerGroup[] {
   return [...groups].sort(compareGroups(sort, ready, inputs))

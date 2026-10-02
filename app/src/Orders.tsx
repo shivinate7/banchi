@@ -51,7 +51,6 @@ import {
   drawerCountsFromPlan,
   groupCardsOwed,
   groupHasUnseenLine,
-  groupIsReadyToShip,
   groupOrderValue,
   orderBuyerLabel,
   passesHideUnknown,
@@ -874,8 +873,9 @@ const STATUS_PILL: Record<Status, { label: string; tone: PillTone; icon: IconNam
 
 /** The five sorts (`D296`, the owner's pick, 2026-09-25): when the buyer's newest
  *  order was placed (FLT-01: a press re-sorts at once), the buyer's own order total, how many
- *  copies are still owed, the buyer's name, and the fewest drawers to open for them. Ready to
- *  Ship still leads every one of these (`orderView.ts`'s own banner on why). */
+ *  copies are still owed, the buyer's name, and the fewest drawers to open for them. A buyer
+ *  whose every owed copy is in the boxes leads every one of these, and at rest the oldest order
+ *  comes first (D296). */
 const SORT_OPTIONS: readonly SortOption<OrderSortKey>[] = [
   { key: 'placed', label: 'Placed', desc: 'Newest first', asc: 'Oldest first', first: 'desc' },
   { key: 'value', label: 'Value', desc: 'High to low', asc: 'Low to high', first: 'desc' },
@@ -883,7 +883,7 @@ const SORT_OPTIONS: readonly SortOption<OrderSortKey>[] = [
   { key: 'buyer', label: 'Buyer', desc: 'Z to A', asc: 'A to Z', first: 'asc' },
   { key: 'drawers', label: 'Fewest drawers', desc: 'Most first', asc: 'Fewest first', first: 'asc' },
 ]
-const SORT_AT_REST: SortValue<OrderSortKey> = { key: 'placed', dir: 'desc' }
+const SORT_AT_REST: SortValue<OrderSortKey> = { key: 'placed', dir: 'asc' }
 
 /** The "Show" facet's choices: a buyer's one state, worst first (UX-171, UX-199), after
  *  Flagged, Short and Partly picked, the three ways a buyer owes a copy the store cannot fill
@@ -927,67 +927,55 @@ function joinPhrases(parts: string[]): string {
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
 }
 
-/** The verdict, drawn once the ledger has answered: ONE fact over ONE set (UX-167). The copies
- *  owed and the buyers they are owed to are both counted over the OPEN orders. The old lede
- *  counted lines over the open orders and buyers over every order in the ledger, so a long
- *  history read "611 lines across 806 buyers".
+/** The headline, drawn once the ledger has answered: a stat row, the way Inventory's box panel
+ *  says its figures (the owner's ruling). Every figure is over the OPEN orders (UX-167), so a
+ *  long history never reaches it. Each label names its unit: a bare "233" beside "238 buyers"
+ *  read as buyers when it was copies.
  *
- *  THE BREAKDOWN IS SAID ONCE, HERE (review finding 1: "216 copies owed" and "97 cards to
- *  pick" read as two answers to one question with nothing connecting them). `owed` splits
- *  three ways over the SAME open set, in the SAME unit (copies): `pick` (owed minus
+ *  `owed` splits two ways over the SAME open set, in the SAME unit (copies): `pick` (owed minus
  *  outstanding, the walk's own arithmetic — `cardsToPull` runs the identical sum over the
- *  walked subset), `short` (no copies left, whether or not this order's own line already
- *  reads `short` because some were already recorded — the two are the same fact, see
- *  `lookWords`), and `elsewhere` (a SKU this store has never seen, or that is sealed
- *  product). `pick + short + elsewhere === owed`, always, because every line's `outstanding`
- *  falls in exactly one of `resolved` (counted in `pick`), the two "none left" reasons, or
- *  the two "needs a look" reasons. `docs/specs/order-walk-plan.md` states this identity. */
+ *  walked subset) and `unfilled` (no copies left, a SKU this store has never seen, or sealed
+ *  product). `pick + unfilled === owed`, always, because every line's `outstanding` is either
+ *  `resolved` (counted in `pick`) or not. `docs/specs/order-walk-plan.md` states this identity.
+ *
+ *  ALL FOUR ARE ALWAYS DRAWN, a zero included, and each figure is a live count (D313): a pull
+ *  that takes `unfilled` to zero, or a figure that loses a digit, moves nothing beside it. */
 /** The cards of one line that are on hand to pull: what it still owes, less what the resolver
  *  could not offer. The one home of this arithmetic (the headline, the walk's count and the
  *  landing view's "pullable" all read it). */
 const pickOf = (line: ResolvedLine): number => Math.max(0, line.owed - line.outstanding)
 
-/** The verdict's loading frame: a skeleton bar over a transparent sentence in the verdict's own
- *  grammar, so it takes the verdict's own box. */
+const HEADLINE_LABELS = ['copies owed', 'buyers', 'to pick', 'not in boxes'] as const
+
+function HeadlineStats({ values }: { readonly values: readonly ReactNode[] }) {
+  return (
+    <div className="orders-headline bn-stat-row">
+      {HEADLINE_LABELS.map((label, at) => (
+        <Stat key={label} value={values[at]} label={label} valueClassName="bn-live-count bn-live-count-start" />
+      ))}
+    </div>
+  )
+}
+
+/** The headline's loading frame: the same four stats over skeleton figures, so it takes the
+ *  loaded row's own box. */
 function VerdictHold() {
-  return <SkeletonText>00 owed, 00 buyers: 00 pick, 00 unfilled</SkeletonText>
+  return <HeadlineStats values={HEADLINE_LABELS.map(() => <SkeletonText>00</SkeletonText>)} />
 }
 
 function verdictOf(open: readonly OrderRow[], resolved: readonly ResolvedOrder[]): ReactNode {
   const owed = open.reduce((sum, order) => sum + Math.max(0, order.wanted - order.recorded), 0)
   const buyers = new Set(open.map(buyerKeyOf)).size
-  if (owed === 0) return 'Every open order has its copies.'
   const byKey = new Map(resolved.map((order) => [order.key, order]))
   let pick = 0
-  let short = 0
-  let elsewhere = 0
+  let unfilled = 0
   for (const order of open) {
     for (const line of byKey.get(order.key)?.lines ?? []) {
       pick += pickOf(line)
-      const reason = lineReason(order, line)
-      if (reason === 'short' || reason === 'no_copies_on_hand') short += line.outstanding
-      else if (reason !== 'resolved') elsewhere += line.outstanding
+      if (lineReason(order, line) !== 'resolved') unfilled += line.outstanding
     }
   }
-  /* The breakdown adds nothing where every copy is pickable (`short` and `elsewhere` both
-   * zero, so `pick === owed`) — it would only repeat the number the sentence already gives.
-   * It is said only where it explains something the plain sentence does not. */
-  /* F5 verbiage cut: the reviewer's own "Status" word would drop the four-way split this
-     line is the only place to see broken out, which the data rule refuses — every number
-     stays, as a short labeled figure, never a bare word standing in for all of them. */
-  const parts = short > 0 || elsewhere > 0 ? [`${pick} pick`] : []
-  if (short + elsewhere > 0) parts.push(`${short + elsewhere} unfilled`)
-  return (
-    <>
-      <strong>{owed}</strong> owed, <strong>{buyers}</strong> {plural(buyers, 'buyer', 'buyers')}
-      {parts.length === 0 ? null : (
-        <>
-          {': '}
-          {joinPhrases(parts)}
-        </>
-      )}
-    </>
-  )
+  return <HeadlineStats values={[owed, buyers, pick, unfilled]} />
 }
 
 /** The ledger has no record of this pull — it was already reversed some other way, never a
@@ -2992,20 +2980,23 @@ function PullStage({
   /* A BUYER FINISHED ON THIS SCREEN STAYS ON IT, marked done, until the next visit (the owner's
      "nothing jumps" ruling, FLT-22, read for this list; UX-197): the last Mark sold never pulls
      the row, or the walk, out from under the hand. */
-  /* Keyed by buyer, holding whether it led as Ready to ship when it left, so it keeps its place
-     in the sort too (a finished buyer has no open order left to say so). */
+  /* Keyed by buyer. A finished buyer owes nothing, so it sorts with the ready buyers (D296): it
+     has no open order left to say so itself. */
   /* TAKEN IN THE RENDER THAT SEES THE BUYER FINISH (React's "adjust state during render"), never in
      an effect: an effect let one committed render drop the buyer from the list, move the selection
      to the next buyer and ask for that buyer's walk (the re-review's race, round 3). */
-  const [finished, setFinished] = useState<ReadonlyMap<string, boolean>>(new Map())
+  const [finished, setFinished] = useState<ReadonlySet<string>>(new Set())
   const [seenGroups, setSeenGroups] = useState(allGroups)
   if (seenGroups !== allGroups) {
     const openNow = new Set(allGroups.filter((group) => group.open.length > 0).map((group) => group.key))
     const left = seenGroups.filter((group) => group.open.length > 0 && !openNow.has(group.key))
     setSeenGroups(allGroups)
-    if (left.length > 0) setFinished((prev) => new Map([...prev, ...left.map((group) => [group.key, groupIsReadyToShip(group)] as const)]))
+    if (left.length > 0) setFinished((prev) => new Set([...prev, ...left.map((group) => group.key)]))
   }
-  const readyOf = (group: BuyerGroup) => finished.get(group.key) ?? groupIsReadyToShip(group)
+  /* READY FIRST (D296): every owed copy is in the boxes. A buyer who BECOMES ready mid-view does
+     not jump: `take` below holds every row where it stood until the next sort, filter or search
+     press retakes the order. */
+  const readyOf = (group: BuyerGroup) => finished.has(group.key) || statusByGroup.get(group.key) === 'ready'
 
   const feedStatuses = useMemo(() => statusVocabulary(payload?.orders ?? []), [payload])
   const facetShape: readonly FilterFacet[] = useMemo(
@@ -3480,6 +3471,30 @@ function PullStage({
 
   /* ---------------------------------------------------------------------- the filter bar */
 
+  /* ONE CONTROL THAT SAYS WHAT IT DOES (UX-232): "Walk all 6 buyers", with the same verb the
+     checkboxes carry. PRESSED, IT NAMES THE UNDO, NEVER A DIFFERENT FEATURE (review finding
+     4): the old label flipped to "Walk one buyer" once every row was ticked, which reads as a
+     SEPARATE control ("walk exactly one") rather than as this same toggle's own off state —
+     the operator had ticked all 70 and the button now claimed to walk one. `aria-pressed`
+     already carries the ON/OFF state; the word only needs to say what THIS PRESS does next.
+     IT SITS IN THE FILTER BAR, JUST BEFORE THE COUNT OF THE ROWS IT WALKS (the owner's ruling).
+     The count is last, so a count that changes width never moves it. */
+  const allTicked = tickableKeys.size > 0 && [...tickableKeys].every((key) => walkTicked.has(key))
+  const walkAll =
+    tickableKeys.size < 2 ? null : (
+      <Button
+        size="sm"
+        className="orders-walkall"
+        aria-pressed={allTicked}
+        onClick={() => {
+          setWalkNote(null)
+          setWalkTicked(allTicked ? new Set() : new Set(tickableKeys))
+        }}
+      >
+        {allTicked ? 'Stop' : `Walk ${tickableKeys.size}`}
+      </Button>
+    )
+
   const filterBar = (
     <FilterBar<OrderSortKey>
       className="orders-filterbar"
@@ -3496,6 +3511,7 @@ function PullStage({
         ...(unknownCount === 0 && !hideUnknown ? [] : [{ checked: hideUnknown, onChange: setHideUnknown, label: 'Hide unknown', count: unknownCount }]),
       ]}
       beside={storeControls}
+      action={walkAll}
     />
   )
 
@@ -3582,32 +3598,9 @@ function PullStage({
     )
   }
 
-  /* ONE CONTROL THAT SAYS WHAT IT DOES (UX-232): "Walk all 6 buyers", with the same verb the
-     checkboxes carry. PRESSED, IT NAMES THE UNDO, NEVER A DIFFERENT FEATURE (review finding
-     4): the old label flipped to "Walk one buyer" once every row was ticked, which reads as a
-     SEPARATE control ("walk exactly one") rather than as this same toggle's own off state —
-     the operator had ticked all 70 and the button now claimed to walk one. `aria-pressed`
-     already carries the ON/OFF state; the word only needs to say what THIS PRESS does next. */
-  const allTicked = tickableKeys.size > 0 && [...tickableKeys].every((key) => walkTicked.has(key))
-  const walkAll =
-    tickableKeys.size < 2 ? null : (
-      <Button
-        size="sm"
-        className="orders-walkall"
-        aria-pressed={allTicked}
-        onClick={() => {
-          setWalkNote(null)
-          setWalkTicked(allTicked ? new Set() : new Set(tickableKeys))
-        }}
-      >
-        {allTicked ? 'Stop' : `Walk ${tickableKeys.size}`}
-      </Button>
-    )
-
-  /* ONE FLAT LIST, NO GROUP HEADINGS (the owner's ruling): the Walk press has its own row. */
+  /* ONE FLAT LIST, NO GROUP HEADINGS (the owner's ruling). The Walk press is in the filter bar. */
   const buyerList = (
     <>
-      {walkAll === null ? null : <div className="orders-buyers-head">{walkAll}</div>}
       <ol className="orders-index bn-stagger">
         {shownGroups.map((group, at) => (
           <li
@@ -3995,9 +3988,8 @@ function BuyerRow({
             <b>{figures.sold}</b> sold
           </>
         ) : (
-          <>
-            <b>{figures.owed}</b> owed
-          </>
+          /* The number only: the headline's "copies owed" says the unit once (the owner's ruling). */
+          <b>{figures.owed}</b>
         )}
       </span>
     </button>
@@ -4006,8 +3998,9 @@ function BuyerRow({
 
 /* ============================================================== the selected order's panel */
 
-/** The walk's head for one buyer: the name, the order, ONE status, and three figures that add
- *  up (owed less short is the walk, UX-168). Manage opens that buyer's own orders. */
+/** The walk's head for one buyer: the name, the order, ONE status, and three figures. To pick
+ *  plus not in boxes is what the row's number says is owed (UX-168). Manage opens that buyer's
+ *  own orders. */
 function OrderPanel({
   group,
   answers,
@@ -4044,9 +4037,12 @@ function OrderPanel({
           {pill.label}
         </Pill>
         <div className="orders-panel-figures">
-          <Stat size="sm" value={figures.owed} label="owed" />
-          <Stat size="sm" value={figures.sold} label="sold" />
-          <Stat size="sm" value={figures.short} label="short" />
+          {/* WHAT THE ROW CANNOT SAY (the owner's ruling): the row already gives the copies owed,
+              so the pane splits them into the ones in the boxes and the ones that are not, the
+              same two words the headline uses. Then what was already sold to this buyer. */}
+          <Stat size="sm" value={figures.owed - figures.short} label="to pick" valueClassName="bn-live-count bn-live-count-start" />
+          <Stat size="sm" value={figures.short} label="not in boxes" valueClassName="bn-live-count bn-live-count-start" />
+          <Stat size="sm" value={figures.sold} label="sold" valueClassName="bn-live-count bn-live-count-start" />
         </div>
       </div>
     </div>

@@ -38,6 +38,7 @@
 }
 .bn-filterbar-search { flex: 1 1 auto; min-width: 0; }
 .bn-filterbar-beside { flex: none; display: flex; align-items: center; }
+.bn-filterbar-action { flex: none; display: flex; align-items: center; }
 
 /* ONE CLEAR-ALL: the count line's. `FilterChips`' own is not drawn inside a bar, in the row or in
    the sheet, so there are never two side by side, and its reserved slot leaves no blank band. */

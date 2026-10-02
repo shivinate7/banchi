@@ -4,7 +4,9 @@
    ========================================================================== */
 
 .orders-hub .bn-verdict { overflow-wrap: anywhere; }
-.orders-hub .bn-verdict strong { color: var(--bn-ink); font-weight: 700; }
+/* THE HEADLINE IS A STAT ROW (Inventory's box panel's own shape). Room for four digits in every
+   figure, so a count that gains or loses one never moves the stat beside it (D313). */
+.orders-headline { --digits: 4; }
 .orders-stage { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
 /* Add orders and Cards to pull: two small squares on the filter bar's line. */
 .orders-store-controls { display: inline-flex; align-items: center; gap: var(--bn-2); }
@@ -118,8 +120,7 @@
     max-height: min(60dvh, 26rem);
     scroll-snap-type: y proximity;
   }
-  .orders-buyers-panel .orders-index-item,
-  .orders-buyers-panel .orders-buyers-head { scroll-snap-align: start; }
+  .orders-buyers-panel .orders-index-item { scroll-snap-align: start; }
 }
 @container orders (min-width: 1000px) {
   .orders-layout {
@@ -225,14 +226,6 @@
 .orders-walkleave { flex: none; }
 
 /* ---- the buyer list (UX-199, UX-201, UX-231, UX-232) --------------------------------- */
-.orders-buyers-head {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--bn-2);
-  /* The card's own inset on every side: the Walk press (40px) never touches its edge. */
-  padding: var(--bn-2) var(--bn-2) 0 var(--bn-3);
-}
 /* The same list padding and row gap as Inventory's box list (`.browse-boxes`). */
 .orders-index {
   list-style: none;
@@ -301,6 +294,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-index-count { flex: none; }
 .orders-index-figure { display: inline-flex; align-items: baseline; justify-content: flex-end; min-width: 3.5em; font-size: var(--bn-fs-xs); font-weight: 500; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .orders-index-figure b { font-family: var(--bn-font-display); font-size: var(--bn-fs-base); font-weight: 800; color: var(--bn-ink); margin-right: var(--bn-0-75); }
+.orders-index-figure b:only-child { margin-right: 0; }
 
 /* ---- the walk's head: one buyer, or several (UX-168, UX-230) ------------------------- */
 .orders-walk { display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4); }
@@ -435,8 +429,10 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
    its own beyond `.walk-pick-where` above: no `.orders-card-*` class draws any more. */
 
 /* ---- 40px hit areas at every width (UX-267) ------------------------------------------ */
-.orders-walkall,
 .orders-walk-tools .bn-btn { min-height: var(--bn-control-h-lg); }
+/* Walk sits in the filter bar, so it takes the bar's own control height: the search's and the
+   Filters trigger's (`--bn-control-h`, which is past the thumb floor under a thumb). */
+.orders-walkall { height: var(--bn-control-h); }
 
 /* ---- the stand-down legend, said once per sheet (UX-240) ------------------------------ */
 .orders-manage-legend {
