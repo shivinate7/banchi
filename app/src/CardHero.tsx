@@ -517,6 +517,9 @@ export function CardHeroHead({
 }) {
   const name = nameOf(card)
   const number = numberCell(card)
+  const heroParts = [number === 'none' ? null : number, card.set_hint, game].filter(
+    (part): part is string => typeof part === 'string' && part !== '',
+  )
   return (
     <div className="browse-hero-head">
       <div className="browse-hero-text">
@@ -537,10 +540,8 @@ export function CardHeroHead({
         {/* THE META LINE: number, set, game, then rarity and finish as outline pills on the SAME
             line. No row holds rarity alone. The seam between the three facts is CSS (D218). */}
         <p className="browse-hero-sub">
-          <span className="browse-hero-parts">
-            {[number === 'none' ? null : number, card.set_hint, game]
-              .filter((part): part is string => typeof part === 'string' && part !== '')
-              .map((part, i) => (
+          <span className="browse-hero-parts" title={heroParts.join(', ')}>
+            {heroParts.map((part, i) => (
                 <span key={`${part}-${i}`} className={i === 0 && number !== 'none' ? 'browse-hero-number' : undefined}>
                   {part}
                 </span>

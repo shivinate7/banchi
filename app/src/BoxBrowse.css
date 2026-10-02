@@ -450,16 +450,21 @@
    holds none is a text line shorter: the hero below it moved 3.5px on the press. */
 .browse-hero-sub {
   display: flex;
-  flex-wrap: wrap;
+  /* ONE LINE, ALWAYS (D313): a chip arriving (Sold, after a sale) must never wrap onto a line of its own and push
+     the stats, the photo and the panel down. The set and game text gives way first (an ellipsis, its full text
+     is the title); the finish and rarity chips clip next; the state chip never shrinks. */
+  flex-wrap: nowrap;
+  overflow: hidden;
   align-items: center;
   min-height: var(--bn-pill-h);
   gap: var(--bn-1-5) var(--bn-2);
   font-size: var(--bn-fs-sm);
   color: var(--bn-ink-3);
 }
-.browse-hero-parts { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--bn-1) var(--bn-2); }
-.browse-hero-parts > span { white-space: nowrap; }
-.browse-hero-parts > span + span::before { content: '·'; margin-right: var(--bn-2); color: var(--bn-ink-4); }
+.browse-hero-sub > * { flex: none; }
+.browse-hero-sub > .browse-hero-parts { flex: 0 100 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.browse-hero-sub > .bn-pill-outline { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.browse-hero-parts > span + span::before { content: '·'; margin: 0 var(--bn-2); color: var(--bn-ink-4); }
 .browse-hero-number { font-family: var(--bn-font-mono); font-weight: 600; color: var(--bn-ink-2); }
 /* Side facts: history, quieter than the lead figures, equal to each other. */
 .browse-hero-side {
