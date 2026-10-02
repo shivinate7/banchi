@@ -7,7 +7,7 @@ comment. This script reads those lines and writes one page, grouped by area. The
 test whose `Governs:` cites a decision the corpus marks as superseded (`decisions_corpus.py`'s
 `supersession`, the one home for that fact).
 
-THE ROSTER. Browser specs (`app/tests/*.spec.ts`), harness tests (`harness/tests/t*.py`) and
+THE ROSTER. Browser specs (`app/tests/*.spec.ts`), unit tests (`app/tests/unit/*.unit.ts`), harness tests (`harness/tests/t*.py`) and
 the dedicated self-test files (`scripts/*-selftest.py`, `scripts/*-selftest.sh`). A guard whose
 self-test lives inside its own script is not in the roster.
 
@@ -30,8 +30,20 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import decisions_corpus  # noqa: E402
 
 PAGE = ROOT / "docs" / "TESTS.md"
+TIERS = """## Test tiers
+
+| Tier | Run by | Holds |
+| --- | --- | --- |
+| Unit | `make unit`, in `make check` | `app/tests/unit/*.unit.ts`. Logic or data with no layout and no real interaction. Playwright's runner, no browser, no dev server. The whole tier stays under 10 s. |
+| Browser | `make design-check` | `app/tests/*.spec.ts`. Anything that needs a page: a measured size, position or computed style, a click, key, focus or drag, a timer or the router running in a page. |
+| Python | `make harness`, the self-tests | `harness/tests/`, `scripts/*-selftest.py`. |
+
+**A test belongs in the unit tier when its verdict is the same if no page ever drew.** A pure function, a table read from `ROUTES` or a JSON file, a parser, a judge fed arrays. If the answer depends on layout, on a real interaction, or on wiring that only a page has, it stays in the browser tier. A unit-tested function still gets one browser case that proves the page calls it (the tab title is the pilot: the function is `tests/unit/tab-title.unit.ts`, the shell stamping it is one case in `scaffold.spec.ts`). Existing browser tests move only when a lane is named for them.
+"""
+
 ROSTER_GLOBS = (
     "app/tests/*.spec.ts",
+    "app/tests/unit/*.unit.ts",
     "harness/tests/t*.py",
     "scripts/*-selftest.py",
     "scripts/*-selftest.sh",
@@ -48,8 +60,13 @@ AREAS: Tuple[Tuple[str, str], ...] = (
     ("Pricing and runs", r"pricing|product-history|live-reconcile|run-panel|photo-cache|t5_|t2_"),
     ("Orders, sales and shipping", r"orders|order-walk|shipping|revenue|home|t11_"),
     ("The Fulfiller's screen", r"fulfillment|pull-confirm"),
+<<<<<<< HEAD
     ("Shell, kit and layout", r"nav|themes|stability|scaffold|page-edge|status-busy|phone|wide|cursor|icon-button|button-stack|filters|filter-standard|kit-data|gallery|brand|^match|t6_"),
     ("Text and money checks", r"machine-words|money|text-shape"),
+=======
+    ("Shell, kit and layout", r"nav|stability|scaffold|page-edge|status-busy|phone|wide|cursor|icon-button|button-stack|filters|filter-standard|kit-data|gallery|brand|^match|tab-title|t6_"),
+    ("Text and money checks", r"machine-words|money-face|text-shape|text-checks"),
+>>>>>>> ac0eb1c1 (One text-check sweep: money-face, machine-words and text-shape read each screen once; document the test tiers)
     ("Public demo", r"demo-"),
     ("Code cards", r"t8_"),
     ("Store, identity and prices", r"cid-|holdings|identity-|sku|readings|price|archive|submission|repair-born|catalog-index|stockimages|pipeline-trends|pricehistory"),
@@ -126,6 +143,7 @@ def render() -> str:
             out.append(f"- `{rel}`: {'; '.join(f)}")
     else:
         out.append("None.")
+    out += ["", TIERS.rstrip("\n")]
     order = [n for n, _ in AREAS] + [UNFILED]
     for area in order:
         if area not in rows:

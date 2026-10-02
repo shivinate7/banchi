@@ -3573,7 +3573,7 @@ COMPONENTS = [
             "machine-words.json": {
                 "does": "D196's word list, `NO_MECHANISM_WORDS`, moved out of "
                         "`docs-audit.py` on 2026-09-23 (`D284`) once a "
-                        "second reader — `app/tests/machine-words.spec.ts`, the rendered-"
+                        "second reader — `app/tests/text-checks.spec.ts`, the rendered-"
                         "text browser check — needed it too. Also holds `repoTopDirs`, the "
                         "one list both the Python path check and the browser path check "
                         "build their regex from. Read, never written; growing the list is "
@@ -3582,7 +3582,7 @@ COMPONENTS = [
                                 "D99", "D273", "D174", "D181", "D196",
                                 "D260", "D284"]},
             "error-words.py": {
-                "does": "the refusal half of D196, read at the source. `machine-words.spec.ts` "
+                "does": "the refusal half of D196, read at the source. `text-checks.spec.ts` "
                         "reads loaded screens and never sees an error state, and `no mechanism "
                         "on screen` reads JSX literals, so the messages a refusal carries to the "
                         "screen word for word were unread. This walks `server/*.py` for the "
@@ -3612,7 +3612,7 @@ COMPONENTS = [
                 "does": ("`make text-density` — the third piece of `D284`, a "
                     "REPEATABLE, ON-DEMAND density pass that prints a CUT TABLE, never a gate "
                     "(D18: it writes one receipt, `.serve/text-density.json`, gitignored). It "
-                    "runs `app/tests/text-shape.spec.ts` with `TEXT_DENSITY=1`, one worker, "
+                    "runs `app/tests/text-checks.spec.ts` with `TEXT_DENSITY=1`, one worker, "
                     "`line` reporter, so it reads the SAME populated fixture and loaded screens "
                     "as the two gates, at 1440 and 390, whatever this checkout's own store holds, "
                     "and never touches `.serve/design-check.json`. Playwright starts or reuses "
@@ -8862,9 +8862,9 @@ COMPONENTS = [
                         "`.bn-page` turned it green.",
             },
             "tests/routeSweep.ts": {
-                "does": ("`sweepEveryRoute`, the one sweep `text-shape.spec.ts`, "
-                    "`machine-words.spec.ts` and `money-face.spec.ts` run, and `make "
-                    "text-density` through the first. Registers every "
+                "does": ("`sweepEveryRoute`, the one sweep `text-checks.spec.ts` runs "
+                    "for all three text checks, and `make "
+                    "text-density` through it. Registers every "
                     "`routeFixtures.ts:POPULATED_ROUTE_SEEDS` seed ONCE, before the first "
                     "navigation, so every screen reads the same store at both widths. Harvests "
                     "routes off the nav at 1440 and the phone drawer at 390, and appends "
@@ -8883,7 +8883,7 @@ COMPONENTS = [
                          "times in 10s and the sweep failed 3 runs of 3.")
             },
             "tests/textShape.ts": {
-                "does": ("`measureTextShape`, the one measurement `text-shape.spec.ts` runs "
+                "does": ("`measureTextShape`, the one measurement `text-checks.spec.ts` runs "
                     "through `page.evaluate` — a self-contained function (Playwright "
                     "serialises it by `toString()`, so it closes over nothing outside "
                     "itself). Four signals: a repeated sentence of 4+ words on 3+ "
@@ -8897,26 +8897,31 @@ COMPONENTS = [
                     "only. `injectRepeatedSentence` is the mutation hook, and trips all four."),
                 "governed_by": ["D284", "D269"],
             },
-            "tests/text-shape.spec.ts": {
-                "does": ("D284's word-ceiling ratchet is superseded (`D284`, "
-                    "2026-09-23): a repetition check and a sentence-shape check, over "
-                    "`textShape.ts:measureTextShape`, replace it — no count is pinned. "
-                    "Sweeps through `routeSweep.ts:sweepEveryRoute`. `text-shape-allow.json` "
-                    "is the shrinking pending list, route -> assertion -> finding key -> lane; "
-                    "fails on an unlisted finding and on a stale entry. "
-                    "`TEXT_SHAPE_MUTATE=<hash>` is the mutation proof. `TEXT_DENSITY=1` is "
-                    "`make text-density`'s report mode: it writes the measurements and asserts "
-                    "nothing. Run by `make design-check`."),
-                "governed_by": ["D284"],
+            "tests/text-checks.spec.ts": {
+                "does": ("ONE sweep, THREE checks (D284): every route is opened once through "
+                    "`routeSweep.ts:sweepEveryRoute` and read by money-face (D221, over "
+                    "`moneyFace.ts:scanMoneyFace`), machine-words (D196, over "
+                    "`machineWords.ts:scanMachineWords`, `.bn-view`'s rendered `innerText`, so a "
+                    "closed `<details>` contributes nothing) and text-shape (a repetition and "
+                    "a sentence-shape check over `textShape.ts:measureTextShape`; no count is "
+                    "pinned). Each check keeps its own pending list "
+                    "(`money-face-allow.json`, `machine-words-allow.json`, "
+                    "`text-shape-allow.json`) and its own `[check]`-named findings, asserted "
+                    "apart so one red never hides another. `MONEY_FACE_MUTATE`, "
+                    "`MACHINE_WORDS_MUTATE` and `TEXT_SHAPE_MUTATE` (a route hash) are the "
+                    "mutation proofs. `TEXT_DENSITY=1` is `make text-density`'s report mode: "
+                    "text-shape alone, writes the measurements, asserts nothing. Also the kit "
+                    "sheet's money-face cases. Run by `make design-check`."),
+                "governed_by": ["D196", "D221", "D269", "D284"],
             },
             "tests/text-shape-allow.json": {
-                "does": ("the shrinking pending list `text-shape.spec.ts` reads, route -> "
+                "does": ("the shrinking pending list `text-checks.spec.ts` reads, route -> "
                     "assertion -> finding key -> lane. The finding key is the finding's own "
                     "text, so an entry excuses one finding and no other."),
                 "governed_by": ["D284"],
             },
             "tests/machineWords.ts": {
-                "does": ("`scanMachineWords`, the one measurement `machine-words.spec.ts` "
+                "does": ("`scanMachineWords`, the one measurement `text-checks.spec.ts` "
                     "runs, self-contained the same way `measureTextShape` is. Takes the "
                     "word list and `repoTopDirs` as its argument (read once from "
                     "`scripts/machine-words.json` by the spec) rather than closing over "
@@ -8926,26 +8931,14 @@ COMPONENTS = [
                     "literal. `injectMachineWord` is the mutation hook."),
                 "governed_by": ["D196", "D269", "D284"],
             },
-            "tests/machine-words.spec.ts": {
-                "does": ("D196's own gap: `no mechanism on screen` reads JSX literals only, "
-                    "so a server response, demo text or a composed string passes it "
-                    "clean. This reads `.bn-view`'s rendered `innerText` instead, through "
-                    "`routeSweep.ts:sweepEveryRoute`. A closed `<details>` "
-                    "(`D269`) contributes nothing to `innerText`, unlike "
-                    "`textContent`, with no special-casing needed. "
-                    "`machine-words-allow.json` is the shrinking pending list, route -> "
-                    "word -> lane, with no wildcard route. `MACHINE_WORDS_MUTATE=<hash>` is "
-                    "the mutation proof. Run by `make design-check`."),
-                "governed_by": ["D196", "D269", "D284"],
-            },
             "tests/machine-words-allow.json": {
-                "does": ("the shrinking pending list `machine-words.spec.ts` reads, route -> "
+                "does": ("the shrinking pending list `text-checks.spec.ts` reads, route -> "
                     "word/path -> lane, no wildcard. A separate list from `scripts/machine-"
                     "words-allow.json` on purpose: rendered text carries no source file."),
                 "governed_by": ["D196", "D274", "D284"],
             },
             "tests/moneyFace.ts": {
-                "does": ("`scanMoneyFace`, the one measurement `money-face.spec.ts` runs, "
+                "does": ("`scanMoneyFace`, the one measurement `text-checks.spec.ts` runs, "
                     "self-contained. Matches `$1.23`, `$66,334.71`, `+$1.20`, `−$0.35` and a "
                     "whole-dollar `$50` in `.bn-view`'s text nodes, and a cents- or `$`-shaped "
                     "value in every visible `<input>`/`<textarea>`, and checks each match's "
@@ -8955,18 +8948,8 @@ COMPONENTS = [
                     "mutation hook."),
                 "governed_by": ["D221", "D284"],
             },
-            "tests/money-face.spec.ts": {
-                "does": ("D221 (money stays mono, confirmed 2026-09-23: inputs and chips "
-                    "included) over `moneyFace.ts:scanMoneyFace`, through "
-                    "`routeSweep.ts:sweepEveryRoute`. `money-face-allow.json` is the "
-                    "shrinking pending list, route -> amount -> lane: the fixture is "
-                    "deterministic, so a route draws the same figures every run. "
-                    "`MONEY_FACE_MUTATE=<hash>` is the mutation proof. Run by "
-                    "`make design-check`."),
-                "governed_by": ["D221", "D284"],
-            },
             "tests/money-face-allow.json": {
-                "does": ("the shrinking pending list `money-face.spec.ts` reads, route -> amount "
+                "does": ("the shrinking pending list `text-checks.spec.ts` reads, route -> amount "
                     "-> lane. An entry excuses one figure on one route, and no other."),
                 "governed_by": ["D221", "D284"],
             },
@@ -9414,8 +9397,7 @@ COMPONENTS = [
             },
             "tests/routeExclusions.ts": {
                 "does": "`EXCLUDED_FROM_SWEEP` (`#/fulfillment`, `#/gallery`), a REGEX rather "
-                        "than a quoted `'#/…'` string literal, shared by `text-shape.spec.ts`, "
-                        "`machine-words.spec.ts` and `money-face.spec.ts`. "
+                        "than a quoted `'#/…'` string literal, read by `text-checks.spec.ts`. "
                         "`scripts/docs-audit.py`'s `route rosters` row reads three or more "
                         "distinct quoted `#/…` literals in one spec as a hand-typed roster; "
                         "these two deliberate exclusions are not one, and a regex avoids "
@@ -9445,8 +9427,8 @@ COMPONENTS = [
                         "newest-first). Nothing in it is random. Read by "
                         "`routeSweep.ts:sweepEveryRoute`, which registers every seed ONCE "
                         "before its sweep — `copy-budget.spec.ts` read them first, before "
-                        "D284 was superseded; `text-shape.spec.ts`, `machine-words.spec.ts` "
-                        "and `money-face.spec.ts` read them now, through the same one sweep.",
+                        "D284 was superseded; `text-checks.spec.ts` "
+                        "reads them now, through the one sweep.",
                 "governed_by": ["D20", "D23", "D77", "D83", "D134", "D284", "D221"],
                 "note": "CLOSED D284'S OWN NAMED GAP, and the argument still holds for its "
                         "successors. Its ceilings on the routes above were pinned against "

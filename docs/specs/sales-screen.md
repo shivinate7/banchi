@@ -78,7 +78,7 @@ entry.
 - **`.revenue-tile-name` is `display: block`,** so its ellipsis rule works outside a flex row. An
   inline box ignores `overflow` and `text-overflow`.
 - **"Last sold" and its date share one line.** Three podium tiles on the same sale date then repeat
-  one sentence, which `text-shape.spec.ts` is built to catch. `text-shape-allow.json` lists it by
+  one sentence, which `text-checks.spec.ts` is built to catch. `text-shape-allow.json` lists it by
   route if a fixture produces the coincidence.
 
 ## Where a change goes
@@ -89,5 +89,4 @@ entry.
   `,V` jump and the entry in the keyboard sheet.
 - `app/tests/revenue.spec.ts` is the screen's suite. `scripts/views.txt` holds its render line, over
   the empty store every worktree starts with (D43).
-- Text shape is three checks and none is a count (D284): `app/tests/text-shape.spec.ts`,
-  `app/tests/machine-words.spec.ts` and `app/tests/money-face.spec.ts`.
+- Text shape is three checks and none is a count (D284), run in one sweep by `app/tests/text-checks.spec.ts`.

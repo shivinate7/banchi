@@ -162,7 +162,7 @@ SCOPE = (
     },
     {
         "path": "scripts/machine-words.json",
-        "why": "Read by `app/tests/machine-words.spec.ts`: the one word list the rendered-text "
+        "why": "Read by `app/tests/text-checks.spec.ts`: the one word list the rendered-text "
                "check scans every route for (D196, D284). A word added or "
                "removed changes what the browser refuses, so only the browser proves it. The "
                "three browser pending lists (`app/tests/*-allow.json`) sit under `app/**` "
@@ -536,8 +536,7 @@ def selftest() -> int:
        "`app/src/Inventory.tsx` reaches `inventory.spec.ts`")
     ok("app/tests/cursor.spec.ts" in inventory_verdict.specs,
        "`app/src/Inventory.tsx` reaches a `routesFromNav(` spec (`cursor.spec.ts`)")
-    ok("app/tests/money-face.spec.ts" in inventory_verdict.specs
-       and "app/tests/machine-words.spec.ts" in inventory_verdict.specs,
+    ok("app/tests/text-checks.spec.ts" in inventory_verdict.specs,
        "`app/src/Inventory.tsx` reaches the specs that sweep through `sweepEveryRoute`, "
        "a helper that calls `routesFromNav(` for them")
     ok(not _NAV_CALL_RE.search("export async function routesFromNav(page: Page)"),
@@ -765,7 +764,7 @@ def sweeps_nav(spec_path: str) -> bool:
     """Does this spec visit whatever the nav draws? True when its own (comment-stripped) body
     calls `routesFromNav(`, OR when any test-side module it imports, transitively, does — a
     helper such as `routeSweep.ts:sweepEveryRoute` makes the call for the spec, and reading
-    only the spec's own text missed `money-face.spec.ts` and `machine-words.spec.ts`. The
+    only the spec's own text missed `text-checks.spec.ts`. The
     definition (`function routesFromNav(`) is not a call. Fails open: a spec that imports a
     sweeping helper for an unrelated export is still counted as sweeping."""
     for path in import_closure([spec_path]):

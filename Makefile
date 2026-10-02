@@ -367,7 +367,7 @@ offenders-prune-selftest:
 # THE THIRD PIECE OF THE OWNER'S 2026-09-23 RULING (D-text-shape-checks, supersedes D284): a
 # REPEATABLE, ON-DEMAND density pass that prints a CUT TABLE, never a gate (D18: it writes one
 # receipt, `.serve/text-density.json`, gitignored). NOT A PREREQUISITE OF ANYTHING and never
-# wired to a hook, `map-fix`'s own standing. It runs `app/tests/text-shape.spec.ts` with
+# wired to a hook, `map-fix`'s own standing. It runs `app/tests/text-checks.spec.ts` with
 # `TEXT_DENSITY=1`, so it reads the SAME populated fixture and the same loaded screens as the
 # two gates, at 1440 and 390, whatever this checkout's own store holds. Playwright starts or
 # reuses this checkout's own Vite (D43); every read is stubbed, so no store is read. One
