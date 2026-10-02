@@ -2034,7 +2034,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         toast({
           kind: 'receipt',
           icon: 'check',
-          title: `Stood down ${plural(done.moved, 'order', 'orders')}`,
+          title: `Stood down ${done.moved} ${plural(done.moved, 'order', 'orders')}`,
           body: `${done.still_open} still open. Nothing was marked sold.`,
           ttlMs: UNDO_WINDOW_MS,
           action: {
