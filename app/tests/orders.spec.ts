@@ -2166,9 +2166,9 @@ test('two unnamed buyers draw two different labels, neither the full id', async 
       ],
     ),
   })
-  /* Newest first, so the 07-15 order leads. */
+  /* Oldest first at rest (D296), so the 07-01 order leads. */
   const names = page.locator('.orders-index-number')
-  await expect(names).toHaveText(['Buyer on order …00002', 'Buyer on order …00001'])
+  await expect(names).toHaveText(['Buyer on order …00001', 'Buyer on order …00002'])
 })
 
 /* THE TAIL OF A NAMELESS LABEL NEVER BREAKS (review, round 3). At 1440 "Buyer on order …00099"
@@ -2392,13 +2392,15 @@ test('under Done, every done buyer is listed open, however long ago it closed (U
 
 /* ------------------------------------------------------------------------------------- 20
  *
- * SORT AND FILTER (`D296`). Ready to Ship leads, newest first within a group,
- * everything else stays reachable behind the status select — an ORDERING and never a hiding.
+ * SORT AND FILTER (`D296`). A buyer whose every owed copy is in the boxes leads, oldest order
+ * first at rest, everything else stays reachable behind the status select — an ORDERING and
+ * never a hiding.
  *
- * THREE BUYERS, ONE FIXTURE. Alice (Ready to Ship, oldest), Carol (Ready to Ship, newest),
- * Bob (a status this file never hardcodes, in the middle). Default order is therefore
- * Carol, Alice, Bob — both Ready-to-Ship groups lead, newest of the two first, then Bob.
- * Carol's own line answers `sku_unseen`, which is what "Hide never-seen SKUs" narrows on.
+ * THREE BUYERS, ONE FIXTURE. Alice (every copy in the boxes, the NEWEST order), Bob (short, a
+ * status this file never hardcodes, the oldest), Carol (a never-seen SKU, in the middle).
+ * Default order is therefore Alice, Bob, Carol: the ready buyer leads although her order is the
+ * newest, then the rest oldest first. Carol's own line answers `sku_unseen`, which is what "Hide
+ * never-seen SKUs" narrows on.
  */
 
 function seededOrder(seed: {
@@ -2452,7 +2454,7 @@ function seededOrder(seed: {
   return { row, resolved }
 }
 
-const ALICE = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
+const ALICE = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-25T00:00:00+00:00', reason: 'resolved' })
 const BOB = seededOrder({ number: 'B0002', buyer: 'Bob', status: 'Zorbo Pending', placedAt: '2026-08-15T00:00:00+00:00', reason: 'short' })
 const CAROL = seededOrder({ number: 'C0003', buyer: 'Carol', status: 'Ready to Ship', placedAt: '2026-08-20T00:00:00+00:00', reason: 'sku_unseen' })
 
@@ -2474,10 +2476,10 @@ test('no row is unreachable at the default: every buyer is reachable with no con
   await expect(page.locator('main.orders')).toContainText('Carol')
 })
 
-test('the default ordering puts Ready to Ship first, newest within', async ({ page }) => {
+test('the default ordering puts a buyer whose copies are all in the boxes first, then the oldest order', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   await expect(page.locator('.orders-index-row')).toHaveCount(3)
-  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
+  expect(await buyerOrder(page)).toEqual(['Alice', 'Bob', 'Carol'])
 })
 
 /** Enough buyers that `.orders-index` must scroll inside `.browse-boxes`'s own 264px band
@@ -2679,14 +2681,14 @@ test('the filter bar clears the 40px thumb floor at phone width', async ({ page 
   expect((await trigger.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(40)
 })
 
-/* A SORT PRESS RE-SORTS AT ONCE (FLT-01, the owner's ruling, amending D296; UX-170). Ready to
- * ship still leads, and the list says so. */
-test('the sort press re-orders the list at once, Ready to ship still leading, in one flat list', async ({ page }) => {
+/* A SORT PRESS RE-SORTS AT ONCE (FLT-01, the owner's ruling, amending D296; UX-170). The ready
+ * buyer still leads. */
+test('the sort press re-orders the list at once, the ready buyer still leading, in one flat list', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
+  expect(await buyerOrder(page)).toEqual(['Alice', 'Bob', 'Carol'])
   await expect(page.locator('.orders-group-head')).toHaveCount(0)
 
-  await (await openFilters(page)).getByRole('button', { name: /^Order: Newest first/ }).click()
+  await (await openFilters(page)).getByRole('button', { name: /^Order: Oldest first/ }).click()
   await closeFilters(page)
   await expect.poll(() => buyerOrder(page)).toEqual(['Alice', 'Carol', 'Bob'])
 })
@@ -2697,10 +2699,10 @@ test('the filters, the search and the sort survive a reload through the URL', as
   await open(page, { orders: threeBuyerPayload() })
 
   await pickFacet(page, 'Status', /^Ready to Ship/)
-  await (await openFilters(page)).getByRole('button', { name: /^Order: Newest first/ }).click()
+  await (await openFilters(page)).getByRole('button', { name: /^Order: Oldest first/ }).click()
   await closeFilters(page)
   await expect(page).toHaveURL(/status=Ready\+to\+Ship/)
-  await expect(page).toHaveURL(/dir=asc/)
+  await expect(page).toHaveURL(/dir=desc/)
 
   await page.reload()
   await expect(page.locator(VIEW)).toBeVisible()
@@ -2898,7 +2900,7 @@ test('Mark sold does not re-rank the Card count sort under the hand', async ({ p
      otherwise a case whose re-read never arrived would pass by doing nothing. The panel's own
      `sold` stat is `group.recorded`, off the re-read `GET /orders` answers, not the walk's
      local tally, so it only reads 2 once the mutated payload above has actually landed. */
-  await expect(page.locator('.orders-panel-figures .bn-stat').nth(1).locator('.bn-stat-value')).toHaveText('2')
+  await expect(page.locator('.orders-panel-figures .bn-stat').nth(2).locator('.bn-stat-value')).toHaveText('2')
 
   expect(await sortBuyerOrder(page)).toEqual(['Mona', 'Zeta', 'Abel'])
 })
@@ -3295,7 +3297,7 @@ test('clicking buyer B while A is selected replaces A — the walk is over B alo
 
 test('the selected order\'s panel is mock A\'s shape: label, title, Manage, pill, the bn-stat triad', async ({ page }) => {
   const owing = order({ wanted: 4, recorded: 1 })
-  const resolvedLine = line({ reason: 'short', owed: 2, wanted: 2 })
+  const resolvedLine = line({ reason: 'short', owed: 2, wanted: 2, outstanding: 2 })
   await open(page, {
     orders: payloadOf([owing], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [resolvedLine] }]),
   })
@@ -3308,12 +3310,16 @@ test('the selected order\'s panel is mock A\'s shape: label, title, Manage, pill
   await expect(panel.locator('.bn-pill')).toBeVisible()
 
   const stats = panel.locator('.orders-panel-figures .bn-stat')
+  /* WHAT THE ROW CANNOT SAY (the owner's ruling): 3 owed split into 1 to pick and 2 not in the
+     boxes, then 1 already sold. The row says the 3; the pane never repeats it. */
   await expect(stats).toHaveCount(3)
-  await expect(stats.nth(0).locator('.bn-stat-label')).toHaveText('owed')
-  await expect(stats.nth(1).locator('.bn-stat-label')).toHaveText('sold')
-  await expect(stats.nth(2).locator('.bn-stat-label')).toHaveText('short')
-  await expect(stats.nth(0).locator('.bn-stat-value')).toHaveText('3')
-  await expect(stats.nth(1).locator('.bn-stat-value')).toHaveText('1')
+  await expect(stats.nth(0).locator('.bn-stat-label')).toHaveText('to pick')
+  await expect(stats.nth(1).locator('.bn-stat-label')).toHaveText('not in boxes')
+  await expect(stats.nth(2).locator('.bn-stat-label')).toHaveText('sold')
+  await expect(stats.nth(0).locator('.bn-stat-value')).toHaveText('1')
+  await expect(stats.nth(1).locator('.bn-stat-value')).toHaveText('2')
+  await expect(stats.nth(2).locator('.bn-stat-value')).toHaveText('1')
+  await expect(panel).not.toContainText('owed')
 
   /* NO TYPED MIDDLE DOT anywhere in the panel (§13, mock A). */
   await expect(panel).not.toContainText(' · ')
@@ -3793,7 +3799,8 @@ test('Mark sold records the copy against the owing order, and the order panel up
   })
 
   const stats = page.locator('.orders-panel-figures .bn-stat')
-  await expect(stats.nth(1).locator('.bn-stat-value')).toHaveText('1')
+  await expect(stats.nth(2).locator('.bn-stat-label')).toHaveText('sold')
+  await expect(stats.nth(2).locator('.bn-stat-value')).toHaveText('1')
 })
 
 /* ------------------------------------------------------------ a stop's title, one ruler */
@@ -4307,11 +4314,17 @@ test('the verdict counts copies and buyers over the same open orders (UX-167)', 
   /* THE DEFECT: lines over the open orders, buyers over every order in the ledger, so a long
      history read "611 lines across 806 buyers". Thirty done buyers must not reach the count. */
   await open(page, { orders: historyPayload() })
-  await expect(page.locator(`${VIEW} .bn-verdict`)).toHaveText('21 owed, 6 buyers')
+  /* THE HEADLINE IS A STAT ROW (the owner's ruling): each figure over its own unit, all four
+     always drawn, a zero included. */
+  const stats = page.locator(`${VIEW} .bn-verdict .bn-stat`)
+  await expect(stats.locator('.bn-stat-label')).toHaveText(['copies owed', 'buyers', 'to pick', 'not in boxes'])
+  await expect(stats.locator('.bn-stat-value')).toHaveText(['21', '6', '21', '0'])
   await expect(page.locator('.orders-index-row')).toHaveCount(6)
+  /* THE UNIT IS SAID ONCE: a row carries the number only. */
+  await expect(page.locator('.orders-index-figure').first()).toHaveText(/^\d+$/)
 })
 
-test('short counts the copies that cannot be pulled, so owed less short is the walk (UX-168)', async ({ page }) => {
+test('not in boxes counts the copies that cannot be pulled, so to pick is the walk (UX-168)', async ({ page }) => {
   /* One line wants 2 and the store holds 1: one copy is missing, not two. */
   const shortLine = line({ reason: 'short', owed: 2, wanted: 2, on_hand: 1, fulfilled: 1, outstanding: 1 })
   await open(page, {
@@ -4321,9 +4334,12 @@ test('short counts the copies that cannot be pulled, so owed less short is the w
     ),
   })
   const stats = page.locator('.orders-panel-figures .bn-stat')
-  await expect(stats.nth(0).locator('.bn-stat-value')).toHaveText('2')
-  await expect(stats.nth(2).locator('.bn-stat-label')).toHaveText('short')
-  await expect(stats.nth(2).locator('.bn-stat-value')).toHaveText('1')
+  await expect(stats.nth(0).locator('.bn-stat-label')).toHaveText('to pick')
+  await expect(stats.nth(0).locator('.bn-stat-value')).toHaveText('1')
+  await expect(stats.nth(1).locator('.bn-stat-label')).toHaveText('not in boxes')
+  await expect(stats.nth(1).locator('.bn-stat-value')).toHaveText('1')
+  /* The headline says the same split store-wide. */
+  await expect(page.locator(`${VIEW} .bn-verdict .bn-stat-value`)).toHaveText(['2', '1', '1', '1'])
 })
 
 /* ------------------------------------------------------------ the Manage sheet's words (UX-238, UX-240) */
@@ -4705,10 +4721,7 @@ test('a fresh landing shows only pullable buyers, and one click widens it', asyn
   await expect(page.locator('.orders-index-row')).toHaveAttribute('aria-current', 'true')
   /* THE HIDDEN SET AND THE HEADLINE'S PICK COUNT COME FROM ONE ARITHMETIC (`pickOf`): Alice holds
      the one pick, Bob's line is short, so the headline names both and the list is the picks' buyers. */
-  const headline = (await page.locator(VIEW).innerText()).match(/(\d+) pick and (\d+) unfilled/)
-  expect(headline).not.toBeNull()
-  expect(Number(headline![1])).toBe(1)
-  expect(Number(headline![2])).toBe(1)
+  await expect(page.locator(`${VIEW} .bn-verdict .bn-stat-value`)).toHaveText(['2', '2', '1', '1'])
   await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
   await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('1 of 2 buyers')
   await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('Hide unpullable')
@@ -4892,27 +4905,32 @@ test('the walk keys do nothing while a text field has focus', async ({ page }) =
 
 /* ------------------------------------------------------- the buyer list at 820 (D304, Q2b) */
 
-test('at 820 a long buyer list rests with the Walk press in view and 40px, and a short one shows whole rows', async ({ page }) => {
-  await setViewport(page, { width: 820, height: 1000 })
-  const seeds = Array.from({ length: 16 }, (_, at) =>
-    seededOrder({ number: `L${String(at).padStart(4, '0')}`, buyer: `Buyer ${at}`, status: 'Ready to Ship', placedAt: `2026-08-${String(at + 1).padStart(2, '0')}T00:00:00+00:00`, reason: 'resolved' }),
-  )
-  await open(page, { orders: payloadOf(seeds.map((one) => one.row), seeds.map((one) => one.resolved)) })
-  const panel = page.locator('.orders-buyers-panel')
-  const walk = panel.locator('.orders-walkall')
-  await expect(walk).toBeVisible()
-  await settleMotion(page)
-  /* Scroll down and back up: a snap that skips the head rests at the first row instead. */
-  await panel.evaluate((el) => el.scrollTo({ top: 200, behavior: 'instant' }))
-  await panel.evaluate((el) => el.scrollTo({ top: 0, behavior: 'instant' }))
-  await settleMotion(page)
-  const at = await panel.evaluate((el) => ({ top: el.scrollTop, over: el.scrollHeight > el.clientHeight }))
-  expect(at.over, 'the fixture must overflow the card').toBe(true)
-  expect(at.top, 'snap rested past the Walk head').toBe(0)
-  const [box, card] = await Promise.all([walk.boundingBox(), panel.boundingBox()])
-  expect(box!.height).toBeGreaterThanOrEqual(40)
-  expect(box!.y).toBeGreaterThanOrEqual(card!.y)
-})
+/* WALK IS IN THE FILTER BAR, BESIDE THE COUNT (the owner's ruling): no row of its own over the
+ * list, 40px, and a scrolled list never takes it out of view. */
+for (const width of [1440, 820]) {
+  test(`at ${width} the Walk press sits in the filter bar beside the count, 40px, and the list has no head row`, async ({ page }) => {
+    await setViewport(page, { width, height: 1000 })
+    const seeds = Array.from({ length: 16 }, (_, at) =>
+      seededOrder({ number: `L${String(at).padStart(4, '0')}`, buyer: `Buyer ${at}`, status: 'Ready to Ship', placedAt: `2026-08-${String(at + 1).padStart(2, '0')}T00:00:00+00:00`, reason: 'resolved' }),
+    )
+    await open(page, { orders: payloadOf(seeds.map((one) => one.row), seeds.map((one) => one.resolved)) })
+    const bar = page.locator(`${VIEW} .orders-filterbar`)
+    const walk = bar.locator('.orders-walkall')
+    await expect(walk).toHaveText('Walk 16')
+    await expect(page.locator('.orders-buyers-panel .orders-walkall')).toHaveCount(0)
+    await settleMotion(page)
+    const [box, count] = await Promise.all([walk.boundingBox(), bar.locator('.bn-filtercount').boundingBox()])
+    expect(box!.height).toBeGreaterThanOrEqual(40)
+    /* Beside the count: on its line, just before it. */
+    expect(Math.abs(box!.y + box!.height / 2 - (count!.y + count!.height / 2))).toBeLessThan(4)
+    expect(count!.x - (box!.x + box!.width)).toBeLessThan(24)
+    expect(count!.x).toBeGreaterThan(box!.x)
+    /* Its labels are unchanged: every row ticked turns it to Stop. */
+    await walk.click()
+    await expect(walk).toHaveText('Stop')
+    await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(16)
+  })
+}
 
 test('at 820 a list that fits shows every row whole', async ({ page }) => {
   await setViewport(page, { width: 820, height: 1000 })

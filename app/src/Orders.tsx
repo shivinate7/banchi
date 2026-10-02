@@ -3129,7 +3129,12 @@ function PullStage({
      every other sort. */
   const [takeSig, setTakeSig] = useState<string | null>(null)
   const [take, setTake] = useState<GroupTake>(new Map())
-  if (takeSig !== basisSig) {
+  /* THE FIRST ROWS ARE TAKEN TOO. The first render has no ledger yet, so its take is empty, and an
+     empty take froze nothing: every row was an "arrival", drawn in the live order on every
+     render. Under a key no sale could move that never showed. Under the ready lead (D296) a
+     sale that leaves a buyer short moved the row under the hand. So the first non-empty list is
+     taken as it lands, the same as a press. */
+  if (takeSig !== basisSig || (take.size === 0 && freshShownGroups.length > 0)) {
     setTakeSig(basisSig)
     setTake(takeOrder(freshShownGroups))
   }

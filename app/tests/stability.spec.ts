@@ -8,7 +8,7 @@ import { card, sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
 import { settleMotion } from './motionSettled'
 import { routesFromNav } from './routes'
-import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, seedPopulatedOrders, severalOrdersWalkPlan } from './routeFixtures'
+import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, line, order, seedPopulatedOrders, severalOrders, severalOrdersWalkPlan } from './routeFixtures'
 import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
 import { setViewport } from './phoneSwitch'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts, type Shift } from './layoutShift'
@@ -944,5 +944,71 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
     } finally {
       Object.assign(mine, kept)
     }
+  })
+}
+
+/* ORDERS: A SALE AND ITS UNDO MOVE NOTHING THE PERSON DID NOT MOVE (D313). The list leads with the
+   buyers whose every owed copy is in the boxes (D296), so readiness is a sort key a sale can change.
+   The sale takes Ada's one copy and leaves her owing one with none on hand: no longer ready. The undo
+   gives it back: ready again, the "a buyer becomes ready" case. Neither re-sorts the rows; the order
+   is retaken only on the next sort, filter or search press. The headline's figures change, and its
+   stats, the filter bar with Walk in it, and every row keep their boxes. `wide` is Verdana with the
+   web fonts blocked. */
+const ORDERS_PARTS = ['.bn-verdict', '.orders-headline .bn-stat:nth-child(4)', '.orders-filterbar', '.orders-walkall', '.orders-buyers-panel', '.orders-panel'] as const
+for (const width of [1440, 820]) for (const wide of [false, true]) {
+  test(`held frame: a sale and its undo on Orders move no row, no stat and no press${wide ? ', wide face' : ''}, at ${width}`, async ({ page }) => {
+    if (wide) {
+      await page.route(/\.(woff2?|ttf)(\?|$)/, (route) => route.abort())
+      await page.addInitScript(() => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const st = document.createElement('style')
+          st.textContent = '*{font-family:Verdana,sans-serif !important}'
+          document.head.append(st)
+        })
+      })
+    }
+    await l1Orders(page)
+    const ready = severalOrders()
+    const sold = severalOrders()
+    sold.orders[0] = order({ wanted: 2, recorded: 1 })
+    sold.resolution.orders[0] = {
+      key: sold.orders[0].key,
+      number: sold.orders[0].number,
+      complete: false,
+      outstanding: 1,
+      lines: [line({ reason: 'no_copies_on_hand', owed: 1, outstanding: 1, on_hand: 0, picks: [], fulfilled: 0 })],
+    }
+    let afterSale = false
+    const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+    await page.route(/\/orders$/, (route) => json(route, afterSale ? sold : ready))
+    await page.route(/\/orders\/pull$/, (route) => {
+      const undo = (route.request().postDataJSON() as { undo?: boolean } | null)?.undo === true
+      afterSale = !undo
+      return json(route, { undone: undo, order_key: ready.orders[0]!.key, sku: '9191486', newly: undo ? -1 : 1, recorded: undo ? 0 : 1, outstanding: undo ? 1 : 0, places: [], sales: [] })
+    })
+    await setViewport(page, { width, height: 1000 })
+    const read = () =>
+      page.evaluate((sels) => {
+        const boxes = sels.map((s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return r ? [s, r.x, r.y, r.width, r.height] : [s] })
+        const rows = [...document.querySelectorAll('.orders-index-row')].map((row) => { const r = row.getBoundingClientRect(); return [row.querySelector('.orders-index-number')?.textContent, r.x, r.y] })
+        return JSON.stringify([boxes, rows])
+      }, [...ORDERS_PARTS])
+    const pickFigure = page.locator('.orders-headline .bn-stat').nth(2).locator('.bn-stat-value')
+    await page.goto(screen('orders'))
+    await expect(page.locator('.orders-walk-list')).toBeVisible()
+    await settleFonts(page)
+    await settleMotion(page)
+    const before = await read()
+    const was = await pickFigure.textContent()
+    const bad: string[] = []
+    await page.getByRole('button', { name: /Mark sold/ }).first().click()
+    await expect(pickFigure).not.toHaveText(was ?? '')
+    await settleMotion(page)
+    if ((await read()) !== before) bad.push('sale')
+    await page.getByRole('button', { name: /^Undo/ }).first().click()
+    await expect(pickFigure).toHaveText(was ?? '')
+    await settleMotion(page)
+    if ((await read()) !== before) bad.push('undo, the buyer ready again')
+    expect(bad, 'these moved something the person did not move').toEqual([])
   })
 }

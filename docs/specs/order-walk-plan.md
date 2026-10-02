@@ -512,9 +512,12 @@ owed = pick + short + elsewhere
 
 The header and the walk's count answer two different questions. One counts the whole store. The
 other counts only the walked subset. Neither said which question it answered, so together they
-read as one contradicted claim. The header states its own breakdown once (`verdictOf`): "N
-copies owed to M buyers, P to pick, S short, E not in the store". A reader can see that the
-identity holds without needing the walk's number to match.
+read as one contradicted claim. The header states its own breakdown once (`verdictOf`). It is a
+stat row like Inventory's box panel: copies owed, buyers, to pick, and not in boxes
+(`short + elsewhere`). Each label names its unit, so a copy count never reads as buyers. A
+reader can see that the identity holds without needing the walk's number to match. A buyer row
+draws its owed copies as a bare number, and the header says the unit once. The opened buyer's
+pane splits that number into to pick and not in boxes, then sold.
 
 A buyer chip must not disagree with that buyer's own figures. `lookWords` sums every reason's
 `outstanding`, never `owed` and never only the loudest reason. One reason explains the whole

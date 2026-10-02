@@ -429,10 +429,8 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
    its own beyond `.walk-pick-where` above: no `.orders-card-*` class draws any more. */
 
 /* ---- 40px hit areas at every width (UX-267) ------------------------------------------ */
+.orders-walkall,
 .orders-walk-tools .bn-btn { min-height: var(--bn-control-h-lg); }
-/* Walk sits in the filter bar, so it takes the bar's own control height: the search's and the
-   Filters trigger's (`--bn-control-h`, which is past the thumb floor under a thumb). */
-.orders-walkall { height: var(--bn-control-h); }
 
 /* ---- the stand-down legend, said once per sheet (UX-240) ------------------------------ */
 .orders-manage-legend {

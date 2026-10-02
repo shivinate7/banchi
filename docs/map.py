@@ -7986,8 +7986,9 @@ COMPONENTS = [
                                 "governed_by": ["D13", "D63", "D69", "D97", "D121", "D193", "D285",
                                                 "D287", "D304"]},
             "src/orderView.ts": {"does": "HOW THE BUYER LIST IS SORTED AND FILTERED "
-                                        "(`D296`): Ready to Ship leads, newest "
-                                        "first within a group, everything else stays reachable "
+                                        "(`D296`): a buyer whose every owed copy is in the "
+                                        "boxes leads, oldest order first at rest, everything "
+                                        "else stays reachable "
                                         "behind a status select rather than dropped — an "
                                         "ORDERING and never a hiding, D103's shape carried over. "
                                         "`statusVocabulary` builds the status options from the "
@@ -9085,7 +9086,7 @@ COMPONENTS = [
                     "exclusion and fails a screen at 0.01 or more. Names what moved. "
                     "`stability-allow.json` is the shrinking exception list, and an entry "
                     "that now passes fails. Not a harness test; `make design-check` runs it."),
-                "governed_by": ["D313", "D280"],
+                "governed_by": ["D280", "D296", "D313"],
                 "note": "Proved red first on main: Home, Graveyard, Revenue and Review shifted.",
             },
             "tests/layoutShift.ts": {

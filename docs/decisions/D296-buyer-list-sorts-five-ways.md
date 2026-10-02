@@ -20,13 +20,15 @@ The owner then picked all four suggestions offered back to him: **Dollar value, 
    is the count of distinct physical boxes the walk planner's own solve says hold this
    buyer's copies.
 
-2. **The Ready-to-Ship lead (the earlier sort rule) is a GROUPING, kept across every key.** It is not a
-   special case of the `placed` sort. This is a finding, read off `orderView.ts:
-   compareGroups`: the ready-bucket check runs BEFORE the picked key's own comparison, for
-   every key, never inside a `case 'placed':` arm. So a Ready-to-Ship buyer still leads
-   under Dollar value, Card count, Buyer name or Fewest drawers. The alternative — scoping
-   the lead to `placed` alone — is the one this entry declines. Nothing in the owner's
-   request, or in the sort rule's own text, says the lead belongs to that one sort.
+2. **The ready lead is a GROUPING, kept across every key.** A buyer whose every owed copy is in
+   the boxes (the buyer's pull status reads Ready) leads, whatever key is picked. A buyer finished
+   on this screen counts as ready, so it keeps its place. The owner changed this lead: it was the
+   feed's "Ready to Ship" status, and is now whether the copies are in the boxes ("Ready first,
+   then oldest order"). The bucket check runs BEFORE the picked key's own comparison, in
+   `orderView.ts:compareGroups`, never inside one key's arm. The caller says who is ready, so the
+   comparator stays pure. **At rest the key is `placed`, oldest first.** A buyer who becomes ready
+   mid-view does not jump: the position freeze (ruling 6) holds every row until the next sort,
+   filter or search press retakes the order.
 
 3. **Ties break by placed date, newest first, on every key.** This is the owner's own words
    for this task, read as the one tiebreak all five keys share.
@@ -59,7 +61,8 @@ The owner then picked all four suggestions offered back to him: **Dollar value, 
    freeze three of five and leave `placed`/`buyer` unguarded by mere convention. The snapshot
    also retakes the moment a freshly-picked Fewest-drawers sort's own walk-plan answer lands.
    That fetch is the one this press itself asked for. It is not held back by the freeze that
-   guards against a pull.
+   guards against a pull. The first rows to land are taken too: the first render has no ledger,
+   and an empty take froze nothing.
 
 ### What was tried and rejected
 
@@ -79,4 +82,4 @@ and a live re-price is a different figure `#/pricing` already owns (D86).
 No settings for the tiebreak. Ties always break by placed date, newest first, on every key.
 This matches the owner's own words for this task, rather than a per-screen preference.
 
-A sort orders and hides nothing; Ready to Ship leads, other statuses stay reachable.
+A sort orders and hides nothing; the ready buyers lead, and every other buyer stays reachable.
