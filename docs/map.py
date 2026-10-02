@@ -6066,7 +6066,7 @@ COMPONENTS = [
                         "One Piece in pipeline/games.py's stack order, bluesteel for anything "
                         "unlisted. Rarity names are the registry's own; the `game vocabulary` "
                         "row fails a rarity with no line here.",
-                "governed_by": ["D94", "D102", "D22", "D-mark-color-by-rarity"]},
+                "governed_by": ["D94", "D102", "D22", "D315"]},
             "src/kit/markPalettes.ts": {"does": "docs/specs/logo.md section 9's seven locked marks — prism, bracket, ground and card base per variant, bluesteel the default. GENERATED, but NOT derived: the ground rule applied to the three gold prisms produces the espresso section 8 rejected in favor of true black, so a build that re-derives them redraws marks the spec eliminated. THE ONE FILE IN app/ OUTSIDE tokens.css THAT MAY NAME A COLOUR (D102) — the `raw color` audit row cannot see it, since its scope is app/src/*.css, and `logo parity` stands in its place by reconciling every hex here against section 9 in both directions.",
                                         "governed_by": ["D94", "D102"]},
             "src/kit/index.tsx": {"does": "the primitives as components: Button, IconButton, Kbd, "

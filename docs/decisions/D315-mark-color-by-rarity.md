@@ -1,4 +1,4 @@
-## D-mark-color-by-rarity — The neighbor mark takes its card's rarity color
+## D315 — The neighbor mark takes its card's rarity color
 
 **The mark in the neighbor row wears the palette of the shown card's rarity. `app/src/kit/rarityMarks.ts` is the one home of the (game, rarity, palette) table.**
 
