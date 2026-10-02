@@ -50,7 +50,7 @@ import type { ReactNode } from 'react'
 import { describeFailure, getOrders, getProductHistory, getProductRealized, search, type Failure, failureTone } from './server'
 import type { OrderLineWire, OrderRow, ProductHistoryPayload, ProductHistoryRange, RealizedPayload, SearchGroup } from './types'
 import {
-  Chip, EmptyState, IconButton, Loading, Money, Notice, Page, Pill, Sep, Sheet,
+  Chip, DidYouMean, EmptyState, IconButton, Loading, Money, Notice, Page, Pill, Sep, Sheet,
   registerSheet, sheetHref, type SheetHostProps, type SheetProps,
 } from './kit'
 import { SearchField } from './SearchField'
@@ -583,7 +583,12 @@ function ProductSearchResults({ state, onPick }: { readonly state: SearchState; 
   if (state.results === null) return null
   const groups = state.results.groups.filter((g): g is SearchGroup & { sku: string } => g.sku !== null)
   if (groups.length === 0) {
-    return <p className="producthistory-note">No card matches &ldquo;{state.results.query}&rdquo;.</p>
+    return (
+      <>
+        <p className="producthistory-note">No card matches &ldquo;{state.results.query}&rdquo;.</p>
+        <DidYouMean name={state.results.did_you_mean} onPick={state.setQuery} />
+      </>
+    )
   }
   return (
     <ul className="producthistory-results">

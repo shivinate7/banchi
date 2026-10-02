@@ -9253,6 +9253,13 @@ COMPONENTS = [
                         "and ground while its weight stays the same.",
                 "governed_by": ["D195", "D311"],
             },
+            "tests/did-you-mean-coverage.spec.ts": {
+                "does": "reads the screen sources: every file that runs the one matcher or the "
+                        "store's search must draw the Did you mean hint, unless it is named as "
+                        "not a list search. Goes red on a searchable screen without the hint. "
+                        "Run by `make design-check`.",
+                "governed_by": ["D271"],
+            },
             "tests/filters/index.html": {
                 "does": "a test page the dev server serves and the build never ships: it mounts "
                         "`FilterSpecimens` and a small view-state demo, so `filters.spec.ts` does "

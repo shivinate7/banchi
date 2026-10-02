@@ -644,6 +644,28 @@ export function EmptyFrame({
   return <Tag className={['bn-empty-frame', className].filter(Boolean).join(' ')}>{children}</Tag>
 }
 
+/* ---- Did you mean ------------------------------------------------------------------- */
+/** The hint line for a search that found nothing (D271). `EmptyState` draws it through its
+ *  `didYouMean` prop. A screen whose zero result is a sentence rather than an `EmptyState`
+ *  draws it directly. The line holds its height with or without a name (D313). */
+export function DidYouMean({
+  name,
+  onPick,
+}: {
+  readonly name: string | null | undefined
+  readonly onPick: (name: string) => void
+}) {
+  return (
+    <div className="bn-empty-hint">
+      {name ? (
+        <Button variant="tint" size="lg" onClick={() => onPick(name)}>
+          Did you mean {name}?
+        </Button>
+      ) : null}
+    </div>
+  )
+}
+
 /* ---- Empty state -------------------------------------------------------------------- */
 export function EmptyState({
   icon = 'sparkles',
@@ -671,15 +693,7 @@ export function EmptyState({
       </div>
       <p className="bn-empty-title">{title}</p>
       {body ? <p className="bn-empty-body">{body}</p> : null}
-      {didYouMean === undefined ? null : (
-        <div className="bn-empty-hint">
-          {didYouMean.name ? (
-            <Button variant="tint" size="lg" onClick={() => didYouMean.onPick(didYouMean.name as string)}>
-              Did you mean {didYouMean.name}?
-            </Button>
-          ) : null}
-        </div>
-      )}
+      {didYouMean === undefined ? null : <DidYouMean {...didYouMean} />}
       {actions ? <div className="bn-empty-actions">{actions}</div> : null}
     </div>
   )

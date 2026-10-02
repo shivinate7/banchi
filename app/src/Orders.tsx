@@ -11,6 +11,7 @@ import {
   Kbd,
   Loading,
   matchQuery,
+  didYouMean,
   Notice,
   Page,
   patchViewQuery,
@@ -3618,6 +3619,7 @@ function PullStage({
               icon="search"
               title="No buyer matches"
               body={`No buyer or order number matches “${query.trim()}”.`}
+              didYouMean={{ name: didYouMean(query, allGroups.map((group) => String(group.name ?? ''))), onPick: setQuery }}
               actions={
                 <Button variant="primary" icon="x" onClick={() => setQuery('')}>
                   Clear search
