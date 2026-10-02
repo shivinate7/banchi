@@ -65,23 +65,29 @@ bad()  { fail=$((fail + 1)); say "FAIL" "$1"; }
 # verdict as an exit code, the reason on stderr. `cwd` travels in the payload because that is
 # where the harness puts it, and because it lets every case be posed against the fixture
 # without this script ever leaving it.
+HOOK_WITHOUT_OWNER_CLAUSE='import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("guard_shell", sys.argv[1] if len(sys.argv) > 1 else "'"$GUARD"'")
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+sys.exit(mod.hook(json.loads(sys.stdin.read()), owner_only=False))'
+
 judge() {   # judge <cwd> <command> -> exit code, output in $out
   out="$(printf '%s' "$2" \
         | CWD="$1" python3 -c 'import json,os,sys; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":sys.stdin.read()}}))' \
-        | PKMNSCAN_OWNER_ONLY=off python3 "$GUARD" --hook 2>&1)"
+        | python3 -c "$HOOK_WITHOUT_OWNER_CLAUSE" 2>&1)"
   return $?
 }
 
 judge_bg() {   # judge_bg <cwd> <command> — the same, with run_in_background set
   out="$(printf '%s' "$2" \
         | CWD="$1" python3 -c 'import json,os,sys; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":sys.stdin.read(),"run_in_background":True}}))' \
-        | PKMNSCAN_OWNER_ONLY=off python3 "$GUARD" --hook 2>&1)"
+        | python3 -c "$HOOK_WITHOUT_OWNER_CLAUSE" 2>&1)"
   return $?
 }
 
 judge_write() {   # judge_write <cwd> <file_path>
   out="$(CWD="$1" TARGET="$2" python3 -c 'import json,os; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"file_path":os.environ["TARGET"]}}))' \
-        | PKMNSCAN_OWNER_ONLY=off python3 "$GUARD" --hook 2>&1)"
+        | python3 -c "$HOOK_WITHOUT_OWNER_CLAUSE" 2>&1)"
   return $?
 }
 
@@ -1158,13 +1164,12 @@ allows "swept: \`git checkout -q -- clean.txt\` (clean)" "$tmp/main" "git checko
 echo ""
 echo "  the owner-only clause: an agent's tool call may not set a guard switch"
 
-# THE ABOVE CASES RUN THE HOOK WITH THE CLAUSE LIFTED (`PKMNSCAN_OWNER_ONLY=off` in the hook
-# subprocess's environment, which no tool call can set: the clause refuses it too). These
-# run it armed, as a session's own tool call would.
+# THE OLDER CASES CALL `hook(payload, owner_only=False)`, so they judge the other nine clauses.
+# These go through the real `--hook`, armed, as a session's own tool call would.
 judge_agent() {   # judge_agent <cwd> <command> -> exit code, output in $out
   out="$(printf '%s' "$2" \
         | CWD="$1" python3 -c 'import json,os,sys; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":sys.stdin.read()}}))' \
-        | env -u PKMNSCAN_OWNER_ONLY python3 "$GUARD" --hook 2>&1)"
+        | python3 "$GUARD" --hook 2>&1)"
   return $?
 }
 judge_agent "$tmp/main" "PKMNSCAN_TREE=off echo hi"
@@ -1181,6 +1186,45 @@ for lever in KILL SUITE_LOCK SERVE_MAIN SYNC; do
   judge_agent "$tmp/main" "PKMNSCAN_$lever=off echo hi"
   if [ $? -eq 0 ]; then ok "recovery lever PKMNSCAN_$lever=off is allowed"; else bad "PKMNSCAN_$lever=off was refused"; fi
 done
+agent_refuses() {   # agent_refuses <label> <command>
+  judge_agent "$tmp/main" "$2"
+  if [ $? -eq 2 ]; then ok "refused: $1"; else bad "ALLOWED: $1"; fi
+}
+agent_allows() {    # agent_allows <label> <command>
+  judge_agent "$tmp/main" "$2"
+  if [ $? -eq 0 ]; then ok "allowed: $1"; else bad "REFUSED: $1"; fi
+}
+# EVERY FORM BELOW REACHES A GUARD'S PROCESS ENVIRONMENT, which is what pre-push and
+# reference-transaction read, so each one is a real setting and not a mention.
+agent_refuses "eval string"                 "eval 'PKMNSCAN_MAIN=off git status'"
+agent_refuses "eval export"                 "eval export PKMNSCAN_MAIN=off"
+agent_refuses "declare -x"                  "declare -x PKMNSCAN_MAIN=off"
+agent_refuses "sudo prefix"                 "sudo PKMNSCAN_MAIN=off ls"
+agent_refuses "sudo -u value"               "sudo -u root PKMNSCAN_MAIN=off ls"
+agent_refuses "command env"                 "command env PKMNSCAN_MAIN=off ls"
+agent_refuses "nohup prefix"                "nohup PKMNSCAN_MAIN=off ls"
+agent_refuses "time prefix"                 "time PKMNSCAN_MAIN=off ls"
+agent_refuses "brace group"                 "{ PKMNSCAN_MAIN=off ls; }"
+agent_refuses "if then"                     "if true; then PKMNSCAN_MAIN=off ls; fi"
+agent_refuses "while loop"                  "while PKMNSCAN_MAIN=off false; do ls; done"
+agent_refuses "backticks"                   'echo `PKMNSCAN_MAIN=off ls`'
+agent_refuses "command substitution"        'echo $(PKMNSCAN_MAIN=off ls)'
+agent_refuses "export of a variable name"   'V=PKMNSCAN_MAIN; export $V=off'
+agent_refuses "ANSI-C quoted name"          "export \$'PKMNSCAN_MAIN'=off"
+agent_refuses "ANSI-C quoted value"         "PKMNSCAN_MAIN=\$'off' ls"
+agent_refuses "env -u before the setting"   "env -u HOME PKMNSCAN_MAIN=off ls"
+agent_refuses "env -S string"               "env -S 'PKMNSCAN_MAIN=off ls'"
+agent_refuses "xargs env"                   "echo x | xargs env PKMNSCAN_MAIN=off ls"
+agent_refuses "heredoc piped to sh"         "cat <<E | sh
+PKMNSCAN_MAIN=off ls
+E"
+agent_refuses "make command-line variable"  "make status PKMNSCAN_MAIN=off"
+agent_allows  "a heredoc piped to a non-shell" "cat <<E | wc -l
+PKMNSCAN_MAIN=off
+E"
+agent_allows  "a quoted mention in git commit" "git status -m 'PKMNSCAN_TREE=off'"
+agent_allows  "an eval of a mention"        "eval 'echo PKMNSCAN_TREE=off'"
+agent_allows  "make without a switch"       "make status ARGS=x"
 judge_agent "$tmp/main" "echo PKMNSCAN_TREE=off"
 if [ $? -eq 0 ]; then ok "a mere mention is allowed"; else bad "a mention was refused"; fi
 judge_agent "$tmp/main" "PKMNSCAN_GUARD_SCOPE=all echo hi"

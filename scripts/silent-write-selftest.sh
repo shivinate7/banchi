@@ -180,8 +180,9 @@ fi
 # went where is one a session argues with instead of learning from.
 judge "$INCIDENT"
 case "$out" in
-  *"PKMNSCAN_SILENT=off"*) ok "the refusal prints the escape hatch" ;;
-  *) bad "the refusal does not name PKMNSCAN_SILENT=off" ;;
+  *"PKMNSCAN_SILENT"*) bad "the refusal names the switch to an agent" ;;
+  *"owner-only: ask the owner"*) ok "the refusal is owner-only and names no switch" ;;
+  *) bad "the refusal carries no owner-only line" ;;
 esac
 case "$out" in
   *"stdout -> /dev/null"*) ok "the refusal names stdout's destination" ;;

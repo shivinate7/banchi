@@ -219,28 +219,91 @@ def _off(clause: str, command: str) -> bool:
 # `recent_hatch_uses`. LOG ONLY: no verdict reads it, and any error here is swallowed.
 
 HATCH_LOG = "pkmnscan-hatches.log"
-_HATCH_TOKEN = re.compile(r"^(PKMNSCAN_[A-Z0-9_]+)=off$")
+# `$V=off` (a variable naming the switch) counts as a setting too: the name is unknowable here.
+_HATCH_TOKEN = re.compile(r"^(?:(PKMNSCAN_[A-Z0-9_]+)|\$\{?[A-Za-z_][A-Za-z0-9_]*\}?)=\$?off$")
+UNRESOLVED = "PKMNSCAN_(unresolved)"
+
+# Words that run or carry another command, so the assignment after them reaches that command's
+# environment: the wrappers shell_parse already knows, plus the ones that SET one.
+_CARRIERS = set(shell_parse.COMMAND_WRAPPERS if shell_parse else ()) | {
+    "declare", "typeset", "export", "local", "readonly"}
+_KEYWORDS = set(shell_parse.LOOP_KEYWORDS if shell_parse else ())
+_MAKES = {"make", "gmake"}
+_HEREDOC_BODY = re.compile(
+    r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n(.*?)\n[ \t]*\2[ \t]*(?:\n|$)", re.S)
+_SUBSTITUTION = re.compile(r"`([^`]*)`|\$\(([^()]*)\)")
 
 
-@lru_cache(maxsize=16)
+def _named(match: "re.Match[str]") -> str:
+    return match.group(1) or UNRESOLVED
+
+
+def _scan_stage(argv: Sequence[str]) -> Set[str]:
+    """Names set by one simple command: its prefix region, an `eval` string, `env -S`, and a
+    `make` command line (make exports command-line variables to its recipes)."""
+    names: Set[str] = set()
+    after_flag = False
+    index = 0
+    while index < len(argv):
+        token = argv[index].lstrip("({")
+        index += 1
+        if not token:
+            continue
+        found = _HATCH_TOKEN.match(token)
+        if found:
+            names.add(_named(found))
+            after_flag = False
+            continue
+        base = shell_parse._basename(token)
+        if base == "eval":
+            names |= set(_hatches_set(" ".join(argv[index:])))
+            return names
+        if base in _MAKES:
+            for word in argv[index:]:
+                hit = _HATCH_TOKEN.match(word)
+                if hit:
+                    names.add(_named(hit))
+            return names
+        if token in ("-S", "--split-string") and index < len(argv):
+            names |= set(_hatches_set(argv[index]))
+            index += 1
+            continue
+        if token.startswith("-"):
+            after_flag = True              # may take a value: `env -u F`, `sudo -u root`
+            continue
+        if base in _CARRIERS or token in _KEYWORDS or shell_parse.ASSIGNMENT.match(token):
+            after_flag = False
+            continue
+        if after_flag:                     # a flag's value, not the command
+            after_flag = False
+            continue
+        break
+    return names
+
+
+@lru_cache(maxsize=64)
 def _hatches_set(command: str) -> Tuple[str, ...]:
     """Hatch names a command REALLY sets, read from the parsed stages, never from raw text.
 
-    A real setting is an env prefix (`X=off cmd`), `export X=off`, or `env X=off cmd`. A
-    mention inside an argument, a comment, a heredoc body or a quoted string is not one.
+    A real setting is an assignment in a stage's prefix region (`X=off cmd`, `export X=off`,
+    `env -u F X=off`, `sudo`/`nohup`/`time`/`declare -x` ahead of it, inside `{ }`, `if`,
+    `while`), an `eval` string, `env -S`, backticks or `$( )`, the body of a heredoc piped to
+    a shell, or a `make` command-line variable. A mention inside an argument, a comment, a
+    heredoc body fed to a non-shell or a quoted string is not one.
     """
     if shell_parse is None or not command:
         return ()
     names: Set[str] = set()
-    for stage in shell_parse.read(command).every:
-        for token in stage.argv:
-            found = _HATCH_TOKEN.match(token)
-            if found:
-                names.add(found.group(1))
-            elif token in ("export", "env") or token.startswith("-") or shell_parse.ASSIGNMENT.match(token):
-                continue
-            else:
-                break
+    reading = shell_parse.read(command)
+    for stage in reading.every:
+        names |= _scan_stage(stage.argv)
+    for found in _SUBSTITUTION.finditer(command):
+        names |= set(_hatches_set(found.group(1) or found.group(2) or ""))
+    if "<<" in command and any(
+            (words := shell_parse.strip_prefixes(stage.argv)) and
+            shell_parse._basename(words[0]) in shell_parse.SHELLS for stage in reading.every):
+        for body in _HEREDOC_BODY.finditer(command):
+            names |= set(_hatches_set(body.group(3)))
     return tuple(sorted(names))
 
 
@@ -1811,8 +1874,6 @@ def clause_owner_only(command: str) -> Verdict:
     Read by `_hatches_set`, so a mention is not a setting. A tool call is the only thing this
     sees: the owner's terminal, CI and the self-tests (subprocesses, not tool calls) pass.
     """
-    if os.environ.get("PKMNSCAN_OWNER_ONLY") == "off":      # the self-test hook only
-        return Verdict([], [])
     blocked = [name for name in _hatches_set(command) if name not in RECOVERY_LEVERS]
     if not blocked:
         return Verdict([], [])
@@ -1829,9 +1890,6 @@ def read_command(command: str, cwd: str, backgrounded: bool = False) -> Verdict:
     if shell_parse is None:
         return Verdict([], ["scripts/shell_parse.py could not be imported, so this guard has "
                             "no opinion about anything"])
-    owner = clause_owner_only(command)
-    if owner.refusals:
-        return owner
     # A BACKGROUNDED COMMAND IS NEVER SKIPPED, and that is not caution — it is the fifth
     # clause's whole subject. `bash scratchpad/autodrive.sh` names none of these words: the
     # `while`/`sleep` was in the FILE, and the early return read the command as uninteresting
@@ -1887,7 +1945,7 @@ def render(refusals: Sequence[Refusal]) -> str:
     return "\n".join(lines)
 
 
-def hook(payload: dict) -> int:
+def hook(payload: dict, owner_only: bool = True) -> int:
     """The PreToolUse hook. Exit 2 blocks the call and hands stderr to the session.
 
     IT FAILS OPEN ON ITS OWN BUGS. `reap.py:hook`'s docstring is the contract and it is not
@@ -1901,7 +1959,11 @@ def hook(payload: dict) -> int:
     command = str(tool_input.get("command") or "")
     if command:
         log_hatches(command, cwd)
-        verdict = read_command(command, cwd, bool(tool_input.get("run_in_background")))
+        # THE OWNER-ONLY CLAUSE IS THE HOOK'S, NOT `read_command`'s: it judges who is typing.
+        # `owner_only=False` is for the self-test's older cases, which judge the other clauses.
+        verdict = clause_owner_only(command) if owner_only else Verdict([], [])
+        if not verdict.refusals:
+            verdict = read_command(command, cwd, bool(tool_input.get("run_in_background")))
     else:
         target = str(tool_input.get("file_path") or tool_input.get("notebook_path") or "")
         if not target:

@@ -346,7 +346,7 @@ def refusal(silenced: Sequence[Silenced]) -> str:
                  "hiding it:")
     lines.append("      git commit -F - && git log --oneline -1")
     lines.append("")
-    lines.append("  PKMNSCAN_SILENT=off runs the command anyway.")
+    lines.append("  Bypass: owner-only: ask the owner to run this command.")
     return "\n".join(lines)
 
 
