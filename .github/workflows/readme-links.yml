@@ -23,6 +23,7 @@ jobs:
 
       - name: Check the links
         id: links
+        shell: bash
         run: python3 scripts/readme_links.py | tee links.txt
 
       - name: Open or update the dead-link issue
