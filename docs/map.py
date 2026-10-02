@@ -9205,6 +9205,12 @@ COMPONENTS = [
                         "both themes. Run by `make design-check`.",
                 "governed_by": ["D118", "D288"],
             },
+            "tests/money.spec.ts": {
+                "does": "`src/money.ts`'s `money()` and `moneyField`, pure, no browser: the cent "
+                        "rounding, and which typed text becomes a price and which is refused. "
+                        "Run by `make design-check`.",
+                "governed_by": ["D221"],
+            },
             "tests/match.spec.ts": {
                 "does": "`kit/match.cases.json`'s case table, run data-driven, one Playwright test "
                         "per row: `matchQuery` against every case, pure, no browser. The other half "
