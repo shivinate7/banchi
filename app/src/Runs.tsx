@@ -270,7 +270,6 @@ export function RunsContent({
       {/* The sheet's own header carries the title and icon now (Review's Sheet, "Runs").
          This row is the one worded primary — "Identify" — plus icons for the rest
          (the header rule, owner 2026-09-24). F5 cut its own two words to one. */}
-      <p className="runs-lede">Paid</p>
       <div className="runs-actions">
         {scopeLine === '' ? null : (
           <Pill tone="accent" icon="box" className="runs-scope">

@@ -54,7 +54,7 @@ import {
 import { stateLabel } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
-import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, boxesMostRecentFirst, countFacets, filterRows, useHeld, type SortValue } from './kit'
+import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, Popover, boxesMostRecentFirst, countFacets, filterRows, useHeld, type SortValue } from './kit'
 import { boxTitle, UNNAMED_BOX } from './kit/data'
 import type { FilterFacet, FilterValue } from './kit/data'
 import { useFacetParams } from './kit/viewState'
@@ -2833,7 +2833,7 @@ function CardOps({
   // The fix after that is "This card is still here" — a different write, `saleStillHere`,
   // which puts the card back without touching a shipped order's own count.
   const [builtOn, setBuiltOn] = useState(false)
-  const anchor = useRef<HTMLDivElement | null>(null)
+  const anchor = useRef<HTMLButtonElement | null>(null)
 
   const terminal = row.card.state === 'sold' || row.card.state === 'retired'
   const addressable =
@@ -2841,22 +2841,6 @@ function CardOps({
     Number.isFinite(row.card.box) &&
     typeof row.card.index === 'number' &&
     Number.isFinite(row.card.index)
-
-  useEffect(() => {
-    if (!menu) return
-    const onDown = (event: MouseEvent) => {
-      if (anchor.current !== null && !anchor.current.contains(event.target as Node)) setMenu(false)
-    }
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMenu(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [menu])
 
   const correct = async (patch: ClaimPatch) => {
     if (busy) return
@@ -3002,20 +2986,21 @@ function CardOps({
   }
 
   return (
-    <div className="browse-cardops" ref={anchor}>
+    <div className="browse-cardops">
       <IconButton
+        ref={anchor}
         icon="more"
         label="Actions"
         aria-haspopup="menu"
         aria-expanded={menu}
         onClick={() => setMenu((held) => !held)}
       />
-      {!menu ? null : (
-        <div className="bn-menu browse-menu" role="menu">
+      <Popover open={menu} onClose={() => setMenu(false)} anchor={anchor} label="Card actions" role="menu" className="browse-menu">
           <button
             role="menuitem"
             type="button"
             className="bn-menu-item"
+            data-autofocus=""
             onClick={() => {
               setMenu(false)
               setTrouble(null)
@@ -3098,8 +3083,7 @@ function CardOps({
               </button>
             </>
           )}
-        </div>
-      )}
+      </Popover>
 
       {open !== 'claims' ? null : (
         <Overlay kind="sheet" label="Correct claims" onClose={() => setOpen(null)} className="browse-claims-sheet">
