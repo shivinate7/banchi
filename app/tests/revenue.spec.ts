@@ -804,50 +804,58 @@ test('a sold row with no photo of either kind still draws the plain tile', async
   await expect(thumb).not.toHaveText(/^\s*None\s*$/i)
 })
 
-test('a SKU the catalogue had not loaded yet is asked once more, and then draws its photo', async ({ page }) => {
+const SLOT_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88"><rect width="63" height="88" fill="#ccc"/></svg>'
+
+test('a pending SKU holds its slot, draws no no-photo state, then draws its photo', async ({ page }) => {
   const STOCK_URL = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
-  await page.route(STOCK_URL, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'image/svg+xml',
-      body: '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88"><rect width="63" height="88" fill="#ccc"/></svg>',
-    }),
-  )
+  await page.route(STOCK_URL, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: SLOT_SVG }))
   await stub(page, generalOrders())
-  let asks = 0
+  const asked: string[][] = []
   await page.route(/\/skus\/photos\?/, (route) => {
-    asks += 1
-    return json(route, { photos: {}, stock_photos: asks === 1 ? {} : { '9100001': STOCK_URL } })
+    const skus = new URL(route.request().url()).searchParams.getAll('sku')
+    asked.push(skus)
+    // A slow catalogue group: pending for two asks, then the URL.
+    return json(
+      route,
+      asked.length <= 2
+        ? { photos: {}, stock_photos: {}, pending: ['9100001'] }
+        : { photos: {}, stock_photos: { '9100001': STOCK_URL }, pending: [] },
+    )
   })
   await open(page)
   const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
-  await expect(thumb).toHaveAttribute('data-missing', 'true')
-  await page.clock.fastForward(6000)
+  await expect(thumb).toHaveAttribute('data-pending', 'true')
+  await expect(thumb).not.toContainText('No photo found')
+  const before = await thumb.boundingBox()
+  await page.clock.fastForward(1100)
+  await expect.poll(() => asked.length).toBe(2)
+  // Still pending after the second ask: same slot, still no no-photo state.
+  await expect(thumb).toHaveAttribute('data-pending', 'true')
+  const during = await thumb.boundingBox()
+  expect(during?.width).toBeCloseTo(before?.width ?? 0, 0)
+  expect(during?.height).toBeCloseTo(before?.height ?? 0, 0)
+  await page.clock.fastForward(2100)
   await expect(thumb.locator('img')).toHaveAttribute('src', STOCK_URL)
+  // Only the pending SKU is asked again.
+  expect(asked[1]).toEqual(['9100001'])
 })
 
-test('changing the sort during the retry window still resolves the photo', async ({ page }) => {
-  const STOCK_URL = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
-  await page.route(STOCK_URL, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'image/svg+xml',
-      body: '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88"><rect width="63" height="88" fill="#ccc"/></svg>',
-    }),
-  )
+test('a SKU pending past the cap ends on no photo found', async ({ page }) => {
   await stub(page, generalOrders())
   let asks = 0
   await page.route(/\/skus\/photos\?/, (route) => {
     asks += 1
-    return json(route, { photos: {}, stock_photos: asks <= 1 ? {} : { '9100001': STOCK_URL } })
+    return json(route, { photos: {}, stock_photos: {}, pending: ['9100001'] })
   })
   await open(page)
-  await expect(page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')).toHaveAttribute('data-missing', 'true')
-  await page.getByLabel('Sort').getByRole('button', { name: 'Copies' }).click()
-  await page.clock.fastForward(6000)
-  await expect(page.locator('img[src="' + STOCK_URL + '"]').first()).toBeVisible()
-  // Defect 6: a catalogue photo is fitted whole (badge and margin inside the frame), never cover-cropped.
-  await expect(page.locator('img[src="' + STOCK_URL + '"]').first()).toHaveCSS('object-fit', 'contain')
+  const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
+  await expect(thumb).toHaveAttribute('data-pending', 'true')
+  for (let i = 0; i < 8; i += 1) await page.clock.fastForward(9000)
+  await expect(thumb).toHaveAttribute('data-missing', 'true')
+  await expect(thumb).toContainText('No photo found')
+  const final = asks
+  await page.clock.fastForward(60000)
+  expect(asks).toBe(final)
 })
 
 

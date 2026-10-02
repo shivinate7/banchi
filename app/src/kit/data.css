@@ -125,7 +125,7 @@
 .bn-thumb-md { width: 64px; }
 .bn-thumb-lg { width: 128px; border-radius: var(--bn-r); }
 .bn-thumb-img { width: 100%; height: 100%; object-fit: cover; }
-.bn-thumb[data-missing='true'] { box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+.bn-thumb:is([data-missing='true'], [data-pending='true']) { box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
 .bn-thumb-none {
   font-size: var(--bn-fs-2xs);
   font-weight: 500;

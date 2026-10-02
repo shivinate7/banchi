@@ -222,7 +222,7 @@
    default, then stretched to fill this tile's full-bleed art area by the rule above. This
    undoes the stretch for exactly that state, so the placeholder stays the compact card shape
    the kit already draws it at, centered in a short strip instead of a tall empty box. */
-.revenue-tile-art:has(.bn-thumb[data-missing='true']) {
+.revenue-tile-art:has(.bn-thumb:is([data-missing='true'], [data-pending='true'])) {
   aspect-ratio: auto;
   height: auto;
   display: flex;
@@ -230,13 +230,13 @@
   justify-content: center;
   padding: var(--bn-5) 0;
 }
-.revenue-tile-art:has(.bn-thumb[data-missing='true']) .bn-thumb {
+.revenue-tile-art:has(.bn-thumb:is([data-missing='true'], [data-pending='true'])) .bn-thumb {
   width: 64px;
   height: auto;
   aspect-ratio: 63 / 88;
 }
 @media (max-width: 639px) {
-  .revenue-tile-art:has(.bn-thumb[data-missing='true']) { width: 96px; padding: var(--bn-3) 0; }
+  .revenue-tile-art:has(.bn-thumb:is([data-missing='true'], [data-pending='true'])) { width: 96px; padding: var(--bn-3) 0; }
 }
 .revenue-tile-rank {
   position: absolute;

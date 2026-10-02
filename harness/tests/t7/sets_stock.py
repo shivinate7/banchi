@@ -793,12 +793,12 @@ def check_stock_images_pokemon_warm_refusal(checks: Checks) -> None:
 
 
 def check_skus_photos_pending(checks: Checks) -> None:
-    """DEBT75: a SKU whose catalogue group is still being fetched answers `pending`, apart
+    """a SKU whose catalogue group is still being fetched answers `pending`, apart
     from a final "no such image". The same ask, once the group has landed, answers the URL."""
     import threading
 
     checks.note("")
-    checks.note("SKUS PHOTOS PENDING — a cold group answers pending, then a URL (DEBT75)")
+    checks.note("SKUS PHOTOS PENDING — a cold group answers pending, then a URL")
     gate = threading.Event()
 
     def slow_fetcher(url: str):

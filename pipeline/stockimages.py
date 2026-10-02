@@ -477,7 +477,7 @@ class StockImages:
         return self._tcgcsv_name_lookup(game, set_name, product_name)
 
     def group_pending(self, game: str, set_name: str) -> bool:
-        """True while a catalogue group has never answered (DEBT75): no cache entry yet, so a
+        """True while a catalogue group has never answered: no cache entry yet, so a
         `None` from a lookup means "ask again", not "no such image". A failed fetch stores an
         empty entry, so a final miss is never pending. Vendored Pokemon cards never are."""
         with self._lock:

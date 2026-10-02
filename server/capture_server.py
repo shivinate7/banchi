@@ -12004,7 +12004,7 @@ def do_skus_photos(
     (`{sku: url}`, a hotlinked catalogue image, D301's same posture — never downloaded,
     never mirrored). A SKU never appears in both.
 
-    `pending` (DEBT75) NAMES A SKU WITH NO URL WHOSE CATALOGUE GROUP HAS NOT ANSWERED YET: the
+    `pending` NAMES A SKU WITH NO URL WHOSE CATALOGUE GROUP HAS NOT ANSWERED YET: the
     client asks again, capped. A SKU absent from all three is a final "no photo".
 
     REFUSES OVER `SKUS_PHOTOS_LIMIT` (round 2 review): the client's own cap bounds what it
