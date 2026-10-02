@@ -59,7 +59,7 @@ DEBT46 a search with a typo finds nothing, and no near match is offered
 DEBT48 code-side mechanization left open
 DEBT50 git and gh CLI traps hit from this checkout
 DEBT58 the Lane H palette record is on a branch, not in main
-DEBT59 an unreadable live claim has no way out on screen
+DEBT59 an unreadable live submission claim has no way out on screen
 DEBT60 the demo builds with Hide unpullable forced off
 DEBT61 eight build proposals are still open
 DEBT62 the demo photos are about 180 MB of plain git, and the owner wants them in Git LFS

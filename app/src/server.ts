@@ -58,6 +58,7 @@ import type {
   LiveCheckAnswer,
   SendAnswer,
   SendsStatus,
+  UnreadableClaim,
   SendSummary,
   MarkdownPush,
   LiveExportFetched,
@@ -2768,6 +2769,23 @@ export async function takeBackSend(stamp: string): Promise<{ send: SendSummary; 
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ confirm: true }),
   })) as { send: SendSummary; moved: number }
+}
+
+/** Free a live send record the server cannot read, by key (DEBT59). `restoreUnreadableClaim` undoes it. */
+export async function releaseUnreadableClaim(key: string): Promise<{ released: UnreadableClaim; status: SendsStatus }> {
+  return (await request(`/pipeline/sends/unreadable/${encodeURIComponent(key)}/release`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as { released: UnreadableClaim; status: SendsStatus }
+}
+
+export async function restoreUnreadableClaim(key: string): Promise<{ restored: string; status: SendsStatus }> {
+  return (await request(`/pipeline/sends/unreadable/${encodeURIComponent(key)}/restore`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })) as { restored: string; status: SendsStatus }
 }
 
 /** The owner has read a taken-back receipt's warning, so the card stops drawing it. */

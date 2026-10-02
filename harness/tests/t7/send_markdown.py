@@ -2500,6 +2500,95 @@ def check_send_review_r3(checks: Checks) -> None:
             refused = True
         checks.ok(refused, "F5b: and a path that guards a send still refuses over that claim")
 
+    # ------------- F5d: an unreadable live claim blocks the press until a person releases it (DEBT59)
+    with _case(checks, "F5d: release an unreadable claim"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        conn = db.connect(Store().directory)
+        try:
+            conn.execute(
+                "INSERT INTO send_claims (key, pid, state, started_at, kind, payload) "
+                "VALUES ('bad-row', 1, 'live', '2026-09-01T00:00:00+00:00', 'listing', '{\"pid\": \"x\"}')"
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        copies_before = Store().read().send_claims.entries.source.count()
+        try:
+            send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+            blocked = False
+        except Exception as exc:  # noqa: BLE001
+            blocked = getattr(exc, "code", "") == "claim_unreadable" and "UnreadableClaim" not in str(exc)
+        checks.ok(blocked, "F5d: AN UNREADABLE LIVE CLAIM BLOCKS THE PRESS, it is never skipped")
+        checks.equal(
+            Store().read().send_claims.entries.source.count(),
+            copies_before,
+            "F5d: the blocked press wrote no claim",
+        )
+        listed = send_routes.do_sends()
+        checks.equal(
+            listed["unreadable"],
+            [{"key": "bad-row", "kind": "listing", "started_at": "2026-09-01T00:00:00+00:00"}],
+            "F5d: THE LIST DRAWS THE UNREADABLE CLAIM BY KEY, kind and start",
+        )
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_release_unreadable("bad-row", {})),
+            "confirm_required",
+            "F5d: release asks for a confirm",
+        )
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_release_unreadable("md-20260901-101500", {})),
+            "confirm_required",
+            "F5d: a mark-down's claim asks for a confirm too",
+        )
+        try:
+            send_routes.do_release_unreadable("md-20260901-101500", {})
+            said = ""
+        except pipeline_routes.PipelineRefusal as caught:
+            said = str(caught)
+        checks.ok("price change is not confirmed" in said, "F5d: and that confirm says the price change is unconfirmed")
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_release_unreadable("no-such", {"confirm": True})),
+            "no_such_unreadable_claim",
+            "F5d: a key that is not unreadable is a 404, nothing written",
+        )
+        answer = send_routes.do_release_unreadable("bad-row", {"confirm": True})
+        checks.equal(
+            (answer["released"]["key"], answer["status"]["unreadable"]),
+            ("bad-row", []),
+            "F5d: RELEASE ANSWERS A RECEIPT and the list no longer carries the claim",
+        )
+        tomb = json.loads(Store().read().send_claims.entries.source.get("bad-row"))
+        checks.equal(
+            (tomb["state"], tomb["released_by"], tomb["unreadable_was"]),
+            ("released", "operator", '{"pid": "x"}'),
+            "F5d: the row stays as a tombstone that keeps the original text",
+        )
+        freed = send_routes.do_restore_unreadable("bad-row", {})["status"]["unreadable"]
+        checks.equal(
+            (len(freed), _route_refusal(lambda: send_routes.do_restore_unreadable("bad-row", {}))),
+            (1, "nothing_to_restore"),
+            "F5d: UNDO PUTS THE ROW BACK LIVE, and a second undo is refused",
+        )
+        send_routes.do_release_unreadable("bad-row", {"confirm": True})
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        checks.ok(sent["stamp"], "F5d: RELEASE FREES THE PRESS: it sends")
+
+    # ------------- F5e: a READABLE live claim cannot be released from here (DEBT59)
+    with _case(checks, "F5e: a readable claim is not releasable by key"), isolated_home():
+        with Store().write() as writable:
+            writable.send_claims.claim("20260901-101500", sendclaims.KIND_LISTING, {"S1": 1}, pid=os.getpid())
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_release_unreadable("20260901-101500", {"confirm": True})),
+            "no_such_unreadable_claim",
+            "F5e: A READABLE CLAIM IS REFUSED, and it is the held send's own way out that frees it",
+        )
+        checks.equal(
+            [claim.stamp for claim in Store().read().send_claims.live()],
+            ["20260901-101500"],
+            "F5e: and the claim is still live",
+        )
+
     # ------------- F5c: a copy `set_state` could not stamp is named in the emit result
     with _case(checks, "F5c: unstamped copies are named"):
         from types import SimpleNamespace as NS

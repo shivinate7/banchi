@@ -110,6 +110,8 @@
     POST   /pipeline/sends/<stamp>/take-back   a written file's copies back on the list
     POST   /pipeline/sends/<stamp>/dismiss     the owner has read a taken-back receipt's
                                                warning, so the card stops drawing it
+    POST   /pipeline/sends/unreadable/<key>/release   free a live send claim the store cannot
+                                               read; `/restore` puts it back
     GET    /pipeline/sends/<stamp>/file    the file one send wrote, for the download door
     POST   /pipeline/live-check            reads what is live and confirms the sends that are
                                            due. Runs only when a request asks
@@ -741,6 +743,7 @@ _MARKDOWN_SEND_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/send$"
 # tail every press has written since round 2, and matched no new receipt.
 _SEND_TAKE_BACK_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/take-back$")
 _SEND_DISMISS_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/dismiss$")
+_SEND_UNREADABLE_RE = re.compile(r"^/pipeline/sends/unreadable/([A-Za-z0-9._-]+)/(release|restore)$")
 _SEND_FILE_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/file$")
 # The lens (D103): every live listing this survey saw, and the two readings over one of them.
 # Structural siblings of the run-scoped pair below, for the reason `_history_for_entry` gives
@@ -17024,6 +17027,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, send_routes.do_take_back(match.group(1), self._body())
                 )
+            match = _SEND_UNREADABLE_RE.match(path)
+            if match:
+                # DEBT59: free a live send claim the store cannot read, and the way back.
+                handler = send_routes.do_release_unreadable if match.group(2) == "release" else send_routes.do_restore_unreadable
+                return self._json(HTTPStatus.OK, handler(match.group(1), self._body()))
             match = _SEND_DISMISS_RE.match(path)
             if match:
                 # The owner has read a taken-back receipt's warning. Changes nothing else.

@@ -26,7 +26,7 @@
 import { useEffect, useState } from 'react'
 import { Button, Icon, IconButton, Money, Notice, Refusal, Retry } from './kit'
 import { clockTime } from './dates'
-import { describeFailure, dismissSendWarning, sendCopies, sendFileUrl, takeBackSend } from './server'
+import { describeFailure, dismissSendWarning, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, takeBackSend } from './server'
 import type { Failure } from './server'
 import type { EmptySend, LiveMove, PriceChange, RefusedPrice, SendSummary, SendTrim } from './types'
 import { emptySendTitle } from './standing'
@@ -517,6 +517,11 @@ export function SendCard({
   const [split, setSplit] = useState(false)
   const [takingBack, setTakingBack] = useState(false)
   const [dismissing, setDismissing] = useState(false)
+  /* A RECORD THE SERVER CANNOT READ (DEBT59): the first press arms it, the second releases it,
+     and the release stays undoable until the card is left. */
+  const [armed, setArmed] = useState<string | null>(null)
+  const [freed, setFreed] = useState<string | null>(null)
+  const [releasing, setReleasing] = useState(false)
   /* A TAKE BACK OR A DISMISS THAT FAILED IS ITS OWN LINE, never the press's failure: that one
      offers "Try again", which SENDS, and says the copies are back on the list. */
   const [undoFailure, setUndoFailure] = useState<{ title: string; failure: Failure } | null>(null)
@@ -668,6 +673,39 @@ export function SendCard({
     }
   }
 
+  const release = async (key: string) => {
+    if (armed !== key) {
+      setArmed(key)
+      return
+    }
+    setReleasing(true)
+    setUndoFailure(null)
+    try {
+      await releaseUnreadableClaim(key)
+      setFreed(key)
+      setArmed(null)
+    } catch (err) {
+      setUndoFailure({ title: 'Banchi could not release this record.', failure: describeFailure(err) })
+    } finally {
+      setReleasing(false)
+      void refreshLive()
+    }
+  }
+
+  const restore = async (key: string) => {
+    setReleasing(true)
+    setUndoFailure(null)
+    try {
+      await restoreUnreadableClaim(key)
+      setFreed(null)
+    } catch (err) {
+      setUndoFailure({ title: 'Banchi could not put this record back.', failure: describeFailure(err) })
+    } finally {
+      setReleasing(false)
+      void refreshLive()
+    }
+  }
+
   const dismiss = async (stamp: string) => {
     setDismissing(true)
     setUndoFailure(null)
@@ -776,11 +814,42 @@ export function SendCard({
         <SendStanding key={send.stamp} send={send} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} />
       ))}
 
-      {(live.status?.unreadable_claims ?? 0) > 0 ? (
-        <Notice tone="warn" compact className="send-standing send-unreadable" title="Sending is paused">
-          One saved record cannot be read, so this list may miss a send.
+      {(live.status?.unreadable ?? []).map((row) => (
+        <Notice
+          key={row.key}
+          tone="warn"
+          compact
+          className="send-standing send-unreadable"
+          title="Sending is paused"
+          action={
+            <Button size="sm" busy={releasing} disabled={releasing} onClick={() => void release(row.key)}>
+              {armed === row.key ? 'Release it anyway' : 'Release this record'}
+            </Button>
+          }
+        >
+          {`A send saved at ${clockTime(row.started_at)} cannot be read, so Banchi cannot tell which copies it holds. `}
+          {armed === row.key
+            ? row.kind === 'markdown'
+              ? "These cards' price change is not confirmed yet, and a send could run over it once this record is released."
+              : 'If that send is still going, or its file waits in TCGplayer, releasing could list copies twice.'
+            : 'Release it once you know that send is over.'}
         </Notice>
-      ) : null}
+      ))}
+      {freed === null ? null : (
+        <Notice
+          tone="ok"
+          compact
+          className="send-standing send-released"
+          title="Record released"
+          action={
+            <Button size="sm" busy={releasing} disabled={releasing} onClick={() => void restore(freed)}>
+              Undo
+            </Button>
+          }
+        >
+          Sending is open again. Undo puts the record back and pauses sending.
+        </Notice>
+      )}
 
       {warned.map((send) => (
         <TakenBackWarning key={send.stamp} send={send} dismiss={(stamp) => void dismiss(stamp)} dismissing={dismissing} />

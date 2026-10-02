@@ -1953,6 +1953,18 @@ class SqliteSource:
             values,
         )
 
+    def rewrite(self, key: str, state: str, payload: str, was: str) -> bool:
+        """Set one row's `state` column and raw payload text, only if its state is `was`.
+
+        For a row `parse` refuses, which `upsert` cannot write: it takes a parsed record's columns.
+        Returns whether a row changed. DEBT59's release and its undo are the only callers.
+        """
+        cur = self.conn.execute(
+            f"UPDATE {self.table} SET state = ?, payload = ? WHERE key = ? AND state = ?",
+            [state, payload, str(key), was],
+        )
+        return cur.rowcount == 1
+
     def delete(self, key: str) -> None:
         where, params = self._where({})
         where = (where + " AND " if where else " WHERE ") + "key = ?"
