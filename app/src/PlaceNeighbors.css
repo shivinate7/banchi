@@ -24,20 +24,24 @@
 .nb-side[data-side='front']::after { content: '\2192'; }
 .nb-side::before, .nb-side::after { color: var(--bn-ink-4); font-weight: 400; }
 
-/* This copy's number, in the ruler pin's chip style (accent ground, `--bn-on-accent` ink). */
+/* This card's spot: the Banchi card in its brackets, 18px high (the chip it replaced was 18px),
+   in a slot as wide as that chip's floor, so the row does not move (D313). */
 .nb-here {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 22px;
   height: 18px;
-  padding: 0 var(--bn-1);
-  border-radius: var(--bn-r-xs);
-  background: var(--bn-accent);
-  color: var(--bn-on-accent);
-  font-size: var(--bn-fs-xs);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+}
+.nb-here svg { display: block; }
+/* Light theme: the brackets take the ink, as the lockup's do (chrome vanishes on a light panel). */
+:root:not([data-theme='dark']) .nb-here .logo-brackets path { stroke: var(--bn-ink); }
+/* One sheen across the card per card change. Opacity and transform only; the resting state is
+   invisible, so reduced motion (which crushes the duration to the floor) draws no sweep. */
+.nb-here .logo-glint { opacity: 0; animation: nb-glint var(--bn-t-highlight) var(--bn-ease) 1; }
+@keyframes nb-glint {
+  0% { opacity: 1; transform: translateX(0); }
+  100% { opacity: 1; transform: translateX(64px); }
 }
 
 /* An unread neighbour, said in words (LOC-28): muted and in the running voice, because it

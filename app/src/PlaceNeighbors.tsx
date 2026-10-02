@@ -51,6 +51,7 @@
  */
 import type { ReactNode } from 'react'
 
+import { Logo, type LogoVariant } from './kit'
 import { neighborWords, placeParts } from './server'
 import type { Place, PlaceNeighbor } from './types'
 import './PlaceNeighbors.css'
@@ -90,12 +91,20 @@ function Name({ side }: { side: PlaceNeighbor }): ReactNode {
 export function PlaceNeighbors({
   place,
   departed = false,
+  mark,
+  glint = false,
 }: {
   place: Place | undefined
   /** The card has left its box. Callers read it off `isDeparted(place)`. Reaches only
    *  `placeParts`, for `aria-label`'s tense (LOC-09) — nothing about the neighbour names
    *  themselves changes when this card, drawn nowhere in this component any more, departs. */
   departed?: boolean
+  /** THE MARK'S PALETTE, the one hook for colouring it (by rarity, later). Unset is the kit's default. */
+  mark?: LogoVariant
+  /** THE GLINT GATE, OFF UNTIL A CALLER HAS A REASON. The sheen is built (`.logo-glint`) and plays
+   *  once per card change when this is true. The owner's gate (a top-decile market price among the
+   *  held SKUs) needs a figure the screen does not read yet, so nothing passes true today. */
+  glint?: boolean
 }): ReactNode {
   const parts = placeParts(place, departed)
   if (parts === null) return null
@@ -117,10 +126,13 @@ export function PlaceNeighbors({
           <Name side={parts.prev} />
         </span>
       )}
-      {/* This copy's own number, the ruler pin's chip. A departed copy has no card to name. */}
+      {/* THIS CARD'S SPOT, the Banchi card in its two brackets between the neighbours. It carries no
+          number: `Card N of M` above and the ruler's pin already say it. It plays its glint once
+          per card change when `glint` is on (`key` is the sentence, which changes with the card). aria-hidden: the
+          row's `aria-label` already says where the card sits. A departed copy has no card to mark. */}
       {place?.card == null ? null : (
         <span className="nb-here" aria-hidden="true">
-          {place.card}
+          <Logo part="both" size={18} glint={glint} variant={mark} key={parts.said} />
         </span>
       )}
       {parts.next === null ? (

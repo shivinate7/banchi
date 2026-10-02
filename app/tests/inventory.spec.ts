@@ -5426,15 +5426,15 @@ test('the neighbours are ranked, not joined — the names are the only thing dra
   )
 })
 
-test('the neighbour line carries no words: names and this copy\'s number only', async ({ page }) => {
+test('the neighbour line carries no words: names and this card\'s mark only', async ({ page }) => {
   await open(page, BOXES, {
     cards: NEIGHBORLY,
     search: (query) => searchAnswer(query, NEIGHBORLY),
   })
-  /* OWNER RULING: `<- back [N] front ->`, arrows drawn by CSS. The text of the line is the two
-     names and the number chip and nothing else — no `back`, `front`, `before`, `after`. */
+  /* OWNER RULING: `<- back [mark] front ->`, arrows drawn by CSS. The text of the line is the two
+     names and nothing else (the mark carries no number) — no `back`, `front`, `before`, `after`. */
   const band = page.locator('.card-locations-row.is-current .nb')
-  await expect(band).toHaveText('Galio, Indefaticable1Evelynn, Entrancing')
+  await expect(band).toHaveText('Galio, IndefaticableEvelynn, Entrancing')
   /* Every line, end chips aside (BACK / FRONT stand in for a name at a box's end): no direction word. */
   const words = await page.locator('.card-locations-owner .nb').evaluateAll((els) =>
     els.map((el) => {
@@ -5444,6 +5444,46 @@ test('the neighbour line carries no words: names and this copy\'s number only', 
     }),
   )
   for (const text of words) expect(text).not.toMatch(/\b(back|front|before|after|next|previous)\b/i)
+})
+
+test('the neighbour row marks this card with the Banchi card, and the row does not move (D313)', async ({
+  page,
+}) => {
+  await open(page, BOXES, { cards: NEIGHBORLY, search: (query) => searchAnswer(query, NEIGHBORLY) })
+  const band = page.locator('.card-locations-row.is-current .nb')
+  const slot = band.locator('.nb-here')
+  /* The mark is decoration: aria-hidden, and the row's own `aria-label` already says where the
+     card sits. No number is drawn in its place. */
+  await expect(slot).toHaveAttribute('aria-hidden', 'true')
+  await expect(slot.locator('svg .logo-brackets')).toHaveCount(1)
+  await expect(slot).not.toHaveText(/\d/)
+  /* The row says where the card sits, so the mark does not have to. */
+  await expect(band).toHaveAttribute('aria-label', 'Position: Galio, Indefaticable / Evelynn, Entrancing')
+  /* THE SVG'S OWN BOX, not the slot's (the slot has a fixed height and cannot go red): the chip it
+     replaced was 18px, so the mark is no taller and sits inside the row. */
+  const row = (await band.boundingBox())!
+  const mark = (await slot.locator('svg').boundingBox())!
+  expect(mark.height).toBeLessThanOrEqual(18)
+  expect(mark.y).toBeGreaterThanOrEqual(row.y)
+  expect(mark.y + mark.height).toBeLessThanOrEqual(row.y + row.height)
+  expect(row.height).toBe(18)
+  /* AND THE ROW DOES NOT MOVE ACROSS A CARD CHANGE (D313): where it sits inside its own panel
+     row, before and after. (The page itself legitimately moves with a different card.) */
+  const inRow = async () => {
+    const nb = (await page.locator('.card-locations-row.is-current .nb').boundingBox())!
+    const rowTop = (await page.locator('.card-locations-row.is-current').boundingBox())!.y
+    return [nb.y - rowTop, nb.height]
+  }
+  const before = await inRow()
+  await page.locator('.browse-row').nth(1).click()
+  await expect(page.locator('.card-locations-row.is-current .nb')).toHaveAttribute('aria-label', /Quiet Ember/)
+  expect(await inRow()).toEqual(before)
+})
+
+test('the glint is off until a caller gates it on', async ({ page }) => {
+  await open(page, BOXES, { cards: NEIGHBORLY, search: (query) => searchAnswer(query, NEIGHBORLY) })
+  await expect(page.locator('.card-locations-owner .nb-here svg')).not.toHaveCount(0)
+  await expect(page.locator('.logo-glint')).toHaveCount(0)
 })
 
 test('the neighbour names are read as words, not as metadata', async ({ page }) => {
