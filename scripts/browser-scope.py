@@ -72,7 +72,7 @@ regardless — D136's pass record is the only thing that skips the matrix on mai
         times.json` (file name to seconds: each test's median over 50 `check.yml` runs).
         A spec with no time gets the mean, so a stale table costs balance, never coverage.
     scripts/browser-scope.py shard-refresh FILE ... [--write]
-        Re-time from `.serve/design-check.json` files (`fileSeconds`). The nightly uploads
+        Re-time from `.serve/design-check.json` files (`fileSeconds`). Every full-suite run uploads
         each shard's as `design-check-times-N`; download them and run this. Previews.
     scripts/browser-scope.py list
     scripts/browser-scope.py selftest
