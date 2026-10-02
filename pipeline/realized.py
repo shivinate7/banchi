@@ -58,12 +58,16 @@ def read_sales(path: str) -> Tuple[List[Sale], Dict[str, int]]:
                 out["not_usd"] += 1
             else:
                 try:
+                    price, refund = Decimal(row["Price"]), Decimal(row["Refund Amount"] or "0")
+                    quantity = int(row["Quantity"])
+                    # NaN and Infinity parse as Decimals, so refuse them by name.
+                    if not (price.is_finite() and refund.is_finite()) or price < 0 or refund < 0 or quantity < 1:
+                        raise ValueError
                     sales.append(Sale(
                         int(row["Vendor Product Id"]),
+                        # Ordered At is a bare date in the export (counted, not printed): no zone to shift.
                         date.fromisoformat(row["Ordered At"].strip()[:10]).isoformat(),
-                        Decimal(row["Price"]),
-                        int(row["Quantity"]),
-                        Decimal(row["Refund Amount"] or "0"),
+                        price, quantity, refund,
                         row["Condition"].strip(),
                         row["Finish"].strip(),
                     ))
@@ -82,15 +86,46 @@ def bucket_on(day: str, buckets: Iterable[Bucket]) -> Optional[Bucket]:
     return held[0] if held else None
 
 
-def compare(sales: Iterable[Sale], buckets: List[Bucket]) -> dict:
-    """Each sale against the market on its date. A refunded sale is listed and left out of
+_BASIS = {"month": "day", "quarter": "3 days", "semiannual": "week", "annual": "week"}
+_FOIL_WORDS = ("holofoil", "foil")
+
+
+def sku_matches(sale: Sale, sku_condition: Optional[str]) -> bool:
+    """True only when the sale's condition and finish are plainly the SKU's. The SKU's
+    condition reads like `Near Mint` or `Near Mint Foil`. A finish of `unknown` or any word
+    this does not know never matches: it is counted as another condition, never guessed."""
+    if not sku_condition:
+        return False
+    words = sku_condition.strip().lower()
+    foil = words.endswith(_FOIL_WORDS)
+    for w in _FOIL_WORDS:
+        if words.endswith(w):
+            words = words[: -len(w)].strip()
+            break
+    finish = sale.finish.lower()
+    if finish in ("foil", "holofoil"):
+        sale_foil = True
+    elif finish == "non-foil":
+        sale_foil = False
+    else:
+        return False
+    return sale.condition.lower() == words and sale_foil == foil
+
+
+def compare(sales: Iterable[Sale], buckets: List[Bucket], sku_condition: Optional[str] = None) -> dict:
+    """Each sale of this SKU's own condition and finish against the market on its date; the
+    rest are counted in `other_conditions`, never compared. A refunded sale is listed and left out of
     the totals. A sale with no bucket on its date is listed with `market: None` and left out
     of the totals, so the two averages always cover the same copies."""
-    rows, units, got, market, refunded, no_market = [], 0, Decimal(0), Decimal(0), 0, 0
+    rows, units, got, market, refunded, no_market, other = [], 0, Decimal(0), Decimal(0), 0, 0, 0
     for s in sorted(sales, key=lambda s: s.day):
+        if not sku_matches(s, sku_condition):
+            other += 1
+            continue
         bucket = bucket_on(s.day, buckets)
         rows.append({"day": s.day, "quantity": s.quantity, "price": str(s.price),
                      "market": bucket.market if bucket else None,
+                     "basis": _BASIS[bucket.range] if bucket else None,
                      "refunded": s.refund > 0, "condition": s.condition, "finish": s.finish})
         if s.refund > 0:
             refunded += 1
@@ -101,7 +136,7 @@ def compare(sales: Iterable[Sale], buckets: List[Bucket]) -> dict:
             got += s.price * s.quantity
             market += Decimal(bucket.market) * s.quantity
     return {
-        "rows": rows, "units": units, "refunded": refunded, "no_market": no_market,
+        "rows": rows, "other_conditions": other, "units": units, "refunded": refunded, "no_market": no_market,
         "realized_avg": str((got / units).quantize(Decimal("0.01"))) if units else None,
         "market_avg": str((market / units).quantize(Decimal("0.01"))) if units else None,
     }

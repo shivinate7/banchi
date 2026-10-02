@@ -6466,22 +6466,23 @@ def do_product_realized(sku: str) -> dict:
             "sales_export_unreadable",
             "The sales export chosen for this server could not be read. Check that it is an OrderWand sales export.",
         ) from None
-    archive = Store().read().archive
-    buckets = archive.for_sku(wanted)
+    snapshot = Store().read()
+    buckets = snapshot.archive.for_sku(wanted)
     product_id = buckets[0].product_id if buckets else None
     mine = [s for s in sales if s.product_id == product_id] if product_id else []
-    # ponytail: a walk of the whole archive, product_id has no index. Index it if this is slow.
-    skus = {b.sku for b in archive.entries.values() if b.product_id == product_id} if product_id else set()
+    condition = None
+    if mine:  # the card lookup is paid only when this product has a sale
+        try:
+            condition = productview.row_for_sku(snapshot, wanted).get(tcgcsv.CONDITION_COLUMN)
+        except productview.ProductNotFound:
+            pass
     return {
         "sku": wanted,
         "configured": True,
         "file": os.path.basename(path),
         "product_id": product_id,
-        # More than one SKU under a product means the market side is this SKU's, not every
-        # condition's. The screen says so rather than guessing a condition match.
-        "product_skus": len(skus),
         "left_out": left_out,
-        **realized.compare(mine, buckets),
+        **realized.compare(mine, buckets, condition),
     }
 
 

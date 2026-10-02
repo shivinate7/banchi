@@ -509,24 +509,37 @@ function RealizedSection({ sku }: { readonly sku: string }) {
     return (
       <section className="producthistory-realized">
         <h3>What you got</h3>
-        <p className="producthistory-note">No sales export is chosen for this server, so your own sale prices are not shown.</p>
+        <p className="producthistory-note">Start Banchi with an OrderWand sales export to see what you got for this product.</p>
       </section>
     )
   }
   const num = (v: string | null) => (v === null ? null : Number(v))
   const gap = payload.realized_avg !== null && payload.market_avg !== null ? Number(payload.realized_avg) - Number(payload.market_avg) : null
+  const lo = payload.left_out
+  const leftOut = [
+    lo.not_a_sale > 0 ? `${lo.not_a_sale} purchases` : '',
+    lo.not_usd > 0 ? `${lo.not_usd} in other currencies` : '',
+    lo.unreadable > 0 ? `${lo.unreadable} unreadable` : '',
+  ].filter(Boolean)
   return (
     <section className="producthistory-realized">
       <h3>What you got</h3>
       {payload.rows.length === 0 ? (
-        <p className="producthistory-note">No sale of this product is in {payload.file}.</p>
+        <p className="producthistory-note">
+          No sale of this exact condition and finish is in {payload.file}.
+          {payload.other_conditions > 0 ? ` ${payload.other_conditions} sales of other conditions are left out.` : ''}
+        </p>
       ) : (
         <>
           <p className="producthistory-note">
-            Your sale price against the market on the day it sold. {payload.units} {payload.units === 1 ? 'copy' : 'copies'} compared
+            Your sale price against the market on the day it sold, for this condition and finish only. {payload.units}{' '}
+            {payload.units === 1 ? 'copy' : 'copies'} compared
             {payload.refunded > 0 ? `, ${payload.refunded} refunded left out` : ''}
-            {payload.no_market > 0 ? `, ${payload.no_market} from before the archive left out` : ''}.
-            {payload.product_skus > 1 ? ' This product has several conditions; the market is the one on this page.' : ''}
+            {payload.no_market > 0 ? `, ${payload.no_market} with no market figure for that date left out` : ''}.
+            {payload.other_conditions > 0 ? ` ${payload.other_conditions} sales of other conditions are not shown.` : ''}
+          </p>
+          <p className="producthistory-note">
+            The market is the saved average for the shortest period that holds the date: a day, 3 days or a week. Dates are the day the export gives.
           </p>
           <dl className="producthistory-realized-totals">
             <div><dt>You got, per copy</dt><dd><Money value={num(payload.realized_avg)} /></dd></div>
@@ -540,6 +553,7 @@ function RealizedSection({ sku }: { readonly sku: string }) {
                 <th className="num">Copies</th>
                 <th className="num">You got</th>
                 <th className="num">Market that day</th>
+                <th>Average of</th>
               </tr>
             </thead>
             <tbody>
@@ -549,10 +563,12 @@ function RealizedSection({ sku }: { readonly sku: string }) {
                   <td className="num">{r.quantity}</td>
                   <td className="num"><Money value={Number(r.price)} /></td>
                   <td className="num"><Money value={num(r.market)} /></td>
+                  <td>{r.basis ?? ''}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {leftOut.length > 0 ? <p className="producthistory-note">Left out of the file: {leftOut.join(', ')}.</p> : null}
         </>
       )}
     </section>

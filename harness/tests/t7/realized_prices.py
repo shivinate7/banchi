@@ -77,6 +77,10 @@ def check_realized_prices(checks: Checks) -> None:
         _row(day="2026-09-10", price="9.00", refund="9.00"),      # refunded
         _row(day="2026-05-01", price="1.00"),                     # no bucket on that date
         _row(day="2026-09-10", price="5.00", pid="1"),            # another product
+        {**_row(day="2026-09-10", price="0.10"), "Condition": "moderately played"},
+        {**_row(day="2026-09-10", price="0.10"), "Finish": "non-foil"},
+        {**_row(day="2026-09-10", price="0.10"), "Finish": "unknown"},
+        _row(price="nan"), _row(price="Infinity"), _row(price="-1.00"), _row(refund="-2"),
     ]
     with tempfile.TemporaryDirectory() as directory, isolated_home():
         path = _write(directory, rows)
@@ -84,25 +88,32 @@ def check_realized_prices(checks: Checks) -> None:
 
         checks.ok(tuple(realized.Sale._fields) == ("product_id", "day", "price", "quantity", "refund", "condition", "finish"), "a Sale carries only the kept fields")
         checks.ok(not any(s_ in repr(sales) for s_ in SENTINELS), "no dropped column survives the parse")
-        checks.ok(left_out == {"not_a_sale": 1, "not_usd": 1, "unreadable": 0} and len(sales) == 4, "purchases and other currencies are counted, never listed")
+        checks.ok(left_out == {"not_a_sale": 1, "not_usd": 1, "unreadable": 4} and len(sales) == 7, "purchases and other currencies are counted, never listed")
 
         buckets = [
             _bucket("month", "2026-09-10", 1, "0.50"),
             _bucket("annual", "2026-09-07", 7, "9.99"),  # holds the date too, never preferred
         ]
         mine = [s for s in sales if s.product_id == int(PID)]
-        out = realized.compare(mine, buckets)
+        out = realized.compare(mine, buckets, "Near Mint Foil")
         checks.ok(out["units"] == 2 and out["realized_avg"] == "3.00" and out["market_avg"] == "0.50", "the join takes the finest bucket and weights by copies")
         checks.ok(out["refunded"] == 1 and out["units"] == 2, "a refunded sale is listed and left out of the totals")
+        checks.ok(out["other_conditions"] == 3 and out["units"] == 2,
+                  "other conditions and finishes are counted, never averaged in")
+        checks.ok(realized.compare(mine, buckets, None)["units"] == 0,
+                  "a SKU with no known condition matches nothing")
         gap = next(r for r in out["rows"] if r["day"] == "2026-05-01")
         checks.ok(gap["market"] is None and out["no_market"] == 1 and out["units"] == 2, "a date with no archive bucket has no market and is not averaged")
 
         with Store().write() as snapshot:
             snapshot.archive.upsert({f"SKU1:{b.range}:{b.start}": b for b in buckets})
         os.environ["PKMNSCAN_SALES_EXPORT"] = path
+        real = pipeline_routes.productview.row_for_sku
+        pipeline_routes.productview.row_for_sku = lambda snap, sku: {"Condition": "Near Mint Foil"}
         try:
             payload = pipeline_routes.do_product_realized("SKU1")
         finally:
+            pipeline_routes.productview.row_for_sku = real
             del os.environ["PKMNSCAN_SALES_EXPORT"]
         checks.ok(payload["product_id"] == int(PID) and payload["realized_avg"] == "3.00"
             and payload["file"] == "synthetic-sales.csv", "the route answers by the archive's product id")

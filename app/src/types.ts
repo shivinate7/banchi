@@ -2254,6 +2254,7 @@ export type RealizedRow = {
   quantity: number
   price: string
   market: string | null
+  basis: string | null
   refunded: boolean
   condition: string
   finish: string
@@ -2266,7 +2267,7 @@ export type RealizedPayload =
       configured: true
       file: string
       product_id: number | null
-      product_skus: number
+      other_conditions: number
       left_out: { not_a_sale: number; not_usd: number; unreadable: number }
       rows: RealizedRow[]
       units: number
