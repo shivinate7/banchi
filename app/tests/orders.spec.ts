@@ -3,7 +3,7 @@
 import { test, expect, type Locator, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
-import { settleMotion } from './motionSettled'
+import { afterPaint, settleMotion } from './motionSettled'
 
 /** A real, tiny image `route.fulfill` can hand back for a photo read — `inventory.spec.ts`'s
  *  own constant, copied rather than imported (that file's is private): a PNG would need a
@@ -2293,7 +2293,7 @@ test('selecting a two-order buyer sends exactly one batched POST /orders/picks, 
 
   /* Wait for the first answer, then give a second call the time it would need to be sent. */
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/picks')).length).toBe(1)
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(400) // keep: asserts no second picks call is sent
 
   const picksCalls = wire.filter((one) => one.path.endsWith('/orders/picks'))
   expect(picksCalls).toHaveLength(1)
@@ -2315,7 +2315,7 @@ test('a picks answer that leaves a key out is not asked for again (the 4,934-req
   await page.locator('.orders-index-row').first().click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/picks')).length).toBeGreaterThan(0)
   /* A window long enough for the loop to have sent hundreds. */
-  await page.waitForTimeout(1000)
+  await page.waitForTimeout(1000) // keep: asserts the picks loop sends at most two calls
   expect(wire.filter((one) => one.path.endsWith('/orders/picks')).length).toBeLessThanOrEqual(2)
 })
 
@@ -4569,7 +4569,7 @@ test('finishing a buyer never asks for another buyer\'s walk, and draws no card 
   await expect(page.locator('.orders-walk-done')).toContainText('All 1 sold.')
 
   /* A window long enough for the stray plan to have been asked for and to have landed. */
-  await page.waitForTimeout(600)
+  await page.waitForTimeout(600) // keep: asserts the stray plan is never asked for
   expect(asked.filter((keys) => keys.includes(secondBuyerKey))).toEqual([])
   await expect(page.locator('.browse-card')).toHaveCount(0)
   await expect(page.getByRole('button', { name: /^Mark sold/ })).toHaveCount(0)
@@ -5260,7 +5260,7 @@ test('a pane taller than the window reaches its last copy by page scroll, at 144
   await page.mouse.move(900, 500)
   for (let i = 0; i < 40 && !(await inView()); i += 1) {
     await page.mouse.wheel(0, 300)
-    await page.waitForTimeout(60)
+    await afterPaint(page)
   }
   expect(await inView(), 'the last copy never came into view by the wheel').toBe(true)
   /* NOT ONLY AT THE END OF THE PAGE: a pinned column releases its lower half only when the whole rail has scrolled by. */
@@ -5277,6 +5277,6 @@ test('a digit sells nothing while the pane is hidden and the sheet is closed', a
   await expect(page.locator(`${CURRENT_PICK} .card-locations-row`)).toHaveCount(2)
   await page.addStyleTag({ content: '.orders-cardcol { display: none !important; }' })
   await page.keyboard.press('1')
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(400) // keep: asserts a digit sells nothing
   expect(wire.filter((one) => one.path.endsWith('/orders/pull'))).toHaveLength(0)
 })

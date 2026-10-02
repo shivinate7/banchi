@@ -2,7 +2,7 @@
 // Governs: D86, D59, D278, D277, D118, D218
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
-import { settleMotion } from './motionSettled'
+import { afterPaint, settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 import { expectOneStagger } from './staggerCheck'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
@@ -1920,7 +1920,7 @@ test('tabbing across a suggested row writes nothing', async ({ page }) => {
 
   await field(page).focus()
   await page.keyboard.press('Tab')
-  await page.waitForTimeout(200)
+  await page.waitForTimeout(200) // keep: asserts a tab writes nothing
 
   /* A HELD TAB THROUGH A HUNDRED ROWS MUST NOT WRITE A HUNDRED OVERRIDES. Focus is not a
      decision, and neither is leaving a field you did not type in. */
@@ -1969,7 +1969,7 @@ test('a letter snaps the price to its column, and does not commit', async ({ pag
 
   /* A SNAP YOU CANNOT INSPECT IS A SNAP YOU CANNOT CHECK. It sets the field and stops there;
      the extra Enter is what makes `l`, look, Enter possible. */
-  await page.waitForTimeout(150)
+  await page.waitForTimeout(150) // keep: asserts the snap writes nothing
   expect(wire.filter((row) => row.method === 'PUT')).toHaveLength(0)
 })
 
@@ -1986,7 +1986,7 @@ test('a snap onto a blank column refuses, says so, and writes nothing', async ({
      next join, an hour later. The field is untouched and the refusal is on screen now. */
   await expect(field(page)).toHaveValue('22.03')
   await expect(page.locator('.pricing-refusal')).toContainText('No Lowest price on this row')
-  await page.waitForTimeout(150)
+  await page.waitForTimeout(150) // keep: asserts the refusal writes nothing
   expect(wire.filter((row) => row.method === 'PUT')).toHaveLength(0)
 })
 
@@ -4457,13 +4457,14 @@ for (const width of [1440, 820]) {
     await setViewport(page, { width, height: 900 })
     await open(page, { skus: FILTER_SKUS })
     await settleFonts(page)
-    await page.waitForTimeout(800)
+    await settleMotion(page)
+    await afterPaint(page)
     const search = page.getByRole('searchbox', { name: 'Search this list' })
     for (const [text, rows] of [['dunsparce', 1], ['', 4]] as const) {
       const from = await markNow(page)
       await search.fill(text)
       await expect(page.locator('.pricing-row')).toHaveCount(rows)
-      await page.waitForTimeout(600)
+      await page.waitForTimeout(600) // keep: shifts are read over the 500ms window after the filter
       const inWindow = (await readShifts(page)).shifts.filter((sh) => sh.at >= from - 100 && sh.at < from + 500)
       expect(sumOf(inWindow), `the filter moved ${describeShifts(inWindow)}`).toBeLessThan(0.0005)
     }

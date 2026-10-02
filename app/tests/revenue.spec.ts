@@ -6,6 +6,7 @@ import { sealEveryTest } from './shell'
 import type { OrderLineProgress, OrderLineWire, OrderRow, OrdersPayload } from '../src/types'
 import { setViewport } from './phoneSwitch'
 import { describeShifts, readShifts, watchShifts } from './layoutShift'
+import { afterPaint, settleMotion } from './motionSettled'
 
 /* `#/revenue` (SALES) BECOMES A TOOL — sort, filter, cross-filter, deep-link and drill down
  * (`D217`), over the same `GET /orders` payload D214 already reshapes. Nothing here
@@ -626,7 +627,7 @@ test('market comparison is a press, never a mount, and draws a sign and a word (
   await open(page, '?period=all')
 
   // Never fetched on mount.
-  await page.waitForTimeout(200)
+  await page.waitForTimeout(200) // keep: asserts the table is never fetched on mount
   expect(calls()).toBe(0)
   await expect(page.locator('.revenue-table thead th', { hasText: 'Today' })).toHaveCount(0)
 
@@ -1024,7 +1025,8 @@ for (const width of [1440, 820]) {
     await setViewport(page, { width, height: 1000 })
     await stub(page, generalOrders())
     await open(page, '?period=all')
-    await page.waitForTimeout(1200)
+    await settleMotion(page)
+    await afterPaint(page)
     const bar = page.locator('.revenue-month-col', { hasText: 'Jul 2026' })
     for (const expected of ['true', null]) {
       /* THE SHIFTS THIS PRESS ADDED, not a time window: a shift is stamped at its frame's start,
@@ -1033,7 +1035,7 @@ for (const width of [1440, 820]) {
       await bar.evaluate((el) => (el as HTMLElement).click())
       if (expected === null) await expect(bar).not.toHaveAttribute('aria-pressed', 'true')
       else await expect(bar).toHaveAttribute('aria-pressed', 'true')
-      await page.waitForTimeout(600)
+      await page.waitForTimeout(600) // keep: asserts no shift over the window after the press
       await expect(page.locator('.revenue-active-filter')).toHaveCount(0)
       const inWindow = (await readShifts(page)).shifts.slice(seen)
       const beside = inWindow.filter((sh) => sh.moved.some((name) => HELD.test(name)))
@@ -1061,11 +1063,12 @@ for (const width of [1440, 820]) {
       }),
     ])
     await open(page, '?period=3m')
-    await page.waitForTimeout(1200)
+    await settleMotion(page)
+    await afterPaint(page)
     for (const label of ['All', '3 months']) {
       const seen = (await readShifts(page)).shifts.length
       await page.getByRole('group', { name: 'Period' }).getByText(label, { exact: true }).click()
-      await page.waitForTimeout(700)
+      await page.waitForTimeout(700) // keep: asserts no shift over the window after the press
       const inWindow = (await readShifts(page)).shifts.slice(seen)
       const beside = inWindow.filter((sh) => sh.moved.some((name) => HELD.test(name)))
       expect(beside, `choosing ${label} moved ${describeShifts(beside)}`).toEqual([])
