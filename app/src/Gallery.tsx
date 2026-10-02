@@ -584,7 +584,7 @@ function OverlaySpecimens() {
               Card actions
             </Button>
           </div>
-          <Popover open={sheetPop} onClose={() => setSheetPop(false)} anchor={sheetAnchor} label="Card actions">
+          <Popover open={sheetPop} onClose={() => setSheetPop(false)} anchor={sheetAnchor} label="Card actions" role="menu">
             <button type="button" className="bn-menu-item" onClick={() => setSheetPop(false)}>
               <Icon name="tag" size={16} /> Set a hint
             </button>
@@ -623,7 +623,7 @@ function OverlaySpecimens() {
         <ConfirmSheet open={confirm} onClose={() => setConfirm(false)} onConfirm={() => setConfirm(false)} title="Delete 3 cards?" confirmLabel="Delete 3 cards">
           <p className="bn-read">This cannot be undone. The photographs go too.</p>
         </ConfirmSheet>
-        <Popover open={pop} onClose={() => setPop(false)} anchor={anchor} label="Specimen menu">
+        <Popover open={pop} onClose={() => setPop(false)} anchor={anchor} label="Specimen menu" role="menu">
           <button type="button" className="bn-menu-item" onClick={() => setPop(false)}>
             <Icon name="divider" size={16} /> Put in a divider
           </button>

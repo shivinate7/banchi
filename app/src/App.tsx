@@ -146,10 +146,10 @@ const PRICING_KEYS: ScreenKeys = {
     { keys: ['↵'], does: 'Save this price and go to the next card', when: 'in the hold panel it sets the hold' },
     { keys: ['⇧↵'], does: 'Save this price and go back one card' },
     { keys: ['↑', '↓'], does: 'Save this price and move to the card before or after' },
-    { keys: ['Esc'], does: 'Drop what you typed in this field' },
-    { keys: ['B'], does: 'Hold it while you wait for the price to move', when: 'in the hold panel' },
-    { keys: ['K'], does: 'Hold it because you are keeping it', when: 'in the hold panel' },
-    { keys: ['X'], does: 'Hold it for a later batch', when: 'in the hold panel' },
+    { keys: ['Esc'], does: 'Drop what you typed in a price field, or close the hold panel' },
+    { keys: ['B'], does: 'Choose this reason: waiting for the price to move', when: 'in the hold panel' },
+    { keys: ['K'], does: 'Choose this reason: keeping this card', when: 'in the hold panel' },
+    { keys: ['X'], does: 'Choose this reason: listing it in a later batch', when: 'in the hold panel' },
   ],
 }
 

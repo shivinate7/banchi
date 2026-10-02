@@ -652,6 +652,7 @@ export function Popover({
   onClose,
   anchor,
   label,
+  role = 'dialog',
   children,
   className,
 }: {
@@ -659,6 +660,8 @@ export function Popover({
   readonly onClose: () => void
   readonly anchor: RefObject<HTMLElement | null>
   readonly label: string
+  /** `menu` for a list of `menuitem`s; the default is a dialog. */
+  readonly role?: 'dialog' | 'menu'
   readonly children?: ReactNode
   readonly className?: string
 }) {
@@ -735,7 +738,7 @@ export function Popover({
     <div
       ref={panel}
       className={['bn-menu bn-popover', className].filter(Boolean).join(' ')}
-      role="dialog"
+      role={role}
       aria-label={label}
       tabIndex={-1}
       data-leaving={leaving ? 'true' : undefined}

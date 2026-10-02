@@ -2995,7 +2995,7 @@ function CardOps({
         aria-expanded={menu}
         onClick={() => setMenu((held) => !held)}
       />
-      <Popover open={menu} onClose={() => setMenu(false)} anchor={anchor} label="Card actions" className="browse-menu">
+      <Popover open={menu} onClose={() => setMenu(false)} anchor={anchor} label="Card actions" role="menu" className="browse-menu">
           <button
             role="menuitem"
             type="button"
