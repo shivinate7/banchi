@@ -6472,10 +6472,8 @@ def do_product_realized(sku: str) -> dict:
     mine = [s for s in sales if s.product_id == product_id] if product_id else []
     condition = None
     if mine:  # the card lookup is paid only when this product has a sale
-        try:
+        with contextlib.suppress(productview.ProductNotFound):
             condition = productview.row_for_sku(snapshot, wanted).get(tcgcsv.CONDITION_COLUMN)
-        except productview.ProductNotFound:
-            pass
     return {
         "sku": wanted,
         "configured": True,
