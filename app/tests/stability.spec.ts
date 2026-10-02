@@ -1044,7 +1044,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
     await setViewport(page, { width, height: 1000 })
     await watchShifts(page)
     const boxes = () =>
-      page.evaluate((sels) => JSON.stringify(sels.map((s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return r ? [s, r.x, r.y, r.width, r.height] : [s] })), [...STRIP_PARTS])
+      page.evaluate((sels) => JSON.stringify(sels.map((s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return r ? [s, r.x, r.y + window.scrollY, r.width, r.height] : [s] })), [...STRIP_PARTS])
     return { gate, boxes }
   }
 
@@ -1081,7 +1081,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
     const before = await boxes()
     const bad: string[] = []
     await page.getByRole('button', { name: /Mark sold/ }).first().click()
-    await expect(page.locator('.orders-strip-card.is-done')).toHaveCount(1)
+    await expect(page.locator('.orders-strip-card.is-done').first()).toBeVisible()
     await settleMotion(page)
     if ((await boxes()) !== before) bad.push('sale')
     await page.getByRole('button', { name: /^Undo/ }).first().click()

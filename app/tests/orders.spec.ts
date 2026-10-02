@@ -1342,7 +1342,7 @@ test('Hide picked folds at the PRESS, not the sale (owner ruling, 2026-09-27)', 
   await expect(page.locator('.orders-walk-line')).toHaveText(/Tricksy Tentacles/)
 
   // Sell Tricksy Tentacles while Hide picked is already on: it stays in place, this time.
-  await page.getByRole('button', { name: /Tricksy Tentacles/ }).click()
+  await page.locator('.orders-walk-press', { hasText: 'Tricksy Tentacles' }).click()
   await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeVisible()
   await expect(page.locator('.orders-walk-tools .bn-hidetoggle-count')).toHaveText('2')
@@ -2535,8 +2535,8 @@ test('the buyer list is not a scroll box of its own, and no hint sits on its row
 })
 
 /* THE LIST AND THE WALK ARE ON THE PAGE AT 1440, 820 AND 720 (UX-169, UX-194) — LAYOUT R
- * (D304, Q1). 1440 is the three-column desk
- * (buyers | walk | card). 820 and 720 sit inside Orders' own 560-999 mid range (the app shell's
+ * (D304, Q1), then Inventory's own skeleton at every width (section 18, design pass C). 1440 is a
+ * two-column desk (buyers over walk | card). 820 and 720 sit inside Orders' own 560-999 mid range (the app shell's
  * own rail collapses to 64px there, D289 rule 3's "720 is a desk" is about a DIFFERENT
  * breakpoint, `#/inventory`'s own 640, and never widens Orders' 1000px one) — Inventory's own
  * two-column skeleton: the buyer rail sits above the walk, in the same column, and the card
@@ -2546,22 +2546,16 @@ for (const [width, height] of [
   [820, 1180],
   [720, 900],
 ] as const) {
-  const desk = width >= 1000
-  test(`at ${width}, the buyer list sits ${desk ? 'beside the walk' : 'above the walk, beside the card'}`, async ({ page }) => {
+  test(`at ${width}, the buyer list sits above the walk, beside the card`, async ({ page }) => {
     await setViewport(page, { width, height })
     await open(page, { orders: threeBuyerPayload() })
     const buyers = await page.locator('.orders-buyers').boundingBox()
     const walk = await page.locator('.orders-walk').boundingBox()
     const card = await page.locator('.orders-cardcol').boundingBox()
     if (buyers === null || walk === null || card === null) throw new Error('the buyer list, the walk or the card did not lay out')
-    if (desk) {
-      expect(walk.x, 'the walk does not sit to the right of the buyer list').toBeGreaterThan(buyers.x + buyers.width - 1)
-      expect(walk.width, 'the walk is squeezed').toBeGreaterThan(300)
-    } else {
-      expect(walk.x, 'the walk stays in the buyer rail column, not beside it').toBeLessThan(buyers.x + buyers.width)
-      expect(walk.y, 'the walk sits under the buyer rail').toBeGreaterThan(buyers.y + buyers.height - 1)
-      expect(card.x, 'the card sits beside the rail column').toBeGreaterThan(buyers.x + buyers.width - 1)
-    }
+    expect(walk.x, 'the walk stays in the buyer rail column, not beside it').toBeLessThan(buyers.x + buyers.width)
+    expect(walk.y, 'the walk sits under the buyer rail').toBeGreaterThan(buyers.y + buyers.height - 1)
+    expect(card.x, 'the card sits beside the rail column').toBeGreaterThan(buyers.x + buyers.width - 1)
     await expect(page.locator('.orders-buyerchip')).toBeHidden()
   })
 }
@@ -3437,10 +3431,10 @@ test('the card pane is the photograph, the pick and every copy with its place an
   await expect(pane.locator('.bn-photo').getByRole('link', { name: /re-shoot/i })).toHaveAttribute('href', /#\/inventory\?box=3/)
   expect(await pane.locator('.bn-photo').innerText()).not.toMatch(/http|localhost|\/photo\//i)
   await expect(pane.locator('.orders-pick-chip')).toHaveText('Pick 1 of 1')
-  /* THE COPIES ARE THE WALK COLUMN'S, NOT THE PANE'S (the owner's redesign): the pane is the head, the
-     band and the photograph, and Mark sold stands on the copy rows in the walk column. */
-  await expect(pane.locator('.card-locations-row')).toHaveCount(0)
-  await expect(page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).first()).toBeVisible()
+  /* THE COPIES ARE THE PANE'S, BESIDE THE PHOTOGRAPH, as Inventory's hero draws them (section 18): one row
+     per copy at the stop, with Mark sold on it. */
+  await expect(pane.locator('.card-locations-row')).toHaveCount(1)
+  await expect(pane.getByRole('button', { name: 'Mark sold' }).first()).toBeVisible()
 
   /* THE REST IS `#/inventory`'s: no details table, no listing counts, and none of inventory's
      own editing actions (retire, move and re-shoot are Inventory-only, §13). */
@@ -3895,7 +3889,7 @@ test('the walk column keeps the box name readable beside the action cell, at 820
   await setViewport(page, { width: 820, height: 1180 })
   await open(page, { orders: threeBuyerPayload(), walkPlan: walkPlanOf([walkPlanStop({})]) })
   await page.locator('.orders-index-item').first().locator('.orders-index-tick input').check()
-  const box = page.locator('.walk-pick-where .card-locations-row .card-locations-identity-box').first()
+  const box = page.locator('.orders-cardcol .card-locations-row .card-locations-identity-box').first()
   await expect(box).toBeVisible()
   const full = await box.evaluate((el) => ({ shown: el.getBoundingClientRect().width, needed: el.scrollWidth }))
   expect(full.shown, 'the box name was cut to a sliver').toBeGreaterThanOrEqual(Math.min(full.needed, 60))
@@ -4003,9 +3997,9 @@ test('the selected buyer row draws a spine, not a ring', async ({ page }) => {
   expect(ownStyle).toBe('none')
 })
 
-test('the walk folds every section at once, and Picked carries a count', async ({ page }) => {
-  /* S5 — "N sections" becomes a real collapse-all/expand-all control, and the Hide sold chip
-   *  now carries how many rows it would hide, matching `#/inventory`'s own `departedHere`. */
+test('the walk counts its sections with no fold, and Picked carries a count', async ({ page }) => {
+  /* "N sections" is a plain count: the strip shows the whole order, so no fold control is left. The Hide
+   *  sold chip carries how many rows it would hide, matching `#/inventory`'s own `departedHere`. */
   const wire = await open(page, {
     orders: secondBuyerPayload().payload,
     pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] },
@@ -4015,13 +4009,8 @@ test('the walk folds every section at once, and Picked carries a count', async (
   await page.locator('.orders-index-item', { hasText: 'Nora Second' }).locator('.orders-index-tick input').check()
   await expect(page.locator('.orders-walk-list')).toContainText('Sunrise')
 
-  const foldButton = page.locator('.orders-walk-tools').getByRole('button', { name: /sections$/ })
-  await expect(foldButton).toHaveText('Fold 2 sections')
-  await expect(page.locator('.orders-walk-rows')).toHaveCount(2)
-  await foldButton.click()
-  await expect(page.locator('.orders-walk-rows')).toHaveCount(0)
-  await expect(foldButton).toHaveText('Open 2 sections')
-  await foldButton.click()
+  await expect(page.locator('.orders-walk-tools .orders-walk-count')).toHaveText('2 sections')
+  await expect(page.locator('.orders-walk-tools').getByRole('button', { name: /sections$/ })).toHaveCount(0)
   await expect(page.locator('.orders-walk-rows')).toHaveCount(2)
 
   const hide = page.locator('.orders-walk-tools').getByRole('button', { name: /^Picked/ })
@@ -4959,13 +4948,13 @@ test('at 820 a list that fits shows every row whole', async ({ page }) => {
   expect(fit).toBe(true)
 })
 
-test('the position card stays inside the walk column at 1440 and 820', async ({ page }) => {
+test('the position card stays inside the card pane at 1440 and 820', async ({ page }) => {
   for (const width of [1440, 820]) {
     await setViewport(page, { width, height: 1000 })
     await open(page, { orders: threeBuyerPayload(), walkPlan: walkPlanOf([walkPlanStop({})]) })
-    const where = page.locator('.walk-pick-where').first()
+    const where = page.locator('.orders-cardcol .card-locations').first()
     await expect(where).toBeVisible()
-    const over = await where.evaluate((el) => el.getBoundingClientRect().right - (el.closest('.orders-walk') as HTMLElement).getBoundingClientRect().right)
+    const over = await where.evaluate((el) => el.getBoundingClientRect().right - (el.closest('.orders-cardcol') as HTMLElement).getBoundingClientRect().right)
     expect(over, `overflow at ${width}`).toBeLessThanOrEqual(0.5)
   }
 })
@@ -5144,7 +5133,7 @@ test('paging with the arrows skips a pick the Hide picked fold has taken off the
   await hide.click()
   await hide.click()
   await expect(page.locator('.orders-walk-line')).toHaveCount(2)
-  await page.getByRole('button', { name: /Sunrise/ }).click()
+  await page.locator('.orders-walk-press', { hasText: 'Sunrise' }).click()
   await expect(page.locator('.browse-card .browse-hero-name')).toHaveText('Sunrise')
   /* Volcanion is picked and folded: the panel must not step onto a card the column does not show. */
   await page.keyboard.press('ArrowLeft')
@@ -5246,7 +5235,7 @@ test('the wheel over a copy row scrolls the page, never a list inside it', async
   /* A LIST THAT COULD SCROLL, even while its rows happen to fit: a taller card would trap the wheel in it
      (`overscroll-behavior: contain`) and the page would stop moving. Nothing under the pick may be a scroller. */
   const scrollers = await page.locator(CURRENT_PICK).evaluate((line) =>
-    [line, ...line.querySelectorAll('*')].filter((el) => /auto|scroll/.test(getComputedStyle(el).overflowY)).map((el) => el.className),
+    [line, ...line.querySelectorAll('*')].filter((el) => !el.closest('.orders-strip') && /auto|scroll/.test(getComputedStyle(el).overflowY)).map((el) => el.className),
   )
   expect(scrollers).toEqual([])
 })

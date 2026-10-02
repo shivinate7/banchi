@@ -1176,6 +1176,17 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 /* The card pane's own paging: two arrow buttons around the two key caps. */
 .orders-pick-nav { display: flex; align-items: center; justify-content: center; gap: var(--bn-3); padding: var(--bn-3) 0; }
 .orders-pick-keys { display: inline-flex; gap: var(--bn-1); }
+/* THE PANE'S COPY ROWS DO NOT SCROLL ON THEIR OWN. The list's own scroll serves Inventory's fixed hero band
+   (D118, `CardLocations.css`); here the column is sticky in the page, so the wheel over a row scrolls the page. */
+.orders-cardcol .card-locations-rows {
+  overflow: visible;
+  overscroll-behavior: auto;
+  scroll-snap-type: none;
+  mask-image: none;
+  -webkit-mask-image: none;
+  padding-bottom: 0;
+}
+
 /* The spares fold under the pane's copy rows: a quiet press; opened, they are more rows in the same list. */
 .orders-walk-spares { margin-top: var(--bn-2); }
 .orders-walk-spares > .bn-btn { color: var(--bn-ink-3); }
