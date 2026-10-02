@@ -87,7 +87,7 @@ import {
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
-import { pickFigureOf, RowAction, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
+import { pickFigureOf, RowAction, WalkStrip, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
 import type {
   BoxRecord,
   IngestResult,
@@ -3676,6 +3676,10 @@ function PullStage({
     0,
   )
 
+  /* DESIGN PASS C: the copies the walked orders want that no box holds. */
+  let notInBoxes = 0
+  for (const key of shownKeys) for (const line of answers.get(key)?.lines ?? []) notInBoxes += Math.max(0, line.outstanding)
+
   const walkHead =
     walkedGroups.length > 1 ? (
       <div className="orders-walk-crowd">
@@ -3793,6 +3797,7 @@ function PullStage({
               the press asks the width once, in `openCardSheet`. At 560px of column and up the pane
               is its usual sticky column beside the walk. */}
           <div className="orders-cardcol" aria-busy={walkHeld ? 'true' : undefined} inert={walkHeld}>
+            <WalkStrip walk={walk} notInBoxes={notInBoxes} />
             <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} sections={sections} />
           </div>
         </div>

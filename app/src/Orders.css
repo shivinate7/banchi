@@ -1212,3 +1212,15 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   .orders-walk-rows { gap: var(--bn-0-5); }
   .orders-walk-tools { flex-wrap: wrap; }
 }
+
+/* DESIGN PASS C: the order's strip above the hero. One row; it scrolls sideways, never wraps. */
+.orders-cardcol { flex-direction: column; gap: var(--bn-3); }
+@container orders (min-width: 560px) { .orders-cardcol { display: flex; } }
+.orders-strip { display: flex; align-items: center; gap: var(--bn-3); min-width: 0; padding: var(--bn-3); border-radius: var(--bn-r-lg); background: var(--bn-surface); box-shadow: var(--bn-shadow-1); }
+.orders-strip-row { list-style: none; display: flex; gap: var(--bn-2); overflow-x: auto; min-width: 0; flex: 1 1 auto; padding: var(--bn-0-5); }
+.orders-strip-card { position: relative; display: block; padding: 0; border: 0; border-radius: var(--bn-r); background: none; transition: box-shadow var(--bn-t-fast) var(--bn-ease), opacity var(--bn-t-fast) var(--bn-ease); }
+.orders-strip-card .bn-thumb { display: block; }
+.orders-strip-card.is-current { box-shadow: 0 0 0 2px var(--bn-accent); }
+.orders-strip-card.is-done { opacity: var(--bn-disabled); }
+.orders-strip-count { position: absolute; right: var(--bn-1); bottom: var(--bn-1); display: inline-flex; align-items: center; gap: var(--bn-0-5); padding: 0 var(--bn-1); border-radius: var(--bn-r-xs); background: var(--bn-surface); font-size: var(--bn-fs-xs); font-weight: 700; font-variant-numeric: tabular-nums; }
+.orders-strip-missing { flex: none; }

@@ -19,14 +19,14 @@
  * one press (Mark sold / Undo) `CardLocations`'s own `renderAction` slot calls per copy.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Icon, Loading, Notice, overlayOpen, Pill } from './kit'
+import { Button, CardThumb, Icon, Loading, Notice, overlayOpen, Pill } from './kit'
 import { toast } from './kit/toast'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
 import { isEditableTarget } from './keys'
 import { CardLocations, MarkSoldButton, UndoSaleButton, markFreshSale, clearFreshSale } from './CardLocations'
-import { describeFailure, walkPlan } from './server'
+import { describeFailure, photoUrl, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
   InventoryCard,
@@ -1009,5 +1009,46 @@ export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk
       disabled={walk.busyCopy !== null && !busy}
       onClick={() => walk.undoCopy(copy.key)}
     />
+  )
+}
+
+/* ------------------------------------------------------------- design pass C: the strip */
+
+/** DESIGN PASS C (scratch, not for merge): the open buyer's whole order as one strip of
+ *  photographs above Inventory's hero, in the walk's order. A press shows that card in the hero.
+ *  A picked card is ticked. What no box holds closes the strip as one count. */
+export function WalkStrip({ walk, notInBoxes }: { readonly walk: OrderWalk; readonly notInBoxes: number }) {
+  const lines = allTakeLinesOf(walk.sections)
+  if (lines.length < 2 && notInBoxes === 0) return null
+  return (
+    <div className="orders-strip" aria-label="Every card in this order">
+      <ol className="orders-strip-row">
+        {lines.map((line) => {
+          const first = line.rows[0]
+          const name = line.take.name ?? 'Not identified yet'
+          const done = pickedAllOf(line, walk.soldKeys)
+          const current = line.rows.some((row) => row.rowKey === walk.current)
+          return (
+            <li key={line.takeKey}>
+              <button
+                type="button"
+                className={['orders-strip-card', current ? 'is-current' : '', done ? 'is-done' : ''].filter(Boolean).join(' ')}
+                aria-current={current ? 'true' : undefined}
+                title={name}
+                onClick={() => first !== undefined && walk.select(first.rowKey)}
+              >
+                <CardThumb src={first === undefined ? null : photoUrl(first.copy.place.box, first.copy.place.index, first.copy)} alt={name} size="md" />
+                <span className="orders-strip-count">{done ? <Icon name="check" size={12} /> : null}{line.take.wanted}</span>
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+      {notInBoxes === 0 ? null : (
+        <span className="orders-strip-missing">
+          <Pill tone="warn" icon="box">{notInBoxes} not in boxes</Pill>
+        </span>
+      )}
+    </div>
   )
 }
