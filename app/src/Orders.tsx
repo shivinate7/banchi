@@ -16,6 +16,12 @@ import {
   patchViewQuery,
   Pill,
   Sheet,
+  SettingsCensus,
+  SettingsEditor,
+  SettingsFigures,
+  SettingsGroup,
+  SettingsOp,
+  SettingsTrouble,
   SkeletonText,
   Stat,
   useFacetParams,
@@ -2294,6 +2300,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         onFill={onFill}
         onDeclareKind={onDeclareKind}
         onCloseLine={onCloseLine}
+        onStandDown={onStandDown}
         onFetch={onFetch}
         onReread={() => void reread()}
         /* THE STORE'S OWN CONTROLS (UX-165, UX-193), two small squares on the filter bar's line
@@ -2776,6 +2783,7 @@ function PullStage({
   onFill,
   onDeclareKind,
   onCloseLine,
+  onStandDown,
   onFetch,
   statusControl,
   statusPanel,
@@ -2806,6 +2814,7 @@ function PullStage({
   readonly onFill: FillHandler
   readonly onDeclareKind: KindHandler
   readonly onCloseLine: CloseLineHandler
+  readonly onStandDown: StandDownHandler
   readonly onFetch: () => void
   readonly statusControl: ReactNode
   readonly statusPanel: ReactNode
@@ -3883,27 +3892,23 @@ function PullStage({
         className="orders-manage-sheet"
       >
         {selectedGroup === null ? null : (
-          <div className="orders-manage-orders">
-            <StandDownLegend group={selectedGroup} answers={answers} />
-            {selectedGroup.orders.map((order) => (
-              <OrderDetail
-                key={order.key}
-                order={order}
-                answer={answers.get(order.key) ?? null}
-                lane={lanesByOrder.get(order.number) ?? null}
-                store={store}
-                claims={claims}
-                busy={busy}
-                onPull={onPull}
-                onFill={onFill}
-                onDeclareKind={onDeclareKind}
-                onCloseLine={onCloseLine}
-                onReread={onReread}
-                variant="panel"
-                hidePicks
-              />
-            ))}
-          </div>
+          <ManagePanel
+            key={selectedGroup.key}
+            group={selectedGroup}
+            answers={answers}
+            status={statusByGroup.get(selectedGroup.key) ?? 'done'}
+            lanesByOrder={lanesByOrder}
+            store={store}
+            claims={claims}
+            busy={busy}
+            failure={failure}
+            onPull={onPull}
+            onFill={onFill}
+            onDeclareKind={onDeclareKind}
+            onCloseLine={onCloseLine}
+            onReread={onReread}
+            onStandDown={onStandDown}
+          />
         )}
       </Sheet>
     </div>
@@ -3914,9 +3919,9 @@ function PullStage({
 
 /** WHAT EACH STAND-DOWN PRESS MEANS, SAID ONCE PER SHEET (UX-240). Each stuck line used to carry
  *  its own 80-word paragraph. Only the presses the buyer's lines actually offer are named. */
-function StandDownLegend({ group, answers }: { readonly group: BuyerGroup; readonly answers: ReadonlyMap<string, ResolvedOrder> }) {
+function StandDownLegend({ orders, answers }: { readonly orders: readonly OrderRow[]; readonly answers: ReadonlyMap<string, ResolvedOrder> }) {
   const reasons = new Set<OrderLineReason>()
-  for (const order of group.orders) for (const line of answers.get(order.key)?.lines ?? []) reasons.add(line.reason)
+  for (const order of orders) for (const line of answers.get(order.key)?.lines ?? []) reasons.add(line.reason)
   const gone = reasons.has('no_copies_on_hand')
   const byHand = reasons.has('sku_unseen') || reasons.has('not_a_single')
   if (!gone && !byHand) return null
@@ -3939,6 +3944,139 @@ function StandDownLegend({ group, answers }: { readonly group: BuyerGroup; reado
         </>
       ) : null}
     </dl>
+  )
+}
+
+/* ====================================================================== the Manage panel */
+
+/** THE BUYER'S MANAGE PANEL, at the bar of Inventory's Manage box: an Overview, one row per order,
+ *  and an editor behind each row. The editor holds that order's lines and its stand-down. A
+ *  stand-down acts where it is pressed and its receipt carries Undo, so its rows say what they do
+ *  and draw no chevron. It opens on the Overview and moves only when a row is pressed (D313). */
+function ManagePanel({
+  group,
+  answers,
+  status,
+  lanesByOrder,
+  store,
+  claims,
+  busy,
+  failure,
+  onPull,
+  onFill,
+  onDeclareKind,
+  onCloseLine,
+  onReread,
+  onStandDown,
+}: {
+  readonly group: BuyerGroup
+  readonly answers: ReadonlyMap<string, ResolvedOrder>
+  readonly status: Status
+  readonly lanesByOrder: ReadonlyMap<string, ShippingLane>
+  readonly store: StoreCopies | null
+  readonly claims: Claims
+  readonly busy: string | null
+  readonly failure: Failure | null
+  readonly onPull: PullHandler
+  readonly onFill: FillHandler
+  readonly onDeclareKind: KindHandler
+  readonly onCloseLine: CloseLineHandler
+  readonly onReread: () => void
+  readonly onStandDown: StandDownHandler
+}) {
+  const [editing, setEditing] = useState<string | null>(null)
+  const [pressed, setPressed] = useState<OrderCloseReason | null>(null)
+  const order = editing === null ? undefined : group.orders.find((one) => one.key === editing)
+
+  if (order !== undefined) {
+    const stand = (reason: OrderCloseReason) => {
+      setPressed(reason)
+      onStandDown([order], reason)
+    }
+    return (
+      <div className="orders-manage-orders">
+        <SettingsEditor title="This order" onBack={() => setEditing(null)}>
+          <StandDownLegend orders={[order]} answers={answers} />
+          <OrderDetail
+            order={order}
+            answer={answers.get(order.key) ?? null}
+            lane={lanesByOrder.get(order.number) ?? null}
+            store={store}
+            claims={claims}
+            busy={busy}
+            onPull={onPull}
+            onFill={onFill}
+            onDeclareKind={onDeclareKind}
+            onCloseLine={onCloseLine}
+            onReread={onReread}
+            variant="panel"
+            hidePicks
+          />
+          <SettingsTrouble failure={failure} />
+          {order.open ? (
+            <SettingsGroup title="Stand down this order" note="Marks nothing sold" danger>
+              {(
+                [
+                  ['not_shipping', 'Cancelled or refunded', 'x'],
+                  ['shipped_elsewhere', 'Already shipped', 'truck'],
+                ] as const
+              ).map(([reason, label, icon]) => (
+                <SettingsOp
+                  key={reason}
+                  icon={icon}
+                  label={label}
+                  said={`Stand down this order: ${label.toLowerCase()}`}
+                  detail="Can be undone"
+                  danger
+                  chevron={false}
+                  busy={busy !== null}
+                  running={busy === 'close' && pressed === reason}
+                  runningLabel="standing down…"
+                  onClick={() => stand(reason)}
+                />
+              ))}
+            </SettingsGroup>
+          ) : null}
+        </SettingsEditor>
+      </div>
+    )
+  }
+
+  const figures = figuresOf(group, answers)
+  const pill = statusPill(status, group, answers)
+  return (
+    <div className="orders-manage-orders">
+      <SettingsFigures title="Overview">
+        <SettingsCensus label="Orders" value={group.orders.length} note={`${group.open.length} open`} />
+        <SettingsCensus
+          label="Cards owed"
+          value={figures.owed}
+          note={figures.short === 0 ? undefined : `${figures.short} not in boxes`}
+        />
+        <SettingsCensus label="Picked" value={figures.sold} help="Copies already marked sold across this buyer's orders." />
+      </SettingsFigures>
+      <div className="orders-manage-status">
+        <Pill tone={pill.tone} icon={pill.icon}>
+          {pill.label}
+        </Pill>
+      </div>
+      <SettingsGroup title="Orders" note="Open one to see its lines">
+        {group.orders.map((one) => {
+          const word = STATUS_PILL[statusOf(one, answers.get(one.key) ?? null)].label
+          const owes = Math.max(0, one.wanted - one.recorded)
+          return (
+            <SettingsOp
+              key={one.key}
+              icon="package"
+              label={one.number}
+              detail={one.open ? `${word}, ${owes} ${plural(owes, 'card', 'cards')} owed` : word}
+              busy={false}
+              onClick={() => setEditing(one.key)}
+            />
+          )
+        })}
+      </SettingsGroup>
+    </div>
   )
 }
 
