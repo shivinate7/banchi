@@ -4,7 +4,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test'
 import type { GameRegistry, ResolvedOrder } from '../src/types'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
-import { settled, whatMoved } from './motionSettled'
+import { afterPaint, settleMotion, settled, whatMoved } from './motionSettled'
 import { iconTip } from './iconTooltip'
 import { phoneOff, setViewport } from './phoneSwitch'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
@@ -1512,15 +1512,13 @@ test('a search that never returns this card gives a sentence, not an endless loa
   const panel = page.locator('.inventory-copies')
   await expect(panel).toBeVisible()
 
-  // Long enough for the debounce (200ms) plus the stubbed fetch to land several times over.
-  await page.waitForTimeout(1500)
-
+  // The answer lands (the warning), then the busy marks must be gone.
+  await expect(panel.locator('.bn-notice-warn')).toContainText("did not return this card's own row")
   await expect(
     panel.locator('[aria-busy="true"]'),
     'the panel is still marked busy once the search has answered',
   ).toHaveCount(0)
   await expect(panel.locator('.inventory-looking')).toHaveCount(0)
-  await expect(panel.locator('.bn-notice-warn')).toContainText("did not return this card's own row")
 })
 
 test('B2 — a sold card reached by a deep link stays drawn for the rest of this box load', async ({
@@ -2011,12 +2009,13 @@ test('the press that sells a copy causes no layout shift in the half second afte
   await expect(row).toBeVisible()
   const press = row.getByRole('button', { name: 'Mark sold' })
   await press.scrollIntoViewIfNeeded()
-  await page.waitForTimeout(1000)
+  await settleMotion(page)
+  await afterPaint(page)
 
   const from = await markNow(page)
   await press.click()
   await expect(row.locator('.position-bar')).toHaveAttribute('data-gone', 'true')
-  await page.waitForTimeout(600)
+  await page.waitForTimeout(600) // keep: the shifts are read over the 500ms window after the press
 
   const inWindow = (await readShifts(page)).shifts.filter((s) => s.at >= from && s.at < from + 500)
   expect(sumOf(inWindow), `the press moved ${describeShifts(inWindow)}`).toBeLessThan(0.0005)
@@ -4852,7 +4851,7 @@ test('UX-244 — a stale section on Move re-opens the pick with one plain senten
    * an effect reverts it, so this waits out a full render pass first. */
   await dialog.locator('.bn-section-pick-item').click()
   await expect(move).toBeEnabled()
-  await page.waitForTimeout(300)
+  await afterPaint(page) // a full render pass, so an effect that reverts it has run
   await expect(move).toBeEnabled()
   await expect(dialog.locator('.bn-section-pick-item[aria-checked="true"]')).toHaveCount(1)
 })
@@ -5554,7 +5553,7 @@ for (const [cutoff, plays, why] of [
       await expect(() => expect(page.evaluate(GLINTS)).resolves.toBeGreaterThan(0)).toPass({ timeout: 2000 })
       await expect(() => expect(page.evaluate(GLINTS)).resolves.toBe(0)).toPass({ timeout: 3000 })
     } else {
-      await page.waitForTimeout(400)
+      await page.waitForTimeout(400) // keep: asserts no glint plays over 400ms
       expect(await page.evaluate(GLINTS)).toBe(0)
     }
   })
@@ -5567,7 +5566,7 @@ test('a card with no market reading never glints, whatever the cutoff', async ({
   await expandAll(page)
   await page.locator('.browse-row', { hasText: 'Eiscue' }).first().click()
   await expect(page.locator('.card-locations-row.is-current .nb')).toHaveAttribute('aria-label', /Galio/)
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(400) // keep: asserts no glint plays over 400ms
   expect(await page.evaluate(GLINTS)).toBe(0)
 })
 
@@ -5576,7 +5575,7 @@ test('the glint reads the readings table and never the run snapshot', async ({ p
   await gated('0.01', {})(page)
   await expect(page.locator('.card-locations-row.is-current .nb-here svg')).toBeVisible()
   await page.locator('.browse-row').nth(1).click()
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(400) // keep: asserts no glint plays over 400ms
   expect(await page.evaluate(GLINTS)).toBe(0)
 })
 
@@ -6281,7 +6280,7 @@ test('a narrow copies column shortens the bar, never the position label', async 
      departed copy still carries no bar, and this case measures a row that has one. */
   const row = page.locator('.card-locations-row').filter({ has: page.locator('.position-bar') }).first()
   await expect(row).toBeVisible()
-  await page.waitForTimeout(150)
+  await settleMotion(page)
 
   const geom = await row.evaluate((el) => {
     const bar = el.querySelector('.position-bar') as HTMLElement
@@ -6401,7 +6400,7 @@ test('every copy row draws the same bar height, located or not', async ({ page }
   await expect(page.locator('.card-locations-owner .position-bar').first()).toBeVisible()
   /* The bar's own transitions are 320ms and one of them is on `width`; measuring inside them
      reads a bar mid-ease. */
-  await page.waitForTimeout(400)
+  await settleMotion(page)
 
   const hs = await page
     .locator('.card-locations-owner .position-bar')
@@ -8808,7 +8807,7 @@ test('the control that re-ranks appearing moves no copy row', async ({ page }) =
      agrees after 300ms is the settled one. */
   let before = await listTop()
   for (let i = 0; i < 20; i++) {
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(300) // keep: the poll interval of a settle loop, it compares two reads apart in time
     const again = await listTop()
     if (again === before) break
     before = again
@@ -8937,7 +8936,7 @@ async function rowFrames(page: Page, go: () => Promise<void>, ms: number): Promi
     const rows = [...document.querySelectorAll('.card-locations-row')]
     return rows.length > 0 && rows.every((row) => row.getAnimations().length === 0 && row.closest('.inventory-held') === null)
   })
-  await page.waitForTimeout(ms)
+  await page.waitForTimeout(ms) // keep: the observation window is the measurement
   return await page.evaluate(() => (window as unknown as { __rowFrames: RowFrame[] }).__rowFrames)
 }
 
