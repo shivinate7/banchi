@@ -100,6 +100,7 @@ import {
   countFacets,
   filterRows,
   matchQuery,
+  didYouMean,
   openSheet,
   useFacetParams,
   useSortParam,
@@ -1367,6 +1368,8 @@ export function Pricing() {
     ]
   }, [rows])
   const [facetPicks, setFacetPicks] = useFacetParams(facetShape)
+  /** Near name for a search that found nothing: the kit's one browser copy over the list's names (D271). */
+  const nearName = useMemo(() => (query.trim() === '' ? null : didYouMean(query, new Set(rows.map((row) => row.name)))), [rows, query])
   const keepRow = useCallback(
     (row: MergedSku) =>
       (!filterHeld || isWithheld(answerFor(row))) &&
@@ -2797,7 +2800,7 @@ export function Pricing() {
             />
           )}
           {filtering && drawn.length === 0 ? (
-            <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." />
+            <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." didYouMean={{ name: nearName, onPick: setQuery }} />
           ) : null}
           <div className="pricing-list" data-copies={source.copies ? 'some' : 'none'}>
             <div className="pricing-caption" aria-hidden="true">

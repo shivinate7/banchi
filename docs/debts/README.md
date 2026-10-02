@@ -55,7 +55,6 @@ DEBT40 a divider save can move a divider past departed records
 DEBT41 Pricing never offers "Make this the rule"
 DEBT43 the merge-speed guard counts SQLite ticks only, and a pure-Python loop is invisible to it
 DEBT44 pokemontcg.io is deprecated (ends 2027-03-01), and `pipeline/stockimages.py` does not call it today
-DEBT46 a search with a typo finds nothing, and no near match is offered
 DEBT48 code-side mechanization left open
 DEBT50 git and gh CLI traps hit from this checkout
 DEBT58 the Lane H palette record is on a branch, not in main
