@@ -5905,6 +5905,11 @@ COMPONENTS = [
                                        "per-worktree elsewhere. Its plugin list carries "
                                        "checkoutIdentity.ts's `/__checkout` answer",
                                "governed_by": ["D13", "D43", "D261"]},
+            "playwright.unit.config.ts": {"does": "the unit tier: the same runner as "
+                                                  "playwright.config.ts with no browser, no dev "
+                                                  "server and no globalSetup, over "
+                                                  "`tests/unit/*.unit.ts`. `make unit`",
+                                          "governed_by": ["D18"]},
             "playwright.config.ts": {"does": "how `make design-check` runs the spec, including the "
                                              "Vite it starts for itself. reuseExistingServer stays "
                                              "ON, and `globalSetup` (checkoutIdentity.ts) refuses "
@@ -6301,6 +6306,11 @@ COMPONENTS = [
             # D16 governs a UI file here for one reason worth keeping: App.tsx drives its nav
             # and its render off a single ROUTES table rather than a table plus a switch, and
             # cites D16 for why two lists of the same strings are the drift to avoid.
+            "src/tabTitle.ts": {"does": "the tab title function, one fixed string per screen: "
+                                        "its own module so a unit test imports it without the "
+                                        "shell's CSS and React. App.tsx stamps it on "
+                                        "`document.title`",
+                                "governed_by": ["D5", "D275"]},
             "src/App.tsx": {"does": "THE BANCHI SHELL, and the ROUTES table it is all driven "
                                     "off. The hash routes are the owner's, plus one the "
                                     "Fulfiller's: `#/` is Home, which took the root hash in the "
@@ -9213,6 +9223,12 @@ COMPONENTS = [
                 "does": "the gross arithmetic `Revenue.tsx` draws, moved out unchanged so a test "
                         "can call it: `salesOf` turns orders into sales, `sum` adds their gross.",
                 "governed_by": ["D214", "D225", "D298"],
+            },
+            "tests/unit/tab-title.unit.ts": {
+                "does": "the tab title function over every ROUTES entry, read through "
+                        "`scripts/kit-adoption.mjs --routes`: the unit tier's pilot, no browser. "
+                        "Run by `make unit`, in `make check`'s product shard.",
+                "governed_by": ["D5", "D275"],
             },
             "tests/match.spec.ts": {
                 "does": "`kit/match.cases.json`'s case table, run data-driven, one Playwright test "

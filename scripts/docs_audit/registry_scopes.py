@@ -714,6 +714,10 @@ SUITE_LOCK_SCRIPT = ROOT / "scripts" / "suite-lock.py"
 #: rather than on a command name, having named a stale one for a day and been corrected.
 _FLEET_RUNNER_RE = re.compile(r"\bplaywright\s+test\b")
 
+#: The unit tier runs the same runner with NO browser and NO dev server (`app/playwright.unit.config.ts`),
+#: a two-second single process that starves nothing, so a script naming that config is not a fleet.
+_UNIT_CONFIG = "playwright.unit.config"
+
 #: The runners this row reads besides the Makefile and app/package.json. A fleet does not have to
 #: arrive as an npm script: `scripts/screenshot.sh` is a shell script that shells out to a node
 #: script that drives Playwright, and either could grow `playwright test` without touching a
@@ -764,7 +768,8 @@ def check_suite_lock(report: Report) -> None:
             "app/package.json", "could not be read, so no fleet can be identified.\n%s" % exc)])
         return
 
-    fleets = sorted(name for name, body in scripts.items() if _FLEET_RUNNER_RE.search(body))
+    fleets = sorted(name for name, body in scripts.items()
+                    if _FLEET_RUNNER_RE.search(body) and _UNIT_CONFIG not in body)
     if not fleets:
         report.add("suite lock", MECHANICAL, [Finding(
             "app/package.json", (

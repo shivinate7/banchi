@@ -7,6 +7,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { routesFromNav } from './routes'
 import { settleFonts } from './fontsReady'
+import { tabTitle } from '../src/tabTitle'
 import { sealEveryTest } from './shell'
 import { phoneOff, setViewport } from './phoneSwitch'
 
@@ -29,16 +30,11 @@ import { phoneOff, setViewport } from './phoneSwitch'
  *            (`header={false}`, the Fulfiller's screen) is exempt: there is no header to
  *            leave a gap after.
  *   scroll   nothing scrolls sideways
- *   title    `document.title` is one FIXED title, "番地 " and the screen name in lowercase
- *            ("番地 pricing", "番地 home"). No alternation, no "— Banchi". The owner's ruling,
- *            2026-09-23. READ OVER TIME AND UNDER BOTH MOTION SETTINGS, never once: with normal
- *            motion the shell used to alternate the title on a timer, and with reduced motion it
- *            showed a second, joined form, so a single read under `reducedMotion: 'reduce'`
- *            never saw the alternation at all. On a fake clock (`page.clock`), the title is read
- *            every TITLE_STEP ms for TITLE_WINDOW ms, well past App.tsx's TITLE_DWELL
- *            (6000 + 4000), once per motion setting. Every read must be the one fixed title. The
- *            window is this file's own number, never read from App.tsx: a test that reads the
- *            value it checks passes when that value is wrong (brand.spec.ts says the same).
+ *   title    ONE browser case, not per route: the shell's timer stamps `document.title` with the
+ *            fixed title, read every TITLE_STEP ms over TITLE_WINDOW ms on a fake clock, under both
+ *            motion settings. WHICH string each route gets is `tests/unit/tab-title.unit.ts`, over
+ *            every `ROUTES` entry. The window is this file's own number, never read from App.tsx:
+ *            a test that reads the value it checks passes when that value is wrong.
  *   palette  the palette ("Go to", D276) lists the route in its Screens group
  *   keys     the keyboard sheet, every screen shown, has an entry that names the route
  *
@@ -50,7 +46,7 @@ import { phoneOff, setViewport } from './phoneSwitch'
  * EXCEPTIONS ARE THE SAME SHRINKING OFFENDER LIST THE STATIC CHECK READS:
  * `scripts/kit-adoption-allow.json`'s `runtime` block, route path -> assertion -> lane. A
  * failure it does not list is red. An entry whose assertion now passes at every width is red
- * too (stale), so the list only shrinks. `palette`, `keys` and `title` are the shell lane's to
+ * too (stale), so the list only shrinks. `palette` and `keys` are the shell lane's to
  * build, and their entries name lane `shell`: the list shrinks when the shell lands. Nothing
  * here is skipped.
  *
@@ -83,7 +79,7 @@ type Allow = Record<string, Record<string, string>>
 const ALLOW: Allow =
   (JSON.parse(readFileSync(resolve(ROOT, 'scripts/kit-adoption-allow.json'), 'utf8')) as { runtime?: Allow }).runtime ?? {}
 
-const PER_ROUTE = ['page', 'h1', 'width', 'top', 'headGap', 'scroll', 'title'] as const
+const PER_ROUTE = ['page', 'h1', 'width', 'top', 'headGap', 'scroll'] as const
 const SHELL_WIDE = ['palette', 'keys'] as const
 const ASSERTIONS: readonly string[] = [...PER_ROUTE, ...SHELL_WIDE]
 
@@ -95,9 +91,9 @@ const WIDTHS: readonly (readonly [number, number])[] = [
 ]
 
 const titleOf = (route: RouteRow): string => route.title ?? route.label
-/** The owner's ruling, 2026-09-23: one fixed tab title, "番地 " and the screen name in lowercase.
- *  Home's reads "番地 home" (the orchestrator's call, 2026-09-23). */
-const tabTitleOf = (route: RouteRow): string => `番地 ${titleOf(route).toLowerCase()}`
+/** The tab title's FUNCTION, over every route, is `tests/unit/tab-title.unit.ts`. Here the browser
+ *  proves only that the shell's timer stamps `document.title` with it. */
+const tabTitleOf = (route: RouteRow): string => tabTitle({ ...route, persona: route.persona ?? undefined })
 
 /** How often, and for how long, the tab title is read on the fake clock. 30s covers the old
  *  6s + 4s alternation three times over. */
@@ -154,16 +150,15 @@ const EXEMPT: Readonly<Record<string, Readonly<Record<string, string>>>> = {
     width: 'D5 (two personas) and docs/DESIGN.md\'s Fulfillment floors: the Fulfiller\'s screen has no shell and sizes its own column.',
     top: 'D5 and docs/DESIGN.md\'s Fulfillment floors: no shell, so no shared top gap to sit under.',
     headGap: 'D5: `header={false}` (no shell) means there is no `.bn-page-head` to leave a gap after.',
-    title: 'D5: the Fulfiller\'s tab names the task and carries no brand.',
   },
 }
 
 /* A REDIRECT ROUTE (D291's `#/runs`) renders nothing of its own — it sends
- * the browser straight to another route's screen. `h1` and `title` name what THAT screen drew,
+ * the browser straight to another route's screen. `h1` names what THAT screen drew,
  * not this row's `label`, so holding a redirect to its own label is asking it to fail forever on
  * a fact it was never going to make true. `page`/`width`/`top`/`scroll` still apply: they are
  * measuring the screen the browser actually lands on. */
-const REDIRECT_EXEMPT = new Set(['h1', 'title'])
+const REDIRECT_EXEMPT = new Set(['h1'])
 
 /** Is this route held to this assertion at all? `false` for a named exemption or a redirect. */
 const applies = (route: RouteRow, assertion: string): boolean =>
@@ -239,7 +234,7 @@ test('the runtime allow list names only real routes, real assertions and a lane'
 for (const route of ROUTE_TABLE) {
   /* `#/gallery`'S PAGE, H1, WIDTH, TOP GAP AND SIDEWAYS SCROLL ARE NOT READ HERE: `gallery.spec.ts`'s
      "the kit is a Page: one h1, one width, one top gap, no sideways scroll, at every width" holds
-     those, in one load. Its head gap and tab title are NOT held there, so they still run. */
+     those, in one load. Its head gap is NOT held there, so it still runs. */
   const heldByGallery = route.path === '/gallery' ? new Set(['page', 'h1', 'width', 'top', 'scroll']) : new Set<string>()
   test(`${route.path} inherits the page scaffold at every width`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -305,27 +300,29 @@ for (const route of ROUTE_TABLE) {
       }
       if (m.sideways > 0) fail('scroll', `${at}: scrolls sideways by ${m.sideways}px`)
     }
-    const measured = PER_ROUTE.filter((a) => a !== 'title' && !heldByGallery.has(a) && applies(route, a))
+    const measured = PER_ROUTE.filter((a) => !heldByGallery.has(a) && applies(route, a))
     expect(reconcile(route, failures, measured)).toEqual([])
   })
-
-  /* THE TAB TITLE, over time, under both motion settings. Its own test because it runs on a fake
-     clock, and the geometry above must not: a faked requestAnimationFrame would stall `settle`. */
-  if (applies(route, 'title')) {
-    test(`${route.path} holds one fixed tab title, with and without reduced motion`, async ({ page }) => {
-      await page.clock.install()
-      const failures = new Map<string, string[]>()
-      for (const reducedMotion of ['no-preference', 'reduce'] as const) {
-        await page.emulateMedia({ reducedMotion })
-        await page.goto(`/#${route.path}`)
-        await expect(page.locator('main').first(), 'the route drew no <main>').toBeVisible()
-        const wrong = titleFailure(await readTitles(page), tabTitleOf(route))
-        if (wrong !== null) failures.set('title', [...(failures.get('title') ?? []), `reduced motion ${reducedMotion}: ${wrong}`])
-      }
-      expect(reconcile(route, failures, ['title'])).toEqual([])
-    })
-  }
 }
+
+/* THE SHELL'S TIMER STAMPS THE TAB TITLE, over time, under both motion settings: the one browser
+   case for it. Which string each route gets is `tests/unit/tab-title.unit.ts`. One route is enough
+   because the stamp is one effect in `App.tsx`, the same for every screen. On a fake clock, so its
+   own test: a faked requestAnimationFrame would stall the geometry's `settle`. */
+test('the shell holds one fixed tab title, with and without reduced motion', async ({ page }) => {
+  await page.clock.install()
+  const route = ROUTE_TABLE.find((r) => r.path === '/pricing')
+  if (route === undefined) throw new Error('/pricing is not in ROUTES: pick another route for the title case')
+  const failures: string[] = []
+  for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+    await page.emulateMedia({ reducedMotion })
+    await page.goto(`/#${route.path}`)
+    await expect(page.locator('main').first(), 'the route drew no <main>').toBeVisible()
+    const wrong = titleFailure(await readTitles(page), tabTitleOf(route))
+    if (wrong !== null) failures.push(`reduced motion ${reducedMotion}: ${wrong}`)
+  }
+  expect(failures).toEqual([])
+})
 
 /* THE TWO ASSERTIONS THAT ONCE PASSED ON NOTHING, proved to fail on their defect.
    F1 of the review: `max-width: none` read as NaN, and a NaN comparison passed. `#/gallery` holds
