@@ -10,7 +10,7 @@ before they can mark it sold. Nothing is lost or written wrong. The cost is one 
 one form factor.
 
 **Stopgap:** none drawn. The two 390px cases in `app/tests/orders.spec.ts` press `1` with the
-sheet open, so the sale itself stays covered.
+sheet open, but both are skipped while `PHONE_SPECS_ON` is false (DEBT77, phone specs off). The sale from the phone sheet is covered only when `PHONE_SPECS_ON` is true. It is uncovered today.
 
 **Cause, unfixed:** the owner does not use the phone view for walks now, so the sheet was left
 as the pane. A fix would give the sheet its own Mark sold on the current pick's copies.

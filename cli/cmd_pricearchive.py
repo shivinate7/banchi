@@ -67,7 +67,7 @@ proven is not the problem.
 when, and (with `--sku`) one SKU's own buckets across every range it has been read in.
 
 DELIBERATELY OUT OF SCOPE, BY THE OWNER'S WORD: any timer, cron or launch agent that fires
-this on its own. `sweep` is a press a person runs. A schedule reverses D278's own statement
+this on its own. `sweep` is a press a person runs. A schedule reverses D224's own statement
 that this reader cannot fire by itself, and that reversal needs its own argument, which
 nobody has made yet.
 """
