@@ -2148,11 +2148,97 @@ def check_layout_batch(checks: Checks) -> None:
         )
 
 
+def check_move_receipt_lines(checks: Checks) -> None:
+    """DEBT38: a section move's receipt says what the move owes (5.4).
+
+    `receipt.owed` names how many moved cards open orders want. `receipt.next_capture` names
+    the section the next capture joins, when the moved section was its box's last. Each is
+    absent (None, empty) at zero. Both routes carry them: single move and Confirm batch.
+    """
+    from store import orders as order_store
+
+    checks.note("")
+    checks.note("BOX MAP — the receipt's owed and next-capture lines (DEBT38)")
+
+    def owe(sku: str, quantity: int, status: str = "Pending") -> None:
+        with Store().write() as snapshot:
+            snapshot.ledger.ingest([order_store.OrderRecord(
+                source="TCGplayer", number=f"O-{sku}", status=status,
+                placed_at="2026-08-28T10:00:00+00:00",
+                lines=[order_store.OrderLine(sku=sku, quantity=quantity)],
+            )])
+
+    def sku_cards(box: int, indices: List[int], sku: str) -> None:
+        with Store().write() as snapshot:
+            for index in indices:
+                snapshot.inventory.cards[master.position_key(box, index)].sku = sku
+
+    with isolated_home():
+        _shelf()
+        # Origins' Uncommons are cards 4-7. Three carry SKU 111, and an order owes two.
+        sku_cards(1, [4, 5, 6], "111")
+        owe("111", 2)
+        body = _drag_sections(1, {"first": 2, "last": 2, "to_box": 2})
+        checks.equal(
+            body["receipt"]["owed"],
+            "2 of these cards are owed to open orders. The orders stay as they are.",
+            "OWED: three copies moved, two owed, so the receipt says two",
+        )
+        checks.equal(body["receipt"]["next_capture"], [], "a middle section moved: no next-capture line")
+
+    with isolated_home():
+        _shelf()
+        sku_cards(1, [4], "111")
+        owe("111", 1, status="Canceled")
+        body = _drag_sections(1, {"first": 2, "last": 2, "to_box": 2})
+        checks.equal(body["receipt"]["owed"], None, "OWED ABSENT: a canceled order is not open, so no line")
+
+    with isolated_home():
+        _shelf()
+        sku_cards(1, [8], "111")
+        owe("111", 3)
+        body = _drag_sections(1, {"first": 3, "last": 3, "to_box": 2})
+        checks.equal(
+            body["receipt"]["owed"],
+            "1 of these cards is owed to an open order. The orders stay as they are.",
+            "OWED: one copy moved, said in the singular",
+        )
+        checks.equal(
+            body["receipt"]["next_capture"],
+            ["The next card you capture in Origins joins Uncommons, Section 2. "
+             "Press S first to start a new section."],
+            "NEXT CAPTURE: Rares was Origins' last section, so the next capture joins Uncommons",
+        )
+
+    with isolated_home():
+        _shelf()
+        sku_cards(1, [1], "222")
+        owe("222", 1)
+        body = capture_server.do_move_sections_batch({
+            "digests": _digests([1, 2]),
+            "moves": [
+                {"box": 1, "first": 3, "last": 3, "to_box": 2},
+                {"box": 1, "first": 1, "last": 1, "to_box": 2},
+            ],
+        })
+        checks.equal(
+            body["receipt"]["owed"],
+            "1 of these cards is owed to an open order. The orders stay as they are.",
+            "BATCH OWED: the Confirm route carries the line too",
+        )
+        checks.equal(
+            body["receipt"]["next_capture"],
+            ["The next card you capture in Origins joins Uncommons, Section 1. "
+             "Press S first to start a new section."],
+            "BATCH NEXT CAPTURE: read off the box as the draft left it",
+        )
+
+
 CHECKS = (
     check_box_map_safety, check_section_moves, check_order_key_migration,
     check_per_card_order, check_card_moves, check_delete_after_placement,
     check_undo_keeps_paid_answers, check_front_of_box, check_card_move_refusals,
     check_divider_editor_keys, check_delete_keeps_dividers, check_merge_speed,
     check_r5_links_and_empty_sections, check_divider_anchor, check_capture_into_section,
-    check_layout_batch,
+    check_layout_batch, check_move_receipt_lines,
 )

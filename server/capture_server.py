@@ -5750,6 +5750,53 @@ def _cross(
     return block, pairs
 
 
+def _owed_line(snapshot, moved: Dict[str, str]) -> Optional[str]:
+    """How many of the moved cards open orders want, as one sentence, or None for none (DEBT38).
+
+    `moved` is `{cid: sku}` of the cards that moved. `walkplan.demand` is the one reading of
+    what open orders still owe per SKU, and a copy is fungible (D212), so the count is, per
+    SKU, the lesser of the copies moved and the copies owed. An open order is one the Orders
+    screen draws as open: owing copies and not in a terminal status."""
+    ledger = snapshot.ledger
+    keys = [r.key for r in ledger.unfulfilled() if not order_store.is_terminal_status(r.status)]
+    wanted = {w.sku: w.wanted for w in walkplan.demand(ledger, keys)}
+    held: Dict[str, int] = {}
+    for sku in moved.values():
+        held[sku] = held.get(sku, 0) + 1
+    owed = sum(min(n, wanted.get(sku, 0)) for sku, n in held.items())
+    if not owed:
+        return None
+    return (
+        f"{owed} of these cards {'is' if owed == 1 else 'are'} owed to "
+        f"{'an open order' if owed == 1 else 'open orders'}. The orders stay as they are."
+    )
+
+
+def _moved_skus(inventory: master.Inventory, box: int, slots: Sequence[int]) -> Dict[str, str]:
+    """`{cid: sku}` for each on-hand card in `slots` that carries a SKU."""
+    out: Dict[str, str] = {}
+    for at in slots:
+        card = inventory.cards.get(master.position_key(box, at))
+        if card is not None and card.sku:
+            out[card.cid] = str(card.sku)
+    return out
+
+
+def _next_capture_line(inventory: master.Inventory, box: int) -> Optional[str]:
+    """Which section the next capture into `box` joins, as one sentence (DEBT38). A capture
+    goes to the box's last section (5.4), so this is said after the box lost its last one."""
+    sections = inventory.layout_of(box)
+    if not sections:
+        return None
+    ordinal = len(sections)
+    name = inventory.section_names_for(box).get(ordinal)
+    label = f"{name}, Section {ordinal}" if name else f"Section {ordinal}"
+    return (
+        f"The next card you capture in {inventory.box_title(box)} joins {label}. "
+        f"Press S first to start a new section."
+    )
+
+
 def _record_move(
     inventory: master.Inventory,
     *,
@@ -5884,6 +5931,8 @@ def _move_sections_core(
     }
 
     names = [sections[j - 1]["name"] for j in chosen]
+    moved_skus = _moved_skus(inventory, box, on_hand)
+    was_last = last == len(sections)
     if same:
         items = []
         for j, name in zip(chosen, names):
@@ -5920,9 +5969,14 @@ def _move_sections_core(
     receipt = _section_move_receipt(
         src_names, src_title, dst_title, chosen, landmarks, target, dst_empty, renumbered
     )
+    receipt["owed"] = _owed_line(snapshot, moved_skus)
+    receipt["next_capture"] = (
+        [line] if was_last and (line := _next_capture_line(inventory, box)) else []
+    )
     return {
         "box": box, "to_box": to_box, "created": created, "moved": landmarks[2],
         "landed": landed, "undo": undo, "receipt": receipt,
+        "moved_skus": moved_skus, "last_box": box if was_last else None,
     }
 
 
@@ -6016,6 +6070,8 @@ def do_move_sections_batch(payload: dict) -> dict:
         created_boxes: List[int] = []
         receipt_steps: List[str] = []
         renumbered_all: List[str] = []
+        moved_all: Dict[str, str] = {}
+        last_boxes: List[int] = []
         moved_total = 0
         for move in moves:
             if not isinstance(move, dict):
@@ -6045,6 +6101,9 @@ def do_move_sections_batch(payload: dict) -> dict:
             receipt_steps.extend(step["receipt"]["steps"])
             renumbered_all.extend(step["receipt"]["renumbered"])
             moved_total += step["moved"]
+            moved_all.update(step["moved_skus"])
+            if step["last_box"] is not None and step["last_box"] not in last_boxes:
+                last_boxes.append(step["last_box"])
 
         move_id = uuid.uuid4().hex[:12]
         after = {str(n): _box_digest(inventory, n) for n in touched if inventory.box(n) is not None}
@@ -6061,7 +6120,13 @@ def do_move_sections_batch(payload: dict) -> dict:
             "move": move_id, "box": None, "to_box": None,
             "created": created_boxes[0] if len(created_boxes) == 1 else (created_boxes or None),
             "moved": moved_total, "landed": [], "boxes": rows,
-            "receipt": {"heading": heading, "steps": receipt_steps, "renumbered": renumbered_all},
+            "receipt": {
+                "heading": heading, "steps": receipt_steps, "renumbered": renumbered_all,
+                "owed": _owed_line(snapshot, moved_all),
+                "next_capture": [
+                    line for n in last_boxes if (line := _next_capture_line(inventory, n))
+                ],
+            },
         }
 
 
@@ -6190,16 +6255,21 @@ def _move_range_core(
         "dst": None if same else _box_state(inventory, to_box),
         "pairs": [],
     }
+    moved_skus = _moved_skus(inventory, box, indices)
     if same:
         items = [("card", at) for at in indices]
     else:
         block, undo["pairs"] = _cross(snapshot, inventory, box, indices, to_box)
         items = [("card", at) for at in block]
     inventory.place(to_box, items, gap)
-    receipt = {"heading": heading, "steps": steps, "renumbered": []}
+    receipt = {
+        "heading": heading, "steps": steps, "renumbered": [],
+        "owed": _owed_line(snapshot, moved_skus), "next_capture": [],
+    }
     return {
         "box": box, "to_box": to_box, "created": None, "moved": count,
         "landed": [], "undo": undo, "receipt": receipt,
+        "moved_skus": moved_skus, "last_box": None,
     }
 
 
