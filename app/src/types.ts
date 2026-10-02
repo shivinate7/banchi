@@ -1818,6 +1818,10 @@ export type SectionMoveResult = {
     heading: string
     steps: string[]
     renumbered: string[]
+    /** How many moved cards open orders are owed, as a sentence, or null for none. */
+    owed: string | null
+    /** Which section the next capture joins, for each box whose last section moved. */
+    next_capture: string[]
   }
   boxes: BoxRecord[]
 }
@@ -1836,6 +1840,10 @@ export type SectionMoveBatchResult = {
     heading: string
     steps: string[]
     renumbered: string[]
+    /** How many moved cards open orders are owed, as a sentence, or null for none. */
+    owed: string | null
+    /** Which section the next capture joins, for each box whose last section moved. */
+    next_capture: string[]
   }
   boxes: BoxRecord[]
 }

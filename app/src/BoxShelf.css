@@ -249,6 +249,11 @@
   color: var(--bn-ink-2);
 }
 
+.shelf-receipt-note {
+  margin: 0;
+  color: var(--bn-ink);
+}
+
 .shelf-receipt-actions {
   display: flex;
   gap: var(--bn-2);
