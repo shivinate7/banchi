@@ -57,11 +57,12 @@ regardless — D136's pass record is the only thing that skips the matrix on mai
         route hash the spec's body names (comments stripped first, matched against
         `app/src/App.tsx`'s own `ROUTES`), plus every screen when the spec sweeps
         the nav (calls `routesFromNav(` itself or through a test-side helper it imports). A shared surface (`app/src/kit/**`, `tokens.css`, `base.css`,
-        `App.tsx`, `main.tsx`, `index.html`, `app/public/**`, a non-spec `app/tests/*`, a
+        `App.tsx`, `main.tsx`, `index.html`, `app/public/**`, a
         config or package file, or anything already in the top-level `SCOPE` outside
         `app/**`) selects every spec. So does an unmapped `app/**` path, an empty or
         unreadable diff, no merge-base, a path carrying whitespace (`PW_ARGS` is word-split
         by `make`), or `PKMNSCAN_BROWSER_SCOPE=all` — printed by name on every such skip.
+        A non-spec `app/tests/*` file selects the specs whose import closure holds it; one no spec imports selects every spec.
         `partial=true` only when the run is genuinely narrowed, so `design-check-passed`
         never records a tree as fully tested on a partial run.
     scripts/browser-scope.py shard N M [SPEC ...]
@@ -83,6 +84,7 @@ Stdlib only, and `git` — it runs on a bare runner before anything is installed
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 import re
@@ -262,9 +264,54 @@ def recipe_text(makefile: str, target: str) -> Optional[str]:
 SideReader = Callable[[str, str], Optional[str]]
 
 
+def _strip_docstrings(tree: ast.AST) -> ast.AST:
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            body = node.body
+            if (body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant)
+                    and isinstance(body[0].value.value, str)):
+                node.body = body[1:] or [ast.Pass()]
+    return tree
+
+
+def ast_equal(before: Optional[str], after: Optional[str]) -> bool:
+    """True only when both sides parse and have the same AST with docstrings stripped, so a
+    comment or docstring edit is equal. Equal AST is equal behavior, unless the source reads its
+    own `__doc__` (then the docstring is behavior and is kept). A parse error, a missing side
+    or any exception is False: fail open."""
+    if before is None or after is None:
+        return False
+    try:
+        keep = "__doc__" in before or "__doc__" in after
+        dump = [ast.dump(t if keep else _strip_docstrings(t))
+                for t in (ast.parse(before), ast.parse(after))]
+        return dump[0] == dump[1]
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _header(source: str) -> tuple:
+    """A module's docstring and its top-level UPPERCASE names: what a reader of the module's
+    prose and section list sees."""
+    tree = ast.parse(source)
+    names = [t.id for n in tree.body if isinstance(n, ast.Assign) for t in n.targets
+             if isinstance(t, ast.Name) and t.id.isupper()]
+    return ast.get_docstring(tree), names
+
+
+def header_equal(before: Optional[str], after: Optional[str]) -> bool:
+    if before is None or after is None:
+        return False
+    try:
+        return _header(before) == _header(after)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def classify_paths(paths: Sequence[str], read_side: SideReader,
                    scope: Sequence[dict] = SCOPE, subject: str = "what a browser draws",
-                   noun: str = "the matrix") -> Verdict:
+                   noun: str = "the matrix",
+                   ast_skip: Optional[Callable[[str], bool]] = None) -> Verdict:
     """The pure half: a list of changed paths in, a verdict out. No git, no environment.
 
     `scope`, `subject` and `noun` are parameters because a SECOND gate now asks the same
@@ -286,6 +333,22 @@ def classify_paths(paths: Sequence[str], read_side: SideReader,
             continue
         entry = hits[0]
         within = entry.get("within")
+        if within is None and ast_skip is not None and path.endswith(".py") and ast_skip(path):
+            if ast_equal(read_side("base", path), read_side("head", path)):
+                lines.append(f"  skip  {path}  (comment or docstring change only: same AST)")
+                continue
+        if within in ("exists", "header"):
+            before, after = read_side("base", path), read_side("head", path)
+            if within == "exists":
+                same = (before is None) == (after is None)
+                what = "only whether it exists is read, and that is unchanged"
+            else:
+                same = before == after or header_equal(before, after)
+                what = "only its docstring and section names are read, and they are unchanged"
+            lines.append(f"  skip  {path}  ({what})" if same else
+                         f"  RUN   {path}  ({'created or deleted' if within == 'exists' else 'docstring or section names changed'})")
+            run = run or not same
+            continue
         if within is None:
             run = True
             lines.append(f"  RUN   {path}  ({entry['path']})")
@@ -603,6 +666,46 @@ def selftest() -> int:
     ok(off_verdict.specs == set(all_specs()) and not off_verdict.partial,
        "PKMNSCAN_BROWSER_SCOPE=all selects every spec")
 
+    # A TEST HELPER SELECTS ONLY THE SPECS THAT IMPORT IT (D215, amended); one nothing imports
+    # selects all. `moneyFace.ts` is the control: reached by the money-face spec, not by all.
+    helper = classify_specs(["app/tests/moneyFace.ts"])
+    ok(helper.partial and "app/tests/money-face.spec.ts" in helper.specs
+       and len(helper.specs) < len(all_specs()),
+       "a test helper selects only the specs whose closure holds it")
+    unread = classify_specs(["app/tests/no-spec-imports-this.ts"])
+    ok(unread.specs == set(all_specs()) and not unread.partial,
+       "a test file no spec imports selects every spec (fail open)")
+
+    # THE COMMENT-ONLY ARM AND THE TWO NARROWINGS, each through the pure classifier.
+    py_scope = ({"path": "x/**", "why": "x"},)
+    pair = lambda a, b: (lambda side, path: a if side == "base" else b)  # noqa: E731
+    skip_all = lambda path: True  # noqa: E731
+    base_src = '"""doc."""\nx = 1  # c\n'
+    verdict_for = lambda a, b: classify_paths(  # noqa: E731
+        ["x/m.py"], pair(a, b), scope=py_scope, ast_skip=skip_all).run
+    ok(not verdict_for(base_src, '"""other doc."""\nx = 1\n'),
+       "a docstring and comment edit skips")
+    ok(verdict_for(base_src, '"""doc."""\nx = 2\n'), "a code edit runs")
+    ok(verdict_for(base_src, "def (:\n"), "a parse error runs")
+    ok(verdict_for('"""d"""\nprint(__doc__)\n', '"""e"""\nprint(__doc__)\n'),
+       "a docstring the module reads as `__doc__` runs")
+    ok(classify_paths(["x/m.py"], pair(base_src, base_src + "#\n"), scope=py_scope).run,
+       "without ast_skip a comment edit still runs (opt-in only)")
+    exists_scope = ({"path": "x/f", "within": "exists", "why": "x"},)
+    ok(not classify_paths(["x/f"], pair("a", "b"), scope=exists_scope).run,
+       "an existence-only subject skips a content edit")
+    ok(classify_paths(["x/f"], pair(None, "b"), scope=exists_scope).run,
+       "an existence-only subject runs when the file is created")
+    ok(classify_paths(["x/f"], pair("a", None), scope=exists_scope).run,
+       "an existence-only subject runs when the file is deleted")
+    header_scope = ({"path": "x/m.py", "within": "header", "why": "x"},)
+    ok(not classify_paths(["x/m.py"], pair(base_src, base_src.replace("x = 1", "y = 2")),
+                          scope=header_scope).run, "a header subject skips a body edit")
+    ok(classify_paths(["x/m.py"], pair(base_src, base_src.replace("doc.", "new.")),
+                      scope=header_scope).run, "a header subject runs on a docstring edit")
+    ok(classify_paths(["x/m.py"], pair(base_src, base_src + "TRACKS = 1\n"),
+                      scope=header_scope).run, "a header subject runs on a new section name")
+
     shard_selftest_cases(ok)
 
     print()
@@ -873,8 +976,9 @@ def is_shared_surface(path: str) -> bool:
         return True
     if path in unnamed_route_views():
         return True
-    if path.startswith(APP_TESTS + "/") and not path.endswith(".spec.ts"):
-        return True
+    # A non-spec test file is NOT shared: `build_reverse_map` maps it to the specs whose import
+    # closure holds it, and one no spec imports (read at run time) is unmapped, which selects
+    # every spec (fail open).
     return path.startswith("app/") and (
         path.endswith(("package.json", "package-lock.json")) or
         re.search(r"tsconfig[^/]*\.json$", path) is not None

@@ -156,7 +156,8 @@ def classify(base: str | None, head: str) -> tuple:
         return True, [f"`git diff {start[:12]} {head}` failed — the self-test RUNS."]
     verdict = browser.classify_paths(
         paths, browser.git_reader(start, head), scope=SCOPE,
-        subject="what `make serve-selftest` reads", noun="the self-test")
+        subject="what `make serve-selftest` reads", noun="the self-test",
+        ast_skip=lambda path: True)  # it runs the code; a comment or docstring edit cannot move it
     lines = [f"{len(paths)} changed path(s) from {start[:12]} to {head}:"] + list(verdict.lines)
     if not verdict.run:
         lines.append(f"  ({HATCH}=all runs it anyway.)")
@@ -195,6 +196,18 @@ def selftest() -> int:
     check("an empty diff runs it", verdict([]), True)
     check("one in-scope path among many runs it",
           verdict(["docs/DESIGN.md", "app/src/Home.tsx", "store/master.py"]), True)
+
+    # A COMMENT OR DOCSTRING EDIT OF A CARRIED MODULE CANNOT MOVE IT (equal AST); code can.
+    def edit(old: str, new: str) -> bool:
+        return browser.classify_paths(
+            ["cli/cmd_pricearchive.py"], lambda side, path: old if side == "base" else new,
+            scope=SCOPE, subject="x", noun="y", ast_skip=lambda path: True).run
+
+    check("a docstring-only edit of a carried module does not run it",
+          edit('"""a."""\nx = 1\n', '"""b."""\nx = 1  # c\n'), False)
+    check("a code edit of a carried module runs it",
+          edit('"""a."""\nx = 1\n', '"""a."""\nx = 2\n'), True)
+    check("an unparseable edit runs it", edit('x = 1\n', 'x = (\n'), True)
 
     # EACH FAIL-OPEN ARM, forced through a stub matcher: the real VCS never fails on demand,
     # so a flipped arm (skip where it must RUN) would stay green. The control proves the
