@@ -1,0 +1,73 @@
+/* Price moves since listing, on #/pricing. `--bn-*` only. Two lines are always drawn so nothing
+   below moves when the read arrives; the list opens only on a press. */
+
+.pricemovers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-1);
+  padding: var(--bn-2) var(--bn-3);
+  border: 1px solid var(--bn-line);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  min-width: 0;
+}
+.pricemovers-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  min-height: 2.5rem;
+}
+.pricemovers-says {
+  margin: 0;
+  min-width: 0;
+  color: var(--bn-ink);
+  font-weight: 600;
+}
+.pricemovers-read {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bn-1);
+  min-height: 1.25rem;
+  margin: 0;
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+}
+.pricemovers-read[data-failed='true'] { color: var(--bn-warn); }
+.pricemovers-read svg { flex: none; margin-top: 0.15em; }
+
+.pricemovers-list {
+  display: flex;
+  flex-direction: column;
+  margin: var(--bn-2) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--bn-line);
+}
+.pricemovers-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 8rem;
+  align-items: center;
+  gap: var(--bn-3);
+  padding: var(--bn-2) 0;
+  border-bottom: 1px solid var(--bn-line);
+}
+.pricemovers-row:last-child { border-bottom: 0; }
+.pricemovers-what { display: flex; flex-direction: column; min-width: 0; }
+.pricemovers-detail { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.pricemovers-prices { display: inline-flex; align-items: center; gap: var(--bn-1); color: var(--bn-ink-2); }
+.pricemovers-change {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--bn-1);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/* DIRECTION IS A WORD AND AN ARROW, NEVER A COLOR (the trend strip's rule, PriceTrend.css). */
+
+@container bn-page (max-width: 899px) {
+  .pricemovers-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .pricemovers-prices { grid-column: 1; }
+  .pricemovers-change { grid-column: 2; grid-row: 1 / span 2; }
+}

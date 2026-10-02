@@ -108,6 +108,7 @@ import {
 } from './kit'
 import type { FilterFacet, SortOption, SortValue } from './kit'
 import { toast } from './kit/toast'
+import { PriceMovers } from './PriceMovers'
 import './Pricing.css'
 import { SendCard } from './SendCard'
 import { ABSENT_SENTENCE, AbsentPhotoNote, gameLabel, noPhotoSentence } from './CardHero'
@@ -2758,6 +2759,7 @@ export function Pricing() {
     >
       <div className="pricing-body" data-live={liveTab ? 'true' : undefined}>
         {bar}
+        <PriceMovers />
         {ruleLine}
         {/* UN-11: outlives the toast, and a reload. Gone once a send has carried a cleared
             SKU (`clear_built_on`) — the next read finds no `last_clear`. */}

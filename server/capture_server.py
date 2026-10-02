@@ -16479,6 +16479,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_price_now(asked)
                 )
+            if path == "/pipeline/movers":
+                # LISTED SKUs THAT MOVED OVER 10% SINCE LISTING (DEBT69). A plain read; drawn on
+                # `#/pricing`, and nothing it says changes a price.
+                return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_movers())
             if path == "/pipeline/holdings-value":
                 # UNSOLD STOCK, VALUED OVER TIME (`docs/specs/sales-plan.md` section 1,
                 # second half). NOT YET REACHABLE FROM A SCREEN — see

@@ -4618,3 +4618,34 @@ export type LiveCheckAnswer = {
   export?: string
   checked: SendSummary[]
 }
+
+/** One listed SKU whose market moved more than the threshold since it was listed. Every figure
+ *  is text and was computed server-side (`pipeline/movers.py`): `change` is a signed fraction,
+ *  `"0.140"` is up fourteen percent. Nothing here is a price to send. */
+export type PriceMover = {
+  sku: string
+  name: string | null
+  set: string | null
+  number: string | null
+  condition: string | null
+  /** The day the SKU was first seen live, `YYYY-MM-DD`. */
+  listed: string
+  then: string
+  now: string
+  change: string
+  direction: 'up' | 'down'
+}
+
+/** How the last scheduled market read ended, or null if none has ever run. */
+export type PriceRefreshNote =
+  | { at: number; ok: true; live_rows: number }
+  | { at: number; ok: false; code: string; message: string }
+
+/** `GET /pipeline/movers`. `unmeasured` counts listed SKUs with no baseline or no reading. */
+export type PriceMoversPayload = {
+  threshold: string
+  listed: number
+  unmeasured: number
+  movers: PriceMover[]
+  refresh: PriceRefreshNote | null
+}

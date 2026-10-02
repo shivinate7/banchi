@@ -155,6 +155,8 @@ from server import tcg_import  # noqa: E402
 from pipeline import pricehistory  # noqa: E402
 from pipeline import productview  # noqa: E402
 from pipeline import holdings  # noqa: E402
+from pipeline import movers as price_movers  # noqa: E402
+from pipeline import pricerefresh  # noqa: E402
 from pipeline import stockimages  # noqa: E402
 from store.pricearchive import RANGE_WIDTH_DAYS  # noqa: E402
 # THE SAME RULE, AND IT IS WHY THE RATES MOVED OUT OF `cli/cmd_identify.py`. `identify/cost.py`
@@ -3849,6 +3851,61 @@ def do_pipeline_holdings_value(range_: str) -> dict:
                 "not counted here."
             ),
         },
+    }
+
+
+def do_pipeline_movers() -> dict:
+    """`GET /pipeline/movers` — listed SKUs whose market moved more than 10% since they were
+    listed, with direction and amount, and the last scheduled read's note (DEBT69).
+
+    A PLAIN READ. No socket, no write, and nothing here changes a price: `#/pricing` draws it and
+    the person decides. THEN is the archive bucket covering the SKU's `first_seen_live` day
+    (D219), NOW is the `readings` table (D189). A SKU with neither is counted in `unmeasured`,
+    never dropped. `refresh` is `pipeline/pricerefresh.py`'s note, or null if no scheduled read
+    has ever run.
+    """
+    try:
+        snapshot = Store().read()
+    except (files.StoreError, OSError, ValueError, TypeError) as exc:
+        files.log_cause('store read', exc)
+        raise PipelineRefusal(
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            "store_unreadable",
+            f"The store could not be read because {files.plain_cause(exc)}, so no price moves can be shown. Try again, and if it repeats, restart the app on the Mac.",
+        ) from None
+    listed = {}
+    for sku, entry in snapshot.inventory.listings.items():
+        when = corpus.parse_stamp(entry.first_seen_live) if entry.live > 0 else None
+        if when is not None:
+            listed[sku] = when.date()
+    summary = snapshot.archive.summary
+    found, unmeasured = price_movers.movers(
+        listed,
+        {sku: r.market for sku, r in snapshot.readings.entries.items()},
+        lambda sku: [p for row in summary.where(sku=sku) for p in row.points],
+    )
+    rows = []
+    for m in found:
+        facts = snapshot.skus.entries.get(m.sku)
+        rows.append({
+            "sku": m.sku,
+            # `skus` has no row for a SKU never read from an export; the reading names it then.
+            "name": facts.product_name if facts else snapshot.readings.entries[m.sku].name,
+            "set": facts.set_name if facts else None,
+            "number": facts.number if facts else None,
+            "condition": facts.condition if facts else None,
+            "listed": listed[m.sku].isoformat(),
+            "then": tcgcsv.format_price(m.then),
+            "now": tcgcsv.format_price(m.now),
+            "change": str(m.change.quantize(Decimal("0.001"))),
+            "direction": m.direction,
+        })
+    return {
+        "threshold": str(price_movers.THRESHOLD),
+        "listed": len(listed),
+        "unmeasured": unmeasured,
+        "movers": rows,
+        "refresh": pricerefresh.read_status(),
     }
 
 

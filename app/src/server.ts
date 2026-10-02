@@ -111,6 +111,7 @@ import type {
   ClaimRelease,
   HoldingsRange,
   HoldingsValuePayload,
+  PriceMoversPayload,
   RunMatchAnswer,
 } from './types'
 
@@ -3310,6 +3311,15 @@ export async function getHoldingsValue(range: HoldingsRange = 'month'): Promise<
     `/pipeline/holdings-value?range=${encodeURIComponent(range)}`,
     NO_CACHE,
   )) as HoldingsValuePayload
+}
+
+/**
+ * Listed SKUs whose market moved more than the threshold since listing, and how the last
+ * scheduled market read ended (`GET /pipeline/movers`, DEBT69). A plain read: it shows what
+ * moved and changes no price.
+ */
+export async function getPriceMovers(): Promise<PriceMoversPayload> {
+  return (await request('/pipeline/movers', NO_CACHE)) as PriceMoversPayload
 }
 
 /** One SKU's answer from `getSkuPhotos` — the first on-hand copy of that SKU that still
