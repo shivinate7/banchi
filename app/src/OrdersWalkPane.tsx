@@ -777,7 +777,10 @@ export function WalkList({
   showBuyers,
   sections,
   onPick,
+  compact = false,
 }: {
+  /** Design pass A: the rail draws the row alone; the pane beside it draws where each copy is. */
+  readonly compact?: boolean
   readonly walk: OrderWalk
   readonly hideSold: boolean
   readonly collapsed?: boolean
@@ -909,7 +912,7 @@ export function WalkList({
                        * any more — `renderAction` puts `RowAction` on every copy here exactly as
                        * it sits in the pane, so the struck-out copy's own Undo is drawn right
                        * where the copy is, never only in the pane above. */}
-                      <CardLocations
+                      {compact ? null : <CardLocations
                         group={groupOf(line.take, line.rows.map((row) => row.copy), walk.facts, walk.rawCards)}
                         persona="owner"
                         onSell={walk.onSell}
@@ -925,11 +928,11 @@ export function WalkList({
                           const at = keyedCopiesOf(line, walk.openSpares).findIndex((one) => one.key === copy.key)
                           return <RowAction walk={walk} copy={copy} take={line.take} hint={current && at >= 0 && at < 9 ? String(at + 1) : undefined} />
                         }}
-                      />
+                      />}
                       {/* THE SPARES, FOLDED (the owner's ruling): copies of this take the solver did not pick.
                           Opened, they are the same copy rows, sold through the same press, and the digit keys
                           continue into them. */}
-                      {spares.length === 0 ? null : (
+                      {compact || spares.length === 0 ? null : (
                         <div className="orders-walk-spares">
                           <Button
                             variant="ghost"

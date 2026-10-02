@@ -35,7 +35,7 @@ import { absoluteDate, relativeDate } from './dates'
 import { toast } from './kit/toast'
 import { boxTitle } from './kit/data'
 import { CardPane, gameWord, photoSrc, type HeroFigures, type Row } from './CardHero'
-import { layoutsOf } from './CardLocations'
+import { CardLocations, layoutsOf } from './CardLocations'
 import { Dialog as Overlay } from './kit/overlay'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { orderReasonLabel, orderReasonRemedy } from './orderReasons'
@@ -87,7 +87,7 @@ import {
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
-import { pickFigureOf, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
+import { pickFigureOf, RowAction, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
 import type {
   BoxRecord,
   IngestResult,
@@ -2617,7 +2617,9 @@ function OrderPickPane({
   owedBySku,
   showBuyers,
   boxes,
+  sections,
 }: {
+  readonly sections?: ReadonlyMap<number, readonly SectionDetail[]>
   readonly boxes: readonly BoxRecord[]
   readonly walk: OrderWalk
   readonly owedBySku: ReadonlyMap<string, number>
@@ -2670,6 +2672,22 @@ function OrderPickPane({
         }
         postChips={showBuyers ? <Pill>For {takeBuyers(currentRow.take)}</Pill> : undefined}
         figures={figures}
+        detail={
+          <CardLocations
+            group={currentGroup}
+            persona="owner"
+            onSell={walk.onSell}
+            busyKey={walk.busyCopy}
+            soldKeys={walk.soldKeys}
+            sections={sections}
+            currentKey={currentRow.copy.key}
+            preserveOrder
+            renderAction={(copy) => {
+              const at = currentGroup.copies.findIndex((one) => one.key === copy.key)
+              return <RowAction walk={walk} copy={copy} take={currentRow.take} hint={at >= 0 && at < 9 ? String(at + 1) : undefined} />
+            }}
+          />
+        }
         photo={{
           label: place,
           absent: broken,
@@ -3716,6 +3734,7 @@ function PullStage({
             showBuyers={walkedGroups.length > 1}
             sections={sections}
             onPick={openCardSheet}
+            compact
           />
         </>
       )}
@@ -3774,7 +3793,7 @@ function PullStage({
               the press asks the width once, in `openCardSheet`. At 560px of column and up the pane
               is its usual sticky column beside the walk. */}
           <div className="orders-cardcol" aria-busy={walkHeld ? 'true' : undefined} inert={walkHeld}>
-            <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} />
+            <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} sections={sections} />
           </div>
         </div>
       </div>
@@ -3784,7 +3803,7 @@ function PullStage({
         title={walk.currentRow?.take.name ?? 'The card'}
         className="orders-card-sheet"
       >
-        <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} />
+        <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} boxes={boxRecords} sections={sections} />
       </Sheet>
 
       <Sheet open={buyersOpen} onClose={() => setBuyersOpen(false)} title="Buyers" icon="list" className="orders-buyers-sheet">

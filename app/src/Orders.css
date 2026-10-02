@@ -94,7 +94,7 @@
 
 @container orders (min-width: 560px) {
   .orders-layout {
-    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-columns: 268px minmax(0, 1fr);
     grid-template-areas: 'buyers card' 'walk card';
     grid-template-rows: auto 1fr;
   }
@@ -122,14 +122,20 @@
   }
   .orders-buyers-panel .orders-index-item { scroll-snap-align: start; }
 }
+/* DESIGN PASS A: Inventory's own skeleton at the desk too. The rail holds the buyers, the open
+   buyer's panel and the walk; the pane is Inventory's hero, photograph beside every copy. */
 @container orders (min-width: 1000px) {
   .orders-layout {
-    grid-template-columns: 260px minmax(0, 1fr) minmax(320px, 400px);
-    grid-template-areas: 'buyers walk card';
-    grid-template-rows: auto;
-    gap: var(--bn-5);
+    grid-template-columns: 300px minmax(0, 1fr);
+    grid-template-areas: 'buyers card' 'walk card';
+    grid-template-rows: auto 1fr;
+    gap: var(--bn-4) var(--bn-5);
   }
+  .orders-buyers-panel { flex: none; max-height: min(40dvh, 22rem); }
   .orders-cardcol { position: sticky; top: var(--bn-4); }
+}
+@container orders (min-width: 560px) {
+  .orders-walk { padding: var(--bn-3); }
 }
 
 /* ---- THE FILTER BAR IS ONE LINE at every width (the owner, 2026-09-24: "i question whether
@@ -1197,3 +1203,12 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 /* The spares fold under a pick line: a quiet 40px press, and the same copy rows when open. */
 .orders-walk-line > .orders-walk-spares { flex: 1 1 100%; min-width: 0; margin: 0 0 var(--bn-2) var(--bn-2); }
 .orders-walk-spares > .bn-btn { color: var(--bn-ink-3); }
+
+/* DESIGN PASS A: the walk in the rail reads as Inventory's card list, one line a card. */
+@container orders (min-width: 560px) {
+  .orders-walk-press { grid-template-columns: 6ch minmax(0, 1fr) auto; min-height: var(--bn-control-h); padding: var(--bn-1) var(--bn-2); }
+  .orders-walk-slot { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .orders-walk-pick { flex-wrap: nowrap; white-space: nowrap; }
+  .orders-walk-rows { gap: var(--bn-0-5); }
+  .orders-walk-tools { flex-wrap: wrap; }
+}
