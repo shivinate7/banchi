@@ -1,48 +1,32 @@
-// Protects: The Graveyard shows its three tabs with the right cards in each, and Inventory shows where a moved card came from.
-// Governs: D134, D196
+// Protects: Inventory's Deleted boxes shelf lists the records of deleted boxes, the old Graveyard tab is gone, and a moved card names where it came from.
+// Governs: D134, D196, D313
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
-import { setViewport } from './phoneSwitch'
 
-/* THE GRAVEYARD'S OWN SPEC, AND `#/inventory`'S "MOVED FROM" — NEITHER HAD ONE (D134, amended
- * by the UX review's graveyard ruling, 2026-09-26, verbatim "Move Moved out of Graveyard").
+/* THE DELETED BOXES SHELF, AND `#/inventory`'S "MOVED FROM" (D134 point 5, amended by the owner's
+ * ruling "A: delete the tab"; the UX review's ruling "Move Moved out of Graveyard").
  *
- * THE OWNER'S REPORT, verbatim: "in graveyard, when i clikc moved or buried i see the same
- * list." Measured on a copy of the owner's real store: 1,358 departed rows, 264 `moved`
- * (every one of them also `buried`, since box 5 — where they all moved out of — was later
- * deleted) and not one `moved` row was ever also sold or retired. `#/graveyard` no longer
- * offers a Moved tab or a Buried tab at all — `buried` is a fact about the BOX, drawn as a
- * quiet tag on the Where cell, never a way a card left.
+ * A sold or retired record outlives its box as a `buried` line, and Inventory's box rail ends with
+ * a shelf that reads those lines. This file proves the CLIENT: given an answer shaped the way
+ * `GET /graveyard` answers (standing rows and buried rows mixed), the shelf counts and draws the
+ * buried ones only, groups them by the box they sat in, opens one in the same card pane every other
+ * card uses, and offers none of the card's actions. `do_graveyard` is Python and is proved by the
+ * harness. It also proves the tab is gone: the nav has no such row and the old address is the
+ * not-found page, which was chosen over a redirect so no route outlives the screen it named.
  *
- * WHAT THIS FILE CAN PROVE, AND WHAT IT CANNOT. `do_graveyard` (`server/capture_server.py`)
- * is what filters `moved` out server-side, and that half is Python, proven by reading the
- * function rather than by a browser. What THIS file proves is the client: given a graveyard
- * answer shaped the way the amended route actually answers (sold and retired rows only, one
- * of them buried), the screen draws exactly three filter tabs, the counts on them are right,
- * and a buried row's tag reads in plain words rather than the pipeline noun "buried" itself
- * (D196). And on `#/inventory`, that a moved-in card's Details panel names where it came
- * from — by the old box's name when that box still stands, and "another box" when it does
- * not, the same honest fallback `Graveyard.tsx`'s own `movedToName` gives `moved_to`.
- *
- * NOT A HARNESS TEST AND MUST NOT BECOME ONE. `docs/GATES.md`'s contract is Python tests at
- * the Stop hook; this starts a browser, alongside `inventory.spec.ts` and `nav.spec.ts`.
+ * NOT A HARNESS TEST AND MUST NOT BECOME ONE. `docs/GATES.md`'s contract is Python tests at the
+ * Stop hook; this starts a browser, alongside `inventory.spec.ts` and `nav.spec.ts`.
  */
 
-// --------------------------------------------------------------------------- the graveyard
-
-const GRAVEYARD_ROUTE = '/#/graveyard'
-
-/** One `GET /graveyard` row, in the amended shape — `how` is `'sold' | 'retired'` only, the
- *  narrowed type `types.ts:DepartedCard` now carries. No `moved_to` either: D134's amendment
- *  removed it as dead weight once a `moved` row can never reach this route. */
 function departed(over: {
   how: 'sold' | 'retired'
   name: string
   box: number
   index: number
   boxName: string | null
-  buried?: boolean
+  buried: boolean
+  sku?: string | null
   retireReason?: string | null
 }) {
   return {
@@ -55,109 +39,102 @@ function departed(over: {
     number: '025',
     game: 'pokemon',
     set_hint: null,
-    sku: over.how === 'sold' ? '9191210' : null,
-    condition: over.how === 'sold' ? 'Near Mint' : null,
+    sku: over.sku ?? null,
+    condition: over.sku ? 'Near Mint' : null,
     retire_reason: over.retireReason ?? null,
     order: null,
     run: null,
     captured_at: '2026-09-01T10:00:00+00:00',
     photo_sha256: null,
-    buried: over.buried ?? false,
-    buried_at: over.buried === true ? '2026-09-26T00:00:00+00:00' : null,
+    buried: over.buried,
+    buried_at: over.buried ? '2026-09-26T00:00:00+00:00' : null,
   }
 }
 
-/** Two sold, one retired — one of the sold rows buried (its box deleted since). Three
- *  departed rows, never a `moved` one: the amendment's own claim is that a `moved` row can
- *  no longer reach this screen at all, so this fixture is the route's real shape rather than
- *  an adversarial one. */
-const GRAVEYARD_ROWS = [
-  departed({ how: 'sold', name: 'Volcanion', box: 1, index: 1, boxName: 'Common bulk' }),
-  departed({ how: 'retired', name: 'Corviknight', box: 1, index: 2, boxName: 'Common bulk', retireReason: 'damaged' }),
-  departed({
-    how: 'sold',
-    name: 'Ambessa, Respected and Feared',
-    box: 3,
-    index: 1,
-    boxName: 'Old bin',
-    buried: true,
-  }),
+/** Two standing rows (they belong to Sales and to Inventory's own shelves) and three buried ones in
+ *  two deleted boxes. The shelf counts and draws the three. */
+const DEPARTED = [
+  departed({ how: 'sold', name: 'Volcanion', box: 1, index: 1, boxName: 'Common bulk', buried: false, sku: '9191210' }),
+  departed({ how: 'retired', name: 'Corviknight', box: 1, index: 2, boxName: 'Common bulk', buried: false, retireReason: 'damaged' }),
+  departed({ how: 'sold', name: 'Ambessa, Respected and Feared', box: 3, index: 2, boxName: 'Old rares', buried: true, sku: '9191486' }),
+  departed({ how: 'retired', name: 'Thievul', box: 3, index: 1, boxName: 'Old rares', buried: true, retireReason: 'miscut' }),
+  departed({ how: 'sold', name: 'Eiscue', box: 4, index: 1, boxName: 'Spare bulk', buried: true }),
 ]
-
-async function openGraveyard(page: Page, rows: unknown[] = GRAVEYARD_ROWS): Promise<void> {
-  await page.route(/\/graveyard$/, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: rows }) }),
-  )
-  await page.goto(GRAVEYARD_ROUTE)
-  await settleFonts(page)
-  await expect(page.getByRole('heading', { name: 'Graveyard' })).toBeVisible()
-}
 
 sealEveryTest()
 
-test('at 820 no header or cell in the table is cut short (screen pass F7)', async ({ page }) => {
-  // The wrap is ~690px at 820: seven columns left `Captured` reading "CAPTURE", its cells "28 da…" and
-  // the condition "Near Mint …". The two lowest-value columns leave and the rest stay whole.
-  await setViewport(page, { width: 820, height: 900 })
-  await openGraveyard(page, GRAVEYARD_ROWS.map((row) => (row.sku === null ? row : { ...row, condition: 'Near Mint Holofoil' })))
-  await expect(page.locator('.graveyard-table tbody tr').first()).toBeVisible()
-  const cut = await page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>('.graveyard-table th, .graveyard-table td, .graveyard-table .graveyard-condition, .graveyard-table .bn-pill')]
-      .filter((el) => el.getClientRects().length > 0 && el.scrollWidth > el.clientWidth + 1)
-      .map((el) => `${el.tagName}:${(el.textContent ?? '').slice(0, 24)}`),
-  )
-  expect(cut).toEqual([])
+test.describe('the Deleted boxes shelf', () => {
+  test('counts the records of deleted boxes only, and ends the rail', async ({ page }) => {
+    await openInventory(page, DEPARTED)
+    const shelf = page.getByRole('button', { name: 'Records from deleted boxes' })
+    await expect(shelf).toBeVisible()
+    await expect(shelf).toContainText('3 records')
+    // Last in the rail, after every box.
+    await expect(page.locator('.browse-boxcell').last()).toHaveAccessibleName('Records from deleted boxes')
+  })
+
+  test('is absent when no box was ever deleted', async ({ page }) => {
+    await openInventory(page, DEPARTED.filter((row) => !row.buried))
+    await expect(page.locator('.browse-boxcell').first()).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Records from deleted boxes' })).toHaveCount(0)
+  })
+
+  test('a press walks the records by the box they sat in and opens one in the card pane', async ({ page }) => {
+    await openInventory(page, DEPARTED)
+    await page.getByRole('button', { name: 'Records from deleted boxes' }).click()
+
+    const list = page.getByRole('list', { name: 'Records from deleted boxes' })
+    await expect(list.locator('.browse-secttitle')).toHaveText(['Old rares', 'Spare bulk'])
+    await expect(list.locator('.browse-row')).toHaveCount(3)
+    // Standing rows never reach this shelf.
+    await expect(list.getByText('Volcanion')).toHaveCount(0)
+    // Slot order inside a box: Thievul (1) before Ambessa (2).
+    await expect(list.locator('.browse-row-name').first()).toHaveText('Thievul')
+
+    await expect(page.getByRole('heading', { name: 'Thievul' })).toBeVisible()
+    await expect(page.getByText('The photograph went with the box.')).toBeVisible()
+    await expect(page.locator('.browse-fact', { hasText: 'Where it sat' })).toContainText('Old rares')
+    await expect(page.locator('.browse-fact', { hasText: 'How it left' })).toContainText('Retired, miscut')
+
+    await list.getByRole('button', { name: /Ambessa/ }).click()
+    await expect(page.getByRole('heading', { name: 'Ambessa, Respected and Feared' })).toBeVisible()
+    await expect(page.getByRole('link', { name: /price history/ })).toHaveAttribute('href', '#/product?sku=9191486')
+
+    // A record with no SKU has no price history to open.
+    await list.getByRole('button', { name: /Eiscue/ }).click()
+    await expect(page.getByRole('link', { name: /price history/ })).toHaveCount(0)
+  })
+
+  test('offers no card action, since a buried record cannot come back', async ({ page }) => {
+    await openInventory(page, DEPARTED)
+    await page.getByRole('button', { name: 'Records from deleted boxes' }).click()
+    await expect(page.getByRole('heading', { name: 'Thievul' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Card actions' })).toHaveCount(0)
+    await expect(page.getByText('Mark sold')).toHaveCount(0)
+  })
+
+  test('moves nothing above the shelf when it is pressed (D313)', async ({ page }) => {
+    await openInventory(page, DEPARTED)
+    const first = page.locator('.browse-boxcell').first()
+    await expect(first).toBeVisible()
+    await page.waitForTimeout(500) // the page's entrance has settled
+    const before = await first.boundingBox()
+    await page.getByRole('button', { name: 'Records from deleted boxes' }).click()
+    await expect(page.getByRole('heading', { name: 'Thievul' })).toBeVisible()
+    expect(await first.boundingBox(), 'the first box cell moved when the shelf was pressed').toEqual(before)
+  })
 })
 
-test.describe('the graveyard', () => {
-  test('exactly three tabs, All/Sold/Retired, with the right counts — no Moved, no Buried', async ({
-    page,
-  }) => {
-    await openGraveyard(page)
-
-    const filters = page.getByRole('group', { name: 'Filter by how a card left' })
-    await expect(filters).toBeVisible()
-    const tabs = filters.getByRole('button')
-    await expect(tabs).toHaveCount(3)
-
-    // COUNTS: 3 departed rows total, 2 sold, 1 retired — the number in each tab's own label.
-    await expect(tabs.nth(0)).toHaveText('All (3)')
-    await expect(tabs.nth(1)).toHaveText('Sold (2)')
-    await expect(tabs.nth(2)).toHaveText('Retired (1)')
-
-    // NO FOURTH OR FIFTH TAB, BY NAME — the amendment's own claim, not only a count. A tab
-    // renamed or reordered without changing the count would pass the count check above and
-    // still be the regression the owner reported.
-    await expect(filters.getByRole('button', { name: /^Moved/ })).toHaveCount(0)
-    await expect(filters.getByRole('button', { name: /^Buried/ })).toHaveCount(0)
-  })
-
-  test('no moved row is ever drawn', async ({ page }) => {
-    await openGraveyard(page)
-
-    const rows = page.locator('.graveyard-row')
-    await expect(rows).toHaveCount(3)
-    // Not one row's own How pill reads "Moved" — every row this screen draws left through
-    // one of the two real doors.
-    await expect(page.locator('.graveyard-table').getByText('Moved', { exact: true })).toHaveCount(0)
-  })
-
-  test('a buried row draws a plain quiet tag, never the word "buried" itself', async ({ page }) => {
-    await openGraveyard(page)
-
-    const buriedRow = page.locator('.graveyard-row', { hasText: 'Ambessa' })
-    await expect(buriedRow).toBeVisible()
-    await expect(buriedRow.getByText('Its box was deleted')).toBeVisible()
-    // D196: the pipeline noun itself never reaches the screen as a typed word.
-    await expect(buriedRow.getByText('Buried', { exact: true })).toHaveCount(0)
-
-    // The two rows whose box still stands carry no such tag at all.
-    const standingRow = page.locator('.graveyard-row', { hasText: 'Volcanion' })
-    await expect(standingRow.getByText('Its box was deleted')).toHaveCount(0)
+test.describe('the Graveyard tab is gone', () => {
+  test('the nav has no such row, and the old address is the not-found page', async ({ page }) => {
+    await openInventory(page)
+    await expect(page.locator('.bn-side').getByRole('link', { name: /^Graveyard/ })).toHaveCount(0)
+    await page.goto('/#/graveyard')
+    await expect(page.getByRole('heading', { name: 'Nothing lives at this address.' })).toBeVisible()
   })
 })
 
-// --------------------------------------------------------------------------- #/inventory
+// --------------------------------------------------------------------------- moved-from
 
 const PHOTO_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1"/></svg>'
@@ -277,7 +254,11 @@ function searchAnswer(query: string): { query: string; groups: unknown[] } {
   return { query, groups: [] }
 }
 
-async function openInventory(page: Page): Promise<void> {
+async function openInventory(page: Page, departedRows: unknown[] = []): Promise<void> {
+  // Inventory reads the burial lines for its Deleted boxes shelf, so every case answers `GET /graveyard`.
+  await page.route(/\/graveyard$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: departedRows }) }),
+  )
   await page.route(/\/photo\/\d+\/\d+/, (route) =>
     route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG }),
   )

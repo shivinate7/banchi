@@ -2242,7 +2242,7 @@ export async function deleteBox(box: number): Promise<BoxDeleteResult> {
  * `DepartedCard.buried` is which one a row came from; nothing else about the shape differs,
  * and a record is never counted from both sources at once.
  *
- * Free and read-only. `#/graveyard` is the one screen that calls this.
+ * Free and read-only. Inventory's Deleted boxes shelf is the one screen that calls this.
  */
 export async function getGraveyard(): Promise<GraveyardPayload> {
   return (await request('/graveyard')) as GraveyardPayload

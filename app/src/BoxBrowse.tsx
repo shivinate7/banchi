@@ -51,6 +51,7 @@ import {
   type MarketRead,
   type Row,
 } from './CardHero'
+import { DeletedPane, DeletedWalk, useBuried } from './DeletedBoxes'
 import { stateLabel } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
@@ -181,10 +182,13 @@ function landingInFullest(rows: readonly Row[]): Row | undefined {
 // ------------------------------------------------------------------ the walk, in sections
 
 /* Which shelf a row is on: a box number, `pooled` for a card whose game says `located: false`
- * (a count, not a location), `unplaced` for the record whose box will not coerce. */
-type Shelf = number | 'pooled' | 'unplaced'
+ * (a count, not a location), `unplaced` for the record whose box will not coerce. `deleted` is
+ * no row's shelf: it holds the records of boxes that no longer exist (`DeletedBoxes.tsx`), which
+ * are read apart from `rows` and so never reach `shelfOf`. */
+type RowShelf = number | 'pooled' | 'unplaced'
+type Shelf = RowShelf | 'deleted'
 
-function shelfOf(row: Row): Shelf {
+function shelfOf(row: Row): RowShelf {
   if (isPooled(row.card)) return 'pooled'
   const box = row.card.box
   if (typeof box !== 'number' || Number.isNaN(box)) return 'unplaced'
@@ -195,7 +199,7 @@ function shelfOf(row: Row): Shelf {
  * for the cross-box search ranking, which no longer has every box's Rows loaded to ask
  * (D192, item 2): the box being browsed fetches only its own cards, so a search that spans
  * boxes has to rank off the search's OWN result rather than off a store-wide `rows` array. */
-function copyShelf(copy: SearchCopy): Shelf {
+function copyShelf(copy: SearchCopy): RowShelf {
   if (copy.place.located === false) return 'pooled'
   const box = copy.place.box
   return typeof box === 'number' && !Number.isNaN(box) ? box : 'unplaced'
@@ -238,6 +242,7 @@ function tierHasLive(tier: readonly SearchGroup[], frozen: FrozenRank): boolean 
 function shelfLabel(shelf: Shelf, name?: string | null): string {
   if (shelf === 'pooled') return 'Pooled'
   if (shelf === 'unplaced') return 'No box'
+  if (shelf === 'deleted') return 'Deleted boxes'
   return boxTitle(name, shelf)
 }
 
@@ -1132,7 +1137,15 @@ export function BoxBrowse({
       .filter((box) => (bySearch === null || bySearch.has(box)) && (!facetActive || (facetMatchesByBox.get(box) ?? 0) > 0))
   }, [boxRecords, filtered, searchBoxes, facetActive, facetMatchesByBox])
 
-  const shelves = useMemo(() => shelvesOf(inQuery, reachableBoxes, order), [inQuery, reachableBoxes, order])
+  /* THE DELETED BOXES SHELF CLOSES THE LIST, AND ONLY WHEN NOTHING NARROWS IT. A search and a
+   * facet pick name live cards, which a buried record is not, so under either the shelf is not
+   * offered and a walk standing on it moves on like any shelf the answer leaves out. */
+  const buried = useBuried(reloads + reloadToken)
+  const [deletedKey, setDeletedKey] = useState<string | null>(null)
+  const shelves = useMemo(() => {
+    const base = shelvesOf(inQuery, reachableBoxes, order)
+    return buried !== null && buried.length > 0 && !filtered && !facetActive ? [...base, 'deleted' as const] : base
+  }, [inQuery, reachableBoxes, order, buried, filtered, facetActive])
 
   /* The filter bar's count line counts BOXES, the list it sits over: `3 of 13 boxes, filtered by
    * Pokémon`. */
@@ -1469,7 +1482,9 @@ export function BoxBrowse({
        * fullest box on its own, with no press behind it (D132). This is the case D118's
        * row-hold below exists for. */
       shelfSource.current = 'search'
-      return pool[0] ?? null
+      /* NEVER THE DELETED SHELF BY DEFAULT: it can reach `shelves` before the box registry does,
+         and a walk that opened on it would never fetch a box. Only a press lands there. */
+      return pool.find((candidate) => candidate !== 'deleted') ?? null
     })
   }, [shelves, boxesAnswered, filtered, results, rankedGroups, frozen])
 
@@ -1673,6 +1688,15 @@ export function BoxBrowse({
     if (found !== null) held.current = found
   }, [found])
   const awaitingRows = typeof shelf === 'number' && rowsShelf !== shelf
+  /* LEAVING THE DELETED SHELF FOR A BOX HOLDS THE SHELF, DIMMED, UNTIL THAT BOX ANSWERS: the press
+   * is one change and the box landing is one, never the pane of a card the walk was not on. */
+  const wasDeleted = useRef(false)
+  useEffect(() => {
+    if (shelf === 'deleted') wasDeleted.current = true
+    else if (!awaitingRows) wasDeleted.current = false
+  }, [shelf, awaitingRows])
+  const holdDeleted = shelf !== 'deleted' && awaitingRows && wasDeleted.current
+  const onDeleted = buried !== null && (shelf === 'deleted' || holdDeleted)
   const searchReRank = shelfSource.current === 'search'
   /* THE OWNER'S RULING, 2026-09-19: THE PREVIOUS DRAWER STAYS ON SCREEN, DIMMED, WHILE THE NEW
    * ONE IS IN FLIGHT — NEVER BLANK. Before this, `awaitingRows` on a PRESS or a walk-to (never
@@ -1692,8 +1716,10 @@ export function BoxBrowse({
    * `--bn-disabled`. It is a transition, not a claim. */
   const heldSections = useRef<readonly Section[]>([])
   useEffect(() => {
-    if (!awaitingRows) heldSections.current = sections
-  }, [sections, awaitingRows])
+    /* THE DELETED SHELF HOLDS NO ROW OF `rows`, so standing on it must not blank the memory a
+       press to the next box dims. */
+    if (!awaitingRows && shelf !== 'deleted') heldSections.current = sections
+  }, [sections, awaitingRows, shelf])
   const heldDetail = useRef<ReactNode>(null)
   useEffect(() => {
     if (found !== null && detail != null) heldDetail.current = detail
@@ -2107,6 +2133,8 @@ export function BoxBrowse({
                     ? 'Pooled cards, which have no box'
                     : cell === 'unplaced'
                       ? 'Records with no readable box'
+                      : cell === 'deleted'
+                        ? 'Records from deleted boxes'
                       : /* The bare figure in `.browse-boxcell-count` (`record.cards`) has no
                          unit of its own — a screen reader would otherwise read the button's
                          name and then a naked number. Naming it here, in the one aria-label
@@ -2125,7 +2153,7 @@ export function BoxBrowse({
                     shelves keep their glyph, which was never a number. */}
                 {typeof cell === 'number' ? null : (
                   <span className="browse-boxcell-glyph">
-                    <Icon name={cell === 'pooled' ? 'layers' : 'alert'} size={14} />
+                    <Icon name={cell === 'pooled' ? 'layers' : cell === 'deleted' ? 'headstone' : 'alert'} size={14} />
                   </span>
                 )}
                 <span className="browse-boxcell-text">
@@ -2155,7 +2183,9 @@ export function BoxBrowse({
                             ? 'a count, not a location'
                             : cell === 'unplaced'
                               ? 'no position at all'
-                              : ''}
+                              : cell === 'deleted'
+                                ? `${(buried?.length ?? 0).toLocaleString()} records`
+                                : ''}
                   </span>
                 </span>
                 {record ? (
@@ -2170,7 +2200,9 @@ export function BoxBrowse({
         </div>
       )}
 
-      {shelf === null ? null : (
+      {onDeleted ? (
+        <DeletedWalk buried={buried} selected={deletedKey} onPick={setDeletedKey} dimmed={holdDeleted} />
+      ) : shelf === null || shelf === 'deleted' ? null : (
         <div className="browse-walk bn-panel">
           <div className="browse-box-head">
             {shelfBox !== null ? (
@@ -2540,7 +2572,9 @@ export function BoxBrowse({
             {phone ? null : railCollapsed ? miniRail : rail}
 
             <div className="browse-side">
-              {panelRow === null ? (
+              {onDeleted ? (
+                <DeletedPane buried={buried} selected={deletedKey} dimmed={holdDeleted} />
+              ) : panelRow === null ? (
                 <div className="bn-panel">
                   {chooserActive && searchGroups !== null ? (
                     <VariantChooser

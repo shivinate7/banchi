@@ -1943,10 +1943,10 @@ function megabytes(bytes: number): string {
  * gates. Two presses that both name the box; the server keeps the refusal
  * (`box_not_empty_of_commitments`) and it is shown whole.
  *
- * D134 (2026-09-11): a sold, retired or moved record no longer answers that refusal — it is
- * buried instead, readable afterward on `#/graveyard`, and only a listed copy still blocks.
- * The Notice below draws that distinction before the press: what will be buried and lost is
- * separate from what will refuse outright. */
+ * D134: a sold, retired or moved record no longer answers that refusal — it is buried instead,
+ * and only a listed copy still blocks. A sold or retired record is read afterward on Inventory's
+ * Deleted boxes shelf; a moved one is alive elsewhere and is not. The Notice below draws that
+ * distinction before the press: what stays on the shelf is separate from what will refuse outright. */
 function DeleteBox({
   record,
   onChanged,
@@ -1972,7 +1972,9 @@ function DeleteBox({
         icon: 'trash',
         title: `${record.name ?? UNNAMED_BOX} is gone. There is no undo.`,
         body: `${count(result.cards, 'card', 'cards')} and ${count(result.photos, 'photograph', 'photographs')} deleted.${
-          result.buried > 0 ? ` ${count(result.buried, 'sold or retired card', 'sold or retired cards')} moved to the graveyard.` : ''
+          record.sold + record.retired > 0
+            ? ` ${count(record.sold + record.retired, 'sold or retired record', 'sold or retired records')} stay on the Deleted boxes shelf.`
+            : ''
         }${result.directory_removed ? '' : ' One photo folder stays: it holds a file the delete did not expect.'}`,
         ttlMs: 12000,
       })
@@ -2005,13 +2007,13 @@ function DeleteBox({
           <Notice tone={record.listed === 0 ? 'info' : 'warn'}>
             {record.listed === 0
               ? `${
-                  record.sold + record.retired + record.moved === 0
-                    ? 'Nothing in this box has departed.'
-                    : `${count(record.sold + record.retired + record.moved, 'departed record', 'departed records')} will be buried, photographs deleted.`
+                  record.sold + record.retired === 0
+                    ? 'Nothing in this box has sold or been retired.'
+                    : `${count(record.sold + record.retired, 'sold or retired record', 'sold or retired records')} will stay on the Deleted boxes shelf, without photographs.`
                 } No undo.`
               : `Refused: ${count(record.listed, 'card', 'cards')} listed — release the hold first.${
-                  record.sold + record.retired + record.moved > 0
-                    ? ` ${count(record.sold + record.retired + record.moved, 'other departed record', 'other departed records')} will be buried once it goes through.`
+                  record.sold + record.retired > 0
+                    ? ` ${count(record.sold + record.retired, 'sold or retired record', 'sold or retired records')} will stay on the Deleted boxes shelf once it goes through.`
                     : ''
                 }`}
           </Notice>

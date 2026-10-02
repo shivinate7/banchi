@@ -71,7 +71,6 @@ const RING = [
   '#/shipping',
   '#/revenue',
   '#/inventory',
-  '#/graveyard',
   '#/codes',
 ] as const
 
@@ -92,7 +91,6 @@ const VIEW: Record<(typeof RING)[number], string> = {
   '#/shipping': 'main.orders-hub.shipping',
   '#/revenue': 'main.revenue',
   '#/inventory': 'main.inventory',
-  '#/graveyard': 'main.graveyard',
   '#/codes': 'main.codes',
 }
 
@@ -169,7 +167,7 @@ async function stub(page: Page, cards: unknown[] = []) {
   await page.route(/\/queues$/, (route) => json(route, { review: [], parked: [] }))
   await page.route(/\/search\?/, (route) => json(route, { query: '', groups: [] }))
   await page.route(/\/games$/, (route) => json(route, { games: [] }))
-  /* D134's graveyard, the twelfth route this ring steps to. */
+  /* D134's buried records: Inventory's Deleted boxes shelf reads them. */
   await page.route(/\/graveyard$/, (route) => json(route, { departed: [] }))
   /* The markdown sheet reads its own history when its host screen mounts, closed or not, and
      holds nothing else until an export is uploaded. Empty is the honest answer here: this
@@ -994,8 +992,8 @@ test('the first Tab reaches the skip link, and a navigation hands focus to the s
   // a chord from nowhere: the same
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
   await page.keyboard.press(',')
-  await page.keyboard.press('g')
-  await expect(page.locator(VIEW['#/graveyard'])).toBeVisible()
+  await page.keyboard.press('i')
+  await expect(page.locator(VIEW['#/inventory'])).toBeVisible()
   await expect.poll(() => page.evaluate(() => document.activeElement?.closest('.bn-view') !== null)).toBe(true)
 })
 

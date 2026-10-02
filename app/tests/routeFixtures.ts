@@ -21,15 +21,15 @@ import type {
  * SHAPE (D284: the sweep needs one shared fixture set).
  *
  * `app/tests/text-shape.spec.ts` and `app/tests/machine-words.spec.ts` render `#/runs`,
- * `#/orders`, `#/shipping`, `#/codes` and `#/graveyard` off `sealEveryTest({ store: true,
- * cards: 122 })` alone, which draws no run, no order, no export, no code and no departed
- * record for any of the five — so a check run only against that state never sees the busiest
+ * `#/orders`, `#/shipping` and `#/codes` off `sealEveryTest({ store: true,
+ * cards: 122 })` alone, which draws no run, no order, no export and no code
+ * for any of the four — so a check run only against that state never sees the busiest
  * screen a real store draws, and a repeated sentence or a machine word landing in a populated
- * list could pass unseen. This module is what those five routes' POPULATED fixtures are built
+ * list could pass unseen. This module is what those routes' POPULATED fixtures are built
  * from: the same shapes `run-panel.spec.ts`'s `runRow`, `orders.spec.ts`'s `place`/`pick`/
  * `line`/`order`/`payloadOf` and `shipping.spec.ts`'s `row`/`batchOf` already prove render
- * correctly, plus two new ones — `codeEntry`/`codeLedgerOf` and `departedCard` — for the two
- * screens no existing spec seeds at all.
+ * correctly, plus `codeEntry`/`codeLedgerOf` and `departedCard`, for what no existing spec
+ * seeds at all.
  *
  * EVERY SPEC THAT NEEDS ONE OF THESE SHAPES IMPORTS FROM HERE INSTEAD OF DEFINING ITS OWN
  * COPY. A second copy of `runRow` anywhere else is exactly the drift this repo's own rule
@@ -655,8 +655,7 @@ export async function seedPopulatedCodes(page: Page): Promise<void> {
 
 /* ----------------------------------------------------------------------- the graveyard */
 
-/** One departed card, in the shape `GET /graveyard` answers with. No existing spec seeds this
- *  route — `#/graveyard` has no dedicated spec yet — so this is a fresh fixture off
+/** One departed card, in the shape `GET /graveyard` answers with: a fresh fixture off
  *  `types.ts:DepartedCard`'s own field list. */
 export function departedCard(over: Partial<DepartedCard> = {}): DepartedCard {
   const base: DepartedCard = {
@@ -682,10 +681,9 @@ export function departedCard(over: Partial<DepartedCard> = {}): DepartedCard {
   return { ...base, ...over }
 }
 
-/** A few departed rows across the two doors D134 (amended) names — sold, retired — one
- *  standing and one buried each, so `#/graveyard` draws its merged list instead of "nothing
- *  has left this store yet". No `moved` row: D134's amendment (2026-09-26, the owner's
- *  ruling "Move Moved out of Graveyard") means `GET /graveyard` never answers with one. */
+/** A few departed rows across the two doors D134 names, sold and retired, one standing and one
+ *  buried each, so Inventory's Deleted boxes shelf has records to draw. No `moved` row: D134's
+ *  amendment means `GET /graveyard` never answers with one. */
 export function severalDeparted(): DepartedCard[] {
   return [
     departedCard(),
@@ -1020,7 +1018,6 @@ export const POPULATED_ROUTE_SEEDS: Record<string, (page: Page) => Promise<void>
   '#/orders': seedPopulatedOrders,
   '#/shipping': seedPopulatedShipping,
   '#/codes': seedPopulatedCodes,
-  '#/graveyard': seedPopulatedGraveyard,
   [PRODUCT_ROUTE]: seedPopulatedProduct,
   '#/review': seedPopulatedReview,
   '#/pricing': seedPopulatedPricing,

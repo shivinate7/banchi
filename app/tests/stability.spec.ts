@@ -303,6 +303,47 @@ for (const width of [1440, 820]) {
   })
 }
 
+/* THE DELETED BOXES SHELF: entering it is one swap with no read behind it, and leaving it for a box
+   holds the frame like any other box press. The shelf's records are the same shape as a box's, so
+   any move is the frame. */
+const L1_BURIED = [
+  { name: 'Thievul', index: 1 },
+  { name: 'Eiscue', index: 2 },
+  { name: 'Pikachu', index: 3 },
+].map((c) => ({
+  left_at: '2026-09-24T10:00:00+00:00', how: 'sold', box: 7, index: c.index, box_name: 'Old rares', name: c.name,
+  number: '025', game: 'pokemon', set_hint: null, sku: '9000001', condition: 'Near Mint', retire_reason: null,
+  order: null, run: null, captured_at: '2026-09-01T10:00:00+00:00', photo_sha256: null, buried: true, buried_at: '2026-09-26T00:00:00+00:00',
+}))
+
+for (const width of [1440, 820]) {
+  test(`held frame: pressing the Deleted boxes shelf swaps the walk once, at ${width}`, async ({ page }) => {
+    await l1Inventory(page)
+    await page.route(/\/graveyard$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: L1_BURIED }) }))
+    const gate = await heldReads(page, /\/inventory\/\d+$/)
+    await watchShifts(page)
+    await setViewport(page, { width, height: 1000 })
+    await page.goto(screen('inventory'))
+    await expect(page.locator('.card-locations').first()).toBeVisible()
+    const r = await heldPress(page, gate, () => page.getByRole('button', { name: 'Records from deleted boxes' }).click())
+    expect(r.clusters, `one press, ${r.clusters} layout changes: ${describeShifts([...r.out, ...r.swap])}`).toBeLessThanOrEqual(1)
+  })
+
+  test(`held frame: leaving the Deleted boxes shelf for a box holds the shelf until the read lands, at ${width}`, async ({ page }) => {
+    await l1Inventory(page)
+    await page.route(/\/graveyard$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: L1_BURIED }) }))
+    const gate = await heldReads(page, /\/inventory\/\d+$/)
+    await watchShifts(page)
+    await setViewport(page, { width, height: 1000 })
+    await page.goto(screen('inventory'))
+    await expect(page.locator('.card-locations').first()).toBeVisible()
+    await page.getByRole('button', { name: 'Records from deleted boxes' }).click()
+    await expect(page.getByRole('heading', { name: 'Thievul' })).toBeVisible()
+    const r = await heldPress(page, gate, () => page.locator('.browse-boxcell', { hasText: 'SV commons' }).click())
+    expectHeld(r)
+  })
+}
+
 /* ORDERS: THE WALK OPENS OVER A READ. `Walk 3` asks the plan for three buyers' orders, so the walk
    holds the buyer it showed until the answer lands, then swaps once. The answer for several buyers
    is taller than the answer for one, which is content and is why only the read-out window and the
@@ -671,7 +712,7 @@ test('L2 shell: the offline banner overlays and moves nothing (S6)', async ({ pa
   await watchShifts(page)
   await setViewport(page, { width: 1440, height: 1000 })
   /* A screen whose own content does not read the server's status, so a shift here is the banner's. */
-  await page.goto(screen('graveyard'))
+  await page.goto(screen('codes'))
   await settleFonts(page)
   const top = () => page.evaluate(() => document.querySelector('.bn-view')!.getBoundingClientRect().top)
   const before = await top()

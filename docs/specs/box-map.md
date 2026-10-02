@@ -117,8 +117,6 @@ move.
 
 - **The side-by-side view at 390.** Two columns of about 170px may hold section names. Draw it and
   show the owner before a change.
-- **The Graveyard after a move.** A 40-card move adds 40 rows. One row per move may read better.
-  The owner did not ask.
 - **A merged-out box.** D83 (a moved card) says a box emptied by a merge cannot be reclaimed. D134
   (a departed record is buried, not kept) may make that sentence stale. The reading awaits the
   owner's word.

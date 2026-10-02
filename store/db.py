@@ -2093,7 +2093,7 @@ def history(conn: sqlite3.Connection) -> List[dict]:
 def events_named(conn: sqlite3.Connection, event: str) -> List[dict]:
     """Every event of one name, newest first. `history`'s narrower sibling (D134).
 
-    `#/graveyard` wants only `buried` lines, not a full-table load and filter in Python —
+    Inventory's Deleted boxes shelf wants only `buried` lines, not a full-table load and filter in Python —
     `history()` stays the reversal readers' full scan (`_state_before_sale` and its twin
     need the whole ordered sequence to find the line just before the one they are asked
     about), and this is the read a screen makes instead. The `event` column already exists
