@@ -554,7 +554,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
         const mid = before[before.length - 1]
         return {
           text: live.textContent ?? '',
-          lefts: before.map((c) => Math.round(c.getBoundingClientRect().left * 10) / 10),
+          lefts: before.map((c) => Math.round(c.getBoundingClientRect().left)),
           last: kids[kids.length - 1] === pick,
           tops: new Set(kids.map((c) => Math.round(c.getBoundingClientRect().top + c.getBoundingClientRect().height / 2))).size,
           gapToPick: mid ? pick.getBoundingClientRect().left - mid.getBoundingClientRect().right : null,
