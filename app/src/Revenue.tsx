@@ -988,11 +988,12 @@ export function Revenue() {
   // asks about a SKU twice.
   useEffect(() => {
     const askedSkus = asked.current
+    const finals = finalSkus.current
     const skus = products.slice(0, PHOTO_LOOKUP_CAP).map((p) => p.sku).filter((sku) => !askedSkus.has(sku))
     if (skus.length === 0) return
     skus.forEach((sku) => askedSkus.add(sku))
     const stop = getSkuPhotosSettled(skus, (found) => {
-      skus.forEach((sku) => found.pending.includes(sku) || finalSkus.current.add(sku))
+      skus.forEach((sku) => found.pending.includes(sku) || finals.add(sku))
       setPhotos((prev) => ({ ...prev, ...found.photos }))
       setStockPhotos((prev) => ({ ...prev, ...found.stockPhotos }))
       setPendingSkus((prev) => {
@@ -1007,7 +1008,7 @@ export function Revenue() {
       stop()
       // A sort, filter or scope change re-runs this effect; a SKU whose answer was dropped
       // with it must be asked again, not remembered as asked.
-      skus.forEach((sku) => finalSkus.current.has(sku) || askedSkus.delete(sku))
+      skus.forEach((sku) => finals.has(sku) || askedSkus.delete(sku))
     }
   }, [products])
 
