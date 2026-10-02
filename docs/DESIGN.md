@@ -239,6 +239,146 @@ locked nowhere a script can read; `docs/debts/` carries that gap rather than thi
 a coverage it does not have. **The row is still not to be satisfied by respelling the palette —
 that is D16's forbidden direction.** What changed is which side was wrong.
 
+## Palettes
+
+Abyssal Bloom and Carnival Midway each recolor the same slots. These are the dark block's
+palette tokens and the palette slots in the token block above. This table locks each hex.
+The word `other` stands for an alpha, a shadow, a gradient or a reference to another slot. The
+`design tokens` row of `make docs-audit` checks this table against `app/src/tokens.css` both
+ways. It also checks that both palettes name the same slots.
+
+```
+abyssal-bloom
+--bn-bg #050d14
+--bn-surface #0a1c2c
+--bn-surface-2 #040b12
+--bn-surface-3 #0f2740
+--bn-surface-glass other
+--bn-hover other
+--bn-ink #eaf7ff
+--bn-ink-2 #bfe3ee
+--bn-ink-3 #8bb3c4
+--bn-ink-4 #6d95a8
+--bn-line other
+--bn-line-strong other
+--bn-line-focus other
+--bn-accent #35e4ff
+--bn-accent-hover #68ecff
+--bn-accent-press #1fc2df
+--bn-accent-tint other
+--bn-accent-tint-2 other
+--bn-on-accent #031017
+--bn-live #ff5a36
+--bn-live-tint other
+--bn-ok #4dffb8
+--bn-ok-tint other
+--bn-warn #ffb020
+--bn-warn-tint other
+--bn-danger #ff2e6d
+--bn-danger-tint other
+--bn-money #ffd76a
+--bn-pill-ink-accent #68ecff
+--bn-pill-ink-ok #4dffb8
+--bn-pill-ink-warn #ffb020
+--bn-pill-ink-danger #ff2e6d
+--bn-pill-ink-live #ff5a36
+--bn-shadow-1 other
+--bn-shadow-2 other
+--bn-shadow-3 other
+--bn-shadow-accent other
+--bn-btn-bg other
+--bn-btn-bg-hover #0f2740
+--bn-btn-shadow other
+--bn-stage-accent #59c7ff
+--bn-stage-accent-hover other
+--bn-stage-ok #3ddc84
+--bn-stage-warn #f5a524
+--bn-stage-danger #ff5c5c
+--bn-stage-live #ff6a58
+--bn-nav-accent-2 #29ffb0
+--bn-nav-label-2 other
+--bn-nav-hover-2 other
+--bn-nav-tint-2 other
+--bn-nav-accent-3 #ff6a2e
+--bn-nav-label-3 other
+--bn-nav-hover-3 other
+--bn-nav-tint-3 other
+--bn-nav-accent-4 #ff2ec4
+--bn-nav-label-4 other
+--bn-nav-hover-4 other
+--bn-nav-tint-4 other
+--bn-seg-active-ink #031017
+--bn-seg-active-bg #35e4ff
+--bn-seg-active-bg-2 #ff6a2e
+--bn-page-backdrop other
+--bn-row-stripe other
+
+carnival-midway
+--bn-bg #0f0817
+--bn-surface #1c0f28
+--bn-surface-2 #0b0512
+--bn-surface-3 #291536
+--bn-surface-glass other
+--bn-hover other
+--bn-ink #f8f1ff
+--bn-ink-2 #dcc8ee
+--bn-ink-3 #ad95c6
+--bn-ink-4 #8c76a8
+--bn-line other
+--bn-line-strong other
+--bn-line-focus other
+--bn-accent #ffcc33
+--bn-accent-hover #ffdb66
+--bn-accent-press #e6b21c
+--bn-accent-tint other
+--bn-accent-tint-2 other
+--bn-on-accent #180f02
+--bn-live #ff3b3b
+--bn-live-tint other
+--bn-ok #4dff9e
+--bn-ok-tint other
+--bn-warn #ffab2e
+--bn-warn-tint other
+--bn-danger #ff1a63
+--bn-danger-tint other
+--bn-money #ffe066
+--bn-pill-ink-accent #ffdb66
+--bn-pill-ink-ok #4dff9e
+--bn-pill-ink-warn #ffab2e
+--bn-pill-ink-danger #ff1a63
+--bn-pill-ink-live #ff3b3b
+--bn-shadow-1 other
+--bn-shadow-2 other
+--bn-shadow-3 other
+--bn-shadow-accent other
+--bn-btn-bg other
+--bn-btn-bg-hover #291536
+--bn-btn-shadow other
+--bn-stage-accent #4de8ff
+--bn-stage-accent-hover other
+--bn-stage-ok #3ddc84
+--bn-stage-warn #f5a524
+--bn-stage-danger #ff5c5c
+--bn-stage-live #ff6a58
+--bn-nav-accent-2 #2de0d0
+--bn-nav-label-2 other
+--bn-nav-hover-2 other
+--bn-nav-tint-2 other
+--bn-nav-accent-3 #ff2e7a
+--bn-nav-label-3 other
+--bn-nav-hover-3 other
+--bn-nav-tint-3 other
+--bn-nav-accent-4 #c86bff
+--bn-nav-label-4 other
+--bn-nav-hover-4 other
+--bn-nav-tint-4 other
+--bn-seg-active-ink #180f02
+--bn-seg-active-bg #ffcc33
+--bn-seg-active-bg-2 #ff2e7a
+--bn-page-backdrop other
+--bn-row-stripe other
+```
+
 ## Light and dark are both first class
 
 **The theme is `data-theme` on `<html>`, plus `data-palette` for a palette.** `THEMES` in

@@ -1,6 +1,9 @@
 // Protects: The theme button cycles light, dark, Abyssal Bloom and Carnival Midway and the choice survives a reload; light and dark paint as before; both palettes keep body text readable; switching moves nothing.
 // Governs: D50, D313
 import { test, expect, type Page } from '@playwright/test'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { THEMES } from '../src/deviceMemory'
 import { sealEveryTest } from './shell'
 import { setViewport } from './phoneSwitch'
 
@@ -12,13 +15,20 @@ test.beforeEach(async ({ page }) => {
   )
 })
 
-const ORDER = ['light', 'dark', 'abyssal-bloom', 'carnival-midway'] as const
-const ATTRS = {
-  light: { theme: null, palette: null },
-  dark: { theme: 'dark', palette: null },
-  'abyssal-bloom': { theme: 'dark', palette: 'abyssal-bloom' },
-  'carnival-midway': { theme: 'dark', palette: 'carnival-midway' },
-} as const
+/* THEMES is the one list; this spec reads it and keeps no copy of its own. */
+const ORDER = THEMES.map((t) => t.id)
+const attrsFor = (id: string) => {
+  const entry = THEMES.find((t) => t.id === id)
+  return { theme: id === 'light' ? null : 'dark', palette: entry && 'palette' in entry ? entry.palette : null }
+}
+
+test('the pre-paint script in index.html lists exactly the ids in THEMES', () => {
+  const html = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8')
+  const known = /var known = \[([^\]]*)\]/.exec(html)?.[1]
+  expect(known, 'index.html has no `var known = [...]`').toBeDefined()
+  const ids = [...(known ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1])
+  expect(ids).toEqual(ORDER)
+})
 
 const attrs = (page: Page) =>
   page.evaluate(() => ({
@@ -38,15 +48,13 @@ async function open(page: Page, scheme: 'light' | 'dark' = 'light'): Promise<voi
 
 test('the theme button cycles all four themes in order and a reload keeps the choice', async ({ page }) => {
   await open(page)
-  expect(await attrs(page)).toMatchObject({ ...ATTRS.light, stored: null })
-  for (const id of [...ORDER.slice(1), 'light'] as const) {
+  expect(await attrs(page)).toMatchObject({ ...attrsFor('light'), stored: null })
+  for (const id of [...ORDER.slice(1), ORDER[0]]) {
     await toggle(page).click()
-    expect(await attrs(page), id).toMatchObject({ ...ATTRS[id], stored: id })
-    if (id === 'abyssal-bloom') {
-      await page.reload()
-      await expect(page.locator('main.home')).toBeVisible()
-      expect(await attrs(page), 'after reload').toMatchObject({ ...ATTRS[id], stored: id })
-    }
+    expect(await attrs(page), id).toMatchObject({ ...attrsFor(id ?? ''), stored: id })
+    await page.reload()
+    await expect(page.locator('main.home')).toBeVisible()
+    expect(await attrs(page), `${id} after reload`).toMatchObject({ ...attrsFor(id ?? ''), stored: id })
   }
 })
 

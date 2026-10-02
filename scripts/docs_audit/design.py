@@ -405,6 +405,72 @@ def token_findings(
     return findings
 
 
+def css_palettes(text: str) -> Dict[str, Dict[str, str]]:
+    """Each `[data-palette='id']` block of tokens.css, keyed by id: name -> value."""
+    body = _CSS_COMMENT_RE.sub(" ", text)
+    out: Dict[str, Dict[str, str]] = {}
+    for match in re.finditer(r":root\b[^{]*\[data-palette=['\"]([a-z0-9-]+)['\"]\][^{]*\{", body):
+        end = _block_end(body, match.end())
+        out[match.group(1)] = {
+            "--" + name: value.strip()
+            for name, value in _CSS_PROPERTY_RE.findall(body[match.end():end])
+            if name.startswith("bn-")
+        }
+    return out
+
+
+def doc_palettes(block: str) -> Dict[str, Dict[str, str]]:
+    """The `## Palettes` block: a bare id line opens a palette, `--bn-name value` lines fill it."""
+    out: Dict[str, Dict[str, str]] = {}
+    current: Optional[Dict[str, str]] = None
+    for raw in block.splitlines():
+        line = raw.strip()
+        if re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", line):
+            current = out.setdefault(line, {})
+        elif line.startswith("--bn-") and current is not None:
+            name, _, value = line.partition(" ")
+            current[name] = value.strip()
+    return out
+
+
+def palette_findings(
+    css: Dict[str, Dict[str, str]],
+    doc: Dict[str, Dict[str, str]],
+    base: Set[str],
+) -> List[Finding]:
+    """Each palette against the doc's table, both ways, and against its siblings.
+
+    A palette recolors the same slots as every other, so a name one declares and another lacks is
+    a hole that paints the base theme's value through it. A name no base block declares is
+    invented. A hex is compared where both sides state one; `other` in the doc stands for an
+    alpha, a shadow or a gradient, which the block states in words and not as a second value.
+    """
+    where = f"{rel(DESIGN)} + {rel(TOKENS_CSS)}"
+    findings: List[Finding] = []
+    for pid in sorted(set(css) | set(doc)):
+        if pid not in css or pid not in doc:
+            side = rel(TOKENS_CSS) if pid not in css else rel(DESIGN)
+            findings.append(Finding(where, f"palette `{pid}` is missing from {side}."))
+    union: Set[str] = set().union(*css.values()) if css else set()
+    for pid in sorted(css):
+        have = set(css[pid])
+        for name in sorted(union - have):
+            findings.append(Finding(where, f"palette `{pid}` declares no `{name}`, and a sibling palette does."))
+        for name in sorted(have - base):
+            findings.append(Finding(where, f"palette `{pid}` declares `{name}`, which no base theme declares."))
+        if pid not in doc:
+            continue
+        for name in sorted(have - set(doc[pid])):
+            findings.append(Finding(where, f"palette `{pid}` declares `{name}`, and the Palettes table in {rel(DESIGN)} names none."))
+        for name in sorted(set(doc[pid]) - have):
+            findings.append(Finding(where, f"the Palettes table locks `{name}` for `{pid}`, and {rel(TOKENS_CSS)} declares none."))
+        for name in sorted(have & set(doc[pid])):
+            locked, rendered = doc[pid][name], css[pid][name]
+            if locked.startswith("#") and rendered.startswith("#") and token_value(COLOR, locked) != token_value(COLOR, rendered):
+                findings.append(Finding(where, f"`{name}` disagrees in palette `{pid}`.\n  {rel(DESIGN)}:      {locked}\n  {rel(TOKENS_CSS)}: {rendered}"))
+    return findings
+
+
 def check_design_tokens(report: Report) -> None:
     """The locked palette in docs/DESIGN.md against the custom properties the app renders.
 
@@ -481,10 +547,18 @@ def check_design_tokens(report: Report) -> None:
         )
         return
 
+    findings = token_findings(claims, light, dark, every)
+    palette_block = fenced_block(read(DESIGN), r"Palettes\b")
+    if palette_block is None:
+        findings.append(Finding(rel(DESIGN), "has no fenced block under its `## Palettes` heading, so no palette is locked."))
+    else:
+        findings += palette_findings(
+            css_palettes(read(TOKENS_CSS)), doc_palettes(palette_block), set(light) | set(dark)
+        )
     report.add(
         "design tokens",
         MECHANICAL,
-        token_findings(claims, light, dark, every),
+        findings,
         f"{len(every)} declared tokens, every one named by the block; "
         f"{len(claims.hexes)} hexes compared across both themes",
         scanned=len(every),
