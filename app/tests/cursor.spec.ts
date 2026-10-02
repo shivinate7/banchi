@@ -915,3 +915,7 @@ test('the cursor floor answers for every shape a control can take', async ({ pag
         .join('\n'),
   ).toHaveLength(0)
 })
+
+test('scratch: planted failure', () => {
+  expect(1).toBe(2)
+})
