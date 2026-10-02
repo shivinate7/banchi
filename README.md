@@ -4,6 +4,8 @@ Banchi (番地, "lot number") takes photos of trading cards you keep in boxes. I
 TCGplayer, prices them, and tells you which box to open when one sells. It is for one seller
 with sorted singles: Pokemon, One Piece and Riftbound.
 
+The first result: `make up` prints a link. Open it to see the app, where your boxes and cards show.
+
 Status: working, built for one store. The code-card feature is dormant.
 
 [Live demo](https://shivinate7.github.io/banchi/): the real app on recorded answers. It
