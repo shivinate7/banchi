@@ -3855,11 +3855,11 @@ def do_pipeline_holdings_value(range_: str) -> dict:
 
 
 def do_pipeline_movers() -> dict:
-    """`GET /pipeline/movers` — listed SKUs whose market moved more than 10% since they were
-    listed, with direction and amount, and the last scheduled read's note (DEBT69).
+    """`GET /pipeline/movers` — live SKUs whose market moved more than 10% since they were first
+    seen live, with direction and amount, and the last scheduled read's note (DEBT69).
 
     A PLAIN READ. No socket, no write, and nothing here changes a price: `#/pricing` draws it and
-    the person decides. THEN is the archive bucket covering the SKU's `first_seen_live` day
+    the person decides. THEN is the archive bucket covering the SKU's `first_seen_live` day (not its listing day)
     (D219), NOW is the `readings` table (D189). A SKU with neither is counted in `unmeasured`,
     never dropped. `refresh` is `pipeline/pricerefresh.py`'s note, or null if no scheduled read
     has ever run.
@@ -3873,9 +3873,16 @@ def do_pipeline_movers() -> dict:
             "store_unreadable",
             f"The store could not be read because {files.plain_cause(exc)}, so no price moves can be shown. Try again, and if it repeats, restart the app on the Mac.",
         ) from None
+    # THE SUBJECTS ARE EVERY SKU IN THE NEWEST LIVE EXPORT WITH A COPY LIVE, which the daily read
+    # keeps current. Its date is `Listing.first_seen_live` where `reconcile --live` has written one:
+    # the first export that held the SKU, NOT the day it was listed. A subject with no such date
+    # is counted unchecked, never dropped. Nothing here writes a `Listing` (D87, D104).
+    _, live_listing = _newest_live_listing()
+    live_skus = [sku for sku, (_, held) in live_listing.items() if held > 0]
     listed = {}
-    for sku, entry in snapshot.inventory.listings.items():
-        when = corpus.parse_stamp(entry.first_seen_live) if entry.live > 0 else None
+    for sku in live_skus:
+        entry = snapshot.inventory.listings.get(sku)
+        when = corpus.parse_stamp(entry.first_seen_live) if entry is not None else None
         if when is not None:
             listed[sku] = when.date()
     summary = snapshot.archive.summary
@@ -3894,7 +3901,7 @@ def do_pipeline_movers() -> dict:
             "set": facts.set_name if facts else None,
             "number": facts.number if facts else None,
             "condition": facts.condition if facts else None,
-            "listed": listed[m.sku].isoformat(),
+            "first_seen": listed[m.sku].isoformat(),
             "then": tcgcsv.format_price(m.then),
             "now": tcgcsv.format_price(m.now),
             "change": str(m.change.quantize(Decimal("0.001"))),
@@ -3902,8 +3909,8 @@ def do_pipeline_movers() -> dict:
         })
     return {
         "threshold": str(price_movers.THRESHOLD),
-        "listed": len(listed),
-        "unmeasured": unmeasured,
+        "listed": len(live_skus),
+        "unmeasured": unmeasured + len(live_skus) - len(listed),
         "movers": rows,
         "refresh": pricerefresh.read_status(),
     }

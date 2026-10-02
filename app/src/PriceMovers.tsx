@@ -1,5 +1,5 @@
 /**
- * Which listed items moved more than a tenth in the market since they were listed (DEBT69).
+ * Which live items moved more than a tenth in the market since they were first seen (DEBT69).
  *
  * A READ, NEVER A DECISION. It names the item, the direction and the amount, and opens the
  * product. Nothing here changes a price: the person decides, and the price field on the row
@@ -13,7 +13,7 @@
 import { useEffect, useState } from 'react'
 import { Button, Icon, Money, ProductLink } from './kit'
 import { getPriceMovers } from './server'
-import { clockTime } from './dates'
+import { relativeDate } from './dates'
 import type { PriceMover, PriceMoversPayload } from './types'
 import './PriceMovers.css'
 
@@ -30,24 +30,25 @@ function summary(read: PriceMoversPayload | null | 'failed'): string {
   const cut = Math.round(Number(read.threshold) * 100)
   if (gone === 0) {
     return read.listed === 0
-      ? 'Nothing is listed yet, so no price has moved.'
-      : `No listed price has moved more than ${cut}% since it was listed.`
+      ? 'No live listings have been read yet.'
+      : `No live price has moved more than ${cut}% since it was first seen.`
   }
-  return `${gone} listed ${gone === 1 ? 'item' : 'items'} moved more than ${cut}% since ${gone === 1 ? 'it was' : 'they were'} listed.`
+  return `${gone} live ${gone === 1 ? 'item' : 'items'} moved more than ${cut}% since ${gone === 1 ? 'it was' : 'they were'} first seen.`
 }
 
+/** ONE LINE, always: the unchecked count comes before the free-form message so a clamp never
+ *  cuts it, and the full text is on the title. */
 function readLine(read: PriceMoversPayload | null | 'failed'): { text: string; failed: boolean } {
-  if (read === null || read === 'failed') return { text: ' ', failed: false }
-  const unmeasured = read.unmeasured === 0 ? '' : ` ${read.unmeasured} could not be checked for want of an earlier price.`
+  if (read === null || read === 'failed') return { text: '\u00a0', failed: false }
+  const unchecked =
+    read.unmeasured === 0 ? '' : ` ${read.unmeasured} could not be checked for want of an earlier price.`
   const note = read.refresh
-  if (note === null) return { text: `No daily price read has run yet.${unmeasured}`, failed: false }
+  if (note === null) return { text: `No daily price read has run yet.${unchecked}`, failed: false }
+  const when = relativeDate(note.at * 1000)
   if (!note.ok) {
-    return {
-      text: `The daily price read failed on ${clockTime(note.at * 1000)}, so these prices are older. ${note.message}`,
-      failed: true,
-    }
+    return { text: `The daily price read failed ${when}, so these prices are older.${unchecked} ${note.message}`, failed: true }
   }
-  return { text: `Prices were read ${clockTime(note.at * 1000)}.${unmeasured}`, failed: false }
+  return { text: `Prices were read ${when}.${unchecked}`, failed: false }
 }
 
 function MoverRow({ row }: { row: PriceMover }) {
@@ -95,7 +96,7 @@ export function PriceMovers() {
   const moved = read !== null && read !== 'failed' ? read.movers : []
   const line = readLine(read)
   return (
-    <section className="pricemovers" aria-label="Price moves since listing">
+    <section className="pricemovers" aria-label="Price moves since first seen">
       <div className="pricemovers-head">
         <p className="pricemovers-says">{summary(read)}</p>
         {moved.length === 0 ? null : (
@@ -104,9 +105,9 @@ export function PriceMovers() {
           </Button>
         )}
       </div>
-      <p className="pricemovers-read" data-failed={line.failed ? 'true' : undefined}>
+      <p className="pricemovers-read" data-failed={line.failed ? 'true' : undefined} title={line.text.trim() === '' ? undefined : line.text}>
         {line.failed ? <Icon name="alert" size={14} /> : null}
-        {line.text}
+        <span className="pricemovers-read-text">{line.text}</span>
       </p>
       {open && moved.length > 0 ? (
         <ul className="pricemovers-list">

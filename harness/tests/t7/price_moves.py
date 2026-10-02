@@ -65,11 +65,7 @@ def check_price_movers(checks: Checks) -> None:
     with isolated_home():
         with Store().write() as writable:
             entry = writable.inventory.listing("501")
-            entry.live = 2
             entry.first_seen_live = "2026-09-10T08:00:00+00:00"
-            gone = writable.inventory.listing("502")
-            gone.live = 0
-            gone.first_seen_live = "2026-09-10T08:00:00+00:00"
             writable.archive.upsert({
                 "501:month:2026-09-10": _bucket("501", "2026-09-10", "10.00", 1),
                 "502:month:2026-09-10": _bucket("502", "2026-09-10", "10.00", 1),
@@ -79,14 +75,27 @@ def check_price_movers(checks: Checks) -> None:
                 KIND_LIVE, "live-x.csv", {"501": reading("501", "12.00"), "502": reading("502", "20.00")},
                 Source(KIND_LIVE, "live-x.csv", 1, 2),
             )
-        before = (files.home() / "inventory" / "store.sqlite")
-        stamp = before.stat().st_mtime_ns if before.exists() else None
-        answer = pipeline_routes.do_pipeline_movers()
-        checks.equal([r["sku"] for r in answer["movers"]], ["501"], "the route names the live SKU and skips the one with no copies live")
+        # 501 has a first-seen date; 503 is NEW in the export and has none (the daily read writes no
+        # `Listing`); 502 has no copy live. Only 501 and 503 are subjects.
+        real = pipeline_routes._newest_live_listing
+        pipeline_routes._newest_live_listing = lambda: (
+            "live-x.csv", {"501": ("12.00", 2), "502": ("20.00", 0), "503": ("5.00", 1)},
+        )
+        try:
+            before = files.home() / "inventory" / "store.sqlite"
+            stamp = before.stat().st_mtime_ns if before.exists() else None
+            answer = pipeline_routes.do_pipeline_movers()
+        finally:
+            pipeline_routes._newest_live_listing = real
+        checks.equal([r["sku"] for r in answer["movers"]], ["501"], "the route names the live SKU with a baseline")
         checks.equal(
             (answer["movers"][0]["direction"], answer["movers"][0]["then"], answer["movers"][0]["now"]),
             ("up", "10.00", "12.00"),
             "the route carries direction, then and now",
+        )
+        checks.equal(
+            (answer["listed"], answer["unmeasured"]), (2, 1),
+            "a newly live SKU with no first-seen date is counted unchecked, and one with no copy live is no subject",
         )
         checks.equal(answer["refresh"], None, "no scheduled read has run, so there is no note")
         checks.equal(
@@ -131,17 +140,35 @@ def check_price_refresh_note(checks: Checks) -> None:
         if saved is not None:
             os.environ["TCGPLAYER_STORE_COOKIE"] = saved
 
-    tree = ast.parse(SCRIPT.read_text())
+    checks.equal(daily_path_reaches(SCRIPT.read_text()), (True, {"do_live_export"}), FENCE_LABEL)
+    checks.equal(
+        daily_path_reaches(SCRIPT.read_text().replace("pipeline_routes.do_live_export", "pipeline_routes.do_pipeline_export")),
+        (True, {"do_pipeline_export"}),
+        "the callee check reads the callee: a swapped-in paid export is seen",
+    )
+
+
+FENCE_LABEL = (
+    "the daily job passes `do_live_export` to the note writer and reaches nothing else of "
+    "`server/`, `cli/` or `identify/`: no paid read, no sweep"
+)
+
+
+def daily_path_reaches(source: str):
+    """`(imports are exactly the note writer and the server module, the `pipeline_routes`
+    attributes the script touches)`. A callee other than `do_live_export` changes the second."""
+    tree = ast.parse(source)
     reached = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module in ("pipeline", "server", "cli", "identify", "store"):
             reached.update("%s.%s" % (node.module, alias.name) for alias in node.names)
         elif isinstance(node, ast.Import):
-            reached.update(alias.name for alias in node.names if alias.name.split(".")[0] in ("cli", "identify", "pipeline", "server", "store"))
-    checks.equal(
-        reached, {"pipeline.pricerefresh", "server.pipeline_routes"},
-        "the daily job reaches the note writer and the live fetch's module only, no paid read and no sweep",
-    )
+            reached.update(a.name for a in node.names if a.name.split(".")[0] in ("cli", "identify", "pipeline", "server", "store"))
+    touched = {
+        n.attr for n in ast.walk(tree)
+        if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "pipeline_routes"
+    }
+    return reached == {"pipeline.pricerefresh", "server.pipeline_routes"}, touched
 
 
 CHECKS = (

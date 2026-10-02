@@ -35,6 +35,8 @@
 }
 .pricemovers-read[data-failed='true'] { color: var(--bn-warn); }
 .pricemovers-read svg { flex: none; margin-top: 0.15em; }
+/* ONE CLAMPED LINE FROM FIRST PAINT: a long refusal sentence never grows the panel. */
+.pricemovers-read-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 .pricemovers-list {
   display: flex;

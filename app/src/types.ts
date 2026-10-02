@@ -4628,8 +4628,8 @@ export type PriceMover = {
   set: string | null
   number: string | null
   condition: string | null
-  /** The day the SKU was first seen live, `YYYY-MM-DD`. */
-  listed: string
+  /** The day the SKU was first seen live, `YYYY-MM-DD`. Not its listing day. */
+  first_seen: string
   then: string
   now: string
   change: string

@@ -4982,12 +4982,19 @@ COMPONENTS = [
                 # no address at all). D216 is why the recording runs offline.
                 "governed_by": ["D61", "D70", "D193", "D216", "D295", "D301"],
             },
+            "launchagent.py": {
+                "does": "the shared launchd install and remove for a daily job on the owner's "
+                        "Mac, main tree only. `price-refresh-daily.py` calls it. "
+                        "`demo-mirror-daily.py` keeps its own copy under the D295 fence; "
+                        "migrating it is its own PR.",
+                "governed_by": ["D295"],
+            },
             "price-refresh-daily.py": {
                 "does": "the daily market read on the owner's Mac: one free live fetch "
                         "(`do_live_export`), then the note `#/pricing` shows. Calls no paid "
                         "read and no archive sweep, and changes no price. `--agent` installs "
                         "the daily launchd job (main tree only), `--agent --remove` removes it. "
-                        "The installer is `demo-mirror-daily.py`'s, copied on purpose.",
+                        "The installer is `launchagent.py`'s; `demo-mirror-daily.py` keeps its own copy (D295 fence).",
                 "note": "PROVED BY T7's `price_moves` group: the note is written on success and "
                         "on refusal, and the script's own imports are asserted to reach only "
                         "the note writer and the live fetch's module.",
