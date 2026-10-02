@@ -251,6 +251,10 @@ export type CardLocationsProps = {
   /** The palette of the mark in each neighbour row (`kit/rarityMarks.ts:markFor`, the caller's
    *  game and rarity). Omitted, the mark's default. Owner skin only. */
   mark?: LogoVariant
+  /** Play the mark's one-shot glint when the walk lands on a copy (`currentKey`): the caller's gate
+   *  (the shown card is in the top tenth of the store by market price). Only the current copy's row
+   *  glints, and its sheen starts when it becomes current. Omitted, no glint. Owner skin only. */
+  glint?: boolean
 
   /** An extra class on the outer `<section>` — a CSS seam so a caller's own stylesheet can
    *  scope a rule to its usage (the walk's row `min-height`, D118) without it reaching
@@ -531,6 +535,7 @@ function OwnerRows({
   frozen = RANK_IS_CURRENT,
   preserveOrder = false,
   mark,
+  glint = false,
   className,
 }: Omit<CardLocationsProps, 'persona'>) {
   /* WHICH COPIES ARE DRAWN, AND IN WHAT ORDER (D132). Rule 1 below used to say no copy is
@@ -684,7 +689,7 @@ function OwnerRows({
                 )}
               </span>
 
-              {pooled ? null : <PlaceNeighbors place={copy.place} departed={departed} mark={mark} />}
+              {pooled ? null : <PlaceNeighbors place={copy.place} departed={departed} mark={mark} glint={glint && copy.key === currentKey} />}
 
               {noBar ? null : (
                 <PositionBar

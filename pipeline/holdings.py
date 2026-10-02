@@ -60,8 +60,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import Decimal, InvalidOperation
-from typing import Dict, List, Optional, Sequence
+from decimal import ROUND_CEILING, Decimal, InvalidOperation
+from typing import Dict, List, Mapping, Optional, Sequence
 
 from pipeline import tcgcsv
 from store.master import TERMINAL_STATES, Inventory
@@ -82,6 +82,40 @@ def on_hand_quantities(inventory: Inventory) -> Dict[str, int]:
             continue
         counts[sku] = counts.get(sku, 0) + 1
     return counts
+
+
+#: THE SHARE OF HELD SKUS THAT GLINT. The owner's ruling: the top tenth by market price.
+TOP_SHARE = Decimal("0.10")
+
+
+def held_market_cutoff(inventory: Inventory, readings: Mapping[str, object]) -> Optional[Decimal]:
+    """The market price at which a held SKU is in the top tenth of what the store holds, or `None`.
+
+    HELD IS `on_hand_quantities`' rule (a SKU with a copy not in a terminal state), and A PRICE IS
+    `readings[sku].market`, the newest figure the store has read for it. A held SKU with no reading,
+    or one whose figure will not parse as a positive number, is LEFT OUT of the ranking and never
+    given a price: a cutoff over guessed prices would glint on a guess. No priced held SKU answers
+    `None`, so no card glints against an empty store.
+
+    NEAREST RANK FROM THE TOP: with `n` priced SKUs the top `ceil(n * 10%)` are in, so the cutoff
+    is the lowest of them. A card at the cutoff is in (ties glint, the caller compares `>=`), which
+    means a tie can carry more than a tenth. One SKU alone is its own top tenth.
+    """
+    prices: List[Decimal] = []
+    for sku in on_hand_quantities(inventory):
+        reading = readings.get(sku)
+        raw = getattr(reading, "market", None)
+        try:
+            price = Decimal(str(raw).strip())
+        except (InvalidOperation, ValueError):
+            continue
+        if price.is_finite() and price > 0:
+            prices.append(price)
+    if not prices:
+        return None
+    prices.sort(reverse=True)
+    top = max(1, int((TOP_SHARE * len(prices)).to_integral_value(rounding=ROUND_CEILING)))
+    return prices[top - 1]
 
 
 def on_hand_names(inventory: Inventory) -> Dict[str, str]:
