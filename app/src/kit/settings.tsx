@@ -160,7 +160,8 @@ export function SettingsCensus({
   note,
 }: {
   label: string
-  value: number | null
+  /** A number, or any node for a figure that is not a count (a rule's name, a price). */
+  value: number | ReactNode | null
   help?: string
   note?: ReactNode
 }) {
@@ -168,7 +169,7 @@ export function SettingsCensus({
     <div className="bn-set-census-cell" title={help}>
       <dt>{label}</dt>
       <dd>
-        {value === null ? '—' : value.toLocaleString()}
+        {value === null ? '—' : typeof value === 'number' ? value.toLocaleString() : value}
         {note === undefined ? null : <span className="bn-set-census-note">{note}</span>}
       </dd>
     </div>
