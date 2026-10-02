@@ -61,8 +61,11 @@ _RUNS_FLAG_RE = re.compile(r"--[a-z][a-z-]*")
 
 CHECK_ENTRY_KEYS = (
     "target", "runs", "asserts", "needs", "writes",
-    "commit_path", "why_off_commit_path", "gates", "governed_by",
+    "commit_path", "why_off_commit_path", "gates", "governed_by", "shard",
 )
+
+# The one entry no shard runs: its own required CI job does. Any other None is a silent CI gap.
+SHARDLESS = ("revert-guard",)
 
 # The parallel shards `.github/workflows/check.yml` runs in place of one `make ci-check`.
 # A registry entry's `shard` names one of these (without the `ci-check-` prefix), or is None.
@@ -138,6 +141,10 @@ def _check_registry() -> Row:
             findings.append(Finding(where, (
                 "is not a rule in the Makefile, so `make check` would fail on it."
             )))
+        if entry["shard"] is None and name not in SHARDLESS:
+            findings.append(Finding(where, (
+                "`shard` is None, and no CI job runs it. Only {0} may have no shard."
+            ).format(", ".join(SHARDLESS))))
         if entry["shard"] is not None and entry["shard"] not in shard_names:
             findings.append(Finding(where, (
                 "`shard` is `{0}`. It is None or one of: {1}."
