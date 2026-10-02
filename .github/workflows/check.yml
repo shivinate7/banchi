@@ -220,30 +220,34 @@ jobs:
         run: make ${{ matrix.target }}
 
   # THE REQUIRED CHECK. The ruleset names `check`, so this job keeps that name and passes only
-  # when every shard passed AND the browser matrix did not fail. `if: always()` because a job
-  # that `needs` a red job is otherwise SKIPPED, and a skipped required check reads as not run.
-  # Shards must be `success`. `design-check` may also be `skipped`, and only because its own
-  # `if:` skipped it (`browser-scope` said no browser can reach the change, or `already-passed`
-  # found this tree green): `failure` and `cancelled` fail `check`. The matrix is advisory no
-  # more. ponytail: the smallest in-repo gate; it can move to claude-settings'
-  # `actions/all-jobs-passed` once that is merged.
+  # when every shard passed AND the browser matrix passed or was skipped ON PURPOSE.
+  # `if: always()` because a job that `needs` a red job is otherwise SKIPPED, and a skipped
+  # required check reads as not run. A shard result must be `success`. `design-check` (the whole
+  # matrix, so one failed, cancelled or skipped shard changes its result) must be `success`, or
+  # `skipped` with an explicit reason: `browser-scope` answered `false` (no browser can reach
+  # the change) or `already-passed` answered `true` (this tree went green on a pull request).
+  # Any other `skipped`, `failure` or `cancelled` fails. ponytail: the smallest in-repo gate;
+  # it can move to claude-settings' `actions/all-jobs-passed` once that is merged.
   check:
-    needs: [ci-check, design-check]
+    needs: [ci-check, design-check, already-passed, browser-scope]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: every shard succeeded and the browser matrix did not fail
+      - name: every shard succeeded and the browser matrix passed or was skipped on purpose
         env:
           SHARDS: ${{ needs.ci-check.result }}
           BROWSER: ${{ needs.design-check.result }}
+          SCOPE_RUN: ${{ needs.browser-scope.outputs.run }}
+          ALREADY_PASSED: ${{ needs.already-passed.outputs.skip }}
         run: |
-          echo "shard result: ${SHARDS}; browser matrix result: ${BROWSER}"
+          echo "shards: ${SHARDS}; browser matrix: ${BROWSER} (scope run=${SCOPE_RUN}, already-passed skip=${ALREADY_PASSED})"
           [ "${SHARDS}" = "success" ] || { echo "a shard did not succeed"; exit 1; }
-          case "${BROWSER}" in
-            success|skipped) ;;
-            *) echo "the browser matrix ${BROWSER}"; exit 1 ;;
-          esac
+          [ "${BROWSER}" = "success" ] && exit 0
+          if [ "${BROWSER}" = "skipped" ] && { [ "${SCOPE_RUN}" = "false" ] || [ "${ALREADY_PASSED}" = "true" ]; }; then
+            echo "browser matrix skipped on purpose"; exit 0
+          fi
+          echo "the browser matrix did not pass: ${BROWSER}"; exit 1
 
   # D133's guard as its own check on the PR, so a refusal reads as what it is rather than as one
   # red line inside ninety seconds of `make ci-check` (which runs it too, as `revert-guard`).
