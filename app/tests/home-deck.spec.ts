@@ -3,6 +3,7 @@
 import { test, expect } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { setViewport } from './phoneSwitch'
+import { settleMotion } from './motionSettled'
 
 sealEveryTest({ store: true, cards: 4 })
 
@@ -21,7 +22,7 @@ for (const [w, h] of [[1440, 900], [820, 1100]] as const) {
       const verdict = page.locator('.home-standing')
       await expect(verdict).toBeVisible()
       await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), theme)
-      await page.waitForTimeout(700)
+      await settleMotion(page)
       if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/home-${w}-${theme}.png` })
       const h1 = await page.locator('main.home h1').boundingBox()
       const v = await verdict.boundingBox()

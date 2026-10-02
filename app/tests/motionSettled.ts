@@ -140,7 +140,7 @@ export function whatMoved(before: Record<string, string>, after: Record<string, 
 export async function settled(page: Page, tries = 40): Promise<Record<string, string>> {
   let last = await outsideThePanel(page)
   for (let i = 0; i < tries; i += 1) {
-    await page.waitForTimeout(75)
+    await page.waitForTimeout(75) // keep: the poll interval of a loop that compares two reads apart in time
     const next = await outsideThePanel(page)
     if (JSON.stringify(next) === JSON.stringify(last)) return next
     last = next

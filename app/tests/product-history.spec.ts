@@ -195,7 +195,7 @@ test.describe('#/product — the per-product view', () => {
     })
     await expect(page).toHaveURL(/#\/gallery$/)
     // A beat for the OLD defect's own effect to have fired, if it still could.
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(300) // keep: asserts the old effect never rewrites the hash
     await expect(page).toHaveURL(/#\/gallery$/)
   })
 
