@@ -2666,9 +2666,8 @@ function OrderPickPane({
       <CardPane
         row={row}
         game={gameWord(row.card)}
-        /* BOTH CHIPS END THE FACTS ROW (D313): the For chip, then the pick chip LAST. The pick chip's width
-           changes ("Pick 1 of 1" to "Pick 12" + "12 short") and nothing sits to its right, so no reserved
-           box is needed and no blank gap opens beside it. */
+        /* BOTH CHIPS END THE FACTS ROW (D313): the For chip, then the pick chip LAST. The pick chip ends the
+           row, and it holds its widest state through the invisible reserve below, so no blank gap opens beside it. */
         postChips={
           <>
             {showBuyers ? <Pill>For {takeBuyers(currentRow.take)}</Pill> : null}
