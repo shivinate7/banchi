@@ -53,6 +53,7 @@ import {
   useUndoHotkey,
 } from './kit'
 import { UNNAMED_BOX } from './kit/data'
+import { markFor } from './kit/rarityMarks'
 import { dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
 import { RANK_IS_CURRENT, stalenessSentence, type FrozenRank } from './frozenRank'
@@ -993,6 +994,7 @@ function CopiesPanel({
             persona="owner"
             sections={layouts}
             currentKey={row.key}
+            mark={markFor(row.card.game, row.card.rarity)}
             /* No SKU, so no listing record and nothing to be the age OF. */
             listedAt={null}
             claims={wanted}
@@ -1048,6 +1050,7 @@ function CopiesPanel({
             persona="owner"
             sections={layouts}
             currentKey={heldCopies.key}
+            mark={markFor(row.card.game, row.card.rarity)}
             listedAt={heldCopies.group.sku === null ? null : (listings[heldCopies.group.sku]?.live_as_of ?? null)}
             claims={wanted}
             onSell={onSell}
@@ -1072,6 +1075,7 @@ function CopiesPanel({
           persona="owner"
           sections={layouts}
           currentKey={row.key}
+          mark={markFor(row.card.game, row.card.rarity)}
           listedAt={group.sku === null ? null : (listings[group.sku]?.live_as_of ?? null)}
           claims={wanted}
           onGoTo={onGoTo}

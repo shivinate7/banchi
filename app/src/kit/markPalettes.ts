@@ -11,7 +11,7 @@
    palette, and it must not be theme-overridable — which is exactly what putting it in
    tokens.css would invite. */
 
-export type LogoVariant = 'bluesteel' | 'lilacish' | 'mint' | 'yellowGold' | 'whiteGold' | 'roseGold'
+export type LogoVariant = 'bluesteel' | 'lilacish' | 'mint' | 'yellowGold' | 'whiteGold' | 'roseGold' | 'orange'
 
 /** Section 9's default: "the one `Logo` and `favicon.svg` take when nothing else is specified".
  *  The other five are the set, not alternates to it. */
@@ -25,7 +25,7 @@ export interface MarkPalette {
   readonly base: string
 }
 
-/** Sheen 0.15 on all six — section 9, inside section 3's settled 0.10-0.20 band. */
+/** Sheen 0.15 on all seven — section 9, inside section 3's settled 0.10-0.20 band. */
 export const SHEEN = 0.15
 
 export const MARKS: Readonly<Record<LogoVariant, MarkPalette>> = {
@@ -70,6 +70,13 @@ export const MARKS: Readonly<Record<LogoVariant, MarkPalette>> = {
     bracket: ['#FFF0E8', '#E8B49C', '#FFF8F4', '#C88A6C'],
     ground: ['#141619', '#000000'],
     base: '#D99878',
+  },
+  orange: {
+    label: 'orange',
+    prism: ['#FFCB94', '#F58A2E', '#D0600F', '#FFE4C8', '#B34E08'],
+    bracket: ['#FFF1E2', '#F0B27A', '#FFF8F0', '#CC8142'],
+    ground: ['#141619', '#000000'],
+    base: '#DB7A22',
   },
 }
 
