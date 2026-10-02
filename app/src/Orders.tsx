@@ -87,7 +87,7 @@ import {
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
-import { pickFigureOf, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
+import { pickFigureOf, WalkTiles, type MissingCard, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
 import type {
   BoxRecord,
   IngestResult,
@@ -3658,6 +3658,20 @@ function PullStage({
     0,
   )
 
+  /* DESIGN PASS B: what the walked orders want that no box holds, one tile per card. */
+  const missingCards: MissingCard[] = []
+  for (const key of shownKeys) {
+    for (const line of answers.get(key)?.lines ?? []) {
+      if (line.outstanding <= 0) continue
+      missingCards.push({
+        key: `${key}/${line.sku}`,
+        name: headlineOf(line).name,
+        count: line.outstanding,
+        words: `${line.outstanding} not in boxes`,
+      })
+    }
+  }
+
   const walkHead =
     walkedGroups.length > 1 ? (
       <div className="orders-walk-crowd">
@@ -3708,7 +3722,8 @@ function PullStage({
               Picked
             </HideToggle>
           </div>
-          <WalkList
+          <WalkTiles walk={walk} owedBySku={owedBySku} missing={missingCards} />
+          {false ? <WalkList
             walk={walk}
             hideSold={hideSold}
             collapsed={sectionsCollapsed}
@@ -3716,7 +3731,7 @@ function PullStage({
             showBuyers={walkedGroups.length > 1}
             sections={sections}
             onPick={openCardSheet}
-          />
+          /> : null}
         </>
       )}
     </section>

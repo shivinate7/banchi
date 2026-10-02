@@ -19,14 +19,14 @@
  * one press (Mark sold / Undo) `CardLocations`'s own `renderAction` slot calls per copy.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Icon, Loading, Notice, overlayOpen, Pill } from './kit'
+import { Button, CardThumb, Icon, Loading, Notice, overlayOpen, Pill } from './kit'
 import { toast } from './kit/toast'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
 import { isEditableTarget } from './keys'
 import { CardLocations, MarkSoldButton, UndoSaleButton, markFreshSale, clearFreshSale } from './CardLocations'
-import { describeFailure, walkPlan } from './server'
+import { describeFailure, photoUrl, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
   InventoryCard,
@@ -208,7 +208,7 @@ function sectionsOf(plan: WalkPlan | null, rows: readonly WalkRow[]): WalkSectio
  *  line's own group still answers "how many are there", not "how many are here".
  *  `facts` OVERLAYS A COPY'S REFRESHED PLACE (D58's renumbering after a sale elsewhere in the
  *  same box) — the same map both callers share, off the one hook. */
-function groupOf(
+export function groupOf(
   take: WalkPlanTake,
   copies: readonly WalkPlanCopy[],
   facts: ReadonlyMap<string, Place>,
@@ -733,7 +733,7 @@ function currentLineOf(walk: OrderWalk): WalkTakeLine | null {
  *  that stop, folded into one line. */
 type WalkTakeLine = { readonly takeKey: string; readonly take: WalkPlanTake; readonly rows: readonly WalkRow[] }
 
-function takeLinesOf(rows: readonly WalkRow[]): WalkTakeLine[] {
+export function takeLinesOf(rows: readonly WalkRow[]): WalkTakeLine[] {
   const out: WalkTakeLine[] = []
   for (const row of rows) {
     const last = out[out.length - 1]
@@ -745,7 +745,7 @@ function takeLinesOf(rows: readonly WalkRow[]): WalkTakeLine[] {
 
 /** Every copy the wanted count is asking for has a receipt against it. Shared by the press's
  *  own snapshot (below) and each line's `is-done` styling — one formula, not two. */
-function pickedAllOf(line: WalkTakeLine, soldKeys: ReadonlySet<string>): boolean {
+export function pickedAllOf(line: WalkTakeLine, soldKeys: ReadonlySet<string>): boolean {
   return line.take.copies.filter((copy) => soldKeys.has(copy.key)).length >= line.take.wanted
 }
 
@@ -1006,5 +1006,84 @@ export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk
       disabled={walk.busyCopy !== null && !busy}
       onClick={() => walk.undoCopy(copy.key)}
     />
+  )
+}
+
+/* ------------------------------------------------------------- design pass B: the tiles */
+
+/** A card the buyer is owed that no box holds, drawn as a tile with no photograph. */
+export type MissingCard = { readonly key: string; readonly name: string; readonly count: number; readonly words: string }
+
+/** DESIGN PASS B (scratch, not for merge): the open buyer's whole order as photographs, in the
+ *  walk's own order, one group per stop. Each tile names its card numbers and carries Mark sold
+ *  for each copy. The cards no box holds close the sheet, so the whole order is on one screen. */
+export function WalkTiles({ walk, owedBySku, missing }: {
+  readonly walk: OrderWalk
+  readonly owedBySku: ReadonlyMap<string, number>
+  readonly missing: readonly MissingCard[]
+}) {
+  if (walk.loading && walk.plan === null) return <Loading rows={4} label="Reading the walk" />
+  return (
+    <div className="orders-tiles">
+      <ul className="orders-tiles-grid">
+      {walk.sections.map((section) => {
+        const lines = takeLinesOf(section.rows)
+        return lines.map((line) => {
+                const first = line.rows[0]
+                const src = first === undefined ? null : photoUrl(first.copy.place.box, first.copy.place.index, first.copy)
+                const figure = pickFigureOf(line.take, owedBySku)
+                const done = pickedAllOf(line, walk.soldKeys)
+                const current = line.rows.some((row) => row.rowKey === walk.current)
+                const group = groupOf(line.take, line.rows.map((row) => row.copy), walk.facts, walk.rawCards)
+                const name = line.take.name ?? 'Not identified yet'
+                return (
+                  <li
+                    key={line.takeKey}
+                    data-take-key={line.takeKey}
+                    className={['orders-tile', done ? 'is-done' : '', current ? 'is-current' : ''].filter(Boolean).join(' ')}
+                  >
+                    <button type="button" className="orders-tile-art" aria-label={`Show ${name}`} onClick={() => first !== undefined && walk.select(first.rowKey)}>
+                      <CardThumb src={src} alt={name} size="lg" />
+                    </button>
+                    <div className="orders-tile-body">
+                      <p className="orders-tile-where"><SectionTitle parts={section.parts} /></p>
+                      <p className="orders-tile-name">{name}</p>
+                      <p className="orders-tile-pick">
+                        {done ? <Icon name="check" size={14} /> : null}
+                        {done ? 'Picked' : 'Pick'} {line.take.wanted}
+                        {figure.short > 0 ? null : ` of ${figure.of}`}
+                        {line.rows.length > line.take.wanted ? <span className="orders-walk-slot-either"> (either)</span> : null}
+                      </p>
+                      <ul className="orders-tile-copies">
+                        {group.copies.map((copy) => (
+                          <li key={copy.key} className="orders-tile-copy">
+                            <span className="orders-tile-slot">#{copy.place.card ?? ""}</span>
+                            <RowAction walk={walk} copy={copy} take={line.take} />
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </li>
+                )
+        })
+      })}
+      </ul>
+      {missing.length === 0 ? null : (
+        <section className="orders-tiles-group">
+          <h3 className="orders-tiles-head">
+            <span>Not in boxes</span>
+            <span className="orders-walk-sectcount">{missing.reduce((sum, one) => sum + one.count, 0)}</span>
+          </h3>
+          <ul className="orders-missing">
+            {missing.map((one) => (
+              <li key={one.key} className="orders-missing-row">
+                <span className="orders-tile-name">{one.name}</span>
+                <Pill tone="warn">{one.words}</Pill>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
   )
 }
