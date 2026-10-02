@@ -75,9 +75,9 @@
   display: block;
   width: 84px;
   aspect-ratio: 63 / 88;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: var(--bn-r);
-  background: var(--bn-surface-2);
+  background: var(--bn-stage-bg);
   box-shadow: var(--bn-shadow-1);
 }
 .inventory-retire-nophoto {
