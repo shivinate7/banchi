@@ -3180,6 +3180,23 @@ COMPONENTS = [
                 "governed_by": ["D18", "D43", "D138", "D122", "D127", "D157", "D305",
                                 ],
             },
+            "refusal_log.py": {
+                "does": "the one refusal log. Every guard that denies or asks appends one "
+                        "TAB-separated line to `.git/pkmnscan-refusals.log`, beside the hatch "
+                        "log: time, `guard:rule`, a snippet of at most 80 characters, the "
+                        "session id, the checkout. `make status` reads the last 24 hours back "
+                        "through `recent`, so a rule can be judged by how often it fires. One "
+                        "`O_APPEND` write per line, so concurrent agents never interleave. "
+                        "LOG ONLY and fails open: a log that cannot be written never changes a "
+                        "guard's verdict or output. Shell hooks call its CLI.",
+                "governed_by": ["D18", "D127", "D179"],
+            },
+            "refusal-log-assert.sh": {
+                "does": "sourced by each guard's self-test: asserts the refusal log holds "
+                        "exactly one well-formed line for a refusal. The line format's home is "
+                        "`refusal_log.py`.",
+                "governed_by": ["D18", "D179"],
+            },
             "silent-write-guard.py": {
                 "does": "the PreToolUse hook on Bash that refuses a git WRITE whose own output "
                         "is thrown away. ONE INVARIANT, NOT A LIST OF SHAPES: a write must "

@@ -127,6 +127,13 @@ SOURCES = (
                "owns its format",
     },
     {
+        "path": "scripts/refusal_log.py",
+        "kind": "defs",
+        "requires": ("recent",),
+        "why": "the refusal log's reader, loaded by refusals() — every guard writes the log "
+               "through this file, which owns its format",
+    },
+    {
         "path": "scripts/icloud-sweep.py",
         "kind": "file",
         "requires": (),
@@ -760,6 +767,21 @@ def hatch_uses(where: Path) -> List[str]:
     return out
 
 
+def refusals(where: Path) -> List[str]:
+    """Refusals in the last 24 hours, per rule, on one line, from the log every guard appends to."""
+    log, why = sidecar("scripts/refusal_log.py", "refusal_log")
+    if log is None:
+        return [field("refusals", why)]
+    try:
+        counts = log.recent(str(where))
+    except OSError as exc:
+        return [field("refusals", f"log unreadable — {exc}")]
+    if not counts:
+        return [field("refusals", "none in the last 24h")]
+    return [field("refusals", f"{sum(counts.values())} in the last 24h: "
+                  + ", ".join(f"{rule} {n}" for rule, n in sorted(counts.items())))]
+
+
 def guards() -> List[str]:
     """Which guards are standing down right now, and whether the turn gate is armed.
 
@@ -795,6 +817,7 @@ def guards() -> List[str]:
         lines.append(field("hatches", "none set — every guard in this shell is armed"))
 
     lines += hatch_uses(ROOT)
+    lines += refusals(ROOT)
 
     gate = resolve("scripts/stop-gate.sh")
     if gate:

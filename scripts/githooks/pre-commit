@@ -35,7 +35,34 @@
 
 set -uo pipefail
 
+# Append one line to the refusal log (scripts/refusal_log.py, the one home). Fails open: a log
+# that cannot be written never changes this hook's verdict or output.
+rlog() {
+  local top
+  top="$(git rev-parse --show-toplevel 2>/dev/null)" || return 0
+  [ -f "$top/scripts/refusal_log.py" ] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  python3 "$top/scripts/refusal_log.py" "$@" >/dev/null 2>&1 || true
+  return 0
+}
+
 fail() {
+  local rule
+  case "$1" in
+    "the armed hooks"*) rule=armed-stale ;;
+    "fixtures/"*) rule=fixtures ;;
+    "iCloud"*) rule=icloud ;;
+    "a secrets"*) rule=secrets ;;
+    "symlink with"*) rule=symlink-absolute ;;
+    "symlink pointing"*) rule=symlink-outside ;;
+    "a staged image"*) rule=qr ;;
+    "python3 is"*) rule=qr-unchecked ;;
+    "staged content"*) rule=code-layout ;;
+    "the markdown"*) rule=docs-audit ;;
+    "a bare"*) rule=bare-hash ;;
+    *) rule=other ;;
+  esac
+  rlog pre-commit "$rule" "${1%%$'\n'*}"
   echo "COMMIT BLOCKED: $1" >&2
   exit 1
 }

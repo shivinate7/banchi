@@ -650,6 +650,45 @@ else
   bad "the fixture could not build a QR test image — PIL or zxing-cpp is missing here"
 fi
 
+# ----------------------------------------------------------- every refusal is logged
+# One line per refusal in the refusal log, and a log that cannot be written never changes the
+# verdict. The fixture carries its own copy of the helper because the hooks find it through the
+# toplevel they run in.
+echo
+echo "  the refusal log"
+. "$REPO_ROOT/scripts/refusal-log-assert.sh"
+rl="$tmp/refusals.log"
+rlrepo="$tmp/rl"
+git init -q -b main "$rlrepo"
+mkdir -p "$rlrepo/scripts"
+cp "$REPO_ROOT/scripts/refusal_log.py" "$rlrepo/scripts/"
+git -C "$rlrepo" config user.email selftest@example.com
+git -C "$rlrepo" config user.name selftest
+git -C "$rlrepo" config commit.gpgsign false
+echo one > "$rlrepo/a.txt"
+git -C "$rlrepo" add a.txt
+PKMNSCAN_MAIN=off git -C "$rlrepo" commit -qm seed
+git -C "$rlrepo" config core.hooksPath "$HOOKS_DIR"
+echo two > "$rlrepo/a.txt"
+git -C "$rlrepo" add a.txt
+rl_out="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$rl" git commit -qm "straight onto main" 2>&1)"; rl_status=$?
+[ $rl_status -ne 0 ] && ok "a refused commit on main still refuses" || bad "the logged refusal let the commit through"
+why="$(refusal_line_ok "$rl" "reference-transaction:main-move")" && ok "…and writes one well-formed line" || bad "the refusal log line: $why"
+rl_bad="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" git commit -qm "straight onto main" 2>&1)"; rl_bad_status=$?
+if [ $rl_bad_status -ne 0 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
+else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
+
+# The opsec PreToolUse hook is a shell script of its own: same three assertions.
+OPSEC="$REPO_ROOT/scripts/guard-opsec.sh"
+rl="$tmp/opsec.log"
+rl_payload='{"session_id":"sess-1","tool_input":{"file_path":"/x/fixtures/a.csv","content":"x"}}'
+rl_out="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$rl" bash "$OPSEC" 2>&1)"; rl_status=$?
+[ $rl_status -eq 2 ] && ok "guard-opsec still refuses a fixtures write" || bad "guard-opsec exited $rl_status"
+why="$(refusal_line_ok "$rl" "guard-opsec:fixtures" "sess-1")" && ok "…and writes one well-formed line" || bad "the guard-opsec log line: $why"
+rl_bad="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" bash "$OPSEC" 2>&1)"; rl_bad_status=$?
+if [ $rl_bad_status -eq 2 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
+else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
+
 echo
 if [ "$fail" -eq 0 ]; then
   echo "githooks self-test: $pass passed"

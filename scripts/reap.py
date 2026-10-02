@@ -96,6 +96,12 @@ def _hatch_set_by(name: str, command: str) -> bool:
     except Exception:                                         # noqa: BLE001 — fail open
         return False
 
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import refusal_log                                        # the one refusal log
+except Exception:                                             # noqa: BLE001 — fail open
+    refusal_log = None                                        # type: ignore[assignment]
+
 WIDTH = 76
 
 # Every absolute path in a command line, as `ps -o command=` prints argv space-joined. A path
@@ -1126,6 +1132,10 @@ def hook(payload: dict) -> int:
         lines.append("  write in flight:  make down ARGS=--confirm   (in that checkout)")
     lines.append("")
     lines.append("  PKMNSCAN_KILL=off runs the command anyway.")
+    if refusal_log:
+        pids = [str(t.pid) for t in bad] + [str(t.pid) for t, _ in owner_bad]
+        refusal_log.log("reap", "kill", "pids " + ",".join(pids + list(intent.unresolved)),
+                        str(payload.get("session_id") or ""), str(payload.get("cwd") or ""))
     print("\n".join(lines), file=sys.stderr)
     return 2
 

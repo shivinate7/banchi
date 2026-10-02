@@ -105,6 +105,10 @@ try:
     import shell_parse
 except Exception:                                             # noqa: BLE001 — fail open
     shell_parse = None                                        # type: ignore[assignment]
+try:
+    import refusal_log                                        # the one refusal log
+except Exception:                                             # noqa: BLE001 — fail open
+    refusal_log = None                                        # type: ignore[assignment]
 
 WIDTH = 76
 
@@ -373,6 +377,9 @@ def hook(payload: dict) -> int:
     verdict = read_command(command)
     if not verdict.silenced:
         return 0
+    if refusal_log:
+        refusal_log.log("silent-write-guard", "silent", ", ".join(sorted({i.verb for i in verdict.silenced})),
+                        str(payload.get("session_id") or ""), str(payload.get("cwd") or ""))
     print(refusal(verdict.silenced), file=sys.stderr)
     return 2
 

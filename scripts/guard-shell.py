@@ -150,6 +150,10 @@ try:
     import shell_parse
 except Exception:                                             # noqa: BLE001 — fail open
     shell_parse = None                                        # type: ignore[assignment]
+try:
+    import refusal_log                                        # the one refusal log
+except Exception:                                             # noqa: BLE001 — fail open
+    refusal_log = None                                        # type: ignore[assignment]
 
 
 # ----------------------------------------------------------------------------- the clauses
@@ -1970,6 +1974,10 @@ def hook(payload: dict, owner_only: bool = True) -> int:
             return 0
         verdict = read_write(target, cwd)
     if verdict.refusals:
+        for refusal in verdict.refusals:
+            if refusal_log:
+                refusal_log.log("guard-shell", refusal.clause, refusal.heading,
+                                str(payload.get("session_id") or ""), cwd)
         print(render(verdict.refusals), file=sys.stderr)
         return 2
     for note in verdict.notes:
