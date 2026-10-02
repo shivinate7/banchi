@@ -2482,6 +2482,18 @@ test('the default ordering puts a buyer whose copies are all in the boxes first,
   expect(await buyerOrder(page)).toEqual(['Alice', 'Bob', 'Carol'])
 })
 
+/* THE OLDEST ORDER IS THE BUYER'S EARLIEST OPEN ONE (D296): who has waited longest. Ann holds an
+ * Aug 1 and an Aug 30 order, Ben one Aug 15 order, both ready. Read by her newest order, Ann would
+ * come second. */
+test('at rest a buyer with two open orders sorts by the earlier one', async ({ page }) => {
+  const annOld = seededOrder({ number: 'N0001', buyer: 'Ann', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
+  const annNew = seededOrder({ number: 'N0002', buyer: 'Ann', status: 'Ready to Ship', placedAt: '2026-08-30T00:00:00+00:00', reason: 'resolved' })
+  const ben = seededOrder({ number: 'N0003', buyer: 'Ben', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'resolved' })
+  await open(page, { orders: payloadOf([annOld.row, annNew.row, ben.row], [annOld.resolved, annNew.resolved, ben.resolved]) })
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
+  await expect(page.locator('.orders-index-number')).toHaveText(['Ann', 'Ben'])
+})
+
 /** Enough buyers that `.orders-index` must scroll inside `.browse-boxes`'s own 264px band
  *  (`BoxBrowse.css`) rather than draw every row flat — the shape Task 2's own case needs. */
 function manyBuyerPayload(n: number): OrdersPayload {

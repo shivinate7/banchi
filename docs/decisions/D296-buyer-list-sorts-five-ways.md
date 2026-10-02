@@ -26,7 +26,9 @@ The owner then picked all four suggestions offered back to him: **Dollar value, 
    feed's "Ready to Ship" status, and is now whether the copies are in the boxes ("Ready first,
    then oldest order"). The bucket check runs BEFORE the picked key's own comparison, in
    `orderView.ts:compareGroups`, never inside one key's arm. The caller says who is ready, so the
-   comparator stays pure. **At rest the key is `placed`, oldest first.** A buyer who becomes ready
+   comparator stays pure. **At rest the key is "Oldest order" (`waited`), oldest first.** It reads
+   the buyer's EARLIEST open order, so the buyer who has waited longest comes first. The `placed`
+   key still reads the buyer's newest order, as ruling 1 says. A buyer who becomes ready
    mid-view does not jump: the position freeze (ruling 6) holds every row until the next sort,
    filter or search press retakes the order.
 

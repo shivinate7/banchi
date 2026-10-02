@@ -68,7 +68,7 @@ function placedAtMs(placedAt: string | null): number {
  * every owed copy is in the boxes is a bucket the comparator checks BEFORE its own key, so a
  * ready buyer leads even under Dollar value or Buyer name. The caller says who is ready
  * (`Orders.tsx` reads the buyer's pull status), so this module stays a pure comparator. At rest
- * the key is `placed`, oldest first.
+ * the key is `waited`: the buyer's earliest open order, oldest first.
  *
  * TIES BREAK BY PLACED DATE, NEWEST FIRST, on every key — the owner's own words for this task.
  * For `placed` itself this is a no-op (the tiebreak is the same field the primary key already
@@ -84,7 +84,15 @@ function placedAtMs(placedAt: string | null): number {
  * such freeze on their own — neither field moves under a pull — but the position snapshot
  * covers every key uniformly rather than freezing three of five and not the other two. */
 
-export type OrderSortKey = 'placed' | 'value' | 'cards' | 'buyer' | 'drawers'
+/* `waited` is the at-rest key (D296): the buyer's EARLIEST open order, so the buyer who has
+ * waited longest comes first. `placed` stays the buyer's NEWEST order, on purpose (D296 ruling 1). */
+export type OrderSortKey = 'waited' | 'placed' | 'value' | 'cards' | 'buyer' | 'drawers'
+
+/** The buyer's earliest OPEN order date. A buyer with nothing open falls back to `latest`. */
+function waitedSinceMs(group: BuyerGroup): number {
+  const open = group.open.map((order) => placedAtMs(order.placed_at)).filter((ms) => ms !== Number.NEGATIVE_INFINITY)
+  return open.length > 0 ? Math.min(...open) : placedAtMs(group.latest)
+}
 
 /** The three aggregates `orderView.ts` cannot compute alone: a live money read, a walk-plan
  *  box count, and (for parity with the other two) the copy count — passed in by `Orders.tsx`
@@ -169,6 +177,8 @@ const DEFAULT_SORT_INPUTS: OrderSortInputs = {
  *  sign for `desc`. */
 function primaryDiff(key: OrderSortKey, inputs: OrderSortInputs, a: BuyerGroup, b: BuyerGroup): number {
   switch (key) {
+    case 'waited':
+      return waitedSinceMs(a) - waitedSinceMs(b)
     case 'placed':
       return placedAtMs(a.latest) - placedAtMs(b.latest)
     case 'value':

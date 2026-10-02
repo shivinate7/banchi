@@ -874,16 +874,17 @@ const STATUS_PILL: Record<Status, { label: string; tone: PillTone; icon: IconNam
 /** The five sorts (`D296`, the owner's pick, 2026-09-25): when the buyer's newest
  *  order was placed (FLT-01: a press re-sorts at once), the buyer's own order total, how many
  *  copies are still owed, the buyer's name, and the fewest drawers to open for them. A buyer
- *  whose every owed copy is in the boxes leads every one of these, and at rest the oldest order
- *  comes first (D296). */
+ *  whose every owed copy is in the boxes leads every one of these. At rest the key is `waited`,
+ *  the buyer's earliest open order, oldest first: who has waited longest (D296). */
 const SORT_OPTIONS: readonly SortOption<OrderSortKey>[] = [
+  { key: 'waited', label: 'Oldest order', desc: 'Newest first', asc: 'Oldest first', first: 'asc' },
   { key: 'placed', label: 'Placed', desc: 'Newest first', asc: 'Oldest first', first: 'desc' },
   { key: 'value', label: 'Value', desc: 'High to low', asc: 'Low to high', first: 'desc' },
   { key: 'cards', label: 'Cards', desc: 'Most first', asc: 'Fewest first', first: 'desc' },
   { key: 'buyer', label: 'Buyer', desc: 'Z to A', asc: 'A to Z', first: 'asc' },
   { key: 'drawers', label: 'Fewest drawers', desc: 'Most first', asc: 'Fewest first', first: 'asc' },
 ]
-const SORT_AT_REST: SortValue<OrderSortKey> = { key: 'placed', dir: 'asc' }
+const SORT_AT_REST: SortValue<OrderSortKey> = { key: 'waited', dir: 'asc' }
 
 /** The "Show" facet's choices: a buyer's one state, worst first (UX-171, UX-199), after
  *  Flagged, Short and Partly picked, the three ways a buyer owes a copy the store cannot fill
