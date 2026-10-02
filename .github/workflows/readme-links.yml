@@ -1,0 +1,43 @@
+# Weekly check of README.md's external links. NEVER on a pull request: a flaky site must not
+# turn a PR red. A dead link opens (or comments on) one issue, the nightly alarm's channel.
+name: readme-links
+
+on:
+  schedule:
+    - cron: '41 4 * * 1'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Check the links
+        id: links
+        shell: bash
+        run: python3 scripts/readme_links.py | tee links.txt
+
+      - name: Open or update the dead-link issue
+        if: ${{ failure() && steps.links.conclusion == 'failure' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="README link dead"
+          body="$(printf 'Dead links in README.md:\n\n%s\n\nRun: %s' "$(sed 's/^/- /' links.txt)" "$RUN_URL")"
+          open="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" \
+            --json number,title --jq "[.[] | select(.title == \"$title\")][0].number // empty")"
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi

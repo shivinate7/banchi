@@ -4548,6 +4548,13 @@ COMPONENTS = [
                         "renders in memory and compares.",
                 "governed_by": ["D18"],
             },
+            "readme_links.py": {
+                "does": "Lists every external http(s) link in README.md and exits 1 naming "
+                        "each dead one (HEAD, then GET, one retry). Run weekly by "
+                        "`.github/workflows/readme-links.yml`, never by a pull request, so a "
+                        "flaky site cannot turn one red. It gates nothing in `make check`.",
+                "governed_by": ["D18"],
+            },
             "tests_page.py": {
                 "does": "`make tests-page` — writes `docs/TESTS.md`, one page of what "
                         "each test file protects. It reads the `Protects:` and `Governs:` lines "
