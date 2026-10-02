@@ -517,7 +517,7 @@ function RealizedSection({ sku }: { readonly sku: string }) {
   const gap = payload.realized_avg !== null && payload.market_avg !== null ? Number(payload.realized_avg) - Number(payload.market_avg) : null
   const lo = payload.left_out
   const leftOut = [
-    lo.not_a_sale > 0 ? `${lo.not_a_sale} purchases` : '',
+    lo.not_a_sale > 0 ? `${lo.not_a_sale} ${lo.not_a_sale === 1 ? 'purchase' : 'purchases'}` : '',
     lo.not_usd > 0 ? `${lo.not_usd} in other currencies` : '',
     lo.unreadable > 0 ? `${lo.unreadable} unreadable` : '',
   ].filter(Boolean)
@@ -527,7 +527,7 @@ function RealizedSection({ sku }: { readonly sku: string }) {
       {payload.rows.length === 0 ? (
         <p className="producthistory-note">
           No sale of this exact condition and finish is in {payload.file}.
-          {payload.other_conditions > 0 ? ` ${payload.other_conditions} sales of other conditions are left out.` : ''}
+          {payload.other_conditions > 0 ? ` ${payload.other_conditions} ${payload.other_conditions === 1 ? 'sale' : 'sales'} of other conditions ${payload.other_conditions === 1 ? 'is' : 'are'} left out.` : ''}
         </p>
       ) : (
         <>
@@ -536,7 +536,7 @@ function RealizedSection({ sku }: { readonly sku: string }) {
             {payload.units === 1 ? 'copy' : 'copies'} compared
             {payload.refunded > 0 ? `, ${payload.refunded} refunded left out` : ''}
             {payload.no_market > 0 ? `, ${payload.no_market} with no market figure for that date left out` : ''}.
-            {payload.other_conditions > 0 ? ` ${payload.other_conditions} sales of other conditions are not shown.` : ''}
+            {payload.other_conditions > 0 ? ` ${payload.other_conditions} ${payload.other_conditions === 1 ? 'sale' : 'sales'} of other conditions ${payload.other_conditions === 1 ? 'is' : 'are'} not shown.` : ''}
           </p>
           <p className="producthistory-note">
             The market is the saved average for the shortest period that holds the date: a day, 3 days or a week. Dates are the day the export gives.
