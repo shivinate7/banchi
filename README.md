@@ -30,7 +30,7 @@ make up                     # serve the app; open the link it prints
 
 ## Usage
 
-`make up` serves the app. `?` in the app lists the keyboard shortcuts (`SHORTCUTS` in
+`make up` serves the app. There is no login: it is for your own desk and network. `?` in the app lists the keyboard shortcuts (`SHORTCUTS` in
 [`app/src/keys.ts`](app/src/keys.ts)).
 
 <!-- gen:routes -->
@@ -54,6 +54,8 @@ make up                     # serve the app; open the link it prints
 
 Each screen's spec is in [`docs/specs/`](docs/specs/). Every step also runs from the terminal.
 `./pkmnscan --help` lists the commands, and `<command> --help` lists its flags.
+A command that writes shows a preview first; add `--write` to apply it. The command list in
+[`CLAUDE.md`](CLAUDE.md) says which commands write.
 
 ```sh
 ./pkmnscan identify --dry-run <capture-dir>   # check everything, spend nothing
