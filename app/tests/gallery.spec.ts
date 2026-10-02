@@ -1263,11 +1263,11 @@ test('a meter with many cells never paints them over its end label at a narrow w
   }
 })
 
-/* DEBT7: THE FULFILLER'S PHOTOGRAPH DRAWS THE WHOLE IMAGE, AT OR OVER THE SCREEN FLOOR.
+/* WHOLE PHOTOGRAPH, NEVER A CROP: THE FULFILLER'S PHOTOGRAPH DRAWS THE WHOLE IMAGE, AT OR OVER THE SCREEN FLOOR.
  *
  * `object-fit: cover` filled the frame by construction, so a floor on painted size (320px, short
  * edge) passed while the card's bottom edge, where its number and rarity sit, was cut off. A
- * detector reading would catch that and is slow and can refuse (DEBT7), so this asks the two
+ * detector reading would catch that and is slow and can refuse, so this asks the two
  * things that make a clipping impossible: the fit is not a clipping one, and the frame has the
  * image's own aspect, so `contain` leaves no bar and the painted short edge is the frame's. */
 test('the fulfiller photograph holds the whole image, clear of the 320px floor', async ({

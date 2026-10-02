@@ -222,7 +222,7 @@ function inventoryBody(states: Store) {
 /* THE STAND-IN PHOTO IS THE RIG'S OWN SHAPE, 9:16 PORTRAIT, AND THAT IS THE FIXTURE'S WHOLE JOB.
  *
  * The rig stores 2160x3840, and the Fulfiller draws the whole frame (`object-fit:
- * contain`, DEBT7) in a frame of that same shape, so the painted short edge is the element's
+ * contain`) in a frame of that same shape, so the painted short edge is the element's
  * own and the ">= 320px" row measures a photograph. An earlier stand-in was 4:3 landscape,
  * drawn to make `cover` do real work; it made `contain` look like a 270px regression when it
  * was the fixture that was the wrong shape.

@@ -2419,7 +2419,7 @@ test('the retirement keeps its panel, because the reason is the write', async ({
   await expect(page.locator('.inventory-retire-reasons')).toBeVisible()
 })
 
-/* DEBT7: BOTH INVENTORY PHOTOGRAPHS DRAW THE WHOLE IMAGE. `cover` cut the card's bottom edge, where
+/* WHOLE PHOTOGRAPH, NEVER A CROP: BOTH INVENTORY PHOTOGRAPHS DRAW THE WHOLE IMAGE. `cover` cut the card's bottom edge, where
  * its number and rarity sit. A fit that never clips is the cheap check; reading the card's edge
  * needs `detect_card`, which is slow and can refuse. */
 test('the preview and the retire dialog draw the whole photograph', async ({ page }) => {
