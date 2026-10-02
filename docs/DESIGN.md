@@ -96,6 +96,27 @@ ELEVATION                       (three steps, each a hairline ring plus a shadow
 --bn-btn-bg / -hover / -shadow  the default button's ground, a token rather than a rule so dark
                                 can lift a button off a panel of its own color
 
+PALETTE SLOTS                   (a theme may recolor these; the default reproduces the plain rule, so
+                                 light and dark are unchanged. Abyssal Bloom and Carnival Midway
+                                 set them under `data-palette`)
+--bn-nav-label-2                = --bn-ink-3       a labelled nav group's caption, Workflow
+--bn-nav-label-3                = --bn-ink-3       a labelled nav group's caption, Sell
+--bn-nav-label-4                = --bn-ink-3       a labelled nav group's caption, Library
+--bn-nav-hover-2                = --bn-ink         a nav link under the pointer, Workflow
+--bn-nav-hover-3                = --bn-ink         a nav link under the pointer, Sell
+--bn-nav-hover-4                = --bn-ink         a nav link under the pointer, Library
+--bn-nav-accent-2               = --bn-accent      the current page's ink and edge bar, Workflow
+--bn-nav-accent-3               = --bn-accent      the current page's ink and edge bar, Sell
+--bn-nav-accent-4               = --bn-accent      the current page's ink and edge bar, Library
+--bn-nav-tint-2                 = --bn-accent-tint the current page's ground, Workflow
+--bn-nav-tint-3                 = --bn-accent-tint the current page's ground, Sell
+--bn-nav-tint-4                 = --bn-accent-tint the current page's ground, Library
+--bn-seg-active-ink             = --bn-ink       the chosen tab of a segmented control
+--bn-seg-active-bg              = --bn-surface   its ground
+--bn-seg-active-bg-2            = --bn-surface   its ground when it is the second tab
+--bn-page-backdrop              none             a gradient behind the page, fixed to the window
+--bn-row-stripe                 transparent      every second row of the Pricing table
+
 TYPE                            Manrope 500-800 · Inter 400-700 · JetBrains Mono 400-600
 --bn-font-display               Manrope        headings, figures, the page title
 --bn-font-ui                    Inter          every sentence, every label, every control
@@ -220,9 +241,14 @@ that is D16's forbidden direction.** What changed is which side was wrong.
 
 ## Light and dark are both first class
 
-**The theme is `data-theme` on `<html>`, and nothing else.** `app/src/kit/index.tsx` holds
-`readTheme`/`applyTheme`; `app/src/App.tsx` follows the system until a choice is stored and
-remembers the choice in `localStorage` under `banchi.theme`. That key is device-local by
+**The theme is `data-theme` on `<html>`, plus `data-palette` for a palette.** `THEMES` in
+`app/src/deviceMemory.ts` is the one list: light, dark, Abyssal Bloom, Carnival Midway. The
+theme button cycles it in that order. A palette rides on dark, so `data-theme="dark"` stays set
+and every dark rule keeps working; `tokens.css` carries each palette as a
+`:root[data-theme='dark'][data-palette='...']` block of the same 46 dark tokens plus the palette
+slots above. `app/src/kit/index.tsx` holds `readTheme`/`applyTheme`; `app/src/App.tsx` follows the
+system until a choice is stored and remembers the choice (the theme id) in `localStorage` under
+`banchi.theme`. A stored value that names no theme is ignored. That key is device-local by
 nature, like the camera's `deviceId`, and is not inventory — the rule it must not break is
 that nothing about a card or the store lives in browser storage.
 

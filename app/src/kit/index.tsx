@@ -5,7 +5,7 @@ import type {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
-import { rememberTheme, storedTheme, type Theme } from '../deviceMemory'
+import { THEMES, rememberTheme, storedTheme, type Theme } from '../deviceMemory'
 import {
   CARD, DISPLAY_BRACKET, DISPLAY_CAPS, HOLO, HOLO_RECT,
   SHEEN_HEIGHT, SMALL_BRACKET, SMALL_STROKE, TILE,
@@ -1281,9 +1281,28 @@ export function readTheme(): Theme {
   return storedTheme() ?? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
 }
 
+/** Stamps the attributes and nothing else: light is NO attribute, dark is `data-theme="dark"`, and a
+ *  palette is dark plus `data-palette`, so every dark rule keeps reading `data-theme`. */
+export function stampTheme(theme: Theme): void {
+  const root = document.documentElement
+  const entry = THEMES.find((t) => t.id === theme)
+  if (theme === 'light') root.removeAttribute('data-theme')
+  else root.setAttribute('data-theme', 'dark')
+  if (entry && 'palette' in entry) root.setAttribute('data-palette', entry.palette)
+  else root.removeAttribute('data-palette')
+}
+
+/** The theme the attributes on <html> show right now. */
+export function appliedTheme(): Theme {
+  const root = document.documentElement
+  const palette = root.getAttribute('data-palette')
+  const named = THEMES.find((t) => 'palette' in t && t.palette === palette)
+  if (named) return named.id
+  return root.hasAttribute('data-theme') ? 'dark' : 'light'
+}
+
 export function applyTheme(theme: Theme): void {
-  if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark')
-  else document.documentElement.removeAttribute('data-theme')
+  stampTheme(theme)
   rememberTheme(theme)
 }
 

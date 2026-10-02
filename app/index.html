@@ -26,8 +26,10 @@
       (function () {
         try {
           var stored = localStorage.getItem('banchi.theme');
-          var dark = stored ? stored === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-          if (dark) document.documentElement.setAttribute('data-theme', 'dark');
+          var known = ['light', 'dark', 'abyssal-bloom', 'carnival-midway'];
+          if (known.indexOf(stored) < 0) stored = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          if (stored !== 'light') document.documentElement.setAttribute('data-theme', 'dark');
+          if (stored !== 'light' && stored !== 'dark') document.documentElement.setAttribute('data-palette', stored);
         } catch (e) {}
       })();
     </script>

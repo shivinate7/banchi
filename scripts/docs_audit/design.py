@@ -289,6 +289,10 @@ def css_token_scopes(text: str) -> Tuple[Dict[str, str], Dict[str, str], Set[str
         if any(start <= match.start() < stop for start, stop in conditional):
             continue
         selector = body[match.start():match.end()]
+        if "[data-palette" in selector:
+            # A palette is a named override of dark, not the dark column: like the at-rule above it
+            # adds names and leaves the two locked columns alone.
+            continue
         table = dark if "data-theme='dark'" in selector or 'data-theme="dark"' in selector else light
         for name, value in declared:
             table["--" + name] = value.strip()

@@ -9077,6 +9077,15 @@ COMPONENTS = [
                 "governed_by": ["D50"],
                 "note": "Proved red first on main: the body sampled mid-grey, and the flash was 0.9 over 380ms.",
             },
+            "tests/themes.spec.ts": {
+                "does": "the theme button over four themes: it cycles light, dark, Abyssal Bloom "
+                        "and Carnival Midway in that order, names the next one in its title, keeps "
+                        "the choice over a reload and ignores an unknown stored value. Light and "
+                        "dark are read as the literal colors they painted before palettes, both "
+                        "palettes keep body text over 4.5:1, and four presses move no box. Not a "
+                        "harness test; `make design-check` runs it.",
+                "governed_by": ["D50", "D313"],
+            },
             "tests/staggerCheck.ts": {
                 "does": "one helper, `expectOneStagger`: every row of a list has an "
                         "`animation-delay` of min(i, `--bn-stagger-cap`) times `--bn-stagger`, "

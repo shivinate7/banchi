@@ -299,6 +299,28 @@
   --bn-pill-h: 22px;
   --bn-pill-h-sm: 18px;
 
+  /* ---- what a palette may recolor beyond the neutrals -------------------------------
+     Each default reproduces today's rule, so light and dark paint exactly as before and only
+     a `data-palette` block below moves them. Nav slots 2-4 are the three labelled groups
+     (Workflow, Sell, Library) in `App.css`; Home keeps the primary accent. */
+  --bn-nav-label-2: var(--bn-ink-3);
+  --bn-nav-label-3: var(--bn-ink-3);
+  --bn-nav-label-4: var(--bn-ink-3);
+  --bn-nav-hover-2: var(--bn-ink);
+  --bn-nav-hover-3: var(--bn-ink);
+  --bn-nav-hover-4: var(--bn-ink);
+  --bn-nav-accent-2: var(--bn-accent);   /* the current page's ink and edge bar */
+  --bn-nav-accent-3: var(--bn-accent);
+  --bn-nav-accent-4: var(--bn-accent);
+  --bn-nav-tint-2: var(--bn-accent-tint);
+  --bn-nav-tint-3: var(--bn-accent-tint);
+  --bn-nav-tint-4: var(--bn-accent-tint);
+  --bn-seg-active-ink: var(--bn-ink);    /* the chosen tab of a segmented control */
+  --bn-seg-active-bg: var(--bn-surface);
+  --bn-seg-active-bg-2: var(--bn-surface);  /* the chosen tab when it is the second */
+  --bn-page-backdrop: none;              /* a gradient behind the page, fixed to the window */
+  --bn-row-stripe: transparent;          /* every second row of a table */
+
   /* ======================================================================
      LEGACY ALIASES — the names every existing stylesheet reads.
      ====================================================================== */
@@ -404,4 +426,170 @@
     --bn-control-h: 42px;
     --bn-control-h-lg: 46px;
   }
+}
+
+/* Abyssal Bloom — A submersible viewport at crush depth: bioluminescent siphonophores, an anglerfish lure, and a bloom of jellyfish light in the black water. */
+:root[data-theme='dark'][data-palette='abyssal-bloom'] {
+  color-scheme: dark;
+
+  --bn-bg: #050d14;
+  --bn-surface: #0a1c2c;
+  --bn-surface-2: #040b12;
+  --bn-surface-3: #0f2740;
+  --bn-surface-glass: rgba(10, 28, 44, 0.72);
+  --bn-hover: rgba(234, 247, 255, 0.05);
+
+  --bn-ink: #eaf7ff;
+  --bn-ink-2: #bfe3ee;
+  --bn-ink-3: #8bb3c4;
+  --bn-ink-4: #6d95a8;
+
+  --bn-line: rgba(180, 230, 255, 0.10);
+  --bn-line-strong: rgba(180, 230, 255, 0.20);
+  --bn-line-focus: rgba(53, 228, 255, 0.6);
+
+  --bn-accent: #35e4ff;
+  --bn-accent-hover: #68ecff;
+  --bn-accent-press: #1fc2df;
+  --bn-accent-tint: rgba(53, 228, 255, 0.16);
+  --bn-accent-tint-2: rgba(53, 228, 255, 0.26);
+  --bn-on-accent: #031017;
+
+  --bn-live: #ff5a36;
+  --bn-live-tint: rgba(255, 90, 54, 0.18);
+
+  --bn-ok: #4dffb8;
+  --bn-ok-tint: rgba(77, 255, 184, 0.16);
+  --bn-warn: #ffb020;
+  --bn-warn-tint: rgba(255, 176, 32, 0.16);
+  --bn-danger: #ff2e6d;
+  --bn-danger-tint: rgba(255, 46, 109, 0.16);
+  --bn-money: #ffd76a;
+
+  --bn-pill-ink-accent: #68ecff;
+  --bn-pill-ink-ok: #4dffb8;
+  --bn-pill-ink-warn: #ffb020;
+  --bn-pill-ink-danger: #ff2e6d;
+  --bn-pill-ink-live: #ff5a36;
+
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(53, 228, 255, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(255, 90, 54, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(53, 228, 255, 0.65);
+
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #0f2740;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  /* the camera/photo stage keeps its own accent apart from the UI's, so the
+     capture screen clashes on purpose against the shell around it */
+  --bn-stage-accent: #59c7ff;
+  --bn-stage-accent-hover: rgba(89, 199, 255, 1);
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-stage-danger: #ff5c5c;
+  --bn-stage-live: #ff6a58;
+  /* nav groups, segmented tabs, page ground and table stripe (were per-selector rules) */
+  --bn-nav-accent-2: #29ffb0;
+  --bn-nav-label-2: var(--bn-nav-accent-2);
+  --bn-nav-hover-2: var(--bn-nav-accent-2);
+  --bn-nav-tint-2: rgba(41, 255, 176, 0.14);
+  --bn-nav-accent-3: #ff6a2e;
+  --bn-nav-label-3: var(--bn-nav-accent-3);
+  --bn-nav-hover-3: var(--bn-nav-accent-3);
+  --bn-nav-tint-3: rgba(255, 106, 46, 0.14);
+  --bn-nav-accent-4: #ff2ec4;
+  --bn-nav-label-4: var(--bn-nav-accent-4);
+  --bn-nav-hover-4: var(--bn-nav-accent-4);
+  --bn-nav-tint-4: rgba(255, 46, 196, 0.14);
+  --bn-seg-active-ink: #031017;
+  --bn-seg-active-bg: #35e4ff;
+  --bn-seg-active-bg-2: #ff6a2e;
+  --bn-page-backdrop: radial-gradient(1200px 700px at 85% -10%, rgba(53,228,255,0.16), transparent 60%), radial-gradient(900px 600px at -10% 90%, rgba(255,46,196,0.14), transparent 55%), radial-gradient(700px 500px at 60% 60%, rgba(41,255,176,0.10), transparent 60%);
+  --bn-row-stripe: rgba(53, 228, 255, 0.045);
+}
+
+/* Carnival Midway — A traveling carnival after dark: big-top magenta stripes, ticket-booth gold, a funhouse mirror’s teal, cotton candy glowing under string lights. */
+:root[data-theme='dark'][data-palette='carnival-midway'] {
+  color-scheme: dark;
+
+  --bn-bg: #0f0817;
+  --bn-surface: #1c0f28;
+  --bn-surface-2: #0b0512;
+  --bn-surface-3: #291536;
+  --bn-surface-glass: rgba(28, 15, 40, 0.72);
+  --bn-hover: rgba(248, 241, 255, 0.05);
+
+  --bn-ink: #f8f1ff;
+  --bn-ink-2: #dcc8ee;
+  --bn-ink-3: #ad95c6;
+  --bn-ink-4: #8c76a8;
+
+  --bn-line: rgba(240, 210, 255, 0.10);
+  --bn-line-strong: rgba(240, 210, 255, 0.20);
+  --bn-line-focus: rgba(255, 204, 51, 0.6);
+
+  --bn-accent: #ffcc33;
+  --bn-accent-hover: #ffdb66;
+  --bn-accent-press: #e6b21c;
+  --bn-accent-tint: rgba(255, 204, 51, 0.16);
+  --bn-accent-tint-2: rgba(255, 204, 51, 0.26);
+  --bn-on-accent: #180f02;
+
+  --bn-live: #ff3b3b;
+  --bn-live-tint: rgba(255, 59, 59, 0.18);
+
+  --bn-ok: #4dff9e;
+  --bn-ok-tint: rgba(77, 255, 158, 0.16);
+  --bn-warn: #ffab2e;
+  --bn-warn-tint: rgba(255, 171, 46, 0.16);
+  --bn-danger: #ff1a63;
+  --bn-danger-tint: rgba(255, 26, 99, 0.16);
+  --bn-money: #ffe066;
+
+  --bn-pill-ink-accent: #ffdb66;
+  --bn-pill-ink-ok: #4dff9e;
+  --bn-pill-ink-warn: #ffab2e;
+  --bn-pill-ink-danger: #ff1a63;
+  --bn-pill-ink-live: #ff3b3b;
+
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(255, 204, 51, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(255, 59, 59, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(255, 204, 51, 0.65);
+
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #291536;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  /* the camera/photo stage keeps its own accent apart from the UI's, so the
+     capture screen clashes on purpose against the shell around it */
+  --bn-stage-accent: #4de8ff;
+  --bn-stage-accent-hover: rgba(77, 232, 255, 1);
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-stage-danger: #ff5c5c;
+  --bn-stage-live: #ff6a58;
+  /* nav groups, segmented tabs, page ground and table stripe (were per-selector rules) */
+  --bn-nav-accent-2: #2de0d0;
+  --bn-nav-label-2: var(--bn-nav-accent-2);
+  --bn-nav-hover-2: var(--bn-nav-accent-2);
+  --bn-nav-tint-2: rgba(45, 224, 208, 0.14);
+  --bn-nav-accent-3: #ff2e7a;
+  --bn-nav-label-3: var(--bn-nav-accent-3);
+  --bn-nav-hover-3: var(--bn-nav-accent-3);
+  --bn-nav-tint-3: rgba(255, 46, 122, 0.14);
+  --bn-nav-accent-4: #c86bff;
+  --bn-nav-label-4: var(--bn-nav-accent-4);
+  --bn-nav-hover-4: var(--bn-nav-accent-4);
+  --bn-nav-tint-4: rgba(200, 107, 255, 0.14);
+  --bn-seg-active-ink: #180f02;
+  --bn-seg-active-bg: #ffcc33;
+  --bn-seg-active-bg-2: #ff2e7a;
+  --bn-page-backdrop: radial-gradient(1100px 650px at 10% -10%, rgba(255,204,51,0.14), transparent 55%), radial-gradient(1000px 700px at 100% 10%, rgba(255,46,122,0.16), transparent 55%), radial-gradient(800px 600px at 50% 100%, rgba(45,224,208,0.12), transparent 55%);
+  --bn-row-stripe: rgba(255, 46, 122, 0.05);
 }
