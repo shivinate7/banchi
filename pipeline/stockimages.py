@@ -476,6 +476,25 @@ class StockImages:
             return None
         return self._tcgcsv_name_lookup(game, set_name, product_name)
 
+    def group_pending(self, game: str, set_name: str) -> bool:
+        """True while a catalogue group has never answered (DEBT75): no cache entry yet, so a
+        `None` from a lookup means "ask again", not "no such image". A failed fetch stores an
+        empty entry, so a final miss is never pending. Vendored Pokemon cards never are."""
+        with self._lock:
+            return (game, set_name) not in self._cache
+
+    def line_name_pending(self, line_name: str) -> bool:
+        """`url_for_line_name`'s twin: True when some candidate set split is still cold."""
+        line, sep, rest = str(line_name or "").partition(" - ")
+        game = game_registry.game_for_product_line(line) if sep else None
+        if game is None:
+            return False
+        return any(
+            self.group_pending(game, rest[:i])
+            for i in range(len(rest))
+            if rest[i : i + 2] == ": "
+        )
+
     def url_for_line_name(self, line_name: str) -> Optional[str]:
         """The image for a SOLD order line whose SKU the `skus` table no longer holds (a
         delisted product leaves the export), from the line's own name alone:

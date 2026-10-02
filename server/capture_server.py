@@ -12004,6 +12004,9 @@ def do_skus_photos(
     (`{sku: url}`, a hotlinked catalogue image, D301's same posture — never downloaded,
     never mirrored). A SKU never appears in both.
 
+    `pending` (DEBT75) NAMES A SKU WITH NO URL WHOSE CATALOGUE GROUP HAS NOT ANSWERED YET: the
+    client asks again, capped. A SKU absent from all three is a final "no photo".
+
     REFUSES OVER `SKUS_PHOTOS_LIMIT` (round 2 review): the client's own cap bounds what it
     SENDS, never what this route would do with a longer list a different caller sent.
     """
@@ -12018,6 +12021,7 @@ def do_skus_photos(
     inventory = snapshot.inventory
     out: Dict[str, dict] = {}
     stock: Dict[str, str] = {}
+    pending: List[str] = []
     line_names: Optional[Dict[str, str]] = None
     for sku in skus:
         if not sku or sku in out or sku in stock:
@@ -12049,6 +12053,8 @@ def do_skus_photos(
             url = images.url_for_line_name(line_names.get(sku, ""))
             if url:
                 stock[sku] = url
+            elif images.line_name_pending(line_names.get(sku, "")):
+                pending.append(sku)
             continue
         if sku_row.number:
             game = games.game_for_product_line(sku_row.product_line)
@@ -12059,7 +12065,13 @@ def do_skus_photos(
             )
         if url:
             stock[sku] = url
-    return {"photos": out, "stock_photos": stock}
+        else:
+            game = games.game_for_product_line(sku_row.product_line)
+            if game and not (sku_row.number and game == stockimages.POKEMON_KEY) and images.group_pending(
+                game, sku_row.set_name
+            ):
+                pending.append(sku)
+    return {"photos": out, "stock_photos": stock, "pending": pending}
 
 
 def do_search(query: str) -> dict:
