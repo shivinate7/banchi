@@ -1670,6 +1670,45 @@ def _case(checks: Checks, label: str):
         checks.ok(False, f"{label}: the case raised", traceback.format_exc()[-1500:])
 
 
+def check_send_sold_since(checks: Checks) -> None:
+    """A copy marked sold after a send still counts toward confirming it.
+
+    A MUTATION-TESTED GUARD. Make `send_routes._sold_since` return 0 and the sold copy reads
+    as missing: the send is judged `short`, though TCGplayer sold the copy it was shown.
+    BOTH PATHS: the receipt's own `sold_before`, and the `state_at` fallback for a press that
+    died before it wrote that figure.
+    """
+    checks.note("")
+    checks.note("SEND CHECK — a copy sold since the send still confirms it")
+
+    cards = [(3, 1, "Articuno", "161", None)]
+    for label, drop_sold_before in (("sold_before", False), ("state_at", True)):
+        with send_portal() as portal, isolated_home():
+            run_dir, _ = seam_run(checks, cards)
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+            sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+            directory = send_routes.sends_dir() / sent["stamp"]
+            record = send_routes._read(directory)
+            checks.ok(
+                "sold_before" in record, "the receipt records `sold_before` at the press"
+            )
+            if drop_sold_before:
+                record.pop("sold_before")
+            record["check_after"] = "2000-01-01T00:00:00+00:00"
+            send_routes._write(directory, record)
+            capture_server.do_mark_sold(3, 1, {})
+            # The one copy sold here, so TCGplayer no longer shows it live.
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+            summary = send_routes.do_live_check({})["checked"][0]
+            checks.equal(
+                (summary["state"], summary["check"]["found"], summary["check"]["expected"]),
+                ("checked", 1, 1),
+                f"A COPY SOLD AFTER THE SEND CONFIRMS IT ({label} path): the sale is the "
+                "reason it is not live, and counting it as missing would hold a good send "
+                "for a re-send",
+            )
+
+
 def check_send_hazards(checks: Checks) -> None:
     """The adversarial review's failures, each against the stand-in portal's own mode.
 
@@ -5144,6 +5183,7 @@ CHECKS = (
     check_markdown_push,
     check_send_guard,
     check_send_press,
+    check_send_sold_since,
     check_send_hazards,
     check_send_review_r3,
     check_send_review_r4,
