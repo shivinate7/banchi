@@ -2,7 +2,7 @@
 
 Banchi (番地, "lot number") takes photos of trading cards you keep in boxes. It lists them on
 TCGplayer, prices them, and tells you which box to open when one sells. It is for one seller
-with sorted singles: Pokemon, One Piece and Riftbound.
+with sorted singles. [`pipeline/games.py`](pipeline/games.py) lists the games.
 
 The first result: `make up` prints a link. Open it to see the app, where your boxes and cards show.
 
@@ -26,14 +26,12 @@ cp .env.example .env        # add ANTHROPIC_API_KEY
 make up                     # serve the app; open the link it prints
 ```
 
-CI runs the installs, with `pip install -r requirements.txt` for `make venv`, and runs
-`npm --prefix app ci`. It does not run `make hooks` (it arms a local clone), `make up` (it
-needs a free port) or `cp .env.example .env` (it needs your key).
+[`check.yml`](.github/workflows/check.yml) shows what CI runs from these steps.
 
 ## Usage
 
-`make up` serves the app and its API on one port. There is no login: it is for your own desk
-and network. `?` in the app lists the keyboard shortcuts.
+`make up` serves the app. `?` in the app lists the keyboard shortcuts (`SHORTCUTS` in
+[`app/src/keys.ts`](app/src/keys.ts)).
 
 <!-- gen:routes -->
 | Screen | Route | Note |
@@ -82,9 +80,7 @@ make ci-check         # what a fresh clone can prove
 make check            # the whole suite; `make explain` lists it
 ```
 
-CI runs `make harness` and `make ci-check`, and a browser run of `make design-check`. It does
-not run `make worktree-setup` or `make dev`, which need your machine, or `make check`: CI runs
-`make ci-check` in its place.
+[`check.yml`](.github/workflows/check.yml) shows what CI runs.
 
 Main moves by pull request only (D42, main moves by pull request). `make docs-audit` checks
 this file against the code: paths, make targets, commands, route table and decision ids.
