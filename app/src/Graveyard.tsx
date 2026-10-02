@@ -8,6 +8,7 @@ import { reasonWord } from './Inventory'
 import { SearchField } from './SearchField'
 import { matchQuery } from './kit/match'
 import './Graveyard.css'
+import { MOCK, MockLedger } from './MockGrave'
 
 /* GRAVEYARD — D134's whole reason for existing.
  *
@@ -82,6 +83,10 @@ function cardTone(how: string): PillTone {
 const ROW_WINDOW = 100
 
 export function Graveyard() {
+  return MOCK === 'B' ? <MockLedger slim /> : MOCK === 'C' ? <MockLedger slim={false} /> : <GraveyardReal />
+}
+
+function GraveyardReal() {
   const [rows, setRows] = useState<DepartedCard[] | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [retrying, setRetrying] = useState(false)

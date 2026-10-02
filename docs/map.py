@@ -7256,6 +7256,14 @@ COMPONENTS = [
                         "scrolling.",
                 "governed_by": ["D50", "D94", "D117", "D134", "D218"],
             },
+            "src/MockGrave.tsx": {
+                "does": "THROWAWAY MOCK, never pushed: the graveyard rethink's three directions behind ?mock=A|B|C.",
+                "governed_by": ["D134"],
+            },
+            "src/MockGrave.css": {
+                "does": "THROWAWAY MOCK, never pushed: the sheet for src/MockGrave.tsx.",
+                "governed_by": ["D134"],
+            },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "
                         "order, photo-confirm before each pull, one-tap mark-sold with an undo "

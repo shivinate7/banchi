@@ -51,6 +51,8 @@ import {
   type MarketRead,
   type Row,
 } from './CardHero'
+import { MOCK, useDeparted, DeletedShelfCell, DeletedShelfWalk, DeletedRecordPane, SlimLogLink } from './MockGrave'
+const MOCK_DELETED = MOCK === 'A' && new URLSearchParams(window.location.search).get('deleted') === '1'
 import { stateLabel } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
@@ -751,6 +753,9 @@ export function BoxBrowse({
   frozen = RANK_IS_CURRENT,
   onQuery,
 }: BoxBrowseProps) {
+  const mockRows = useDeparted()
+  const mockBuried = mockRows === null ? null : mockRows.filter((r) => r.buried).length
+  const mockSlim = mockRows === null ? null : mockRows.filter((r) => r.buried || r.how === 'retired').length
   const [rows, setRows] = useState<Row[] | null>(null)
   /** Which shelf `rows` currently answers for (D192, item 2).
    *
@@ -2115,7 +2120,7 @@ export function BoxBrowse({
                          (S16). */
                         `${shelfLabel(cell, record?.name)}${record ? `, ${record.cards.toLocaleString()} captured` : ''}`
                 }
-                aria-current={cell === shelf ? 'true' : undefined}
+                aria-current={!MOCK_DELETED && cell === shelf ? 'true' : undefined}
                 disabled={!reachable}
                 onClick={() => selectShelf(cell)}
               >
@@ -2167,10 +2172,12 @@ export function BoxBrowse({
               </button>
             )
           })}
+          {MOCK === 'A' ? <DeletedShelfCell current={MOCK_DELETED} count={mockBuried} /> : null}
+          {MOCK === 'B' ? <SlimLogLink count={mockSlim} /> : null}
         </div>
       )}
 
-      {shelf === null ? null : (
+      {MOCK_DELETED ? <DeletedShelfWalk /> : shelf === null ? null : (
         <div className="browse-walk bn-panel">
           <div className="browse-box-head">
             {shelfBox !== null ? (
@@ -2540,6 +2547,8 @@ export function BoxBrowse({
             {phone ? null : railCollapsed ? miniRail : rail}
 
             <div className="browse-side">
+              {MOCK_DELETED ? <DeletedRecordPane /> : null}
+              {MOCK_DELETED ? null : <>
               {panelRow === null ? (
                 <div className="bn-panel">
                   {chooserActive && searchGroups !== null ? (
@@ -2702,6 +2711,7 @@ export function BoxBrowse({
                   />
                 </>
               )}
+              </>}
             </div>
           </div>
 
