@@ -2149,7 +2149,7 @@ def check_layout_batch(checks: Checks) -> None:
 
 
 def check_move_receipt_lines(checks: Checks) -> None:
-    """DEBT38: a section move's receipt says what the move owes (5.4).
+    """a section move's receipt says what the move owes (5.4).
 
     `receipt.owed` names how many moved cards open orders want. `receipt.next_capture` names
     the section the next capture joins, when the moved section was its box's last. Each is
@@ -2158,7 +2158,7 @@ def check_move_receipt_lines(checks: Checks) -> None:
     from store import orders as order_store
 
     checks.note("")
-    checks.note("BOX MAP — the receipt's owed and next-capture lines (DEBT38)")
+    checks.note("BOX MAP — the receipt's owed and next-capture lines")
 
     def owe(sku: str, quantity: int, status: str = "Pending") -> None:
         with Store().write() as snapshot:

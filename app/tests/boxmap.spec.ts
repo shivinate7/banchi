@@ -65,20 +65,24 @@ const RESULT: SectionMoveBatchResult = {
       'In Mixed Singles, find the divider Promos. Put them just on the far side of it, in the same order.',
     ],
     renumbered: ['In Mixed Singles, Promos moves from Section 2 to Section 3.'],
+    owed: '3 of these cards are owed to open orders. The orders stay as they are.',
+    next_capture: [
+      'The next card you capture in RB Origins joins Uncommons, Section 2. Press S first to start a new section.',
+    ],
   },
   boxes: [],
 }
 
 type Sent = { path: string; body: unknown }
 
-async function openShelf(page: Page): Promise<Sent[]> {
+async function openShelf(page: Page, result: SectionMoveBatchResult = RESULT): Promise<Sent[]> {
   const sent: Sent[] = []
   await page.route(/\/boxes(\?.*)?$/, (route) =>
     route.fulfill({ json: { boxes: BOXES, facets: { games: [], sets: {}, rarities: {} } } }),
   )
   await page.route(/\/boxes\/sections\/move-batch$/, async (route) => {
     sent.push({ path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() })
-    await route.fulfill({ json: RESULT })
+    await route.fulfill({ json: result })
   })
   await page.route(/\/boxes\/sections\/undo$/, async (route) => {
     sent.push({ path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() })
@@ -128,6 +132,39 @@ test('Layout enters edit mode; a queued drop writes nothing until Confirm, which
   await page.keyboard.press('u')
   await expect(page.locator('.shelf-receipt')).toContainText('Put back.')
   expect(sent[1]).toEqual({ path: '/boxes/sections/undo', body: { move: 'm1' } })
+})
+
+test('the receipt names the cards owed to open orders and the section the next capture joins, and each line is absent at zero', async ({ page }) => {
+  await openShelf(page)
+  await page.getByRole('button', { name: 'Layout' }).click()
+  await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
+  await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
+  await page.getByRole('button', { name: /Put Uncommons just on the far side of Promos/ }).click()
+  const firstBox = page.locator('.shelf-box').first()
+  const top = async () => (await firstBox.boundingBox())?.y
+  await page.getByRole('button', { name: 'Confirm' }).click()
+  const receipt = page.locator('.shelf-receipt')
+  await expect(receipt.locator('.shelf-receipt-note')).toHaveText([
+    '3 of these cards are owed to open orders. The orders stay as they are.',
+    'The next card you capture in RB Origins joins Uncommons, Section 2. Press S first to start a new section.',
+  ])
+  /* D313: the receipt sits below the map, so Undo drops the notes without moving the map. */
+  const before = await top()
+  await page.keyboard.press('u')
+  await expect(receipt).toContainText('Put back.')
+  await expect(receipt.locator('.shelf-receipt-note')).toHaveCount(0)
+  expect(await top()).toBe(before)
+})
+
+test('a receipt with nothing owed and no last section moved draws neither line', async ({ page }) => {
+  await openShelf(page, { ...RESULT, receipt: { ...RESULT.receipt, owed: null, next_capture: [] } })
+  await page.getByRole('button', { name: 'Layout' }).click()
+  await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
+  await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
+  await page.getByRole('button', { name: /Put Uncommons just on the far side of Promos/ }).click()
+  await page.getByRole('button', { name: 'Confirm' }).click()
+  await expect(page.locator('.shelf-receipt')).toContainText('1 change to make.')
+  await expect(page.locator('.shelf-receipt-note')).toHaveCount(0)
 })
 
 test('Cancel throws the whole draft away: nothing is sent, and the map returns to read-only', async ({ page }) => {

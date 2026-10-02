@@ -5751,7 +5751,7 @@ def _cross(
 
 
 def _owed_line(snapshot, moved: Dict[str, str]) -> Optional[str]:
-    """How many of the moved cards open orders want, as one sentence, or None for none (DEBT38).
+    """How many of the moved cards open orders want, as one sentence, or None for none.
 
     `moved` is `{cid: sku}` of the cards that moved. `walkplan.demand` is the one reading of
     what open orders still owe per SKU, and a copy is fungible (D212), so the count is, per
@@ -5783,7 +5783,7 @@ def _moved_skus(inventory: master.Inventory, box: int, slots: Sequence[int]) -> 
 
 
 def _next_capture_line(inventory: master.Inventory, box: int) -> Optional[str]:
-    """Which section the next capture into `box` joins, as one sentence (DEBT38). A capture
+    """Which section the next capture into `box` joins, as one sentence. A capture
     goes to the box's last section (5.4), so this is said after the box lost its last one."""
     sections = inventory.layout_of(box)
     if not sections:

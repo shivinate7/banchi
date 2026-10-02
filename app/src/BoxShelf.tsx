@@ -924,6 +924,13 @@ function MoveReceipt({
               ))}
             </ul>
           )}
+          {[result.receipt.owed ?? '', ...result.receipt.next_capture]
+            .filter((line) => line !== '')
+            .map((line) => (
+              <p key={line} className="shelf-receipt-note">
+                {line}
+              </p>
+            ))}
         </>
       )}
       <div className="shelf-receipt-actions">

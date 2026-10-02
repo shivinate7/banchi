@@ -9572,7 +9572,7 @@ COMPONENTS = [
                         "gap press sends the section, the gap and the aim, U sends the undo, the "
                         "keyboard and a pointer drag each move a section, a split names a new "
                         "box, and every press is 40px or more.",
-                "governed_by": ["D117", "D264"],
+                "governed_by": ["D117", "D264", "D313"],
             },
             "tests/revenue.spec.ts": {
                 "does": "`#/revenue`'s own suite (`D217`): the empty and failure "
