@@ -62,7 +62,7 @@ import { WITHHOLD_KEYS, WITHHOLD_LABELS, WITHHOLD_REASONS, type WithholdReason }
 import { isEditableTarget } from './keys'
 import { FLAT_KEY, subThresholdSkus } from './readiness'
 import { isWithheld, rowShare, runChip } from './standing'
-import { TrendCell, type TrendRead } from './PriceTrend'
+import { TrendCell, type KeptTrend, type TrendRead } from './PriceTrend'
 import { ClearPrices } from './ClearPrices'
 import { runBoxLabel } from './runScope'
 import {
@@ -466,10 +466,21 @@ function usePhone(): boolean {
  *  forms this repo's names take are parenthesised ("Calm Rune (R02a)") and a trailing "- "
  *  ("Garganacl - 084/132"), both anchored at the end of the string — never a bare substring
  *  match. */
+/** A strip older than this, against the newest overnight read, is drawn dimmed with its date. */
+const STALE_AFTER_S = 3600
+
+/** A saved strip with its date, and whether it is older than the newest overnight read. */
+function keptStrip(saved: SavedTrendsPayload | null, sku: string): KeptTrend | undefined {
+  const found = saved?.skus[sku]
+  if (found === undefined) return undefined
+  const newest = saved?.note?.at ?? found.at
+  return { ranges: found.ranges, at: found.at, stale: found.at < newest - STALE_AFTER_S }
+}
+
 /** A saved strip as a row's trend read, or undefined where the job saved none. */
 function savedRead(saved: SavedTrendsPayload | null, sku: string): TrendRead | undefined {
-  const found = saved?.skus[sku]
-  return found === undefined ? undefined : { kind: 'read', ranges: found.ranges }
+  const kept = keptStrip(saved, sku)
+  return kept === undefined ? undefined : { kind: 'read', ranges: kept.ranges, at: kept.at, stale: kept.stale }
 }
 
 function numberSuffix(number: string): RegExp | null {
@@ -2036,7 +2047,7 @@ export function Pricing() {
               const found = payload.skus[sku]
               next[sku] =
                 found !== undefined
-                  ? { kind: 'read', ranges: found.ranges }
+                  ? { kind: 'read', ranges: found.ranges, at: Math.floor(Date.now() / 1000) }
                   : { kind: 'refused', why: payload.refused[sku] ?? 'No answer for this card.' }
             }
             return next
@@ -2860,6 +2871,7 @@ export function Pricing() {
                     note={note !== null && note.sku === sku.sku ? note.text : null}
                     readAge={ageWords(source.readAtOf(sku))}
                     trend={trends[sku.sku] ?? (liveTab ? undefined : savedRead(saved, sku.sku))}
+                    kept={liveTab ? undefined : keptStrip(saved, sku.sku)}
                     asked={sendQty[sku.sku] ?? ''}
                     onAsked={(text) => setAsked(sku.sku, text)}
                     holding={holdFor === sku.sku}
@@ -3025,6 +3037,7 @@ function PricingRow({
   note,
   readAge,
   trend,
+  kept,
   asked,
   onAsked,
   holding,
@@ -3047,6 +3060,7 @@ function PricingRow({
   note: string | null
   readAge: string | null
   trend: TrendRead | undefined
+  kept?: KeptTrend
   asked: string
   onAsked: (text: string) => void
   holding: boolean
@@ -3161,7 +3175,7 @@ function PricingRow({
         {sku.snap.low === null ? '—' : <Money value={Number(sku.snap.low)} />}
       </span>
       <span className="pricing-col-trend">
-        <TrendCell read={trend} />
+        <TrendCell read={trend} kept={kept} />
       </span>
 
       {!source.copies ? null : (

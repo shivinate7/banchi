@@ -22,6 +22,11 @@ from typing import Callable, Optional
 
 from store import files
 
+#: THE ONE SPELLING of "this row has no product to read a history for". `server/pipeline_routes.py`
+#: builds the refusal sentence from it and `preload` below counts it: a refusal that is NOT this is
+#: a read the mirror or the network failed, and the screen says so differently.
+NO_PRODUCT_LINE = "is not in a catalogued product line"
+
 STATUS_FILENAME = "price-refresh.json"
 TRENDS_FILENAME = "price-trends.json"
 
@@ -77,34 +82,55 @@ def run(fetch: Callable[[], dict], now: Optional[int] = None) -> dict:
     return note
 
 
+def save_strips(strips: dict, at: Optional[int] = None, keep: Optional[set] = None) -> None:
+    """THE ONE SAVE for a strip, used by the overnight preload and by the Trends press alike.
+
+    `strips` is `{sku: ranges}` for strips that were READ. A SKU not named keeps its saved entry
+    and its old date, so a refused read never replaces a good strip. `keep`, when given, prunes
+    every saved SKU not in it (the overnight job passes the current worklist).
+    """
+    when = int(time.time()) if at is None else int(at)
+    saved = read_trends()
+    for sku, ranges in strips.items():
+        saved[sku] = {"at": when, "ranges": ranges}
+    if keep is not None:
+        saved = {sku: entry for sku, entry in saved.items() if sku in keep}
+    _write(trends_path(), {"skus": saved})
+
+
 def preload(fetch: Callable[[], dict], now: Optional[int] = None) -> dict:
     """Read the waiting rows' strips once; save what came back; write the note either way.
 
     `fetch` answers `{"asked": n, "skus": {sku: ranges}, "refused": {sku: why}, "failed":
-    [sentence]}`. A SKU that came back replaces its saved entry; one that did not keeps its old
-    entry and its old date. `read` below `asked` is a partial read and the screen says so.
+    [sentence], "current": [every SKU on the worklist]}`. The note splits the asked rows three
+    ways that add up to `asked`: `read` (a strip with sales), `no_history` (read, but no sales, or
+    no product line to look up) and `unreadable` (the mirror or the network refused). `failed`
+    counts chunks that raised. Only `no_history` is "no history"; the rest is a read that failed.
     """
     at = int(time.time()) if now is None else int(now)
     try:
         answer = fetch()
-        saved = read_trends()
-        for sku, ranges in answer["skus"].items():
-            saved[sku] = {"at": at, "ranges": ranges}
-        if answer["skus"]:
-            _write(trends_path(), {"skus": saved})
+        strips = answer["skus"]
+        refused = answer.get("refused") or {}
         failed = list(answer.get("failed") or [])
+        keep = answer.get("current")
+        save_strips(strips, at, None if keep is None else set(keep))
+        no_product = sum(1 for why in refused.values() if NO_PRODUCT_LINE in why)
+        empty = sum(1 for ranges in strips.values() if not ranges)
         note = {
             "at": at,
             "ok": not failed,
             "asked": int(answer["asked"]),
-            "read": len(answer["skus"]),
-            "refused": len(answer.get("refused") or {}),
+            "read": len(strips) - empty,
+            "no_history": empty + no_product,
+            "unreadable": len(refused) - no_product,
+            "failed": len(failed),
             "message": failed[0] if failed else "",
         }
     except Exception as caught:
         note = {
-            "at": at, "ok": False, "asked": 0, "read": 0, "refused": 0,
-            "message": str(caught) or type(caught).__name__,
+            "at": at, "ok": False, "asked": 0, "read": 0, "no_history": 0, "unreadable": 0,
+            "failed": 1, "message": str(caught) or type(caught).__name__,
         }
     _write(status_path(), {**(read_status() or {}), "trends": note})
     return note

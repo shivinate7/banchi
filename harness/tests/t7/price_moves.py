@@ -149,21 +149,56 @@ def check_price_refresh_note(checks: Checks) -> None:
         "the callee check reads the callee: a swapped-in paid export is seen",
     )
     checks.equal(
-        preload_calls(), {"do_pipeline_worklist", "do_pipeline_trends"},
+        preload_calls(), PRELOAD_ALLOWED,
         "the overnight preload calls the worklist and the Trends press's own route and nothing else",
+    )
+    checks.equal(
+        preload_calls(planted_helper_source()), PRELOAD_ALLOWED | {"do_pipeline_identify"},
+        "a paid read reached through a helper one level down is seen",
     )
 
 
-def preload_calls():
-    """Every `do_*` function `do_price_trends_preload` calls, read off its own source."""
+PRELOAD_ALLOWED = {"do_pipeline_worklist", "do_pipeline_trends"}
+
+
+def preload_calls(source: str = ""):
+    """Every `do_*` function and `module.attr` that `do_price_trends_preload` reaches, ONE LEVEL
+    DEEP: a helper it calls is opened and its calls count too, so a paid read hidden behind a
+    helper is seen. The allowed callees are not opened (they are the press's own route)."""
+    tree = ast.parse(source or Path(pipeline_routes.__file__).read_text())
+    funcs = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+    modules = {
+        (alias.asname or alias.name).split(".")[0]
+        for n in ast.walk(tree) if isinstance(n, (ast.Import, ast.ImportFrom)) for alias in n.names
+    }
+
+    def callees(fn):
+        found = set()
+        for n in ast.walk(fn):
+            if isinstance(n, ast.Call):
+                f = n.func
+                if isinstance(f, ast.Name):
+                    found.add(f.id)
+                elif isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) and f.value.id in modules:
+                    found.add(f.value.id + "." + f.attr)
+        return found
+
+    first = callees(funcs["do_price_trends_preload"])
+    reached = set(first)
+    for name in first:
+        if name in funcs and name not in PRELOAD_ALLOWED:
+            reached |= callees(funcs[name])
+    return {n for n in reached if n.startswith("do_") or "." in n}
+
+
+def planted_helper_source() -> str:
+    """The route module with a helper added to the preload that reaches a paid read."""
     source = Path(pipeline_routes.__file__).read_text()
-    for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.FunctionDef) and node.name == "do_price_trends_preload":
-            return {
-                n.func.id for n in ast.walk(node)
-                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id.startswith("do_")
-            }
-    return set()
+    source = source.replace(
+        "def do_price_trends_preload() -> dict:",
+        "def _planted():\n    return do_pipeline_identify({})\n\n\ndef do_price_trends_preload() -> dict:", 1,
+    )
+    return source.replace("    work = do_pipeline_worklist([])", "    _planted()\n    work = do_pipeline_worklist([])", 1)
 
 
 FENCE_LABEL = (
@@ -190,37 +225,46 @@ def daily_path_reaches(source: str):
 
 
 def check_price_trends_preload(checks: Checks) -> None:
-    """The overnight Trends read asks what the press asks, saves it with its date, and says when
-    it was partial or failed.
+    """The overnight Trends read asks what the press asks, saves each strip with its date, prunes
+    what left the worklist, survives a chunk that raises anything, and counts causes honestly.
 
     ONLY THE WORKLIST AND THE TRENDS ROUTE ARE STUBBED: the preload's own row choice (not
-    `at_cap`), door choice (the last run holding the row), chunking and note are the code under
-    test, so each of those is a red case below.
+    `at_cap`), door choice (the last run holding the row), chunking, pruning and note are the code
+    under test, so each of those is a red case below.
     """
-    from http import HTTPStatus
-
     checks.note("")
-    checks.note("TRENDS PRELOAD — the press's rows, door and pace; saved with a date; partial said")
+    checks.note("TRENDS PRELOAD — the press's rows, door and pace; saved with a date; causes counted")
 
     rows = [{"sku": "S%02d" % i, "at_cap": False, "in": [{"run": "old"}, {"run": "new"}]} for i in range(10)]
     rows.append({"sku": "CAPPED", "at_cap": True, "in": [{"run": "new"}]})
     asked = []
-    mode = {"fail": False, "refuse": "S03"}
+    mode = {"raise_on": None, "worklist_fails": False}
+    sales = [{"range": "month", "points": ["1"]}]
 
     def worklist(_wanted):
+        if mode["worklist_fails"]:
+            raise RuntimeError("worklist unreadable")
         return {"skus": rows}
 
     def trends(door, skus):
         asked.append((door, list(skus)))
-        if mode["fail"]:
-            raise pipeline_routes.PipelineRefusal(HTTPStatus.CONFLICT, "pricing_not_written", "Run new has no prices file yet.")
-        refused = {s: "no product" for s in skus if s == mode["refuse"]}
-        return {"skus": {s: {"ranges": [{"range": "month", "points": [s]}]} for s in skus if s not in refused}, "refused": refused}
+        if mode["raise_on"] == len(asked):
+            raise RuntimeError("connection reset")
+        out, refused = {}, {}
+        for s_ in skus:
+            if s_ == "S03":
+                refused[s_] = "the mirror refused the request"
+            elif s_ == "S04":
+                refused[s_] = "S04 " + pricerefresh.NO_PRODUCT_LINE + ", so there is no product"
+            else:
+                out[s_] = {"ranges": [] if s_ == "S05" else sales}
+        return {"skus": out, "refused": refused}
 
     real = pipeline_routes.do_pipeline_worklist, pipeline_routes.do_pipeline_trends
     pipeline_routes.do_pipeline_worklist, pipeline_routes.do_pipeline_trends = worklist, trends
     try:
         with isolated_home():
+            pricerefresh.save_strips({"GONE": sales}, at=5)
             note = pricerefresh.preload(pipeline_routes.do_price_trends_preload, now=1000)
             checks.equal(
                 [(d, len(c)) for d, c in asked], [("new", 8), ("new", 2)],
@@ -228,28 +272,39 @@ def check_price_trends_preload(checks: Checks) -> None:
             )
             checks.ok("CAPPED" not in sum((c for _, c in asked), []), "the at-cap row is not read")
             checks.equal(
-                (note["ok"], note["asked"], note["read"], note["refused"]), (True, 10, 9, 1),
-                "the note counts asked, read and refused, so a partial read is visible",
+                (note["ok"], note["asked"], note["read"], note["no_history"], note["unreadable"]),
+                (True, 10, 7, 2, 1),
+                "the note splits asked into read, no history and unreadable, and they add up",
             )
             saved = pipeline_routes.do_pipeline_saved_trends()
             checks.equal(
-                (len(saved["skus"]), saved["skus"]["S00"]["at"], "S03" in saved["skus"], saved["note"]["read"]),
-                (9, 1000, False, 9),
-                "the saved strips carry the second they were read, and a refused SKU is not saved",
+                ("GONE" in saved["skus"], saved["skus"]["S00"]["at"], "S03" in saved["skus"], len(saved["skus"])),
+                (False, 1000, False, 8),
+                "a SKU off the worklist is pruned at save time, strips carry their read second, a refused SKU is not saved",
             )
 
-            mode["fail"] = True
+            asked.clear()
+            mode["raise_on"] = 2
             failed = pricerefresh.preload(pipeline_routes.do_price_trends_preload, now=2000)
             after = pipeline_routes.do_pipeline_saved_trends()
             checks.ok(
-                failed["ok"] is False and failed["read"] == 0 and "no prices file" in failed["message"],
-                "a refused run is a failed note carrying its sentence", str(failed),
+                failed["ok"] is False and failed["failed"] == 1 and "connection reset" in failed["message"]
+                and failed["unreadable"] >= 2,
+                "a chunk that raises ANY error is counted failed, its rows unreadable, and the walk goes on", str(failed),
             )
             checks.equal(
-                (len(after["skus"]), after["skus"]["S00"]["at"]), (9, 1000),
-                "a failed read keeps the last good strips and their old date",
+                (after["skus"]["S00"]["at"], after["skus"]["S09"]["at"]), (2000, 1000),
+                "strips read before the failed chunk are saved, and the failed chunk's keep their old date",
             )
-            pricerefresh.run(lambda: {"live_rows": 1}, now=3000)
+
+            mode["worklist_fails"] = True
+            hard = pricerefresh.preload(pipeline_routes.do_price_trends_preload, now=3000)
+            checks.ok(
+                hard["ok"] is False and "worklist unreadable" in hard["message"]
+                and len(pipeline_routes.do_pipeline_saved_trends()["skus"]) == len(after["skus"]),
+                "a worklist that cannot be read fails the note and prunes nothing", str(hard),
+            )
+            pricerefresh.run(lambda: {"live_rows": 1}, now=4000)
             checks.equal(
                 (pricerefresh.read_status() or {}).get("trends", {}).get("ok"), False,
                 "the live read's note keeps the trends note beside it",
@@ -258,8 +313,55 @@ def check_price_trends_preload(checks: Checks) -> None:
         pipeline_routes.do_pipeline_worklist, pipeline_routes.do_pipeline_trends = real
 
 
+
+def check_trends_press_saves(checks: Checks) -> None:
+    """The Trends press writes its strips through the same save, and a refused press read never
+    replaces a good saved strip."""
+    from types import SimpleNamespace
+
+    from pipeline import pricehistory, tcgcsv
+
+    checks.note("")
+    checks.note("TRENDS PRESS SAVE — the press saves what it read; a refusal keeps the good strip")
+
+    first_range = pricehistory.DEFAULT_RANGES[0]
+
+    class Market:
+        def __init__(self, **_kw):
+            pass
+
+        def readings_for_rows(self, rows, product_ids=None):
+            out, refused = {}, {}
+            for row in rows:
+                sku = row[tcgcsv.SKU_COLUMN]
+                if sku == "A":
+                    out[sku] = SimpleNamespace(product_id=1, series={first_range: 1})
+                else:
+                    refused[sku] = "the mirror refused the request"
+            return out, refused
+
+    real = pricehistory.Market, pricehistory.catalogued_row, pipeline_routes._history_spark
+    pricehistory.Market, pricehistory.catalogued_row = Market, lambda row: True
+    pipeline_routes._history_spark = lambda series: {"range": first_range, "points": ["fresh"]}
+    entries = {sku: {"name": sku, "row": {tcgcsv.SKU_COLUMN: sku}} for sku in ("A", "B")}
+    try:
+        with isolated_home():
+            pricerefresh.save_strips({"B": [{"range": first_range, "points": ["good"]}]}, at=5)
+            answer = pipeline_routes._trends_for_entries(entries, ["A", "B"], {"run": "x"}, missing="{sku}", skip_at_cap=True)
+            saved = pricerefresh.read_trends()
+            checks.equal(sorted(answer["refused"]), ["B"], "the press answers B refused")
+            checks.equal(
+                (saved["A"]["ranges"][0]["points"], saved["B"]["at"], saved["B"]["ranges"][0]["points"]),
+                (["fresh"], 5, ["good"]),
+                "the press saved what it read, and the refused SKU kept its good strip and its old date",
+            )
+    finally:
+        pricehistory.Market, pricehistory.catalogued_row, pipeline_routes._history_spark = real
+
+
 CHECKS = (
     check_price_movers,
     check_price_refresh_note,
     check_price_trends_preload,
+    check_trends_press_saves,
 )

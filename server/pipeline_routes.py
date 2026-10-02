@@ -6756,7 +6756,7 @@ def _trends_for_entries(
             # there is no category to look a history up by — a refusal with its own sentence,
             # not an empty reading.
             refused[sku] = (
-                f"{entry.get('name') or sku} is not in a catalogued product line, so there "
+                f"{entry.get('name') or sku} {pricerefresh.NO_PRODUCT_LINE}, so there "
                 f"is no product to look a history up by (D22)."
             )
             continue
@@ -6796,6 +6796,20 @@ def _trends_for_entries(
     readings, walked = market.readings_for_rows(rows, product_ids=product_ids)
     refused.update(walked)
 
+    strips = {
+        sku: [
+            _history_spark(reading.series[r])
+            for r in pricehistory.DEFAULT_RANGES
+            if r in reading.series
+        ]
+        for sku, reading in readings.items()
+    }
+    # THE PRESS WRITES THROUGH THE SAME SAVE AS THE OVERNIGHT READ, so a reload keeps it. Only strips
+    # that were READ are saved: a refused SKU never replaces a good saved strip.
+    try:
+        pricerefresh.save_strips(strips)
+    except OSError as exc:
+        files.log_cause('trends save', exc)
     return {
         **source,
         "asked": len(rows),
@@ -6806,11 +6820,7 @@ def _trends_for_entries(
                 # ONE ENTRY PER RANGE, IN `DEFAULT_RANGES` ORDER — finest first, the same
                 # order the panel draws and the same list. The ranges OVERLAP and are never
                 # two halves to add up.
-                "ranges": [
-                    _history_spark(reading.series[r])
-                    for r in pricehistory.DEFAULT_RANGES
-                    if r in reading.series
-                ],
+                "ranges": strips[sku],
             }
             for sku, reading in readings.items()
         },
@@ -6854,7 +6864,7 @@ def do_price_trends_preload() -> dict:
             chunk = skus[at:at + TREND_PRELOAD_CHUNK]
             try:
                 answer = do_pipeline_trends(door, chunk)
-            except PipelineRefusal as caught:
+            except Exception as caught:  # ANY failure costs this chunk only; strips already read stay
                 failed.append(f"{door}: {caught}")
                 refused.update({sku: str(caught) for sku in chunk})
                 continue
@@ -6865,6 +6875,7 @@ def do_price_trends_preload() -> dict:
         "skus": read,
         "refused": refused,
         "failed": failed,
+        "current": [str(row["sku"]) for row in work["skus"]],
     }
 
 

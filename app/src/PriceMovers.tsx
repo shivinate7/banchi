@@ -58,13 +58,16 @@ function trendsLine(note: TrendsPreloadNote | null, loading: boolean): { text: s
   if (loading) return { text: '\u00a0', failed: false }
   if (note === null) return { text: 'No overnight trends read has run yet. Press Trends to read them now.', failed: false }
   const when = relativeDate(note.at * 1000)
-  if (!note.ok) {
-    return { text: `The overnight trends read failed ${when}; ${note.read} of ${note.asked} cards were read. ${note.message}`, failed: true }
+  const partial = !note.ok || note.unreadable > 0
+  const counts = [
+    note.unreadable > 0 ? `${note.unreadable} could not be read.` : '',
+    note.no_history > 0 ? `${note.no_history} ${note.no_history === 1 ? 'has' : 'have'} no history.` : '',
+  ].filter(Boolean).join(' ')
+  if (!partial) {
+    return { text: `Trends were read ${when} for ${note.read} ${note.read === 1 ? 'card' : 'cards'}. ${counts} Press Trends to refresh.`.replace('  ', ' '), failed: false }
   }
-  if (note.read < note.asked) {
-    return { text: `Trends were read ${when} for ${note.read} of ${note.asked} cards. The rest had no history to read.`, failed: true }
-  }
-  return { text: `Trends were read ${when} for ${note.read} ${note.read === 1 ? 'card' : 'cards'}. Press Trends to refresh.`, failed: false }
+  const failure = note.failed > 0 ? ` ${note.failed} ${note.failed === 1 ? 'step' : 'steps'} failed: ${note.message}` : ''
+  return { text: `Trends were read ${when} for ${note.read} of ${note.asked} cards. ${counts}${failure}`, failed: true }
 }
 
 function MoverRow({ row }: { row: PriceMover }) {

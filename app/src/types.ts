@@ -4644,13 +4644,17 @@ export type PriceRefreshNote =
 /** One SKU's strip as the daily job saved it, with the second it was read. */
 export type SavedTrend = { at: number; ranges: TrendRange[] }
 
-/** How the overnight Trends read ended. `read` below `asked` is a partial read. */
+/** How the overnight Trends read ended. `read`, `no_history` and `unreadable` add up to `asked`:
+ *  only `no_history` means the card has none, `unreadable` is a read the mirror or network
+ *  refused, and `failed` counts chunks that raised. */
 export type TrendsPreloadNote = {
   at: number
   ok: boolean
   asked: number
   read: number
-  refused: number
+  no_history: number
+  unreadable: number
+  failed: number
   message: string
 }
 

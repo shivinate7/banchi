@@ -709,6 +709,13 @@ async function stubStore(page: Page): Promise<void> {
     }),
   )
 
+  /* `#/pricing`'S TWO ON-ARRIVAL LOCAL READS (DEBT69): the price moves and the strips the daily job
+   *  saved. Both answer "nothing yet"; a spec about either overrides them per case. */
+  await page.route(/\/pipeline\/movers$/, (route) =>
+    json(route, { threshold: '0.10', listed: 0, unmeasured: 0, movers: [], refresh: null }),
+  )
+  await page.route(/\/pipeline\/trends-saved$/, (route) => json(route, { skus: {}, note: null }))
+
   await stubCropPreview(page)
 
   /* D77's CATALOG LOOKUP, WHICH THE QUEUE ENTRY ABOVE IS WHAT ASKS FOR. A `no_catalog_row`
