@@ -216,28 +216,8 @@
    both: the badge ran off the frame and the white margin read as a box floating in the tile.
    `contain` on the kit's neutral ground shows the whole image, badge inside, at every size. */
 .revenue-thumb-stock .bn-thumb-img { object-fit: contain; }
-/* A TILE WITH NO PHOTOGRAPH DOES NOT SPEND THE PHOTOGRAPH'S OWN SPACE ON EMPTY GREY (item 4,
-   review round). Sealed product, and a single with every copy already gone, both draw the
-   kit's ONE "no photo" placeholder (`bn-thumb[data-missing]`) — sized for a list row by
-   default, then stretched to fill this tile's full-bleed art area by the rule above. This
-   undoes the stretch for exactly that state, so the placeholder stays the compact card shape
-   the kit already draws it at, centered in a short strip instead of a tall empty box. */
-.revenue-tile-art:has(.bn-thumb:is([data-missing='true'], [data-pending='true'])) {
-  aspect-ratio: auto;
-  height: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--bn-5) 0;
-}
-.revenue-tile-art:has(.bn-thumb:is([data-missing='true'], [data-pending='true'])) .bn-thumb {
-  width: 64px;
-  height: auto;
-  aspect-ratio: 63 / 88;
-}
-@media (max-width: 639px) {
-  .revenue-tile-art:has(.bn-thumb:is([data-missing='true'], [data-pending='true'])) { width: 96px; padding: var(--bn-3) 0; }
-}
+/* A tile with no photograph keeps the photograph's own frame (D313): pending, final no-photo and
+   photo all draw the same box, so an answer arriving moves nothing. */
 .revenue-tile-rank {
   position: absolute;
   top: var(--bn-3);

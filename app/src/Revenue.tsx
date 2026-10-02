@@ -863,6 +863,8 @@ export function Revenue() {
   /** SKUs whose photo answer is not final yet: their slot holds its size and draws no "No photo found". */
   const [pendingSkus, setPendingSkus] = useState<ReadonlySet<string>>(new Set())
   const asked = useRef<Set<string>>(new Set())
+  /** SKUs with a final photo answer: a re-run never asks them again or draws them pending. */
+  const finalSkus = useRef<Set<string>>(new Set())
 
   // UNSOLD STOCK (D236) — same posture as `prices`, own loading/failure state, never touching
   // `prices`/`pricesLoading` (that is D225's SOLD figure and this is never allowed to merge
@@ -990,6 +992,7 @@ export function Revenue() {
     if (skus.length === 0) return
     skus.forEach((sku) => askedSkus.add(sku))
     const stop = getSkuPhotosSettled(skus, (found) => {
+      skus.forEach((sku) => found.pending.includes(sku) || finalSkus.current.add(sku))
       setPhotos((prev) => ({ ...prev, ...found.photos }))
       setStockPhotos((prev) => ({ ...prev, ...found.stockPhotos }))
       setPendingSkus((prev) => {
@@ -1004,7 +1007,7 @@ export function Revenue() {
       stop()
       // A sort, filter or scope change re-runs this effect; a SKU whose answer was dropped
       // with it must be asked again, not remembered as asked.
-      skus.forEach((sku) => askedSkus.delete(sku))
+      skus.forEach((sku) => finalSkus.current.has(sku) || askedSkus.delete(sku))
     }
   }, [products])
 

@@ -840,6 +840,32 @@ test('a pending SKU holds its slot, draws no no-photo state, then draws its phot
   expect(asked[1]).toEqual(['9100001'])
 })
 
+test('a pending tile holds the box it has with a photo (D313)', async ({ page }) => {
+  const STOCK_URL = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
+  await page.route(STOCK_URL, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: SLOT_SVG }))
+  await stub(page, generalOrders())
+  let asks = 0
+  await page.route(/\/skus\/photos\?/, (route) => {
+    asks += 1
+    return json(
+      route,
+      asks <= 1
+        ? { photos: {}, stock_photos: {}, pending: ['9100001'] }
+        : { photos: {}, stock_photos: { '9100001': STOCK_URL }, pending: [] },
+    )
+  })
+  await open(page)
+  const tile = page.locator('.revenue-podium .revenue-tile').first()
+  const art = tile.locator('.revenue-tile-art')
+  await expect(tile.locator('.bn-thumb')).toHaveAttribute('data-pending', 'true')
+  const before = await art.boundingBox()
+  await page.clock.fastForward(1100)
+  await expect(tile.locator('.bn-thumb img')).toHaveAttribute('src', STOCK_URL)
+  const after = await art.boundingBox()
+  expect(after?.width).toBeCloseTo(before?.width ?? 0, 0)
+  expect(after?.height).toBeCloseTo(before?.height ?? 0, 0)
+})
+
 test('a SKU pending past the cap ends on no photo found', async ({ page }) => {
   await stub(page, generalOrders())
   let asks = 0
