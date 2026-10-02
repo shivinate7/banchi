@@ -1,4 +1,5 @@
-/* WHICH MARK PALETTE A CARD'S RARITY WEARS: the one table (game, rarity, palette), read by the
+/* WHICH MARK PALETTE A CARD'S RARITY WEARS (D-mark-color-by-rarity, the neighbour mark takes its
+ * card's rarity color): the one table (game, rarity, palette), read by the
  * neighbour row's mark (`PlaceNeighbors`'s `mark`) and by nothing else.
  *
  * THE RARITY NAMES ARE `pipeline/games.py`'s, VERBATIM, and `make docs-audit`'s `game vocabulary`
