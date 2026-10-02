@@ -5777,8 +5777,8 @@ def _moved_skus(inventory: master.Inventory, box: int, slots: Sequence[int]) -> 
     out: Dict[str, str] = {}
     for at in slots:
         card = inventory.cards.get(master.position_key(box, at))
-        if card is not None and card.sku:
-            out[card.cid] = str(card.sku)
+        if card is not None and card.sku and str(card.sku).strip():
+            out[card.cid] = str(card.sku).strip()
     return out
 
 
@@ -5932,7 +5932,8 @@ def _move_sections_core(
 
     names = [sections[j - 1]["name"] for j in chosen]
     moved_skus = _moved_skus(inventory, box, on_hand)
-    was_last = last == len(sections)
+    # The box's last section after the move: the one that was last, or one that lands last.
+    was_last = last == len(sections) or (same and before is None)
     if same:
         items = []
         for j, name in zip(chosen, names):

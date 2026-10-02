@@ -90,7 +90,7 @@ the owner's orientation. For a section moved from RB Origins into the middle of 
 - **Two more lines, each absent at zero.** One says how many moved cards are owed to open orders
   (`receipt.owed`). It counts, per SKU, the lesser of the copies moved and the copies owed, since
   a copy is fungible (D212). The other says which section the next capture joins when the moved
-  section was last in its box (`receipt.next_capture`). Press S first to start a new section.
+  section was last in its box, or a same-box move made it last (`receipt.next_capture`). Press S first to start a new section.
   The batch route carries both. The Shelf draws them under the steps.
 - **The receipt stays** until the owner closes it or the next move replaces it. Its "Done" press
   writes nothing.

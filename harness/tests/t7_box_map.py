@@ -2233,6 +2233,65 @@ def check_move_receipt_lines(checks: Checks) -> None:
             "BATCH NEXT CAPTURE: read off the box as the draft left it",
         )
 
+    with isolated_home():
+        _shelf()
+        # A line stood down owes nothing, so its cards are not counted (`walkplan.demand`).
+        # A second open line keeps the order itself open, so only the line's own `closed` can say no.
+        sku_cards(1, [4, 5], "333")
+        with Store().write() as snapshot:
+            snapshot.ledger.ingest([order_store.OrderRecord(
+                source="TCGplayer", number="O-333", status="Pending",
+                placed_at="2026-08-28T10:00:00+00:00",
+                lines=[order_store.OrderLine(sku="333", quantity=2),
+                       order_store.OrderLine(sku="999", quantity=1)],
+            )])
+            snapshot.ledger.close_line(
+                order_store.order_key("TCGplayer", "O-333"), "333", order_store.CLOSE_NOT_SHIPPING
+            )
+        body = _drag_sections(1, {"first": 2, "last": 2, "to_box": 2})
+        checks.equal(body["receipt"]["owed"], None, "STOOD DOWN: a closed line is not counted")
+
+    with isolated_home():
+        _shelf()
+        # Three copies are owed and one is already pulled, so two are outstanding.
+        sku_cards(1, [4, 5, 6], "444")
+        owe("444", 3)
+        with Store().write() as snapshot:
+            snapshot.ledger.record_pull(order_store.order_key("TCGplayer", "O-444"), "444", ["PULLED-1"])
+        body = _drag_sections(1, {"first": 2, "last": 2, "to_box": 2})
+        checks.equal(
+            body["receipt"]["owed"],
+            "2 of these cards are owed to open orders. The orders stay as they are.",
+            "PARTLY PICKED: only the outstanding copies count",
+        )
+
+    with isolated_home():
+        _shelf()
+        sku_cards(1, [4], "555")
+        owe("555", 5)
+        body = capture_server.do_move_sections_batch({
+            "digests": _digests([1, 2]),
+            "moves": [
+                {"box": 1, "first": 2, "last": 2, "to_box": 2},
+                {"box": 2, "first": 3, "last": 3, "to_box": 1},
+            ],
+        })
+        checks.equal(
+            body["receipt"]["owed"],
+            "1 of these cards is owed to an open order. The orders stay as they are.",
+            "ONE CARD MOVED TWICE IN A DRAFT counts once, never twice",
+        )
+
+    with isolated_home():
+        _shelf()
+        body = _drag_sections(1, {"first": 1, "last": 1, "to_box": 1})
+        checks.equal(
+            body["receipt"]["next_capture"],
+            ["The next card you capture in Origins joins Commons, Section 3. "
+             "Press S first to start a new section."],
+            "SAME-BOX MOVE TO THE END: the moved section is now last, so the next capture joins it",
+        )
+
 
 CHECKS = (
     check_box_map_safety, check_section_moves, check_order_key_migration,
