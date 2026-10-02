@@ -51,6 +51,7 @@
  */
 import type { ReactNode } from 'react'
 
+import { Logo } from './kit'
 import { neighborWords, placeParts } from './server'
 import type { Place, PlaceNeighbor } from './types'
 import './PlaceNeighbors.css'
@@ -63,6 +64,9 @@ import './PlaceNeighbors.css'
  *
  * THE EPITHET IS DEMOTED AND NEVER DROPPED: 61 of 99 champions carry more than one — Master
  * Yi has 14 — so `Master Yi` alone names fourteen different cards and is not an identity. */
+/* SCRATCH PREVIEW: `?nbmark=card|both` picks the shape. */
+const MARK_PART = new URLSearchParams(window.location.search).get('nbmark') === 'card' ? 'card' : 'both'
+
 function seam(name: string): [string, string | null] {
   const at = name.indexOf(', ')
   return at < 1 ? [name, null] : [name.slice(0, at), name.slice(at + 2)]
@@ -120,7 +124,7 @@ export function PlaceNeighbors({
       {/* This copy's own number, the ruler pin's chip. A departed copy has no card to name. */}
       {place?.card == null ? null : (
         <span className="nb-here" aria-hidden="true">
-          {place.card}
+          <Logo part={MARK_PART} size={18} glint key={parts.said} />
         </span>
       )}
       {parts.next === null ? (
