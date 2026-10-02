@@ -6877,7 +6877,7 @@ COMPONENTS = [
                         "in the product a rectangle. Body face and lowercase on the names is "
                         "docs/DESIGN.md's own line (the body face is for sentences a human "
                         "reads).",
-                "governed_by": ["D58", "D31", "D41", "D260", "D218"]},
+                "governed_by": ["D58", "D31", "D41", "D260", "D218", "D313"]},
             "src/BoxBrowse.tsx": {"does": "the box walk, D31's default way into #/inventory — was #/pull until the "
                     "three routes merged. The card's own capture photo beside its position label "
                     "and, since D58, "

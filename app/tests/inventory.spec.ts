@@ -5426,15 +5426,15 @@ test('the neighbours are ranked, not joined — the names are the only thing dra
   )
 })
 
-test('the neighbour line carries no words: names and this copy\'s number only', async ({ page }) => {
+test('the neighbour line carries no words: names and this card\'s mark only', async ({ page }) => {
   await open(page, BOXES, {
     cards: NEIGHBORLY,
     search: (query) => searchAnswer(query, NEIGHBORLY),
   })
-  /* OWNER RULING: `<- back [N] front ->`, arrows drawn by CSS. The text of the line is the two
-     names and the number chip and nothing else — no `back`, `front`, `before`, `after`. */
+  /* OWNER RULING: `<- back [mark] front ->`, arrows drawn by CSS. The text of the line is the two
+     names and nothing else (the mark carries no number) — no `back`, `front`, `before`, `after`. */
   const band = page.locator('.card-locations-row.is-current .nb')
-  await expect(band).toHaveText('Galio, Indefaticable1Evelynn, Entrancing')
+  await expect(band).toHaveText('Galio, IndefaticableEvelynn, Entrancing')
   /* Every line, end chips aside (BACK / FRONT stand in for a name at a box's end): no direction word. */
   const words = await page.locator('.card-locations-owner .nb').evaluateAll((els) =>
     els.map((el) => {
@@ -5444,6 +5444,31 @@ test('the neighbour line carries no words: names and this copy\'s number only', 
     }),
   )
   for (const text of words) expect(text).not.toMatch(/\b(back|front|before|after|next|previous)\b/i)
+})
+
+test('the neighbour row marks this card with the Banchi card, and the row does not move (D313)', async ({
+  page,
+}) => {
+  await open(page, BOXES, { cards: NEIGHBORLY, search: (query) => searchAnswer(query, NEIGHBORLY) })
+  const band = page.locator('.card-locations-row.is-current .nb')
+  const slot = band.locator('.nb-here')
+  /* The mark is decoration: aria-hidden, and the row's own `aria-label` already says where the
+     card sits. No number is drawn in its place. */
+  await expect(slot).toHaveAttribute('aria-hidden', 'true')
+  await expect(slot.locator('svg .logo-brackets')).toHaveCount(1)
+  await expect(slot).not.toHaveText(/\d/)
+  /* The chip it replaced was 18px, so the row keeps its height and its y. */
+  const box = await band.boundingBox()
+  expect(box?.height).toBe(18)
+  expect((await slot.boundingBox())?.height).toBe(18)
+  await page.waitForTimeout(300)
+  expect((await band.boundingBox())?.y).toBe(box?.y)
+})
+
+test('the glint is off until a caller gates it on', async ({ page }) => {
+  await open(page, BOXES, { cards: NEIGHBORLY, search: (query) => searchAnswer(query, NEIGHBORLY) })
+  await expect(page.locator('.card-locations-owner .nb-here svg')).not.toHaveCount(0)
+  await expect(page.locator('.logo-glint')).toHaveCount(0)
 })
 
 test('the neighbour names are read as words, not as metadata', async ({ page }) => {
