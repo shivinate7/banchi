@@ -579,7 +579,7 @@ async function openComposer(page: Page) {
      back to Cards, which is where every case below was written to begin. */
   await expect(page.locator('.run-quote, .runs-composer .bn-notice-danger').first()).toBeVisible()
   const cards = page.locator('.runs-stages').getByRole('button', { name: 'Cards' })
-  if ((await cards.count()) > 0) await cards.click()
+  await cards.click()
   await expect(page.locator('.runs-starts')).toBeVisible()
 }
 
@@ -600,7 +600,7 @@ async function pickBox(page: Page, box = 9) {
      run. Choosing the start first is idempotent — `Segmented` re-presses without toggling —
      so every existing caller of this helper keeps meaning what it meant. */
   const drawers = page.locator('.runs-starts').getByRole('button', { name: 'Boxes' })
-  if (await drawers.isVisible()) await drawers.click()
+  await drawers.click()
   const label = boxTitle(BOX_NAMES[box] ?? null, box)
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   await page.locator('.runs-boxes').getByRole('button', { name: new RegExp(`^${escaped}\\b`) }).click()
