@@ -413,6 +413,43 @@ def check_test_purposes(report: Report) -> None:
     )
 
 
+def _cli_flags() -> Tuple[Dict[str, set], set]:
+    """`{command: {--flag}}` from cli/__main__.py's `add_argument` calls; "" holds the global flags.
+
+    The second value names commands whose parser the AST cannot follow: a non-literal flag,
+    or nested subparsers.
+    """
+    flags: Dict[str, set] = {"": set()}
+    opaque: set = set()
+    try:
+        tree = ast.parse(read(ROOT / "cli" / "__main__.py"))
+    except (SyntaxError, OSError):
+        return flags, opaque
+    owner: Dict[str, str] = {}
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)]
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Attribute):
+            call = node.value
+            if call.func.attr == "add_parser" and call.args and isinstance(call.args[0], ast.Constant) and isinstance(node.targets[0], ast.Name):
+                owner[node.targets[0].id] = call.args[0].value
+                flags.setdefault(call.args[0].value, set())
+    for call in calls:
+        if not isinstance(call.func.value, ast.Name):
+            continue
+        var = call.func.value.id
+        name = "" if var == "parser" else owner.get(var)
+        if name is None:
+            continue
+        if call.func.attr == "add_subparsers" and name:
+            opaque.add(name)
+        if call.func.attr == "add_argument" and call.args:
+            if all(isinstance(a, ast.Constant) and isinstance(a.value, str) for a in call.args):
+                flags[name].update(a.value for a in call.args if a.value.startswith("--"))
+            else:
+                opaque.add(name or "")
+    return flags, opaque
+
+
 def check_readme_blocks(report: Report) -> None:
     """README's `<!-- gen:NAME -->` blocks equal what `scripts/readme_gen.py` renders from the source.
 
@@ -430,7 +467,20 @@ def check_readme_blocks(report: Report) -> None:
             findings.append(Finding("README.md", "has no generated block; the `routes` block is gone."))
         if mod.render(text) != text:
             findings.append(Finding("README.md", "a generated block is stale. Run `python3 scripts/readme_gen.py --write`."))
-    report.add("readme blocks", MECHANICAL, findings, f"{blocks} generated block(s) match their source", scanned=blocks)
+    # Every `--flag` on a `./pkmnscan <command>` line in README is an `add_argument` flag of that
+    # command's parser in cli/__main__.py (read by AST, as `pkmnscan commands` reads COMMANDS).
+    # A parser the AST cannot follow is a question, never ok and never a finding.
+    flags, opaque = _cli_flags()
+    questions: List[Finding] = []
+    for sub, rest in re.findall(r"^\./pkmnscan\s+(\w+)(.*)$", read(ROOT / "README.md"), re.M):
+        for flag in re.findall(r"--[\w-]+", rest.split("#")[0]):
+            if sub in opaque or sub not in flags:
+                questions.append(Finding("README.md", f"`./pkmnscan {sub}` flags unknown: its parser is not readable by AST ({flag})."))
+            elif flag not in flags[sub] | flags[""]:
+                findings.append(Finding("README.md", f"`./pkmnscan {sub}` shows `{flag}`, which no `add_argument` of it declares."))
+    if questions:
+        report.add("readme flags", ADVISORY, questions)
+    report.add("readme blocks", MECHANICAL, findings, f"{blocks} generated block(s) match their source; its flags are declared by the CLI", scanned=blocks)
 
 
 def check_route_rosters(report: Report) -> None:
