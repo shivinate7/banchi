@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { test, expect } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { BLOCK, PARAMS, ROMAN_TRACK_SOLVED } from '../src/kit/lockupGeometry'
+import { VARIANTS } from '../src/kit/markPalettes'
 import { phoneOff, setViewport } from './phoneSwitch'
 
 /* THE MARK, IN THE BROWSER THAT DRAWS IT.
@@ -199,7 +200,7 @@ test('the display cut is what the gallery shows at 64px and above', async ({ pag
   expect(cuts.boundary, '64px takes the display cut').toBe(1)
 })
 
-test('all six locked marks are drawn, and they differ', async ({ page }) => {
+test('every locked mark is drawn, and they differ', async ({ page }) => {
   await page.goto(GALLERY)
   const palettes = await page
     .locator('[data-kit-section="mark"] svg[width="56"]')
@@ -211,12 +212,12 @@ test('all six locked marks are drawn, and they differ', async ({ page }) => {
       ),
     )
 
-  expect(palettes, 'section 9 locks six marks').toHaveLength(6)
+  expect(palettes, 'section 9 locks one mark per variant').toHaveLength(VARIANTS.length)
   // The whole palette, not the ground: section 9 gives all three gold marks the same true
   // black, so grounds alone would only ever distinguish four. A variant prop that silently
-  // fell back to the default would draw six identical tiles, and every other assertion in
+  // fell back to the default would draw identical tiles, and every other assertion in
   // this file would still pass.
-  expect(new Set(palettes).size, 'each variant draws its own palette').toBe(6)
+  expect(new Set(palettes).size, 'each variant draws its own palette').toBe(VARIANTS.length)
 })
 
 test('the tile mark is fixed dark in both themes, and the brand frame is not', async ({ page }) => {
