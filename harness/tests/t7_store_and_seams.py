@@ -193,6 +193,7 @@ from harness.tests.t7 import (  # noqa: E402
     value,
     undo_built_on,
     sets_stock,
+    realized_prices,
 )
 # `t7_box_map.py` imports these names from this module, so they stay reachable here (D264).
 from cli import resolve  # noqa: E402, F401
@@ -241,6 +242,7 @@ CHECK_ORDER = (
     *value.CHECKS,
     *undo_built_on.CHECKS,
     *sets_stock.CHECKS,
+    *realized_prices.CHECKS,
 )
 
 

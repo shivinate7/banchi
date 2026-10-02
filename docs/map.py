@@ -1339,6 +1339,14 @@ COMPONENTS = [
                                         "product-history-selftest`, PATH GATED and IN "
                                         "`make check` as of D247's twenty-first entry "
                                         "(owner's word, 2026-09-23)."},
+            "realized.py": {"does": "`read_sales` reads an OrderWand sales export with `csv`, "
+                                    "keeping nine columns and dropping every buyer field at parse "
+                                    "time. `compare` sets each sale against the finest archived "
+                                    "bucket that holds its date, leaving out refunds and dates "
+                                    "with no bucket.",
+                            "governed_by": ["D214", "D219", "D227"],
+                            "note": "A read-only diagnostic (DEBT70). PROVED BY T7's "
+                                    "`realized_prices` group on synthetic rows."},
             # UNSOLD STOCK, VALUED OVER TIME (`docs/specs/sales-plan.md` section 1,
             # second half; `D236`). The position is the SKU
             # (D212); quantity is the `cards` table's own state, never the marketplace
