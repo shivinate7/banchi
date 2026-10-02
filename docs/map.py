@@ -6260,6 +6260,17 @@ COMPONENTS = [
                                                        "`FilterSpecimens`; `tests/filters/` mounts it "
                                                        "too.",
                                                "governed_by": ["D5", "D270"]},
+            "src/kit/settings.tsx": {"does": "THE SETTINGS SHEET'S PARTS (the owner: \"Kit first\"). "
+                                             "`SettingsOp`, `SettingsGroup`, `SettingsFigures`, "
+                                             "`SettingsCensus`, `SettingsEditor`, `SettingsTrouble`, "
+                                             "`CardPicker` (D314, cards for a bulk action are picked "
+                                             "inside the sheet) and `useSheetWrite`, the one "
+                                             "write-with-refusal hook. They take props and name no "
+                                             "box. Manage box draws them.",
+                                     "governed_by": ["D275", "D313", "D314"]},
+            "src/kit/settings.specimens.tsx": {"does": "The settings sheet's parts on invented data, "
+                                                       "mounted on the kit page as `SettingsSpecimens`.",
+                                               "governed_by": ["D275"]},
             "src/kit/highlight.tsx": {"does": "THE MATCH HIGHLIGHT (FLT-08: \"no search result shows "
                                               "what matched\"). `Highlight` marks only a row "
                                               "`kit/match.ts:matchQuery` accepts. Text is marked where "

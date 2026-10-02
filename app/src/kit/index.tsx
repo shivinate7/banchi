@@ -1317,3 +1317,8 @@ export type { FacetValueOf } from './facets'
 export { Highlight, matchSpans } from './highlight'
 export type { HighlightKind } from './highlight'
 export { useViewQuery, patchViewQuery, useViewParam, useViewFlag, useFacetParams, useSortParam } from './viewState'
+
+/* ---- the settings sheet's parts (kit-settings) ----------------------------------------------
+   Screens import these from here, never from `./settings` directly. */
+export { SettingsOp, SettingsGroup, SettingsFigures, SettingsCensus, SettingsEditor, SettingsTrouble, CardPicker, useSheetWrite, count } from './settings'
+export type { PickGroup } from './settings'
