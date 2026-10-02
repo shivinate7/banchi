@@ -1745,7 +1745,7 @@ img.bn-crop[data-cropped='true'] {
   font-family: var(--bn-font-display);
   font-size: var(--bn-fs-lg);
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--bn-tracking-tight);
   color: var(--bn-ink);
   font-variant-numeric: tabular-nums;
 }
@@ -1825,7 +1825,7 @@ img.bn-crop[data-cropped='true'] {
   font-family: var(--bn-font-display);
   font-size: var(--bn-fs-lg);
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--bn-tracking-tight);
   color: var(--bn-ink);
   margin-top: calc(-1 * var(--bn-2));
 }
