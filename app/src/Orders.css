@@ -1199,9 +1199,18 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 
 /* The walk in the rail reads as Inventory's card list, one line a card. */
 @container orders (min-width: 560px) {
-  .orders-walk-press { grid-template-columns: 6ch minmax(0, 1fr) auto; min-height: var(--bn-control-h); padding: var(--bn-1) var(--bn-2); }
-  .orders-walk-slot { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .orders-walk-pick { flex-wrap: nowrap; white-space: nowrap; }
+  /* THE NAME TAKES THE FIRST LINE WHOLE and is never cut; the slot numbers wrap on the line under it, beside the pick
+     count. The pick box holds "Picked" and "Pick" alike, so a sale never re-wraps the slots and the row keeps its height. */
+  .orders-walk-press {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'name name' 'slot pick' 'for for';
+    align-items: baseline;
+    min-height: var(--bn-control-h);
+    padding: var(--bn-1) var(--bn-2);
+  }
+  .orders-walk-name { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+  .orders-walk-slot { font-size: var(--bn-fs-sm); }
+  .orders-walk-pick { flex-wrap: nowrap; white-space: nowrap; min-width: 14ch; justify-content: flex-end; }
   .orders-walk-rows { gap: var(--bn-0-5); }
   .orders-walk-tools { flex-wrap: wrap; }
 }

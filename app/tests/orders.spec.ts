@@ -5108,7 +5108,8 @@ test('at 820 a picked line keeps its slot numbers clear of the struck name', asy
   await expect(line).toHaveClass(/is-done/)
   const slot = (await line.locator('.orders-walk-slot').boundingBox())!
   const name = (await line.locator('.orders-walk-name').boundingBox())!
-  expect(slot.x + slot.width, 'the numbers end before the name begins').toBeLessThanOrEqual(name.x + 0.5)
+  const apart = slot.x + slot.width <= name.x + 0.5 || slot.y >= name.y + name.height - 0.5
+  expect(apart, 'the numbers sit beside or under the name, never over it').toBe(true)
   /* AND THE PICK FIGURE STAYS INSIDE THE ROW: it wraps rather than run past the walk column. */
   const pick = (await line.locator('.orders-walk-pick').boundingBox())!
   const press = (await line.locator('.orders-walk-press').boundingBox())!
