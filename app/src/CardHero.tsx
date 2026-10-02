@@ -123,7 +123,7 @@ export function claimList(claim: string | string[] | null): string[] {
 /* ------------------------------------------------------------------------------ the market */
 
 export type MarketRead =
-  | { kind: 'table'; at: number | null; rows: Record<string, string | null>; cutoff: string | null }
+  | { kind: 'table'; at: number | null; rows: Record<string, string | null>; cutoff: string | null; readings: Record<string, string> }
   | { kind: 'absent'; why: string }
 
 export function marketTable(payload: PricingPayload): MarketRead {
@@ -133,7 +133,7 @@ export function marketTable(payload: PricingPayload): MarketRead {
       rows[`${at.box}/${at.index}`] = priced.snap?.market ?? null
     }
   }
-  return { kind: 'table', at: payload.written_at ?? null, rows, cutoff: payload.held_market_cutoff ?? null }
+  return { kind: 'table', at: payload.written_at ?? null, rows, cutoff: payload.held_market_cutoff ?? null, readings: payload.held_market_readings ?? {} }
 }
 
 function marketText(card: InventoryCard, read: MarketRead | undefined): string {
@@ -333,14 +333,30 @@ export type HeroFigures = {
  *  same figure from the same read. Null while it loads, on a failed read, and where the run holds no
  *  row for this card: the band draws a quiet dash and never a made-up figure. */
 export function useMarketPrice(card: InventoryCard): number | null {
-  return useMarketRead(card).price
+  const table = useMarketTable(card)
+  if (table === null) return null
+  const raw = table.rows[`${card.box}/${card.index}`]
+  const price = raw === null || raw === undefined ? NaN : Number(raw)
+  return Number.isNaN(price) ? null : price
 }
 
-/** THE CARD'S MARKET PRICE AND THE STORE'S TOP-TENTH CUTOFF, off the one pricing read. `cutoff` is the
- *  server's `held_market_cutoff` (`pipeline/holdings.py`), a price and never a list of prices, so the
- *  screen ranks nothing. Both are null while loading, on a failed read, and for a card the run has no
- *  figure for: nothing is guessed. */
+/** THE GLINT'S TWO FIGURES, BOTH OUT OF THE READINGS TABLE: the card's price by `card.sku` and the
+ *  store's top-tenth cutoff (`held_market_cutoff`, `pipeline/holdings.py`). Like with like: the
+ *  Market figure the hero draws is the run's snapshot, and it is not what the cutoff ranks. No
+ *  fallback to it, so a card with no SKU or no reading has a null price. Null while loading and on
+ *  a failed read. */
 export function useMarketRead(card: InventoryCard): { price: number | null; cutoff: number | null } {
+  const table = useMarketTable(card)
+  if (table === null) return { price: null, cutoff: null }
+  const raw = card.sku ? table.readings[card.sku] : undefined
+  const price = raw === undefined ? NaN : Number(raw)
+  const cut = table.cutoff === null ? NaN : Number(table.cutoff)
+  return { price: Number.isNaN(price) ? null : price, cutoff: Number.isNaN(cut) ? null : cut }
+}
+
+/** The run's pricing read for one card, once per run; null until it lands, on a failed read, and for
+ *  a card no run has read. */
+function useMarketTable(card: InventoryCard): Extract<MarketRead, { kind: 'table' }> | null {
   const run = card.run ?? null
   const [read, setRead] = useState<{ run: string; table: MarketRead } | null>(null)
   useEffect(() => {
@@ -357,13 +373,8 @@ export function useMarketRead(card: InventoryCard): { price: number | null; cuto
       live = false
     }
   }, [run])
-  if (run === null || read === null || read.run !== run || read.table.kind !== 'table') {
-    return { price: null, cutoff: null }
-  }
-  const raw = read.table.rows[`${card.box}/${card.index}`]
-  const price = raw === null || raw === undefined ? NaN : Number(raw)
-  const cut = read.table.cutoff === null ? NaN : Number(read.table.cutoff)
-  return { price: Number.isNaN(price) ? null : price, cutoff: Number.isNaN(cut) ? null : cut }
+  if (run === null || read === null || read.run !== run || read.table.kind !== 'table') return null
+  return read.table
 }
 
 /** Whether the card is in the top tenth of the store by market price: at or above the cutoff, ties in.

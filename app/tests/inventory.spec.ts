@@ -5491,8 +5491,12 @@ const GATED: Cards = (() => {
   }
 })()
 
-const gated = (cutoff: string | null) => async (page: Page) => {
-  await open(page, BOXES, { cards: GATED, search: (query) => searchAnswer(query, GATED) }, () => ({ ...PRICING, held_market_cutoff: cutoff }))
+const gated = (cutoff: string | null, readings: Record<string, string> = { '8937370': '5.47' }) => async (page: Page) => {
+  await open(page, BOXES, { cards: GATED, search: (query) => searchAnswer(query, GATED) }, () => ({
+    ...PRICING,
+    held_market_cutoff: cutoff,
+    held_market_readings: readings,
+  }))
 }
 const GLINTS = () => document.getAnimations().filter((a) => (a as CSSAnimation).animationName === 'nb-glint').length
 
@@ -5521,10 +5525,19 @@ for (const [cutoff, plays, why] of [
 test('a card with no market reading never glints, whatever the cutoff', async ({ page }) => {
   await gated('0.01')(page)
   await expect(page.locator('.card-locations-row.is-current .nb-here svg')).toBeVisible()
-  /* 2/4 (Eiscue) has a null market in the run's table. */
+  /* 2/4 (Eiscue, SKU 8937371) has no figure in the readings. */
   await expandAll(page)
   await page.locator('.browse-row', { hasText: 'Eiscue' }).first().click()
   await expect(page.locator('.card-locations-row.is-current .nb')).toHaveAttribute('aria-label', /Galio/)
+  await page.waitForTimeout(400)
+  expect(await page.evaluate(GLINTS)).toBe(0)
+})
+
+test('the glint reads the readings table and never the run snapshot', async ({ page }) => {
+  /* The run's snapshot says 5.47 for 8937370 (the hero shows it); the readings hold nothing for it. */
+  await gated('0.01', {})(page)
+  await expect(page.locator('.card-locations-row.is-current .nb-here svg')).toBeVisible()
+  await page.locator('.browse-row').nth(1).click()
   await page.waitForTimeout(400)
   expect(await page.evaluate(GLINTS)).toBe(0)
 })

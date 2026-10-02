@@ -2528,6 +2528,9 @@ export type PricingPayload = {
    *  (an empty store, or no held SKU with a reading). The server computes it (`pipeline/holdings.py`),
    *  so the screen compares one card's price to it and ranks nothing. Optional for an older server. */
   held_market_cutoff?: string | null
+  /** `{sku: market}` out of the same readings table the cutoff ranks, for this run's SKUs that it
+   *  holds a figure for. The glint compares THIS to the cutoff, never the run's `snap`. */
+  held_market_readings?: Record<string, string>
 }
 
 /* ------------------------------------------------- the cross-run pricing worklist (D86) */
