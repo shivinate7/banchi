@@ -38,6 +38,7 @@ import { dirname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DEV_URL } from '../devPort'
 import { isOutside, sealEveryTest } from './shell'
+import { afterPaint, settleMotion } from './motionSettled'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const DIST = join(HERE, '..', '..', 'dist-demo')
@@ -119,13 +120,20 @@ async function serveDemo(page: Page): Promise<string> {
   return `${DEV_URL}${base}`
 }
 
+/** The demo's reads have landed and drawn: no skeleton stands, nothing still moves. */
+async function drawn(page: Page): Promise<void> {
+  await expect(page.locator('.bn-skeleton')).toHaveCount(0)
+  await settleMotion(page)
+  await afterPaint(page)
+}
+
 /** The demo's own root, no hash typed, and its first read landed. */
 async function openRoot(page: Page): Promise<void> {
   const origin = await serveDemo(page)
   await page.goto(origin)
   await page.locator('main').first().waitFor()
   // The demo answers every read after a 45-135 ms pause, on purpose (`demoRequest`).
-  await page.waitForTimeout(600)
+  await drawn(page)
 }
 
 /** A deep link, opened the way a shared URL opens it. Only `#/product` uses this (D227). */
@@ -133,7 +141,7 @@ async function openLink(page: Page, link: string): Promise<void> {
   const origin = await serveDemo(page)
   await page.goto(`${origin}${link}`)
   await page.locator('main').first().waitFor()
-  await page.waitForTimeout(600)
+  await drawn(page)
 }
 
 /** Arrive at a screen the way a visitor does: land on the root, press its row in the sidebar.
@@ -143,7 +151,7 @@ async function visit(page: Page, screen: string): Promise<void> {
   if (screen === 'Home') return
   await page.locator('.bn-side').getByRole('link', { name: new RegExp(`^${screen}`) }).first().click()
   await page.locator('main').first().waitFor()
-  await page.waitForTimeout(600)
+  await drawn(page)
 }
 
 /** The Fulfiller's screen: its sidebar row opens it in a new window, as it does at the desk. */
@@ -154,7 +162,7 @@ async function visitFulfiller(page: Page): Promise<Page> {
     page.locator('.bn-side').getByRole('link', { name: 'Pull' }).first().click(),
   ])
   await fulfiller.locator('main, body').first().waitFor()
-  await fulfiller.waitForTimeout(600)
+  await drawn(fulfiller)
   return fulfiller
 }
 

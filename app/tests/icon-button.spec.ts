@@ -197,20 +197,18 @@ test('a long-press opens the tooltip and does not also press the button', async 
   const point = { x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2) }
   const cdp = await page.context().newCDPSession(page)
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] })
-  await page.waitForTimeout(700)
+  // the hold is the touch itself; the tooltip opens once it passes the long-press threshold
   await expect(btn).toHaveAttribute('data-tip-open', 'true')
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-  await page.waitForTimeout(300)
+  await page.waitForTimeout(300) // keep: asserts the long-press release presses nothing
   const clicks = await page.evaluate(() => window.__iconClicks)
   expect(clicks, 'the long-press that revealed the tooltip also pressed the button').toBe(0)
 
   // A quick tap (under the long-press threshold) still presses it, exactly once.
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] })
-  await page.waitForTimeout(60)
+  await page.waitForTimeout(60) // keep: a tap under the long-press threshold is a real duration
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-  await page.waitForTimeout(300)
-  const tapClicks = await page.evaluate(() => window.__iconClicks)
-  expect(tapClicks, 'a quick tap did not press the button').toBe(1)
+  await expect.poll(() => page.evaluate(() => window.__iconClicks), { message: 'a quick tap did not press the button' }).toBe(1)
 })
 
 test('the toast dismiss glyph clears 4.5:1 against the toast ground, in both themes', async ({ page }) => {
