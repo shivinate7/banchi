@@ -514,21 +514,70 @@ for (const width of [1440, 820]) {
     expect(new Set(seen).size, `the pick count's box: ${seen.join(' | ')}`).toBe(1)
   })
 
-  test(`L3 S13: the pick chip holds one box whether or not copies are short, at ${width}`, async ({ page }) => {
+}
+
+/* The seeded walk's card is a Riftbound Epic, so the row holds the parts, the finish, the rarity, then the For and pick chips.
+   `wide` is Verdana with the web fonts blocked, the face that wraps on Linux. */
+for (const width of [1440, 820]) for (const wide of [false, true]) {
+  test(`L3 S13: the pick chip ends the facts row, so its change moves no chip left of it${wide ? ', wide face' : ''}, at ${width}`, async ({ page }) => {
+    if (wide) {
+      await page.route(/\.(woff2?|ttf)(\?|$)/, (route) => route.abort())
+      await page.addInitScript(() => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const st = document.createElement('style')
+          st.textContent = '*{font-family:Verdana,sans-serif !important}'
+          document.head.append(st)
+        })
+      })
+    }
+    const epic = { ...card({ box: 3, index: 21, section: 2, card: 17, name: 'Volcanion', state: 'identified', sku: '9191486', boxName: 'RB Epics', boxTotal: 133 }), rarity_claim: 'epic', metadata_finish: 'foil', game: 'riftbound', condition: 'Near Mint' }
+    await page.route(/\/inventory\/copies$/, (route) => json(route, { cards: { '3/21': epic }, listings: {} }))
     await openOrdersWalk(page, width)
-    const chip = '.orders-pick-chip'
-    await expect(page.locator(chip)).toBeVisible()
-    const seen = await boxPerVariant(
-      page,
-      chip,
-      [
-        '<span class="bn-pill bn-pill-accent">Pick 1 of 2</span>',
-        '<span class="bn-pill bn-pill-accent">Pick 12</span> <span class="bn-pill bn-pill-warn">12 short</span>',
-      ],
-      chip,
-    )
-    expect(seen, 'the chip must exist').not.toContain('absent')
-    expect(new Set(seen.map((s) => s.split('|')[2])).size, `the chip's width: ${seen.join(' | ')}`).toBe(1)
+    await expect(page.locator('.orders-pick-chip')).toBeVisible()
+    const r = await page.evaluate(() => {
+      const row = document.querySelector('.browse-hero-sub') as HTMLElement
+      const pick = row.querySelector('.orders-pick-chip') as HTMLElement
+      const keep = pick.innerHTML
+      const partsEl = row.querySelector('.browse-hero-parts') as HTMLElement
+      const keepParts = partsEl.innerHTML
+      /* ROOM: the set text is cut to the number, so the row has slack and only the pick chip's own width is under test. */
+      partsEl.innerHTML = '<span>025</span>'
+      const chips = () => [...row.children] as HTMLElement[]
+      /* ON A ROW WITH NO ROOM the set text, then the finish and rarity pills, give way first (BoxBrowse.css, `.browse-hero-sub`), by design. */
+      const pills = () => chips().filter((c) => c !== pick && !c.classList.contains('browse-hero-parts'))
+      const lefts = () => pills().map((c) => c.getBoundingClientRect().left)
+      const gapsOf = () => pills().map((c) => c.getBoundingClientRect().left - (c.previousElementSibling as HTMLElement).getBoundingClientRect().right)
+      const rects = (el: Element) => [...el.children].map((c) => c.getBoundingClientRect())
+      const lineTops = () => new Set(chips().map((c) => Math.round(c.getBoundingClientRect().top + c.getBoundingClientRect().height / 2)))
+      pick.innerHTML = '<span class="bn-pill bn-pill-accent">Pick 2 of 2</span>'
+      const before = lefts()
+      const gapsBefore = gapsOf()
+      const shortWordsGap = (() => {
+        const k = rects(pick)
+        return pick.getBoundingClientRect().width - k.reduce((n, c) => n + c.width, 0)
+      })()
+      const onelineBefore = lineTops().size
+      pick.innerHTML = '<span class="bn-pill bn-pill-accent">Pick 1</span> <span class="bn-pill bn-pill-warn">1 short</span>'
+      const after = lefts()
+      const gapsAfter = gapsOf()
+      const onelineAfter = lineTops().size
+      pick.innerHTML = keep
+      partsEl.innerHTML = keepParts
+      const kids = chips()
+      const gap = parseFloat(getComputedStyle(row).columnGap)
+      const rarity = kids.filter((c) => c.classList.contains('bn-pill-outline')).pop()
+      const next = rarity ? kids[kids.indexOf(rarity) + 1] : undefined
+      const rarityGap = rarity && next ? next.getBoundingClientRect().left - rarity.getBoundingClientRect().right : null
+      return { before, after, gapsAfter, gapsBefore, lastIsPick: kids[kids.length - 1] === pick, onelineBefore, onelineAfter, gap, rarityGap, hasRarity: !!rarity, shortWordsGap }
+    })
+    expect(r.lastIsPick, 'the pick chip is the last thing in the facts row').toBe(true)
+    expect(r.after, 'a pill left of the pick chip moved').toEqual(r.before)
+    expect(r.gapsAfter, 'a gap between pills opened or closed').toEqual(r.gapsBefore)
+    expect(r.gapsAfter.every((g) => Math.abs(g - r.gap) < 1), 'every gap is the row gap').toBe(true)
+    expect([r.onelineBefore, r.onelineAfter], 'the facts row kept one line').toEqual([1, 1])
+    expect(r.hasRarity, 'the seeded card has a rarity chip').toBe(true)
+    expect(r.rarityGap, 'the gap after the rarity chip is the row gap, no blank box').toBeCloseTo(r.gap, 0)
+    expect(r.shortWordsGap, 'the pick chip is its pills and nothing else: no reserved blank').toBeCloseTo(0, 0)
   })
 }
 

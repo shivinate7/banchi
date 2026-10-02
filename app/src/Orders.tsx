@@ -2658,21 +2658,26 @@ function OrderPickPane({
       <CardPane
         row={row}
         game={gameWord(row.card)}
-        preChips={
-          <span className="orders-pick-chip">
-            <Pill tone="accent">
-              Pick {currentRow.take.wanted}
-              {figure.short > 0 ? null : ` of ${figure.of}`}
-            </Pill>
-            {figure.short > 0 ? (
-              <>
-                {' '}
-                <Pill tone="warn">{figure.short} short</Pill>
-              </>
-            ) : null}
-          </span>
+        /* BOTH CHIPS END THE FACTS ROW (D313): the For chip, then the pick chip LAST. The pick chip's width
+           changes ("Pick 1 of 1" to "Pick 12" + "12 short") and nothing sits to its right, so no reserved
+           box is needed and no blank gap opens beside it. */
+        postChips={
+          <>
+            {showBuyers ? <Pill>For {takeBuyers(currentRow.take)}</Pill> : null}
+            <span className="orders-pick-chip">
+              <Pill tone="accent">
+                Pick {currentRow.take.wanted}
+                {figure.short > 0 ? null : ` of ${figure.of}`}
+              </Pill>
+              {figure.short > 0 ? (
+                <>
+                  {' '}
+                  <Pill tone="warn">{figure.short} short</Pill>
+                </>
+              ) : null}
+            </span>
+          </>
         }
-        postChips={showBuyers ? <Pill>For {takeBuyers(currentRow.take)}</Pill> : undefined}
         figures={figures}
         detail={
           <>
