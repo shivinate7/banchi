@@ -2288,10 +2288,18 @@ def do_pipeline_pricing(name: str) -> dict:
         answers = book.scoped_to(wanted, run_name=directory.name).to_payload()
     except Exception:  # noqa: BLE001 - see above: a bad corpus must not blank the table
         answers = None
+    held_cutoff, held_readings = _held_market(
+        str(row.get("sku")) for row in pricing.get("skus") or [] if row.get("sku")
+    )
     return {
         "run": directory.name,
         "pricing": pricing,
         "decisions": answers,
+        # THE MARKET PRICE AT WHICH A HELD SKU IS IN THE TOP TENTH OF THE STORE, or null. The
+        # neighbour mark's glint reads it beside the card's own Market figure, so the screen
+        # never pulls every price to rank them (`pipeline/holdings.py:held_market_cutoff`).
+        "held_market_cutoff": held_cutoff,
+        "held_market_readings": held_readings,
         # WHEN THIS TABLE WAS WRITTEN, WHICH IS THE ONLY AGE THIS SERVER CAN HONESTLY GIVE A
         # PRICE. `cli/cmd_join.py` rewrites `pricing.json` on every join, so its mtime is the
         # moment a join last read an export — and every figure under `snap` came out of that
@@ -2306,6 +2314,29 @@ def do_pipeline_pricing(name: str) -> dict:
         # copied, which resets it; nothing in this repo copies one.
         "written_at": int(table.stat().st_mtime),
     }
+
+
+def _held_market(skus: Iterable[str]) -> Tuple[Optional[str], Dict[str, str]]:
+    """`(held_market_cutoff, held_market_readings)` from ONE lock-free read of the store.
+
+    The cutoff is `holdings.held_market_cutoff` as a string, or None. The readings are
+    `{sku: market}` for the SKUs asked about that the readings table holds a figure for, so the
+    screen compares a card's price to the cutoff out of the SAME table that built it, never out
+    of a run's snapshot. NEVER RAISES: a store that cannot be read costs the glint and not the
+    table, the same posture as `_relabel_positions`. Figures are `str()` of what the table holds,
+    exact like every price on this wire."""
+    try:
+        snapshot = Store().read()
+        entries = dict(snapshot.readings.entries)
+        cutoff = holdings.held_market_cutoff(snapshot.inventory, entries)
+    except (files.StoreError, OSError, ValueError, TypeError):
+        return None, {}
+    found = {
+        str(sku): str(entries[str(sku)].market)
+        for sku in skus
+        if str(sku) in entries and entries[str(sku)].market not in (None, "")
+    }
+    return (None if cutoff is None else str(cutoff)), found
 
 
 # ----------------------------------------------------------- the cross-run worklist (D86)

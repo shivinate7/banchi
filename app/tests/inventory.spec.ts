@@ -5426,15 +5426,15 @@ test('the neighbours are ranked, not joined — the names are the only thing dra
   )
 })
 
-test('the neighbour line carries no words: names and this copy\'s number only', async ({ page }) => {
+test('the neighbour line carries no words: names and this card\'s mark only', async ({ page }) => {
   await open(page, BOXES, {
     cards: NEIGHBORLY,
     search: (query) => searchAnswer(query, NEIGHBORLY),
   })
-  /* OWNER RULING: `<- back [N] front ->`, arrows drawn by CSS. The text of the line is the two
-     names and the number chip and nothing else — no `back`, `front`, `before`, `after`. */
+  /* OWNER RULING: `<- back [mark] front ->`, arrows drawn by CSS. The text of the line is the two
+     names and nothing else (the mark carries no number) — no `back`, `front`, `before`, `after`. */
   const band = page.locator('.card-locations-row.is-current .nb')
-  await expect(band).toHaveText('Galio, Indefaticable1Evelynn, Entrancing')
+  await expect(band).toHaveText('Galio, IndefaticableEvelynn, Entrancing')
   /* Every line, end chips aside (BACK / FRONT stand in for a name at a box's end): no direction word. */
   const words = await page.locator('.card-locations-owner .nb').evaluateAll((els) =>
     els.map((el) => {
@@ -5444,6 +5444,121 @@ test('the neighbour line carries no words: names and this copy\'s number only', 
     }),
   )
   for (const text of words) expect(text).not.toMatch(/\b(back|front|before|after|next|previous)\b/i)
+})
+
+test('the neighbour row marks this card with the Banchi card, and the row does not move (D313)', async ({
+  page,
+}) => {
+  await open(page, BOXES, { cards: NEIGHBORLY, search: (query) => searchAnswer(query, NEIGHBORLY) })
+  const band = page.locator('.card-locations-row.is-current .nb')
+  const slot = band.locator('.nb-here')
+  /* The mark is decoration: aria-hidden, and the row's own `aria-label` already says where the
+     card sits. No number is drawn in its place. */
+  await expect(slot).toHaveAttribute('aria-hidden', 'true')
+  await expect(slot.locator('svg .logo-brackets')).toHaveCount(1)
+  await expect(slot).not.toHaveText(/\d/)
+  /* The row says where the card sits, so the mark does not have to. */
+  await expect(band).toHaveAttribute('aria-label', 'Position: Galio, Indefaticable / Evelynn, Entrancing')
+  /* THE SVG'S OWN BOX, not the slot's (the slot has a fixed height and cannot go red): the chip it
+     replaced was 18px, so the mark is no taller and sits inside the row. */
+  const row = (await band.boundingBox())!
+  const mark = (await slot.locator('svg').boundingBox())!
+  expect(mark.height).toBeLessThanOrEqual(18)
+  expect(mark.y).toBeGreaterThanOrEqual(row.y)
+  expect(mark.y + mark.height).toBeLessThanOrEqual(row.y + row.height)
+  expect(row.height).toBe(18)
+  /* AND THE ROW DOES NOT MOVE ACROSS A CARD CHANGE (D313): where it sits inside its own panel
+     row, before and after. (The page itself legitimately moves with a different card.) */
+  const inRow = async () => {
+    const nb = (await page.locator('.card-locations-row.is-current .nb').boundingBox())!
+    const rowTop = (await page.locator('.card-locations-row.is-current').boundingBox())!.y
+    return [nb.y - rowTop, nb.height]
+  }
+  const before = await inRow()
+  await page.locator('.browse-row').nth(1).click()
+  await expect(page.locator('.card-locations-row.is-current .nb')).toHaveAttribute('aria-label', /Quiet Ember/)
+  expect(await inRow()).toEqual(before)
+})
+
+test('the neighbour mark wears the shown card\'s rarity palette', async ({ page }) => {
+  const cards: Cards = {
+    '2/1': card({
+      index: 1, state: 'identified', name: 'Test Card', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3,
+      game: 'riftbound', catalogRarity: 'Epic',
+      neighbors: { prev: { index: 18, slot: 17, name: 'Galio, Indefaticable' }, next: { index: 20, slot: 19, name: 'Evelynn, Entrancing' } },
+    }),
+  }
+  await open(page, BOXES, { cards, search: (query) => searchAnswer(query, cards) })
+  /* Epic is the orange mark (rarityMarks.ts); its prism's middle stop is #F58A2E. */
+  await expect(page.locator('.card-locations-row.is-current .nb-here stop[stop-color="#F58A2E"]')).toHaveCount(1)
+})
+
+/* THE GLINT GATE: the card's own Market figure at or above the server's `held_market_cutoff`. */
+const GATED: Cards = (() => {
+  const near = { prev: { index: 18, slot: 17, name: 'Galio, Indefaticable' }, next: { index: 20, slot: 19, name: 'Evelynn, Entrancing' } }
+  const priced = { state: 'identified', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3, run: PRICED_RUN, neighbors: near }
+  return {
+    '2/1': card({ index: 1, name: 'Thievul', ...priced }),
+    '2/2': card({ index: 2, name: 'Thievul', ...priced, neighbors: { prev: near.prev, next: { index: 21, slot: 20, name: 'Ahri, Alluring' } } }),
+    '2/4': card({ index: 4, state: 'identified', name: 'Eiscue', sku: '8937371', section: 2, sectionStart: 4, sectionEnd: 4, run: PRICED_RUN, neighbors: near }),
+  }
+})()
+
+const gated = (cutoff: string | null, readings: Record<string, string> = { '8937370': '5.47' }) => async (page: Page) => {
+  await open(page, BOXES, { cards: GATED, search: (query) => searchAnswer(query, GATED) }, () => ({
+    ...PRICING,
+    held_market_cutoff: cutoff,
+    held_market_readings: readings,
+  }))
+}
+const GLINTS = () => document.getAnimations().filter((a) => (a as CSSAnimation).animationName === 'nb-glint').length
+
+for (const [cutoff, plays, why] of [
+  ['5.47', true, 'a card AT the cutoff (ties glint)'],
+  ['5.00', true, 'a card above the cutoff'],
+  ['6.00', false, 'a card below the cutoff'],
+  [null, false, 'no cutoff at all (an empty store)'],
+] as const) {
+  test(`the mark glints on a card change: ${why}`, async ({ page }) => {
+    await gated(cutoff)(page)
+    await expect(page.locator('.card-locations-row.is-current .nb-here svg')).toBeVisible()
+    await expect(() => expect(page.evaluate(GLINTS)).resolves.toBe(0)).toPass({ timeout: 3000 })
+    await page.locator('.browse-row').nth(1).click()
+    if (plays) {
+      /* Applied on the change, then removed when it has played once. */
+      await expect(() => expect(page.evaluate(GLINTS)).resolves.toBeGreaterThan(0)).toPass({ timeout: 2000 })
+      await expect(() => expect(page.evaluate(GLINTS)).resolves.toBe(0)).toPass({ timeout: 3000 })
+    } else {
+      await page.waitForTimeout(400)
+      expect(await page.evaluate(GLINTS)).toBe(0)
+    }
+  })
+}
+
+test('a card with no market reading never glints, whatever the cutoff', async ({ page }) => {
+  await gated('0.01')(page)
+  await expect(page.locator('.card-locations-row.is-current .nb-here svg')).toBeVisible()
+  /* 2/4 (Eiscue, SKU 8937371) has no figure in the readings. */
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).first().click()
+  await expect(page.locator('.card-locations-row.is-current .nb')).toHaveAttribute('aria-label', /Galio/)
+  await page.waitForTimeout(400)
+  expect(await page.evaluate(GLINTS)).toBe(0)
+})
+
+test('the glint reads the readings table and never the run snapshot', async ({ page }) => {
+  /* The run's snapshot says 5.47 for 8937370 (the hero shows it); the readings hold nothing for it. */
+  await gated('0.01', {})(page)
+  await expect(page.locator('.card-locations-row.is-current .nb-here svg')).toBeVisible()
+  await page.locator('.browse-row').nth(1).click()
+  await page.waitForTimeout(400)
+  expect(await page.evaluate(GLINTS)).toBe(0)
+})
+
+test('the glint is off until a caller gates it on', async ({ page }) => {
+  await open(page, BOXES, { cards: NEIGHBORLY, search: (query) => searchAnswer(query, NEIGHBORLY) })
+  await expect(page.locator('.card-locations-owner .nb-here svg')).not.toHaveCount(0)
+  await expect(page.locator('.logo-glint')).toHaveCount(0)
 })
 
 test('the neighbour names are read as words, not as metadata', async ({ page }) => {

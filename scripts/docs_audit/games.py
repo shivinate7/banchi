@@ -58,6 +58,8 @@ from .paths_commands import load_game_coverage_allowlist
 # quiet under, arriving from the opposite direction.
 
 GAMES_MODULE = ROOT / "pipeline" / "games.py"
+RARITY_MARKS_MODULE = ROOT / "app" / "src" / "kit" / "rarityMarks.ts"
+MARK_PALETTES_MODULE = ROOT / "app" / "src" / "kit" / "markPalettes.ts"
 
 # The one module allowed to build the export request (D65), and the three fields of it
 # that are a standing instruction rather than a transcription of the portal's own form.
@@ -399,6 +401,39 @@ def _claimed_by(entry: Dict[str, object]) -> Set[str]:
     )
 
 
+def rarity_mark_table() -> Optional[Dict[str, Dict[str, str]]]:
+    """`app/src/kit/rarityMarks.ts`'s (game, rarity, palette) table as a dict, read as text:
+    one `  <game>: {` block per game and one `'<rarity>': '<palette>',` line per rarity. None
+    when the file is missing, which is a finding at the caller."""
+    if not RARITY_MARKS_MODULE.exists():
+        return None
+    text = RARITY_MARKS_MODULE.read_text(encoding="utf-8")
+    table: Dict[str, Dict[str, str]] = {}
+    game: Optional[str] = None
+    for line in text[text.index("export const RARITY_MARKS") :].splitlines():
+        opened = re.match(r"^  (\w+): \{$", line)
+        if opened:
+            game = opened.group(1)
+            table[game] = {}
+            continue
+        if line.startswith("  }"):
+            game = None
+            continue
+        row = re.match(r"^    '([^']+)': '(\w+)',$", line)
+        if row and game is not None:
+            table[game][row.group(1)] = row.group(2)
+    return table
+
+
+def mark_palette_names() -> Set[str]:
+    """The palette names `markPalettes.ts`'s `LogoVariant` union declares."""
+    if not MARK_PALETTES_MODULE.exists():
+        return set()
+    text = MARK_PALETTES_MODULE.read_text(encoding="utf-8")
+    union = re.search(r"export type LogoVariant = ([^\n]+)", text)
+    return set(re.findall(r"'(\w+)'", union.group(1))) if union else set()
+
+
 def check_game_vocabulary(report: Report) -> None:
     """`pipeline/games.py`'s shape, and the two export findings that cannot false-positive.
 
@@ -442,10 +477,46 @@ def check_game_vocabulary(report: Report) -> None:
     bands = set(data.get("CROP_BAND_NAMES") or ())
     where_module = rel(GAMES_MODULE)
 
+    marks = rarity_mark_table()
+    palettes = mark_palette_names()
+    if marks is None:
+        findings.append(
+            Finding(rel(RARITY_MARKS_MODULE), "the (game, rarity, palette) table is missing."),
+        )
+    else:
+        # Both directions, and the palette must be one the mark ships.
+        known = {str(e.get("key")): set(e.get("rarities") or ()) for e in entries}
+        for game, rows in marks.items():
+            for rarity, palette in rows.items():
+                if palette not in palettes:
+                    findings.append(
+                        Finding(
+                            f"{rel(RARITY_MARKS_MODULE)} -> {game}",
+                            f"{rarity!r} wears {palette!r}, which markPalettes.ts does not declare.",
+                        )
+                    )
+                if rarity not in known.get(game, set()):
+                    findings.append(
+                        Finding(
+                            f"{rel(RARITY_MARKS_MODULE)} -> {game}",
+                            f"{rarity!r} is no rarity of {game!r} in pipeline/games.py.",
+                        )
+                    )
+
     seen: Set[str] = set()
     for entry in entries:
         key = str(entry.get("key", "?"))
         where = f"{where_module} -> {key}"
+        if marks is not None:
+            for rarity in entry.get("rarities") or ():
+                if rarity not in marks.get(key, {}):
+                    findings.append(
+                        Finding(
+                            where,
+                            f"rarity {rarity!r} has no mark palette in "
+                            f"{rel(RARITY_MARKS_MODULE)}: add a line for it.",
+                        )
+                    )
         if key in seen:
             findings.append(Finding(where, f"two entries claim the key {key!r}."))
         seen.add(key)

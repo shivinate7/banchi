@@ -1055,10 +1055,19 @@ export function Logo({
   size = 28,
   variant = DEFAULT_VARIANT,
   className,
+  part = 'tile',
+  glint = false,
 }: {
   readonly size?: number
+  /** THE PALETTE HOOK: any of the six locked marks (markPalettes.ts). A caller that wants the
+   *  mark coloured by something (a rarity, later) passes it here and nowhere else. */
   readonly variant?: LogoVariant
   readonly className?: string
+  /** `both` is the card inside its two brackets with no tile, cropped to them, drawn at
+   *  `size` HEIGHT (the neighbour row's marker). `tile` is the app icon. */
+  readonly part?: 'tile' | 'both'
+  /** A one-shot sheen across the card, played on mount (`.logo-glint`, PlaceNeighbors.css). */
+  readonly glint?: boolean
 }) {
   // Per instance, because the sidebar, the mobile drawer and a crash page can all be mounted at
   // once and each mark's gradients are referenced by id. The sheet gets away with a module
@@ -1067,6 +1076,7 @@ export function Logo({
   const id = useId().replace(/:/g, '')
   const mark = MARKS[variant]
   const small = size < 64
+  const vb: readonly [number, number, number, number] = part === 'both' ? [21, 14.5, 58, 71] : [0, 0, 100, 100]
 
   const bracket = small ? (
     <path
@@ -1086,7 +1096,7 @@ export function Logo({
   )
 
   return (
-    <svg className={className} width={size} height={size} viewBox="0 0 100 100" aria-hidden="true">
+    <svg className={className} width={(size * vb[2]) / vb[3]} height={size} viewBox={vb.join(' ')} aria-hidden="true">
       <defs>
         <linearGradient id={`${id}g`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor={mark.ground[0]} />
@@ -1134,12 +1144,18 @@ export function Logo({
         )}
       </defs>
 
-      <path d={TILE} fill={`url(#${id}g)`} />
-      <g clipPath={`url(#${id}t)`}>
-        <rect width="100" height={SHEEN_HEIGHT} fill={`url(#${id}s)`} />
+      {part === 'tile' && (
+        <>
+          <path d={TILE} fill={`url(#${id}g)`} />
+          <g clipPath={`url(#${id}t)`}>
+            <rect width="100" height={SHEEN_HEIGHT} fill={`url(#${id}s)`} />
+          </g>
+        </>
+      )}
+      <g className="logo-brackets">
+        {bracket}
+        <g transform="rotate(180 50 50)">{bracket}</g>
       </g>
-      {bracket}
-      <g transform="rotate(180 50 50)">{bracket}</g>
       <rect x={CARD.x} y={CARD.y} width={CARD.w} height={CARD.h} rx={CARD.r} fill={mark.base} />
       {small ? (
         <rect x={CARD.x} y={CARD.y} width={CARD.w} height={CARD.h} rx={CARD.r} fill={`url(#${id}p)`} />
@@ -1153,6 +1169,28 @@ export function Logo({
             fill={`url(#${id}p)`}
           />
         </g>
+      )}
+      {glint && (
+        <>
+          <clipPath id={`${id}k`}>
+            <rect x={CARD.x} y={CARD.y} width={CARD.w} height={CARD.h} rx={CARD.r} />
+          </clipPath>
+          <linearGradient id={`${id}w`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#FFFFFF" stopOpacity="0" />
+            <stop offset="0.5" stopColor="#FFFFFF" stopOpacity="0.9" />
+            <stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
+          </linearGradient>
+          <g clipPath={`url(#${id}k)`}>
+            <rect
+              className="logo-glint"
+              x={CARD.x - CARD.w}
+              y={CARD.y}
+              width={CARD.w}
+              height={CARD.h}
+              fill={`url(#${id}w)`}
+            />
+          </g>
+        </>
       )}
     </svg>
   )

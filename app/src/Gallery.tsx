@@ -687,7 +687,7 @@ export function Gallery() {
           <Section
             id="kit-mark" data-kit-section="mark" className="kit-section"
             title="The mark"
-            lede="Six marks. Bluesteel is the default."
+            lede="Seven marks. Bluesteel is the default."
           >
             <Spec
               label="The small cut, below 64px"

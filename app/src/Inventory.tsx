@@ -30,7 +30,7 @@ import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
 import { useViewParam } from './kit/viewState'
 import { CardLocations, hiddenCopies, layoutsOf, MarkSoldButton, UndoSaleButton, clearFreshSale, markFreshSale } from './CardLocations'
-import type { HeroFigures } from './CardHero'
+import { inTopTenth, useMarketRead, type HeroFigures } from './CardHero'
 import { InventorySets } from './InventorySets'
 import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
@@ -53,6 +53,7 @@ import {
   useUndoHotkey,
 } from './kit'
 import { UNNAMED_BOX } from './kit/data'
+import { markFor } from './kit/rarityMarks'
 import { dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
 import { RANK_IS_CURRENT, stalenessSentence, type FrozenRank } from './frozenRank'
@@ -907,6 +908,9 @@ function CopiesPanel({
   frozen: FrozenRank
 }) {
   const { query, setQuery, results, loading, failure, reload } = useSearch()
+  /* THE GLINT GATE: this card is in the top tenth of the store by market price. The cutoff is the
+     server's (`held_market_cutoff` on the pricing read), so nothing here ranks anything. */
+  const glint = inTopTenth(useMarketRead(row.card))
 
   const handle = skuOrName(row.card)
 
@@ -993,6 +997,8 @@ function CopiesPanel({
             persona="owner"
             sections={layouts}
             currentKey={row.key}
+            mark={markFor(row.card.game, row.card.rarity)}
+            glint={glint}
             /* No SKU, so no listing record and nothing to be the age OF. */
             listedAt={null}
             claims={wanted}
@@ -1048,6 +1054,8 @@ function CopiesPanel({
             persona="owner"
             sections={layouts}
             currentKey={heldCopies.key}
+            mark={markFor(row.card.game, row.card.rarity)}
+            glint={glint}
             listedAt={heldCopies.group.sku === null ? null : (listings[heldCopies.group.sku]?.live_as_of ?? null)}
             claims={wanted}
             onSell={onSell}
@@ -1072,6 +1080,8 @@ function CopiesPanel({
           persona="owner"
           sections={layouts}
           currentKey={row.key}
+          mark={markFor(row.card.game, row.card.rarity)}
+          glint={glint}
           listedAt={group.sku === null ? null : (listings[group.sku]?.live_as_of ?? null)}
           claims={wanted}
           onGoTo={onGoTo}

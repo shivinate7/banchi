@@ -240,6 +240,84 @@ def mutation_sealed_exclusion_dropped() -> None:
         holdings.sealed_excluded_count = original
 
 
+def _held(prices: dict) -> tuple:
+    """An inventory holding one copy of each SKU in `prices`, and readings carrying its price
+    (`None` for a SKU with a copy and no reading)."""
+    from types import SimpleNamespace
+
+    inventory = Inventory()
+    readings = {}
+    for n, (sku, market) in enumerate(prices.items(), start=1):
+        inventory.cards[position_key(1, n)] = _card(1, n, sku, sku)
+        if market is not None:
+            readings[sku] = SimpleNamespace(market=market)
+    return inventory, readings
+
+
+def test_cutoff_top_tenth() -> None:
+    from decimal import Decimal
+
+    inventory, readings = _held({f"S{n}": str(n) for n in range(1, 11)})
+    ok(holdings.held_market_cutoff(inventory, readings) == Decimal("10"),
+       "ten held SKUs: the cutoff is the top one's price")
+    inventory, readings = _held({f"S{n}": str(n) for n in range(1, 12)})
+    ok(holdings.held_market_cutoff(inventory, readings) == Decimal("10"),
+       "eleven held SKUs: the top ceil(1.1) = 2 are in, the cutoff is the second")
+
+
+def test_cutoff_ties_at_the_cutoff_are_in() -> None:
+    from decimal import Decimal
+
+    prices = {f"S{n}": "1" for n in range(1, 10)}
+    prices["TOP"] = "5"
+    prices["TIE"] = "5"
+    inventory, readings = _held(prices)
+    cutoff = holdings.held_market_cutoff(inventory, readings)
+    ok(cutoff == Decimal("5"), "two SKUs tie at the top: the cutoff is their shared price",
+       str(cutoff))
+    ok(sum(1 for r in readings.values() if Decimal(r.market) >= cutoff) == 2,
+       "both tied SKUs are at or above the cutoff, so both glint")
+
+
+def test_cutoff_no_reading_is_left_out() -> None:
+    from decimal import Decimal
+
+    inventory, readings = _held({"A": "2", "B": None, "C": "not a price", "D": "0.00"})
+    ok(holdings.held_market_cutoff(inventory, readings) == Decimal("2"),
+       "a held SKU with no reading, a junk figure or a zero is not ranked and not given a price")
+
+
+def test_cutoff_empty_store() -> None:
+    ok(holdings.held_market_cutoff(Inventory(), {}) is None, "an empty store has no cutoff")
+    inventory, readings = _held({"A": None})
+    ok(holdings.held_market_cutoff(inventory, readings) is None,
+       "held SKUs with no reading at all have no cutoff")
+
+
+def test_cutoff_ignores_sold_skus() -> None:
+    from decimal import Decimal
+
+    inventory, readings = _held({"A": "2", "SOLD": "900"})
+    inventory.cards[position_key(1, 2)] = _card(1, 2, "SOLD", "SOLD", state=SOLD)
+    ok(holdings.held_market_cutoff(inventory, readings) == Decimal("2"),
+       "a SKU with only sold copies is not held and never sets the cutoff")
+
+
+def mutation_cutoff_counts_unheld() -> None:
+    """The guard above goes red if the cutoff ranks every reading rather than the held ones."""
+    from decimal import Decimal
+
+    original = holdings.on_hand_quantities
+    holdings.on_hand_quantities = lambda inventory: {sku: 1 for _, (sku, _s) in inventory.cards.select(("sku", "state"))}
+    try:
+        inventory, readings = _held({"A": "2", "SOLD": "900"})
+        inventory.cards[position_key(1, 2)] = _card(1, 2, "SOLD", "SOLD", state=SOLD)
+        cutoff = holdings.held_market_cutoff(inventory, readings)
+        ok(cutoff != Decimal("2"), "mutation: ranking unheld SKUs moves the cutoff (guard catches it)")
+    finally:
+        holdings.on_hand_quantities = original
+
+
 def main() -> int:
     print("pipeline/holdings.py:")
     test_quantity_and_state()
@@ -249,9 +327,15 @@ def main() -> int:
     test_priced_none_bucket_carries_no_value()
     test_sealed_excluded_counted()
     test_sealed_never_dropped_when_zero_ledger()
+    test_cutoff_top_tenth()
+    test_cutoff_ties_at_the_cutoff_are_in()
+    test_cutoff_no_reading_is_left_out()
+    test_cutoff_empty_store()
+    test_cutoff_ignores_sold_skus()
     print("mutation arms (each proves the real guard above would have caught it):")
     mutation_gap_interpolates()
     mutation_sealed_exclusion_dropped()
+    mutation_cutoff_counts_unheld()
     print(f"{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0
 
