@@ -1718,3 +1718,149 @@ img.bn-crop[data-cropped='true'] {
 .bn-meter-cells > span.is-on { background: var(--bn-ink-3); box-shadow: none; }
 .bn-meter-end { flex: none; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .bn-meter-end[data-tone='warn'] { color: var(--bn-warn); font-weight: 600; }
+
+/* ---- settings sheet: the rows, census, group heads, editor frame and card picker a settings sheet is built from (kit/settings.tsx) ---- */
+.bn-set-group { display: flex; flex-direction: column; gap: var(--bn-2); }
+.bn-set-group > .bn-label { display: flex; align-items: center; gap: var(--bn-2); }
+.bn-set-group-note { font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--bn-ink-3); }
+.bn-set-group-danger > .bn-label { color: var(--bn-danger); }
+
+/* the census */
+.bn-set-census {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--bn-2);
+}
+.bn-set-census-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-0-5);
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+  min-width: 0;
+}
+.bn-set-census-cell dt { font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bn-set-census-cell dd {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-lg);
+  font-weight: 800;
+  letter-spacing: var(--bn-tracking-tight);
+  color: var(--bn-ink);
+  font-variant-numeric: tabular-nums;
+}
+/* How old the figure above it is. Quieter than the figure, and it may wrap. */
+.bn-set-census-note { display: block; margin-top: 1px; font-family: var(--bn-font-ui); font-size: var(--bn-fs-xs); font-weight: 400; letter-spacing: normal; }
+
+/* the operation rows */
+.bn-set-ops {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  overflow: hidden;
+}
+.bn-set-op {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--bn-3);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--bn-2) var(--bn-3);
+  text-align: left;
+  border-bottom: 1px solid var(--bn-line);
+  color: var(--bn-ink);
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-set-ops > .bn-set-op:last-child,
+.bn-set-ops > :last-child > .bn-set-op:last-of-type { border-bottom: 0; }
+.bn-set-op:hover:not(:disabled) { background: var(--bn-hover); }
+.bn-set-op:disabled { opacity: var(--bn-disabled); }
+.bn-set-op-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--bn-r-sm);
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-2);
+}
+.bn-set-op-label { font-size: var(--bn-fs-md); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.bn-set-op-detail { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bn-set-op-chev { color: var(--bn-ink-4); }
+/* A write in flight says so on the row that fired it, not by greying every row out. */
+.bn-set-op[data-running='true'] { opacity: 1; }
+.bn-set-op[data-running='true'] .bn-set-op-detail { color: var(--bn-accent); }
+.bn-set-op-spin {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--bn-line-strong);
+  border-top-color: var(--bn-accent);
+  animation: bn-spin var(--bn-t-spin) var(--bn-ease-linear) infinite;
+}
+.bn-set-op-danger { color: var(--bn-danger); }
+.bn-set-op-danger .bn-set-op-icon { background: var(--bn-danger-tint); color: var(--bn-danger); }
+.bn-set-op-danger:hover:not(:disabled) { background: var(--bn-danger-tint); }
+.bn-set-op-danger .bn-set-op-detail { color: var(--bn-danger); opacity: 0.8; }
+
+.bn-set-editor { display: flex; flex-direction: column; gap: var(--bn-4); animation: bn-page-in var(--bn-t) var(--bn-ease-out) both; }
+.bn-set-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-1);
+  height: var(--bn-control-h-sm);
+  padding: 0 var(--bn-2) 0 var(--bn-1);
+  margin-left: calc(-1 * var(--bn-1));
+  border-radius: var(--bn-r-sm);
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  color: var(--bn-ink-3);
+}
+.bn-set-back:hover { color: var(--bn-ink); background: var(--bn-surface-2); }
+.bn-set-editor-title {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-lg);
+  font-weight: 800;
+  letter-spacing: var(--bn-tracking-tight);
+  color: var(--bn-ink);
+  margin-top: calc(-1 * var(--bn-2));
+}
+
+/* ---- the card picker: narrows a Move or a Claims write, inside its own sheet ---- */
+.bn-set-picker { display: flex; flex-direction: column; gap: var(--bn-2); }
+.bn-set-picker-bar { display: flex; align-items: center; gap: var(--bn-2); }
+.bn-set-picker-count { flex: 1 1 auto; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+.bn-set-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--bn-line);
+  border-radius: var(--bn-r);
+}
+.bn-set-picker-list ul { list-style: none; margin: 0; padding: 0; }
+.bn-set-picker-group + .bn-set-picker-group { border-top: 1px solid var(--bn-line); }
+.bn-set-picker-head {
+  display: flex;
+  width: 100%;
+  padding: var(--bn-1-5) var(--bn-3);
+  background: var(--bn-surface-2);
+  font-size: var(--bn-fs-xs);
+  font-weight: 700;
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+  color: var(--bn-ink-2);
+}
+.bn-set-picker-card { display: flex; padding: var(--bn-1-5) var(--bn-3) var(--bn-1-5) var(--bn-6); font-variant-numeric: tabular-nums; }
+.bn-set-picker-card:hover { background: var(--bn-hover); }
+
+/* the phone: thumb sizes */
+@media (max-width: 639px), (hover: none) and (pointer: coarse) {
+  .bn-set-op { min-height: 52px; }
+  .bn-set-back { height: var(--bn-control-h-lg); padding: 0 var(--bn-3) 0 var(--bn-2); }
+}

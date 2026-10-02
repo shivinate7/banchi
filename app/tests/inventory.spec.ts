@@ -1201,7 +1201,7 @@ async function closeBoxOps(page: Page) {
 
 /** One figure from the box's census, by the label above it. */
 function censusValue(page: Page, label: string) {
-  return page.locator('.boxops-census-cell', { hasText: label }).locator('dd')
+  return page.locator('.bn-set-census-cell', { hasText: label }).locator('dd')
 }
 
 // ------------------------------------------------------- one screen, not two modes (D31)
@@ -3140,7 +3140,7 @@ test('the census greps to the store, and the identity line says what the box hol
 
   /* THE NOTES UNDER FILL AND NEXT CAPTURE ARE CUT (UX-259, cut list #17): the figures stand on
      their labels, and the store's word "index" is not one of them (D196). */
-  await expect(page.locator('.boxops-census-cell', { hasText: 'Fill' }).locator('.boxops-census-note')).toHaveCount(0)
+  await expect(page.locator('.bn-set-census-cell', { hasText: 'Fill' }).locator('.bn-set-census-note')).toHaveCount(0)
 
   /* Five, not seven: two of the seven records have left. THE CENSUS TRIAD (D41) REACHED THIS
      PANEL — `on hand` is a `bn-stat` figure now, the same primitive `CardLocations`' own three
@@ -3237,8 +3237,8 @@ test('the operations are rows on one edge, and the delete is the only bordered o
      apart, which is what the screen draws. The order inside each is still pinned: it is D20's
      own — what the box is called, where its dividers are, then the two
      that act on cards rather than on the box. */
-  const rows = page.locator('.boxops-group:not(.boxops-group-danger) .boxops-op')
-  await expect(rows.locator('.boxops-op-label')).toHaveText([
+  const rows = page.locator('.bn-set-group:not(.bn-set-group-danger) .bn-set-op')
+  await expect(rows.locator('.bn-set-op-label')).toHaveText([
     'Rename',
     'Sections',
     'Naming',
@@ -3288,7 +3288,7 @@ test('the operations are rows on one edge, and the delete is the only bordered o
   const ordinary = await rows.first().evaluate((node) => window.getComputedStyle(node).color)
   const danger = await bar.evaluate((node) => window.getComputedStyle(node).color)
   expect(danger, 'the delete is drawn in the same ink as an ordinary operation').not.toBe(ordinary)
-  await expect(page.locator('.boxops-group-danger')).toContainText('Danger')
+  await expect(page.locator('.bn-set-group-danger')).toContainText('Danger')
 
   /* AND THE BAR IS BORDERED, which is the half of this case's own name that nothing asserted.
      The loop above proves the rows are bare; between them the title claims the delete is the
@@ -3305,7 +3305,7 @@ test('the operations are rows on one edge, and the delete is the only bordered o
      and the bordered row asserted above — holds, and D288's OWN concern (a press that cannot
      be undone keeps its words) is about the button's own label, "Delete", spelled out in
      full above, not this secondary caption. */
-  await expect(bar.locator('.boxops-op-detail')).toHaveCount(0)
+  await expect(bar.locator('.bn-set-op-detail')).toHaveCount(0)
 })
 
 // ------------------------------------------------------------------------- the mass-select
@@ -3325,8 +3325,8 @@ test('the list draws no tick, and Claims states the whole box on its own button'
      write reaches. The accessible name is asserted beside the visible one: the label and the
      detail are grid items with no text node between them. */
   const claims = page.getByRole('button', { name: /^Claims/ })
-  await expect(claims.locator('.boxops-op-label')).toHaveText('Claims')
-  await expect(claims.locator('.boxops-op-detail')).toHaveText('7 cards')
+  await expect(claims.locator('.bn-set-op-label')).toHaveText('Claims')
+  await expect(claims.locator('.bn-set-op-detail')).toHaveText('7 cards')
   await expect(claims).toHaveAttribute('aria-label', 'Claims, 7 cards')
 })
 
@@ -3336,24 +3336,24 @@ test('the card picker in the Claims sheet starts whole, narrows by card and by s
   await open(page)
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Claims/ }).click()
-  const picker = page.locator('.boxops-picker')
+  const picker = page.locator('.bn-set-picker')
   await expect(picker.getByRole('button', { name: /^Whole box/ })).toHaveAttribute('aria-pressed', 'true')
-  await expect(picker.locator('.boxops-picker-list')).toHaveCount(0)
+  await expect(picker.locator('.bn-set-picker-list')).toHaveCount(0)
 
   await picker.getByRole('button', { name: 'Some cards' }).click()
-  const cards = picker.locator('.boxops-picker-card input')
+  const cards = picker.locator('.bn-set-picker-card input')
   const total = await cards.count()
   expect(total).toBeGreaterThan(1)
-  await expect(picker.locator('.boxops-picker-count')).toHaveText(`${total} of ${total} picked`)
+  await expect(picker.locator('.bn-set-picker-count')).toHaveText(`${total} of ${total} picked`)
 
   await cards.nth(0).uncheck()
-  await expect(picker.locator('.boxops-picker-count')).toHaveText(`${total - 1} of ${total} picked`)
-  await expect(picker.locator('.boxops-picker-head input').first()).toHaveJSProperty('indeterminate', true)
+  await expect(picker.locator('.bn-set-picker-count')).toHaveText(`${total - 1} of ${total} picked`)
+  await expect(picker.locator('.bn-set-picker-head input').first()).toHaveJSProperty('indeterminate', true)
 
   await picker.getByRole('button', { name: 'None' }).click()
-  await expect(picker.locator('.boxops-picker-count')).toHaveText(`0 of ${total} picked`)
-  await picker.locator('.boxops-picker-head input').first().check()
-  await expect(picker.locator('.boxops-picker-head input').first()).toHaveJSProperty('indeterminate', false)
+  await expect(picker.locator('.bn-set-picker-count')).toHaveText(`0 of ${total} picked`)
+  await picker.locator('.bn-set-picker-head input').first().check()
+  await expect(picker.locator('.bn-set-picker-head input').first()).toHaveJSProperty('indeterminate', false)
   await picker.getByRole('button', { name: 'None' }).click()
 
   await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
@@ -3368,9 +3368,9 @@ test('the box claim sends only the switched-on fields, over only the cards picke
   const wire = await open(page)
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Claims/ }).click()
-  await page.locator('.boxops-picker').getByRole('button', { name: 'Some cards' }).click()
-  await page.locator('.boxops-picker').getByRole('button', { name: 'None' }).click()
-  const cards = page.locator('.boxops-picker-card input')
+  await page.locator('.bn-set-picker').getByRole('button', { name: 'Some cards' }).click()
+  await page.locator('.bn-set-picker').getByRole('button', { name: 'None' }).click()
+  const cards = page.locator('.bn-set-picker-card input')
   await cards.nth(0).check()
   await cards.nth(1).check()
 
@@ -3399,12 +3399,12 @@ test('Claims can fix one departed card alone, and Move never lists it', async ({
   const wire = await open(page)
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Claims/ }).click()
-  const picker = page.locator('.boxops-picker')
+  const picker = page.locator('.bn-set-picker')
   await picker.getByRole('button', { name: 'Some cards' }).click()
   await picker.getByRole('button', { name: 'None' }).click()
-  const gone = picker.locator('.boxops-picker-group', { hasText: 'Sold or moved out' })
+  const gone = picker.locator('.bn-set-picker-group', { hasText: 'Sold or moved out' })
   await expect(gone).toHaveCount(1)
-  await gone.locator('.boxops-picker-card input').first().check()
+  await gone.locator('.bn-set-picker-card input').first().check()
   await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
   await page.getByRole('textbox', { name: 'Note' }).fill('sold copy')
   await page.getByRole('button', { name: /^Apply to/ }).click()
@@ -3417,17 +3417,17 @@ test('Move lists on-hand cards only', async ({ page }) => {
   await open(page)
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Move,/ }).click()
-  await expect(page.locator('.boxops-picker').getByRole('button', { name: /^Whole box, 5 cards/ })).toBeVisible()
-  await page.locator('.boxops-picker').getByRole('button', { name: 'Some cards' }).click()
-  await expect(page.locator('.boxops-picker-group', { hasText: 'Sold or moved out' })).toHaveCount(0)
+  await expect(page.locator('.bn-set-picker').getByRole('button', { name: /^Whole box, 5 cards/ })).toBeVisible()
+  await page.locator('.bn-set-picker').getByRole('button', { name: 'Some cards' }).click()
+  await expect(page.locator('.bn-set-picker-group', { hasText: 'Sold or moved out' })).toHaveCount(0)
 })
 
 test('every card picked in the Claims sheet is the whole box and sends no indices key', async ({ page }) => {
   const wire = await open(page)
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Claims/ }).click()
-  await expect(page.locator('.boxops-picker').getByRole('button', { name: /^Whole box, 7 cards/ })).toBeVisible()
-  await page.locator('.boxops-picker').getByRole('button', { name: 'Some cards' }).click()
+  await expect(page.locator('.bn-set-picker').getByRole('button', { name: /^Whole box, 7 cards/ })).toBeVisible()
+  await page.locator('.bn-set-picker').getByRole('button', { name: 'Some cards' }).click()
   await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
   await page.getByRole('textbox', { name: 'Note' }).fill('all')
   await page.getByRole('button', { name: /^Apply to/ }).click()
@@ -3448,9 +3448,9 @@ test('Move on two cards picked in the sheet sends exactly those indices', async 
   })
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Move,/ }).click()
-  await page.locator('.boxops-picker').getByRole('button', { name: 'Some cards' }).click()
-  await page.locator('.boxops-picker').getByRole('button', { name: 'None' }).click()
-  const cards = page.locator('.boxops-picker-card input')
+  await page.locator('.bn-set-picker').getByRole('button', { name: 'Some cards' }).click()
+  await page.locator('.bn-set-picker').getByRole('button', { name: 'None' }).click()
+  const cards = page.locator('.bn-set-picker-card input')
   await cards.nth(0).check()
   await cards.nth(1).check()
   await page.locator('.bn-field .bn-pick').click()
@@ -6224,7 +6224,7 @@ test("the box's census and its forecast are told apart, and the fill says which 
   /* SAME COMPLAINT ONE COLUMN OVER, and the same absence. `cards 543 · sold 0 · fill 543 · next
      index 544` is 46 cells = 354.2px in a 299px track, so it wrapped — and it is not a digit
      count: box 1's shorter line wraps identically. It is four words and three interpuncts. */
-  const meta = page.locator('.boxops-census')
+  const meta = page.locator('.bn-set-census')
   await expect(meta).toBeVisible()
   expect(await meta.innerText()).not.toContain('·')
 
@@ -6239,7 +6239,7 @@ test("the box's census and its forecast are told apart, and the fill says which 
      `Next index` is D10's high-water mark — what the allocator hands out next — and it is named
      apart from them rather than sitting in the row as a fourth count of cards. */
   await expect(censusValue(page, 'Next capture')).toHaveText('8')
-  await expect(page.locator('.boxops-census-cell', { hasText: 'Next capture' })).toHaveCount(1)
+  await expect(page.locator('.bn-set-census-cell', { hasText: 'Next capture' })).toHaveCount(1)
 
   /* A box has no seal (`D299`), so no census figure can be a frozen one. */
   expect((await page.locator('.boxops-census-qual').allInnerTexts()).join(' ')).not.toMatch(/sealed/)
@@ -6247,7 +6247,7 @@ test("the box's census and its forecast are told apart, and the fill says which 
   /* And no figure wraps away from its own label at either width. */
   for (const width of [1440, 1280]) {
     await setViewport(page, { width, height: 900 })
-    const cells = await page.locator('.boxops-census-cell').evaluateAll((nodes) =>
+    const cells = await page.locator('.bn-set-census-cell').evaluateAll((nodes) =>
       nodes.map((node) => {
         const value = node.querySelector('dd') as HTMLElement
         return { h: value.getBoundingClientRect().height, line: Number.parseFloat(window.getComputedStyle(value).lineHeight) }
@@ -7496,7 +7496,7 @@ test('D132 — a named section is said in the walk header, in the bar\'s sentenc
   await expect(field).toHaveValue('Rares')
   await field.fill('Top rares')
   await page.getByRole('button', { name: 'Save names' }).click()
-  await expect(page.locator('.boxops-editor')).toHaveCount(0)
+  await expect(page.locator('.bn-set-editor')).toHaveCount(0)
 })
 
 // ---------------------------------------------------------------------------------------

@@ -1174,7 +1174,14 @@ test('a section inside a layer is an h3, and on the page an h2', async ({ page }
    lane that owns the fix — a shrinking list, never a pinned count. A violation not listed fails.
    A listed entry that matches nothing in any of the four runs fails too, so the list only
    shrinks: take the entry out in the commit that fixes it. */
-const AXE_KNOWN: readonly { readonly rule: string; readonly selector: string; readonly owner: string; readonly why: string }[] = []
+const AXE_KNOWN: readonly { readonly rule: string; readonly selector: string; readonly owner: string; readonly why: string }[] = [
+  {
+    rule: 'color-contrast',
+    selector: '.bn-set-op-danger > .bn-set-op-detail',
+    owner: 'the Manage box danger rows',
+    why: 'the detail is danger red at 0.8 opacity, under 4.5:1 in dark. The same rows draw it in Manage box today; the kit page is the first place axe reads it. Fixing it moves a pixel of Manage box, which the move into the kit was ruled not to do.',
+  },
+]
 
 test('axe finds nothing on the kit at 390 and 1440 in both themes, but what is listed with its owner', async ({ page }) => {
   test.setTimeout(90_000)
