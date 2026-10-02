@@ -5457,12 +5457,27 @@ test('the neighbour row marks this card with the Banchi card, and the row does n
   await expect(slot).toHaveAttribute('aria-hidden', 'true')
   await expect(slot.locator('svg .logo-brackets')).toHaveCount(1)
   await expect(slot).not.toHaveText(/\d/)
-  /* The chip it replaced was 18px, so the row keeps its height and its y. */
-  const box = await band.boundingBox()
-  expect(box?.height).toBe(18)
-  expect((await slot.boundingBox())?.height).toBe(18)
-  await page.waitForTimeout(300)
-  expect((await band.boundingBox())?.y).toBe(box?.y)
+  /* The row says where the card sits, so the mark does not have to. */
+  await expect(band).toHaveAttribute('aria-label', 'Position: Galio, Indefaticable / Evelynn, Entrancing')
+  /* THE SVG'S OWN BOX, not the slot's (the slot has a fixed height and cannot go red): the chip it
+     replaced was 18px, so the mark is no taller and sits inside the row. */
+  const row = (await band.boundingBox())!
+  const mark = (await slot.locator('svg').boundingBox())!
+  expect(mark.height).toBeLessThanOrEqual(18)
+  expect(mark.y).toBeGreaterThanOrEqual(row.y)
+  expect(mark.y + mark.height).toBeLessThanOrEqual(row.y + row.height)
+  expect(row.height).toBe(18)
+  /* AND THE ROW DOES NOT MOVE ACROSS A CARD CHANGE (D313): where it sits inside its own panel
+     row, before and after. (The page itself legitimately moves with a different card.) */
+  const inRow = async () => {
+    const nb = (await page.locator('.card-locations-row.is-current .nb').boundingBox())!
+    const rowTop = (await page.locator('.card-locations-row.is-current').boundingBox())!.y
+    return [nb.y - rowTop, nb.height]
+  }
+  const before = await inRow()
+  await page.locator('.browse-row').nth(1).click()
+  await expect(page.locator('.card-locations-row.is-current .nb')).toHaveAttribute('aria-label', /Quiet Ember/)
+  expect(await inRow()).toEqual(before)
 })
 
 test('the neighbour mark wears the shown card\'s rarity palette', async ({ page }) => {
