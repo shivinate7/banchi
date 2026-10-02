@@ -590,3 +590,50 @@ that made it. The walk's ranking is held the same way (section 8).
 One difference stays. Inventory's natural sort is the platform's `Intl.Collator` with
 `numeric`. The walk's is `_natural_key`. Python and TypeScript cannot share one function. The
 two agree on digit runs and case, and may differ on punctuation and accents.
+
+## 18. Design pass: why Orders reads a step behind
+
+**Status: proposed, not built.** Prototypes sit on scratch branches `scratch/orders-pass-a`,
+`-b` and `-c`. Nothing here is ruled until the owner picks.
+
+### What the good screens do that Orders does not
+
+Measured against `#/inventory`, `#/` and `#/revenue` at 1440 and 820, in both themes, on the
+demo mirror:
+
+- **One hero.** Inventory gives one pane most of the width: the card's head, three big
+  figures, then the photograph beside every copy's location. Orders splits the width into three
+  near-equal columns, so no column leads.
+- **The two halves of Inventory's hero are torn apart.** Orders draws the locations inline in
+  the middle column and the photograph in a narrow right column. Below the photograph the right
+  column is empty.
+- **The order is never seen whole.** Sales and Home lead with photographs. Orders shows one
+  photograph at a time, and folds the cards no box holds behind "N more elsewhere" or a count.
+- **The rail is not Inventory's rail.** Inventory's rail is a short list, the open item's
+  panel, and its card list, one line a card. Orders puts the open buyer's panel and walk in a
+  second column, beside a full-height list.
+- **The press is small.** Mark sold is an icon press inside each location card, repeated down a
+  long scroll. Home has one clear primary press.
+- **Kit use is good, motion is good, stability holds (D313).** These are not the gap.
+
+### The directions
+
+- **A, Inventory's hero.** The section 13 skeleton, drawn as written: the rail holds the buyers,
+  the open buyer's panel and the walk, one line a card. The pane is `CardPane` with
+  `CardLocations` as its `detail`, photograph beside every copy. Fixes hierarchy, the empty
+  column and the split hero. Cost: the walk rows lose their inline locations; the pane draws
+  every copy of the card, so spares are no longer folded, and the digit keys must follow the
+  pane's order.
+- **B, the order as photographs.** No card pane. The open buyer's whole order is a grid of photo
+  tiles in walk order, each with its section, card numbers and Mark sold; the cards no box holds
+  close it as a list. Fixes "never seen whole". **Dropped:** a one-card buyer leaves the pane
+  mostly empty again, the location ruler is lost, and it departs from section 13.
+- **C, A plus the order's strip.** A, with one row of photographs above the hero: every card in
+  the open order, in walk order, ticked when picked, the current one ringed, and the count no box
+  holds at its end. A press shows that card in the hero. Not drawn for a one-card order. Fixes
+  everything A fixes, plus "never seen whole". Cost: A's cost plus one component.
+
+### Pick
+
+**C.** It is Inventory's screen, as section 13 asks, so the two screens stay one design, and
+the strip answers the one question Inventory never has to: what does this buyer get.
