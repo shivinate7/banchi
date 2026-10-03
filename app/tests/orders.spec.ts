@@ -2963,7 +2963,7 @@ test('the stand-down names its cutoff, its span and every Ready-to-ship order, a
   const cutoff = panel.getByLabel('Placed before')
   await expect(cutoff).toHaveValue('2020-03-01')
   await expect(panel).toContainText('2 orders, placed Jun 1, 2019 to Jan 1, 2020.')
-  await expect(panel).toContainText('Completed - Paid')
+  await expect(panel).toContainText('completed - paid')
   await expect(panel.locator('.orders-reconcile-live')).toHaveCount(0)
   await expect(panel.getByRole('button', { name: 'Stand down 2 orders' })).toBeEnabled()
 

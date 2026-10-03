@@ -1011,9 +1011,9 @@ test('an emitted run with copies still unsent stays open, and the chip counts th
   const line = page.getByTestId('pricing-unreachable')
   await expect(line).toContainText('214 never identified')
   await expect(line).toContainText('1 in Review')
-  await expect(line).toContainText('99 in 1 reading need a rebind')
+  await expect(line).toContainText('99 in 1 reading wait on a re-link')
   await expect(line).not.toContainText('not matched')
-  await expect(line).not.toContainText('2 readings need a rebind')
+  await expect(line).not.toContainText('2 readings wait on a re-link')
   await expect(line.getByRole('link', { name: '1 in Review' })).toHaveAttribute('href', '#/review')
 })
 
@@ -1079,8 +1079,8 @@ test('an unknown card count is still warned about, and a known zero is not', asy
   await expect(line).toContainText('214 never identified')
   /* One of the two rows survives — the unknown — and it carries no figure, because there is no
      honest one to carry. The zero-card row is gone from the sentence entirely. */
-  await expect(line).toContainText('1 reading need a rebind')
-  await expect(line).not.toContainText('in 1 reading need a rebind')
+  await expect(line).toContainText('1 reading waits on a re-link')
+  await expect(line).not.toContainText('in 1 reading waits on a re-link')
   await expect(line).not.toContainText('2 readings')
 })
 

@@ -2220,7 +2220,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     <section className="orders-paste" aria-label="Add orders">
       <label className="bn-field">
         <span className="bn-field-label" title={`Only the SKU, the count and the card's name leave this browser. An order with no source is stamped ${DEFAULT_ORDER_SOURCE}.`}>
-          Paste the order as JSON
+          Paste an order (JSON text)
         </span>
         <textarea
           ref={pasteBox}
@@ -2229,8 +2229,8 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           onChange={(event) => setHub({ paste: event.target.value })}
           disabled={busy !== null}
           rows={6}
-          placeholder={'{"source": "TCGplayer", "number": "…", "lines": [{"sku": "…", "quantity": 1}]}'}
-          aria-label="Order JSON"
+          placeholder="Paste the copied order here"
+          aria-label="Order to paste"
           spellCheck={false}
         />
       </label>
@@ -2566,7 +2566,7 @@ function ReconcileBacklogPanel({
             {candidates.length === 1
               ? `1 order, placed ${dayLabel(dayOf(oldest))}.`
               : `${candidates.length} orders, placed ${dayLabel(dayOf(oldest))} to ${dayLabel(dayOf(newest))}.`}{' '}
-            {joinPhrases(breakdown.map(([status, count]) => `${count} “${status}”`))}.
+            Status: {breakdown.map(([status, count]) => (status === 'no status' ? `${count} with no status` : `${count} ${status.toLowerCase()}`)).join('; ')}.
           </p>
           {live.length === 0 ? null : (
             <Notice
