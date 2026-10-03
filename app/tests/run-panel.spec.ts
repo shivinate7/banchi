@@ -747,8 +747,10 @@ test('the panel is open on arrival, with all four commands named and reachable',
   const identify = page.locator('.runs-actions').getByRole('button', { name: /^Identify/ })
   await expect(identify).toBeVisible()
   await identify.click()
-  /* THE SHEET OPENS ON ITS OWN COST CHECK (Q5), so its heading is the cost's. */
-  await expect(page.getByRole('dialog', { name: /Which cards|What it costs/ })).toBeVisible()
+  /* THE SHEET OPENS ON ITS OWN COST CHECK (Q5), so its heading is the cost's: 'What it will read' for
+     the free default, which is the heading it settles on once the quote answers. It passes through
+     'Which cards' on the way, so the name is a race unless every settled heading is accepted. */
+  await expect(page.getByRole('dialog', { name: /Which cards|What it costs|What it will read/ })).toBeVisible()
 })
 
 test('a live run is announced where the panel already is', async ({ page }) => {
