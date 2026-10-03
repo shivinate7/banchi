@@ -232,9 +232,9 @@ def run(ok) -> None:
         str(by_label["codex hooks"]),
     )
 
-    # CODEX_ONLY: two hooks the shared layer owns for Claude Code. Driven on temp files through
-    # the row's own two path globals, with the pair spelled out so a widened CODEX_ONLY shows.
-    print("\ncodex hooks: the CODEX_ONLY pair is allowed in Codex only, in both directions")
+    # CODEX_ONLY: one hook the shared layer owns for Claude Code (silent-write runs on both sides).
+    # Driven on temp files through the row's own two path globals.
+    print("\ncodex hooks: the CODEX_ONLY hook is allowed in Codex only, in both directions")
     import json
     from . import env_map
 
@@ -260,15 +260,15 @@ def run(ok) -> None:
                 env_map.CLAUDE_SETTINGS, env_map.CODEX_HOOKS = saved
         return [f for row in rep.checks for f in row.findings]
 
-    found = codex_hooks_findings([shared], [shared, reap, silent])
-    ok(not found, "green: Claude lacks the two CODEX_ONLY hooks and Codex runs them", str(found))
-    found = codex_hooks_findings([shared, reap], [shared, reap, silent])
+    found = codex_hooks_findings([shared, silent], [shared, silent, reap])
+    ok(not found, "green: Claude lacks the CODEX_ONLY hook and Codex runs it", str(found))
+    found = codex_hooks_findings([shared, silent, reap], [shared, silent, reap])
     ok(len(found) == 1 and "CODEX_ONLY is stale" in str(found[0]),
        "red: Claude runs a CODEX_ONLY hook again", str(found))
-    found = codex_hooks_findings([shared], [shared, reap])
+    found = codex_hooks_findings([shared, silent], [shared, silent])
     ok(len(found) == 1 and "lost" in str(found[0]),
        "red: Codex loses a CODEX_ONLY hook", str(found))
-    found = codex_hooks_findings([shared], [shared, reap, silent, extra])
+    found = codex_hooks_findings([shared, silent], [shared, silent, reap, extra])
     ok(len(found) == 1 and "does not run" in str(found[0]),
        "red: an unlisted Codex-only hook appears", str(found))
 
