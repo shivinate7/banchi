@@ -114,12 +114,8 @@ import {
   useViewParam,
 } from './kit'
 import type { FilterFacet, SortOption, SortValue } from './kit'
-<<<<<<< HEAD
 import { dismissToast, toast } from './kit/toast'
-=======
-import { toast } from './kit/toast'
 import { PriceMovers } from './PriceMovers'
->>>>>>> origin/main
 import './Pricing.css'
 import { SendCard } from './SendCard'
 import { ABSENT_SENTENCE, AbsentPhotoNote, gameLabel, noPhotoSentence } from './CardHero'
