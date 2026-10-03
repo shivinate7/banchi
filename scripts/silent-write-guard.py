@@ -223,7 +223,7 @@ _CARRIES = {
 }
 
 
-def read_command(command: str) -> Verdict:
+def read_command(command: str, only_file: bool = False) -> Verdict:
     """Every write in this command whose own output the session will not see.
 
     THE DEFAULT IS "NO OPINION", and it returns as early as it can: this runs on every Bash
@@ -277,8 +277,10 @@ def read_command(command: str) -> Verdict:
             continue
         out = resolve(stage.fd1, op in PIPE_OPS, tail)
         err = resolve(stage.fd2, op == "|&", tail)
-        lost_out = out if discarded(out, stage) else None
-        lost_err = err if discarded(err, stage) else None
+        # `--only file`: the shared guard owns /dev/null and closed descriptors, so keep
+        # the unread-file clause alone.
+        lost_out = out if discarded(out, stage) and (not only_file or out.kind == FILE) else None
+        lost_err = err if discarded(err, stage) and (not only_file or err.kind == FILE) else None
         if lost_out or lost_err:
             silenced.append(Silenced(verb, stage.text, lost_out, lost_err))
     note = ""
@@ -354,7 +356,7 @@ def refusal(silenced: Sequence[Silenced]) -> str:
     return "\n".join(lines)
 
 
-def hook(payload: dict) -> int:
+def hook(payload: dict, only_file: bool = False) -> int:
     """The PreToolUse hook on Bash. Exit 2 blocks the call and hands stderr to the session.
 
     IT FAILS OPEN ON ITS OWN BUGS. `reap.py:hook`'s docstring is the contract and it is not
@@ -374,13 +376,14 @@ def hook(payload: dict) -> int:
         return 0
     if os.environ.get("PKMNSCAN_SILENT") == "off" or _hatch_set_by("PKMNSCAN_SILENT", command):
         return 0
-    verdict = read_command(command)
+    verdict = read_command(command, only_file)
     if not verdict.silenced:
         return 0
     print(refusal(verdict.silenced), file=sys.stderr)
     sys.stderr.flush()
     if refusal_log:
-        refusal_log.log("silent-write-guard", "silent", ", ".join(sorted({i.verb for i in verdict.silenced})),
+        rule = "silent-file" if only_file else "silent"        # the file clause's own fire count
+        refusal_log.log("silent-write-guard", rule, ", ".join(sorted({i.verb for i in verdict.silenced})),
                         str(payload.get("session_id") or ""), str(payload.get("cwd") or ""))
     return 2
 
@@ -406,6 +409,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="run as a PreToolUse hook on Bash; reads the payload on stdin")
     parser.add_argument("--explain", metavar="CMD", default="",
                         help="the verdict for one command, and why")
+    parser.add_argument("--only", choices=["file"], default="",
+                        help="with --hook: run one clause alone. `file` is the output-to-an-unread-"
+                             "file clause. An unknown value is a usage error and exits 2, so a "
+                             "typo cannot silently become a no-op or run everything")
     return parser
 
 
@@ -418,7 +425,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 0
         if not isinstance(payload, dict):
             return 0
-        return hook(payload)
+        return hook(payload, args.only == "file")
     if args.explain:
         return explain(args.explain)
     build_parser().print_help()

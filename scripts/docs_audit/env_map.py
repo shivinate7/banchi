@@ -1067,9 +1067,9 @@ CODEX_ONLY = frozenset({
     ("PreToolUse", "Bash", "scripts/reap.py --hook"),
 })
 
-#: `--skip NAMES` tells `scripts/guard-shell.py` which clauses the shared layer owns. Claude
+#: `--skip NAMES` tells `scripts/guard-shell.py` which clauses the shared layer owns, and `--only file` narrows `scripts/silent-write-guard.py` to its file clause. Claude
 #: Code passes it and Codex does not, so it is not part of which hook fires.
-_SKIP_FLAG = re.compile(r"\s+--skip\s+\S+")
+_SKIP_FLAG = re.compile(r"\s+--(?:skip|only)\s+\S+")
 
 
 def _hook_triples(data: object) -> Set[Tuple[str, str, str]]:
