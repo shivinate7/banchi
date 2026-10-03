@@ -1385,6 +1385,20 @@ COMPONENTS = [
                                         "this module; REACHABLE FROM A SCREEN AS OF D236 — "
                                         "`app/src/Revenue.tsx`'s `getHoldingsValue` calls it "
                                         "from `#/revenue`'s \"Value my stock\" panel."},
+            "movers.py": {"does": "which listed SKUs moved more than ten percent in the "
+                                  "market since they were listed. `baseline_at` is the finest "
+                                  "archive bucket that COVERS the listing day; a SKU with no "
+                                  "such bucket or no current reading is counted unmeasured, "
+                                  "never dropped or guessed. A read: nothing it returns "
+                                  "changes a price.",
+                          "governed_by": ["D189", "D219"]},
+            "pricerefresh.py": {"does": "the daily market read's notes and saved Trends strips. `run` calls the one live "
+                                        "fetch it is handed and writes `inventory/"
+                                        "price-refresh.json` either way, so a failed or missing "
+                                        "read is visible on `#/pricing` and never a silent stale "
+                                        "state. It takes the fetch as an argument so this layer "
+                                        "never imports `server/`.",
+                                "governed_by": ["D104", "D189"]},
             "livecheck.py": {"does": "the whole store against one live TCGplayer export "
                                      "(My Pricing), both directions. D87: `cli/cmd_reconcile.py` "
                                      "scopes its diff to one run's emitted_skus while "
@@ -4979,6 +4993,25 @@ COMPONENTS = [
                 # no address at all). D216 is why the recording runs offline.
                 "governed_by": ["D61", "D70", "D193", "D216", "D295", "D301"],
             },
+            "launchagent.py": {
+                "does": "the shared launchd install and remove for a daily job on the owner's "
+                        "Mac, main tree only. `price-refresh-daily.py` calls it. "
+                        "`demo-mirror-daily.py` keeps its own copy under the D295 fence; "
+                        "migrating it is its own PR.",
+                "governed_by": ["D295"],
+            },
+            "price-refresh-daily.py": {
+                "does": "the daily market read on the owner's Mac: one free live fetch "
+                        "(`do_live_export`), then the overnight Trends preload "
+                        "(`do_price_trends_preload`), each leaving a note `#/pricing` shows. Calls no paid "
+                        "read and no archive sweep, and changes no price. `--agent` installs "
+                        "the daily launchd job (main tree only), `--agent --remove` removes it. "
+                        "The installer is `launchagent.py`'s; `demo-mirror-daily.py` keeps its own copy (D295 fence).",
+                "note": "PROVED BY T7's `price_moves` group: the note is written on success and "
+                        "on refusal, and the script's own imports are asserted to reach only "
+                        "the note writer and the live fetch's module.",
+                "governed_by": ["D104", "D189", "D224", "D278", "D295"],
+            },
             "demo-mirror-daily.py": {
                 "does": "the daily demo refresh on the owner's Mac. Cuts a throwaway worktree "
                         "from origin/main, runs `make demo-mirror`, and publishes only a "
@@ -7873,6 +7906,16 @@ COMPONENTS = [
                                            "against are a card that had not been printed yet, "
                                            "and joining through them draws a year-long slope "
                                            "that never happened."},
+            "src/PriceMovers.tsx": {"does": "the panel above #/pricing's list: which listed "
+                                            "items moved more than a tenth since listing, with "
+                                            "direction and amount, and how the last daily price "
+                                            "read ended. Two lines hold their size from first "
+                                            "paint, the list opens only on a press, and nothing "
+                                            "here changes a price.",
+                                    "governed_by": ["D104", "D189", "D219", "D278", "D313"]},
+            "src/PriceMovers.css": {"does": "that panel, `--bn-*` only. Direction is a word and "
+                                            "an arrow, never a colour, like the trend strip.",
+                                    "governed_by": ["D278", "D313"]},
             "src/PriceTrend.css": {"does": "that strip at owner density. It spans BOTH grid rows "
                                            "the way .pricing-id does, so 45px carries a 20px "
                                            "shape and a 10px sign without touching the invariant "

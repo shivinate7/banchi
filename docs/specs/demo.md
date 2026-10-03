@@ -99,7 +99,7 @@ recorded here means the path is not a read this demo replays.
 - `/graveyard`, `/inventory/recent` at Home's own depth, and `/pipeline/submissions`.
 - Every `/boxes` facet filter the three menus can make (D213), each facet unset or one value.
 - Each value band (`top`, `bottom`, `gaps`) whole, once per box. The browser cuts the page.
-- `/pipeline/holdings-value` for each range, and `/pipeline/price-now` for each SKU.
+- `/pipeline/holdings-value` for each range, `/pipeline/price-now` for each SKU, and `/pipeline/movers` once.
 - `/pipeline/products/<sku>/history` for each SKU, when the server can answer it.
 - Three POST routes that only read: `/inventory/copies` per SKU, `/orders/picks` per order, and
   `/orders/walk-plan`. A POST read is keyed `POST <path> <body>` with the body's keys sorted

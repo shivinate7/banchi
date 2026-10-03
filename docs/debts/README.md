@@ -69,7 +69,7 @@ DEBT65 the number-corner crop is sent only on a retry
 DEBT66 no perceptual-hash cross-check on identification
 DEBT67 capture photographs exist in one place
 DEBT68 the posted-price history has no screen
-DEBT69 prices are not refreshed on a schedule, and nothing says which SKUs moved
+DEBT69 the daily price read covers listed SKUs only, and no live price is pushed automatically
 DEBT70 realized prices inform no listing rule
 DEBT71 the value of the set hint is asserted, not measured
 DEBT72 PKMNVAULT, Supabase and eBay are unbuilt
