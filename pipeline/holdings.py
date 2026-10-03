@@ -272,7 +272,7 @@ def aggregate_totals(series: List[SkuSeries], on_hand_count: int) -> List[TotalP
     `width_days`, anchored on the latest start of any priced point: its window is dated
     `anchor - k * width_days`, where `k = (anchor - start) // width_days`; it covers the
     `width_days` days ending on that date. A total sums every
-    SKU with a priced point in that window and is dated by the window start. A SKU never
+    SKU with a priced point in that window and is dated by the window's latest day. A SKU never
     counts twice in one window (its latest point wins). `gap_before` is true when a window
     between two totals has no priced point at all. When the width is unknown (under two
     adjacent points) or a start does not parse, a point keeps its own start as its window.
