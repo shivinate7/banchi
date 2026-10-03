@@ -5,7 +5,7 @@
  *
  * WHY THIS EXISTS. Every reviewer of the 2026-09 UX overhaul graded the product on the public
  * demo, and the demo could not show photographs (the recorder copied from a folder the seed
- * stopped writing when D183 moved them), undo, the order walk, the graveyard, product history,
+ * stopped writing when D183 moved them), undo, the order walk, the deleted boxes shelf, product history,
  * value bands, facet counts or a typed search. Each of those failed as a quiet refusal or a
  * broken image, so a reviewer could not tell a demo gap from a product defect. This spec reads
  * the BUILT artifact, `dist-demo/`, and fails when one of those screens goes back to refusing.
@@ -420,9 +420,10 @@ test.describe('the published demo draws what reviewers grade', () => {
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
   })
 
-  test('Graveyard lists the departed', async ({ page }) => {
-    await visit(page, 'Graveyard')
-    await expect(page.getByRole('row').filter({ hasText: 'Sold' }).first()).toBeVisible()
+  test('Inventory: the Deleted boxes shelf lists the records of deleted boxes', async ({ page }) => {
+    await visit(page, 'Inventory')
+    await page.getByRole('button', { name: 'Records from deleted boxes' }).click()
+    await expect(page.getByRole('list', { name: 'Records from deleted boxes' }).locator('.browse-row').first()).toBeVisible()
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
   })
 

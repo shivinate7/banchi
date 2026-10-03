@@ -85,6 +85,8 @@
                                            SKU rather than by a run — archive-first, live only
                                            when the archive has never swept this SKU
                                            (D227)
+    GET    /pipeline/products/<sku>/realized   what this seller got for that product against the
+                                           archived market on each sale date. Read-only (DEBT70)
     POST   /pipeline/runs/<name>/<step>    join | emit | reconcile. Free, run in the request
     GET    /pipeline/markdowns             every stale-listing markdown, newest first (D100)
     POST   /pipeline/markdowns             which live listings are not selling, and what each
@@ -108,6 +110,8 @@
     POST   /pipeline/sends/<stamp>/take-back   a written file's copies back on the list
     POST   /pipeline/sends/<stamp>/dismiss     the owner has read a taken-back receipt's
                                                warning, so the card stops drawing it
+    POST   /pipeline/sends/unreadable/<key>/release   free a live send claim the store cannot
+                                               read; `/restore` puts it back
     GET    /pipeline/sends/<stamp>/file    the file one send wrote, for the download door
     POST   /pipeline/live-check            reads what is live and confirms the sends that are
                                            due. Runs only when a request asks
@@ -706,6 +710,7 @@ _RUN_TRENDS_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/trends$")
 # and requires non-empty; this pattern is a coarser first filter, same as every other ID
 # pattern in this file).
 _PRODUCT_HISTORY_RE = re.compile(r"^/pipeline/products/([A-Za-z0-9._-]+)/history$")
+_PRODUCT_REALIZED_RE = re.compile(r"^/pipeline/products/([A-Za-z0-9._-]+)/realized$")
 # What a fetch WOULD ask TCGplayer for, before one is pressed (D76). Same hazard as the
 # three above and the same remedy: `scope` is `[a-z]+`, so `_RUN_STEP_RE` would answer it
 # `no_such_step` if this were declared after it. GET only — it presses nothing.
@@ -738,6 +743,7 @@ _MARKDOWN_SEND_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/send$"
 # tail every press has written since round 2, and matched no new receipt.
 _SEND_TAKE_BACK_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/take-back$")
 _SEND_DISMISS_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/dismiss$")
+_SEND_UNREADABLE_RE = re.compile(r"^/pipeline/sends/unreadable/([A-Za-z0-9._-]+)/(release|restore)$")
 _SEND_FILE_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/file$")
 # The lens (D103): every live listing this survey saw, and the two readings over one of them.
 # Structural siblings of the run-scoped pair below, for the reason `_history_for_entry` gives
@@ -1308,7 +1314,7 @@ BOX_DELETED = master.BOX_DELETED
 # record IS the history, and it survives the box by being buried here rather than by the
 # box standing undeletable forever. ONE LINE PER DEPARTED RECORD, WITH A `position` KEY —
 # unlike `box_deleted`'s summary, this is the retained record itself and not a duplicate of
-# one, so it carries the record whole rather than a count. `#/graveyard` reads these lines
+# one, so it carries the record whole rather than a count. Inventory's Deleted boxes shelf reads these lines
 # merged with the sold/retired/moved records still standing in boxes nobody has deleted.
 BURIED = "buried"
 
@@ -6839,7 +6845,7 @@ def do_delete_box(box: int) -> dict:
     carries, usually none). That line is what "a history log" means for a card leaving
     through a deleted box: it is no longer a row anywhere, it is not undoable, and its
     photograph goes with everything else in the box — but what it was, and how and when
-    it left, is not lost. `#/graveyard` reads these lines (D134, amended 2026-09-26: it filters a
+    it left, is not lost. Inventory's Deleted boxes shelf reads these lines (D134, amended 2026-09-26: it filters a
     `moved` one out — see `do_graveyard` — a moved card is alive elsewhere, not departed),
     merged with every sold/retired record still standing in a box nobody has deleted, so
     one screen answers both.
@@ -6946,7 +6952,7 @@ def do_delete_box(box: int) -> dict:
                     # (D145). `box_name` beside it is already frozen for this
                     # reason; the number is the one field here that is handed straight back
                     # out to the next drawer (D20), so on its own it cannot say which `Box 1`
-                    # this card was buried out of. Nothing draws it — `#/graveyard` reads the
+                    # this card was buried out of. Nothing draws it — Inventory's Deleted boxes shelf reads the
                     # name — and it is what lets a later question be answered at all.
                     bid=registered.bid if registered is not None else None,
                     index=at,
@@ -7048,7 +7054,7 @@ def _departed_row(
     buried,
     buried_at,
 ) -> dict:
-    """One `#/graveyard` row, the same shape whether it came from a live box or a burial
+    """One departed row, the same shape whether it came from a live box or a burial
     line (D134) — the merge point `do_graveyard` exists to make, so the screen reads one
     kind of record rather than two.
 
@@ -7077,10 +7083,12 @@ def _departed_row(
     }
 
 
-def do_graveyard() -> dict:
-    """Every card that TRULY LEFT the store: sold or retired, newest departure first
-    (D134, amended by the UX review's graveyard ruling, 2026-09-26, verbatim: "Move Moved
-    out of Graveyard").
+def do_graveyard(buried_only: bool = False) -> dict:
+    """The sold and retired records the store keeps, newest departure first, in one shape
+    (D134, amended by the UX review's graveyard ruling, verbatim: "Move Moved out of
+    Graveyard"). With `buried_only` it answers the `buried` half alone: the records whose box
+    was deleted, which Inventory's Deleted boxes shelf reads. That path skips the in-box half,
+    so it builds no standing row and joins no order for a record the client would drop.
 
     MOVED IS NOT A DEPARTURE. A moved record is a tombstone at its old key — the card
     itself is alive at `moved_to`, in another box, exactly as sellable as it ever was.
@@ -7127,7 +7135,7 @@ def do_graveyard() -> dict:
     _DEPARTED_STATES = tuple(s for s in master.TERMINAL_STATES if s != master.MOVED)
 
     rows: List[dict] = []
-    for state in _DEPARTED_STATES:
+    for state in () if buried_only else _DEPARTED_STATES:
         for card in inventory.cards.where(state=state):
             registered = inventory.box(card.box)
             order = None
@@ -16382,7 +16390,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # D134's graveyard: an exact string, matched by no other route's pattern, over
             # a lock-free read on both its sources.
             if path == "/graveyard":
-                return self._json(HTTPStatus.OK, do_graveyard())
+                params = parse_qs(parsed.query)
+                return self._json(HTTPStatus.OK, do_graveyard(buried_only=params.get("buried") == ["1"]))
             if path == "/games":
                 return self._json(HTTPStatus.OK, do_games())
             # D69's order screen. An exact string and therefore no ordering hazard, and a
@@ -16668,6 +16677,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK,
                     pipeline_routes.do_pipeline_trends(match.group(1), asked),
+                )
+            match = _PRODUCT_REALIZED_RE.match(path)
+            if match:
+                # DEBT70: the owner's own sale prices against the archive. Read-only.
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_product_realized(match.group(1)),
                 )
             match = _PRODUCT_HISTORY_RE.match(path)
             if match:
@@ -17011,6 +17027,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, send_routes.do_take_back(match.group(1), self._body())
                 )
+            match = _SEND_UNREADABLE_RE.match(path)
+            if match:
+                # DEBT59: free a live send claim the store cannot read, and the way back.
+                handler = send_routes.do_release_unreadable if match.group(2) == "release" else send_routes.do_restore_unreadable
+                return self._json(HTTPStatus.OK, handler(match.group(1), self._body()))
             match = _SEND_DISMISS_RE.match(path)
             if match:
                 # The owner has read a taken-back receipt's warning. Changes nothing else.

@@ -164,7 +164,7 @@ def run(ok) -> None:
                 {"matcher": "Write|Edit", "hooks": [{"type": "command", "command": "scripts/guard-opsec.sh"}]},
                 {"matcher": "Bash", "hooks": [{"type": "command", "command": "scripts/reap.py --hook"}]},
             ],
-            "Stop": [{"hooks": [{"type": "command", "command": "scripts/stop-gate.sh"}]}],
+            "Stop": [{"hooks": [{"type": "command", "command": "scripts/typecheck-hook.py"}]}],
         }
     }
     triples = _hook_triples(claude_shaped)
@@ -175,7 +175,7 @@ def run(ok) -> None:
         str(sorted(triples)),
     )
     ok(
-        ("Stop", "", "scripts/stop-gate.sh") in triples,
+        ("Stop", "", "scripts/typecheck-hook.py") in triples,
         "an event with no tool to match reads its matcher as the empty string, not skipped",
         str(sorted(triples)),
     )
@@ -194,7 +194,7 @@ def run(ok) -> None:
             "PreToolUse": [
                 {"matcher": "Write|Edit", "hooks": [{"type": "command", "command": "scripts/guard-opsec.sh"}]},
             ],
-            "Stop": [{"hooks": [{"type": "command", "command": "scripts/stop-gate.sh"}]}],
+            "Stop": [{"hooks": [{"type": "command", "command": "scripts/typecheck-hook.py"}]}],
         }
     }
     missing = _hook_triples(claude_shaped) - _hook_triples(codex_shaped)

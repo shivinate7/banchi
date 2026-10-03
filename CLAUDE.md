@@ -79,7 +79,7 @@ make demo-mirror-install  # CI's step: install the committed scrub. No store, no
 make demo-static    # demo-mirror-install, then a static build to dist-demo/.
 make demo-preview   # serve dist-demo/ as a static host would.
 make check          # the whole suite, product first, guard self-tests last. `make explain` lists it.
-make ci-check       # the same targets as `check`, as CI runs them on a fresh clone.
+make ci-check       # the same list as `check`, from `scripts/checks.py`. CI runs it as four shards, `revert-guard` apart.
 make css-var-check  # a `var(--x)` with no fallback and no definition. PKMNSCAN_CSS_VARS=off skips it.
 make token-literal-check  # a CSS literal equal to a design token, ratcheted per file. PKMNSCAN_TOKEN_LITERALS=off skips it.
 make catalog-refresh  # re-clone pokemon-tcg-data into vendor/. Writes. ARGS=--dry-run.
@@ -230,7 +230,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **Real CSV libraries only.** PapaParse (JS), `csv` (Python). Never `split(",")`.
 - **Not a Claude artifact.** No `window.storage`, no `facingMode: "environment"`, nothing about a card in `localStorage`.
   **Eleven keys are stored on the device**, each a fact about this machine and not a card. `app/src/useCamera.ts`
-  holds `banchi.capture.deviceId` and `banchi.capture.rotation`. `app/src/deviceMemory.ts` holds `banchi.theme`,
+  holds `banchi.capture.deviceId` and `banchi.capture.rotation`. `app/src/deviceMemory.ts` holds `banchi.theme` (a `THEMES` id: light, dark, abyssal-bloom or carnival-midway),
   `banchi.rail`, `banchi.orders.fetch-filter`, `banchi.inventory.hide-sold`, `banchi.box-recency`,
   `banchi.capture.setup` (six values as one document, D142, the setup outlives the browser), `banchi.capture.sections` (kept until the sitting
   ends, D164, the undo stack is the sitting) and `banchi.runs.spend-notice` (a notice, never a cap, D180, a press names the cards). `app/src/Orders.tsx` holds

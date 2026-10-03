@@ -1339,6 +1339,14 @@ COMPONENTS = [
                                         "product-history-selftest`, PATH GATED and IN "
                                         "`make check` as of D247's twenty-first entry "
                                         "(owner's word, 2026-09-23)."},
+            "realized.py": {"does": "`read_sales` reads an OrderWand sales export with `csv`, "
+                                    "keeping nine columns and dropping every buyer field at parse "
+                                    "time. `compare` sets each sale against the finest archived "
+                                    "bucket that holds its date, leaving out refunds and dates "
+                                    "with no bucket.",
+                            "governed_by": ["D214", "D219", "D227"],
+                            "note": "A read-only diagnostic (DEBT70). PROVED BY T7's "
+                                    "`realized_prices` group on synthetic rows."},
             # UNSOLD STOCK, VALUED OVER TIME (`docs/specs/sales-plan.md` section 1,
             # second half; `D236`). The position is the SKU
             # (D212); quantity is the `cards` table's own state, never the marketplace
@@ -4069,20 +4077,6 @@ COMPONENTS = [
                         "and `make worktree-setup` already exercise on every worktree.",
                 "governed_by": ["D18", "D257"],
             },
-            "stop-gate.sh": {
-                "does": "the Stop hook. RUNS NOTHING as of 2026-09-20 — the owner's ruling "
-                        "moved the harness off turn end entirely, onto the commit path and "
-                        "CI only (see the decision entry). It stays on the Stop hook roster "
-                        "so `--status` can answer 'what runs at turn end' honestly instead "
-                        "of the roster falling silent; `make status`'s 'turn gate' line reads "
-                        "it. PKMNSCAN_GATE=off is kept, recognised but no longer load-bearing.",
-                # Thin on purpose rather than padded. The contract it USED TO run is
-                # docs/GATES.md, which is prose and not a numbered decision, so what D16
-                # settles about this file is what may NOT be put behind it: a docs check
-                # here would fire at the end of every turn, including turns that touched no
-                # markdown. That reasoning still argues against putting anything back.
-                "governed_by": ["D16", "D248"],
-            },
             "guard-opsec.sh": {
                 "does": "the PreToolUse opsec twin — RE-ENABLED 2026-08-23 with a narrowed "
                     "shape match (stands alone, mixes letters and digits, no repeated "
@@ -5769,8 +5763,7 @@ COMPONENTS = [
                 "day on the owner's own word, having been shown the phone-drawer cost "
                 "(D214); one inventory view (D31 folded the box walk "
                 "and the pull preview into it); "
-                "`#/graveyard`, where a departed card is read whether its box still stands or "
-                "was deleted out from under it (D134); the code-card screen D70 gave its own "
+                "the code-card screen D70 gave its own "
                 "route; and `#/gallery`, which is the KIT — step 6's component page grown into "
                 "every primitive the product is built from. One is the Fulfiller's, and the "
                 "shell deliberately draws no chrome over it. The count here is RECOUNTED off "
@@ -6309,11 +6302,11 @@ COMPONENTS = [
             # and its render off a single ROUTES table rather than a table plus a switch, and
             # cites D16 for why two lists of the same strings are the drift to avoid.
             "src/App.tsx": {"does": "THE BANCHI SHELL, and the ROUTES table it is all driven "
-                                    "off. TWELVE hash routes, ELEVEN the owner's and one the "
+                                    "off. The hash routes are the owner's, plus one the "
                                     "Fulfiller's: `#/` is Home, which took the root hash in the "
                                     "2026-09 rebuild and moved capture to `#/capture`; then "
                                     "capture, runs, review, pricing, orders, shipping, "
-                                    "inventory, `#/graveyard` (D134), codes, the Fulfiller's "
+                                    "inventory, codes, the Fulfiller's "
                                     "`#/fulfillment`, and "
                                     "`#/gallery`, which is the KIT now rather than step 6's "
                                     "component page. RECOUNT FROM THE TABLE, NEVER INCREMENT — "
@@ -7230,42 +7223,22 @@ COMPONENTS = [
                 "governed_by": ["D5", "D20", "D22", "D31", "D38", "D41", "D50", "D83", "D132",
                                 "D313"],
             },
-            "src/Graveyard.tsx": {
-                "does": "`#/graveyard` (D134, amended by the UX review's graveyard ruling, "
-                        "2026-09-26, verbatim \"Move Moved out of Graveyard\"): every card "
-                        "that TRULY LEFT — sold or retired, never moved — newest departure "
-                        "first. TWO SOURCES, ONE TABLE — a sold/retired record still "
-                        "standing in a box nobody has deleted, the same records "
-                        "`#/inventory` already draws as departed, and a `buried` history "
-                        "line for one whose box WAS deleted by `do_delete_box`. "
-                        "`GET /graveyard` merges both server-side and filters `moved` out of "
-                        "both (`do_graveyard`) — a moved card is alive in another box, and "
-                        "`#/inventory`'s own card details say where it moved in from "
-                        "(`CardHero.tsx:movedFromFact`), not a tombstone here. A Segmented "
-                        "filter of three tabs (All/Sold/Retired) and a text search over "
-                        "name, number, SKU and box name; `buried` draws as a small quiet tag "
-                        "on the Where cell ('Its box was deleted'), a fact about the box "
-                        "rather than a fourth tab (D196: no pipeline noun on screen); no "
-                        "photograph, no price, no control that writes anything — a ledger "
-                        "for looking, not a screen that spends. ITS `#` IS ALWAYS A KEY, "
-                        "NEVER A COUNT (D92): a departed record has no slot to count to, so "
-                        "`positionOf` and the Where column both go through "
-                        "`storeKey.ts:storeKeyText` — `B9 #3`, D68's own spelling — rather "
-                        "than composing `#{index}` by hand.",
-                "governed_by": ["D26", "D58", "D68", "D83", "D92", "D134", "D196", "D218", "D259",
-                                "D313"],
-            },
-            "src/Graveyard.css": {
-                "does": "a smaller sheet than a working screen's, because this one has no "
-                        "form and no write: a toolbar, a `.bn-table` that becomes a stacked "
-                        "card at 639px on the same idiom `Codes.css` established, and a "
-                        "loading skeleton. Every color is a `--bn-*` token. THE FILTER ROW "
-                        "SCROLLS SIDEWAYS ON A PHONE, ON THE SAME COARSE-POINTER ARM D117 "
-                        "ALREADY MAKES FOR A THUMB (Orders' own chip row): five filters with "
-                        "counts were sized to their own content inside a flex column and bled "
-                        "the whole page wider than the viewport rather than either wrapping or "
-                        "scrolling.",
-                "governed_by": ["D50", "D94", "D117", "D134", "D218"],
+            "src/DeletedBoxes.tsx": {
+                "does": "INVENTORY'S DELETED BOXES SHELF (D134 point 5, the owner's word \"A: "
+                        "delete the tab\"). A sold or retired record outlives its box as a "
+                        "`buried` history line, and this reads those lines from `GET "
+                        "/graveyard` (`useBuried`; `do_graveyard` merges them) so the one "
+                        "place a card's whereabouts is read also holds a deleted box's "
+                        "records. `DeletedWalk` is the walk, grouped by the box each record "
+                        "sat in and drawn with `BoxBrowse.css`'s own classes. `DeletedPane` "
+                        "is `CardHero.tsx:CardPane` handed a card built from the record, with "
+                        "how it left, which box, when the box went and a link to the SKU's "
+                        "price history beside a photograph slot that says the photograph "
+                        "went with the box (`PhotoPanel`'s `gone`). No card actions and no "
+                        "Details disclosure, because a buried record cannot come back. "
+                        "`BoxBrowse.tsx` owns the shelf cell, which record is open and the "
+                        "held frame on leaving it.",
+                "governed_by": ["D26", "D31", "D118", "D132", "D134", "D196", "D259", "D313"],
             },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "
@@ -7377,7 +7350,7 @@ COMPONENTS = [
                                          "printed as a label. Also `RETIRE_REASONS` and "
                                          "`reasonWord`: the four ways a card leaves without a sale, "
                                          "one label and one sentence each, the one table the "
-                                         "Retire dialog and Graveyard read (UX-241). The stored "
+                                         "Retire dialog and the Deleted boxes shelf read (UX-241). The stored "
                                          "code never reaches the screen (D196).",
                                  "governed_by": ["D5", "D26", "D31", "D83", "D92", "D115", "D196"]},
             "src/frozenRank.ts": {"does": "THE ORDER IS TAKEN ONCE AND HELD UNTIL SOMEBODY ASKS "
@@ -7423,8 +7396,7 @@ COMPONENTS = [
                                          "open/closed state itself instead of reading it off the "
                                          "caller. `Row` also moved here; `BoxBrowse.tsx` "
                                          "re-exports it so `Inventory.tsx`'s own import keeps "
-                                         "working. `movedFromFact` (the UX review's graveyard "
-                                         "ruling, 2026-09-26, \"Move Moved out of Graveyard\"): "
+                                         "working. `movedFromFact` (D134's amendment): "
                                          "a moved card must still be findable from ITSELF, so "
                                          "`factGroupsOf`'s Provenance group grows one fact, "
                                          "\"Moved from\", off `card.moved_from` — the wire "
@@ -7432,9 +7404,8 @@ COMPONENTS = [
                                          "(`asdict(card)`) and this file is the first reader "
                                          "of. The box half is named by `boxes`, an optional "
                                          "prop `BoxBrowse.tsx` passes its own `boxRecords`, "
-                                         "falling back to \"another box\" the same honest way "
-                                         "`Graveyard.tsx`'s own `movedToName` does when the old "
-                                         "box is gone (D259).",
+                                         "falling back to \"another box\" when the old box is "
+                                         "gone (D259).",
                                  "governed_by": ["D6", "D26", "D28", "D31", "D34", "D67", "D77",
                                                  "D83", "D89", "D97", "D118", "D119", "D134",
                                                  "D172", "D183", "D195", "D218", "D252", "D259",
@@ -9088,6 +9059,15 @@ COMPONENTS = [
                 "governed_by": ["D50"],
                 "note": "Proved red first on main: the body sampled mid-grey, and the flash was 0.9 over 380ms.",
             },
+            "tests/themes.spec.ts": {
+                "does": "the theme button over four themes: it cycles light, dark, Abyssal Bloom "
+                        "and Carnival Midway in that order, names the next one in its title, keeps "
+                        "the choice over a reload and ignores an unknown stored value. Light and "
+                        "dark are read as the literal colors they painted before palettes, both "
+                        "palettes keep body text over 4.5:1, and four presses move no box. Not a "
+                        "harness test; `make design-check` runs it.",
+                "governed_by": ["D50", "D313"],
+            },
             "tests/staggerCheck.ts": {
                 "does": "one helper, `expectOneStagger`: every row of a list has an "
                         "`animation-delay` of min(i, `--bn-stagger-cap`) times `--bn-stagger`, "
@@ -9215,6 +9195,24 @@ COMPONENTS = [
                         "pressing the button; and the toast dismiss glyph's 4.5:1 contrast in "
                         "both themes. Run by `make design-check`.",
                 "governed_by": ["D118", "D288"],
+            },
+            "tests/money.spec.ts": {
+                "does": "`src/money.ts`'s `money()` and `moneyField`, pure, no browser: the cent "
+                        "rounding, and which typed text becomes a price and which is refused. "
+                        "Run by `make design-check`.",
+                "governed_by": ["D221"],
+            },
+            "tests/revenue-math.spec.ts": {
+                "does": "`src/revenueMath.ts`'s `salesOf` and `sum`, pure, no browser: gross is "
+                        "quantity times price, canceled orders and lines closed as not shipping "
+                        "are left out, an unpriced line is never a guessed price, and the result "
+                        "carries no profit field. Run by `make design-check`.",
+                "governed_by": ["D214", "D225", "D298"],
+            },
+            "src/revenueMath.ts": {
+                "does": "the gross arithmetic `Revenue.tsx` draws, moved out unchanged so a test "
+                        "can call it: `salesOf` turns orders into sales, `sum` adds their gross.",
+                "governed_by": ["D214", "D225", "D298"],
             },
             "tests/match.spec.ts": {
                 "does": "`kit/match.cases.json`'s case table, run data-driven, one Playwright test "
@@ -9725,25 +9723,20 @@ COMPONENTS = [
                         "is NOT a harness test: it starts a browser, so it runs under "
                         "`make design-check` and is deliberately off the commit path.",
             },
-            "tests/graveyard.spec.ts": {
-                "does": "`#/graveyard` and `#/inventory`'s \"Moved from\" fact, in a browser "
-                        "(D134, amended by the UX review's graveyard ruling, 2026-09-26, "
-                        "\"Move Moved out of Graveyard\"). The server-side filter that keeps "
-                        "a `moved` record off this route is Python and is proven by reading "
-                        "`do_graveyard`, not by this file; what this file proves is the "
-                        "CLIENT — given a graveyard answer shaped the way the amended route "
-                        "actually answers (sold and retired rows only, one buried), the "
-                        "screen draws exactly three filter tabs (never a fourth named Moved "
-                        "or a fifth named Buried), the counts on them are right, and a "
-                        "buried row's own tag reads \"Its box was deleted\" rather than "
-                        "typing the pipeline noun \"buried\" itself (D196). The second half, "
-                        "`CardHero.tsx:movedFromFact`, is asserted against a card moved in "
-                        "from a box that still stands (named) and one moved in from a box "
-                        "since deleted (\"another box\", `movedToName`'s own honest fallback, "
-                        "D259). Like its siblings it is NOT a harness test: it starts a "
+            "tests/deleted-boxes.spec.ts": {
+                "does": "Inventory's Deleted boxes shelf and `CardHero.tsx:movedFromFact`, in a "
+                        "browser (D134 point 5). Given a `GET /graveyard` answer that mixes "
+                        "standing and buried rows, the shelf counts and draws the buried ones "
+                        "only, ends the rail, groups them by the box they sat in, opens one "
+                        "in the card pane with no card action, and moves nothing above it. "
+                        "It is absent when no box was deleted. The nav has no Graveyard row "
+                        "and the old address is the not-found page. A moved-in card names the "
+                        "box it came from, or says \"another box\" when that box was "
+                        "deleted (D259). `do_graveyard` is Python and is proven by the "
+                        "harness. Like its siblings it is NOT a harness test: it starts a "
                         "browser, so it runs under `make design-check` and is deliberately "
                         "off the commit path.",
-                "governed_by": ["D134", "D196", "D259"],
+                "governed_by": ["D134", "D196", "D259", "D313"],
             },
             "tests/inventory-sets.spec.ts": {
                 "does": "THE OWNER'S \"BY SET\" VIEW (D293), in a browser. The grouping "

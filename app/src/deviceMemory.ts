@@ -39,14 +39,36 @@
 const THEME_KEY = 'banchi.theme'
 const RAIL_KEY = 'banchi.rail'
 
-export type Theme = 'light' | 'dark'
+/** THE ONE LIST OF THEMES: the toggle cycles it in this order, storage validates against it and
+ *  the toggle's tooltip reads `label`. A palette rides on top of dark (`data-theme="dark"` stays
+ *  set, `data-palette` names it), so `palette` is the attribute value and absent for the two bases.
+ *  `app/index.html`'s pre-paint script repeats the ids because it runs before any module does. */
+export const THEMES = [
+  { id: 'light', label: 'Light' },
+  { id: 'dark', label: 'Dark' },
+  { id: 'abyssal-bloom', label: 'Abyssal Bloom', palette: 'abyssal-bloom' },
+  { id: 'carnival-midway', label: 'Carnival Midway', palette: 'carnival-midway' },
+] as const
+
+export type Theme = (typeof THEMES)[number]['id']
+
+export function themeLabel(theme: Theme): string {
+  return THEMES.find((t) => t.id === theme)?.label ?? theme
+}
+
+/** The theme after this one, wrapping from the last back to the first. */
+export function nextTheme(theme: Theme): Theme {
+  const at = THEMES.findIndex((t) => t.id === theme)
+  return THEMES[(at + 1) % THEMES.length]?.id ?? 'light'
+}
 
 /** The theme the operator CHOSE, or null where they have not — which is not the same as
- *  light. A null here is what lets the shell keep following the system. */
+ *  light. A null here is what lets the shell keep following the system. An unknown stored
+ *  value is null too. */
 export function storedTheme(): Theme | null {
   try {
     const stored = localStorage.getItem(THEME_KEY)
-    return stored === 'light' || stored === 'dark' ? stored : null
+    return THEMES.find((t) => t.id === stored)?.id ?? null
   } catch {
     return null
   }

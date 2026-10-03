@@ -59,11 +59,11 @@ Adding a `--fix` flag is a change to this entry, not a configuration knob. The r
 
 An agent that can edit the docs to satisfy its own gate will do exactly that, and each edit will look reasonable. The docs stop being a record of what was decided and become a record of what was convenient — and unlike a failing test, nothing downstream ever notices. That is also why `/docs-audit` shows every proposed change in one table before touching anything, and never stages or commits: the owner's own `git diff` is the last link in the chain.
 
-**The docs audit is not a harness test, and must not become one.** Putting it in `harness/run.py:TESTS` was considered and rejected. The harness runs behind the `Stop` hook (`scripts/stop-gate.sh`), so a docs test there would fire at the end of every turn, including turns that touched no markdown at all. The trigger is commit-time and on-demand by choice.
+**The docs audit is not a harness test, and must not become one.** Putting it in `harness/run.py:TESTS` was considered and rejected. The harness once ran behind a `Stop` hook, so a docs test there would have fired at the end of every turn, including turns that touched no markdown at all. The trigger is commit-time and on-demand by choice.
 
 This paragraph used to make that point by naming the number the docs test would have taken, which stopped working the moment a real test needed a number. T7 is now the store, server and command-seam test (`docs/GATES.md`), and it is unrelated to this entry. The rule here was never about a number.
 
-**The allowlist is self-cleaning.** `scripts/docs-audit-allow.txt` records things the docs name before they exist — `PKMNSCAN_IMAGE_MIRROR` was documented by build-order step 9. The audit **fails when an entry comes true**, which forces the line out at that moment. Same instinct as `stop-gate.sh` arming on the absence of `NOT_IMPLEMENTED` markers rather than on a toggle: a list that only grows becomes a list nobody has read since.
+**The allowlist is self-cleaning.** `scripts/docs-audit-allow.txt` records things the docs name before they exist — `PKMNSCAN_IMAGE_MIRROR` was documented by build-order step 9. The audit **fails when an entry comes true**, which forces the line out at that moment. A list that only grows becomes a list nobody has read since.
 
 **A threshold is published, not restated.** Each test's `PASS_CRITERIA` must appear word for word as the `- **Pass**:` line of its `### Tn` section, and layer 1 blocks a commit where they disagree. **Reconciliation runs from the test to the gate.** The test is where a threshold is argued about and changed; `docs/GATES.md` is where it is announced. Rewriting a test so a doc-checker goes quiet inverts that and makes the test worse to please a tool.
 

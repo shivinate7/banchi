@@ -59,7 +59,7 @@ DEBT46 a search with a typo finds nothing, and no near match is offered
 DEBT48 code-side mechanization left open
 DEBT50 git and gh CLI traps hit from this checkout
 DEBT58 the Lane H palette record is on a branch, not in main
-DEBT59 an unreadable live claim has no way out on screen
+DEBT59 an unreadable live submission claim has no way out on screen
 DEBT60 the demo builds with Hide unpullable forced off
 DEBT61 eight build proposals are still open
 DEBT62 the demo photos are about 180 MB of plain git, and the owner wants them in Git LFS
@@ -70,7 +70,7 @@ DEBT66 no perceptual-hash cross-check on identification
 DEBT67 capture photographs exist in one place
 DEBT68 the posted-price history has no screen
 DEBT69 prices are not refreshed on a schedule, and nothing says which SKUs moved
-DEBT70 the owner's realized prices are not read
+DEBT70 realized prices inform no listing rule
 DEBT71 the value of the set hint is asserted, not measured
 DEBT72 PKMNVAULT, Supabase and eBay are unbuilt
 DEBT73 the Mac dock icon has no drop shadow, and none was tried

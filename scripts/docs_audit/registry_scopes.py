@@ -21,9 +21,7 @@ from .core import (
     Row,
     SELF,
     _STAGED_PATHS,
-    _check_recipe,
     _nul_list,
-    _recipe_targets,
     _sibling,
     _walk,
     entry_parser,
@@ -63,26 +61,16 @@ _RUNS_FLAG_RE = re.compile(r"--[a-z][a-z-]*")
 
 CHECK_ENTRY_KEYS = (
     "target", "runs", "asserts", "needs", "writes",
-    "commit_path", "why_off_commit_path", "gates", "governed_by",
+    "commit_path", "why_off_commit_path", "gates", "governed_by", "shard",
 )
 
+# The one entry no shard runs: its own required CI job does. Any other None is a silent CI gap.
+SHARDLESS = ("revert-guard",)
+
 # The parallel shards `.github/workflows/check.yml` runs in place of one `make ci-check`.
+# A registry entry's `shard` names one of these (without the `ci-check-` prefix), or is None.
 CI_SHARD_RULES = ("ci-check-product", "ci-check-static", "ci-check-guards-1", "ci-check-guards-2")
-
-
-def _ci_check_recipe() -> Optional[List[str]]:
-    """The targets `make ci-check` runs — the gate `.github/workflows/check.yml` invokes.
-
-    RECONCILED AGAINST NOTHING UNTIL 2026-09-12, while `check registry`, `check census` and
-    `commit path` all read the `check:` recipe alone. The Makefile's own header states the
-    hazard in capitals — "IT IS A SUBSET AND CAN DRIFT FROM `check`" — and a target dropped
-    from this one stops gating every pull request and every push in silence, which is the
-    armed-hook defect with a runner in front of it.
-
-    Membership only, deliberately, and never order: `check registry` owns the order of the
-    `check:` recipe, and `ci-check` is ordered differently on purpose.
-    """
-    return _recipe_targets("ci-check")
+CHECK_WORKFLOW = ROOT / ".github" / "workflows" / "check.yml"
 
 
 # The marker a non-gating target's recipe has to print, so a reader of a green `make check`
@@ -108,83 +96,37 @@ def _checks_registry() -> Optional[Tuple[List[dict], dict]]:
 
 
 def _check_registry() -> Row:
-    """scripts/checks.py against the `check:` recipe it describes, both directions.
+    """scripts/checks.py, the one list `make check`, `make ci-check` and the CI shards run.
 
-    THE REGISTRY IS A PARALLEL DECLARATION AND NOT THE DRIVER, which is the shape that makes
-    this row necessary and also makes it safe. A registry that drove `make check` could not
-    disagree with it — and could silently stop running a check, which is the failure this repo
-    has paid for more than any other. A registry that merely describes it can only lie, and a
-    lie is what a check can catch.
+    The suite's composition is DERIVED from the registry, so only what is still hand-kept is
+    read here, each leg able to go red on its own:
 
-    ORDER IS CHECKED, not just membership. The file says its entries are in recipe order and
-    `make explain` prints them that way, so a reader takes the order as the running order; a
-    claim being read is a claim worth verifying, and it costs one comparison.
-
-    **`ci-check` IS RECONCILED HERE TOO, AS OF 2026-09-12, and it had no reader at all.**
-    `grep -c ci-check scripts/docs-audit.py` returned 0: three rows read the `check:` recipe
-    and none read the gate `.github/workflows/check.yml` actually invokes on every pull
-    request and every push. The Makefile's own header says "IT IS A SUBSET AND CAN DRIFT
-    FROM `check`", which is a hazard written down and watched by nobody.
-
-    The difference is DECLARED, not tolerated: a target in `check` and not in `ci-check`
-    needs a `why_off_ci` sentence on its entry, and a target carrying that sentence while
-    sitting in `ci-check` is as wrong as a missing one — the same pairing discipline
-    `commit_path` / `why_off_commit_path` already keeps. Membership only, never order.
-    Today the sole difference is `vale`, which the Makefile header already argues, so the
-    extension starts green.
-
-    **AND A SLOT THAT CANNOT FAIL SAYS SO AT RUN TIME.** `gates: False` was read by nothing:
-    the field was declared honestly and the disclosure never reached the run a session
-    reads. `vale` swallows its status with `--no-exit` and, with no binary, prints and exits
-    0 — so a reader of a green `make check` counts 25 passing rows where 24 are gates. The
-    entry's recipe has to print `NOT A GATE:`, in both directions, so `make explain`, the
-    run and the reader agree. A GATING target is never forced to print anything; the point
-    is disclosure, not removal, and the owner has ruled prose style worth running and not
-    worth gating (D18, plus the bare-`python3` toolchain fact — D74's own text argues only
-    that vale's file scope now matches `.vale.ini`, never that a prose check must not gate).
+      - every entry has the full shape, and its `needs` tokens are defined in NEEDS (and NEEDS
+        holds no token nobody uses, D80);
+      - every entry's target is a rule in the Makefile, so a typo is a finding here and not a
+        `make` error on the runner;
+      - every `shard` is None or one of CI_SHARD_RULES, every shard has an entry (a shard
+        with none fails its job), and `check.yml`'s matrix lists exactly those shards;
+      - a slot that cannot fail (`gates: False`) says so in its recipe, in both directions.
     """
-    recipe = _check_recipe()
-    ci_recipe = _ci_check_recipe()
     loaded = _checks_registry()
-    if recipe is None:
-        return Row("check registry", MECHANICAL, [Finding(
-            "Makefile",
-            "the `check:` recipe could not be read, so nothing can be reconciled against it. "
-            "If the target changed shape, this row's reader has to move with it.")],
-            "the `check:` recipe could not be read, so the registry was not checked")
     if loaded is None:
         return Row("check registry", MECHANICAL, [Finding(
             rel(CHECKS_REGISTRY),
             "CHECKS and NEEDS could not be read as module-level literals. They are parsed "
             "with `ast.literal_eval` and never imported, so every entry must stay a plain "
             "literal — no helper class, no call, no comprehension.")],
-            "the registry file is missing or unreadable, so the recipe was not checked")
+            "the registry file is missing or unreadable, so nothing was checked")
 
     entries, needs = loaded
     findings: List[Finding] = []
-
-    declared = [str(entry.get("target", "")) for entry in entries]
-    for name in recipe:
-        if name not in declared:
-            findings.append(Finding(rel(CHECKS_REGISTRY), (
-                "`make check` runs `{0}` and no entry describes it.\n"
-                "  Add one, or `make explain` and `make help` both under-report the suite."
-            ).format(name)))
-    for name in declared:
-        if name not in recipe:
-            findings.append(Finding(rel(CHECKS_REGISTRY), (
-                "there is an entry for `{0}`, which `make check` does not run.\n"
-                "  An entry for a check nobody runs reads as coverage."
-            ).format(name)))
-    if not findings and declared != recipe:
-        findings.append(Finding(rel(CHECKS_REGISTRY), (
-            "the entries are not in recipe order.\n"
-            "  recipe:   {0}\n"
-            "  registry: {1}"
-        ).format(", ".join(recipe), ", ".join(declared))))
+    makefile_text = read(ROOT / "Makefile") if exists(ROOT / "Makefile") else ""
+    rules = set(re.findall(r"^([a-z][a-z0-9-]*):", makefile_text, flags=re.M))
+    shard_names = {rule[len("ci-check-"):] for rule in CI_SHARD_RULES}
 
     for entry in entries:
-        where = "{0} — {1}".format(rel(CHECKS_REGISTRY), entry.get("target", "<unnamed>"))
+        name = str(entry.get("target", "<unnamed>"))
+        where = "{0} — {1}".format(rel(CHECKS_REGISTRY), name)
         missing = [key for key in CHECK_ENTRY_KEYS if key not in entry]
         if missing:
             findings.append(Finding(where, "entry is missing: {0}".format(", ".join(missing))))
@@ -195,6 +137,32 @@ def _check_registry() -> Row:
                     "`needs` names `{0}`, which NEEDS does not define.\n"
                     "  A token nobody defined is a token nobody can reason about."
                 ).format(token)))
+        if name not in rules:
+            findings.append(Finding(where, (
+                "is not a rule in the Makefile, so `make check` would fail on it."
+            )))
+        if entry["shard"] is None and name not in SHARDLESS:
+            findings.append(Finding(where, (
+                "`shard` is None, and no CI job runs it. Only {0} may have no shard."
+            ).format(", ".join(SHARDLESS))))
+        if entry["shard"] is not None and entry["shard"] not in shard_names:
+            findings.append(Finding(where, (
+                "`shard` is `{0}`. It is None or one of: {1}."
+            ).format(entry["shard"], ", ".join(sorted(shard_names)))))
+
+    for shard in sorted(shard_names):
+        if not any(entry.get("shard") == shard for entry in entries):
+            findings.append(Finding(rel(CHECKS_REGISTRY), (
+                "no entry runs in shard `{0}`, so `ci-check-{0}` fails on an empty list."
+            ).format(shard)))
+    workflow = read(CHECK_WORKFLOW) if exists(CHECK_WORKFLOW) else ""
+    matrix = re.search(r"target:\s*\[([^\]]*)\]", workflow)
+    listed = {t.strip() for t in matrix.group(1).split(",")} if matrix else set()
+    if listed != set(CI_SHARD_RULES):
+        findings.append(Finding(rel(CHECK_WORKFLOW), (
+            "the `ci-check` job's matrix lists {0}, and the shards are {1}.\n"
+            "  A shard in no job gates nothing on a pull request."
+        ).format(sorted(listed) or "nothing", sorted(CI_SHARD_RULES))))
 
     # NEEDS is a section of this file in D80's sense, and the same rule applies one level
     # down: a vocabulary entry no check claims is a definition with no reader.
@@ -204,84 +172,14 @@ def _check_registry() -> Row:
             "NEEDS defines `{0}` and no check needs it. Delete it or use it (D80)."
         ).format(token)))
 
-    # ---- the OTHER gate: `make ci-check`, which every PR and push runs ------------------
-    if ci_recipe is None:
-        findings.append(Finding("Makefile", (
-            "the `ci-check:` recipe could not be read, and `.github/workflows/check.yml` "
-            "invokes it on every pull request and every push.\n"
-            "  A subset nothing reconciles is a gate that can lose a target in silence.")))
-    else:
-        by_target = {str(entry.get("target", "")): entry for entry in entries}
-        for name in ci_recipe:
-            if name not in recipe:
-                findings.append(Finding("Makefile", (
-                    "`make ci-check` runs `{0}` and `make check` does not.\n"
-                    "  ci-check is a SUBSET of check by the Makefile's own header. A target "
-                    "only CI runs is one a session cannot reproduce before pushing."
-                ).format(name)))
-        for name in recipe:
-            if name in ci_recipe:
-                continue
-            entry = by_target.get(name)
-            reason = str((entry or {}).get("why_off_ci") or "").strip()
-            if not reason:
-                findings.append(Finding(
-                    "{0} — {1}".format(rel(CHECKS_REGISTRY), name),
-                    "`make check` runs it and `make ci-check` does not, and the entry says "
-                    "nothing about why.\n"
-                    "  Either add it to the ci-check recipe, or give the entry a "
-                    "`why_off_ci` sentence. A target silently absent from the gate that "
-                    "runs on every PR has stopped gating anything, and the run is green "
-                    "because it never happened.",
-                ))
-        for name, entry in sorted(by_target.items()):
-            if str(entry.get("why_off_ci") or "").strip() and name in ci_recipe:
-                findings.append(Finding(
-                    "{0} — {1}".format(rel(CHECKS_REGISTRY), name),
-                    "carries `why_off_ci` and `make ci-check` runs it. The sentence explains "
-                    "an absence that is over; delete it, or the next reader believes CI does "
-                    "not run this.",
-                ))
-
-    # ---- CI runs `ci-check` as shards; their union is `ci-check`, target for target -----
-    shards = [_recipe_targets(rule) for rule in CI_SHARD_RULES]
-    if ci_recipe is not None:
-        for rule, body in zip(CI_SHARD_RULES, shards):
-            if body is None:
-                findings.append(Finding("Makefile", (
-                    "the `{0}:` recipe could not be read, and `.github/workflows/check.yml` "
-                    "runs it as one of the parallel shards of `ci-check`."
-                ).format(rule)))
-        if all(body is not None for body in shards):
-            ran = [name for body in shards for name in body]
-            for name in ci_recipe:
-                if name not in ran:
-                    findings.append(Finding("Makefile", (
-                        "`make ci-check` runs `{0}` and no CI shard does.\n"
-                        "  A target in no shard gates nothing on a pull request, and the "
-                        "`check` job is green because it never ran."
-                    ).format(name)))
-            for name in sorted(set(ran)):
-                if name not in ci_recipe:
-                    findings.append(Finding("Makefile", (
-                        "a CI shard runs `{0}` and `make ci-check` does not.\n"
-                        "  A session cannot reproduce it before pushing."
-                    ).format(name)))
-                elif ran.count(name) > 1:
-                    findings.append(Finding("Makefile", (
-                        "`{0}` is in more than one CI shard, or twice in one.\n"
-                        "  Each target runs once."
-                    ).format(name)))
-
     # ---- a slot in `make check` that cannot fail says so where the run is read ----------
-    makefile_text = read(ROOT / "Makefile") if exists(ROOT / "Makefile") else ""
     for entry in entries:
         name = str(entry.get("target", ""))
         if "gates" not in entry:
             continue
         body = _make_recipe(makefile_text, name)
         if body is None:
-            continue  # `check registry`'s membership legs above already name a missing rule
+            continue  # the Makefile-rule leg above already names a missing rule
         printed = any(_NOT_A_GATE_MARKER in line for line in body)
         if not entry["gates"] and not printed:
             findings.append(Finding(
@@ -301,9 +199,8 @@ def _check_registry() -> Row:
 
     ungated = sum(1 for entry in entries if entry.get("gates") is False)
     return Row("check registry", MECHANICAL, findings,
-               "{0} checks in recipe order, {1} in ci-check, {2} declared non-gating".format(
-                   len(recipe), len(ci_recipe or ()), ungated),
-               scanned=len(recipe))
+               "{0} checks in run order, {1} declared non-gating".format(len(entries), ungated),
+               scanned=len(entries))
 
 
 ## ---- commit-path writes, read from the AST rather than from `checks.py`'s own sentence ----
@@ -1550,12 +1447,9 @@ _INVOCATION_RE = re.compile(r"docs-audit\.py((?:\s+--[a-z][a-z-]*)*)")
 
 
 def check_check_registry(report: Report) -> None:
-    """`scripts/checks.py` against the `check:` recipe it describes, both directions.
+    """`scripts/checks.py` against the Makefile rules and CI jobs it drives.
 
-    Was merged with `check census` by M3 (test-audit-2026-09-27, L8, Q8 yes). `check
-    census`'s own half — every OTHER published list of what `make check` runs, reconciled
-    against that same recipe — is CUT (test-audit plan Q2, 2026-09-28): it repeated a
-    membership question this row already answers for the recipe's own declaration.
+    Membership and order are derived from the registry, so only the hand-kept legs remain.
     """
     result = _check_registry()
     report.add("check registry", result.severity, result.findings, result.summary,

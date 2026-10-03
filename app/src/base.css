@@ -20,6 +20,8 @@ html {
 body {
   min-height: 100%;
   background: var(--bn-bg);
+  background-image: var(--bn-page-backdrop);
+  background-attachment: fixed;
   color: var(--bn-ink);
   font-family: var(--bn-font-ui);
   font-size: var(--bn-fs-base);

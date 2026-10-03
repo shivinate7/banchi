@@ -154,6 +154,7 @@ from server import tcg_import  # noqa: E402
 # because Pillow may genuinely be absent, and there is no equivalent risk here.
 from pipeline import pricehistory  # noqa: E402
 from pipeline import productview  # noqa: E402
+from pipeline import realized  # noqa: E402
 from pipeline import holdings  # noqa: E402
 from pipeline import stockimages  # noqa: E402
 from store.pricearchive import RANGE_WIDTH_DAYS  # noqa: E402
@@ -6434,6 +6435,52 @@ def do_product_history(sku: str) -> dict:
             [{"from": r["from"]} for r in ranges]
         ),
         "never_sold": not reading.series,
+    }
+
+
+def do_product_realized(sku: str) -> dict:
+    """`GET /pipeline/products/<sku>/realized` — what this seller got for this SKU's product,
+    against the archived market on each sale date (DEBT70). READ-ONLY, no receipt.
+
+    The sales export is read IN PLACE from `PKMNSCAN_SALES_EXPORT`, a path the owner names.
+    With none set the answer is `configured: false` and nothing is read. Rows are matched on
+    the archive's own `product_id`; only dates and money leave this function, never a buyer
+    (`pipeline/realized.py:read_sales` drops them while parsing).
+    """
+    wanted = _wanted_sku(sku)
+    path = os.environ.get("PKMNSCAN_SALES_EXPORT", "").strip()
+    if not path:
+        return {"sku": wanted, "configured": False}
+    if not os.path.isfile(path):
+        raise PipelineRefusal(
+            HTTPStatus.NOT_FOUND,
+            "sales_export_missing",
+            "The sales export file chosen for this server is not there.",
+        )
+    try:
+        sales, left_out = realized.read_sales(path)
+    except (ValueError, OSError) as exc:
+        files.log_cause("sales export", exc)
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "sales_export_unreadable",
+            "The sales export chosen for this server could not be read. Check that it is an OrderWand sales export.",
+        ) from None
+    snapshot = Store().read()
+    buckets = snapshot.archive.for_sku(wanted)
+    product_id = buckets[0].product_id if buckets else None
+    mine = [s for s in sales if s.product_id == product_id] if product_id else []
+    condition = None
+    if mine:  # the card lookup is paid only when this product has a sale
+        with contextlib.suppress(productview.ProductNotFound):
+            condition = productview.row_for_sku(snapshot, wanted).get(tcgcsv.CONDITION_COLUMN)
+    return {
+        "sku": wanted,
+        "configured": True,
+        "file": os.path.basename(path),
+        "product_id": product_id,
+        "left_out": left_out,
+        **realized.compare(mine, buckets, condition),
     }
 
 

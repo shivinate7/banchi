@@ -1953,6 +1953,18 @@ class SqliteSource:
             values,
         )
 
+    def rewrite(self, key: str, state: str, payload: str, was: str) -> bool:
+        """Set one row's `state` column and raw payload text, only if its state is `was`.
+
+        For a row `parse` refuses, which `upsert` cannot write: it takes a parsed record's columns.
+        Returns whether a row changed. DEBT59's release and its undo are the only callers.
+        """
+        cur = self.conn.execute(
+            f"UPDATE {self.table} SET state = ?, payload = ? WHERE key = ? AND state = ?",
+            [state, payload, str(key), was],
+        )
+        return cur.rowcount == 1
+
     def delete(self, key: str) -> None:
         where, params = self._where({})
         where = (where + " AND " if where else " WHERE ") + "key = ?"
@@ -2093,7 +2105,7 @@ def history(conn: sqlite3.Connection) -> List[dict]:
 def events_named(conn: sqlite3.Connection, event: str) -> List[dict]:
     """Every event of one name, newest first. `history`'s narrower sibling (D134).
 
-    `#/graveyard` wants only `buried` lines, not a full-table load and filter in Python —
+    Inventory's Deleted boxes shelf wants only `buried` lines, not a full-table load and filter in Python —
     `history()` stays the reversal readers' full scan (`_state_before_sale` and its twin
     need the whole ordered sequence to find the line just before the one they are asked
     about), and this is the read a screen makes instead. The `event` column already exists

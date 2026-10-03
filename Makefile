@@ -396,31 +396,7 @@ orient:
 audit-history:
 	@python3 scripts/audit-history.py
 
-# THE CLAIM `check registry` READS ON THE MAKEFILE SIDE. CLAUDE.md's own Commands
-# section carries the same list; the row reconciles both against the recipe above,
-# both ways, so this line and CLAUDE.md's cannot drift from each other or from it.
-# make check        harness + docs-audit + revert-guard + port-agreement + set-hint-agreement +
-#                   readiness-agreement + screen-freshness + screen-freshness-selftest +
-#                   sigil-check + css-var-check + css-var-check-selftest +
-#                   hand-search-selftest + token-literal-check +
-#                   kit-adoption + ignore-check + lint + typecheck + audit-self-test +
-#                   mutate-anchors + githooks-selftest + revert-selftest +
-#                   decisions-selftest + debts-selftest + gates-selftest +
-#                   submission-selftest + cid-selftest + pricearchive-selftest +
-#                   archive-review-selftest + holdings-selftest + identity-checks-selftest +
-#                   price-postings-selftest + product-history-selftest +
-#                   sku-number-contradictions-selftest + readings-selftest + skus-selftest +
-#                   identity-store-selftest + identity-binding-selftest +
-#                   identity-readers-selftest + identity-cli-selftest + janitor-selftest +
-#                   reap-selftest + silent-write-selftest + guard-shell-selftest +
-#                   suite-lock-selftest + browser-scope-selftest + serve-selftest +
-#                   sync-selftest + verdict-selftest + js-breakpoints-selftest +
-#                   subagent-override-selftest + guard-scope-selftest +
-#                   token-literal-check-selftest + kit-adoption-selftest + port-slots-selftest +
-#                   match-selftest
-
-# Not prerequisites: make is free to reorder those, and with -j it runs them in parallel.
-# A check suite has to run in a known order and stop at the first failure.
+# `make check` is `make ci-check`: scripts/checks.py is the one list (see RUN_CHECKS below).
 # THE SELF-TEST RUNS HERE AND NOT IN THE GIT HOOK, and the split is D18's rather than a
 # preference: `--self-test` is the one mode of docs-audit.py that WRITES (into a temporary
 # directory it makes and destroys), and nothing that writes may run on the path that decides
@@ -430,73 +406,7 @@ audit-history:
 # It sat red and unnoticed until 2026-08-24 because nothing ran it at all: a stale fixture in
 # the `tested_by reach` case had stopped being false, and `make docs-audit` was green
 # throughout. A checker whose own self-test nobody runs is a checker nobody has watched fail.
-check:
-	@$(MAKE) --no-print-directory harness
-	@$(MAKE) --no-print-directory docs-audit
-	@$(MAKE) --no-print-directory revert-guard
-	@$(MAKE) --no-print-directory port-agreement
-	@$(MAKE) --no-print-directory set-hint-agreement
-	@$(MAKE) --no-print-directory readiness-agreement
-	@$(MAKE) --no-print-directory screen-freshness
-	@$(MAKE) --no-print-directory screen-freshness-selftest
-	@$(MAKE) --no-print-directory sigil-check
-	@$(MAKE) --no-print-directory css-var-check
-	@$(MAKE) --no-print-directory css-var-check-selftest
-	@$(MAKE) --no-print-directory hand-search-selftest
-	@$(MAKE) --no-print-directory token-literal-check
-	@$(MAKE) --no-print-directory kit-adoption
-	@$(MAKE) --no-print-directory ignore-check
-	@$(MAKE) --no-print-directory lint
-	@$(MAKE) --no-print-directory typecheck
-	@$(MAKE) --no-print-directory audit-self-test
-	@$(MAKE) --no-print-directory mutate-anchors
-	@$(MAKE) --no-print-directory githooks-selftest
-	@$(MAKE) --no-print-directory revert-selftest
-	@$(MAKE) --no-print-directory decisions-selftest
-	@$(MAKE) --no-print-directory debts-selftest
-	@$(MAKE) --no-print-directory gates-selftest
-	@$(MAKE) --no-print-directory submission-selftest
-	@$(MAKE) --no-print-directory cid-selftest
-	@$(MAKE) --no-print-directory pricearchive-selftest
-	@$(MAKE) --no-print-directory archive-review-selftest
-	@$(MAKE) --no-print-directory holdings-selftest
-	@$(MAKE) --no-print-directory identity-checks-selftest
-	@$(MAKE) --no-print-directory price-postings-selftest
-	@$(MAKE) --no-print-directory product-history-selftest
-	@$(MAKE) --no-print-directory sku-number-contradictions-selftest
-	@$(MAKE) --no-print-directory readings-selftest
-	@$(MAKE) --no-print-directory skus-selftest
-	@$(MAKE) --no-print-directory identity-store-selftest
-	@$(MAKE) --no-print-directory identity-binding-selftest
-	@$(MAKE) --no-print-directory identity-readers-selftest
-	@$(MAKE) --no-print-directory identity-cli-selftest
-	@$(MAKE) --no-print-directory janitor-selftest
-	@$(MAKE) --no-print-directory reap-selftest
-	@$(MAKE) --no-print-directory silent-write-selftest
-	@$(MAKE) --no-print-directory guard-shell-selftest
-	@$(MAKE) --no-print-directory suite-lock-selftest
-	@$(MAKE) --no-print-directory browser-scope-selftest
-	@$(MAKE) --no-print-directory serve-selftest
-	@$(MAKE) --no-print-directory sync-selftest
-	@$(MAKE) --no-print-directory verdict-selftest
-	@$(MAKE) --no-print-directory js-breakpoints-selftest
-	@$(MAKE) --no-print-directory subagent-override-selftest
-	@$(MAKE) --no-print-directory guard-scope-selftest
-	@$(MAKE) --no-print-directory token-literal-check-selftest
-	@$(MAKE) --no-print-directory kit-adoption-selftest
-	@$(MAKE) --no-print-directory port-slots-selftest
-	@$(MAKE) --no-print-directory match-selftest
-	@$(MAKE) --no-print-directory serve-scope-selftest
-	@$(MAKE) --no-print-directory demo-record-selftest
-	@$(MAKE) --no-print-directory demo-mirror-daily-selftest
-	@$(MAKE) --no-print-directory demo-record-resume-selftest
-	@$(MAKE) --no-print-directory demo-record-walkplan-selftest
-	@$(MAKE) --no-print-directory pricehistory-cache-selftest
-	@$(MAKE) --no-print-directory pricehistory-offline-selftest
-	@$(MAKE) --no-print-directory repair-born-game-selftest
-	@$(MAKE) --no-print-directory stockimages-cache-selftest
-	@$(MAKE) --no-print-directory sku-name-contradictions-selftest
-	@$(MAKE) --no-print-directory pipeline-trends-archive-ids-selftest
+check: ci-check
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
 # This exists because nothing ever re-ran the gate: `make check` failed in every fresh checkout
@@ -517,154 +427,30 @@ check:
 # Everything below answers from the tree alone, which is exactly what a re-checker can own.
 # IT RUNS THE SAME TARGETS AS `check`, NOT FEWER. Kept adjacent to it deliberately, so the two
 # are read together; `make explain` describes the suite and this list adds no rows to it.
-ci-check:
-	@$(MAKE) --no-print-directory harness
-	@$(MAKE) --no-print-directory docs-audit
-	@$(MAKE) --no-print-directory audit-self-test
-	@$(MAKE) --no-print-directory mutate-anchors
-	@$(MAKE) --no-print-directory githooks-selftest
-	@$(MAKE) --no-print-directory revert-selftest
-	@$(MAKE) --no-print-directory decisions-selftest
-	@$(MAKE) --no-print-directory debts-selftest
-	@$(MAKE) --no-print-directory gates-selftest
-	@$(MAKE) --no-print-directory submission-selftest
-	@$(MAKE) --no-print-directory cid-selftest
-	@$(MAKE) --no-print-directory pricearchive-selftest
-	@$(MAKE) --no-print-directory archive-review-selftest
-	@$(MAKE) --no-print-directory holdings-selftest
-	@$(MAKE) --no-print-directory identity-checks-selftest
-	@$(MAKE) --no-print-directory price-postings-selftest
-	@$(MAKE) --no-print-directory product-history-selftest
-	@$(MAKE) --no-print-directory sku-number-contradictions-selftest
-	@$(MAKE) --no-print-directory readings-selftest
-	@$(MAKE) --no-print-directory skus-selftest
-	@$(MAKE) --no-print-directory identity-store-selftest
-	@$(MAKE) --no-print-directory identity-binding-selftest
-	@$(MAKE) --no-print-directory identity-readers-selftest
-	@$(MAKE) --no-print-directory identity-cli-selftest
-	@$(MAKE) --no-print-directory revert-guard
-	@$(MAKE) --no-print-directory janitor-selftest
-	@$(MAKE) --no-print-directory reap-selftest
-	@$(MAKE) --no-print-directory silent-write-selftest
-	@$(MAKE) --no-print-directory guard-shell-selftest
-	@$(MAKE) --no-print-directory suite-lock-selftest
-	@$(MAKE) --no-print-directory browser-scope-selftest
-	@$(MAKE) --no-print-directory serve-selftest
-	@$(MAKE) --no-print-directory sync-selftest
-	@$(MAKE) --no-print-directory verdict-selftest
-	@$(MAKE) --no-print-directory js-breakpoints-selftest
-	@$(MAKE) --no-print-directory subagent-override-selftest
-	@$(MAKE) --no-print-directory guard-scope-selftest
-	@$(MAKE) --no-print-directory token-literal-check-selftest
-	@$(MAKE) --no-print-directory kit-adoption-selftest
-	@$(MAKE) --no-print-directory port-slots-selftest
-	@$(MAKE) --no-print-directory match-selftest
-	@$(MAKE) --no-print-directory serve-scope-selftest
-	@$(MAKE) --no-print-directory demo-record-selftest
-	@$(MAKE) --no-print-directory demo-mirror-daily-selftest
-	@$(MAKE) --no-print-directory demo-record-resume-selftest
-	@$(MAKE) --no-print-directory demo-record-walkplan-selftest
-	@$(MAKE) --no-print-directory pricehistory-cache-selftest
-	@$(MAKE) --no-print-directory pricehistory-offline-selftest
-	@$(MAKE) --no-print-directory repair-born-game-selftest
-	@$(MAKE) --no-print-directory stockimages-cache-selftest
-	@$(MAKE) --no-print-directory sku-name-contradictions-selftest
-	@$(MAKE) --no-print-directory pipeline-trends-archive-ids-selftest
-	@$(MAKE) --no-print-directory port-agreement
-	@$(MAKE) --no-print-directory set-hint-agreement
-	@$(MAKE) --no-print-directory readiness-agreement
-	@$(MAKE) --no-print-directory screen-freshness
-	@$(MAKE) --no-print-directory screen-freshness-selftest
-	@$(MAKE) --no-print-directory sigil-check
-	@$(MAKE) --no-print-directory css-var-check
-	@$(MAKE) --no-print-directory css-var-check-selftest
-	@$(MAKE) --no-print-directory hand-search-selftest
-	@$(MAKE) --no-print-directory token-literal-check
-	@$(MAKE) --no-print-directory kit-adoption
-	@$(MAKE) --no-print-directory ignore-check
-	@$(MAKE) --no-print-directory lint
-	@$(MAKE) --no-print-directory typecheck
+# Every recipe below runs registry targets as ONE `make` call, never as prerequisites: make may
+# reorder prerequisites and runs them in parallel under -j, and a check suite has to run in a
+# known order and stop at the first failure. An empty or failed registry read stops the recipe.
+# `scripts/checks.py` is the one list (`--targets [shard]`); adding a check is one entry there.
+RUN_CHECKS = t="$$(python3 scripts/checks.py --targets $(1))" && $(MAKE) --no-print-directory $$t
 
-# CI RUNS `ci-check` AS THREE PARALLEL SHARDS (owner's word, 2026-09-28; D161, amended): the
-# serial job took 600s on run 36509895299, and the shards together run exactly `ci-check`'s
-# recipe. Each shard keeps D161's order, product first: `ci-check-product` is the harness and
-# the checks of the product; the two guards shards are the guards' own self-tests, balanced by
-# the times that run measured. `ci-check` stays the one command a session runs before pushing.
-# `make docs-audit`'s `check registry` row fails when the shards' union is not `ci-check`'s
-# recipe, target for target, with none missing and none run twice.
+ci-check:
+	@$(call RUN_CHECKS)
+
+# CI RUNS `ci-check` AS FOUR PARALLEL SHARDS (D161, amended): the serial job took 600s on run
+# 36509895299. Each entry's `shard` field in scripts/checks.py names its shard, product first,
+# the guards' self-tests last, balanced by the times that run measured. `revert-guard` has no
+# shard: the standalone required `revert-guard` job runs it, and `ci-check` runs it locally.
 ci-check-product:
-	@$(MAKE) --no-print-directory harness
+	@$(call RUN_CHECKS,product)
 
 ci-check-static:
-	@$(MAKE) --no-print-directory docs-audit
-	@$(MAKE) --no-print-directory port-agreement
-	@$(MAKE) --no-print-directory set-hint-agreement
-	@$(MAKE) --no-print-directory readiness-agreement
-	@$(MAKE) --no-print-directory screen-freshness
-	@$(MAKE) --no-print-directory sigil-check
-	@$(MAKE) --no-print-directory css-var-check
-	@$(MAKE) --no-print-directory token-literal-check
-	@$(MAKE) --no-print-directory kit-adoption
-	@$(MAKE) --no-print-directory ignore-check
-	@$(MAKE) --no-print-directory lint
-	@$(MAKE) --no-print-directory typecheck
+	@$(call RUN_CHECKS,static)
 
 ci-check-guards-1:
-	@$(MAKE) --no-print-directory audit-self-test
-	@$(MAKE) --no-print-directory mutate-anchors
-	@$(MAKE) --no-print-directory githooks-selftest
-	@$(MAKE) --no-print-directory revert-selftest
-	@$(MAKE) --no-print-directory decisions-selftest
-	@$(MAKE) --no-print-directory debts-selftest
-	@$(MAKE) --no-print-directory gates-selftest
-	@$(MAKE) --no-print-directory submission-selftest
-	@$(MAKE) --no-print-directory cid-selftest
-	@$(MAKE) --no-print-directory pricearchive-selftest
-	@$(MAKE) --no-print-directory archive-review-selftest
-	@$(MAKE) --no-print-directory holdings-selftest
-	@$(MAKE) --no-print-directory identity-checks-selftest
-	@$(MAKE) --no-print-directory price-postings-selftest
-	@$(MAKE) --no-print-directory product-history-selftest
-	@$(MAKE) --no-print-directory sku-number-contradictions-selftest
-	@$(MAKE) --no-print-directory readings-selftest
-	@$(MAKE) --no-print-directory skus-selftest
-	@$(MAKE) --no-print-directory identity-store-selftest
-	@$(MAKE) --no-print-directory identity-binding-selftest
-	@$(MAKE) --no-print-directory identity-readers-selftest
-	@$(MAKE) --no-print-directory identity-cli-selftest
-	@$(MAKE) --no-print-directory revert-guard
-	@$(MAKE) --no-print-directory janitor-selftest
-	@$(MAKE) --no-print-directory reap-selftest
-	@$(MAKE) --no-print-directory silent-write-selftest
-	@$(MAKE) --no-print-directory guard-shell-selftest
-	@$(MAKE) --no-print-directory suite-lock-selftest
-	@$(MAKE) --no-print-directory browser-scope-selftest
+	@$(call RUN_CHECKS,guards-1)
 
 ci-check-guards-2:
-	@$(MAKE) --no-print-directory serve-selftest
-	@$(MAKE) --no-print-directory sync-selftest
-	@$(MAKE) --no-print-directory verdict-selftest
-	@$(MAKE) --no-print-directory js-breakpoints-selftest
-	@$(MAKE) --no-print-directory subagent-override-selftest
-	@$(MAKE) --no-print-directory guard-scope-selftest
-	@$(MAKE) --no-print-directory token-literal-check-selftest
-	@$(MAKE) --no-print-directory kit-adoption-selftest
-	@$(MAKE) --no-print-directory port-slots-selftest
-	@$(MAKE) --no-print-directory match-selftest
-	@$(MAKE) --no-print-directory serve-scope-selftest
-	@$(MAKE) --no-print-directory demo-record-selftest
-	@$(MAKE) --no-print-directory demo-mirror-daily-selftest
-	@$(MAKE) --no-print-directory demo-record-resume-selftest
-	@$(MAKE) --no-print-directory demo-record-walkplan-selftest
-	@$(MAKE) --no-print-directory pricehistory-cache-selftest
-	@$(MAKE) --no-print-directory pricehistory-offline-selftest
-	@$(MAKE) --no-print-directory repair-born-game-selftest
-	@$(MAKE) --no-print-directory stockimages-cache-selftest
-	@$(MAKE) --no-print-directory sku-name-contradictions-selftest
-	@$(MAKE) --no-print-directory pipeline-trends-archive-ids-selftest
-	@$(MAKE) --no-print-directory screen-freshness-selftest
-	@$(MAKE) --no-print-directory css-var-check-selftest
-	@$(MAKE) --no-print-directory hand-search-selftest
+	@$(call RUN_CHECKS,guards-2)
 
 # The other half of D47: every path a worktree provisions is ignored whatever kind of thing is
 # at it. In `check` and never in the git hook — D18 forbids a commit gate that depends on local

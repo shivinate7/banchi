@@ -270,7 +270,7 @@ class Store:
 
     def buried(self):
         """Every `buried` event, newest first (D134). `history()`'s narrower sibling, for
-        `#/graveyard`'s read: a whole box's departed records, without loading every other
+        Inventory's Deleted boxes shelf's read: a whole box's departed records, without loading every other
         event this store has ever written to filter them in Python."""
         conn = db.connect(self.directory)
         try:

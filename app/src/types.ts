@@ -427,7 +427,7 @@ export type InventoryCard = {
   /** THE OLD POSITION A TRANSPLANT CARRIES (`store/master.py:Card.moved_from`), ALREADY ON
    *  THIS WIRE AND NEVER TYPED HERE UNTIL THE UX REVIEW'S GRAVEYARD RULING. Set only on the
    *  card a move CREATED, not on the tombstone it left behind — `"box/index"`, the same key
-   *  shape `#/graveyard`'s `moved_to` carries. `null` for a card captured where it stands.
+   *  shape `moved_to` carries. `null` for a card captured where it stands.
    *  `Inventory.tsx`/`BoxBrowse.tsx` read it to say where a card was moved in from; nothing
    *  writes it back. */
   moved_from: string | null
@@ -949,7 +949,7 @@ export type MoveCardsResult = {
  *  `buried` is D134's amendment to ruling 3 (2026-09-11): a sold, retired or moved record no
  *  longer blocks this delete — it is buried, and `cards` counts it same as before while
  *  `buried` says how many of those `cards` left through a departure door rather than as
- *  ordinary on-hand junk. `#/graveyard` is where a buried record is read afterward. */
+ *  ordinary on-hand junk. Inventory's Deleted boxes shelf is where a buried record is read afterward. */
 export type BoxDeleteResult = {
   deleted_box: number
   cards: number
@@ -2254,6 +2254,36 @@ export type ProductHistoryPayload = {
   history_begins: string | null
   never_sold: boolean
 }
+
+/** One sale against the archived market on its date (`GET /pipeline/products/<sku>/realized`,
+ *  DEBT70). Dates and money only: the server drops every buyer field while parsing. */
+export type RealizedRow = {
+  day: string
+  quantity: number
+  price: string
+  market: string | null
+  basis: string | null
+  refunded: boolean
+  condition: string
+  finish: string
+}
+
+export type RealizedPayload =
+  | { sku: string; configured: false }
+  | {
+      sku: string
+      configured: true
+      file: string
+      product_id: number | null
+      other_conditions: number
+      left_out: { not_a_sale: number; not_usd: number; unreadable: number }
+      rows: RealizedRow[]
+      units: number
+      refunded: number
+      no_market: number
+      realized_avg: string | null
+      market_avg: string | null
+    }
 
 /** ONE RANGE'S NAMES — `GET /pipeline/holdings-value?range=<range>`, D236. UNSOLD STOCK, never
  *  sold-then-against-now (that is D225's `SoldPricesLookup`, a different figure this must
@@ -4616,7 +4646,12 @@ export type SendsStatus = {
   now: string
   /** Live send records the server could not read. Its list drew the rest. */
   unreadable_claims: number
+  /** Each of those records, by key, for the release control. */
+  unreadable: UnreadableClaim[]
 }
+
+/** A live send record the server cannot read. Only its indexed facts survive. */
+export type UnreadableClaim = { key: string; kind: string; started_at: string }
 
 export type SendAnswer = { send: SendSummary; console: string }
 

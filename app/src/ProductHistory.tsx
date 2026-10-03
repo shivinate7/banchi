@@ -47,8 +47,8 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { describeFailure, getOrders, getProductHistory, search, type Failure, failureTone } from './server'
-import type { OrderLineWire, OrderRow, ProductHistoryPayload, ProductHistoryRange, SearchGroup } from './types'
+import { describeFailure, getOrders, getProductHistory, getProductRealized, search, type Failure, failureTone } from './server'
+import type { OrderLineWire, OrderRow, ProductHistoryPayload, ProductHistoryRange, RealizedPayload, SearchGroup } from './types'
 import {
   Chip, EmptyState, IconButton, Loading, Money, Notice, Page, Pill, Sep, Sheet,
   registerSheet, sheetHref, type SheetHostProps, type SheetProps,
@@ -480,7 +480,98 @@ export function ProductHistoryView({ sku, onSwitchSku }: { readonly sku: string;
           </table>
         </section>
       ) : null}
+
+      <RealizedSection sku={payload.sku} />
     </div>
+  )
+}
+
+/** What this seller got against the market on each sale date (DEBT70). Its own fetch, so a
+ *  missing export never blocks the chart. Read-only. */
+function RealizedSection({ sku }: { readonly sku: string }) {
+  const [payload, setPayload] = useState<RealizedPayload | null>(null)
+  const [failure, setFailure] = useState<Failure | null>(null)
+  useEffect(() => {
+    let alive = true
+    setPayload(null)
+    setFailure(null)
+    getProductRealized(sku)
+      .then((p) => alive && setPayload(p))
+      .catch((err) => alive && setFailure(describeFailure(err)))
+    return () => {
+      alive = false
+    }
+  }, [sku])
+
+  if (failure !== null) return <Notice tone={failureTone(failure)} code={failure.code}>{failure.message}</Notice>
+  if (payload === null) return <Loading shape="rows" rows={1} label="Reading your sales" />
+  if (!payload.configured) {
+    return (
+      <section className="producthistory-realized">
+        <h3>What you got</h3>
+        <p className="producthistory-note">Start Banchi with an OrderWand sales export to compare your sales with the market.</p>
+      </section>
+    )
+  }
+  const num = (v: string | null) => (v === null ? null : Number(v))
+  const gap = payload.realized_avg !== null && payload.market_avg !== null ? Number(payload.realized_avg) - Number(payload.market_avg) : null
+  const lo = payload.left_out
+  const leftOut = [
+    lo.not_a_sale > 0 ? `${lo.not_a_sale} ${lo.not_a_sale === 1 ? 'purchase' : 'purchases'}` : '',
+    lo.not_usd > 0 ? `${lo.not_usd} in other currencies` : '',
+    lo.unreadable > 0 ? `${lo.unreadable} unreadable` : '',
+  ].filter(Boolean)
+  return (
+    <section className="producthistory-realized">
+      <h3>What you got</h3>
+      {payload.rows.length === 0 ? (
+        <p className="producthistory-note">
+          No sale of this exact condition and finish is in {payload.file}.
+          {payload.other_conditions > 0 ? ` ${payload.other_conditions} ${payload.other_conditions === 1 ? 'sale' : 'sales'} of other conditions ${payload.other_conditions === 1 ? 'is' : 'are'} left out.` : ''}
+        </p>
+      ) : (
+        <>
+          <p className="producthistory-note">
+            Your sale price against the market on the day it sold, for this condition and finish only. {payload.units}{' '}
+            {payload.units === 1 ? 'copy' : 'copies'} compared
+            {payload.refunded > 0 ? `, ${payload.refunded} refunded left out` : ''}
+            {payload.no_market > 0 ? `, ${payload.no_market} with no market figure for that date left out` : ''}.
+            {payload.other_conditions > 0 ? ` ${payload.other_conditions} ${payload.other_conditions === 1 ? 'sale' : 'sales'} of other conditions ${payload.other_conditions === 1 ? 'is' : 'are'} not shown.` : ''}
+          </p>
+          <p className="producthistory-note">
+            The market is the saved average for the shortest period that holds the date: a day, 3 days or a week. Dates are the day the export gives.
+          </p>
+          <dl className="producthistory-realized-totals">
+            <div><dt>You got, per copy</dt><dd><Money value={num(payload.realized_avg)} /></dd></div>
+            <div><dt>Market, per copy</dt><dd><Money value={num(payload.market_avg)} /></dd></div>
+            <div><dt>Difference</dt><dd><Money value={gap} signed /></dd></div>
+          </dl>
+          <table className="bn-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th className="num">Copies</th>
+                <th className="num">You got</th>
+                <th className="num">Market that day</th>
+                <th>Average of</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payload.rows.map((r, i) => (
+                <tr key={i}>
+                  <td>{r.day}{r.refunded ? ' (refunded)' : ''}</td>
+                  <td className="num">{r.quantity}</td>
+                  <td className="num"><Money value={Number(r.price)} /></td>
+                  <td className="num"><Money value={num(r.market)} /></td>
+                  <td>{r.basis ?? ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {leftOut.length > 0 ? <p className="producthistory-note">Left out of the file: {leftOut.join(', ')}.</p> : null}
+        </>
+      )}
+    </section>
   )
 }
 

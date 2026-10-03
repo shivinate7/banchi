@@ -58,6 +58,7 @@ import type {
   LiveCheckAnswer,
   SendAnswer,
   SendsStatus,
+  UnreadableClaim,
   SendSummary,
   MarkdownPush,
   LiveExportFetched,
@@ -67,6 +68,7 @@ import type {
   RunDetail,
   PriceHistoryPayload,
   ProductHistoryPayload,
+  RealizedPayload,
   PricingPayload,
   PricingCorpus,
   PricingClearable,
@@ -2234,7 +2236,8 @@ export async function deleteBox(box: number): Promise<BoxDeleteResult> {
 }
 
 /**
- * Every departed card the store still knows about, newest departure first (D134).
+ * The sold and retired records the store keeps, newest departure first (D134). `buriedOnly`
+ * asks for the records of deleted boxes alone, which is all the Deleted boxes shelf reads.
  *
  * TWO SOURCES, ONE SHAPE. A sold, retired or moved record can be standing in a box nobody
  * has deleted — the same records `#/inventory` already draws as departed — or it can be the
@@ -2242,10 +2245,10 @@ export async function deleteBox(box: number): Promise<BoxDeleteResult> {
  * `DepartedCard.buried` is which one a row came from; nothing else about the shape differs,
  * and a record is never counted from both sources at once.
  *
- * Free and read-only. `#/graveyard` is the one screen that calls this.
+ * Free and read-only.
  */
-export async function getGraveyard(): Promise<GraveyardPayload> {
-  return (await request('/graveyard')) as GraveyardPayload
+export async function getGraveyard(options: { buriedOnly?: boolean } = {}): Promise<GraveyardPayload> {
+  return (await request(options.buriedOnly === true ? '/graveyard?buried=1' : '/graveyard')) as GraveyardPayload
 }
 
 /**
@@ -2768,6 +2771,23 @@ export async function takeBackSend(stamp: string): Promise<{ send: SendSummary; 
   })) as { send: SendSummary; moved: number }
 }
 
+/** Free a live send record the server cannot read, by key (DEBT59). `restoreUnreadableClaim` undoes it. */
+export async function releaseUnreadableClaim(key: string): Promise<{ released: UnreadableClaim; status: SendsStatus }> {
+  return (await request(`/pipeline/sends/unreadable/${encodeURIComponent(key)}/release`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as { released: UnreadableClaim; status: SendsStatus }
+}
+
+export async function restoreUnreadableClaim(key: string): Promise<{ restored: string; status: SendsStatus }> {
+  return (await request(`/pipeline/sends/unreadable/${encodeURIComponent(key)}/restore`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })) as { restored: string; status: SendsStatus }
+}
+
 /** The owner has read a taken-back receipt's warning, so the card stops drawing it. */
 export async function dismissSendWarning(stamp: string): Promise<{ send: SendSummary }> {
   return (await request(`/pipeline/sends/${encodeURIComponent(stamp)}/dismiss`, {
@@ -3227,6 +3247,15 @@ export async function getProductHistory(sku: string): Promise<ProductHistoryPayl
     `/pipeline/products/${encodeURIComponent(sku)}/history`,
     NO_CACHE,
   )) as ProductHistoryPayload
+}
+
+/** What this seller got for the product, against the archived market on each sale date
+ *  (DEBT70). Read-only. `configured: false` when the server was given no sales export. */
+export async function getProductRealized(sku: string): Promise<RealizedPayload> {
+  return (await request(
+    `/pipeline/products/${encodeURIComponent(sku)}/realized`,
+    NO_CACHE,
+  )) as RealizedPayload
 }
 
 /**

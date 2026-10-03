@@ -584,9 +584,7 @@ def is_identifier_entry(entry: str) -> bool:
 def check_allowlist(report: Report, allowed: Dict[str, str]) -> None:
     """Self-cleaning: an entry that has come true is stale and must go.
 
-    Same instinct as scripts/stop-gate.sh arming on the absence of NOT_IMPLEMENTED
-    markers rather than on a toggle someone has to remember to flip. An allowlist that
-    only ever grows becomes a list of things nobody has looked at since.
+    An allowlist that only ever grows becomes a list of things nobody has looked at since.
 
     Each kind goes stale by the same signal the check it suppresses uses. Anything looser
     misfires: a blanket "appears anywhere in the code" reads a comment explaining why T7

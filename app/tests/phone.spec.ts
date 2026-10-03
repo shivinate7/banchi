@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
-import { POPULATED_ROUTE_SEEDS, seedPopulatedGraveyard } from './routeFixtures'
+import { POPULATED_ROUTE_SEEDS } from './routeFixtures'
 import { routesFromNav } from './routes'
 import { PHONE_OFF_REASON, PHONE_SPECS_ON, setViewport } from './phoneSwitch'
 
@@ -773,7 +773,7 @@ test('every drawer route is reachable by tap, at two phone heights', async ({ pa
 /* THE DRAWER HAS NO FIXED FOOT (D266; UX-037).
  * Cards to pull, the theme and the server line are the last rows of the one scrolling list, so
  * nothing covers the end of it. And on this file's own phone every SCREEN in the drawer shows
- * without a scroll: before, Graveyard and Codes sat under the foot with a 32px fade as the only
+ * without a scroll: before, Sales and Codes sat under the foot with a 32px fade as the only
  * cue. It navigates nowhere. */
 test('the drawer has no fixed foot, and every screen in it shows without a scroll', async ({ page }) => {
   await setViewport(page, PHONE)
@@ -797,50 +797,3 @@ test('the drawer has no fixed foot, and every screen in it shows without a scrol
   await expect(nav.getByRole('button', { name: 'Theme' })).toBeInViewport()
 })
 
-/* THE SWEEP ABOVE COULD NOT HAVE CAUGHT THIS. It reads `#/graveyard` off the shared empty
-   store, where `rows.length === 0` renders "Nothing has left yet" and never the filter row at
-   all — so a defect in that row was invisible to every route-level sweep in this file. Five
-   filter options (All/Sold/Retired/Moved/Buried, each with a count) sized to their own content
-   inside a flex column once bled the whole PAGE 72px wider than the viewport at 390px, with
-   "Buried" clipped at the very edge and no cue a fifth filter existed. D134's amendment
-   (2026-09-26) dropped Moved and Buried to three tabs (All/Sold/Retired) — Moved is not a
-   departure, and Buried was a fact about the box rather than a way a card left. THREE TABS FIT
-   AT 390 WITHOUT OVERFLOWING AT ALL (measured, not assumed): the owner's call, once the CI run
-   this branch shipped found the row no longer overflows, was to stop forcing that scenario —
-   what this case must hold is that the row NEVER bleeds the page, whether it happens to fit or
-   to scroll. This still seeds a real, populated graveyard the way `copy-budget.spec.ts` does,
-   to put the row on screen at all — a future filter set wider than three tabs is exactly what
-   this case is still here to catch. */
-test('graveyard filter row never bleeds the page at 390, whether it fits or scrolls', async ({ page }) => {
-  await setViewport(page, PHONE)
-  await seedPopulatedGraveyard(page)
-  /* A template literal, not a quoted literal: this is one route this case is about, not a
-     roster — `scripts/docs-audit.py`'s `route rosters` row counts quoted `'#/...'` hashes
-     because THAT shape is how a hand-typed roster shows up, and three or more of them without
-     a `ROUTE-ROSTER` marker means "derive this list, or say which roster it pins." One route
-     named once is neither. */
-  await page.goto(`#/graveyard`)
-  await page.waitForTimeout(400)
-
-  const seg = page.locator('.graveyard-toolbar .bn-seg')
-  await expect(seg).toBeVisible()
-
-  const over = await overflow(page)
-  expect(
-    over,
-    `#/graveyard scrolls the whole page sideways by ${over}px at 390 with a populated filter row`,
-  ).toBeLessThanOrEqual(0)
-
-  const [scrollW, clientW, overflowX] = await seg.evaluate((el) => [
-    el.scrollWidth,
-    el.clientWidth,
-    getComputedStyle(el).overflowX,
-  ])
-  /* NEVER A FORCED OVERFLOW: the row may fit its container outright (three tabs at 390,
-     measured) or overflow it — either is fine. What is never fine is the row pushing the
-     PAGE sideways instead of absorbing its own overflow, so a row that DOES overflow must be
-     a real scroller, never a rendering fault. */
-  if (scrollW > clientW) {
-    expect(overflowX, 'the filter row overflows but is not a scroll region').toBe('auto')
-  }
-})

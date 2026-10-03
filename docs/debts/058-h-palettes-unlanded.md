@@ -5,3 +5,5 @@ The Lane H record (eight dark palettes, 32 JPEG screenshots in a `design-refs` f
 **Outcome at risk.** The record is lost if the branch is deleted.
 
 **Closes when.** The owner lands it: cherry-pick 029c7dfe and e7c8358a onto main, use the American spelling in the notes file, commit through the hook, run `make ci-check`, and delete this entry in the same change.
+
+Two of the eight palettes, Abyssal Bloom and Carnival Midway, have landed as themes in `app/src/tokens.css` (`THEMES` in `app/src/deviceMemory.ts`). Their CSS files in the record are now redundant; the other six, the screenshots and the method are still only on the branch.

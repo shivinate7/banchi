@@ -765,6 +765,12 @@ async function open(
   const record = (method: string, url: string, body: unknown) =>
     wire.push({ method, path: new URL(url).pathname, body })
 
+  /* The Deleted boxes shelf reads the burial lines. This fixture has no deleted box, so none: the
+     shelf has its own cases in `deleted-boxes.spec.ts`. */
+  await page.route(/\/graveyard(\?.*)?$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: [] }) }),
+  )
+
   /* The writes first: the read regexes below are looser and a `/inventory` matcher would
      swallow `/inventory/2` if it were registered ahead of it. */
 
@@ -1228,9 +1234,12 @@ sealEveryTest()
  * NOT `open()`: that helper's own postcondition waits for `.browse-sectfold`, which a
  * zero-box store never renders — waiting for it here would just re-time-out inside the
  * helper instead of inside the assertion. This registers the same handful of GET routes the
- * screen fires with no shelf resolved — `/boxes`, `/queues`, `/orders` — and nothing else,
+ * screen fires with no shelf resolved — `/boxes`, `/queues`, `/orders`, `/graveyard` — and nothing else,
  * so an unstubbed read the fix accidentally starts would fail loudly through `sealCapture`. */
 test('a zero-box store renders "No boxes yet" instead of loading forever', async ({ page }) => {
+  await page.route(/\/graveyard(\?.*)?$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: [] }) }),
+  )
   await page.route(/\/boxes$/, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ boxes: [] }) }),
   )
@@ -4170,12 +4179,12 @@ test('a listing hold is named on the delete panel rather than discovered by pres
   await page.getByRole('button', { name: /^Delete$/ }).click()
 
   /* D134: a listed copy is the only remaining ground for `box_not_empty_of_commitments` — a
-     sold or retired record no longer blocks and is named as something that will be BURIED
-     instead, never as a reason the box is refused. This fixture's sold (1) and retired (1)
-     read as "2 other departed records". */
+     sold or retired record no longer blocks and is named as something that will stay on the
+     Deleted boxes shelf instead, never as a reason the box is refused. This fixture's sold (1)
+     and retired (1) read as "2 sold or retired records". */
   await expect(page.locator('.boxops-confirm')).toContainText('3 cards listed')
-  await expect(page.locator('.boxops-confirm')).toContainText('2 other departed records')
-  await expect(page.locator('.boxops-confirm')).toContainText('will be buried')
+  await expect(page.locator('.boxops-confirm')).toContainText('2 sold or retired records')
+  await expect(page.locator('.boxops-confirm')).toContainText('will stay on the Deleted boxes shelf')
 })
 
 test('the control that releases does not exist until the free plan has answered', async ({

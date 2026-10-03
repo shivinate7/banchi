@@ -142,6 +142,7 @@ test.describe('#/product — the per-product view', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.route(/\/pipeline\/products\/[^/]+\/history$/, (route) => json(route, historyPayload()))
+    await page.route(/\/pipeline\/products\/[^/]+\/realized$/, (route) => json(route, { sku: '0', configured: false }))
     await page.route(/\/orders$/, (route) => json(route, ordersPayload()))
     // THE PRINTINGS SWITCH ASKS `/search` ON ITS OWN (`usePrintings`), as soon as the
     // product's name loads — sealCapture aborts anything a test does not stub. One group
