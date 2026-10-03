@@ -118,7 +118,7 @@ there, each top-level directory a `ROOT / "x"` chain names, and the TS import cl
 `app/src/*.ts` such a chain names (`standing.ts`, `storeHistory.ts`). the `vendor/` tree, `requirements.txt`
 and `app/package-lock.json` are declared beside that, because no harness source spells them.
 The Makefile counts only through the `harness` recipe. A main push and the nightly run set
-`PKMNSCAN_GUARD_SCOPE=off` in `check.yml`, so they never skip. A comment-only edit never skips
+`PKMNSCAN_GUARD_SCOPE=all` in `check.yml`, so they never skip. A comment-only edit never skips
 the harness: it reads docstrings as text.
 Second, a non-spec file under `app/tests/` selects the specs whose import closure holds it
 (`browser-scope.py:build_reverse_map`). One no spec imports still selects every spec.

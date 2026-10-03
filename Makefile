@@ -307,14 +307,14 @@ explain:
 # end (D248) — a session runs this itself before saying something works.
 # PATH GATED (owner's word, D247 amended): `scripts/guard-scope.py` derives what the harness reads
 # from `harness/` itself and skips this when the branch touches none of it. A main push and the
-# nightly run set PKMNSCAN_GUARD_SCOPE=off in check.yml, so they never skip.
+# nightly run set PKMNSCAN_GUARD_SCOPE=all in check.yml, so they never skip.
 harness:
 	$(VENV_GUARD)
 	@python3 scripts/guard-scope.py classify --target harness --base origin/main; rc=$$?; \
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) harness/run.py; \
 	else \
-		echo "harness: SKIPPED — nothing in this branch reaches what harness/ reads. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "harness: SKIPPED — nothing in this branch reaches what harness/ reads. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # Exit 1 is a provably wrong reference and fails. Exit 2 is the coupling question — it
