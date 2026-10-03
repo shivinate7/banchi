@@ -281,7 +281,7 @@ async function open(
   await page.route(/\/pipeline\/send$/, async (route) => {
     const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>
     wire.push({ method: 'POST', path: '/pipeline/send', body })
-    if (options.sendDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.sendDelayMs))
+    if (options.sendDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.sendDelayMs)) // keep: stubbed answer held options.sendDelayMs ms on purpose, a latency fixture
     const answer: { status: number; body?: unknown; code?: string; data?: unknown } = (
       options.send ?? (() => ({ status: 200, body: { send: sendSummary(), console: '' } }))
     )(body)
@@ -540,7 +540,7 @@ async function open(
      a case that hands over `worklist` is testing the merge. The answers are NOT on this
      payload: they are the corpus's, read through `/pricing` above. */
   await page.route(/\/pipeline\/pricing/, async (route) => {
-    if (options.pricingDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.pricingDelayMs))
+    if (options.pricingDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.pricingDelayMs)) // keep: stubbed answer held options.pricingDelayMs ms on purpose, a latency fixture
     const listed = options.worklist?.runs ??
       options.runs ?? [{ run: RUN, box: 7, box_name: 'Riftbound epics', skus: 1 }]
     const rows =

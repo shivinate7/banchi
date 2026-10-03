@@ -42,6 +42,12 @@ const PHONE = { width: 390, height: 844 }
 /* NOTHING HERE MAY REACH THE CAPTURE SERVER. This spec registers no fixtures of its own, so it
    takes the shared small store. Above every hook, which `make docs-audit`'s `spec seal` row
    checks. */
+/** The screen holds content and nothing still moves: content first, so a screen that has not drawn yet cannot pass. */
+async function drawn(page: Page): Promise<void> {
+  await page.waitForFunction(() => (document.querySelector('main')?.innerText.trim().length ?? 0) > 20)
+  await settleMotion(page)
+}
+
 sealEveryTest({ store: true, cards: 122 })
 
 /** The floor, and the probe radius that answers it: a thumb landing 19px off the centre. */
@@ -406,7 +412,7 @@ for (const hash of SCREENS) {
   test(`${hash} holds the thumb floor at 390, and does not scroll sideways`, async ({ page }) => {
     await setViewport(page, PHONE)
     await page.goto(hash)
-    await settleMotion(page)
+    await drawn(page)
     const failures = await sweep(page, hash, hash === '#/gallery' ? 'box' : 'probe')
     const over = await overflow(page)
     expect(over, `${hash} scrolls sideways by ${over}px at 390 — CLAUDE.md: "No horizontal page scroll at 390."`).toBeLessThanOrEqual(0)
@@ -432,7 +438,7 @@ test.describe('on a touch screen at 820', () => {
     for (const hash of routes) {
       if (hash.endsWith('/fulfillment')) continue // his screen draws no shell and holds its own 44px floor
       await page.goto(hash)
-      await settleMotion(page)
+      await drawn(page)
       failures.push(...(await sweep(page, hash, 'box')))
       const over = await overflow(page)
       expect(over, `${hash} scrolls sideways by ${over}px at 820`).toBeLessThanOrEqual(0)
@@ -483,7 +489,7 @@ test('the sheets and menus a phone opens hold the floor too', async ({ page }) =
   }
 
   await page.goto(find('/inventory'))
-  await settleMotion(page)
+  await drawn(page)
   const chip = page.locator('.browse-boxchip')
   if (await chip.count()) {
     await chip.click()
@@ -499,7 +505,7 @@ test('the sheets and menus a phone opens hold the floor too', async ({ page }) =
      own screen, so it never appears in the drawer's own roster — the Runs sheet opens over
      `#/review` instead, at the address its own redirect lands on. */
   await page.goto(`${find('/review')}?runs=1`)
-  await settleMotion(page)
+  await drawn(page)
   const identify = page.getByRole('button', { name: /Identify a box/i }).first()
   if (await identify.count()) {
     await identify.click()
@@ -561,7 +567,7 @@ test('"Check first" mounts the composer over the runs sheet in one commit, and t
     return hit as string
   }
   await page.goto(find('/review'))
-  await settleMotion(page)
+  await drawn(page)
   await page.locator('.review-identify-open').click()
   // Both layers ARE open (D291's own "opened in the same commit" case) -- this is the fact the
   // sweep below has to get right, not a precondition to relax away.
@@ -821,7 +827,7 @@ test('graveyard filter row never bleeds the page at 390, whether it fits or scro
      a `ROUTE-ROSTER` marker means "derive this list, or say which roster it pins." One route
      named once is neither. */
   await page.goto(`#/graveyard`)
-  await settleMotion(page)
+  await drawn(page)
 
   const seg = page.locator('.graveyard-toolbar .bn-seg')
   await expect(seg).toBeVisible()

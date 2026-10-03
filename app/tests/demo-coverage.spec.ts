@@ -99,7 +99,7 @@ async function serveDemo(page: Page): Promise<string> {
     // runner does (run 36807030451). Deterministic where a CPU throttle is not: the first photograph
     // of every screen is requested only after that chunk has arrived and parsed.
     if (/\/demoServer-[^/]*\.js$/.test(url.pathname) && process.env.DEMO_CHUNK_DELAY_MS)
-      await new Promise((done) => setTimeout(done, Number(process.env.DEMO_CHUNK_DELAY_MS)))
+      await new Promise((done) => setTimeout(done, Number(process.env.DEMO_CHUNK_DELAY_MS))) // keep: chunk delay from DEMO_CHUNK_DELAY_MS, a latency fixture on purpose
     if (PREVIEW !== null) {
       const response = await route.fetch({ url: `${PREVIEW}${url.pathname}` })
       await route.fulfill({ response })
@@ -120,9 +120,11 @@ async function serveDemo(page: Page): Promise<string> {
   return `${DEV_URL}${base}`
 }
 
-/** The demo's reads have landed and drawn: no skeleton stands, nothing still moves. */
+/** The demo's reads have landed and drawn: the screen holds content, no skeleton or busy mark stands,
+ *  nothing still moves. Content first, so a skeleton that has not mounted yet cannot pass. */
 async function drawn(page: Page): Promise<void> {
-  await expect(page.locator('.bn-skeleton')).toHaveCount(0)
+  await page.waitForFunction(() => (document.querySelector('main')?.innerText.trim().length ?? 0) > 20)
+  await expect(page.locator('.bn-skeleton, [aria-busy="true"]')).toHaveCount(0)
   await settleMotion(page)
   await afterPaint(page)
 }

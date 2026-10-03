@@ -17,15 +17,18 @@ from .strings import _offender_list_at_merge_base, _read_offender_list
 TESTS_DIR = ROOT / "app" / "tests"
 FIXED_SLEEP_ALLOW = ROOT / "scripts" / "fixed-sleep-allow.json"
 
-# The call itself, with its dot, so prose that names `waitForTimeout` is not a sleep.
-_SLEEP_RE = re.compile(r"\.waitForTimeout\(")
-# `// keep: <reason>` on the same line, or alone on the line above. The reason may not be empty.
-_KEEP_RE = re.compile(r"//\s*keep:\s*\S")
+# Every shape of a fixed sleep: `waitForTimeout` named at all (so an alias is caught too), a bare
+# `setTimeout(` (the `new Promise((r) => setTimeout(r, ms))` sleep; `window.` and `test.` prefixed calls
+# are timers and test limits, not sleeps), and a call to a helper named like a sleep with a number.
+_SLEEP_RE = re.compile(r"\bwaitForTimeout\b|(?<![.\w])setTimeout\(|\b(?:sleep|delay|pause|nap)\w*\(\s*\d")
+# `// keep: <reason>` on the same line, or alone on the line above. The reason is at least three words,
+# so it can name the duration under test; `keep: x` is not a reason.
+_KEEP_RE = re.compile(r"//\s*keep:\s*\S+(?:\s+\S+){2,}")
 _COMMENT_ONLY_RE = re.compile(r"^\s*(?://|/\*|\*)")
 
 
 def bare_sleeps(text: str) -> List[int]:
-    """1-based lines that call `.waitForTimeout(` with no `keep:` reason beside them."""
+    """1-based lines that sleep a fixed time with no `keep:` reason (three words or more) beside them."""
     lines = text.split("\n")
     out: List[int] = []
     for i, line in enumerate(lines):
@@ -65,7 +68,7 @@ def sleep_findings(
                 findings.append(Finding(
                     f"{file}:{line}",
                     "sleeps a fixed time with no reason. Wait on the condition (`expect`, `expect.poll`, `settleMotion`, "
-                    "`afterPaint`, a response), or end the line with `// keep: <why nothing else can be waited on>`."))
+                    "`afterPaint`, a response), or end the line with `// keep: <three words or more naming the duration under test>`."))
     for file, entry in sorted(listed.items()):
         if not str(entry.get("reason", "")).strip():
             findings.append(Finding(allow_rel, f"entry for {file} has no reason. Write why it stays, or fix the sleeps."))
@@ -78,7 +81,7 @@ def sleep_findings(
 
 
 def check_fixed_sleeps(report: Report) -> None:
-    """No `waitForTimeout` in `app/tests/` without a `// keep:` reason, past `scripts/fixed-sleep-allow.json`.
+    """No fixed sleep (`waitForTimeout`, `new Promise(r => setTimeout(r, ms))`, a `sleep(300)` helper) in `app/tests/` without a `// keep:` reason, past `scripts/fixed-sleep-allow.json`.
 
     A fixed sleep guesses at a duration. A case that asserts nothing happens over time keeps its
     sleep and says so on the line. Every other wait is on a condition. **The list only shrinks.**

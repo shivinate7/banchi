@@ -90,7 +90,7 @@ async function settledInnerText(page: Page, region: Locator, route: string): Pro
   let textReset = 0
   let readsReset = 0
   while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS))
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS)) // keep: the poll interval of the sweep wait loop, POLL_MS apart
     const next = await region.innerText()
     const started = reads?.started ?? 0
     const busy = reads !== undefined && (reads.open.size > 0 || started !== startedBefore)

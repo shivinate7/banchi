@@ -58,7 +58,7 @@ async function slowReads(page: Page): Promise<void> {
     () => true,
     async (route) => {
       const type = route.request().resourceType()
-      if (type === 'fetch' || type === 'xhr') await new Promise((r) => setTimeout(r, SLOW_MS))
+      if (type === 'fetch' || type === 'xhr') await new Promise((r) => setTimeout(r, SLOW_MS)) // keep: stubbed answer held SLOW_MS ms on purpose, a latency fixture
       await route.fallback()
     },
   )
@@ -154,7 +154,7 @@ for (const width of [1440, 820]) for (const seeded of [true, false]) for (const 
         const type = route.request().resourceType()
         if (type === 'fetch' || type === 'xhr') {
           const url = route.request().url()
-          await new Promise((r) => setTimeout(r, LANDS.find(([re]) => re.test(url))?.[1] ?? SLOW_MS))
+          await new Promise((r) => setTimeout(r, LANDS.find(([re]) => re.test(url))?.[1] ?? SLOW_MS)) // keep: each read lands at its own LANDS delay, a latency fixture
         }
         await route.fallback()
       },
@@ -201,7 +201,7 @@ type Gate = { on: boolean; served: number }
 async function heldReads(page: Page, read: RegExp): Promise<Gate> {
   const gate: Gate = { on: false, served: 0 }
   await page.route(read, async (route) => {
-    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS)) // latency fixture, not a wait
+    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS)) // keep: stubbed answer held READ_MS ms on purpose, a latency fixture
     gate.served += 1
     await route.fallback()
   })
@@ -216,11 +216,17 @@ async function heldPress(page: Page, gate: Gate, press: () => Promise<void>) {
   const served = gate.served
   const from = await markNow(page)
   await press()
-  /* the held read answers, then the swap draws: the gate counts the answer, the network goes quiet, motion ends. */
+  /* The frame is held: something on screen is marked busy or held. That is asserted, so a press that
+     held nothing cannot pass for one that held and swapped. */
+  const HELD = '[aria-busy="true"], [data-held="true"]'
+  await expect(page.locator(HELD).first(), 'the press held no frame while its read was out').toBeAttached()
+  /* The held read answers, then the swap draws: the answer is counted, then the marks come off. Both are
+     conditions of the page, so the window cannot close before the swap is drawn. */
   await expect.poll(() => gate.served, { message: 'the held read never answered' }).toBeGreaterThan(served)
-  await page.waitForLoadState('networkidle')
+  await expect(page.locator(HELD), 'the frame never let go of the old content').toHaveCount(0)
   await settleMotion(page)
   await afterPaint(page)
+  await page.waitForTimeout(CLUSTER_MS * 2) // keep: a second layout change within CLUSTER_MS of the swap is a second cluster, and only elapsed time shows it
   gate.on = false
   const all = (await readShifts(page)).shifts.filter((s) => s.at >= from)
   const out = all.filter((s) => s.at < from + READ_MS - 150)
@@ -321,7 +327,7 @@ async function l1Orders(page: Page): Promise<Gate> {
   await seedPopulatedOrders(page)
   const gate: Gate = { on: false, served: 0 }
   await page.route(/\/orders\/walk-plan$/, async (route) => {
-    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS)) // latency fixture, not a wait
+    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS)) // keep: stubbed answer held READ_MS ms on purpose, a latency fixture
     gate.served += 1
     const keys = (route.request().postDataJSON() as { keys: string[] }).keys
     const plan = severalOrdersWalkPlan()
@@ -394,7 +400,7 @@ async function l1Review(page: Page): Promise<Gate> {
   )
   const gate: Gate = { on: false, served: 0 }
   await page.route(/\/review\/\d+\/\d+\/catalog/, async (route) => {
-    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS)) // latency fixture, not a wait
+    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS)) // keep: stubbed answer held READ_MS ms on purpose, a latency fixture
     gate.served += 1
     json(route, {
       box: 2,
@@ -927,7 +933,7 @@ test('L2 shell: web fonts arriving late move nothing (S17)', async ({ page }) =>
 test('L2 shell: a Sales podium thumbnail arriving moves nothing (S18)', async ({ page }) => {
   const STOCK = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
   await page.route(STOCK, async (route) => {
-    await new Promise((r) => setTimeout(r, 2000))
+    await new Promise((r) => setTimeout(r, 2000)) // keep: stubbed answer held 2000 ms on purpose, a latency fixture
     await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88"><rect width="63" height="88" fill="#ccc"/></svg>' })
   })
   const order = {
@@ -1135,7 +1141,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
     await seedPopulatedOrders(page)
     const gate: Gate = { on: false, served: 0 }
     await page.route(/\/orders\/walk-plan$/, async (route) => {
-      if (gate.on) await new Promise((r) => setTimeout(r, READ_MS)) // latency fixture, not a wait
+      if (gate.on) await new Promise((r) => setTimeout(r, READ_MS)) // keep: stubbed answer held READ_MS ms on purpose, a latency fixture
       gate.served += 1
       const plan = severalOrdersWalkPlan()
       const stop = plan.stops[0]!

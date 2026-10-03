@@ -49,7 +49,7 @@ for (const from of ['light', 'dark'] as const) {
       }
       sample()
       toggle.click()
-      await new Promise((r) => setTimeout(r, 700))
+      await new Promise((r) => setTimeout(r, 700)) // keep: the 700ms window of the theme flip is the colour sampling window
       running = false
       return [...colors]
     })

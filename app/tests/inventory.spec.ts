@@ -992,7 +992,7 @@ async function open(
    * query string rather than a fixed body — a case answering `?game=` differently from a
    * bare `GET /boxes` passes one; every other case keeps passing a plain object. */
   await page.route(/\/boxes(\?.*)?$/, async (route) => {
-    if (options.boxesDelayMs) await new Promise((resolve) => setTimeout(resolve, options.boxesDelayMs))
+    if (options.boxesDelayMs) await new Promise((resolve) => setTimeout(resolve, options.boxesDelayMs)) // keep: stubbed answer held options.boxesDelayMs ms on purpose, a latency fixture
     const body =
       typeof boxes === 'function' ? boxes(new URL(route.request().url()).searchParams) : boxes
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
@@ -1947,7 +1947,7 @@ test('the press that sells a copy does not shift while the re-read is in flight'
   await page.route(/\/search\?/, async (route) => {
     calls += 1
     const asked = new URL(route.request().url()).searchParams.get('q') ?? ''
-    if (calls === 2) await new Promise((resolve) => setTimeout(resolve, 800))
+    if (calls === 2) await new Promise((resolve) => setTimeout(resolve, 800)) // keep: stubbed answer held 800 ms on purpose, a latency fixture
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1976,7 +1976,7 @@ test('the press that sells a copy does not shift while the re-read is in flight'
     if (box !== null) seenTops.add(Math.round(box.y))
     if ((await page.locator('.inventory-looking').count()) > 0) sawSkeleton = true
     if ((await row.locator('.position-bar').getAttribute('data-gone')) === 'true') break
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 50)) // keep: samples the list top every 50ms until the sale lands, a poll interval
   }
 
   expect([...seenTops], 'the copies list moved while the re-read was in flight').toEqual([topsBefore])
@@ -4851,7 +4851,7 @@ test('UX-244 — a stale section on Move re-opens the pick with one plain senten
    * an effect reverts it, so this waits out a full render pass first. */
   await dialog.locator('.bn-section-pick-item').click()
   await expect(move).toBeEnabled()
-  await afterPaint(page) // a full render pass, so an effect that reverts it has run
+  await page.waitForTimeout(300) // keep: asserts the pick is not reverted a beat after it lands, a revert is an async effect that only elapsed time shows
   await expect(move).toBeEnabled()
   await expect(dialog.locator('.bn-section-pick-item[aria-checked="true"]')).toHaveCount(1)
 })
@@ -8445,7 +8445,7 @@ test.skip(
      what is being changed here is WHEN the answer lands, never what is in it. */
   await page.route(/\/inventory\/\d+$/, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
-    await new Promise((resolve) => setTimeout(resolve, 400))
+    await new Promise((resolve) => setTimeout(resolve, 400)) // keep: stubbed answer held 400 ms on purpose, a latency fixture
     return route.fallback()
   })
   await expandAll(page)
@@ -8531,7 +8531,7 @@ test.skip(
      gives the one-shot snapshot below comfortable room over CI's own latency. */
   await page.route(/\/inventory\/7$/, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
-    await new Promise((resolve) => setTimeout(resolve, 800))
+    await new Promise((resolve) => setTimeout(resolve, 800)) // keep: stubbed answer held 800 ms on purpose, a latency fixture
     return route.fallback()
   })
 
@@ -8972,7 +8972,7 @@ for (const how of ['held arrow key', 'click']) test(`the copies list does not mo
   await open(page, SIFT_BOXES, { cards: siftCards(), search: (query) => searchAnswer(query, siftCards()) })
   /* A real server answers in tens of milliseconds, not none. */
   await page.route(/\/search/, async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 150))
+    await new Promise((resolve) => setTimeout(resolve, 150)) // keep: stubbed answer held 150 ms on purpose, a latency fixture
     return route.fallback()
   })
   await expandAll(page)

@@ -5146,7 +5146,7 @@ test('paging with the arrows skips a pick the Hide picked fold has taken off the
 test('a digit pressed while a sale is in flight says one sale at a time', async ({ page }) => {
   const wire = await open(page, { orders: oneOpenOrder(), walkPlan: twoCopyPlan(), pull: SPARE_PULL })
   await page.route(/\/orders\/pull$/, async (route) => {
-    await new Promise((settled) => setTimeout(settled, 1500))
+    await new Promise((settled) => setTimeout(settled, 1500)) // keep: stubbed answer held 1500 ms on purpose, a latency fixture
     await route.fallback()
   })
   await expect(page.locator('.card-locations-sell[aria-keyshortcuts]').first()).toBeVisible()

@@ -20,6 +20,15 @@ def run(ok) -> None:
     ok(bare_sleeps("  await fulfiller.waitForTimeout(300)\n") == [1], "a sleep on another page object is found", "")
     ok(not bare_sleeps("// a `waitForTimeout(30)` is a floor\n * page.waitForTimeout(30) would flake\n"), "a comment naming the call is not a sleep", "")
 
+    # the shapes the first version let through: a promise sleep, an alias, a helper, a thin reason
+    ok(bare_sleeps("  await new Promise((r) => setTimeout(r, 700))\n") == [1], "a `new Promise(r => setTimeout(r, N))` sleep is found", "")
+    ok(bare_sleeps("  await new Promise((resolve) => {\n    setTimeout(resolve, 700)\n  })\n") == [2], "a multi-line promise sleep is found", "")
+    ok(bare_sleeps("  const nap = page.waitForTimeout\n") == [1], "an alias of `waitForTimeout` is found", "")
+    ok(bare_sleeps("  await sleep(300)\n") == [1], "a `sleep(300)` helper call is found", "")
+    ok(not bare_sleeps("  test.setTimeout(240_000)\n  window.setTimeout(() => {}, 5)\n"), "a test limit and a window timer are not sleeps", "")
+    ok(bare_sleeps("  await page.waitForTimeout(300) // keep: x\n") == [1], "`keep: x` is not a reason", "")
+    ok(not bare_sleeps("  await new Promise((r) => setTimeout(r, 700)) // keep: the 700ms flip window is the sample\n"), "a promise sleep with a three-word reason passes", "")
+
     listed = {"a.ts": {"file": "a.ts", "count": 1, "reason": "helper"}}
     ok(not sleep_findings({"a.ts": [4]}, listed, listed, "allow.json"), "a listed file at its count is clean", "")
     ok(len(sleep_findings({"a.ts": [4, 9]}, listed, listed, "allow.json")) == 1, "a second bare sleep in a listed file is found", "")
