@@ -1177,7 +1177,7 @@ def run(args, say) -> int:
         # comment on purpose — this is the figure an operator reads while deciding to spend,
         # and a denominator that changed silently is a published measurement rotting.
         not_found = len(to_send) - cropped - len(unfit)
-        say(f"crop            to the detected card +{images.CROP_PAD*100:.0f}% "
+        say(f"crop            to the detected card "
             f"— {cropped} cropped of the {len(to_send)} being sent"
             + (f", {not_found} sent whole (no card found)" if not_found else "")
             + (f", {len(unfit)} sent whole (box unfit to crop to)" if unfit else ""))
