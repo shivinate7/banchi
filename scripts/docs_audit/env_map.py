@@ -1067,9 +1067,13 @@ CODEX_ONLY = frozenset({
     ("PreToolUse", "Bash", "scripts/reap.py --hook"),
 })
 
-#: `--skip NAMES` tells `scripts/guard-shell.py` which clauses the shared layer owns. Claude
-#: Code passes it and Codex does not, so it is not part of which hook fires.
-_SKIP_FLAG = re.compile(r"\s+--skip\s+\S+")
+
+#: The value each file pins for `GUARD_SHELL_SKIP` on a `scripts/guard-shell.py` hook: Claude
+#: Code's Bash entry skips the three clauses the shared layer owns, every other entry sets it
+#: empty so an inherited value never narrows a guard. The triples below drop the prefix, so a
+#: pin that drifts is its own finding, not a hook mismatch.
+_SKIP_ENV = re.compile(r"^GUARD_SHELL_SKIP=(\S*)\s+")
+CLAUDE_BASH_SKIP = "checkout,stash,reset"
 
 
 def _hook_triples(data: object) -> Set[Tuple[str, str, str]]:
@@ -1110,7 +1114,7 @@ def _hook_triples(data: object) -> Set[Tuple[str, str, str]]:
                     continue
                 command = hook.get("command")
                 if isinstance(command, str) and command:
-                    triples.add((str(event), str(matcher), _SKIP_FLAG.sub("", command)))
+                    triples.add((str(event), str(matcher), _SKIP_ENV.sub("", command)))
     return triples
 
 
@@ -1197,6 +1201,26 @@ def check_codex_hooks(report: Report) -> None:
 
     def describe(event: str, matcher: str, command: str) -> str:
         return f"{event}" + (f" (matcher `{matcher}`)" if matcher else "") + f" -> `{command}`"
+
+    for label, data, path in (("claude", claude_data, ".claude/settings.json"),
+                              ("codex", codex_data, ".codex/hooks.json")):
+        for event, entries in (data.get("hooks") or {}).items():
+            for entry in entries or []:
+                matcher = entry.get("matcher") or ""
+                for hook in entry.get("hooks") or []:
+                    command = hook.get("command") or ""
+                    if "scripts/guard-shell.py" not in command:
+                        continue
+                    found = _SKIP_ENV.match(command)
+                    want = CLAUDE_BASH_SKIP if label == "claude" and matcher == "Bash" else ""
+                    if not found or found.group(1) != want:
+                        findings.append(
+                            Finding(
+                                path,
+                                f"{event} (matcher `{matcher}`) must set "
+                                f"`GUARD_SHELL_SKIP={want}` before guard-shell.py, got `{command}`.",
+                            )
+                        )
 
     for event, matcher, command in sorted(claude_triples - codex_triples):
         findings.append(

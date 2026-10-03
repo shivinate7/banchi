@@ -52,10 +52,9 @@ adds the guard below, so the row starts green rather than starts by reporting th
 
 **One divergence is declared, on the owner's word.** The shared layer's guard owns the pkill rule
 for Claude Code, so `.claude/settings.json` no longer runs `scripts/reap.py --hook`, and it runs
-`scripts/guard-shell.py` with `--skip checkout,stash,reset`. Codex runs no shared guard and keeps
+`scripts/guard-shell.py` with `GUARD_SHELL_SKIP=checkout,stash,reset`. Every other guard-shell entry sets `GUARD_SHELL_SKIP=` empty, so an inherited value never narrows Codex. Codex runs no shared guard and keeps
 all of them in full. `CODEX_ONLY` in `check_codex_hooks` names the one hook only Codex runs, and
-the row fails when Claude Code runs it again or Codex loses it. The `--skip` flag is dropped
-before the triples are compared. Claude Code keeps `scripts/silent-write-guard.py --hook` until
+the row fails when Claude Code runs it again or Codex loses it. The row compares commands exactly, so the `GUARD_SHELL_SKIP` value on each entry is pinned. Claude Code keeps `scripts/silent-write-guard.py --hook` until
 the shared silent-write rule covers pull, fetch, `make merge`, `gh pr merge`, closed descriptors
 and unread-file redirects; it is cut then.
 

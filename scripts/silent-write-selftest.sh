@@ -394,6 +394,14 @@ if [ $rl_bad_status -eq 2 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable
 else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
 
 echo ""
+echo "  an unknown flag: a hook warns and allows, the command line still refuses"
+bogus_out="$(printf '{}' | python3 "$GUARD" --hook --bogus 2>&1 >/dev/null)"; bogus_status=$?
+if [ $bogus_status -eq 0 ] && [ -n "$bogus_out" ]; then ok "--hook --bogus exits 0 and warns on stderr"
+else bad "--hook --bogus: exit $bogus_status, stderr '$bogus_out' (want 0 and a warning)"; fi
+python3 "$GUARD" --bogus >/dev/null 2>&1 </dev/null
+[ $? -eq 2 ] && ok "without --hook, an unknown flag still exits 2" || bad "without --hook, an unknown flag did not exit 2"
+
+echo ""
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ] || exit 1
 exit 0
