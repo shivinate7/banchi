@@ -3856,7 +3856,7 @@ export function CaptureScreen() {
 
   const swallowedTotal = swallowed.busy + swallowed.noBox + swallowed.notReady + swallowed.held
 
-  /* The dispenser (D316). It deals only while motion can photograph: armed with a
+  /* The dispenser (D-dispenser-button). It deals only while motion can photograph: armed with a
    * baseline, camera ready, capture not halted. Any fire the screen declines stops it. */
   const motionArmed = triggerMode === 'motion' && motionDiag?.hasBaseline === true
   const dealer = useDealer({

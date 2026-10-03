@@ -1,4 +1,4 @@
-/* THE DISPENSER (D316, docs/specs/dispenser.md). The one home of the Web Bluetooth
+/* THE DISPENSER (D-dispenser-button, docs/specs/dispenser.md). The one home of the Web Bluetooth
  * link to the tcg-dealer dispenser, its command allow list and the paced deal loop. No other file
  * talks to the dispenser. `createDealer` is plain TypeScript with no React; `useDealer` is the
  * screen's hook over it. Nothing here is stored, and dealing never resumes on its own (D19). */

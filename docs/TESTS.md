@@ -36,11 +36,11 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | `app/tests/capture-section.spec.ts` | The Capture section picker fills its row, steps with the bracket keys, sends S with the right section, falls back plainly on a stale pick, and never moves the shutter. | D118, D128, D164, D260, D264 |
 | `app/tests/capture-undo.spec.ts` | The ten-deep undo stack on Capture walks back the right card each time, so an undo never deletes the record of a different physical card. | D10, D41, D58, D101, D117, D118, D164, D196 |
 | `app/tests/capture-width.spec.ts` | The Capture screen leaves no unused horizontal band inside its page frame at 1440 and 820. | D118, D195, D197 |
-| `app/tests/dispenser.spec.ts` | The dispenser control sits under the shutter, gives its reason when it cannot deal, and stops dealing the moment a fire is dropped. | D316, D19, D313 |
+| `app/tests/dispenser.spec.ts` | The dispenser control sits under the shutter, gives its reason when it cannot deal, and stops dealing the moment a fire is dropped. | D19, D313 |
 | `app/tests/motion-live.spec.ts` | The motion trigger's browser wiring arms on the mode toggle, reads real video frames, turns a settle into a capture, and counts a capture with no box as dropped. | D19, D81, D84, D218 |
 | `app/tests/motion-theme-flash.spec.ts` | The theme flips in one crossfade that never paints a frame matching neither theme; the capture flash is a light 200ms shot. | D50 |
 | `app/tests/motion.spec.ts` | The motion state machine gives the exact answer on hand-built frame sequences. | D81, D84, D131 |
-| `app/tests/unit/dispenser.unit.ts` | The dispenser deals one card per command, paced, over an allow-listed link, and stops on empty, error, silence, a lost link or Stop. | D316, D19 |
+| `app/tests/unit/dispenser.unit.ts` | The dispenser deals one card per command, paced, over an allow-listed link, and stops on empty, error, silence, a lost link or Stop. | D19 |
 | `harness/tests/t9_traces.py` | The motion trigger fires correctly on real recorded rig sessions, not only on synthetic frames. | D81, D84, D131 |
 
 ## Review and identity

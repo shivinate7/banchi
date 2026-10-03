@@ -1,5 +1,5 @@
 // Protects: The dispenser control sits under the shutter, gives its reason when it cannot deal, and stops dealing the moment a fire is dropped.
-// Governs: D316, D19, D313
+// Governs: D-dispenser-button, D19, D313
 import { expect, test } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import type { Page } from '@playwright/test'

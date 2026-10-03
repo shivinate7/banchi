@@ -1,4 +1,4 @@
-## D316 — A Capture button starts and stops the dispenser
+## D-dispenser-button — A Capture button starts and stops the dispenser
 
 **The Capture screen has a Connect, then Start, control for the tcg-dealer dispenser. It deals one card per command over Web Bluetooth, from the browser. Motion still takes every photo. Nothing about the trigger changes.**
 
