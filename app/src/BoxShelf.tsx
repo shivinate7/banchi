@@ -480,7 +480,6 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
          mode switch (Cancel/Confirm, or Edit layout) is a second row of the page instead,
          never squeezed in beside the h1 (D275, R2). */
       actions={editing ? null : <ShelfSwitch view="shelf" onView={onView} />}
-      status={failure === null ? null : <FailureNotice failure={failure} title={failureTitle(failure.code)} />}
       loading={records === null && readFailure === null}
       empty={readFailure === null ? null : <FailureNotice failure={readFailure} title="The boxes could not be read." onRetry={load} />}
     >
@@ -583,6 +582,12 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
           ))}
         </div>
       )}
+
+      {/* THE ANSWER TO A PRESS SITS BELOW THE MAP, like the receipt (D313). Page's status slot
+          reserves a notice-high band under the head, which drew a blank band above "Layout"
+          whenever nothing had failed. Below the map, a refusal moves nothing the person did
+          not move. */}
+      {failure === null ? null : <FailureNotice failure={failure} title={failureTitle(failure.code)} />}
 
       {receipt === null ? null : (
         <MoveReceipt result={receipt} undone={undone} busy={busy} onUndo={() => void undo()} onDone={() => setReceipt(null)} />

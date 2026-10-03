@@ -8290,7 +8290,7 @@ COMPONENTS = [
                                          "gap moves it through `moveSections`. The receipt is the "
                                          "server's physical instruction, with Undo on U.",
                                   "governed_by": ["D31", "D50", "D88", "D117", "D118", "D260",
-                                                  "D264", "D294", "D275", "D285", "D293"]},
+                                                  "D264", "D275", "D285", "D293", "D294", "D313"]},
             "src/BoxShelf.css": {"does": "the Shelf's blocks, gaps, lift bar and receipt. A "
                                          "block's height follows its count with a 44px floor; a "
                                          "gap is 40px, the thumb floor.",
