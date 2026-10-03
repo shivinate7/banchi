@@ -3786,7 +3786,7 @@ COMPONENTS = [
             "docs_audit/env_map.py": {
                 "does": "The rows over environment variables, hatches, the subagent override, the repo map, the "
                         "hook roster, Codex hooks and the build-order mirror.",
-                "governed_by": ["D2", "D31", "D80", "D127", "D135", "D140", "D178", "D280"]},
+                "governed_by": ["D2", "D31", "D80", "D127", "D135", "D140", "D171", "D178", "D280"]},
             "docs_audit/games.py": {
                 "does": "The rows over game and export vocabulary: the registry against the committed exports, "
                         "coverage, the matrix superset and the join-key shape.",

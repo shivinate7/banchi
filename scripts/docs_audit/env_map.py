@@ -1067,13 +1067,17 @@ CODEX_ONLY = frozenset({
     ("PreToolUse", "Bash", "scripts/reap.py --hook"),
 })
 
-
 #: The value each file pins for `GUARD_SHELL_SKIP` on a `scripts/guard-shell.py` hook: Claude
 #: Code's Bash entry skips the three clauses the shared layer owns, every other entry sets it
 #: empty so an inherited value never narrows a guard. The triples below drop the prefix, so a
 #: pin that drifts is its own finding, not a hook mismatch.
 _SKIP_ENV = re.compile(r"^GUARD_SHELL_SKIP=(\S*)\s+")
 CLAUDE_BASH_SKIP = "checkout,stash,reset"
+
+#: The one hook Claude Code runs narrowed by an environment prefix, and Codex runs bare. The
+#: row expects the prefix on the Claude entry and its absence on the Codex entry.
+NARROWED_ENV = "PKMNSCAN_SILENT_WRITE_ONLY=file,bash-c "
+NARROWED_HOOK = ("PreToolUse", "Bash", "scripts/silent-write-guard.py --hook")
 
 
 def _hook_triples(data: object) -> Set[Tuple[str, str, str]]:
@@ -1086,7 +1090,7 @@ def _hook_triples(data: object) -> Set[Tuple[str, str, str]]:
     than skipped — an event that gains a matcher in one file and not the other is exactly
     the drift this reads for, and a triple can only report that by carrying the field.
 
-    A `--skip NAMES` flag is dropped from the command for the same reason: the guard is the same
+    The `GUARD_SHELL_SKIP` prefix is dropped for the same reason: the guard is the same
     hook with fewer clauses.
 
     `timeout` is deliberately not part of the triple. It changes how patient a hook is, not
@@ -1221,6 +1225,22 @@ def check_codex_hooks(report: Report) -> None:
                                 f"`GUARD_SHELL_SKIP={want}` before guard-shell.py, got `{command}`.",
                             )
                         )
+
+    # The narrowed hook: Claude's entry carries the prefix and Codex's carries none. Strip the
+    # prefix from Claude's side after checking it, so the comparison below sees one hook.
+    event, matcher, bare = NARROWED_HOOK
+    narrowed = (event, matcher, NARROWED_ENV + bare)
+    if narrowed in claude_triples:
+        claude_triples = (claude_triples - {narrowed}) | {NARROWED_HOOK}
+    elif NARROWED_HOOK in claude_triples:
+        findings.append(Finding(".claude/settings.json",
+                                f"runs `{bare}` without the `{NARROWED_ENV.strip()}` prefix. "
+                                "Claude Code runs the file and bash-c clauses alone (D171)."))
+    if narrowed in codex_triples:
+        findings.append(Finding(".codex/hooks.json",
+                                f"runs `{narrowed[2]}`. Codex runs the full hook, with no "
+                                "prefix (D171)."))
+        codex_triples = (codex_triples - {narrowed}) | {NARROWED_HOOK}
 
     for event, matcher, command in sorted(claude_triples - codex_triples):
         findings.append(
