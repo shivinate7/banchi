@@ -1,6 +1,6 @@
 # Pick the identification engine for each run
 
-**Status: DESIGN. Nothing is built.** D2 (identification is Haiku vision, end to end) carries the
+**Status: phase 1 is built (the per-run picker, the free read, the second look). The background reader (section 8) is not built.** D2 (identification is Haiku vision, end to end) carries the
 owner's ruling. For each run, the owner picks who reads the cards: Haiku or the stock-photo matcher.
 The free read is the default pick, on the owner's ruling.
 
