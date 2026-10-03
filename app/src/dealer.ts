@@ -123,19 +123,18 @@ export function createDealer() {
   const deal = () => {
     if (state !== 'dealing') return
     awaiting = true
-    write('MOTOR:START').then(
-      () => {
+    write('MOTOR:START')
+      .then(() => {
         if (state !== 'dealing') return
         clearTimeout(silence)
         silence = setTimeout(() => {
           awaiting = false
           finish('error', SAID_SILENT, true)
         }, SILENCE_MS)
-      },
-      () => {
+      })
+      .catch(() => {
         if (state === 'dealing') lost()
-      },
-    )
+      })
   }
   const onReply = (text: string) => {
     if (!awaiting) return

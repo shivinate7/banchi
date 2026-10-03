@@ -6871,7 +6871,7 @@ COMPONENTS = [
                             "D34", "D36", "D41", "D56", "D58", "D65", "D67", "D81", "D92", "D117",
                             "D118", "D121", "D128", "D131", "D132", "D142", "D144", "D145", "D153",
                             "D164", "D170", "D172", "D183", "D196", "D218", "D259", "D260", "D264",
-                            "D271", "D299", "D313"]},
+                            "D271", "D299", "D313", "D-dispenser-button"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
