@@ -1621,3 +1621,9 @@
   .capture-entrybox .capture-filter { min-height: var(--bn-control-h-sm); }
   .capture-note-wrap .bn-input { min-height: var(--bn-control-h-sm); }
 }
+
+/* A long box name ellipsizes; "Identify" and "on Runs" stay whole and the button stays inside its card. */
+.capture-onward .bn-btn { min-width: 0; max-width: 100%; }
+.capture-onward-label { display: flex; gap: var(--bn-1); min-width: 0; }
+.capture-onward-end { flex: none; }
+.capture-onward-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }

@@ -4910,7 +4910,11 @@ export function CaptureScreen() {
                     somebody who has just finished feeding a drawer, and it names the drawer
                     they fed — `#/runs` composing the pair when they get there is that screen's
                     job and is right for its own reason (`boxLabel` in `runScope.ts`). */}
-                Identify {captureBoxLabel(box, boxName)} on Runs
+                <span className="capture-onward-label">
+                <span className="capture-onward-end">Identify</span>
+                <span className="capture-onward-name">{captureBoxLabel(box, boxName)}</span>
+                <span className="capture-onward-end">on Runs</span>
+                </span>
               </Button>
             </div>
           ) : null}
