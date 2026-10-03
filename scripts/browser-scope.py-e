@@ -61,8 +61,12 @@ regardless — D136's pass record is the only thing that skips the matrix on mai
         config or package file, or anything already in the top-level `SCOPE` outside
         `app/**`) selects every spec. So does an unmapped `app/**` path, an empty or
         unreadable diff, no merge-base, a path carrying whitespace (`PW_ARGS` is word-split
+<<<<<<< HEAD
         by `make`), or `PKMNSCAN_BROWSER_SCOPE=all` — printed by name on every such skip.
+=======
+        by `make`), or `PKMNSCAN_BROWSER_SCOPE=off` — printed by name on every such skip.
         A non-spec `app/tests/*` file selects the specs whose import closure holds it; one no spec imports selects every spec.
+>>>>>>> 9890a5a8 (Scope precision: harness path gate, test-helper spec selection, narrowed guard subjects, AST-equal skips)
         `partial=true` only when the run is genuinely narrowed, so `design-check-passed`
         never records a tree as fully tested on a partial run.
     scripts/browser-scope.py shard N M [SPEC ...]
@@ -306,18 +310,6 @@ def header_equal(before: Optional[str], after: Optional[str]) -> bool:
         return _header(before) == _header(after)
     except Exception:  # noqa: BLE001
         return False
-
-
-def skippable_on_ast(sources: Sequence[Path]) -> Callable[[str], bool]:
-    """The `ast_skip` predicate for a gate whose test sources are `sources`: a file the test
-    NAMES (its path or its file name appears in any of them) is never skipped on equal AST,
-    because a test that names a file may patch it by exact text, and a quote swap or a comment
-    then breaks its anchor while the AST is unchanged. An unreadable source: nothing skips."""
-    try:
-        text = "\n".join(Path(q).read_text(encoding="utf-8", errors="replace") for q in sources)
-    except OSError:
-        return lambda path: False
-    return lambda path: path not in text and Path(path).name not in text
 
 
 def classify_paths(paths: Sequence[str], read_side: SideReader,
