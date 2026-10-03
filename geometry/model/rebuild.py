@@ -22,8 +22,8 @@ HOLDOUT_BOXES = (1, 5)
 
 
 def labels():
-    a = [o for o in json.load(open(HERE / "labels.json")) if o["verdict"] != "REJECT"]
-    return a + json.load(open(HERE / "labels_new.json"))
+    a = [o for o in json.loads((HERE / "labels.json").read_text()) if o["verdict"] != "REJECT"]
+    return a + json.loads((HERE / "labels_new.json").read_text())
 
 
 def make_data(work):
@@ -55,7 +55,7 @@ def make_data(work):
                                      bbox=[x0 * sx, y0 * sy, (x1 - x0) * sx, (y1 - y0) * sy],
                                      area=(x1 - x0) * (y1 - y0) * sx * sy))
     for sp, d in coco.items():
-        json.dump(d, open(f"{work}/{sp}.json", "w"))
+        Path(f"{work}/{sp}.json").write_text(json.dumps(d))
         print(sp, len(d["images"]))
 
 
