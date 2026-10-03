@@ -22,9 +22,9 @@ from geometry.detect import CARD_ASPECT, CardBox, detect_card
 MODEL = Path(__file__).resolve().parent / "model" / "dfine_card_640.onnx"
 SIZE = 640
 MIN_SCORE = 0.25
-# A SHAPE GATE, THE ONE `detect_card` HAS. The model can score a part of a card or of a scene
-# confidently (0.70 on a dark strip of a synthetic frame, aspect 0.25), and a box nobody believes
-# must reach `detect_card` rather than a refusal downstream. The thinnest of the 243 labelled cards
+# A CHEAP PRE-FILTER, NOT THE GUARD. The guard is `identify.images.crop_refusal`, and the crop
+# preview falls back to `detect_card` when it refuses. This only spares that round trip for a
+# box nobody believes (0.70 on a dark strip, aspect 0.25). The thinnest of the 243 labeled cards
 # is 0.603, so 0.5 loses none of them.
 MIN_BOX_ASPECT = 0.5
 

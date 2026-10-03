@@ -1590,6 +1590,20 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
             max_edge=max_edge,
             crop_box=detected if crop else None,
         )
+        if crop and prepared.crop_refused and detected is not None and detected.method == "dfine":
+            # THE SAFETY PATH FOR A CONFIDENT MODEL BOX THAT `crop_refusal` REFUSES (D125). The
+            # fallback inside `locate_card` runs only when the model answers nothing, and the
+            # guard lives in `identify`, which `geometry` may not import, so the refusal is
+            # handled here: ask `detect_card`, and cut with its box if it has one.
+            try:
+                fallback = geometry.detect_card(capture.photo)
+            except Exception:
+                fallback = None
+            if fallback is not None:
+                detected = fallback
+                prepared = identify_images.prepare(
+                    capture.photo, max_edge=max_edge, crop_box=detected
+                )
     except identify_images.ImageError as exc:
         return {
             "selection": selection.describe(),
