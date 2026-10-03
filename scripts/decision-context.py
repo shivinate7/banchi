@@ -261,7 +261,9 @@ def render(relative: str, entry: Dict[str, object]) -> str:
 
 def _seen_file(payload: Dict[str, object]) -> Optional[Path]:
     """The temp file holding the paths this session was already shown, or None without an id."""
-    clean = lambda key: re.sub(r"[^A-Za-z0-9_-]", "", str(payload.get(key) or ""))
+    def clean(key):
+        return re.sub(r"[^A-Za-z0-9_-]", "", str(payload.get(key) or ""))
+
     safe = clean("session_id")
     # The session id is shared by the orchestrator and every subagent, so the agent id (empty
     # for the main session) is part of the key: each agent is shown a file once.
