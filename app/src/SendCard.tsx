@@ -842,9 +842,7 @@ export function SendCard({
           className="send-standing send-released"
           title="Record released"
           action={
-            <Button size="sm" busy={releasing} disabled={releasing} onClick={() => void restore(freed)}>
-              Undo
-            </Button>
+            <IconButton icon="undo" label="Undo" name="Put the record back" busy={releasing} disabled={releasing} onClick={() => void restore(freed)} />
           }
         >
           Sending is open again. Undo puts the record back and pauses sending.
