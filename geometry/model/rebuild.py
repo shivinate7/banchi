@@ -6,8 +6,9 @@
     # 1e-4), no EMA, no AMP, with `dfine_hgnetv2_n_custom.yml` pointing at <workdir>.
     python geometry/model/rebuild.py export <dfine-repo> <config.yml> <checkpoint.pth> <out.onnx>
 
-The labels hold 243 corner sets on the owner's rig photos. Each holds a `path` to a photograph
-that is NOT in this repo; a label whose file is missing is skipped. `verdict: REJECT` labels in
+The labels hold 243 corner sets on the owner's rig photos. Each names its photograph by `sha256`
+(the store's own photo key), found at $PKMNSCAN_HOME/photos/<sha[:2]>/<sha>.jpg. No photograph is
+in this repo; a label whose file is missing is skipped. `verdict: REJECT` labels in
 `labels.json` are dropped. Boxes 1 and 5 are the holdout. Needs numpy, Pillow, and for `export`
 torch plus the D-FINE checkout. The ONNX takes `images` and `orig_target_sizes`.
 """
@@ -35,7 +36,9 @@ def make_data(work):
     coco = {sp: dict(images=[], annotations=[], categories=[dict(id=0, name="card")]) for sp in ("train", "val")}
     for sp in coco:
         os.makedirs(f"{work}/{sp}", exist_ok=True)
+    home = os.environ.get("PKMNSCAN_HOME") or sys.exit("PKMNSCAN_HOME names the store holding the photographs")
     for o in labels():
+        o["path"] = f"{home}/photos/{o['sha256'][:2]}/{o['sha256']}.jpg"
         if not os.path.exists(o["path"]):
             continue
         sp = "val" if o["box"] in HOLDOUT_BOXES else "train"

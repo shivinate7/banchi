@@ -11,7 +11,9 @@ itself, axis aligned and unpadded: `identify.images.crop_rect` pads it by `PAD_B
 `method` is "dfine". `geometry/model/rebuild.py` rebuilds the file from the labels.
 """
 
+import sys
 import threading
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -31,19 +33,26 @@ def pad_for(box, default: float) -> float:
 
 
 _lock = threading.Lock()
-_session = None  # None: not tried yet. False: tried and unavailable.
+_session = None  # None: not loaded. False: the last load failed.
+_failed_at = 0.0
+RETRY_AFTER = 60.0  # seconds before a failed load is tried again
 
 
 def _load():
-    global _session
+    global _session, _failed_at
     with _lock:
+        if _session is False and time.monotonic() - _failed_at >= RETRY_AFTER:
+            _session = None
         if _session is None:
             try:
                 import onnxruntime as ort
 
                 _session = ort.InferenceSession(str(MODEL), providers=["CPUExecutionProvider"])
-            except Exception:
-                _session = False
+            except Exception as exc:
+                _session, _failed_at = False, time.monotonic()
+                # Once per failure, not per photo: the cooldown is what keeps this one line.
+                print(f"card_box: model not loaded ({exc!r}); using detect_card, retry in {RETRY_AFTER:.0f}s",
+                      file=sys.stderr)
     return _session or None
 
 
@@ -57,9 +66,11 @@ def resize_linear(array, nw, nh):
     y0, x0 = np.floor(ys).astype(int), np.floor(xs).astype(int)
     y1, x1 = np.minimum(y0 + 1, h - 1), np.minimum(x0 + 1, w - 1)
     fy, fx = (ys - y0)[:, None, None], (xs - x0)[None, :, None]
-    a = array.astype(np.float32)
-    top = a[y0][:, x0] * (1 - fx) + a[y0][:, x1] * fx
-    bottom = a[y1][:, x0] * (1 - fx) + a[y1][:, x1] * fx
+    # GATHER ROWS AND COLUMNS WHILE STILL uint8 and convert only the 640x640 result: a float32
+    # copy of a 12 MP frame is about 192 MB, times the preview's concurrent requests.
+    f = lambda yy, xx: array[yy][:, xx].astype(np.float32)
+    top = f(y0, x0) * (1 - fx) + f(y0, x1) * fx
+    bottom = f(y1, x0) * (1 - fx) + f(y1, x1) * fx
     return np.rint(top * (1 - fy) + bottom * fy).astype(np.uint8)
 
 

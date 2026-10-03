@@ -1481,7 +1481,10 @@ def _band_rect(sent_size, prepared, det, rect, band_fractions):
 
 
 def do_pipeline_crop_preview(payload: dict) -> dict:
-    """`POST /pipeline/crop-preview` — what this reading actually sends. FREE, writes nothing.
+    """`POST /pipeline/crop-preview` — what this reading sends, cropped by the preview's own finder. FREE, writes nothing.
+
+    THE FINDER IS `geometry.locate_card` (D125) AND A RUN'S IS STILL `detect_card`, so the crop
+    drawn here can differ from the one a run makes until runs move to it.
 
     D32's amendment gave the crop three named pairs and a sentence each, because the owner
     could not tell from the controls what the crop did: *"walk me through how im supposed to
@@ -1598,12 +1601,14 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
             "sample": {"box": capture.box, "index": capture.index, "unreadable": str(exc)},
         }
 
-    # THE CUT THE RUN WILL ACTUALLY MAKE, WHICH IS NOT ALWAYS THE ONE DETECTION PROPOSED.
+    # THE CUT THIS PREVIEW MAKES, WHICH IS NOT ALWAYS THE ONE THE FINDER PROPOSED. The finder is
+    # `geometry.locate_card` (the model, `detect_card` behind it), and a run still asks
+    # `detect_card` alone, so until runs move this is NOT the cut a run makes (D125).
     # `prepare` applies `images.crop_refusal` and can decline a box that came back looking
-    # fine — a rectangle inside the card, which sends the collector number outside the bytes.
+    # fine: a rectangle inside the card, which sends the collector number outside the bytes.
     # Reading the refusal off `prepared` rather than re-running the guard is the same rule
     # `_parse_preflight` follows and the same one `crop_rect` exists for: the preview draws
-    # what was made, never a second opinion about it.
+    # what it made, never a second opinion about it.
     crop_refused = prepared.crop_refused
     rect = (
         identify_images.crop_rect(prepared.original_size, detected)
