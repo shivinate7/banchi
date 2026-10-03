@@ -58,6 +58,7 @@ from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from store import files as store_files
+from identify.matchconst import MODEL_BYTES, MODEL_FILENAME, MODEL_SHA256, SERVED_GAMES  # noqa: F401
 from store.cache import ENGINE_MATCHER as ENGINE
 
 # ------------------------------------------------------------------------ the rules
@@ -78,7 +79,6 @@ MEASURE_MAX = 200
 FLOOR_MIN = 0.755
 TOP_N = 3
 
-SERVED_GAMES = ("pokemon", "riftbound", "one_piece")
 
 # The reasons a card is left unread. Each is a stable code the run record and the screen read.
 UNREAD_GAME = "game_not_served"
@@ -100,9 +100,6 @@ UNREAD_FLOOR = "match_too_weak"
 # The IMAGE tower of Marqo ecommerce-B (92.9 M parameters), fp32. Exported by
 # `scripts/export-matcher-model.py`, published as a release asset on shivinate7/banchi, and
 # pinned here by size and SHA-256. A different file is a different model: the index refuses it.
-MODEL_FILENAME = "marqo-b-image.onnx"
-MODEL_SHA256 = "79bc0fec967bdbb695a082344a5c2b4dc8ca47f34e72bf32c90f2e99e455a003"
-MODEL_BYTES = 371_700_983
 MODEL_RELEASE_TAG = "matcher-model-1"
 MODEL_URL = (
     "https://github.com/shivinate7/banchi/releases/download/"

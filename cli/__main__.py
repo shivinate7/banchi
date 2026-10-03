@@ -14,6 +14,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# THE BACKGROUND READER'S WATCHER TAKES A FAST PATH, before the heavy imports below. Its whole
+# design is a small idle process (`identify/sweep.py`): it must never import numpy, Pillow or
+# onnxruntime, and the imports below pull in the first two.
+if sys.argv[1:3] == ["match", "--sweep"]:
+    from identify import sweep  # noqa: E402
+
+    raise SystemExit(sweep.watch_main(sys.argv[3:]))
+
 from cli import (  # noqa: E402
     cmd_boxes,
     cmd_match,
@@ -298,6 +306,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="set up the free reader: status is free, prepare downloads the model and reads the stock photos.",
     )
     match_sub = match.add_subparsers(dest="match_action")
+    match.add_argument(
+        "--sweep", action="store_true",
+        help="the background reader's watcher: reads the queue while the switch is on, in the "
+        "gaps between captures, and never spends",
+    )
+    match.add_argument("--sweep-worker", action="store_true", help="the watcher's worker (not run by hand)")
     match_status = match_sub.add_parser("status", help="what is ready. Free.")
     match_status.add_argument("--json", action="store_true", help="also print one line of JSON")
     match_prepare = match_sub.add_parser(

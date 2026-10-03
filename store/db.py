@@ -85,6 +85,9 @@ BOX_IDS_ISSUED = "box_ids_issued"
 CARD_IDS_SEEDED = "card_ids_seeded"
 CARD_ID_SOURCES = "card_id_sources"
 PHOTOS_RELOCATED = "photos_relocated"
+# The background reader's switch (`identify/sweep.py`): "on" or absent. A store row, not a device
+# key, because it is a fact about this store and not about the browser that flipped it.
+MATCH_SWEEP = "match_sweep"
 # FIVE, FOR THE SAME REASON FOUR WAS. `docs/specs/stable-card-id.md` §5's warning about a
 # concurrent step landing under one number applies to every schema bump since, not only the
 # one it was written about — so this one is claimed the same way: added as its own step,
@@ -1588,6 +1591,18 @@ def box_ids_issued(conn: sqlite3.Connection) -> int:
         return max(0, int(row[0]))
     except (TypeError, ValueError):
         return 0
+
+
+def match_sweep_on(conn: sqlite3.Connection) -> bool:
+    """Whether the background reader is switched on. Off where the row is absent."""
+    row = conn.execute("SELECT value FROM meta WHERE key = ?", (MATCH_SWEEP,)).fetchone()
+    return bool(row) and row[0] == "on"
+
+
+def set_match_sweep(conn: sqlite3.Connection, on: bool) -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (MATCH_SWEEP, "on" if on else "off")
+    )
 
 
 def photos_relocated(conn: sqlite3.Connection) -> Optional[str]:

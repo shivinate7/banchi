@@ -1,6 +1,6 @@
 # Pick the identification engine for each run
 
-**Status: phase 1 is built (the per-run picker, the free read, the second look). The background reader (section 8) is not built.** D2 (identification is Haiku vision, end to end) carries the
+**Status: phase 1 is built (the per-run picker, the free read, the second look). Phase 2, the background reader (section 8), is built and off by default. Its two ship gates are measured and wait for the owner.** D2 (identification is Haiku vision, end to end) carries the
 owner's ruling. For each run, the owner picks who reads the cards: Haiku or the stock-photo matcher.
 The free read is the default pick, on the owner's ruling.
 
@@ -427,16 +427,20 @@ Without a change, a Haiku press would adopt a matcher answer as paid for. So:
 with an empty queue it uses barely any memory. This section bends two decisions, D1 and D273 (question 3).
 Both are rewritten in place and cite the owner's word.
 
-**What it is.** A separate child, the CLI command `match` with the `--sweep` flag. It lives outside the capture server.
+**What it is.** A separate child, the CLI command `match` with the `--sweep` flag (`identify/sweep.py`). It lives outside the capture server.
 It takes no request slot. `REQUEST_SLOTS` and `PHOTO_SLOTS` in `server/capture_server.py` are never spent on it.
 It reads photographs from disk. It never runs inside a capture request.
+The capture server starts the watcher when the switch goes on, and once at server start when the switch is already on. It does nothing else for it.
 
 **The queue.** A card is queued when its state is `captured` and the `identifications` table holds no row for it.
+The game must be one the matcher serves. An unhinted Pokemon card is never queued.
+A card the worker looked at and did not accept is recorded as tried, against that photograph and that model file.
+It leaves the queue until it is re-shot or the model changes. It waits for a press.
 
 **What it writes.** One thing: an `identifications` row with engine `marqo-b`. It never writes card state.
 It never sets a SKU, a name or a number on a card. Those follow D258 (identity follows the SKU) and the join.
 The row records the card's `cid`. A move or a renumber changes the position key and never the `cid`.
-So the row follows the card through a re-slot.
+The row is keyed like every cache row, by position, and the `cid` lets a reader match it back to the card.
 
 **A re-shoot drops the row.** Today `do_reshoot` writes new bytes and touches neither `cards` nor `identifications`
 (`store/db.py`, the comment on the naming ladder). A matcher row would then hold the digest of bytes that exist nowhere.
@@ -472,23 +476,50 @@ The build lane measures the watcher's idle resident memory, with an empty queue,
 It brings the number to the owner before ship, and the owner sets the pass mark then.
 A queue with cards in it may use the 454 MB peak, in the worker only.
 
-**While cards are being fed (the capture gate).** Until the capture-speed gate is measured, the sweep reads in the gaps only.
-It waits 3 seconds after the last capture before it starts the worker, and it stops the worker at the next capture.
-The gate: 300 feeder-paced captures on a scratch store, run twice, with the reader and without it.
-The metric is the p99 time of a capture request. If the p99 with the reader is worse than the p99 without it
-the owner decides from the two figures whether the sweep may read "always" or stays on "gaps only". There is no pass mark yet.
-Until that measurement exists, gaps only is the rule. This is unmeasured.
+**While cards are being fed (the capture gate).** The owner's ruling: the reader reads even mid-feed (*"Even mid-feed"*).
+The quiet time is 0. The worker starts as soon as a card waits, and a capture never stops it.
+The gate: 300 feeder-paced captures on a scratch store, run with the reader off and with it on. The metric is the p99 time of a capture request.
+The measured p99 is 30.5 ms with the reader on and 30.6 ms with it off, so the ruling stands on the figures below.
+`--quiet N` still exists on the watcher. With N above 0 the worker starts only when the newest capture is N seconds old, and a capture stops it.
+The measuring script uses it for its third arm.
 
-**The toggle.** The on and off switch lives in the rig settings on the Capture screen. That is the `Setup` group in the Rig panel of `CaptureScreen`.
-Its state is a row in the store's `meta` table. It is not a device key, and it is not in `deviceMemory.ts`.
+**Measured (scratch store, `scripts/sweep-memory.py` and `scripts/capture-gate.py`).**
+
+| Measure | Result |
+|---|---|
+| Watcher idle resident memory, empty queue | 22.1 MB |
+| Worker peak resident memory, 20 captured cards | 929 MB |
+| Worker peak resident memory, 3000 captured cards | 1103.5 MB |
+| Capture request, reader off (300 captures at 623 ms) | p50 20.1 ms, p99 30.6 ms |
+| Capture request, reader on, quiet of 3 s | p50 21.0 ms, p99 34.1 ms |
+| Capture request, reader on, quiet of 0 (shipped) | p50 16.6 ms, p99 30.5 ms |
+
+With a quiet of 3 s the worker never ran during the feed, because a card arrived every 623 ms.
+With a quiet of 0 it wrote 139 rows during the feed and the p99 did not move.
+The first worker peak came from a 20-card store. The second comes from a store of 3000 cards.
+The worker runs `store.read()` once per chunk of 8 cards. A snapshot loads only the rows it names, so the figure does not grow with the store.
+The peak is above the 454 MB of the model alone, because the worker also holds the CLI imports and decoded crops.
+
+**It cannot crash-loop.** A worker that exits with any code but 0 or 3 is waited out for longer each time: 30 seconds, doubling to 30 minutes.
+Exit code 3 means the model file, the index or the runtime is not ready, and the wait is 300 seconds.
+The worker writes its log to `.serve/match-sweep.log`. Before each chunk it records the cards in `match-sweep-inflight.json`.
+A worker that dies inside a chunk, even by an out-of-memory kill, leaves the file. The next start marks those cards tried.
+**One watcher runs at a time, by one lock.** The watcher holds an `flock` on `inventory/match-sweep.lock`. A held lock is the only thing that reads as running, so a reused pid cannot.
+The watcher writes `.serve/match-sweep.json` and a reap owner mark (D305). `make down` and `make reap` stop it, and a SIGTERM stops the worker before the watcher exits.
+It exits when its store or its tree is gone.
+
+**The toggle.** The on and off switch is one row, "Match in the background", in the Rig panel of the Capture screen.
+Its state is the `match_sweep` row in the store's `meta` table. It is not a device key, and it is not in `deviceMemory.ts`.
+`PUT /pipeline/match/sweep` writes it and starts the watcher. `GET /pipeline/match/sweep` reads it.
+The row holds its size until the store answers (D313). The reader is off until the owner turns it on.
 The setup press downloads the model file and builds the fingerprints once (section 6, "Prepare matching"). It asks first, and it shows both sizes.
 Turning the toggle on never downloads. With no model or no index, the toggle reads as on and the sweep does nothing.
 
 **What the screens show (D313, nothing on screen moves unless the person moved it).**
 
 - Nothing on the capture screen changes while the sweep reads. No count, no spinner, no new element.
-- The runs sheet shows one snapshot count: how many cards the free reader has matched. It is read when the sheet opens
-  and when the owner presses refresh. It never ticks.
+- The runs sheet shows one snapshot count: how many cards the free reader has matched. It sits on the "Prepare matching" card, read when the sheet opens
+  and when the owner presses refresh. It never ticks. It counts every `marqo-b` row, from a press or from the background reader.
 - A per-card detail shows on request only: the engine, the match and the margin.
 
 **What a paid press does over matched cards.** Section 6 gives the rule. It asks every time, and the default is skip.
@@ -511,7 +542,7 @@ Turning the toggle on never downloads. With no model or no index, the toggle rea
 - The free read may run in the background, always, if its idle memory is barely any. D1 and D273 are rewritten for it (section 8).
 - A printing with no stock image blocks only a match that shares its card name. Radiance is no special case (section 2).
 - The pass marks for idle memory and capture speed are not set. Measure first, then bring the numbers to the owner (section 8).
-- While cards are being fed, the reader reads in the gaps only, until a capture-speed gate is measured (section 8).
+- The reader reads even mid-feed. The owner's word: *"Even mid-feed"*. The quiet time is 0, from the measured capture gate (section 8).
 - A paid press over matched cards asks every time and defaults to skip (section 6).
 - The on and off toggle is in the rig settings. Its state is a store row. The setup press downloads once (section 8).
 

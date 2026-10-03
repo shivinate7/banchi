@@ -202,6 +202,7 @@ const RECORDED = {
     'getPriceMovers', 'getSavedTrends',       // #/pricing's movers and the saved overnight trends
     'getSkuPhotosSettled',                    // the stock-photo read that waits out a cold group
     'getMatchState',                          // the free reader's readiness (model, fingerprints)
+    'getMatchSweep',                          // the background reader's switch and matched count
     // The markdown lens's three (D103) — the survey table, and D278's history and trends
     // strip re-addressed at a stamp instead of a run.
     'getMarkdownTable', 'markdownHistory', 'markdownTrends',
@@ -244,6 +245,7 @@ const RECORDED = {
   ],
   writes: [
     'prepareMatch',                           // the free reader's one-time setup press
+    'setMatchSweep',                          // the background reader's on/off switch
     'capture', 'updateCard', 'undoCapture', 'reshootPhoto', 'answerReview', 'standDown',
     'undoStandDown', 'undoAnswer', 'answerReviewGroup', 'markSold', 'undoSale', 'retireCard',
     'undoRetire', 'createBox', 'updateBox', 'openSection', 'applyBoxClaims', 'removeCardInPlace',

@@ -337,6 +337,7 @@ from pipeline import walkplan  # noqa: E402
 from cli import runs as cli_runs  # noqa: E402
 from server import match  # noqa: E402
 from store import Store, db, files, master, numbers, photos, queues  # noqa: E402
+from store import cache as cache_mod  # noqa: E402
 from store import orders as order_store  # noqa: E402
 
 # The pipeline seam, in its own module because it is the one part of this server that can
@@ -11206,6 +11207,13 @@ def do_reshoot(box: int, index: int, payload: dict) -> dict:
 
         previous_capture_id = card.capture_id
 
+        # A BACKGROUND-READER ROW HOLDS THE DIGEST OF BYTES THAT ARE ABOUT TO EXIST NOWHERE, so it
+        # goes in the same transaction as the new photograph, and the reader reads the new one.
+        # A Haiku row or a cleared row keeps today's behavior: it is paid for or vouched for.
+        held = snapshot.cache.get(key)
+        if held is not None and held.engine == cache_mod.ENGINE_MATCHER and not held.cleared_by_human:
+            del snapshot.cache.entries[key]
+
         # The caller's own integers, exactly as `_card_row` renders from them: the record
         # was found under their key, and they have already matched (\\d+)/(\\d+) in the
         # route, while the stored fields may be strings `Inventory.parse` never coerced.
@@ -16615,6 +16623,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # IS THE FREE READER PREPARED (`docs/specs/identify-engine-pick.md`). Free: a size, a
                 # hash, an index's counts and a progress file. It loads no model.
                 return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_match())
+            if path == "/pipeline/match/sweep":
+                # THE BACKGROUND READER'S SWITCH AND ITS COUNT, for the Capture screen's Setup.
+                # Free: a meta row, a pid check and one count.
+                return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_match_sweep())
             if path == "/pipeline/runs":
                 return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_runs())
             if path == "/pipeline/markdowns":
@@ -17314,6 +17326,12 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, do_put_box(int(match.group(1)), self._body())
                 )
+            if path == "/pipeline/match/sweep":
+                # THE SETUP SWITCH. One meta row, and the watcher starts when it is on. It never
+                # downloads and never reads a card inside this request.
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pipeline_match_sweep_set(self._body())
+                )
             if path == "/pricing":
                 # THE CORPUS, REPLACED WHOLESALE (D86, amended) — the read-modify-write the
                 # retired per-run `PUT .../decisions` used, over one document for the store
@@ -17853,6 +17871,9 @@ def serve(host: str = HOST, port: int = PORT) -> None:
     # what `warm_stock_images` itself refuses to do from anywhere but here. Fire-and-forget:
     # background threads, and a store this checkout cannot yet read warms nothing.
     pipeline_routes.warm_stock_images()
+    # A SWITCHED-ON BACKGROUND READER whose watcher did not survive the restart starts again. A
+    # detached child, outside this server; it takes no request slot.
+    pipeline_routes.ensure_sweep()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

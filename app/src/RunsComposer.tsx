@@ -412,6 +412,7 @@ function MatchPrepare({
         <p className="run-step-fine">
           Ready. {count(state.fingerprints)} stock photos read
           {(state.no_image ?? 0) > 0 ? `, ${state.no_image} printings have none` : ''}.
+          {typeof state.matched === 'number' ? ` ${plural(state.matched, 'card')} matched for free so far.` : ''}
         </p>
         <Button size="sm" variant="quiet" onClick={onPrepare}>
           Refresh stock photos

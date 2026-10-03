@@ -444,8 +444,10 @@ COMPONENTS = [
                                         "the table and writes nothing.",
                                 "governed_by": ["D189", "D86"],
                                 "tested_by": ["T7"]},
-            "cmd_match.py": {"does": "`pkmnscan match status | prepare` — the free reader's one-time "
-                                     "setup (D2). `status` is free. `prepare` downloads the pinned model "
+            "cmd_match.py": {"does": "`pkmnscan match status | prepare | --sweep-worker` — the free reader's "
+                                     "setup and the background reader's worker (D2): it reads the "
+                                     "queue and exits, writing only `marqo-b` identifications rows. "
+                                     "`status` is free. `prepare` downloads the pinned model "
                                      "file if absent, then reads each stock photo of every set the "
                                      "store holds plus every Riftbound set once and keeps the "
                                      "fingerprint (D301's one exception). Resumable, never spends, "
@@ -1691,13 +1693,27 @@ COMPONENTS = [
                                  "margin and floor clear `MARGIN_MIN` and `FLOOR_MIN`, its pool is one "
                                  "hinted set or every non-promo set of its game, and the best answer "
                                  "shares no card name with a printing that has no stock photo (the "
-                                 "look-alike guard). Any other card is left UNREAD: no identification, "
-                                 "never queued, no fallback. The index (`inventory/fingerprints.sqlite`) "
+                                 "look-alike guard). Any other card is NOT ACCEPTED: the press sends it to "
+                                 "a Haiku second look, held for review. The index (`inventory/fingerprints.sqlite`) "
                                  "holds vectors only and names the model file's sha256, so another "
                                  "model's index is refused (D301's one exception: each stock image is "
                                  "read once, in memory). Stdlib at import; numpy, Pillow and onnxruntime "
                                  "load lazily.",
                          "governed_by": ["D2", "D3", "D76", "D88", "D170", "D213", "D301"]},
+            "matchconst.py": {"does": "the few constants the background reader's watcher needs "
+                                      "(served games, the model pin, the store's home), standard "
+                                      "library only, because the watcher cannot import the `store` "
+                                      "package (about 17 MB). `match.py` takes its names from here.",
+                              "governed_by": ["D2", "D43"]},
+            "sweep.py": {"does": "the background reader's watcher (`pkmnscan match --sweep`): a small "
+                                 "idle process on the standard library and sqlite only. It polls the "
+                                 "queue (captured cards with no identifications row, in a served game, "
+                                 "never an unhinted Pokemon card, never one already tried) and starts a "
+                                 "worker as soon as cards wait (`--quiet N` waits for a gap of N seconds). "
+                                 "One flock keeps one watcher; a failing worker is backed off, logged "
+                                 "and its cards marked tried. It never spends and never writes card "
+                                 "state.",
+                         "governed_by": ["D1", "D2", "D76", "D88", "D170", "D273", "D305"]},
             "cost.py": {"does": "the price sheet, and the ONE place it is applied — the preflight's "
                                 "estimate before a send, the collect's record of what the send used, "
                                 "and server/pipeline_routes.py:_usage filling the figure in for a run "
@@ -3624,6 +3640,22 @@ COMPONENTS = [
                 "does": "the vendored linter's MIT license and notice, copied unmodified "
                         "beside it — the license's one condition for reuse.",
                 "governed_by": ["D60"]},
+            "sweep_scratch.py": {
+                "does": "a scratch capture server over a temporary store (own free port, the model "
+                        "symlinked, the index copied) for the background reader's two measurements. "
+                        "It never touches the owner's store.",
+                "governed_by": ["D43", "D2"]},
+            "sweep-memory.py": {
+                "does": "ship gate (a) for the background reader: the watcher's idle RSS with an "
+                        "empty queue and the worker's peak RSS over a queue of captures, on a "
+                        "scratch store. It also checks the reader wrote only `marqo-b` rows and "
+                        "changed no card state. No pass mark; it prints numbers for the owner.",
+                "governed_by": ["D2", "D1"]},
+            "capture-gate.py": {
+                "does": "ship gate (b) for the background reader: p50 and p99 of 300 feeder-paced "
+                        "capture requests on a scratch store with the reader off, on in the gaps, "
+                        "and on always. No pass mark; the owner decides from the three rows.",
+                "governed_by": ["D2", "D1"]},
             "ste_measure.py": {
                 "does": "the STE prose check's ONE measurer. Its `ste offenders` docs-audit "
                         "row was CUT 2026-09-27 (test-audit plan, D60/D280 amended): "
