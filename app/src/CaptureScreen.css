@@ -660,6 +660,9 @@
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  /* An implicit `auto` column grows to the foot's nowrap min-content (box name + tuning readout) and
+     spills past the stage, so the frame is wider than its column and clipped. Pin it to the stage. */
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
   border-radius: var(--bn-r-xl);
@@ -949,7 +952,8 @@
   font-size: var(--bn-fs-sm);
   color: var(--vf-ink-2);
 }
-.capture-foot-box { display: flex; align-items: center; gap: var(--bn-2); min-width: 0; }
+.capture-foot-box { display: flex; align-items: center; gap: var(--bn-2); min-width: 0; flex: 1 0 auto; }
+.capture-foot-box > .capture-foot-next { flex: none; }
 .capture-foot-box > .bn-icon { color: var(--vf-ink-3); flex: none; }
 .capture-foot-box-name { font-weight: 600; color: var(--vf-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .capture-foot-next {
@@ -1269,12 +1273,13 @@
 .capture-carried { animation: capture-drop var(--bn-t-slow) var(--bn-ease-spring) both; }
 
 /* ---- tuning drawer: a pill in the stage foot, a panel floating above it ------------------------------------------ */
-.capture-tuning { position: relative; flex: none; }
+.capture-tuning { position: relative; flex: 0 1 auto; min-width: 0; }
 .capture-tuning > summary {
   display: flex;
   align-items: center;
   gap: var(--bn-1-5);
   height: 26px;
+  min-width: 0;
   padding: 0 var(--bn-2) 0 var(--bn-2);
   border-radius: var(--bn-r-full);
   background: var(--bn-surface-2);
@@ -1295,6 +1300,7 @@
   font-weight: 500;
   color: var(--vf-ink-3);
   max-width: 220px;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
