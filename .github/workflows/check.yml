@@ -431,11 +431,9 @@ jobs:
       # shard when the two differ: an older image cannot find its browser, a newer one would
       # silently run a different Chromium.
       - name: Image matches the Playwright pin
-        env:
-          IMAGE: ${{ job.container.image }}
         run: |
           pin="$(node -p "require('./app/package.json').devDependencies['@playwright/test']")"
-          tag="$(printf '%s' "$IMAGE" | sed -E 's|.*/playwright:v([0-9.]+)-.*|\1|')"
+          tag="$(grep -oE 'mcr.microsoft.com/playwright:v[0-9.]+' .github/workflows/check.yml | head -1 | sed 's/.*:v//')"
           if [ "$pin" != "$tag" ]; then
             echo "image is Playwright $tag but app/package.json pins $pin: move them together" >&2
             exit 1
