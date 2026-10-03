@@ -41,10 +41,13 @@ type Command = (typeof ALLOWED)[number]
 /** Pause after COMPLETE before the next START (about 0.6 s a card, the pace motion was tuned on). */
 export const DEAL_GAP_MS = 200
 const SILENCE_MS = 5_000
+/** After Stop, how long a START still in the air may take to answer before its card is written off. */
+const SETTLE_MS = 1_000
 
 export const SAID_LOST = 'Lost the dispenser. Check it is on, then connect again.'
 const SAID_SILENT = 'No answer. Check it is on and nothing else is using it.'
 const SAID_FAULT = 'The dispenser reported a fault. Check it, then connect again.'
+export const SAID_OFF = 'Bluetooth is off. Turn it on, then connect again.'
 const SAID_FAILED = 'Could not connect. Check it is on, then try again.'
 export const SAID_DROPPED = 'Stopped: a card was not photographed. Resume captures first.'
 
@@ -73,6 +76,7 @@ export function createDealer() {
   let awaiting = false // a START went out and its reply has not come
   let silence: ReturnType<typeof setTimeout> | undefined
   let gap: ReturnType<typeof setTimeout> | undefined
+  let settle: ReturnType<typeof setTimeout> | undefined
 
   const derive = (): string => {
     if (note !== null) return note
@@ -141,6 +145,7 @@ export function createDealer() {
     if (text === 'MOTOR:COMPLETE') {
       awaiting = false
       clearTimeout(silence)
+      clearTimeout(settle)
       cards += 1
       if (state === 'dealing') gap = setTimeout(deal, DEAL_GAP_MS)
       publish() // a card already moving when Stop was pressed still counts
@@ -160,6 +165,8 @@ export function createDealer() {
     if (state === 'connecting' || state === 'connected' || state === 'dealing' || state === 'stopped') return
     const api = bluetooth()
     if (api === undefined) return
+    teardown?.() // a reconnect drops the old link's listeners first
+    teardown = null
     state = 'connecting'
     note = null
     publish()
@@ -169,8 +176,14 @@ export function createDealer() {
         filters: [{ name: DEVICE_NAME }, { services: [SERVICE] }],
         optionalServices: [SERVICE],
       })
-    } catch {
-      state = 'idle' // the chooser was closed
+    } catch (e) {
+      const { name = '', message = '' } = e as { name?: string; message?: string }
+      if (name === 'AbortError' || (name === 'NotFoundError' && /cancel/i.test(message))) {
+        state = 'idle' // the owner closed the chooser: nothing to say
+      } else {
+        state = 'error'
+        note = name === 'NotFoundError' ? SAID_OFF : SAID_FAILED
+      }
       publish()
       return
     }
@@ -203,7 +216,7 @@ export function createDealer() {
   }
 
   async function start(): Promise<void> {
-    if (command === null || (state !== 'connected' && state !== 'stopped')) return
+    if (awaiting || command === null || (state !== 'connected' && state !== 'stopped')) return
     cards = 0
     note = null
     ended = false
@@ -219,6 +232,8 @@ export function createDealer() {
     state = 'stopped'
     note = why ?? null
     publish()
+    // a START still in the air may land; if it never answers, write the card off so Start can run again
+    if (awaiting) settle = setTimeout(() => (awaiting = false), SETTLE_MS)
     await write('MOTOR:STOP').catch(() => {})
   }
 
@@ -234,6 +249,7 @@ export function createDealer() {
     /** Stop dealing and drop the listeners. For unmount. */
     dispose() {
       void stop()
+      clearTimeout(settle)
       teardown?.()
       teardown = null
     },
