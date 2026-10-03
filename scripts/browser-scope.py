@@ -345,10 +345,15 @@ def classify_paths(paths: Sequence[str], read_side: SideReader,
             continue
         entry = hits[0]
         within = entry.get("within")
-        if within is None and ast_skip is not None and path.endswith(".py") and ast_skip(path):
-            if ast_equal(read_side("base", path), read_side("head", path)):
-                lines.append(f"  skip  {path}  (comment or docstring change only: same AST)")
-                continue
+        if (
+            within is None
+            and ast_skip is not None
+            and path.endswith(".py")
+            and ast_skip(path)
+            and ast_equal(read_side("base", path), read_side("head", path))
+        ):
+            lines.append(f"  skip  {path}  (comment or docstring change only: same AST)")
+            continue
         if within in ("exists", "header"):
             before, after = read_side("base", path), read_side("head", path)
             if within == "exists":

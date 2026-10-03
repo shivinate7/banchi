@@ -113,23 +113,23 @@ twenty-third entry is now on the roster.
 
 **AMENDMENT, THE HARNESS AND PRECISION.** The owner's word. Four changes, one engine.
 `make harness` is now a roster target (`harness`, derived by `guard-scope.py:harness_subjects`).
-Its subjects are read out of every module under `harness/`: each package or module imported
-there, each top-level directory a `ROOT / "x"` chain names, and the TS import closure of each
-`app/src/*.ts` such a chain names (`standing.ts`, `storeHistory.ts`). the `vendor/` tree, `requirements.txt`
+Its subjects are read out of every module under `harness/`. They are each package or module
+imported there. They are each top-level directory a `ROOT / "x"` chain names. They are the TS
+import closure of each `app/src/*.ts` such a chain names (`standing.ts`, `storeHistory.ts`). The `vendor/` tree, `requirements.txt`
 and `app/package-lock.json` are declared beside that, because no harness source spells them.
 The Makefile counts only through the `harness` recipe. A main push and the nightly run set
 `PKMNSCAN_GUARD_SCOPE=all` in `check.yml`, so they never skip. A comment-only edit never skips
 the harness: it reads docstrings as text.
 Second, a non-spec file under `app/tests/` selects the specs whose import closure holds it
 (`browser-scope.py:build_reverse_map`). One no spec imports still selects every spec.
-Third, `guard-scope.py:NARROW` narrows a derived subject to what is read: `exists` where only
-`is_file` reads it, `header` (docstring and UPPERCASE names) for `docs/map.py` under
-`audit-self-test`, and a drop for `silent-write-selftest`'s `docs-audit.py` command string.
+Third, `guard-scope.py:NARROW` narrows a derived subject to what is read.
+`exists` is for a subject where only `is_file` reads it. `header` (docstring and UPPERCASE names)
+is for `docs/map.py` under `audit-self-test`. A drop is for `silent-write-selftest`'s `docs-audit.py` command string.
 `EXTRA_SUBJECTS` adds what `browser-scope-selftest` reads and the deriver cannot see.
 Fourth, `serve-selftest` and `audit-self-test` skip a Python subject whose AST, docstrings
 stripped, is equal on both sides (`browser-scope.py:ast_equal`). A parse error, a module that
 reads `__doc__`, a file the self-test names (it may patch it by exact text: `serve.py`,
 `sigil-check.py`) and anything under `harness/` for `audit-self-test` run. The harness subjects
 also follow bare string constants (`pkmnscan`) and the `scripts/*.py` files it names to the data
-they read (`demo-assets/`, not its `mirror/`), plus the `app/tsconfig*.json` files.
+they read (`demo-assets/`, not its `mirror/`), plus `app/tsconfig.json`.
 The measured saving is unmeasured until the first CI runs after merge.
