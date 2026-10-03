@@ -1072,7 +1072,7 @@ allows "swept: \`git checkout -q -- clean.txt\` (clean)" "$tmp/main" "git checko
 echo ""
 echo "  the owner-only clause: an agent's tool call may not set a guard switch"
 
-# THE OLDER CASES CALL `hook(payload, owner_only=False)`, so they judge the other nine clauses.
+# THE OLDER CASES CALL `hook(payload, owner_only=False)`, so they judge the other clauses.
 # These go through the real `--hook`, armed, as a session's own tool call would.
 judge_agent() {   # judge_agent <cwd> <command> -> exit code, output in $out
   out="$(printf '%s' "$2" \

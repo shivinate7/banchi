@@ -23,7 +23,7 @@ evidence for that: guard-opsec.sh over-triggered and was turned off within a day
 
 ONCE PER FILE PER SESSION, on the owner's word. The nudge for a file is printed the first time
 the session edits it and is silent after, because the session already holds it. The paths shown
-are kept in a temp file named for the session id. A SessionStart event deletes that file
+are kept in a temp file named for the session id and agent id. A SessionStart event deletes that file
 (`--reset`), so a compaction, which drops the printed text from the context, prints each file
 again. No session id in the payload means no memory, so the nudge prints every time.
 
@@ -261,8 +261,11 @@ def render(relative: str, entry: Dict[str, object]) -> str:
 
 def _seen_file(payload: Dict[str, object]) -> Optional[Path]:
     """The temp file holding the paths this session was already shown, or None without an id."""
-    safe = re.sub(r"[^A-Za-z0-9_-]", "", str(payload.get("session_id") or ""))
-    return Path(tempfile.gettempdir()) / f"pkmnscan-decision-context-{safe}" if safe else None
+    clean = lambda key: re.sub(r"[^A-Za-z0-9_-]", "", str(payload.get(key) or ""))
+    safe = clean("session_id")
+    # The session id is shared by the orchestrator and every subagent, so the agent id (empty
+    # for the main session) is part of the key: each agent is shown a file once.
+    return Path(tempfile.gettempdir()) / f"pkmnscan-decision-context-{safe}-{clean('agent_id')}" if safe else None
 
 
 def already_shown(payload: Dict[str, object], relative: str) -> bool:
@@ -301,7 +304,8 @@ def main(argv: Sequence[str]) -> int:
     if argv[:1] == ["--reset"]:
         seen = _seen_file(payload)
         if seen is not None:
-            seen.unlink(missing_ok=True)
+            for each in seen.parent.glob(seen.name.rsplit("-", 1)[0] + "-*"):
+                each.unlink(missing_ok=True)
         return 0
     relative = relative_to_root(str(payload.get("tool_input", {}).get("file_path", "")))
     if not relative:
