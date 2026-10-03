@@ -754,6 +754,7 @@ function SwitchRow({
   icon,
   on,
   busy,
+  down,
   title,
   onToggle,
 }: {
@@ -761,13 +762,14 @@ function SwitchRow({
   icon: IconName
   on: boolean | null
   busy: boolean
+  down: boolean
   title: string
   onToggle: () => void
 }) {
   return (
     <button
       type="button"
-      className="capture-row"
+      className="capture-row capture-row-switch"
       role="switch"
       aria-checked={on === true}
       disabled={on === null || busy}
@@ -779,10 +781,9 @@ function SwitchRow({
       <span className="capture-lab">{label}</span>
       <span className="capture-right">
         <span className={on === true ? 'capture-val is-armed' : 'capture-val'}>
-          {on === null ? '\u00a0' : on ? 'On' : 'Off'}
+          {on === null ? (down ? 'Unavailable' : '\u00a0') : on ? 'On' : 'Off'}
         </span>
       </span>
-      <span aria-hidden="true" />
     </button>
   )
 }
@@ -1156,13 +1157,18 @@ export function CaptureScreen() {
      It is read once, when the rig is first shown, and written by the person pressing the row. */
   const [sweepOn, setSweepOn] = useState<boolean | null>(null)
   const [sweepBusy, setSweepBusy] = useState(false)
+  const [sweepDown, setSweepDown] = useState(false)
   const rigShown = rigOpen || (openField !== null && RIG_FIELDS.has(openField))
   useEffect(() => {
     if (!rigShown || sweepOn !== null) return
     let live = true
     getMatchSweep()
-      .then((answer) => live && setSweepOn(answer.on))
-      .catch(() => undefined)
+      .then((answer) => {
+        if (!live) return
+        setSweepDown(false)
+        setSweepOn(answer.on)
+      })
+      .catch(() => live && setSweepDown(true))
     return () => {
       live = false
     }
@@ -4805,14 +4811,18 @@ export function CaptureScreen() {
                 <ul className="capture-block-list">
                   {blockers.map((blocker) => (
                     <li key={blocker.key} className="capture-block-row" data-tone={blocker.tone}>
-                      <Icon name={blocker.icon} size={14} />
+                      {/* One icon per row: the fix button carries it when there is no sentence. */}
                       {blocker.text === null ? null : (
-                        <span className="capture-block-say">{blocker.text}</span>
+                        <>
+                          <Icon name={blocker.icon} size={14} />
+                          <span className="capture-block-say">{blocker.text}</span>
+                        </>
                       )}
                       {blocker.fix === null ? null : (
                         <Button
-                          size="sm"
-                          icon={blocker.fix.icon}
+                          size="lg"
+                          block
+                          icon={blocker.text === null ? blocker.fix.icon : undefined}
                           className="capture-block-fix"
                           onClick={blocker.fix.onPress}
                         >
@@ -4926,10 +4936,7 @@ export function CaptureScreen() {
 
           {undoStack.length === 0 ? (
             <p className="capture-quiet capture-film-empty">
-              {/* F5 verbiage cut: the "Recent" heading above already says this filmstrip is
-                  empty of anything to undo — a bare glyph carries it, and the section's own
-                  aria-label ("Recent captures") is what a screen reader has instead. */}
-              <Icon name="film" size={14} />
+              Your latest captures show up here, ready to undo.
             </p>
           ) : (
             <ul className="capture-undo-list">
@@ -5675,6 +5682,7 @@ export function CaptureScreen() {
             icon="eye"
             on={sweepOn}
             busy={sweepBusy}
+            down={sweepDown}
             title="Matches captured cards to their stock photos in the gaps between captures. Free, and it never changes a card."
             onToggle={flipSweep}
           />

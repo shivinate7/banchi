@@ -793,6 +793,8 @@ function read(path: string): unknown {
    * gives with no sales export, for any SKU. The screen words it as a sentence. */
   const realized = /^\/pipeline\/products\/([^/]+)\/realized$/.exec(route)
   if (realized !== null) return { sku: decodeURIComponent(realized[1] ?? ''), configured: false }
+  /* The background reader is off in the demo: the answer the real server gives when it is not swept. */
+  if (route === '/pipeline/match/sweep') return { on: false, running: false, matched: 0 }
   /* THE BURIED HALF OF THE ONE RECORDED GRAVEYARD, filtered as the route filters it. */
   const graveyard = responses['/graveyard']
   if (route === '/graveyard' && params.get('buried') === '1' && graveyard !== undefined) {

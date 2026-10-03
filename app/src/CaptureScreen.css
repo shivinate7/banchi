@@ -227,6 +227,9 @@
    row's single cap — widened for THIS row alone, never the shared `.capture-row` template,
    so every other row's column stays put. */
 .capture-row-keypair { grid-template-columns: 42px auto auto minmax(0, 1fr) 14px; }
+/* No chevron: the switch row's value column takes the 14px a chevron would hold, so 'Off' is never clipped by a long label in a narrow rail. */
+.capture-row-switch { grid-template-columns: 22px auto minmax(0, 1fr) auto; }
+.capture-row-switch .capture-lab { overflow: hidden; text-overflow: ellipsis; }
 .capture-row-icon { color: var(--bn-ink-3); flex: none; }
 .capture-lab { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-2); white-space: nowrap; }
 /* `.capture-right` is the flex row that holds the value AND its sub-line as siblings — never
@@ -564,7 +567,7 @@
 .capture-block-row[data-tone='warn'] { color: var(--bn-ink); }
 .capture-block-row[data-tone='warn'] > .bn-icon { color: var(--bn-warn); }
 .capture-block-say { grid-column: 2 / 4; align-self: start; min-width: 0; }
-.capture-block-fix { grid-column: 2; justify-self: stretch; align-self: start; margin-top: var(--bn-1-5); }
+.capture-block-fix { grid-column: 1 / -1; justify-self: stretch; align-self: start; margin-top: var(--bn-1-5); }
 .capture-replayed { font-size: var(--bn-fs-sm); line-height: 1.4; padding: var(--bn-2) var(--bn-3); }
 .capture-section { display: flex; flex-direction: column; gap: var(--bn-1-5); padding-top: var(--bn-1-5); }
 /* The way onward: once the box holds cards, the run card hands it to the pipeline. */
@@ -1025,7 +1028,6 @@
 /* NOT `.bn-live-count`: the words "12 recent" are the figure, so the floor is the whole phrase */
 .capture-undo-depth { min-inline-size: 9ch; margin-left: var(--bn-1-5); font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--bn-ink-3); }
 .capture-film-empty { display: flex; align-items: flex-start; gap: var(--bn-2); padding: var(--bn-1-5) var(--bn-1) var(--bn-1); font-size: var(--bn-fs-sm); }
-.capture-film-empty .bn-icon { color: var(--bn-ink-4); }
 /* UN-1: THE WHOLE SITTING SCROLLS INSIDE THE STRIP RATHER THAN GROWING THE PAGE (D164's cap
    is gone). Fixed at a round number of grid rows rather than a viewport fraction, so the strip's
    own height does not shift as the viewfinder above it resizes across breakpoints — `40vh`
