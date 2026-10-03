@@ -102,6 +102,9 @@ async function writes(page: Page): Promise<string[]> {
 const control = (page: Page, name: string) => page.getByRole('button', { name, exact: true })
 
 async function armMotion(page: Page): Promise<void> {
+  // picking a box folds the Rig group; open it again when it is shut
+  const rig = page.getByRole('region', { name: 'Rig' }).getByRole('button', { name: /^Rig/ })
+  if ((await rig.getAttribute('aria-expanded')) === 'false') await rig.click()
   await page.getByRole('button', { name: /Trigger/ }).click()
   await page.getByRole('button', { name: 'motion', exact: true }).click()
   await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'motion')
@@ -161,38 +164,87 @@ test('with no navigator.bluetooth the screen says it needs Chrome on the Mac', a
   await expect(control(page, 'Connect dispenser')).toBeDisabled()
 })
 
-test('armed and connected, a fire with no box is dropped and dealing stops with the not-photographed line', async ({ page }) => {
+/* THE WIRE THIS SCREEN NEEDS, stubbed. `POST /capture` answers an ERROR, so a fire with a box
+ * picked is a capture that fails: the screen counts it or halts, and either way dealing must stop.
+ * Nothing reaches the real store. */
+const GAME = {
+  key: 'pokemon', display: 'Pokémon', product_line: 'Pokemon', rarities: ['Common'], finishes: ['normal'],
+  condition_by_finish: { normal: 'Near Mint' }, finish_by_rarity: { Common: ['normal'] }, located: true,
+  join_key: 'number_over_printed_total', prompt: 'pokemon', crop_bands: ['title', 'number'], card_aspect: 0.716,
+  unverified: false, catalogued: true,
+}
+const SPAN = { section: 1, start: 1, end: null, count: 0, name: null, div: '1' }
+const BOX = {
+  box: 5, bid: 15, name: 'Dispenser box', sections: [1], state: 'open', capacity: null, fill: 0, next_index: 1,
+  cards: 0, sold: 0, retired: 0, listed: 0, on_hand: 0, sections_detail: [SPAN], layout_token: 'tok1',
+}
+const json = (body: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(body) })
+let capturePosts = 0
+
+async function stubWire(page: Page): Promise<void> {
+  capturePosts = 0
+  await page.route(/\/games$/, (r) => r.fulfill(json({ default: 'pokemon', products: [], product_game: 'pokemon_code', games: [GAME] })))
+  await page.route(/\/status$/, (r) => r.fulfill(json({ cards: 0, next_index: { '5': 1 } })))
+  await page.route(/\/boxes$/, (r) => r.fulfill(json({ boxes: [BOX] })))
+  await page.route(/\/capture\/sitting$/, (r) => r.fulfill(json({ open: true, gap_minutes: 30, cards: [] })))
+  await page.route(/\/capture$/, (r) => {
+    capturePosts += 1
+    return r.fulfill(json({ error: { code: 'capture_failed', message: 'The capture failed.' } }, 500))
+  })
+}
+
+/** Camera picked, optionally a box picked, motion armed, scene injected, dispenser connected. */
+async function ready(page: Page, withBox: boolean): Promise<void> {
   await fakeBluetooth(page)
+  await stubWire(page)
   await page.goto('/#/capture')
-  // the camera opens on a press and a pick, as it does for the owner
+  await expect(page.getByLabel('Rig')).toBeVisible()
   await page.keyboard.press('v')
   await page.getByLabel('Rig').getByRole('button', { name: 'Connect' }).click()
   await page.locator('.capture-opt').filter({ hasText: /Canvas Cam Link/ }).click()
   await page.keyboard.press('Escape')
+  if (withBox) {
+    await expect(async () => {
+      await page.keyboard.press('b')
+      await expect(page.locator('.capture-opt').filter({ hasText: /Dispenser box/ })).toBeVisible({ timeout: 1_000 })
+    }).toPass({ timeout: 15_000 })
+    await page.keyboard.type('5')
+    await page.keyboard.press('Enter')
+  }
   await armMotion(page)
   await injectScene(page)
   await expect(page.locator('.capture-motion-hud')).toBeAttached({ timeout: 5_000 })
   await control(page, 'Connect dispenser').click()
-  await expect(page.locator('.capture-controls').getByText('Connected', { exact: true })).toBeVisible()
+}
+
+test('armed with a camera but no box, Start is off and says to pick a box first', async ({ page }) => {
+  await ready(page, false)
+  await expect(control(page, 'Start dispenser')).toBeDisabled()
+  await expect(page.locator('.capture-controls').getByText('Pick a box first')).toBeVisible()
+  expect(await writes(page)).toEqual([])
+})
+
+test('with a box picked, a capture that fails stops dealing and the last write is STOP', async ({ page }) => {
+  await ready(page, true)
   const start = control(page, 'Start dispenser')
   await expect(start).toBeEnabled({ timeout: 5_000 })
   await start.click()
   await expect(control(page, 'Stop dispenser')).toBeVisible()
   expect((await writes(page))[0]).toBe('MOTOR:START')
 
-  // the card lands in front of the lens: motion fires, no box is picked, the fire is dropped
+  // the card lands in front of the lens: motion fires, the capture POST fails
   await page.evaluate((base) => {
     ;(window as unknown as { __scene: { base: number } }).__scene.base = base
   }, CARD)
+  await expect(control(page, 'Start dispenser')).toBeVisible({ timeout: 8_000 })
+  expect(capturePosts).toBeGreaterThan(0)
   await expect(
-    page.locator('.capture-controls').getByText('Stopped: a card was not photographed. Resume captures first.'),
-  ).toBeVisible({ timeout: 8_000 })
-  await expect(control(page, 'Start dispenser')).toBeVisible()
+    page.locator('.capture-controls').getByText(/Stopped: a card was not photographed|Resume captures first/),
+  ).toBeVisible()
 
-  // the last write is STOP, and nothing is sent after it
   const sent = await writes(page)
   expect(sent.at(-1)).toBe('MOTOR:STOP')
-  await page.waitForTimeout(1_500) // keep: quiet window proving nothing follows STOP
+  await page.waitForTimeout(1_500) // keep: a quiet 1.5 s after STOP
   expect(await writes(page)).toEqual(sent)
   for (const w of sent) expect(['MOTOR:START', 'MOTOR:STOP']).toContain(w)
 })

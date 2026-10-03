@@ -337,3 +337,38 @@ test('the only payloads ever written are on the allow list', async () => {
   await advance(1_000)
   for (const w of rig.writes) expect(ALLOWED).toContain(w)
 })
+
+test('SYNTHETIC: Stop with a START in flight, then Start within 0.45 s, waits for the old COMPLETE or a 1 s settle', async () => {
+  // the old START's COMPLETE would land at 420 ms
+  const dealer = await connected(PACED_10)
+  void dealer.start()
+  await advance(100)
+  void dealer.stop()
+  await advance(50)
+  void dealer.start()
+  await advance(100)
+  // 250 ms in: the old card is still moving, so no second START may have gone out
+  expect(rig.writes.filter((w) => w === 'MOTOR:START')).toHaveLength(1)
+  await advance(150)
+  // 400 ms: still before the old COMPLETE at 420 ms
+  expect(rig.writes.filter((w) => w === 'MOTOR:START')).toHaveLength(1)
+  await advance(2_000)
+  // after the old COMPLETE (420 ms) and well inside the 1 s settle, the new START has gone out, once
+  const starts = rig.writes.filter((w) => w === 'MOTOR:START')
+  expect(starts).toHaveLength(2)
+  expect(rig.writes.indexOf('MOTOR:STOP')).toBeLessThan(rig.writes.lastIndexOf('MOTOR:START'))
+  expect(rig.maxInFlight).toBe(1)
+})
+
+test('SYNTHETIC: Stop with a START in flight and no COMPLETE ever, a Start waits out a ~1 s settle after STOP', async () => {
+  const dealer = await connected([[null, 0], COMPLETE])
+  void dealer.start()
+  await advance(100)
+  void dealer.stop()
+  await advance(50)
+  void dealer.start()
+  await advance(800)
+  expect(rig.writes.filter((w) => w === 'MOTOR:START')).toHaveLength(1)
+  await advance(1_500)
+  expect(rig.writes.filter((w) => w === 'MOTOR:START')).toHaveLength(2)
+})
