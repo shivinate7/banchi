@@ -6746,6 +6746,11 @@ COMPONENTS = [
                                      "the version field, so a scorer cannot read a v2 trace as "
                                      "a rig with no light in it.",
                              "governed_by": ["D19", "D81", "D144"]},
+            "src/dealer.ts": {"does": "the dispenser's one home: the Web Bluetooth link to the "
+                                      "tcg-dealer dispenser, its two-payload allow list and the "
+                                      "paced deal loop (createDealer), and the Capture screen's "
+                                      "hook over it (useDealer). docs/specs/dispenser.md.",
+                              "governed_by": ["D-dispenser-button", "D19"]},
             "src/motion.ts": {"does": "Gate C's auto-capture: a pure MotionMachine (settle, "
                                       "novelty, card presence, deferring refractory) under a "
                                       "thin DOM sampler that feeds it one 64x36 luma grid per "
