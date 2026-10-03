@@ -18,6 +18,16 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 - `app/tests/review.spec.ts`: D218 in part superseded by D280
 - `app/tests/shipping.spec.ts`: D218 in part superseded by D280
 
+## Test tiers
+
+| Tier | Run by | Holds |
+| --- | --- | --- |
+| Unit | `make unit`, in `make check` | `app/tests/unit/*.unit.ts`. Logic or data with no layout and no real interaction. Playwright's runner, no browser, no dev server. The whole tier stays under 10 s. |
+| Browser | `make design-check` | `app/tests/*.spec.ts`. Anything that needs a page: a measured size, position or computed style, a click, key, focus or drag, a timer or the router running in a page. |
+| Python | `make harness`, the self-tests | `harness/tests/`, `scripts/*-selftest.py`. |
+
+**A test belongs in the unit tier when its verdict is the same if no page ever drew.** A pure function, a table read from `ROUTES` or a JSON file, a parser, a judge fed arrays. If the answer depends on layout, on a real interaction, or on wiring that only a page has, it stays in the browser tier. A unit-tested function still gets one browser case that proves the page calls it (the tab title is the pilot: the function is `tests/unit/tab-title.unit.ts`, the shell stamping it is one case in `scaffold.spec.ts`). Existing browser tests move only when a lane is named for them.
+
 ## Capture
 
 | File | Protects | Governs |
@@ -102,6 +112,7 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | `app/tests/brand.spec.ts` | The generated logo mark draws at the right cut and size at every place the app shows it. | D102, D134, D136, D266 |
 | `app/tests/button-stack.spec.ts` | Buttons of the same role that stack in one panel share one width. | D195 |
 | `app/tests/cursor.spec.ts` | Every control shows the right cursor, response and press behavior, and no press or hover moves the layout. | D43, D50, D70, D110, D118 |
+| `app/tests/did-you-mean-coverage.spec.ts` | Every screen that searches a list draws "Did you mean" on its zero-result state, so a new search cannot ship without it. | D271 |
 | `app/tests/filter-standard.spec.ts` | Every filter and sort row is one kit control of one width, the sort direction sits inside its field, and a set filter differs from rest by more than weight. | D311, D195 |
 | `app/tests/filters.spec.ts` | The shared filter bar, hide toggle, sortable table header and match highlight behave the same on every screen that filters a list. | D118, D132, D270, D288 |
 | `app/tests/gallery.spec.ts` | The Kit sheet draws every row shape the product can draw, so no specimen is unreachable there. | D24, D68, D41, D118, D119, D269, D272 |
@@ -116,6 +127,7 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | `app/tests/status-busy.spec.ts` | A refusal the server sent to the shell's status poll never draws the offline banner. | D207 |
 | `app/tests/themes.spec.ts` | The theme button cycles light, dark, Abyssal Bloom and Carnival Midway and the choice survives a reload; light and dark paint as before; both palettes keep body text readable; switching moves nothing. | D50, D313 |
 | `app/tests/wide.spec.ts` | Screens stay balanced at 1920px and 2560px wide, with no starved field or unbounded prose line. | D27, D123, D275 |
+| `app/tests/unit/tab-title.unit.ts` | Every screen's tab title is one fixed string, the screen's name in lowercase, and the Fulfiller's carries no brand. | none |
 | `harness/tests/t6_geometry.py` | Card detection finds the card within tolerance across offset, scale and rotation, and refuses when no card is there. | none |
 | `scripts/match-selftest.py` | The Python search matcher agrees with the browser matcher on the shared case table, and the server search reaches it. | none |
 
@@ -123,10 +135,8 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 
 | File | Protects | Governs |
 | --- | --- | --- |
-| `app/tests/machine-words.spec.ts` | No machine word (decision id, repository path, pipeline noun) reaches the rendered text of any screen. | D196, D269 |
-| `app/tests/money-face.spec.ts` | Every dollar figure on every screen draws in the mono face. | D221 |
 | `app/tests/money.spec.ts` | `money()` rounds to the cent and `moneyField` turns owner-typed text into a price the field sends, or null. | D221 |
-| `app/tests/text-shape.spec.ts` | No screen repeats a sentence across many cards, states a fact twice, runs a sentence over 25 words, or repeats its own heading in a caption. | D18, D284 |
+| `app/tests/text-checks.spec.ts` | Every screen is read once, and no screen draws a money figure off the mono face, a machine word, a repeated sentence or fact, an over-long sentence or a caption that repeats its heading. | D18, D196, D221, D269, D284 |
 
 ## Public demo
 

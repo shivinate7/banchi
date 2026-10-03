@@ -31,6 +31,7 @@
 }
 
 .shelf-mode-bar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--bn-2);
@@ -289,3 +290,18 @@
 }
 .shelf-drop-mark[data-edge='start'] { inset-inline-start: 0; }
 .shelf-drop-mark[data-edge='end'] { inset-inline-end: 0; }
+
+/* A refusal opens over the page against the controls that were pressed (the kit's "what the
+   server said" does the same), so it takes no row and moves nothing (D313). */
+.shelf-mode-bar .shelf-answer { top: calc(100% + var(--bn-2)); }
+.shelf-receipt-actions { position: relative; }
+.shelf-receipt-actions .shelf-answer { bottom: calc(100% + var(--bn-2)); }
+.shelf-answer {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  inline-size: min(100%, 36rem);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-3);
+  border-radius: var(--bn-r);
+}

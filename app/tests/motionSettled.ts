@@ -51,6 +51,10 @@ import type { Page } from '@playwright/test'
  */
 export const SETTLE_MAX_MS = 5000
 
+/** Two animation frames: what a press or a read changed has been laid out and painted. A condition, not a guessed pause. */
+export const afterPaint = (page: Page): Promise<void> =>
+  page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))))
+
 export async function settleMotion(page: Page): Promise<void> {
   await page.waitForFunction(
     (maxMs) =>
@@ -136,7 +140,7 @@ export function whatMoved(before: Record<string, string>, after: Record<string, 
 export async function settled(page: Page, tries = 40): Promise<Record<string, string>> {
   let last = await outsideThePanel(page)
   for (let i = 0; i < tries; i += 1) {
-    await page.waitForTimeout(75)
+    await page.waitForTimeout(75) // keep: the poll interval of a loop that compares two reads apart in time
     const next = await outsideThePanel(page)
     if (JSON.stringify(next) === JSON.stringify(last)) return next
     last = next

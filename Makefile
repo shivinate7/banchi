@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent demo-mirror-daily-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck unit venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent demo-mirror-daily-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -305,9 +305,17 @@ explain:
 
 # T1-T9 and T11, the ten verification tests. No longer run automatically at turn
 # end (D248) — a session runs this itself before saying something works.
+# PATH GATED (owner's word, D247 amended): `scripts/guard-scope.py` derives what the harness reads
+# from `harness/` itself and skips this when the branch touches none of it. A main push and the
+# nightly run set PKMNSCAN_GUARD_SCOPE=all in check.yml, so they never skip.
 harness:
 	$(VENV_GUARD)
-	@$(PYTHON) harness/run.py
+	@python3 scripts/guard-scope.py classify --target harness --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
+		$(PYTHON) harness/run.py; \
+	else \
+		echo "harness: SKIPPED — nothing in this branch reaches what harness/ reads. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+	fi
 
 # Exit 1 is a provably wrong reference and fails. Exit 2 is the coupling question — it
 # prints and passes, here for the same reason the pre-commit hook lets it through: a
@@ -367,7 +375,7 @@ offenders-prune-selftest:
 # THE THIRD PIECE OF THE OWNER'S 2026-09-23 RULING (D-text-shape-checks, supersedes D284): a
 # REPEATABLE, ON-DEMAND density pass that prints a CUT TABLE, never a gate (D18: it writes one
 # receipt, `.serve/text-density.json`, gitignored). NOT A PREREQUISITE OF ANYTHING and never
-# wired to a hook, `map-fix`'s own standing. It runs `app/tests/text-shape.spec.ts` with
+# wired to a hook, `map-fix`'s own standing. It runs `app/tests/text-checks.spec.ts` with
 # `TEXT_DENSITY=1`, so it reads the SAME populated fixture and the same loaded screens as the
 # two gates, at 1440 and 390, whatever this checkout's own store holds. Playwright starts or
 # reuses this checkout's own Vite (D43); every read is stubbed, so no store is read. One
@@ -1525,6 +1533,11 @@ lint:
 	$(RUFF_GUARD)
 	@$(PYTHON) -m ruff check .
 
+# The unit tier (docs/TESTS.md): Playwright's runner, no browser, no dev server.
+unit:
+	$(NPM_GUARD)
+	@npm --prefix app run unit
+
 # `tsc --noEmit` over app/.
 typecheck:
 	$(NPM_GUARD)
@@ -1622,6 +1635,15 @@ demo-mirror-rebuild:
 # takes the job out. ARGS=--dry-run is not this target's: run `python3 scripts/demo-mirror-daily.py --dry-run`.
 demo-mirror-agent:
 	@python3 scripts/demo-mirror-daily.py --agent $(ARGS)
+
+# THE DAILY MARKET READ (DEBT69): one free download of the owner's own live listings, once a day, with
+# a note `#/pricing` shows. `price-refresh-agent` installs the launchd job (main tree only), ARGS=--remove
+# removes it. `price-refresh` runs one read now over THIS checkout's store. It sweeps no archive and
+# changes no price.
+price-refresh:
+	@$(PYTHON) scripts/price-refresh-daily.py
+price-refresh-agent:
+	@python3 scripts/price-refresh-daily.py --agent $(ARGS)
 
 # CI's own step: the committed scrub, installed into app/demo/ and app/public/demo/photos/.
 # Reads no store and contacts no network. `demo-static` builds from this.

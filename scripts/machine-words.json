@@ -1,5 +1,5 @@
 {
-  "_about": "THE ONE PLACE THIS WORD LIST LIVES (D196, amended by D284 2026-09-23: 'the word list grows'). `scripts/docs-audit.py`'s `no mechanism on screen` row (the AST walk over app/src's own JSX literals) and `app/tests/machine-words.spec.ts` (the rendered-text browser check over every route's actual `innerText`, catching server- and demo-composed strings the AST walk cannot reach) both read this file rather than keeping two dictionaries a session could edit out of step. Every entry is machinery this repo is BUILT FROM; every 'why' says why it is not something an operator reaches for. `run`, `box`, `export`, `listing` and `TCGplayer` are deliberately absent — they are the operator's own words, the ones docs/DESIGN.md's Register section and CLAUDE.md's screen table are written in.",
+  "_about": "THE ONE PLACE THIS WORD LIST LIVES (D196, amended by D284 2026-09-23: 'the word list grows'). `scripts/docs-audit.py`'s `no mechanism on screen` row (the AST walk over app/src's own JSX literals) and `app/tests/text-checks.spec.ts` (the rendered-text browser check over every route's actual `innerText`, catching server- and demo-composed strings the AST walk cannot reach) both read this file rather than keeping two dictionaries a session could edit out of step. Every entry is machinery this repo is BUILT FROM; every 'why' says why it is not something an operator reaches for. `run`, `box`, `export`, `listing` and `TCGplayer` are deliberately absent — they are the operator's own words, the ones docs/DESIGN.md's Register section and CLAUDE.md's screen table are written in.",
   "words": {
     "the pipeline": "D1's two-phase batch process, end to end — an implementation the operator never chose and the outcome (a price, a queue entry) is what they read instead",
     "the resolver": "pipeline/join.py's per-order picker (D174, D181) — an internal component name; the operator sees which copies fill an order, never which module chose them",
@@ -17,6 +17,8 @@
     "Staged": "TCGplayer's own Import-to-Staged terminology (D87) — a fact about that other product's workflow, not this store; the operator reads what changed in their own store",
     "make demo": "a shell invocation for seeding the public demo (docs/specs/demo.md) — a command this repository's own tooling runs, never something an operator at the rig types",
     "/pipeline/": "a request path under pipeline/'s own routes — a URL fact about this codebase's wiring, never a sentence about a card, a box or an order",
+    "Haiku": "the vendor model that reads a card (D2) - naming it is naming a technique, not a fact about a card. ONE string is exempt on the owner's word (D196's named exception): the matcher control's hover tooltip, read from `MATCHER_NAME_TOOLTIP` in app/src/engines.ts",
+    "Marqo": "the vendor model that matches a card to stock photos (D2) - same reason, same one exempt string",
     "manual:c": "a run's own reason code for a card started from a terminal rather than a capture (see Notice's disclosure) — the operator reads what happened to their card, never the code that logs it"
   },
   "repoTopDirs": [

@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react'
 
 import {
-  describeFailure, getHoldingsValue, getOrders, getSkuPhotos, getSoldPrices,
+  describeFailure, getHoldingsValue, getOrders, getSkuPhotosSettled, getSoldPrices,
   photoUrl, type Failure, type SkuPhotoEntry, type SoldPricesLookup,
 } from './server'
 import type { HoldingsRange, HoldingsTotal, HoldingsValuePayload, OrderRow } from './types'
@@ -13,7 +13,7 @@ import { moneyGrouped } from './money'
 import { salesOf, sum, type Sale } from './revenueMath'
 import { absoluteDate, monthOf, saleDate, weekOf } from './dates'
 import { useCardCropWhenSeen } from './cardCrop'
-import { matchQuery } from './kit/match'
+import { didYouMean, matchQuery } from './kit/match'
 import { SearchField } from './SearchField'
 import { ReadingAge } from './CardLocations'
 import './Revenue.css'
@@ -580,6 +580,7 @@ function RowThumb({
   name,
   photos,
   stockPhotos,
+  pendingSkus,
   size,
 }: {
   readonly sku: string
@@ -590,6 +591,8 @@ function RowThumb({
    *  applies to it: the rig's own crop rectangle describes THIS store's photograph, not a
    *  catalogue image, so it draws through the SAME `CardThumb` with `crop={null}`. */
   readonly stockPhotos: Readonly<Record<string, string>>
+  /** SKUs still waiting on a final answer: the slot draws empty, never "No photo found". */
+  readonly pendingSkus: ReadonlySet<string>
   readonly size: 'sm' | 'md' | 'lg'
 }) {
   const entry = photos[sku]
@@ -603,6 +606,7 @@ function RowThumb({
         src={src}
         alt={name}
         size={size}
+        pending={src === null && pendingSkus.has(sku)}
         crop={entry === undefined ? null : crop}
         focus={THUMB_FOCUS}
         className={entry === undefined ? 'revenue-thumb-stock' : undefined}
@@ -622,8 +626,6 @@ function MetaLine({ product }: { readonly product: Product }) {
 const scrollToEnd = (el: HTMLDivElement | null) => {
   if (el !== null) el.scrollLeft = el.scrollWidth
 }
-
-const STOCK_RETRY_MS = 5000
 
 export function Revenue() {
   const [orders, setOrders] = useState<OrderRow[] | null>(null)
@@ -721,7 +723,11 @@ export function Revenue() {
   // sets and pricing?"): a stock (catalogue) photo for a SKU with no own photographed copy
   // on hand — the SAME resolver Sets and Pricing already draw theirs from, never a second one.
   const [stockPhotos, setStockPhotos] = useState<Readonly<Record<string, string>>>({})
+  /** SKUs whose photo answer is not final yet: their slot holds its size and draws no "No photo found". */
+  const [pendingSkus, setPendingSkus] = useState<ReadonlySet<string>>(new Set())
   const asked = useRef<Set<string>>(new Set())
+  /** SKUs with a final photo answer: a re-run never asks them again or draws them pending. */
+  const finalSkus = useRef<Set<string>>(new Set())
 
   // UNSOLD STOCK (D236) — same posture as `prices`, own loading/failure state, never touching
   // `prices`/`pricesLoading` (that is D225's SOLD figure and this is never allowed to merge
@@ -786,7 +792,11 @@ export function Revenue() {
   )
 
   const activeRange = activeBucket === null ? null : buckets.find((b) => b.key === activeBucket) ?? null
-  const scopeSales = activeRange === null ? inPeriod : inPeriod.filter((s) => s.at >= activeRange.start && s.at < activeRange.end)
+  // Memoized: `products` and the photo lookup key off its identity, so a fresh array each render re-asked every render.
+  const scopeSales = useMemo(
+    () => (activeRange === null ? inPeriod : inPeriod.filter((s) => s.at >= activeRange.start && s.at < activeRange.end)),
+    [inPeriod, activeRange],
+  )
 
   const products = useMemo(() => {
     const by = new Map<string, Product>()
@@ -835,40 +845,37 @@ export function Revenue() {
       return sortDir === 'asc' ? base : -base
     })
   }, [scopeSales, query, sortKey, sortDir, view])
+  const nearName = useMemo(
+    () => (query.trim() === '' ? null : didYouMean(query, new Set(scopeSales.map((sale) => sale.name)))),
+    [scopeSales, query],
+  )
 
   // THE THUMBNAIL PRESS, ON ARRIVAL, NOT GATED. Asks only about the SKUs this screen is
   // about to draw (the podium and board window, bounded by `PHOTO_LOOKUP_CAP`), and never
   // asks about a SKU twice.
   useEffect(() => {
     const askedSkus = asked.current
+    const finals = finalSkus.current
     const skus = products.slice(0, PHOTO_LOOKUP_CAP).map((p) => p.sku).filter((sku) => !askedSkus.has(sku))
     if (skus.length === 0) return
     skus.forEach((sku) => askedSkus.add(sku))
-    let alive = true
-    let retry: number | undefined
-    const ask = (wanted: string[], again: boolean) =>
-      getSkuPhotos(wanted)
-        .then((found) => {
-          if (!alive) return
-          setPhotos((prev) => ({ ...prev, ...found.photos }))
-          setStockPhotos((prev) => ({ ...prev, ...found.stockPhotos }))
-          // The catalogue loads in the background on first ask and answers nothing until it
-          // has, so a SKU still missing gets one more ask a few seconds on.
-          const missing = wanted.filter((sku) => !(sku in found.photos) && !(sku in found.stockPhotos))
-          if (again && missing.length > 0) retry = window.setTimeout(() => ask(missing, false), STOCK_RETRY_MS)
-        })
-        .catch(() => {
-          // A failed thumbnail lookup falls back to the plain tile CardThumb already draws for
-          // a missing photo — the same shape a photographed SKU with no on-hand copy gets, so
-          // this screen never needs a second failure state for it.
-        })
-    ask(skus, true)
+    const stop = getSkuPhotosSettled(skus, (found) => {
+      skus.forEach((sku) => found.pending.includes(sku) || finals.add(sku))
+      setPhotos((prev) => ({ ...prev, ...found.photos }))
+      setStockPhotos((prev) => ({ ...prev, ...found.stockPhotos }))
+      setPendingSkus((prev) => {
+        const next = new Set(prev)
+        skus.forEach((sku) => next.delete(sku))
+        found.pending.forEach((sku) => next.add(sku))
+        return next
+      })
+    })
+    setPendingSkus((prev) => new Set([...prev, ...skus]))
     return () => {
-      alive = false
-      window.clearTimeout(retry)
+      stop()
       // A sort, filter or scope change re-runs this effect; a SKU whose answer was dropped
       // with it must be asked again, not remembered as asked.
-      skus.forEach((sku) => askedSkus.delete(sku))
+      skus.forEach((sku) => finals.has(sku) || askedSkus.delete(sku))
     }
   }, [products])
 
@@ -1238,14 +1245,14 @@ export function Revenue() {
       </div>
 
       {products.length === 0 ? (
-        <EmptyState icon="search" title="Nothing sold under that name in this period." />
+        <EmptyState icon="search" title="Nothing sold under that name in this period." didYouMean={{ name: nearName, onPick: setQuery }} />
       ) : (
         <>
           <section className="revenue-podium">
             {podium.map((p, i) => (
               <article className="revenue-tile" key={p.sku}>
                 <div className="revenue-tile-art">
-                  <RowThumb sku={p.sku} name={p.name} photos={photos} stockPhotos={stockPhotos} size="lg" />
+                  <RowThumb sku={p.sku} name={p.name} photos={photos} stockPhotos={stockPhotos} pendingSkus={pendingSkus} size="lg" />
                   <span className="revenue-tile-rank">{i + 1}</span>
                 </div>
                 <div className="revenue-tile-body">
@@ -1315,7 +1322,7 @@ export function Revenue() {
                 {board.map((p, i) => (
                   <li key={p.sku}>
                     <span className="revenue-board-rk">{i + 4}</span>
-                    <RowThumb sku={p.sku} name={p.name} photos={photos} stockPhotos={stockPhotos} size="sm" />
+                    <RowThumb sku={p.sku} name={p.name} photos={photos} stockPhotos={stockPhotos} pendingSkus={pendingSkus} size="sm" />
                     <div className="revenue-board-who">
                       <ProductLink sku={p.sku} name={p.name}>
                         <span className="revenue-tile-name" title={p.nameIsSku ? undefined : short(p).full}>

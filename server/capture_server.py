@@ -12083,6 +12083,9 @@ def do_skus_photos(
     (`{sku: url}`, a hotlinked catalogue image, D301's same posture — never downloaded,
     never mirrored). A SKU never appears in both.
 
+    `pending` NAMES A SKU WITH NO URL WHOSE CATALOGUE GROUP HAS NOT ANSWERED YET: the
+    client asks again, capped. A SKU absent from all three is a final "no photo".
+
     REFUSES OVER `SKUS_PHOTOS_LIMIT` (round 2 review): the client's own cap bounds what it
     SENDS, never what this route would do with a longer list a different caller sent.
     """
@@ -12097,6 +12100,7 @@ def do_skus_photos(
     inventory = snapshot.inventory
     out: Dict[str, dict] = {}
     stock: Dict[str, str] = {}
+    pending: List[str] = []
     line_names: Optional[Dict[str, str]] = None
     for sku in skus:
         if not sku or sku in out or sku in stock:
@@ -12128,6 +12132,8 @@ def do_skus_photos(
             url = images.url_for_line_name(line_names.get(sku, ""))
             if url:
                 stock[sku] = url
+            elif images.line_name_pending(line_names.get(sku, "")):
+                pending.append(sku)
             continue
         if sku_row.number:
             game = games.game_for_product_line(sku_row.product_line)
@@ -12138,7 +12144,13 @@ def do_skus_photos(
             )
         if url:
             stock[sku] = url
-    return {"photos": out, "stock_photos": stock}
+        else:
+            game = games.game_for_product_line(sku_row.product_line)
+            if game and not (sku_row.number and game == stockimages.POKEMON_KEY) and images.group_pending(
+                game, sku_row.set_name
+            ):
+                pending.append(sku)
+    return {"photos": out, "stock_photos": stock, "pending": pending}
 
 
 def do_search(query: str) -> dict:
@@ -12453,7 +12465,19 @@ def do_search(query: str) -> dict:
             }
         )
 
-    return {"query": text, "groups": groups}
+    answer: dict = {"query": text, "groups": groups}
+    if not groups:
+        # A ZERO RESULT ONLY (D271): one hint, never a ranking. Its own connection, so the
+        # `cards` scan counter above never sees it.
+        conn = db.connect(files.inventory_dir())
+        try:
+            names = sorted({str(row[0]) for row in conn.execute("SELECT DISTINCT name FROM cards") if row[0]})
+        finally:
+            conn.close()
+        near = match.did_you_mean(text, names)
+        if near is not None:
+            answer["did_you_mean"] = near
+    return answer
 
 
 # --------------------------------------------------------------------------------- boxes
@@ -16559,6 +16583,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_price_now(asked)
                 )
+            if path == "/pipeline/trends-saved":
+                # THE STRIPS THE DAILY JOB SAVED (DEBT69, D278): a local read, no market request.
+                return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_saved_trends())
+            if path == "/pipeline/movers":
+                # LISTED SKUs THAT MOVED OVER 10% SINCE LISTING (DEBT69). A plain read; drawn on
+                # `#/pricing`, and nothing it says changes a price.
+                return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_movers())
             if path == "/pipeline/holdings-value":
                 # UNSOLD STOCK, VALUED OVER TIME (`docs/specs/sales-plan.md` section 1,
                 # second half). NOT YET REACHABLE FROM A SCREEN — see

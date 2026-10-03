@@ -199,6 +199,8 @@ const RECORDED = {
     // The graveyard's one read (D134). Its own line, for the reason the writes below give.
     'getGraveyard',
     'getProductRealized',                     // the product page's realized-price read
+    'getPriceMovers', 'getSavedTrends',       // #/pricing's movers and the saved overnight trends
+    'getSkuPhotosSettled',                    // the stock-photo read that waits out a cold group
     // The markdown lens's three (D103) — the survey table, and D278's history and trends
     // strip re-addressed at a stamp instead of a run.
     'getMarkdownTable', 'markdownHistory', 'markdownTrends',

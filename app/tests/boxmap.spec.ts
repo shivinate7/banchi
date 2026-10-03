@@ -4,6 +4,7 @@ import { test, expect, type Page } from '@playwright/test'
 import type { BoxRecord, SectionDetail, SectionMoveBatchResult } from '../src/types'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
+import { setViewport } from './phoneSwitch'
 
 /* THE SHELF (D264), horizontal, edit-mode ruling (owner, 2026-09-26): read-only until "Edit
  * layout", every drag queues a draft move with no write, and Confirm sends the whole draft as
@@ -106,6 +107,76 @@ test('read-only: every box is drawn horizontally, Back/Front replaces the senten
   /* Sections run in one row, left to right: a block's WIDTH follows its count now, not height. */
   const widths = await first.locator('.shelf-block').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width))
   expect(widths[2]).toBeGreaterThan(widths[1] ?? 0)
+})
+
+async function bandGap(page: Page): Promise<{ gap: number; token: number }> {
+  /* The standard gap is the page head's own margin token (--bn-4), read in the browser, never a pixel copy. */
+  return page.evaluate(() => {
+    const head = document.querySelector('.bn-page-head') as HTMLElement
+    const bar = document.querySelector('.shelf-mode-bar') as HTMLElement
+    const probe = document.createElement('div')
+    probe.style.height = 'var(--bn-4)'
+    document.body.append(probe)
+    const token = probe.getBoundingClientRect().height
+    probe.remove()
+    return { gap: bar.getBoundingClientRect().top - head.getBoundingClientRect().bottom, token }
+  })
+}
+
+for (const [width, scheme] of [[1440, 'light'], [820, 'light'], [1440, 'dark'], [820, 'dark']] as const) {
+  test(`the map starts one section gap under the head: no reserved band holds the toolbar down (${width}, ${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme })
+    await setViewport(page, { width, height: 900 })
+    await openShelf(page)
+    const { gap, token } = await bandGap(page)
+    expect(gap).toBeCloseTo(token, 0)
+  })
+}
+
+async function draftOneMove(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Layout' }).click()
+  await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
+  await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
+  await page.getByRole('button', { name: /Put Uncommons just on the far side of Promos/ }).click()
+}
+
+test('a failed Undo moves nothing: the receipt and its Undo stay where they were', async ({ page }) => {
+  await openShelf(page)
+  await page.route(/\/boxes\/sections\/undo$/, (route) =>
+    route.fulfill({ status: 409, json: { error: { code: 'undo_refused', message: 'That layout cannot be put back.' } } }),
+  )
+  await draftOneMove(page)
+  await page.getByRole('button', { name: 'Confirm' }).click()
+  const undo = page.getByRole('button', { name: /Undo/ })
+  await expect(undo).toBeVisible()
+  /* Page coordinates, so the browser scrolling a pressed control into view is not read as the page moving. */
+  const box = async () =>
+    page.evaluate(() => {
+      const at = (sel: string) => {
+        const r = document.querySelector(sel)!.getBoundingClientRect()
+        return [r.left + scrollX, r.top + scrollY, r.width, r.height]
+      }
+      return { receipt: at('.shelf-receipt'), undo: at('.shelf-receipt-actions .bn-btn, .shelf-receipt-actions button') }
+    })
+  const before = await box()
+  await undo.click()
+  await expect(page.getByRole('alert')).toBeVisible()
+  expect(await box()).toEqual(before)
+})
+
+test('a refused Confirm answers inside the viewport, even when the map is taller than the screen', async ({ page }) => {
+  const filler = Array.from({ length: 14 }, (_, i) => box(10 + i, `Filler ${i + 1}`, [section(1, null, 20)]))
+  await setViewport(page, { width: 1440, height: 600 })
+  await openShelf(page, RESULT, [...BOXES, ...filler])
+  await page.route(/\/boxes\/sections\/move-batch$/, (route) =>
+    route.fulfill({ status: 409, json: { error: { code: 'draft_stale', message: 'Nothing was moved.' } } }),
+  )
+  await draftOneMove(page)
+  const tall = await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight)
+  expect(tall, 'the map must be taller than the viewport for this case to mean anything').toBe(true)
+  await page.getByRole('button', { name: 'Confirm' }).click()
+  /* Found by its words, not its role: the sentence is what the owner reads, whichever version draws it. */
+  await expect(page.getByText("A box's cards changed since Edit layout was pressed")).toBeInViewport()
 })
 
 test('Layout enters edit mode; a queued drop writes nothing until Confirm, which sends the whole draft once', async ({ page }) => {
@@ -255,7 +326,7 @@ test('grip drag: nothing is sent while the pointer is still down', async ({ page
   await page.mouse.down()
   await page.mouse.move(to.x + to.width * 0.75, to.y + to.height / 2, { steps: 8 })
   await expect(page.locator('.shelf-drop-mark')).toHaveCount(1)
-  await page.waitForTimeout(300)
+  await page.waitForTimeout(300) // keep: a held drag sends nothing for this window
   expect(sent).toHaveLength(0)
   await page.mouse.up()
   await expect(page.getByText('1 change queued.', { exact: false })).toBeVisible()

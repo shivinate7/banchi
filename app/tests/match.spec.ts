@@ -2,11 +2,12 @@
 import { test, expect } from '@playwright/test'
 
 import { sealEveryTest } from './shell'
-import { matchQuery, filterByQuery, type MatchFields } from '../src/kit/match'
+import { matchQuery, filterByQuery, didYouMean, type MatchFields } from '../src/kit/match'
 /* An IMPORT ATTRIBUTE, not only `resolveJsonModule`: Node's own ESM loader (this repo's
  * Playwright runs on Node 25) refuses a bare `import … from '*.json'` at runtime, whatever
  * TypeScript's own module resolution allows for the type check. */
 import cases from '../src/kit/match.cases.json' with { type: 'json' }
+import didCases from '../src/kit/didyoumean.cases.json' with { type: 'json' }
 
 /* THE MATCHER'S OWN CASE TABLE, RUN DATA-DRIVEN (the addendum's "Done" line: "match.spec passes
  * every row of match.cases.json"). `kit-data.spec.ts` already carries `matchQuery`'s
@@ -93,4 +94,11 @@ test('a leading slash never falls through to raw (F11c)', () => {
   expect(matchQuery('/19', { raw: ['19'] })).toBe(false)
   // The same query still finds a real card number whose second part is 19.
   expect(matchQuery('/19', { numbers: ['4/19'] })).toBe(true)
+})
+
+/* D271: the browser copy of "Did you mean" runs the table `scripts/match-selftest.py` runs. */
+test('didYouMean agrees with every row of didyoumean.cases.json', () => {
+  for (const one of didCases as readonly { note: string; query: string; names: string[]; suggest: string | null }[]) {
+    expect(didYouMean(one.query, one.names), one.note).toBe(one.suggest)
+  }
 })

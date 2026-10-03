@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
+import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { Button, FailureNotice, Icon, IconButton, Segmented, useUndoHotkey } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { Page } from './kit/Page'
@@ -265,6 +265,8 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
   const [dest, setDest] = useState<Dest | null>(null)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<Failure | null>(null)
+  /* Undo's own refusal, shown by the Undo it answers (inside the receipt), not up in the toolbar. */
+  const [undoFailure, setUndoFailure] = useState<Failure | null>(null)
   const [receipt, setReceipt] = useState<SectionMoveBatchResult | null>(null)
   const [undone, setUndone] = useState(false)
   const [over, setOver] = useState<GapId | null>(null)
@@ -366,6 +368,7 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
     setFailure(null)
     try {
       setReceipt(await moveSectionsBatch({ digests, moves }))
+      setUndoFailure(null)
       setUndone(false)
       setMode('view')
       setDigests(null)
@@ -383,12 +386,12 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
   const undo = useCallback(async () => {
     if (receipt === null || undone || busy) return
     setBusy(true)
-    setFailure(null)
+    setUndoFailure(null)
     try {
       await undoSectionMove(receipt.move)
       setUndone(true)
     } catch (err) {
-      setFailure(describeFailure(err))
+      setUndoFailure(describeFailure(err))
     } finally {
       setBusy(false)
       load()
@@ -596,7 +599,6 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
          mode switch (Cancel/Confirm, or Edit layout) is a second row of the page instead,
          never squeezed in beside the h1 (D275, R2). */
       actions={editing ? null : <ShelfSwitch view="shelf" onView={onView} />}
-      status={failure === null ? null : <FailureNotice failure={failure} title={failureTitle(failure.code)} />}
       loading={records === null && readFailure === null}
       empty={readFailure === null ? null : <FailureNotice failure={readFailure} title="The boxes could not be read." onRetry={load} />}
     >
@@ -615,6 +617,7 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
             Layout
           </Button>
         )}
+        {failure === null ? null : <Answer><FailureNotice failure={failure} title={failureTitle(failure.code)} compact /></Answer>}
       </div>
 
       {records !== null && working.length > 0 ? (
@@ -703,7 +706,7 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
       )}
 
       {receipt === null ? null : (
-        <MoveReceipt result={receipt} undone={undone} busy={busy} onUndo={() => void undo()} onDone={() => setReceipt(null)} />
+        <MoveReceipt result={receipt} undone={undone} busy={busy} failure={undoFailure} onUndo={() => void undo()} onDone={() => setReceipt(null)} />
       )}
     </Page>
   )
@@ -1047,16 +1050,31 @@ function BoxRow({
   )
 }
 
+/** A REFUSAL ANSWERS THE PRESS WHERE IT WAS MADE, OVER THE PAGE, MOVING NOTHING (D313, D118). It
+ *  is positioned against the controls that were pressed, so it never takes a row of its own, and
+ *  it scrolls itself into view so it cannot land off screen. */
+function Answer({ children, above }: { readonly children: ReactNode; readonly above?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => ref.current?.scrollIntoView({ block: 'nearest' }), [])
+  return (
+    <div className="shelf-answer" data-above={above ? 'true' : undefined} ref={ref} role="alert">
+      {children}
+    </div>
+  )
+}
+
 function MoveReceipt({
   result,
   undone,
   busy,
+  failure,
   onUndo,
   onDone,
 }: {
   readonly result: SectionMoveBatchResult
   readonly undone: boolean
   readonly busy: boolean
+  readonly failure: Failure | null
   readonly onUndo: () => void
   readonly onDone: () => void
 }) {
@@ -1089,6 +1107,11 @@ function MoveReceipt({
       <div className="shelf-receipt-actions">
         {undone ? null : <IconButton icon="undo" label="Undo" name="Undo this layout" kbd="U" busy={busy} disabled={busy} onClick={onUndo} />}
         <Button onClick={onDone}>Done</Button>
+        {failure === null ? null : (
+          <Answer above>
+            <FailureNotice failure={failure} title={failureTitle(failure.code)} compact />
+          </Answer>
+        )}
       </div>
     </section>
   )

@@ -17,6 +17,7 @@ import {
   getMarkdowns,
   getPriceHistory,
   getPriceTrends,
+  getSavedTrends,
   markdownFileUrl,
   markdownListings,
   markdownTrends,
@@ -52,6 +53,7 @@ import type {
   Unreachable,
   LiveMove,
   PricingSku,
+  SavedTrendsPayload,
   RunDetail,
   RunSummary,
   WithheldRecord,
@@ -60,7 +62,7 @@ import { WITHHOLD_KEYS, WITHHOLD_LABELS, WITHHOLD_REASONS, type WithholdReason }
 import { isEditableTarget } from './keys'
 import { FLAT_KEY, subThresholdSkus } from './readiness'
 import { isWithheld, rowShare, runChip } from './standing'
-import { TrendCell, type TrendRead } from './PriceTrend'
+import { TrendCell, type KeptTrend, type TrendRead } from './PriceTrend'
 import { ClearPrices } from './ClearPrices'
 import { runBoxLabel } from './runScope'
 import {
@@ -100,6 +102,7 @@ import {
   countFacets,
   filterRows,
   matchQuery,
+  didYouMean,
   openSheet,
   useFacetParams,
   useSortParam,
@@ -108,6 +111,7 @@ import {
 } from './kit'
 import type { FilterFacet, SortOption, SortValue } from './kit'
 import { toast } from './kit/toast'
+import { PriceMovers } from './PriceMovers'
 import './Pricing.css'
 import { SendCard } from './SendCard'
 import { ABSENT_SENTENCE, AbsentPhotoNote, gameLabel, noPhotoSentence } from './CardHero'
@@ -463,6 +467,23 @@ function usePhone(): boolean {
  *  forms this repo's names take are parenthesised ("Calm Rune (R02a)") and a trailing "- "
  *  ("Garganacl - 084/132"), both anchored at the end of the string — never a bare substring
  *  match. */
+/** A strip older than this, against the newest overnight read, is drawn dimmed with its date. */
+const STALE_AFTER_S = 3600
+
+/** A saved strip with its date, and whether it is older than the newest overnight read. */
+function keptStrip(saved: SavedTrendsPayload | null, sku: string): KeptTrend | undefined {
+  const found = saved?.skus[sku]
+  if (found === undefined) return undefined
+  const newest = saved?.note?.at ?? found.at
+  return { ranges: found.ranges, at: found.at, stale: found.at < newest - STALE_AFTER_S }
+}
+
+/** A saved strip as a row's trend read, or undefined where the job saved none. */
+function savedRead(saved: SavedTrendsPayload | null, sku: string): TrendRead | undefined {
+  const kept = keptStrip(saved, sku)
+  return kept === undefined ? undefined : { kind: 'read', ranges: kept.ranges, at: kept.at, stale: kept.stale }
+}
+
 function numberSuffix(number: string): RegExp | null {
   const trimmed = number.trim()
   if (trimmed === '') return null
@@ -871,6 +892,23 @@ export function Pricing() {
   /* The trend strip (D277), cleared when the loaded set changes. */
   const [trends, setTrends] = useState<Record<string, TrendRead>>({})
   const [trendRun, setTrendRun] = useState<{ total: number; done: number; reading: boolean } | null>(null)
+  /* THE STRIPS THE DAILY JOB SAVED OVERNIGHT, read once from a local file at first paint. It fires
+     no request at the market host, so a visit still costs the mirror nothing (D278). The Trends
+     press below overwrites a row's strip with a fresh read. */
+  const [saved, setSaved] = useState<SavedTrendsPayload | null>(null)
+  useEffect(() => {
+    let alive = true
+    getSavedTrends()
+      .then((payload) => {
+        if (alive) setSaved(payload)
+      })
+      .catch(() => {
+        /* No saved strips is not a failure of this screen; the Trends press still reads. */
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
   const trendWalk = useRef(0)
   const [note, setNote] = useState<{ sku: string; text: string } | null>(null)
   /** Holding: the held rows alone (UX-212). */
@@ -1367,6 +1405,8 @@ export function Pricing() {
     ]
   }, [rows])
   const [facetPicks, setFacetPicks] = useFacetParams(facetShape)
+  /** Near name for a search that found nothing: the kit's one browser copy over the list's names (D271). */
+  const nearName = useMemo(() => (query.trim() === '' ? null : didYouMean(query, new Set(rows.map((row) => row.name)))), [rows, query])
   const keepRow = useCallback(
     (row: MergedSku) =>
       (!filterHeld || isWithheld(answerFor(row))) &&
@@ -2010,7 +2050,7 @@ export function Pricing() {
               const found = payload.skus[sku]
               next[sku] =
                 found !== undefined
-                  ? { kind: 'read', ranges: found.ranges }
+                  ? { kind: 'read', ranges: found.ranges, at: Math.floor(Date.now() / 1000) }
                   : { kind: 'refused', why: payload.refused[sku] ?? 'No answer for this card.' }
             }
             return next
@@ -2758,6 +2798,7 @@ export function Pricing() {
     >
       <div className="pricing-body" data-live={liveTab ? 'true' : undefined}>
         {bar}
+        <PriceMovers trendsNote={liveTab || saved === null ? null : saved.note} trendsLoading={liveTab || saved === null} />
         {ruleLine}
         {/* UN-11: outlives the toast, and a reload. Gone once a send has carried a cleared
             SKU (`clear_built_on`) — the next read finds no `last_clear`. */}
@@ -2797,7 +2838,7 @@ export function Pricing() {
             />
           )}
           {filtering && drawn.length === 0 ? (
-            <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." />
+            <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." didYouMean={{ name: nearName, onPick: setQuery }} />
           ) : null}
           <div className="pricing-list" data-copies={source.copies ? 'some' : 'none'}>
             <div className="pricing-caption" aria-hidden="true">
@@ -2832,7 +2873,8 @@ export function Pricing() {
                     asking={liveTab ? (askingOf.get(sku.sku) ?? null) : undefined}
                     note={note !== null && note.sku === sku.sku ? note.text : null}
                     readAge={ageWords(source.readAtOf(sku))}
-                    trend={trends[sku.sku]}
+                    trend={trends[sku.sku] ?? (liveTab ? undefined : savedRead(saved, sku.sku))}
+                    kept={liveTab ? undefined : keptStrip(saved, sku.sku)}
                     asked={sendQty[sku.sku] ?? ''}
                     onAsked={(text) => setAsked(sku.sku, text)}
                     holding={holdFor === sku.sku}
@@ -2998,6 +3040,7 @@ function PricingRow({
   note,
   readAge,
   trend,
+  kept,
   asked,
   onAsked,
   holding,
@@ -3020,6 +3063,7 @@ function PricingRow({
   note: string | null
   readAge: string | null
   trend: TrendRead | undefined
+  kept?: KeptTrend
   asked: string
   onAsked: (text: string) => void
   holding: boolean
@@ -3134,7 +3178,7 @@ function PricingRow({
         {sku.snap.low === null ? '—' : <Money value={Number(sku.snap.low)} />}
       </span>
       <span className="pricing-col-trend">
-        <TrendCell read={trend} />
+        <TrendCell read={trend} kept={kept} />
       </span>
 
       {!source.copies ? null : (
