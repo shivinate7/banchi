@@ -2,8 +2,8 @@
 import { execFileSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { expect, test } from '@playwright/test'
 
+import { expect, test } from './unit'
 import { tabTitle } from '../../src/tabTitle'
 
 /* THE FUNCTION HALF OF THE TAB TITLE, over every `ROUTES` entry, read from `ROUTES` by the same

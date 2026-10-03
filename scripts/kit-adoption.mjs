@@ -1731,7 +1731,7 @@ function selfTest() {
   const base = { static: { 'app/src/A.tsx': { R1: 'home', 'R2-class': 'home' } }, runtime: { '/': { page: 'home' } } }
   /* The rules defined at the merge-base: every rule this file knows today, minus R2-new, which
      stands for a rule born on the branch. */
-  const baseRules = { static: new Set(Object.keys(RULES)), runtime: new Set(['page', 'h1', 'width', 'top', 'scroll', 'title', 'palette', 'keys']) }
+  const baseRules = { static: new Set(Object.keys(RULES)), runtime: new Set(['page', 'h1', 'width', 'top', 'scroll', 'palette', 'keys']) }
   const clone = (o) => JSON.parse(JSON.stringify(o))
   const refusedOnly = (g, block, key) => g.refused.length === 1 && g.allowed.length === 0 && g.refused[0].block === block && g.refused[0].key === key && /exists at the merge-base/.test(g.refused[0].why)
   add('a new static key (a new file) for an existing rule is refused, so red', () => {
@@ -1845,8 +1845,8 @@ function selfTest() {
     const same = growth(at.allow, at.allow, at.rules, rulesAtHead())
     const more = growth(at.allow, head, at.rules, rulesAtHead())
     return at.rules.static !== null && Object.keys(RULES).every((r) => at.rules.static.has(r)) &&
-      at.rules.runtime !== null && ['page', 'title', 'palette', 'keys'].every((a) => at.rules.runtime.has(a)) &&
-      rulesAtHead().runtime !== null && ['page', 'title', 'keys'].every((a) => rulesAtHead().runtime.has(a)) &&
+      at.rules.runtime !== null && ['page', 'palette', 'keys'].every((a) => at.rules.runtime.has(a)) &&
+      rulesAtHead().runtime !== null && ['page', 'keys'].every((a) => rulesAtHead().runtime.has(a)) &&
       same.refused.length === 0 && same.allowed.length === 0 && more.refused.length === 1
   })
 

@@ -19,17 +19,10 @@ import type {
  * WROTE, MOVED HERE SO A FOURTH AND FIFTH FILE CAN REUSE THEM RATHER THAN INVENT A COMPETING
  * SHAPE (D284: the sweep needs one shared fixture set).
  *
-<<<<<<< HEAD
- * `app/tests/text-shape.spec.ts` and `app/tests/machine-words.spec.ts` render `#/runs`,
+ * `app/tests/text-checks.spec.ts` renders `#/runs`,
  * `#/orders`, `#/shipping` and `#/codes` off `sealEveryTest({ store: true,
  * cards: 122 })` alone, which draws no run, no order, no export and no code
  * for any of the four — so a check run only against that state never sees the busiest
-=======
- * `app/tests/text-checks.spec.ts` renders `#/runs`,
- * `#/orders`, `#/shipping`, `#/codes` and `#/graveyard` off `sealEveryTest({ store: true,
- * cards: 122 })` alone, which draws no run, no order, no export, no code and no departed
- * record for any of the five — so a check run only against that state never sees the busiest
->>>>>>> ac0eb1c1 (One text-check sweep: money-face, machine-words and text-shape read each screen once; document the test tiers)
  * screen a real store draws, and a repeated sentence or a machine word landing in a populated
  * list could pass unseen. This module is what those routes' POPULATED fixtures are built
  * from: the same shapes `run-panel.spec.ts`'s `runRow`, `orders.spec.ts`'s `place`/`pick`/

@@ -9207,6 +9207,13 @@ COMPONENTS = [
                         "can call it: `salesOf` turns orders into sales, `sum` adds their gross.",
                 "governed_by": ["D214", "D225", "D298"],
             },
+            "tests/unit/unit.ts": {
+                "does": "the unit tier's `test`: Playwright's, with the `page`, `context` and "
+                        "`browser` fixtures made to throw, so a unit case cannot open a browser. "
+                        "`eslint.config.js` refuses `test` imported from Playwright under "
+                        "`tests/unit/`.",
+                "governed_by": ["D18"],
+            },
             "tests/unit/tab-title.unit.ts": {
                 "does": "the tab title function over every ROUTES entry, read through "
                         "`scripts/kit-adoption.mjs --routes`: the unit tier's pilot, no browser. "
