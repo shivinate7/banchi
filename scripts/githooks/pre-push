@@ -24,6 +24,17 @@ set -uo pipefail
 
 remote="${1:-origin}"
 
+# Append one line to the refusal log (scripts/refusal_log.py, the one home). Fails open: a log
+# that cannot be written never changes this hook's verdict or output.
+rlog() {
+  local top
+  top="$(git rev-parse --show-toplevel 2>/dev/null)" || return 0
+  [ -f "$top/scripts/refusal_log.py" ] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  python3 "$top/scripts/refusal_log.py" "$@" >/dev/null 2>&1 || true
+  return 0
+}
+
 # D133's guard, on every BRANCH push. A push to main is refused below on D42's grounds before
 # this ever runs; what this reads is the branch about to become a PR, and it asks whether what
 # that branch would land on origin/main puts a file back the way main had it before a commit
@@ -43,11 +54,12 @@ while IFS=' ' read -r local_ref local_oid remote_ref remote_oid; do
   if [ "${remote_ref:-}" != "refs/heads/main" ]; then
     case "${local_oid:-}" in
       ""|0000000000000000000000000000000000000000) ;;  # a delete pushes no commit
-      *) guard_branch "$local_oid" || exit 1 ;;
+      *) guard_branch "$local_oid" || { rlog pre-push revert-branch "$local_ref"; exit 1; } ;;
     esac
     continue
   fi
 
+  rlog pre-push main-push "${local_ref:-<deleting>} -> $remote_ref"
   echo "" >&2
   echo "REFUSED: nothing pushes to main." >&2
   echo "" >&2

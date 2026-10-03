@@ -60,6 +60,17 @@
 
 set -uo pipefail
 
+# Append one line to the refusal log (scripts/refusal_log.py, the one home). Fails open: a log
+# that cannot be written never changes this hook's verdict or output.
+rlog() {
+  local top
+  top="$(git rev-parse --show-toplevel 2>/dev/null)" || return 0
+  [ -f "$top/scripts/refusal_log.py" ] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  python3 "$top/scripts/refusal_log.py" "$@" >/dev/null 2>&1 || true
+  return 0
+}
+
 # `prepared` is the phase that can still refuse. `committed` is a report — and since
 # 2026-09-12 it is one this hook makes, see the block below. `aborted` and any unknown phase
 # from a future git read stdin and exit 0.
@@ -168,6 +179,7 @@ while IFS=' ' read -r _old new ref rest; do
       cdir="$(git rev-parse --git-common-dir 2>/dev/null)" || cdir=""
       [ -n "$cdir" ] && [ -f "$cdir/refs/heads/main" ] && continue
     fi
+    rlog reference-transaction main-delete "refs/heads/main"
     echo "" >&2
     echo "REFUSED: this would DELETE refs/heads/main." >&2
     echo "" >&2
@@ -191,6 +203,7 @@ while IFS=' ' read -r _old new ref rest; do
 
   short_new="$(git rev-parse --short "$new" 2>/dev/null || echo "$new")"
   short_cur="$(git rev-parse --short "$current" 2>/dev/null || echo "$current")"
+  rlog reference-transaction main-move "refs/heads/main $short_cur -> $short_new"
   echo "" >&2
   echo "REFUSED: main does not move locally." >&2
   echo "" >&2
