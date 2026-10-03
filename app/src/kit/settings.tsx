@@ -106,6 +106,8 @@ export function SettingsOp({
   danger = false,
   expanded,
   running,
+  runningLabel = 'writing…',
+  chevron = true,
   disabled = false,
   onClick,
 }: {
@@ -121,6 +123,10 @@ export function SettingsOp({
    *  which is a control saying nothing while it works; this puts the ring on the one that
    *  was pressed and swaps its detail for a word. */
   running?: boolean
+  /** What the detail says while `running`. A screen whose write is not a "write" names its own. */
+  runningLabel?: string
+  /** A row that acts where it stands, rather than opening something, draws no chevron. */
+  chevron?: boolean
   danger?: boolean
   expanded?: boolean
   onClick: () => void
@@ -141,11 +147,11 @@ export function SettingsOp({
       </span>
       <span className="bn-set-op-label">{label}</span>
       {running ? (
-        <span className="bn-set-op-detail">writing…</span>
+        <span className="bn-set-op-detail">{runningLabel}</span>
       ) : detail === undefined ? null : (
         <span className="bn-set-op-detail">{detail}</span>
       )}
-      <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={14} className="bn-set-op-chev" />
+      {chevron ? <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={14} className="bn-set-op-chev" /> : null}
     </button>
   )
 }

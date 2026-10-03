@@ -42,6 +42,12 @@ numpy>=1.21
 # Version-1 detection rate, which is exactly the symbol size a 1 cm code produces.
 zxing-cpp==2.3.0
 
+# onnxruntime  the app's ONE model runtime (owner's ruling). geometry/card_box.py runs the
+#              fine-tuned D-FINE-N card finder on it (D125). It is optional at runtime: with
+#              it missing the crop preview falls back to detect_card. 1.30.0 is the version
+#              the holdout was measured on (57 ms a photograph, CPU).
+onnxruntime==1.30.0
+
 # Deliberately absent:
 #   requests   stdlib urllib covers both fetches this repo makes — pokemontcg.io, and
 #              D65's TCGplayer Filtered Export in server/tcg_export.py; one fewer

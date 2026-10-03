@@ -3,6 +3,7 @@
 import { test, expect } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { setViewport } from './phoneSwitch'
+import { settleMotion } from './motionSettled'
 
 sealEveryTest({ store: true, cards: 260 })
 
@@ -39,7 +40,7 @@ for (const [w, h] of [[1440, 900], [820, 1100]] as const) {
       await page.goto('/#/')
       await expect(page.locator('.home-ribbon')).toBeVisible()
       await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), theme)
-      await page.waitForTimeout(700)
+      await settleMotion(page)
       if (process.env.SHOTS) await page.locator('.home-foot').screenshot({ path: `${process.env.SHOTS}/home-ribbon-${w}-${theme}.png` })
       const said = /over (\d+) sittings?/.exec((await page.locator('.home-foot-sum').innerText()).replace(/\s+/g, ' '))
       expect(said, 'the sentence names a sitting count').not.toBeNull()

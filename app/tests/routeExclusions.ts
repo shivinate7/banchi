@@ -1,5 +1,5 @@
-/* THE TWO ROUTES `routeSweep.ts` EXCLUDES FOR `text-shape.spec.ts`, `machine-words.spec.ts`
- * AND `money-face.spec.ts`, as REGEXES rather than quoted string literals.
+/* THE TWO ROUTES `routeSweep.ts` EXCLUDES FOR `text-checks.spec.ts`,
+ * as REGEXES rather than quoted string literals.
  *
  * `scripts/docs-audit.py`'s `route rosters` row treats three or more distinct `'#/…'`
  * string literals in one spec as a hand-typed roster — the exact shape that let D69's and

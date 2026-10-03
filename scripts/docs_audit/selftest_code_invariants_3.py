@@ -299,6 +299,7 @@ def run(ok) -> None:
     checks_bak = checks_path.with_suffix(".py.bak")
     old_field = (
         '        "target": "sigil-check",\n'
+        '        "shard": "static",\n'
         '        "runs": "python3 scripts/sigil-check.py --self-test && python3 '
         'scripts/sigil-check.py",\n'
     )

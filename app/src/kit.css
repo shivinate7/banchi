@@ -792,10 +792,13 @@ span.bn-slot { display: inline-block; }
 .bn-seg-item[aria-pressed='true'],
 .bn-seg-item[aria-selected='true'],
 .bn-seg-item[aria-current] {
-  color: var(--bn-ink);
-  background: var(--bn-surface);
+  color: var(--bn-seg-active-ink);
+  background: var(--bn-seg-active-bg);
   box-shadow: var(--bn-shadow-1);
 }
+.bn-seg-item:nth-of-type(2)[aria-pressed='true'],
+.bn-seg-item:nth-of-type(2)[aria-selected='true'],
+.bn-seg-item:nth-of-type(2)[aria-current] { background: var(--bn-seg-active-bg-2); }
 /* THE SMALL SIZE (S10): `.bn-seg`'s 3px padding plus the item's own 28px put a segmented
    control at 34px total beside 28px search/select controls in the same row. Sized so the
    two totals match exactly: 2px padding + a 24px item = 28px, `--bn-control-h-sm`'s own
@@ -1000,6 +1003,7 @@ span.bn-slot { display: inline-block; }
 .bn-empty-art-lg { width: 72px; height: 72px; border-radius: var(--bn-r-2xl); }
 .bn-empty-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 700; color: var(--bn-ink); }
 .bn-empty-body { font-size: var(--bn-fs-base); max-width: 44ch; }
+.bn-empty-hint { min-height: 40px; display: flex; align-items: center; justify-content: center; }
 .bn-empty-actions { display: flex; gap: var(--bn-2); margin-top: var(--bn-2); flex-wrap: wrap; justify-content: center; }
 
 /* A well version of the same idea, for a card that already sits on its own ground rather

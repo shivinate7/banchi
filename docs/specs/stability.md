@@ -76,7 +76,6 @@ viewport. Each row names the element by its class.
 |---|---|---|---|
 | A1 | Home | 0.08 at 1440, 0.13 at 820 | `.home-grid2` and `.home-spine` move down 100–139 px when the foot lands. |
 | A2 | Pricing | 0.03 at 1440, 0.05 at 820 | `.pricing-row` grows 81 px and moves 399 px. |
-| A3 | Graveyard | 0.06 at 1440, 0.10 at 820 | `.bn-page-body` moves 128 px. |
 | A4 | Sales | 0.05 at 1440, 0.04 at 820 | The podium thumbnails grow 187–292 px. |
 | A5 | Orders | 0.008 at 1440, 0.012 at 820 | `.bn-page-body` grows 493–509 px. |
 | A6 | Review | 0.004 at 1440, 0.005 at 820 | `.bn-page-body` moves 8 px. |
@@ -93,7 +92,7 @@ viewport. Each row names the element by its class.
 | S4 | Inventory, 820 only | Step card to card (← / →, or a row click) | `.card-locations` unmounts for about 210 ms while the copies read is out. `.browse-band` shrinks 527→347 px, and `.browse-details` moves −180 px, then +180 px. At 1440 the copies sit beside the photo, so the band does not change height. | B | Confirmed (frame by frame) | 0.031 twice for each step | Held frame in `CardLocations`: keep the last copies mounted while the read is out. |
 | S5 | Review | Open the lookup (`L` or the Search button), and close it (Esc) | `.review-actions` and `.review-tray` move +94 px, then −158 px, 8 ms apart. Esc moves them +65 px. `CatalogPanel` replaces the candidate list in flow. | B | Confirmed | 0.008 + 0.017 (key). 0.003 + 0.006 (click). 0.005 (Esc) | Held frame, and the actions stay at a fixed place under the stage. |
 | S6 | All screens | The server goes away, then comes back | `.bn-banner` mounts in flow above `.bn-view` (sticky, not fixed). The whole view moves 44 px down, then up. The person did nothing. | D | Confirmed | 0.0255 each way | Overlay, not flow. |
-| S7 | 8 of 12 screens, classic-scrollbar systems | Data lands, or the route changes between a short and a long screen | The document gains or loses a 15 px scrollbar. `.bn-head-actions` and other right-aligned or centered content moves 9–15 px across. The routes are Home, Pricing, Orders, Sales, Inventory, Graveyard, Fulfillment and Capture. Codes goes the other way. | F | Confirmed (bars forced) | dx 15 px; CLS up to 0.09 with A1 | `scrollbar-gutter: stable`. |
+| S7 | 8 of 12 screens, classic-scrollbar systems | Data lands, or the route changes between a short and a long screen | The document gains or loses a 15 px scrollbar. `.bn-head-actions` and other right-aligned or centered content moves 9–15 px across. The routes are Home, Pricing, Orders, Sales, Inventory, Fulfillment and Capture. Codes goes the other way. | F | Confirmed (bars forced) | dx 15 px; CLS up to 0.09 with A1 | `scrollbar-gutter: stable`. |
 | S8 | Inventory, list toolbar | Tick a row; toggle "In stock only" | Tick mounts "1 ticked" and "clear" chips into `.browse-status`. At 820 "All" wraps to its own line, and the list moves 30 px. The toggle's count changes width (dx 60–67 px), and that also wraps "All". | C + E | Resolved | 0.019 at 1440. 0.034–0.038 at 820 | The list carries no ticks (D314), so the toolbar never gains chips. |
 | S9 | Sales | Pick a month column | Nothing mounts. The chosen bar takes a ring, a bold label and a cross in place, and pressing it again shows every month. | C | Resolved by the notes-at-the-act change | 0 | Held frame: the state lives on the bar that exists. `revenue.spec.ts` holds the D313 case. |
 | S10 | Sales | Choose the "All" period | Resolved. The comparison folds into the order line as a trailing clause, said only when a real comparison exists. There is no separate prior line, and the order line is clamped to one line. | C | Fixed | 0.0142 at 820 before. 0 after | Case in `revenue.spec.ts`. |
@@ -114,7 +113,7 @@ viewport. Each row names the element by its class.
 - **Hover and focus (K).** 0 shifts over about 600 hovers and 300 Tab presses on 13 screens at
   both widths. A CSS scan finds no `:hover` or `:focus` rule that changes a layout property.
 - **Route change scroll anchor.** `App.tsx` resets the scroll with `window.scrollTo(0, 0)` in an
-  effect on `path`. A frame-by-frame read after a sidebar press from a scrolled Graveyard shows
+  effect on `path`. A frame-by-frame read after a sidebar press from a scrolled screen shows
   the new screen first at `scrollY` 0. No frame shows the new screen at the old offset.
 - **Layout transitions that are contained or intended.** `.browse-boxcell-bar > span`,
   `.home-box-bar > span`, `.capture-meter-fill` and `.bn-progress > span` animate `width` inside
@@ -125,7 +124,7 @@ viewport. Each row names the element by its class.
   intended. A lint lets them through by name (§5).
 - **Intended content changes.** These presses were measured, and each move is the press's own
   result at its spot:
-  - a filter or sort that reorders rows (Graveyard "Sold", Sales "Copies");
+  - a filter or sort that reorders rows (Sales "Copies");
   - a disclosure that opens under its header (Fulfillment box, Inventory section fold);
   - the Sales "Custom" period, which opens its date fields under the period control.
 
@@ -159,7 +158,7 @@ viewport on this press, and S7's gutter covers that case.
 
 | Screen | Before the press | After the press |
 |---|---|---|
-| Home, Capture, Review, Pricing, Orders, Shipping, Sales, Inventory, Graveyard, Codes, Fulfillment, Kit, Product history | 0 | 0 (every clicked control and every key flow) |
+| Home, Capture, Review, Pricing, Orders, Shipping, Sales, Inventory, Codes, Fulfillment, Kit, Product history | 0 | 0 (every clicked control and every key flow) |
 
 There are no offenders.
 

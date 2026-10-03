@@ -436,7 +436,7 @@ def check_import_layering(report: Report) -> None:
 def check_error_words(report: Report) -> None:
     """The refusal messages a screen prints word for word obey D196 too.
 
-    `no mechanism on screen` reads JSX literals and `machine-words.spec.ts` reads loaded
+    `no mechanism on screen` reads JSX literals and `text-checks.spec.ts` reads loaded
     screens, so neither ever sees a REFUSAL: those strings live in `server/*.py` and in
     `app/src/server.ts`'s `ServerError` calls. `scripts/error-words.py` reads them at the
     source, so this row needs no browser. It fails on a message carrying a backtick, a

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The error-state check `machine-words.spec.ts` cannot be: it reads loaded screens, so it never
+"""The error-state check `text-checks.spec.ts` cannot be: it reads loaded screens, so it never
 sees a refusal. This reads the refusal templates themselves, at the source, and needs no browser.
 
 WHAT IT READS. Every message a refusal carries to the screen word for word, in three places:

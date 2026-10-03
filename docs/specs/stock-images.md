@@ -8,7 +8,8 @@
 A server-side resolver, `pipeline/stockimages.py:StockImages`, answers one question:
 `(game, set_name, number)` gives a hotlinked photo URL, or `None`. It is hotlinked and never
 mirrored. The browser loads the photo straight from the tcgcsv or pokemontcg.io CDN, and this repo
-never downloads or stores the bytes (D24's hotlink rule, reused).
+never downloads or stores the bytes (D301, stock photos are hotlinked, never mirrored).
+One exception stands in D301: the stock-photo matcher reads each image once for its fingerprint and drops the bytes (`docs/specs/identify-engine-pick.md`).
 
 `server/pipeline_routes.py:STOCK_IMAGES` is the one instance for the server's whole life, so its
 in-process cache is worth having. `GET /pipeline/sets` (`do_pipeline_sets`) and

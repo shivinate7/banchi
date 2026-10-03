@@ -2,13 +2,14 @@ import { flushSync } from 'react-dom'
 import { Component, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ComponentType, ErrorInfo, ReactNode } from 'react'
 import { isEditableTarget } from './keys'
-import { rememberRail, storedRail, storedTheme } from './deviceMemory'
+import { tabTitle } from './tabTitle'
+import { nextTheme, rememberRail, storedRail, storedTheme, themeLabel } from './deviceMemory'
 import { getStatus, onServerBoot, onServerReachable, ServerError } from './server'
 import { useSearch } from './useSearch'
 import { matchQuery } from './kit/match'
 import { usePoll } from './usePoll'
 import { Button, Icon, IconButton, Kbd, Lockup, Modal, Page, PageRouteContext, Sheet, SheetHost,
-  applyTheme, openSheet, overlayOpen, readTheme, type IconName, type Theme } from './kit'
+  appliedTheme, applyTheme, openSheet, overlayOpen, readTheme, stampTheme, type IconName, type Theme } from './kit'
 import { BLOCK, PARAMS, ROMAN_TRACK_SOLVED } from './kit/lockupGeometry'
 import { Toaster, toast } from './kit/toast'
 import { SearchField } from './SearchField'
@@ -18,7 +19,6 @@ import { CaptureScreen } from './CaptureScreen'
 import { RunsRedirect } from './Runs'
 import { ReviewQueue } from './ReviewQueue'
 import { Inventory } from './Inventory'
-import { Graveyard } from './Graveyard'
 import { Pricing } from './Pricing'
 import { Orders } from './Orders'
 import { Shipping } from './Shipping'
@@ -240,7 +240,6 @@ export const ROUTES: readonly Route[] = [
    * `route rosters`, and every spec's pinned roster), so it is a deliberate edit and never a
    * side effect. */
   { path: '/inventory', label: 'Inventory', icon: 'box', view: Inventory, persona: 'owner', group: 'library', hotkey: 'i', nav: true, tab: true, keywords: 'boxes find a card where search sold retire move', keys: INVENTORY_KEYS },
-  { path: '/graveyard', label: 'Graveyard', icon: 'headstone', view: Graveyard, persona: 'owner', group: 'library', hotkey: 'g', nav: true, keywords: 'sold retired moved buried departed history gone deleted box' },
   { path: '/codes', label: 'Codes', icon: 'qr', view: Codes, persona: 'owner', group: 'library', hotkey: 'd', nav: true, keywords: 'code cards qr redeem read a box', keys: CODES_KEYS },
   { path: '/fulfillment', label: 'Cards to pull', icon: 'hand', view: Fulfillment, persona: 'fulfiller', group: 'aside', keywords: 'hand-off pull fulfiller new tab', keys: FULFILLMENT_KEYS },
   { path: '/gallery', label: 'Kit', icon: 'grid', view: Gallery, persona: 'owner', group: 'aside', keywords: 'component kit design system tokens' },
@@ -473,8 +472,7 @@ function useTheme(): [Theme, () => void] {
     const follow = () => {
       if (storedTheme() !== null) return
       const next: Theme = media.matches ? 'dark' : 'light'
-      if (next === 'dark') document.documentElement.setAttribute('data-theme', 'dark')
-      else document.documentElement.removeAttribute('data-theme')
+      stampTheme(next)
       setTheme(next)
     }
     follow()
@@ -482,7 +480,7 @@ function useTheme(): [Theme, () => void] {
     return () => media.removeEventListener('change', follow)
   }, [])
   const toggle = useCallback(() => {
-    const next: Theme = document.documentElement.hasAttribute('data-theme') ? 'light' : 'dark'
+    const next = nextTheme(appliedTheme())
     const flip = () => {
       applyTheme(next)
       flushSync(() => setTheme(next))
@@ -1032,20 +1030,6 @@ function NavLink({ route, current, onNavigate }: { route: Route; current: boolea
   )
 }
 
-/* ---- the tab title ------------------------------------------------------------------------------
-   ONE FIXED TITLE: "番地 " and the screen's name in lowercase ("番地 pricing", "番地 home"). The
-   owner's ruling, 2026-09-23. It replaced a title that alternated on a timer between the screen and
-   "番地 banchi", and a second, joined form under reduced motion. `app/index.html` carries
-   "番地 banchi" for the moment before React boots.
-   LOWERCASED HERE AND NOWHERE ELSE. The nav, the palette and the keyboard sheet draw the label in
-   Title Case; this is the tab's own voice. `toLowerCase` rather than `toLocaleLowerCase`: the labels
-   are ASCII English and the locale form has a Turkish dotted-i behaviour nobody here wants.
-   THE FULFILLER'S TAB NAMES HIS TASK AND CARRIES NO BRAND (D5). */
-function tabTitle(route: Route | undefined): string {
-  const name = (route === undefined ? 'Not found' : route.title ?? route.label).toLowerCase()
-  return route?.persona === 'fulfiller' ? name : `番地 ${name}`
-}
-
 /* ---- sidebar ---------------------------------------------------------------------------------- */
 /* docs/specs/logo.md section 16: the open sidebar draws the lockup at kanji 40, and the rail keeps
    the mark at the 32 it already ships. Named here because they are the two numbers the shell
@@ -1178,7 +1162,7 @@ function Sidebar({
           <span className="bn-side-foot-text">Go to</span>
           <Kbd>⌘K</Kbd>
         </Button>
-        <Button variant="ghost" icon={theme === 'dark' ? 'sun' : 'moon'} onClick={onToggleTheme}>
+        <Button variant="ghost" icon={theme === 'light' ? 'moon' : 'sun'} onClick={onToggleTheme} title={`Switch to ${themeLabel(nextTheme(theme))}`}>
           <span className="bn-side-foot-text">Theme</span>
         </Button>
       </div>
@@ -1281,8 +1265,8 @@ function Drawer({ open, path, onClose, theme, onToggleTheme }: { open: boolean; 
               <Icon name="external" size={14} className="bn-faint" />
             </a>
           ))}
-          <button type="button" className="bn-nav-link" onClick={onToggleTheme}>
-            <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
+          <button type="button" className="bn-nav-link" onClick={onToggleTheme} title={`Switch to ${themeLabel(nextTheme(theme))}`}>
+            <Icon name={theme === 'light' ? 'moon' : 'sun'} size={18} />
             <span className="bn-nav-text">Theme</span>
           </button>
         </div>
@@ -1403,7 +1387,7 @@ export function App() {
       run: r.persona === 'fulfiller' ? () => window.open(`#${r.path}`, '_blank', 'noopener') : () => go(r.path),
     }))
     const extras: Command[] = [
-      { id: 'theme', group: 'Appearance', label: theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', icon: theme === 'dark' ? 'sun' : 'moon', run: toggleTheme },
+      { id: 'theme', group: 'Appearance', label: `Switch to ${themeLabel(nextTheme(theme))}`, icon: theme === 'light' ? 'moon' : 'sun', run: toggleTheme },
       { id: 'rail', group: 'Appearance', label: rail ? 'Expand the sidebar' : 'Collapse the sidebar', icon: 'columns', hint: '⌘ .', run: toggleRail },
       { id: 'keys', group: 'Help', label: 'Keyboard shortcuts', icon: 'keyboard', hint: '?', keywords: 'hotkeys bindings reference cheatsheet keys shortcut arrow leader', run: () => setKeysOpen(true) },
     ]

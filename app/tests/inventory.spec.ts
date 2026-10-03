@@ -4,7 +4,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test'
 import type { GameRegistry, ResolvedOrder } from '../src/types'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
-import { settled, whatMoved } from './motionSettled'
+import { afterPaint, settleMotion, settled, whatMoved } from './motionSettled'
 import { iconTip } from './iconTooltip'
 import { phoneOff, setViewport } from './phoneSwitch'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
@@ -765,6 +765,12 @@ async function open(
   const record = (method: string, url: string, body: unknown) =>
     wire.push({ method, path: new URL(url).pathname, body })
 
+  /* The Deleted boxes shelf reads the burial lines. This fixture has no deleted box, so none: the
+     shelf has its own cases in `deleted-boxes.spec.ts`. */
+  await page.route(/\/graveyard(\?.*)?$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: [] }) }),
+  )
+
   /* The writes first: the read regexes below are looser and a `/inventory` matcher would
      swallow `/inventory/2` if it were registered ahead of it. */
 
@@ -992,7 +998,7 @@ async function open(
    * query string rather than a fixed body — a case answering `?game=` differently from a
    * bare `GET /boxes` passes one; every other case keeps passing a plain object. */
   await page.route(/\/boxes(\?.*)?$/, async (route) => {
-    if (options.boxesDelayMs) await new Promise((resolve) => setTimeout(resolve, options.boxesDelayMs))
+    if (options.boxesDelayMs) await new Promise((resolve) => setTimeout(resolve, options.boxesDelayMs)) // keep: stubbed answer held options.boxesDelayMs ms on purpose, a latency fixture
     const body =
       typeof boxes === 'function' ? boxes(new URL(route.request().url()).searchParams) : boxes
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
@@ -1228,9 +1234,12 @@ sealEveryTest()
  * NOT `open()`: that helper's own postcondition waits for `.browse-sectfold`, which a
  * zero-box store never renders — waiting for it here would just re-time-out inside the
  * helper instead of inside the assertion. This registers the same handful of GET routes the
- * screen fires with no shelf resolved — `/boxes`, `/queues`, `/orders` — and nothing else,
+ * screen fires with no shelf resolved — `/boxes`, `/queues`, `/orders`, `/graveyard` — and nothing else,
  * so an unstubbed read the fix accidentally starts would fail loudly through `sealCapture`. */
 test('a zero-box store renders "No boxes yet" instead of loading forever', async ({ page }) => {
+  await page.route(/\/graveyard(\?.*)?$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: [] }) }),
+  )
   await page.route(/\/boxes$/, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ boxes: [] }) }),
   )
@@ -1512,15 +1521,13 @@ test('a search that never returns this card gives a sentence, not an endless loa
   const panel = page.locator('.inventory-copies')
   await expect(panel).toBeVisible()
 
-  // Long enough for the debounce (200ms) plus the stubbed fetch to land several times over.
-  await page.waitForTimeout(1500)
-
+  // The answer lands (the warning), then the busy marks must be gone.
+  await expect(panel.locator('.bn-notice-warn')).toContainText("did not return this card's own row")
   await expect(
     panel.locator('[aria-busy="true"]'),
     'the panel is still marked busy once the search has answered',
   ).toHaveCount(0)
   await expect(panel.locator('.inventory-looking')).toHaveCount(0)
-  await expect(panel.locator('.bn-notice-warn')).toContainText("did not return this card's own row")
 })
 
 test('B2 — a sold card reached by a deep link stays drawn for the rest of this box load', async ({
@@ -1949,7 +1956,7 @@ test('the press that sells a copy does not shift while the re-read is in flight'
   await page.route(/\/search\?/, async (route) => {
     calls += 1
     const asked = new URL(route.request().url()).searchParams.get('q') ?? ''
-    if (calls === 2) await new Promise((resolve) => setTimeout(resolve, 800))
+    if (calls === 2) await new Promise((resolve) => setTimeout(resolve, 800)) // keep: stubbed answer held 800 ms on purpose, a latency fixture
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1978,7 +1985,7 @@ test('the press that sells a copy does not shift while the re-read is in flight'
     if (box !== null) seenTops.add(Math.round(box.y))
     if ((await page.locator('.inventory-looking').count()) > 0) sawSkeleton = true
     if ((await row.locator('.position-bar').getAttribute('data-gone')) === 'true') break
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 50)) // keep: samples the list top every 50ms until the sale lands, a poll interval
   }
 
   expect([...seenTops], 'the copies list moved while the re-read was in flight').toEqual([topsBefore])
@@ -2011,12 +2018,13 @@ test('the press that sells a copy causes no layout shift in the half second afte
   await expect(row).toBeVisible()
   const press = row.getByRole('button', { name: 'Mark sold' })
   await press.scrollIntoViewIfNeeded()
-  await page.waitForTimeout(1000)
+  await settleMotion(page)
+  await afterPaint(page)
 
   const from = await markNow(page)
   await press.click()
   await expect(row.locator('.position-bar')).toHaveAttribute('data-gone', 'true')
-  await page.waitForTimeout(600)
+  await page.waitForTimeout(600) // keep: the shifts are read over the 500ms window after the press
 
   const inWindow = (await readShifts(page)).shifts.filter((s) => s.at >= from && s.at < from + 500)
   expect(sumOf(inWindow), `the press moved ${describeShifts(inWindow)}`).toBeLessThan(0.0005)
@@ -2417,6 +2425,16 @@ test('the retirement keeps its panel, because the reason is the write', async ({
   await expect(page.locator('.bn-scrim')).toHaveCount(1)
   await expect(page.getByRole('dialog')).toBeVisible()
   await expect(page.locator('.inventory-retire-reasons')).toBeVisible()
+})
+
+/* WHOLE PHOTOGRAPH, NEVER A CROP: BOTH INVENTORY PHOTOGRAPHS DRAW THE WHOLE IMAGE. `cover` cut the card's bottom edge, where
+ * its number and rarity sit. A fit that never clips is the cheap check; reading the card's edge
+ * needs `detect_card`, which is slow and can refuse. */
+test('the preview and the retire dialog draw the whole photograph', async ({ page }) => {
+  await open(page)
+  await expect(page.locator('.browse-photo')).toHaveCSS('object-fit', 'contain')
+  await copyRow(page, CARD_1).getByRole('button', { name: 'Retire' }).click()
+  await expect(page.locator('.inventory-confirm-photo')).toHaveCSS('object-fit', 'contain')
 })
 
 // ------------------------------------------------ the copies are a way back into the walk
@@ -4170,12 +4188,12 @@ test('a listing hold is named on the delete panel rather than discovered by pres
   await page.getByRole('button', { name: /^Delete$/ }).click()
 
   /* D134: a listed copy is the only remaining ground for `box_not_empty_of_commitments` — a
-     sold or retired record no longer blocks and is named as something that will be BURIED
-     instead, never as a reason the box is refused. This fixture's sold (1) and retired (1)
-     read as "2 other departed records". */
+     sold or retired record no longer blocks and is named as something that will stay on the
+     Deleted boxes shelf instead, never as a reason the box is refused. This fixture's sold (1)
+     and retired (1) read as "2 sold or retired records". */
   await expect(page.locator('.boxops-confirm')).toContainText('3 cards listed')
-  await expect(page.locator('.boxops-confirm')).toContainText('2 other departed records')
-  await expect(page.locator('.boxops-confirm')).toContainText('will be buried')
+  await expect(page.locator('.boxops-confirm')).toContainText('2 sold or retired records')
+  await expect(page.locator('.boxops-confirm')).toContainText('will stay on the Deleted boxes shelf')
 })
 
 test('the control that releases does not exist until the free plan has answered', async ({
@@ -4765,6 +4783,29 @@ test('S3 — with Hide sold on, a search count excludes what the fold already hi
   await expect(page.locator('.browse-filterbar .bn-filtercount-figure')).toHaveText('0 of 3 boxes')
 })
 
+test('D271 — a search that finds nothing offers the near name, and pressing it runs that search', async ({ page }) => {
+  const cards: Cards = {
+    '2/1': card({ index: 1, state: 'identified', name: 'Renekton', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+  }
+  const store: Store = {
+    cards,
+    search: (query) => {
+      const answer = searchAnswer(query, cards)
+      return answer.groups.length === 0 && /rekenton/i.test(query) ? { ...answer, did_you_mean: 'Renekton' } : answer
+    },
+  }
+  await open(page, TWO_BOXES, store, () => PRICING, SALE)
+
+  await page.getByRole('searchbox').fill('Rekenton')
+  const hint = page.getByRole('button', { name: 'Did you mean Renekton?' })
+  await expect(hint).toBeVisible()
+  /* D313: the line is drawn whole with the empty state, and is a thumb's height. */
+  expect((await hint.boundingBox())?.height).toBeGreaterThanOrEqual(40)
+  await hint.click()
+  await expect(page.getByRole('searchbox')).toHaveValue('Renekton')
+  await expect(page.getByText(/^Nothing matches/)).toHaveCount(0)
+})
+
 test('UX-244 — one copy moves to another box from its own row, and the receipt names the section (D300)', async ({ page }) => {
   await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
   const sent: { path: string; body: unknown }[] = []
@@ -4852,7 +4893,7 @@ test('UX-244 — a stale section on Move re-opens the pick with one plain senten
    * an effect reverts it, so this waits out a full render pass first. */
   await dialog.locator('.bn-section-pick-item').click()
   await expect(move).toBeEnabled()
-  await page.waitForTimeout(300)
+  await page.waitForTimeout(300) // keep: asserts the pick is not reverted a beat after it lands, a revert is an async effect that only elapsed time shows
   await expect(move).toBeEnabled()
   await expect(dialog.locator('.bn-section-pick-item[aria-checked="true"]')).toHaveCount(1)
 })
@@ -5554,7 +5595,7 @@ for (const [cutoff, plays, why] of [
       await expect(() => expect(page.evaluate(GLINTS)).resolves.toBeGreaterThan(0)).toPass({ timeout: 2000 })
       await expect(() => expect(page.evaluate(GLINTS)).resolves.toBe(0)).toPass({ timeout: 3000 })
     } else {
-      await page.waitForTimeout(400)
+      await page.waitForTimeout(400) // keep: asserts no glint plays over 400ms
       expect(await page.evaluate(GLINTS)).toBe(0)
     }
   })
@@ -5567,7 +5608,7 @@ test('a card with no market reading never glints, whatever the cutoff', async ({
   await expandAll(page)
   await page.locator('.browse-row', { hasText: 'Eiscue' }).first().click()
   await expect(page.locator('.card-locations-row.is-current .nb')).toHaveAttribute('aria-label', /Galio/)
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(400) // keep: asserts no glint plays over 400ms
   expect(await page.evaluate(GLINTS)).toBe(0)
 })
 
@@ -5576,7 +5617,7 @@ test('the glint reads the readings table and never the run snapshot', async ({ p
   await gated('0.01', {})(page)
   await expect(page.locator('.card-locations-row.is-current .nb-here svg')).toBeVisible()
   await page.locator('.browse-row').nth(1).click()
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(400) // keep: asserts no glint plays over 400ms
   expect(await page.evaluate(GLINTS)).toBe(0)
 })
 
@@ -6281,7 +6322,7 @@ test('a narrow copies column shortens the bar, never the position label', async 
      departed copy still carries no bar, and this case measures a row that has one. */
   const row = page.locator('.card-locations-row').filter({ has: page.locator('.position-bar') }).first()
   await expect(row).toBeVisible()
-  await page.waitForTimeout(150)
+  await settleMotion(page)
 
   const geom = await row.evaluate((el) => {
     const bar = el.querySelector('.position-bar') as HTMLElement
@@ -6401,7 +6442,7 @@ test('every copy row draws the same bar height, located or not', async ({ page }
   await expect(page.locator('.card-locations-owner .position-bar').first()).toBeVisible()
   /* The bar's own transitions are 320ms and one of them is on `width`; measuring inside them
      reads a bar mid-ease. */
-  await page.waitForTimeout(400)
+  await settleMotion(page)
 
   const hs = await page
     .locator('.card-locations-owner .position-bar')
@@ -8446,7 +8487,7 @@ test.skip(
      what is being changed here is WHEN the answer lands, never what is in it. */
   await page.route(/\/inventory\/\d+$/, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
-    await new Promise((resolve) => setTimeout(resolve, 400))
+    await new Promise((resolve) => setTimeout(resolve, 400)) // keep: stubbed answer held 400 ms on purpose, a latency fixture
     return route.fallback()
   })
   await expandAll(page)
@@ -8532,7 +8573,7 @@ test.skip(
      gives the one-shot snapshot below comfortable room over CI's own latency. */
   await page.route(/\/inventory\/7$/, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
-    await new Promise((resolve) => setTimeout(resolve, 800))
+    await new Promise((resolve) => setTimeout(resolve, 800)) // keep: stubbed answer held 800 ms on purpose, a latency fixture
     return route.fallback()
   })
 
@@ -8808,7 +8849,7 @@ test('the control that re-ranks appearing moves no copy row', async ({ page }) =
      agrees after 300ms is the settled one. */
   let before = await listTop()
   for (let i = 0; i < 20; i++) {
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(300) // keep: the poll interval of a settle loop, it compares two reads apart in time
     const again = await listTop()
     if (again === before) break
     before = again
@@ -8937,7 +8978,7 @@ async function rowFrames(page: Page, go: () => Promise<void>, ms: number): Promi
     const rows = [...document.querySelectorAll('.card-locations-row')]
     return rows.length > 0 && rows.every((row) => row.getAnimations().length === 0 && row.closest('.inventory-held') === null)
   })
-  await page.waitForTimeout(ms)
+  await page.waitForTimeout(ms) // keep: the observation window is the measurement
   return await page.evaluate(() => (window as unknown as { __rowFrames: RowFrame[] }).__rowFrames)
 }
 
@@ -8973,7 +9014,7 @@ for (const how of ['held arrow key', 'click']) test(`the copies list does not mo
   await open(page, SIFT_BOXES, { cards: siftCards(), search: (query) => searchAnswer(query, siftCards()) })
   /* A real server answers in tens of milliseconds, not none. */
   await page.route(/\/search/, async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 150))
+    await new Promise((resolve) => setTimeout(resolve, 150)) // keep: stubbed answer held 150 ms on purpose, a latency fixture
     return route.fallback()
   })
   await expandAll(page)

@@ -198,6 +198,9 @@ const RECORDED = {
     'getBoxPhotos', 'getMarkdowns',
     // The graveyard's one read (D134). Its own line, for the reason the writes below give.
     'getGraveyard',
+    'getProductRealized',                     // the product page's realized-price read
+    'getPriceMovers', 'getSavedTrends',       // #/pricing's movers and the saved overnight trends
+    'getSkuPhotosSettled',                    // the stock-photo read that waits out a cold group
     // The markdown lens's three (D103) — the survey table, and D278's history and trends
     // strip re-addressed at a stamp instead of a run.
     'getMarkdownTable', 'markdownHistory', 'markdownTrends',
@@ -288,6 +291,7 @@ const RECORDED = {
     'moveSections', 'undoSectionMove',        // D264, the box map's section move and its undo
     'moveRange',                              // D264, one card or a range, the next slice
     'closeSection',                           // UN-15, S's own undo
+    'releaseUnreadableClaim', 'restoreUnreadableClaim', // DEBT59, a stuck live claim's way out and back
     'moveSectionsBatch',                      // D264, the Map's edit-mode Confirm: a whole
                                                // draft — sections and ranges — in one write
   ],
@@ -568,6 +572,17 @@ function readScreen(file, text, classification) {
           const origin = (element.propertyName ?? element.name).text
           if (classification.writes.includes(origin)) screen.writes.set(element.name.text, origin)
           if (classification.reads.includes(origin)) screen.reads.set(element.name.text, origin)
+        }
+      }
+    }
+
+    // `liveCheck.refresh` is a read on a screen's behalf: it fetches `GET /pipeline/sends`, the one
+    // place the send card's standing claims come from. Recognised by the module and the name.
+    if (ts.isImportDeclaration(node) && /['"]\.\/liveCheck['"]/.test(node.moduleSpecifier.getText(src))) {
+      const bindings = node.importClause?.namedBindings
+      if (bindings !== undefined && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) {
+          if ((element.propertyName ?? element.name).text === 'refresh') screen.reads.set(element.name.text, 'refresh')
         }
       }
     }

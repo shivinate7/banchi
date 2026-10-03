@@ -13,7 +13,7 @@ import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from harness.tests import Checks
-from cli import requeue, resolve
+from cli import requeue, resolve, runs
 from pipeline import corpus, join, tcgcsv
 from server import capture_server
 from store import files, master, photos, queues
@@ -34,6 +34,7 @@ from harness.tests.t7.common import (
     back_of,
     capture_named,
     capture_payload,
+    command,
     corrupt_history,
     entry,
     events_for,
@@ -1792,6 +1793,14 @@ def check_graveyard(checks: Checks) -> None:
             "the deleted box's departure now reads `buried: true` with a `buried_at` "
             "stamp; the standing one still reads `buried: false`",
             f"rows were: {rows!r}",
+        )
+
+        only = capture_server.do_graveyard(buried_only=True)["departed"]
+        checks.ok(
+            len(only) == 1 and only[0]["buried"] is True and only[0]["name"] == "Alpha",
+            "`buried_only` answers the deleted box's record alone — the standing retirement is "
+            "not built, so a sale or a retire never pays for rows the shelf would drop",
+            f"rows were: {only!r}",
         )
 
 
@@ -3894,6 +3903,46 @@ def check_mark_sold(checks: Checks) -> None:
 # ------------------------------------------------------ mark sold reverses the order ledger
 
 
+def check_sale_undo_counts(checks: Checks) -> None:
+    """Undoing a sale takes the SKU's `sold_here` back down, and the cap sees it.
+
+    A MUTATION-TESTED GUARD. Pass `undone=False` to `Listing.sale` in `_sell` and the SKU
+    keeps counting a sale that was reversed: `sold_here` reads 2 here, `live_estimate` falls
+    to zero, and a capped emit sends a copy TCGplayer already holds.
+    """
+    checks.note("")
+    checks.note("MARK SOLD UNDO — sold_here comes back down, and a capped emit counts it")
+
+    with isolated_home():
+        pair = [(3, i, "Dunsparce", "120", "normal") for i in (1, 2)]
+        run_dir, _ = seam_run(checks, pair, live={DUNSPARCE_SKU: 1})
+        with Store().write() as snapshot:
+            for key in ("3/1", "3/2"):
+                _bind(snapshot, key, DUNSPARCE_SKU)
+        listing = Store().read().inventory.listing_for(DUNSPARCE_SKU)
+        checks.equal(
+            (listing.live, listing.sold_here), (1, 0), "the export put one copy live, none sold here"
+        )
+        capture_server.do_mark_sold(3, 1, {})
+        checks.equal(
+            Store().read().inventory.listing_for(DUNSPARCE_SKU).sold_here, 1, "a sale counts one"
+        )
+        capture_server.do_mark_sold(3, 1, {"undo": True})
+        listing = Store().read().inventory.listing_for(DUNSPARCE_SKU)
+        checks.equal(
+            listing.sold_here,
+            0,
+            "AN UNDONE SALE LEAVES NOTHING COUNTED — a reversal that still added one reads 2",
+        )
+        checks.equal(listing.live_estimate, 1, "so the SKU still reads one live")
+        command(checks, "emit", str(run_dir.directory), "--cap", "1", exits=1)
+        checks.ok(
+            not run_dir.path(runs.IMPORT_MERGED).exists(),
+            "AND A CAP OF ONE SENDS NOTHING MORE: the one live copy is still out, so a "
+            "capped emit adds no row",
+        )
+
+
 def check_mark_sold_releases_ledger(checks: Checks) -> None:
     """The sale undo's ledger half — `docs/specs/undo.md` §4.
 
@@ -4737,6 +4786,7 @@ CHECKS = (
     check_review_answer,
     check_group_answer,
     check_mark_sold,
+    check_sale_undo_counts,
     check_mark_sold_releases_ledger,
     check_retire,
     check_reshoot,

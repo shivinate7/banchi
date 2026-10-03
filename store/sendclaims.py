@@ -28,6 +28,7 @@ file, which adds none).
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -132,6 +133,51 @@ class SendClaims:
     def unreadable(self) -> List[str]:
         """Keys of live rows that will not parse, as of the last `live()` read."""
         return list(self.entries.dropped)
+
+    def unreadable_rows(self) -> List[dict]:
+        """What the screen can say about each unreadable live claim: its key, kind and start.
+
+        Read from the indexed columns, which survive a payload that will not parse. Call after
+        `live(strict=False)`, which fills `unreadable()`.
+        """
+        bad = set(self.entries.dropped)
+        if not bad:
+            return []
+        return [
+            {"key": key, "kind": kind, "started_at": started}
+            for key, (kind, started) in self.entries.select(("kind", "started_at"), state=STATE_LIVE)
+            if key in bad
+        ]
+
+    def release_unreadable(self, stamp: str, by: str) -> bool:
+        """Release a live claim that will not parse, keeping its raw payload for the way back.
+
+        The row stays as a tombstone (`state` released, `unreadable_was` the original text), so
+        `restore_unreadable` can put it back exactly. False when `stamp` is not an unreadable live row.
+        """
+        source = self.entries.source
+        text = source.get(stamp) if source is not None else None
+        if text is None or self.get(stamp) is not None:
+            return False
+        try:
+            record = json.loads(text)
+        except ValueError:
+            record = None
+        record = dict(record) if isinstance(record, dict) else {}
+        record.update(state=STATE_RELEASED, released_at=now(), released_by=str(by), unreadable_was=text)
+        return source.rewrite(stamp, STATE_RELEASED, json.dumps(record, sort_keys=True), STATE_LIVE)
+
+    def restore_unreadable(self, stamp: str) -> bool:
+        """Undo `release_unreadable`: the original row, live again. False for any other row."""
+        source = self.entries.source
+        text = source.get(stamp) if source is not None else None
+        try:
+            was = json.loads(text or "").get("unreadable_was")
+        except (ValueError, AttributeError):
+            was = None
+        if not isinstance(was, str):
+            return False
+        return source.rewrite(stamp, STATE_LIVE, was, STATE_RELEASED)
 
     def get(self, stamp: str) -> Optional[SendClaim]:
         return self.entries.get(str(stamp))

@@ -65,23 +65,29 @@ bad()  { fail=$((fail + 1)); say "FAIL" "$1"; }
 # verdict as an exit code, the reason on stderr. `cwd` travels in the payload because that is
 # where the harness puts it, and because it lets every case be posed against the fixture
 # without this script ever leaving it.
+HOOK_WITHOUT_OWNER_CLAUSE='import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("guard_shell", sys.argv[1] if len(sys.argv) > 1 else "'"$GUARD"'")
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+sys.exit(mod.hook(json.loads(sys.stdin.read()), owner_only=False))'
+
 judge() {   # judge <cwd> <command> -> exit code, output in $out
   out="$(printf '%s' "$2" \
         | CWD="$1" python3 -c 'import json,os,sys; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":sys.stdin.read()}}))' \
-        | python3 "$GUARD" --hook 2>&1)"
+        | python3 -c "$HOOK_WITHOUT_OWNER_CLAUSE" 2>&1)"
   return $?
 }
 
 judge_bg() {   # judge_bg <cwd> <command> — the same, with run_in_background set
   out="$(printf '%s' "$2" \
         | CWD="$1" python3 -c 'import json,os,sys; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":sys.stdin.read(),"run_in_background":True}}))' \
-        | python3 "$GUARD" --hook 2>&1)"
+        | python3 -c "$HOOK_WITHOUT_OWNER_CLAUSE" 2>&1)"
   return $?
 }
 
 judge_write() {   # judge_write <cwd> <file_path>
   out="$(CWD="$1" TARGET="$2" python3 -c 'import json,os; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"file_path":os.environ["TARGET"]}}))' \
-        | python3 "$GUARD" --hook 2>&1)"
+        | python3 -c "$HOOK_WITHOUT_OWNER_CLAUSE" 2>&1)"
   return $?
 }
 
@@ -226,8 +232,10 @@ refuses "an env prefix does not launder it"          "$tmp/main" "PKMNSCAN_MAIN=
 # escape hatch is what CLAUDE.md forbids repo-wide, and one that does not name the `.bak`
 # shape sends a session looking for a different command to type.
 judge "$tmp/main" "git checkout work.py"
-case "$out" in *"PKMNSCAN_CHECKOUT=off"*) ok "the refusal prints its escape hatch" ;;
-  *) bad "the refusal does not name PKMNSCAN_CHECKOUT=off" ;; esac
+case "$out" in
+  *"PKMNSCAN_CHECKOUT=off"*) bad "the refusal names the CHECKOUT switch to an agent" ;;
+  *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
+  *) bad "the refusal carries no owner-only line" ;; esac
 case "$out" in *".bak"*) ok "the refusal names the \`.bak\` copy as the way to do it safely" ;;
   *) bad "the refusal does not name the .bak shape" ;; esac
 case "$out" in *"work.py is modified"*) ok "the refusal names the file and its state" ;;
@@ -338,8 +346,10 @@ case "$out" in *"$tmp/main/work.py"*) ok "the refusal names the resolved target"
   *) bad "the refusal does not name the target" ;; esac
 case "$out" in *"$wt_root"*) ok "the refusal names the resolved root" ;;
   *) bad "the refusal does not name this checkout" ;; esac
-case "$out" in *"PKMNSCAN_TREE=off"*) ok "the refusal prints its escape hatch" ;;
-  *) bad "the refusal does not name PKMNSCAN_TREE=off" ;; esac
+case "$out" in
+  *"PKMNSCAN_TREE=off"*) bad "the refusal names the TREE switch to an agent" ;;
+  *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
+  *) bad "the refusal carries no owner-only line" ;; esac
 
 judge_write "$WT" "$WT/work.py"
 if [ $? -eq 0 ]; then ok "the same relative path INSIDE the worktree passes"
@@ -415,8 +425,10 @@ refuses "a bare \`cd <main>\` — the tool's cwd persists"           "$WT" "cd $
 judge "$WT" "cd $tmp/main && npm run build"
 case "$out" in *"stand in another checkout"*) ok "the \`cd\` refusal says what the act is" ;;
   *) bad "the cd refusal does not name the act" ;; esac
-case "$out" in *"PKMNSCAN_TREE=off"*) ok "…and prints the same hatch" ;;
-  *) bad "the cd refusal does not name PKMNSCAN_TREE=off" ;; esac
+case "$out" in
+  *"PKMNSCAN_TREE=off"*) bad "the refusal names the TREE switch to an agent" ;;
+  *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
+  *) bad "the refusal carries no owner-only line" ;; esac
 allows  "\`cd\` into a temp directory that is no checkout"          "$WT" "cd $tmp/scratch && echo x > out.log"
 allows  "\`cd\` inside this checkout, then a relative write"         "$WT" "cd app && echo x > f"
 allows  "\`cd -\`, which this parse cannot place — no opinion"       "$WT" "cd - && echo x > f"
@@ -468,8 +480,10 @@ refuses "\`--paginate\` does not name a method" "$tmp/main" "gh api --paginate r
 judge "$tmp/main" "gh api repos/o/r/check-runs -f per_page=100"
 case "$out" in *"repos/o/r/check-runs?per_page=100"*) ok "the refusal prints the query-string form it wants" ;;
   *) bad "the refusal does not show the query-string form" ;; esac
-case "$out" in *"PKMNSCAN_GH=off"*) ok "the refusal prints its escape hatch" ;;
-  *) bad "the refusal does not name PKMNSCAN_GH=off" ;; esac
+case "$out" in
+  *"PKMNSCAN_GH=off"*) bad "the refusal names the GH switch to an agent" ;;
+  *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
+  *) bad "the refusal carries no owner-only line" ;; esac
 
 allows "\`--method GET\` says what it means"   "$tmp/main" "gh api --method GET repos/o/r/issues -f per_page=100"
 allows "\`-X POST\` says what it means"        "$tmp/main" "gh api -X POST repos/o/r/issues -f state=open"
@@ -506,8 +520,10 @@ refuses "the multi-operand directory form" "$tmp/main" "ln -s $tmp/main/harness/
 judge "$WT" "ln -s $tmp/main/harness/images harness/images"
 case "$out" in *"harness/images/images"*) ok "the refusal names the nested link it would create" ;;
   *) bad "the refusal does not name the nested path" ;; esac
-case "$out" in *"PKMNSCAN_LINK=off"*) ok "the refusal prints its escape hatch" ;;
-  *) bad "the refusal does not name PKMNSCAN_LINK=off" ;; esac
+case "$out" in
+  *"PKMNSCAN_LINK=off"*) bad "the refusal names the LINK switch to an agent" ;;
+  *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
+  *) bad "the refusal carries no owner-only line" ;; esac
 case "$out" in *"ln -sfn"*) ok "the refusal names \`ln -sfn\`" ;;
   *) bad "the refusal does not name ln -sfn" ;; esac
 
@@ -590,8 +606,10 @@ case "$out" in *"command line NAMES it"*) ok "the refusal explains that the patt
 # learns to argue with. The refusal names the dependency instead.
 case "$out" in *"platform-dependent"*) ok "and names the platform dependency rather than asserting past it" ;;
   *) bad "the refusal asserts a self-match this platform does not produce" ;; esac
-case "$out" in *"PKMNSCAN_WAIT=off"*) ok "the refusal prints its escape hatch" ;;
-  *) bad "the refusal does not name PKMNSCAN_WAIT=off" ;; esac
+case "$out" in
+  *"PKMNSCAN_WAIT=off"*) bad "the refusal names the WAIT switch to an agent" ;;
+  *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
+  *) bad "the refusal carries no owner-only line" ;; esac
 case "$out" in *"sanctioned form"*) ok "the refusal names what to do instead" ;;
   *) bad "the refusal does not name the alternative" ;; esac
 
@@ -706,8 +724,10 @@ case "$out" in *"pr-h-readings-table-local"*) ok "the refusal names the current 
   *) bad "the refusal does not name the current branch" ;; esac
 case "$out" in *"claude/pr-h-readings-table"*) ok "the refusal names the tracked upstream" ;;
   *) bad "the refusal does not name the tracked upstream" ;; esac
-case "$out" in *"PKMNSCAN_PUSH=off"*) ok "the refusal prints its escape hatch" ;;
-  *) bad "the refusal does not name PKMNSCAN_PUSH=off" ;; esac
+case "$out" in
+  *"PKMNSCAN_PUSH=off"*) bad "the refusal names the PUSH switch to an agent" ;;
+  *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
+  *) bad "the refusal carries no owner-only line" ;; esac
 # (a) the trap is still refused: `git push origin HEAD` above, on a branch whose upstream is
 # ANOTHER branch. (A bare `git push` is git's own net, allowed below.)
 remedy="$(printf '%s\n' "$out" | sed -n '/Name the branch/,/git push -u/p')"
@@ -911,8 +931,10 @@ refuses "buried mid-script behind a \`&&\`" \
   "$tmp/main" "echo tidy && git stash drop"
 
 judge "$tmp/main" "git stash pop"
-case "$out" in *"PKMNSCAN_STASH=off"*) ok "the refusal prints its escape hatch" ;;
-  *) bad "the refusal does not name PKMNSCAN_STASH=off" ;; esac
+case "$out" in
+  *"PKMNSCAN_STASH=off"*) bad "the refusal names the STASH switch to an agent" ;;
+  *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
+  *) bad "the refusal carries no owner-only line" ;; esac
 case "$out" in *"per-CLONE"*) ok "the refusal explains the shared-stack hazard" ;;
   *) bad "the refusal does not explain why the stack is shared" ;; esac
 case "$out" in *"never a stash"*) ok "the refusal's remedy names a commit on your own branch" ;;
@@ -969,8 +991,10 @@ refuses "an env prefix does not launder it" "$tmp/main" "PKMNSCAN_MAIN=off git r
 refuses "buried mid-script behind a \`&&\`" "$tmp/main" "echo tidy && git reset --hard"
 
 judge "$tmp/main" "git reset --hard"
-case "$out" in *"PKMNSCAN_RESET=off"*) ok "the refusal prints its escape hatch" ;;
-  *) bad "the refusal does not name PKMNSCAN_RESET=off" ;; esac
+case "$out" in
+  *"PKMNSCAN_RESET=off"*) bad "the refusal names the RESET switch to an agent" ;;
+  *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
+  *) bad "the refusal carries no owner-only line" ;; esac
 case "$out" in *".bak"*) ok "the refusal names the \`.bak\` copy as the way to do it safely" ;;
   *) bad "the refusal does not name the .bak shape" ;; esac
 case "$out" in *"is modified"*) ok "the refusal names the modified file" ;;
@@ -1050,8 +1074,10 @@ refuses "buried mid-script behind a \`&&\`" "$tmp/main" "git fetch origin && mak
 refuses "an env prefix does not launder it" "$tmp/main" "PKMNSCAN_MAIN=off make merge ARGS=\"437 --confirm\" | tail -5"
 
 judge "$tmp/main" "make merge ARGS=\"437 --confirm\" 2>&1 | tail -18"
-case "$out" in *"PKMNSCAN_NARRATE=off"*) ok "the refusal prints its escape hatch" ;;
-  *) bad "the refusal does not name PKMNSCAN_NARRATE=off" ;; esac
+case "$out" in
+  *"PKMNSCAN_NARRATE=off"*) bad "the refusal names the NARRATE switch to an agent" ;;
+  *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
+  *) bad "the refusal carries no owner-only line" ;; esac
 case "$out" in *"four to"*) ok "the refusal says the wait is CORRECT and how long it takes, so nobody 'fixes' the waiting" ;;
   *) bad "the refusal does not defend the wait itself" ;; esac
 case "$out" in *"no pipe"*) ok "and it names the remedy: run it with nothing after it" ;;
@@ -1134,6 +1160,75 @@ done
 # the one swept line whose verdict depends on the tree rather than the string: clean passes,
 # dirty is the rule. Both directions are already pinned above; this is the line as typed.
 allows "swept: \`git checkout -q -- clean.txt\` (clean)" "$tmp/main" "git checkout -q -- clean.txt"
+
+echo ""
+echo "  the owner-only clause: an agent's tool call may not set a guard switch"
+
+# THE OLDER CASES CALL `hook(payload, owner_only=False)`, so they judge the other nine clauses.
+# These go through the real `--hook`, armed, as a session's own tool call would.
+judge_agent() {   # judge_agent <cwd> <command> -> exit code, output in $out
+  out="$(printf '%s' "$2" \
+        | CWD="$1" python3 -c 'import json,os,sys; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":sys.stdin.read()}}))' \
+        | python3 "$GUARD" --hook 2>&1)"
+  return $?
+}
+judge_agent "$tmp/main" "PKMNSCAN_TREE=off echo hi"
+if [ $? -eq 2 ]; then ok "an agent command with PKMNSCAN_TREE=off is refused"; else bad "PKMNSCAN_TREE=off was allowed"; fi
+case "$out" in
+  *PKMNSCAN_TREE*) bad "the owner-only refusal names the switch" ;;
+  *"owner-only: ask the owner to run this command"*) ok "and says owner-only without naming it" ;;
+  *) bad "the owner-only refusal is missing" ;; esac
+judge_agent "$tmp/main" "export PKMNSCAN_MAIN=off; echo hi"
+if [ $? -eq 2 ]; then ok "export form is refused"; else bad "export PKMNSCAN_MAIN=off was allowed"; fi
+judge_agent "$tmp/main" "env PKMNSCAN_DOCS=off echo hi"
+if [ $? -eq 2 ]; then ok "env form is refused"; else bad "env PKMNSCAN_DOCS=off was allowed"; fi
+for lever in KILL SUITE_LOCK SERVE_MAIN SYNC; do
+  judge_agent "$tmp/main" "PKMNSCAN_$lever=off echo hi"
+  if [ $? -eq 0 ]; then ok "recovery lever PKMNSCAN_$lever=off is allowed"; else bad "PKMNSCAN_$lever=off was refused"; fi
+done
+agent_refuses() {   # agent_refuses <label> <command>
+  judge_agent "$tmp/main" "$2"
+  if [ $? -eq 2 ]; then ok "refused: $1"; else bad "ALLOWED: $1"; fi
+}
+agent_allows() {    # agent_allows <label> <command>
+  judge_agent "$tmp/main" "$2"
+  if [ $? -eq 0 ]; then ok "allowed: $1"; else bad "REFUSED: $1"; fi
+}
+# EVERY FORM BELOW REACHES A GUARD'S PROCESS ENVIRONMENT, which is what pre-push and
+# reference-transaction read, so each one is a real setting and not a mention.
+agent_refuses "eval string"                 "eval 'PKMNSCAN_MAIN=off git status'"
+agent_refuses "eval export"                 "eval export PKMNSCAN_MAIN=off"
+agent_refuses "declare -x"                  "declare -x PKMNSCAN_MAIN=off"
+agent_refuses "sudo prefix"                 "sudo PKMNSCAN_MAIN=off ls"
+agent_refuses "sudo -u value"               "sudo -u root PKMNSCAN_MAIN=off ls"
+agent_refuses "command env"                 "command env PKMNSCAN_MAIN=off ls"
+agent_refuses "nohup prefix"                "nohup PKMNSCAN_MAIN=off ls"
+agent_refuses "time prefix"                 "time PKMNSCAN_MAIN=off ls"
+agent_refuses "brace group"                 "{ PKMNSCAN_MAIN=off ls; }"
+agent_refuses "if then"                     "if true; then PKMNSCAN_MAIN=off ls; fi"
+agent_refuses "while loop"                  "while PKMNSCAN_MAIN=off false; do ls; done"
+agent_refuses "backticks"                   'echo `PKMNSCAN_MAIN=off ls`'
+agent_refuses "command substitution"        'echo $(PKMNSCAN_MAIN=off ls)'
+agent_refuses "export of a variable name"   'V=PKMNSCAN_MAIN; export $V=off'
+agent_refuses "ANSI-C quoted name"          "export \$'PKMNSCAN_MAIN'=off"
+agent_refuses "ANSI-C quoted value"         "PKMNSCAN_MAIN=\$'off' ls"
+agent_refuses "env -u before the setting"   "env -u HOME PKMNSCAN_MAIN=off ls"
+agent_refuses "env -S string"               "env -S 'PKMNSCAN_MAIN=off ls'"
+agent_refuses "xargs env"                   "echo x | xargs env PKMNSCAN_MAIN=off ls"
+agent_refuses "heredoc piped to sh"         "cat <<E | sh
+PKMNSCAN_MAIN=off ls
+E"
+agent_refuses "make command-line variable"  "make status PKMNSCAN_MAIN=off"
+agent_allows  "a heredoc piped to a non-shell" "cat <<E | wc -l
+PKMNSCAN_MAIN=off
+E"
+agent_allows  "a quoted mention in git commit" "git status -m 'PKMNSCAN_TREE=off'"
+agent_allows  "an eval of a mention"        "eval 'echo PKMNSCAN_TREE=off'"
+agent_allows  "make without a switch"       "make status ARGS=x"
+judge_agent "$tmp/main" "echo PKMNSCAN_TREE=off"
+if [ $? -eq 0 ]; then ok "a mere mention is allowed"; else bad "a mention was refused"; fi
+judge_agent "$tmp/main" "PKMNSCAN_GUARD_SCOPE=all echo hi"
+if [ $? -eq 0 ]; then ok "a run-everything scope switch is allowed"; else bad "PKMNSCAN_GUARD_SCOPE=all was refused"; fi
 
 echo ""
 echo "  the escape hatches, in both of PKMNSCAN_KILL's two forms"
@@ -1286,6 +1381,19 @@ if [ -f "$HERE/silent-write-guard.py" ]; then
   if [ $? -eq 2 ]; then ok "the shared parser still serves silent-write-guard.py"
   else bad "silent-write-guard.py no longer refuses a silenced commit — the extraction broke it"; fi
 fi
+
+LIBDIR="$HERE"
+echo ""
+echo "  the refusal log"
+. "$LIBDIR/refusal-log-assert.sh"
+rl="$tmp/refusals.log"
+rl_payload='{"session_id":"sess-1","cwd":"'"$tmp"'","tool_input":{"command":"gh api -f k=v repos/x/y"}}'
+rl_out="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$rl" python3 "$GUARD" --hook 2>&1)"; rl_status=$?
+[ $rl_status -eq 2 ] && ok "a refused command still exits 2" || bad "the logged refusal exited $rl_status"
+why="$(refusal_line_ok "$rl" "guard-shell:gh" "sess-1")" && ok "…and writes one well-formed line" || bad "the refusal log line: $why"
+rl_bad="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" python3 "$GUARD" --hook 2>&1)"; rl_bad_status=$?
+if [ $rl_bad_status -eq 2 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
+else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
 
 echo ""
 printf '  %d passed, %d failed\n' "$pass" "$fail"

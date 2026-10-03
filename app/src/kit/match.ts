@@ -291,3 +291,63 @@ export function filterByQuery<T>(rows: readonly T[], query: string, fieldsOf: (r
   if (tokens.length === 0) return [...rows]
   return rows.filter((row) => cover(tokens, 0, prepare(fieldsOf(row))))
 }
+
+/* ---- Did you mean (D271, the last open gap) ---------------------------------------
+ * A hint on a ZERO-result search only. It never changes `matchQuery`'s answer or any ranking.
+ * `server/match.py:did_you_mean` is the same function over difflib; both run
+ * `didyoumean.cases.json`. The ratio below is difflib's `SequenceMatcher.ratio` (longest
+ * matching block, earliest in each string, recursing left and right). */
+export const DID_YOU_MEAN_MIN = 5
+export const DID_YOU_MEAN_CUTOFF = 0.7
+const EDGE = /^[^\p{L}\p{N}_]+|[^\p{L}\p{N}_]+$/gu
+
+function matchedChars(a: string, b: string): number {
+  if (a === '' || b === '') return 0
+  let bestI = 0
+  let bestJ = 0
+  let bestK = 0
+  const run = new Array<number>(b.length + 1).fill(0)
+  for (let i = 0; i < a.length; i++) {
+    let diag = 0
+    for (let j = 0; j < b.length; j++) {
+      const up = run[j + 1] as number
+      run[j + 1] = a[i] === b[j] ? diag + 1 : 0
+      diag = up
+      if ((run[j + 1] as number) > bestK) {
+        bestK = run[j + 1] as number
+        bestI = i - bestK + 1
+        bestJ = j - bestK + 1
+      }
+    }
+  }
+  if (bestK === 0) return 0
+  return bestK + matchedChars(a.slice(0, bestI), b.slice(0, bestJ)) + matchedChars(a.slice(bestI + bestK), b.slice(bestJ + bestK))
+}
+
+function ratio(a: string, b: string): number {
+  return a.length + b.length === 0 ? 1 : (2 * matchedChars(a, b)) / (a.length + b.length)
+}
+
+/** The one name (or word of a name) the query is closest to, or null. */
+export function didYouMean(query: string, names: Iterable<string>): string | null {
+  const q = foldText(query)
+  if ([...q].length < DID_YOU_MEAN_MIN) return null
+  let best: string | null = null
+  let bestScore = DID_YOU_MEAN_CUTOFF
+  for (const name of names) {
+    const keys: [string, string][] = [[foldText(name), name.replace(EDGE, '')]]
+    for (const token of name.split(/\s+/u)) {
+      const word = foldText(token)
+      if (word !== '' && !word.includes(' ')) keys.push([word, token.replace(EDGE, '')])
+    }
+    for (const [key, shown] of keys) {
+      if (key === q) return null
+      const score = ratio(key, q)
+      if (score > bestScore) {
+        best = shown
+        bestScore = score
+      }
+    }
+  }
+  return best
+}

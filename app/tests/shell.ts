@@ -301,6 +301,13 @@ async function sealCapture(page: Page): Promise<void> {
  *  by then. `cards` is a parameter because the sidebar draws it beside a walk that has its own
  *  count, and two numbers disagreeing on one screen is the class of lie this file is fixing. */
 async function stubShell(page: Page, cards: number): Promise<void> {
+  /* `#/pricing`'S TWO ON-ARRIVAL LOCAL READS (DEBT69): the price moves and the strips the daily job
+   *  saved. Both answer "nothing yet"; a spec about either overrides them per case. */
+  await page.route(/\/pipeline\/movers$/, (route) =>
+    json(route, { threshold: '0.10', listed: 0, unmeasured: 0, movers: [], refresh: null }),
+  )
+  await page.route(/\/pipeline\/trends-saved$/, (route) => json(route, { skus: {}, note: null }))
+
   await page.route(/\/status$/, (route) =>
     json(route, {
       captures_root: 'captures',
@@ -663,7 +670,7 @@ async function stubStore(page: Page): Promise<void> {
   await page.route(/\/codes\/lots$/, (route) => json(route, { lots: [] }))
   /* D134's graveyard: empty, because this fixture's departed cards belong to `#/inventory`
      and its own copies list, not to a screen these five specs never navigate to. */
-  await page.route(/\/graveyard$/, (route) => json(route, { departed: [] }))
+  await page.route(/\/graveyard(\?.*)?$/, (route) => json(route, { departed: [] }))
   await page.route(/\/orders$/, (route) =>
     json(route, {
       summary: '0 orders',
