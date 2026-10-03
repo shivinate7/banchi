@@ -75,7 +75,6 @@ DEBT71 the value of the set hint is asserted, not measured
 DEBT72 PKMNVAULT, Supabase and eBay are unbuilt
 DEBT73 the Mac dock icon has no drop shadow, and none was tried
 DEBT74 the mark's four HELD base parameters were never compared
-DEBT75 the first ask for a cold catalog group answers nothing
 DEBT76 the walk's card sheet on a phone has no Mark sold
 DEBT77 every phone-width spec is off
 DEBT82 The Fulfiller's boxes slide once when the Pick list lands

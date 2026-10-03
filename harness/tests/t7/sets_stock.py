@@ -792,9 +792,53 @@ def check_stock_images_pokemon_warm_refusal(checks: Checks) -> None:
     )
 
 
+def check_skus_photos_pending(checks: Checks) -> None:
+    """a SKU whose catalogue group is still being fetched answers `pending`, apart
+    from a final "no such image". The same ask, once the group has landed, answers the URL."""
+    import threading
+
+    checks.note("")
+    checks.note("SKUS PHOTOS PENDING — a cold group answers pending, then a URL")
+    gate = threading.Event()
+
+    def slow_fetcher(url: str):
+        if url.endswith("/categories"):
+            return {"results": [{"name": "Pokemon", "categoryId": 3}]}
+        if url.endswith("/3/groups"):
+            return {"results": [{"name": "Scarlet & Violet", "groupId": 501}]}
+        if url.endswith("/3/501/products"):
+            gate.wait(timeout=10)
+            return {"results": [
+                {"imageUrl": "https://img/etb.jpg", "name": "Scarlet & Violet Elite Trainer Box", "productId": 900001},
+            ]}
+        raise AssertionError(f"unexpected fetch: {url}")
+
+    images = stockimages.StockImages(market=pricehistory.Market(cache_dir=None, fetcher=slow_fetcher))
+    with isolated_home():
+        with Store().write() as snapshot:
+            snapshot.skus.entries["sealed-sku"] = SkuRow(
+                product_line="Pokemon", set_name="Scarlet & Violet",
+                product_name="Scarlet & Violet Elite Trainer Box", number="", rarity="",
+                condition="", grade=None, printing=None, first_seen=1_700_000_000,
+                last_seen=1_700_000_000, source="t7-fixture", raw={},
+            )
+        cold = capture_server.do_skus_photos(["sealed-sku"], images=images)
+        checks.equal(cold["pending"], ["sealed-sku"], "a cold group answers pending")
+        checks.equal(cold["stock_photos"], {}, "and no URL yet")
+        gate.set()
+        for _ in range(100):
+            if not images.group_pending("pokemon", "Scarlet & Violet"):
+                break
+            time.sleep(0.05)
+        warm = capture_server.do_skus_photos(["sealed-sku"], images=images)
+        checks.equal(warm["pending"], [], "a landed group is not pending")
+        checks.equal(warm["stock_photos"].get("sealed-sku"), "https://img/etb.jpg", "and answers the URL")
+
+
 CHECKS = (
     check_pipeline_sets,
     check_stock_images,
     check_sales_stock_photo_fallback,
     check_stock_images_pokemon_warm_refusal,
+    check_skus_photos_pending,
 )
