@@ -523,6 +523,8 @@ echo "  -- the escape hatch --"
 
 judge "$tmp/checkout" "PKMNSCAN_KILL=off pkill -f $stranger_script"
 [ $? -eq 0 ] && ok "the hatch is honoured in the command itself" || bad "the printed hatch does not work"
+judge "$tmp/checkout" "echo PKMNSCAN_KILL=off; pkill -f $stranger_script"
+[ $? -ne 0 ] && ok "a mere mention does not lift the guard" || bad "a mention of the hatch lifted the guard"
 out="$(cd "$tmp/checkout" && printf '{"tool_input":{"command":"pkill -f %s"}}' "$stranger_script" \
        | PKMNSCAN_KILL=off python3 "$REAP" --hook 2>&1)"
 [ $? -eq 0 ] && ok "and in the environment" || bad "PKMNSCAN_KILL=off in the environment did nothing"

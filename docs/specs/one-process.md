@@ -148,7 +148,7 @@ and the logs under `.serve/`.
 
 **`make dev` runs beside the supervisor.** `do_guard_foreground` refuses `make server` while this
 checkout's supervisor is up, because `:8000` is the supervisor's. It no longer refuses `make dev`.
-The supervisor does not hold the dev port. `PKMNSCAN_FOREGROUND=ok` bypasses the guard.
+The supervisor does not hold the dev port. `PKMNSCAN_FOREGROUND=off` bypasses the guard.
 
 **`make up` prints one link**, `http://localhost:<capture port>`, and the LAN name beside it when
 `PKMNSCAN_LAN_NAME` is set. **`make status`** reports the app's build: built, building, stale with a

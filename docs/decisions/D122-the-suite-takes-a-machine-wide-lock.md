@@ -86,7 +86,7 @@ here has measured a failure from.
 along with what would reopen it.
 
 **THE ESCAPE HATCH IS `PKMNSCAN_SUITE_LOCK=off` AND IT IS PRINTED IN EVERY REFUSAL**, in the shape
-`PKMNSCAN_MAIN=off` and `PKMNSCAN_FOREGROUND=ok` already use. A guard with no visible way past it
+`PKMNSCAN_MAIN=off` and `PKMNSCAN_FOREGROUND=off` already use. A guard with no visible way past it
 is one somebody disarms by deleting the line from the Makefile, where nothing would catch it.
 `PKMNSCAN_LOCK_DIR` moves the lock directory and exists for the self-test alone — same shape as
 `scripts/janitor.py --sessions DIR`, and for the same reason: a self-test that took the real lock

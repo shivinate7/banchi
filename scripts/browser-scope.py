@@ -61,7 +61,7 @@ regardless — D136's pass record is the only thing that skips the matrix on mai
         config or package file, or anything already in the top-level `SCOPE` outside
         `app/**`) selects every spec. So does an unmapped `app/**` path, an empty or
         unreadable diff, no merge-base, a path carrying whitespace (`PW_ARGS` is word-split
-        by `make`), or `PKMNSCAN_BROWSER_SCOPE=off` — printed by name on every such skip.
+        by `make`), or `PKMNSCAN_BROWSER_SCOPE=all` — printed by name on every such skip.
         `partial=true` only when the run is genuinely narrowed, so `design-check-passed`
         never records a tree as fully tested on a partial run.
     scripts/browser-scope.py shard N M [SPEC ...]
@@ -592,7 +592,7 @@ def selftest() -> int:
        "the unmapped fallback, is what fires")
 
     old = os.environ.get("PKMNSCAN_BROWSER_SCOPE")
-    os.environ["PKMNSCAN_BROWSER_SCOPE"] = "off"
+    os.environ["PKMNSCAN_BROWSER_SCOPE"] = "all"
     try:
         off_verdict = classify_specs(["app/src/Inventory.tsx"])
     finally:
@@ -601,7 +601,7 @@ def selftest() -> int:
         else:
             os.environ["PKMNSCAN_BROWSER_SCOPE"] = old
     ok(off_verdict.specs == set(all_specs()) and not off_verdict.partial,
-       "PKMNSCAN_BROWSER_SCOPE=off selects every spec")
+       "PKMNSCAN_BROWSER_SCOPE=all selects every spec")
 
     shard_selftest_cases(ok)
 
@@ -906,9 +906,9 @@ def classify_specs(paths: Sequence[str],
     when the substitution happens above the real `def` in this file.
     """
     everyone = set(all_specs())
-    if os.environ.get("PKMNSCAN_BROWSER_SCOPE") == "off":
+    if os.environ.get("PKMNSCAN_BROWSER_SCOPE") == "all":
         return SpecVerdict(everyone, False,
-                           ["PKMNSCAN_BROWSER_SCOPE=off — every spec runs."])
+                           ["PKMNSCAN_BROWSER_SCOPE=all — every spec runs."])
     if not paths:
         return SpecVerdict(everyone, False, [
             "no changed files were found. That is more likely a wrong base than an empty "

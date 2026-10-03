@@ -29,8 +29,8 @@ drift would be invisible: both would answer, and nobody would know which was rig
 
 IT FAILS OPEN, IN EVERY DIRECTION. No merge-base, a diff it cannot compute, an EMPTY diff
 (more likely a wrong base than an empty change), a `CARRY` it cannot read, and a recipe it
-cannot extract all answer RUN, out loud. Only an explicit skip skips, and `PKMNSCAN_SERVE_SCOPE=off`
-turns the whole gate off and is printed every time it skips.
+cannot extract all answer RUN, out loud. Only an explicit skip skips, and `PKMNSCAN_SERVE_SCOPE=all`
+runs it anyway. That adds a check, so it is not a hatch.
 
     scripts/serve-scope.py classify [--base REV] [--head REV]
         Prints the reasoning and exits 0 to RUN, 3 to SKIP. `make serve-selftest` reads it.
@@ -143,8 +143,8 @@ def scope_for(entry: dict) -> str:
 
 def classify(base: str | None, head: str) -> tuple:
     browser = _browser_scope()
-    if os.environ.get(HATCH) == "off":
-        return True, [f"{HATCH}=off — the self-test RUNS."]
+    if os.environ.get(HATCH) == "all":
+        return True, [f"{HATCH}=all — the self-test RUNS."]
     reference = base or "origin/main"
     # `classify_revisions` would use browser-scope's OWN scope, so the git half is borrowed
     # piece by piece and the pure half is called with ours.
@@ -159,7 +159,7 @@ def classify(base: str | None, head: str) -> tuple:
         subject="what `make serve-selftest` reads", noun="the self-test")
     lines = [f"{len(paths)} changed path(s) from {start[:12]} to {head}:"] + list(verdict.lines)
     if not verdict.run:
-        lines.append(f"  ({HATCH}=off runs it anyway.)")
+        lines.append(f"  ({HATCH}=all runs it anyway.)")
     return verdict.run, lines
 
 

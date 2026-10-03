@@ -37,8 +37,8 @@ narrowing are `scripts/browser-scope.py`'s `classify_paths`, imported rather tha
 
 IT FAILS OPEN, IN EVERY DIRECTION. No merge-base, a diff it cannot compute, an EMPTY diff,
 an unscoped target name, and any exception raised while deriving a subject all answer RUN,
-out loud. Only an explicit skip skips, and `PKMNSCAN_GUARD_SCOPE=off` turns the whole gate
-off for every target and is printed every time any of them skips.
+out loud. Only an explicit skip skips, and `PKMNSCAN_GUARD_SCOPE=all` runs every target
+anyway. That adds checks, so it is not a hatch.
 
     scripts/guard-scope.py classify --target <name> [--base REV] [--head REV]
         Prints the reasoning and exits 0 to RUN, 3 to SKIP. Each roster entry's own
@@ -441,8 +441,8 @@ DIRTY_LINE = "working tree has uncommitted changes; this verdict covers commits 
 
 
 def classify(target: str, base: Optional[str], head: str) -> Tuple[bool, List[str]]:
-    if os.environ.get(HATCH) == "off":
-        return True, [f"{HATCH}=off — {target} RUNS."]
+    if os.environ.get(HATCH) == "all":
+        return True, [f"{HATCH}=all — {target} RUNS."]
     if target not in TARGETS:
         return True, [f"{target!r} is not in guard-scope's ROSTER — an unscoped target RUNS."]
     try:
@@ -464,7 +464,7 @@ def classify(target: str, base: Optional[str], head: str) -> Tuple[bool, List[st
         if not verdict.run:
             if browser.git("status", "--porcelain", "--untracked-files=no"):
                 lines.append(DIRTY_LINE)
-            lines.append(f"  ({HATCH}=off runs it anyway.)")
+            lines.append(f"  ({HATCH}=all runs it anyway.)")
         return verdict.run, lines
     except Exception as exc:  # noqa: BLE001 — a scoping bug must cost time, never coverage.
         return True, [f"guard-scope classification raised {exc!r} — {target} RUNS."]
@@ -624,8 +624,8 @@ def selftest() -> int:
     # ---- fail-open, exercised for real against this repository's own git history.
     check("an unscoped target runs",
           classify("not-a-real-target", "origin/main", "HEAD")[0], True)
-    check("HATCH=off runs a real target regardless", (lambda: (
-        os.environ.__setitem__(HATCH, "off"),
+    check("HATCH=all runs a real target regardless", (lambda: (
+        os.environ.__setitem__(HATCH, "all"),
         classify("reap-selftest", "origin/main", "HEAD")[0],
         os.environ.pop(HATCH, None),
     )[1])(), True)
