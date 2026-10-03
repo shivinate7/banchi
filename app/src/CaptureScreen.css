@@ -227,9 +227,30 @@
    row's single cap — widened for THIS row alone, never the shared `.capture-row` template,
    so every other row's column stays put. */
 .capture-row-keypair { grid-template-columns: 42px auto auto minmax(0, 1fr) 14px; }
-/* No chevron: the switch row's value column takes the 14px a chevron would hold, so 'Off' is never clipped by a long label in a narrow rail. */
-.capture-row-switch { grid-template-columns: 22px auto minmax(0, 1fr) auto; }
-.capture-row-switch .capture-lab { overflow: hidden; text-overflow: ellipsis; }
+/* The switch row has no fold, so its chevron column holds a switch track instead: same five columns as
+   its siblings, so 'On'/'Off' ends where theirs do. The kit has no switch; this one is local to the one row
+   that needs it, drawn with tokens. */
+.capture-track {
+  position: relative;
+  width: 14px;
+  height: 8px;
+  border-radius: var(--bn-r-full);
+  background: var(--bn-ink-4);
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.capture-track::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--bn-surface);
+  transition: translate var(--bn-t-fast) var(--bn-ease);
+}
+.capture-row-switch[aria-checked='true'] .capture-track { background: var(--bn-accent); }
+.capture-row-switch[aria-checked='true'] .capture-track::after { translate: 6px 0; }
 .capture-row-icon { color: var(--bn-ink-3); flex: none; }
 .capture-lab { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-2); white-space: nowrap; }
 /* `.capture-right` is the flex row that holds the value AND its sub-line as siblings — never

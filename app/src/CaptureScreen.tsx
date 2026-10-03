@@ -784,6 +784,7 @@ function SwitchRow({
           {on === null ? (down ? 'Unavailable' : '\u00a0') : on ? 'On' : 'Off'}
         </span>
       </span>
+      <span aria-hidden="true" className="capture-track" />
     </button>
   )
 }
@@ -5679,7 +5680,7 @@ export function CaptureScreen() {
           )}
           <SwitchRow
             label="Match in the background"
-            icon="eye"
+            icon="image"
             on={sweepOn}
             busy={sweepBusy}
             down={sweepDown}
