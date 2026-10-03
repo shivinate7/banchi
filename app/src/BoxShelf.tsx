@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
+import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { Button, FailureNotice, Icon, IconButton, Segmented, useUndoHotkey } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { Page } from './kit/Page'
@@ -270,6 +270,8 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
   const [over, setOver] = useState<GapId | null>(null)
   const [cardsReload, setCardsReload] = useState(0)
   const [dragging, setDragging] = useState<Dragging | null>(null)
+  /* A click on the grip that did not drag answers in the verdict line, in place of a row (D118, D313). */
+  const [gripHint, setGripHint] = useState(false)
 
   const load = useCallback(() => {
     getBoxes()
@@ -424,6 +426,12 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
   )
 
   /* Esc puts the section down, and yields to typing. */
+  const dragSwallow = useRef(false)
+  const pointer = useRef({ x: 0, y: 0 })
+  const endDrag = useCallback(() => {
+    grab.current = null
+    setDragging(null)
+  }, [])
   const grab = useRef<{ id: number; x: number; y: number; box: number; section: number; started: boolean } | null>(null)
   const keys = useRef({ putDown, lifted })
   keys.current = { putDown, lifted }
@@ -432,8 +440,7 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
       if (event.metaKey || event.ctrlKey || event.altKey || isEditableTarget(event.target)) return
       if (event.key === 'Escape' && grab.current !== null) {
         event.preventDefault()
-        grab.current = null
-        setDragging(null)
+        endDrag()
       } else if (event.key === 'Escape' && keys.current.lifted !== null) {
         event.preventDefault()
         keys.current.putDown()
@@ -441,7 +448,38 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  }, [endDrag])
+
+  /* A drag cannot outlive what it was started on: saving, leaving Layout, or a re-read that
+     removes the grip ends it with nothing queued. */
+  useEffect(() => {
+    if (grab.current !== null && (busy || mode !== 'edit')) endDrag()
+  }, [busy, mode, records, endDrag])
+
+  /* AUTOSCROLL near the top and bottom edge of the window while a section is held, so a box
+     below the fold is reachable. The scroller is the nearest scrolling ancestor of the map; the
+     target is read again after each step because the content moved under the pointer. */
+  const draggingNow = dragging !== null
+  useEffect(() => {
+    if (!draggingNow) return
+    let frame = 0
+    const edge = 64
+    const step = () => {
+      const g = grab.current
+      if (g === null) return
+      const { x, y } = pointer.current
+      const speed = y < edge ? -((edge - y) / edge) * 18 : y > window.innerHeight - edge ? ((y - (window.innerHeight - edge)) / edge) * 18 : 0
+      if (speed !== 0) {
+        let el: HTMLElement | null = document.querySelector('.shelf')
+        while (el !== null && !(el.scrollHeight > el.clientHeight && /(auto|scroll)/.test(getComputedStyle(el).overflowY))) el = el.parentElement
+        ;(el ?? document.scrollingElement)?.scrollBy(0, speed)
+        setDragging({ box: g.box, section: g.section, target: targetAt(x, y, g) })
+      }
+      frame = requestAnimationFrame(step)
+    }
+    frame = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(frame)
+  }, [draggingNow])
 
   /* U undoes the batch the receipt shows, the one `U` primitive (`kit/undo.ts`). */
   useUndoHotkey(() => (receipt === null ? null : () => void undo()))
@@ -504,15 +542,30 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
     onGripMove: (event: ReactPointerEvent<HTMLElement>) => {
       const g = grab.current
       if (g === null || g.id !== event.pointerId) return
+      if (event.buttons === 0) return endDrag()
+      pointer.current = { x: event.clientX, y: event.clientY }
       if (!g.started && Math.hypot(event.clientX - g.x, event.clientY - g.y) < 4) return
       g.started = true
+      setGripHint(false)
       setDragging({ box: g.box, section: g.section, target: targetAt(event.clientX, event.clientY, g) })
+    },
+    /* A DRAG ENDS ON ANY OF THESE, so a stuck one can never queue a move on a later click: the
+       release, a cancel, capture taken away, or a move with no button down (a release missed
+       outside the window). Only the release itself may queue. */
+    onGripLost: (event: ReactPointerEvent<HTMLElement>) => {
+      if (grab.current?.id === event.pointerId) endDrag()
+    },
+    onGripClick: (event: ReactMouseEvent<HTMLElement>, section: number, onLift: (section: number) => void) => {
+      /* Enter and Space click with detail 0: the keyboard path opens the picker. */
+      if (event.detail === 0) return onLift(section)
+      if (dragSwallow.current) dragSwallow.current = false
+      else setGripHint(true)
     },
     onGripEnd: (event: ReactPointerEvent<HTMLElement>) => {
       const g = grab.current
       if (g === null || g.id !== event.pointerId) return
-      grab.current = null
-      setDragging(null)
+      endDrag()
+      if (g.started) dragSwallow.current = true
       if (!g.started || event.type === 'pointercancel') return
       const target = targetAt(event.clientX, event.clientY, g)
       if (target !== null) queue({ kind: 'section', box: g.box, first: g.section, last: g.section, toBox: target.box, before: target.before })
@@ -537,7 +590,7 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
       data-dragging={dragging === null ? undefined : 'true'}
       icon="box"
       verdict={
-        records === null ? null : editing ? `Editing the layout. ${dirty ? `${moves.length} ${moves.length === 1 ? 'change' : 'changes'} queued.` : 'Drag a section to move it.'}` : null
+        records === null ? null : editing ? `Editing the layout. ${dirty ? `${moves.length} ${moves.length === 1 ? 'change' : 'changes'} queued.` : gripHint ? 'Drag to move it, or press the arrow.' : 'Drag a section to move it.'}` : null
       }
       /* R2 (kit-adoption): the header's actions slot holds at most one worded press. The
          mode switch (Cancel/Confirm, or Edit layout) is a second row of the page instead,
@@ -855,6 +908,8 @@ function BoxRow({
     onGripDown: (e: ReactPointerEvent<HTMLElement>, box: number, section: number) => void
     onGripMove: (e: ReactPointerEvent<HTMLElement>) => void
     onGripEnd: (e: ReactPointerEvent<HTMLElement>) => void
+    onGripLost: (e: ReactPointerEvent<HTMLElement>) => void
+    onGripClick: (e: ReactMouseEvent<HTMLElement>, section: number, onLift: (section: number) => void) => void
   }
   readonly record: WorkingBox | null
   readonly fullest: number
@@ -914,17 +969,20 @@ function BoxRow({
       </span>
       {editing && onLift && !gaps && d.count > 0 ? (
         <span className="shelf-block-tools">
-          {/* THE GRIP DRAGS. It opens nothing: the picker is the next button, the keyboard way. */}
+          {/* THE GRIP DRAGS. Enter or Space on it opens the picker (the keyboard path); a mouse
+              click that did not drag answers in the verdict line. The arrow beside it is the picker too. */}
           <IconButton
             icon="grip"
             label="Drag section"
-            name={`Drag section ${sectionName(d)} of ${boxName(record)}`}
+            name={`Drag section ${sectionName(d)} of ${boxName(record)}. Press Enter to choose a box.`}
             className="shelf-grip"
             disabled={busy}
             onPointerDown={gripHandlers ? (e) => gripHandlers.onGripDown(e, record.box, d.section) : undefined}
             onPointerMove={gripHandlers?.onGripMove}
             onPointerUp={gripHandlers?.onGripEnd}
             onPointerCancel={gripHandlers?.onGripEnd}
+            onLostPointerCapture={gripHandlers?.onGripLost}
+            onClick={gripHandlers ? (e) => gripHandlers.onGripClick(e, d.section, onLift) : undefined}
           />
           <IconButton
             icon="arrowRight"
