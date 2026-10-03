@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "scripts/guard-shell.py --hook"
+            "command": "GUARD_SHELL_SKIP= scripts/guard-shell.py --hook"
           }
         ]
       },
@@ -51,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "scripts/guard-shell.py --hook"
+            "command": "GUARD_SHELL_SKIP= scripts/guard-shell.py --hook"
           }
         ]
       }
