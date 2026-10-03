@@ -6159,7 +6159,8 @@ COMPONENTS = [
                                           "deviceId (D27), and nothing about a card.",
                                   "governed_by": ["D5", "D13", "D27", "D32", "D50", "D94", "D95",
                                                   "D117", "D118", "D125", "D196", "D221", "D260",
-                                                  "D269", "D272", "D288", "D300", "D309", "D313"]},
+                                                  "D269", "D271", "D272", "D288", "D300", "D309",
+                                                  "D313"]},
             "src/kit/Icon.tsx": {"does": "one icon set, 73 paths on a 24-unit grid at 1.75 stroke "
                                          "with round joins, drawn in the Lucide idiom so the whole "
                                          "product speaks one line weight. `currentColor` and "
@@ -6637,17 +6638,15 @@ COMPONENTS = [
                                      "dropped 17% of the store would be a silent drop.",
                              "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11",
                                              "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28",
-                                             "D29", "D58", "D32", "D33", "D34", "D36", "D37", "D39",
-                                             "D45", "D77", "D180", "D86", "D183", "D138", "D54", "D55",
-                                             "D56", "D59", "D61", "D278", "D63", "D65",
-                                             "D67", "D69", "D73", "D76", "D277", "D83", "D87",
+                                             "D29", "D32", "D33", "D34", "D36", "D37", "D39", "D45",
+                                             "D54", "D55", "D56", "D58", "D59", "D61", "D63", "D65",
+                                             "D67", "D69", "D73", "D76", "D77", "D83", "D86", "D87",
                                              "D89", "D91", "D92", "D93", "D97", "D100", "D103",
-                                             "D104", "D113", "D115", "D260", "D118", "D132",
-                                             "D134", "D142", "D145", "D147", "D156",
-                                             "D166", "D168", "D172", "D174", "D193",
-                                             "D196", "D212", "D213", "D225", "D227", "D236", "D252",
-                                             "D264", "D294", "D273", "D299",
-                                             "D301"]},
+                                             "D104", "D113", "D115", "D118", "D132", "D134", "D138",
+                                             "D142", "D145", "D147", "D156", "D166", "D168", "D172",
+                                             "D174", "D180", "D183", "D193", "D196", "D212", "D213",
+                                             "D225", "D227", "D236", "D252", "D260", "D264", "D271",
+                                             "D273", "D277", "D278", "D294", "D299", "D301"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D91), whether the "
@@ -7815,8 +7814,8 @@ COMPONENTS = [
                                                 "D100", "D101", "D103", "D105", "D107", "D109",
                                                 "D115", "D117", "D118", "D125", "D137", "D145",
                                                 "D156", "D168", "D172", "D180", "D181", "D196",
-                                                "D210", "D218", "D221", "D269", "D273", "D277",
-                                                "D278", "D285", "D301", "D313"]},
+                                                "D210", "D218", "D221", "D269", "D271", "D273",
+                                                "D277", "D278", "D285", "D301", "D313"]},
             "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, a kit Sheet off #/pricing's header (D168). The owner's own "
                                             "ask: typed prices go stale and there was no way to clear many at once. IT IS A "
                                             "PRESS AND NOT A POLICY: nothing here runs on a clock. The scope is the "
@@ -9286,7 +9285,7 @@ COMPONENTS = [
                         "per row: `matchQuery` against every case, pure, no browser. The other half "
                         "of `matchQuery`'s coverage — the hand-written, narrated cases — is "
                         "`kit-data.spec.ts`'s. Run by `make design-check`.",
-                "governed_by": ["D5"],
+                "governed_by": ["D5", "D271"],
             },
             "src/kit/match.cases.json": {
                 "does": "the one case table for `kit/match.ts`: query, `MatchFields` and the "
@@ -9320,6 +9319,13 @@ COMPONENTS = [
                         "sort field, one value style at rest, and a set filter changes ink, edge "
                         "and ground while its weight stays the same.",
                 "governed_by": ["D195", "D311"],
+            },
+            "tests/did-you-mean-coverage.spec.ts": {
+                "does": "reads the screen sources: every file that runs the one matcher or the "
+                        "store's search must draw the Did you mean hint, unless it is named as "
+                        "not a list search. Goes red on a searchable screen without the hint. "
+                        "Run by `make design-check`.",
+                "governed_by": ["D271"],
             },
             "tests/filters/index.html": {
                 "does": "a test page the dev server serves and the build never ships: it mounts "
@@ -9779,8 +9785,8 @@ COMPONENTS = [
                                 "D83", "D86", "D89", "D92", "D101", "D115", "D117", "D118", "D119",
                                 "D124", "D125", "D132", "D134", "D136", "D142", "D155", "D172",
                                 "D181", "D192", "D195", "D196", "D213", "D218", "D259", "D260",
-                                "D277", "D284", "D288", "D299", "D300", "D310",
-                                "D313", "D314"],
+                                "D271", "D277", "D284", "D288", "D299", "D300", "D310", "D313",
+                                "D314"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

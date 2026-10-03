@@ -47,7 +47,7 @@
  * NOT reach.
  */
 
-import { filterByQuery } from './kit/match'
+import { didYouMean, filterByQuery } from './kit/match'
 import { ServerError } from './server'
 import type { GraveyardPayload } from './types'
 
@@ -672,7 +672,8 @@ function search(query: string): unknown {
       return { box: Number(place.box ?? 0), name: (place.box_name as string | null) ?? null }
     }),
   }))
-  return { query, groups: matched }
+  const near = matched.length === 0 ? didYouMean(query, rows.flatMap((group) => (group.names as string[]) ?? [])) : null
+  return { query, groups: matched, ...(near === null ? {} : { did_you_mean: near }) }
 }
 
 /** `POST /inventory/copies` — every on-hand copy of the named SKUs, merged per SKU. */

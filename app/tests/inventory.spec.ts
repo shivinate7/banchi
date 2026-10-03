@@ -4773,6 +4773,29 @@ test('S3 — with Hide sold on, a search count excludes what the fold already hi
   await expect(page.locator('.browse-filterbar .bn-filtercount-figure')).toHaveText('0 of 3 boxes')
 })
 
+test('D271 — a search that finds nothing offers the near name, and pressing it runs that search', async ({ page }) => {
+  const cards: Cards = {
+    '2/1': card({ index: 1, state: 'identified', name: 'Renekton', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+  }
+  const store: Store = {
+    cards,
+    search: (query) => {
+      const answer = searchAnswer(query, cards)
+      return answer.groups.length === 0 && /rekenton/i.test(query) ? { ...answer, did_you_mean: 'Renekton' } : answer
+    },
+  }
+  await open(page, TWO_BOXES, store, () => PRICING, SALE)
+
+  await page.getByRole('searchbox').fill('Rekenton')
+  const hint = page.getByRole('button', { name: 'Did you mean Renekton?' })
+  await expect(hint).toBeVisible()
+  /* D313: the line is drawn whole with the empty state, and is a thumb's height. */
+  expect((await hint.boundingBox())?.height).toBeGreaterThanOrEqual(40)
+  await hint.click()
+  await expect(page.getByRole('searchbox')).toHaveValue('Renekton')
+  await expect(page.getByText(/^Nothing matches/)).toHaveCount(0)
+})
+
 test('UX-244 — one copy moves to another box from its own row, and the receipt names the section (D300)', async ({ page }) => {
   await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
   const sent: { path: string; body: unknown }[] = []

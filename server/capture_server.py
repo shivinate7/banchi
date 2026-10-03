@@ -12465,7 +12465,19 @@ def do_search(query: str) -> dict:
             }
         )
 
-    return {"query": text, "groups": groups}
+    answer: dict = {"query": text, "groups": groups}
+    if not groups:
+        # A ZERO RESULT ONLY (D271): one hint, never a ranking. Its own connection, so the
+        # `cards` scan counter above never sees it.
+        conn = db.connect(files.inventory_dir())
+        try:
+            names = sorted({str(row[0]) for row in conn.execute("SELECT DISTINCT name FROM cards") if row[0]})
+        finally:
+            conn.close()
+        near = match.did_you_mean(text, names)
+        if near is not None:
+            answer["did_you_mean"] = near
+    return answer
 
 
 # --------------------------------------------------------------------------------- boxes

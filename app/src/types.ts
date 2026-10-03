@@ -1771,6 +1771,8 @@ export type SearchGroup = {
 export type SearchResult = {
   query: string
   groups: SearchGroup[]
+  /** On a zero result only: the one near name the query was probably meant for (D271). */
+  did_you_mean?: string
 }
 
 // --------------------------------------------------------------------------------- the boxes

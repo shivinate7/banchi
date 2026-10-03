@@ -48,7 +48,7 @@ AREAS: Tuple[Tuple[str, str], ...] = (
     ("Pricing and runs", r"pricing|product-history|live-reconcile|run-panel|photo-cache|t5_|t2_"),
     ("Orders, sales and shipping", r"orders|order-walk|shipping|revenue|home|t11_"),
     ("The Fulfiller's screen", r"fulfillment|pull-confirm"),
-    ("Shell, kit and layout", r"nav|themes|stability|scaffold|page-edge|status-busy|phone|wide|cursor|icon-button|button-stack|filters|filter-standard|kit-data|gallery|brand|^match|t6_"),
+    ("Shell, kit and layout", r"nav|themes|stability|scaffold|page-edge|status-busy|phone|wide|cursor|icon-button|button-stack|filters|filter-standard|kit-data|gallery|brand|^match|did-you-mean|t6_"),
     ("Text and money checks", r"machine-words|money|text-shape"),
     ("Public demo", r"demo-"),
     ("Code cards", r"t8_"),

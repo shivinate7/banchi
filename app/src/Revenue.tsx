@@ -13,7 +13,7 @@ import { moneyGrouped } from './money'
 import { salesOf, sum, type Sale } from './revenueMath'
 import { absoluteDate, monthOf, saleDate, weekOf } from './dates'
 import { useCardCropWhenSeen } from './cardCrop'
-import { matchQuery } from './kit/match'
+import { didYouMean, matchQuery } from './kit/match'
 import { SearchField } from './SearchField'
 import { ReadingAge } from './CardLocations'
 import './Revenue.css'
@@ -845,6 +845,10 @@ export function Revenue() {
       return sortDir === 'asc' ? base : -base
     })
   }, [scopeSales, query, sortKey, sortDir, view])
+  const nearName = useMemo(
+    () => (query.trim() === '' ? null : didYouMean(query, new Set(scopeSales.map((sale) => sale.name)))),
+    [scopeSales, query],
+  )
 
   // THE THUMBNAIL PRESS, ON ARRIVAL, NOT GATED. Asks only about the SKUs this screen is
   // about to draw (the podium and board window, bounded by `PHOTO_LOOKUP_CAP`), and never
@@ -1241,7 +1245,7 @@ export function Revenue() {
       </div>
 
       {products.length === 0 ? (
-        <EmptyState icon="search" title="Nothing sold under that name in this period." />
+        <EmptyState icon="search" title="Nothing sold under that name in this period." didYouMean={{ name: nearName, onPick: setQuery }} />
       ) : (
         <>
           <section className="revenue-podium">

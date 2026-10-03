@@ -49,6 +49,7 @@ PURE. No I/O, no store, no network — the same function answers in a script and
 
 from __future__ import annotations
 
+import difflib
 import re
 import unicodedata
 from functools import lru_cache
@@ -398,3 +399,38 @@ def match_query(query: str, fields: MatchFields) -> bool:
     if not tokens:
         return True
     return _cover(tokens, _prepare(fields))
+
+
+# DID YOU MEAN (D271, the last open gap). A hint on a ZERO-result search only: it never
+# touches `match_query`'s answer or any ranking. `kit/match.ts:didYouMean` is the browser copy
+# and `app/src/kit/didyoumean.cases.json` is the table both run. Candidates are each name
+# folded, plus each of its words (a typo is usually one word). Highest ratio wins, the first
+# name in the given order on a tie. A query under the minimum suggests nothing.
+DID_YOU_MEAN_MIN = 5
+DID_YOU_MEAN_CUTOFF = 0.7
+_EDGE = re.compile(r"^[^\w]+|[^\w]+$")
+
+
+def did_you_mean(query: str, names: Iterable[str]) -> Optional[str]:
+    """The one name (or word of a name) the query is closest to, or None."""
+    q = fold_text(query)
+    if len(q) < DID_YOU_MEAN_MIN:
+        return None
+    matcher = difflib.SequenceMatcher(None)
+    matcher.set_seq2(q)
+    best, best_score = None, DID_YOU_MEAN_CUTOFF
+    for name in names:
+        folded = fold_text(name)
+        keys = [(folded, _EDGE.sub("", str(name)))]
+        for token in str(name).split():
+            word = fold_text(token)
+            if word and " " not in word:
+                keys.append((word, _EDGE.sub("", token)))
+        for key, shown in keys:
+            if key == q:
+                return None
+            matcher.set_seq1(key)
+            score = matcher.ratio()
+            if score > best_score:
+                best, best_score = shown, score
+    return best

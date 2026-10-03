@@ -2633,6 +2633,7 @@ export function BoxBrowse({
                       icon="search"
                       title={`Nothing matches “${query.trim()}”`}
                       body="Searches name, number, SKU, set, note."
+                      didYouMean={{ name: results?.did_you_mean, onPick: setQuery }}
                       actions={
                         <Button icon="x" words="only-primary" onClick={() => setQuery('')}>
                           Clear the search
