@@ -355,7 +355,7 @@ test('grip drag: a lost capture ends the drag, so a later release queues nothing
 })
 
 test('grip drag: at 820 wide, a drag held at the bottom edge autoscrolls to a box below the fold', async ({ page }) => {
-  await page.setViewportSize({ width: 820, height: 600 })
+  await setViewport(page, { width: 820, height: 600 })
   const many = Array.from({ length: 8 }, (_, i) => box(i + 1, `Box ${i + 1}`, [section(1, `Sec ${i + 1}`, 6), section(2, `Part ${i + 1}`, 6)]))
   await openShelf(page, RESULT, many)
   await page.getByRole('button', { name: 'Layout' }).click()
