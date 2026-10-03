@@ -781,7 +781,7 @@ function SwitchRow({
       <span className="capture-lab">{label}</span>
       <span className="capture-right">
         <span className={on === true ? 'capture-val is-armed' : 'capture-val'}>
-          {on === null ? (down ? 'Off' : '\u00a0') : on ? 'On' : 'Off'}
+          {on === null ? (down ? 'Unavailable' : '\u00a0') : on ? 'On' : 'Off'}
         </span>
       </span>
     </button>
@@ -1163,7 +1163,11 @@ export function CaptureScreen() {
     if (!rigShown || sweepOn !== null) return
     let live = true
     getMatchSweep()
-      .then((answer) => live && setSweepOn(answer.on))
+      .then((answer) => {
+        if (!live) return
+        setSweepDown(false)
+        setSweepOn(answer.on)
+      })
       .catch(() => live && setSweepDown(true))
     return () => {
       live = false
