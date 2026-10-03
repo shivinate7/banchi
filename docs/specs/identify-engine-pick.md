@@ -481,7 +481,22 @@ It waits 3 seconds after the last capture before it starts the worker, and it st
 The gate: 300 feeder-paced captures on a scratch store, run twice, with the reader and without it.
 The metric is the p99 time of a capture request. If the p99 with the reader is worse than the p99 without it
 the owner decides from the two figures whether the sweep may read "always" or stays on "gaps only". There is no pass mark yet.
-Until that measurement exists, gaps only is the rule. This is unmeasured.
+Until the owner sets a pass mark, gaps only is the rule.
+
+**Measured (scratch store, `scripts/sweep-memory.py` and `scripts/capture-gate.py`).**
+
+| Measure | Result |
+|---|---|
+| Watcher idle resident memory, empty queue | 19.2 MB |
+| Worker peak resident memory, 20 captured cards | 929 MB |
+| Capture request, reader off (300 captures at 623 ms) | p50 20.1 ms, p99 30.6 ms |
+| Capture request, reader on, gaps only | p50 21.0 ms, p99 34.1 ms |
+| Capture request, reader on, always (quiet of 0) | p50 16.6 ms, p99 30.5 ms |
+
+In the gaps-only arm the worker never ran during the feed, because a card arrived every 623 ms.
+In the always arm it wrote 139 rows during the feed and the p99 did not move.
+The worker peak is above the 454 MB of the model alone, because the worker also holds the CLI imports and decoded crops.
+The owner sets the pass marks from these figures.
 
 **The toggle.** The on and off switch is one row, "Match in the background", in the Rig panel of the Capture screen.
 Its state is the `match_sweep` row in the store's `meta` table. It is not a device key, and it is not in `deviceMemory.ts`.
