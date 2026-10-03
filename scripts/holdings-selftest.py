@@ -152,6 +152,58 @@ def test_range_gap_breaks_the_line() -> None:
        "series gap", str(totals[2]))
 
 
+def _phase_report(range_: str, width: int, skus: dict, skip=()):
+    """`skus` maps sku -> (first start, value). Five buckets each, `width` days apart;
+    bucket indexes in `skip` are never swept for ANY sku (a true calendar gap)."""
+    from datetime import date, timedelta
+    inventory = Inventory()
+    archive = PriceArchive()
+    entries = {}
+    for i, (sku, (first, value)) in enumerate(skus.items(), 1):
+        inventory.cards[position_key(1, i)] = _card(1, i, sku, "Card " + sku)
+        for k in range(5):
+            if k in skip:
+                continue
+            start = (date.fromisoformat(first) + timedelta(days=width * k)).isoformat()
+            entries[f"{sku}:{range_}:{start}"] = _bucket(sku, range_, width, start, value)
+    archive.upsert(entries)
+    return holdings.build_holdings_report(inventory, archive, Ledger(), range_,
+                                          now="2026-01-01T00:00:00+00:00")
+
+
+PHASED = {"PHA": ("2026-09-01", "10.00"), "PHB": ("2026-08-31", "20.00"),
+          "PHC": ("2026-08-30", "40.00")}
+
+
+def test_phased_buckets_form_one_line() -> None:
+    """Three SKUs whose 3-day bucket starts sit on three phases (the owner's `quarter`
+    store). Each total counts every SKU priced in that bucket window."""
+    totals = _phase_report("quarter", 3, PHASED).totals
+    ok(not any(t.gap_before for t in totals), "phased quarter: no false gap_before",
+       str([(t.start, t.gap_before) for t in totals]))
+    ok(bool(totals) and totals[-1].value == "70.00",
+       "phased quarter: latest total sums all three SKUs", str(totals[-1:]))
+    ok(bool(totals) and totals[-1].priced_names == 3,
+       "phased quarter: latest total prices all three names", str(totals[-1:]))
+
+
+def test_phased_buckets_real_gap_still_breaks() -> None:
+    totals = _phase_report("quarter", 3, PHASED, skip=(2,)).totals
+    ok(any(t.gap_before for t in totals), "phased quarter: a bucket no SKU swept still breaks the line",
+       str([(t.start, t.gap_before) for t in totals]))
+    ok(bool(totals) and totals[-1].value == "70.00",
+       "phased quarter: latest total after a real gap still sums all three", str(totals[-1:]))
+
+
+def test_aligned_weekly_totals_unchanged() -> None:
+    aligned = {"WKA": ("2026-08-03", "10.00"), "WKB": ("2026-08-03", "5.50")}
+    totals = _phase_report("semiannual", 7, aligned).totals
+    ok([t.start for t in totals] == ["2026-08-03", "2026-08-10", "2026-08-17", "2026-08-24", "2026-08-31"],
+       "aligned weekly: one total per shared start", str(totals))
+    ok(all(t.value == "15.50" and t.priced_names == 2 and not t.gap_before for t in totals),
+       "aligned weekly: each total is the plain sum, no gap", str(totals))
+
+
 def test_priced_none_bucket_carries_no_value() -> None:
     """A bucket the source answered with NO price (D277's no-reading shape, stored as
     `market=None`) keeps its own row, at its own real calendar date, and carries no value —
@@ -324,6 +376,9 @@ def main() -> int:
     test_name_with_reading()
     test_name_with_no_reading()
     test_range_gap_breaks_the_line()
+    test_phased_buckets_form_one_line()
+    test_phased_buckets_real_gap_still_breaks()
+    test_aligned_weekly_totals_unchanged()
     test_priced_none_bucket_carries_no_value()
     test_sealed_excluded_counted()
     test_sealed_never_dropped_when_zero_ledger()
