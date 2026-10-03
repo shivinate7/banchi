@@ -58,3 +58,15 @@ D177's prune measurement uses for its own undercount, for the identical reason: 
 missed understates the defect, never invents one.
 
 Reasoning stays in the decision, screens state facts; a note about zero does not draw.
+
+### One named exception: the matcher's hover tooltip
+
+The owner's word: plain words on the engine control, with the model name in a hover tooltip.
+`docs/specs/identify-engine-pick.md` section 6 draws the control. This is the only exception to the rule.
+
+- The exempt string is `MATCHER_NAME_TOOLTIP`, exported from `app/src/engines.ts`.
+- The `no mechanism on screen` row reads that constant from its file. It never holds a copy of the text.
+- The row exempts a string only when the whole string equals the constant. A longer string that holds it is caught.
+- `Haiku` and `Marqo` are now on the word list in `scripts/machine-words.json`. Any other string that names a model is caught.
+- If the file or the constant is absent, nothing is exempt.
+- The label on the control stays in plain words. Only the tooltip names the model.

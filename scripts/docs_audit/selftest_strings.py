@@ -10,6 +10,8 @@ from typing import Dict, List
 from .core import _sibling
 from .strings import (
     NO_MECHANISM_EXEMPT_FILES,
+    _model_name_exception,
+    _no_mechanism_findings,
     TYPED_INTERPUNCT_EXTRACT_ARGS,
     TYPED_INTERPUNCT_RULE,
     _offender_diff,
@@ -34,6 +36,22 @@ def run(ok) -> None:
     ok(frozenset({"Gallery.tsx"}) == NO_MECHANISM_EXEMPT_FILES,
        "the no-mechanism-on-screen exemption is pinned to exactly one file, `Gallery.tsx`",
        f"got: {sorted(NO_MECHANISM_EXEMPT_FILES)}")
+
+    print("\nno mechanism: the model-name exception is one string, read from the constant")
+    tip = "Marqo ecommerce-B, run on this Mac"
+    rows = [{"file": "app/src/RunsComposer.tsx", "line": 1, "text": tip},
+            {"file": "app/src/RunsComposer.tsx", "line": 2, "text": "Marqo ecommerce-B, run on this Mac, v2"},
+            {"file": "app/src/RunsComposer.tsx", "line": 3, "text": "Read by Haiku"}]
+    found, _used = _no_mechanism_findings(rows, {}, tip)
+    ok([f.where.split(":")[-1] for f in found] == ["2", "3"],
+       "the exempt tooltip passes; a longer string that holds it, and any other model name, are caught")
+    found_none, _used = _no_mechanism_findings(rows[:1], {}, None)
+    ok(len(found_none) == 1, "with no constant in the code, the same string is caught")
+    with tempfile.TemporaryDirectory() as exc_dir:
+        probe = Path(exc_dir) / "engines.ts"
+        probe.write_text("export const MATCHER_NAME_TOOLTIP = 'Marqo ecommerce-B, run on this Mac'\n")
+        ok(_model_name_exception(probe) == tip, "the exception text is read from the exported constant")
+        ok(_model_name_exception(Path(exc_dir) / "absent.ts") is None, "no file, no exception")
 
     print("\ntyped interpunct: the two extractor widenings, and the ratchet's own arithmetic")
     with tempfile.TemporaryDirectory() as tmp_name:

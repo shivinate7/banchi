@@ -236,9 +236,28 @@ def _machine_words_allow() -> Dict[str, Dict[str, str]]:
     return {k: v for k, v in raw.items() if k != "_about"}
 
 
+# THE ONE NAMED EXCEPTION (D196, the owner's word): the matcher control's hover tooltip may name the
+# model. The allowance is the constant the code emits, read from its file, never a copy of the text
+# (an allow list that restates the string drifts from it). Absent file or constant: no allowance.
+MODEL_NAME_CONSTANT_FILE = ROOT / "app" / "src" / "engines.ts"
+MODEL_NAME_CONSTANT = "MATCHER_NAME_TOOLTIP"
+_MODEL_NAME_CONSTANT_RE = re.compile(
+    r"export\s+const\s+" + MODEL_NAME_CONSTANT + r"\s*(?::\s*string\s*)?=\s*(['\"`])(.*?)\1", re.S
+)
+
+
+def _model_name_exception(path: Path = MODEL_NAME_CONSTANT_FILE) -> Optional[str]:
+    try:
+        found = _MODEL_NAME_CONSTANT_RE.search(path.read_text(encoding="utf-8"))
+    except OSError:
+        return None
+    return found.group(2) if found else None
+
+
 def _no_mechanism_findings(
     strings: List[Dict[str, object]],
     allow: Optional[Dict[str, Dict[str, str]]] = None,
+    exception_text: Optional[str] = None,
 ) -> Tuple[List[Finding], Set[Tuple[str, str]]]:
     """Returns the findings, and the `(file, word)` allow-list entries a hit actually used —
     the second is how the caller tells a listed entry that is still true from one that has
@@ -251,6 +270,8 @@ def _no_mechanism_findings(
         if _no_mechanism_exempt(file):
             continue
         text = str(item["text"])
+        if exception_text is not None and text == exception_text:
+            continue
         where = f"{item['file']}:{item['line']}"
         shown = text if len(text) <= 100 else text[:97] + "..."
         code_hit = (
@@ -351,7 +372,7 @@ def check_no_mechanism_on_screen(report: Report) -> None:
                            "this row needs the same toolchain `make lint` and `make typecheck` require.")
         return
     allow = _machine_words_allow()
-    findings, used = _no_mechanism_findings(strings, allow)
+    findings, used = _no_mechanism_findings(strings, allow, _model_name_exception())
 
     # STALE ENTRIES: an allow-listed (file, word) pair that matched nothing this run. The
     # lane that owns it already fixed the string, and the entry is the only thing left

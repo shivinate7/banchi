@@ -76,10 +76,11 @@ So a second test removed the true card's stock photos from the pool. Every answe
 Section 3 gives the result. Per card, the matcher run does this and nothing else:
 
 1. If the card's set has no complete pool, the card is left unread. It stays in the selection as needing identification.
-2. The preflight says how many cards are left, and why. The owner presses Haiku for them.
-3. A matcher press never calls Anthropic. A free press must never spend money by surprise.
+2. The preflight and the receipt both say how many cards were left, and why. The owner presses the paid read for them.
+3. A matcher press never calls Anthropic. There is never an automatic fallback to Haiku.
+   A free press must never spend money by surprise. This is the owner's ruling.
 
-A card could go to review with its photo instead. That is an open question for the owner.
+A card the matcher left unread does not go to review. Review is for a card the matcher read and doubted.
 
 **Games the matcher refuses.** `pokemon_code` and `misc` have no stock photos.
 Code cards follow their own rules. No code-card photo is ever embedded, copied or matched.
@@ -116,9 +117,12 @@ Measured on the 500 photographs, Marqo-B:
   Marqo-B accepted 99% of cards at a mean precision of 99.4% and a worst split of 98.8% (measured).
   A half of 250 cards cannot show 99.5%.
 - The values 0.02 and 0.755 were chosen on the same 500 cards. They are a starting point, not a result.
-  A held-out set of photographs must confirm them before the owner adopts the engine.
   Both values live in one constant, beside the eval that produced them.
   The record also carries the model file hash.
+- **Build-lane gate: a held-out check confirms the thresholds before adoption.**
+  The owner supplies photographs that the spike never saw, and the eval scores them with the fixed constants.
+  The build lane does not ship the matcher pick until that check reports no wrong answer among the accepted cards,
+  and reports the share accepted. A failed check lowers the constants or ends the build. It never edits the held-out set.
 - Rotation retries do not help Marqo-B. Take the best of four rotations. Its top-1 on 13 sideways battlefield cards falls from 85% to 77%.
   Its top-1 on upright Riftbound cards stays at 99% (measured). The retry lowered upright top-1 for each of the nine other models in the first round of ten.
   Only CLIP L/14 gained, from 92% to 100% on the 13 sideways cards. The matcher does not retry.
@@ -156,9 +160,12 @@ The preflight names each such set.
 The spike's 1,365 images make about 4.2 MB (measured). The index lives under `inventory/`, beside the other
 derived stores. It is keyed by image URL and model hash.
 
-Building the index needs the image bytes once. That conflicts with D301, which says this repo never
-downloads or stores the bytes. The bytes would be held in memory and dropped. Only the vectors are stored.
-This needs the owner's word. The spike fetched 1,365 images at a polite pace, which took a few minutes (measured).
+Building the index needs the image bytes once. D301 (stock photos are hotlinked, never mirrored) is amended
+on the owner's word for this one read. The server reads each stock image, computes its fingerprint, and drops the bytes.
+Only the fingerprint is stored. A fingerprint records the model file hash and the source URL.
+**A change of model rebuilds every fingerprint.** An old fingerprint never meets a new model.
+The read is the matcher's own step. The owner starts it from a screen. The spike fetched 1,365 images at a polite pace,
+which took a few minutes (measured).
 
 ## 5. Weight
 
@@ -211,15 +218,11 @@ The owner gives it by pressing a button on a screen. The runs sheet shows a card
 It states the size, 372 MB, and the source. A press starts the download and checks the hash.
 Until the download finishes, the matcher pick is dimmed with one sentence. Nothing downloads on its own.
 
-Two sources are possible. The owner chooses:
-
-- A. A converted file, hosted as a release asset of this repo, with the hash pinned in code.
-  It is one download of 372 MB. Marqo's license is Apache-2.0, which allows redistribution with a notice.
-  A legal read is unmeasured.
-- B. The owner runs the export script. That needs torch (574 MB installed) and the original 775 MB weights.
-  Both are deleted afterward.
-
-Recommendation: A. It keeps the app's runtime to onnxruntime, and it needs one 372 MB download.
+**The source is a release asset of `shivinate7/banchi`**, with the file's SHA-256 pinned in code.
+It is one download of 372 MB. The owner chose this source. Marqo's license is Apache-2.0, which allows
+redistribution with a notice. A legal read is unmeasured. The release does not exist yet.
+The owner creates it, on the owner's word, when the build lane needs it. This PR creates no release.
+The export script stays the developer's way to rebuild the file. It needs torch in a throwaway venv.
 
 **Where the runtime loads.** The capture server stays free of ML code. `server/pipeline_routes.py` is stdlib only.
 onnxruntime loads only in the detached child that runs the identify command. The Anthropic client loads there too.
@@ -243,8 +246,12 @@ The pick is a segmented control above that choice, labeled "Who reads these card
 It is one term of the press, so the selection stays the cards the operator named (D180, a press names the cards it covers).
 Nothing else about selection changes.
 
-**What each pick says.** The words are the operator's words.
-D196 (no screen string names a mechanism) rules out model names and the word "model".
+**What each pick says.** The labels are the operator's words.
+D196 (no screen string names a mechanism) rules out model names on screen, with one named exception.
+The owner's word: plain words on the control, and the model name in a hover tooltip.
+The tooltip on the matcher pick names the model. It is the constant `MATCHER_NAME_TOOLTIP`, exported from `app/src/engines.ts`.
+D196 records the exception. The `no mechanism on screen` row exempts that one string and reads it from the constant.
+The build lane must export the constant under that name, or the exemption finds nothing.
 
 | Pick | Label | Line under it |
 |---|---|---|
@@ -312,13 +319,11 @@ Without a change, a Haiku press would adopt a matcher answer as paid for. So:
 - The spike's eval, as a script that runs on demand. It is not in `make check`, because it needs the owner's photographs.
 - T1 stays the Haiku gate.
 
-## 8. Not decided here
+## 8. The owner's rulings
 
-The owner decides these. The report that carried this PR lists each one as options with a recommendation.
-
-- What the matcher does for a card with no stock photo.
-- Whether model names show anywhere on screen.
-- Whether D301 may be amended so that the app reads image bytes once, to build the index.
-- Where the converted model file comes from.
-- Whether int8 is worth its own threshold fit.
-- Whether the spike's eval is committed.
+- A card with no stock photo is left unread, and the run says how many. There is no automatic fallback to Haiku (section 2).
+- D301 is amended for one fingerprint read of each stock image. A model change rebuilds every fingerprint (section 4).
+- The model file is a release asset of `shivinate7/banchi`, with a pinned hash, downloaded when the owner presses a control (section 5).
+- The control uses plain words. The model name sits in one hover tooltip, as a named exception in D196 (section 6).
+- Before adoption, a held-out check confirms the thresholds. That is a build-lane gate (section 3).
+- Process only: the build starts on fp32. The build lane commits the eval scripts.
