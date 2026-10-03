@@ -1124,7 +1124,7 @@ CHECKS = (
                    "screen (`Inventory.tsx`) reaches its own spec and every `routesFromNav(` "
                    "spec but not an unrelated one, an unknown `app/` path and a path carrying "
                    "whitespace both select every spec rather than a guess, and "
-                   "`PKMNSCAN_BROWSER_SCOPE=off` does too.",
+                   "`PKMNSCAN_BROWSER_SCOPE=all` does too.",
         "needs": ("python3",),
         "writes": "",
         "commit_path": False,
@@ -1277,7 +1277,7 @@ CHECKS = (
                    "and the roster name each other in both directions, that a fresh import "
                    "added to a fixture is picked up with no edit to this file, that a "
                    "sub-chain (`ROOT / \"scripts\"` alone) never surfaces as a false subject, "
-                   "and the fail-open cases: an unscoped target, `PKMNSCAN_GUARD_SCOPE=off`, "
+                   "and the fail-open cases: an unscoped target, `PKMNSCAN_GUARD_SCOPE=all`, "
                    "and a nonexistent head commit all RUN.",
         "needs": ("python3", "git"),
         "writes": "two throwaway fixture files under `tempfile.TemporaryDirectory()`, to "

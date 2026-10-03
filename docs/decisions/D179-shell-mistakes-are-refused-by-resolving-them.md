@@ -99,14 +99,12 @@ path nor a commit says so; a checkout root it could not resolve says so. A guard
 distinguish "nothing to object to" from "I could not read this" is D171's own failure class
 wearing a guard's clothes.
 
-### Five hatches, not one
+### Five hatches, not one, and none is printed to an agent
 
 `PKMNSCAN_CHECKOUT`, `PKMNSCAN_TREE`, `PKMNSCAN_GH`, `PKMNSCAN_LINK`, `PKMNSCAN_WAIT` — each
-`=off`, each honoured in the environment and inline, each printed in its own refusal and
-nowhere else. **One switch for the whole hook would mean disarming the clause that guards uncommitted work in order to make a symlink**, and a hatch reached for by reflex is a guard
+`=off`, each honoured in the environment, and each the owner's to set. The owner's word: a refusal never prints a blocked switch's name to an agent. It prints "owner-only: ask the owner to run this command". `clause_owner_only` refuses an agent's tool call that sets any real `PKMNSCAN_*=off`, read by `_hatches_set`, so a mention passes. Four recovery levers stay open to an agent because each frees a stuck session: `PKMNSCAN_KILL`, `PKMNSCAN_SUITE_LOCK`, `PKMNSCAN_SERVE_MAIN` and `PKMNSCAN_SYNC`, and they keep their printed names. The owner's terminal and CI are not tool calls, so the clause never sees them. The clause lives in `hook`, not in `read_command`. The self-test's older cases call `hook(payload, owner_only=False)`, and only its owner-only cases go through `--hook`. There is no switch for it. **Known residual:** a Write of a script, then `bash script.sh`, sets a switch that no stage of any Bash command shows. The clause cannot see it. **One switch for the whole hook would mean disarming the clause that guards uncommitted work in order to make a symlink**, and a hatch reached for by reflex is a guard
 already gone. The recovery the 2026-09-06 incident actually needed — `git checkout --` in the
-main tree, to unwind writes that had landed there — is one hatch away and is named in the
-refusal.
+main tree, to unwind writes that had landed there — is one hatch away, and the owner holds it.
 
 ### The parser is shared, because it already existed
 
@@ -368,7 +366,7 @@ already sees every Bash command, so it is the one home.
 A command can set any `PKMNSCAN_<NAME>=off`: an env prefix, `export`, or `env`. The hook reads
 that from the parsed stages, so a mention in an argument, a comment or a heredoc is not a use.
 `_off` reads the same parsed set, so a hatch counts only as a real assignment. Every hatch a
-command sets is logged, and a mention never lifts. A hatch set in the environment is not logged
+command sets is logged, and a mention never lifts. The three scope switches take `=all`, not `=off`: they only add checks, so they are not hatches and the log never counts them. A hatch set in the environment is not logged
 here; `make status` names it under `hatches`. The hook appends one
 line per name to `pkmnscan-hatches.log` in `git rev-parse --git-common-dir`. Every worktree of the
 clone shares that file. A line holds the time, the hatch, the checkout, the branch and the first

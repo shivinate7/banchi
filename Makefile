@@ -477,7 +477,7 @@ verdict-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/verdict-selftest.py; \
 	else \
-		echo "verdict-selftest: SKIPPED — nothing in this branch reaches app/design-check-reporter.ts. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "verdict-selftest: SKIPPED — nothing in this branch reaches app/design-check-reporter.ts. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # python3, not $(PYTHON): the script is stdlib-only so it must not need `make venv`.
@@ -486,7 +486,7 @@ audit-self-test:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/docs-audit.py --self-test; \
 	else \
-		echo "audit-self-test: SKIPPED — this branch does not touch scripts/docs-audit.py or scripts/docs_audit/. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "audit-self-test: SKIPPED — this branch does not touch scripts/docs-audit.py or scripts/docs_audit/. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # D92 — a bare `#` on an owner-side screen is D58's COUNT, and three renderers spelled the
@@ -587,7 +587,7 @@ port-slots-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/port-slots.py selftest; \
 	else \
-		echo "port-slots-selftest: SKIPPED — this branch does not touch the port-slot claim or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "port-slots-selftest: SKIPPED — this branch does not touch the port-slot claim or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # FLT-06/04, UX-173: the one forgiving matcher, server side. `server/match.py` against every
@@ -606,7 +606,7 @@ match-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/match-selftest.py; \
 	else \
-		echo "match-selftest: SKIPPED — this branch does not touch search, matching or their callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "match-selftest: SKIPPED — this branch does not touch search, matching or their callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # HERE AND NOT IN THE GIT HOOK, for the reason stated above `check` and for a second one of
@@ -619,7 +619,7 @@ githooks-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/githooks-selftest.sh; \
 	else \
-		echo "githooks-selftest: SKIPPED — nothing in this branch reaches scripts/githooks/. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "githooks-selftest: SKIPPED — nothing in this branch reaches scripts/githooks/. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # THE SHARED MERGE TOOL (D140, merge claims the record number). `~/.claude/bin/merge` lives in
@@ -659,7 +659,7 @@ revert-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/revert-audit.py selftest; \
 	else \
-		echo "revert-selftest: SKIPPED — this branch does not touch scripts/revert-audit.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "revert-selftest: SKIPPED — this branch does not touch scripts/revert-audit.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # THE CORPUS IS COMPLETE AND STILL ROUND-TRIPS. `docs/decisions/` is one file per entry and
@@ -788,7 +788,7 @@ screen-freshness-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		node scripts/screen-freshness.mjs --self-test; \
 	else \
-		echo "screen-freshness-selftest: SKIPPED — this branch does not touch scripts/screen-freshness.mjs. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "screen-freshness-selftest: SKIPPED — this branch does not touch scripts/screen-freshness.mjs. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # NOT IN `check`, AND NOT IN THE GIT HOOK. It is the one target here that can DELETE a file,
@@ -834,7 +834,7 @@ janitor-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/janitor-selftest.sh; \
 	else \
-		echo "janitor-selftest: SKIPPED — nothing in this branch reaches scripts/janitor.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "janitor-selftest: SKIPPED — nothing in this branch reaches scripts/janitor.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # THE SUPERVISOR'S BUILD JOB (D138), against a throwaway tree with a stub `vite build`. Same
@@ -852,7 +852,7 @@ janitor-selftest:
 # target would cost more to maintain than it saves. A SECOND gated target needs the owner's
 # word again — do not read this recipe as a pattern to copy.
 #
-# PKMNSCAN_SERVE_SCOPE=off runs it regardless, and every skip prints that.
+# PKMNSCAN_SERVE_SCOPE=all runs it regardless, and every skip prints that.
 serve-selftest:
 	@python3 scripts/serve-scope.py classify --base origin/main; rc=$$?; \
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
@@ -867,7 +867,7 @@ serve-selftest:
 # no merge-base, an unreadable diff and an EMPTY diff all run the test.
 # `make serve-selftest` was the only path-gated target from 2026-09-17 to 2026-09-20 —
 # 70.1s of `make check`'s own total, copying the checkout with a STUB app/ so no screen
-# change can reach it. `PKMNSCAN_SERVE_SCOPE=off` runs it regardless, printed in every
+# change can reach it. `PKMNSCAN_SERVE_SCOPE=all` runs it regardless, printed in every
 # skip.
 serve-scope:
 	@python3 scripts/serve-scope.py $(ARGS)
@@ -890,7 +890,7 @@ serve-scope-selftest:
 # and, 2026-09-27, `match-selftest`, `browser-scope-selftest` and
 # `port-slots-selftest`). Fails open exactly like `serve-scope`: no merge-base, an
 # unreadable diff, an EMPTY diff, an unscoped target, and any exception all run the
-# test. `PKMNSCAN_GUARD_SCOPE=off` runs every gated self-test regardless, printed in
+# test. `PKMNSCAN_GUARD_SCOPE=all` runs every gated self-test regardless, printed in
 # every skip. Reconciled BOTH WAYS by `make docs-audit`'s `guard scope` row: every
 # roster target is wired into the Makefile and every wired recipe names a roster
 # target. A THIRD GATE MECHANISM needs the owner's word again — a new roster entry
@@ -911,7 +911,7 @@ sync-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/sync-selftest.py; \
 	else \
-		echo "sync-selftest: SKIPPED — nothing in this branch reaches scripts/primary_sync.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "sync-selftest: SKIPPED — nothing in this branch reaches scripts/primary_sync.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # WHAT THIS SESSION STARTED, AND NOTHING ELSE. `pkill -f` and `lsof -ti tcp:PORT` are both
@@ -946,7 +946,7 @@ reap-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/reap-selftest.sh; \
 	else \
-		echo "reap-selftest: SKIPPED — nothing in this branch reaches scripts/reap.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "reap-selftest: SKIPPED — nothing in this branch reaches scripts/reap.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 .PHONY: reap reap-selftest
@@ -971,7 +971,7 @@ submission-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/submission-selftest.py; \
 	else \
-		echo "submission-selftest: SKIPPED — this branch does not touch the claim table it proves. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "submission-selftest: SKIPPED — this branch does not touch the claim table it proves. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # D172'S TWO TARGETS, AND ONLY ONE OF THEM IS IN `check`.
@@ -989,7 +989,7 @@ cid-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/cid-selftest.py; \
 	else \
-		echo "cid-selftest: SKIPPED — this branch does not touch the card's stable name or the photograph store. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "cid-selftest: SKIPPED — this branch does not touch the card's stable name or the photograph store. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # THE SIXTEENTH GATED TARGET (D247, owner's word 2026-09-23 on the SKU-first price-history
@@ -1002,7 +1002,7 @@ pricearchive-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/pricearchive-selftest.py; \
 	else \
-		echo "pricearchive-selftest: SKIPPED — this branch does not touch price-history resolution or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "pricearchive-selftest: SKIPPED — this branch does not touch price-history resolution or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # SIX MORE GATED TARGETS, SEVENTEENTH THROUGH TWENTY-SECOND (D247, owner's word
@@ -1016,7 +1016,7 @@ archive-review-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/archive-review-selftest.py; \
 	else \
-		echo "archive-review-selftest: SKIPPED — this branch does not touch the archive review queue or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "archive-review-selftest: SKIPPED — this branch does not touch the archive review queue or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # pipeline/holdings.py, proved against in-memory fixtures, no store, no network:
@@ -1026,7 +1026,7 @@ holdings-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/holdings-selftest.py; \
 	else \
-		echo "holdings-selftest: SKIPPED — this branch does not touch unsold-stock holdings or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "holdings-selftest: SKIPPED — this branch does not touch unsold-stock holdings or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # pipeline/identity_checks.py's four stored-data checks, proved against literal
@@ -1036,7 +1036,7 @@ identity-checks-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/identity-checks-selftest.py; \
 	else \
-		echo "identity-checks-selftest: SKIPPED — this branch does not touch the stored-data identification checks or their callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "identity-checks-selftest: SKIPPED — this branch does not touch the stored-data identification checks or their callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # TWO INVOCATIONS: the real run, then `--mutate-to-upsert`, which MUST itself go red inside
@@ -1048,7 +1048,7 @@ price-postings-selftest:
 		$(PYTHON) scripts/price-postings-selftest.py && \
 		$(PYTHON) scripts/price-postings-selftest.py --mutate-to-upsert; \
 	else \
-		echo "price-postings-selftest: SKIPPED — this branch does not touch the price-postings ledger or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "price-postings-selftest: SKIPPED — this branch does not touch the price-postings ledger or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # pipeline/productview.py and server/pipeline_routes.py:do_product_history, proved
@@ -1058,7 +1058,7 @@ product-history-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/product-history-selftest.py; \
 	else \
-		echo "product-history-selftest: SKIPPED — this branch does not touch the per-product history route or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "product-history-selftest: SKIPPED — this branch does not touch the per-product history route or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # pipeline/sku_number_contradictions.py, proved against literal fixtures and
@@ -1068,7 +1068,7 @@ sku-number-contradictions-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/sku-number-contradictions-selftest.py; \
 	else \
-		echo "sku-number-contradictions-selftest: SKIPPED — this branch does not touch the SKU self-contradiction check or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "sku-number-contradictions-selftest: SKIPPED — this branch does not touch the SKU self-contradiction check or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # Wired into `check` and `ci-check` after a test-health audit found each in neither. Not
@@ -1237,7 +1237,7 @@ silent-write-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/silent-write-selftest.sh; \
 	else \
-		echo "silent-write-selftest: SKIPPED — nothing in this branch reaches scripts/silent-write-guard.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "silent-write-selftest: SKIPPED — nothing in this branch reaches scripts/silent-write-guard.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 .PHONY: silent-write-selftest
@@ -1272,7 +1272,7 @@ guard-shell-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/guard-shell-selftest.sh; \
 	else \
-		echo "guard-shell-selftest: SKIPPED — nothing in this branch reaches scripts/guard-shell.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "guard-shell-selftest: SKIPPED — nothing in this branch reaches scripts/guard-shell.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 .PHONY: guard-shell-selftest
@@ -1453,7 +1453,7 @@ suite-lock-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/suite-lock.py selftest; \
 	else \
-		echo "suite-lock-selftest: SKIPPED — this branch does not touch scripts/suite-lock.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "suite-lock-selftest: SKIPPED — this branch does not touch scripts/suite-lock.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # The classifier's own matcher, recipe narrowing and spec map, proved on fixtures and on the
@@ -1464,7 +1464,7 @@ browser-scope-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/browser-scope.py selftest; \
 	else \
-		echo "browser-scope-selftest: SKIPPED — this branch does not touch the browser-matrix classifier or its spec map. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "browser-scope-selftest: SKIPPED — this branch does not touch the browser-matrix classifier or its spec map. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # A JS media query's viewport width against what a stylesheet under app/src declares

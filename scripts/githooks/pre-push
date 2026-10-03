@@ -62,7 +62,7 @@ while IFS=' ' read -r local_ref local_oid remote_ref remote_oid; do
   echo "    git push -u origin \$(git branch --show-current)" >&2
   echo "    gh pr create --fill" >&2
   echo "" >&2
-  echo "  Escape hatch, deliberate and loud:   PKMNSCAN_MAIN=off git push ..." >&2
+  echo "  Bypass: owner-only: ask the owner to run this command." >&2
   echo "" >&2
   exit 1
 done

@@ -215,8 +215,8 @@ jobs:
       # their own hatches, which is what those hatches are for. A PR keeps its scope.
       - name: make ${{ matrix.target }}
         env:
-          PKMNSCAN_GUARD_SCOPE: ${{ github.event_name != 'pull_request' && 'off' || '' }}
-          PKMNSCAN_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'off' || '' }}
+          PKMNSCAN_GUARD_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
+          PKMNSCAN_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
         run: make ${{ matrix.target }}
 
   # THE REQUIRED CHECK. The ruleset names `check`, so this job keeps that name and passes only
@@ -372,7 +372,7 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           # Off a pull request, every spec: a nightly never narrows.
-          PKMNSCAN_BROWSER_SCOPE: ${{ github.event_name != 'pull_request' && 'off' || '' }}
+          PKMNSCAN_BROWSER_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
         run: python3 scripts/browser-scope.py specs --base "origin/$BASE_REF"
 
   # The browser half. Same tree, different question: what a person actually sees.

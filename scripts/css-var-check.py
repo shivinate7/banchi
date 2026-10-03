@@ -618,8 +618,7 @@ def main(argv: Sequence[str]) -> int:
         print(f"      Point it at the token it means, or give it a fallback: "
               f"`var({finding.name}, <value>)`.\n")
     print(
-        f"{len(findings)} finding(s). Escape hatch: `{HATCH}=off` skips this check, printed "
-        f"here so it is never a silent workaround."
+        f"{len(findings)} finding(s). Bypass: owner-only: ask the owner to run this command."
     )
     return 1
 
