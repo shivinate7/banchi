@@ -16,6 +16,12 @@ import {
   patchViewQuery,
   Pill,
   Sheet,
+  SettingsCensus,
+  SettingsEditor,
+  SettingsFigures,
+  SettingsGroup,
+  SettingsOp,
+  SettingsTrouble,
   SkeletonText,
   Stat,
   useFacetParams,
@@ -2028,7 +2034,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         toast({
           kind: 'receipt',
           icon: 'check',
-          title: `Stood down ${plural(done.moved, 'order', 'orders')}`,
+          title: `Stood down ${done.moved} ${plural(done.moved, 'order', 'orders')}`,
           body: `${done.still_open} still open. Nothing was marked sold.`,
           ttlMs: UNDO_WINDOW_MS,
           action: {
@@ -2045,6 +2051,60 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             },
           },
         })
+        await reread()
+      } catch (err) {
+        if (!live.current) return
+        setFailure(describeFailure(err))
+      } finally {
+        if (live.current) setBusy(null)
+      }
+    })()
+  }
+
+  /* ONE ORDER, STOOD DOWN BY THE LINES THAT ARE OPEN NOW (the Manage panel). `Ledger.close_line` skips
+     a line already closed with the same reason and re-stamps one closed with another, and
+     `reopen_line` reopens every closed line it is given. So the order-shaped call, and an Undo over
+     it, would reopen a line closed earlier on purpose. This names only the open lines, and Undo
+     names that same list. Nothing open, or nothing moved, is a plain sentence with no Undo. */
+  const onStandDownOrder = (order: OrderRow, reason: OrderCloseReason) => {
+    void (async () => {
+      setBusy('close')
+      setFailure(null)
+      try {
+        const aim = order.progress
+          .filter((row) => row.closed_at == null && row.outstanding > 0)
+          .map((row) => ({ source: order.source, number: order.number, sku: row.sku }))
+        const done = aim.length === 0 ? null : await closeLines(aim, reason)
+        if (!live.current) return
+        if (done === null || done.moved === 0) {
+          toast({
+            kind: 'ok',
+            icon: 'info',
+            title: 'Nothing to stand down',
+            body: 'Every line of this order is already closed.',
+          })
+        } else {
+          toast({
+            kind: 'receipt',
+            icon: 'check',
+            title: 'Stood down 1 order',
+            body: `${done.still_open} still open. Nothing was marked sold.`,
+            ttlMs: UNDO_WINDOW_MS,
+            action: {
+              label: 'Undo',
+              onPress: () => {
+                void (async () => {
+                  try {
+                    await reopenLines(aim)
+                    touchHub()
+                  } catch (err) {
+                    toast({ ...refusalToast(err), icon: 'alert' })
+                  }
+                })()
+              },
+            },
+          })
+        }
         await reread()
       } catch (err) {
         if (!live.current) return
@@ -2294,6 +2354,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         onFill={onFill}
         onDeclareKind={onDeclareKind}
         onCloseLine={onCloseLine}
+        onStandDownOrder={onStandDownOrder}
         onFetch={onFetch}
         onReread={() => void reread()}
         /* THE STORE'S OWN CONTROLS (UX-165, UX-193), two small squares on the filter bar's line
@@ -2776,6 +2837,7 @@ function PullStage({
   onFill,
   onDeclareKind,
   onCloseLine,
+  onStandDownOrder,
   onFetch,
   statusControl,
   statusPanel,
@@ -2806,6 +2868,7 @@ function PullStage({
   readonly onFill: FillHandler
   readonly onDeclareKind: KindHandler
   readonly onCloseLine: CloseLineHandler
+  readonly onStandDownOrder: (order: OrderRow, reason: OrderCloseReason) => void
   readonly onFetch: () => void
   readonly statusControl: ReactNode
   readonly statusPanel: ReactNode
@@ -3883,27 +3946,23 @@ function PullStage({
         className="orders-manage-sheet"
       >
         {selectedGroup === null ? null : (
-          <div className="orders-manage-orders">
-            <StandDownLegend group={selectedGroup} answers={answers} />
-            {selectedGroup.orders.map((order) => (
-              <OrderDetail
-                key={order.key}
-                order={order}
-                answer={answers.get(order.key) ?? null}
-                lane={lanesByOrder.get(order.number) ?? null}
-                store={store}
-                claims={claims}
-                busy={busy}
-                onPull={onPull}
-                onFill={onFill}
-                onDeclareKind={onDeclareKind}
-                onCloseLine={onCloseLine}
-                onReread={onReread}
-                variant="panel"
-                hidePicks
-              />
-            ))}
-          </div>
+          <ManagePanel
+            key={selectedGroup.key}
+            group={selectedGroup}
+            answers={answers}
+            status={statusByGroup.get(selectedGroup.key) ?? 'done'}
+            lanesByOrder={lanesByOrder}
+            store={store}
+            claims={claims}
+            busy={busy}
+            failure={failure}
+            onPull={onPull}
+            onFill={onFill}
+            onDeclareKind={onDeclareKind}
+            onCloseLine={onCloseLine}
+            onReread={onReread}
+            onStandDownOrder={onStandDownOrder}
+          />
         )}
       </Sheet>
     </div>
@@ -3914,9 +3973,9 @@ function PullStage({
 
 /** WHAT EACH STAND-DOWN PRESS MEANS, SAID ONCE PER SHEET (UX-240). Each stuck line used to carry
  *  its own 80-word paragraph. Only the presses the buyer's lines actually offer are named. */
-function StandDownLegend({ group, answers }: { readonly group: BuyerGroup; readonly answers: ReadonlyMap<string, ResolvedOrder> }) {
+function StandDownLegend({ orders, answers }: { readonly orders: readonly OrderRow[]; readonly answers: ReadonlyMap<string, ResolvedOrder> }) {
   const reasons = new Set<OrderLineReason>()
-  for (const order of group.orders) for (const line of answers.get(order.key)?.lines ?? []) reasons.add(line.reason)
+  for (const order of orders) for (const line of answers.get(order.key)?.lines ?? []) reasons.add(line.reason)
   const gone = reasons.has('no_copies_on_hand')
   const byHand = reasons.has('sku_unseen') || reasons.has('not_a_single')
   if (!gone && !byHand) return null
@@ -3939,6 +3998,139 @@ function StandDownLegend({ group, answers }: { readonly group: BuyerGroup; reado
         </>
       ) : null}
     </dl>
+  )
+}
+
+/* ====================================================================== the Manage panel */
+
+/** THE BUYER'S MANAGE PANEL, at the bar of Inventory's Manage box: an Overview, one row per order,
+ *  and an editor behind each row. The editor holds that order's lines and its stand-down. A
+ *  stand-down acts where it is pressed and its receipt carries Undo, so its rows say what they do
+ *  and draw no chevron. It opens on the Overview and moves only when a row is pressed (D313). */
+function ManagePanel({
+  group,
+  answers,
+  status,
+  lanesByOrder,
+  store,
+  claims,
+  busy,
+  failure,
+  onPull,
+  onFill,
+  onDeclareKind,
+  onCloseLine,
+  onReread,
+  onStandDownOrder,
+}: {
+  readonly group: BuyerGroup
+  readonly answers: ReadonlyMap<string, ResolvedOrder>
+  readonly status: Status
+  readonly lanesByOrder: ReadonlyMap<string, ShippingLane>
+  readonly store: StoreCopies | null
+  readonly claims: Claims
+  readonly busy: string | null
+  readonly failure: Failure | null
+  readonly onPull: PullHandler
+  readonly onFill: FillHandler
+  readonly onDeclareKind: KindHandler
+  readonly onCloseLine: CloseLineHandler
+  readonly onReread: () => void
+  readonly onStandDownOrder: (order: OrderRow, reason: OrderCloseReason) => void
+}) {
+  const [editing, setEditing] = useState<string | null>(null)
+  const [pressed, setPressed] = useState<OrderCloseReason | null>(null)
+  const order = editing === null ? undefined : group.orders.find((one) => one.key === editing)
+
+  if (order !== undefined) {
+    const stand = (reason: OrderCloseReason) => {
+      setPressed(reason)
+      onStandDownOrder(order, reason)
+    }
+    return (
+      <div className="orders-manage-orders">
+        <SettingsEditor title="This order" onBack={() => setEditing(null)}>
+          <StandDownLegend orders={[order]} answers={answers} />
+          <OrderDetail
+            order={order}
+            answer={answers.get(order.key) ?? null}
+            lane={lanesByOrder.get(order.number) ?? null}
+            store={store}
+            claims={claims}
+            busy={busy}
+            onPull={onPull}
+            onFill={onFill}
+            onDeclareKind={onDeclareKind}
+            onCloseLine={onCloseLine}
+            onReread={onReread}
+            variant="panel"
+            hidePicks
+          />
+          <SettingsTrouble failure={failure} />
+          {order.open ? (
+            <SettingsGroup title="Stand down this order" note="Marks nothing sold" danger>
+              {(
+                [
+                  ['not_shipping', 'Cancelled or refunded', 'x'],
+                  ['shipped_elsewhere', 'Already shipped', 'truck'],
+                ] as const
+              ).map(([reason, label, icon]) => (
+                <SettingsOp
+                  key={reason}
+                  icon={icon}
+                  label={label}
+                  said={`Stand down this order: ${label.toLowerCase()}`}
+                  detail="Can be undone"
+                  danger
+                  chevron={false}
+                  busy={busy !== null}
+                  running={busy === 'close' && pressed === reason}
+                  runningLabel="standing down…"
+                  onClick={() => stand(reason)}
+                />
+              ))}
+            </SettingsGroup>
+          ) : null}
+        </SettingsEditor>
+      </div>
+    )
+  }
+
+  const figures = figuresOf(group, answers)
+  const pill = statusPill(status, group, answers)
+  return (
+    <div className="orders-manage-orders">
+      <SettingsFigures title="Overview">
+        <SettingsCensus label="Orders" value={group.orders.length} note={`${group.open.length} open`} />
+        <SettingsCensus
+          label="Cards owed"
+          value={figures.owed}
+          note={figures.short === 0 ? undefined : `${figures.short} not in boxes`}
+        />
+        <SettingsCensus label="Picked" value={figures.sold} help="Copies already marked sold across this buyer's orders." />
+      </SettingsFigures>
+      <div className="orders-manage-status">
+        <Pill tone={pill.tone} icon={pill.icon}>
+          {pill.label}
+        </Pill>
+      </div>
+      <SettingsGroup title="Orders" note="Open one to see its lines">
+        {group.orders.map((one) => {
+          const word = STATUS_PILL[statusOf(one, answers.get(one.key) ?? null)].label
+          const owes = Math.max(0, one.wanted - one.recorded)
+          return (
+            <SettingsOp
+              key={one.key}
+              icon="package"
+              label={one.number}
+              detail={one.open ? `${word}, ${owes} ${plural(owes, 'card', 'cards')} owed` : word}
+              busy={false}
+              onClick={() => setEditing(one.key)}
+            />
+          )
+        })}
+      </SettingsGroup>
+    </div>
   )
 }
 
@@ -4196,6 +4388,19 @@ function OrderDetail({
      still owed, never the `status` string (D91) — so an order closed because every copy was
      already pulled draws nothing here exactly as before, and one closed by the marketplace
      while copies remain open gets its lines and its Pull button back. */
+  /* A STOOD-DOWN LINE SAYS SO IN PLAIN WORDS, whether it was the whole order or one line: a done
+     order otherwise drew only "Done", which reads as filled. The reason is named when the stood-down
+     lines share one. */
+  const stood = order.progress.filter((row) => row.closed_at != null)
+  const reasons = new Set(stood.map((row) => row.closed_reason))
+  const stoodWord =
+    stood.length === 0
+      ? null
+      : `${stood.length >= order.lines.length ? 'Stood down' : `${stood.length} of ${order.lines.length} lines stood down`}${
+          reasons.size === 1 ? (reasons.has('not_shipping') ? ', cancelled or refunded' : reasons.has('shipped_elsewhere') ? ', shipped elsewhere' : '') : ''
+        }`
+  const stoodNote = stoodWord === null ? null : <p className="orders-order-stood"><Icon name="check" size={14} /> {stoodWord}</p>
+
   const body =
     !ownsAWalkableBody(order) ? null : answer === null ? (
       <div className="orders-reason orders-reason-warn">
@@ -4292,6 +4497,7 @@ function OrderDetail({
         )}
       </div>
 
+      {stoodNote}
       {body}
     </article>
   )
