@@ -1,6 +1,6 @@
 # Pick the identification engine for each run
 
-**Status: phase 1 is built (the per-run picker, the free read, the second look). The background reader (section 8) is not built.** D2 (identification is Haiku vision, end to end) carries the
+**Status: phase 1 is built (the per-run picker, the free read, the second look). Phase 2, the background reader (section 8), is built and off by default. Its two ship gates are measured and wait for the owner.** D2 (identification is Haiku vision, end to end) carries the
 owner's ruling. For each run, the owner picks who reads the cards: Haiku or the stock-photo matcher.
 The free read is the default pick, on the owner's ruling.
 
@@ -427,16 +427,20 @@ Without a change, a Haiku press would adopt a matcher answer as paid for. So:
 with an empty queue it uses barely any memory. This section bends two decisions, D1 and D273 (question 3).
 Both are rewritten in place and cite the owner's word.
 
-**What it is.** A separate child, the CLI command `match` with the `--sweep` flag. It lives outside the capture server.
+**What it is.** A separate child, the CLI command `match` with the `--sweep` flag (`identify/sweep.py`). It lives outside the capture server.
 It takes no request slot. `REQUEST_SLOTS` and `PHOTO_SLOTS` in `server/capture_server.py` are never spent on it.
 It reads photographs from disk. It never runs inside a capture request.
+The capture server starts the watcher when the switch goes on, and once at server start when the switch is already on. It does nothing else for it.
 
 **The queue.** A card is queued when its state is `captured` and the `identifications` table holds no row for it.
+The game must be one the matcher serves. An unhinted Pokemon card is never queued.
+A card the worker looked at and did not accept is recorded as tried, against that photograph and that model file.
+It leaves the queue until it is re-shot or the model changes. It waits for a press.
 
 **What it writes.** One thing: an `identifications` row with engine `marqo-b`. It never writes card state.
 It never sets a SKU, a name or a number on a card. Those follow D258 (identity follows the SKU) and the join.
 The row records the card's `cid`. A move or a renumber changes the position key and never the `cid`.
-So the row follows the card through a re-slot.
+The row is keyed like every cache row, by position, and the `cid` lets a reader match it back to the card.
 
 **A re-shoot drops the row.** Today `do_reshoot` writes new bytes and touches neither `cards` nor `identifications`
 (`store/db.py`, the comment on the naming ladder). A matcher row would then hold the digest of bytes that exist nowhere.
@@ -479,16 +483,18 @@ The metric is the p99 time of a capture request. If the p99 with the reader is w
 the owner decides from the two figures whether the sweep may read "always" or stays on "gaps only". There is no pass mark yet.
 Until that measurement exists, gaps only is the rule. This is unmeasured.
 
-**The toggle.** The on and off switch lives in the rig settings on the Capture screen. That is the `Setup` group in the Rig panel of `CaptureScreen`.
-Its state is a row in the store's `meta` table. It is not a device key, and it is not in `deviceMemory.ts`.
+**The toggle.** The on and off switch is one row, "Match in the background", in the Rig panel of the Capture screen.
+Its state is the `match_sweep` row in the store's `meta` table. It is not a device key, and it is not in `deviceMemory.ts`.
+`PUT /pipeline/match/sweep` writes it and starts the watcher. `GET /pipeline/match/sweep` reads it.
+The row holds its size until the store answers (D313). The reader is off until the owner turns it on.
 The setup press downloads the model file and builds the fingerprints once (section 6, "Prepare matching"). It asks first, and it shows both sizes.
 Turning the toggle on never downloads. With no model or no index, the toggle reads as on and the sweep does nothing.
 
 **What the screens show (D313, nothing on screen moves unless the person moved it).**
 
 - Nothing on the capture screen changes while the sweep reads. No count, no spinner, no new element.
-- The runs sheet shows one snapshot count: how many cards the free reader has matched. It is read when the sheet opens
-  and when the owner presses refresh. It never ticks.
+- The runs sheet shows one snapshot count: how many cards the free reader has matched. It sits on the "Prepare matching" card, read when the sheet opens
+  and when the owner presses refresh. It never ticks. It counts every `marqo-b` row, from a press or from the background reader.
 - A per-card detail shows on request only: the engine, the match and the margin.
 
 **What a paid press does over matched cards.** Section 6 gives the rule. It asks every time, and the default is skip.

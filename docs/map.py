@@ -3639,6 +3639,22 @@ COMPONENTS = [
                 "does": "the vendored linter's MIT license and notice, copied unmodified "
                         "beside it — the license's one condition for reuse.",
                 "governed_by": ["D60"]},
+            "sweep_scratch.py": {
+                "does": "a scratch capture server over a temporary store (own free port, the model "
+                        "symlinked, the index copied) for the background reader's two measurements. "
+                        "It never touches the owner's store.",
+                "governed_by": ["D43", "D2"]},
+            "sweep-memory.py": {
+                "does": "ship gate (a) for the background reader: the watcher's idle RSS with an "
+                        "empty queue and the worker's peak RSS over a queue of captures, on a "
+                        "scratch store. It also checks the reader wrote only `marqo-b` rows and "
+                        "changed no card state. No pass mark; it prints numbers for the owner.",
+                "governed_by": ["D2", "D1"]},
+            "capture-gate.py": {
+                "does": "ship gate (b) for the background reader: p50 and p99 of 300 feeder-paced "
+                        "capture requests on a scratch store with the reader off, on in the gaps, "
+                        "and on always. No pass mark; the owner decides from the three rows.",
+                "governed_by": ["D2", "D1"]},
             "ste_measure.py": {
                 "does": "the STE prose check's ONE measurer. Its `ste offenders` docs-audit "
                         "row was CUT 2026-09-27 (test-audit plan, D60/D280 amended): "
