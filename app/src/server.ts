@@ -77,6 +77,7 @@ import type {
   PricingWorklist,
   RunSelection,
   MatchState,
+  MatchSweep,
   RunSend,
   RunPreflight,
   RunStarted,
@@ -2418,6 +2419,21 @@ function onTheWire(send: RunSend): Record<string, unknown> {
  *  and a progress file; the server loads no model to answer it. */
 export async function getMatchState(): Promise<MatchState> {
   return (await request('/pipeline/match', NO_CACHE)) as MatchState
+}
+
+/** The background reader's switch and its count. FREE: a store row, a pid check and one count. */
+export async function getMatchSweep(): Promise<MatchSweep> {
+  return (await request('/pipeline/match/sweep', NO_CACHE)) as MatchSweep
+}
+
+/** The Capture screen's switch for the background reader. It writes one store row and, when on,
+ *  starts the watcher; it never downloads and never reads a card inside the request. */
+export async function setMatchSweep(on: boolean): Promise<MatchSweep> {
+  return (await request('/pipeline/match/sweep', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ on }),
+  })) as MatchSweep
 }
 
 /** THE OWNER'S PREPARE PRESS. It downloads the model file (once) and reads each stock photo once.

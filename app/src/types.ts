@@ -2984,9 +2984,19 @@ export type RunSend = {
   rereadMatcher?: boolean
 }
 
+/** `GET` and `PUT /pipeline/match/sweep`: the background reader's switch (Capture, Rig). `running` is
+ *  whether its watcher is alive. Switching on never downloads anything. */
+export type MatchSweep = {
+  on: boolean
+  running: boolean
+  matched: number
+}
+
 /** `GET /pipeline/match`: is the free reader prepared, and is a Prepare running. Free; the server
  *  loads no model to answer it. */
 export type MatchState = {
+  /** Cards the free reader has matched, in the store: one snapshot, read when the sheet asks. */
+  matched?: number
   model_present: boolean
   model_ok: boolean
   model_bytes: number

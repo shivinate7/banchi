@@ -167,7 +167,9 @@ from store.pricearchive import RANGE_WIDTH_DAYS  # noqa: E402
 from identify import cost  # noqa: E402
 from identify import match as matcher  # noqa: E402
 from identify import sidecar  # noqa: E402
+from identify import sweep  # noqa: E402
 from store import Store, files, master  # noqa: E402
+from store import cache as cache_mod  # noqa: E402
 from store import db as store_db  # noqa: E402
 from store import readings as store_readings  # noqa: E402
 from store import submissions as claims  # noqa: E402
@@ -1163,7 +1165,106 @@ def do_pipeline_match() -> dict:
         "model_url": matcher.MODEL_URL,
         "margin_min": matcher.MARGIN_MIN,
         "floor_min": matcher.FLOOR_MIN,
+        # A SNAPSHOT, read when the sheet asks. The runs sheet draws it once and never ticks it.
+        "matched": _swept_count(),
     }
+
+
+def _swept_count() -> int:
+    """How many cards the free reader has matched, in the store. One snapshot per call."""
+    try:
+        conn = store_db.open_read_only(store_db.path(files.inventory_dir()))
+    except FileNotFoundError:
+        return 0
+    try:
+        row = conn.execute(
+            "select count(*) from identifications where json_extract(payload, '$.engine') = ?",
+            (cache_mod.ENGINE_MATCHER,),
+        ).fetchone()
+        return int(row[0]) if row else 0
+    finally:
+        conn.close()
+
+
+def _sweep_state() -> dict:
+    conn = store_db.connect(files.inventory_dir())
+    try:
+        on = store_db.match_sweep_on(conn)
+    finally:
+        conn.close()
+    return {"on": on, "running": sweep.running_pid() is not None, "matched": _swept_count()}
+
+
+def do_pipeline_match_sweep() -> dict:
+    """`GET /pipeline/match/sweep` — is the background reader switched on, is its watcher alive,
+    and how many cards has it matched. FREE: a meta row, a pid check and one count."""
+    return _sweep_state()
+
+
+def _spawn_sweep_watcher() -> Optional[int]:
+    """Start a detached watcher unless one runs. It outlives this server, like a run does."""
+    if sweep.running_pid() is not None:
+        return None
+    try:
+        child = subprocess.Popen(  # noqa: S603
+            [str(PKMNSCAN), "match", "--sweep"],
+            cwd=str(REPO_ROOT),
+            env=_env(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError as exc:
+        files.log_cause("match sweep spawn", exc)
+        raise PipelineRefusal(
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            "spawn_failed",
+            f"Could not start the background reader because {files.plain_cause(exc)}. Try again, and if it repeats, restart the app on the Mac.",
+        ) from None
+    return child.pid
+
+
+def do_pipeline_match_sweep_set(payload: dict) -> dict:
+    """`PUT /pipeline/match/sweep` with `{"on": true|false}` — the Setup switch.
+
+    It writes one `meta` row and starts the watcher when it is on. It NEVER downloads anything and
+    never reads a card itself: with no model file or no index the switch reads as on and the
+    watcher does nothing. Off stops the watcher at its next look, within a few seconds."""
+    on = payload.get("on")
+    if not isinstance(on, bool):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST, "on_required", "Say whether the background reader is on or off."
+        )
+    conn = store_db.connect(files.inventory_dir())
+    try:
+        store_db.set_match_sweep(conn, on)
+    finally:
+        conn.close()
+    if on:
+        _spawn_sweep_watcher()
+    return _sweep_state()
+
+
+def ensure_sweep() -> None:
+    """Called once by `server/capture_server.py:serve`: a switched-on reader whose watcher died
+    with the machine's last restart starts again. Silent on any failure: a reader that cannot start
+    must never stop the capture server."""
+    try:
+        conn = store_db.open_read_only(store_db.path(files.inventory_dir()))
+    except (FileNotFoundError, OSError):
+        return
+    try:
+        on = store_db.match_sweep_on(conn)
+    except Exception:  # noqa: BLE001
+        on = False
+    finally:
+        conn.close()
+    if on:
+        try:
+            _spawn_sweep_watcher()
+        except Exception as exc:  # noqa: BLE001
+            files.log_cause("match sweep ensure", exc)
 
 
 def do_pipeline_match_prepare(payload: dict) -> Tuple[HTTPStatus, dict]:

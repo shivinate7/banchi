@@ -90,6 +90,9 @@ class CacheEntry:
     # hands it to the run record, so `default_router` still sends the card to review until a
     # person answers it. Absent on every other entry.
     second_look: Optional[dict] = None
+    # The card's own name (`cid`), recorded by the background reader. A move or a renumber changes
+    # the position key and never the cid, so the row can be matched back to its card.
+    cid: Optional[str] = None
 
     @property
     def confidence(self) -> Optional[str]:
@@ -227,6 +230,7 @@ class Cache:
         prompt_fingerprint: str,
         engine: str = ENGINE_HAIKU,
         second_look: Optional[dict] = None,
+        cid: Optional[str] = None,
     ) -> Optional[dict]:
         """Store an answer. Refuses to overwrite a cleared one; reports a disagreement.
 
@@ -254,6 +258,7 @@ class Cache:
             at=now(),
             engine=engine,
             second_look=second_look,
+            cid=cid,
         )
         return None
 
