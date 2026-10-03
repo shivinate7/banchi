@@ -3856,20 +3856,27 @@ export function CaptureScreen() {
   const dealer = useDealer({
     halted: halt !== null,
     dropped: swallowedTotal + swallowed.halted,
-    ready: camera.ready,
+    ready: blockers.length === 0,
     armed: motionArmed,
   })
+  /* One reason per blocker the Capture button already answers to: the same `blockers` list, never a copy. */
+  const blockerWord: Record<string, string> = {
+    halt: 'Resume captures first',
+    camera: 'Open the camera first',
+    'camera-fault': 'The camera is sending no frames',
+    box: 'Pick a box first',
+    game: 'Waiting for a game',
+    unverified: 'Pick another game first',
+  }
   const dealerReason = !dealerSupported()
     ? 'Needs Chrome on the Mac'
     : triggerMode !== 'motion'
       ? 'Turn on motion first'
       : !motionArmed
         ? 'Waiting for motion to settle'
-        : !camera.ready
-          ? 'Open the camera first'
-          : halt !== null
-            ? 'Resume captures first'
-            : null
+        : blockers.length > 0
+          ? (blockerWord[blockers[0]?.key ?? ''] ?? 'Capture is blocked')
+          : null
   const dealerIdle = dealer.state === 'connected' || dealer.state === 'stopped'
   const dealerSaid = !dealerSupported() ? dealerReason : dealerIdle && dealerReason !== null ? dealerReason : dealer.said
 
@@ -4839,7 +4846,7 @@ export function CaptureScreen() {
                     ? 'Start dispenser'
                     : 'Connect dispenser'}
             </Button>
-            <Slot as="p" className="capture-dealer-said">
+            <Slot as="p" className="capture-quiet capture-dealer-said">
               {dealerSaid}
             </Slot>
 
