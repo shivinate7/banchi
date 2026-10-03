@@ -6,9 +6,9 @@ feeder's own rate) are posted to a scratch capture server over a scratch store
 (`scripts/sweep_scratch.py`), three times, each over a fresh store:
 
   off      the reader switched off
-  gaps     the reader on, as shipped: its worker starts only 3 s after the last capture
-  always   the reader on with `--quiet 0`: the worker starts the moment a card waits. This is
-           the arm the owner would be choosing if "gaps only" were lifted.
+  always   the reader on, as shipped (the owner's ruling, "Even mid-feed"): its worker starts the
+           moment a card waits
+  gaps     the reader on with `--quiet 3`: its worker starts only 3 s after the last capture
 
 The metric is the time of one capture request, p50 and p99 and the worst. There is no pass mark:
 the owner reads the three rows and decides whether the reader may read "always". Nothing here
@@ -41,15 +41,15 @@ def run_arm(arm: str, args) -> dict:
     watcher = None
     try:
         scratch.start()
-        if arm == "gaps":
-            scratch.set_switch(True)  # the real route: it starts the watcher with the 3 s gap
-        elif arm == "always":
+        if arm == "always":
+            scratch.set_switch(True)  # the real route: it starts the watcher as shipped
+        elif arm == "gaps":
             # THE SWITCH ROW BY HAND AND OUR OWN WATCHER, because the route starts the default one.
             conn = db.connect(scratch.home / "inventory")
             db.set_match_sweep(conn, True)
             conn.close()
             watcher = subprocess.Popen(
-                [str(REPO / "pkmnscan"), "match", "--sweep", "--quiet", "0"], cwd=str(REPO), env=scratch.env
+                [str(REPO / "pkmnscan"), "match", "--sweep", "--quiet", "3"], cwd=str(REPO), env=scratch.env
             )
         time.sleep(1.5)
         photos = photo_list(args.photos, args.captures)
@@ -79,7 +79,7 @@ def main() -> int:
     parser.add_argument("--index", required=True, type=Path)
     parser.add_argument("--photos", required=True, type=Path, help="JSON list of photograph paths")
     parser.add_argument("--captures", type=int, default=300)
-    parser.add_argument("--arms", default="off,gaps,always")
+    parser.add_argument("--arms", default="off,always,gaps")
     parser.add_argument("--json", type=Path, help="write the three results here")
     args = parser.parse_args()
     results = {arm: run_arm(arm, args) for arm in args.arms.split(",")}

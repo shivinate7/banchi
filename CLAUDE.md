@@ -105,7 +105,7 @@ make catalog-mirror # dry run only. ARGS=--dry-run samples over HTTP HEAD.
                                    # downloads the pinned model file and reads each stock photo once (D301, stock photos
                                    # are hotlinked, never mirrored; this is its one exception). Nothing starts it but the
                                    # owner's press. `match --sweep` is the background reader's watcher (off until the
-                                   # Capture screen's Rig switch is on; never spends; reads only in the gaps).
+                                   # Capture screen's Rig switch is on; never spends; reads even mid-feed).
                                    # `identify --engine marqo-b`
                                    # reads free first, then sends each card it cannot accept to Haiku, held for review.
 ./pkmnscan cards    name | audit [--verbose] | photos [--write] [--limit N] | identity [--write]

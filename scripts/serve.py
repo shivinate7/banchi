@@ -1765,6 +1765,14 @@ def _sweep_orphans(root: Path = REPO_ROOT) -> None:
         with contextlib.suppress(OSError):
             os.killpg(os.getpgid(pid), signal.SIGTERM)
         clear_pidfile(child, root)
+    # THE BACKGROUND READER'S WATCHER (`identify/sweep.py`) is detached from the capture server and
+    # outlives it, so `make down` stops it here. It is judged by its flock and never by a pid; the
+    # watcher stops its own worker on SIGTERM.
+    from identify import sweep as match_sweep
+
+    stopped = match_sweep.stop_watcher_of(root)
+    if stopped is not None:
+        print(f"stopping the background reader (pid {stopped})")
 
 
 def owned_by_agent(root: Path = REPO_ROOT) -> bool:

@@ -1192,7 +1192,7 @@ def _sweep_state() -> dict:
         on = store_db.match_sweep_on(conn)
     finally:
         conn.close()
-    return {"on": on, "running": sweep.running_pid() is not None, "matched": _swept_count()}
+    return {"on": on, "running": sweep.running(), "matched": _swept_count()}
 
 
 def do_pipeline_match_sweep() -> dict:
@@ -1203,7 +1203,7 @@ def do_pipeline_match_sweep() -> dict:
 
 def _spawn_sweep_watcher() -> Optional[int]:
     """Start a detached watcher unless one runs. It outlives this server, like a run does."""
-    if sweep.running_pid() is not None:
+    if sweep.running():
         return None
     try:
         child = subprocess.Popen(  # noqa: S603

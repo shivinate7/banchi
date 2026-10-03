@@ -19,9 +19,21 @@ THE QUEUE is every card in state `captured`, in a game the matcher serves, with 
 row, other than an unhinted Pokemon card (D170: its pool is the whole category) and a card already
 tried against this photograph and this model.
 
-GAPS ONLY: the worker starts only when the newest capture is `quiet` seconds old (3 by default),
-and the watcher stops it the moment a newer capture arrives. The capture-speed gate
-(`scripts/capture-gate.py`) has no pass mark yet, so this stays the rule until the owner sets one.
+EVEN MID-FEED, on the owner's ruling. The capture gate (`scripts/capture-gate.py`) measured a capture
+request's p99 at 30.5 ms with the reader on and 30.6 ms with it off, so `QUIET_SECONDS` is 0: the
+worker starts as soon as a card waits and is never stopped for a capture. A `quiet` above 0 still
+works (`--quiet`): the worker then starts only when the newest capture is that old, and is stopped
+at the next one. The measuring script uses it for its other arms.
+
+IT CANNOT CRASH-LOOP. A worker that exits non-zero is waited out for longer each time (30 s doubling
+to 30 minutes), its stderr goes to `.serve/match-sweep.log`, and the cards it was reading when it died
+are marked tried so one bad photograph cannot take it down again.
+
+ONE WATCHER, BY ONE LOCK. The watcher holds an `flock` on `inventory/match-sweep.lock` for its whole
+life. A held lock is the only thing that reads as running: a pid is reused and a lock is not. The
+watcher also writes `.serve/match-sweep.json` (its pid and the lock's path) so `make down` can stop it
+from the tree alone, and a reap owner mark so `make reap` stops it and its worker (D305).
+It exits when its store or its tree is gone, and a SIGTERM stops the worker first.
 
 THE SWITCH is a row in the store's `meta` table (`db.MATCH_SWEEP`), set from the Capture screen's
 Setup. The watcher exits when it reads "off". Nothing here downloads: with no model file or no
@@ -30,6 +42,7 @@ index the queue is never worked.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import signal
@@ -43,8 +56,13 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from identify.matchconst import MODEL_BYTES, MODEL_FILENAME, MODEL_SHA256, REPO_ROOT, SERVED_GAMES, inventory_dir
 
-QUIET_SECONDS = 3.0
+QUIET_SECONDS = 0.0
 POLL_SECONDS = 5.0
+# The wait after a worker exits non-zero: this, doubled for each one in a row, up to the cap.
+FAILURE_BACKOFF_SECONDS = 30.0
+FAILURE_BACKOFF_CAP_SECONDS = 1800.0
+# The worker's log is rotated once it passes this.
+LOG_MAX_BYTES = 1_000_000
 # How long the watcher waits for a stopped worker before it kills it.
 STOP_GRACE_SECONDS = 5.0
 # How often the watcher looks for a newer capture while a worker runs.
@@ -63,6 +81,24 @@ INDEX_FILENAME = "fingerprints.sqlite"
 def state_path() -> Path:
     """The watcher's pid and last figures. Derived data beside the store, like the index."""
     return inventory_dir() / "match-sweep.json"
+
+
+def lock_path() -> Path:
+    return inventory_dir() / "match-sweep.lock"
+
+
+def inflight_path() -> Path:
+    """The cards the worker is reading right now. A worker that dies mid-chunk leaves it behind."""
+    return inventory_dir() / "match-sweep-inflight.json"
+
+
+def serve_dir() -> Path:
+    """`.serve/` of the tree this code runs from: the log, the pid file, the reap marks."""
+    return REPO_ROOT / ".serve"
+
+
+def log_path() -> Path:
+    return serve_dir() / "match-sweep.log"
 
 
 def tried_path() -> Path:
@@ -174,31 +210,110 @@ def files_present() -> bool:
 # --------------------------------------------------------------------------- the watcher
 
 
+def acquire_lock():
+    """The open lock file with `flock` held, or None when another process holds it."""
+    import fcntl
+
+    lock_path().parent.mkdir(parents=True, exist_ok=True)
+    handle = open(lock_path(), "a+")  # noqa: SIM115 - held for the watcher's life
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        return None
+    return handle
+
+
+def running() -> bool:
+    """Whether a watcher is alive: the lock is held. A reused pid cannot read as running."""
+    handle = acquire_lock()
+    if handle is None:
+        return True
+    handle.close()  # closing releases the flock
+    return False
+
+
 def running_pid() -> Optional[int]:
-    """The pid of a live watcher, or None. A stale file whose pid is gone does not count."""
+    """The live watcher's pid, from its state file, or None when no lock is held."""
+    if not running():
+        return None
     record = _read_json(state_path())
     pid = record.get("pid") if isinstance(record, dict) else None
-    if not isinstance(pid, int) or pid == os.getpid():
-        return None
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        return None
-    return pid
+    return pid if isinstance(pid, int) else None
 
 
 def _write_state(**values) -> None:
     _write_json(state_path(), {"pid": os.getpid(), "at": time.time(), **values})
 
 
+def _write_serve_file(lock: Path) -> None:
+    """`.serve/match-sweep.json`: what `make down` needs to stop this watcher from the tree alone."""
+    _write_json(serve_dir() / "match-sweep.json", {"pid": os.getpid(), "lock": str(lock)})
+
+
+def _mark_for_reap() -> None:
+    """The reap owner mark (D305), so `make reap` stops this watcher and, through its descendants,
+    its worker. Fails open: a watcher that cannot be marked still runs, untagged."""
+    try:
+        scripts = str(REPO_ROOT / "scripts")
+        if scripts not in sys.path:
+            sys.path.insert(0, scripts)
+        import reap_mark
+
+        reap_mark.write_mark(str(REPO_ROOT), os.getpid(), "match-sweep")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def stop_watcher_of(root: Path) -> Optional[int]:
+    """`make down`'s half: SIGTERM the watcher of the tree `root` if its lock is held. The pid it
+    stopped, or None. It trusts the lock and not the pid, so a reused pid is never signalled."""
+    import fcntl
+
+    record = _read_json(Path(root) / ".serve" / "match-sweep.json")
+    if not isinstance(record, dict) or not isinstance(record.get("pid"), int):
+        return None
+    try:
+        handle = open(record["lock"], "a+")  # noqa: SIM115
+    except (OSError, KeyError, TypeError):
+        return None
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        pid = record["pid"]  # held: this watcher is alive
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            return None
+        return pid
+    finally:
+        handle.close()
+    return None
+
+
+def _open_log():
+    serve_dir().mkdir(parents=True, exist_ok=True)
+    path = log_path()
+    try:
+        if path.stat().st_size > LOG_MAX_BYTES:
+            os.replace(path, path.with_name(path.name + ".1"))
+    except OSError:
+        pass
+    return open(path, "ab")  # noqa: SIM115 - handed to the worker
+
+
 def _spawn_worker() -> "subprocess.Popen":
-    return subprocess.Popen(  # noqa: S603
-        [sys.executable, "-m", "cli", "match", "--sweep-worker"],
-        cwd=str(REPO_ROOT),
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    log = _open_log()
+    try:
+        return subprocess.Popen(  # noqa: S603
+            [sys.executable, "-m", "cli", "match", "--sweep-worker"],
+            cwd=str(REPO_ROOT),
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+        )
+    finally:
+        log.close()  # the child holds its own copy
 
 
 def _stop(worker) -> None:
@@ -208,6 +323,39 @@ def _stop(worker) -> None:
     except subprocess.TimeoutExpired:
         worker.kill()
         worker.wait()
+
+
+def settle_inflight() -> int:
+    """Mark the cards a dead worker was reading as tried, so they cannot take the next one down.
+
+    The worker writes the chunk it is about to read and clears it afterwards. A file still here
+    belongs to a worker that died inside the chunk (a crash, an out-of-memory kill). Returns how
+    many cards it settled."""
+    record = _read_json(inflight_path())
+    if not isinstance(record, dict) or record.get("model") != MODEL_SHA256:
+        with_error = inflight_path()
+        if with_error.exists():
+            with_error.unlink()
+        return 0
+    keys = record.get("keys")
+    settled = {str(k): str(v) for k, v in keys.items()} if isinstance(keys, dict) else {}
+    remember_tried(settled)
+    inflight_path().unlink()
+    return len(settled)
+
+
+def mark_inflight(keys: Dict[str, str]) -> None:
+    _write_json(inflight_path(), {"model": MODEL_SHA256, "keys": keys})
+
+
+def clear_inflight() -> None:
+    with contextlib.suppress(OSError):
+        inflight_path().unlink()
+
+
+def _gone() -> bool:
+    """Whether the store or the tree this watcher serves is gone."""
+    return not REPO_ROOT.exists() or not (inventory_dir() / DB_FILENAME).is_file()
 
 
 def watch(
@@ -220,47 +368,90 @@ def watch(
     max_polls: Optional[int] = None,
 ) -> int:
     """Poll the queue until the switch reads off. Returns 0, or 1 when another watcher runs."""
-    if running_pid() is not None:
+    lock = acquire_lock()
+    if lock is None:
         return 1
-    _write_state(worker=None)
-    polls = 0
-    backoff_until = 0.0
-    while max_polls is None or polls < max_polls:
-        polls += 1
-        conn = open_store()
-        if conn is None:
-            sleep(poll)
-            continue
-        try:
-            if not switched_on(conn):
+    import threading
+
+    current: list = []
+    previous = None
+    if threading.current_thread() is threading.main_thread():
+        def terminate(_signum, _frame):
+            # THE WORKER FIRST, then the watcher: a watcher that dies and leaves its worker would
+            # leave a 900 MB process that nothing is polling.
+            if current and current[0].poll() is None:
+                _stop(current[0])
+            raise SystemExit(0)
+
+        previous = signal.signal(signal.SIGTERM, terminate)
+    try:
+        _write_state(worker=None)
+        _write_serve_file(lock_path())
+        _mark_for_reap()
+        settle_inflight()
+        polls = 0
+        backoff_until = 0.0
+        failures = 0
+        while max_polls is None or polls < max_polls:
+            polls += 1
+            if _gone():
                 break
-            waiting = bool(queue(conn, limit=1))
-            last = newest_capture(conn)
-        finally:
-            conn.close()
-        if waiting and now() >= backoff_until and now() - last >= quiet and files_present():
-            started = now()
-            worker = spawn()
-            _write_state(worker=worker.pid)
-            while worker.poll() is None:
-                sleep(WATCH_WORKER_SECONDS)
-                conn = open_store()
-                if conn is None:
-                    continue
-                try:
-                    interrupted = newest_capture(conn) > started or not switched_on(conn)
-                finally:
-                    conn.close()
-                if interrupted:
-                    _stop(worker)
+            conn = open_store()
+            if conn is None:
+                sleep(poll)
+                continue
+            try:
+                if not switched_on(conn):
                     break
-            if worker.returncode == EXIT_NOT_READY:
-                backoff_until = now() + NOT_READY_BACKOFF_SECONDS
-            _write_state(worker=None)
-            continue
-        sleep(poll)
-    _write_state(worker=None, stopped=True)
-    return 0
+                waiting = bool(queue(conn, limit=1))
+                last = newest_capture(conn)
+            finally:
+                conn.close()
+            if waiting and now() >= backoff_until and now() - last >= quiet and files_present():
+                started = now()
+                worker = spawn()
+                current[:] = [worker]
+                _write_state(worker=worker.pid)
+                stopped_by_us = False
+                while worker.poll() is None:
+                    sleep(WATCH_WORKER_SECONDS)
+                    conn = open_store()
+                    if conn is None:
+                        if _gone():
+                            _stop(worker)
+                            stopped_by_us = True
+                            break
+                        continue
+                    try:
+                        interrupted = (quiet > 0 and newest_capture(conn) > started) or not switched_on(conn)
+                    finally:
+                        conn.close()
+                    if interrupted:
+                        _stop(worker)
+                        stopped_by_us = True
+                        break
+                current[:] = []
+                code = worker.returncode
+                if code == EXIT_NOT_READY:
+                    backoff_until = now() + NOT_READY_BACKOFF_SECONDS
+                elif code != 0 and not stopped_by_us:
+                    # EVERY OTHER FAILURE WAITS LONGER EACH TIME, and the cards it died on are
+                    # tried, so a bad photograph or a broken runtime cannot loop the machine.
+                    settle_inflight()
+                    delay = min(FAILURE_BACKOFF_CAP_SECONDS, FAILURE_BACKOFF_SECONDS * (2 ** failures))
+                    failures += 1
+                    backoff_until = now() + delay
+                else:
+                    failures = 0
+                _write_state(worker=None)
+                continue
+            sleep(poll)
+        _write_state(worker=None, stopped=True)
+        return 0
+    finally:
+        if previous is not None:
+            signal.signal(signal.SIGTERM, previous)
+        lock.close()
 
 
 def watch_main(argv: Sequence[str]) -> int:

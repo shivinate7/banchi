@@ -6,7 +6,7 @@ Spec section 8, "Memory is a ship gate". This starts a scratch capture server ov
 
   idle RSS      the watcher's resident memory over several polls with an EMPTY queue
   peak RSS      the worker's highest resident memory, sampled every 100 ms, while it reads a queue
-                of captured cards in the gap after the last capture
+                of captured cards (it reads even while captures arrive: the owner's ruling)
 
 It also checks the two rules the design promises: the reader wrote only `marqo-b` identifications
 rows, and no card changed state. It prints numbers and brings them to the owner. There is no pass
@@ -56,7 +56,7 @@ def main() -> int:
         idle = max(samples) / 1024
         print(f"watcher idle RSS      {idle:.1f} MB (max of {len(samples)} samples over {args.idle_seconds:.0f} s, empty queue)")
 
-        # 2. PEAK: capture cards, then leave a gap and watch the worker.
+        # 2. PEAK: capture cards while the worker reads them, and watch it to the end.
         before = scratch.sql("select key, state from cards order by key")
         for photo in photo_list(args.photos, args.cards):
             scratch.capture(photo)

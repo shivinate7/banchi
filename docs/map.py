@@ -1709,10 +1709,11 @@ COMPONENTS = [
                                  "idle process on the standard library and sqlite only. It polls the "
                                  "queue (captured cards with no identifications row, in a served game, "
                                  "never an unhinted Pokemon card, never one already tried) and starts a "
-                                 "worker only while cards wait and the newest capture is 3 seconds old. "
-                                 "It stops the worker at the next capture. It never spends and never "
-                                 "writes card state.",
-                         "governed_by": ["D1", "D2", "D76", "D88", "D170", "D273"]},
+                                 "worker as soon as cards wait (`--quiet N` waits for a gap of N seconds). "
+                                 "One flock keeps one watcher; a failing worker is backed off, logged "
+                                 "and its cards marked tried. It never spends and never writes card "
+                                 "state.",
+                         "governed_by": ["D1", "D2", "D76", "D88", "D170", "D273", "D305"]},
             "cost.py": {"does": "the price sheet, and the ONE place it is applied — the preflight's "
                                 "estimate before a send, the collect's record of what the send used, "
                                 "and server/pipeline_routes.py:_usage filling the figure in for a run "

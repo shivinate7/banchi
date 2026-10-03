@@ -132,13 +132,19 @@ def prepare(
 def sweep_worker(say) -> int:
     """The background reader's worker (`identify/sweep.py` starts it): read the queue, then exit.
 
-    It loads the model once, reads the waiting cards a few at a time, and stops at the next
-    capture or the next SIGTERM, whichever comes first. It writes one thing, an `identifications`
-    row with engine `marqo-b`, through `Cache.put`, which never overwrites a Haiku or a cleared
-    row. It never writes card state, and it never spends. A card it cannot accept is remembered as
-    tried against this photograph and waits for a press."""
+    It loads the model once and reads the waiting cards a few at a time until the queue is empty,
+    the switch is off or it is sent SIGTERM. It writes one thing, an `identifications` row with
+    engine `marqo-b`, through `Cache.put`, which never overwrites a Haiku or a cleared row. It
+    never writes card state, and it never spends. A card it cannot accept is remembered as tried
+    against this photograph and waits for a press.
+
+    EXIT CODES the watcher reads: 0 done, 3 "not ready" (no model file or index, or a runtime that
+    cannot load: numpy or onnxruntime missing), 1 a crash. Before each chunk it records the cards
+    in `match-sweep-inflight.json`, so a crash that leaves no Python exception behind (an
+    out-of-memory kill) still marks them tried and cannot loop."""
     from pipeline import games
 
+    sweep.settle_inflight()
     if not match.status()["ready"]:
         say("sweep           the model file or the fingerprints are not ready; nothing read")
         return sweep.EXIT_NOT_READY
@@ -146,53 +152,71 @@ def sweep_worker(say) -> int:
     stop = []
     signal.signal(signal.SIGTERM, lambda _signum, _frame: stop.append(True))
     store = Store()
-    started = time.time()
     accepted = tried = 0
-    with match.Index() as index:
-        while not stop:
-            conn = db.open_read_only(db.path(store_files.inventory_dir()))
-            try:
-                if sweep.newest_capture(conn) > started or not db.match_sweep_on(conn):
+    try:
+        with match.Index() as index:
+            while not stop:
+                conn = db.open_read_only(db.path(store_files.inventory_dir()))
+                try:
+                    if not db.match_sweep_on(conn):
+                        break
+                    waiting = sweep.queue(conn, limit=SWEEP_CHUNK)
+                finally:
+                    conn.close()
+                if not waiting:
                     break
-                waiting = sweep.queue(conn, limit=SWEEP_CHUNK)
-            finally:
-                conn.close()
-            if not waiting:
-                break
-            inventory = store.read().inventory
-            requests, meta = [], {}
-            noted: Dict[str, str] = {}
-            for key, capture_id in waiting:
-                card = inventory.cards.get(key)
-                path = photos.find(card.cid) if card is not None else None
-                if card is None or path is None:
-                    noted[key] = capture_id  # nothing to read now; a re-shoot changes the id
-                    continue
-                game = str(card.game or games.DEFAULT_GAME)
-                requests.append(match.Request(
-                    key=key, photo=path, game=game,
-                    strategy=str(games.get(game)["prompt"]), set_hint=card.set_hint,
-                ))
-                meta[key] = (card, capture_id, photos.sha256_of(path))
-            results = match.read(requests, index) if requests else []
-            with store.write() as writable:
-                for result in results:
-                    card, capture_id, digest = meta[result.key]
-                    now = writable.inventory.cards.get(result.key)
-                    # THE CARD MAY HAVE CHANGED WHILE IT WAS READ: gone, no longer captured, or
-                    # re-shot. Then this answer is about bytes that no longer stand there.
-                    if now is None or now.state != "captured" or now.capture_id != card.capture_id:
+                sweep.mark_inflight(dict(waiting))
+                inventory = store.read().inventory
+                requests, meta = [], {}
+                noted: Dict[str, str] = {}
+                for key, capture_id in waiting:
+                    card = inventory.cards.get(key)
+                    path = photos.find(card.cid) if card is not None else None
+                    if card is None or path is None:
+                        noted[key] = capture_id  # nothing to read now; a re-shoot changes the id
                         continue
-                    if result.accepted and result.payload is not None:
-                        writable.cache.put(
-                            result.key, result.payload, digest, match.MODEL_SHA256,
-                            engine=ENGINE_MATCHER, cid=card.cid,
-                        )
-                        accepted += 1
-                    else:
-                        noted[result.key] = capture_id
-            sweep.remember_tried(noted)
-            tried += len(noted)
+                    game = str(card.game or games.DEFAULT_GAME)
+                    requests.append(match.Request(
+                        key=key, photo=path, game=game,
+                        strategy=str(games.get(game)["prompt"]), set_hint=card.set_hint,
+                    ))
+                    meta[key] = (card, capture_id, photos.sha256_of(path))
+                results = match.read(requests, index) if requests else []
+                with store.write() as writable:
+                    for result in results:
+                        card, capture_id, digest = meta[result.key]
+                        now = writable.inventory.cards.get(result.key)
+                        # THE CARD MAY HAVE CHANGED WHILE IT WAS READ: gone, no longer captured,
+                        # re-shot (a new capture id) or renamed (a new cid). Then this answer is
+                        # about bytes that no longer stand there.
+                        if (
+                            now is None
+                            or now.state != "captured"
+                            or now.capture_id != card.capture_id
+                            or now.cid != card.cid
+                        ):
+                            continue
+                        if result.accepted and result.payload is not None:
+                            writable.cache.put(
+                                result.key, result.payload, digest, match.MODEL_SHA256,
+                                engine=ENGINE_MATCHER, cid=card.cid,
+                            )
+                            accepted += 1
+                        else:
+                            noted[result.key] = capture_id
+                sweep.remember_tried(noted)
+                sweep.clear_inflight()
+                tried += len(noted)
+    except ImportError as exc:
+        # A MISSING RUNTIME is "not ready", not a crash: the watcher waits 300 s and says why.
+        say(f"sweep           the reader's runtime is not installed ({exc.name or exc}); nothing read")
+        sweep.clear_inflight()
+        return sweep.EXIT_NOT_READY
+    except Exception as exc:  # noqa: BLE001
+        # THE CARDS IN FLIGHT BECOME TRIED so one bad photograph cannot take the next worker down.
+        say(f"sweep           stopped by {type(exc).__name__}: {exc}")
+        sweep.settle_inflight()
+        return 1
     say(f"sweep           {accepted} matched, {tried} left for a press")
     return 0
 
