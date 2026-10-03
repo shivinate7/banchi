@@ -7,7 +7,7 @@ drift, missing `make reap`, the eight-key storage roster and D132 — a byte-ide
 of `.claude/skills/tcgplayer-csv/SKILL.md` at the equivalent path under a separate,
 untracked `.agents/skills/` directory, and
 `.codex/` holding `config.toml` (a shell-environment policy, machine-local) and `hooks.json`
-(the same six-then-eight hooks `.claude/settings.json` runs, by the same scripts). None of the
+(the hooks `.claude/settings.json` runs, by the same scripts, plus the two named in `CODEX_ONLY`). None of the
 three was tracked, so none of it reached a clone, a worktree, or a PR — every Codex session
 anywhere but that one Mac read stale prose, a stale skill, or no hooks at all.
 
@@ -50,6 +50,19 @@ neither of which `.codex/hooks.json` had. A Codex session could have run an unre
 notify a supervisor to stop. Both are added to `.codex/hooks.json` in the same change that
 adds the guard below, so the row starts green rather than starts by reporting the gap.
 
+**One divergence is declared, on the owner's word.** The shared layer's guard owns the pkill rule
+for Claude Code, so `.claude/settings.json` no longer runs `scripts/reap.py --hook`, and it runs
+`scripts/guard-shell.py` with `GUARD_SHELL_SKIP=checkout,stash,reset`. Every other guard-shell entry sets `GUARD_SHELL_SKIP=` empty, so an inherited value never narrows Codex. Codex runs no shared guard and keeps
+all of them in full. `CODEX_ONLY` in `check_codex_hooks` names the one hook only Codex runs, and
+the row fails when Claude Code runs it again or Codex loses it. The row compares commands exactly, so the `GUARD_SHELL_SKIP` value on each entry is pinned.
+Claude Code runs `PKMNSCAN_SILENT_WRITE_ONLY=file,bash-c scripts/silent-write-guard.py --hook`.
+That runs only the unread-file clause and the `bash -c` clause. The shared silent-write rule
+(claude-settings PR 257 and PR 264) covers the rest. Codex keeps the full hook. The row pins the
+prefix on the Claude entry and its absence on the Codex entry. It is a variable, not a flag.
+An older branch's copy ignores a variable and runs the full check. An unknown flag exits 2 and
+blocks every Bash call. Both clauses are reviewed against their refusal-log counts with
+claude-settings (D171).
+
 **`scripts/docs_audit/env_map.py:check_codex_hooks` reads both files as `(event, matcher, command)` triples and reports whichever side is missing what the other runs**, plus any command that
 names a script no longer in the tree. It is MECHANICAL — a hook roster is a literal, checkable
 the same way `check_hook_roster` already checks `scripts/githooks/` against `docs/map.py` — and
@@ -60,7 +73,7 @@ is provable without touching either real file) and then asserts the two real fil
 **What this is not.** `.codex/config.toml` stays untracked, gitignored beside
 `.claude/settings.local.json` with a comment saying why: a shell-environment policy is
 machine-local the same way a local Claude Code settings override is, and neither belongs in
-the tree that ships to every checkout. Nothing about `PKMNSCAN_GATE` or any other value in it
+the tree that ships to every checkout. Nothing about any value in it
 is asserted here.
 
 ### What is BUILT, RECORDED, NEITHER

@@ -219,7 +219,7 @@ Fix it and leave the pin: red (stale).
 
 **Cost:** small.
 
-**Status.** `scripts/guard-shell.py` has nine clauses (checkout, tree, gh, link, wait, push, stash,
+**Status.** `scripts/guard-shell.py` has seven clauses (checkout, tree, wait, push, stash,
 reset, narrate) and none reads `.env`. `.claude/settings.json` denies `Read(./.env)` and nothing
 else screens the key.
 
@@ -578,7 +578,7 @@ to be able to see. None of these entries has been re-checked against the code si
 Kept so nobody re-proposes them. A rejected mechanism usually fires on honest work, cannot fail, or would have a gate write to the tree (D18).
 
 - **A Stop hook that blocks a turn claiming the harness is green when no harness ran.** Self-refuting.
-  `scripts/stop-gate.sh` runs `make harness` before anything else in the hook. A claim check would run after that run, and it would block a claim its own gate had made true.
+  The retired Stop hook ran `make harness` before anything else. A claim check would run after that run, and it would block a claim its own gate had made true.
 - **A Stop hook that requires a fresh render and a Read of that PNG.** Three unboundable false-positive
   families, and it would launder a wrong image. Most `app/src` writes carry no appearance claim.
 - **A Stop hook that requires BUILT, RECORDED, NEITHER, SPECIFIED or VALIDATED in a wrap-up.** 84% of
@@ -589,7 +589,7 @@ Kept so nobody re-proposes them. A rejected mechanism usually fires on honest wo
 - **A PreCompact hook that injects the fixture facts, `make` targets and modified-file list.** Breakage is
   unobservable by construction. It also collides with D135's `codex hooks` row, which compares the full
   event, matcher and command triple.
-- **Registering `scripts/stop-gate.sh` on SubagentStop.** The path is unexercised (0 of 129,119
+- **Registering a harness-running Stop hook on SubagentStop.** The path is unexercised (0 of 129,119
   assistant messages were sidechain). Arming it would spend the owner's CPU on the machine their rig and
   live capture server run on.
 - **A warn-only Stop hook that matches delegation phrases and prints the route, CLI and `make` rosters.**
@@ -605,7 +605,7 @@ Kept so nobody re-proposes them. A rejected mechanism usually fires on honest wo
 - **A `+make icloud-selftest`.** Zero incidents, and the hazard class cannot occur now that the checkout
   lives outside iCloud.
 - **Refusing `git add -A` and `git add --all`.** A correct everyday command. The incident had a different
-  cause, a bare `ln -s` into an existing path. An existence test on `ln -s` catches it at the cause.
+  cause, a bare `ln -s` into an existing path. The guard for that cause was removed on the owner's word.
 - **A PreToolUse Bash hook that refuses a bare `gh pr merge` without an env marker.** Every measured
   incident went through `make merge` from the wrong tree, so the tree is the subject. Rank 28 fixes it
   there.

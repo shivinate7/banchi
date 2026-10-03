@@ -73,6 +73,22 @@ import re
 import sys
 from typing import List, NamedTuple, Optional, Sequence
 
+
+def _hatch_set_by(name: str, command: str) -> bool:
+    """Whether `command` REALLY sets `name=off`: guard-shell's `_hatches_set`, the one parser.
+
+    A mention in an argument, comment or quoted string does not count. Unloadable: not set.
+    """
+    try:
+        import importlib.util
+        here = os.path.dirname(os.path.abspath(__file__))
+        spec = importlib.util.spec_from_file_location("guard_shell", os.path.join(here, "guard-shell.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return name in mod._hatches_set(command)
+    except Exception:                                         # noqa: BLE001 — fail open
+        return False
+
 # THE PARSER MOVED TO `scripts/shell_parse.py` ON 2026-09-12, UNCHANGED, because a second
 # guard needed it. `scripts/guard-shell.py` refuses five shell mistakes and every one of them
 # has to read a command the same way this file does — and the four defects this tokenizer took
@@ -89,6 +105,10 @@ try:
     import shell_parse
 except Exception:                                             # noqa: BLE001 — fail open
     shell_parse = None                                        # type: ignore[assignment]
+try:
+    import refusal_log                                        # the one refusal log
+except Exception:                                             # noqa: BLE001 — fail open
+    refusal_log = None                                        # type: ignore[assignment]
 
 WIDTH = 76
 
@@ -99,6 +119,7 @@ class Silenced(NamedTuple):
     text: str                 # the stage as typed, for the refusal
     stdout: Optional[Redirect]
     stderr: Optional[Redirect]
+    clause: str = ""          # `file` or `bash-c` when a narrowed run kept it, for the refusal log
 
 
 class Verdict(NamedTuple):
@@ -203,7 +224,7 @@ _CARRIES = {
 }
 
 
-def read_command(command: str) -> Verdict:
+def read_command(command: str, clauses: Optional[frozenset] = None) -> Verdict:
     """Every write in this command whose own output the session will not see.
 
     THE DEFAULT IS "NO OPINION", and it returns as early as it can: this runs on every Bash
@@ -222,6 +243,9 @@ def read_command(command: str) -> Verdict:
     # (stage, the pipe op that follows it, its pipeline's tail) — the parser's `Placed`, kept
     # in this shape because the stream arithmetic below reads all three.
     stages = [(placed.stage, placed.pipe_op, placed.tail) for placed in reading.placed]
+    # `read` appends the stages of every `bash -c` script after the top-level ones. A read at
+    # depth 3 unwraps nothing, so its length is where the inner stages begin.
+    top = len(shell_parse.read(command, 3).placed)
     every = reading.every
 
     def resolve(where: Redirect, piped: bool, tail: Stage) -> Redirect:
@@ -251,16 +275,31 @@ def read_command(command: str) -> Verdict:
         return True
 
     silenced: List[Silenced] = []
-    for stage, op, tail in stages:
+    for at, (stage, op, tail) in enumerate(stages):
+        inner = at >= top
         verb = _write_verb(shell_parse.strip_prefixes(stage.argv))
         if not verb:
             continue
         out = resolve(stage.fd1, op in PIPE_OPS, tail)
         err = resolve(stage.fd2, op == "|&", tail)
-        lost_out = out if discarded(out, stage) else None
-        lost_err = err if discarded(err, stage) else None
+        # A narrowed run (`PKMNSCAN_SILENT_WRITE_ONLY`) keeps a lost stream only when a named
+        # clause owns it: `file` owns a stream sent to an unread file, `bash-c` owns any lost
+        # stream of a stage inside a `bash -c` script. The shared guard owns the rest.
+        def owned(where: Redirect, inner: bool = inner) -> str:
+            if clauses is None:
+                return "all"
+            if "file" in clauses and where.kind == FILE:
+                return "file"
+            if "bash-c" in clauses and inner:
+                return "bash-c"
+            return ""
+
+        lost_out = out if discarded(out, stage) and owned(out) else None
+        lost_err = err if discarded(err, stage) and owned(err) else None
+        kept = [w for w in (lost_out, lost_err) if w]
+        label = "" if clauses is None else ("file" if any(w.kind == FILE for w in kept) else "bash-c")
         if lost_out or lost_err:
-            silenced.append(Silenced(verb, stage.text, lost_out, lost_err))
+            silenced.append(Silenced(verb, stage.text, lost_out, lost_err, label))
     note = ""
     if unreadable and not silenced:
         note = ("{0} line(s) did not tokenize — an unbalanced quote, most likely a multi-line "
@@ -330,11 +369,36 @@ def refusal(silenced: Sequence[Silenced]) -> str:
                  "hiding it:")
     lines.append("      git commit -F - && git log --oneline -1")
     lines.append("")
-    lines.append("  PKMNSCAN_SILENT=off runs the command anyway.")
+    lines.append("  Bypass: owner-only: ask the owner to run this command.")
     return "\n".join(lines)
 
 
-def hook(payload: dict) -> int:
+CLAUSES = ("file", "bash-c")
+
+
+def _clauses() -> Optional[frozenset]:
+    """`PKMNSCAN_SILENT_WRITE_ONLY=file,bash-c` narrows the hook to the named clauses.
+
+    An environment variable, never a flag: an old copy of this script on an older branch
+    ignores a variable and runs the full check, while an unknown flag exits 2 and blocks
+    every Bash call. Unset means the full check. An unknown name runs the full check and
+    warns on every call, since each Bash call is a new process. It never exits non-zero over
+    configuration.
+    """
+    value = os.environ.get("PKMNSCAN_SILENT_WRITE_ONLY", "")
+    names = [name for name in value.split(",") if name]
+    if not names:
+        return None
+    unknown = [name for name in names if name not in CLAUSES]
+    if unknown:
+        print("silent-write: PKMNSCAN_SILENT_WRITE_ONLY names {0!r}, which is not one of {1}; "
+              "running the full check".format(",".join(unknown), ", ".join(CLAUSES)),
+              file=sys.stderr)
+        return None
+    return frozenset(names)
+
+
+def hook(payload: dict, clauses: Optional[frozenset] = None) -> int:
     """The PreToolUse hook on Bash. Exit 2 blocks the call and hands stderr to the session.
 
     IT FAILS OPEN ON ITS OWN BUGS. `reap.py:hook`'s docstring is the contract and it is not
@@ -352,12 +416,20 @@ def hook(payload: dict) -> int:
     command = str(tool_input.get("command") or "")
     if not command:
         return 0
-    if os.environ.get("PKMNSCAN_SILENT") == "off" or "PKMNSCAN_SILENT=off" in command:
+    if os.environ.get("PKMNSCAN_SILENT") == "off" or _hatch_set_by("PKMNSCAN_SILENT", command):
         return 0
-    verdict = read_command(command)
+    verdict = read_command(command, clauses)
     if not verdict.silenced:
         return 0
     print(refusal(verdict.silenced), file=sys.stderr)
+    sys.stderr.flush()
+    if refusal_log:
+        # One line per clause that fired, so each clause has its own fire count.
+        for item_clause in sorted({i.clause for i in verdict.silenced}):
+            rule = "silent-" + item_clause if item_clause else "silent"
+            verbs = ", ".join(sorted({i.verb for i in verdict.silenced if i.clause == item_clause}))
+            refusal_log.log("silent-write-guard", rule, verbs,
+                            str(payload.get("session_id") or ""), str(payload.get("cwd") or ""))
     return 2
 
 
@@ -386,7 +458,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    args = build_parser().parse_args(list(argv) if argv is not None else None)
+    args, unknown = build_parser().parse_known_args(list(argv) if argv is not None else None)
+    if unknown:
+        if not args.hook:
+            build_parser().error("unrecognized arguments: " + " ".join(unknown))
+        # A hook's flags come from the session's settings, its script from this branch: an older copy
+        # must ignore a newer flag, never block the tool call (docs/agent-traps.md).
+        print("warning: hook ignores unknown flags: " + " ".join(unknown), file=sys.stderr)
     if args.hook:
         try:
             payload = json.loads(sys.stdin.read() or "{}")
@@ -394,7 +472,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 0
         if not isinstance(payload, dict):
             return 0
-        return hook(payload)
+        return hook(payload, _clauses())
     if args.explain:
         return explain(args.explain)
     build_parser().print_help()

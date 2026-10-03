@@ -37,8 +37,8 @@ narrowing are `scripts/browser-scope.py`'s `classify_paths`, imported rather tha
 
 IT FAILS OPEN, IN EVERY DIRECTION. No merge-base, a diff it cannot compute, an EMPTY diff,
 an unscoped target name, and any exception raised while deriving a subject all answer RUN,
-out loud. Only an explicit skip skips, and `PKMNSCAN_GUARD_SCOPE=off` turns the whole gate
-off for every target and is printed every time any of them skips.
+out loud. Only an explicit skip skips, and `PKMNSCAN_GUARD_SCOPE=all` runs every target
+anyway. That adds checks, so it is not a hatch.
 
     scripts/guard-scope.py classify --target <name> [--base REV] [--head REV]
         Prints the reasoning and exits 0 to RUN, 3 to SKIP. Each roster entry's own
@@ -107,6 +107,9 @@ ROSTER = (
     {"target": "match-selftest", "test": "scripts/match-selftest.py"},
     {"target": "browser-scope-selftest", "test": "scripts/browser-scope.py"},
     {"target": "port-slots-selftest", "test": "scripts/port-slots.py"},
+    # THE PRODUCT HARNESS, on the owner's word (D247, amended). Not a self-test, so its subjects
+    # are not read from one file: `harness_subjects()` reads every module under `harness/`.
+    {"target": "harness", "test": "harness/run.py", "derive": "harness"},
 )
 
 TARGETS = {entry["target"] for entry in ROSTER}
@@ -249,9 +252,9 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
     Filtered to paths that exist as real files, so a renamed subject falls out on its own
     instead of pointing at nothing, and a false hit (a decorative string that happens to look
     like a path) never survives. A hit under `scripts/githooks/` widens to the whole
-    directory: `githooks-selftest.sh` names two of its five hooks as literal paths and the
-    rest only in prose ("its pre-push sibling") — a reader that stopped at the two named
-    ones would silently narrow what the gate can see, which is the exact failure this
+    directory: `githooks-selftest.sh` names one of its three hooks as a literal path and the
+    rest only in prose ("its pre-push sibling") — a reader that stopped at the one named
+    would silently narrow what the gate can see, which is the exact failure this
     workstream exists to close.
     """
     if not test_path.exists():
@@ -401,6 +404,8 @@ def subjects_for(entry: dict) -> Tuple[str, ...]:
     package's row modules are not read through their own path chains, which are row constants.
     The package itself is a subject through the import walk in `derive_subjects`.
     """
+    if entry.get("derive") == "harness":
+        return harness_subjects()
     subjects = set(derive_subjects(ROOT / entry["test"], func=entry.get("func")))
     package = entry.get("package")
     if package:
@@ -411,13 +416,135 @@ def subjects_for(entry: dict) -> Tuple[str, ...]:
     return tuple(sorted(_follow_package_imports(subjects, [entry["test"]])))
 
 
+# WHAT A GUARD'S TEST READS OF A SUBJECT, WHEN IT IS LESS THAN THE WHOLE FILE (D247, amended).
+# `derive_subjects` sees a path and cannot see how it is used, so these narrow a derived subject
+# by hand: `within` is `exists` (only `is_file` reads it) or `header` (only the module docstring
+# and top-level UPPERCASE names are read); `None` drops a subject that is a command string the
+# test never runs. The selftest fails when a key here is no longer a derived subject, so a stale
+# entry cannot hide.
+NARROW = {
+    "audit-self-test": {
+        "docs/map.py": ("header", "`_consumer_block` reads its docstring and `_map_sections` its "
+                                  "UPPERCASE names; nothing else of it."),
+    },
+    "browser-scope-selftest": {
+        "app/src/kit.css": ("exists", "read only through `is_file`."),
+        "app/src/kit/index.tsx": ("exists", "read only through `is_file`."),
+    },
+    "silent-write-selftest": {
+        "scripts/docs-audit.py": ("exists", "a command string the guard parses and never runs."),
+        "scripts/docs_audit/**": (None, "reached only through that command string's import."),
+    },
+}
+
+# SUBJECTS THE DERIVER CANNOT SEE: `browser-scope.py`'s selftest reads these through
+# `import_closure` and `classify_specs` over the real tree, never as a `ROOT / ...` chain.
+EXTRA_SUBJECTS = {
+    "browser-scope-selftest": (
+        ("app/src/App.tsx", "its `ROUTES` table is read by `route_views`."),
+        ("app/src/Inventory.tsx", "the selftest asserts the specs it reaches."),
+        ("app/src/Home.tsx", "the selftest asserts the specs it reaches."),
+        ("app/tests/**", "the specs and their helpers are read for route hashes and sweeps."),
+    ),
+}
+
+# Targets whose test executes its subjects, so a docstring or comment edit cannot move a verdict.
+# The predicate leaves out what the audit reads as TEXT: `harness/` docstrings carry claims it checks.
+def ast_skip_for(target: str):
+    """The `ast_skip` predicate for a target, or None. Never for a file the test names (it may
+    patch it by text: `sigil-check.py` by the code-invariants self-test), and never `harness/`."""
+    if target != "audit-self-test":
+        return None
+    sources = [ROOT / "scripts" / "docs-audit.py", *sorted((ROOT / "scripts" / "docs_audit").glob("*.py"))]
+    named = _browser_scope().skippable_on_ast(sources)
+    return lambda path: not path.startswith("harness/") and named(path)
+
+
+# A directory the harness reaches but never reads in part: a change under it cannot move a verdict.
+HARNESS_UNREAD = {"demo-assets": ("mirror",)}
+
+
+def harness_subjects() -> Tuple[str, ...]:
+    """What `harness/run.py` reads, derived from every module under `harness/`.
+
+    From each module: a local package or top-level module it imports; a top-level name a
+    `ROOT / "x"` chain or a bare string constant names (`"pkmnscan"`, `"./pkmnscan"`: a
+    subprocess target or an opened data path); and the TS import closure of every `app/src/*.ts`
+    a chain names (`standing.ts`, `storeHistory.ts`). A `scripts/*.py` file so named is scanned
+    the same way, to a fixed point, because it reads on the harness's behalf (`demo-seed.py`
+    reads `demo-assets/`). Raises on an unreadable module: `classify` turns that into RUN.
+    """
+    browser = _browser_scope()
+    tops: Set[str] = set()
+    ts_roots: Set[str] = set()
+    queue = sorted((ROOT / "harness").rglob("*.py"))
+    seen: Set[Path] = set()
+    while queue:
+        module = queue.pop()
+        if module in seen:
+            continue
+        seen.add(module)
+        tree = ast.parse(module.read_text())
+        collector = _PathCollector()
+        collector.visit(tree)
+        hits = set(collector.hits)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                tops |= {a.name.split(".")[0] for a in node.names}
+            elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                tops.add(node.module.split(".")[0])
+            elif (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                  and node.value and len(node.value) < 200 and not re.search(r"\s", node.value)):
+                hits.add(node.value[2:] if node.value.startswith("./") else node.value)
+        for hit in hits:
+            tops.add(hit.split("/")[0])
+            if hit.startswith("app/src/") and hit.endswith((".ts", ".tsx")):
+                ts_roots.add(hit)
+            if hit.startswith("scripts/") and hit.endswith(".py") and (ROOT / hit).is_file():
+                queue.append(ROOT / hit)
+    subjects: Set[str] = set()
+    real = set(os.listdir(ROOT))  # exact names: a case-folding disk must not make "Store" a hit
+    for top in sorted(t for t in tops if t in real or f"{t}.py" in real) :
+        if top == "app" or top.startswith("."):
+            continue
+        if (ROOT / top).is_dir():
+            unread = HARNESS_UNREAD.get(top, ())
+            if unread:
+                for child in sorted((ROOT / top).iterdir()):
+                    if child.name not in unread:
+                        subjects.add(f"{top}/{child.name}" + ("/**" if child.is_dir() else ""))
+            else:
+                subjects.add(f"{top}/**")
+        elif (ROOT / f"{top}.py").is_file():
+            subjects.add(f"{top}.py")
+        elif (ROOT / top).is_file():
+            subjects.add(top)
+    for root in ts_roots:
+        if (ROOT / root).is_file():
+            subjects |= browser.import_closure([root])
+    # What no harness source spells: the vendored catalog is data the packages open, and
+    # `requirements.txt`, the lockfile and the tsconfigs pin what runs and how `standing.ts` bundles.
+    subjects |= {"vendor/**", "requirements.txt", "app/package-lock.json"}
+    subjects |= {f"app/{q.name}" for q in (ROOT / "app").glob("tsconfig*.json")}
+    return tuple(sorted(subjects))
+
+
 def scope_for(entry: dict) -> Tuple[dict, ...]:
     """The full `classify_paths` scope for one roster entry: subjects, the test, the gate."""
     rel_test = entry["test"]
     subjects = subjects_for(entry)
     scope: List[dict] = [{"path": rel_test, "why": "the test itself."}]
+    narrow = NARROW.get(entry["target"], {})
     for subject in subjects:
-        scope.append({"path": subject, "why": f"read by `{rel_test}`, derived from its source."})
+        within, why = narrow.get(subject, (False, ""))
+        if within is None:
+            continue
+        item = {"path": subject, "why": f"read by `{rel_test}`, derived from its source."}
+        if within:
+            item.update(within=within, why=f"{item['why']} Narrowed: {why}")
+        scope.append(item)
+    for path, why in EXTRA_SUBJECTS.get(entry["target"], ()):
+        scope.append({"path": path, "why": f"read by `{rel_test}`: {why}"})
     scope.append({
         "path": "scripts/guard-scope.py",
         "beyond_carry": "this classifier. A change to the gate's own reasoning is proven only "
@@ -441,8 +568,8 @@ DIRTY_LINE = "working tree has uncommitted changes; this verdict covers commits 
 
 
 def classify(target: str, base: Optional[str], head: str) -> Tuple[bool, List[str]]:
-    if os.environ.get(HATCH) == "off":
-        return True, [f"{HATCH}=off — {target} RUNS."]
+    if os.environ.get(HATCH) == "all":
+        return True, [f"{HATCH}=all — {target} RUNS."]
     if target not in TARGETS:
         return True, [f"{target!r} is not in guard-scope's ROSTER — an unscoped target RUNS."]
     try:
@@ -458,13 +585,14 @@ def classify(target: str, base: Optional[str], head: str) -> Tuple[bool, List[st
             return True, [f"`git diff {start[:12]} {head}` failed — {target} RUNS."]
         verdict = browser.classify_paths(
             paths, browser.git_reader(start, head), scope=scope,
-            subject=f"what `make {target}` reads", noun=target)
+            subject=f"what `make {target}` reads", noun=target,
+            ast_skip=ast_skip_for(target))
         lines = [f"{len(paths)} changed path(s) from {start[:12]} to {head}:"] + list(
             verdict.lines)
         if not verdict.run:
             if browser.git("status", "--porcelain", "--untracked-files=no"):
                 lines.append(DIRTY_LINE)
-            lines.append(f"  ({HATCH}=off runs it anyway.)")
+            lines.append(f"  ({HATCH}=all runs it anyway.)")
         return verdict.run, lines
     except Exception as exc:  # noqa: BLE001 — a scoping bug must cost time, never coverage.
         return True, [f"guard-scope classification raised {exc!r} — {target} RUNS."]
@@ -624,8 +752,8 @@ def selftest() -> int:
     # ---- fail-open, exercised for real against this repository's own git history.
     check("an unscoped target runs",
           classify("not-a-real-target", "origin/main", "HEAD")[0], True)
-    check("HATCH=off runs a real target regardless", (lambda: (
-        os.environ.__setitem__(HATCH, "off"),
+    check("HATCH=all runs a real target regardless", (lambda: (
+        os.environ.__setitem__(HATCH, "all"),
         classify("reap-selftest", "origin/main", "HEAD")[0],
         os.environ.pop(HATCH, None),
     )[1])(), True)
@@ -636,19 +764,19 @@ def selftest() -> int:
     # ---- each fail-open arm, forced through a stub matcher. The real VCS never fails on
     # demand, so without a stub a flipped arm (skip where it must RUN) stays green. The
     # positive control proves the stub can make the gate SKIP at all.
-    def with_stub(full=False, **overrides):
+    def with_stub(full=False, target="reap-selftest", **overrides):
         stub = types.SimpleNamespace(
             landing_base=lambda reference, head: "a" * 40,
             changed_paths=lambda start, head: ["app/src/Orders.tsx"],
             git_reader=lambda start, head: (lambda side, path: ""),
             git=lambda *args: "",
-            classify_paths=browser.classify_paths)
+            classify_paths=browser.classify_paths, import_closure=browser.import_closure)
         for name, value in overrides.items():
             setattr(stub, name, value)
         real = globals()["_browser_scope"]
         globals()["_browser_scope"] = lambda: stub
         try:
-            got = classify("reap-selftest", "origin/main", "HEAD")
+            got = classify(target, "origin/main", "HEAD")
             return got if full else got[0]
         finally:
             globals()["_browser_scope"] = real
@@ -698,6 +826,70 @@ def selftest() -> int:
           all(verdict(e["target"], [e["test"]]) for e in ROSTER), True)
     check("every target runs on this classifier changing",
           all(verdict(e["target"], ["scripts/guard-scope.py"]) for e in ROSTER), True)
+
+    # ---- THE HARNESS GATE (D247, amended): its scope is read out of `harness/`, and every
+    # fail-open arm that holds for a self-test holds for it.
+    harness_entry = next(e for e in ROSTER if e["target"] == "harness")
+    harness_subj = set(subjects_for(harness_entry))
+    for wanted in ("pipeline/**", "store/**", "fixtures/**", "scripts/**", "vendor/**",
+                   "app/src/standing.ts", "app/src/storeHistory.ts"):
+        check(f"the harness reads `{wanted}`", wanted in harness_subj, True)
+    check("a change to pipeline/ runs the harness", verdict("harness", ["pipeline/join.py"]), True)
+    check("a docs-only change skips the harness",
+          verdict("harness", ["docs/DESIGN.md", "README.md"]), False)
+    check("a screen no harness test reads skips the harness",
+          verdict("harness", ["app/src/Orders.tsx"]), False)
+    check("a TS file in the standing.ts closure runs the harness",
+          verdict("harness", ["app/src/standing.ts"]), True)
+    check("an empty diff runs the harness", verdict("harness", []), True)
+    check("an unreadable diff runs the harness",
+          with_stub(target="harness", changed_paths=lambda s, h: None), True)
+    check("no merge-base runs the harness",
+          with_stub(target="harness", landing_base=lambda r, h: None), True)
+    check("a harness classification that raises runs the harness",
+          with_stub(target="harness", changed_paths=boom), True)
+    check("stub control: an unrelated change skips the harness",
+          with_stub(target="harness"), False)
+
+    # ---- THE NARROWINGS: a key that is no longer a derived subject is a stale entry.
+    for target, table in NARROW.items():
+        entry = next(e for e in ROSTER if e["target"] == target)
+        raw = set(subjects_for(entry))
+        check(f"{target}: every NARROW key is still a derived subject",
+              sorted(set(table) - raw), [])
+    check("silent-write-selftest skips a docs_audit change",
+          verdict("silent-write-selftest", ["scripts/docs_audit/rows.py"]), False)
+    check("silent-write-selftest skips a docs-audit.py content change",
+          verdict("silent-write-selftest", ["scripts/docs-audit.py"]), False)
+    check("browser-scope-selftest skips a kit.css content change",
+          verdict("browser-scope-selftest", ["app/src/kit.css"]), False)
+    for path in ("app/src/App.tsx", "app/src/Inventory.tsx", "app/src/Home.tsx",
+                 "app/tests/home.spec.ts"):
+        check(f"browser-scope-selftest runs on {path}",
+              verdict("browser-scope-selftest", [path]), True)
+
+    # ---- THE COMMENT-ONLY ARM, over a real diff shape: a docstring edit in a subject.
+    audit_scope = scope_for(next(e for e in ROSTER if e["target"] == "audit-self-test"))
+
+    def comment_verdict(old: str, new: str) -> bool:
+        return browser.classify_paths(
+            ["cli/cmd_prices.py"], lambda side, path: old if side == "base" else new,
+            scope=audit_scope, subject="x", noun="y", ast_skip=ast_skip_for("audit-self-test")).run
+
+    check("audit-self-test skips a docstring-only edit of a subject",
+          comment_verdict('"""a."""\nx = 1\n', '"""b."""\nx = 1  # c\n'), False)
+    check("audit-self-test runs on a code edit of a subject",
+          comment_verdict('"""a."""\nx = 1\n', '"""a."""\nx = 2\n'), True)
+    check("audit-self-test runs when a subject no longer parses",
+          comment_verdict('"""a."""\nx = 1\n', "x = (\n"), True)
+    check("the harness gate never skips on comments (no ast_skip for it)",
+          ast_skip_for("harness"), None)
+    check("audit-self-test runs on a quote swap in a file its self-tests name",
+          browser.classify_paths(
+              ["scripts/sigil-check.py"],
+              lambda side, path: "x = 'a'\n" if side == "base" else 'x = "a"\n',
+              scope=(*audit_scope, {"path": "scripts/sigil-check.py", "why": "x"}),
+              subject="x", noun="y", ast_skip=ast_skip_for("audit-self-test")).run, True)
 
     print("\nPASS" if ok else "\nFAIL")
     return 0 if ok else 1

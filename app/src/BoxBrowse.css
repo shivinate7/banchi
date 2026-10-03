@@ -673,7 +673,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   background: var(--bn-stage-bg);
   animation: bn-fade var(--bn-t-slow) var(--bn-ease-out) both;
 }
@@ -943,3 +943,6 @@
   .browse-queued .bn-notice a { position: relative; }
   .browse-queued .bn-notice a::after { content: ''; position: absolute; inset: -16px -4px; }
 }
+
+/* The word a record of a deleted box left by, at the row's right end. */
+.browse-row-how { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }

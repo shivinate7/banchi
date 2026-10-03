@@ -2,8 +2,7 @@
 #
 # SELF-CLEANING: scripts/docs-audit.py FAILS when a path listed here exists, so the entry
 # has to be deleted at the moment it stops being true. An allowlist that only grows turns
-# into a list of things nobody has looked at since — the same reason scripts/stop-gate.sh
-# arms itself on the absence of NOT_IMPLEMENTED markers instead of on a toggle.
+# into a list of things nobody has looked at since.
 #
 # A reason is not optional. "Build-order step 6 creates this" is a reason; the path
 # repeated back in prose is not. If the reason is that the audit misread ordinary prose as

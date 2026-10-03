@@ -180,8 +180,9 @@ fi
 # went where is one a session argues with instead of learning from.
 judge "$INCIDENT"
 case "$out" in
-  *"PKMNSCAN_SILENT=off"*) ok "the refusal prints the escape hatch" ;;
-  *) bad "the refusal does not name PKMNSCAN_SILENT=off" ;;
+  *"PKMNSCAN_SILENT"*) bad "the refusal names the switch to an agent" ;;
+  *"owner-only: ask the owner"*) ok "the refusal is owner-only and names no switch" ;;
+  *) bad "the refusal carries no owner-only line" ;;
 esac
 case "$out" in
   *"stdout -> /dev/null"*) ok "the refusal names stdout's destination" ;;
@@ -351,6 +352,7 @@ echo ""
 echo "  the escape hatch, in both of PKMNSCAN_KILL's two forms"
 
 allows "inline in the command"  "PKMNSCAN_SILENT=off git commit -m x >/dev/null 2>&1"
+refuses "a mere mention does not lift it" "echo PKMNSCAN_SILENT=off; git commit -m x >/dev/null 2>&1"
 
 out="$(printf '%s' "git commit -m x >/dev/null 2>&1" \
       | python3 -c 'import json,sys; print(json.dumps({"tool_input":{"command":sys.stdin.read()}}))' \
@@ -377,6 +379,92 @@ fails_open "a null command"              '{"tool_input":{"command":null}}'
 fails_open "a payload that is a list"    '[1,2,3]'
 fails_open "no stdin at all"             ''
 fails_open "an unbalanced quote"         '{"tool_input":{"command":"git commit -m '"'"'oops >/dev/null 2>&1"}}'
+
+LIBDIR="$HERE"
+echo ""
+echo "  the refusal log"
+. "$LIBDIR/refusal-log-assert.sh"
+rl="$tmp/refusals.log"
+rl_payload='{"session_id":"sess-1","cwd":"'"$tmp"'","tool_input":{"command":"git commit -m x >/dev/null 2>&1"}}'
+rl_out="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$rl" python3 "$GUARD" --hook 2>&1)"; rl_status=$?
+[ $rl_status -eq 2 ] && ok "a refused command still exits 2" || bad "the logged refusal exited $rl_status"
+why="$(refusal_line_ok "$rl" "silent-write-guard:silent" "sess-1")" && ok "…and writes one well-formed line" || bad "the refusal log line: $why"
+rl_bad="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" python3 "$GUARD" --hook 2>&1)"; rl_bad_status=$?
+if [ $rl_bad_status -eq 2 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
+else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
+
+echo ""
+echo "  PKMNSCAN_SILENT_WRITE_ONLY: a list of clauses (file, bash-c), for a hook set that has the shared guard"
+
+# judge_env <value> <command>: judge with PKMNSCAN_SILENT_WRITE_ONLY=<value>, or unset when <value> is "-".
+# $? is the hook's exit code; the refusal log line lands in $sw_log.
+sw_log="$tmp/sw-refusals.log"
+judge_env() {
+  local payload
+  payload="$(printf '%s' "$2" | python3 -c 'import json,sys; print(json.dumps({"session_id":"sess-sw","cwd":sys.argv[1],"tool_input":{"command":sys.stdin.read()}}))' "$tmp")"
+  : > "$sw_log"
+  if [ "$1" = "-" ]; then
+    out="$(printf '%s' "$payload" | env -u PKMNSCAN_SILENT_WRITE_ONLY PKMNSCAN_REFUSAL_LOG="$sw_log" python3 "$GUARD" --hook 2>&1)"
+  else
+    out="$(printf '%s' "$payload" | PKMNSCAN_SILENT_WRITE_ONLY="$1" PKMNSCAN_REFUSAL_LOG="$sw_log" python3 "$GUARD" --hook 2>&1)"
+  fi
+  return $?
+}
+
+judge_env file "git commit -m x >$tmp/x 2>&1"
+if [ $? -eq 2 ]; then ok "file: output to an unread file is refused"; else bad "file: output to an unread file was allowed"; fi
+why="$(refusal_line_ok "$sw_log" "silent-write-guard:silent-file" "sess-sw")" && ok "…and logs silent-write-guard:silent-file" || bad "file: the refusal log line: $why"
+
+for c in "git commit -m x >/dev/null 2>&1" "git commit -m x 2>&-" "git pull -q"; do
+  judge_env file "$c"
+  if [ $? -eq 0 ]; then ok "file: \`$c\` is allowed (the shared guard covers it)"; else bad "file: \`$c\` was refused"; fi
+done
+
+judge_env - "git commit -m x >/dev/null 2>&1"
+if [ $? -eq 2 ]; then ok "no variable: /dev/null silencing is still refused"; else bad "no variable: /dev/null silencing was allowed"; fi
+why="$(refusal_line_ok "$sw_log" "silent-write-guard:silent" "sess-sw")" && ok "…and logs silent-write-guard:silent" || bad "no variable: the refusal log line: $why"
+
+judge_env bogus "git commit -m x >/dev/null 2>&1"
+status=$?
+if [ $status -eq 2 ]; then ok "unknown value: the full check runs (/dev/null refused)"; else bad "unknown value: the full check did not run (exit $status)"; fi
+n="$(printf '%s\n' "$out" | grep -c 'PKMNSCAN_SILENT_WRITE_ONLY')"
+if [ "$n" -eq 1 ]; then ok "…and prints one warning line"; else bad "unknown value: expected one warning line, saw $n"; fi
+judge_env bogus "git status"
+if [ $? -eq 0 ]; then ok "unknown value never exits non-zero over configuration"; else bad "unknown value on a clean command exited non-zero"; fi
+
+# file,bash-c: what Claude Code runs. A top-level /dev/null is the shared guard's, a bash -c script's is ours.
+judge_env file,bash-c "git commit -m x >/dev/null 2>&1"
+if [ $? -eq 0 ]; then ok "file,bash-c: a top-level >/dev/null is allowed"; else bad "file,bash-c: a top-level >/dev/null was refused"; fi
+bc_null="bash -c 'git commit -m x >/dev/null 2>&1'"
+judge_env file,bash-c "$bc_null"
+if [ $? -eq 2 ]; then ok "file,bash-c: a bash -c script's >/dev/null is refused"; else bad "file,bash-c: a bash -c script's >/dev/null was allowed"; fi
+why="$(refusal_line_ok "$sw_log" "silent-write-guard:silent-bash-c" "sess-sw")" && ok "...and logs silent-write-guard:silent-bash-c" || bad "file,bash-c: the bash-c log line: $why"
+judge_env file,bash-c "bash -c 'git commit -m x >$tmp/x 2>&1'"
+if [ $? -eq 2 ]; then ok "file,bash-c: a bash -c script's unread-file redirect is refused"; else bad "file,bash-c: a bash -c script's unread-file redirect was allowed"; fi
+why="$(refusal_line_ok "$sw_log" "silent-write-guard:silent-file" "sess-sw")" && ok "...and logs silent-write-guard:silent-file" || bad "file,bash-c: the file log line: $why"
+judge_env file,bash-c "bash -c 'git commit -m x 2>&1 | cat >/dev/null'"
+if [ $? -eq 2 ]; then ok "file,bash-c: a pipe into a discarding tail inside bash -c is refused"; else bad "file,bash-c: a pipe into a discarding tail inside bash -c was allowed"; fi
+
+judge_env file "$bc_null"
+if [ $? -eq 0 ]; then ok "file alone: the bash -c /dev/null case is allowed"; else bad "file alone: the bash -c /dev/null case was refused"; fi
+
+judge_env file,bogus "git commit -m x >/dev/null 2>&1"
+status=$?
+if [ $status -eq 2 ]; then ok "file,bogus: the full check runs (/dev/null refused)"; else bad "file,bogus: the full check did not run (exit $status)"; fi
+n="$(printf '%s\n' "$out" | grep -c 'PKMNSCAN_SILENT_WRITE_ONLY')"
+if [ "$n" -eq 1 ]; then ok "...and warns once"; else bad "file,bogus: expected one warning line, saw $n"; fi
+judge_env - "$bc_null"
+if [ $? -eq 2 ]; then ok "unset: the full check runs (bash -c /dev/null refused)"; else bad "unset: the full check did not run"; fi
+
+# NOT COVERED: an argv the script does not know. `build_parser().parse_args` exits 2 on an
+# unknown flag in hook mode, and exit 2 blocks the call, so there is no tolerance to pin.
+
+echo "  an unknown flag: a hook warns and allows, the command line still refuses"
+bogus_out="$(printf '{}' | python3 "$GUARD" --hook --bogus 2>&1 >/dev/null)"; bogus_status=$?
+if [ $bogus_status -eq 0 ] && [ -n "$bogus_out" ]; then ok "--hook --bogus exits 0 and warns on stderr"
+else bad "--hook --bogus: exit $bogus_status, stderr '$bogus_out' (want 0 and a warning)"; fi
+python3 "$GUARD" --bogus >/dev/null 2>&1 </dev/null
+[ $? -eq 2 ] && ok "without --hook, an unknown flag still exits 2" || bad "without --hook, an unknown flag did not exit 2"
 
 echo ""
 printf '  %d passed, %d failed\n' "$pass" "$fail"

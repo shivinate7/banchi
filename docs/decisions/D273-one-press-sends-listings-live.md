@@ -11,7 +11,7 @@ records the answers and the decisions they amend.
 |---|---|---|
 | Q1 | Does Banchi send the listing file to TCGplayer itself? | Yes. "Download the file instead" stays as a second door. |
 | Q2 | Is "Put live" its own press? | No. ONE PRESS sends AND makes live. |
-| Q3 | How does Banchi check what is live after a publish? | Both ways. An open app checks by itself when the wait ends, with no refresh. A closed app checks on the next visit to Pricing or Home. No server job runs unattended. |
+| Q3 | How does Banchi check what is live after a publish? | Both ways. An open app checks by itself when the wait ends, with no refresh. A closed app checks on the next visit to Pricing or Home. No server job runs unattended, with one exception on the owner's word: a free background reader of captured cards. It is a separate child that holds almost no memory when its queue is empty (D1, `docs/specs/identify-engine-pick.md`). It reads even while cards are being captured, on the owner's word "Even mid-feed". The capture gate measured a capture request's p99 at 30.5 ms with the reader on and 30.6 ms with it off. |
 | Q4 | Does matching run by itself when the reading finishes? | Yes. A problem becomes the run's next step. |
 | Q5 | Does the cost check run when the Identify sheet opens? | Yes. Open, then spend: two presses. |
 | Q6 | What does the Runs screen become? | Decide after the moves land. The route and its name stay. |

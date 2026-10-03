@@ -31,6 +31,7 @@
 }
 
 .shelf-mode-bar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--bn-2);
@@ -80,6 +81,7 @@
 /* THE ROW: sections run left to right, back to front. It scrolls WITHIN ITSELF on a narrow
    column — a long box never widens the page (no horizontal page scroll at 390). */
 .shelf-box-body {
+  position: relative;
   display: flex;
   flex-direction: row;
   align-items: stretch;
@@ -93,6 +95,7 @@
 }
 
 .shelf-slot {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--bn-1);
@@ -249,6 +252,11 @@
   color: var(--bn-ink-2);
 }
 
+.shelf-receipt-note {
+  margin: 0;
+  color: var(--bn-ink);
+}
+
 .shelf-receipt-actions {
   display: flex;
   gap: var(--bn-2);
@@ -259,4 +267,41 @@
 .shelf-lift .bn-seg {
   flex-wrap: wrap;
   max-width: 100%;
+}
+
+/* THE GRIP DRAGS (the owner's ruling). Its own touch-action keeps a finger from scrolling the row
+   instead; the arrow beside it is the picker, the keyboard path. The two sit in one row inside
+   the block and add no height of their own beyond the thumb floor the block already holds. */
+.shelf-block-tools { display: inline-flex; gap: var(--bn-1); }
+.shelf-grip { touch-action: none; cursor: grab; }
+.shelf[data-dragging='true'] { user-select: none; cursor: grabbing; }
+.shelf[data-dragging='true'] .shelf-grip { cursor: grabbing; }
+
+/* The drop mark and the box it points at. Both are drawn in place (an outline colour and an
+   absolutely positioned bar), so a drag moves nothing but the dragged thing (D313). */
+.shelf-box[data-drop='true'] { border-color: var(--bn-accent); }
+.shelf-drop-mark {
+  position: absolute;
+  inset-block: 0;
+  inline-size: var(--bn-1);
+  border-radius: var(--bn-r);
+  background: var(--bn-accent);
+  pointer-events: none;
+}
+.shelf-drop-mark[data-edge='start'] { inset-inline-start: 0; }
+.shelf-drop-mark[data-edge='end'] { inset-inline-end: 0; }
+
+/* A refusal opens over the page against the controls that were pressed (the kit's "what the
+   server said" does the same), so it takes no row and moves nothing (D313). */
+.shelf-mode-bar .shelf-answer { top: calc(100% + var(--bn-2)); }
+.shelf-receipt-actions { position: relative; }
+.shelf-receipt-actions .shelf-answer { bottom: calc(100% + var(--bn-2)); }
+.shelf-answer {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  inline-size: min(100%, 36rem);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-3);
+  border-radius: var(--bn-r);
 }

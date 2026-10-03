@@ -117,6 +117,9 @@ class _PokemonImages:
         # reverse of that mapping, so `display_name` answers the vendored tree's OWN
         # string rather than re-deriving one from whatever the store happened to send.
         self._names_by_id: Dict[str, str] = {}
+        # `id -> printedTotal` off the same `sets/en.json` pass: the right half of the
+        # collector number, which a whole-set listing (`products`) must carry.
+        self._printed_by_id: Dict[str, str] = {}
         self._numbers: Dict[str, Dict[str, str]] = {}
         self._numbers_mtime: Dict[str, float] = {}
 
@@ -129,14 +132,18 @@ class _PokemonImages:
                 rows = []
             ids: Dict[str, str] = {}
             names: Dict[str, str] = {}
+            printed: Dict[str, str] = {}
             for row in rows:
                 if not row.get("id") or not row.get("name"):
                     continue
                 set_id = str(row["id"])
                 ids[join.normalize_set(str(row["name"]))] = set_id
                 names[set_id] = str(row["name"])
+                if row.get("printedTotal") is not None:
+                    printed[set_id] = str(row["printedTotal"])
             self._set_ids = ids
             self._names_by_id = names
+            self._printed_by_id = printed
         return self._set_ids
 
     def _numbers_for(self, set_id: str) -> Dict[str, str]:
@@ -183,6 +190,33 @@ class _PokemonImages:
             url = index.get(join.number_index_key(number.split("/", 1)[0]))
         return url
 
+    def products(self, set_name: str) -> Optional[List["CatalogProduct"]]:
+        """Every NUMBERED card of the set, with or without an image URL, off disk. `None` when
+        the set does not resolve. The matcher's index is built from this, and a card with no
+        image is listed with an empty URL rather than dropped: the look-alike guard needs the
+        names of the printings that have no photo (`identify/match.py`)."""
+        set_id = self._set_id_for(set_name)
+        if set_id is None:
+            return None
+        self._set_ids_by_name()
+        path = self._root / "cards" / "en" / f"{set_id}.json"
+        try:
+            rows = json.loads(path.read_text("utf-8"))
+        except (OSError, ValueError):
+            return None
+        printed = self._printed_by_id.get(set_id, "")
+        return [
+            CatalogProduct(
+                product_id=str(row["id"]),
+                name=str(row.get("name") or ""),
+                number=str(row["number"]),
+                printed_total=printed,
+                url=str((row.get("images") or {}).get("small") or ""),
+            )
+            for row in rows
+            if row.get("number") and row.get("id")
+        ]
+
     def display_name(self, set_name: str) -> Optional[str]:
         """The vendored tree's OWN name for `set_name`, resolved the SAME two-try order
         `_set_id_for` already uses for the photo: the unstripped name first, and the
@@ -202,6 +236,18 @@ class _PokemonImages:
             return None
         self._set_ids_by_name()  # ensures `_names_by_id` is loaded
         return self._names_by_id.get(set_id)
+
+
+class CatalogProduct(NamedTuple):
+    """One numbered card of a set, as the matcher's index needs it. `printed_total` is the
+    right half of a Pokemon number ("132") and empty for the games whose `number` is the
+    whole printed identifier. `url` is empty when the catalogue has no image for it."""
+
+    product_id: str
+    name: str
+    number: str
+    printed_total: str
+    url: str
 
 
 class _ImageIndex(NamedTuple):
@@ -476,6 +522,25 @@ class StockImages:
             return None
         return self._tcgcsv_name_lookup(game, set_name, product_name)
 
+    def group_pending(self, game: str, set_name: str) -> bool:
+        """True while a catalogue group has never answered: no cache entry yet, so a
+        `None` from a lookup means "ask again", not "no such image". A failed fetch stores an
+        empty entry, so a final miss is never pending. Vendored Pokemon cards never are."""
+        with self._lock:
+            return (game, set_name) not in self._cache
+
+    def line_name_pending(self, line_name: str) -> bool:
+        """`url_for_line_name`'s twin: True when some candidate set split is still cold."""
+        line, sep, rest = str(line_name or "").partition(" - ")
+        game = game_registry.game_for_product_line(line) if sep else None
+        if game is None:
+            return False
+        return any(
+            self.group_pending(game, rest[:i])
+            for i in range(len(rest))
+            if rest[i : i + 2] == ": "
+        )
+
     def url_for_line_name(self, line_name: str) -> Optional[str]:
         """The image for a SOLD order line whose SKU the `skus` table no longer holds (a
         delisted product leaves the export), from the line's own name alone:
@@ -521,6 +586,61 @@ class StockImages:
             with self._lock:
                 if self._cache[(game, set_name)][1].urls_by_product_id:
                     return
+
+    def catalog_products(
+        self, game: str, set_name: str, group_id: Optional[int] = None
+    ) -> Optional[Tuple[List[CatalogProduct], int]]:
+        """`(numbered products, count of unnumbered ones)` for a whole set, or `None` when the
+        set does not resolve. BLOCKING, so it is for the matcher's index build and NEVER a
+        request thread (the header's rule for the tcgcsv walk).
+
+        Pokemon answers from the vendored tree with an unnumbered count of 0 (the tree lists
+        singles only). Every other game walks the same `Market` the image lookup uses, under
+        the same `_market_lock`, so a build and a warm cannot corrupt each other's read."""
+        if game == POKEMON_KEY:
+            found = self._pokemon.products(set_name)
+            return None if found is None else (found, 0)
+        try:
+            with self._market_lock:
+                category_id = self._market.category_id(str(game_registry.get(game)["product_line"]))
+                gid = group_id if group_id is not None else self._market.group_id(category_id, set_name)
+                payload = self._market.get(
+                    f"{CATALOG_HOST}/tcgplayer/{category_id}/{gid}/products",
+                    f"tcgcsv/{category_id}/{gid}/products",
+                    self._ttl,
+                )
+        except (PriceHistoryError, KeyError):
+            return None
+        numbered: List[CatalogProduct] = []
+        unnumbered = 0
+        for product in payload.get("results") or ():
+            number = extended(product, EXTENDED_NUMBER)
+            if not number:
+                unnumbered += 1
+                continue
+            numbered.append(
+                CatalogProduct(
+                    product_id=str(product["productId"]),
+                    name=str(product.get("name") or ""),
+                    number=str(number),
+                    printed_total="",
+                    url=str(product.get("imageUrl") or ""),
+                )
+            )
+        return numbered, unnumbered
+
+    def catalog_sets(self, game: str) -> List[Tuple[str, int]]:
+        """`(set name, group id)` for every tcgcsv group of a game. Empty for Pokemon, whose
+        sets come from the store's own cards (D170: a Pokemon run names its sets)."""
+        if game == POKEMON_KEY:
+            return []
+        try:
+            with self._market_lock:
+                category_id = self._market.category_id(str(game_registry.get(game)["product_line"]))
+                rows = self._market.groups(category_id)
+        except (PriceHistoryError, KeyError):
+            return []
+        return [(str(row["name"]), int(row["groupId"])) for row in rows.values()]
 
     def display_name(self, game: str, set_name: str) -> Optional[str]:
         """The catalogue's own clean name for a set, when this resolver can name one.

@@ -93,12 +93,6 @@
         "recognised"
       ]
     },
-    "docs/decisions/*-a-departed-record-is-buried.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "modelled"
-      ]
-    },
     "docs/decisions/*-docs-are-linted-as-documents.md": {
       "lane": "docs-sweep",
       "SPELLING": [

@@ -411,4 +411,25 @@ export default tseslint.config(
       'react-hooks/exhaustive-deps': 'error',
     },
   },
+  {
+    /* THE UNIT TIER TAKES `test` FROM `./unit`, whose `page`, `context` and `browser` fixtures
+     * throw. Importing `test` from Playwright directly would skip that. A block of its own, on
+     * `no-restricted-imports`, so no `no-restricted-syntax` list above is touched. */
+    files: ['tests/unit/**/*.ts'],
+    ignores: ['tests/unit/unit.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@playwright/test',
+              importNames: ['test'],
+              message: "Import `test` from './unit': it refuses a browser fixture (the unit tier opens no browser).",
+            },
+          ],
+        },
+      ],
+    },
+  },
 )

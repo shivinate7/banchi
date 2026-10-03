@@ -17,6 +17,7 @@ import {
   getMarkdowns,
   getPriceHistory,
   getPriceTrends,
+  getSavedTrends,
   markdownFileUrl,
   markdownListings,
   markdownTrends,
@@ -52,6 +53,7 @@ import type {
   Unreachable,
   LiveMove,
   PricingSku,
+  SavedTrendsPayload,
   RunDetail,
   RunSummary,
   WithheldRecord,
@@ -60,7 +62,7 @@ import { WITHHOLD_KEYS, WITHHOLD_LABELS, WITHHOLD_REASONS, type WithholdReason }
 import { isEditableTarget } from './keys'
 import { FLAT_KEY, subThresholdSkus } from './readiness'
 import { isWithheld, rowShare, runChip } from './standing'
-import { TrendCell, type TrendRead } from './PriceTrend'
+import { TrendCell, type KeptTrend, type TrendRead } from './PriceTrend'
 import { ClearPrices } from './ClearPrices'
 import { runBoxLabel } from './runScope'
 import {
@@ -96,10 +98,15 @@ import {
   ReloadButton,
   Retry,
   Segmented,
+  SettingsCensus,
+  SettingsFigures,
+  SettingsGroup,
+  SettingsOp,
   Sheet,
   countFacets,
   filterRows,
   matchQuery,
+  didYouMean,
   openSheet,
   useFacetParams,
   useSortParam,
@@ -107,7 +114,8 @@ import {
   useViewParam,
 } from './kit'
 import type { FilterFacet, SortOption, SortValue } from './kit'
-import { toast } from './kit/toast'
+import { dismissToast, toast } from './kit/toast'
+import { PriceMovers } from './PriceMovers'
 import './Pricing.css'
 import { SendCard } from './SendCard'
 import { ABSENT_SENTENCE, AbsentPhotoNote, gameLabel, noPhotoSentence } from './CardHero'
@@ -385,7 +393,12 @@ function groupOf(sku: PricingSku): string | null {
 type Undo = { id: number } & (
   | { kind: 'answer'; writes: readonly { sku: string; before: CorpusAnswer | undefined; channel: 'price' | 'unknown' }[] }
   | { kind: 'cutoff'; before: { threshold: string | undefined; sub_threshold: PricingCorpus['policy']['sub_threshold'] | undefined } }
+  | { kind: 'runcut'; run: string; before: { threshold: string | undefined; sub_threshold: PricingCorpus['policy']['sub_threshold'] | undefined } }
+  | { kind: 'rule'; before: { rule: string | undefined; basis: string | undefined } }
 )
+
+/** An undo entry before it is given its id. */
+type UndoEntry = Undo extends infer U ? (U extends Undo ? Omit<U, 'id'> : never) : never
 
 /** The corpus as the document every reader on this screen understands, with one run's policy
  *  override folded over the store's in `corpus.py:policy_for`'s own order. */
@@ -463,6 +476,23 @@ function usePhone(): boolean {
  *  forms this repo's names take are parenthesised ("Calm Rune (R02a)") and a trailing "- "
  *  ("Garganacl - 084/132"), both anchored at the end of the string — never a bare substring
  *  match. */
+/** A strip older than this, against the newest overnight read, is drawn dimmed with its date. */
+const STALE_AFTER_S = 3600
+
+/** A saved strip with its date, and whether it is older than the newest overnight read. */
+function keptStrip(saved: SavedTrendsPayload | null, sku: string): KeptTrend | undefined {
+  const found = saved?.skus[sku]
+  if (found === undefined) return undefined
+  const newest = saved?.note?.at ?? found.at
+  return { ranges: found.ranges, at: found.at, stale: found.at < newest - STALE_AFTER_S }
+}
+
+/** A saved strip as a row's trend read, or undefined where the job saved none. */
+function savedRead(saved: SavedTrendsPayload | null, sku: string): TrendRead | undefined {
+  const kept = keptStrip(saved, sku)
+  return kept === undefined ? undefined : { kind: 'read', ranges: kept.ranges, at: kept.at, stale: kept.stale }
+}
+
 function numberSuffix(number: string): RegExp | null {
   const trimmed = number.trim()
   if (trimmed === '') return null
@@ -863,6 +893,7 @@ export function Pricing() {
   const [saving, setSaving] = useState(false)
   const [undo, setUndo] = useState<Undo[]>([])
   const nextUndoId = useRef(1)
+  const toastOfField = useRef(new Map<string, number>())
   const [holdFor, setHoldFor] = useState<string | null>(null)
   const holdAnchor = useRef<HTMLElement | null>(null)
   const holdButtons = useRef(new Map<string, HTMLButtonElement>())
@@ -871,6 +902,23 @@ export function Pricing() {
   /* The trend strip (D277), cleared when the loaded set changes. */
   const [trends, setTrends] = useState<Record<string, TrendRead>>({})
   const [trendRun, setTrendRun] = useState<{ total: number; done: number; reading: boolean } | null>(null)
+  /* THE STRIPS THE DAILY JOB SAVED OVERNIGHT, read once from a local file at first paint. It fires
+     no request at the market host, so a visit still costs the mirror nothing (D278). The Trends
+     press below overwrites a row's strip with a fresh read. */
+  const [saved, setSaved] = useState<SavedTrendsPayload | null>(null)
+  useEffect(() => {
+    let alive = true
+    getSavedTrends()
+      .then((payload) => {
+        if (alive) setSaved(payload)
+      })
+      .catch(() => {
+        /* No saved strips is not a failure of this screen; the Trends press still reads. */
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
   const trendWalk = useRef(0)
   const [note, setNote] = useState<{ sku: string; text: string } | null>(null)
   /** Holding: the held rows alone (UX-212). */
@@ -1069,6 +1117,20 @@ export function Pricing() {
 
   const queued = runs.find((row) => row.run === run)?.counts?.queued_main ?? 0
 
+  /** One write's receipt: an undo entry and the toast whose Undo reverses THIS entry (finding #2). */
+  const recordUndo = useCallback((entry: UndoEntry, title: string, body: string) => {
+    const id = nextUndoId.current++
+    setUndo((stack) => [{ id, ...entry } as Undo, ...stack].slice(0, UNDO_DEPTH))
+    /* ONE FIELD, ONE LIVE TOAST: an older toast's Undo would write its own "before" over a
+     * newer change, so a newer change on the same field retires the older toast. */
+    const field = entry.kind === 'runcut' ? `runcut:${entry.run}` : entry.kind
+    dismissToast(toastOfField.current.get(field) ?? -1)
+    toastOfField.current.set(
+      field,
+      toast({ kind: 'receipt', title, body, ttlMs: 8000, action: { label: 'Undo', kbd: 'U', onPress: () => undoByIdRef.current(id) } }),
+    )
+  }, [])
+
   /** Set the STORE-WIDE cut-off. BOTH KEYS, ALWAYS: the line and what the half below it lists at
    *  are one figure (the owner, 2026-09-03), so this screen has no way to write one alone.
    *  UN-13 (finding #15, `docs/specs/undo.md` §11.10): a cut-off change is a reversal too, so
@@ -1085,37 +1147,35 @@ export function Pricing() {
     const storedFlat = book?.policy?.sub_threshold
     const storedFlatValue = typeof storedFlat === 'string' ? storedFlat : storedFlat !== null && storedFlat !== undefined ? storedFlat[FLAT_KEY] : undefined
     if (storedThreshold === figure && storedFlatValue === figure) return
-    const id = nextUndoId.current++
-    setUndo((stack) =>
-      [
-        { id, kind: 'cutoff' as const, before: { threshold: book?.policy?.threshold, sub_threshold: book?.policy?.sub_threshold } },
-        ...stack,
-      ].slice(0, UNDO_DEPTH),
+    recordUndo(
+      { kind: 'cutoff', before: { threshold: book?.policy?.threshold, sub_threshold: book?.policy?.sub_threshold } },
+      'Cut-off changed',
+      `The store-wide rule now reads ${figure}.`,
     )
-    toast({
-      kind: 'receipt',
-      title: 'Cut-off changed',
-      body: `The store-wide rule now reads ${figure}.`,
-      ttlMs: 8000,
-      action: { label: 'Undo', kbd: 'U', onPress: () => undoByIdRef.current(id) },
-    })
     setBook((current) =>
       current === null
         ? current
         : { ...current, policy: { ...current.policy, threshold: figure, sub_threshold: { [FLAT_KEY]: figure } } },
     )
-  }, [book])
+  }, [book, recordUndo])
 
   const setRunCut = useCallback(
     (figure: string | undefined) => {
       if (run === null) return
+      if (runCut(book, run) === figure) return
+      const was = book?.policy?.per_run?.[run]
+      recordUndo(
+        { kind: 'runcut', run, before: { threshold: writtenCut(was) ?? undefined, sub_threshold: was?.['sub_threshold'] as never } },
+        figure === undefined ? 'Run follows the store cut-off' : 'Cut-off changed for this run',
+        figure === undefined ? 'This run now uses the store-wide cut-off.' : `This run's cut-off now reads ${figure}.`,
+      )
       const patch =
         figure === undefined
           ? { threshold: undefined, sub_threshold: undefined }
           : { threshold: figure, sub_threshold: { [FLAT_KEY]: figure } }
       setBook((current) => (current === null ? current : withRunPolicy(current, run, patch)))
     },
-    [run],
+    [run, book, recordUndo],
   )
 
   const saveFailed = useCallback(() => book !== null && failedBook.current === book, [book])
@@ -1367,6 +1427,8 @@ export function Pricing() {
     ]
   }, [rows])
   const [facetPicks, setFacetPicks] = useFacetParams(facetShape)
+  /** Near name for a search that found nothing: the kit's one browser copy over the list's names (D271). */
+  const nearName = useMemo(() => (query.trim() === '' ? null : didYouMean(query, new Set(rows.map((row) => row.name)))), [rows, query])
   const keepRow = useCallback(
     (row: MergedSku) =>
       (!filterHeld || isWithheld(answerFor(row))) &&
@@ -1580,6 +1642,13 @@ export function Pricing() {
       if (chosen === undefined) return
       const missing = rows.filter((row) => row.presets[key] === null)
       if (source.proposes) {
+        if (book?.policy?.rule !== chosen.rule || book?.policy?.basis !== chosen.basis) {
+          recordUndo(
+            { kind: 'rule', before: { rule: book?.policy?.rule, basis: book?.policy?.basis } },
+            'Pricing rule changed',
+            `${chosen.says}.`,
+          )
+        }
         setBook((current) =>
           current === null ? current : { ...current, policy: { ...current.policy, rule: chosen.rule, basis: chosen.basis } },
         )
@@ -1650,7 +1719,7 @@ export function Pricing() {
         },
       })
     },
-    [rows, table, answerFor, source, book],
+    [rows, table, answerFor, source, book, recordUndo],
   )
 
   /** The live rows a cut-off press would move: under the line, and nobody answered them. */
@@ -1802,6 +1871,11 @@ export function Pricing() {
       setCustomBad(null)
       const rule = customRuleText(draft)
       if (doc?.rule === rule && (doc?.basis ?? 'market') === draft.basis) return
+      recordUndo(
+        { kind: 'rule', before: { rule: book?.policy?.rule, basis: book?.policy?.basis } },
+        'Pricing rule changed',
+        `${customSays(draft)}.`,
+      )
       setBook((current) => (current === null ? current : { ...current, policy: { ...current.policy, rule, basis: draft.basis } }))
       for (const row of rows) {
         if (row.bucket === 'sub_threshold' || answerFor(row) !== undefined) continue
@@ -1812,7 +1886,7 @@ export function Pricing() {
       }
       setNote(null)
     },
-    [doc, rows, answerFor],
+    [doc, rows, answerFor, book, recordUndo],
   )
 
   /** Reverses one entry, whichever kind it is — shared by `undoLast` (`U`, the toolbar) and
@@ -1825,6 +1899,32 @@ export function Pricing() {
             ? current
             : { ...current, policy: { ...current.policy, threshold: top.before.threshold, sub_threshold: top.before.sub_threshold } },
         )
+        return
+      }
+      if (top.kind === 'runcut') {
+        setBook((current) =>
+          current === null ? current : withRunPolicy(current, top.run, { threshold: top.before.threshold, sub_threshold: top.before.sub_threshold }),
+        )
+        return
+      }
+      if (top.kind === 'rule') {
+        setBook((current) =>
+          current === null ? current : { ...current, policy: { ...current.policy, rule: top.before.rule, basis: top.before.basis } },
+        )
+        setPressedCustom(false)
+        setCustomBad(null)
+        setCustomDraft(parseCustomRule(top.before.rule, top.before.basis) ?? { kind: 'undercut', pct: '', basis: 'market' })
+        /* The unanswered fields show the rule's figure, so they go back to the old rule's. */
+        const was = PRESETS.find((p) => p.rule === top.before.rule && p.basis === top.before.basis)
+        for (const row of rows) {
+          const input = inputs.current.get(row.sku)
+          if (!input || answerFor(row) !== undefined || row.bucket === 'sub_threshold') continue
+          const next = was === undefined ? '' : (row.presets[was.key] ?? '')
+          if (input.value !== next) {
+            input.value = next
+            flash(input)
+          }
+        }
         return
       }
       /* UN-12: every op in the batch reverses together, in the SAME setBook call. */
@@ -1854,7 +1954,7 @@ export function Pricing() {
         touched.current.delete(w.sku)
       }
     },
-    [rows, suggestionFor],
+    [rows, suggestionFor, answerFor],
   )
 
   /* THE NEWEST, AND ONLY THE NEWEST (`U` and the toolbar's own Undo): `docs/specs/undo.md`
@@ -2010,7 +2110,7 @@ export function Pricing() {
               const found = payload.skus[sku]
               next[sku] =
                 found !== undefined
-                  ? { kind: 'read', ranges: found.ranges }
+                  ? { kind: 'read', ranges: found.ranges, at: Math.floor(Date.now() / 1000) }
                   : { kind: 'refused', why: payload.refused[sku] ?? 'No answer for this card.' }
             }
             return next
@@ -2282,7 +2382,8 @@ export function Pricing() {
   const activePreset = PRESETS.find((p) => p.rule === doc?.rule && p.basis === doc?.basis) ?? null
   const standingCustom = activePreset === null ? parseCustomRule(doc?.rule, doc?.basis) : null
   const customOn = pressedCustom || standingCustom !== null
-  const ruleSegment = customOn ? CUSTOM_KEY : (activePreset?.key ?? '')
+  /* THE RULE IN FORCE, FROM THE POLICY ONLY. Pressing Custom opens its inputs and claims nothing. */
+  const ruleSegment = activePreset?.key ?? (standingCustom !== null ? CUSTOM_KEY : '')
   const standingKey = standingCustom === null ? null : `${standingCustom.kind}:${standingCustom.pct}:${standingCustom.basis}`
   useEffect(() => {
     if (standingKey === null || customSeed.current === standingKey) return
@@ -2305,6 +2406,24 @@ export function Pricing() {
     },
     [applyPreset],
   )
+
+  /* ONE REAL CARD PER PRESET, from the whole worklist so a lens never swaps it: its basis price
+     in, the server's own figure out. No arithmetic here. */
+  const examples = useMemo(() => {
+    const out: Record<string, { name: string; from: string; to: string } | null> = {}
+    for (const preset of PRESETS) {
+      out[preset.key] = null
+      for (const row of partitioned) {
+        const from = preset.basis === 'low' ? row.snap.low : row.snap.market
+        const to = row.presets[preset.key]
+        if (row.bucket === 'listable' && from !== null && typeof to === 'string') {
+          out[preset.key] = { name: row.name, from, to }
+          break
+        }
+      }
+    }
+    return out
+  }, [partitioned])
 
   const subCount = subThresholdSkus(rows).length
   const roster = work?.roster ?? []
@@ -2758,6 +2877,7 @@ export function Pricing() {
     >
       <div className="pricing-body" data-live={liveTab ? 'true' : undefined}>
         {bar}
+        <PriceMovers trendsNote={liveTab || saved === null ? null : saved.note} trendsLoading={liveTab || saved === null} />
         {ruleLine}
         {/* UN-11: outlives the toast, and a reload. Gone once a send has carried a cleared
             SKU (`clear_built_on`) — the next read finds no `last_clear`. */}
@@ -2797,7 +2917,7 @@ export function Pricing() {
             />
           )}
           {filtering && drawn.length === 0 ? (
-            <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." />
+            <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." didYouMean={{ name: nearName, onPick: setQuery }} />
           ) : null}
           <div className="pricing-list" data-copies={source.copies ? 'some' : 'none'}>
             <div className="pricing-caption" aria-hidden="true">
@@ -2832,7 +2952,8 @@ export function Pricing() {
                     asking={liveTab ? (askingOf.get(sku.sku) ?? null) : undefined}
                     note={note !== null && note.sku === sku.sku ? note.text : null}
                     readAge={ageWords(source.readAtOf(sku))}
-                    trend={trends[sku.sku]}
+                    trend={trends[sku.sku] ?? (liveTab ? undefined : savedRead(saved, sku.sku))}
+                    kept={liveTab ? undefined : keptStrip(saved, sku.sku)}
                     asked={sendQty[sku.sku] ?? ''}
                     onAsked={(text) => setAsked(sku.sku, text)}
                     holding={holdFor === sku.sku}
@@ -2892,6 +3013,8 @@ export function Pricing() {
         open={ruleOpen}
         onClose={() => setRuleOpen(false)}
         ruleSegment={ruleSegment}
+        ruleName={activePreset?.label ?? (standingCustom !== null ? 'Custom' : 'Not set')}
+        examples={examples}
         onRule={pickRule}
         customOn={customOn}
         customDraft={customDraft}
@@ -2998,6 +3121,7 @@ function PricingRow({
   note,
   readAge,
   trend,
+  kept,
   asked,
   onAsked,
   holding,
@@ -3020,6 +3144,7 @@ function PricingRow({
   note: string | null
   readAge: string | null
   trend: TrendRead | undefined
+  kept?: KeptTrend
   asked: string
   onAsked: (text: string) => void
   holding: boolean
@@ -3134,7 +3259,7 @@ function PricingRow({
         {sku.snap.low === null ? '—' : <Money value={Number(sku.snap.low)} />}
       </span>
       <span className="pricing-col-trend">
-        <TrendCell read={trend} />
+        <TrendCell read={trend} kept={kept} />
       </span>
 
       {!source.copies ? null : (
@@ -3334,6 +3459,8 @@ function RuleSheet({
   open,
   onClose,
   ruleSegment,
+  ruleName,
+  examples,
   onRule,
   customOn,
   customDraft,
@@ -3353,6 +3480,9 @@ function RuleSheet({
   open: boolean
   onClose: () => void
   ruleSegment: string
+  ruleName: string
+  /** What each preset lists one real card at, from the figures the server priced. */
+  examples: Record<string, { name: string; from: string; to: string } | null>
   onRule: (key: string) => void
   customOn: boolean
   customDraft: CustomRule
@@ -3372,64 +3502,104 @@ function RuleSheet({
   const overridden = from === 'run'
   return (
     <Sheet open={open} onClose={onClose} title="Pricing rule" icon="tag">
-      <section className="pricing-sheet-part" aria-labelledby="pricing-rule-head">
-        <h3 className="pricing-sheet-head" id="pricing-rule-head">
-          New cards
-        </h3>
-        <Segmented<string>
-          className="pricing-rule-seg"
-          label="How new cards are priced"
-          value={ruleSegment}
-          options={[...PRESETS.map((preset) => ({ value: preset.key, label: preset.label })), { value: CUSTOM_KEY, label: 'Custom' }]}
-          onChange={onRule}
+      <div className="pricing-sheet">
+      <SettingsFigures title="Overview">
+        <SettingsCensus label="Rule" value={ruleName} />
+        <SettingsCensus
+          label="Cut-off"
+          value={<Money value={Number(cut)} />}
+          help="The cut-off and the floor are one figure: cards worth less list at it, and nothing lists lower."
         />
-        {!customOn ? null : (
-          <div className="pricing-custom" data-bad={customBad === null ? undefined : 'true'}>
-            <Segmented<RuleKind>
-              label="Under or over"
-              value={customDraft.kind}
-              options={[
-                { value: 'undercut', label: KIND_LABEL.undercut },
-                { value: 'markup', label: KIND_LABEL.markup },
-              ]}
-              onChange={(kind) => onCustomDraft({ ...customDraft, kind }, true)}
-            />
-            <label className="pricing-pct">
-              <input
-                className="bn-input pricing-pct-input"
-                type="text"
-                inputMode="decimal"
-                placeholder="0"
-                aria-label="Percentage"
-                aria-invalid={customBad === null ? undefined : true}
-                value={customDraft.pct}
-                onChange={(event) => {
-                  const text = event.currentTarget.value
-                  if (PCT.test(text)) onCustomDraft({ ...customDraft, pct: text }, false)
-                }}
-                onBlur={(event) => onCustomCommit({ ...customDraft, pct: event.currentTarget.value })}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter') return
-                  event.preventDefault()
-                  onCustomCommit({ ...customDraft, pct: event.currentTarget.value })
-                }}
+        <SettingsCensus label="Priced" value={above} help="Cards worth the cut-off or more, which the rule prices." />
+      </SettingsFigures>
+
+      <SettingsGroup title="New cards" note="How a new card is priced">
+        {PRESETS.map((preset) => {
+          const on = ruleSegment === preset.key
+          const example = examples[preset.key]
+          return (
+            <div className="pricing-rule-row" key={preset.key}>
+              <SettingsOp
+                icon={on ? 'check' : 'tag'}
+                label={preset.label}
+                said={on ? `${preset.label}, in force` : preset.label}
+                busy={false}
+                onClick={() => onRule(preset.key)}
               />
-              <span aria-hidden="true">%</span>
-            </label>
-            <Segmented<RuleBasis>
-              label="Which price to work from"
-              value={customDraft.basis}
-              options={[
-                { value: 'market', label: BASIS_LABEL.market },
-                { value: 'low', label: BASIS_LABEL.low },
-              ]}
-              onChange={(basis) => onCustomDraft({ ...customDraft, basis }, true)}
-            />
-          </div>
-        )}
-        {customBad === null ? null : <p className="pricing-sheet-bad">{customBad}</p>}
-        {note === null ? null : <p className="pricing-sheet-bad">{note}</p>}
-      </section>
+              <p className="pricing-rule-says">
+                {preset.says}.
+                {example === null || example === undefined ? null : (
+                  <>
+                    {' '}
+                    {example.name} at <Money value={Number(example.from)} /> lists at <Money value={Number(example.to)} />.
+                  </>
+                )}
+              </p>
+            </div>
+          )
+        })}
+        <div className="pricing-rule-row">
+          <SettingsOp
+            icon={ruleSegment === CUSTOM_KEY ? 'check' : 'pencil'}
+            label="Custom"
+            expanded={customOn}
+            said={ruleSegment === CUSTOM_KEY ? 'Custom, in force' : 'Custom'}
+            busy={false}
+            onClick={() => onRule(CUSTOM_KEY)}
+          />
+          <p className="pricing-rule-says">
+            {customBad === null && badPercent(customDraft.kind, customDraft.pct) === null
+              ? `${customSays(customDraft)}.`
+              : 'Your own percentage, under or over market or the lowest listing.'}
+          </p>
+          {!customOn ? null : (
+            <div className="pricing-custom" data-bad={customBad === null ? undefined : 'true'}>
+              <Segmented<RuleKind>
+                label="Under or over"
+                value={customDraft.kind}
+                options={[
+                  { value: 'undercut', label: KIND_LABEL.undercut },
+                  { value: 'markup', label: KIND_LABEL.markup },
+                ]}
+                onChange={(kind) => onCustomDraft({ ...customDraft, kind }, true)}
+              />
+              <label className="pricing-pct">
+                <input
+                  className="bn-input pricing-pct-input"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0"
+                  aria-label="Percentage"
+                  aria-invalid={customBad === null ? undefined : true}
+                  value={customDraft.pct}
+                  onChange={(event) => {
+                    const text = event.currentTarget.value
+                    if (PCT.test(text)) onCustomDraft({ ...customDraft, pct: text }, false)
+                  }}
+                  onBlur={(event) => onCustomCommit({ ...customDraft, pct: event.currentTarget.value })}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return
+                    event.preventDefault()
+                    onCustomCommit({ ...customDraft, pct: event.currentTarget.value })
+                  }}
+                />
+                <span aria-hidden="true">%</span>
+              </label>
+              <Segmented<RuleBasis>
+                label="Which price to work from"
+                value={customDraft.basis}
+                options={[
+                  { value: 'market', label: BASIS_LABEL.market },
+                  { value: 'low', label: BASIS_LABEL.low },
+                ]}
+                onChange={(basis) => onCustomDraft({ ...customDraft, basis }, true)}
+              />
+            </div>
+          )}
+        </div>
+      </SettingsGroup>
+      {customBad === null ? null : <p className="pricing-sheet-bad">{customBad}</p>}
+      {note === null ? null : <p className="pricing-sheet-bad">{note}</p>}
 
       <section className="pricing-sheet-part" aria-labelledby="pricing-cut-head">
         <h3 className="pricing-sheet-head" id="pricing-cut-head">
@@ -3468,6 +3638,7 @@ function RuleSheet({
           </p>
         )}
       </section>
+      </div>
     </Sheet>
   )
 }

@@ -24,6 +24,16 @@ file of the session that broke rank 19's rule four days after writing it — is 
 *"phrased as an explanation to recall rather than a prohibition to trip over"* will be recalled
 exactly when it is not needed.
 
+### Amended on the owner's word: what Claude Code runs
+
+Claude Code runs `GUARD_SHELL_SKIP=checkout,stash,reset scripts/guard-shell.py --hook`. The shared layer's
+guard (`claude-settings` `hooks/guard.py`, rule 1, shared-tree) owns clauses 1, 7 and 8 there:
+it refuses a checkout or restore over a modified path, a stash that takes another tree's entry,
+and a hard reset over uncommitted work, each judged against the state of its subject. The
+Claude-side copy was cut so one refusal speaks once. `.codex/hooks.json` runs all seven,
+because Codex runs no shared guard (D135). `GUARD_SHELL_SKIP` (and its alias `--skip`) names clauses by their table name
+and an unknown name skips nothing. Clauses 3 and 4 are gone for both tools.
+
 ### The five, and what each cost
 
 **1. `git checkout <path>` / `git restore <path>` over a modified file.** 2026-09-06: three
@@ -41,17 +51,8 @@ symptom was silent and read as a different bug: the worktree's own dev server we
 the worktree's unedited `app/`. This is D43's subject — every checkout has its own store, its
 own ports, its own inventory — with the one door D43 did not close.
 
-**3. `gh api -f k=v` with no method.** 2026-09-12: a field implies a body, so gh sends POST. The
-call hung past a 120s tool timeout and left a background process to reap, *"which reads as a
-network problem rather than as a malformed request"* — and it was hit while building the
-SHA-pinned merge wait, so the malformed request blocked a fix.
-
-**4. `ln -s` at a path that already exists.** 2026-08-29:
-`ln -s <main>/harness/images harness/images` over an existing directory nested a second
-`images` link INSIDE it instead of failing. Copying that back landed a symlink loop,
-`Path.mkdir(exist_ok=True)` raised `FileExistsError`, T1 died naming only the symptom, and
-iCloud renamed the real 133 MB directory — the largest thing in this tree, with no backup
-anywhere — to `images 2`, empty.
+**3 and 4 are retired.** `gh api -f k=v` with no method (a field implies a body, so gh sends POST)
+and `ln -s` at a path that already exists were removed on the owner's word, with their hatches. The numbers stay as stable ids and nothing renumbers.
 
 **5. A polling loop.** 2026-09-12, twice in one day. A session that had read the rule four days
 earlier wrote `until ! pgrep -f 'scratchpad/drive.sh'`; the loop never went false, its chained
@@ -72,12 +73,12 @@ anybody's to find.
 ### The predicate is resolution, and that is the whole design
 
 `git checkout main` and `git checkout CLAUDE.md` are the same verb; the first is a branch and
-the second destroys work. `ln -s a b` is right on Monday and wrong on Tuesday. A backgrounded
+the second destroys work. A backgrounded
 script's loop is not in the command at all — it is in the file.
 **So the guard asks the system, read-only, exactly as `scripts/reap.py:hook` does for a kill:**
 `git status --porcelain` decides
 whether an operand is a modified path, `git rev-parse --verify` decides whether it is a commit,
-`os.path.lexists` decides whether a link destination is there, and the shell script a
+and the shell script a
 backgrounded command names is READ. `reap.py`'s standard is that `pkill -f capture_server.py` is
 allowed when the only match is yours; the same standard here is that `git checkout main` is
 allowed because `main` is not a file.
@@ -99,14 +100,12 @@ path nor a commit says so; a checkout root it could not resolve says so. A guard
 distinguish "nothing to object to" from "I could not read this" is D171's own failure class
 wearing a guard's clothes.
 
-### Five hatches, not one
+### Five hatches, not one, and none is printed to an agent
 
-`PKMNSCAN_CHECKOUT`, `PKMNSCAN_TREE`, `PKMNSCAN_GH`, `PKMNSCAN_LINK`, `PKMNSCAN_WAIT` — each
-`=off`, each honoured in the environment and inline, each printed in its own refusal and
-nowhere else. **One switch for the whole hook would mean disarming the clause that guards uncommitted work in order to make a symlink**, and a hatch reached for by reflex is a guard
+`PKMNSCAN_CHECKOUT`, `PKMNSCAN_TREE`, `PKMNSCAN_WAIT` and the later clauses' hatches — each
+`=off`, each honoured in the environment, and each the owner's to set. The owner's word: a refusal never prints a blocked switch's name to an agent. It prints "owner-only: ask the owner to run this command". `clause_owner_only` refuses an agent's tool call that sets any real `PKMNSCAN_*=off`, read by `_hatches_set`, so a mention passes. Four recovery levers stay open to an agent because each frees a stuck session: `PKMNSCAN_KILL`, `PKMNSCAN_SUITE_LOCK`, `PKMNSCAN_SERVE_MAIN` and `PKMNSCAN_SYNC`, and they keep their printed names. The owner's terminal and CI are not tool calls, so the clause never sees them. The clause lives in `hook`, not in `read_command`. The self-test's older cases call `hook(payload, owner_only=False)`, and only its owner-only cases go through `--hook`. There is no switch for it. **Known residual:** a Write of a script, then `bash script.sh`, sets a switch that no stage of any Bash command shows. The clause cannot see it. **One switch for the whole hook would mean disarming the clause that guards uncommitted work in order to make a symlink**, and a hatch reached for by reflex is a guard
 already gone. The recovery the 2026-09-06 incident actually needed — `git checkout --` in the
-main tree, to unwind writes that had landed there — is one hatch away and is named in the
-refusal.
+main tree, to unwind writes that had landed there — is one hatch away, and the owner holds it.
 
 ### The parser is shared, because it already existed
 
@@ -368,7 +367,7 @@ already sees every Bash command, so it is the one home.
 A command can set any `PKMNSCAN_<NAME>=off`: an env prefix, `export`, or `env`. The hook reads
 that from the parsed stages, so a mention in an argument, a comment or a heredoc is not a use.
 `_off` reads the same parsed set, so a hatch counts only as a real assignment. Every hatch a
-command sets is logged, and a mention never lifts. A hatch set in the environment is not logged
+command sets is logged, and a mention never lifts. The three scope switches take `=all`, not `=off`: they only add checks, so they are not hatches and the log never counts them. A hatch set in the environment is not logged
 here; `make status` names it under `hatches`. The hook appends one
 line per name to `pkmnscan-hatches.log` in `git rev-parse --git-common-dir`. Every worktree of the
 clone shares that file. A line holds the time, the hatch, the checkout, the branch and the first
@@ -384,9 +383,23 @@ printed remedy never names the forbidden target). A push that names the branch's
 destination lands on that name, so the clause allows it. `HEAD` stays refused when the upstream is
 a different non-default branch.
 
+### Every refusal is logged, so a rule is judged by how often it fires
+
+**The owner's ruling: log every deny or ask.** `scripts/refusal_log.py` is the one helper. Each
+guard imports it, and the shell hooks call its CLI. It appends one line per refusal to
+`pkmnscan-refusals.log`, beside the hatch log. A line holds the time, `guard:rule` (one stable id
+per clause), a snippet of at most 80 characters (a heading, a path or a masked verdict, never a
+whole command), the session id and the checkout. The guards that write it are `guard-shell.py`,
+`reap.py --hook`, `silent-write-guard.py`, `guard-opsec.sh` and the three hooks in
+`scripts/githooks/` that refuse. One `O_APPEND` write per line keeps concurrent agents apart.
+The log is LOG ONLY and fails open: a log that cannot be written never changes a verdict or an
+output. `PKMNSCAN_REFUSAL_LOG` names a file instead of the common-dir default, which is how each
+self-test points the log at a fixture and at an unwritable path. `make status` prints the last 24
+hours per rule on one line, beside the hatch lines.
+
 ### Standing
 
-**BUILT and self-tested**: six clauses, `scripts/guard-shell-selftest.sh` with five
+**BUILT and self-tested**: seven clauses, `scripts/guard-shell-selftest.sh` with four
 reproductions, the swept allow list, every hatch in both forms, and the fail-open floor.
 **RECORDED**: this entry, `docs/map.py`, CLAUDE.md, `scripts/checks.py` and both hook rosters.
 **NEITHER**: nothing. What is unproven is what every hook here shares and

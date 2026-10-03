@@ -47,8 +47,9 @@
  * NOT reach.
  */
 
-import { filterByQuery } from './kit/match'
+import { didYouMean, filterByQuery } from './kit/match'
 import { ServerError } from './server'
+import type { GraveyardPayload } from './types'
 
 type Recorded = { status: number; body: unknown }
 type Dict = Record<string, unknown>
@@ -671,7 +672,8 @@ function search(query: string): unknown {
       return { box: Number(place.box ?? 0), name: (place.box_name as string | null) ?? null }
     }),
   }))
-  return { query, groups: matched }
+  const near = matched.length === 0 ? didYouMean(query, rows.flatMap((group) => (group.names as string[]) ?? [])) : null
+  return { query, groups: matched, ...(near === null ? {} : { did_you_mean: near }) }
 }
 
 /** `POST /inventory/copies` — every on-hand copy of the named SKUs, merged per SKU. */
@@ -787,6 +789,15 @@ function read(path: string): unknown {
   if (route === '/pipeline/price-now') return priceNow(params.getAll('sku').filter((s) => s !== ''))
   if (route === '/skus/photos') return skuPhotos(params.getAll('sku').filter((s) => s !== ''))
   if (route === '/search') return search(params.get('q') ?? '')
+  /* A seller's sales are private (DEBT70), so no bundle holds them: the answer the real server
+   * gives with no sales export, for any SKU. The screen words it as a sentence. */
+  const realized = /^\/pipeline\/products\/([^/]+)\/realized$/.exec(route)
+  if (realized !== null) return { sku: decodeURIComponent(realized[1] ?? ''), configured: false }
+  /* THE BURIED HALF OF THE ONE RECORDED GRAVEYARD, filtered as the route filters it. */
+  const graveyard = responses['/graveyard']
+  if (route === '/graveyard' && params.get('buried') === '1' && graveyard !== undefined) {
+    return { departed: (graveyard.body as GraveyardPayload).departed.filter((row) => row.buried) }
+  }
   notRecorded()
 }
 

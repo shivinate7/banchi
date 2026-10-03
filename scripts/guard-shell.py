@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""Refuse nine shell mistakes this repo has already made and paid for.
+"""Refuse seven shell mistakes this repo has already made and paid for.
 
 EVERY CLAUSE HERE HAS AN INCIDENT BEHIND IT, and not one of them was a lapse of care: each
 was a rule somebody had already written down, in a memory file or in CLAUDE.md, and then
 broken by a session that had read it. That is not a reason to write the rule again; it is
 what D171 rules a rule IS. A rule is read once, at the start, and then competes with the
-work. So these nine are mechanical.
+work. So these seven are mechanical. Their numbers are stable ids: 3 (`gh api -f`) and 4
+(`ln -s` over a path) are retired on the owner's word, and nothing renumbers.
+
+CLAUDE CODE RUNS THIS WITH `GUARD_SHELL_SKIP=checkout,stash,reset` (`--skip` is an alias). The shared layer's guard
+(`claude-settings/hooks/guard.py`, rule 1, shared-tree) owns clauses 1, 7 and 8 there, so the
+Claude-side copy is cut on the owner's word. Codex runs no shared guard and runs all seven.
 
     1. `git checkout <path>` / `git restore <path>` over a file with uncommitted changes
        2026-09-06: three mutation cases used `sed -i.bak` and the fourth used
@@ -18,18 +23,6 @@ work. So these nine are mechanical.
        checkout, on `main`, for most of a session — and `make launch-agent`'s supervisor
        hot-reloaded that uncommitted branch code into their live `:8000` capture server
        repeatedly while they were using the app over their real store.
-
-    3. `gh api -f k=v` with no method
-       2026-09-12: a field implies a BODY, so gh sends POST. The call hung past a 120s tool
-       timeout and left a background process to reap, "which reads as a network problem
-       rather than as a malformed request."
-
-    4. `ln -s` at a path that already exists
-       2026-08-29: `ln -s <main>/harness/images harness/images` over an existing directory
-       made `harness/images/images` instead of failing. A copy brought the loop back,
-       `Path.mkdir(exist_ok=True)` raised FileExistsError, T1 died naming only the symptom,
-       and iCloud renamed the real 133 MB directory — the largest thing in this tree with no
-       backup anywhere — to `images 2`, empty.
 
     5. A polling loop
        2026-09-12, twice. A session that had read the rule four days earlier wrote
@@ -94,16 +87,15 @@ THE STANDARD IS `scripts/reap.py:hook`'S AND IT IS NOT NEGOTIABLE HERE EITHER:
                                 missing `git`: exit 0 and refuse nothing
     an unreadable TARGET fails CLOSED — but only where "unreadable" is this file being right
                                 that it does not know AND the harm is unrecoverable, which is
-                                true of none of these nine: each of the first eight RESOLVES
-                                its subject and the ninth names a roster of two, and a subject
+                                true of none of these seven: six of them RESOLVE
+                                their subject and clause 9 names a roster of two, and a subject
                                 a clause cannot resolve is a command it has no opinion about
 
 RESOLUTION, NEVER SPELLING, wherever the question has a real answer. `git checkout main` and
 `git checkout CLAUDE.md` are the same six characters of verb: the first is a branch and the
-second destroys work, and only the filesystem and `git status` can say which. `ln -s a b` is
-right on Monday and wrong on Tuesday depending on whether `b` exists. `git push origin HEAD`
+second destroys work, and only the filesystem and `git status` can say which. `git push origin HEAD`
 is right when the upstream is named the same and wrong when it is not, and only
-`branch.<name>.merge` can say which. That is reap.py's whole argument, applied to five more
+`branch.<name>.merge` can say which. That is reap.py's whole argument, applied to four more
 commands — and clause 9, which cannot be resolved that way, argues its own roster instead of
 pretending otherwise.
 
@@ -113,10 +105,10 @@ purpose, every legitimate shape this repo actually types is pinned as PASSING in
 `scripts/guard-shell-selftest.sh`, and each is RUN there before it is scored, because a case
 that is secretly a typo passes for the wrong reason.
 
-NINE CLAUSES, NINE HATCHES, AND THAT IS DELIBERATE. One switch for the whole hook would mean
-disarming the destructive-checkout clause in order to make a symlink, which is how a guard
+SEVEN CLAUSES, SEVEN HATCHES, AND THAT IS DELIBERATE. One switch for the whole hook would mean
+disarming the destructive-checkout clause in order to push once, which is how a guard
 stops being one. Each refusal prints only its own, each is honoured in the environment and
-inline, and all nine are documented in CLAUDE.md (`make docs-audit`'s `env names` row refuses
+inline, and all seven are documented in CLAUDE.md (`make docs-audit`'s `env names` row refuses
 a variable the code reads and no markdown names).
 
     scripts/guard-shell.py --hook            the PreToolUse hook. Payload on stdin.
@@ -150,6 +142,10 @@ try:
     import shell_parse
 except Exception:                                             # noqa: BLE001 — fail open
     shell_parse = None                                        # type: ignore[assignment]
+try:
+    import refusal_log                                        # the one refusal log
+except Exception:                                             # noqa: BLE001 — fail open
+    refusal_log = None                                        # type: ignore[assignment]
 
 
 # ----------------------------------------------------------------------------- the clauses
@@ -170,10 +166,6 @@ CLAUSES = (
     Clause("tree", "PKMNSCAN_TREE",
            "never write outside the checkout this session is standing in, and never `cd` "
            "into another one"),
-    Clause("gh", "PKMNSCAN_GH",
-           "never pass -f/-F to `gh api` without naming the method"),
-    Clause("link", "PKMNSCAN_LINK",
-           "use `ln -sfn`, or test the path is absent, when linking"),
     Clause("wait", "PKMNSCAN_WAIT",
            "never poll in a loop — background the work and take its notification"),
     Clause("push", "PKMNSCAN_PUSH",
@@ -204,8 +196,14 @@ class Verdict(NamedTuple):
     notes: List[str]        # printed, exit 0 — what this file looked at and could not read
 
 
+#: Clauses the caller left to another guard (`GUARD_SHELL_SKIP`, or `--skip`). Set once, by `main`, for one hook run.
+SKIPPED: Set[str] = set()
+
+
 def _off(clause: str, command: str) -> bool:
-    """Whether this clause's hatch is set, in either of `PKMNSCAN_KILL`'s two forms."""
+    """Whether this clause is skipped, or its hatch is set, in either of `PKMNSCAN_KILL`'s forms."""
+    if clause in SKIPPED:
+        return True
     name = HATCH[clause]
     return os.environ.get(name) == "off" or name in _hatches_set(command)
 
@@ -219,28 +217,91 @@ def _off(clause: str, command: str) -> bool:
 # `recent_hatch_uses`. LOG ONLY: no verdict reads it, and any error here is swallowed.
 
 HATCH_LOG = "pkmnscan-hatches.log"
-_HATCH_TOKEN = re.compile(r"^(PKMNSCAN_[A-Z0-9_]+)=off$")
+# `$V=off` (a variable naming the switch) counts as a setting too: the name is unknowable here.
+_HATCH_TOKEN = re.compile(r"^(?:(PKMNSCAN_[A-Z0-9_]+)|\$\{?[A-Za-z_][A-Za-z0-9_]*\}?)=\$?off$")
+UNRESOLVED = "PKMNSCAN_(unresolved)"
+
+# Words that run or carry another command, so the assignment after them reaches that command's
+# environment: the wrappers shell_parse already knows, plus the ones that SET one.
+_CARRIERS = set(shell_parse.COMMAND_WRAPPERS if shell_parse else ()) | {
+    "declare", "typeset", "export", "local", "readonly"}
+_KEYWORDS = set(shell_parse.LOOP_KEYWORDS if shell_parse else ())
+_MAKES = {"make", "gmake"}
+_HEREDOC_BODY = re.compile(
+    r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n(.*?)\n[ \t]*\2[ \t]*(?:\n|$)", re.S)
+_SUBSTITUTION = re.compile(r"`([^`]*)`|\$\(([^()]*)\)")
 
 
-@lru_cache(maxsize=16)
+def _named(match: "re.Match[str]") -> str:
+    return match.group(1) or UNRESOLVED
+
+
+def _scan_stage(argv: Sequence[str]) -> Set[str]:
+    """Names set by one simple command: its prefix region, an `eval` string, `env -S`, and a
+    `make` command line (make exports command-line variables to its recipes)."""
+    names: Set[str] = set()
+    after_flag = False
+    index = 0
+    while index < len(argv):
+        token = argv[index].lstrip("({")
+        index += 1
+        if not token:
+            continue
+        found = _HATCH_TOKEN.match(token)
+        if found:
+            names.add(_named(found))
+            after_flag = False
+            continue
+        base = shell_parse._basename(token)
+        if base == "eval":
+            names |= set(_hatches_set(" ".join(argv[index:])))
+            return names
+        if base in _MAKES:
+            for word in argv[index:]:
+                hit = _HATCH_TOKEN.match(word)
+                if hit:
+                    names.add(_named(hit))
+            return names
+        if token in ("-S", "--split-string") and index < len(argv):
+            names |= set(_hatches_set(argv[index]))
+            index += 1
+            continue
+        if token.startswith("-"):
+            after_flag = True              # may take a value: `env -u F`, `sudo -u root`
+            continue
+        if base in _CARRIERS or token in _KEYWORDS or shell_parse.ASSIGNMENT.match(token):
+            after_flag = False
+            continue
+        if after_flag:                     # a flag's value, not the command
+            after_flag = False
+            continue
+        break
+    return names
+
+
+@lru_cache(maxsize=64)
 def _hatches_set(command: str) -> Tuple[str, ...]:
     """Hatch names a command REALLY sets, read from the parsed stages, never from raw text.
 
-    A real setting is an env prefix (`X=off cmd`), `export X=off`, or `env X=off cmd`. A
-    mention inside an argument, a comment, a heredoc body or a quoted string is not one.
+    A real setting is an assignment in a stage's prefix region (`X=off cmd`, `export X=off`,
+    `env -u F X=off`, `sudo`/`nohup`/`time`/`declare -x` ahead of it, inside `{ }`, `if`,
+    `while`), an `eval` string, `env -S`, backticks or `$( )`, the body of a heredoc piped to
+    a shell, or a `make` command-line variable. A mention inside an argument, a comment, a
+    heredoc body fed to a non-shell or a quoted string is not one.
     """
     if shell_parse is None or not command:
         return ()
     names: Set[str] = set()
-    for stage in shell_parse.read(command).every:
-        for token in stage.argv:
-            found = _HATCH_TOKEN.match(token)
-            if found:
-                names.add(found.group(1))
-            elif token in ("export", "env") or token.startswith("-") or shell_parse.ASSIGNMENT.match(token):
-                continue
-            else:
-                break
+    reading = shell_parse.read(command)
+    for stage in reading.every:
+        names |= _scan_stage(stage.argv)
+    for found in _SUBSTITUTION.finditer(command):
+        names |= set(_hatches_set(found.group(1) or found.group(2) or ""))
+    if "<<" in command and any(
+            (words := shell_parse.strip_prefixes(stage.argv)) and
+            shell_parse._basename(words[0]) in shell_parse.SHELLS for stage in reading.every):
+        for body in _HEREDOC_BODY.finditer(command):
+            names |= set(_hatches_set(body.group(3)))
     return tuple(sorted(names))
 
 
@@ -821,163 +882,6 @@ def clause_tree_write(file_path: str, cwd: str, root: str) -> Verdict:
     return Verdict([_tree_refusal(verdict[0], root, file_path)], [])
 
 
-# ------------------------------------------------------------------- 3. `gh api` with a field
-
-_FIELD_FLAGS = {"-f", "-F", "--field", "--raw-field"}
-_METHOD_FLAGS = {"-X", "--method"}
-
-
-def clause_gh(reading: "shell_parse.Reading") -> Verdict:
-    refusals: List[Refusal] = []
-    for placed in reading.placed:
-        argv = shell_parse.strip_prefixes(placed.stage.argv)
-        if not argv or not (argv[0] == "gh" or argv[0].endswith("/gh")):
-            continue
-        if argv[1:2] != ["api"]:
-            continue
-        rest = argv[2:]
-        fields: List[str] = []
-        endpoint = ""
-        has_method = False
-        index = 0
-        while index < len(rest):
-            token = rest[index]
-            index += 1
-            if token in _METHOD_FLAGS or any(token.startswith(f + "=") for f in _METHOD_FLAGS):
-                has_method = True
-                if "=" not in token and index < len(rest):
-                    index += 1
-                continue
-            if token.startswith("-X") and len(token) > 2:
-                has_method = True
-                continue
-            if token in _FIELD_FLAGS:
-                if index < len(rest):
-                    fields.append(rest[index])
-                    index += 1
-                continue
-            if any(token.startswith(flag + "=") for flag in ("--field", "--raw-field")):
-                fields.append(token.split("=", 1)[1])
-                continue
-            if re.match(r"^-[fF].+", token) and not token.startswith("--"):
-                fields.append(token[2:])
-                continue
-            if token.startswith("-"):
-                # Another gh flag. `--paginate`, `--jq`, `--cache`, `-H` and friends: `-H`
-                # and `--hostname` take a value, and stepping over a value that is really the
-                # endpoint would lose the endpoint — which costs a less specific refusal and
-                # never a wrong verdict.
-                if token in ("-H", "--header", "--hostname", "--jq", "-q", "--template",
-                             "-t", "--cache", "--input", "--slurp"):
-                    index += 1
-                continue
-            if not endpoint:
-                endpoint = token
-        if has_method or not fields:
-            continue
-        if endpoint == "graphql":
-            continue                       # a POST by design, and it carries no --method
-        query = "&".join(fields)
-        joined = endpoint + ("&" if "?" in endpoint else "?") + query if endpoint else query
-        refusals.append(Refusal("gh", [
-            "  {0}".format(shell_parse.short(placed.stage.text)),
-            "      {0} gives this request a BODY, and gh sends a body with POST.".format(
-                ", ".join("`{0}`".format(f) for f in fields)),
-            "      No method is named, so the method is not the GET you meant.",
-            "",
-            "  A GET's parameters belong in the query string:",
-            "      gh api '{0}'".format(joined),
-            "  or name the method, if the body is what you wanted:",
-            "      gh api --method GET {0} {1}".format(
-                endpoint or "<endpoint>", " ".join("-f " + f for f in fields)),
-            "",
-            "  On 2026-09-12 the first form hung past a 120s tool timeout and left a "
-            "background",
-            "  process to reap, which reads as a network problem rather than as a malformed",
-            "  request. It was hit while building the SHA-pinned merge wait, so it blocked a "
-            "fix.",
-        ], "BLOCKED: `gh api` with a field and no method is a POST."))
-    return Verdict(refusals, [])
-
-
-# ------------------------------------------------------------------ 4. `ln -s` over a path
-
-def clause_link(reading: "shell_parse.Reading", cwd: str) -> Verdict:
-    refusals: List[Refusal] = []
-    for placed in reading.placed:
-        argv = shell_parse.strip_prefixes(placed.stage.argv)
-        if not argv or not (argv[0] == "ln" or argv[0].endswith("/ln")):
-            continue
-        symbolic = safe = False
-        operands: List[str] = []
-        for token in argv[1:]:
-            if token.startswith("--"):
-                if token == "--symbolic":
-                    symbolic = True
-                elif token in ("--force", "--no-dereference", "--interactive",
-                               "--no-target-directory", "--backup"):
-                    safe = True
-                continue
-            if token.startswith("-") and len(token) > 1:
-                letters = set(token[1:])
-                symbolic = symbolic or "s" in letters
-                # `-f` replaces, `-n`/`-h` refuses to descend into a link to a directory, and
-                # `-i` asks. Each of those is the caller saying what should happen to a path
-                # that is already there, which is the whole ask of this clause.
-                safe = safe or bool(letters & {"f", "n", "h", "i"})
-                continue
-            operands.append(token)
-        if not symbolic or safe or not operands:
-            continue
-        if len(operands) == 1:
-            pairs = [(operands[0], os.path.basename(operands[0].rstrip("/")))]
-        elif len(operands) == 2:
-            pairs = [(operands[0], operands[1])]
-        else:
-            directory = operands[-1]
-            pairs = [(src, os.path.join(directory, os.path.basename(src.rstrip("/"))))
-                     for src in operands[:-1]]
-        for source, dest in pairs:
-            if "$" in dest or "*" in dest:
-                continue                   # unexpanded by this parse; no honest answer
-            full = dest if os.path.isabs(dest) else os.path.join(cwd, dest)
-            if not os.path.lexists(full):
-                continue
-            nested = ""
-            if os.path.isdir(full) and not os.path.islink(full):
-                nested = os.path.join(dest, os.path.basename(source.rstrip("/")))
-            refusals.append(Refusal("link", [
-                "  {0}".format(shell_parse.short(placed.stage.text)),
-                "      `{0}` already exists.".format(dest),
-            ] + ([
-                "      It is a DIRECTORY, so ln does not fail — it creates `{0}` inside it, "
-                "pointing".format(nested),
-                "      at `{0}`. That is the 2026-08-29 incident exactly.".format(source),
-            ] if nested else [
-                "      ln will refuse it, or replace something you did not mean to replace.",
-            ]) + [
-                "",
-                "  On 2026-08-29 `ln -s <main>/harness/images harness/images` over an "
-                "existing",
-                "  directory made `harness/images/images`. A copy brought the loop back, "
-                "`Path.mkdir(",
-                "  exist_ok=True)` raised FileExistsError, T1 died naming only the symptom, "
-                "and iCloud",
-                "  renamed the real 133 MB directory — the largest thing in this tree with no "
-                "backup",
-                "  anywhere — to `images 2`, empty.",
-                "",
-                "  Say which one you mean:",
-                "      ln -sfn {0} {1}      # replace the link; never descend into it".format(
-                    source, dest),
-                "      [ -e {0} ] || ln -s {1} {0}".format(dest, source),
-                "  `scripts/worktree-provision.sh` takes the second form, which is why "
-                "`make worktree-setup`",
-                "  has never reproduced this.",
-            ], "BLOCKED: `ln -s` at a path that already exists."))
-    return Verdict(refusals, [])
-
-
 # ------------------------------------------------------------------------ 5. a polling loop
 
 _PATTERN_POLLERS = {"pgrep", "pkill", "lsof"}
@@ -1237,8 +1141,8 @@ def _push_operands(rest: Sequence[str]) -> Tuple[str, List[str], bool]:
 
     `special` marks a flag that pushes something other than "this branch under its own
     name" — `--all`, `--mirror`, `--tags`, `-d`/`--delete` — which is a different operation
-    this clause has no opinion about. AN UNKNOWN FLAG IS STEPPED OVER, the fail-open reading
-    `clause_gh` already takes for `gh api`'s own long tail of flags: the worst outcome is a
+    this clause has no opinion about. AN UNKNOWN FLAG IS STEPPED OVER, the fail-open reading:
+    the worst outcome is a
     push this clause says nothing about, never a wrong verdict.
     """
     remote = ""
@@ -1298,8 +1202,8 @@ def _default_branch(remote: str, cwd: str) -> str:
     `origin`'s. A throwaway repo that has never had that symbolic ref written (this guard's
     own selftest fixture, most `git init`-then-`push` clones) falls back to the same rule
     the claude-settings sweep uses for the primary checkout: the first of
-    `main`, `master` that exists as a local branch. Nothing here is a guess dressed as a
-    read — an unreadable remote and an absent local branch both return "", and the caller
+    `main`, `master` that exists as a local branch. Nothing here is a guess dressed as
+    a read — an unreadable remote and an absent local branch both return "", and the caller
     treats that exactly like the pre-2026-09-13 code did: no exemption, still refused.
     """
     ok, out = _run(["git", "symbolic-ref", "--quiet", "--short",
@@ -1797,6 +1701,27 @@ def clause_narrate(reading: "shell_parse.Reading") -> Verdict:
 
 # ------------------------------------------------------------------------------ the verdict
 
+#: THE RECOVERY LEVERS: the hatches an agent may still set, because each one frees a stuck
+#: session (a wedged process, a held lock, a main that will not sync). Every other
+#: `PKMNSCAN_*=off` is the owner's to set, from the owner's terminal, never from a tool call.
+RECOVERY_LEVERS = frozenset({"PKMNSCAN_KILL", "PKMNSCAN_SUITE_LOCK", "PKMNSCAN_SERVE_MAIN",
+                             "PKMNSCAN_SYNC"})
+OWNER_ONLY = "owner-only: ask the owner to run this command"
+
+
+def clause_owner_only(command: str) -> Verdict:
+    """Refuse a REAL `PKMNSCAN_*=off` in an agent's command, naming no switch (owner's word).
+
+    Read by `_hatches_set`, so a mention is not a setting. A tool call is the only thing this
+    sees: the owner's terminal, CI and the self-tests (subprocesses, not tool calls) pass.
+    """
+    blocked = [name for name in _hatches_set(command) if name not in RECOVERY_LEVERS]
+    if not blocked:
+        return Verdict([], [])
+    return Verdict([Refusal("owner-only", ["  This command switches a guard off. " + OWNER_ONLY + "."],
+                            "REFUSED: a guard switch is the owner's to set.")], [])
+
+
 def read_command(command: str, cwd: str, backgrounded: bool = False) -> Verdict:
     """Every refusal this command earns, and every note about what could not be read.
 
@@ -1812,7 +1737,7 @@ def read_command(command: str, cwd: str, backgrounded: bool = False) -> Verdict:
     # and let the four-hour runaway through. Measured as a failing case in the self-test
     # before this line existed.
     if not detached(command, backgrounded) and not any(word in command for word in
-                                ("git", "gh ", "ln ", "tee", "while", "until", ">", "cd",
+                                ("git", "tee", "while", "until", ">", "cd",
                                  "merge")):
         return Verdict([], [])
 
@@ -1826,8 +1751,6 @@ def read_command(command: str, cwd: str, backgrounded: bool = False) -> Verdict:
     for clause, verdict in (
         ("checkout", lambda: clause_checkout(reading, cwd)),
         ("tree", lambda: clause_tree_bash(reading, cwd, root)),
-        ("gh", lambda: clause_gh(reading)),
-        ("link", lambda: clause_link(reading, cwd)),
         ("wait", lambda: clause_wait(reading, command, cwd, backgrounded)),
         ("push", lambda: clause_push(reading, cwd)),
         ("stash", lambda: clause_stash(reading, cwd)),
@@ -1856,11 +1779,12 @@ def render(refusals: Sequence[Refusal]) -> str:
         lines.append(refusal.heading)
         lines.extend(refusal.lines)
         lines.append("")
-        lines.append("  {0}=off runs the command anyway.".format(HATCH[refusal.clause]))
+        if refusal.clause != "owner-only":
+            lines.append("  Bypass: owner-only: ask the owner to run this command.")
     return "\n".join(lines)
 
 
-def hook(payload: dict) -> int:
+def hook(payload: dict, owner_only: bool = True) -> int:
     """The PreToolUse hook. Exit 2 blocks the call and hands stderr to the session.
 
     IT FAILS OPEN ON ITS OWN BUGS. `reap.py:hook`'s docstring is the contract and it is not
@@ -1874,7 +1798,11 @@ def hook(payload: dict) -> int:
     command = str(tool_input.get("command") or "")
     if command:
         log_hatches(command, cwd)
-        verdict = read_command(command, cwd, bool(tool_input.get("run_in_background")))
+        # THE OWNER-ONLY CLAUSE IS THE HOOK'S, NOT `read_command`'s: it judges who is typing.
+        # `owner_only=False` is for the self-test's older cases, which judge the other clauses.
+        verdict = clause_owner_only(command) if owner_only else Verdict([], [])
+        if not verdict.refusals:
+            verdict = read_command(command, cwd, bool(tool_input.get("run_in_background")))
     else:
         target = str(tool_input.get("file_path") or tool_input.get("notebook_path") or "")
         if not target:
@@ -1882,6 +1810,11 @@ def hook(payload: dict) -> int:
         verdict = read_write(target, cwd)
     if verdict.refusals:
         print(render(verdict.refusals), file=sys.stderr)
+        sys.stderr.flush()               # the refusal is out before any log work
+        for refusal in verdict.refusals:
+            if refusal_log:
+                refusal_log.log("guard-shell", refusal.clause, refusal.heading,
+                                str(payload.get("session_id") or ""), cwd)
         return 2
     for note in verdict.notes:
         print("guard-shell: {0}".format(note), file=sys.stderr)
@@ -1903,10 +1836,12 @@ def explain(command: str, write: str, cwd: str) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="guard-shell",
-        description="Refuse nine shell mistakes this repo has already paid for.",
+        description="Refuse seven shell mistakes this repo has already paid for.",
     )
     parser.add_argument("--hook", action="store_true",
                         help="run as a PreToolUse hook; reads the payload on stdin")
+    parser.add_argument("--skip", metavar="NAMES", default="",
+                        help="comma-separated clause names another guard owns; not run")
     parser.add_argument("--explain", metavar="CMD", default="",
                         help="the verdict for one command, and why")
     parser.add_argument("--explain-write", metavar="PATH", default="",
@@ -1917,11 +1852,21 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    args = build_parser().parse_args(list(argv) if argv is not None else None)
+    args, unknown = build_parser().parse_known_args(list(argv) if argv is not None else None)
+    if unknown:
+        if not args.hook:
+            build_parser().error("unrecognized arguments: " + " ".join(unknown))
+        # A hook's flags come from the session's settings, its script from this branch: an older copy
+        # must ignore a newer flag, never block the tool call (docs/agent-traps.md).
+        print("warning: hook ignores unknown flags: " + " ".join(unknown), file=sys.stderr)
     if args.clauses:
         for clause in CLAUSES:
             print("{0:<10} {1:<22} {2}".format(clause.name, clause.hatch + "=off", clause.rule))
         return 0
+    # GUARD_SHELL_SKIP is the hook option's home: an environment variable, so a copy that does not
+    # know it ignores it. `--skip` stays as an alias for branches that already pass it.
+    skip = os.environ.get("GUARD_SHELL_SKIP", "") + "," + args.skip
+    SKIPPED.update(name for name in skip.split(",") if name in HATCH)
     if args.hook:
         try:
             payload = json.loads(sys.stdin.read() or "{}")

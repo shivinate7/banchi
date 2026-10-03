@@ -58,3 +58,13 @@ only and carries no sealed row at all.
 Stock images cache in the archive's market-cache directory; no second cache.
 
 `PKMNSCAN_STOCK_IMAGES_SYNC` is set only by `scripts/demo-record.py`. It makes `warm_stock_images()` join its threads before the server accepts requests, so the recorder's first read is warm. The live server stays fire-and-forget.
+
+**Amended, on the owner's word: one exception, a fingerprint read.** The stock-photo matcher
+(`docs/specs/identify-engine-pick.md`, D2) needs one fingerprint for each stock image.
+The server reads the bytes of each image once and computes that fingerprint. It then drops the bytes.
+
+- The fingerprint is a vector of 768 numbers. The vector is the only thing stored.
+- No image byte is written to disk, and no image is served from this repo. Hotlinking is unchanged.
+- A change of model rebuilds every fingerprint. An old fingerprint never meets a new model.
+- A fingerprint records the model file hash and the source URL.
+- The read is the matcher's own step. The owner starts it from a screen. It does not run on its own.

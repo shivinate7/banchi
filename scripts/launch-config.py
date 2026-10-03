@@ -41,8 +41,8 @@ WHAT "STALE" MEANS, AND WHY IT IS NOT "ANY FILE WITH THE WRONG PORT". A file is 
 only when it is byte-for-byte the shape this script writes except for the port. Anything
 else — a second configuration, a different command, a `url`, an attach-only entry, JSON
 that does not parse — is somebody's work and is REPORTED rather than overwritten. That
-asymmetry is D44's: `make icloud-sweep` deletes only what is provably a duplicate and only
-ever reports what differs, on the grounds that guessing is the one way a cleanup tool
+asymmetry is the conservative one: delete only what is provably a duplicate and only
+report what differs, on the grounds that guessing is the one way a cleanup tool
 destroys work. A provisioner that runs on every session start unasked has strictly more
 reason to keep it.
 

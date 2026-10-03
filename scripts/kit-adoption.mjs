@@ -40,7 +40,8 @@
  *                            `app/src/Gallery.tsx` is exempt from this one rule: it is the kit's
  *                            specimen sheet and draws each kit class raw on purpose
  *                            (`bn-pick`, `bn-fchip`, `bn-filterchips`, `bn-filterbar`, `bn-sort` and
- *                            `bn-hidetoggle` are the kit's filter control, D311)
+ *                            `bn-hidetoggle` are the kit's filter control, D311; `bn-set-*` is the settings
+ *                            sheet's rows, figures, editor frame and card picker, `kit/settings.tsx`)
  *                R2-date     `toLocaleDateString`, `toLocaleTimeString` or `Intl.DateTimeFormat`
  *                            outside `app/src/dates.ts`. ALSO, BY HEURISTIC: `.toLocaleString(...)`
  *                            with an object-literal argument that names a date or time option
@@ -306,7 +307,7 @@ function countWordedButtons(node, sf) {
 /** The class names only the kit may write. A token equal to one of these is reserved. */
 export const RESERVED_EXACT = ['bn-page', 'bn-head', 'bn-title', 'bn-lede', 'bn-money', 'bn-skeleton', 'bn-select']
 /** The class-name families only the kit may write: any token that starts with one of these. */
-export const RESERVED_PREFIX = ['bn-empty', 'bn-notice', 'bn-sheet', 'bn-modal', 'bn-pick', 'bn-fchip', 'bn-filterchips', 'bn-filterbar', 'bn-sort', 'bn-hidetoggle']
+export const RESERVED_PREFIX = ['bn-empty', 'bn-notice', 'bn-sheet', 'bn-modal', 'bn-pick', 'bn-fchip', 'bn-filterchips', 'bn-filterbar', 'bn-sort', 'bn-hidetoggle', 'bn-set-']
 
 function reserved(token) {
   if (RESERVED_EXACT.includes(token)) return true
@@ -1454,6 +1455,12 @@ function selfTest() {
     const hits = analyze(tree({ 'app/src/S.tsx': src })).violations.filter((v) => v.rule === 'R2-class').map((v) => v.detail)
     return ['bn-money', 'bn-empty-state', 'bn-notice', 'bn-skeleton', 'bn-sheet-left'].every((t) => hits.includes(t))
   })
+  add('a sheet that hand-rolls the settings parts (bn-set-op, bn-set-picker) is red, and a bn-settings-ish class is green', () => {
+    const red = analyze(tree({ 'app/src/S.tsx': 'export const S = () => <button className="bn-set-op"><ul className="bn-set-picker-list" /></button>\n' })).violations
+      .filter((v) => v.rule === 'R2-class').map((v) => v.detail)
+    return red.includes('bn-set-op') && red.includes('bn-set-picker-list') &&
+      green(outcome(tree({ 'app/src/S.tsx': 'export const S = () => <div className="bn-settings-ish bn-set" />\n' })))
+  })
   add('a class that only shares a prefix with an exact reservation is green (bn-page-head, bn-money-ish)', () =>
     green(outcome(tree({ 'app/src/S.tsx': 'export const S = () => <div className="bn-page-head bn-money-ish bn-headline" />\n' }))))
   add('toLocaleDateString and Intl.DateTimeFormat in a screen are red; in dates.ts green', () => {
@@ -1724,7 +1731,7 @@ function selfTest() {
   const base = { static: { 'app/src/A.tsx': { R1: 'home', 'R2-class': 'home' } }, runtime: { '/': { page: 'home' } } }
   /* The rules defined at the merge-base: every rule this file knows today, minus R2-new, which
      stands for a rule born on the branch. */
-  const baseRules = { static: new Set(Object.keys(RULES)), runtime: new Set(['page', 'h1', 'width', 'top', 'scroll', 'title', 'palette', 'keys']) }
+  const baseRules = { static: new Set(Object.keys(RULES)), runtime: new Set(['page', 'h1', 'width', 'top', 'scroll', 'palette', 'keys']) }
   const clone = (o) => JSON.parse(JSON.stringify(o))
   const refusedOnly = (g, block, key) => g.refused.length === 1 && g.allowed.length === 0 && g.refused[0].block === block && g.refused[0].key === key && /exists at the merge-base/.test(g.refused[0].why)
   add('a new static key (a new file) for an existing rule is refused, so red', () => {
@@ -1838,8 +1845,8 @@ function selfTest() {
     const same = growth(at.allow, at.allow, at.rules, rulesAtHead())
     const more = growth(at.allow, head, at.rules, rulesAtHead())
     return at.rules.static !== null && Object.keys(RULES).every((r) => at.rules.static.has(r)) &&
-      at.rules.runtime !== null && ['page', 'title', 'palette', 'keys'].every((a) => at.rules.runtime.has(a)) &&
-      rulesAtHead().runtime !== null && ['page', 'title', 'keys'].every((a) => rulesAtHead().runtime.has(a)) &&
+      at.rules.runtime !== null && ['page', 'palette', 'keys'].every((a) => at.rules.runtime.has(a)) &&
+      rulesAtHead().runtime !== null && ['page', 'keys'].every((a) => rulesAtHead().runtime.has(a)) &&
       same.refused.length === 0 && same.allowed.length === 0 && more.refused.length === 1
   })
 

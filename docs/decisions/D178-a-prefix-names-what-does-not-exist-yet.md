@@ -18,7 +18,7 @@
 
 ### What it deliberately does not mark
 
-A `+` is read **only where a row was about to make a claim about existence**, and only when the token it precedes is shaped like a path, a make target or an env name. `+x` is a file mode and D44's entry contains one; it matches nothing here and never will.
+A `+` is read **only where a row was about to make a claim about existence**, and only when the token it precedes is shaped like a path, a make target or an env name. `+x` is a file mode and a decision entry can contain one; it matches nothing here and never will.
 
 ### It caught its own author twice, which is the evidence it works
 

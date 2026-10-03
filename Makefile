@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent demo-mirror-daily-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet lint typecheck unit venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent demo-mirror-daily-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -305,9 +305,17 @@ explain:
 
 # T1-T9 and T11, the ten verification tests. No longer run automatically at turn
 # end (D248) — a session runs this itself before saying something works.
+# PATH GATED (owner's word, D247 amended): `scripts/guard-scope.py` derives what the harness reads
+# from `harness/` itself and skips this when the branch touches none of it. A main push and the
+# nightly run set PKMNSCAN_GUARD_SCOPE=all in check.yml, so they never skip.
 harness:
 	$(VENV_GUARD)
-	@$(PYTHON) harness/run.py
+	@python3 scripts/guard-scope.py classify --target harness --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
+		$(PYTHON) harness/run.py; \
+	else \
+		echo "harness: SKIPPED — nothing in this branch reaches what harness/ reads. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+	fi
 
 # Exit 1 is a provably wrong reference and fails. Exit 2 is the coupling question — it
 # prints and passes, here for the same reason the pre-commit hook lets it through: a
@@ -367,7 +375,7 @@ offenders-prune-selftest:
 # THE THIRD PIECE OF THE OWNER'S 2026-09-23 RULING (D-text-shape-checks, supersedes D284): a
 # REPEATABLE, ON-DEMAND density pass that prints a CUT TABLE, never a gate (D18: it writes one
 # receipt, `.serve/text-density.json`, gitignored). NOT A PREREQUISITE OF ANYTHING and never
-# wired to a hook, `map-fix`'s own standing. It runs `app/tests/text-shape.spec.ts` with
+# wired to a hook, `map-fix`'s own standing. It runs `app/tests/text-checks.spec.ts` with
 # `TEXT_DENSITY=1`, so it reads the SAME populated fixture and the same loaded screens as the
 # two gates, at 1440 and 390, whatever this checkout's own store holds. Playwright starts or
 # reuses this checkout's own Vite (D43); every read is stubbed, so no store is read. One
@@ -396,31 +404,7 @@ orient:
 audit-history:
 	@python3 scripts/audit-history.py
 
-# THE CLAIM `check registry` READS ON THE MAKEFILE SIDE. CLAUDE.md's own Commands
-# section carries the same list; the row reconciles both against the recipe above,
-# both ways, so this line and CLAUDE.md's cannot drift from each other or from it.
-# make check        harness + docs-audit + revert-guard + port-agreement + set-hint-agreement +
-#                   readiness-agreement + screen-freshness + screen-freshness-selftest +
-#                   sigil-check + css-var-check + css-var-check-selftest +
-#                   hand-search-selftest + token-literal-check +
-#                   kit-adoption + ignore-check + lint + typecheck + audit-self-test +
-#                   mutate-anchors + githooks-selftest + revert-selftest +
-#                   decisions-selftest + debts-selftest + gates-selftest +
-#                   submission-selftest + cid-selftest + pricearchive-selftest +
-#                   archive-review-selftest + holdings-selftest + identity-checks-selftest +
-#                   price-postings-selftest + product-history-selftest +
-#                   sku-number-contradictions-selftest + readings-selftest + skus-selftest +
-#                   identity-store-selftest + identity-binding-selftest +
-#                   identity-readers-selftest + identity-cli-selftest + janitor-selftest +
-#                   reap-selftest + silent-write-selftest + guard-shell-selftest +
-#                   suite-lock-selftest + browser-scope-selftest + serve-selftest +
-#                   sync-selftest + verdict-selftest + js-breakpoints-selftest +
-#                   subagent-override-selftest + guard-scope-selftest +
-#                   token-literal-check-selftest + kit-adoption-selftest + port-slots-selftest +
-#                   match-selftest
-
-# Not prerequisites: make is free to reorder those, and with -j it runs them in parallel.
-# A check suite has to run in a known order and stop at the first failure.
+# `make check` is `make ci-check`: scripts/checks.py is the one list (see RUN_CHECKS below).
 # THE SELF-TEST RUNS HERE AND NOT IN THE GIT HOOK, and the split is D18's rather than a
 # preference: `--self-test` is the one mode of docs-audit.py that WRITES (into a temporary
 # directory it makes and destroys), and nothing that writes may run on the path that decides
@@ -430,73 +414,7 @@ audit-history:
 # It sat red and unnoticed until 2026-08-24 because nothing ran it at all: a stale fixture in
 # the `tested_by reach` case had stopped being false, and `make docs-audit` was green
 # throughout. A checker whose own self-test nobody runs is a checker nobody has watched fail.
-check:
-	@$(MAKE) --no-print-directory harness
-	@$(MAKE) --no-print-directory docs-audit
-	@$(MAKE) --no-print-directory revert-guard
-	@$(MAKE) --no-print-directory port-agreement
-	@$(MAKE) --no-print-directory set-hint-agreement
-	@$(MAKE) --no-print-directory readiness-agreement
-	@$(MAKE) --no-print-directory screen-freshness
-	@$(MAKE) --no-print-directory screen-freshness-selftest
-	@$(MAKE) --no-print-directory sigil-check
-	@$(MAKE) --no-print-directory css-var-check
-	@$(MAKE) --no-print-directory css-var-check-selftest
-	@$(MAKE) --no-print-directory hand-search-selftest
-	@$(MAKE) --no-print-directory token-literal-check
-	@$(MAKE) --no-print-directory kit-adoption
-	@$(MAKE) --no-print-directory ignore-check
-	@$(MAKE) --no-print-directory lint
-	@$(MAKE) --no-print-directory typecheck
-	@$(MAKE) --no-print-directory audit-self-test
-	@$(MAKE) --no-print-directory mutate-anchors
-	@$(MAKE) --no-print-directory githooks-selftest
-	@$(MAKE) --no-print-directory revert-selftest
-	@$(MAKE) --no-print-directory decisions-selftest
-	@$(MAKE) --no-print-directory debts-selftest
-	@$(MAKE) --no-print-directory gates-selftest
-	@$(MAKE) --no-print-directory submission-selftest
-	@$(MAKE) --no-print-directory cid-selftest
-	@$(MAKE) --no-print-directory pricearchive-selftest
-	@$(MAKE) --no-print-directory archive-review-selftest
-	@$(MAKE) --no-print-directory holdings-selftest
-	@$(MAKE) --no-print-directory identity-checks-selftest
-	@$(MAKE) --no-print-directory price-postings-selftest
-	@$(MAKE) --no-print-directory product-history-selftest
-	@$(MAKE) --no-print-directory sku-number-contradictions-selftest
-	@$(MAKE) --no-print-directory readings-selftest
-	@$(MAKE) --no-print-directory skus-selftest
-	@$(MAKE) --no-print-directory identity-store-selftest
-	@$(MAKE) --no-print-directory identity-binding-selftest
-	@$(MAKE) --no-print-directory identity-readers-selftest
-	@$(MAKE) --no-print-directory identity-cli-selftest
-	@$(MAKE) --no-print-directory janitor-selftest
-	@$(MAKE) --no-print-directory reap-selftest
-	@$(MAKE) --no-print-directory silent-write-selftest
-	@$(MAKE) --no-print-directory guard-shell-selftest
-	@$(MAKE) --no-print-directory suite-lock-selftest
-	@$(MAKE) --no-print-directory browser-scope-selftest
-	@$(MAKE) --no-print-directory serve-selftest
-	@$(MAKE) --no-print-directory sync-selftest
-	@$(MAKE) --no-print-directory verdict-selftest
-	@$(MAKE) --no-print-directory js-breakpoints-selftest
-	@$(MAKE) --no-print-directory subagent-override-selftest
-	@$(MAKE) --no-print-directory guard-scope-selftest
-	@$(MAKE) --no-print-directory token-literal-check-selftest
-	@$(MAKE) --no-print-directory kit-adoption-selftest
-	@$(MAKE) --no-print-directory port-slots-selftest
-	@$(MAKE) --no-print-directory match-selftest
-	@$(MAKE) --no-print-directory serve-scope-selftest
-	@$(MAKE) --no-print-directory demo-record-selftest
-	@$(MAKE) --no-print-directory demo-mirror-daily-selftest
-	@$(MAKE) --no-print-directory demo-record-resume-selftest
-	@$(MAKE) --no-print-directory demo-record-walkplan-selftest
-	@$(MAKE) --no-print-directory pricehistory-cache-selftest
-	@$(MAKE) --no-print-directory pricehistory-offline-selftest
-	@$(MAKE) --no-print-directory repair-born-game-selftest
-	@$(MAKE) --no-print-directory stockimages-cache-selftest
-	@$(MAKE) --no-print-directory sku-name-contradictions-selftest
-	@$(MAKE) --no-print-directory pipeline-trends-archive-ids-selftest
+check: ci-check
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
 # This exists because nothing ever re-ran the gate: `make check` failed in every fresh checkout
@@ -517,154 +435,30 @@ check:
 # Everything below answers from the tree alone, which is exactly what a re-checker can own.
 # IT RUNS THE SAME TARGETS AS `check`, NOT FEWER. Kept adjacent to it deliberately, so the two
 # are read together; `make explain` describes the suite and this list adds no rows to it.
-ci-check:
-	@$(MAKE) --no-print-directory harness
-	@$(MAKE) --no-print-directory docs-audit
-	@$(MAKE) --no-print-directory audit-self-test
-	@$(MAKE) --no-print-directory mutate-anchors
-	@$(MAKE) --no-print-directory githooks-selftest
-	@$(MAKE) --no-print-directory revert-selftest
-	@$(MAKE) --no-print-directory decisions-selftest
-	@$(MAKE) --no-print-directory debts-selftest
-	@$(MAKE) --no-print-directory gates-selftest
-	@$(MAKE) --no-print-directory submission-selftest
-	@$(MAKE) --no-print-directory cid-selftest
-	@$(MAKE) --no-print-directory pricearchive-selftest
-	@$(MAKE) --no-print-directory archive-review-selftest
-	@$(MAKE) --no-print-directory holdings-selftest
-	@$(MAKE) --no-print-directory identity-checks-selftest
-	@$(MAKE) --no-print-directory price-postings-selftest
-	@$(MAKE) --no-print-directory product-history-selftest
-	@$(MAKE) --no-print-directory sku-number-contradictions-selftest
-	@$(MAKE) --no-print-directory readings-selftest
-	@$(MAKE) --no-print-directory skus-selftest
-	@$(MAKE) --no-print-directory identity-store-selftest
-	@$(MAKE) --no-print-directory identity-binding-selftest
-	@$(MAKE) --no-print-directory identity-readers-selftest
-	@$(MAKE) --no-print-directory identity-cli-selftest
-	@$(MAKE) --no-print-directory revert-guard
-	@$(MAKE) --no-print-directory janitor-selftest
-	@$(MAKE) --no-print-directory reap-selftest
-	@$(MAKE) --no-print-directory silent-write-selftest
-	@$(MAKE) --no-print-directory guard-shell-selftest
-	@$(MAKE) --no-print-directory suite-lock-selftest
-	@$(MAKE) --no-print-directory browser-scope-selftest
-	@$(MAKE) --no-print-directory serve-selftest
-	@$(MAKE) --no-print-directory sync-selftest
-	@$(MAKE) --no-print-directory verdict-selftest
-	@$(MAKE) --no-print-directory js-breakpoints-selftest
-	@$(MAKE) --no-print-directory subagent-override-selftest
-	@$(MAKE) --no-print-directory guard-scope-selftest
-	@$(MAKE) --no-print-directory token-literal-check-selftest
-	@$(MAKE) --no-print-directory kit-adoption-selftest
-	@$(MAKE) --no-print-directory port-slots-selftest
-	@$(MAKE) --no-print-directory match-selftest
-	@$(MAKE) --no-print-directory serve-scope-selftest
-	@$(MAKE) --no-print-directory demo-record-selftest
-	@$(MAKE) --no-print-directory demo-mirror-daily-selftest
-	@$(MAKE) --no-print-directory demo-record-resume-selftest
-	@$(MAKE) --no-print-directory demo-record-walkplan-selftest
-	@$(MAKE) --no-print-directory pricehistory-cache-selftest
-	@$(MAKE) --no-print-directory pricehistory-offline-selftest
-	@$(MAKE) --no-print-directory repair-born-game-selftest
-	@$(MAKE) --no-print-directory stockimages-cache-selftest
-	@$(MAKE) --no-print-directory sku-name-contradictions-selftest
-	@$(MAKE) --no-print-directory pipeline-trends-archive-ids-selftest
-	@$(MAKE) --no-print-directory port-agreement
-	@$(MAKE) --no-print-directory set-hint-agreement
-	@$(MAKE) --no-print-directory readiness-agreement
-	@$(MAKE) --no-print-directory screen-freshness
-	@$(MAKE) --no-print-directory screen-freshness-selftest
-	@$(MAKE) --no-print-directory sigil-check
-	@$(MAKE) --no-print-directory css-var-check
-	@$(MAKE) --no-print-directory css-var-check-selftest
-	@$(MAKE) --no-print-directory hand-search-selftest
-	@$(MAKE) --no-print-directory token-literal-check
-	@$(MAKE) --no-print-directory kit-adoption
-	@$(MAKE) --no-print-directory ignore-check
-	@$(MAKE) --no-print-directory lint
-	@$(MAKE) --no-print-directory typecheck
+# Every recipe below runs registry targets as ONE `make` call, never as prerequisites: make may
+# reorder prerequisites and runs them in parallel under -j, and a check suite has to run in a
+# known order and stop at the first failure. An empty or failed registry read stops the recipe.
+# `scripts/checks.py` is the one list (`--targets [shard]`); adding a check is one entry there.
+RUN_CHECKS = t="$$(python3 scripts/checks.py --targets $(1))" && $(MAKE) --no-print-directory $$t
 
-# CI RUNS `ci-check` AS THREE PARALLEL SHARDS (owner's word, 2026-09-28; D161, amended): the
-# serial job took 600s on run 36509895299, and the shards together run exactly `ci-check`'s
-# recipe. Each shard keeps D161's order, product first: `ci-check-product` is the harness and
-# the checks of the product; the two guards shards are the guards' own self-tests, balanced by
-# the times that run measured. `ci-check` stays the one command a session runs before pushing.
-# `make docs-audit`'s `check registry` row fails when the shards' union is not `ci-check`'s
-# recipe, target for target, with none missing and none run twice.
+ci-check:
+	@$(call RUN_CHECKS)
+
+# CI RUNS `ci-check` AS FOUR PARALLEL SHARDS (D161, amended): the serial job took 600s on run
+# 36509895299. Each entry's `shard` field in scripts/checks.py names its shard, product first,
+# the guards' self-tests last, balanced by the times that run measured. `revert-guard` has no
+# shard: the standalone required `revert-guard` job runs it, and `ci-check` runs it locally.
 ci-check-product:
-	@$(MAKE) --no-print-directory harness
+	@$(call RUN_CHECKS,product)
 
 ci-check-static:
-	@$(MAKE) --no-print-directory docs-audit
-	@$(MAKE) --no-print-directory port-agreement
-	@$(MAKE) --no-print-directory set-hint-agreement
-	@$(MAKE) --no-print-directory readiness-agreement
-	@$(MAKE) --no-print-directory screen-freshness
-	@$(MAKE) --no-print-directory sigil-check
-	@$(MAKE) --no-print-directory css-var-check
-	@$(MAKE) --no-print-directory token-literal-check
-	@$(MAKE) --no-print-directory kit-adoption
-	@$(MAKE) --no-print-directory ignore-check
-	@$(MAKE) --no-print-directory lint
-	@$(MAKE) --no-print-directory typecheck
+	@$(call RUN_CHECKS,static)
 
 ci-check-guards-1:
-	@$(MAKE) --no-print-directory audit-self-test
-	@$(MAKE) --no-print-directory mutate-anchors
-	@$(MAKE) --no-print-directory githooks-selftest
-	@$(MAKE) --no-print-directory revert-selftest
-	@$(MAKE) --no-print-directory decisions-selftest
-	@$(MAKE) --no-print-directory debts-selftest
-	@$(MAKE) --no-print-directory gates-selftest
-	@$(MAKE) --no-print-directory submission-selftest
-	@$(MAKE) --no-print-directory cid-selftest
-	@$(MAKE) --no-print-directory pricearchive-selftest
-	@$(MAKE) --no-print-directory archive-review-selftest
-	@$(MAKE) --no-print-directory holdings-selftest
-	@$(MAKE) --no-print-directory identity-checks-selftest
-	@$(MAKE) --no-print-directory price-postings-selftest
-	@$(MAKE) --no-print-directory product-history-selftest
-	@$(MAKE) --no-print-directory sku-number-contradictions-selftest
-	@$(MAKE) --no-print-directory readings-selftest
-	@$(MAKE) --no-print-directory skus-selftest
-	@$(MAKE) --no-print-directory identity-store-selftest
-	@$(MAKE) --no-print-directory identity-binding-selftest
-	@$(MAKE) --no-print-directory identity-readers-selftest
-	@$(MAKE) --no-print-directory identity-cli-selftest
-	@$(MAKE) --no-print-directory revert-guard
-	@$(MAKE) --no-print-directory janitor-selftest
-	@$(MAKE) --no-print-directory reap-selftest
-	@$(MAKE) --no-print-directory silent-write-selftest
-	@$(MAKE) --no-print-directory guard-shell-selftest
-	@$(MAKE) --no-print-directory suite-lock-selftest
-	@$(MAKE) --no-print-directory browser-scope-selftest
+	@$(call RUN_CHECKS,guards-1)
 
 ci-check-guards-2:
-	@$(MAKE) --no-print-directory serve-selftest
-	@$(MAKE) --no-print-directory sync-selftest
-	@$(MAKE) --no-print-directory verdict-selftest
-	@$(MAKE) --no-print-directory js-breakpoints-selftest
-	@$(MAKE) --no-print-directory subagent-override-selftest
-	@$(MAKE) --no-print-directory guard-scope-selftest
-	@$(MAKE) --no-print-directory token-literal-check-selftest
-	@$(MAKE) --no-print-directory kit-adoption-selftest
-	@$(MAKE) --no-print-directory port-slots-selftest
-	@$(MAKE) --no-print-directory match-selftest
-	@$(MAKE) --no-print-directory serve-scope-selftest
-	@$(MAKE) --no-print-directory demo-record-selftest
-	@$(MAKE) --no-print-directory demo-mirror-daily-selftest
-	@$(MAKE) --no-print-directory demo-record-resume-selftest
-	@$(MAKE) --no-print-directory demo-record-walkplan-selftest
-	@$(MAKE) --no-print-directory pricehistory-cache-selftest
-	@$(MAKE) --no-print-directory pricehistory-offline-selftest
-	@$(MAKE) --no-print-directory repair-born-game-selftest
-	@$(MAKE) --no-print-directory stockimages-cache-selftest
-	@$(MAKE) --no-print-directory sku-name-contradictions-selftest
-	@$(MAKE) --no-print-directory pipeline-trends-archive-ids-selftest
-	@$(MAKE) --no-print-directory screen-freshness-selftest
-	@$(MAKE) --no-print-directory css-var-check-selftest
-	@$(MAKE) --no-print-directory hand-search-selftest
+	@$(call RUN_CHECKS,guards-2)
 
 # The other half of D47: every path a worktree provisions is ignored whatever kind of thing is
 # at it. In `check` and never in the git hook — D18 forbids a commit gate that depends on local
@@ -691,7 +485,7 @@ verdict-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/verdict-selftest.py; \
 	else \
-		echo "verdict-selftest: SKIPPED — nothing in this branch reaches app/design-check-reporter.ts. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "verdict-selftest: SKIPPED — nothing in this branch reaches app/design-check-reporter.ts. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # python3, not $(PYTHON): the script is stdlib-only so it must not need `make venv`.
@@ -700,7 +494,7 @@ audit-self-test:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/docs-audit.py --self-test; \
 	else \
-		echo "audit-self-test: SKIPPED — this branch does not touch scripts/docs-audit.py or scripts/docs_audit/. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "audit-self-test: SKIPPED — this branch does not touch scripts/docs-audit.py or scripts/docs_audit/. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # D92 — a bare `#` on an owner-side screen is D58's COUNT, and three renderers spelled the
@@ -801,7 +595,7 @@ port-slots-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/port-slots.py selftest; \
 	else \
-		echo "port-slots-selftest: SKIPPED — this branch does not touch the port-slot claim or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "port-slots-selftest: SKIPPED — this branch does not touch the port-slot claim or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # FLT-06/04, UX-173: the one forgiving matcher, server side. `server/match.py` against every
@@ -820,7 +614,7 @@ match-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/match-selftest.py; \
 	else \
-		echo "match-selftest: SKIPPED — this branch does not touch search, matching or their callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "match-selftest: SKIPPED — this branch does not touch search, matching or their callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # HERE AND NOT IN THE GIT HOOK, for the reason stated above `check` and for a second one of
@@ -833,7 +627,7 @@ githooks-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/githooks-selftest.sh; \
 	else \
-		echo "githooks-selftest: SKIPPED — nothing in this branch reaches scripts/githooks/. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "githooks-selftest: SKIPPED — nothing in this branch reaches scripts/githooks/. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # THE SHARED MERGE TOOL (D140, merge claims the record number). `~/.claude/bin/merge` lives in
@@ -873,7 +667,7 @@ revert-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/revert-audit.py selftest; \
 	else \
-		echo "revert-selftest: SKIPPED — this branch does not touch scripts/revert-audit.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "revert-selftest: SKIPPED — this branch does not touch scripts/revert-audit.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # THE CORPUS IS COMPLETE AND STILL ROUND-TRIPS. `docs/decisions/` is one file per entry and
@@ -1002,22 +796,10 @@ screen-freshness-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		node scripts/screen-freshness.mjs --self-test; \
 	else \
-		echo "screen-freshness-selftest: SKIPPED — this branch does not touch scripts/screen-freshness.mjs. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "screen-freshness-selftest: SKIPPED — this branch does not touch scripts/screen-freshness.mjs. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
-# NOT IN `check`, AND NOT IN THE GIT HOOK. It is the one target here that can DELETE a file,
-# so D18's rule applies at its strongest: nothing that writes may run on the path that decides
-# whether a commit proceeds. It is also not a defect to have conflict copies lying around —
-# the pre-commit hook already refuses to COMMIT one — so failing `check` over them would gate
-# a tidy-up on a condition the owner's filesystem creates on its own schedule.
-#
-# `make status` reports the count, which is where a thing you should know but need not act on
-# belongs. Deleting is opt-in: `make icloud-sweep ARGS=--delete`.
-icloud-sweep:
-	@python3 scripts/icloud-sweep.py $(ARGS)
-
-# NOT IN `check`, AND NOT IN THE GIT HOOK, for icloud-sweep's reason exactly: these two are the
-# only targets here that can delete a file, and D18 forbids a writer on the path that decides
+# NOT IN `check`, AND NOT IN THE GIT HOOK. This is a target that can delete a file, and D18 forbids a writer on the path that decides
 # whether a commit proceeds. Nor is leftover exhaust a defect to fail a commit over — it is a
 # condition the owner's own sessions create on their own schedule.
 #
@@ -1048,7 +830,7 @@ janitor-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/janitor-selftest.sh; \
 	else \
-		echo "janitor-selftest: SKIPPED — nothing in this branch reaches scripts/janitor.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "janitor-selftest: SKIPPED — nothing in this branch reaches scripts/janitor.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # THE SUPERVISOR'S BUILD JOB (D138), against a throwaway tree with a stub `vite build`. Same
@@ -1066,7 +848,7 @@ janitor-selftest:
 # target would cost more to maintain than it saves. A SECOND gated target needs the owner's
 # word again — do not read this recipe as a pattern to copy.
 #
-# PKMNSCAN_SERVE_SCOPE=off runs it regardless, and every skip prints that.
+# PKMNSCAN_SERVE_SCOPE=all runs it regardless, and every skip prints that.
 serve-selftest:
 	@python3 scripts/serve-scope.py classify --base origin/main; rc=$$?; \
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
@@ -1081,7 +863,7 @@ serve-selftest:
 # no merge-base, an unreadable diff and an EMPTY diff all run the test.
 # `make serve-selftest` was the only path-gated target from 2026-09-17 to 2026-09-20 —
 # 70.1s of `make check`'s own total, copying the checkout with a STUB app/ so no screen
-# change can reach it. `PKMNSCAN_SERVE_SCOPE=off` runs it regardless, printed in every
+# change can reach it. `PKMNSCAN_SERVE_SCOPE=all` runs it regardless, printed in every
 # skip.
 serve-scope:
 	@python3 scripts/serve-scope.py $(ARGS)
@@ -1104,7 +886,7 @@ serve-scope-selftest:
 # and, 2026-09-27, `match-selftest`, `browser-scope-selftest` and
 # `port-slots-selftest`). Fails open exactly like `serve-scope`: no merge-base, an
 # unreadable diff, an EMPTY diff, an unscoped target, and any exception all run the
-# test. `PKMNSCAN_GUARD_SCOPE=off` runs every gated self-test regardless, printed in
+# test. `PKMNSCAN_GUARD_SCOPE=all` runs every gated self-test regardless, printed in
 # every skip. Reconciled BOTH WAYS by `make docs-audit`'s `guard scope` row: every
 # roster target is wired into the Makefile and every wired recipe names a roster
 # target. A THIRD GATE MECHANISM needs the owner's word again — a new roster entry
@@ -1125,7 +907,7 @@ sync-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/sync-selftest.py; \
 	else \
-		echo "sync-selftest: SKIPPED — nothing in this branch reaches scripts/primary_sync.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "sync-selftest: SKIPPED — nothing in this branch reaches scripts/primary_sync.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # WHAT THIS SESSION STARTED, AND NOTHING ELSE. `pkill -f` and `lsof -ti tcp:PORT` are both
@@ -1160,7 +942,7 @@ reap-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/reap-selftest.sh; \
 	else \
-		echo "reap-selftest: SKIPPED — nothing in this branch reaches scripts/reap.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "reap-selftest: SKIPPED — nothing in this branch reaches scripts/reap.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 .PHONY: reap reap-selftest
@@ -1185,7 +967,7 @@ submission-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/submission-selftest.py; \
 	else \
-		echo "submission-selftest: SKIPPED — this branch does not touch the claim table it proves. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "submission-selftest: SKIPPED — this branch does not touch the claim table it proves. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # D172'S TWO TARGETS, AND ONLY ONE OF THEM IS IN `check`.
@@ -1203,7 +985,7 @@ cid-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/cid-selftest.py; \
 	else \
-		echo "cid-selftest: SKIPPED — this branch does not touch the card's stable name or the photograph store. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "cid-selftest: SKIPPED — this branch does not touch the card's stable name or the photograph store. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # THE SIXTEENTH GATED TARGET (D247, owner's word 2026-09-23 on the SKU-first price-history
@@ -1216,7 +998,7 @@ pricearchive-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/pricearchive-selftest.py; \
 	else \
-		echo "pricearchive-selftest: SKIPPED — this branch does not touch price-history resolution or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "pricearchive-selftest: SKIPPED — this branch does not touch price-history resolution or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # SIX MORE GATED TARGETS, SEVENTEENTH THROUGH TWENTY-SECOND (D247, owner's word
@@ -1230,7 +1012,7 @@ archive-review-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/archive-review-selftest.py; \
 	else \
-		echo "archive-review-selftest: SKIPPED — this branch does not touch the archive review queue or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "archive-review-selftest: SKIPPED — this branch does not touch the archive review queue or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # pipeline/holdings.py, proved against in-memory fixtures, no store, no network:
@@ -1240,7 +1022,7 @@ holdings-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/holdings-selftest.py; \
 	else \
-		echo "holdings-selftest: SKIPPED — this branch does not touch unsold-stock holdings or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "holdings-selftest: SKIPPED — this branch does not touch unsold-stock holdings or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # pipeline/identity_checks.py's four stored-data checks, proved against literal
@@ -1250,7 +1032,7 @@ identity-checks-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/identity-checks-selftest.py; \
 	else \
-		echo "identity-checks-selftest: SKIPPED — this branch does not touch the stored-data identification checks or their callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "identity-checks-selftest: SKIPPED — this branch does not touch the stored-data identification checks or their callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # TWO INVOCATIONS: the real run, then `--mutate-to-upsert`, which MUST itself go red inside
@@ -1262,7 +1044,7 @@ price-postings-selftest:
 		$(PYTHON) scripts/price-postings-selftest.py && \
 		$(PYTHON) scripts/price-postings-selftest.py --mutate-to-upsert; \
 	else \
-		echo "price-postings-selftest: SKIPPED — this branch does not touch the price-postings ledger or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "price-postings-selftest: SKIPPED — this branch does not touch the price-postings ledger or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # pipeline/productview.py and server/pipeline_routes.py:do_product_history, proved
@@ -1272,7 +1054,7 @@ product-history-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/product-history-selftest.py; \
 	else \
-		echo "product-history-selftest: SKIPPED — this branch does not touch the per-product history route or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "product-history-selftest: SKIPPED — this branch does not touch the per-product history route or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # pipeline/sku_number_contradictions.py, proved against literal fixtures and
@@ -1282,7 +1064,7 @@ sku-number-contradictions-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/sku-number-contradictions-selftest.py; \
 	else \
-		echo "sku-number-contradictions-selftest: SKIPPED — this branch does not touch the SKU self-contradiction check or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "sku-number-contradictions-selftest: SKIPPED — this branch does not touch the SKU self-contradiction check or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # Wired into `check` and `ci-check` after a test-health audit found each in neither. Not
@@ -1451,21 +1233,18 @@ silent-write-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/silent-write-selftest.sh; \
 	else \
-		echo "silent-write-selftest: SKIPPED — nothing in this branch reaches scripts/silent-write-guard.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "silent-write-selftest: SKIPPED — nothing in this branch reaches scripts/silent-write-guard.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 .PHONY: silent-write-selftest
 
-# EIGHT SHELL MISTAKES THIS REPO HAS ALREADY PAID FOR, refused before they run. Every one was a
+# SEVEN SHELL MISTAKES THIS REPO HAS ALREADY PAID FOR, refused before they run. Every one was a
 # rule somebody had written down and a later session broke anyway — which is D171's ruling
-# about what a rule IS, applied to eight more commands:
+# about what a rule IS, applied to seven more commands:
 #
 #   `git checkout <modified path>`     2026-09-06, ~240 lines of uncommitted work destroyed
 #   a write outside this checkout      2026-09-06, ~1,500 lines into the owner's MAIN tree, on
 #                                      main, hot-reloaded into their live capture server
-#   `gh api -f k=v` with no method     2026-09-12, a GET silently POSTed and hung past a timeout
-#   `ln -s` at an existing path        2026-08-29, harness/images/images and a 133 MB directory
-#                                      renamed away by iCloud
 #   a polling loop                     2026-09-12 twice: a `pgrep` waiter whose pattern is not
 #                                      the process, and a backgrounded driver that ran 119
 #                                      rounds over 3h58m across a compaction
@@ -1477,7 +1256,7 @@ silent-write-selftest:
 #   `git reset --hard`/`--merge`       over uncommitted tracked work
 #
 # `scripts/guard-shell.py --hook` is a PreToolUse hook on Bash and on Write|Edit — not a target
-# you run — and this self-test is what proves it. FIVE OF THE EIGHT INCIDENTS ARE PERFORMED in a
+# you run — and this self-test is what proves it. FOUR OF THE INCIDENTS ARE PERFORMED in a
 # throwaway repository before the guard is asked about them, which is reap-selftest's standard;
 # the false positives are RUN there too, because a case that is secretly a typo passes for the
 # wrong reason. IN `check`, NEVER IN THE GIT HOOK: it writes a temp repository (D18).
@@ -1486,7 +1265,7 @@ guard-shell-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/guard-shell-selftest.sh; \
 	else \
-		echo "guard-shell-selftest: SKIPPED — nothing in this branch reaches scripts/guard-shell.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "guard-shell-selftest: SKIPPED — nothing in this branch reaches scripts/guard-shell.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 .PHONY: guard-shell-selftest
@@ -1667,7 +1446,7 @@ suite-lock-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/suite-lock.py selftest; \
 	else \
-		echo "suite-lock-selftest: SKIPPED — this branch does not touch scripts/suite-lock.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "suite-lock-selftest: SKIPPED — this branch does not touch scripts/suite-lock.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # The classifier's own matcher, recipe narrowing and spec map, proved on fixtures and on the
@@ -1678,7 +1457,7 @@ browser-scope-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/browser-scope.py selftest; \
 	else \
-		echo "browser-scope-selftest: SKIPPED — this branch does not touch the browser-matrix classifier or its spec map. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+		echo "browser-scope-selftest: SKIPPED — this branch does not touch the browser-matrix classifier or its spec map. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # A JS media query's viewport width against what a stylesheet under app/src declares
@@ -1738,6 +1517,11 @@ lint:
 	$(VENV_GUARD)
 	$(RUFF_GUARD)
 	@$(PYTHON) -m ruff check .
+
+# The unit tier (docs/TESTS.md): Playwright's runner, no browser, no dev server.
+unit:
+	$(NPM_GUARD)
+	@npm --prefix app run unit
 
 # `tsc --noEmit` over app/.
 typecheck:
@@ -1836,6 +1620,15 @@ demo-mirror-rebuild:
 # takes the job out. ARGS=--dry-run is not this target's: run `python3 scripts/demo-mirror-daily.py --dry-run`.
 demo-mirror-agent:
 	@python3 scripts/demo-mirror-daily.py --agent $(ARGS)
+
+# THE DAILY MARKET READ (DEBT69): one free download of the owner's own live listings, once a day, with
+# a note `#/pricing` shows. `price-refresh-agent` installs the launchd job (main tree only), ARGS=--remove
+# removes it. `price-refresh` runs one read now over THIS checkout's store. It sweeps no archive and
+# changes no price.
+price-refresh:
+	@$(PYTHON) scripts/price-refresh-daily.py
+price-refresh-agent:
+	@python3 scripts/price-refresh-daily.py --agent $(ARGS)
 
 # CI's own step: the committed scrub, installed into app/demo/ and app/public/demo/photos/.
 # Reads no store and contacts no network. `demo-static` builds from this.

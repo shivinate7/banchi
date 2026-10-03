@@ -42,6 +42,18 @@ while what he picked was a catalog row. `server/capture_server.py:do_review_answ
 the argument. Gate B's 16 answers on 2026-08-22 went that way, so the permanence rule above
 is still real code on an untravelled path — and whether the chosen row should replace the
 model's answer here is the open decision that run put on the table.
+
+EVERY ENTRY NAMES THE ENGINE THAT READ IT (`docs/specs/identify-engine-pick.md` section 7).
+`haiku` is the paid read and is the value of every entry written before the field existed.
+`marqo-b` is the free stock-photo reader. The two never stand for each other:
+
+  - a matcher write never overwrites ANY entry, so a paid or human answer is never lost to a
+    free one, and a card already answered is skipped, not re-read;
+  - a paid write may replace a matcher entry (that is the way back), and never a cleared one;
+  - the prompt-staleness listers look at paid entries only. A matcher entry has no prompt,
+    and "stale against the prompt" would be a claim about a contract it was never read with;
+  - a paid press adopts a matcher entry as answered by default. `reread_matcher` is the
+    explicit choice to buy those cards again, and it never reaches a cleared entry.
 """
 
 from __future__ import annotations
@@ -53,6 +65,10 @@ from typing import Iterable, List, Mapping, Optional
 from store.rows import Rows, TableSpec
 
 WEAK_CONFIDENCE = "low"
+
+# The one home of the engine names. An entry with no `engine` is `haiku`.
+ENGINE_HAIKU = "haiku"
+ENGINE_MATCHER = "marqo-b"
 
 
 def now() -> str:
@@ -68,6 +84,15 @@ class CacheEntry:
     prompt_fingerprint: str
     at: str
     cleared_by_human: bool = False
+    engine: str = ENGINE_HAIKU
+    # THE REVIEW HOLD RIDES THE ENTRY. A Haiku answer read as a second look (the free reader did
+    # not accept the card) carries the matcher's pick here. Any later press that adopts the entry
+    # hands it to the run record, so `default_router` still sends the card to review until a
+    # person answers it. Absent on every other entry.
+    second_look: Optional[dict] = None
+    # The card's own name (`cid`), recorded by the background reader. A move or a renumber changes
+    # the position key and never the cid, so the row can be matched back to its card.
+    cid: Optional[str] = None
 
     @property
     def confidence(self) -> Optional[str]:
@@ -131,11 +156,17 @@ class Cache:
     def get(self, key: str) -> Optional[CacheEntry]:
         return self.entries.get(key)
 
-    def reusable(self, key: str, photo_sha256: str) -> Optional[CacheEntry]:
+    def reusable(
+        self, key: str, photo_sha256: str, reread_matcher: bool = False
+    ) -> Optional[CacheEntry]:
         """The answer to reuse for this position, or None to send the card again.
 
         A cleared answer is returned whatever the photo says — that is what permanent means.
         Otherwise the photo has to be the same photo.
+
+        A matcher answer is reusable like any other, so a paid press skips the cards the free
+        reader answered. `reread_matcher` is the owner's explicit choice to buy them again:
+        it makes an uncleared matcher entry not reusable, and touches nothing else.
         """
         entry = self.entries.get(key)
         if entry is None:
@@ -143,6 +174,8 @@ class Cache:
         if entry.cleared_by_human:
             return entry
         if entry.photo_sha256 != photo_sha256:
+            return None
+        if reread_matcher and entry.engine == ENGINE_MATCHER:
             return None
         return entry
 
@@ -156,7 +189,9 @@ class Cache:
         return sorted(
             key
             for key, entry in self.entries.items()
-            if key in current and entry.prompt_fingerprint != current[key]
+            if key in current
+            and entry.engine == ENGINE_HAIKU
+            and entry.prompt_fingerprint != current[key]
         )
 
     def weak_and_uncleared(
@@ -179,7 +214,7 @@ class Cache:
             expected = current.get(key)
             if expected is None:
                 continue
-            if entry.cleared_by_human:
+            if entry.cleared_by_human or entry.engine != ENGINE_HAIKU:
                 continue
             if entry.prompt_fingerprint == expected:
                 continue
@@ -193,13 +228,21 @@ class Cache:
         identification: dict,
         photo_sha256: str,
         prompt_fingerprint: str,
+        engine: str = ENGINE_HAIKU,
+        second_look: Optional[dict] = None,
+        cid: Optional[str] = None,
     ) -> Optional[dict]:
         """Store an answer. Refuses to overwrite a cleared one; reports a disagreement.
 
         Returns the disagreement record when a cleared entry was left in place and the new
         answer differs, so the caller can put it in the run report.
+
+        A matcher write never overwrites any entry: the card is answered already, and a free
+        read must not replace a paid or a human answer. It writes only where nothing is held.
         """
         existing = self.entries.get(key)
+        if engine == ENGINE_MATCHER and existing is not None:
+            return None
         if existing is not None and existing.cleared_by_human:
             if _differs(existing.identification, identification):
                 return {
@@ -213,6 +256,9 @@ class Cache:
             photo_sha256=photo_sha256,
             prompt_fingerprint=prompt_fingerprint,
             at=now(),
+            engine=engine,
+            second_look=second_look,
+            cid=cid,
         )
         return None
 

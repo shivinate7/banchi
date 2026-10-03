@@ -1083,7 +1083,7 @@ def off_main(root: Path = REPO_ROOT) -> Optional[str]:
     all — a container copy, the throwaway tree `scripts/serve-selftest.py` builds — has no
     branch to be wrong about and reads as `None`.
 
-    AND IT IS GATED ON `main` BEING A REAL LOCAL BRANCH, the same gate `post-checkout` uses, so
+    AND IT IS GATED ON `main` BEING A REAL LOCAL BRANCH, the same gate `scripts/primary_sync.py` uses, so
     a checkout of another repository that happens to run this file is not in violation for
     calling its trunk something else. It is also what keeps this quiet on CI, where the checkout
     is a primary one standing on a detached HEAD with no local `main` — measured, and the reason
@@ -1765,6 +1765,14 @@ def _sweep_orphans(root: Path = REPO_ROOT) -> None:
         with contextlib.suppress(OSError):
             os.killpg(os.getpgid(pid), signal.SIGTERM)
         clear_pidfile(child, root)
+    # THE BACKGROUND READER'S WATCHER (`identify/sweep.py`) is detached from the capture server and
+    # outlives it, so `make down` stops it here. It is judged by its flock and never by a pid; the
+    # watcher stops its own worker on SIGTERM.
+    from identify import sweep as match_sweep
+
+    stopped = match_sweep.stop_watcher_of(root)
+    if stopped is not None:
+        print(f"stopping the background reader (pid {stopped})")
 
 
 def owned_by_agent(root: Path = REPO_ROOT) -> bool:
@@ -1986,10 +1994,10 @@ def do_guard_foreground(_args: argparse.Namespace) -> int:
     quietly moved would serve a DIFFERENT store); what this removes is the ability to create it
     by accident.
 
-    `PKMNSCAN_FOREGROUND=ok` bypasses, in the shape `PKMNSCAN_MAIN=off` already uses — a guard
+    `PKMNSCAN_FOREGROUND=off` bypasses, in the shape `PKMNSCAN_MAIN=off` already uses — a guard
     with no visible way past it gets disarmed somewhere worse.
     """
-    if os.environ.get(FOREGROUND_ENV, "").strip().lower() in ("ok", "1", "yes"):
+    if os.environ.get(FOREGROUND_ENV, "").strip().lower() == "off":
         return 0
     pid = supervisor_pid()
     if pid is None:
@@ -2004,7 +2012,7 @@ def do_guard_foreground(_args: argparse.Namespace) -> int:
     print("  make dev              hot reload on its own port, against this server")
     print("  make up ARGS=--restart   bounce the supervisor instead")
     print("  make down             stop it, then run this again")
-    print(f"  {FOREGROUND_ENV}=ok make …   run anyway")
+    print("  Bypass: owner-only: ask the owner to run this command.")
     return 1
 
 

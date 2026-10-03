@@ -21,8 +21,10 @@ import {
   getBoxes,
   getCaptureSitting,
   getGames,
+  getMatchSweep,
   getStatus,
   newCaptureId,
+  setMatchSweep,
   openSection,
   photoUrl,
   type PhotoRef,
@@ -744,6 +746,47 @@ function KeyCaps({ k }: { k: string | readonly [string, string] }) {
   )
 }
 
+/** A rig row with no key and no fold: one switch, drawn on the same grid as `Row` so the panel keeps
+ *  its columns. `on` is null until the store has answered, and the row holds its size meanwhile
+ *  (D313): the value is a non-breaking space, never a word that then changes width. */
+function SwitchRow({
+  label,
+  icon,
+  on,
+  busy,
+  title,
+  onToggle,
+}: {
+  label: string
+  icon: IconName
+  on: boolean | null
+  busy: boolean
+  title: string
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className="capture-row"
+      role="switch"
+      aria-checked={on === true}
+      disabled={on === null || busy}
+      title={title}
+      onClick={onToggle}
+    >
+      <span aria-hidden="true" />
+      <Icon name={icon} size={15} className="capture-row-icon" />
+      <span className="capture-lab">{label}</span>
+      <span className="capture-right">
+        <span className={on === true ? 'capture-val is-armed' : 'capture-val'}>
+          {on === null ? '\u00a0' : on ? 'On' : 'Off'}
+        </span>
+      </span>
+      <span aria-hidden="true" />
+    </button>
+  )
+}
+
 function keyShortcutsText(k: string | readonly [string, string]): string {
   return typeof k === 'string' ? k : k.join(' ')
 }
@@ -1109,6 +1152,31 @@ export function CaptureScreen() {
    * keeps a manual re-open from being immediately re-closed the next render. */
   const [rigOpen, setRigOpen] = useState(restored.box === null)
   const rigTouched = useRef(false)
+  /* THE BACKGROUND READER'S SWITCH is a store row, not a device key: it is a fact about this store.
+     It is read once, when the rig is first shown, and written by the person pressing the row. */
+  const [sweepOn, setSweepOn] = useState<boolean | null>(null)
+  const [sweepBusy, setSweepBusy] = useState(false)
+  const rigShown = rigOpen || (openField !== null && RIG_FIELDS.has(openField))
+  useEffect(() => {
+    if (!rigShown || sweepOn !== null) return
+    let live = true
+    getMatchSweep()
+      .then((answer) => live && setSweepOn(answer.on))
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [rigShown, sweepOn])
+  const flipSweep = () => {
+    if (sweepOn === null) return
+    setSweepBusy(true)
+    setMatchSweep(!sweepOn)
+      .then((answer) => {
+        setSweepOn(answer.on)
+        setSweepBusy(false)
+      })
+      .catch(() => setSweepBusy(false))
+  }
   useEffect(() => {
     if (rigTouched.current) return
     if (box !== null) setRigOpen(false)
@@ -5602,6 +5670,14 @@ export function CaptureScreen() {
               onToggle={() => toggleField('trigger')}
             />
           )}
+          <SwitchRow
+            label="Match in the background"
+            icon="eye"
+            on={sweepOn}
+            busy={sweepBusy}
+            title="Matches captured cards to their stock photos in the gaps between captures. Free, and it never changes a card."
+            onToggle={flipSweep}
+          />
             </>
           )}
 

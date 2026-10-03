@@ -1,0 +1,11 @@
+[
+  { "note": "a typo finds the name, though the raw token keeps its comma", "query": "Rekenton", "names": ["Pikachu", "Renekton,"], "suggest": "Renekton" },
+  { "note": "a typo in one word of a long name suggests that word", "query": "Charzard", "names": ["Charizard ex", "Pikachu"], "suggest": "Charizard" },
+  { "note": "an accented name is found by a typo of its plain spelling", "query": "flabebee", "names": ["Flabébé"], "suggest": "Flabébé" },
+  { "note": "a short query suggests nothing", "query": "rek", "names": ["Renekton"], "suggest": null },
+  { "note": "a short query is near a name by ratio and still suggests nothing", "query": "pika", "names": ["Pikachu"], "suggest": null },
+  { "note": "a query too far from a name suggests nothing", "query": "pikarex", "names": ["Pikachu"], "suggest": null },
+  { "note": "a query nothing is near suggests nothing", "query": "zzzzzzzz", "names": ["Renekton", "Pikachu"], "suggest": null },
+  { "note": "a query that is already a name gets no hint", "query": "pikachu", "names": ["Pikachu", "Pikachuu"], "suggest": null },
+  { "note": "a blank query gets no hint", "query": "   ", "names": ["Pikachu"], "suggest": null }
+]

@@ -5,6 +5,7 @@ import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
 
+import { afterPaint, settleMotion } from './motionSettled'
 import type {
   OrdersPayload,
   Place,
@@ -366,13 +367,14 @@ test('a pull press causes no layout shift in the half second after it', async ({
   const wire = await open(page)
   const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
   await expect(rows.nth(0)).toBeVisible()
-  await page.waitForTimeout(1000)
+  await settleMotion(page)
+  await afterPaint(page)
 
   const from = await markNow(page)
   await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
   await expect(rows.nth(0).getByRole('button', { name: 'Undo' })).toBeVisible()
-  await page.waitForTimeout(600)
+  await page.waitForTimeout(600) // keep: shifts are read over the 500ms window after the press
 
   const inWindow = (await readShifts(page)).shifts.filter((s) => s.at >= from && s.at < from + 500)
   expect(sumOf(inWindow), `the press moved ${describeShifts(inWindow)}`).toBeLessThan(0.0005)

@@ -39,7 +39,7 @@ make map            # docs/map.py rendered. ARGS=<package|path|D<n>|--stale|--de
                     #   ARGS="D<n> --full" prints that entry verbatim.
 make explain        # what `make check` runs, and what each row is worth. ARGS=<target>.
 make serve-scope    # first path gate, read by `make serve-selftest`. ARGS=list | "classify --base <rev>".
-                    #   PKMNSCAN_SERVE_SCOPE=off runs it anyway.
+                    #   PKMNSCAN_SERVE_SCOPE=all runs it anyway (run-everything, not a hatch).
 make guard-scope    # second path gate, read by each gated self-test. ARGS=list | classify.
 make orient         # ARGS=<file.tsx> [--name <C>]: which component draws it. Run before briefing a screen.
 make map-fix        # adds a file's cited decision ids to docs/map.py. Previews. ARGS=--write.
@@ -76,10 +76,12 @@ make demo-mirror SOURCE=<checkout>  # owner's Mac only: scrub, crop, commit `dem
 make demo-mirror-agent  # owner's Mac, main tree only: a daily launchd job that refreshes the mirror
                     #   and auto-merges a mirror-only PR on green CI (D295, the public demo is the scrubbed real store). ARGS=--remove removes it.
 make demo-mirror-install  # CI's step: install the committed scrub. No store, no network.
+make price-refresh  # ONE free download of the live listings now, over this checkout's store, and the note `#/pricing` shows. No sweep, no price change.
+make price-refresh-agent  # owner's Mac, main tree only: a daily launchd job that runs it (D104 (live fetch is guarded)). ARGS=--remove removes it.
 make demo-static    # demo-mirror-install, then a static build to dist-demo/.
 make demo-preview   # serve dist-demo/ as a static host would.
 make check          # the whole suite, product first, guard self-tests last. `make explain` lists it.
-make ci-check       # the same targets as `check`, as CI runs them on a fresh clone.
+make ci-check       # the same list as `check`, from `scripts/checks.py`. CI runs it as four shards, `revert-guard` apart.
 make css-var-check  # a `var(--x)` with no fallback and no definition. PKMNSCAN_CSS_VARS=off skips it.
 make token-literal-check  # a CSS literal equal to a design token, ratcheted per file. PKMNSCAN_TOKEN_LITERALS=off skips it.
 make catalog-refresh  # re-clone pokemon-tcg-data into vendor/. Writes. ARGS=--dry-run.
@@ -99,6 +101,13 @@ make catalog-mirror # dry run only. ARGS=--dry-run samples over HTTP HEAD.
                                    #   import-listed.csv and import-subthreshold.csv. --split-games writes one file per game.
                                    #   --live-guard FILE trims rows so TCGplayer never holds more copies than
                                    #   are here. --reprice-live F adds a price-only row per live card F names.
+./pkmnscan match    status | prepare [--model-only | --fingerprints-only]  # the free reader's setup. Prepare
+                                   # downloads the pinned model file and reads each stock photo once (D301, stock photos
+                                   # are hotlinked, never mirrored; this is its one exception). Nothing starts it but the
+                                   # owner's press. `match --sweep` is the background reader's watcher (off until the
+                                   # Capture screen's Rig switch is on; never spends; reads even mid-feed).
+                                   # `identify --engine marqo-b`
+                                   # reads free first, then sends each card it cannot accept to Haiku, held for review.
 ./pkmnscan cards    name | audit [--verbose] | photos [--write] [--limit N] | identity [--write]
                                    # stable card names. `make cid-audit` runs the audit.
 ./pkmnscan prices   adopt [--write] | show [--held]  # the price corpus. Adopt folds legacy decisions.json in.
@@ -148,7 +157,7 @@ The legacy aliases at the foot of tokens.css are dead. A new rule may not read o
 - **Type has three roles.** `--bn-font-display` (Manrope, headings), `--bn-font-ui` (Inter),
   `--bn-font-mono` (JetBrains Mono, machine strings only: SKUs, run names, reason codes, key caps,
   card numbers). Tables use Inter tabular-nums. Money uses `.bn-money` (D221, money stays mono), asserted by
-  `app/tests/money-face.spec.ts`. Body is 14px.
+  `app/tests/text-checks.spec.ts`. Body is 14px.
 - **The kit is `app/src/kit/` and `app/src/kit.css`.** `#/gallery` renders it. Reach for the kit before
   you write a primitive.
 - **Register.** Sentences on screen, not machine strings. Enum values are labeled. An empty state is a
@@ -157,7 +166,7 @@ The legacy aliases at the foot of tokens.css are dead. A new rule may not read o
 - **No typed middle dot or bullet (U+00B7, U+2022) in a user-visible string** (D218, a typed dot is a defect).
   CSS draws the separator. The `typed interpunct` row of `make docs-audit` enforces it, with a shrinking list (D280, lists of offenders).
 - **Text shape is three checks, none a count** (D284, three checks replace one ceiling):
-  `app/tests/text-shape.spec.ts`, `app/tests/machine-words.spec.ts`, `app/tests/money-face.spec.ts`. Each reads
+  all in `app/tests/text-checks.spec.ts`, one sweep. Each reads
   a shrinking allow list in `app/tests/`, keyed to the finding.
 - **The mark is generated** (D102, the mark has its own palette). `scripts/build-mark.mjs` writes it. Never put a `border-radius` on it.
 - **`base.css` sets four floors** (D50, feedback is the product's; D118, a press changes what is on screen):
@@ -230,7 +239,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **Real CSV libraries only.** PapaParse (JS), `csv` (Python). Never `split(",")`.
 - **Not a Claude artifact.** No `window.storage`, no `facingMode: "environment"`, nothing about a card in `localStorage`.
   **Eleven keys are stored on the device**, each a fact about this machine and not a card. `app/src/useCamera.ts`
-  holds `banchi.capture.deviceId` and `banchi.capture.rotation`. `app/src/deviceMemory.ts` holds `banchi.theme`,
+  holds `banchi.capture.deviceId` and `banchi.capture.rotation`. `app/src/deviceMemory.ts` holds `banchi.theme` (a `THEMES` id: light, dark, abyssal-bloom or carnival-midway),
   `banchi.rail`, `banchi.orders.fetch-filter`, `banchi.inventory.hide-sold`, `banchi.box-recency`,
   `banchi.capture.setup` (six values as one document, D142, the setup outlives the browser), `banchi.capture.sections` (kept until the sitting
   ends, D164, the undo stack is the sitting) and `banchi.runs.spend-notice` (a notice, never a cap, D180, a press names the cards). `app/src/Orders.tsx` holds
@@ -301,11 +310,12 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   **NOT MECHANIZED:** a machine cannot tell a date from a version number, a port or a test fixture without intent.
 - **Opsec.** A live unredeemed code card is a bearer instrument. No code-card photo in a listing, README,
   screenshot or commit. `scripts/githooks/pre-commit` enforces it, armed by `make hooks`.
-- **Nine shell mistakes are refused before they run** by `scripts/guard-shell.py --hook` on Bash and Write/Edit (D135, Codex reads the same rules).
-  Each clause fails open on its own bugs. Each has an escape hatch that its refusal names: `PKMNSCAN_CHECKOUT`, `PKMNSCAN_TREE`, `PKMNSCAN_GH`,
-  `PKMNSCAN_LINK`, `PKMNSCAN_WAIT`, `PKMNSCAN_PUSH`, `PKMNSCAN_STASH`, `PKMNSCAN_RESET`, `PKMNSCAN_NARRATE`
-  (D235, the heartbeat is refused a pipe). The ninth clause names its subjects, a short per-incident roster
-  that the self-test reconciles. The other eight resolve what a command would do. `make guard-shell-selftest` proves each one in a throwaway repo.
+- **Seven shell mistakes are refused before they run** by `scripts/guard-shell.py --hook` on Bash and Write/Edit (D135, Codex reads the same rules).
+  Claude Code sets `GUARD_SHELL_SKIP=checkout,stash,reset` (`--skip` is an alias), because the shared layer's guard owns those three there. Codex runs all seven.
+  Each clause fails open on its own bugs. A tool call that sets a real `PKMNSCAN_*=off` is refused as owner-only, with no switch named, unless it is a recovery lever (`PKMNSCAN_KILL`, `PKMNSCAN_SUITE_LOCK`, `PKMNSCAN_SERVE_MAIN`, `PKMNSCAN_SYNC`). Only the owner's terminal and CI set the rest (D042 (main moves by pull request) and D179 (shell mistakes are refused by resolving)). Each has an owner-held escape hatch, never printed to an agent: `PKMNSCAN_CHECKOUT`, `PKMNSCAN_TREE`,
+  `PKMNSCAN_WAIT`, `PKMNSCAN_PUSH`, `PKMNSCAN_STASH`, `PKMNSCAN_RESET`, `PKMNSCAN_NARRATE`
+  (D235, the heartbeat is refused a pipe). The narrate clause names its subjects, a short per-incident roster
+  that the self-test reconciles. The other six resolve what a command would do. `make guard-shell-selftest` proves each one in a throwaway repo.
   A hatch counts only as a real assignment (env prefix, `export` or `env`), never a mention. Every `PKMNSCAN_*=off` a command sets is logged, and `make status` shows the last 24 hours. A hatch set in the environment is not logged, and `make status` lists it under `hatches` (D179, shell mistakes are refused by resolving them).
 - **A citation names a symbol, never a line.** Write a decision id, a section or `module.symbol` (no `.py`).
   A method is "`module.Class`'s `method`". A CSS rule is its selector.

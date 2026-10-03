@@ -112,8 +112,10 @@ re-derived: `_real` and its symlink trap, the process table, the leader-only `ki
 grew a second, disagreeing notion of what is safe to stop.
 
 **It imports nothing from this tree**, for `janitor.py`'s reason: both stay repo-agnostic so a hook can
-point them at any checkout. **The repo's own `.claude/settings.json` carries the hook as well**, so the guard is armed in this tree and in
+point them at any checkout. **The repo's own `.codex/hooks.json` carries the hook**, so the guard is armed in this tree and in
 every worktree cut from it with no per-machine step at all — the repo's copy is the only one, run from `scripts/`.
+`.claude/settings.json` does not, on the owner's word: the shared layer's machine-wide-kill rule
+owns the Claude side.
 
 ### Amended 2026-09-10, the same day: a root may not be a directory that contains everything
 

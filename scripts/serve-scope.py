@@ -29,8 +29,8 @@ drift would be invisible: both would answer, and nobody would know which was rig
 
 IT FAILS OPEN, IN EVERY DIRECTION. No merge-base, a diff it cannot compute, an EMPTY diff
 (more likely a wrong base than an empty change), a `CARRY` it cannot read, and a recipe it
-cannot extract all answer RUN, out loud. Only an explicit skip skips, and `PKMNSCAN_SERVE_SCOPE=off`
-turns the whole gate off and is printed every time it skips.
+cannot extract all answer RUN, out loud. Only an explicit skip skips, and `PKMNSCAN_SERVE_SCOPE=all`
+runs it anyway. That adds a check, so it is not a hatch.
 
     scripts/serve-scope.py classify [--base REV] [--head REV]
         Prints the reasoning and exits 0 to RUN, 3 to SKIP. `make serve-selftest` reads it.
@@ -143,8 +143,8 @@ def scope_for(entry: dict) -> str:
 
 def classify(base: str | None, head: str) -> tuple:
     browser = _browser_scope()
-    if os.environ.get(HATCH) == "off":
-        return True, [f"{HATCH}=off — the self-test RUNS."]
+    if os.environ.get(HATCH) == "all":
+        return True, [f"{HATCH}=all — the self-test RUNS."]
     reference = base or "origin/main"
     # `classify_revisions` would use browser-scope's OWN scope, so the git half is borrowed
     # piece by piece and the pure half is called with ours.
@@ -156,10 +156,11 @@ def classify(base: str | None, head: str) -> tuple:
         return True, [f"`git diff {start[:12]} {head}` failed — the self-test RUNS."]
     verdict = browser.classify_paths(
         paths, browser.git_reader(start, head), scope=SCOPE,
-        subject="what `make serve-selftest` reads", noun="the self-test")
+        subject="what `make serve-selftest` reads", noun="the self-test",
+        ast_skip=browser.skippable_on_ast([ROOT / "scripts" / "serve-selftest.py"]))
     lines = [f"{len(paths)} changed path(s) from {start[:12]} to {head}:"] + list(verdict.lines)
     if not verdict.run:
-        lines.append(f"  ({HATCH}=off runs it anyway.)")
+        lines.append(f"  ({HATCH}=all runs it anyway.)")
     return verdict.run, lines
 
 
@@ -196,6 +197,25 @@ def selftest() -> int:
     check("one in-scope path among many runs it",
           verdict(["docs/DESIGN.md", "app/src/Home.tsx", "store/master.py"]), True)
 
+    # A COMMENT OR DOCSTRING EDIT OF A CARRIED MODULE CANNOT MOVE IT (equal AST); code can, and a
+    # file the self-test NAMES (it patches `serve.py` by exact text) never skips on equal AST.
+    skippable = browser.skippable_on_ast([ROOT / "scripts" / "serve-selftest.py"])
+    def edit(old: str, new: str) -> bool:
+        return browser.classify_paths(
+            ["cli/cmd_pricearchive.py"], lambda side, path: old if side == "base" else new,
+            scope=SCOPE, subject="x", noun="y", ast_skip=skippable).run
+
+    check("a docstring-only edit of a carried module does not run it",
+          edit('"""a."""\nx = 1\n', '"""b."""\nx = 1  # c\n'), False)
+    check("a code edit of a carried module runs it",
+          edit('"""a."""\nx = 1\n', '"""a."""\nx = 2\n'), True)
+    check("an unparseable edit runs it", edit('x = 1\n', 'x = (\n'), True)
+    check("a quote swap in the file the self-test patches by text runs it",
+          browser.classify_paths(
+              ["scripts/serve.py"],
+              lambda side, path: "x = 'a'\n" if side == "base" else 'x = "a"\n',
+              scope=SCOPE, subject="x", noun="y", ast_skip=skippable).run, True)
+
     # EACH FAIL-OPEN ARM, forced through a stub matcher: the real VCS never fails on demand,
     # so a flipped arm (skip where it must RUN) would stay green. The control proves the
     # stub can make the gate SKIP at all.
@@ -204,7 +224,8 @@ def selftest() -> int:
             landing_base=lambda reference, head: "a" * 40,
             changed_paths=lambda start, head: ["app/src/Orders.tsx"],
             git_reader=lambda start, head: (lambda side, path: ""),
-            classify_paths=browser.classify_paths)
+            classify_paths=browser.classify_paths,
+            skippable_on_ast=browser.skippable_on_ast)
         for name, value in overrides.items():
             setattr(stub, name, value)
         real = globals()["_browser_scope"]

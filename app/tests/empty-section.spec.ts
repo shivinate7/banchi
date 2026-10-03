@@ -240,6 +240,8 @@ async function open(page: Page, extraBoxes: readonly Record<string, unknown>[] =
   await page.route(/\/pipeline\/runs$/, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"runs": []}' }),
   )
+  // Inventory's Deleted boxes shelf reads the burial lines; this store has none.
+  await page.route(/\/graveyard(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"departed":[]}' }))
   await page.route(/\/queues$/, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ review: [], parked: [] }) }),
   )
@@ -532,6 +534,8 @@ async function openSale(page: Page): Promise<{ sell: () => void }> {
   await page.route(/\/pipeline\/runs$/, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"runs": []}' }),
   )
+  // Inventory's Deleted boxes shelf reads the burial lines; this store has none.
+  await page.route(/\/graveyard(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"departed":[]}' }))
   await page.route(/\/queues$/, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ review: [], parked: [] }) }),
   )

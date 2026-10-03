@@ -127,23 +127,11 @@ SOURCES = (
                "owns its format",
     },
     {
-        "path": "scripts/icloud-sweep.py",
-        "kind": "file",
-        "requires": (),
-        "why": "counts iCloud Drive conflict copies — run by icloud() below. Run rather than "
-               "reimplemented, so the pattern that decides what a conflict copy IS lives in "
-               "one file",
-    },
-    {
-        "path": "scripts/stop-gate.sh",
-        "kind": "file",
-        "requires": (),
-        "why": "whether the per-turn harness gate is armed, and its own reason if not — run "
-               "by guards() below through its `--status` flag. That flag exists to answer "
-               "exactly this and had no caller anywhere: not in the Makefile, not here, not "
-               "in checks.py, not in either hook roster. A guard that has stood down prints "
-               "nothing while it is standing down, so the one output a cold session reads "
-               "is where its state belongs",
+        "path": "scripts/refusal_log.py",
+        "kind": "defs",
+        "requires": ("recent",),
+        "why": "the refusal log's reader, loaded by refusals() — every guard writes the log "
+               "through this file, which owns its format",
     },
     {
         "path": "scripts/serve.py",
@@ -760,8 +748,23 @@ def hatch_uses(where: Path) -> List[str]:
     return out
 
 
+def refusals(where: Path) -> List[str]:
+    """Refusals in the last 24 hours, per rule, on one line, from the log every guard appends to."""
+    log, why = sidecar("scripts/refusal_log.py", "refusal_log")
+    if log is None:
+        return [field("refusals", why)]
+    try:
+        counts = log.recent(str(where))
+    except OSError as exc:
+        return [field("refusals", f"log unreadable — {exc}")]
+    if not counts:
+        return [field("refusals", "none in the last 24h")]
+    return [field("refusals", f"{sum(counts.values())} in the last 24h: "
+                  + ", ".join(f"{rule} {n}" for rule, n in sorted(counts.items())))]
+
+
 def guards() -> List[str]:
-    """Which guards are standing down right now, and whether the turn gate is armed.
+    """Which guards are standing down right now.
 
     **A GUARD SWITCHED OFF IS INVISIBLE BY CONSTRUCTION.** Every hatch in this repo is
     printed by the refusal it lifts — which means that when it is SET, no refusal happens,
@@ -769,15 +772,9 @@ def guards() -> List[str]:
     `PKMNSCAN_DOCS=off` exported in a shell profile, a launchd plist or a wrapper kills one
     of the only two checks on the commit path in every session from then on.
 
-    So the two things that cannot report themselves are reported here, where a cold session
+    So the thing that cannot report itself is reported here, where a cold session
     starts. `env | grep PKMNSCAN` is the one-line version of the first half and nobody runs
     it unprompted.
-
-    **`scripts/stop-gate.sh --status` existed to answer the second and had no caller.** It
-    is the per-turn harness gate — armed or disarmed, with its own reason — and it was
-    reachable from no Makefile target, no status output, and neither hook roster. Run
-    rather than reimplemented, for `icloud-sweep`'s reason: the rule that decides whether
-    the gate is armed lives in one file.
 
     GATES NOTHING. This script's job is saying what state you are actually in.
     """
@@ -794,19 +791,13 @@ def guards() -> List[str]:
     else:
         lines.append(field("hatches", "none set — every guard in this shell is armed"))
 
+    redirect = os.environ.get("PKMNSCAN_REFUSAL_LOG")
+    if redirect:
+        lines.append(field("hatches", f"PKMNSCAN_REFUSAL_LOG={redirect} — every refusal is "
+                                      "logged there, and not to this clone's log"))
     lines += hatch_uses(ROOT)
+    lines += refusals(ROOT)
 
-    gate = resolve("scripts/stop-gate.sh")
-    if gate:
-        try:
-            done = subprocess.run(
-                [str(gate[0]), "--status"], cwd=str(ROOT),
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=15, check=False,
-            )
-            answer = done.stdout.decode("utf-8", errors="replace").strip() or "no answer"
-        except (OSError, subprocess.SubprocessError) as exc:
-            answer = f"could not be asked — {exc}"
-        lines.append(field("turn gate", answer))
     return lines
 
 
@@ -1052,39 +1043,6 @@ def ports_and_store() -> List[str]:
     return out
 
 
-def icloud() -> List[str]:
-    """How many iCloud Drive conflict copies are lying in this tree.
-
-    Reported and never acted on. They are untracked, the pre-commit hook already refuses to
-    COMMIT one, and `make hooks` installs only what git tracks — so the two ways one could do
-    damage are closed and what is left is clutter that a person clears when they feel like it.
-    What was NOT closed until this line existed is noticing: they are invisible to every
-    normal command, and the way they surfaced was a commit failing on the repo-map orphan rule
-    and, once, one being installed as a git hook.
-
-    Silent when there are none, which has been the permanent case since the repo moved off
-    iCloud Drive on 2026-08-29. Kept rather than deleted for D44's amended reason: the check is
-    a scan of this tree, and a tree can be put back inside a synced folder without telling it.
-    """
-    found = resolve("scripts/icloud-sweep.py")
-    if not found:
-        return []
-    done = subprocess.run(
-        [sys.executable, str(found[0])],
-        cwd=str(ROOT), capture_output=True, text=True, check=False,
-    )
-    summary = ""
-    for line in done.stdout.splitlines():
-        if line.startswith("icloud-sweep:"):
-            summary = line.split(":", 1)[1].strip()
-    if not summary or summary == "no conflict copies":
-        return []
-    return [
-        field("iCloud copies", summary.split("  (")[0]),
-        cont("`make icloud-sweep` lists them; ARGS=--delete removes the identical ones"),
-    ]
-
-
 def leftovers() -> List[str]:
     """A pointer, never a count (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep"). The sweep that counts is claude-settings' and takes
     minutes on this machine, so `make status` does not run it."""
@@ -1189,7 +1147,7 @@ def render() -> str:
     lines += blind_spots(mapdata)
     lines.append(field("the map", "`make map` renders docs/map.py — a package, a path, a"))
     lines.append(cont("decision id, or `--stale` for prose its file has outrun."))
-    lines += ["", "REPO"] + repo() + hooks() + guards() + ports_and_store() + icloud() + leftovers()
+    lines += ["", "REPO"] + repo() + hooks() + guards() + ports_and_store() + leftovers()
     lines += ["", "SERVING"] + serving() + slow_requests()
     lines += ["", "STORE"] + store()
 

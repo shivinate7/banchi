@@ -4,8 +4,10 @@ import {
   cropPreview,
   describeFailure,
   getGames,
+  getMatchState,
   getRuns,
   photoUrl,
+  prepareMatch,
   preflightRun,
   startRun,
   type Failure,
@@ -15,6 +17,7 @@ import type {
   BoxRecord,
   CropPreview,
   GameEntry,
+  MatchState,
   RunPreflight,
   RunSelection,
   RunSend,
@@ -29,6 +32,8 @@ import { LogWell } from './RunsLog'
 import { whenLabel } from './RunsStage'
 import { boxesLabel, boxLabel, runBoxLabel } from './runScope'
 import { money } from './money'
+import { usePoll } from './usePoll'
+import { DEFAULT_ENGINE, HAIKU_NAME_TOOLTIP, MATCHER_NAME_TOOLTIP, type Engine } from './engines'
 import { storeKeyText } from './storeKey'
 import { rememberSpendNotice, storedSpendNotice } from './deviceMemory'
 import { carriedByBox, type CarriedScope } from './runHandoff'
@@ -335,6 +340,106 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`
 }
 
+/** A card the free reader's pool rules leave unread, in a sentence. The codes are the reader's own
+ *  and never drawn. An unknown code is still counted, in words that do not guess at its cause. */
+function unreadLine(code: string, n: number): string {
+  const cards = plural(n, 'card')
+  switch (code) {
+    case 'set_not_resolved':
+      return `${cards} have a set hint that does not name one set`
+    case 'pokemon_needs_a_set':
+      return `${cards} are Pokemon with no set named`
+    case 'promo_set':
+      return `${cards} are in a promo set`
+    case 'game_not_served':
+      return `${cards} are a game the free read does not cover`
+    case 'set_not_indexed':
+    case 'no_index':
+      return `${cards} are in a set that has no stock photos read yet`
+    default:
+      return `${cards} go to the second look`
+  }
+}
+
+/** What reading the matched cards again costs, on the ask's own line. The quote is the server's, so
+ *  the per-card figure is its own estimate divided by the cards it is for, never a second cost model.
+ *  With nothing quoted to divide, the line says the cost shows once the ask is on. */
+function askCostLine(total: RunPreflight['total'], on: boolean): string {
+  const again = total.matcher_read ?? 0
+  const sent = total.to_send ?? 0
+  const estimate = total.estimate_usd
+  if (estimate === null || sent === 0) {
+    return on ? 'These are in the figure above.' : 'Its cost shows when you turn this on.'
+  }
+  const about = money((estimate / sent) * again)
+  return on ? `These are in the figure above: about ${about}.` : `Reading them again would add about ${about}.`
+}
+
+/** The free reader's setup, on the second stage. THE OWNER'S PRESS IS THE ONLY THING THAT DOWNLOADS
+ *  OR READS: the card says the sizes first and the press starts it. Free, so no money gate, but the
+ *  download is a large one and the owner asked that nothing fetch on its own. While it runs the line
+ *  holds its own box, so the stage does not move (D313). */
+function MatchPrepare({
+  state,
+  trouble,
+  preparing,
+  onPrepare,
+}: {
+  readonly state: MatchState | null
+  readonly trouble: string | null
+  readonly preparing: boolean
+  readonly onPrepare: () => void
+}) {
+  if (state === null) {
+    return trouble !== null ? (
+      <Notice tone="warn">{trouble}</Notice>
+    ) : (
+      <Loading rows={1} label="Checking whether matching is ready" />
+    )
+  }
+  const running = state.running || preparing
+  const progress = state.progress
+  const megabytes = Math.round(state.model_bytes / 1_000_000)
+  const line =
+    progress !== null && running
+      ? progress.phase === 'model'
+        ? `Downloading, ${progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0}%`
+        : `Reading stock photos, ${progress.done} of ${progress.total} sets`
+      : null
+  if (state.ready && !running) {
+    return (
+      <div className="runs-match-ready">
+        <p className="run-step-fine">
+          Ready. {count(state.fingerprints)} stock photos read
+          {(state.no_image ?? 0) > 0 ? `, ${state.no_image} printings have none` : ''}.
+          {typeof state.matched === 'number' ? ` ${plural(state.matched, 'card')} matched for free so far.` : ''}
+        </p>
+        <Button size="sm" variant="quiet" onClick={onPrepare}>
+          Refresh stock photos
+        </Button>
+      </div>
+    )
+  }
+  return (
+    <Notice
+      tone={progress?.state === 'failed' && !running ? 'warn' : 'info'}
+      title="Matching needs a one-time setup"
+      action={
+        <Button size="sm" variant="primary" busy={running} disabled={running} onClick={onPrepare}>
+          Prepare matching
+        </Button>
+      }
+    >
+      {running
+        ? (line ?? 'Starting')
+        : progress?.state === 'failed'
+          ? progress.message
+          : `A ${megabytes} MB download, then a read of the stock photos for the sets you hold and every Riftbound set. It costs nothing and keeps going if you close this sheet.`}
+      {trouble !== null ? <span> {trouble}</span> : null}
+    </Notice>
+  )
+}
+
 /** The next whole dollar at or above a figure, floored at the notice's own default. What the
  *  one-press raise sets, so "stop asking" means this send AND the ones like it rather than this
  *  send to the cent. */
@@ -380,6 +485,25 @@ export function RunsComposer({
     setReading((held) => ({ ...held, ...patch }))
   }, [])
 
+  /* WHO READS THE CARDS (`engines.ts`). The free read is the default pick every time the sheet opens, and
+     the pick is not stored on the device. `rereadMatcher` is the paid press's explicit ask, and it
+     starts off every time: a press over cards the free reader matched asks again at each press. */
+  const [engine, setEngine] = useState<Engine>(DEFAULT_ENGINE)
+  const [rereadMatcher, setRereadMatcher] = useState(false)
+  const [matchState, setMatchState] = useState<MatchState | null>(null)
+  const [matchTrouble, setMatchTrouble] = useState<string | null>(null)
+  const [preparing, setPreparing] = useState(false)
+  const free = engine === 'marqo-b'
+  const matchReady = matchState?.ready === true
+  /* A FRESH OPENING IS THE FREE READ, AND ASKS AGAIN. The pick is a fact about one press, never a
+     preference the device keeps. */
+  useEffect(() => {
+    if (open) {
+      setEngine(DEFAULT_ENGINE)
+      setRereadMatcher(false)
+    }
+  }, [open])
+
   /* The preflight's answer — step one of the money gate — and the send it was quoted for. */
   const [quote, setQuote] = useState<RunPreflight | null>(null)
   const [ticket, setTicket] = useState('')
@@ -420,8 +544,15 @@ export function RunsComposer({
   /* WHAT WOULD ACTUALLY BE SENT, in the shape `server.ts` puts on the wire. One derivation feeds
      the preflight, the preview, the confirm and the void key below. */
   const send = useMemo(
-    () => ({ selection, crop: reading.crop, maxEdge: reading.maxEdge }),
-    [selection, reading],
+    () => ({
+      selection,
+      engine,
+      /* The free reader crops its own photograph, so the reading means nothing to it. */
+      crop: free ? undefined : reading.crop,
+      maxEdge: free ? undefined : reading.maxEdge,
+      rereadMatcher: !free && rereadMatcher ? true : undefined,
+    }),
+    [selection, reading, engine, free, rereadMatcher],
   )
 
   /* The whole send as one string, so an effect can compare it. Spelled out term by term rather
@@ -440,8 +571,10 @@ export function RunsComposer({
         selection.run ?? '',
         reading.crop ? 'crop' : 'whole',
         reading.maxEdge,
+        engine,
+        rereadMatcher ? 'again' : 'skip',
       ].join('|'),
-    [selection, reading],
+    [selection, reading, engine, rereadMatcher],
   )
 
   const scoped = startAnswered(draft, carried)
@@ -455,9 +588,19 @@ export function RunsComposer({
     }
   }, [sendKey, ticket])
 
+  /* The paid press's ask over matched cards moves the send too, but it is pressed ON the quote, so
+     it asks for a fresh quote at once instead of throwing the figure away and walking the operator
+     back a stage. `requote` is set by that one control and nothing else. */
+  const requote = useRef(false)
+
   /* And the cost stage cannot stand without a quote under it. */
   useEffect(() => {
     if (stage === 'quote' && quote === null && busy !== 'quote') {
+      if (requote.current) {
+        requote.current = false
+        void doQuoteRef.current()
+        return
+      }
       setStage('read')
       toast({
         kind: 'status',
@@ -672,6 +815,7 @@ export function RunsComposer({
   const doQuote = useCallback(
     () =>
       guard('quote', async () => {
+        if (free && !matchReady) return
         const answer = await preflightRun(send)
         setQuote(answer)
         setTicket(sendKey)
@@ -679,8 +823,41 @@ export function RunsComposer({
         setRaised(null)
         setStage('quote')
       }),
-    [guard, send, sendKey],
+    [guard, send, sendKey, free, matchReady],
   )
+  const doQuoteRef = useRef(doQuote)
+  doQuoteRef.current = doQuote
+
+  /* THE FREE READER'S STATE, read when the sheet opens over the second stage and kept fresh while a
+     Prepare runs. FREE: the route loads no model. Polled through `usePoll` like every other poll
+     (D207), and only while it is wanted. */
+  const wantMatch = open && (free || stage === 'read')
+  const matchPoll = usePoll<MatchState>({
+    fn: getMatchState,
+    onData: (data) => {
+      setMatchState(data)
+      setMatchTrouble(null)
+      if (!data.running) setPreparing(false)
+    },
+    onError: () => setMatchTrouble('Could not check whether matching is ready.'),
+    liveMs: 1500,
+    idleMs: 15000,
+    isLive: (data) => data.running,
+    enabled: wantMatch,
+  })
+
+  const doPrepare = async () => {
+    setPreparing(true)
+    setMatchTrouble(null)
+    try {
+      await prepareMatch()
+      setMatchState(await getMatchState())
+      matchPoll.refresh()
+    } catch (err) {
+      setPreparing(false)
+      setMatchTrouble(describeFailure(err).message)
+    }
+  }
 
   /* OPEN, THEN SPEND (the owner's Q5 ruling, D33 kept). The cost check is free, so it runs the
      moment the sheet opens over cards it can already name: the press that carried the scope
@@ -694,9 +871,12 @@ export function RunsComposer({
       return
     }
     if (autoQuoted.current || !scoped || stage !== 'select' || quote !== null || busy !== null) return
+    /* The free reader quotes only once it is known to be prepared. Until then the second stage
+       says what is missing and offers Prepare, and Check cost waits. */
+    if (free && !matchReady) return
     autoQuoted.current = true
     void doQuote()
-  }, [open, scoped, stage, quote, busy, doQuote])
+  }, [open, scoped, stage, quote, busy, doQuote, free, matchReady])
 
   const doStart = () =>
     guard('start', async () => {
@@ -774,6 +954,9 @@ export function RunsComposer({
     { value: 'run' as StartKey, label: 'A previous run’s cards', icon: 'history' as const },
   ]
 
+  /* THE SECOND STAGE ASKS WHO READS FIRST, and for the free read there are no photos to send. */
+  const stageTitle = stage === 'read' && free ? 'Who reads the cards' : stage === 'quote' && free ? 'What it will read' : TITLES[stage]
+
   const estimate = quote?.total.estimate_usd ?? null
   const overNotice = estimate !== null && estimate > notice
 
@@ -782,15 +965,15 @@ export function RunsComposer({
      column. `passKeys`: the preview's own arrow keys step the selection (the effect above), so
      the kit must not swallow them. It builds its own head, because the stage list lives there. */
   return (
-      <Dialog kind="dialog" label={TITLES[stage]} onClose={close} passKeys className="runs-composer">
+      <Dialog kind="dialog" label={stageTitle} onClose={close} passKeys className="runs-composer">
         <header className="runs-composer-head">
           <div className="runs-composer-heading">
             <span className="bn-eyebrow">
               <span>Identify</span>
-              <span>costs money</span>
+              <span>{free ? 'free first' : 'costs money'}</span>
             </span>
             <h2 className="runs-composer-title" id="runs-composer-title">
-              {TITLES[stage]}
+              {stageTitle}
             </h2>
           </div>
           <ol className="runs-stages" aria-label="Stages">
@@ -1057,6 +1240,48 @@ export function RunsComposer({
           {stage === 'read' ? (
             <div className="runs-composer-stage runs-composer-read" key="read">
               <div className="runs-reading">
+                <div className="run-engine">
+                  <div className="run-read-head">
+                    <span className="run-read-title">Who reads these cards</span>
+                  </div>
+                  <Segmented<Engine>
+                    className="run-engines"
+                    label="Who reads these cards"
+                    value={engine}
+                    options={[
+                      {
+                        value: 'marqo-b',
+                        label: 'Match to stock photos',
+                        icon: 'layers',
+                        title: MATCHER_NAME_TOOLTIP,
+                      },
+                      {
+                        value: 'haiku',
+                        label: 'Read from the photo',
+                        icon: 'eye',
+                        title: HAIKU_NAME_TOOLTIP,
+                      },
+                    ]}
+                    onChange={(next) => {
+                      setEngine(next)
+                      setRereadMatcher(false)
+                    }}
+                  />
+                  <p className="run-step-fine runs-engine-says">
+                    {free
+                      ? 'Reads every card for free first. It needs a stock photo for each card and cannot tell foil from normal. Cards it is unsure of get a second look from the paid read, then wait in your review queue.'
+                      : 'Reads the name, the number and the foil from the photograph. Costs money, quoted before anything is spent.'}
+                  </p>
+                  {free ? (
+                    <MatchPrepare
+                      state={matchState}
+                      trouble={matchTrouble}
+                      preparing={preparing}
+                      onPrepare={() => void doPrepare()}
+                    />
+                  ) : null}
+                </div>
+                {free ? null : (
                 <div className="run-read">
                   <div className="run-read-head">
                     <span className="run-read-title">One reading for this press</span>
@@ -1118,8 +1343,10 @@ export function RunsComposer({
                       two readings is two presses, which is what it always was in practice. */}
 
                 </div>
+                )}
               </div>
 
+              {free ? null : (
               <aside className="run-preview" aria-label="What this reading sends">
                 <div className="run-preview-head">
                   <span className="bn-label">What this reading sends</span>
@@ -1250,6 +1477,7 @@ export function RunsComposer({
                   </div>
                 )}
               </aside>
+              )}
             </div>
           ) : null}
 
@@ -1257,15 +1485,38 @@ export function RunsComposer({
           {stage === 'quote' && quote !== null ? (
             <div className="runs-composer-stage runs-quote run-quote" key="quote">
               <div className="runs-quote-figure">
-                <span className="bn-label">Estimated cost</span>
+                <span className="bn-label">{free ? 'Second look, estimated cost' : 'Estimated cost'}</span>
                 <span className="runs-quote-money">{money(quote.total.estimate_usd)}</span>
                 <span className="runs-quote-line">
                   <span>
-                    <strong>{plural(quote.total.to_send ?? 0, 'card')}</strong> to send
+                    <strong>{plural(quote.total.to_send ?? 0, 'card')}</strong> {free ? 'to match' : 'to send'}
                   </span>
                   <span>{count(quote.total.cache_hits)} already answered</span>
                   <span>{count(quote.total.photographs)} photographs</span>
                 </span>
+                {free ? (
+                  /* WHAT THE FREE READ WILL AND WILL NOT DO, in counts the pool rules can know now.
+                     The margin judges the best answer, so cards left unread for that reason are
+                     counted after the read, and the line says so. */
+                  <span className="runs-quote-line">
+                    <span>
+                      {quote.total.second_look_measured === false ? 'About ' : ''}
+                      {count(quote.total.free_read)} read free
+                    </span>
+                    <span>
+                      {quote.total.second_look_measured === false ? 'about ' : ''}
+                      {count(quote.total.second_look)} get a second look from the paid read
+                    </span>
+                    <span>
+                      {quote.total.second_look_measured === false
+                        ? 'Estimated from earlier cards, rounded up. The press counts them for real.'
+                        : 'Counted by reading them now'}
+                    </span>
+                    {Object.entries(quote.total.unread).map(([code, n]) => (
+                      <span key={code}>{unreadLine(code, n)}</span>
+                    ))}
+                  </span>
+                ) : null}
                 <span className="runs-quote-line">
                   {/* `cards` IS THE SELECTION AND `to_send` IS THE INVOICE, and the two differing
                       is the cache doing its job — which on this store is the ordinary case, not
@@ -1297,6 +1548,27 @@ export function RunsComposer({
                         )}'s cards.`}
                 </p>
               </div>
+
+              {!free && (quote.total.matcher_read ?? 0) > 0 ? (
+                /* THE PAID PRESS OVER CARDS THE FREE READER ANSWERED ASKS EVERY TIME, AND THE DEFAULT
+                   IS SKIP (the owner's ruling). The figure above already leaves them out. Turning
+                   this on re-quotes at once, and its cost is on the line, not only in the total.
+                   It starts off at every opening and every press. */
+                <div className="runs-quote-ask">
+                  <label className="bn-check">
+                    <input
+                      type="checkbox"
+                      checked={rereadMatcher}
+                      onChange={(event) => {
+                        requote.current = true
+                        setRereadMatcher(event.target.checked)
+                      }}
+                    />
+                    Also read again the {plural(quote.total.matcher_read ?? 0, 'card')} that matching decided
+                  </label>
+                  <p className="run-step-fine">{askCostLine(quote.total, rereadMatcher)}</p>
+                </div>
+              ) : null}
 
               {partial === null ? null : (
                 /* UNREACHABLE AND KEPT (`RunStartFailure`). A cart could half-start — `Popen`
@@ -1382,19 +1654,24 @@ export function RunsComposer({
                     <Button
                       variant="primary"
                       size="xl"
-                      icon="zap"
+                      icon={free ? 'check' : 'zap'}
                       className="run-button-money"
                       busy={busy === 'start'}
                       disabled={busy !== null}
                       onClick={() => void doStart()}
                     >
-                      {`Spend ${money(quote.total.estimate_usd)} and identify ${count(quote.total.to_send)} cards`}
+                      {free
+                        ? `Match ${count(quote.total.to_send)} cards, then spend ${money(quote.total.estimate_usd)} on the second look`
+                        : `Spend ${money(quote.total.estimate_usd)} and identify ${count(quote.total.to_send)} cards`}
                     </Button>
                     <span className="runs-quote-fine">
-                      One run. Identification takes minutes to hours and keeps going if you close this tab.
+                      {free
+                        ? 'One run. The free read costs nothing. The second look is paid, and its answers wait in your review queue. It keeps going if you close this tab.'
+                        : 'One run. Identification takes minutes to hours and keeps going if you close this tab.'}
                     </span>
                     {/* THE SETTING ITSELF, ALWAYS ON SCREEN AND NEVER ONLY INSIDE THE WARNING —
                         otherwise the figure could be raised and never lowered again. */}
+                    {(
                     <label className="runs-field-inline runs-spend-set">
                       <span>Ask me above</span>
                       <span className="bn-muted">$</span>
@@ -1413,6 +1690,7 @@ export function RunsComposer({
                         }}
                       />
                     </label>
+                    )}
                   </div>
                 </>
               )}
@@ -1519,12 +1797,12 @@ export function RunsComposer({
               <span className="runs-composer-note">{line}</span>
               <Button
                 variant="primary"
-                icon="dollar"
+                icon={free ? 'check' : 'dollar'}
                 busy={busy === 'quote'}
-                disabled={!scoped || busy !== null}
+                disabled={!scoped || busy !== null || (free && !matchReady)}
                 onClick={() => void doQuote()}
               >
-                Check cost
+                {free ? 'Check what it will read' : 'Check cost'}
               </Button>
             </>
           ) : null}

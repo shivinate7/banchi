@@ -5,7 +5,7 @@ import type {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
-import { rememberTheme, storedTheme, type Theme } from '../deviceMemory'
+import { THEMES, rememberTheme, storedTheme, type Theme } from '../deviceMemory'
 import {
   CARD, DISPLAY_BRACKET, DISPLAY_CAPS, HOLO, HOLO_RECT,
   SHEEN_HEIGHT, SMALL_BRACKET, SMALL_STROKE, TILE,
@@ -644,18 +644,46 @@ export function EmptyFrame({
   return <Tag className={['bn-empty-frame', className].filter(Boolean).join(' ')}>{children}</Tag>
 }
 
+/* ---- Did you mean ------------------------------------------------------------------- */
+/** The hint line for a search that found nothing (D271). `EmptyState` draws it through its
+ *  `didYouMean` prop. A screen whose zero result is a sentence rather than an `EmptyState`
+ *  draws it directly. The line holds its height with or without a name (D313). */
+export function DidYouMean({
+  name,
+  onPick,
+}: {
+  readonly name: string | null | undefined
+  readonly onPick: (name: string) => void
+}) {
+  return (
+    <div className="bn-empty-hint">
+      {name ? (
+        <Button variant="tint" size="lg" onClick={() => onPick(name)}>
+          Did you mean {name}?
+        </Button>
+      ) : null}
+    </div>
+  )
+}
+
 /* ---- Empty state -------------------------------------------------------------------- */
 export function EmptyState({
   icon = 'sparkles',
   title,
   body,
   actions,
+  didYouMean,
   className,
 }: {
   readonly icon?: IconName
   readonly title: ReactNode
   readonly body?: ReactNode
   readonly actions?: ReactNode
+  /** The ONE home of "Did you mean" (D271) for a search that found nothing. Pass it on a
+   *  search's empty state: `name` is the near name or null, `onPick` runs that search. The
+   *  line holds its height whether or not there is a name, so its arrival moves nothing
+   *  (D313). */
+  readonly didYouMean?: { readonly name: string | null | undefined; readonly onPick: (name: string) => void }
   readonly className?: string
 }) {
   return (
@@ -665,6 +693,7 @@ export function EmptyState({
       </div>
       <p className="bn-empty-title">{title}</p>
       {body ? <p className="bn-empty-body">{body}</p> : null}
+      {didYouMean === undefined ? null : <DidYouMean {...didYouMean} />}
       {actions ? <div className="bn-empty-actions">{actions}</div> : null}
     </div>
   )
@@ -882,7 +911,7 @@ export function Segmented<T extends string>({
   className,
 }: {
   readonly value: T
-  readonly options: readonly { readonly value: T; readonly label: ReactNode; readonly icon?: IconName; readonly kbd?: string }[]
+  readonly options: readonly { readonly value: T; readonly label: ReactNode; readonly icon?: IconName; readonly kbd?: string; readonly title?: string }[]
   readonly onChange: (next: T) => void
   readonly label?: string
   /** `'sm'` matches a 28px row of search/select controls (S10) — see kit.css's own note on
@@ -898,6 +927,7 @@ export function Segmented<T extends string>({
           type="button"
           className={['bn-seg-item', size === 'sm' ? 'bn-seg-item-sm' : ''].filter(Boolean).join(' ')}
           aria-pressed={option.value === value}
+          title={option.title}
           onClick={() => onChange(option.value)}
         >
           {option.icon ? <Icon name={option.icon} size={14} /> : null}
@@ -1281,9 +1311,28 @@ export function readTheme(): Theme {
   return storedTheme() ?? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
 }
 
+/** Stamps the attributes and nothing else: light is NO attribute, dark is `data-theme="dark"`, and a
+ *  palette is dark plus `data-palette`, so every dark rule keeps reading `data-theme`. */
+export function stampTheme(theme: Theme): void {
+  const root = document.documentElement
+  const entry = THEMES.find((t) => t.id === theme)
+  if (theme === 'light') root.removeAttribute('data-theme')
+  else root.setAttribute('data-theme', 'dark')
+  if (entry && 'palette' in entry) root.setAttribute('data-palette', entry.palette)
+  else root.removeAttribute('data-palette')
+}
+
+/** The theme the attributes on <html> show right now. */
+export function appliedTheme(): Theme {
+  const root = document.documentElement
+  const palette = root.getAttribute('data-palette')
+  const named = THEMES.find((t) => 'palette' in t && t.palette === palette)
+  if (named) return named.id
+  return root.hasAttribute('data-theme') ? 'dark' : 'light'
+}
+
 export function applyTheme(theme: Theme): void {
-  if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark')
-  else document.documentElement.removeAttribute('data-theme')
+  stampTheme(theme)
   rememberTheme(theme)
 }
 
@@ -1306,7 +1355,7 @@ export type {
 } from './data'
 export { registerSheet, openSheet, closeSheet, useOpenSheet, sheetHref, hasSheet } from './sheets'
 export type { SheetProps, SheetKind, OpenSheet, SheetHostProps } from './sheets'
-export { matchQuery } from './match'
+export { matchQuery, didYouMean } from './match'
 
 /* ---- the filter bar, and the URL view state it is built to sit in (kit-filtering) -----------
    Screens import these from here too, never from `./filters` or `./viewState` directly. */
@@ -1317,3 +1366,8 @@ export type { FacetValueOf } from './facets'
 export { Highlight, matchSpans } from './highlight'
 export type { HighlightKind } from './highlight'
 export { useViewQuery, patchViewQuery, useViewParam, useViewFlag, useFacetParams, useSortParam } from './viewState'
+
+/* ---- the settings sheet's parts (kit-settings) ----------------------------------------------
+   Screens import these from here, never from `./settings` directly. */
+export { SettingsOp, SettingsGroup, SettingsFigures, SettingsCensus, SettingsEditor, SettingsTrouble, CardPicker, useSheetWrite, count } from './settings'
+export type { PickGroup } from './settings'

@@ -185,14 +185,18 @@ from harness.tests.t7 import (  # noqa: E402
     inventory_routes,
     server_hardening,
     cli_identify,
+    engine_pick,
+    engine_sweep,
     orders,
     server_lanes,
     pipeline_fetch,
     price_history,
+    price_moves,
     shipping,
     value,
     undo_built_on,
     sets_stock,
+    realized_prices,
 )
 # `t7_box_map.py` imports these names from this module, so they stay reachable here (D264).
 from cli import resolve  # noqa: E402, F401
@@ -233,14 +237,18 @@ CHECK_ORDER = (
     *inventory_routes.CHECKS,
     *server_hardening.CHECKS,
     *cli_identify.CHECKS,
+    *engine_pick.CHECKS,
+    *engine_sweep.CHECKS,
     *orders.CHECKS,
     *server_lanes.CHECKS,
     *pipeline_fetch.CHECKS,
     *price_history.CHECKS,
+    *price_moves.CHECKS,
     *shipping.CHECKS,
     *value.CHECKS,
     *undo_built_on.CHECKS,
     *sets_stock.CHECKS,
+    *realized_prices.CHECKS,
 )
 
 

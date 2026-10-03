@@ -2,14 +2,14 @@
 
 **The primary checkout is where the damage lands, so the refusal is on serving there and not on the git command.** An earlier design, written after `/Users/shivinate/Developer/pkmnscan` — the primary checkout, the one D138 keeps
 a supervisor alive out of over the owner's real store — was found standing on
-`claude/env-key-rotation` with three live sessions in it. It shipped three readers of that fact
+`claude/env-key-rotation` with three live sessions in it. It shipped warnings at three moments
 and ruled that **a warning is the ceiling**.
 
 **It happened again the next night**, on `claude/debts-citation-repair`: a branch already merged
 as pull request #282, already behind `origin/main`, with **four live sessions in the tree**. Told
 about it, the owner said: *"i literally thought we had a guard in place that ENSURES our primary
 checkout IS ALWAYS MAIN"*. That sentence is the reopening, and what it reopens is the ceiling —
-not the three readers, which stand and are untouched.
+not the readers.
 
 ### The guard goes at the damage, not at the git command
 
@@ -52,7 +52,7 @@ one is stronger.
 *"Always ensure you take the best practices to resolve things, never the band aid routes."* The
 warning already existed, already fired, and was already missed twice. Volume is not a mechanism.
 
-### What is built: two guards, because one of them can be checked out from under the other
+### What is built: one refusal and two readers
 
 **1. `scripts/serve.py:off_main` — the supervisor refuses to adopt this tree's code.** Four arms,
 at exactly the four moments code is adopted and nowhere else:
@@ -81,25 +81,12 @@ guard at all. Asked first, the question is answered by the image already running
 it would be answered by the branch's own copy, which is no guard. There is a self-test arm whose
 fixture branch deletes the guard from its own serve.py for exactly this.
 
-**2. `scripts/githooks/post-checkout` — the copy a branch cannot rewrite.** `make hooks` COPIES
-the hooks into the common `.git` dir that `core.hooksPath` points every worktree of this clone
-at, so the hook git runs is not rewritten by checking out a branch. `scripts/serve.py` very much
-is. That asymmetry is the entire reason for a second half, and it is
-D140's argument one register over:
-**a guard living only in the thing being guarded is absent from the checkout that needs it.**
-
-So the hook, at the moment of the switch, now reads two facts a warning once asserted without checking:
-whether a supervisor is actually live here, and whether the branch just checked out carries the
-guard. It says the server will refuse — or, where the branch predates the guard,
-**that it will not**, and names `make down ARGS=--confirm`. The old warning claimed the live
-capture server "now
-runs THIS branch's code" whether or not one was running at all; that sentence is gone.
-
-**The hook finds the guard by grepping for the escape hatch's name**, which is the one token that
-cannot be in that file for a second reason. Over-reporting is the safe direction for something
-that only prints: renaming the hatch makes it say *stop it* where it need not, never the reverse.
-`scripts/githooks-selftest.sh` asserts both directions **against this repo's own serve.py**, so
-the token going stale is a failed commit rather than a silence.
+**2. The `post-checkout` hook is gone, on the owner's word** (remove the post-merge and
+post-checkout warners). A branch switch prints nothing now. Nothing depends on it: the refusal in
+part 1 is what protects the owner's store, and the two readers that remain are `make status`
+under SERVING and `scripts/worktree-guard.sh` at session start. A cold start on a branch cut
+before the refusal existed is served; the SessionStart reader and `make status` are the only
+speakers there.
 
 ### It has an escape hatch, and that is a departure from the entry it is modelled on
 
@@ -173,8 +160,7 @@ nothing.
 ### What it cannot see, named rather than left to be found
 
 **A cold start on a branch cut before this guard existed.** That branch's `serve.py` carries no
-guard, launchd runs it, and it serves. The hook is the only thing that speaks — at the switch,
-which is earlier than the login and is a moment somebody may not be reading. The hole shrinks on
+guard, launchd runs it, and it serves. Only the two readers speak, and both run after the fact. The hole shrinks on
 its own, since every branch cut or merged after this carries the guard, and it is narrower than
 it sounds: it needs the tree *parked* on such a branch across a restart. It is not closed, and
 closing it properly would mean the plist executing through something outside the tree, which is a
@@ -183,9 +169,9 @@ larger change than the defect currently justifies.
 **A branch that differs from main in nothing the supervisor watches is served, and correctly so.**
 The arms fire where code is adopted, so a branch differing only under `docs/` never reaches one —
 and what is serving is main's code, byte for byte, for everything that runs. The *tree* is still
-wrong, and the three readers are the ones whose subject that is.
+wrong, and the two readers are the ones whose subject that is.
 **The refusal's subject is the code; theirs is the branch.**
-Neither subsumes the other, which is why all four now exist.
+Neither subsumes the other, which is why all three exist.
 
 **And it does not decide that the tree should be put back.** `scripts/worktree-guard.sh` reports
 and never switches, in as many words, and nothing here changes that. The owner may stand that

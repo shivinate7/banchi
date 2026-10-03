@@ -44,10 +44,12 @@
  *   a write site.
  *
  *   THE WRITE BEHIND A WRAPPER. `Fulfillment.tsx:unsell` is a module-level helper over
- *   `undoSale`; `BoxOps.tsx` hands `() => updateBox(...)` to `useBoxWrite`'s `write`. In the
+ *   `undoSale`; `BoxOps.tsx` hands `() => updateBox(...)` to the kit's `useSheetWrite`'s `write`. In the
  *   first the evidence lives at the CALLER, so the analysis is retried at each caller; in the
  *   second the evidence lives inside the HOOK, so the hook's body joins the evidence scope and
- *   its parameters are mapped back to the arguments the component passed in.
+ *   its parameters are mapped back to the arguments the component passed in. A hook the kit
+ *   owns (`KIT_HOOKS`: `useSheetWrite`, in `kit/settings.tsx`) is read from its kit file the same
+ *   way, so it covers a write only while the `onChanged` handed to it re-reads.
  *
  * WHAT A GREEN RUN MEANS, AND WHAT IT DOES NOT — this is the part worth being exact about.
  *
@@ -196,6 +198,11 @@ const RECORDED = {
     'getBoxPhotos', 'getMarkdowns',
     // The graveyard's one read (D134). Its own line, for the reason the writes below give.
     'getGraveyard',
+    'getProductRealized',                     // the product page's realized-price read
+    'getPriceMovers', 'getSavedTrends',       // #/pricing's movers and the saved overnight trends
+    'getSkuPhotosSettled',                    // the stock-photo read that waits out a cold group
+    'getMatchState',                          // the free reader's readiness (model, fingerprints)
+    'getMatchSweep',                          // the background reader's switch and matched count
     // The markdown lens's three (D103) — the survey table, and D278's history and trends
     // strip re-addressed at a stamp instead of a run.
     'getMarkdownTable', 'markdownHistory', 'markdownTrends',
@@ -237,6 +244,8 @@ const RECORDED = {
     'getInventorySets',
   ],
   writes: [
+    'prepareMatch',                           // the free reader's one-time setup press
+    'setMatchSweep',                          // the background reader's on/off switch
     'capture', 'updateCard', 'undoCapture', 'reshootPhoto', 'answerReview', 'standDown',
     'undoStandDown', 'undoAnswer', 'answerReviewGroup', 'markSold', 'undoSale', 'retireCard',
     'undoRetire', 'createBox', 'updateBox', 'openSection', 'applyBoxClaims', 'removeCardInPlace',
@@ -286,6 +295,7 @@ const RECORDED = {
     'moveSections', 'undoSectionMove',        // D264, the box map's section move and its undo
     'moveRange',                              // D264, one card or a range, the next slice
     'closeSection',                           // UN-15, S's own undo
+    'releaseUnreadableClaim', 'restoreUnreadableClaim', // DEBT59, a stuck live claim's way out and back
     'moveSectionsBatch',                      // D264, the Map's edit-mode Confirm: a whole
                                                // draft — sections and ranges — in one write
   ],
@@ -570,6 +580,17 @@ function readScreen(file, text, classification) {
       }
     }
 
+    // `liveCheck.refresh` is a read on a screen's behalf: it fetches `GET /pipeline/sends`, the one
+    // place the send card's standing claims come from. Recognised by the module and the name.
+    if (ts.isImportDeclaration(node) && /['"]\.\/liveCheck['"]/.test(node.moduleSpecifier.getText(src))) {
+      const bindings = node.importClause?.namedBindings
+      if (bindings !== undefined && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) {
+          if ((element.propertyName ?? element.name).text === 'refresh') screen.reads.set(element.name.text, 'refresh')
+        }
+      }
+    }
+
     if (ts.isFunctionDeclaration(node) && node.name !== undefined) {
       screen.declarations.set(node.name.text, { node, aliases: new Map() })
     }
@@ -716,6 +737,25 @@ function componentOf(screen, site) {
  * is one hop away, and a scan that stops at the handler's own body calls three correct screens
  * defective.
  */
+/** The write-with-re-read hooks the kit owns, by name and home. A screen that calls one has the
+ *  hook's body join its evidence scope, exactly as a hook declared in the screen's own file does,
+ *  so `useSheetWrite(onChanged)` is covered only while the `onChanged` it is handed re-reads. */
+const KIT_HOOKS = { useSheetWrite: path.join(APP_SRC, 'kit', 'settings.tsx') }
+const kitHookCache = new Map()
+function kitHook(name) {
+  const file = KIT_HOOKS[name]
+  if (file === undefined || !fs.existsSync(file)) return undefined
+  if (!kitHookCache.has(name)) {
+    const src = parse(file, fs.readFileSync(file, 'utf8'))
+    let found
+    walk(src, (n) => {
+      if (found === undefined && ts.isFunctionDeclaration(n) && n.name?.text === name) found = { node: n, aliases: new Map() }
+    })
+    kitHookCache.set(name, found)
+  }
+  return kitHookCache.get(name)
+}
+
 function evidenceScope(screen, handler) {
   const nodes = [handler]
   const aliases = new Map()
@@ -731,17 +771,16 @@ function evidenceScope(screen, handler) {
       const declaration = screen.declarations.get(name)
       if (declaration === undefined) return
       if (declaration.hook !== undefined) {
-        const hook = screen.declarations.get(declaration.hook)
+        const hook = screen.declarations.get(declaration.hook) ?? kitHook(declaration.hook)
         if (hook === undefined || hook.node === undefined) return
         // The hook's parameters, bound to what this component actually handed it.
         hook.node.parameters.forEach((parameter, index) => {
           const argument = declaration.args[index]
-          if (
-            ts.isIdentifier(parameter.name) &&
-            argument !== undefined &&
-            ts.isIdentifier(argument)
-          ) {
-            aliases.set(parameter.name.text, argument.text)
+          if (ts.isIdentifier(parameter.name) && argument !== undefined) {
+            /* A non-identifier argument (`() => undefined`) maps to a name no prop can have.
+             * Left unmapped, the hook's `onChanged()` would be read as the component's own
+             * `onChanged` prop whenever the two names agree, and a no-op would pass. */
+            aliases.set(parameter.name.text, ts.isIdentifier(argument) ? argument.text : '<expression>')
           }
         })
         nodes.push(hook.node)
@@ -1936,6 +1975,30 @@ function selfTest() {
         const [reloads, setReloads] = useState(0)
         useEffect(() => { void doRead().then(setRows) }, [reloads])
         return <div>{rows}<Thunked onChanged={() => setReloads((n) => n + 1)} /></div>
+      }`],
+    ['the kit hook useSheetWrite handed the callback prop, bound at the parent', 'callback prop, re-read owned by the parent', `
+      export function Kitted({ onChanged }: { onChanged: () => void }) {
+        const { write } = useSheetWrite(onChanged)
+        const press = () => write(() => doWrite(1, 2))
+        return <button onClick={press} />
+      }
+      export function KitOwner() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        return <div>{rows}<Kitted onChanged={() => setReloads((n) => n + 1)} /></div>
+      }`],
+    ['3e. the kit hook useSheetWrite handed a no-op onChanged', null, `
+      export function KitNoop({ onChanged }: { onChanged: () => void }) {
+        const { write } = useSheetWrite(() => undefined)
+        const press = () => write(() => doWrite(1, 2))
+        return <button onClick={press} />
+      }
+      export function KitNoopOwner() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        return <div>{rows}<KitNoop onChanged={() => setReloads((n) => n + 1)} /></div>
       }`],
   ]
 

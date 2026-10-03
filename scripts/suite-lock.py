@@ -93,7 +93,7 @@ DEFAULT_LOCK_DIR = Path.home() / ".pkmnscan" / "locks"
 #: be holding it. Same shape as `scripts/janitor.py --sessions DIR`, for the same reason.
 LOCK_DIR_ENV = "PKMNSCAN_LOCK_DIR"
 
-#: The escape hatch, in the shape `PKMNSCAN_MAIN=off` and `PKMNSCAN_FOREGROUND=ok` already
+#: The escape hatch, in the shape `PKMNSCAN_MAIN=off` and `PKMNSCAN_FOREGROUND=off` already
 #: use, and printed in every refusal. A guard with no visible way past it gets disarmed
 #: somewhere worse — by deleting the line from the Makefile, which nothing would catch.
 ESCAPE_ENV = "PKMNSCAN_SUITE_LOCK"

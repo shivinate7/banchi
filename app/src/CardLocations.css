@@ -514,8 +514,8 @@
   display: block;
   width: min(360px, 100%);
   min-width: min(320px, 100%);
-  aspect-ratio: 63 / 88;
-  object-fit: cover;
+  aspect-ratio: 9 / 16;
+  object-fit: contain;
   background: var(--bn-surface-2);
   border: 1px solid var(--bn-line);
   border-radius: var(--bn-r-lg);

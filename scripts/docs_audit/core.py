@@ -722,27 +722,15 @@ def _strip_ts_comments(text: str) -> str:
     return TS_COMMENT.sub(" ", text)
 
 
-# The recipe's own enumeration. `check:` is a block of tab-indented lines and nothing but
-# `$(MAKE) --no-print-directory <target>` calls; see the Makefile's own comment for why they
-# are calls and not prerequisites (make is free to reorder prerequisites, and with -j it runs
-# them in parallel — a check suite has to run in a known order and stop at the first failure).
-_CHECK_RECIPE_RE = re.compile(r"\$\(MAKE\)\s+--no-print-directory\s+([a-z][a-z0-9-]*)")
-
-
-def _recipe_targets(rule: str) -> Optional[List[str]]:
-    """The targets one `$(MAKE)`-dispatching rule runs, in recipe order, or None."""
-    makefile = ROOT / "Makefile"
-    if not exists(makefile):
-        return None
-    block = re.search(rf"^{re.escape(rule)}:\n((?:\t.*\n)+)", read(makefile), flags=re.M)
-    if block is None:
-        return None
-    return _CHECK_RECIPE_RE.findall(block.group(1))
-
-
 def _check_recipe() -> Optional[List[str]]:
-    """The targets `make check` runs, in recipe order, or None if the block cannot be read."""
-    return _recipe_targets("check")
+    """The targets `make check` runs, in run order: the registry's, or None if unreadable."""
+    registry = ROOT / "scripts" / "checks.py"
+    if not exists(registry):
+        return None
+    entries = literals_from_module(registry).get("CHECKS")
+    if not isinstance(entries, (list, tuple)):
+        return None
+    return [str(entry["target"]) for entry in entries]
 
 
 # ------------------------------------------------- the checks defined here vs the ones run

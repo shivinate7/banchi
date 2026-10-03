@@ -6,8 +6,8 @@ import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
 import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, SHIPPING_EXPORT_CSV } from './routeFixtures'
 import { phoneOff, setViewport } from './phoneSwitch'
 
-/* THE ONE SWEEP `text-shape.spec.ts`, `machine-words.spec.ts` AND `money-face.spec.ts` RUN,
- * and `make text-density` through the first of them (D284). One copy, so the
+/* THE ONE SWEEP `text-checks.spec.ts` RUNS FOR ITS THREE CHECKS,
+ * and `make text-density` through it (D284). One copy, so the
  * three checks cannot disagree about which state a screen was measured in.
  *
  * THE STORE IS THE SAME AT EVERY STOP. `sealEveryTest({ store: true, cards: 122 })` is the
@@ -90,7 +90,7 @@ async function settledInnerText(page: Page, region: Locator, route: string): Pro
   let textReset = 0
   let readsReset = 0
   while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS))
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS)) // keep: the poll interval of the sweep wait loop, POLL_MS apart
     const next = await region.innerText()
     const started = reads?.started ?? 0
     const busy = reads !== undefined && (reads.open.size > 0 || started !== startedBefore)

@@ -52,12 +52,21 @@
 set -uo pipefail
 
 payload="$(cat)"
+
+# Append one line to the refusal log (scripts/refusal_log.py, the one home). Fails open.
+rlog() {
+  local sid
+  sid="$(printf '%s' "$payload" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("session_id",""))' 2>/dev/null)" || sid=""
+  python3 "$(dirname "$0")/refusal_log.py" guard-opsec "$1" "$2" --session "$sid" >/dev/null 2>&1 || true
+  return 0
+}
 path="$(printf '%s' "$payload" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("tool_input",{}).get("file_path",""))' 2>/dev/null)" || path=""
 
 [ -z "$path" ] && exit 0
 
 case "$path" in
   */fixtures/*)
+    rlog fixtures "$path"
     echo "BLOCKED: fixtures/ is ground truth for the round-trip test and is read-only. If the schema genuinely changed, re-export from TCGplayer and commit that as a new fixture." >&2
     exit 2
     ;;
@@ -66,6 +75,7 @@ esac
 case "$path" in
   */captures/*) exit 0 ;;
   *.png|*.jpg|*.jpeg|*.webp|*.heic)
+    rlog image "$path"
     echo "BLOCKED: image write outside captures/. Code-card photos are bearer instruments and must never reach a tracked path. Write to captures/ or explain why this image is safe." >&2
     exit 2
     ;;
@@ -100,6 +110,7 @@ except Exception:
 
 if [ -n "$verdict" ]; then
   # The layout in the message is assembled at runtime so this file never carries it.
+  rlog code "$verdict"
   p3="XXX"; p4="XXXX"
   echo "BLOCKED: content carries what looks like a live printed code (${verdict}). A live unredeemed code is a bearer instrument — never write one into a repo file. Use the ${p3}-${p4}-${p3}-${p3} placeholder layout, which this guard deliberately passes." >&2
   exit 2

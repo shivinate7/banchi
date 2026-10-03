@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "scripts/guard-shell.py --hook"
+            "command": "GUARD_SHELL_SKIP= scripts/guard-shell.py --hook"
           }
         ]
       },
@@ -51,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "scripts/guard-shell.py --hook"
+            "command": "GUARD_SHELL_SKIP= scripts/guard-shell.py --hook"
           }
         ]
       }
@@ -75,6 +75,14 @@
             "command": "scripts/worktree-guard.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/decision-context.py --reset"
+          }
+        ]
       }
     ],
     "SessionEnd": [
@@ -95,16 +103,6 @@
             "type": "command",
             "command": "scripts/session-teardown.sh",
             "timeout": 60
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "scripts/stop-gate.sh"
           }
         ]
       }

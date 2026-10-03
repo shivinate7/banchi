@@ -10,6 +10,7 @@
  */
 
 import type { TrendRange } from './types'
+import { relativeDate } from './dates'
 import { RANGE_LABEL, sparkSegments } from './PriceHistory'
 import './PriceTrend.css'
 
@@ -17,7 +18,7 @@ import './PriceTrend.css'
  *  drawn as nothing — the at-cap rows the batch skips are in this state permanently. */
 export type TrendRead =
   | { kind: 'reading' }
-  | { kind: 'read'; ranges: TrendRange[] }
+  | { kind: 'read'; ranges: TrendRange[]; at?: number; stale?: boolean }
   | { kind: 'refused'; why: string }
 
 /** A ratio the SERVER computed, as a percentage. The only arithmetic here; it is ink. */
@@ -79,13 +80,28 @@ function Mini({ range }: { range: TrendRange }) {
  * operator has not pressed the button", of "this row is at the cap so the batch skipped it",
  * and of a run whose trends were never loaded.
  */
-export function TrendCell({ read }: { read: TrendRead | undefined }) {
+/** A strip the daily job saved, with the second it was read. */
+export type KeptTrend = { ranges: TrendRange[]; at: number; stale: boolean }
+
+export function TrendCell({ read, kept }: { read: TrendRead | undefined; kept?: KeptTrend }) {
   if (read === undefined) return <span className="pricetrend pricetrend-empty" />
   if (read.kind === 'reading') {
     return (
       <span className="pricetrend pricetrend-reading" aria-label="reading the trend">
         <span className="pricetrend-skel" />
         <span className="pricetrend-skel" />
+      </span>
+    )
+  }
+  if (read.kind === 'refused' && kept !== undefined && kept.ranges.length > 0) {
+    /* A REFUSED READ NEVER REPLACES A GOOD STRIP: the kept one stays, with its date, and the
+       refusal is drawn beside it as a mark that says why. */
+    return (
+      <span className="pricetrend" data-kept-refused="true" data-stale={kept.stale ? 'true' : undefined} title={`${read.why} Showing the strip read ${relativeDate(kept.at * 1000)}.`}>
+        {kept.ranges.map((range) => (
+          <Mini key={range.range} range={range} />
+        ))}
+        <span className="pricetrend-flag" aria-hidden="true">!</span>
       </span>
     )
   }
@@ -108,7 +124,11 @@ export function TrendCell({ read }: { read: TrendRead | undefined }) {
     )
   }
   return (
-    <span className="pricetrend">
+    <span
+      className="pricetrend"
+      data-stale={read.stale ? 'true' : undefined}
+      title={read.at === undefined ? undefined : `Read ${relativeDate(read.at * 1000)}`}
+    >
       {read.ranges.map((range) => (
         <Mini key={range.range} range={range} />
       ))}

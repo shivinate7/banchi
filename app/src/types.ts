@@ -427,7 +427,7 @@ export type InventoryCard = {
   /** THE OLD POSITION A TRANSPLANT CARRIES (`store/master.py:Card.moved_from`), ALREADY ON
    *  THIS WIRE AND NEVER TYPED HERE UNTIL THE UX REVIEW'S GRAVEYARD RULING. Set only on the
    *  card a move CREATED, not on the tombstone it left behind — `"box/index"`, the same key
-   *  shape `#/graveyard`'s `moved_to` carries. `null` for a card captured where it stands.
+   *  shape `moved_to` carries. `null` for a card captured where it stands.
    *  `Inventory.tsx`/`BoxBrowse.tsx` read it to say where a card was moved in from; nothing
    *  writes it back. */
   moved_from: string | null
@@ -741,6 +741,9 @@ export type QueueRead = {
    *  file written before 2026-09-11, and the screen draws the same sentence for both, which
    *  is the honest one — it does not know what was claimed. */
   rarity_claim?: string[] | null
+  /** The free reader's top pick, present only on a card it did not accept, whose paid answer is
+   *  held here. Absent on every other entry. */
+  matcher_pick?: { name: string | null; number: string | null; set: string | null; reason: string } | null
 }
 
 /** One card waiting for a human. `store/queues.py:QueueEntry`, minus the two Python
@@ -949,7 +952,7 @@ export type MoveCardsResult = {
  *  `buried` is D134's amendment to ruling 3 (2026-09-11): a sold, retired or moved record no
  *  longer blocks this delete — it is buried, and `cards` counts it same as before while
  *  `buried` says how many of those `cards` left through a departure door rather than as
- *  ordinary on-hand junk. `#/graveyard` is where a buried record is read afterward. */
+ *  ordinary on-hand junk. Inventory's Deleted boxes shelf is where a buried record is read afterward. */
 export type BoxDeleteResult = {
   deleted_box: number
   cards: number
@@ -1771,6 +1774,8 @@ export type SearchGroup = {
 export type SearchResult = {
   query: string
   groups: SearchGroup[]
+  /** On a zero result only: the one near name the query was probably meant for (D271). */
+  did_you_mean?: string
 }
 
 // --------------------------------------------------------------------------------- the boxes
@@ -1818,6 +1823,10 @@ export type SectionMoveResult = {
     heading: string
     steps: string[]
     renumbered: string[]
+    /** How many moved cards open orders are owed, as a sentence, or null for none. */
+    owed: string | null
+    /** Which section the next capture joins, for each box whose last section moved. */
+    next_capture: string[]
   }
   boxes: BoxRecord[]
 }
@@ -1836,6 +1845,10 @@ export type SectionMoveBatchResult = {
     heading: string
     steps: string[]
     renumbered: string[]
+    /** How many moved cards open orders are owed, as a sentence, or null for none. */
+    owed: string | null
+    /** Which section the next capture joins, for each box whose last section moved. */
+    next_capture: string[]
   }
   boxes: BoxRecord[]
 }
@@ -2246,6 +2259,36 @@ export type ProductHistoryPayload = {
   history_begins: string | null
   never_sold: boolean
 }
+
+/** One sale against the archived market on its date (`GET /pipeline/products/<sku>/realized`,
+ *  DEBT70). Dates and money only: the server drops every buyer field while parsing. */
+export type RealizedRow = {
+  day: string
+  quantity: number
+  price: string
+  market: string | null
+  basis: string | null
+  refunded: boolean
+  condition: string
+  finish: string
+}
+
+export type RealizedPayload =
+  | { sku: string; configured: false }
+  | {
+      sku: string
+      configured: true
+      file: string
+      product_id: number | null
+      other_conditions: number
+      left_out: { not_a_sale: number; not_usd: number; unreadable: number }
+      rows: RealizedRow[]
+      units: number
+      refunded: number
+      no_market: number
+      realized_avg: string | null
+      market_avg: string | null
+    }
 
 /** ONE RANGE'S NAMES — `GET /pipeline/holdings-value?range=<range>`, D236. UNSOLD STOCK, never
  *  sold-then-against-now (that is D225's `SoldPricesLookup`, a different figure this must
@@ -2933,6 +2976,49 @@ export type RunSend = {
   selection: RunSelection
   crop?: boolean
   maxEdge?: number
+  /** Who reads the cards. Absent means the paid read, so an old caller never switches engines by
+   *  omission. The runs sheet always sends one (`engines.ts`). */
+  engine?: 'marqo-b' | 'haiku'
+  /** The paid press's explicit choice to buy again the cards the free reader answered. Never
+   *  sent with the free engine. */
+  rereadMatcher?: boolean
+}
+
+/** `GET` and `PUT /pipeline/match/sweep`: the background reader's switch (Capture, Rig). `running` is
+ *  whether its watcher is alive. Switching on never downloads anything. */
+export type MatchSweep = {
+  on: boolean
+  running: boolean
+  matched: number
+}
+
+/** `GET /pipeline/match`: is the free reader prepared, and is a Prepare running. Free; the server
+ *  loads no model to answer it. */
+export type MatchState = {
+  /** Cards the free reader has matched, in the store: one snapshot, read when the sheet asks. */
+  matched?: number
+  model_present: boolean
+  model_ok: boolean
+  model_bytes: number
+  index_present: boolean
+  index_current: boolean
+  ready: boolean
+  /** Stock photos read, printings with none, and sets covered. Absent until an index exists. */
+  fingerprints?: number
+  no_image?: number
+  sets?: number
+  running: boolean
+  progress: {
+    state: 'running' | 'done' | 'failed'
+    phase: 'model' | 'fingerprints'
+    done: number
+    total: number
+    message: string
+  } | null
+  /** Where the model file is fetched from, so the screen can say so before anything downloads. */
+  model_url: string
+  margin_min: number
+  floor_min: number
 }
 
 
@@ -3067,6 +3153,16 @@ export type RunPreflightTotal = {
   to_send: number | null
   estimate_usd: number | null
   cards: number
+  /** Cards the free reader already answered (named only by a press that has some), and, for a
+   *  free press, how many the pool rules let it read and why the rest are left unread. */
+  matcher_read: number | null
+  can_read: number | null
+  /** The matcher-first press: cards the free reader takes, cards that go to the paid second look,
+   *  and whether the pass was measured (true) or estimated from the held-out share (false). */
+  free_read: number | null
+  second_look: number | null
+  second_look_measured: boolean | null
+  unread: Record<string, number>
 }
 
 /** ONE QUOTE, where it used to be a list of one or more. D180's rule was that the response shape
@@ -4608,7 +4704,12 @@ export type SendsStatus = {
   now: string
   /** Live send records the server could not read. Its list drew the rest. */
   unreadable_claims: number
+  /** Each of those records, by key, for the release control. */
+  unreadable: UnreadableClaim[]
 }
+
+/** A live send record the server cannot read. Only its indexed facts survive. */
+export type UnreadableClaim = { key: string; kind: string; started_at: string }
 
 export type SendAnswer = { send: SendSummary; console: string }
 
@@ -4617,4 +4718,55 @@ export type LiveCheckAnswer = {
   check_at?: string | null
   export?: string
   checked: SendSummary[]
+}
+
+/** One listed SKU whose market moved more than the threshold since it was listed. Every figure
+ *  is text and was computed server-side (`pipeline/movers.py`): `change` is a signed fraction,
+ *  `"0.140"` is up fourteen percent. Nothing here is a price to send. */
+export type PriceMover = {
+  sku: string
+  name: string | null
+  set: string | null
+  number: string | null
+  condition: string | null
+  /** The day the SKU was first seen live, `YYYY-MM-DD`. Not its listing day. */
+  first_seen: string
+  then: string
+  now: string
+  change: string
+  direction: 'up' | 'down'
+}
+
+/** How the last scheduled market read ended, or null if none has ever run. */
+export type PriceRefreshNote =
+  | { at: number; ok: true; live_rows: number }
+  | { at: number; ok: false; code: string; message: string }
+
+/** One SKU's strip as the daily job saved it, with the second it was read. */
+export type SavedTrend = { at: number; ranges: TrendRange[] }
+
+/** How the overnight Trends read ended. `read`, `no_history` and `unreadable` add up to `asked`:
+ *  only `no_history` means the card has none, `unreadable` is a read the mirror or network
+ *  refused, and `failed` counts chunks that raised. */
+export type TrendsPreloadNote = {
+  at: number
+  ok: boolean
+  asked: number
+  read: number
+  no_history: number
+  unreadable: number
+  failed: number
+  message: string
+}
+
+/** `GET /pipeline/trends-saved`: a local read, no market request. */
+export type SavedTrendsPayload = { skus: Record<string, SavedTrend>; note: TrendsPreloadNote | null }
+
+/** `GET /pipeline/movers`. `unmeasured` counts listed SKUs with no baseline or no reading. */
+export type PriceMoversPayload = {
+  threshold: string
+  listed: number
+  unmeasured: number
+  movers: PriceMover[]
+  refresh: PriceRefreshNote | null
 }

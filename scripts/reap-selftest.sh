@@ -523,6 +523,8 @@ echo "  -- the escape hatch --"
 
 judge "$tmp/checkout" "PKMNSCAN_KILL=off pkill -f $stranger_script"
 [ $? -eq 0 ] && ok "the hatch is honoured in the command itself" || bad "the printed hatch does not work"
+judge "$tmp/checkout" "echo PKMNSCAN_KILL=off; pkill -f $stranger_script"
+[ $? -ne 0 ] && ok "a mere mention does not lift the guard" || bad "a mention of the hatch lifted the guard"
 out="$(cd "$tmp/checkout" && printf '{"tool_input":{"command":"pkill -f %s"}}' "$stranger_script" \
        | PKMNSCAN_KILL=off python3 "$REAP" --hook 2>&1)"
 [ $? -eq 0 ] && ok "and in the environment" || bad "PKMNSCAN_KILL=off in the environment did nothing"
@@ -993,6 +995,26 @@ out="$(cd "$tmp/checkout" && CLAUDE_CODE_CHILD_SESSION=1 CLAUDE_CODE_SESSION_ID=
 kill -0 "$stale_pid" 2>/dev/null \
   && bad "an untagged process (its stale mark already gone) survived an explicit pid:" \
   || ok "and it is still reachable by naming it explicitly, as any untagged process is"
+
+echo
+echo "  the refusal log"
+. "$(dirname "$REAP")/refusal-log-assert.sh"
+rl="$tmp/refusals.log"
+rl_payload='{"session_id":"sess-1","tool_input":{"command":"kill 1"}}'
+rl_out="$(cd "$tmp/checkout" && printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$rl" python3 "$REAP" --hook 2>&1)"; rl_status=$?
+[ $rl_status -eq 2 ] && ok "a refused kill still exits 2" || bad "the logged refusal exited $rl_status"
+why="$(refusal_line_ok "$rl" "reap:kill" "sess-1")" && ok "…and writes one well-formed line" || bad "the refusal log line: $why"
+rl_bad="$(cd "$tmp/checkout" && printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" python3 "$REAP" --hook 2>&1)"; rl_bad_status=$?
+if [ $rl_bad_status -eq 2 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
+else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
+
+echo
+echo "  an unknown flag: a hook warns and allows, the command line still refuses"
+bogus_out="$(cd "$tmp/checkout" && printf '{}' | python3 "$REAP" --hook --bogus 2>&1 >/dev/null)"; bogus_status=$?
+if [ $bogus_status -eq 0 ] && [ -n "$bogus_out" ]; then ok "--hook --bogus exits 0 and warns on stderr"
+else bad "--hook --bogus: exit $bogus_status, stderr '$bogus_out' (want 0 and a warning)"; fi
+(cd "$tmp/checkout" && python3 "$REAP" --bogus >/dev/null 2>&1 </dev/null)
+[ $? -eq 2 ] && ok "without --hook, an unknown flag still exits 2" || bad "without --hook, an unknown flag did not exit 2"
 
 echo
 if [ "$fail" -eq 0 ]; then

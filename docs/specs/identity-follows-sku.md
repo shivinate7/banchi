@@ -276,8 +276,8 @@ find the card.
 
 Every screen that draws `name`, `number` or `rarity` draws the SKU's product. That covers the
 `#/inventory` lists and Details, the landmark walk, Home's recent deck, orders and the walk,
-holdings (`_value_rows`, D236) and the Fulfiller's screen. `#/graveyard` and box delete draw
-the name at burial, which is frozen history (D134).
+holdings (`_value_rows`, D236) and the Fulfiller's screen. The Deleted boxes shelf and box delete
+draw the name at burial, which is frozen history (D134).
 
 `number_key` composes from the catalog pair, so D234's glued-code repair has nothing to repair
 on a SKU-bound card. Price history (D254) tier (b) reads the SKU table. Tier (c) equals tier

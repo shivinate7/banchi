@@ -85,6 +85,9 @@ BOX_IDS_ISSUED = "box_ids_issued"
 CARD_IDS_SEEDED = "card_ids_seeded"
 CARD_ID_SOURCES = "card_id_sources"
 PHOTOS_RELOCATED = "photos_relocated"
+# The background reader's switch (`identify/sweep.py`): "on" or absent. A store row, not a device
+# key, because it is a fact about this store and not about the browser that flipped it.
+MATCH_SWEEP = "match_sweep"
 # FIVE, FOR THE SAME REASON FOUR WAS. `docs/specs/stable-card-id.md` §5's warning about a
 # concurrent step landing under one number applies to every schema bump since, not only the
 # one it was written about — so this one is claimed the same way: added as its own step,
@@ -1590,6 +1593,18 @@ def box_ids_issued(conn: sqlite3.Connection) -> int:
         return 0
 
 
+def match_sweep_on(conn: sqlite3.Connection) -> bool:
+    """Whether the background reader is switched on. Off where the row is absent."""
+    row = conn.execute("SELECT value FROM meta WHERE key = ?", (MATCH_SWEEP,)).fetchone()
+    return bool(row) and row[0] == "on"
+
+
+def set_match_sweep(conn: sqlite3.Connection, on: bool) -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (MATCH_SWEEP, "on" if on else "off")
+    )
+
+
 def photos_relocated(conn: sqlite3.Connection) -> Optional[str]:
     """When every photograph reached the card's own name, or None.
 
@@ -1953,6 +1968,18 @@ class SqliteSource:
             values,
         )
 
+    def rewrite(self, key: str, state: str, payload: str, was: str) -> bool:
+        """Set one row's `state` column and raw payload text, only if its state is `was`.
+
+        For a row `parse` refuses, which `upsert` cannot write: it takes a parsed record's columns.
+        Returns whether a row changed. DEBT59's release and its undo are the only callers.
+        """
+        cur = self.conn.execute(
+            f"UPDATE {self.table} SET state = ?, payload = ? WHERE key = ? AND state = ?",
+            [state, payload, str(key), was],
+        )
+        return cur.rowcount == 1
+
     def delete(self, key: str) -> None:
         where, params = self._where({})
         where = (where + " AND " if where else " WHERE ") + "key = ?"
@@ -2093,7 +2120,7 @@ def history(conn: sqlite3.Connection) -> List[dict]:
 def events_named(conn: sqlite3.Connection, event: str) -> List[dict]:
     """Every event of one name, newest first. `history`'s narrower sibling (D134).
 
-    `#/graveyard` wants only `buried` lines, not a full-table load and filter in Python —
+    Inventory's Deleted boxes shelf wants only `buried` lines, not a full-table load and filter in Python —
     `history()` stays the reversal readers' full scan (`_state_before_sale` and its twin
     need the whole ordered sequence to find the line just before the one they are asked
     about), and this is the read a screen makes instead. The `event` column already exists

@@ -111,9 +111,8 @@ on:
   # out without having to remember to look.
   push:
     branches: [main]
-  # THE NIGHTLY FULL RUN (the required-checks entry in docs/decisions/, D136). A merge is
-  # allowed without the browser matrix because this run re-checks main at night and flags the
-  # owner with an issue. It runs every check and every browser shard: no path scope skips
+  # THE NIGHTLY FULL RUN (the required-checks entry in docs/decisions/, D136). `check` fails
+  # on a red browser matrix; this run still re-checks main at night and flags the owner with an issue. It runs every check and every browser shard: no path scope skips
   # anything on a schedule or a dispatch (see the scope hatches on the steps below).
   schedule:
     - cron: '17 3 * * *'
@@ -216,28 +215,39 @@ jobs:
       # their own hatches, which is what those hatches are for. A PR keeps its scope.
       - name: make ${{ matrix.target }}
         env:
-          PKMNSCAN_GUARD_SCOPE: ${{ github.event_name != 'pull_request' && 'off' || '' }}
-          PKMNSCAN_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'off' || '' }}
+          PKMNSCAN_GUARD_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
+          PKMNSCAN_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
         run: make ${{ matrix.target }}
 
   # THE REQUIRED CHECK. The ruleset names `check`, so this job keeps that name and passes only
-  # when every shard passed. `if: always()` because a job that `needs` a red shard is otherwise
-  # SKIPPED, and a skipped required check reads as not run; the test is `== 'success'` on every
-  # result, so a failed, skipped or cancelled shard all fail it.
+  # when every shard passed AND the browser matrix passed or was skipped ON PURPOSE.
+  # `if: always()` because a job that `needs` a red job is otherwise SKIPPED, and a skipped
+  # required check reads as not run. A shard result must be `success`. `design-check` (the whole
+  # matrix, so one failed, cancelled or skipped shard changes its result) must be `success`, or
+  # `skipped` with an explicit reason: `browser-scope` answered `false` (no browser can reach
+  # the change) or `already-passed` answered `true` (this tree went green on a pull request).
+  # Any other `skipped`, `failure` or `cancelled` fails. ponytail: the smallest in-repo gate;
+  # it can move to claude-settings' `actions/all-jobs-passed` once that is merged.
   check:
-    needs: [ci-check]
+    needs: [ci-check, design-check, already-passed, browser-scope]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: every shard succeeded
+      - name: every shard succeeded and the browser matrix passed or was skipped on purpose
         env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
+          SHARDS: ${{ needs.ci-check.result }}
+          BROWSER: ${{ needs.design-check.result }}
+          SCOPE_RUN: ${{ needs.browser-scope.outputs.run }}
+          ALREADY_PASSED: ${{ needs.already-passed.outputs.skip }}
         run: |
-          echo "shard results: ${RESULTS}"
-          for r in ${RESULTS}; do
-            [ "${r}" = "success" ] || { echo "a shard did not succeed"; exit 1; }
-          done
+          echo "shards: ${SHARDS}; browser matrix: ${BROWSER} (scope run=${SCOPE_RUN}, already-passed skip=${ALREADY_PASSED})"
+          [ "${SHARDS}" = "success" ] || { echo "a shard did not succeed"; exit 1; }
+          [ "${BROWSER}" = "success" ] && exit 0
+          if [ "${BROWSER}" = "skipped" ] && { [ "${SCOPE_RUN}" = "false" ] || [ "${ALREADY_PASSED}" = "true" ]; }; then
+            echo "browser matrix skipped on purpose"; exit 0
+          fi
+          echo "the browser matrix did not pass: ${BROWSER}"; exit 1
 
   # D133's guard as its own check on the PR, so a refusal reads as what it is rather than as one
   # red line inside ninety seconds of `make ci-check` (which runs it too, as `revert-guard`).
@@ -284,6 +294,11 @@ jobs:
   # checkout tokens, template injection and over-broad permissions. Pinned to one version so a
   # release cannot turn this red on its own. NOT a required check: the ruleset names `check`
   # and `revert-guard` only.
+  #
+  # IT RUNS ONLY WHEN A WORKFLOW FILE CHANGED, on the owner's word. The first step diffs the
+  # landed commit against its first parent (a PR checkout is GitHub's merge of the branch into
+  # its base, so that diff is what the PR lands) and the lint step runs only on a difference.
+  # A parent the shallow clone cannot read answers "changed", so the job fails toward linting.
   zizmor:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -291,16 +306,30 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+          fetch-depth: 2
+
+      - name: Did a workflow file change
+        id: changed
+        run: |
+          rc=0
+          git diff --quiet HEAD^1 HEAD -- .github/workflows || rc=$?
+          if [ "${rc}" = "0" ]; then
+            echo "no workflow file changed — skipping zizmor"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: zizmor
+        if: steps.changed.outputs.run == 'true'
         run: pipx run zizmor==1.30.1 .github/workflows
 
-  # HAS THIS TREE ALREADY PASSED? Asked on every event and ACTED ON only for a push to main
-  # (D136). It runs the lookup on a PR and a dispatch too, and prints the answer, so the
-  # mechanism is exercised on every run rather than only at the moment it matters — a gate
-  # that fires once a day is a gate nobody has watched work. `actions: read` is what listing
-  # artifacts through the API needs; nothing here writes.
+  # HAS THIS TREE ALREADY PASSED? Asked on a push to main only (D136), on the owner's word. A
+  # PR or a dispatch skips this job, its `skip` output is empty, and `design-check` reads an
+  # empty output as "run the matrix". `actions: read` is what listing artifacts through the
+  # API needs; nothing here writes.
   already-passed:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -362,7 +391,7 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           # Off a pull request, every spec: a nightly never narrows.
-          PKMNSCAN_BROWSER_SCOPE: ${{ github.event_name != 'pull_request' && 'off' || '' }}
+          PKMNSCAN_BROWSER_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
         run: python3 scripts/browser-scope.py specs --base "origin/$BASE_REF"
 
   # The browser half. Same tree, different question: what a person actually sees.
@@ -378,7 +407,7 @@ jobs:
   # a twenty-dispatch table (at most 1 red run in 20) landing in a decision
   # entry of its own in a later commit of the same task; this comment is not the ongoing reader. Six shards over two runners'
   # worth of CPU is the same total runner-minutes as three ever were, spread thinner; wall-clock
-  # per shard drops further and a chromium install is paid once per shard either way.
+  # per shard drops further and the browser comes with the job image.
   # `fail-fast: false` because a red shard is a claim about its own cases and the other five are
   # still worth their verdict.
   design-check:
@@ -390,6 +419,12 @@ jobs:
     if: ${{ !cancelled() && needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # The official image, by tag and digest. Chromium is preinstalled at the version the pin
+    # needs (the "Image matches" step enforces it). `--ipc=host` is Playwright's own advice for
+    # Chromium in a container.
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.0-noble@sha256:35c7d48b4ccaf3aca5018f5f1bf7f50c7da7d61d176c530741f4f2e9ca336c34
+      options: --ipc=host
     strategy:
       fail-fast: false
       matrix:
@@ -408,53 +443,33 @@ jobs:
       - name: Install
         run: npm ci --prefix app
 
-      # Keyed on the lockfile, so the cache turns over exactly when the pinned Playwright does —
-      # `app/package.json` pins `@playwright/test` exactly and `scripts/screenshot.sh` carries the
-      # rule that the two move together or neither does. A third hand-typed copy of the version
-      # here would be a third thing to forget.
-      - name: Cache the browser
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('app/package-lock.json') }}
-
-      # THE CAUSE OF THE INSTALL HANGS (measured over 120 design-check jobs: 12 took over 120 s, median 19 s; job 110053275779 had a browser cache HIT and still hung): the browser
-      # cache is fine, but `--with-deps` runs `apt-get install` for ~32 MB of font and mesa
-      # packages, and the runner's azure.archive.ubuntu.com mirror sometimes serves them at
-      # ~100 kB/s. The log stops at a `Get:N` line. This cache holds those .debs so a shard only
-      # downloads what the mirror updated since (apt ignores a cached .deb whose version is stale).
-      # `actions/cache` never overwrites a key, so the key carries the ISO week and the runner
-      # image: each week saves a fresh set, seeded from the last one through `restore-keys`.
-      - name: Name this week's apt cache
-        id: apt-week
-        run: echo "key=$(date -u +%G-W%V)-${ImageVersion:-none}" >> "$GITHUB_OUTPUT"
-
-      - name: Cache the apt packages
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/apt-archives
-          key: playwright-apt-${{ runner.os }}-${{ steps.apt-week.outputs.key }}
-          restore-keys: |
-            playwright-apt-${{ runner.os }}-
-
-      - name: Install chromium
-        timeout-minutes: 5
-        working-directory: app
-        # BANDAID, ON TOP OF THE CACHE ABOVE: a mirror stall still costs one try. `timeout 120`
-        # kills the stalled npx, but its `sudo apt-get` child lives on and holds the dpkg lock.
-        # The retry stops that child, and the drop-in makes apt wait up to 60 s on the lock
-        # itself (Playwright runs apt-get as root, which reads /etc/apt/apt.conf.d).
+      # THE BROWSER COMES WITH THE IMAGE (the job's `container:`), so there is no browser cache,
+      # no apt cache and no `playwright install --with-deps`: those cost 13 to 33 s per shard and
+      # were the source of the mirror-stall hangs. The image tag is the one place the version is
+      # typed besides `app/package.json`'s exact `@playwright/test` pin, and this step fails the
+      # shard when the two differ: an older image cannot find its browser, a newer one would
+      # silently run a different Chromium.
+      - name: Image matches the Playwright pin
         run: |
-          echo 'DPkg::Lock::Timeout "60";' | sudo tee /etc/apt/apt.conf.d/99lock-timeout
-          sudo mkdir -p /var/cache/apt/archives
-          sudo cp -n ~/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
-          timeout 120 npx playwright install --with-deps chromium || {
-            sudo pkill -x apt-get || true
-            sudo pkill -x dpkg || true
-            timeout 120 npx playwright install --with-deps chromium
-          }
-          mkdir -p ~/apt-archives
-          cp -n /var/cache/apt/archives/*.deb ~/apt-archives/ 2>/dev/null || true
+          pin="$(node -p "require('./app/package.json').devDependencies['@playwright/test']")"
+          tag="$(grep -oE 'mcr.microsoft.com/playwright:v[0-9.]+' .github/workflows/check.yml | head -1 | sed 's/.*:v//')"
+          if [ "$pin" != "$tag" ]; then
+            echo "image is Playwright $tag but app/package.json pins $pin: move them together" >&2
+            exit 1
+          fi
+
+      # TWO THINGS THE IMAGE LACKS THAT THE RUNNER HAD (measured by a probe job on this PR):
+      # `make`, and DejaVu Sans. Without DejaVu, fontconfig resolves `Verdana` and `sans-serif` to
+      # WenQuanYi Zen Hei, a CJK face, so every `wide` case (D313: web fonts blocked, Verdana
+      # injected) and every stability measure would draw a different face than on the runner,
+      # where both resolve to DejaVu Sans. The runner also carries Lato, which no stylesheet
+      # names. Two small packages, one retry for a mirror stall.
+      - name: Install make and DejaVu
+        timeout-minutes: 5
+        run: |
+          install() { timeout 60 apt-get -o Acquire::Retries=3 update -qq && timeout 60 apt-get -o Acquire::Retries=3 install -y -qq --no-install-recommends make fonts-dejavu-core; }
+          install || install
+          fc-match Verdana | grep -q DejaVuSans || { echo "Verdana does not resolve to DejaVu Sans" >&2; exit 1; }
 
       # Playwright starts its own dev server here: `webServer.reuseExistingServer` finds nothing
       # serving on a fresh runner, which is exactly the state it is written for. The port comes
@@ -484,9 +499,9 @@ jobs:
           fi
           make design-check PW_ARGS="--workers=2 $files"
 
-      # The nightly keeps each shard's per-file seconds, for `browser-scope.py shard-refresh`.
+      # Every full-suite run keeps each shard's per-file seconds, for `browser-scope.py shard-refresh` (a narrowed run times only some specs, so it keeps none).
       - name: Keep the shard's timings
-        if: ${{ always() && github.event_name == 'schedule' }}
+        if: ${{ always() && needs.browser-scope.outputs.specs == 'all' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: design-check-times-${{ matrix.shard }}

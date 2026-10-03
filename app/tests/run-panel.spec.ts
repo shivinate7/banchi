@@ -2,7 +2,9 @@
 // Governs: D32, D33, D36, D56, D65, D174, D180, D291
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
-import { runRow } from './routeFixtures'
+import { NO_FREE_FIELDS, matchState, runRow, stubMatchState } from './routeFixtures'
+import { HAIKU_NAME_TOOLTIP, MATCHER_NAME_TOOLTIP } from '../src/engines'
+import type { MatchState } from '../src/types'
 import { expectOneStagger } from './staggerCheck'
 import { boxTitle } from '../src/kit/dataRules'
 
@@ -175,6 +177,8 @@ function cropPreviewPayload(crop: boolean, maxEdge: number, offset: number, game
  *  selection now, and `box` is a term that is an array even for one drawer so a reader never
  *  has to ask which shape it got. */
 type SelectionBody = {
+  engine?: string
+  reread_matcher?: boolean
   confirm?: unknown
   box?: number[]
   keys?: string[]
@@ -241,11 +245,37 @@ async function open(
      *  wire either way, so a case can assert that the match ran with nobody pressing — or that
      *  it did not. Default: not waiting, which changes nothing on screen. */
     match?: (body: Record<string, unknown>) => unknown
+    /** `GET /pipeline/match`: the free reader's state. PREPARED by default, which is what a free
+     *  quote needs; a case about the not-prepared state passes `{ ready: false, ... }`. */
+    matchState?: Partial<MatchState>
+    /** What a FREE quote answers (the matcher-first press): cards the free reader takes and cards
+     *  that go to the paid second look, per drawer, and whether the pass was measured. A paid quote
+     *  carries none of them. */
+    free?: {
+      freeRead?: number
+      secondLook?: number
+      measured?: boolean
+      unread?: Record<string, number>
+    }
+    /** Cards the free reader already answered in this selection: the paid press's ask. */
+    matcherRead?: number
+    /** What `POST /pipeline/match/prepare` answers. Recorded into the wire, never started. */
+    prepare?: unknown
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
   const record = (method: string, url: string, body: unknown) =>
     wire.push({ method, path: new URL(url).pathname, body })
+
+  await stubMatchState(page, matchState(options.matchState))
+  await page.route(/\/pipeline\/match\/prepare$/, async (route) => {
+    record('POST', route.request().url(), route.request().postDataJSON())
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(options.prepare ?? { started: true, pid: 4242 }),
+    })
+  })
 
   await page.route(/\/pipeline\/runs\/[^/]+\/match$/, async (route) => {
     const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>
@@ -335,6 +365,9 @@ async function open(
     const legs = Math.max(1, drawers.length)
     const perBox = options.toSend ?? 36
     const perBoxMoney = options.estimate ?? 0.42
+    /* A FREE QUOTE IS THE ONE THE BODY ASKS FOR: `engine` is on the wire, so the fixture answers the
+       way the server would and a screen that sent the wrong engine reads the wrong figures. */
+    const free = body.engine === 'marqo-b'
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -353,6 +386,17 @@ async function open(
           to_send: perBox * legs,
           estimate_usd: Number((perBoxMoney * legs).toFixed(2)),
           cards: 40 * legs,
+          ...NO_FREE_FIELDS,
+          matcher_read: free ? null : options.matcherRead ? options.matcherRead * legs : null,
+          ...(free
+            ? {
+                can_read: perBox * legs,
+                free_read: (options.free?.freeRead ?? 30) * legs,
+                second_look: (options.free?.secondLook ?? perBox - (options.free?.freeRead ?? 30)) * legs,
+                second_look_measured: options.free?.measured ?? true,
+                unread: options.free?.unread ?? {},
+              }
+            : {}),
         },
       }),
     })
@@ -607,9 +651,17 @@ async function pickBox(page: Page, box = 9) {
 }
 
 /** Forward from the boxes stage to the reading stage. */
-async function toReading(page: Page) {
+async function toReading(page: Page, reader: 'paid' | 'free' = 'paid') {
   await page.getByRole('button', { name: /^Next: photos$/ }).click()
-  await expect(page.locator('.run-readings').first()).toBeVisible()
+  await expect(page.locator('.run-engine')).toBeVisible()
+  /* THE FREE READ IS THE DEFAULT PICK EVERY TIME THE SHEET OPENS (`engines.ts`), and every case in this
+     file that predates the picker was written about the PAID reading: its crop and edge controls, its
+     `Check cost`, its confirm. Those cases press the paid pick here, once, so they still test what
+     they meant. A case about the picker itself passes `'free'` and finds the sheet as the owner does. */
+  if (reader === 'paid') {
+    await page.locator('.run-engines').getByRole('button', { name: 'Read from the photo' }).click()
+  }
+  if (reader === 'paid') await expect(page.locator('.run-readings').first()).toBeVisible()
 }
 
 /** Back to the reading stage from the cost stage, by the footer's own way back. */
@@ -621,10 +673,10 @@ async function backToReading(page: Page) {
 /** The state most of this file's cases start from: the dialog open on box 9's reading, one
  *  press from the free preflight. This is what `openPanel` used to mean before the panel
  *  became a dialog — a scoped screen with `Check cost` on it. */
-async function atReading(page: Page, box = 9) {
+async function atReading(page: Page, box = 9, reader: 'paid' | 'free' = 'paid') {
   await openComposer(page)
   await pickBox(page, box)
-  await toReading(page)
+  await toReading(page, reader)
 }
 
 /** The free preflight — step one of the two-press money gate. */
@@ -695,8 +747,10 @@ test('the panel is open on arrival, with all four commands named and reachable',
   const identify = page.locator('.runs-actions').getByRole('button', { name: /^Identify/ })
   await expect(identify).toBeVisible()
   await identify.click()
-  /* THE SHEET OPENS ON ITS OWN COST CHECK (Q5), so its heading is the cost's. */
-  await expect(page.getByRole('dialog', { name: /Which cards|What it costs/ })).toBeVisible()
+  /* THE SHEET OPENS ON ITS OWN COST CHECK (Q5), so its heading is the cost's: 'What it will read' for
+     the free default, which is the heading it settles on once the quote answers. It passes through
+     'Which cards' on the way, so the name is a race unless every settled heading is accepted. */
+  await expect(page.getByRole('dialog', { name: /Which cards|What it costs|What it will read/ })).toBeVisible()
 })
 
 test('a live run is announced where the panel already is', async ({ page }) => {
@@ -1008,7 +1062,7 @@ test('arrow keys walk the box, and a text field keeps its own caret keys', async
   await edge.click()
   const before = wire.filter((row) => row.path === '/pipeline/crop-preview').length
   await page.keyboard.press('ArrowRight')
-  await page.waitForTimeout(500)
+  await page.waitForTimeout(500) // keep: asserts the arrow key sends no extra crop-preview
   await expect(page.locator('.run-preview-count')).toContainText('card 2 of 543')
   expect(wire.filter((row) => row.path === '/pipeline/crop-preview').length).toBe(before)
 })
@@ -3110,4 +3164,291 @@ test('every run row waits min(i, cap) * the one shared stagger', async ({ page }
   await open(page, { runs })
   await expect(page.locator('.run-row').first()).toBeVisible()
   await expectOneStagger(page, '.run-row', 15)
+})
+
+/* ===================================================================== who reads the cards
+ *
+ * THE FREE READER, PHASE 1 (`docs/specs/identify-engine-pick.md`). The sheet's second stage asks
+ * who reads first. The free read (match to stock photos) is the default pick each time the sheet
+ * opens, it needs a one-time Prepare, and its quote says whether its second-look count was counted or
+ * estimated. The paid read is one press away and asks nothing of the free reader unless the owner
+ * asks to buy the matched cards again. Every route is intercepted: Prepare is recorded and never
+ * started, and no spend route is reached except to record its body. */
+
+const picked = (page: Page, name: string) => page.locator('.run-engines').getByRole('button', { name })
+
+const identifyBody = (wire: Wire[]) =>
+  wire.find((row) => row.path === '/pipeline/identify')?.body as Record<string, unknown> | undefined
+
+const preflights = (wire: Wire[]) => wire.filter((row) => row.path === '/pipeline/preflight')
+
+const NOT_PREPARED = {
+  ready: false,
+  index_present: false,
+  index_current: false,
+  model_present: false,
+  model_ok: false,
+}
+
+test('the free read is the default pick, and the paid read is one press away', async ({ page }) => {
+  await open(page)
+  await atReading(page, 9, 'free')
+
+  await expect(picked(page, 'Match to stock photos')).toHaveAttribute('aria-pressed', 'true')
+  await expect(picked(page, 'Read from the photo')).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('.runs-engine-says')).toContainText('Reads every card for free first')
+  /* NO CROP OR EDGE CONTROLS: the free reader cuts its own photograph, so the reading means nothing to it. */
+  await expect(page.locator('.run-readings')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Check what it will read' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Check cost/ })).toHaveCount(0)
+
+  await picked(page, 'Read from the photo').click()
+  await expect(picked(page, 'Read from the photo')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.runs-engine-says')).toContainText('Costs money, quoted before anything is spent')
+  await expect(page.locator('.run-readings').first()).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Check cost/ })).toBeVisible()
+
+  await picked(page, 'Match to stock photos').click()
+  await expect(page.locator('.run-readings')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Check what it will read' })).toBeVisible()
+})
+
+test('a fresh opening is the free read again, whatever was picked last time', async ({ page }) => {
+  await open(page)
+  await atReading(page, 9, 'paid')
+  await expect(picked(page, 'Read from the photo')).toHaveAttribute('aria-pressed', 'true')
+  await page.locator('.runs-composer').getByRole('button', { name: 'Close' }).click()
+  await expect(page.locator('.runs-composer')).toHaveCount(0)
+
+  await page.locator('.runs-actions').getByRole('button', { name: /^Identify/ }).click()
+  await expect(page.locator('.runs-composer')).toBeVisible()
+  /* THE SHEET REOPENS ON THE SECOND STAGE WITH THE BOX KEPT, and the pick is not what it keeps. */
+  await expect(page.locator('.run-engine')).toBeVisible()
+  await expect(picked(page, 'Match to stock photos')).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('both picks carry a hover tooltip that names their model, and nothing else on the sheet does', async ({
+  page,
+}) => {
+  await open(page)
+  await atReading(page, 9, 'free')
+
+  await expect(picked(page, 'Match to stock photos')).toHaveAttribute('title', MATCHER_NAME_TOOLTIP)
+  await expect(picked(page, 'Read from the photo')).toHaveAttribute('title', HAIKU_NAME_TOOLTIP)
+  expect(MATCHER_NAME_TOOLTIP).toContain('Marqo ecommerce-B')
+  expect(HAIKU_NAME_TOOLTIP).toContain('Claude Haiku 4.5')
+  /* THE TWO NAMED EXCEPTIONS (D196): every other word on the sheet leaves the models unnamed. */
+  const text = (await page.locator('.runs-composer').innerText()).toLowerCase()
+  expect(text).not.toMatch(/marqo|haiku|claude|onnx/)
+})
+
+test('not prepared: the sheet says so, offers Prepare, and the quote waits', async ({ page }) => {
+  const wire = await open(page, { matchState: NOT_PREPARED })
+  await page.locator('.runs-actions').getByRole('button', { name: /^Identify/ }).click()
+  await expect(page.locator('.runs-composer')).toBeVisible()
+  await pickBox(page, 9)
+  await toReading(page, 'free')
+
+  await expect(page.locator('.runs-composer .bn-notice')).toContainText('Matching needs a one-time setup')
+  await expect(page.locator('.runs-composer .bn-notice')).toContainText('372 MB download')
+  await expect(page.getByRole('button', { name: 'Prepare matching' })).toBeEnabled()
+  /* THE PRESS THAT WOULD READ IS DISABLED, AND NO QUOTE WAS ASKED FOR: a free quote over an
+     unprepared reader would be a guess. */
+  await expect(page.getByRole('button', { name: 'Check what it will read' })).toBeDisabled()
+  await expect(page.locator('.run-quote')).toHaveCount(0)
+  await expect(page.locator('.run-button-money')).toHaveCount(0)
+  expect(preflights(wire)).toEqual([])
+  expect(wire.filter((row) => row.path === '/pipeline/identify')).toEqual([])
+  /* AND NOTHING WAS DOWNLOADED UNASKED: opening the sheet did not reach the Prepare route. */
+  expect(wire.filter((row) => row.path === '/pipeline/match/prepare')).toEqual([])
+})
+
+test('the Prepare press starts the setup once, with its confirm, and nothing else does', async ({ page }) => {
+  const wire = await open(page, { matchState: NOT_PREPARED })
+  await page.locator('.runs-actions').getByRole('button', { name: /^Identify/ }).click()
+  await pickBox(page, 9)
+  await toReading(page, 'free')
+  expect(wire.filter((row) => row.path === '/pipeline/match/prepare')).toEqual([])
+
+  await page.getByRole('button', { name: 'Prepare matching' }).click()
+  await expect
+    .poll(() => wire.filter((row) => row.path === '/pipeline/match/prepare'))
+    .toEqual([{ method: 'POST', path: '/pipeline/match/prepare', body: { confirm: true } }])
+  expect(wire.filter((row) => row.path === '/pipeline/identify')).toEqual([])
+})
+
+test('while a Prepare runs the line says how far, and the press cannot be made twice', async ({ page }) => {
+  await open(page, {
+    matchState: {
+      ...NOT_PREPARED,
+      running: true,
+      progress: { state: 'running', phase: 'model', done: 50, total: 100, message: '' },
+    },
+  })
+  await page.locator('.runs-actions').getByRole('button', { name: /^Identify/ }).click()
+  await pickBox(page, 9)
+  await toReading(page, 'free')
+  await expect(page.locator('.runs-composer .bn-notice')).toContainText('Downloading, 50%')
+  await expect(page.getByRole('button', { name: 'Prepare matching' })).toBeDisabled()
+})
+
+test('a prepared reader says how many stock photos it holds, and the quote is open to ask', async ({ page }) => {
+  await open(page)
+  await atReading(page, 9, 'free')
+  await expect(page.locator('.runs-match-ready')).toContainText(
+    /Ready\. 52,?000 stock photos read, 120 printings have none/,
+  )
+  await expect(page.getByRole('button', { name: 'Check what it will read' })).toBeEnabled()
+})
+
+test('a counted free quote says it was counted, and gives the free read and the second look', async ({
+  page,
+}) => {
+  const wire = await open(page, { free: { freeRead: 30, secondLook: 6, measured: true } })
+  await atReading(page, 9, 'free')
+  await page.getByRole('button', { name: 'Check what it will read' }).click()
+  await expect(page.locator('.run-quote')).toBeVisible()
+
+  /* THE ASK ITSELF: the free quote is asked for with the free engine, never the paid one. */
+  const asked = preflights(wire).at(-1)?.body as SelectionBody
+  expect(asked.engine).toBe('marqo-b')
+  expect(asked.crop).toBeUndefined()
+  expect(asked.max_edge).toBeUndefined()
+
+  await expect(page.locator('.run-quote .bn-label').first()).toHaveText('Second look, estimated cost')
+  await expect(page.locator('.runs-quote-money')).toHaveText('$0.42')
+  const quote = page.locator('.run-quote')
+  await expect(quote).toContainText('36 cards to match')
+  await expect(quote).toContainText('30 read free')
+  await expect(quote).toContainText('6 get a second look from the paid read')
+  await expect(quote).toContainText('Counted by reading them now')
+  await expect(quote).not.toContainText('Estimated from earlier cards')
+  await expect(quote).not.toContainText('About 30')
+})
+
+test('an estimated free quote says so on every figure it estimates', async ({ page }) => {
+  await open(page, { free: { freeRead: 23, secondLook: 13, measured: false } })
+  await atReading(page, 9, 'free')
+  await page.getByRole('button', { name: 'Check what it will read' }).click()
+  const quote = page.locator('.run-quote')
+  await expect(quote).toBeVisible()
+
+  await expect(quote).toContainText('About 23 read free')
+  await expect(quote).toContainText('about 13 get a second look from the paid read')
+  await expect(quote).toContainText('Estimated from earlier cards, rounded up. The press counts them for real.')
+  await expect(quote).not.toContainText('Counted by reading them now')
+})
+
+test('cards the free reader cannot take are named in sentences, never by their code', async ({ page }) => {
+  await open(page, {
+    free: {
+      unread: { pokemon_needs_a_set: 2, set_not_resolved: 3, promo_set: 4, game_not_served: 5, set_not_indexed: 6 },
+    },
+  })
+  await atReading(page, 9, 'free')
+  await page.getByRole('button', { name: 'Check what it will read' }).click()
+  const quote = page.locator('.run-quote')
+  await expect(quote).toBeVisible()
+
+  await expect(quote).toContainText('2 cards are Pokemon with no set named')
+  await expect(quote).toContainText('3 cards have a set hint that does not name one set')
+  await expect(quote).toContainText('4 cards are in a promo set')
+  await expect(quote).toContainText('5 cards are a game the free read does not cover')
+  await expect(quote).toContainText('6 cards are in a set that has no stock photos read yet')
+  await expect(quote).not.toContainText(/pokemon_needs_a_set|set_not_resolved|promo_set|game_not_served|set_not_indexed/)
+})
+
+test('the free confirm names the second look as the only spend, and sends the free engine', async ({ page }) => {
+  const wire = await open(page)
+  await atReading(page, 9, 'free')
+  await page.getByRole('button', { name: 'Check what it will read' }).click()
+  const confirm = page.locator('.run-button-money')
+  await expect(confirm).toHaveText('Match 36 cards, then spend $0.42 on the second look')
+  await expect(page.locator('.runs-quote-fine')).toContainText('The free read costs nothing. The second look is paid')
+
+  await confirm.click()
+  await expect(page.locator('.runs-receipt')).toBeVisible()
+  const body = identifyBody(wire)
+  expect(body?.confirm).toBe(true)
+  expect(body?.engine).toBe('marqo-b')
+  expect(body?.box).toEqual([9])
+  /* THE FREE READER CUTS ITS OWN PHOTOGRAPH, so the reading never rides along, and it never asks to re-buy. */
+  expect(body?.crop).toBeUndefined()
+  expect(body?.max_edge).toBeUndefined()
+  expect(body?.reread_matcher).toBeUndefined()
+})
+
+test('the paid confirm sends the paid engine with the reading it names, and no re-read', async ({ page }) => {
+  const wire = await open(page)
+  await atReading(page)
+  await checkCost(page)
+  await expect(page.locator('.runs-quote .bn-label').first()).toHaveText('Estimated cost')
+  await expect(page.locator('.run-button-money')).toHaveText('Spend $0.42 and identify 36 cards')
+  await page.locator('.run-button-money').click()
+  await expect(page.locator('.runs-receipt')).toBeVisible()
+
+  const body = identifyBody(wire)
+  expect(body?.confirm).toBe(true)
+  expect(body?.engine).toBe('haiku')
+  expect(typeof body?.crop).toBe('boolean')
+  expect(body?.max_edge).toBeDefined()
+  expect(body?.reread_matcher).toBeUndefined()
+})
+
+test('cards the free reader answered are skipped by a paid press, and buying them again is a tick on the quote', async ({
+  page,
+}) => {
+  const wire = await open(page, { matcherRead: 5 })
+  await atReading(page)
+  await checkCost(page)
+
+  const ask = page.locator('.runs-quote-ask')
+  await expect(ask).toContainText('Also read again the 5 cards that matching decided')
+  await expect(ask.getByRole('checkbox')).not.toBeChecked()
+  await expect(ask.locator('.run-step-fine')).toContainText('Reading them again would add about $0.06')
+  /* THE DEFAULT IS SKIP: a press with the box untouched asks for no re-read. */
+  const first = preflights(wire).at(-1)?.body as SelectionBody
+  expect(first.reread_matcher).toBeUndefined()
+
+  const before = preflights(wire).length
+  await ask.getByRole('checkbox').check()
+  /* TICKING RE-QUOTES AT ONCE, with the ask on the wire. */
+  await expect.poll(() => preflights(wire).length).toBe(before + 1)
+  const again = preflights(wire).at(-1)?.body as SelectionBody
+  expect(again.reread_matcher).toBe(true)
+  await expect(page.locator('.runs-quote-ask .run-step-fine')).toContainText('These are in the figure above')
+
+  await page.locator('.run-button-money').click()
+  await expect(page.locator('.runs-receipt')).toBeVisible()
+  expect(identifyBody(wire)?.reread_matcher).toBe(true)
+})
+
+test('a paid quote with nothing the free reader answered draws no re-read ask at all', async ({ page }) => {
+  await open(page)
+  await atReading(page)
+  await checkCost(page)
+  await expect(page.locator('.runs-quote-ask')).toHaveCount(0)
+})
+
+test('a free run says what it matched and how many went to the second look', async ({ page }) => {
+  await open(page, {
+    detail: {
+      manifest: {
+        flags: { engine: 'marqo-b' },
+        matched: 30,
+        second_look: [
+          { key: '9/1', code: 'margin_too_small', name: 'Raichu' },
+          { key: '9/2', code: 'lookalike_guard', name: 'Pikachu' },
+        ],
+      },
+    },
+  })
+  await openRun(page)
+  const head = page.locator('.runs-detail-panel .runs-step-head').first()
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click()
+  await expect(page.locator('.runs-detail-panel')).toContainText(
+    'Matched 30 cards free. 2 cards got a second look from the paid read and wait in review.',
+  )
+  /* A CODE IS THE RUN RECORD'S, never the screen's. */
+  await expect(page.locator('.runs-detail-panel')).not.toContainText(/margin_too_small|lookalike_guard/)
 })

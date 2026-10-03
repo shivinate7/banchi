@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
 # main does not move locally. Every way it could is this one hook.
 #
-# AND SINCE 2026-09-12 IT ALSO SAYS WHAT main IS CARRYING ONCE IT HAS MOVED. That half refuses
-# nothing — it runs at `committed`, prints, and exits 0 — and it lives here for the one
-# property this file has that no script in a checkout has: `core.hooksPath` is one installed
-# directory in the common .git dir, so every working tree of this clone runs THIS copy. The
-# block carries the measurement.
-#
 # WHY A reference-transaction HOOK AND NOT pre-commit. A pre-commit hook sees commits, and
 # the failure that produced this guard was not a commit: 637e2e4 was authored on a session's
 # own branch and FAST-FORWARDED into main, which creates no commit and runs no commit hook.
@@ -30,8 +24,8 @@
 #      is not on origin until something pushes it — and pushing to main is what the pre-push
 #      hook beside this one refuses.
 #   3a. Packing (`pack-refs`, `gc`): dropping a loose main whose value is unchanged. main does not move. See the block at the deletion test.
-#   4. PKMNSCAN_MAIN=off, the visible escape hatch, spelled the way PKMNSCAN_GATE=off and
-#      PKMNSCAN_DOCS=off already are in this repo.
+#   4. PKMNSCAN_MAIN=off, the visible escape hatch, spelled the way PKMNSCAN_DOCS=off
+#      already is in this repo.
 #
 # THE `old` COLUMN IS NOT EVIDENCE AND THIS HOOK IGNORES IT. That is the single most important
 # line in this file, it is not what the format suggests, and both bugs this hook shipped with
@@ -60,14 +54,20 @@
 
 set -uo pipefail
 
-# `prepared` is the phase that can still refuse. `committed` is a report — and since
-# 2026-09-12 it is one this hook makes, see the block below. `aborted` and any unknown phase
-# from a future git read stdin and exit 0.
-phase="${1:-}"
-case "$phase" in
-  prepared|committed) ;;
-  *) exit 0 ;;
-esac
+# Append one line to the refusal log (scripts/refusal_log.py, the one home). Fails open: a log
+# that cannot be written never changes this hook's verdict or output.
+rlog() {
+  local top
+  top="$(git rev-parse --show-toplevel 2>/dev/null)" || return 0
+  [ -f "$top/scripts/refusal_log.py" ] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  python3 "$top/scripts/refusal_log.py" "$@" >/dev/null 2>&1 || true
+  return 0
+}
+
+# `prepared` is the phase that can still refuse. Every other phase (`committed`, `aborted`, an
+# unknown one from a future version) exits 0 with no output.
+[ "${1:-}" = "prepared" ] || exit 0
 
 [ "${PKMNSCAN_MAIN:-}" = "off" ] && exit 0
 
@@ -85,64 +85,6 @@ zero_oid() {
     *) return 0 ;;
   esac
 }
-
-# ---------------------------------------------------- what main is carrying, once it has moved
-#
-# THE ONE THING IN THIS CLONE THAT SEES EVERY main MOVE, WHICHEVER CHECKOUT CAUSED IT. That is
-# why the report lives here and not only in the merge tool. A guard inside one
-# checkout's own copy of a script is absent from exactly the checkouts that need it. `core.hooksPath` points at ONE installed directory in the common .git dir, so this
-# file is the same file for every one of those trees.
-#
-# IT REPORTS AND IT NEVER REFUSES, WHICH IS THE OPPOSITE OF EVERYTHING ELSE IN THIS FILE. By
-# the time main moves locally, the pull request is merged and origin carries the slug whatever
-# happens here; refusing the fast-forward would leave this clone behind a main that is already
-# wrong, which repairs nothing and breaks every read downstream of it. And it fires at
-# `committed`, after the transaction, so a bug in it cannot abort anybody's ref update.
-#
-# THE PATTERN IS DELIBERATELY LOOSER THAN THE CLAIMER'S. the shared merge tool owns the
-# grammar an id is ALLOCATED by (`.github/stamp.json`); this only has to notice a heading that is not a number. A
-# loose reader over-reports, and for a report that is the safe direction — the strict answer
-# is one command away and the message names it.
-if [ "$phase" = "committed" ]; then
-  while IFS=' ' read -r _old new ref rest; do
-    [ "${ref:-}" = "refs/heads/main" ] || continue
-    [ -n "${rest:-}" ] && continue
-    zero_oid "$new" && continue
-
-    carried=""
-    for file in docs/DECISIONS.md docs/specs/code-cards.md; do
-      hit="$(git show "$new:$file" 2>/dev/null | grep -E '^## [DC]-[a-z][a-z0-9]*-' 2>/dev/null)"
-      [ -n "$hit" ] && carried="$carried$hit
-"
-    done
-    hit="$(git show "$new:docs/GATES.md" 2>/dev/null \
-             | grep -E '^0\. +.?step [a-z][a-z0-9]*-' 2>/dev/null)"
-    [ -n "$hit" ] && carried="$carried$hit
-"
-    [ -n "$carried" ] || continue
-
-    short="$(git rev-parse --short "$new" 2>/dev/null || echo "$new")"
-    echo "" >&2
-    echo "UNCLAIMED ID ON main — main moved to $short and that commit carries one." >&2
-    echo "" >&2
-    printf '%s\n' "$carried" | sed '/^$/d; s/^/    /' >&2
-    echo "" >&2
-    echo "  A slug is a BRANCH's placeholder and the merge is what turns it into a number" >&2
-    echo "  (D140). One on main means the claim did not run: every citation of that id now" >&2
-    echo "  resolves to nothing, and no later merge can find it, because the branch that" >&2
-    echo "  wrote it is merged and gone." >&2
-    echo "" >&2
-    echo "  NOTHING WAS REFUSED and nothing here is wrong with your command. main carries" >&2
-    echo "  this on origin already; holding this clone back would repair nothing." >&2
-    echo "" >&2
-    echo "  Repair is any pull request off main, merged through \`make merge\`: the shared" >&2
-    echo "  merge tool claims every pending record in the tree it merges." >&2
-    echo "" >&2
-  done <<EOF
-$lines
-EOF
-  exit 0
-fi
 
 # The value main actually holds right now. Read during `prepared`, so the transaction has a
 # lock file open but has not renamed it over the ref — what comes back is the pre-update value,
@@ -168,10 +110,11 @@ while IFS=' ' read -r _old new ref rest; do
       cdir="$(git rev-parse --git-common-dir 2>/dev/null)" || cdir=""
       [ -n "$cdir" ] && [ -f "$cdir/refs/heads/main" ] && continue
     fi
+    rlog reference-transaction main-delete "refs/heads/main"
     echo "" >&2
     echo "REFUSED: this would DELETE refs/heads/main." >&2
     echo "" >&2
-    echo "  Escape hatch, if you really mean it:  PKMNSCAN_MAIN=off git ..." >&2
+    echo "  Bypass: owner-only: ask the owner to run this command." >&2
     echo "" >&2
     exit 1
   fi
@@ -191,6 +134,7 @@ while IFS=' ' read -r _old new ref rest; do
 
   short_new="$(git rev-parse --short "$new" 2>/dev/null || echo "$new")"
   short_cur="$(git rev-parse --short "$current" 2>/dev/null || echo "$current")"
+  rlog reference-transaction main-move "refs/heads/main $short_cur -> $short_new"
   echo "" >&2
   echo "REFUSED: main does not move locally." >&2
   echo "" >&2
@@ -208,7 +152,7 @@ while IFS=' ' read -r _old new ref rest; do
   echo "    gh pr create --fill" >&2
   echo "" >&2
   echo "  To sync main after a PR is merged:   git switch main && git pull" >&2
-  echo "  Escape hatch, deliberate and loud:   PKMNSCAN_MAIN=off git ..." >&2
+  echo "  Bypass: owner-only: ask the owner to run this command." >&2
   echo "" >&2
   exit 1
 done <<EOF

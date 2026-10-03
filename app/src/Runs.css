@@ -836,6 +836,45 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
 .run-read-scope { color: var(--bn-ink-3); min-width: 0; }
 .runs-reading-says { margin: 0; }
 
+/* ---- who reads: the free or the paid read ---- */
+.run-engine {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+}
+.run-engines.bn-seg {
+  flex-wrap: wrap;
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+}
+.run-engines .bn-seg-item { flex: 1 1 auto; }
+.run-engines .bn-seg-item[aria-pressed='true'] {
+  background: var(--bn-accent-tint);
+  color: var(--bn-accent);
+  box-shadow: none;
+}
+.runs-engine-says { margin: 0; }
+.runs-match-ready {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  flex-wrap: wrap;
+  min-height: var(--bn-9);
+}
+.runs-match-ready .run-step-fine { margin: 0; }
+/* THE PAID PRESS'S ASK over cards the free reader matched. It holds the same box whether it is on
+   or off, so turning it on moves nothing under the finger (D313). */
+.runs-quote-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-1);
+  padding: var(--bn-3);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface-2);
+}
+.runs-quote-ask .run-step-fine { margin: 0; }
+
 /* ---- the quote ---- */
 /* WHAT THE PRESS IS OVER, IN THE SERVER'S OWN WORDS, directly under the figure it costs. */
 .runs-quote-over {

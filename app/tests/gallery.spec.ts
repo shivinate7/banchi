@@ -3,7 +3,7 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { createRequire } from 'node:module'
 import { sealEveryTest } from './shell'
-import { settleMotion } from './motionSettled'
+import { afterPaint, settleMotion } from './motionSettled'
 import { PHONE_OFF_REASON, PHONE_SPECS_ON, phoneOff, setViewport } from './phoneSwitch'
 
 /* THE ROW SHAPES `#/gallery` DRAWS THAT NOTHING ELSE IN THIS APP EVER DRAWS.
@@ -381,14 +381,14 @@ async function setTheme(page: import('@playwright/test').Page, theme: 'light' | 
     else document.documentElement.removeAttribute('data-theme')
   }, theme)
   // a theme flip eases every colour over a beat (base.css); read after it lands
-  await page.waitForTimeout(450)
+  await settleMotion(page)
 }
 
 test('the kit is a Page: one h1, one width, one top gap, no sideways scroll, at every width', async ({ page }) => {
   for (const [width, height] of WIDTHS) {
     if (phoneOff(width)) continue
     await setViewport(page, { width, height })
-    await page.waitForTimeout(100)
+    await afterPaint(page)
     const m = await page.evaluate(() => {
       const main = document.querySelector<HTMLElement>('main[data-bn-page]')
       const h1 = main?.querySelector('h1')
@@ -574,7 +574,7 @@ test('a confirm is an alertdialog, its first focus is Cancel, and a held Enter c
   for (let i = 0; i < 5; i++) await page.keyboard.down('Enter')
   await page.keyboard.up('Enter')
   /* a closing layer keeps drawing for its leave beat, so wait it out and ask whether it is leaving */
-  await page.waitForTimeout(400)
+  await afterPaint(page)
   await expect(dialog, 'a held Enter closed the confirm').toBeVisible()
   await expect(dialog, 'a held Enter closed the confirm').not.toHaveAttribute('data-leaving')
   await page.keyboard.press('Escape')
@@ -592,7 +592,7 @@ test('a busy confirm cannot be closed by Close, Escape or the scrim', async ({ p
   await expect(dialog.getByRole('button', { name: 'Close' })).toBeDisabled()
   await page.keyboard.press('Escape')
   await page.mouse.click(4, 4)
-  await page.waitForTimeout(300)
+  await afterPaint(page)
   await expect(dialog, 'a busy confirm closed').toBeVisible()
   await expect(dialog, 'a busy confirm closed').not.toHaveAttribute('data-leaving')
   /* the specimen's write finishes, and then it closes */
@@ -1174,7 +1174,14 @@ test('a section inside a layer is an h3, and on the page an h2', async ({ page }
    lane that owns the fix — a shrinking list, never a pinned count. A violation not listed fails.
    A listed entry that matches nothing in any of the four runs fails too, so the list only
    shrinks: take the entry out in the commit that fixes it. */
-const AXE_KNOWN: readonly { readonly rule: string; readonly selector: string; readonly owner: string; readonly why: string }[] = []
+const AXE_KNOWN: readonly { readonly rule: string; readonly selector: string; readonly owner: string; readonly why: string }[] = [
+  {
+    rule: 'color-contrast',
+    selector: '.bn-set-op-danger > .bn-set-op-detail',
+    owner: 'the Manage box danger rows',
+    why: 'the detail is danger red at 0.8 opacity, under 4.5:1 in dark. The same rows draw it in Manage box today; the kit page is the first place axe reads it. Fixing it moves a pixel of Manage box, which the move into the kit was ruled not to do.',
+  },
+]
 
 test('axe finds nothing on the kit at 390 and 1440 in both themes, but what is listed with its owner', async ({ page }) => {
   test.setTimeout(90_000)
@@ -1195,7 +1202,7 @@ test('axe finds nothing on the kit at 390 and 1440 in both themes, but what is l
           await opener.scrollIntoViewIfNeeded()
           await opener.click()
           await expect(page.locator('[data-bn-overlay="sheet"]')).toBeVisible()
-          await page.waitForTimeout(400)
+          await settleMotion(page)
         }
         const violations = await page.evaluate(async () => {
           const w = window as unknown as {
@@ -1261,4 +1268,26 @@ test('a meter with many cells never paints them over its end label at a narrow w
     const apart = end.y >= cell.bottom - 0.5 || end.x >= cell.right - 0.5
     expect(apart, 'no cell is painted over the label').toBe(true)
   }
+})
+
+/* WHOLE PHOTOGRAPH, NEVER A CROP: THE FULFILLER'S PHOTOGRAPH DRAWS THE WHOLE IMAGE, AT OR OVER THE SCREEN FLOOR.
+ *
+ * `object-fit: cover` filled the frame by construction, so a floor on painted size (320px, short
+ * edge) passed while the card's bottom edge, where its number and rarity sit, was cut off. A
+ * detector reading would catch that and is slow and can refuse, so this asks the two
+ * things that make a clipping impossible: the fit is not a clipping one, and the frame has the
+ * image's own aspect, so `contain` leaves no bar and the painted short edge is the frame's. */
+test('the fulfiller photograph holds the whole image, clear of the 320px floor', async ({
+  page,
+}) => {
+  const photo = page.locator(PHOTO).first()
+  await expect(photo).toHaveCSS('object-fit', 'contain')
+  const box = await photo.evaluate((node) => {
+    const img = node as HTMLImageElement
+    const r = img.getBoundingClientRect()
+    return { w: r.width, h: r.height, nw: img.naturalWidth, nh: img.naturalHeight }
+  })
+  expect(box.nw).toBeGreaterThan(0)
+  expect(Math.abs(box.w / box.h - box.nw / box.nh)).toBeLessThan(0.01)
+  expect(Math.min(box.w, box.h)).toBeGreaterThanOrEqual(320)
 })

@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test'
 import type {
   CodeEntry,
   CodeLedger,
-  DepartedCard,
+  MatchState,
   OrderRow,
   OrdersPayload,
   PickRow,
@@ -20,16 +20,15 @@ import type {
  * WROTE, MOVED HERE SO A FOURTH AND FIFTH FILE CAN REUSE THEM RATHER THAN INVENT A COMPETING
  * SHAPE (D284: the sweep needs one shared fixture set).
  *
- * `app/tests/text-shape.spec.ts` and `app/tests/machine-words.spec.ts` render `#/runs`,
- * `#/orders`, `#/shipping`, `#/codes` and `#/graveyard` off `sealEveryTest({ store: true,
- * cards: 122 })` alone, which draws no run, no order, no export, no code and no departed
- * record for any of the five — so a check run only against that state never sees the busiest
+ * `app/tests/text-checks.spec.ts` renders `#/runs`,
+ * `#/orders`, `#/shipping` and `#/codes` off `sealEveryTest({ store: true,
+ * cards: 122 })` alone, which draws no run, no order, no export and no code
+ * for any of the four — so a check run only against that state never sees the busiest
  * screen a real store draws, and a repeated sentence or a machine word landing in a populated
- * list could pass unseen. This module is what those five routes' POPULATED fixtures are built
+ * list could pass unseen. This module is what those routes' POPULATED fixtures are built
  * from: the same shapes `run-panel.spec.ts`'s `runRow`, `orders.spec.ts`'s `place`/`pick`/
  * `line`/`order`/`payloadOf` and `shipping.spec.ts`'s `row`/`batchOf` already prove render
- * correctly, plus two new ones — `codeEntry`/`codeLedgerOf` and `departedCard` — for the two
- * screens no existing spec seeds at all.
+ * correctly, plus `codeEntry`/`codeLedgerOf`, for what no existing spec seeds at all.
  *
  * EVERY SPEC THAT NEEDS ONE OF THESE SHAPES IMPORTS FROM HERE INSTEAD OF DEFINING ITS OWN
  * COPY. A second copy of `runRow` anywhere else is exactly the drift this repo's own rule
@@ -118,6 +117,53 @@ export async function seedPopulatedRuns(page: Page): Promise<void> {
       contentType: 'application/json',
       body: JSON.stringify({ runs: severalRuns() }),
     }),
+  )
+}
+
+/* ------------------------------------------------------------------ the free reader */
+
+/** What `GET /pipeline/match` answers, in the shape the route returns: the free reader is
+ *  prepared (model on disk, an index built by it). A case that wants another state overrides the
+ *  fields it means, so "not prepared" is `matchState({ ready: false, index_present: false })`
+ *  and nothing else about the answer is a second copy of a shape. */
+export function matchState(overrides: Partial<MatchState> = {}): MatchState {
+  return {
+    model_present: true,
+    model_ok: true,
+    model_bytes: 371_700_983,
+    index_present: true,
+    index_current: true,
+    ready: true,
+    fingerprints: 52000,
+    no_image: 120,
+    sets: 310,
+    running: false,
+    progress: null,
+    model_url: 'https://github.com/shivinate7/banchi/releases/download/matcher-model-1/marqo-b-image.onnx',
+    margin_min: 0.05,
+    floor_min: 0.755,
+    ...overrides,
+  }
+}
+
+/** The preflight total's free-reader fields, all absent: what a paid quote carries. Spread it into
+ *  a `total` so a fixture cannot forget one of the six (a free quote reads `unread` with
+ *  `Object.entries`, and a missing one crashes the sheet rather than failing a case). */
+export const NO_FREE_FIELDS = {
+  matcher_read: null,
+  can_read: null,
+  free_read: null,
+  second_look: null,
+  second_look_measured: null,
+  unread: {},
+} as const
+
+/** Stub `GET /pipeline/match`, the free reader's state, which the Identify sheet reads when it opens.
+ *  Free, writes nothing. `POST /pipeline/match/prepare` is NOT answered here: it downloads, and a spec
+ *  that presses Prepare stubs it itself, so the seal reports any spec that reaches it by accident. */
+export async function stubMatchState(page: Page, state: MatchState = matchState()): Promise<void> {
+  await page.route(/\/pipeline\/match$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(state) }),
   )
 }
 
@@ -653,101 +699,6 @@ export async function seedPopulatedCodes(page: Page): Promise<void> {
   )
 }
 
-/* ----------------------------------------------------------------------- the graveyard */
-
-/** One departed card, in the shape `GET /graveyard` answers with. No existing spec seeds this
- *  route — `#/graveyard` has no dedicated spec yet — so this is a fresh fixture off
- *  `types.ts:DepartedCard`'s own field list. */
-export function departedCard(over: Partial<DepartedCard> = {}): DepartedCard {
-  const base: DepartedCard = {
-    left_at: '2026-09-10T15:00:00+00:00',
-    how: 'sold',
-    box: 2,
-    index: 3,
-    box_name: 'SV commons',
-    name: 'Eiscue',
-    number: '112',
-    game: 'pokemon',
-    set_hint: 'ME01',
-    sku: '8937371',
-    condition: 'Near Mint',
-    retire_reason: null,
-    order: 'A2FFC195-0000F4-006AC',
-    run: '2026-08-24-box9-01',
-    captured_at: '2026-08-22T12:34:00+00:00',
-    photo_sha256: 'a1b2c3',
-    buried: false,
-    buried_at: null,
-  }
-  return { ...base, ...over }
-}
-
-/** A few departed rows across the two doors D134 (amended) names — sold, retired — one
- *  standing and one buried each, so `#/graveyard` draws its merged list instead of "nothing
- *  has left this store yet". No `moved` row: D134's amendment (2026-09-26, the owner's
- *  ruling "Move Moved out of Graveyard") means `GET /graveyard` never answers with one. */
-export function severalDeparted(): DepartedCard[] {
-  return [
-    departedCard(),
-    departedCard({
-      left_at: '2026-09-08T11:00:00+00:00',
-      how: 'retired',
-      box: 5,
-      index: 4,
-      box_name: null,
-      name: 'Corviknight',
-      number: '198',
-      sku: null,
-      retire_reason: 'miscut',
-      order: null,
-      run: null,
-      photo_sha256: 'd4e5f6',
-    }),
-    departedCard({
-      left_at: '2026-09-05T09:00:00+00:00',
-      how: 'retired',
-      box: 9,
-      index: 2,
-      box_name: null,
-      name: 'Thievul',
-      number: '090',
-      sku: null,
-      retire_reason: 'damaged',
-      order: null,
-      run: null,
-      photo_sha256: 'g7h8i9',
-      buried: true,
-      buried_at: '2026-09-06T00:00:00+00:00',
-    }),
-    departedCard({
-      left_at: '2026-08-29T08:00:00+00:00',
-      how: 'sold',
-      box: 1,
-      index: 12,
-      box_name: null,
-      name: 'Volcanion',
-      number: '025',
-      sku: '9191210',
-      order: 'B31A0C7D-0001A2-00311',
-      run: '2026-08-22-box1-03',
-      photo_sha256: null,
-      buried: true,
-      buried_at: '2026-09-01T00:00:00+00:00',
-    }),
-  ]
-}
-
-/** Stub `GET /graveyard` with a populated list. */
-export async function seedPopulatedGraveyard(page: Page): Promise<void> {
-  await page.route(/\/graveyard$/, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ departed: severalDeparted() }),
-    }),
-  )
-}
-
 /* ------------------------------------------------------------------------- the product */
 
 /** `#/product` WITH A SKU, the only state that route draws anything real in. The SKU is
@@ -801,6 +752,10 @@ export async function seedPopulatedProduct(page: Page): Promise<void> {
       body: JSON.stringify(productHistory()),
     }),
   )
+  // The realized-price read: no sales export given, so the section says so and draws no figure.
+  await page.route(/\/pipeline\/products\/[^/]+\/realized$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sku: '0', configured: false }) }),
+  )
 }
 
 /* ------------------------------------------------------------------------ #/review */
@@ -826,7 +781,7 @@ function catalogRow(sku: string, overrides: Record<string, unknown> = {}) {
  *  open (`showCatalog` is true whenever an entry carries no candidates, D77), but every
  *  route through this fixture answered zero rows, so "Show N more" and the truncation
  *  notice `CatalogPanel` draws for a wide result never rendered anywhere the sweep's own
- *  text checks (`text-shape.spec.ts`, `machine-words.spec.ts`, `money-face.spec.ts`) could
+ *  text checks (`text-checks.spec.ts`) could
  *  see them. 200 rows delivered against 205 found is the same shape a real egregious search
  *  returns (`CATALOG_EGREGIOUS_LIMIT`, `server/capture_server.py`), so this measures BOTH
  *  new strings in the one state: the reveal button (`revealed < rows.length`) and the
@@ -1020,7 +975,6 @@ export const POPULATED_ROUTE_SEEDS: Record<string, (page: Page) => Promise<void>
   '#/orders': seedPopulatedOrders,
   '#/shipping': seedPopulatedShipping,
   '#/codes': seedPopulatedCodes,
-  '#/graveyard': seedPopulatedGraveyard,
   [PRODUCT_ROUTE]: seedPopulatedProduct,
   '#/review': seedPopulatedReview,
   '#/pricing': seedPopulatedPricing,

@@ -5,6 +5,7 @@ import { sealEveryTest } from './shell'
 import type { Page } from '@playwright/test'
 import type { GameRegistry } from '../src/types'
 import { setViewport } from './phoneSwitch'
+import { afterPaint } from './motionSettled'
 
 /* SUB-BOX CAPTURE, LANE B — the Capture screen's own section picker
  * (docs/specs/subbox-capture.md §5). Lane A (the store, the server, the harness) is proved by
@@ -89,22 +90,33 @@ const BOX = {
 
 async function open(
   page: Page,
-  options: { spans?: Span[]; boxes?: readonly unknown[] } = {},
+  options: { spans?: Span[]; boxes?: readonly unknown[]; holdSweep?: boolean; bare?: boolean } = {},
 ): Promise<{
   opens: { box: string; after?: string }[]
   closes: { box: string; div?: string }[]
+  /** The background reader's switch: the bodies `PUT /pipeline/match/sweep` carried, and the
+   *  release for its `GET`, which is held from the first request when `holdSweep` is set. */
+  sweepPuts: unknown[]
+  releaseSweep: () => void
   /** Simulates a re-space this browser never saw — another device's own S or capture.
    *  The next aim at this box that carries the OLD token is refused `section_gone`, exactly
    *  as a real one would be (subbox-capture.md 1). */
   bumpToken: () => void
 }> {
+  let releaseSweep: () => void = () => undefined
+  const sweepGate = options.holdSweep === true ? new Promise<void>((resolve) => (releaseSweep = resolve)) : null
+  let sweepOn = false
   const wire: {
     opens: { box: string; after?: string }[]
     closes: { box: string; div?: string }[]
+    sweepPuts: unknown[]
+    releaseSweep: () => void
     bumpToken: () => void
   } = {
     opens: [],
     closes: [],
+    sweepPuts: [],
+    releaseSweep: () => releaseSweep(),
     bumpToken: () => {
       token = `tok${++tokenGen}`
     },
@@ -151,6 +163,19 @@ async function open(
       body: JSON.stringify({ boxes: options.boxes ?? [boxRow()] }),
     }),
   )
+  await page.route(/\/pipeline\/match\/sweep$/, async (route) => {
+    const request = route.request()
+    if (request.method() === 'PUT') {
+      const asked = request.postDataJSON() as { on: boolean }
+      wire.sweepPuts.push(asked)
+      sweepOn = asked.on
+    } else if (sweepGate !== null) await sweepGate
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ on: sweepOn, running: sweepOn, matched: 0 }),
+    })
+  })
   await page.route(/\/capture\/sitting$/, (route) =>
     route.fulfill({
       status: 200,
@@ -256,6 +281,7 @@ async function open(
 
   await page.goto('/#/capture')
   await expect(page.locator('.capture-row').filter({ hasText: /Finish/ })).toBeVisible()
+  if (options.bare === true) return wire
 
   await expect(async () => {
     await page.keyboard.press('b')
@@ -947,7 +973,7 @@ test('walking the open list by keyboard keeps the focused option in view to the 
     if (at > 0) await page.keyboard.press('Tab')
     const focused = page.locator('.capture-open-pinned .capture-opt:focus')
     await expect(focused).toContainText(`Section ${at + 1} of 12`)
-    await page.waitForTimeout(60)
+    await afterPaint(page)
     const list = (await page.locator('.capture-open-pinned').boundingBox())!
     const opt = (await focused.boundingBox())!
     expect(opt.y).toBeGreaterThanOrEqual(list.y)
@@ -978,7 +1004,19 @@ for (const [width, height] of [
     await sectionRow(page).click()
     const pinned = page.locator('.capture-open-pinned')
     await expect(pinned).toBeVisible()
-    await page.waitForTimeout(500) // the open's own scroll settles
+    await page.evaluate(() => new Promise<void>((done) => {
+  const top = () => document.querySelector('.capture-open-pinned')!.getBoundingClientRect().top
+  let last = top()
+  let still = 0
+  const tick = () => {
+    const now = top()
+    still = now === last ? still + 1 : 0
+    last = now
+    if (still >= 5) done()
+    else requestAnimationFrame(tick)
+  }
+  requestAnimationFrame(tick)
+}))
     const tabTop = (await page.locator('.bn-tabbar').boundingBox())!.y
     const topBarBottom = (await page.locator('.bn-topbar').boundingBox())!.y +
       (await page.locator('.bn-topbar').boundingBox())!.height
@@ -990,3 +1028,33 @@ for (const [width, height] of [
     expect(header.y + header.height).toBeLessThanOrEqual(list.y + list.height)
   })
 }
+
+/* THE BACKGROUND READER'S SWITCH (docs/specs/identify-engine-pick.md, section 8), a row on the Rig
+ * panel. No box is open, so the panel is shown on arrival. */
+test.describe('Match in the background', () => {
+  const row = (page: Page) => page.getByRole('switch', { name: /Match in the background/ })
+
+  test('holds its height while the switch state loads, and reads Off by default', async ({ page }) => {
+    const wire = await open(page, { boxes: [], holdSweep: true, bare: true })
+    await expect(row(page)).toBeVisible()
+    await expect(row(page)).toBeDisabled()
+    const before = (await row(page).boundingBox())!
+    wire.releaseSweep()
+    await expect(row(page)).toBeEnabled()
+    await expect(row(page)).toContainText('Off')
+    await expect(row(page)).toHaveAttribute('aria-checked', 'false')
+    expect((await row(page).boundingBox())!.height, 'the row changed height when the state arrived').toBe(before.height)
+  })
+
+  test('a press calls PUT with the flipped state and shows it', async ({ page }) => {
+    const wire = await open(page, { boxes: [], bare: true })
+    await expect(row(page)).toBeEnabled()
+    expect(wire.sweepPuts, 'nothing is written before a press').toEqual([])
+    await row(page).click()
+    await expect(row(page)).toContainText('On')
+    await expect(row(page)).toHaveAttribute('aria-checked', 'true')
+    await row(page).click()
+    await expect(row(page)).toContainText('Off')
+    expect(wire.sweepPuts).toEqual([{ on: true }, { on: false }])
+  })
+})

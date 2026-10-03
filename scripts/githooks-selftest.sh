@@ -67,32 +67,6 @@ expect() {
   esac
 }
 
-# THE BRANCH WARNING IS ASSERTED ON OUTPUT, NOT ON EXIT STATUS, AND `expect` CANNOT SEE IT.
-# `scripts/githooks/post-checkout` runs AFTER the switch has happened — git has no
-# `pre-checkout` hook — so it has nothing left to refuse and exits 0 whichever way it decides
-# (D158). A case written with `expect allow` would pass on a hook that printed nothing at all,
-# which is the entire failure mode these two exist to catch. They assert the marker the warning
-# leads with, which is why it leads with one rather than opening on prose.
-MARK="PRIMARY CHECKOUT:"
-says() {
-  local what="$1"; shift
-  local out; out="$("$@" 2>&1)"
-  case "$out" in
-    *"$MARK"*) ok "$what — warned" ;;
-    *) bad "$what — no warning, and the live server is serving this branch"
-       printf '%s\n' "$out" | sed 's/^/         /' ;;
-  esac
-}
-silent() {
-  local what="$1"; shift
-  local out; out="$("$@" 2>&1)"
-  case "$out" in
-    *"$MARK"*) bad "$what — warned, and must not"
-       printf '%s\n' "$out" | sed 's/^/         /' ;;
-    *) ok "$what — silent" ;;
-  esac
-}
-
 echo "githooks self-test  (hooks: $HOOKS_DIR)"
 
 # ---------------------------------------------------------------- a repo and its origin
@@ -114,12 +88,6 @@ git config core.hooksPath "$HOOKS_DIR"
 
 # ---------------------------------------------------------------------------- the cases
 echo "  -- the ordinary path stays open --"
-# THE SETUP SWITCHES BELOW DROP STDERR, AND ONLY BECAUSE THEY ARE SETUP. Every one of them moves
-# this fixture — a primary checkout — onto a branch, so post-checkout's D158 warning fires on each
-# and interleaves three blocks of it through sections about something else. The warning is ASSERTED
-# in its own section at the foot of this file; muting it here is muting a passing guard's noise, not
-# skipping a case, and it is done per-command rather than globally so a hook that starts printing
-# somewhere unexpected still shows up.
 git switch -q -c feature 2>/dev/null
 echo two > file.txt
 git add file.txt
@@ -253,295 +221,6 @@ expect refuse "delete loose-only main stating its value" git update-ref -d refs/
 git switch -q side 2>/dev/null
 cd "$tmp/work" || exit 1
 
-echo "  -- D158: which branch the primary checkout stands on --"
-# WHY THIS IS A GUARD AT ALL. D138 keeps a supervisor alive at login out of the PRIMARY checkout
-# over the owner's real store, so the branch that ONE directory stands on silently decides which
-# code serves their real inventory. A linked worktree has its own store and its own ports to be
-# wrong on its own (D43), so it must stay silent — and that is the arm most likely to be written
-# backwards, since `.git` is a FILE in the worktree and a DIRECTORY in the checkout and either
-# reads fine to someone skimming it.
-#
-# MUTATION-TESTED 2026-09-11, by copying the hooks to a scratch directory, inverting that one
-# test (`-d "$top/.git"` -> `-f "$top/.git"`) and re-running with PKMNSCAN_HOOKS_DIR pointed at
-# the copy: the primary case and both worktree cases fail, 3 FAILED. Deleting the `!= "main"`
-# arm fails the switch-back case. Deleting the block entirely fails all three `says` cases.
-says   "a branch switch in the PRIMARY checkout"  git switch -q feature
-# A FILE-LEVEL CHECKOUT IS NOT A BRANCH MOVE, and says nothing even standing off main: git passes
-# $3 = 0 and the hook exits on it before either block. Asserted because without that gate every
-# `git checkout -- path` would print the warning, which is the fastest way to teach a reader to
-# skip it.
-# IT IS GUARDED TWICE AND THIS CASE NEEDS BOTH GONE TO FAIL, which is a fact about the hook rather
-# than a weakness here: git passes the SAME sha as $1 and $2 for a file-level checkout, so the
-# `$old != $new` guard below covers exactly the same ground. Mutating either one alone leaves all
-# twenty-eight cases green; mutating the pair fails this one.
-silent "a file-level checkout while off main"     git checkout -q -- file.txt
-silent "switching the PRIMARY checkout back to main" git switch -q main
-# A DETACHED HEAD IS OFF MAIN AS SURELY AS A BRANCH IS, AND IT IS NAMED AS ONE. Two assertions
-# and not the same one twice: `git rev-parse --abbrev-ref HEAD` answers the literal string `HEAD`
-# when detached, so a warning that did not special-case it would read "now on HEAD, not main" and
-# name a branch that does not exist. `says` cannot see that — mutating the naming out left every
-# case in this section green. It also has to land on a DIFFERENT commit: `--detach` at the commit
-# you are already on leaves $1 = $2, which the hook's own first guard drops as a no-op.
-out="$(git switch -q --detach feature 2>&1)"
-case "$out" in
-  *"$MARK"*"detached HEAD"*) ok "a detached HEAD in the PRIMARY checkout — warned, and named as detached" ;;
-  *"$MARK"*) bad "a detached HEAD warned, but was named as a branch called HEAD"
-             printf '%s\n' "$out" | sed 's/^/         /' ;;
-  *) bad "a detached HEAD in the PRIMARY checkout — no warning"
-     printf '%s\n' "$out" | sed 's/^/         /' ;;
-esac
-silent "back to main from a detached HEAD"        git switch -q main
-
-# A LINKED WORKTREE IS NOT THE SUBJECT. `main` is a real local branch here and the hook checks for
-# one, so the silence below can only come from the primary/linked test — which is what makes these
-# two cases worth having rather than passing for a second reason.
-silent "creating a linked worktree"               git worktree add -q -b wt-one "$tmp/linked" feature
-# AT `main`'s COMMIT AND NOT AT HEAD's, because `switch -c` at the same commit leaves $1 = $2 and
-# the hook's own no-op guard drops it before the branch block is ever reached. Written that way
-# first, this case passed on a mutant that had the primary/linked test INVERTED — green for the
-# wrong reason, which is the defect this file's `expect` helper already has a paragraph about.
-silent "a branch switch INSIDE a linked worktree" git -C "$tmp/linked" switch -q -c wt-two main
-# Cleaned up so the fixture's own teardown is not left removing a registered worktree by rm -rf.
-git worktree remove --force "$tmp/linked" 2>/dev/null || true
-git branch -D wt-one wt-two 2>/dev/null >/dev/null || true
-
-# A REPOSITORY THAT DOES NOT USE `main` IS NOT IN VIOLATION, and this is the one case the fixture
-# above cannot make: `main` exists there by construction, so the hook's gate on `main` being a real
-# local branch is unfalsifiable in it — mutating that gate out left all twenty-five other cases
-# green. It matters because a user-level hook can put this repo's hooks in front of other
-# checkouts, and a warning that fired in every `master`-based repository is a warning somebody
-# switches off — which takes D42's refusals and the three opsec rules with it.
-#
-# Seeded BEFORE core.hooksPath is armed, for the same reason the fixture above is: the pre-commit
-# hook is this repo's real one and the seed commit is not the thing under test. And branched at
-# `master~1` rather than at HEAD, because a branch created at the commit you are standing on leaves
-# $1 = $2 and never reaches the block.
-git init -q -b master "$tmp/foreign"
-git -C "$tmp/foreign" config user.email selftest@example.com
-git -C "$tmp/foreign" config user.name  selftest
-git -C "$tmp/foreign" config commit.gpgsign false
-echo one > "$tmp/foreign/f.txt"; git -C "$tmp/foreign" add f.txt
-git -C "$tmp/foreign" commit -qm "seed"
-echo two > "$tmp/foreign/f.txt"; git -C "$tmp/foreign" add f.txt
-git -C "$tmp/foreign" commit -qm "second"
-git -C "$tmp/foreign" config core.hooksPath "$HOOKS_DIR"
-silent "a branch switch where there is no \`main\`" git -C "$tmp/foreign" switch -q -c topic master~1
-
-echo "  -- D158: the switch says what the SERVER will do about it --"
-# WHY THE SECOND HALF IS IN THIS FILE AT ALL. The refusal itself lives in `scripts/serve.py`,
-# and `scripts/serve.py` is a tracked file — so the checkout that just happened is exactly the
-# event that can replace it with a copy carrying no guard. `make hooks` COPIES this hook into
-# the common `.git` dir that `core.hooksPath` points every worktree at, so the copy git runs
-# here is the one thing a branch switch cannot rewrite. It reports; it still refuses nothing.
-mkdir -p "$tmp/work/.serve" "$tmp/work/scripts"
-echo 1 > "$tmp/work/.serve/supervisor.pid"
-
-# THE REAL serve.py, NOT A FIXTURE OF ONE, AND THAT IS THE POINT OF THIS PAIR. The hook decides
-# whether a branch can refuse for itself by grepping that branch's serve.py for the escape
-# hatch's name. A case that wrote the token by hand would stay green forever after the token
-# was renamed in serve.py, and the hook would quietly start telling every switch that the guard
-# is missing. Copying the shipped file makes the rename a FAILED COMMIT in one direction, and
-# the gutted copy below covers the other.
-# THREE STATES NOW, NOT TWO (D176). A branch's serve.py either
-# SYNCS this tree back to main, or merely REFUSES to serve it (D158's shape), or does neither
-# and serves it. Each is a different sentence, and the ordinary state today is the first — so
-# the arm that used to expect "will REFUSE" over the SHIPPED file now expects the sync, and the
-# refusal case has to have its token taken away to be reached at all.
-cp "$REPO_ROOT/scripts/serve.py" "$tmp/work/scripts/serve.py"
-out="$(git switch -q feature 2>&1)"
-case "$out" in
-  *"$MARK"*"PUT THIS TREE BACK ON MAIN"*)
-     ok "a live supervisor whose serve.py carries the SELF-SYNC — the switch says the tree "\
-"will be put back, which is what will actually happen" ;;
-  *"$MARK"*"will REFUSE to reload"*)
-     bad "the switch promised a REFUSAL over a serve.py that syncs — the message describes "\
-"D158's behaviour and the tree will be moved instead"
-     printf '%s\n' "$out" | sed 's/^/         /' ;;
-  *"$MARK"*)
-     bad "the switch warned but said nothing about what the live server would do"
-     printf '%s\n' "$out" | sed 's/^/         /' ;;
-  *) bad "no warning at all on a branch switch with a live supervisor"
-     printf '%s\n' "$out" | sed 's/^/         /' ;;
-esac
-git switch -q main 2>/dev/null
-
-# D158'S SHAPE: a branch that refuses but cannot sync. Reached by taking the module's name away
-# and leaving the hatch's, which is also what proves the two greps are not reading one token.
-sed 's/primary_sync/RENAMED_BY_THIS_CASE/g' \
-  "$REPO_ROOT/scripts/serve.py" > "$tmp/work/scripts/serve.py"
-out="$(git switch -q feature 2>&1)"
-case "$out" in
-  *"$MARK"*"will REFUSE to reload"*)
-     ok "a branch that refuses but does NOT sync — the switch says refuse, not put back" ;;
-  *"$MARK"*"PUT THIS TREE BACK ON MAIN"*)
-     bad "a branch with no sync in it was reported as one that syncs — the greps are reading "\
-"the same token"
-     printf '%s\n' "$out" | sed 's/^/         /' ;;
-  *) bad "a branch that can refuse said nothing about the live server"
-     printf '%s\n' "$out" | sed 's/^/         /' ;;
-esac
-git switch -q main 2>/dev/null
-
-# THE OTHER DIRECTION, AND THE ONLY CASE THE SUPERVISOR'S OWN GUARD CANNOT COVER: a branch cut
-# before the guard existed. Its serve.py will be re-exec'd into and will serve the real store,
-# and nothing in that branch is going to say so — so this hook is the last thing that can.
-sed -e 's/PKMNSCAN_SERVE_MAIN/RENAMED_BY_THIS_CASE/g' -e 's/primary_sync/ALSO_RENAMED/g' \
-  "$REPO_ROOT/scripts/serve.py" > "$tmp/work/scripts/serve.py"
-out="$(git switch -q feature 2>&1)"
-case "$out" in
-  *"$MARK"*"predates the guard"*)
-     ok "a branch whose serve.py predates the guard — the switch says so and names the stop" ;;
-  *"$MARK"*"will REFUSE to reload"*|*"$MARK"*"PUT THIS TREE BACK ON MAIN"*)
-     bad "a branch with NO guard was reported as one that would act — the grep is inverted"
-     printf '%s\n' "$out" | sed 's/^/         /' ;;
-  *) bad "a branch predating the guard said nothing about the live server"
-     printf '%s\n' "$out" | sed 's/^/         /' ;;
-esac
-git switch -q main 2>/dev/null
-
-# AND IT MAY NOT INVENT A SERVER. D158's warning asserted that the live capture server "now
-# runs THIS branch's code" whether or not one was running — the hazard printed as a fact. With
-# no supervisor there is nothing to say about one, and a line that appears anyway is the same
-# defect a register down.
-rm -f "$tmp/work/.serve/supervisor.pid"
-out="$(git switch -q feature 2>&1)"
-case "$out" in
-  *"supervisor is live"*)
-     bad "no supervisor is running and the hook claimed one was"
-     printf '%s\n' "$out" | sed 's/^/         /' ;;
-  *"$MARK"*) ok "with no supervisor running, the switch warns and claims nothing about a server" ;;
-  *) bad "the branch warning stopped firing when .serve/supervisor.pid went away"
-     printf '%s\n' "$out" | sed 's/^/         /' ;;
-esac
-git switch -q main 2>/dev/null
-rm -rf "$tmp/work/.serve" "$tmp/work/scripts/serve.py"
-
-# AND THE BLOCK D158 DID NOT TOUCH, which was covered by nothing: deleting the `make hooks`
-# staleness reminder outright left every other case in this file green. Two blocks now share one
-# hook file, so "intact and untouched" was a claim about a diff rather than something asserted —
-# and a reminder that silently stopped firing is a clone running hooks nobody installed.
-# It fires when `scripts/githooks` differs across the two commits, so the fixture has to carry such
-# a path on one side only. Switching TO main, so the branch warning is silent and this reminder is
-# the only thing that can be in the output.
-mkdir -p "$tmp/work/scripts/githooks"
-echo "#!/bin/sh" > "$tmp/work/scripts/githooks/example"
-git switch -q -c hookful 2>/dev/null
-git add scripts/githooks/example
-PKMNSCAN_MAIN=off git commit -qm "a branch that carries its own hooks" >/dev/null 2>&1
-out="$(git switch -q main 2>&1)"
-case "$out" in
-  *"make hooks"*) ok "the \`make hooks\` staleness reminder still fires on a branch move" ;;
-  *) bad "scripts/githooks differed across the switch and nothing said \`make hooks\`"
-     printf '%s\n' "$out" | sed 's/^/         /' ;;
-esac
-
-# ------------------------------------------- main carrying an unclaimed id, the moment it moves
-#
-# WHY THIS BELONGS IN A HOOK AND NOT ONLY IN THE MERGE TOOL. A guard inside one checkout's own
-# copy of a script is absent from exactly the checkouts that need it. `core.hooksPath` is one installed directory in the common
-# .git dir, so THIS file is the same file for every one of them, and a main move is the one
-# event all of them share.
-#
-# IT IS ASSERTED ON OUTPUT AND NOT ON EXIT STATUS, for the reason the branch warning above is:
-# this half refuses nothing and exits 0 whatever it decides, so `expect allow` would pass over
-# a hook that printed nothing at all. The marker it leads with is what the cases read.
-echo "  -- main carrying an unclaimed id is reported the moment it moves --"
-SLUG_MARK="UNCLAIMED ID ON main"
-# THE FIXTURE'S IDS ARE COMPOSED AND NEVER SPELLED. This file sits inside the auditor's own
-# haystack, so a literal `D-...` heading here IS a citation of an entry that does not exist and
-# a literal number is a citation the map would then have to carry under `governed_by`. Both
-# were reported on the first run of this block. the claim self-test composed its fixture
-# ids from integers for exactly this reason and records it in the same words.
-SLUG_ID="D-""an-id-nobody-claimed"
-cd "$tmp/work" || exit 1
-git switch -q -c slugful main 2>/dev/null
-mkdir -p docs
-printf '## %s — a title\n' "$SLUG_ID" > docs/DECISIONS.md
-git add docs/DECISIONS.md
-git commit -qm "an entry whose id the merge never claimed" >/dev/null 2>&1
-git push -q -u origin slugful 2>/dev/null
-SLUGGED="$(git rev-parse HEAD)"
-git -C "$tmp/origin.git" update-ref refs/heads/main "$SLUGGED"
-git switch -q --detach HEAD 2>/dev/null      # main checked out nowhere: the refspec form works
-git fetch -q origin 2>/dev/null
-
-slug_out="$(git fetch origin main:main 2>&1)"
-case "$slug_out" in
-  *"$SLUG_MARK"*) ok "a main that carries a slug is reported when it lands" ;;
-  *) bad "main moved onto an unclaimed id and the hook said nothing"
-     printf '%s\n' "$slug_out" | sed 's/^/         /' ;;
-esac
-case "$slug_out" in
-  *"$SLUG_ID"*) ok "AND NAMES THE ID, so the repair does not need a search" ;;
-  *) bad "reported, but did not name the id"
-     printf '%s\n' "$slug_out" | sed 's/^/         /' ;;
-esac
-# ONCE, AND ABOUT main. A fetch that writes the refspec moves refs/heads/main and the
-# remote-tracking ref in transactions the hook sees back to back; a report that does not ask
-# which ref it is looking at says the same thing twice about one move, and a reader who has
-# learned to skim a doubled warning is a reader this hook has already lost.
-if [ "$(printf '%s\n' "$slug_out" | grep -c "$SLUG_MARK")" = "1" ]; then
-  ok "exactly once — the report asks which ref moved"
-else
-  bad "the report fired $(printf '%s\n' "$slug_out" | grep -c "$SLUG_MARK") times for one move"
-fi
-# AND IT REFUSED NOTHING: main is where the fetch was taking it.
-if [ "$(git rev-parse refs/heads/main)" = "$SLUGGED" ]; then
-  ok "and main moved anyway — the report is a report"
-else
-  bad "the report blocked the move; main is at $(git rev-parse --short refs/heads/main)"
-fi
-
-# The other direction, which is the one a vacuous implementation passes: a clean main is SILENT.
-git switch -q slugful 2>/dev/null
-printf '## D%s — the same entry, with its number\n' 1 > docs/DECISIONS.md
-git add docs/DECISIONS.md
-git commit -qm "the number claimed" >/dev/null 2>&1
-git push -q origin slugful 2>/dev/null
-CLAIMED="$(git rev-parse HEAD)"
-git -C "$tmp/origin.git" update-ref refs/heads/main "$CLAIMED"
-git switch -q --detach HEAD 2>/dev/null
-git fetch -q origin 2>/dev/null
-clean_out="$(git fetch origin main:main 2>&1)"
-case "$clean_out" in
-  *"$SLUG_MARK"*) bad "a main with no unclaimed id was reported anyway"
-     printf '%s\n' "$clean_out" | sed 's/^/         /' ;;
-  *) ok "a main whose ids are all numbers — silent" ;;
-esac
-
-# AND IT IS main IT READS, NOT WHATEVER ELSE IS IN THE PAYLOAD. This clone's `main` moves to a
-# clean commit while a second ref in the SAME transaction moves to the slugged one; a hook that
-# read every line of a main-mentioning payload would report that other ref's commit under a
-# heading that says `ON main`, which is worse than saying nothing.
-#
-# `update-ref --stdin` RATHER THAN A FETCH, AND THE FIXTURE MEASURED WHY. `git fetch` with two
-# refspecs issues ONE TRANSACTION PER REF here — measured on this machine's git, two `prepared`
-# payloads of one ref each — so no fetch can produce the shape this case needs. `update-ref
-# --stdin` is the porcelain that batches, and it is a real gesture rather than the hook being
-# fed by hand.
-git switch -q slugful 2>/dev/null
-printf '## D%s — the same entry\n## D%s — and another\n' 1 2 > docs/DECISIONS.md
-git add docs/DECISIONS.md
-git commit -qm "a second numbered entry" >/dev/null 2>&1
-git push -q origin slugful 2>/dev/null
-CLAIMED2="$(git rev-parse HEAD)"
-git -C "$tmp/origin.git" update-ref refs/heads/main "$CLAIMED2"
-git switch -q --detach HEAD 2>/dev/null
-git fetch -q origin 2>/dev/null
-both_out="$(printf 'update refs/heads/main %s\nupdate refs/heads/sidecar %s\n' \
-              "$CLAIMED2" "$SLUGGED" | git update-ref --stdin 2>&1)"
-if [ "$(git rev-parse refs/heads/sidecar 2>/dev/null)" = "$SLUGGED" ]; then
-  ok "the fixture arms the case: one transaction moved main AND a slugged sidecar"
-else
-  bad "the fixture is wrong — the batched update-ref did not land"
-  printf '%s\n' "$both_out" | sed 's/^/         /'
-fi
-case "$both_out" in
-  *"$SLUG_MARK"*) bad "reported another ref's commit as main's"
-     printf '%s\n' "$both_out" | sed 's/^/         /' ;;
-  *) ok "a slug on a ref that is NOT main — silent" ;;
-esac
-
 echo "  -- a secrets file is refused in any directory (D312, the hook refuses a secrets file) --"
 git switch -q -c secretstest 2>/dev/null
 mkdir -p sub/deep
@@ -649,6 +328,79 @@ if [ -s "$tmp/clean.png" ] && [ -s "$tmp/qr.png" ]; then
 else
   bad "the fixture could not build a QR test image — PIL or zxing-cpp is missing here"
 fi
+
+# ----------------------------------------------------------- every refusal is logged
+# One line per refusal in the refusal log, and a log that cannot be written never changes the
+# verdict. The fixture carries its own copy of the helper because the hooks find it through the
+# toplevel they run in.
+echo
+echo "  the refusal log"
+. "$REPO_ROOT/scripts/refusal-log-assert.sh"
+rl="$tmp/refusals.log"
+rlrepo="$tmp/rl"
+git init -q -b main "$rlrepo"
+mkdir -p "$rlrepo/scripts"
+cp "$REPO_ROOT/scripts/refusal_log.py" "$rlrepo/scripts/"
+git -C "$rlrepo" config user.email selftest@example.com
+git -C "$rlrepo" config user.name selftest
+git -C "$rlrepo" config commit.gpgsign false
+echo one > "$rlrepo/a.txt"
+git -C "$rlrepo" add a.txt
+PKMNSCAN_MAIN=off git -C "$rlrepo" commit -qm seed
+git -C "$rlrepo" config core.hooksPath "$HOOKS_DIR"
+echo two > "$rlrepo/a.txt"
+git -C "$rlrepo" add a.txt
+rl_out="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$rl" git commit -qm "straight onto main" 2>&1)"; rl_status=$?
+[ $rl_status -ne 0 ] && ok "a refused commit on main still refuses" || bad "the logged refusal let the commit through"
+why="$(refusal_line_ok "$rl" "reference-transaction:main-move")" && ok "…and writes one well-formed line" || bad "the refusal log line: $why"
+rl_bad="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" git commit -qm "straight onto main" 2>&1)"; rl_bad_status=$?
+if [ $rl_bad_status -ne 0 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
+else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
+
+# pre-commit (a staged secrets file) and pre-push (a push to main): same three assertions.
+git -C "$rlrepo" switch -q -c rlb
+echo k > "$rlrepo/.env"
+git -C "$rlrepo" add -f .env
+rl="$tmp/precommit.log"
+rl_out="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$rl" git commit -qm "secrets" 2>&1)"; rl_status=$?
+[ $rl_status -ne 0 ] && ok "pre-commit still refuses a staged secrets file" || bad "pre-commit let a secrets file through"
+why="$(refusal_line_ok "$rl" "pre-commit:secrets")" && ok "…and writes one well-formed line" || bad "the pre-commit log line: $why"
+rl_bad="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" git commit -qm "secrets" 2>&1)"; rl_bad_status=$?
+if [ $rl_bad_status -ne 0 ] && [ "$rl_bad" = "$rl_out" ]; then ok "pre-commit: an unwritable log path changes neither verdict nor output"
+else bad "pre-commit: an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
+git -C "$rlrepo" reset -q -- .env
+git init -q --bare "$tmp/rlorigin.git"
+git -C "$rlrepo" remote add origin "$tmp/rlorigin.git"
+rl="$tmp/prepush.log"
+rl_out="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$rl" git push origin rlb:main 2>&1)"; rl_status=$?
+[ $rl_status -ne 0 ] && ok "pre-push still refuses a push to main" || bad "pre-push let a push to main through"
+why="$(refusal_line_ok "$rl" "pre-push:main-push")" && ok "…and writes one well-formed line" || bad "the pre-push log line: $why"
+rl_bad="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" git push origin rlb:main 2>&1)"; rl_bad_status=$?
+if [ $rl_bad_status -ne 0 ] && [ "$rl_bad" = "$rl_out" ]; then ok "pre-push: an unwritable log path changes neither verdict nor output"
+else bad "pre-push: an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
+
+# The log is bounded: past its cap it rotates, and the reader sees only the tail.
+rl="$tmp/big.log"
+python3 -c "
+import os, sys
+sys.path.insert(0, '$REPO_ROOT/scripts')
+import refusal_log as r
+os.environ['PKMNSCAN_REFUSAL_LOG'] = '$rl'
+for _ in range(4000):
+    r.log('t', 'rule', 'x' * 40)
+sys.exit(0 if os.path.getsize('$rl') <= r.MAX_BYTES and os.path.exists('$rl.1') and r.recent() else 1)
+" && ok "the refusal log rotates past its cap and its tail still reads" || bad "the refusal log grew past its cap or did not rotate"
+
+# The opsec PreToolUse hook is a shell script of its own: same three assertions.
+OPSEC="$REPO_ROOT/scripts/guard-opsec.sh"
+rl="$tmp/opsec.log"
+rl_payload='{"session_id":"sess-1","tool_input":{"file_path":"/x/fixtures/a.csv","content":"x"}}'
+rl_out="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$rl" bash "$OPSEC" 2>&1)"; rl_status=$?
+[ $rl_status -eq 2 ] && ok "guard-opsec still refuses a fixtures write" || bad "guard-opsec exited $rl_status"
+why="$(refusal_line_ok "$rl" "guard-opsec:fixtures" "sess-1")" && ok "…and writes one well-formed line" || bad "the guard-opsec log line: $why"
+rl_bad="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" bash "$OPSEC" 2>&1)"; rl_bad_status=$?
+if [ $rl_bad_status -eq 2 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
+else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
 
 echo
 if [ "$fail" -eq 0 ]; then

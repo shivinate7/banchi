@@ -35,7 +35,33 @@
 
 set -uo pipefail
 
+# Append one line to the refusal log (scripts/refusal_log.py, the one home). Fails open: a log
+# that cannot be written never changes this hook's verdict or output.
+rlog() {
+  local top
+  top="$(git rev-parse --show-toplevel 2>/dev/null)" || return 0
+  [ -f "$top/scripts/refusal_log.py" ] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  python3 "$top/scripts/refusal_log.py" "$@" >/dev/null 2>&1 || true
+  return 0
+}
+
 fail() {
+  local rule
+  case "$1" in
+    "the armed hooks"*) rule=armed-stale ;;
+    "fixtures/"*) rule=fixtures ;;
+    "a secrets"*) rule=secrets ;;
+    "symlink with"*) rule=symlink-absolute ;;
+    "symlink pointing"*) rule=symlink-outside ;;
+    "a staged image"*) rule=qr ;;
+    "python3 is"*) rule=qr-unchecked ;;
+    "staged content"*) rule=code-layout ;;
+    "the markdown"*) rule=docs-audit ;;
+    "a bare"*) rule=bare-hash ;;
+    *) rule=other ;;
+  esac
+  rlog pre-commit "$rule" "${1%%$'\n'*}"
   echo "COMMIT BLOCKED: $1" >&2
   exit 1
 }
@@ -44,8 +70,7 @@ fail() {
 # ZEROTH RULE: THE ARMED COPY IS THE ONE THAT RUNS, SO IT HAD BETTER BE THE ONE THAT MERGED.
 #
 # `make hooks` copies scripts/githooks/ into .git/hooks-armed and nothing keeps the copy in
-# step afterwards. post-merge and post-checkout print a reminder, and that reminder is not
-# enough: it fires only on pull or branch switch, it scrolls away, and it allowed the armed
+# step afterwards. A reminder is not enough: it scrolls away, and it allowed the armed
 # pre-commit to sit four days behind a merged sigil check with every commit skipping it.
 # A gate that silently stops running is worse than no gate, because the green is believed.
 #
@@ -105,7 +130,7 @@ if [ "${PKMNSCAN_HOOKS:-}" != "off" ]; then
       make hooks
 
   This tree's scripts/githooks matches main, so that is safe to run here.
-  Bypass once with:  PKMNSCAN_HOOKS=off git commit ..."
+  Bypass: owner-only: ask the owner to run this command."
     fi
   fi
 fi
@@ -121,34 +146,6 @@ if [ -n "$changed_fixtures" ]; then
   fail "fixtures/ is ground truth for the round-trip test and is read-only.
   Changed: $(echo "$changed_fixtures" | tr '\n' ' ')
   If the schema genuinely changed, re-export from TCGplayer and commit that as a new fixture."
-fi
-
-# iCloud Drive conflict copies. This repo LEFT iCloud Drive on 2026-08-29 and the rule stays
-# armed anyway (D44, amended): it costs one grep, and the hazard is a property of a synced
-# DIRECTORY rather than of this project — a checkout made inside one on any machine brings it
-# straight back. iCloud resolves a same-file race by writing a SECOND file beside the original
-# with " 2"
-# appended to the stem — `pre-push 2`, `githooks-selftest 2.sh`. They are untracked, so they
-# are invisible until something says `git add -A`, which is exactly what an agent session
-# says. Measured on 2026-08-29: three appeared in one afternoon, and one of them was
-# installed as a git hook by `make hooks` before that target learned to enumerate through
-# `git ls-files`.
-#
-# Refused rather than reported, because the failure is silent and permanent: a committed
-# `foo 2.py` is a second copy of a module that no import reaches and no test runs, and it
-# will be read later as a file somebody meant to write. Deleting it is always right; the
-# original is the tracked one.
-#
-# The pattern is the stem ending in a space and digits, before an optional extension. A
-# deliberate `Section 2.md` would trip it — the bypass below is the answer, and nothing in
-# this repo is named that way today.
-[ "${PKMNSCAN_DUPES:-}" = "off" ] && icloud_dupes="" || icloud_dupes="$(printf '%s\n' "$staged" | grep -E '(^|/)[^/]* [0-9]+(\.[A-Za-z0-9]+)?$' || true)"
-if [ -n "$icloud_dupes" ]; then
-  fail "iCloud Drive conflict copies staged:
-$(printf '%s\n' "$icloud_dupes" | sed 's/^/    /')
-  These are duplicates iCloud wrote beside the real file, not files anyone authored.
-  Delete them — the tracked original is the one you want.
-  If a name like this is genuinely intended:  PKMNSCAN_DUPES=off git commit ..."
 fi
 
 # SECRETS FILES (D312, the hook refuses a secrets file). Refused: any staged
@@ -202,7 +199,7 @@ if [ "${PKMNSCAN_LINKS:-}" != "off" ]; then
   Committed, that path is baked into the tree — and in the working tree it names, it
   points at itself. Checking it out replaces the real directory with a loop, silently.
   This is how the image mirror was lost (D47). Ignore the path instead of tracking it.
-  If it is genuinely intended:  PKMNSCAN_LINKS=off git commit ..."
+  Bypass: owner-only: ask the owner to run this command."
         ;;
       *)
         resolved="$(cd "$root/$(dirname "$link")" 2>/dev/null && cd "$(dirname "$target")" 2>/dev/null && pwd -P || true)"
@@ -210,7 +207,7 @@ if [ "${PKMNSCAN_LINKS:-}" != "off" ]; then
           "$root"|"$root"/*|"") ;;
           *) fail "symlink pointing outside the repository staged: $link -> $target
   It resolves to $resolved, which no clone on another machine will have.
-  If it is genuinely intended:  PKMNSCAN_LINKS=off git commit ..." ;;
+  Bypass: owner-only: ask the owner to run this command." ;;
         esac
         ;;
     esac
@@ -263,14 +260,14 @@ if [ "${#image_paths[@]}" -gt 0 ] && [ "${PKMNSCAN_QR:-}" != "off" ]; then
       fail "a staged image carries a decodable QR, or could not be checked.
   Code-card photos are bearer instruments and must never reach a tracked path, wherever the
   file lands.
-  Bypass once with:  PKMNSCAN_QR=off git commit ..."
+  Bypass: owner-only: ask the owner to run this command."
     fi
   else
     fail "python3 is unavailable, so staged image(s) could not be checked for a QR:
   $(printf '%s\n' "${image_paths[@]}" | tr '\n' ' ')
   Unavailable is not the same as clear — a scanner that cannot run is not evidence an image
   is free of a live code.
-  Bypass once with:  PKMNSCAN_QR=off git commit ..."
+  Bypass: owner-only: ask the owner to run this command."
   fi
 fi
 
@@ -330,7 +327,7 @@ if [ "${PKMNSCAN_DOCS:-}" != "off" ] && [ -f scripts/docs-audit.py ] && command 
       fail "the markdown disagrees with the code — see the findings above.
   Fix the reference, or the code it points at. Do not edit a doc purely to get
   past this hook (D16).
-  Bypass once with:  PKMNSCAN_DOCS=off git commit ..."
+  Bypass: owner-only: ask the owner to run this command."
       ;;
     2)
       echo "$audit_out"
@@ -395,7 +392,7 @@ if [ "${PKMNSCAN_SIGIL:-}" != "off" ] && [ -f scripts/sigil-check.py ] && comman
   Draw the slot (D58's count); keep the index for addressing. If the key really is
   what belongs there, say so on the line or in the comment above it:
       sigil-ok: <why this record has no slot to draw instead>
-  Bypass once with:  PKMNSCAN_SIGIL=off git commit ..."
+  Bypass: owner-only: ask the owner to run this command."
       ;;
     *)
       echo "WARNING: scripts/sigil-check.py exited $sigil_status — the sigil check did not run." >&2

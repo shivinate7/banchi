@@ -164,7 +164,7 @@ def run(ok) -> None:
                 {"matcher": "Write|Edit", "hooks": [{"type": "command", "command": "scripts/guard-opsec.sh"}]},
                 {"matcher": "Bash", "hooks": [{"type": "command", "command": "scripts/reap.py --hook"}]},
             ],
-            "Stop": [{"hooks": [{"type": "command", "command": "scripts/stop-gate.sh"}]}],
+            "Stop": [{"hooks": [{"type": "command", "command": "scripts/typecheck-hook.py"}]}],
         }
     }
     triples = _hook_triples(claude_shaped)
@@ -175,7 +175,7 @@ def run(ok) -> None:
         str(sorted(triples)),
     )
     ok(
-        ("Stop", "", "scripts/stop-gate.sh") in triples,
+        ("Stop", "", "scripts/typecheck-hook.py") in triples,
         "an event with no tool to match reads its matcher as the empty string, not skipped",
         str(sorted(triples)),
     )
@@ -194,7 +194,7 @@ def run(ok) -> None:
             "PreToolUse": [
                 {"matcher": "Write|Edit", "hooks": [{"type": "command", "command": "scripts/guard-opsec.sh"}]},
             ],
-            "Stop": [{"hooks": [{"type": "command", "command": "scripts/stop-gate.sh"}]}],
+            "Stop": [{"hooks": [{"type": "command", "command": "scripts/typecheck-hook.py"}]}],
         }
     }
     missing = _hook_triples(claude_shaped) - _hook_triples(codex_shaped)
@@ -231,6 +231,79 @@ def run(ok) -> None:
         ".codex/hooks.json and .claude/settings.json name the same hooks in this tree",
         str(by_label["codex hooks"]),
     )
+
+    # CODEX_ONLY: one hook the shared layer owns for Claude Code (silent-write runs on both sides).
+    # Driven on temp files through the row's own two path globals.
+    print("\ncodex hooks: the CODEX_ONLY hook is allowed in Codex only, in both directions")
+    import json
+    from . import env_map
+
+    def hook(matcher: str, command: str) -> dict:
+        return {"matcher": matcher, "hooks": [{"type": "command", "command": command}]}
+
+    shared = hook("Write|Edit", "scripts/guard-opsec.sh")
+    reap = hook("Bash", "scripts/reap.py --hook")
+    silent = hook("Bash", "scripts/silent-write-guard.py --hook")
+    narrow = "PKMNSCAN_SILENT_WRITE_ONLY=file,bash-c "
+    silent_c = hook("Bash", narrow + "scripts/silent-write-guard.py --hook")
+    extra = hook("Bash", "scripts/janitor.py --hook")
+
+    def codex_hooks_findings(claude: list, codex: list) -> list:
+        with tempfile.TemporaryDirectory() as tmp:
+            c, x = Path(tmp) / "settings.json", Path(tmp) / "hooks.json"
+            c.write_text(json.dumps({"hooks": {"PreToolUse": claude}}), encoding="utf-8")
+            x.write_text(json.dumps({"hooks": {"PreToolUse": codex}}), encoding="utf-8")
+            saved = env_map.CLAUDE_SETTINGS, env_map.CODEX_HOOKS
+            env_map.CLAUDE_SETTINGS, env_map.CODEX_HOOKS = c, x
+            try:
+                rep = Report()
+                check_codex_hooks(rep)
+            finally:
+                env_map.CLAUDE_SETTINGS, env_map.CODEX_HOOKS = saved
+        return [f for row in rep.checks for f in row.findings]
+
+    found = codex_hooks_findings([shared, silent_c], [shared, silent, reap])
+    ok(not found, "green: Claude lacks the CODEX_ONLY hook and Codex runs it", str(found))
+    found = codex_hooks_findings([shared, silent_c, reap], [shared, silent, reap])
+    ok(len(found) == 1 and "CODEX_ONLY is stale" in str(found[0]),
+       "red: Claude runs a CODEX_ONLY hook again", str(found))
+    found = codex_hooks_findings([shared, silent_c], [shared, silent])
+    ok(len(found) == 1 and "lost" in str(found[0]),
+       "red: Codex loses a CODEX_ONLY hook", str(found))
+    found = codex_hooks_findings([shared, silent_c], [shared, silent, reap, extra])
+    ok(len(found) == 1 and "does not run" in str(found[0]),
+       "red: an unlisted Codex-only hook appears", str(found))
+
+    # PKMNSCAN_SILENT_WRITE_ONLY pin: Claude's entry carries `file,bash-c`, Codex's carries none.
+    found = codex_hooks_findings([shared, silent_c], [shared, silent, reap])
+    ok(not found, "green: Claude has the file,bash-c prefix and Codex has none", str(found))
+    for label, claude_entry in (
+        ("only `file`", hook("Bash", "PKMNSCAN_SILENT_WRITE_ONLY=file scripts/silent-write-guard.py --hook")),
+        ("no prefix", silent),
+    ):
+        found = codex_hooks_findings([shared, claude_entry], [shared, silent, reap])
+        ok(any(f.where == ".claude/settings.json" for f in found),
+           f"red: Claude's entry has {label}", str(found))
+    found = codex_hooks_findings([shared, silent_c], [shared, silent_c, reap])
+    ok(any(f.where == ".codex/hooks.json" and "full hook" in f.message for f in found),
+       "red: Codex's entry has the prefix", str(found))
+
+    # GUARD_SHELL_SKIP pin: Claude's Bash entry skips three clauses, every other guard-shell entry is empty.
+    gs = "scripts/guard-shell.py --hook"
+    sk = "GUARD_SHELL_SKIP=checkout,stash,reset "
+    c_bash, c_edit = hook("Bash", sk + gs), hook("Write|Edit", "GUARD_SHELL_SKIP= " + gs)
+    x_bash, x_edit = hook("Bash", "GUARD_SHELL_SKIP= " + gs), hook("Write|Edit", "GUARD_SHELL_SKIP= " + gs)
+    found = codex_hooks_findings([c_bash, c_edit], [x_bash, x_edit, reap])
+    ok(not found, "green: each guard-shell entry carries its pinned skip value", str(found))
+    found = codex_hooks_findings([hook("Bash", "GUARD_SHELL_SKIP=checkout " + gs), c_edit], [x_bash, x_edit, reap])
+    ok(len(found) == 1 and "GUARD_SHELL_SKIP=checkout,stash,reset" in str(found[0]),
+       "red: Claude's Bash entry carries a different skip value", str(found))
+    found = codex_hooks_findings([c_bash, c_edit], [hook("Bash", gs), x_edit, reap])
+    ok(len(found) == 1 and "must set `GUARD_SHELL_SKIP=`" in str(found[0]),
+       "red: a Codex entry misses the empty prefix", str(found))
+    found = codex_hooks_findings([c_bash, hook("Write|Edit", sk + gs)], [x_bash, x_edit, reap])
+    ok(len(found) == 1 and "must set `GUARD_SHELL_SKIP=`" in str(found[0]),
+       "red: Claude's Write|Edit entry carries a skip value", str(found))
 
     # The staged-mode primitives, which have no loud failure mode: every one of them
     # answers plausibly against the worktree while auditing a tree the commit will not

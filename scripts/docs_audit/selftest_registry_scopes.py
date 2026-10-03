@@ -23,7 +23,7 @@ from .dispatch import UNDISPATCHED, check_dispatch
 from .env_map import _consumer_block, _map_sections
 from .hygiene import ROSTER_MARK, ROUTE_HASH, _balanced, expected_rosters
 from . import registry_scopes
-from .registry_scopes import INVOKERS, check_audit_invocation, check_check_registry
+from .registry_scopes import INVOKERS, UNIT_COMMAND, check_audit_invocation, check_check_registry, fleet_scripts
 
 
 def run(ok) -> None:
@@ -34,6 +34,10 @@ def run(ok) -> None:
     except SystemExit as exc:
         code = exc.code if isinstance(exc.code, int) else None
     ok(code == EXIT_USAGE, f"an unknown flag exits {EXIT_USAGE}, never 2", f"exited {code}")
+    ok(fleet_scripts({"unit": UNIT_COMMAND, "design-check": "playwright test"}) == ["design-check"],
+       "the exact unit command is not a fleet, and a bare `playwright test` is", "")
+    ok(fleet_scripts({"sneaky": UNIT_COMMAND + " && playwright test"}) == ["sneaky"],
+       "a fleet chained after the unit command is still a fleet", "")
     report = Report()
     check_audit_invocation(report)
     by_label = {row.check: row.findings for row in report.checks}
