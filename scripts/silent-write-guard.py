@@ -277,7 +277,7 @@ def read_command(command: str, only_file: bool = False) -> Verdict:
             continue
         out = resolve(stage.fd1, op in PIPE_OPS, tail)
         err = resolve(stage.fd2, op == "|&", tail)
-        # `--only file`: the shared guard owns /dev/null and closed descriptors, so keep
+        # `PKMNSCAN_SILENT_WRITE_ONLY=file`: the shared guard owns /dev/null and closed descriptors, so keep
         # the unread-file clause alone.
         lost_out = out if discarded(out, stage) and (not only_file or out.kind == FILE) else None
         lost_err = err if discarded(err, stage) and (not only_file or err.kind == FILE) else None
@@ -356,6 +356,21 @@ def refusal(silenced: Sequence[Silenced]) -> str:
     return "\n".join(lines)
 
 
+def _only_file() -> bool:
+    """`PKMNSCAN_SILENT_WRITE_ONLY=file` selects the unread-file clause alone.
+
+    An environment variable, never a flag: an old copy of this script on an older branch
+    ignores a variable and runs the full check, while an unknown flag exits 2 and blocks
+    every Bash call. An unknown value runs the full check and warns once. It never exits
+    non-zero over configuration.
+    """
+    value = os.environ.get("PKMNSCAN_SILENT_WRITE_ONLY", "")
+    if value and value != "file":
+        print("silent-write: PKMNSCAN_SILENT_WRITE_ONLY={0!r} is not `file`; running the full "
+              "check".format(value), file=sys.stderr)
+    return value == "file"
+
+
 def hook(payload: dict, only_file: bool = False) -> int:
     """The PreToolUse hook on Bash. Exit 2 blocks the call and hands stderr to the session.
 
@@ -409,10 +424,6 @@ def build_parser() -> argparse.ArgumentParser:
                         help="run as a PreToolUse hook on Bash; reads the payload on stdin")
     parser.add_argument("--explain", metavar="CMD", default="",
                         help="the verdict for one command, and why")
-    parser.add_argument("--only", choices=["file"], default="",
-                        help="with --hook: run one clause alone. `file` is the output-to-an-unread-"
-                             "file clause. An unknown value is a usage error and exits 2, so a "
-                             "typo cannot silently become a no-op or run everything")
     return parser
 
 
@@ -425,7 +436,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 0
         if not isinstance(payload, dict):
             return 0
-        return hook(payload, args.only == "file")
+        return hook(payload, _only_file())
     if args.explain:
         return explain(args.explain)
     build_parser().print_help()
