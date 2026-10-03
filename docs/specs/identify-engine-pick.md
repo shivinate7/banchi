@@ -2,7 +2,7 @@
 
 **Status: DESIGN. Nothing is built.** D2 (identification is Haiku vision, end to end) carries the
 owner's ruling. For each run, the owner picks who reads the cards: Haiku or the stock-photo matcher.
-Haiku as the default is a proposal. The owner confirms it.
+The free read is the default pick, on the owner's ruling.
 
 This spec answers six questions. What can the matcher not do? When may it decide? Where do its
 candidates come from? What does it weigh? Where does the pick sit on screen? How does the pipeline
@@ -69,6 +69,8 @@ The matcher adds one use of the same facts: the candidate pool.
   If any set of the game is incomplete, the card is left unread. A per-set test would let the matcher accept a guess here.
 - **Sealed product and anything with no number** is never matched. It has no card photo to compare.
 - A set is complete when every numbered product in it has a stock image and a stored fingerprint (section 4).
+- **Promo sets are left out of the pool.** A promo set is a set whose name holds "Promo".
+  An unhinted card matches against the main sets only. A card hinted into a promo set is never read by the matcher. It goes to the paid read.
 - For Pokemon, D170 already makes every run name its sets. An unhinted Pokemon card cannot reach a matcher run.
   The pool is therefore never the whole Pokemon category.
 - For Riftbound, "every set of its game" is every Riftbound group that holds a numbered product. Riftbound's export scope is `category`,
@@ -90,13 +92,53 @@ Section 3 gives the result. For an unread card, the matcher run does this and no
 An unread card never goes to review. Review holds a card the matcher accepted and the finish ladder could not finish.
 The run record keeps the reason and the top three candidates for each unread card. It writes no identification for it.
 
-**How many of the owner's cards are eligible today** (measured, from the store opened read-only, and the stock-image
-coverage listing). The store holds 3,503 cards with a SKU: 2,961 Riftbound and 542 Pokemon. 3,501 have a number.
-2,802 carry a set hint and sit in a set whose numbered products all have an image URL.
-The other 699 are unhinted Riftbound cards. Every one of the 8 Riftbound groups that holds a numbered product has an image URL for all of them.
-So 3,501 of 3,503 (99.9%) meet the rule on image URLs. The two others have no number.
-This is an upper bound. A set counts as complete only when every fingerprint is stored.
-The fingerprint index run (section 4) confirms it and writes the per-set coverage table.
+**The owner's word on promos: "i have no promos".** Printings with no stock image that are promos are left out of the matcher's pool.
+Unhinted Riftbound cards match against the main sets. A promo card is never read by the matcher. It goes to the paid read.
+
+**The premise holds today** (measured, store opened read-only). The check joined the `cards` table to the `skus` table.
+It covered all 2,961 Riftbound cards the store has held in any state, which are 806 distinct SKUs.
+
+- None sits in a set named "Promo". Every card sits in Origins, Spiritforged, Unleashed or Vendetta.
+- None has "promo", "prerelease", "judge", "serial", "signature" or "overnumbered" in its name, set, product, printing or rarity.
+- None is one of the 229 products that have no photo.
+
+**The known risk, in one line.** If a promo enters the store, the matcher could read it as its main-set twin.
+Organized Play promos repeat main-set numbers.
+
+**What catches it.** The promo guard is cheap. At queue build and at preflight, the run asks the store one question:
+does any held card sit in a promo set of this game? If yes, unhinted cards of that game are left unread for the paid read.
+It is one query on `cards.set_name`, which has an index. The build adopts it. A promo that is hinted into its promo set is left unread without it.
+A promo whose set name does not hold "Promo" is not caught. That is an open item.
+
+**The 229 products with no photo** (measured). The CDN answers 403 with an XML error for every size of each image URL.
+The working images answer 200. CloudFront answers 403 for a key that does not exist. So each is a product with a URL and no photo.
+They count as "no stock image".
+
+| Group | Products | What they are |
+|---|---|---|
+| Organized Play Promotional Cards | 174 | Promos. Left out of the pool by the owner's rule. |
+| Promotional Cards | 6 | Promos. Left out of the pool. |
+| Radiance | 11 | A small set with no photo at all. Not a promo by name. |
+| Spiritforged, Unleashed, Vendetta | 38 | Runes (numbers such as R01b) and Tokens (numbers such as T01 // T05). Not promos. Not broken links. |
+
+- The 38 are ordinary products of the main sets. The promo rule does not cover them. They keep those three sets incomplete.
+- The owner holds 96 Runes (measured). Their printings all have photos. None of the 38 is held today.
+  A Rune of a printing with no photo would match a sibling Rune of the same name. That is the look-alike failure of section 3.
+
+**How many of the owner's cards are eligible today** (measured). The store holds 3,501 numbered cards with a SKU: 2,959 Riftbound and 542 Pokemon.
+
+| Rule | Eligible | Share |
+|---|---|---|
+| Promo sets out, and every other set must be complete | 844 | 24.1% |
+| Plus a family guard on Runes and Tokens (below), hinted cards only | 2,800 | 80.0% |
+| Plus unhinted cards, with Radiance treated as outside the pool | 3,407 | 97.3% |
+
+**The family guard.** A match whose best candidate is a Rune or a Token product is left unread. The paid read decides the variant.
+Rune and Token numbers do not have the `N/M` shape. The guard removes the 38 from the completeness test and leaves the three main sets complete for every other card.
+It costs the 94 held Rune or Token cards (3% of Riftbound). It needs no new guess. Whether it holds for a Rune that matches a non-Rune is unmeasured.
+
+**Radiance** has 11 numbered products and no photo. A Radiance card photographed with no hint would match a main-set card.
+The 97.3% row assumes the owner rules Radiance out of the pool. The store holds no Radiance card. That ruling is open.
 
 **Games the matcher refuses.** `pokemon_code` and `misc` have no stock photos.
 Code cards follow their own rules. No code-card photo is ever embedded, copied or matched.
@@ -265,26 +307,24 @@ Marqo-B is the best on accuracy for its cost. CLIP L/14 ties it on accuracy at a
 **Where.** The runs sheet. `Runs.tsx` draws `RunsComposer`, the staged composer for the one press that can spend money.
 Its second stage, "One reading for this press", already holds a per-press choice about how photographs are read.
 The pick is a segmented control above that choice, labeled "Who reads these cards".
-Haiku as the default pick is a proposal. The owner confirms it.
+The free read is the default pick each time the composer opens. The pick is not stored on the device.
 It is one term of the press, so the selection stays the cards the operator named (D180, a press names the cards it covers).
 Nothing else about selection changes.
 
 **What each pick says.** The labels are the operator's words.
-D196 (no screen string names a mechanism) rules out model names on screen, with one named exception.
-The owner's word: plain words on the control, and the model name in a hover tooltip.
-The tooltip on the matcher pick names the model. It is the constant `MATCHER_NAME_TOOLTIP`, exported from `app/src/engines.ts`.
-D196 records the exception. The `no mechanism on screen` row exempts that one string and reads it from the constant.
-The build lane must export the constant under that name, or the exemption finds nothing.
+D196 (no screen string names a mechanism) rules out model names on screen, with two named exceptions.
+The owner's word: plain words on the control, and each pick's model name in its hover tooltip.
+The two tooltips are the constants `HAIKU_NAME_TOOLTIP` and `MATCHER_NAME_TOOLTIP`, both exported from `app/src/engines.ts`.
+D196 records the exceptions. The `no mechanism on screen` row exempts exactly those two strings. It reads each from its constant.
+It exempts a word-list hit only. The build lane must export both constants under those names, or the exemption finds nothing.
 
 | Pick | Label | Line under it |
 |---|---|---|
 | `haiku` | Read from the photo | Reads the name, the number and the foil. Costs about the quoted amount. |
 | `marqo-b` | Match to stock photos | Free. Needs a stock photo for each card. Cannot tell foil from normal. Cards it is unsure of are left unread, and you can read them with the paid read. |
 
-**A tooltip on each pick.** Both picks carry a `title` tooltip. The matcher's tooltip is `MATCHER_NAME_TOOLTIP` and names the model.
-The Haiku pick's tooltip is a plain sentence about what the read does. It carries no model name,
-because the owner's exception is one string (D196). If the owner wants the Haiku name in its tooltip, that needs a second
-named exception. This is an open point for the owner.
+**A tooltip on each pick.** Both picks carry a `title` tooltip, and both name their model.
+The Haiku pick uses `HAIKU_NAME_TOOLTIP`. The matcher pick uses `MATCHER_NAME_TOOLTIP`.
 
 - The cost line comes from the free preflight. `POST /pipeline/preflight` takes the engine.
   It returns a dollar amount for Haiku and zero for the matcher.
@@ -293,14 +333,16 @@ named exception. This is an open point for the owner.
 - The matcher quote adds three counts. They are the cards it can match, the cards it must leave unread because
   their pool is incomplete, and the cards already answered. A card can also be left unread after the read, when its margin is too small.
   The quote cannot count those, so it says so. It also adds the setup state.
-- **A Haiku press reads the unread cards only, by default.** A selection can hold cards the matcher accepted.
-  Those are answered. The Haiku preflight quote names the count it would bill, and that count excludes them.
-  Reading them again is an explicit choice, a second line on the quote: "Also read again the 412 cards that matching decided".
-  That line shows its own cost, and it is off until the owner turns it on.
+- **A paid press over cards the free reader matched asks every time, and the default answer is skip.**
+  A selection can hold cards the matcher accepted. Those are answered.
+  The Haiku preflight quote names the count it would bill, and that count excludes them.
+  The ask is a second line on the quote: "Also read again the 412 cards that matching decided".
+  That line shows its own cost. It is off until the owner turns it on, and it asks again at every press.
+  This replaces the earlier idea of a cross-check default. Nothing cross-checks the free read by default.
 - The press button names the cards, as D180 requires. It reads "Match 412 cards, free" for the matcher.
   It reads "Read 412 cards, about $0.45" for Haiku.
 - When the matcher is picked, the crop and size choice is hidden. The matcher always uses the same crop.
-- Haiku is the default pick each time the composer opens. The pick is not stored on the device.
+- The free read is the default pick each time the composer opens. The pick is not stored on the device.
 
 **Fingerprint control.** The runs sheet has one card named "Prepare matching" with two parts. Each part shows its size first and
 starts only on the owner's press.
@@ -318,7 +360,7 @@ The manifest records the engine in `flags`. It records the model hash and the po
 `model` field and a new run field. A review queue entry carries the engine that read it, beside the existing read fields.
 D258 (identity follows the SKU) keeps those read fields as evidence.
 
-**The wire.** `RunSend` gains `engine`, default `haiku`. `onTheWire` in `app/src/server.ts` sends it.
+**The wire.** `RunSend` gains `engine`, default `marqo-b`. `onTheWire` in `app/src/server.ts` sends it.
 `app/src/types.ts` carries its shape. `POST /pipeline/identify` keeps its `confirm` field for both engines.
 One gate stays one press. The CLI takes `--engine`. Two free routes serve setup.
 One reports the matcher state. One downloads on a `confirm`.
@@ -363,7 +405,78 @@ Without a change, a Haiku press would adopt a matcher answer as paid for. So:
 - The spike's eval, as a script that runs on demand. It is not in `make check`, because it needs the owner's photographs.
 - T1 stays the Haiku gate.
 
-## 8. The owner's rulings
+## 8. Background reader
+
+**The owner's ruling: the free read may run in the background, and always.** It is allowed on one condition:
+with an empty queue it uses barely any memory. This section bends two decisions, D1 and D273 (question 3).
+Both are rewritten in place and cite the owner's word.
+
+**What it is.** A separate child, the CLI command `match` with the `--sweep` flag. It lives outside the capture server.
+It takes no request slot. `REQUEST_SLOTS` and `PHOTO_SLOTS` in `server/capture_server.py` are never spent on it.
+It reads photographs from disk. It never runs inside a capture request.
+
+**The queue.** A card is queued when its state is `captured` and the `identifications` table holds no row for it.
+
+**What it writes.** One thing: an `identifications` row with engine `marqo-b`. It never writes card state.
+It never sets a SKU, a name or a number on a card. Those follow D258 (identity follows the SKU) and the join.
+The row records the card's `cid`. A move or a renumber changes the position key and never the `cid`.
+So the row follows the card through a re-slot.
+
+**A re-shoot drops the row.** Today `do_reshoot` writes new bytes and touches neither `cards` nor `identifications`
+(`store/db.py`, the comment on the naming ladder). A matcher row would then hold the digest of bytes that exist nowhere.
+So the build makes a re-shoot delete a `marqo-b` row for that card in the same transaction.
+The sweep then reads the new photograph. A Haiku row keeps today's behavior.
+
+**What it never reads.**
+
+- An unhinted Pokemon card, because its pool is the whole category (section 2, D170).
+- A card in any set whose pool is incomplete (section 2).
+- A card from another game's rules: code cards and `misc`.
+- It never borrows a hint from a neighbor or from the box. A hint is evidence about the card that carries it (D76).
+
+**Memory is a ship gate.** Measured on this Mac with onnxruntime 1.30.0 and the fp32 file:
+
+| State | Resident memory |
+|---|---|
+| Python with sqlite only | 15 MB |
+| Plus numpy and Pillow | 29 MB |
+| Plus onnxruntime imported | 47 MB |
+| Model loaded, after three reads | 454 MB |
+| After the session is freed in the same process | 454 MB |
+
+Freeing the session does not return the memory in the same process (measured). So the design is two parts:
+
+- A **watcher** that imports only `sqlite3` and the standard library. It polls the queue. It never imports numpy, Pillow or onnxruntime.
+  Its idle memory is the first row, 15 MB.
+- A **worker** that the watcher starts when the queue is not empty. It loads the model, reads the queue to empty, and exits.
+  Exit returns the memory. A cold start to the first vector took 0.26 seconds with the file cached (measured).
+
+The gate: the idle resident memory of the watcher, with an empty queue, must stay under 30 MB. The owner confirms the number.
+The build lane measures it on the shipped build, and the matcher does not ship if it fails.
+A queue with cards in it may use the 454 MB peak, in the worker only.
+
+**While cards are being fed (the capture gate).** Until the capture-speed gate is measured, the sweep reads in the gaps only.
+It waits 3 seconds after the last capture before it starts the worker, and it stops the worker at the next capture.
+The gate: 300 feeder-paced captures on a scratch store, run twice, with the reader and without it.
+The metric is the p99 time of a capture request. If the p99 with the reader is worse than the p99 without it
+by no more than a margin the owner sets, the sweep may read "always". If it is worse than that, the sweep stays on "gaps only".
+Until that measurement exists, gaps only is the rule. This is unmeasured.
+
+**The toggle.** The on and off switch lives in the rig settings on the Capture screen. That is the `Setup` group in the Rig panel of `CaptureScreen`.
+Its state is a row in the store's `meta` table. It is not a device key, and it is not in `deviceMemory.ts`.
+The setup press downloads the model file and builds the fingerprints once (section 6, "Prepare matching"). It asks first, and it shows both sizes.
+Turning the toggle on never downloads. With no model or no complete pool, the toggle reads as on and the sweep does nothing.
+
+**What the screens show (D313, nothing on screen moves unless the person moved it).**
+
+- Nothing on the capture screen changes while the sweep reads. No count, no spinner, no new element.
+- The runs sheet shows one snapshot count: how many cards the free reader has matched. It is read when the sheet opens
+  and when the owner presses refresh. It never ticks.
+- A per-card detail shows on request only: the engine, the match and the margin.
+
+**What a paid press does over matched cards.** Section 6 gives the rule. It asks every time, and the default is skip.
+
+## 9. The owner's rulings
 
 - A card the matcher cannot accept is left unread and stays in the selection. It never goes to review. Nothing falls back on its own (sections 2 and 3).
 - The matcher reads a card only when its whole candidate pool is complete (section 2).
@@ -373,4 +486,19 @@ Without a change, a Haiku press would adopt a matcher answer as paid for. So:
 - Before adoption, a held-out check confirms the thresholds. That is a build-lane gate (section 3).
 - Process only: the build starts on fp32. The build lane commits the eval scripts.
 
-**Open for the owner.** Whether Haiku is the default pick. Whether the Haiku pick's tooltip may name Haiku, as a second named exception.
+- The free read is the default pick. Both tooltips name their model. D196 holds both as named exceptions (section 6).
+- The free read may run in the background, always, if its idle memory is barely any. D1 and D273 are rewritten for it (section 8).
+- While cards are being fed, the reader reads in the gaps only, until a capture-speed gate is measured (section 8).
+- A paid press over matched cards asks every time and defaults to skip (section 6).
+- The on and off toggle is in the rig settings. Its state is a store row. The setup press downloads once (section 8).
+
+**Open for the owner.** The idle memory number for the gate: the proposal is 30 MB. The margin for the capture-speed gate.
+
+**Open for the owner: the Runes and Tokens.** The promo rule does not cover them, and the owner holds 96.
+
+- **Option A: no family guard.** Eligible 844 (24.1%). Spiritforged, Unleashed and Vendetta stay incomplete. Most Riftbound cards need the paid read.
+- **Option B: the family guard, hinted cards only.** Eligible 2,800 (80.0%). Unhinted Riftbound cards stay unread, as D170 already requires of Pokemon.
+- **Option C: B, plus unhinted cards, with Radiance ruled out of the pool.** Eligible 3,407 (97.3%).
+  The risk is an unhinted Radiance card read as a main-set card, and a promo whose set name does not hold "Promo". The store holds neither today.
+- **Recommendation: B now.** It recovers 80% with no new guess. Take C after the owner rules on Radiance, and after a held-out run that includes
+  a Rune or a Token and a Radiance card.

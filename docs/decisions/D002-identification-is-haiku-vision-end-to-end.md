@@ -1,6 +1,6 @@
 ## D2 — Identification is Haiku vision, end to end
 
-**Identification is Claude Haiku vision over the Batch API, owned end to end. The owner picks the engine for each run.** The default pick is Haiku, as a proposal that the owner confirms. The owner's word: *"i think i should be able to pick if i want it processed by haiku or marqo-b"*.
+**Identification is Claude Haiku vision over the Batch API, owned end to end. The owner picks the engine for each run.** The default pick is the free read. The owner's word: *"i think i should be able to pick if i want it processed by haiku or marqo-b"*.
 
 The second engine is a stock-photo matcher. It runs an open image-embedding model (Marqo ecommerce-B on onnxruntime). It ranks a card's photo against the stock photos of the cards the run could hold. `docs/specs/identify-engine-pick.md` is the design. It is not built.
 
@@ -9,6 +9,8 @@ The second engine is a stock-photo matcher. It runs an open image-embedding mode
 **The matcher never decides alone, and it never guesses.** It reads a card only when the card's whole candidate pool is complete and the match clears a margin. Any other card is left unread. It stays in the selection as needing identification. It never goes to review. Nothing falls back on its own. The run goes on for the other cards and says how many it left unread. The owner presses the paid read for those cards.
 
 **What stays true of Haiku.** OCR was researched and rejected at about 85-90% accuracy. Haiku costs about a tenth of a cent a card through the Batch API. That is negligible, so cost is not the reason the matcher exists. The set hint is an optional accelerator that the capture app records. Identification works without it, and better with it.
+
+**The free read may also run in the background.** It reads captured cards that have no answer. It writes one identification row and never changes card state. A paid press over cards it matched asks every time, and the default answer is skip. The design is `docs/specs/identify-engine-pick.md`, section 8.
 
 **Haiku does two things the matcher cannot.** It reads the printed collector number. It reports a finish, which feeds D3 (variants resolve by a fixed ladder).
 

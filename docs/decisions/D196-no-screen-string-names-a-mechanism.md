@@ -59,17 +59,18 @@ missed understates the defect, never invents one.
 
 Reasoning stays in the decision, screens state facts; a note about zero does not draw.
 
-### One named exception: the matcher's hover tooltip
+### Two named exceptions: the engine picks' hover tooltips
 
-The owner's word: plain words on the engine control, with the model name in a hover tooltip.
-`docs/specs/identify-engine-pick.md` section 6 draws the control. This is the only exception to the rule.
+The owner's word: plain words on the engine control, with each pick's model name in its hover tooltip.
+`docs/specs/identify-engine-pick.md` section 6 draws the control. These are the only exceptions to the rule.
 
-- The exempt string is `MATCHER_NAME_TOOLTIP`, exported from `app/src/engines.ts`.
+- The exempt strings are `HAIKU_NAME_TOOLTIP` and `MATCHER_NAME_TOOLTIP`, both exported from `app/src/engines.ts`.
 - The exception covers the word-list hit only. A decision id, a repository path or a CLI string inside that text still fails the row.
 - The control writes `title={MATCHER_NAME_TOOLTIP}`. The AST walk cannot read an identifier at the use site.
-  So the row reads the constant's declared text from its file and checks that text as a string a person reads.
-- The row exempts a string only when the whole string equals the constant. A longer string that holds it is caught.
-- The constant is declared on one line, with one pair of quotes, no backslash and no `${`. Any other shape is a finding.
+  So the row reads each constant's declared text from its file and checks that text as a string a person reads.
+- The row exempts a string only when the whole string equals one of the two constants. A longer string that holds one is caught.
+- A third model string needs its own constant, its own owner word and its own record here.
+- Each constant is declared on one line, with one pair of quotes, no backslash and no `${`. Any other shape is a finding.
 - `Haiku` and `Marqo` are on the word list in `scripts/machine-words.json`. Any other string that names a model is caught.
-- If the file or the constant is absent, nothing is exempt.
-- The label on each pick stays in plain words. Only this one tooltip names the model.
+- If the file or a constant is absent, nothing is exempt for it.
+- The label on each pick stays in plain words. Only the two tooltips name a model.

@@ -236,51 +236,54 @@ def _machine_words_allow() -> Dict[str, Dict[str, str]]:
     return {k: v for k, v in raw.items() if k != "_about"}
 
 
-# THE ONE NAMED EXCEPTION (D196, the owner's word): the matcher control's hover tooltip may name
-# the model. It exempts ONE thing: a word-list hit (`Haiku`, `Marqo`) in a string that equals the
-# constant. A decision id, a repository path or a CLI string inside that same text still fails.
+# THE TWO NAMED EXCEPTIONS (D196, the owner's word): each engine pick's hover tooltip may name its
+# model, and the row exempts EXACTLY these two constants. An exemption covers ONE thing: a word-list
+# hit (`Haiku`, `Marqo`) in a string that equals one of the constants. A decision id, a repository
+# path or a CLI string inside that same text still fails.
 #
-# WHY THE CONSTANT IS THE THING CHECKED. The AST walk reads string literals at the use site. The
+# WHY THE CONSTANTS ARE THE THING CHECKED. The AST walk reads string literals at the use site. The
 # control writes `title={MATCHER_NAME_TOOLTIP}`, an identifier, and a walk cannot follow an
-# identifier without data-flow analysis. So the row reads the constant's declared text from its
+# identifier without data-flow analysis. So the row reads each constant's declared text from its
 # file and runs it through the same findings function as a synthetic string. The allowance is the
-# constant itself, never a copy of its text (an allow list that restates the string drifts from it).
+# constants themselves, never a copy of their text (an allow list that restates a string drifts).
 #
 # DECLARED SHAPE: one line, one pair of quotes, no backslash and no interpolation. A constant that
 # is declared any other way is a finding, so the reader never truncates a string quietly.
 MODEL_NAME_CONSTANT_FILE = ROOT / "app" / "src" / "engines.ts"
-MODEL_NAME_CONSTANT = "MATCHER_NAME_TOOLTIP"
-_MODEL_NAME_DECL_RE = re.compile(r"export\s+const\s+" + MODEL_NAME_CONSTANT + r"\b[^=\n]*=")
-_MODEL_NAME_CONSTANT_RE = re.compile(
-    r"export\s+const\s+" + MODEL_NAME_CONSTANT
-    + r"\s*(?::\s*string\s*)?=\s*(['\"])((?:(?!\1)[^\\\n$])*)\1\s*(?:as\s+const\s*)?;?\s*$",
-    re.M,
-)
+MODEL_NAME_CONSTANTS = ("HAIKU_NAME_TOOLTIP", "MATCHER_NAME_TOOLTIP")
 
 
-def _model_name_constant(path: Path = MODEL_NAME_CONSTANT_FILE) -> Tuple[Optional[str], Optional[str]]:
-    """`(text, problem)`. `(None, None)` when the file or the constant is absent: nothing is exempt."""
+def _model_name_constants(
+    path: Path = MODEL_NAME_CONSTANT_FILE,
+    names: Sequence[str] = MODEL_NAME_CONSTANTS,
+) -> Tuple[Tuple[str, ...], List[str]]:
+    """`(texts, problems)`. A constant that is absent adds nothing: nothing is exempt for it."""
     try:
         source = path.read_text(encoding="utf-8")
     except OSError:
-        return None, None
-    if _MODEL_NAME_DECL_RE.search(source) is None:
-        return None, None
-    found = _MODEL_NAME_CONSTANT_RE.search(source)
-    if found is None:
-        return None, (f"{MODEL_NAME_CONSTANT} is not declared in the one shape the row reads: one line, one pair of "
-                      "quotes, no backslash, no `${`. Declare it that way.")
-    return found.group(2), None
-
-
-def _model_name_exception(path: Path = MODEL_NAME_CONSTANT_FILE) -> Optional[str]:
-    return _model_name_constant(path)[0]
+        return (), []
+    texts: List[str] = []
+    problems: List[str] = []
+    for name in names:
+        if re.search(r"export\s+const\s+" + name + r"\b[^=\n]*=", source) is None:
+            continue
+        found = re.search(
+            r"export\s+const\s+" + name
+            + r"\s*(?::\s*string\s*)?=\s*(['\"])((?:(?!\1)[^\\\n$])*)\1\s*(?:as\s+const\s*)?;?\s*$",
+            source, re.M,
+        )
+        if found is None:
+            problems.append(f"{name} is not declared in the one shape the row reads: one line, one pair of "
+                            "quotes, no backslash, no `${`. Declare it that way.")
+        else:
+            texts.append(found.group(2))
+    return tuple(texts), problems
 
 
 def _no_mechanism_findings(
     strings: List[Dict[str, object]],
     allow: Optional[Dict[str, Dict[str, str]]] = None,
-    exception_text: Optional[str] = None,
+    exception_texts: Sequence[str] = (),
 ) -> Tuple[List[Finding], Set[Tuple[str, str]]]:
     """Returns the findings, and the `(file, word)` allow-list entries a hit actually used —
     the second is how the caller tells a listed entry that is still true from one that has
@@ -316,7 +319,7 @@ def _no_mechanism_findings(
             )
             continue
         word_hit = _NO_MECHANISM_RE.search(text)
-        if word_hit is not None and exception_text is not None and text == exception_text:
+        if word_hit is not None and text in exception_texts:
             continue    # the named exception covers the word-list hit only; the code checks above already ran
         if word_hit is not None:
             canon = word_hit.group(0).lower()
@@ -395,13 +398,13 @@ def check_no_mechanism_on_screen(report: Report) -> None:
                            "this row needs the same toolchain `make lint` and `make typecheck` require.")
         return
     allow = _machine_words_allow()
-    exception_text, shape_problem = _model_name_constant()
-    if exception_text is not None:
-        # The constant's own text, as a string a person reads (see the header above the constant).
-        strings = list(strings) + [{"file": rel(MODEL_NAME_CONSTANT_FILE), "line": 0, "text": exception_text}]
-    findings, used = _no_mechanism_findings(strings, allow, exception_text)
-    if shape_problem is not None:
-        findings.append(Finding(rel(MODEL_NAME_CONSTANT_FILE), shape_problem))
+    exception_texts, shape_problems = _model_name_constants()
+    for text in exception_texts:
+        # Each constant's own text, as a string a person reads (see the header above the constants).
+        strings = list(strings) + [{"file": rel(MODEL_NAME_CONSTANT_FILE), "line": 0, "text": text}]
+    findings, used = _no_mechanism_findings(strings, allow, exception_texts)
+    for problem in shape_problems:
+        findings.append(Finding(rel(MODEL_NAME_CONSTANT_FILE), problem))
 
     # STALE ENTRIES: an allow-listed (file, word) pair that matched nothing this run. The
     # lane that owns it already fixed the string, and the entry is the only thing left
