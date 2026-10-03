@@ -509,7 +509,7 @@ function RealizedSection({ sku }: { readonly sku: string }) {
     return (
       <section className="producthistory-realized">
         <h3>What you got</h3>
-        <p className="producthistory-note">Start Banchi with an OrderWand sales export to see what you got for this product.</p>
+        <p className="producthistory-note">Start Banchi with an OrderWand sales export to compare your sales with the market.</p>
       </section>
     )
   }
