@@ -1340,6 +1340,8 @@
 /* ---- prose: quiet, refused, ok ------------------------------------------------------------------------------------------ */
 .capture-quiet { font-size: var(--bn-fs-sm); line-height: 1.45; color: var(--bn-ink-3); }
 .capture-quiet .bn-icon { flex: none; }
+/* The dispenser's status line holds two lines always (D313): its longest sentence wraps at the rail width. */
+.capture-dealer-said { min-block-size: 2lh; margin: 0; }
 /* Receipts and refusals flow as one sentence: the icon rides inline so a position label
    inside the sentence never breaks onto its own line. */
 .capture-refused {

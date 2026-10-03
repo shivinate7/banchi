@@ -6746,6 +6746,11 @@ COMPONENTS = [
                                      "the version field, so a scorer cannot read a v2 trace as "
                                      "a rig with no light in it.",
                              "governed_by": ["D19", "D81", "D144"]},
+            "src/dealer.ts": {"does": "the dispenser's one home: the Web Bluetooth link to the "
+                                      "tcg-dealer dispenser, its two-payload allow list and the "
+                                      "paced deal loop (createDealer), and the Capture screen's "
+                                      "hook over it (useDealer). docs/specs/dispenser.md.",
+                              "governed_by": ["D316", "D19"]},
             "src/motion.ts": {"does": "Gate C's auto-capture: a pure MotionMachine (settle, "
                                       "novelty, card presence, deferring refractory) under a "
                                       "thin DOM sampler that feeds it one 64x36 luma grid per "
@@ -6866,7 +6871,7 @@ COMPONENTS = [
                             "D34", "D36", "D41", "D56", "D58", "D65", "D67", "D81", "D92", "D117",
                             "D118", "D121", "D128", "D131", "D132", "D142", "D144", "D145", "D153",
                             "D164", "D170", "D172", "D183", "D196", "D218", "D259", "D260", "D264",
-                            "D271", "D299", "D313"]},
+                            "D271", "D299", "D313", "D316"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -9287,6 +9292,19 @@ COMPONENTS = [
                         "`eslint.config.js` refuses `test` imported from Playwright under "
                         "`tests/unit/`.",
                 "governed_by": ["D18"],
+            },
+            "tests/unit/dispenser.unit.ts": {
+                "does": "`dealer.ts`'s link and paced loop against a fake `navigator.bluetooth` that "
+                        "replays tcg-dealer's recorded sequences (paced loop, empty hopper) plus "
+                        "labeled synthetic ones (fault, silence, lost link, Stop mid-write). The "
+                        "fake refuses any write off the allow list or out of turn. Run by `make unit`.",
+                "governed_by": ["D316", "D19"],
+            },
+            "tests/dispenser.spec.ts": {
+                "does": "the dispenser control on the real capture screen with the same fake: "
+                        "the reason shows in Manual, \"Needs Chrome\" with no Bluetooth, and a fire "
+                        "with no box stops dealing with STOP the last write.",
+                "governed_by": ["D316", "D18", "D19", "D313"],
             },
             "tests/unit/tab-title.unit.ts": {
                 "does": "the tab title function over every ROUTES entry, read through "

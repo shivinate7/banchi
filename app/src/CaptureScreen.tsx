@@ -59,6 +59,7 @@ import { captureBoxLabel } from './runScope'
 // before it is a different sitting. Imported rather than restated — see `sitting` below.
 import { GAP_MINUTES } from './storeHistory'
 import { Button, ConfirmSheet, Icon, IconButton, Kbd, Notice, Page, Pill, Slot, Stat } from './kit'
+import { dealerSupported, useDealer } from './dealer'
 import { matchQuery } from './kit/match'
 import { toast } from './kit/toast'
 import { placePartsOf } from './position'
@@ -3856,6 +3857,36 @@ export function CaptureScreen() {
 
   const swallowedTotal = swallowed.busy + swallowed.noBox + swallowed.notReady + swallowed.held
 
+  /* The dispenser (D316). It deals only while motion can photograph: armed with a
+   * baseline, camera ready, capture not halted. Any fire the screen declines stops it. */
+  const motionArmed = triggerMode === 'motion' && motionDiag?.hasBaseline === true
+  const dealer = useDealer({
+    halted: halt !== null,
+    dropped: swallowedTotal + swallowed.halted,
+    ready: blockers.length === 0,
+    armed: motionArmed,
+  })
+  /* One reason per blocker the Capture button already answers to: the same `blockers` list, never a copy. */
+  const blockerWord: Record<string, string> = {
+    halt: 'Resume captures first',
+    camera: 'Open the camera first',
+    'camera-fault': 'The camera is sending no frames',
+    box: 'Pick a box first',
+    game: 'Waiting for a game',
+    unverified: 'Pick another game first',
+  }
+  const dealerReason = !dealerSupported()
+    ? 'Needs Chrome on the Mac'
+    : triggerMode !== 'motion'
+      ? 'Turn on motion first'
+      : !motionArmed
+        ? 'Waiting for motion to settle'
+        : blockers.length > 0
+          ? (blockerWord[blockers[0]?.key ?? ''] ?? 'Capture is blocked')
+          : null
+  const dealerIdle = dealer.state === 'connected' || dealer.state === 'stopped'
+  const dealerSaid = !dealerSupported() ? dealerReason : dealerIdle && dealerReason !== null ? dealerReason : dealer.said
+
   /** WHETHER THERE IS ANYTHING TO CLEAR, which is what disables the control rather than hiding
    *  it (D142). A control that appears and disappears with the state it acts
    *  on makes the rail's height move under the operator's hand, and D118 forbids exactly that.
@@ -4794,6 +4825,37 @@ export function CaptureScreen() {
             >
               Capture
             </Button>
+
+            <Button
+              size="lg"
+              block
+              icon={dealer.state === 'dealing' ? 'pause' : 'play'}
+              className="capture-dealer"
+              busy={dealer.state === 'connecting'}
+              disabled={
+                !dealerSupported() ||
+                (dealerIdle && dealerReason !== null) ||
+                dealer.state === 'connecting'
+              }
+              onClick={() =>
+                void (dealer.state === 'dealing'
+                  ? dealer.stop()
+                  : dealerIdle
+                    ? dealer.start()
+                    : dealer.connect())
+              }
+            >
+              {dealer.state === 'dealing'
+                ? 'Stop dispenser'
+                : dealer.state === 'connecting'
+                  ? 'Connecting'
+                  : dealerIdle
+                    ? 'Start dispenser'
+                    : 'Connect dispenser'}
+            </Button>
+            <Slot as="p" className="capture-quiet capture-dealer-said">
+              {dealerSaid}
+            </Slot>
 
             {/* FOLD INTO THE BUTTON (owner's ruling): when the camera is the ONLY thing
                 missing, the box below is noise — the viewfinder already carries its own "Open

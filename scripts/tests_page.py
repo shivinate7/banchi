@@ -54,7 +54,7 @@ _ID = re.compile(r"\bD[1-9][0-9]{0,2}\b")
 
 # First match wins. A file no rule names lands in UNFILED, and the audit row refuses it.
 AREAS: Tuple[Tuple[str, str], ...] = (
-    ("Capture", r"capture-|motion|t9_traces"),
+    ("Capture", r"capture-|motion|dispenser|t9_traces"),
     ("Review and identity", r"review|absent-photo|confirm-identity|correct-answer|card-variants|t1_|t3_|t4_"),
     ("Inventory and boxes", r"inventory|boxmap|empty-section|section-ruler|locating|deleted-boxes|t7_"),
     ("Pricing and runs", r"pricing|product-history|live-reconcile|run-panel|photo-cache|t5_|t2_"),
