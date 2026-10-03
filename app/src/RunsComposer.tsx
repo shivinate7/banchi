@@ -850,6 +850,7 @@ export function RunsComposer({
     setMatchTrouble(null)
     try {
       await prepareMatch()
+      setMatchState(await getMatchState())
       matchPoll.refresh()
     } catch (err) {
       setPreparing(false)
