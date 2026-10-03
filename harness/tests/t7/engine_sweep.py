@@ -8,11 +8,14 @@ server is a throwaway one on 127.0.0.1 with an ephemeral port.
 from __future__ import annotations
 
 import base64
+import contextlib
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 from unittest import mock
 
 from harness.tests import Checks
@@ -132,12 +135,28 @@ class _Worker:
         self.returncode = -9
 
 
+@contextlib.contextmanager
+def _tree():
+    """A throwaway tree for `sweep.REPO_ROOT`: `.serve/` (the pid file, the owner mark, the log) lands
+    here and never in the checkout. `scripts/` links to the real one so the reap mark can import."""
+    if sweep.REPO_ROOT != REPO_ROOT:  # already inside one: nested uses share it
+        yield sweep.REPO_ROOT
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "scripts").symlink_to(REPO_ROOT / "scripts")
+        with mock.patch.object(sweep, "REPO_ROOT", root):
+            yield root
+
+
 def _watch(*, last, clock, workers, polls, sleeper=None, poll=5.0, quiet_s=3.0):
-    """`sweep.watch` on a fake clock, sleep and spawn. Returns (result, the workers it spawned)."""
+    """`sweep.watch` on a fake clock, sleep and spawn. Returns (result, the workers it spawned).
+    `quiet_s="default"` leaves the quiet time to the watcher's own default."""
     spawned = []
 
     def spawn():
         spawned.append(workers.pop(0) if workers else _Worker())
+        spawned[-1].at = clock[0]
         return spawned[-1]
 
     def sleep(seconds):
@@ -145,10 +164,11 @@ def _watch(*, last, clock, workers, polls, sleeper=None, poll=5.0, quiet_s=3.0):
         if sleeper:
             sleeper()
 
-    with mock.patch.object(sweep, "files_present", lambda: True), mock.patch.object(
+    quiet_arg = {} if quiet_s == "default" else {"quiet": quiet_s}
+    with _tree(), mock.patch.object(sweep, "files_present", lambda: True), mock.patch.object(
         sweep, "newest_capture", lambda _conn: last[0]
     ):
-        result = sweep.watch(quiet_s, poll, sleep=sleep, now=lambda: clock[0], spawn=spawn, max_polls=polls)
+        result = sweep.watch(poll=poll, **quiet_arg, sleep=sleep, now=lambda: clock[0], spawn=spawn, max_polls=polls)
     return result, spawned
 
 
@@ -180,14 +200,15 @@ def check_sweep_watcher(checks: Checks) -> None:
         _, spawned = _watch(last=[0.0], clock=[1000.0], workers=[_Worker(0)], polls=2, poll=100.0)
         checks.equal(len(spawned), 2, "control: after exit code 0 the next poll starts one at once")
 
+        held = sweep.acquire_lock()
+        try:
+            result, spawned = _watch(last=[0.0], clock=[1000.0], workers=[], polls=1)
+        finally:
+            held.close()
+        checks.equal((result, len(spawned)), (1, 0), "a held lock means a watcher runs: exit 1, nothing spawned")
         sweep._write_json(sweep.state_path(), {"pid": os.getppid()})
-        result, spawned = _watch(last=[0.0], clock=[1000.0], workers=[], polls=1)
-        checks.equal((result, len(spawned)), (1, 0), "a live watcher already running: exit 1, nothing spawned")
-        dead = subprocess.Popen([sys.executable, "-c", "pass"])
-        dead.wait()
-        sweep._write_json(sweep.state_path(), {"pid": dead.pid})
         result, _ = _watch(last=[0.0], clock=[1000.0], workers=[], polls=1)
-        checks.equal(result, 0, "control: a stale pid file does not block")
+        checks.equal(result, 0, "a state file naming a live pid does not block, only the lock does")
 
 
 # --------------------------------------------------------------------------------- 3. the worker
@@ -352,9 +373,206 @@ def check_sweep_imports_light(checks: Checks) -> None:
                 )
 
 
+# ------------------------------------------------------------ 2b. backoff, quiet, lock, crash, guard
+
+
+def check_sweep_backoff(checks: Checks) -> None:
+    checks.note("")
+    checks.note("SWEEP BACKOFF — exit 1 waits 30, 60, 120 s up to 1800 s; 0 resets; 3 waits 300 s; a stop is no failure")
+    with isolated_home():
+        _capture(game="pokemon", set_hint="sv9")
+        _switch(True)
+
+        def gaps(codes, polls):
+            _, spawned = _watch(last=[0.0], clock=[1000.0], workers=[_Worker(c) for c in codes], polls=polls, poll=10.0)
+            times = [w.at for w in spawned]
+            return [t2 - t1 for t1, t2 in zip(times, times[1:])]
+
+        checks.equal(
+            gaps([1] * 9, 700)[:8], [30, 60, 120, 240, 480, 960, 1800, 1800],
+            "exit 1 doubles the wait from 30 s and caps it at 1800 s",
+        )
+        checks.equal(gaps([1, 1, 0, 1, 1], 40)[:4], [30, 60, 0, 30], "exit 0 resets it, so the next failure waits 30 s again")
+        checks.equal(gaps([3, 0], 40)[:1], [300], "exit 3 waits 300 s")
+
+        newer, slow = [1000.0], _Worker(polls=300)
+        _, spawned = _watch(
+            last=newer, clock=[1010.0], workers=[slow], polls=3, quiet_s=1.0,
+            sleeper=lambda: None if slow.returncode else newer.__setitem__(0, 1010.2),
+        )
+        checks.equal(len(spawned), 2, "a worker the watcher stopped is no failure: the next one starts with no backoff")
+
+
+def check_sweep_quiet(checks: Checks) -> None:
+    checks.note("")
+    checks.note("SWEEP QUIET — default 0: no gap, a capture never stops a worker. Above 0: both gates apply")
+    with isolated_home():
+        _capture(game="pokemon", set_hint="sv9")
+        _switch(True)
+        checks.equal(sweep.QUIET_SECONDS, 0.0, "the default quiet time is 0")
+        _, spawned = _watch(last=[1010.0], clock=[1010.0], workers=[], polls=1, quiet_s="default")
+        checks.equal(len(spawned), 1, "at the default a worker starts with no gap after the last capture")
+        newer, slow = [1000.0], _Worker(polls=300)
+        _watch(last=newer, clock=[1010.0], workers=[slow], polls=1, quiet_s="default",
+               sleeper=lambda: newer.__setitem__(0, 2000.0))
+        checks.equal(slow.signals, [], "at the default a newer capture never stops the worker")
+        _, spawned = _watch(last=[1010.0], clock=[1010.0], workers=[], polls=1, quiet_s=3.0)
+        checks.equal(len(spawned), 0, "above 0 the gap gate holds a worker back")
+        newer, slow = [1000.0], _Worker(polls=300)
+        _watch(last=newer, clock=[1010.0], workers=[slow], polls=1, quiet_s=3.0,
+               sleeper=lambda: newer.__setitem__(0, 2000.0))
+        checks.ok(slow.signals, "and a newer capture stops the worker")
+
+
+def check_sweep_lock(checks: Checks) -> None:
+    checks.note("")
+    checks.note("SWEEP LOCK — one flock says running; SIGTERM, gone tree, .serve file and owner mark")
+    with isolated_home(), _tree() as root:
+        checks.ok(not sweep.running(), "no watcher: running() is false")
+        held = sweep.acquire_lock()
+        checks.ok(sweep.running() and sweep.acquire_lock() is None, "a held lock reads as running, and a second acquire fails")
+        held.close()
+        checks.ok(not sweep.running(), "running() is false after release")
+        sweep._write_json(sweep.state_path(), {"pid": os.getppid()})
+        checks.ok(not sweep.running() and sweep.running_pid() is None, "a state file naming a live pid is not running")
+
+        # stop_watcher_of trusts the lock, never the pid.
+        sweep._write_json(root / ".serve" / "match-sweep.json", {"pid": 4242, "lock": str(sweep.lock_path())})
+        signalled = []
+        with mock.patch.object(sweep.os, "kill", lambda pid, sig: signalled.append((pid, sig))):
+            checks.equal((sweep.stop_watcher_of(root), signalled), (None, []), "stop_watcher_of signals nothing while the lock is free")
+            held = sweep.acquire_lock()
+            try:
+                answer = sweep.stop_watcher_of(root)
+            finally:
+                held.close()
+        checks.equal((answer, signalled), (4242, [(4242, signal.SIGTERM)]), "and SIGTERMs the recorded pid while the lock is held")
+
+        # SIGTERM: the handler stops the worker, then exits 0. The handler is captured, not installed.
+        _capture(game="pokemon", set_hint="sv9")
+        _switch(True)
+        handlers, slow, fired = [], _Worker(polls=300), []
+
+        def sleeper():
+            if handlers and not fired:
+                fired.append(1)
+                handlers[0](signal.SIGTERM, None)
+
+        def install(sig, handler):
+            if sig == signal.SIGTERM and callable(handler):
+                handlers.append(handler)
+
+        with mock.patch.object(sweep.signal, "signal", install):
+            try:
+                _watch(last=[1000.0], clock=[1010.0], workers=[slow], polls=2, sleeper=sleeper)
+                code = "returned"
+            except SystemExit as bye:
+                code = bye.code
+        checks.equal((code, bool(slow.signals)), (0, True), "SIGTERM stops the worker, then the watcher exits 0")
+
+        _watch(last=[1000.0], clock=[1010.0], workers=[], polls=1)
+        record = json.loads((root / ".serve" / "match-sweep.json").read_text())
+        checks.equal(record, {"pid": os.getpid(), "lock": str(sweep.lock_path())}, ".serve/match-sweep.json names the watcher's pid and its lock")
+        checks.ok((root / ".serve" / "owners" / f"{os.getpid()}.json").is_file(), "and the reap owner mark exists")
+
+        # _gone(): a store that no longer exists ends the watcher at once, where a store that is
+        # merely unreadable would be waited on (one sleep per poll).
+        sleeps = []
+        (sweep.inventory_dir() / sweep.DB_FILENAME).unlink()
+        result, _ = _watch(last=[1000.0], clock=[1010.0], workers=[], polls=5, sleeper=lambda: sleeps.append(1))
+        checks.equal((result, len(sleeps)), (0, 0), "_gone() ends the watcher with exit 0 when the store is gone, with no wait")
+
+
+def check_sweep_crash(checks: Checks) -> None:
+    from cli import cmd_match
+
+    checks.note("")
+    checks.note("SWEEP CRASH — ImportError is exit 3, any other exception exit 1 with the chunk tried, inflight settled, log")
+    with isolated_home(), _tree() as root:
+        keys = [_capture(game="pokemon", set_hint="sv9") for _ in range(3)]
+        _switch(True)
+        ids = {k: Store().read().inventory.cards[k].capture_id for k in keys}
+
+        def run_worker(boom):
+            def read(_requests, _index):
+                raise boom
+
+            with mock.patch.object(match, "status", lambda: {"ready": True}), mock.patch.object(
+                match, "Index", _FakeIndex
+            ), mock.patch.object(match, "read", read), mock.patch.object(os, "nice", lambda _n: 0), mock.patch(
+                "signal.signal", lambda *_a: None
+            ), quiet():
+                return cmd_match.sweep_worker(lambda _line: None)
+
+        checks.equal(run_worker(ImportError("no onnxruntime")), sweep.EXIT_NOT_READY, "an ImportError in the worker is exit 3")
+        checks.ok(not sweep.inflight_path().exists(), "and leaves no inflight file")
+        checks.equal(run_worker(RuntimeError("bad photo")), 1, "any other exception is exit 1")
+        checks.equal(sweep.tried(), ids, "with every card of the chunk tried at its capture id")
+        checks.ok(not sweep.inflight_path().exists(), "and the inflight file settled")
+
+        sweep.mark_inflight({"9/9": "left-over-1"})
+        with mock.patch.object(match, "status", lambda: {"ready": False}), quiet():
+            cmd_match.sweep_worker(lambda _line: None)
+        checks.equal(sweep.tried().get("9/9"), "left-over-1", "a leftover inflight file is settled as tried at worker start")
+        checks.ok(not sweep.inflight_path().exists(), "and removed")
+        sweep.mark_inflight({"9/7": "left-over-0"})
+        _watch(last=[1000.0], clock=[1001.0], workers=[], polls=1)  # inside the quiet time: no worker
+        checks.equal(sweep.tried().get("9/7"), "left-over-0", "a leftover inflight file is settled when the watcher starts")
+        sweep.mark_inflight({"9/8": "left-over-2"})
+        _watch(last=[0.0], clock=[1000.0], workers=[_Worker(1)], polls=1)
+        checks.equal(sweep.tried().get("9/8"), "left-over-2", "a leftover inflight file is settled after a failed worker exit")
+
+        real_popen = subprocess.Popen
+
+        def popen(_argv, **kw):
+            real_popen([sys.executable, "-c", "import sys; sys.stderr.write('worker-boom')"],
+                       stdout=kw["stdout"], stderr=kw["stderr"]).wait()
+            return _Worker()
+
+        with mock.patch.object(sweep.subprocess, "Popen", popen):
+            sweep._spawn_worker()
+        log = root / ".serve" / "match-sweep.log"
+        checks.ok(log.is_file() and "worker-boom" in log.read_text(), "worker stderr lands in .serve/match-sweep.log")
+
+
+def check_sweep_cid_guard(checks: Checks) -> None:
+    from cli import cmd_match
+
+    checks.note("")
+    checks.note("SWEEP GUARD — an answer is skipped when the cid changed and the capture id did not")
+    with isolated_home():
+        renamed, plain = (_capture(game="pokemon", set_hint="sv9") for _ in range(2))
+        _switch(True)
+        calls = []
+
+        def fake_read(requests, _index):
+            calls.append(1)
+            if len(calls) == 1:
+                with Store().write() as snap:
+                    snap.inventory.cards[renamed].cid = "f" * 64
+            else:
+                _switch(False)
+            return [match.Result(r.key, True, dict(SAID, engine=MATCHER)) for r in requests]
+
+        with mock.patch.object(match, "status", lambda: {"ready": True}), mock.patch.object(
+            match, "Index", _FakeIndex
+        ), mock.patch.object(match, "read", fake_read), mock.patch.object(os, "nice", lambda _n: 0), mock.patch(
+            "signal.signal", lambda *_a: None
+        ), quiet():
+            cmd_match.sweep_worker(lambda _line: None)
+        engines = _engines()
+        checks.equal(engines.get(plain), MATCHER, "control: the unchanged card gets its row")
+        checks.ok(renamed not in engines, "a card whose cid changed mid-read gets no row from the old answer")
+
+
 CHECKS = (
     check_sweep_queue,
     check_sweep_watcher,
+    check_sweep_backoff,
+    check_sweep_quiet,
+    check_sweep_lock,
+    check_sweep_crash,
+    check_sweep_cid_guard,
     check_sweep_worker,
     check_reshoot_drops_matcher_row,
     check_sweep_routes,
