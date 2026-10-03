@@ -3887,6 +3887,13 @@ COMPONENTS = [
             "docs_audit/selftest_strings.py": {
                 "does": "Self-test cases for the strings rows, called by `selftest.self_test`.",
                 "governed_by": ["D280"]},
+            "docs_audit/selftest_sleeps.py": {
+                "does": "Self-test cases for the fixed sleeps row, called by `selftest.self_test`.",
+                "governed_by": ["D280"]},
+            "docs_audit/sleeps.py": {
+                "does": "The fixed sleeps row: a `waitForTimeout` in the browser specs carries a `keep:` reason or "
+                        "waits on a condition, past a per-file allow list that only shrinks.",
+                "governed_by": ["D280"]},
             "docs_audit/spelling.py": {
                 "does": "The American-spelling reader and the shell-substitution row.",
                 "governed_by": ["D60", "D88", "D280"]},
