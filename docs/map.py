@@ -401,7 +401,7 @@ COMPONENTS = [
                                         "second copy of it.",
                                 "governed_by": ["D1", "D2", "D21", "D23", "D33", "D36", "D43",
                                                 "D180", "D63", "D145", "D163", "D172",
-                                                "D174"]},
+                                                "D174", "D125"]},
             "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews. "
                                     "SEEDS inventory/prices.json's rule and basis on the first "
                                     "join of an EMPTY corpus and never reassigns them (D86) "

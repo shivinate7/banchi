@@ -1715,8 +1715,7 @@ def _band_rect(sent_size, prepared, det, rect, band_fractions):
 def do_pipeline_crop_preview(payload: dict) -> dict:
     """`POST /pipeline/crop-preview` — what this reading sends, cropped by the preview's own finder. FREE, writes nothing.
 
-    THE FINDER IS `geometry.locate_card` (D125) AND A RUN'S IS STILL `detect_card`, so the crop
-    drawn here can differ from the one a run makes until runs move to it.
+    THE CUT IS A RUN'S: `identify.images.prepare_located` (D125).
 
     D32's amendment gave the crop three named pairs and a sentence each, because the owner
     could not tell from the controls what the crop did: *"walk me through how im supposed to
@@ -1772,7 +1771,6 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
         )
 
     try:
-        import geometry
         from geometry.crop import BAND_PROFILES
         from identify import images as identify_images
         from pipeline import games
@@ -1805,37 +1803,12 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
     at = offset % total
     capture = captures[at]
 
-    try:
-        # THE MODEL FIRST, `detect_card` BEHIND IT (D125): `locate_card` falls back itself.
-        detected = geometry.locate_card(capture.photo)
-    except Exception:
-        # The same swallow `cli/cmd_identify.py` performs around this call, and for the same
-        # reason: detection is an optimisation, and a photograph it cannot read is sent whole
-        # rather than failing the card. A preview that raised where the run would shrug would
-        # be describing a different run.
-        detected = None
-
     max_edge = _max_edge(payload) or identify_images.MAX_EDGE
     try:
-        prepared = identify_images.prepare(
-            capture.photo,
-            max_edge=max_edge,
-            crop_box=detected if crop else None,
+        # The cut a run makes: one shared home, `identify.images.prepare_located` (D125).
+        detected, prepared = identify_images.prepare_located(
+            capture.photo, max_edge=max_edge, crop=crop, find=True
         )
-        if crop and prepared.crop_refused and detected is not None and detected.method == "dfine":
-            # THE SAFETY PATH FOR A CONFIDENT MODEL BOX THAT `crop_refusal` REFUSES (D125). The
-            # fallback inside `locate_card` runs only when the model answers nothing, and the
-            # guard lives in `identify`, which `geometry` may not import, so the refusal is
-            # handled here: ask `detect_card`, and cut with its box if it has one.
-            try:
-                fallback = geometry.detect_card(capture.photo)
-            except Exception:
-                fallback = None
-            if fallback is not None:
-                detected = fallback
-                prepared = identify_images.prepare(
-                    capture.photo, max_edge=max_edge, crop_box=detected
-                )
     except identify_images.ImageError as exc:
         return {
             "selection": selection.describe(),
@@ -1847,9 +1820,8 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
             "sample": {"box": capture.box, "index": capture.index, "unreadable": str(exc)},
         }
 
-    # THE CUT THIS PREVIEW MAKES, WHICH IS NOT ALWAYS THE ONE THE FINDER PROPOSED. The finder is
-    # `geometry.locate_card` (the model, `detect_card` behind it), and a run still asks
-    # `detect_card` alone, so until runs move this is NOT the cut a run makes (D125).
+    # THE CUT THIS PREVIEW MAKES, WHICH IS NOT ALWAYS THE ONE THE FINDER PROPOSED, and is the
+    # cut a run makes (D125).
     # `prepare` applies `images.crop_refusal` and can decline a box that came back looking
     # fine: a rectangle inside the card, which sends the collector number outside the bytes.
     # Reading the refusal off `prepared` rather than re-running the guard is the same rule
