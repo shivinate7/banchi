@@ -68,7 +68,9 @@ def resize_linear(array, nw, nh):
     fy, fx = (ys - y0)[:, None, None], (xs - x0)[None, :, None]
     # GATHER ROWS AND COLUMNS WHILE STILL uint8 and convert only the 640x640 result: a float32
     # copy of a 12 MP frame is about 192 MB, times the preview's concurrent requests.
-    f = lambda yy, xx: array[yy][:, xx].astype(np.float32)
+    def f(yy, xx):
+        return array[yy][:, xx].astype(np.float32)
+
     top = f(y0, x0) * (1 - fx) + f(y0, x1) * fx
     bottom = f(y1, x0) * (1 - fx) + f(y1, x1) * fx
     return np.rint(top * (1 - fy) + bottom * fy).astype(np.uint8)
