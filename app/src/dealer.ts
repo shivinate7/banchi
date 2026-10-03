@@ -73,6 +73,7 @@ export function createDealer() {
   let command: BtCharacteristic | null = null
   let teardown: (() => void) | null = null
   let queue: Promise<void> = Promise.resolve()
+  let pending = false // a Start is waiting for the old card
   let awaiting = false // a START went out and its reply has not come
   let silence: ReturnType<typeof setTimeout> | undefined
   let gap: ReturnType<typeof setTimeout> | undefined
@@ -149,6 +150,7 @@ export function createDealer() {
       cards += 1
       if (state === 'dealing') gap = setTimeout(deal, DEAL_GAP_MS)
       publish() // a card already moving when Stop was pressed still counts
+      release()
       return
     }
     if (state !== 'dealing') return
@@ -215,14 +217,25 @@ export function createDealer() {
     }
   }
 
-  async function start(): Promise<void> {
-    if (awaiting || command === null || (state !== 'connected' && state !== 'stopped')) return
+  /* The old card is down (or written off): a Start that was waiting for it may go. */
+  const release = () => {
+    if (!pending || state === 'dealing') return
+    pending = false
+    begin()
+  }
+  function begin(): void {
     cards = 0
     note = null
     ended = false
     state = 'dealing'
     publish()
     deal()
+  }
+  /** A Start while a START is still awaiting its COMPLETE waits for it, or for the settle timer. */
+  async function start(): Promise<void> {
+    if (command === null || (state !== 'connected' && state !== 'stopped')) return
+    if (awaiting) pending = true
+    else begin()
   }
 
   /** Stop sends STOP after any write in flight. A card already moving still lands. */
@@ -233,7 +246,10 @@ export function createDealer() {
     note = why ?? null
     publish()
     // a START still in the air may land; if it never answers, write the card off so Start can run again
-    if (awaiting) settle = setTimeout(() => (awaiting = false), SETTLE_MS)
+    if (awaiting) settle = setTimeout(() => {
+        awaiting = false
+        release()
+      }, SETTLE_MS)
     await write('MOTOR:STOP').catch(() => {})
   }
 
@@ -250,6 +266,7 @@ export function createDealer() {
     dispose() {
       void stop()
       clearTimeout(settle)
+      pending = false
       teardown?.()
       teardown = null
     },
