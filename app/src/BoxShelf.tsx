@@ -48,6 +48,15 @@ type Lifted = {
 
 type Dest = number | 'new'
 
+/** A section grabbed by its grip: where it will land if released now. `target` is a real box and
+ *  the section it goes in front of (`null` is the box's near end). It is drawn as a mark inside
+ *  that box and takes no room, so nothing on the map moves but the thing being dragged (D313). */
+type Dragging = {
+  readonly box: number
+  readonly section: number
+  readonly target: { readonly box: number; readonly before: number | null } | null
+}
+
 /** A gap's id on the page: `s:<n>` in front of a section, `c:<index>` in front of a card,
  *  `e:<n>` at a section's end, `end` at the box's near end. */
 type GapId = string
@@ -260,6 +269,7 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
   const [undone, setUndone] = useState(false)
   const [over, setOver] = useState<GapId | null>(null)
   const [cardsReload, setCardsReload] = useState(0)
+  const [dragging, setDragging] = useState<Dragging | null>(null)
 
   const load = useCallback(() => {
     getBoxes()
@@ -414,12 +424,17 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
   )
 
   /* Esc puts the section down, and yields to typing. */
+  const grab = useRef<{ id: number; x: number; y: number; box: number; section: number; started: boolean } | null>(null)
   const keys = useRef({ putDown, lifted })
   keys.current = { putDown, lifted }
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey || isEditableTarget(event.target)) return
-      if (event.key === 'Escape' && keys.current.lifted !== null) {
+      if (event.key === 'Escape' && grab.current !== null) {
+        event.preventDefault()
+        grab.current = null
+        setDragging(null)
+      } else if (event.key === 'Escape' && keys.current.lifted !== null) {
         event.preventDefault()
         keys.current.putDown()
       }
@@ -457,6 +472,53 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
     },
   }
 
+  /* THE GRIP IS A DRAG HANDLE (the owner's ruling: a press-and-drag on the grip, no destination
+     to pick first). The release lands the section in front of the section the pointer is left
+     of, in whichever real box it is over, and queues a draft move, the same step the picker
+     queues. A press that never travels 4px is a click and does nothing. */
+  const targetAt = (x: number, y: number, from: { box: number; section: number }): Dragging['target'] => {
+    const hit = document.elementFromPoint(x, y)
+    const boxEl = hit instanceof Element ? (hit.closest('[data-shelf-box]') as HTMLElement | null) : null
+    if (boxEl === null) return null
+    const toBox = Number(boxEl.dataset.shelfBox)
+    if (!(toBox > 0)) return null
+    const slots = Array.from(boxEl.querySelectorAll<HTMLElement>('[data-shelf-slot]'))
+    let before: number | null = null
+    for (const el of slots) {
+      const r = el.getBoundingClientRect()
+      if (x < r.left + r.width / 2) {
+        before = Number(el.dataset.shelfSlot)
+        break
+      }
+    }
+    /* Dropping where it already sits is no move. */
+    if (toBox === from.box && (before === from.section || before === from.section + 1 || (before === null && from.section === slots.length))) return null
+    return { box: toBox, before }
+  }
+  const gripHandlers = {
+    onGripDown: (event: ReactPointerEvent<HTMLElement>, box: number, section: number) => {
+      if (busy || event.button !== 0) return
+      grab.current = { id: event.pointerId, x: event.clientX, y: event.clientY, box, section, started: false }
+      event.currentTarget.setPointerCapture(event.pointerId)
+    },
+    onGripMove: (event: ReactPointerEvent<HTMLElement>) => {
+      const g = grab.current
+      if (g === null || g.id !== event.pointerId) return
+      if (!g.started && Math.hypot(event.clientX - g.x, event.clientY - g.y) < 4) return
+      g.started = true
+      setDragging({ box: g.box, section: g.section, target: targetAt(event.clientX, event.clientY, g) })
+    },
+    onGripEnd: (event: ReactPointerEvent<HTMLElement>) => {
+      const g = grab.current
+      if (g === null || g.id !== event.pointerId) return
+      grab.current = null
+      setDragging(null)
+      if (!g.started || event.type === 'pointercancel') return
+      const target = targetAt(event.clientX, event.clientY, g)
+      if (target !== null) queue({ kind: 'section', box: g.box, first: g.section, last: g.section, toBox: target.box, before: target.before })
+    },
+  }
+
   const moving = cardMode ? chosenName : lifted?.scope === 'all' && source !== null ? boxName(source) : liftedName
   const gaps: Gaps = { over, name: moving, onPut: dropAt, busy }
   const destRecord = dest === null || dest === 'new' ? null : (byBox.get(dest) ?? null)
@@ -472,6 +534,7 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
   return (
     <Page
       className="shelf"
+      data-dragging={dragging === null ? undefined : 'true'}
       icon="box"
       verdict={
         records === null ? null : editing ? `Editing the layout. ${dirty ? `${moves.length} ${moves.length === 1 ? 'change' : 'changes'} queued.` : 'Drag a section to move it.'}` : null
@@ -570,6 +633,8 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
               lifted={lifted}
               busy={busy}
               editing={editing}
+              dragging={dragging}
+              gripHandlers={gripHandlers}
               onLift={
                 editing
                   ? (section) => {
@@ -782,7 +847,15 @@ function BoxRow({
   editing,
   cardGaps,
   skip,
+  dragging,
+  gripHandlers,
 }: {
+  readonly dragging?: Dragging | null
+  readonly gripHandlers?: {
+    onGripDown: (e: ReactPointerEvent<HTMLElement>, box: number, section: number) => void
+    onGripMove: (e: ReactPointerEvent<HTMLElement>) => void
+    onGripEnd: (e: ReactPointerEvent<HTMLElement>) => void
+  }
   readonly record: WorkingBox | null
   readonly fullest: number
   readonly range?: { first: number; last: number } | null
@@ -827,7 +900,7 @@ function BoxRow({
   const block = (d: SectionDetail) => (
     <div
       className="shelf-block"
-      data-lifted={inRange(d.section) ? 'true' : undefined}
+      data-lifted={inRange(d.section) || (dragging != null && dragging.box === record.box && dragging.section === d.section) ? 'true' : undefined}
       data-empty={d.count === 0 ? 'true' : undefined}
       style={blockStyle(d.count, fullest)}
       onPointerDown={editing && inRange(d.section) && dragHandlers ? dragHandlers.onDragStart : undefined}
@@ -840,26 +913,48 @@ function BoxRow({
         <span className="shelf-block-count">{cards(d.count)}</span>
       </span>
       {editing && onLift && !gaps && d.count > 0 ? (
-        <IconButton
-          icon="grip"
-          label="Move section"
-          name={`Move section ${sectionName(d)} of ${boxName(record)}`}
-          pressed={lifted != null && lifted.box === record.box && lifted.section === d.section}
-          disabled={busy}
-          onClick={() => onLift(d.section)}
-        />
+        <span className="shelf-block-tools">
+          {/* THE GRIP DRAGS. It opens nothing: the picker is the next button, the keyboard way. */}
+          <IconButton
+            icon="grip"
+            label="Drag section"
+            name={`Drag section ${sectionName(d)} of ${boxName(record)}`}
+            className="shelf-grip"
+            disabled={busy}
+            onPointerDown={gripHandlers ? (e) => gripHandlers.onGripDown(e, record.box, d.section) : undefined}
+            onPointerMove={gripHandlers?.onGripMove}
+            onPointerUp={gripHandlers?.onGripEnd}
+            onPointerCancel={gripHandlers?.onGripEnd}
+          />
+          <IconButton
+            icon="arrowRight"
+            label="Move section"
+            name={`Move section ${sectionName(d)} of ${boxName(record)}`}
+            pressed={lifted != null && lifted.box === record.box && lifted.section === d.section}
+            disabled={busy}
+            onClick={() => onLift(d.section)}
+          />
+        </span>
       ) : null}
     </div>
   )
   return (
-    <section className="shelf-box" aria-label={boxName(record)}>
+    <section
+      className="shelf-box"
+      aria-label={boxName(record)}
+      data-shelf-box={record.box}
+      data-drop={dragging?.target?.box === record.box ? 'true' : undefined}
+    >
       <header className="shelf-box-head">
         <h2 className="shelf-box-name">{boxName(record)}</h2>
         <span className="shelf-box-count">{cards(record.on_hand)}</span>
       </header>
       <ol className="shelf-box-body">
-        {sections.map((d) => (
-          <li key={d.section} className="shelf-slot">
+        {sections.length === 0 && dragging?.target?.box === record.box ? <span className="shelf-drop-mark" data-edge="start" aria-hidden="true" /> : null}
+        {sections.map((d, at) => (
+          <li key={d.section} className="shelf-slot" data-shelf-slot={d.section}>
+            {dragging?.target?.box === record.box && dragging.target.before === d.section ? <span className="shelf-drop-mark" data-edge="start" aria-hidden="true" /> : null}
+            {dragging?.target?.box === record.box && dragging.target.before === null && at === sections.length - 1 ? <span className="shelf-drop-mark" data-edge="end" aria-hidden="true" /> : null}
             {gaps && !cardMode && offered(d.section) ? <Gap gaps={gaps} id={`s:${d.section}`} where={where(d)} /> : null}
             {cardMode && gaps ? (
               <div className="shelf-card-gaps" aria-label={sectionName(d)}>
