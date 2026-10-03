@@ -1160,10 +1160,9 @@ export function CaptureScreen() {
   useEffect(() => {
     if (!rigShown || sweepOn !== null) return
     let live = true
-    getMatchSweep().then(
-      (answer) => live && setSweepOn(answer.on),
-      () => undefined,
-    )
+    getMatchSweep()
+      .then((answer) => live && setSweepOn(answer.on))
+      .catch(() => undefined)
     return () => {
       live = false
     }
@@ -1171,13 +1170,12 @@ export function CaptureScreen() {
   const flipSweep = () => {
     if (sweepOn === null) return
     setSweepBusy(true)
-    setMatchSweep(!sweepOn).then(
-      (answer) => {
+    setMatchSweep(!sweepOn)
+      .then((answer) => {
         setSweepOn(answer.on)
         setSweepBusy(false)
-      },
-      () => setSweepBusy(false),
-    )
+      })
+      .catch(() => setSweepBusy(false))
   }
   useEffect(() => {
     if (rigTouched.current) return
