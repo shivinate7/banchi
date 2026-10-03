@@ -376,3 +376,17 @@ test('SYNTHETIC: Stop with a START in flight and no COMPLETE ever, a Start waits
   expect(rig.writes.filter((w) => w === 'MOTOR:START')).toHaveLength(2)
   await dealer.stop()
 })
+
+test('SYNTHETIC: Stop, Start (pending), Stop again before the old COMPLETE: no START ever goes out', async () => {
+  const dealer = await connected(PACED_10)
+  void dealer.start()
+  await advance(100)
+  void dealer.stop()
+  await advance(50)
+  void dealer.start() // pending behind the old card
+  await advance(50)
+  void dealer.stop() // a safety stop before the old COMPLETE at 420 ms
+  await advance(10_000)
+  expect(rig.writes.filter((w) => w === 'MOTOR:START')).toHaveLength(1)
+  expect(read(dealer).state).toBe('stopped')
+})
