@@ -227,6 +227,8 @@
    row's single cap — widened for THIS row alone, never the shared `.capture-row` template,
    so every other row's column stays put. */
 .capture-row-keypair { grid-template-columns: 42px auto auto minmax(0, 1fr) 14px; }
+/* No chevron: the switch row's value column takes the 14px a chevron would hold, so 'Off' is never clipped by a long label in a narrow rail. */
+.capture-row-switch { grid-template-columns: 22px auto auto minmax(0, 1fr); }
 .capture-row-icon { color: var(--bn-ink-3); flex: none; }
 .capture-lab { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-2); white-space: nowrap; }
 /* `.capture-right` is the flex row that holds the value AND its sub-line as siblings — never
@@ -565,6 +567,7 @@
 .capture-block-row[data-tone='warn'] > .bn-icon { color: var(--bn-warn); }
 .capture-block-say { grid-column: 2 / 4; align-self: start; min-width: 0; }
 .capture-block-fix { grid-column: 2; justify-self: stretch; align-self: start; margin-top: var(--bn-1-5); }
+.capture-block-row > .capture-block-fix:first-child { grid-column: 1 / -1; }
 .capture-replayed { font-size: var(--bn-fs-sm); line-height: 1.4; padding: var(--bn-2) var(--bn-3); }
 .capture-section { display: flex; flex-direction: column; gap: var(--bn-1-5); padding-top: var(--bn-1-5); }
 /* The way onward: once the box holds cards, the run card hands it to the pipeline. */
