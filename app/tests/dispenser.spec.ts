@@ -59,6 +59,30 @@ async function fakeBluetooth(page: Page): Promise<void> {
       },
     }
     const device = { name: 'ESP_OTA_GATTS', gatt: server, addEventListener: () => {}, removeEventListener: () => {} }
+    /* A READY CAMERA THE WAY THE PRODUCT READS IT: a canvas stream behind getUserMedia, one device
+       in enumerateDevices, as capture-section.spec.ts does. No product gate is touched. */
+    const canvas = document.createElement('canvas')
+    canvas.width = 640
+    canvas.height = 360
+    const context = canvas.getContext('2d')
+    if (context !== null) {
+      context.fillStyle = 'rgb(20,20,20)'
+      context.fillRect(0, 0, 640, 360)
+      // a canvas stream delivers frames only when something is drawn, and metadata needs a frame
+      let tick = 0
+      setInterval(() => {
+        tick += 1
+        context.fillStyle = `rgb(${20 + (tick % 2)},20,20)`
+        context.fillRect(0, 0, 640, 360)
+      }, 33)
+    }
+    const stream = canvas.captureStream(30)
+    const media = navigator.mediaDevices as unknown as {
+      enumerateDevices: () => Promise<unknown[]>
+      getUserMedia: () => Promise<MediaStream>
+    }
+    media.enumerateDevices = async () => [{ deviceId: 'canvas', kind: 'videoinput', label: 'Canvas Cam Link', groupId: 'g' }]
+    media.getUserMedia = async () => stream
     Object.defineProperty(navigator, 'bluetooth', {
       configurable: true,
       value: {
@@ -131,7 +155,6 @@ test('in Manual the control is there, and Start is off with its reason', async (
 test('with no navigator.bluetooth the screen says it needs Chrome on the Mac', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'bluetooth', { configurable: true, value: undefined })
-    delete (navigator as unknown as { bluetooth?: unknown }).bluetooth
   })
   await page.goto('/#/capture')
   await expect(page.locator('.capture-controls').getByText('Needs Chrome on the Mac')).toBeVisible()
@@ -141,6 +164,11 @@ test('with no navigator.bluetooth the screen says it needs Chrome on the Mac', a
 test('armed and connected, a fire with no box is dropped and dealing stops with the not-photographed line', async ({ page }) => {
   await fakeBluetooth(page)
   await page.goto('/#/capture')
+  // the camera opens on a press and a pick, as it does for the owner
+  await page.keyboard.press('v')
+  await page.getByLabel('Rig').getByRole('button', { name: 'Connect' }).click()
+  await page.locator('.capture-opt').filter({ hasText: /Canvas Cam Link/ }).click()
+  await page.keyboard.press('Escape')
   await armMotion(page)
   await injectScene(page)
   await expect(page.locator('.capture-motion-hud')).toBeAttached({ timeout: 5_000 })
