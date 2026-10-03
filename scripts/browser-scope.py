@@ -683,9 +683,9 @@ def selftest() -> int:
        "PKMNSCAN_BROWSER_SCOPE=all selects every spec")
 
     # A TEST HELPER SELECTS ONLY THE SPECS THAT IMPORT IT (D215, amended); one nothing imports
-    # selects all. `moneyFace.ts` is the control: reached by the money-face spec, not by all.
+    # selects all. `moneyFace.ts` is the control: reached by the text-checks spec, not by all.
     helper = classify_specs(["app/tests/moneyFace.ts"])
-    ok(helper.partial and "app/tests/money-face.spec.ts" in helper.specs
+    ok(helper.partial and "app/tests/text-checks.spec.ts" in helper.specs
        and len(helper.specs) < len(all_specs()),
        "a test helper selects only the specs whose closure holds it")
     unread = classify_specs(["app/tests/no-spec-imports-this.ts"])
