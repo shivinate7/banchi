@@ -85,6 +85,11 @@ class CacheEntry:
     at: str
     cleared_by_human: bool = False
     engine: str = ENGINE_HAIKU
+    # THE REVIEW HOLD RIDES THE ENTRY. A Haiku answer read as a second look (the free reader did
+    # not accept the card) carries the matcher's pick here. Any later press that adopts the entry
+    # hands it to the run record, so `default_router` still sends the card to review until a
+    # person answers it. Absent on every other entry.
+    second_look: Optional[dict] = None
 
     @property
     def confidence(self) -> Optional[str]:
@@ -221,6 +226,7 @@ class Cache:
         photo_sha256: str,
         prompt_fingerprint: str,
         engine: str = ENGINE_HAIKU,
+        second_look: Optional[dict] = None,
     ) -> Optional[dict]:
         """Store an answer. Refuses to overwrite a cleared one; reports a disagreement.
 
@@ -247,6 +253,7 @@ class Cache:
             prompt_fingerprint=prompt_fingerprint,
             at=now(),
             engine=engine,
+            second_look=second_look,
         )
         return None
 

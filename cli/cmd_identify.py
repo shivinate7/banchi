@@ -362,6 +362,9 @@ class Item:
     # that carries one went to the paid second look in the same press, and its answer is held
     # for the review queue (the engine-pick spec, section 2).
     unread: Optional[match.Result] = None
+    # The second-look marker of a CACHED answer, read off the entry. A card adopted from the cache
+    # has no `unread`, and this keeps its review hold (the engine-pick spec, section 2).
+    held_second_look: Optional[dict] = None
 
     @property
     def key(self) -> str:
@@ -633,7 +636,7 @@ def _run_matcher(to_read: List[Item], say) -> batch.BatchRun:
 def _second_look_record(item: Item) -> Optional[dict]:
     """What the free reader thought of a card it did not accept, for the review queue."""
     if item.unread is None:
-        return None
+        return item.held_second_look
     top = item.unread.candidates[0] if item.unread.candidates else {}
     return {
         "code": item.unread.code,
@@ -756,6 +759,7 @@ def _adopt_cached(item: Item, entry, fingerprints: Dict[str, str]) -> None:
     item.cached = True
     item.stage = STAGE_CACHED
     item.engine = entry.engine
+    item.held_second_look = entry.second_look
     item.identification = dict(entry.identification)
     item.status = batch.SUCCEEDED
     expected = fingerprints.get(item.strategy)
@@ -1129,7 +1133,10 @@ def run(args, say) -> int:
     matcher_run: Optional[batch.BatchRun] = None
     second_look: List[Item] = list(to_send)
     measured = False
-    if free and to_send and match.status()["ready"]:
+    ready = bool(free and to_send and match.status()["ready"])
+    # A DRY RUN OVER A LONG SELECTION ESTIMATES, because the screen's request waits for it. A real
+    # press runs in its own detached child and always counts.
+    if ready and (not args.dry_run or len(to_send) <= match.MEASURE_MAX):
         matcher_run = _run_matcher(to_send, say)
         second_look = [i for i in to_send if i.unread is not None]
         measured = True
@@ -1138,8 +1145,12 @@ def run(args, say) -> int:
             second_count = len(second_look)
             second_cost = _estimate(second_look)
         else:
-            second_count = round(len(to_send) * match.UNACCEPTED_SHARE)
-            second_cost = (_estimate(to_send) * Decimal(str(match.UNACCEPTED_SHARE))).quantize(Decimal("0.01"))
+            # NEVER UNDER THE FLOOR THE POOL RULES ALREADY PROVE: a card the pool rules cannot
+            # match goes to the second look for certain, so the estimate is at least that many.
+            pool_floor = len(to_send) - match.preflight([_match_request(i) for i in to_send])["can_read"]
+            second_count = max(round(len(to_send) * match.UNACCEPTED_SHARE), pool_floor)
+            share = Decimal(second_count) / Decimal(max(len(to_send), 1))
+            second_cost = (_estimate(to_send) * share).quantize(Decimal("0.01"))
     say(f"estimated cost  ${second_cost if free else _estimate(to_send)}")
     if free:
         # FREE FIRST, PAID ONLY ON THE LOW-CONFIDENCE CARDS. The pool rules refuse some cards
@@ -1264,7 +1275,7 @@ def run(args, say) -> int:
         say("--dry-run: nothing submitted, nothing written.")
         return 0
 
-    if free and to_send and matcher_run is None:
+    if free and to_send and not ready:
         say("refused: the free reader is not prepared. Press Prepare on the runs sheet first: it "
             "downloads the model file and builds the fingerprints, once.")
         return 1
@@ -1445,6 +1456,17 @@ def run(args, say) -> int:
             _give_back_unspent(claim, run_dir, store, say)
             return 1
         _apply(items_by_key, result)
+        # THE MARKER SURVIVES A RESUME: the matcher's reason and pick were written to the
+        # manifest before the batch was submitted, and this process never ran the matcher.
+        held = {
+            row["key"]: row
+            for row in run_dir.manifest.get("second_look") or []
+            if isinstance(row, dict) and "key" in row
+        }
+        for item in items:
+            row = held.get(item.key)
+            if row is not None and item.held_second_look is None:
+                item.held_second_look = {k: v for k, v in row.items() if k != "key"}
         usage_in += result.usage.input_tokens
         usage_out += result.usage.output_tokens
     elif to_send and free:
@@ -1462,7 +1484,7 @@ def run(args, say) -> int:
         run_dir.set(
             matched=read_count,
             second_look=[
-                [item.key, item.unread.code]
+                {"key": item.key, **_second_look_record(item)}
                 for item in second
                 if item.unread is not None
             ],
@@ -1673,6 +1695,7 @@ def run(args, say) -> int:
                     # which `_collect` parsed under the default for the same reason.
                     fingerprints.get(item.strategy, fingerprint),
                     engine=item.engine,
+                    second_look=_second_look_record(item),
                 )
                 if clash:
                     disagreements.append(clash)

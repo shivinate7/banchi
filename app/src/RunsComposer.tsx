@@ -1507,7 +1507,7 @@ export function RunsComposer({
                     </span>
                     <span>
                       {quote.total.second_look_measured === false
-                        ? 'Estimated until stock photos are prepared'
+                        ? 'Estimated from earlier cards, rounded up. The press counts them for real.'
                         : 'Counted by reading them now'}
                     </span>
                     {Object.entries(quote.total.unread).map(([code, n]) => (

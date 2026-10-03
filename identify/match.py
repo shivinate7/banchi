@@ -66,10 +66,15 @@ from store.cache import ENGINE_MATCHER as ENGINE
 # nothing; with the floor, 0 wrong of 459 accepted, 91.8% accepted) and NOT yet confirmed on
 # photographs the spike never saw.
 MARGIN_MIN = 0.05
-# THE SHARE OF CARDS THE READER DOES NOT ACCEPT, measured on the held-out check's 3,001 store
-# photographs at this margin (1,876 accepted, so 37 percent are not). It is the quote's estimate
-# before the index exists, and the quote says "estimated" while it is used.
-UNACCEPTED_SHARE = 0.37
+# THE SHARE OF CARDS THE READER DOES NOT ACCEPT, used for a quote that is not measured. The
+# held-out check's 3,001 store photographs measured 37.5 percent at this margin, with a 95 percent
+# upper bound of 39.2. The figure is rounded UP to 0.40 so an estimate never understates the
+# second look's cost. The quote says "estimated" whenever it is used.
+UNACCEPTED_SHARE = 0.40
+# A dry run over more cards than this does not run the matcher. The request that asked for the
+# quote waits for the dry run, the matcher costs 50 to 90 ms a card, and a long selection would
+# hold a request slot for minutes. The press itself always counts for real, in its own child.
+MEASURE_MAX = 200
 FLOOR_MIN = 0.755
 TOP_N = 3
 
@@ -82,6 +87,7 @@ UNREAD_INDEX_STALE = "index_stale"
 UNREAD_NO_HINT = "pokemon_needs_a_set"
 UNREAD_HINT = "set_not_resolved"
 UNREAD_PROMO = "promo_set"
+UNREAD_PROMO_HELD = "promo_held"
 UNREAD_NOT_INDEXED = "set_not_indexed"
 UNREAD_NO_CARD = "no_card_found"
 UNREAD_UNREADABLE = "photo_unreadable"
@@ -131,11 +137,25 @@ def sha256_of_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+# THE VERDICT OF ONE HASH, keyed by what the file is on disk: path, size and modification time.
+# `GET /pipeline/match` is polled every few seconds and the model is 372 MB, so hashing it on every
+# call held a request slot for the whole read. A file replaced in place changes its size or its
+# mtime, and the download renames a new file in, so a changed file is always hashed again.
+_verdicts: Dict[Tuple[str, int, int], bool] = {}
+
+
 def model_ready(path: Optional[Path] = None) -> bool:
     """True when the model file is on disk, the pinned size, and the pinned hash."""
     target = path or model_path()
     try:
-        return target.stat().st_size == MODEL_BYTES and sha256_of_file(target) == MODEL_SHA256
+        stat = target.stat()
+        if stat.st_size != MODEL_BYTES:
+            return False
+        key = (str(target), stat.st_size, stat.st_mtime_ns)
+        if key not in _verdicts:
+            _verdicts.clear()  # one file matters at a time: the cache never grows
+            _verdicts[key] = sha256_of_file(target) == MODEL_SHA256
+        return _verdicts[key]
     except OSError:
         return False
 
@@ -155,6 +175,37 @@ def card_name(name: str) -> str:
 
 def is_promo_set(set_name: str) -> bool:
     return "promo" in (set_name or "").lower()
+
+
+ALL_GAMES = "*"
+
+
+def held_promo_games() -> Set[str]:
+    """The games in which the store holds a promo printing, by one query on `cards.set_name`.
+
+    THE PROMO GUARD (spec section 2). Organized Play promos repeat main-set numbers, so a held
+    promo could be matched to its main-set twin. For a game named here the pool is not complete:
+    an unhinted card of that game is not accepted. A store that does not exist holds nothing. A
+    store that cannot be read is treated as holding a promo in every game (`ALL_GAMES`), never as
+    holding none. A card whose `set_name` was never filled in cannot be seen by this query."""
+    from store import db
+
+    try:
+        conn = db.open_read_only(db.path(store_files.inventory_dir()))
+    except FileNotFoundError:
+        return set()
+    except Exception:  # noqa: BLE001 - an unreadable store must not read as a clean one
+        return {ALL_GAMES}
+    try:
+        rows = conn.execute(
+            "select distinct coalesce(game, 'pokemon') from cards "
+            "where lower(set_name) like '%promo%' and state not in ('sold', 'retired', 'moved')"
+        ).fetchall()
+        return {str(r[0]) for r in rows}
+    except Exception:  # noqa: BLE001
+        return {ALL_GAMES}
+    finally:
+        conn.close()
 
 
 # ------------------------------------------------------------------------ the download
@@ -457,7 +508,7 @@ def _crop(photo: Path, aspect: float):
 
 
 def _resolve_pool(
-    index: Index, game: str, hint: Optional[str]
+    index: Index, game: str, hint: Optional[str], promo_games: Set[str] = frozenset()  # type: ignore[assignment]
 ) -> Tuple[Optional[Tuple[str, ...]], Optional[str], str]:
     """`(set names, None, "")` or `(None, code, detail)`. The pool rules in the header."""
     from pipeline import games, setnames
@@ -490,6 +541,8 @@ def _resolve_pool(
         return (found,), None, ""
     if game == "pokemon":
         return None, UNREAD_NO_HINT, "a Pokemon card with no set hint is never read"
+    if game in promo_games or ALL_GAMES in promo_games:
+        return None, UNREAD_PROMO_HELD, f"the store holds a promo {game} card, so an unhinted card cannot be matched safely"
     pool = tuple(n for n in names if not is_promo_set(n))
     if not pool:
         return None, UNREAD_NO_INDEX, f"the index holds only promo sets for {game}"
@@ -518,14 +571,16 @@ def read(
     model: Optional[Path] = None,
     aspect: float = 0.716,
     log: Callable[[str], None] = lambda _m: None,
+    promo_games: Optional[Set[str]] = None,
 ) -> List[Result]:
-    """One `Result` per request, in order. Accepted or left unread, never guessed.
+    """One `Result` per request, in order. Accepted or not accepted, never guessed.
 
     IN CHUNKS OF `CHUNK`, BECAUSE A CROP IS A FULL-RESOLUTION IMAGE (about 9 MB decoded) and a whole
     box held at once is gigabytes. Each chunk is cropped, embedded and ranked, then released."""
     out: List[Result] = []
+    promos = held_promo_games() if promo_games is None else promo_games
     for start in range(0, len(requests), CHUNK):
-        out.extend(_read_chunk(requests[start : start + CHUNK], index, model, aspect, log))
+        out.extend(_read_chunk(requests[start : start + CHUNK], index, model, aspect, log, promos))
     return out
 
 
@@ -535,6 +590,7 @@ def _read_chunk(
     model: Optional[Path],
     aspect: float,
     log: Callable[[str], None],
+    promo_games: Set[str] = frozenset(),  # type: ignore[assignment]
 ) -> List[Result]:
     import numpy as np
 
@@ -548,7 +604,7 @@ def _read_chunk(
         if not current:
             out[request.key] = Result(request.key, False, code=UNREAD_INDEX_STALE, detail="the index was built by another model file")
             continue
-        sets, code, detail = _resolve_pool(index, request.game, request.set_hint)
+        sets, code, detail = _resolve_pool(index, request.game, request.set_hint, promo_games)
         if sets is None:
             out[request.key] = Result(request.key, False, code=code, detail=detail)
             continue
@@ -621,7 +677,10 @@ def _read_chunk(
 
 
 def preflight(
-    requests: Sequence[Request], index: Optional[Index] = None, model: Optional[Path] = None
+    requests: Sequence[Request],
+    index: Optional[Index] = None,
+    model: Optional[Path] = None,
+    promo_games: Optional[Set[str]] = None,
 ) -> Dict[str, object]:
     """What a matcher press would do BEFORE any photograph is decoded or any vector made.
     Free. It counts the cards the pool rules already leave unread; the margin, the floor and
@@ -633,11 +692,12 @@ def preflight(
         summary["unread"] = unread
         return summary
     own = index or Index()
+    promos = held_promo_games() if promo_games is None else promo_games
     for request in requests:
         if request.game not in SERVED_GAMES:
             unread[UNREAD_GAME] = unread.get(UNREAD_GAME, 0) + 1
             continue
-        sets, code, _detail = _resolve_pool(own, request.game, request.set_hint)
+        sets, code, _detail = _resolve_pool(own, request.game, request.set_hint, promos)
         if sets is None:
             unread[str(code)] = unread.get(str(code), 0) + 1
         else:
