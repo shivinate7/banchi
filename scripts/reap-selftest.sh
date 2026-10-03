@@ -1009,6 +1009,14 @@ if [ $rl_bad_status -eq 2 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable
 else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
 
 echo
+echo "  an unknown flag: a hook warns and allows, the command line still refuses"
+bogus_out="$(cd "$tmp/checkout" && printf '{}' | python3 "$REAP" --hook --bogus 2>&1 >/dev/null)"; bogus_status=$?
+if [ $bogus_status -eq 0 ] && [ -n "$bogus_out" ]; then ok "--hook --bogus exits 0 and warns on stderr"
+else bad "--hook --bogus: exit $bogus_status, stderr '$bogus_out' (want 0 and a warning)"; fi
+(cd "$tmp/checkout" && python3 "$REAP" --bogus >/dev/null 2>&1 </dev/null)
+[ $? -eq 2 ] && ok "without --hook, an unknown flag still exits 2" || bad "without --hook, an unknown flag did not exit 2"
+
+echo
 if [ "$fail" -eq 0 ]; then
   echo "reap self-test: $pass passed"
   exit 0

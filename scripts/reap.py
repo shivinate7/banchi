@@ -1292,7 +1292,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    args = build_parser().parse_args(argv)
+    args, unknown = build_parser().parse_known_args(argv)
+    if unknown:
+        if not args.hook:
+            build_parser().error("unrecognized arguments: " + " ".join(unknown))
+        # A hook's flags come from the session's settings, its script from this branch: an older copy
+        # must ignore a newer flag, never block the tool call (docs/agent-traps.md).
+        print("warning: hook ignores unknown flags: " + " ".join(unknown), file=sys.stderr)
     if args.hook:
         try:
             payload = json.load(sys.stdin)

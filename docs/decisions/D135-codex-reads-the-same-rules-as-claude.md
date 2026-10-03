@@ -52,15 +52,16 @@ adds the guard below, so the row starts green rather than starts by reporting th
 
 **One divergence is declared, on the owner's word.** The shared layer's guard owns the pkill rule
 for Claude Code, so `.claude/settings.json` no longer runs `scripts/reap.py --hook`, and it runs
-`scripts/guard-shell.py` with `--skip checkout,stash,reset`. Codex runs no shared guard and keeps
+`scripts/guard-shell.py` with `GUARD_SHELL_SKIP=checkout,stash,reset`. Every other guard-shell entry sets `GUARD_SHELL_SKIP=` empty, so an inherited value never narrows Codex. Codex runs no shared guard and keeps
 all of them in full. `CODEX_ONLY` in `check_codex_hooks` names the one hook only Codex runs, and
-the row fails when Claude Code runs it again or Codex loses it. The `--skip` flag is dropped
-before the triples are compared. Claude Code runs `PKMNSCAN_SILENT_WRITE_ONLY=file scripts/silent-write-guard.py --hook`, the unread-file clause alone,
-because the shared silent-write rule (claude-settings PR 257) covers part of it. That part is a silenced pull,
-a fetch into a local ref, `make merge`, `gh pr merge` and closed descriptors. Pipe-tail,
-`bash -c` and `>&/dev/null` silencing are pending in the shared rule. Codex keeps the full hook.
-The `codex hooks` row expects the prefix on the Claude entry and none on the Codex entry. It is a variable, not a flag. An older branch's copy ignores a variable and runs the full check. An unknown flag exits 2 and blocks every Bash call. The file clause is cut from Claude Code when its fire count is
-reviewed with claude-settings.
+the row fails when Claude Code runs it again or Codex loses it. The row compares commands exactly, so the `GUARD_SHELL_SKIP` value on each entry is pinned.
+Claude Code runs `PKMNSCAN_SILENT_WRITE_ONLY=file,bash-c scripts/silent-write-guard.py --hook`.
+That runs only the unread-file clause and the `bash -c` clause. The shared silent-write rule
+(claude-settings PR 257 and PR 264) covers the rest. Codex keeps the full hook. The row pins the
+prefix on the Claude entry and its absence on the Codex entry. It is a variable, not a flag.
+An older branch's copy ignores a variable and runs the full check. An unknown flag exits 2 and
+blocks every Bash call. Both clauses are reviewed against their refusal-log counts with
+claude-settings (D171).
 
 **`scripts/docs_audit/env_map.py:check_codex_hooks` reads both files as `(event, matcher, command)` triples and reports whichever side is missing what the other runs**, plus any command that
 names a script no longer in the tree. It is MECHANICAL — a hook roster is a literal, checkable
