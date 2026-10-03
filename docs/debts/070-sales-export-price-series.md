@@ -1,5 +1,7 @@
-## DEBT70 — the owner's realized prices are not read
+## DEBT70 — realized prices inform no listing rule
 
-**Gap.** OrderWand's sales export carries a price and a `Vendor Product Id` (a TCGplayer `productId`) on every row, so it joins to the price-history archive with no lookup. It answers what this seller actually got, against what the market did. It carries no SKU and cannot be turned into one. It holds buyer names, so no copy belongs in the tree.
+**Gap.** `#/product` shows what this seller got for a product against the archived market on each sale date (`GET /pipeline/products/<sku>/realized`, `pipeline/realized.py`). It is a read-only diagnostic. Nothing prices, lists or re-prices from it.
 
-**Limit.** It is a diagnostic. Turning it into a listing rule needs its own decision entry.
+**How it is fed.** The server reads an OrderWand sales export in place, from the path in `PKMNSCAN_SALES_EXPORT`. With none set, the screen says so and reads nothing. The file holds buyer names. `read_sales` drops every column but nine at parse time. No copy of the file, and no buyer value, belongs in the tree, a fixture or a log.
+
+**Limits.** The join is on `Vendor Product Id`. The export carries no SKU, so a product with several archived SKUs is compared against the SKU on screen, and the screen says so. A date older than the archive has no market figure and is left out of both averages. Refunded sales, purchases and non-USD rows are left out and counted. A listing rule built on this needs its own decision entry (D214: revenue is gross, never profit).

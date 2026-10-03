@@ -5,6 +5,7 @@ import { sealEveryTest } from './shell'
 import type { Page } from '@playwright/test'
 import type { GameRegistry } from '../src/types'
 import { setViewport } from './phoneSwitch'
+import { afterPaint } from './motionSettled'
 
 /* SUB-BOX CAPTURE, LANE B — the Capture screen's own section picker
  * (docs/specs/subbox-capture.md §5). Lane A (the store, the server, the harness) is proved by
@@ -947,7 +948,7 @@ test('walking the open list by keyboard keeps the focused option in view to the 
     if (at > 0) await page.keyboard.press('Tab')
     const focused = page.locator('.capture-open-pinned .capture-opt:focus')
     await expect(focused).toContainText(`Section ${at + 1} of 12`)
-    await page.waitForTimeout(60)
+    await afterPaint(page)
     const list = (await page.locator('.capture-open-pinned').boundingBox())!
     const opt = (await focused.boundingBox())!
     expect(opt.y).toBeGreaterThanOrEqual(list.y)
@@ -978,7 +979,19 @@ for (const [width, height] of [
     await sectionRow(page).click()
     const pinned = page.locator('.capture-open-pinned')
     await expect(pinned).toBeVisible()
-    await page.waitForTimeout(500) // the open's own scroll settles
+    await page.evaluate(() => new Promise<void>((done) => {
+  const top = () => document.querySelector('.capture-open-pinned')!.getBoundingClientRect().top
+  let last = top()
+  let still = 0
+  const tick = () => {
+    const now = top()
+    still = now === last ? still + 1 : 0
+    last = now
+    if (still >= 5) done()
+    else requestAnimationFrame(tick)
+  }
+  requestAnimationFrame(tick)
+}))
     const tabTop = (await page.locator('.bn-tabbar').boundingBox())!.y
     const topBarBottom = (await page.locator('.bn-topbar').boundingBox())!.y +
       (await page.locator('.bn-topbar').boundingBox())!.height

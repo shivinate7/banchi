@@ -806,7 +806,7 @@ test('the search box does not answer the card when a digit is typed into it', as
      card; an input that swallowed one would be fine, but an input that did NOT would write a
      SKU onto a real card while the operator was typing a collector number. `isEditableTarget`
      is what stops it, and nothing in the type system says so. */
-  await page.waitForTimeout(150)
+  await page.waitForTimeout(150) // keep: asserts the digit typed into the box sends nothing
   expect(sent.filter((s) => s.method === 'POST')).toHaveLength(0)
   await expect(box).toHaveValue('1')
 })
@@ -944,7 +944,7 @@ function whatMoved(before: Record<string, Placed>, after: Record<string, Placed>
 async function settled(page: Page, tries = 40): Promise<Record<string, Placed>> {
   let last = await outsideThePanel(page)
   for (let i = 0; i < tries; i += 1) {
-    await page.waitForTimeout(75)
+    await page.waitForTimeout(75) // keep: the poll interval of a loop that compares two reads apart in time
     const next = await outsideThePanel(page)
     if (JSON.stringify(next) === JSON.stringify(last)) return next
     last = next
@@ -1020,7 +1020,7 @@ test('an entry with rows is not offered the export unasked', async ({ page }) =>
      "a second, looser list beside a good one is how a screen teaches you to stop reading the
      first" — and that is an argument about what appears UNASKED, which D77 does not touch.
      The timeout is the assertion: an arrival fetch would already have been sent. */
-  await page.waitForTimeout(200)
+  await page.waitForTimeout(200) // keep: asserts no catalog fetch is sent unasked
   expect(sent.filter((s) => s.url.includes('/catalog?'))).toHaveLength(0)
   await expect(page.locator('.review-catalog')).toHaveCount(0)
 })

@@ -19,7 +19,7 @@
 
 /** `$1.23`, or `—` where there is no figure. The one place a dollar amount becomes a string. */
 export function money(value: number | null | undefined): string {
-  return typeof value === 'number' ? `$${value.toFixed(2)}` : '—'
+  return typeof value === 'number' && Number.isFinite(value) ? `$${value.toFixed(2)}` : '—'
 }
 
 /** `$66,334.71`, or `—` where there is no figure — `money()`'s own grouped sibling, never a

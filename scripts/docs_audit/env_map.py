@@ -323,7 +323,7 @@ def source_names(target: Path, suffixes: Tuple[str, ...], deep: bool) -> Set[str
 # "cited" D31 and icon-512.png "cited" D2 on the day they were added.
 BINARY_SUFFIXES = frozenset({
     ".png", ".jpg", ".jpeg", ".webp", ".heic", ".gif", ".avif", ".pdf",
-    ".ico", ".woff", ".woff2", ".ttf", ".otf", ".zip", ".sqlite",
+    ".ico", ".woff", ".woff2", ".ttf", ".otf", ".zip", ".sqlite", ".onnx",
 })
 
 

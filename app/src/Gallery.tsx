@@ -15,6 +15,7 @@ import { MARKS } from './kit/markPalettes'
 import { ICON_MEANINGS, ICON_NAMES } from './kit/Icon'
 import { DataSpecimens } from './kit/data.specimens'
 import { FilterSpecimens } from './kit/filters.specimens'
+import { SettingsSpecimens } from './kit/settings.specimens'
 import './Gallery.css'
 
 /* THE KIT — every primitive Banchi is built from, on one page, so the tokens are looked at
@@ -241,6 +242,7 @@ const SECTIONS: readonly { id: string; label: string; group: string }[] = [
   { id: 'data', label: 'Data', group: 'Primitives' },
   { id: 'surfaces', label: 'Surfaces & menu', group: 'Primitives' },
   { id: 'data-kit', label: 'Money, filters & links', group: 'Primitives' },
+  { id: 'settings', label: 'Settings sheet', group: 'Primitives' },
   { id: 'pull-confirm', label: 'Pull-confirm', group: 'Screen pieces' },
   { id: 'position', label: 'Position bar', group: 'Screen pieces' },
   { id: 'position-label', label: 'Position label', group: 'Screen pieces' },
@@ -584,7 +586,7 @@ function OverlaySpecimens() {
               Card actions
             </Button>
           </div>
-          <Popover open={sheetPop} onClose={() => setSheetPop(false)} anchor={sheetAnchor} label="Card actions">
+          <Popover open={sheetPop} onClose={() => setSheetPop(false)} anchor={sheetAnchor} label="Card actions" role="menu">
             <button type="button" className="bn-menu-item" onClick={() => setSheetPop(false)}>
               <Icon name="tag" size={16} /> Set a hint
             </button>
@@ -623,7 +625,7 @@ function OverlaySpecimens() {
         <ConfirmSheet open={confirm} onClose={() => setConfirm(false)} onConfirm={() => setConfirm(false)} title="Delete 3 cards?" confirmLabel="Delete 3 cards">
           <p className="bn-read">This cannot be undone. The photographs go too.</p>
         </ConfirmSheet>
-        <Popover open={pop} onClose={() => setPop(false)} anchor={anchor} label="Specimen menu">
+        <Popover open={pop} onClose={() => setPop(false)} anchor={anchor} label="Specimen menu" role="menu">
           <button type="button" className="bn-menu-item" onClick={() => setPop(false)}>
             <Icon name="divider" size={16} /> Put in a divider
           </button>
@@ -1517,6 +1519,10 @@ export function Gallery() {
 
           <Section id="kit-filtering" data-kit-section="filtering" className="kit-section" title="Filter bar" lede="One filter bar, one hide toggle, one sortable table header, and the match highlight — composed from the pieces above.">
             <FilterSpecimens />
+          </Section>
+
+          <Section id="kit-settings" data-kit-section="settings" className="kit-section" title="Settings sheet" lede="The rows, figures, editor frame and card picker a settings sheet is built from. Manage box draws them.">
+            <SettingsSpecimens />
           </Section>
 
           {/* ------------------------------------------------------------ screen pieces */}

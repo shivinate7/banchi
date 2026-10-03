@@ -6,8 +6,8 @@ description: Run the on-demand text-density pass over Banchi's own screens and r
 # Text density pass
 
 `D284` replaces a pinned word ceiling with three things. None of them is
-a count. Two are gates: `app/tests/text-shape.spec.ts` (repetition and sentence shape) and
-`app/tests/machine-words.spec.ts` (D196's own rendered-text gap). The third is this pass. A
+a count. Two are gates, both in `app/tests/text-checks.spec.ts` (repetition and sentence shape, and
+D196's own rendered-text gap). The third is this pass. A
 session runs it on demand. It is never a gate. `D284` carries the argument.
 
 ## Running it
@@ -19,7 +19,7 @@ make text-density ARGS="--route '#/' --top 8"      # more prose blocks per route
 make text-density ARGS="--json"                    # the raw measurements
 ```
 
-It needs no dev server and no store. It runs `app/tests/text-shape.spec.ts` in a report mode
+It needs no dev server and no store. It runs `app/tests/text-checks.spec.ts` in a report mode
 (`TEXT_DENSITY=1`). That spec sweeps every route through `app/tests/routeSweep.ts`: the
 populated fixture of `app/tests/routeFixtures.ts`, each screen read only once it is loaded.
 So the table shows the same screens, in the same state, as the gates. Playwright starts this
@@ -53,7 +53,7 @@ things, in the 2026-09-23 review's own order:
 2. **Is a sentence doing the layout's job?** A caption that only restates its own heading, or
    a subtitle that a control already states. Cut it. The control still says it.
 3. **Does the prose explain mechanism?** A pipeline noun, a decision id, a file path.
-   `app/tests/machine-words.spec.ts` gates this one. Check its pending list,
+   `app/tests/text-checks.spec.ts` gates this one. Check its pending list,
    `app/tests/machine-words-allow.json`, before you treat a hit as new.
 
 ## What this pass does not do

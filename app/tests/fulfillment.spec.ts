@@ -909,7 +909,7 @@ async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<St
     mood.reads = (mood.reads ?? 0) + 1
     // Long enough to read the screen and short enough not to be the test's runtime. The
     // loading state is the one screen here that nothing else can hold still.
-    if (mood.slow === true) await new Promise((done) => setTimeout(done, 1200))
+    if (mood.slow === true) await new Promise((done) => setTimeout(done, 1200)) // keep: stubbed answer held 1200 ms on purpose, a latency fixture
     if (mood.fail === true) {
       await route.fulfill({
         status: 500,

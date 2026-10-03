@@ -522,4 +522,99 @@ def run() -> Result:
                 f"{cropped.sent_size} against a whole frame at {whole.sent_size}",
             )
 
+    c.note("D125 model finder: the cases below run the committed ONNX on a committed demo photo.")
+    return _model_cases(c, Image, ImageDraw)
+
+
+def _model_cases(c, Image, ImageDraw) -> Result:
+    import json
+    import tempfile as _tf
+    from unittest import mock
+
+    import geometry
+    import geometry.card_box as card_box
+    from identify import images as ident
+
+    photo = Path(__file__).resolve().parents[2] / "demo-assets" / "extra" / "photos" / "0000.jpg"
+    frame = _scene(Image, ImageDraw)
+
+    # 1. A missing model file is the safety path, never an error and never "dfine".
+    with mock.patch.object(card_box, "MODEL", Path("/nonexistent/none.onnx")), mock.patch.object(
+        card_box, "_session", None
+    ):
+        box = geometry.locate_card(frame)
+        c.ok(
+            box is not None and box.method != "dfine",
+            "model file missing: locate_card answers with detect_card's box",
+            str(box and box.method),
+        )
+
+    # 2. A score bar nothing clears falls back to detect_card's box.
+    with mock.patch.object(card_box, "MIN_SCORE", 1.5):
+        box = geometry.locate_card(photo)
+        fallback = geometry.detect_card(photo)
+        c.ok(
+            card_box.model_card(photo) is None
+            and (box is None) == (fallback is None)
+            and (box is None or (box.method != "dfine" and box == fallback)),
+            "MIN_SCORE above 1: locate_card is exactly detect_card's answer",
+        )
+
+    # 3. The real model on a committed photo.
+    box = card_box.model_card(photo)
+    if c.ok(box is not None and box.method == "dfine", "the real model boxes a committed photo", str(box)):
+        c.ok(
+            0.0 <= box.left < box.right <= 1.0 and 0.0 <= box.top < box.bottom <= 1.0,
+            "its fractions sit inside 0..1 with right > left and bottom > top",
+            f"{box.left:.3f},{box.top:.3f},{box.right:.3f},{box.bottom:.3f}",
+        )
+        c.ok(geometry.locate_card(photo).method == "dfine", "locate_card returns the model's box when it answers")
+
+    # 4. A file that is not an image gives None, never an exception.
+    with _tf.TemporaryDirectory() as work:
+        junk = Path(work) / "junk.jpg"
+        junk.write_bytes(b"not an image at all")
+        try:
+            got, raised = card_box.model_card(junk), False
+        except Exception:
+            got, raised = None, True
+        c.ok(got is None and not raised, "model_card on a non-image file returns None and never raises")
+
+    # 5. The pad follows the finder, once.
+    size = (1000, 1400)
+    base = dict(angle=0.0, left=0.2, top=0.2, right=0.8, bottom=0.8, fill=1.0, aspect=0.714)
+    dfine = geometry.CardBox(method="dfine", **base)
+    other = geometry.CardBox(method="tone", **base)
+    cw, ch = 600.0, 840.0
+    left, top, right, bottom = ident.crop_rect(size, dfine)
+    c.ok(
+        abs((right - left) - cw * 1.08) < 2 and abs((bottom - top) - ch * 1.08) < 2,
+        "crop_rect on a dfine box pads 4% a side, and only that",
+        f"{right - left:.0f}x{bottom - top:.0f} against {cw * 1.08:.0f}x{ch * 1.08:.0f}",
+    )
+    left, top, right, bottom = ident.crop_rect(size, other)
+    wide = 1 + 2 * ident.CROP_PAD
+    c.ok(
+        abs((right - left) - cw * wide) < 2,
+        "crop_rect on a detect_card box pads CROP_PAD a side",
+        f"{right - left:.0f} against {cw * wide:.0f}",
+    )
+    short = geometry.CardBox(method="dfine", **{**base, "bottom": 0.5})  # wider than a card is tall
+    c.ok(
+        ident.card_rect(size, short) == (200.0, 280.0, 800.0, 700.0),
+        "card_rect leaves a dfine box alone: no aspect correction",
+        str(ident.card_rect(size, short)),
+    )
+
+    # 6. The committed labels parse; usable = both files minus REJECT rows.
+    here = Path(geometry.__file__).resolve().parent / "model"
+    old = json.loads((here / "labels.json").read_text())
+    new = json.loads((here / "labels_new.json").read_text())
+    usable = [o for o in old if o["verdict"] != "REJECT"] + new
+    c.ok(
+        (len(old), len(new), len(usable)) == (150, 100, 243)
+        and all(len(o["corners"]) == 4 for o in usable),
+        "labels.json and labels_new.json parse: 243 usable after 7 REJECT rows, four corners each",
+        f"{len(old)}+{len(new)} -> {len(usable)}",
+    )
     return c.result()

@@ -49,17 +49,15 @@ DEBT31 The path guard never reads code, so a decision cited by path in a comment
 DEBT32 The archive sweep stays a press, and the owner intends to schedule it eventually
 DEBT33 An answered queue entry can never resurface, even when it is wrong
 DEBT34 Categories and products never expire, on a membership claim this store cannot re-check on its own
-DEBT38 a section move's receipt names no owed cards and no next capture
 DEBT39 the public demo refuses every box map move
 DEBT40 a divider save can move a divider past departed records
 DEBT41 Pricing never offers "Make this the rule"
 DEBT43 the merge-speed guard counts SQLite ticks only, and a pure-Python loop is invisible to it
 DEBT44 pokemontcg.io is deprecated (ends 2027-03-01), and `pipeline/stockimages.py` does not call it today
-DEBT46 a search with a typo finds nothing, and no near match is offered
 DEBT48 code-side mechanization left open
 DEBT50 git and gh CLI traps hit from this checkout
 DEBT58 the Lane H palette record is on a branch, not in main
-DEBT59 an unreadable live claim has no way out on screen
+DEBT59 an unreadable live submission claim has no way out on screen
 DEBT60 the demo builds with Hide unpullable forced off
 DEBT61 eight build proposals are still open
 DEBT62 the demo photos are about 180 MB of plain git, and the owner wants them in Git LFS
@@ -69,13 +67,12 @@ DEBT65 the number-corner crop is sent only on a retry
 DEBT66 no perceptual-hash cross-check on identification
 DEBT67 capture photographs exist in one place
 DEBT68 the posted-price history has no screen
-DEBT69 prices are not refreshed on a schedule, and nothing says which SKUs moved
-DEBT70 the owner's realized prices are not read
+DEBT69 the daily price read covers listed SKUs only, and no live price is pushed automatically
+DEBT70 realized prices inform no listing rule
 DEBT71 the value of the set hint is asserted, not measured
 DEBT72 PKMNVAULT, Supabase and eBay are unbuilt
 DEBT73 the Mac dock icon has no drop shadow, and none was tried
 DEBT74 the mark's four HELD base parameters were never compared
-DEBT75 the first ask for a cold catalog group answers nothing
 DEBT76 the walk's card sheet on a phone has no Mark sold
 DEBT77 every phone-width spec is off
 DEBT82 The Fulfiller's boxes slide once when the Pick list lands

@@ -93,6 +93,33 @@ It is off-nav. The route's own SKU field is the control a person finds without a
   fixed fact, so the width is stated beside any comparison.
 - **Nothing reaches back more than 357 days**, and the chart states the date its own history begins.
 
+### The posted-price view (OPEN: placement settled, build waits on the gate)
+
+DEBT68. `price_postings` (D243) records every posted price, one row per SKU per press. The
+owner ruled "B, then A". Both wait for the gate: one SKU holds a second posting, meaning
+`price_postings` rows exceed its distinct SKUs. One posting is a point and draws no history.
+Measured on the owner's store: 103 rows over 103 distinct SKUs, so the gate is closed. Both
+builds need one new read route over `store/postings.py`, one client function in
+`app/src/server.ts` and one wire type in `app/src/types.ts`. Neither writes.
+
+Rules both keep: a posted price is a third kind of observation, never joined to the market line
+or the fills (D278). A price stays until the next press, so it is a held step. Money uses
+`.bn-money` (D221). Kit pieces and `--bn-*` tokens only. A chart or table holds its size from
+first paint (D313, nothing moves unless the person moved it).
+
+**B, the first build: a Sales section.** A section on `#/revenue`, below the sold products,
+titled "What you asked". One row per re-priced name: posts, first asked, latest asked, change,
+average sold at. Each name links to `#/product`. It answers "which cards did I re-price, and did
+it help" across the store. It shows the ends of a history, not its shape. It sits on a
+gross-revenue screen (D214), so it never claims profit. The period control needs a rule for
+posts outside the period.
+
+**A, the second build: an asked-price series on `#/product`.** Each range chart gets a dashed ink
+step line with one hollow square per posting, one legend entry, and a price axis that includes
+postings. B's row links are how a person reaches it. It shows the shape of one SKU's asked price
+against the market line and the sale diamonds (D212's grain). It adds a fourth mark to four
+stacked charts.
+
 ## 4. The archive (BUILT)
 
 The price-history source has a hard ceiling of 357 days. Everything older is gone, and everything

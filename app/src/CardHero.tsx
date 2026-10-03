@@ -225,14 +225,11 @@ function listingFact(card: InventoryCard, listings: Readonly<Record<string, List
   }
 }
 
-/** Where a transplant came from, in plain words — the UX review's graveyard ruling: "Move
- *  Moved out of Graveyard", so a moved card must still be findable from ITSELF on
- *  `#/inventory` rather than only from the tombstone `#/graveyard` reads. `card.moved_from`
+/** Where a transplant came from, in plain words. A moved card is found from ITSELF on
+ *  `#/inventory`, never from the tombstone a move leaves (D134's amendment). `card.moved_from`
  *  is `"box/index"` (`store/master.py:Card.moved_from`); only the box half is said, by name
- *  (D259), never the number. The old box can be gone by the time anyone looks — that is
- *  the graveyard review's own example, box 5 deleted after 264 cards moved out of it — so a
- *  name that does not resolve falls back to "another box" rather than the digits, the same
- *  honest answer `Graveyard.tsx:movedToName` gives for the matching case in `moved_to`. */
+ *  (D259), never the number. The old box can be gone by the time anyone looks, so a name that
+ *  does not resolve falls back to "another box" rather than the digits. */
 function movedFromFact(card: InventoryCard, boxes: readonly BoxRecord[]): Detail | null {
   // `== null` catches BOTH a stored `null` and a plain-JS fixture that never set the field
   // at all — `undefined`, the shape a route mock or an older server row actually carries,
@@ -766,19 +763,30 @@ export type PhotoPanelProps = {
   reshoot: ReactNode
   /** The box registry, so a moved card can say which box it went to by name. */
   boxes?: readonly BoxRecord[]
+  /** A record whose box was deleted: the sentence for a photograph that went with it, drawn with
+   *  no re-shoot link, since there is no box to shoot into. */
+  gone?: string
 }
 
 /** Three ways a photo can be missing — never stored, reclaimed on purpose after the sale
  *  (D89), or claimed and not on disk — each a card-shaped placeholder. `reshoot` is optional
  *  by the caller's own choice: `#/orders` passes `null`, since re-shooting a card mid-walk is
  *  an Inventory-only correction. */
-export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoot, boxes = [] }: PhotoPanelProps) {
+export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoot, boxes = [], gone }: PhotoPanelProps) {
   /* D218: `label` is the server's `Position.label`, and this panel only ever speaks it —
      the paragraph below and the photo's own `alt` are plain text and an accessible name,
      where there is no CSS to draw the ` · ' with, so `sayPlace` reads it as a sentence
      instead. Shared by `#/inventory` (`BoxBrowse.tsx`) and `#/orders`
      (`OrdersWalkPane.tsx`), so fixing it here fixes both callers at once. */
   const where = label === null ? `store key ${row.key}` : sayPlace(label)
+
+  if (gone !== undefined) {
+    return (
+      <div className="bn-photo browse-absent">
+        <AbsentPhotoNote sentence={gone} />
+      </div>
+    )
+  }
 
   if (row.card.photo === null) {
     return (

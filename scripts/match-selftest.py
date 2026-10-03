@@ -1689,6 +1689,27 @@ def case_do_search_still_refuses_an_unrelated_number() -> None:
     check("1010" not in skus, "do_search('54') does not find a card whose number is 154/200")
 
 
+def case_did_you_mean_runs_the_shared_table_and_do_search_hints_only_on_zero() -> None:
+    """D271: `match.did_you_mean` against `didyoumean.cases.json` (the browser copy runs the
+    same rows), then `do_search` end to end: a typo hints, a hit carries no hint, a short miss
+    carries none."""
+    from server import match
+
+    path = REPO / "app" / "src" / "kit" / "didyoumean.cases.json"
+    for i, case in enumerate(json.loads(path.read_text("utf-8"))):
+        equal(match.did_you_mean(case["query"], case["names"]), case["suggest"], f"did-you-mean row {i} ({case['note']})")
+
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+
+    with Store().write() as snapshot:
+        snapshot.inventory.cards["1/1"] = master.Card(box=1, index=1, name="Renekton,", number="1", printed_total="9", sku="1010")
+    equal(cs.do_search("Rekenton").get("did_you_mean"), "Renekton", "do_search('Rekenton') hints Renekton")
+    check("did_you_mean" not in cs.do_search("Renekton"), "a hit carries no hint")
+    check("did_you_mean" not in cs.do_search("rek"), "a short miss carries no hint")
+
+
 CASES = [
     case_match_py_agrees_with_every_row,
     case_match_rank_never_treats_a_number_as_a_bare_substring,
@@ -1728,6 +1749,7 @@ CASES = [
     case_do_search_permanent_fuzz_agrees_with_match_query,
     case_do_search_still_refuses_an_unrelated_number,
     case_do_search_runs_the_shared_case_table,
+    case_did_you_mean_runs_the_shared_table_and_do_search_hints_only_on_zero,
 ]
 
 

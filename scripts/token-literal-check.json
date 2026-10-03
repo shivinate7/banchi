@@ -2,7 +2,7 @@
   "files": {
     "app/src/App.css": 2,
     "app/src/BoxBrowse.css": 2,
-    "app/src/BoxOps.css": 4,
+    "app/src/BoxOps.css": 2,
     "app/src/CaptureScreen.css": 11,
     "app/src/CardLocations.css": 1,
     "app/src/Codes.css": 4,
@@ -22,7 +22,7 @@
   },
   "off_scale": {
     "app/src/BoxBrowse.css": 1,
-    "app/src/BoxOps.css": 4,
+    "app/src/BoxOps.css": 3,
     "app/src/CaptureScreen.css": 2,
     "app/src/CardLocations.css": 1,
     "app/src/Codes.css": 3,
@@ -34,7 +34,7 @@
     "app/src/RunFiles.css": 1,
     "app/src/RunPanel.css": 2,
     "app/src/Runs.css": 2,
-    "app/src/kit.css": 3,
+    "app/src/kit.css": 4,
     "app/src/kit/data.css": 1,
     "app/src/kit/filters.css": 1
   }

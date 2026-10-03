@@ -7,9 +7,12 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List
 
-from .core import _sibling
+from .core import Report, _sibling, module_globals
 from .strings import (
     NO_MECHANISM_EXEMPT_FILES,
+    _model_name_constants,
+    check_no_mechanism_on_screen,
+    _no_mechanism_findings,
     TYPED_INTERPUNCT_EXTRACT_ARGS,
     TYPED_INTERPUNCT_RULE,
     _offender_diff,
@@ -34,6 +37,78 @@ def run(ok) -> None:
     ok(frozenset({"Gallery.tsx"}) == NO_MECHANISM_EXEMPT_FILES,
        "the no-mechanism-on-screen exemption is pinned to exactly one file, `Gallery.tsx`",
        f"got: {sorted(NO_MECHANISM_EXEMPT_FILES)}")
+
+    print("\nno mechanism: the two model-name exceptions cover the word-list hit and nothing else")
+    marqo_tip = "Marqo ecommerce-B, run on this Mac"
+    haiku_tip = "Claude Haiku, read through the Batch API"
+    both = (haiku_tip, marqo_tip)
+
+    def row(line, text):
+        return {"file": "app/src/RunsComposer.tsx", "line": line, "text": text}
+
+    found, _used = _no_mechanism_findings([row(1, marqo_tip), row(2, haiku_tip), row(3, marqo_tip + ", v2"), row(4, "Read by Haiku")], {}, both)
+    ok([f.where.split(":")[-1] for f in found] == ["3", "4"],
+       "both exempt tooltips pass; a longer string that holds one, and any other model name, are caught")
+    found_none, _used = _no_mechanism_findings([row(1, marqo_tip), row(2, haiku_tip)], {}, ())
+    ok(len(found_none) == 2, "with no constants in the code, the same two strings are caught")
+    found_one, _used = _no_mechanism_findings([row(1, marqo_tip), row(2, haiku_tip)], {}, (marqo_tip,))
+    ok(len(found_one) == 1, "the exemption is per constant: a third model string needs its own constant")
+    bad_id = "Marqo ecommerce-B (" + "D" + "301), run on this Mac"   # assembled, so this file cites no decision
+    found_id, _used = _no_mechanism_findings([row(0, bad_id)], {}, (bad_id,))
+    ok(len(found_id) == 1, "a tooltip carrying a decision id fails the row even though it equals a constant")
+    bad_path = "Marqo ecommerce-B, see docs/specs/identify-engine-pick.md"
+    found_path, _used = _no_mechanism_findings([row(0, bad_path)], {}, (bad_path,))
+    ok(len(found_path) == 1, "a tooltip carrying a repository path fails the same way")
+    bad_cli = "Haiku via ./pkmnscan identify"
+    found_cli, _used = _no_mechanism_findings([row(0, bad_cli)], {}, (bad_cli,))
+    ok(len(found_cli) == 1, "a tooltip carrying a command line fails the same way")
+    with tempfile.TemporaryDirectory() as exc_dir:
+        probe = Path(exc_dir) / "engines.ts"
+
+        def declare(haiku, marqo):
+            probe.write_text(
+                f"export const HAIKU_NAME_TOOLTIP = '{haiku}'\n"
+                f"export const MATCHER_NAME_TOOLTIP = '{marqo}'\n"
+            )
+
+        declare(haiku_tip, marqo_tip)
+        ok(_model_name_constants(probe) == (both, []), "both exception texts are read from their exported constants")
+        ok(_model_name_constants(Path(exc_dir) / "absent.ts") == ((), []), "no file, no exception")
+        probe.write_text("export const MATCHER_NAME_TOOLTIP = 'Marqo\\'s ecommerce-B'\n")
+        got_text, got_problems = _model_name_constants(probe)
+        ok(got_text == () and len(got_problems) == 1, "a constant declared outside the one shape is a finding, never a truncated read")
+
+        # THE WIRING. The row itself must read the constants and exempt exactly their text.
+        _row_fn = check_no_mechanism_on_screen
+        _read_constants = _model_name_constants   # patching rebinds the name everywhere, so keep the real reader
+        fake = [row(7, "Match to stock photos")]
+        names = ("_run_user_strings", "_model_name_constants", "_machine_words_allow")
+        saved = tuple(module_globals()[n] for n in names)
+
+        def findings_of(reader):
+            module_globals()["_model_name_constants"] = reader
+            report = Report()
+            _row_fn(report)
+            return [c for c in report.checks if c.check == "no mechanism on screen"][0].findings
+
+        try:
+            module_globals()["_run_user_strings"] = lambda _a: list(fake)
+            module_globals()["_machine_words_allow"] = lambda: {}
+            declare(haiku_tip, marqo_tip)
+            found_row = findings_of(lambda: _read_constants(probe))
+            ok(not found_row, "the row reads both constants and passes their tooltips", "; ".join(f.message for f in found_row))
+            declare(haiku_tip, "Marqo ecommerce-B (" + "D" + "301)")
+            ok(len(findings_of(lambda: _read_constants(probe))) == 1,
+               "the row fails a constant that carries a decision id: the constant's text is checked")
+            declare(haiku_tip, marqo_tip)
+            ok(not findings_of(lambda: ((), [])), "dropping the wiring leaves nothing to check, and the screen strings alone pass")
+            module_globals()["_run_user_strings"] = lambda _a: [row(7, marqo_tip)]
+            ok(len(findings_of(lambda: ((), []))) == 1,
+               "with the wiring dropped, a screen that writes the tooltip text literally is caught")
+            ok(not findings_of(lambda: _read_constants(probe)), "with the wiring in place, the same literal passes")
+        finally:
+            for n, v in zip(names, saved):
+                module_globals()[n] = v
 
     print("\ntyped interpunct: the two extractor widenings, and the ratchet's own arithmetic")
     with tempfile.TemporaryDirectory() as tmp_name:

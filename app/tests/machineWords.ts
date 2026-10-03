@@ -1,4 +1,4 @@
-/* THE ONE MEASUREMENT `machine-words.spec.ts` READS, kept in its own module for the same
+/* THE ONE MEASUREMENT `text-checks.spec.ts` READS, kept in its own module for the same
  * reason `textShape.ts` is: `page.evaluate` serialises a function by `toString()`, so it may
  * not close over anything from this file's outer scope — the word list and the repo-top-dirs
  * list are passed IN as its argument instead, both read once from `scripts/machine-words.json`
@@ -88,7 +88,7 @@ export function scanMachineWords(args: {
   return { words: wordsHit, paths: pathsHit }
 }
 
-/* THE MUTATION HOOK for `machine-words.spec.ts` (`MACHINE_WORDS_MUTATE=<hash>`): one sentence
+/* THE MUTATION HOOK for `text-checks.spec.ts` (`MACHINE_WORDS_MUTATE=<hash>`): one sentence
  * naming a word on the list, appended inside that route's `.bn-view` through
  * `page.evaluate`, never an edit under `app/src`. "the resolver" is on the list and on no
  * screen, so the finding it makes is always a NEW one. */

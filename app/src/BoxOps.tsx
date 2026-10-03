@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 
 import type {
   BoxClaimResult,
@@ -28,12 +28,14 @@ import {
   reclaimBoxPhotos,
   releaseBoxListings,
   updateBox,
-  failureTone,
 } from './server'
 import { nonEmptySections, spansOf } from './position'
 import { ReadingAge } from './CardLocations'
 import { readingAgo } from './cardState'
-import { Button, Icon, IconButton, Notice, Pill, Segmented, Select, SectionPicker, Stat, boxesMostRecentFirst, type IconName } from './kit'
+import {
+  Button, CardPicker, Icon, IconButton, Notice, Pill, Select, SectionPicker, SettingsCensus, SettingsEditor, SettingsFigures, SettingsGroup, SettingsOp,
+  SettingsTrouble, Stat, boxesMostRecentFirst, count, useSheetWrite, type PickGroup,
+} from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { toast } from './kit/toast'
 import { Dialog as Overlay } from './kit/overlay'
@@ -96,110 +98,6 @@ function readingBound(at: string | null): string | null {
   if (ago === null) return null
   if (ago === 'just now') return 'Recent'
   return `Recent, ${ago.replace(/ ago$/, '')}`
-}
-
-/** One write at a time: `Store.write()` takes the file lock per call. */
-type Busy = boolean
-
-/** Every write in this file, with its lock discipline, its refusal handling and its re-read in
- *  one place. `write` returns the answer, or null for a refusal, so a caller can close its own
- *  editor on success and leave it open on a refusal. */
-function useBoxWrite(onChanged: () => void): {
-  busy: Busy
-  trouble: Failure | null
-  write: <T>(run: () => Promise<T>) => Promise<T | null>
-} {
-  const [busy, setBusy] = useState<Busy>(false)
-  const [trouble, setTrouble] = useState<Failure | null>(null)
-
-  const write = useCallback(
-    async <T,>(run: () => Promise<T>): Promise<T | null> => {
-      if (busy) return null
-      setBusy(true)
-      setTrouble(null)
-      try {
-        const answer = await run()
-        onChanged()
-        return answer
-      } catch (err) {
-        setTrouble(describeFailure(err))
-        return null
-      } finally {
-        setBusy(false)
-      }
-    },
-    [busy, onChanged],
-  )
-
-  return { busy, trouble, write }
-}
-
-/** The refusal panel: the server's sentence, then the greppable code beneath it. */
-function Trouble({ failure }: { failure: Failure | null }) {
-  if (failure === null) return null
-  return <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />
-}
-
-function count(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`
-}
-
-/**
- * One box operation, drawn as a row in the sheet: an icon, what the press does, the value or
- * quantity it is about, and a chevron. The detail is inside the button so it is part of the
- * accessible name ("Seal box, freezes at 543"); the explicit `aria-label` supplies the comma.
- */
-function Op({
-  icon,
-  label,
-  detail,
-  said,
-  busy,
-  danger = false,
-  expanded,
-  running,
-  disabled = false,
-  onClick,
-}: {
-  icon: IconName
-  label: string
-  detail?: string
-  /** This row has nothing to do yet — the detail says why — and is not pressable. */
-  disabled?: boolean
-  /** The accessible name in full, where the drawn label is shorter than the sentence. */
-  said?: string
-  busy: boolean
-  /** THIS row is the one whose write is in flight. `busy` alone only greys every row out,
-   *  which is a control saying nothing while it works; this puts the ring on the one that
-   *  was pressed and swaps its detail for a word. */
-  running?: boolean
-  danger?: boolean
-  expanded?: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      className={danger ? 'boxops-op boxops-op-danger' : 'boxops-op'}
-      type="button"
-      aria-label={said ?? (detail === undefined ? label : `${label}, ${detail}`)}
-      aria-expanded={expanded}
-      aria-busy={running ? true : undefined}
-      data-running={running ? 'true' : undefined}
-      disabled={busy || disabled}
-      onClick={onClick}
-    >
-      <span className="boxops-op-icon">
-        {running ? <span className="boxops-op-spin" aria-hidden="true" /> : <Icon name={icon} size={16} />}
-      </span>
-      <span className="boxops-op-label">{label}</span>
-      {running ? (
-        <span className="boxops-op-detail">writing…</span>
-      ) : detail === undefined ? null : (
-        <span className="boxops-op-detail">{detail}</span>
-      )}
-      <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={14} className="boxops-op-chev" />
-    </button>
-  )
 }
 
 /** A number off the wire, or null for anything that is not one. Null is not zero. */
@@ -393,12 +291,7 @@ export function BoxIdentity({
 
 /* ------------------------------------------------------------------------ the sheet ---- */
 
-export type PickSection = {
-  readonly key: string
-  readonly title: string
-  readonly cards: readonly { readonly index: number; readonly label: string; readonly departed?: boolean }[]
-}
-const NO_CARDS: readonly PickSection[] = []
+const NO_CARDS: readonly PickGroup[] = []
 
 type Editing = 'name' | 'sections' | 'section-names' | 'claims' | 'move' | null
 
@@ -415,7 +308,7 @@ export function BoxOps({
   onChanged: () => void
   /** The box's on-hand cards by section, for narrowing a Move or a Claims write inside its own
    *  sheet. The default is the whole box; the scope sentence on the control says which. */
-  cards?: readonly PickSection[]
+  cards?: readonly PickGroup[]
   /** The registry, for the move's destination picker. */
   boxes?: readonly BoxRecord[]
   /** Every SKU's listing record, off `GET /inventory`. Read for the reading age beside this
@@ -424,7 +317,7 @@ export function BoxOps({
   open: boolean
   onClose: () => void
 }) {
-  const { busy, trouble, write } = useBoxWrite(onChanged)
+  const { busy, trouble, write } = useSheetWrite(onChanged)
   /* F1 — a stale-section refusal reads the boxes again, the way the one-card Move panel
    * already does, so the re-pick offers live sections rather than looping on a dead key. A
    * ref, not a dependency, so the effect below fires once per NEW refusal and never merely
@@ -488,7 +381,7 @@ export function BoxOps({
 
   /* A MOVE REACHES ON-HAND CARDS ONLY. Claims reaches departed records too, listed in their own
      group, so one sold card can be corrected alone. */
-  const pool: readonly PickSection[] = (() => {
+  const pool: readonly PickGroup[] = (() => {
     const live = cards
       .map((section) => ({ ...section, cards: section.cards.filter((card) => card.departed !== true) }))
       .filter((section) => section.cards.length > 0)
@@ -501,7 +394,7 @@ export function BoxOps({
   const selection = narrowed === null || narrowed.length === everyIndex.length ? [] : narrowed
   const emptyPick = narrowed !== null && narrowed.length === 0
   const picker =
-    pool.length === 0 ? null : <CardPicker sections={pool} picked={narrowed} onChange={setNarrowed} />
+    pool.length === 0 ? null : <CardPicker whole="Whole box" sections={pool} picked={narrowed} onChange={setNarrowed} />
   const scope =
     selection.length > 0
       ? `the ${count(selection.length, 'selected card', 'selected cards')}`
@@ -662,41 +555,38 @@ export function BoxOps({
       <div className="inv-sheet-body boxops-body">
         {editing === null ? (
           <>
-            <section className="boxops-group">
-              <h3 className="bn-label">Overview</h3>
-              <dl className="boxops-census">
-                <Census label="Captured" value={record.cards} />
-                <Census label="Stored" value={known(record.on_hand)} />
-                <Census label="Sold" value={record.sold} />
-                <Census label="Retired" value={record.retired} />
-                <Census label="Moved" value={record.moved} />
-                {/* A LIVE FIGURE NEVER STANDS WITHOUT ITS AGE — and this age is a BOUND, not
-                    a stamp, because it is store-wide: a box record carries a count of held
-                    cards and no SKUs. The oldest reading can only understate freshness, and
-                    the wording says `within` so it is not read as a moment. The exact,
-                    box-scoped age is on every line of the release plan below. */}
-                <Census
-                  label="Listing-held"
-                  value={record.listed}
-                  note={
-                    record.listed === 0 || readAt === null ? undefined : (
-                      <span className="inv-readage boxops-readbound" title={boundHelp}>
-                        {readingBound(readAt)}
-                      </span>
-                    )
-                  }
-                  help={
-                    readAt === null
-                      ? 'Cards believed live at TCGplayer. No listing figure written yet.'
-                      : boundHelp
-                  }
-                />
-                {/* THE TWO FIGURES KEEP NO NOTE (UX-259, cut list #17), and the second is named
-                    for what it is to the owner, never the store's "index" (D196). */}
-                <Census label="Fill" value={known(record.fill)} help="The highest card position ever captured in this box." />
-                <Census label="Next capture" value={known(record.next_index)} help="Where the next card captured into this box lands." />
-              </dl>
-            </section>
+            <SettingsFigures title="Overview">
+              <SettingsCensus label="Captured" value={record.cards} />
+              <SettingsCensus label="Stored" value={known(record.on_hand)} />
+              <SettingsCensus label="Sold" value={record.sold} />
+              <SettingsCensus label="Retired" value={record.retired} />
+              <SettingsCensus label="Moved" value={record.moved} />
+              {/* A LIVE FIGURE NEVER STANDS WITHOUT ITS AGE — and this age is a BOUND, not
+                  a stamp, because it is store-wide: a box record carries a count of held
+                  cards and no SKUs. The oldest reading can only understate freshness, and
+                  the wording says `within` so it is not read as a moment. The exact,
+                  box-scoped age is on every line of the release plan below. */}
+              <SettingsCensus
+                label="Listing-held"
+                value={record.listed}
+                note={
+                  record.listed === 0 || readAt === null ? undefined : (
+                    <span className="inv-readage boxops-readbound" title={boundHelp}>
+                      {readingBound(readAt)}
+                    </span>
+                  )
+                }
+                help={
+                  readAt === null
+                    ? 'Cards believed live at TCGplayer. No listing figure written yet.'
+                    : boundHelp
+                }
+              />
+              {/* THE TWO FIGURES KEEP NO NOTE (UX-259, cut list #17), and the second is named
+                  for what it is to the owner, never the store's "index" (D196). */}
+              <SettingsCensus label="Fill" value={known(record.fill)} help="The highest card position ever captured in this box." />
+              <SettingsCensus label="Next capture" value={known(record.next_index)} help="Where the next card captured into this box lands." />
+            </SettingsFigures>
 
             {record.sections.length > 0 && record.sections_detail.length === 0 ? (
               <Notice tone="warn" title="This box has a declared layout that will not validate">
@@ -705,66 +595,57 @@ export function BoxOps({
               </Notice>
             ) : null}
 
-            <section className="boxops-group">
-              <h3 className="bn-label">Box</h3>
-              <div className="boxops-ops">
-                <Op icon="pencil" label="Rename" detail={record.name ?? 'unnamed'} busy={busy} onClick={() => startEdit('name')} />
-                <Op
-                  icon="divider"
-                  label="Sections"
-                  detail={
-                    record.sections.length === 0
-                      ? 'not declared'
-                      : count(record.sections_detail.length, 'section', 'sections')
-                  }
-                  busy={busy}
-                  onClick={() => startEdit('sections')}
-                />
-                <Op
-                  icon="pencil"
-                  label="Naming"
-                  detail={
-                    record.sections_detail.length === 0
-                      ? 'declare sections first'
-                      : (() => {
-                          const named = record.sections_detail.filter((detail) => detail.name).length
-                          return named === 0 ? 'Unnamed' : `${named} of ${record.sections_detail.length} named`
-                        })()
-                  }
-                  busy={busy}
-                  disabled={record.sections_detail.length === 0}
-                  onClick={() => startEdit('section-names')}
-                />
-              </div>
-            </section>
+            <SettingsGroup title="Box">
+              <SettingsOp icon="pencil" label="Rename" detail={record.name ?? 'unnamed'} busy={busy} onClick={() => startEdit('name')} />
+              <SettingsOp
+                icon="divider"
+                label="Sections"
+                detail={
+                  record.sections.length === 0
+                    ? 'not declared'
+                    : count(record.sections_detail.length, 'section', 'sections')
+                }
+                busy={busy}
+                onClick={() => startEdit('sections')}
+              />
+              <SettingsOp
+                icon="pencil"
+                label="Naming"
+                detail={
+                  record.sections_detail.length === 0
+                    ? 'declare sections first'
+                    : (() => {
+                        const named = record.sections_detail.filter((detail) => detail.name).length
+                        return named === 0 ? 'Unnamed' : `${named} of ${record.sections_detail.length} named`
+                      })()
+                }
+                busy={busy}
+                disabled={record.sections_detail.length === 0}
+                onClick={() => startEdit('section-names')}
+              />
+            </SettingsGroup>
 
             {record.cards > 0 || (record.on_hand ?? 0) > 0 ? (
-              <section className="boxops-group">
-                <h3 className="bn-label">
-                  Cards
-                  <span className="boxops-group-note">Whole box, or pick some inside</span>
-                </h3>
-                <div className="boxops-ops">
-                  {record.cards > 0 ? (
-                    <Op
-                      icon="pencil"
-                      label="Claims"
-                      detail={count(record.cards, 'card', 'cards')}
-                      busy={busy}
-                      onClick={() => startEdit('claims')}
-                    />
-                  ) : null}
-                  {(record.on_hand ?? 0) > 0 ? (
-                    <Op
-                      icon="moveTo"
-                      label="Move"
-                      detail={count(record.on_hand ?? 0, 'card', 'cards')}
-                      busy={busy}
-                      onClick={() => startEdit('move')}
-                    />
-                  ) : null}
-                </div>
-              </section>
+              <SettingsGroup title="Cards" note="Whole box, or pick some inside">
+                {record.cards > 0 ? (
+                  <SettingsOp
+                    icon="pencil"
+                    label="Claims"
+                    detail={count(record.cards, 'card', 'cards')}
+                    busy={busy}
+                    onClick={() => startEdit('claims')}
+                  />
+                ) : null}
+                {(record.on_hand ?? 0) > 0 ? (
+                  <SettingsOp
+                    icon="moveTo"
+                    label="Move"
+                    detail={count(record.on_hand ?? 0, 'card', 'cards')}
+                    busy={busy}
+                    onClick={() => startEdit('move')}
+                  />
+                ) : null}
+              </SettingsGroup>
             ) : null}
 
             {claimed === null ? null : <ClaimReceipt result={claimed} boxLabel={record.name ?? UNNAMED_BOX} />}
@@ -784,19 +665,16 @@ export function BoxOps({
               </Notice>
             )}
 
-            <Trouble failure={trouble} />
+            <SettingsTrouble failure={trouble} />
 
-            <section className="boxops-group boxops-group-danger">
-              <h3 className="bn-label">Danger</h3>
-              <div className="boxops-ops">
-                <ReleaseListings record={record} boxes={boxes} listings={listings} onChanged={onChanged} />
-                <ReclaimPhotos record={record} onChanged={onChanged} />
-                <DeleteBox record={record} onChanged={onChanged} onDeleted={onClose} />
-              </div>
-            </section>
+            <SettingsGroup title="Danger" danger>
+              <ReleaseListings record={record} boxes={boxes} listings={listings} onChanged={onChanged} />
+              <ReclaimPhotos record={record} onChanged={onChanged} />
+              <DeleteBox record={record} onChanged={onChanged} onDeleted={onClose} />
+            </SettingsGroup>
           </>
         ) : editing === 'claims' ? (
-          <EditorFrame title="Set claims" onBack={closeEdit}>
+          <SettingsEditor title="Set claims" onBack={closeEdit}>
             {picker}
             {refused === null ? null : <Notice tone="warn" title={refused} />}
             <ClaimEditor
@@ -806,10 +684,10 @@ export function BoxOps({
               onApply={(patch) => void applyClaims(patch)}
               onCancel={closeEdit}
             />
-            <Trouble failure={trouble} />
-          </EditorFrame>
+            <SettingsTrouble failure={trouble} />
+          </SettingsEditor>
         ) : editing === 'name' ? (
-          <EditorFrame title="Rename" onBack={closeEdit}>
+          <SettingsEditor title="Rename" onBack={closeEdit}>
             <Field
               label="Name"
               value={draft}
@@ -818,7 +696,7 @@ export function BoxOps({
               autoFocus
               hint="Each box has its own name. Leave it empty for a default name."
             />
-            <Trouble failure={trouble} />
+            <SettingsTrouble failure={trouble} />
             <div className="boxops-actions">
               <Button variant="ghost" onClick={closeEdit}>
                 Cancel
@@ -827,9 +705,9 @@ export function BoxOps({
                 Save name
               </Button>
             </div>
-          </EditorFrame>
+          </SettingsEditor>
         ) : editing === 'move' ? (
-          <EditorFrame title="Move to box" onBack={closeEdit}>
+          <SettingsEditor title="Move to box" onBack={closeEdit}>
             {picker}
             <div className="bn-field">
               {others.length > 0 ? (
@@ -887,7 +765,7 @@ export function BoxOps({
             {refused === null ? null : (
               <Notice tone="warn" title={refused} detail={sectionTrouble?.message} code={sectionTrouble?.code} />
             )}
-            {sectionTrouble === null ? <Trouble failure={trouble} /> : null}
+            {sectionTrouble === null ? <SettingsTrouble failure={trouble} /> : null}
             <div className="boxops-actions">
               {/* THE PANEL'S FOCUS LANDS HERE, not the kit Select (round 2's own convention,
                   Inventory.tsx's MovePanel): `Select` is a button of its own with no
@@ -904,9 +782,9 @@ export function BoxOps({
                 Move
               </Button>
             </div>
-          </EditorFrame>
+          </SettingsEditor>
         ) : editing === 'section-names' ? (
-          <EditorFrame title="Name sections" onBack={closeEdit}>
+          <SettingsEditor title="Name sections" onBack={closeEdit}>
             <p className="boxops-editor-lead">
               A word for each section, drawn beside its number on every label — <b className="bn-facts"><span>Section 2</span> <span>Rares</span></b>.
               Leave one blank to clear it. The name follows its divider if the layout is edited later.
@@ -928,7 +806,7 @@ export function BoxOps({
                 />
               ))}
             </div>
-            <Trouble failure={trouble} />
+            <SettingsTrouble failure={trouble} />
             <div className="boxops-actions">
               <Button variant="ghost" onClick={closeEdit}>
                 Cancel
@@ -937,9 +815,9 @@ export function BoxOps({
                 Save names
               </Button>
             </div>
-          </EditorFrame>
+          </SettingsEditor>
         ) : (
-          <EditorFrame title="Edit sections" onBack={closeEdit}>
+          <SettingsEditor title="Edit sections" onBack={closeEdit}>
             <Field
               label="Section starts"
               value={draft}
@@ -950,7 +828,7 @@ export function BoxOps({
               hint="Where each section's numbering starts."
             />
             {refused === null ? null : <Notice tone="warn">{refused}</Notice>}
-            <Trouble failure={trouble} />
+            <SettingsTrouble failure={trouble} />
 
             {proposed === null ? (
               <div className="boxops-actions">
@@ -970,142 +848,10 @@ export function BoxOps({
                 onCancel={() => setProposed(null)}
               />
             )}
-          </EditorFrame>
+          </SettingsEditor>
         )}
       </div>
     </Overlay>
-  )
-}
-
-function Census({
-  label,
-  value,
-  help,
-  note,
-}: {
-  label: string
-  value: number | null
-  help?: string
-  /** A quieter line under the figure — how old the reading behind it is, and nothing else. */
-  note?: ReactNode
-}) {
-  return (
-    <div className="boxops-census-cell" title={help}>
-      <dt>{label}</dt>
-      <dd>
-        {value === null ? '—' : value.toLocaleString()}
-        {note === undefined ? null : <span className="boxops-census-note">{note}</span>}
-      </dd>
-    </div>
-  )
-}
-
-/* THE CARDS A MOVE OR A CLAIM REACHES, PICKED BESIDE THE ACT (the list carries no ticks). It
- * opens on the whole box; "Some cards" starts with every card picked, so narrowing is unpicking.
- * A section's check is partial while some of its cards are picked. */
-function CardPicker({
-  sections,
-  picked,
-  onChange,
-}: {
-  sections: readonly PickSection[]
-  picked: readonly number[] | null
-  onChange: (next: readonly number[] | null) => void
-}) {
-  const all = sections.flatMap((section) => section.cards.map((card) => card.index))
-  const held = new Set(picked ?? [])
-  const set = (next: Set<number>) => onChange(all.filter((index) => next.has(index)))
-  const toggle = (indices: readonly number[], on: boolean) => {
-    const next = new Set(held)
-    for (const index of indices) {
-      if (on) next.add(index)
-      else next.delete(index)
-    }
-    set(next)
-  }
-  return (
-    <div className="boxops-picker">
-      <Segmented
-        label="Cards to include"
-        value={picked === null ? 'all' : 'some'}
-        options={[
-          { value: 'all', label: `Whole box, ${count(all.length, 'card', 'cards')}` },
-          { value: 'some', label: 'Some cards' },
-        ]}
-        onChange={(next) => onChange(next === 'all' ? null : all)}
-      />
-      {picked === null ? null : (
-        <>
-          <div className="boxops-picker-bar">
-            <span className="boxops-picker-count" aria-live="polite">
-              {picked.length} of {all.length} picked
-            </span>
-            <Button size="sm" variant="quiet" onClick={() => onChange(all)}>
-              All
-            </Button>
-            <Button size="sm" variant="quiet" onClick={() => onChange([])}>
-              None
-            </Button>
-          </div>
-          <ul className="boxops-picker-list">
-            {sections.map((section) => {
-              const indices = section.cards.map((card) => card.index)
-              const n = indices.filter((index) => held.has(index)).length
-              return (
-                <li key={section.key} className="boxops-picker-group">
-                  <label className="bn-check boxops-picker-head">
-                    <input
-                      type="checkbox"
-                      checked={n > 0 && n === indices.length}
-                      ref={(node) => {
-                        if (node !== null) node.indeterminate = n > 0 && n < indices.length
-                      }}
-                      aria-label={`All of ${section.title}`}
-                      onChange={(event) => toggle(indices, event.target.checked)}
-                    />
-                    <span>{section.title}</span>
-                  </label>
-                  <ul>
-                    {section.cards.map((card) => (
-                      <li key={card.index}>
-                        <label className="bn-check boxops-picker-card">
-                          <input
-                            type="checkbox"
-                            checked={held.has(card.index)}
-                            onChange={(event) => toggle([card.index], event.target.checked)}
-                          />
-                          <span>{card.label}</span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              )
-            })}
-          </ul>
-        </>
-      )}
-    </div>
-  )
-}
-
-function EditorFrame({
-  title,
-  onBack,
-  children,
-}: {
-  title: string
-  onBack: () => void
-  children: ReactNode
-}) {
-  return (
-    <div className="boxops-editor">
-      <button type="button" className="boxops-back" onClick={onBack}>
-        <Icon name="chevronLeft" size={14} /> All settings
-      </button>
-      <h3 className="boxops-editor-title">{title}</h3>
-      {children}
-    </div>
   )
 }
 
@@ -1119,7 +865,7 @@ function Relabel({
 }: {
   record: BoxRecord
   proposed: readonly number[]
-  busy: Busy
+  busy: boolean
   onSave: () => void
   onCancel: () => void
 }) {
@@ -1718,7 +1464,7 @@ function ReleaseListings({
 
   return (
     <>
-      <Op
+      <SettingsOp
         icon="flag"
         danger
         label="Release"
@@ -1765,7 +1511,7 @@ function ReleaseListings({
             </>
           )}
 
-          <Trouble failure={trouble} />
+          <SettingsTrouble failure={trouble} />
           <div className="boxops-actions">
             <Button
               variant="ghost"
@@ -1862,7 +1608,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
 
   return (
     <>
-      <Op
+      <SettingsOp
         icon="image"
         danger
         label="Reclaim"
@@ -1908,7 +1654,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
             </Notice>
           )}
 
-          <Trouble failure={trouble} />
+          <SettingsTrouble failure={trouble} />
           <div className="boxops-actions">
             <Button
               variant="ghost"
@@ -1943,10 +1689,10 @@ function megabytes(bytes: number): string {
  * gates. Two presses that both name the box; the server keeps the refusal
  * (`box_not_empty_of_commitments`) and it is shown whole.
  *
- * D134 (2026-09-11): a sold, retired or moved record no longer answers that refusal — it is
- * buried instead, readable afterward on `#/graveyard`, and only a listed copy still blocks.
- * The Notice below draws that distinction before the press: what will be buried and lost is
- * separate from what will refuse outright. */
+ * D134: a sold, retired or moved record no longer answers that refusal — it is buried instead,
+ * and only a listed copy still blocks. A sold or retired record is read afterward on Inventory's
+ * Deleted boxes shelf; a moved one is alive elsewhere and is not. The Notice below draws that
+ * distinction before the press: what stays on the shelf is separate from what will refuse outright. */
 function DeleteBox({
   record,
   onChanged,
@@ -1972,7 +1718,9 @@ function DeleteBox({
         icon: 'trash',
         title: `${record.name ?? UNNAMED_BOX} is gone. There is no undo.`,
         body: `${count(result.cards, 'card', 'cards')} and ${count(result.photos, 'photograph', 'photographs')} deleted.${
-          result.buried > 0 ? ` ${count(result.buried, 'sold or retired card', 'sold or retired cards')} moved to the graveyard.` : ''
+          record.sold + record.retired > 0
+            ? ` ${count(record.sold + record.retired, 'sold or retired record', 'sold or retired records')} stay on the Deleted boxes shelf.`
+            : ''
         }${result.directory_removed ? '' : ' One photo folder stays: it holds a file the delete did not expect.'}`,
         ttlMs: 12000,
       })
@@ -1987,7 +1735,7 @@ function DeleteBox({
 
   return (
     <>
-      <Op
+      <SettingsOp
         icon="trash"
         danger
         label="Delete"
@@ -2005,17 +1753,17 @@ function DeleteBox({
           <Notice tone={record.listed === 0 ? 'info' : 'warn'}>
             {record.listed === 0
               ? `${
-                  record.sold + record.retired + record.moved === 0
-                    ? 'Nothing in this box has departed.'
-                    : `${count(record.sold + record.retired + record.moved, 'departed record', 'departed records')} will be buried, photographs deleted.`
+                  record.sold + record.retired === 0
+                    ? 'Nothing in this box has sold or been retired.'
+                    : `${count(record.sold + record.retired, 'sold or retired record', 'sold or retired records')} will stay on the Deleted boxes shelf, without photographs.`
                 } No undo.`
               : `Refused: ${count(record.listed, 'card', 'cards')} listed — release the hold first.${
-                  record.sold + record.retired + record.moved > 0
-                    ? ` ${count(record.sold + record.retired + record.moved, 'other departed record', 'other departed records')} will be buried once it goes through.`
+                  record.sold + record.retired > 0
+                    ? ` ${count(record.sold + record.retired, 'sold or retired record', 'sold or retired records')} will stay on the Deleted boxes shelf once it goes through.`
                     : ''
                 }`}
           </Notice>
-          <Trouble failure={trouble} />
+          <SettingsTrouble failure={trouble} />
           <div className="boxops-actions">
             <Button
               variant="ghost"

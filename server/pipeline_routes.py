@@ -154,7 +154,10 @@ from server import tcg_import  # noqa: E402
 # because Pillow may genuinely be absent, and there is no equivalent risk here.
 from pipeline import pricehistory  # noqa: E402
 from pipeline import productview  # noqa: E402
+from pipeline import realized  # noqa: E402
 from pipeline import holdings  # noqa: E402
+from pipeline import movers as price_movers  # noqa: E402
+from pipeline import pricerefresh  # noqa: E402
 from pipeline import stockimages  # noqa: E402
 from store.pricearchive import RANGE_WIDTH_DAYS  # noqa: E402
 # THE SAME RULE, AND IT IS WHY THE RATES MOVED OUT OF `cli/cmd_identify.py`. `identify/cost.py`
@@ -1480,7 +1483,10 @@ def _band_rect(sent_size, prepared, det, rect, band_fractions):
 
 
 def do_pipeline_crop_preview(payload: dict) -> dict:
-    """`POST /pipeline/crop-preview` — what this reading actually sends. FREE, writes nothing.
+    """`POST /pipeline/crop-preview` — what this reading sends, cropped by the preview's own finder. FREE, writes nothing.
+
+    THE FINDER IS `geometry.locate_card` (D125) AND A RUN'S IS STILL `detect_card`, so the crop
+    drawn here can differ from the one a run makes until runs move to it.
 
     D32's amendment gave the crop three named pairs and a sentence each, because the owner
     could not tell from the controls what the crop did: *"walk me through how im supposed to
@@ -1570,7 +1576,8 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
     capture = captures[at]
 
     try:
-        detected = geometry.detect_card(capture.photo)
+        # THE MODEL FIRST, `detect_card` BEHIND IT (D125): `locate_card` falls back itself.
+        detected = geometry.locate_card(capture.photo)
     except Exception:
         # The same swallow `cli/cmd_identify.py` performs around this call, and for the same
         # reason: detection is an optimisation, and a photograph it cannot read is sent whole
@@ -1585,6 +1592,20 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
             max_edge=max_edge,
             crop_box=detected if crop else None,
         )
+        if crop and prepared.crop_refused and detected is not None and detected.method == "dfine":
+            # THE SAFETY PATH FOR A CONFIDENT MODEL BOX THAT `crop_refusal` REFUSES (D125). The
+            # fallback inside `locate_card` runs only when the model answers nothing, and the
+            # guard lives in `identify`, which `geometry` may not import, so the refusal is
+            # handled here: ask `detect_card`, and cut with its box if it has one.
+            try:
+                fallback = geometry.detect_card(capture.photo)
+            except Exception:
+                fallback = None
+            if fallback is not None:
+                detected = fallback
+                prepared = identify_images.prepare(
+                    capture.photo, max_edge=max_edge, crop_box=detected
+                )
     except identify_images.ImageError as exc:
         return {
             "selection": selection.describe(),
@@ -1596,12 +1617,14 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
             "sample": {"box": capture.box, "index": capture.index, "unreadable": str(exc)},
         }
 
-    # THE CUT THE RUN WILL ACTUALLY MAKE, WHICH IS NOT ALWAYS THE ONE DETECTION PROPOSED.
+    # THE CUT THIS PREVIEW MAKES, WHICH IS NOT ALWAYS THE ONE THE FINDER PROPOSED. The finder is
+    # `geometry.locate_card` (the model, `detect_card` behind it), and a run still asks
+    # `detect_card` alone, so until runs move this is NOT the cut a run makes (D125).
     # `prepare` applies `images.crop_refusal` and can decline a box that came back looking
-    # fine — a rectangle inside the card, which sends the collector number outside the bytes.
+    # fine: a rectangle inside the card, which sends the collector number outside the bytes.
     # Reading the refusal off `prepared` rather than re-running the guard is the same rule
     # `_parse_preflight` follows and the same one `crop_rect` exists for: the preview draws
-    # what was made, never a second opinion about it.
+    # what it made, never a second opinion about it.
     crop_refused = prepared.crop_refused
     rect = (
         identify_images.crop_rect(prepared.original_size, detected)
@@ -3849,6 +3872,68 @@ def do_pipeline_holdings_value(range_: str) -> dict:
                 "not counted here."
             ),
         },
+    }
+
+
+def do_pipeline_movers() -> dict:
+    """`GET /pipeline/movers` — live SKUs whose market moved more than 10% since they were first
+    seen live, with direction and amount, and the last scheduled read's note (DEBT69).
+
+    A PLAIN READ. No socket, no write, and nothing here changes a price: `#/pricing` draws it and
+    the person decides. THEN is the archive bucket covering the SKU's `first_seen_live` day (not its listing day)
+    (D219), NOW is the `readings` table (D189). A SKU with neither is counted in `unmeasured`,
+    never dropped. `refresh` is `pipeline/pricerefresh.py`'s note, or null if no scheduled read
+    has ever run.
+    """
+    try:
+        snapshot = Store().read()
+    except (files.StoreError, OSError, ValueError, TypeError) as exc:
+        files.log_cause('store read', exc)
+        raise PipelineRefusal(
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            "store_unreadable",
+            f"The store could not be read because {files.plain_cause(exc)}, so no price moves can be shown. Try again, and if it repeats, restart the app on the Mac.",
+        ) from None
+    # THE SUBJECTS ARE EVERY SKU IN THE NEWEST LIVE EXPORT WITH A COPY LIVE, which the daily read
+    # keeps current. Its date is `Listing.first_seen_live` where `reconcile --live` has written one:
+    # the first export that held the SKU, NOT the day it was listed. A subject with no such date
+    # is counted unchecked, never dropped. Nothing here writes a `Listing` (D87, D104).
+    _, live_listing = _newest_live_listing()
+    live_skus = [sku for sku, (_, held) in live_listing.items() if held > 0]
+    listed = {}
+    for sku in live_skus:
+        entry = snapshot.inventory.listings.get(sku)
+        when = corpus.parse_stamp(entry.first_seen_live) if entry is not None else None
+        if when is not None:
+            listed[sku] = when.date()
+    summary = snapshot.archive.summary
+    found, unmeasured = price_movers.movers(
+        listed,
+        {sku: r.market for sku, r in snapshot.readings.entries.items()},
+        lambda sku: [p for row in summary.where(sku=sku) for p in row.points],
+    )
+    rows = []
+    for m in found:
+        facts = snapshot.skus.entries.get(m.sku)
+        rows.append({
+            "sku": m.sku,
+            # `skus` has no row for a SKU never read from an export; the reading names it then.
+            "name": facts.product_name if facts else snapshot.readings.entries[m.sku].name,
+            "set": facts.set_name if facts else None,
+            "number": facts.number if facts else None,
+            "condition": facts.condition if facts else None,
+            "first_seen": listed[m.sku].isoformat(),
+            "then": tcgcsv.format_price(m.then),
+            "now": tcgcsv.format_price(m.now),
+            "change": str(m.change.quantize(Decimal("0.001"))),
+            "direction": m.direction,
+        })
+    return {
+        "threshold": str(price_movers.THRESHOLD),
+        "listed": len(live_skus),
+        "unmeasured": unmeasured + len(live_skus) - len(listed),
+        "movers": rows,
+        "refresh": pricerefresh.read_status(),
     }
 
 
@@ -6437,6 +6522,52 @@ def do_product_history(sku: str) -> dict:
     }
 
 
+def do_product_realized(sku: str) -> dict:
+    """`GET /pipeline/products/<sku>/realized` — what this seller got for this SKU's product,
+    against the archived market on each sale date (DEBT70). READ-ONLY, no receipt.
+
+    The sales export is read IN PLACE from `PKMNSCAN_SALES_EXPORT`, a path the owner names.
+    With none set the answer is `configured: false` and nothing is read. Rows are matched on
+    the archive's own `product_id`; only dates and money leave this function, never a buyer
+    (`pipeline/realized.py:read_sales` drops them while parsing).
+    """
+    wanted = _wanted_sku(sku)
+    path = os.environ.get("PKMNSCAN_SALES_EXPORT", "").strip()
+    if not path:
+        return {"sku": wanted, "configured": False}
+    if not os.path.isfile(path):
+        raise PipelineRefusal(
+            HTTPStatus.NOT_FOUND,
+            "sales_export_missing",
+            "The sales export file chosen for this server is not there.",
+        )
+    try:
+        sales, left_out = realized.read_sales(path)
+    except (ValueError, OSError) as exc:
+        files.log_cause("sales export", exc)
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "sales_export_unreadable",
+            "The sales export chosen for this server could not be read. Check that it is an OrderWand sales export.",
+        ) from None
+    snapshot = Store().read()
+    buckets = snapshot.archive.for_sku(wanted)
+    product_id = buckets[0].product_id if buckets else None
+    mine = [s for s in sales if s.product_id == product_id] if product_id else []
+    condition = None
+    if mine:  # the card lookup is paid only when this product has a sale
+        with contextlib.suppress(productview.ProductNotFound):
+            condition = productview.row_for_sku(snapshot, wanted).get(tcgcsv.CONDITION_COLUMN)
+    return {
+        "sku": wanted,
+        "configured": True,
+        "file": os.path.basename(path),
+        "product_id": product_id,
+        "left_out": left_out,
+        **realized.compare(mine, buckets, condition),
+    }
+
+
 def _wanted_sku(sku: str) -> str:
     wanted = (sku or "").strip()
     if not wanted:
@@ -6586,12 +6717,11 @@ def do_pipeline_trends(name: str, skus: Sequence[str] = ()) -> dict:
     2026-08-31 by asking for the graphs on every row. This is the route that entry specified,
     built to the shape it specified, and D277 records what the answer cost.
 
-    IT IS STILL A PRESS AND THAT IS THE WHOLE OF D278 THAT SURVIVES INTACT. Nothing polls
-    this and no render fires it: a screen that read it on mount would turn every visit to
-    `#/pricing` into ~92 requests at a free public mirror for readings nobody asked for,
-    which is the one way D278 said this feature could become rude. What changed is the
-    GRANULARITY of the press — one for the list instead of one per card — and not whether
-    there is one.
+    A PRESS, AND AN OVERNIGHT READ BY THE OWNER'S WORD (D278). No render fires it: a screen that
+    read it on mount would turn every visit to `#/pricing` into ~92 requests at a free public
+    mirror for readings nobody asked for. The Trends press stays, to refresh. The daily job also
+    walks it overnight (`do_price_trends_preload`) at this route's own pace and saves the result,
+    which `#/pricing` then draws at first paint from a local file.
 
     IT SKIPS THE ROWS THIS RUN CAN ADD NOTHING FOR, on the owner's instruction of the same
     day: *"I don't need the prices for the rows that have none left."* `at_cap` is the field
@@ -6693,7 +6823,7 @@ def _trends_for_entries(
             # there is no category to look a history up by — a refusal with its own sentence,
             # not an empty reading.
             refused[sku] = (
-                f"{entry.get('name') or sku} is not in a catalogued product line, so there "
+                f"{entry.get('name') or sku} {pricerefresh.NO_PRODUCT_LINE}, so there "
                 f"is no product to look a history up by (D22)."
             )
             continue
@@ -6733,6 +6863,20 @@ def _trends_for_entries(
     readings, walked = market.readings_for_rows(rows, product_ids=product_ids)
     refused.update(walked)
 
+    strips = {
+        sku: [
+            _history_spark(reading.series[r])
+            for r in pricehistory.DEFAULT_RANGES
+            if r in reading.series
+        ]
+        for sku, reading in readings.items()
+    }
+    # THE PRESS WRITES THROUGH THE SAME SAVE AS THE OVERNIGHT READ, so a reload keeps it. Only strips
+    # that were READ are saved: a refused SKU never replaces a good saved strip.
+    try:
+        pricerefresh.save_strips(strips)
+    except OSError as exc:
+        files.log_cause('trends save', exc)
     return {
         **source,
         "asked": len(rows),
@@ -6743,15 +6887,75 @@ def _trends_for_entries(
                 # ONE ENTRY PER RANGE, IN `DEFAULT_RANGES` ORDER — finest first, the same
                 # order the panel draws and the same list. The ranges OVERLAP and are never
                 # two halves to add up.
-                "ranges": [
-                    _history_spark(reading.series[r])
-                    for r in pricehistory.DEFAULT_RANGES
-                    if r in reading.series
-                ],
+                "ranges": strips[sku],
             }
             for sku, reading in readings.items()
         },
         "refused": refused,
+    }
+
+
+#: How many SKUs one preload request asks about: `app/src/Pricing.tsx`'s `TREND_CHUNK`, so the
+#: overnight walk asks exactly what the Trends press would, in the same sized steps.
+TREND_PRELOAD_CHUNK = 8
+
+
+def do_price_trends_preload() -> dict:
+    """The daily job's overnight Trends read: the strip for every row `#/pricing`'s Trends press
+    would read, through the SAME route that press calls (`do_pipeline_trends`), by the owner's word.
+
+    ROWS AND DOORS ARE THE PRESS'S OWN. The rows are the unsent worklist's (`do_pipeline_worklist`,
+    every open run) that are not `at_cap`, each read through the last run that holds it, which is
+    `loadTrends`' rule in `app/src/Pricing.tsx`. The pace is `pricehistory.Market`'s own courtesy
+    delay, inside `do_pipeline_trends`; this adds no faster loop and no second reader.
+
+    FREE, READ-ONLY, AND NEVER ON A RENDER. It is reached only by `scripts/price-refresh-daily.py`
+    (a visit to `#/pricing` still fires no request at the market host) and calls nothing that
+    spends, sweeps or writes a price. The test for that reads this function's own calls.
+
+    A failed step is named, never dropped: a refused run lands in `failed` and its rows in
+    `refused`, and the caller's note says how many of how many were read.
+    """
+    work = do_pipeline_worklist([])
+    by_door: Dict[str, List[str]] = {}
+    for row in work["skus"]:
+        legs = row.get("in") or []
+        door = legs[-1].get("run") if legs else None
+        if door and not row.get("at_cap"):
+            by_door.setdefault(str(door), []).append(str(row["sku"]))
+    read: Dict[str, list] = {}
+    refused: Dict[str, str] = {}
+    failed: List[str] = []
+    for door, skus in by_door.items():
+        for at in range(0, len(skus), TREND_PRELOAD_CHUNK):
+            chunk = skus[at:at + TREND_PRELOAD_CHUNK]
+            try:
+                answer = do_pipeline_trends(door, chunk)
+            except Exception as caught:  # ANY failure costs this chunk only; strips already read stay
+                failed.append(f"{door}: {caught}")
+                refused.update({sku: str(caught) for sku in chunk})
+                continue
+            read.update({sku: found["ranges"] for sku, found in answer["skus"].items()})
+            refused.update(answer["refused"])
+    return {
+        "asked": sum(len(skus) for skus in by_door.values()),
+        "skus": read,
+        "refused": refused,
+        "failed": failed,
+        "current": [str(row["sku"]) for row in work["skus"]],
+    }
+
+
+def do_pipeline_saved_trends() -> dict:
+    """`GET /pipeline/trends-saved` — the strips the daily job saved, and how that read ended.
+
+    A PLAIN LOCAL READ: two small files, no socket, no market request. `#/pricing` draws it at
+    first paint, so a visit fires no request at the market host (D278). `note` is the preload's
+    own note, or null if no overnight read has ever run.
+    """
+    return {
+        "skus": pricerefresh.read_trends(),
+        "note": (pricerefresh.read_status() or {}).get("trends"),
     }
 
 

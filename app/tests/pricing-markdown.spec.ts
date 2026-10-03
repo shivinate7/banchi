@@ -115,7 +115,7 @@ async function open(
 
   await page.route(/\/pipeline\/markdowns\/[^/]+\/send$/, async (route) => {
     wire.push({ method: 'POST', path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() })
-    if (options.sendDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.sendDelayMs))
+    if (options.sendDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.sendDelayMs)) // keep: stubbed answer held options.sendDelayMs ms on purpose, a latency fixture
     const answer = options.send?.() ?? { status: 200 }
     await route.fulfill({
       status: answer.status,
@@ -773,7 +773,7 @@ test('the Live tab opens the newest read, and its line says how the read was tak
 
 test('Read again keeps its words and its place while it reads', async ({ page }) => {
   await page.route(/\/pipeline\/live-export$/, async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    await new Promise((resolve) => setTimeout(resolve, 1500)) // keep: stubbed answer held 1500 ms on purpose, a latency fixture
     await route.fulfill({ status: 409, contentType: 'application/json', body: '{"error":{"code":"tcg_cookie_missing","message":"No session."}}' })
   })
   await open(page)
@@ -792,7 +792,7 @@ test('Read again keeps its words and its place while it reads', async ({ page })
 test('the Live tab’s Download keeps its words and its place while it writes', async ({ page }) => {
   await open(page)
   await page.route(/\/pipeline\/markdowns\/[^/]+\/apply$/, async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    await new Promise((resolve) => setTimeout(resolve, 1500)) // keep: stubbed answer held 1500 ms on purpose, a latency fixture
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

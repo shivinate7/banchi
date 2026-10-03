@@ -240,6 +240,3 @@ product       http://localhost:5173/#/product  .producthistory,.bn-title
 #   it is the leak itself, not a risk of one.
 # OFF_RENDER #/capture — needs a camera. A headless render draws the permission path, which
 #   is a real state and not the screen; the layout is verified at the rig.
-# OFF_RENDER #/graveyard — read-only, and every row on it is a departed card whose
-#   photograph the walk can draw. Nothing here can be undone and nothing here prices, so
-#   there is no layout question a render would settle that `#/inventory`'s does not.

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { test, expect } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { settleMotion } from './motionSettled'
 import { BLOCK, PARAMS, ROMAN_TRACK_SOLVED } from '../src/kit/lockupGeometry'
 import { VARIANTS } from '../src/kit/markPalettes'
 import { phoneOff, setViewport } from './phoneSwitch'
@@ -128,7 +129,7 @@ test('the collapsed bracket is markGeometry.ts own wire, at the rail size', asyn
   await setViewport(page, { width: 1440, height: 900 })
   await page.goto('/')
   await page.click('.bn-side .bn-brand')
-  await page.waitForTimeout(700)
+  await settleMotion(page)
 
   const drawn = await page.locator('.bn-side .bn-lockup-bracket').evaluate((el) => {
     const r = el.getBoundingClientRect()
@@ -164,9 +165,12 @@ test('the bracket is one continuous path across the collapse, never two', async 
   await page.click('.bn-side .bn-brand')
   // mid-flight: the path must already be neither end. A crossfade would leave `d` untouched and
   // move opacity instead, which is exactly what shipped before and what this catches.
-  await page.waitForTimeout(90)
-  const mid = await arm.getAttribute('d')
-  await page.waitForTimeout(700)
+  // first frame whose path differs from the open one, read in page time
+  const mid = await arm.evaluate((el, from) => new Promise<string | null>((done) => {
+    const tick = () => (el.getAttribute('d') !== from ? done(el.getAttribute('d')) : requestAnimationFrame(tick))
+    tick()
+  }), open)
+  await settleMotion(page)
   const rail = await arm.getAttribute('d')
 
   expect(mid, 'the bracket did not move mid-collapse — it is being swapped, not morphed').not.toBe(open)
@@ -333,12 +337,11 @@ test('the chevron is quiet, and it is pinned to the row edge rather than floatin
     .toBeLessThan(1)
 
   await page.hover('.bn-side .bn-brand')
-  await page.waitForTimeout(250)
-  expect((await read()).opacity, 'and it comes up to full under the cursor').toBe(1)
+  await expect.poll(async () => (await read()).opacity, { message: 'and it comes up to full under the cursor' }).toBe(1)
 
   // GONE IN THE RAIL, not faded: 64px less two gutters leaves 48 and the mark takes 32.
   await page.click('.bn-side .bn-brand')
-  await page.waitForTimeout(500)
+  // the chevron is hidden on the next line, which waits for it
   await expect(page.locator('.bn-brand-chevron')).toBeHidden()
 })
 
@@ -381,7 +384,7 @@ test('the tab title holds one fixed title per screen, and none survives the scre
   const { named } = await screens(page)
 
   await page.goto(`/${named.href}`)
-  await page.waitForTimeout(400)
+  await expect(page).toHaveTitle(`番地 ${named.label.toLowerCase()}`)
   const seen = new Set<string>()
   for (let i = 0; i < 32; i++) { seen.add(await page.title()); await page.clock.runFor(500) }
   expect([...seen], 'one fixed title, the screen in lowercase after the brand')
@@ -496,10 +499,10 @@ test('collapsing the sidebar moves nothing sideways off its spine', async ({ pag
   // passed the other two on the same code.
   const during: Array<Record<'mark' | 'nav' | 'foot', number | null>> = []
   for (let i = 0; i < 8; i++) {
-    await page.waitForTimeout(40)
+    await page.waitForTimeout(40) // keep: the 40ms sample schedule is the measurement, deliberately off the frame clock
     during.push(await centers())
   }
-  await page.waitForTimeout(400)
+  await settleMotion(page)
   const rail = await centers()
 
   // the corridor: every mid-flight sample sits between the two resting positions, with 2px of
@@ -561,7 +564,7 @@ for (const rail of [
       // that never closed would otherwise be measured as though it had.
       await expect(page.locator('.bn-shell[data-rail="true"]')).toHaveCount(1)
     }
-    await page.waitForTimeout(500)
+    await settleMotion(page)
 
     const read = await page.evaluate(() => {
       const center = (el: Element) => {
@@ -651,7 +654,7 @@ test('the phone drawer draws the lockup, and no wordmark or tagline beside it', 
   await page.goto('/')
   await page.getByText('More', { exact: true }).click()
   await expect(page.locator('.bn-drawer')).toBeVisible()
-  await page.waitForTimeout(500)
+  await settleMotion(page)
 
   const lockup = page.locator('.bn-drawer .bn-brand-lockup')
   // section 19 settled kanji 40 — the sidebar's own number, drawn at 390 and 320 in both themes
@@ -688,7 +691,7 @@ test('every lockup the product draws clears the size floor', async ({ page }) =>
     for (const hash of ['/', GALLERY]) {
       await page.goto(hash)
       if (w < 640 && hash === '/') await page.getByText('More', { exact: true }).click()
-      await page.waitForTimeout(400)
+      await settleMotion(page)
       const sizes = await page.locator('.bn-lockup').evaluateAll((els) =>
         els.map((el) => Number(el.getAttribute('width'))))
       expect(sizes.length, `${hash} at ${w} draws no lockup at all`).toBeGreaterThan(0)
@@ -801,7 +804,7 @@ test('the drawer keeps its headings on an iPhone in Safari, and every row stays 
   await page.goto('/')
   await page.getByText('More', { exact: true }).click()
   await expect(page.locator('.bn-drawer')).toBeVisible()
-  await page.waitForTimeout(400)
+  await settleMotion(page)
 
   const seen = await page.evaluate(() => {
     const drawer = document.querySelector('.bn-drawer')!
@@ -847,7 +850,7 @@ test('the second step reaches the mini and the iPhone 14, and stops short of a t
   await page.goto('/')
   await page.getByText('More', { exact: true }).click()
   await expect(page.locator('.bn-drawer')).toBeVisible()
-  await page.waitForTimeout(400)
+  await settleMotion(page)
 
   const iphone14 = await page.evaluate(() => {
     const nav = document.querySelector('.bn-drawer .bn-nav')!
@@ -869,7 +872,7 @@ test('the second step reaches the mini and the iPhone 14, and stops short of a t
   await setViewport(page, { width: 375, height: 722 })
   await page.goto('/')
   await page.getByText('More', { exact: true }).click()
-  await page.waitForTimeout(400)
+  await settleMotion(page)
 
   const mini = await page.evaluate(() => {
     const nav = document.querySelector('.bn-drawer .bn-nav')!
@@ -893,7 +896,7 @@ test('the second step reaches the mini and the iPhone 14, and stops short of a t
   await setViewport(page, { width: 375, height: 600 })
   await page.goto('/')
   await page.getByText('More', { exact: true }).click()
-  await page.waitForTimeout(400)
+  await settleMotion(page)
   const short = await page.evaluate(() => {
     const nav = document.querySelector('.bn-drawer .bn-nav')!
     return {
@@ -914,7 +917,7 @@ test('the second step reaches the mini and the iPhone 14, and stops short of a t
   await setViewport(page, { width: 390, height: 900 })
   await page.goto('/')
   await page.getByText('More', { exact: true }).click()
-  await page.waitForTimeout(400)
+  await settleMotion(page)
   const tall = await page.locator('.bn-drawer .bn-nav a.bn-nav-link').first()
     .evaluate((el) => Math.round(el.getBoundingClientRect().height))
   expect(tall, 'a phone with room to spare keeps its 44px rows').toBe(44)
@@ -928,7 +931,7 @@ test('a tall phone keeps the full lockup, because it has the room', async ({ pag
   await page.goto('/')
   await page.getByText('More', { exact: true }).click()
   await expect(page.locator('.bn-drawer')).toBeVisible()
-  await page.waitForTimeout(400)
+  await settleMotion(page)
 
   const lockup = await page.locator('.bn-drawer .bn-lockup').evaluate((el) => Number(el.getAttribute('width')))
   expect(lockup, 'a tall phone draws the sidebar’s own kanji 40').toBeCloseTo((40 * BLOCK.w) / BLOCK.ref, 0)

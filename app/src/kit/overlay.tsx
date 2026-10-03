@@ -643,7 +643,7 @@ function floorY(): number {
   return Math.min(window.innerHeight, top)
 }
 
-/** A small panel under the control that opened it. Not blocking: no scrim, and the page stays
+/** A small panel under the control that opened it. Arrow keys move between `.bn-menu-item`s. Not blocking: no scrim, and the page stays
  *  live. Escape, a press outside, focus leaving it, or Tab past its last item closes it, and
  *  focus goes back to the control. It opens ABOVE the control when there is no room below, and
  *  shifts to stay inside the viewport and above the phone's tab bar. */
@@ -652,6 +652,7 @@ export function Popover({
   onClose,
   anchor,
   label,
+  role = 'dialog',
   children,
   className,
 }: {
@@ -659,6 +660,8 @@ export function Popover({
   readonly onClose: () => void
   readonly anchor: RefObject<HTMLElement | null>
   readonly label: string
+  /** `menu` for a list of `menuitem`s; the default is a dialog. */
+  readonly role?: 'dialog' | 'menu'
   readonly children?: ReactNode
   readonly className?: string
 }) {
@@ -735,7 +738,7 @@ export function Popover({
     <div
       ref={panel}
       className={['bn-menu bn-popover', className].filter(Boolean).join(' ')}
-      role="dialog"
+      role={role}
       aria-label={label}
       tabIndex={-1}
       data-leaving={leaving ? 'true' : undefined}
@@ -744,7 +747,20 @@ export function Popover({
       onKeyDown={(event) => {
         /* TAB PAST THE LAST ITEM (or Shift-Tab past the first) CLOSES IT, and focus goes back to
            the control that opened it, not on into the page (UX-091). */
-        if (event.key !== 'Tab' || panel.current === null) return
+        if (panel.current === null) return
+        /* ARROWS WALK THE MENU ITEMS (`.bn-menu-item`), wrapping at the ends; Home and End jump.
+           A popover with no menu items in it never reaches this. */
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End') {
+          const menu = Array.from(panel.current.querySelectorAll<HTMLElement>('.bn-menu-item:not(:disabled)'))
+          if (menu.length === 0) return
+          const at = menu.indexOf(document.activeElement as HTMLElement)
+          const next =
+            event.key === 'Home' ? 0 : event.key === 'End' ? menu.length - 1 : event.key === 'ArrowDown' ? (at + 1) % menu.length : (at <= 0 ? menu.length : at) - 1
+          event.preventDefault()
+          menu[next]?.focus()
+          return
+        }
+        if (event.key !== 'Tab') return
         const items = focusables(panel.current)
         const first = items[0]
         const last = items[items.length - 1]

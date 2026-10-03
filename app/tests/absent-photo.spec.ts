@@ -4,6 +4,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { place, seedPopulatedPricing } from './routeFixtures'
 import { setViewport } from './phoneSwitch'
+import { settleMotion } from './motionSettled'
 
 /* THE PHOTOGRAPH IS GONE (a 404 on the file), ON THREE SCREENS, AND EACH SAYS IT THE SAME WAY.
  *
@@ -68,7 +69,7 @@ async function openReview(page: Page): Promise<void> {
 async function shot(page: Page, name: string): Promise<void> {
   const dir = process.env.SHOTS
   if (!dir) return
-  await page.waitForTimeout(700) // let a sheet finish sliding in; only when a person asked for pictures
+  await settleMotion(page)
   await page.screenshot({ path: `${dir}/${name}.png` })
 }
 

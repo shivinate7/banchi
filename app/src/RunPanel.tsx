@@ -21,7 +21,7 @@ import { RunFiles } from './RunFiles'
 import { RunRescue } from './RunRescue'
 import { FileButton } from './RunsDrop'
 import { LogWell } from './RunsLog'
-import { COMMANDS, StageBar, StagePill, matchProblemTitle, runningFor, stageOf, whenLabel, type Command } from './RunsStage'
+import { COMMANDS, STAGE_WORDS, StageBar, StagePill, matchProblemTitle, runningFor, stageOf, whenLabel, type Command } from './RunsStage'
 import { boxOf, runBoxLabel } from './runScope'
 import { roundsToNothing } from './money'
 import { matchWaiting } from './autoMatch'
@@ -167,10 +167,13 @@ function previousLine(fetched: ExportFetched, display: (game: string) => string)
   return `Last time: ${list}. This one: ${fetched.rows.toLocaleString()} / ${fetched.skus.toLocaleString()}.`
 }
 
+/** What a run with no box on record says in the box's place. */
+const NO_BOX_SAID = 'This run has no box on record.'
+
 /** What a run was over, in the fewest words that are true. */
 function scopeOf(row: RunSummary): string {
   const label = runBoxLabel(row)
-  if (label === null) return '—'
+  if (label === null) return NO_BOX_SAID
   if (row.scope != null && !row.scope.whole_box) return `${label} (${row.scope.cards ?? '?'} cards)`
   return label
 }
@@ -741,20 +744,18 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
       <aside className="runs-master bn-panel" aria-label="Every run">
         <div className="runs-master-head">
           <span className="bn-section-title">
-            <Icon name="history" size={16} /> Runs
+            <Icon name="history" size={16} /> {runs.length === 0 ? 'Every run' : `${runs.length} run${runs.length === 1 ? '' : 's'}`}
           </span>
-          {runs.length === 0 ? null : (
+          {live === 0 ? null : (
             <span className="run-list-head">
-              {runs.length} run{runs.length === 1 ? '' : 's'}
-              {live > 0 ? (
-                <Pill tone="live" className="runs-pill-live">
-                  <span className="bn-dot bn-dot-live" />
-                  {live} running
-                </Pill>
-              ) : null}
+              <Pill tone="live" className="runs-pill-live">
+                <span className="bn-dot bn-dot-live" />
+                {live} running
+              </Pill>
             </span>
           )}
         </div>
+        {runs.length === 0 ? null : <p className="run-list-key">Each bar fills as a run passes {STAGE_WORDS}.</p>}
         {pageFailure !== null ? (
           <div className="runs-trouble">
             <Notice tone={failureTone(pageFailure)} code={pageFailure.code}>
@@ -844,7 +845,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                     say — with the id still on the title attribute for a reader who needs
                     it. */}
                 <h2 className="runs-detail-h" title={runBoxLabel(detail) === null ? undefined : detail.run}>
-                  {runBoxLabel(detail) ?? detail.run}
+                  {runBoxLabel(detail) ?? NO_BOX_SAID}
                 </h2>
               </div>
               <div className="runs-detail-side">

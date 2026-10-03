@@ -113,7 +113,7 @@ export function scanMoneyFace(): MoneyFaceResult {
   return { text: textHits, fields: fieldHits, noView: false }
 }
 
-/* THE MUTATION HOOK for `money-face.spec.ts` (`MONEY_FACE_MUTATE=<hash>`): one dollar figure
+/* THE MUTATION HOOK for `text-checks.spec.ts` (`MONEY_FACE_MUTATE=<hash>`): one dollar figure
  * drawn in Inter, appended inside that route's `.bn-view` through `page.evaluate`, never an
  * edit under `app/src`. `$987.65` is on no screen of the fixture, so the finding it makes is
  * always a NEW amount, even on a route that already has an amount listed. */

@@ -4,7 +4,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test'
 import type { GameRegistry, ResolvedOrder } from '../src/types'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
-import { settled, whatMoved } from './motionSettled'
+import { afterPaint, settleMotion, settled, whatMoved } from './motionSettled'
 import { iconTip } from './iconTooltip'
 import { phoneOff, setViewport } from './phoneSwitch'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
@@ -765,6 +765,12 @@ async function open(
   const record = (method: string, url: string, body: unknown) =>
     wire.push({ method, path: new URL(url).pathname, body })
 
+  /* The Deleted boxes shelf reads the burial lines. This fixture has no deleted box, so none: the
+     shelf has its own cases in `deleted-boxes.spec.ts`. */
+  await page.route(/\/graveyard(\?.*)?$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: [] }) }),
+  )
+
   /* The writes first: the read regexes below are looser and a `/inventory` matcher would
      swallow `/inventory/2` if it were registered ahead of it. */
 
@@ -992,7 +998,7 @@ async function open(
    * query string rather than a fixed body — a case answering `?game=` differently from a
    * bare `GET /boxes` passes one; every other case keeps passing a plain object. */
   await page.route(/\/boxes(\?.*)?$/, async (route) => {
-    if (options.boxesDelayMs) await new Promise((resolve) => setTimeout(resolve, options.boxesDelayMs))
+    if (options.boxesDelayMs) await new Promise((resolve) => setTimeout(resolve, options.boxesDelayMs)) // keep: stubbed answer held options.boxesDelayMs ms on purpose, a latency fixture
     const body =
       typeof boxes === 'function' ? boxes(new URL(route.request().url()).searchParams) : boxes
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
@@ -1201,7 +1207,7 @@ async function closeBoxOps(page: Page) {
 
 /** One figure from the box's census, by the label above it. */
 function censusValue(page: Page, label: string) {
-  return page.locator('.boxops-census-cell', { hasText: label }).locator('dd')
+  return page.locator('.bn-set-census-cell', { hasText: label }).locator('dd')
 }
 
 // ------------------------------------------------------- one screen, not two modes (D31)
@@ -1228,9 +1234,12 @@ sealEveryTest()
  * NOT `open()`: that helper's own postcondition waits for `.browse-sectfold`, which a
  * zero-box store never renders — waiting for it here would just re-time-out inside the
  * helper instead of inside the assertion. This registers the same handful of GET routes the
- * screen fires with no shelf resolved — `/boxes`, `/queues`, `/orders` — and nothing else,
+ * screen fires with no shelf resolved — `/boxes`, `/queues`, `/orders`, `/graveyard` — and nothing else,
  * so an unstubbed read the fix accidentally starts would fail loudly through `sealCapture`. */
 test('a zero-box store renders "No boxes yet" instead of loading forever', async ({ page }) => {
+  await page.route(/\/graveyard(\?.*)?$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: [] }) }),
+  )
   await page.route(/\/boxes$/, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ boxes: [] }) }),
   )
@@ -1512,15 +1521,13 @@ test('a search that never returns this card gives a sentence, not an endless loa
   const panel = page.locator('.inventory-copies')
   await expect(panel).toBeVisible()
 
-  // Long enough for the debounce (200ms) plus the stubbed fetch to land several times over.
-  await page.waitForTimeout(1500)
-
+  // The answer lands (the warning), then the busy marks must be gone.
+  await expect(panel.locator('.bn-notice-warn')).toContainText("did not return this card's own row")
   await expect(
     panel.locator('[aria-busy="true"]'),
     'the panel is still marked busy once the search has answered',
   ).toHaveCount(0)
   await expect(panel.locator('.inventory-looking')).toHaveCount(0)
-  await expect(panel.locator('.bn-notice-warn')).toContainText("did not return this card's own row")
 })
 
 test('B2 — a sold card reached by a deep link stays drawn for the rest of this box load', async ({
@@ -1949,7 +1956,7 @@ test('the press that sells a copy does not shift while the re-read is in flight'
   await page.route(/\/search\?/, async (route) => {
     calls += 1
     const asked = new URL(route.request().url()).searchParams.get('q') ?? ''
-    if (calls === 2) await new Promise((resolve) => setTimeout(resolve, 800))
+    if (calls === 2) await new Promise((resolve) => setTimeout(resolve, 800)) // keep: stubbed answer held 800 ms on purpose, a latency fixture
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1978,7 +1985,7 @@ test('the press that sells a copy does not shift while the re-read is in flight'
     if (box !== null) seenTops.add(Math.round(box.y))
     if ((await page.locator('.inventory-looking').count()) > 0) sawSkeleton = true
     if ((await row.locator('.position-bar').getAttribute('data-gone')) === 'true') break
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 50)) // keep: samples the list top every 50ms until the sale lands, a poll interval
   }
 
   expect([...seenTops], 'the copies list moved while the re-read was in flight').toEqual([topsBefore])
@@ -2011,12 +2018,13 @@ test('the press that sells a copy causes no layout shift in the half second afte
   await expect(row).toBeVisible()
   const press = row.getByRole('button', { name: 'Mark sold' })
   await press.scrollIntoViewIfNeeded()
-  await page.waitForTimeout(1000)
+  await settleMotion(page)
+  await afterPaint(page)
 
   const from = await markNow(page)
   await press.click()
   await expect(row.locator('.position-bar')).toHaveAttribute('data-gone', 'true')
-  await page.waitForTimeout(600)
+  await page.waitForTimeout(600) // keep: the shifts are read over the 500ms window after the press
 
   const inWindow = (await readShifts(page)).shifts.filter((s) => s.at >= from && s.at < from + 500)
   expect(sumOf(inWindow), `the press moved ${describeShifts(inWindow)}`).toBeLessThan(0.0005)
@@ -3150,7 +3158,7 @@ test('the census greps to the store, and the identity line says what the box hol
 
   /* THE NOTES UNDER FILL AND NEXT CAPTURE ARE CUT (UX-259, cut list #17): the figures stand on
      their labels, and the store's word "index" is not one of them (D196). */
-  await expect(page.locator('.boxops-census-cell', { hasText: 'Fill' }).locator('.boxops-census-note')).toHaveCount(0)
+  await expect(page.locator('.bn-set-census-cell', { hasText: 'Fill' }).locator('.bn-set-census-note')).toHaveCount(0)
 
   /* Five, not seven: two of the seven records have left. THE CENSUS TRIAD (D41) REACHED THIS
      PANEL — `on hand` is a `bn-stat` figure now, the same primitive `CardLocations`' own three
@@ -3247,8 +3255,8 @@ test('the operations are rows on one edge, and the delete is the only bordered o
      apart, which is what the screen draws. The order inside each is still pinned: it is D20's
      own — what the box is called, where its dividers are, then the two
      that act on cards rather than on the box. */
-  const rows = page.locator('.boxops-group:not(.boxops-group-danger) .boxops-op')
-  await expect(rows.locator('.boxops-op-label')).toHaveText([
+  const rows = page.locator('.bn-set-group:not(.bn-set-group-danger) .bn-set-op')
+  await expect(rows.locator('.bn-set-op-label')).toHaveText([
     'Rename',
     'Sections',
     'Naming',
@@ -3298,7 +3306,7 @@ test('the operations are rows on one edge, and the delete is the only bordered o
   const ordinary = await rows.first().evaluate((node) => window.getComputedStyle(node).color)
   const danger = await bar.evaluate((node) => window.getComputedStyle(node).color)
   expect(danger, 'the delete is drawn in the same ink as an ordinary operation').not.toBe(ordinary)
-  await expect(page.locator('.boxops-group-danger')).toContainText('Danger')
+  await expect(page.locator('.bn-set-group-danger')).toContainText('Danger')
 
   /* AND THE BAR IS BORDERED, which is the half of this case's own name that nothing asserted.
      The loop above proves the rows are bare; between them the title claims the delete is the
@@ -3315,7 +3323,7 @@ test('the operations are rows on one edge, and the delete is the only bordered o
      and the bordered row asserted above — holds, and D288's OWN concern (a press that cannot
      be undone keeps its words) is about the button's own label, "Delete", spelled out in
      full above, not this secondary caption. */
-  await expect(bar.locator('.boxops-op-detail')).toHaveCount(0)
+  await expect(bar.locator('.bn-set-op-detail')).toHaveCount(0)
 })
 
 // ------------------------------------------------------------------------- the mass-select
@@ -3335,8 +3343,8 @@ test('the list draws no tick, and Claims states the whole box on its own button'
      write reaches. The accessible name is asserted beside the visible one: the label and the
      detail are grid items with no text node between them. */
   const claims = page.getByRole('button', { name: /^Claims/ })
-  await expect(claims.locator('.boxops-op-label')).toHaveText('Claims')
-  await expect(claims.locator('.boxops-op-detail')).toHaveText('7 cards')
+  await expect(claims.locator('.bn-set-op-label')).toHaveText('Claims')
+  await expect(claims.locator('.bn-set-op-detail')).toHaveText('7 cards')
   await expect(claims).toHaveAttribute('aria-label', 'Claims, 7 cards')
 })
 
@@ -3346,24 +3354,24 @@ test('the card picker in the Claims sheet starts whole, narrows by card and by s
   await open(page)
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Claims/ }).click()
-  const picker = page.locator('.boxops-picker')
+  const picker = page.locator('.bn-set-picker')
   await expect(picker.getByRole('button', { name: /^Whole box/ })).toHaveAttribute('aria-pressed', 'true')
-  await expect(picker.locator('.boxops-picker-list')).toHaveCount(0)
+  await expect(picker.locator('.bn-set-picker-list')).toHaveCount(0)
 
   await picker.getByRole('button', { name: 'Some cards' }).click()
-  const cards = picker.locator('.boxops-picker-card input')
+  const cards = picker.locator('.bn-set-picker-card input')
   const total = await cards.count()
   expect(total).toBeGreaterThan(1)
-  await expect(picker.locator('.boxops-picker-count')).toHaveText(`${total} of ${total} picked`)
+  await expect(picker.locator('.bn-set-picker-count')).toHaveText(`${total} of ${total} picked`)
 
   await cards.nth(0).uncheck()
-  await expect(picker.locator('.boxops-picker-count')).toHaveText(`${total - 1} of ${total} picked`)
-  await expect(picker.locator('.boxops-picker-head input').first()).toHaveJSProperty('indeterminate', true)
+  await expect(picker.locator('.bn-set-picker-count')).toHaveText(`${total - 1} of ${total} picked`)
+  await expect(picker.locator('.bn-set-picker-head input').first()).toHaveJSProperty('indeterminate', true)
 
   await picker.getByRole('button', { name: 'None' }).click()
-  await expect(picker.locator('.boxops-picker-count')).toHaveText(`0 of ${total} picked`)
-  await picker.locator('.boxops-picker-head input').first().check()
-  await expect(picker.locator('.boxops-picker-head input').first()).toHaveJSProperty('indeterminate', false)
+  await expect(picker.locator('.bn-set-picker-count')).toHaveText(`0 of ${total} picked`)
+  await picker.locator('.bn-set-picker-head input').first().check()
+  await expect(picker.locator('.bn-set-picker-head input').first()).toHaveJSProperty('indeterminate', false)
   await picker.getByRole('button', { name: 'None' }).click()
 
   await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
@@ -3378,9 +3386,9 @@ test('the box claim sends only the switched-on fields, over only the cards picke
   const wire = await open(page)
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Claims/ }).click()
-  await page.locator('.boxops-picker').getByRole('button', { name: 'Some cards' }).click()
-  await page.locator('.boxops-picker').getByRole('button', { name: 'None' }).click()
-  const cards = page.locator('.boxops-picker-card input')
+  await page.locator('.bn-set-picker').getByRole('button', { name: 'Some cards' }).click()
+  await page.locator('.bn-set-picker').getByRole('button', { name: 'None' }).click()
+  const cards = page.locator('.bn-set-picker-card input')
   await cards.nth(0).check()
   await cards.nth(1).check()
 
@@ -3409,12 +3417,12 @@ test('Claims can fix one departed card alone, and Move never lists it', async ({
   const wire = await open(page)
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Claims/ }).click()
-  const picker = page.locator('.boxops-picker')
+  const picker = page.locator('.bn-set-picker')
   await picker.getByRole('button', { name: 'Some cards' }).click()
   await picker.getByRole('button', { name: 'None' }).click()
-  const gone = picker.locator('.boxops-picker-group', { hasText: 'Sold or moved out' })
+  const gone = picker.locator('.bn-set-picker-group', { hasText: 'Sold or moved out' })
   await expect(gone).toHaveCount(1)
-  await gone.locator('.boxops-picker-card input').first().check()
+  await gone.locator('.bn-set-picker-card input').first().check()
   await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
   await page.getByRole('textbox', { name: 'Note' }).fill('sold copy')
   await page.getByRole('button', { name: /^Apply to/ }).click()
@@ -3427,17 +3435,17 @@ test('Move lists on-hand cards only', async ({ page }) => {
   await open(page)
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Move,/ }).click()
-  await expect(page.locator('.boxops-picker').getByRole('button', { name: /^Whole box, 5 cards/ })).toBeVisible()
-  await page.locator('.boxops-picker').getByRole('button', { name: 'Some cards' }).click()
-  await expect(page.locator('.boxops-picker-group', { hasText: 'Sold or moved out' })).toHaveCount(0)
+  await expect(page.locator('.bn-set-picker').getByRole('button', { name: /^Whole box, 5 cards/ })).toBeVisible()
+  await page.locator('.bn-set-picker').getByRole('button', { name: 'Some cards' }).click()
+  await expect(page.locator('.bn-set-picker-group', { hasText: 'Sold or moved out' })).toHaveCount(0)
 })
 
 test('every card picked in the Claims sheet is the whole box and sends no indices key', async ({ page }) => {
   const wire = await open(page)
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Claims/ }).click()
-  await expect(page.locator('.boxops-picker').getByRole('button', { name: /^Whole box, 7 cards/ })).toBeVisible()
-  await page.locator('.boxops-picker').getByRole('button', { name: 'Some cards' }).click()
+  await expect(page.locator('.bn-set-picker').getByRole('button', { name: /^Whole box, 7 cards/ })).toBeVisible()
+  await page.locator('.bn-set-picker').getByRole('button', { name: 'Some cards' }).click()
   await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
   await page.getByRole('textbox', { name: 'Note' }).fill('all')
   await page.getByRole('button', { name: /^Apply to/ }).click()
@@ -3458,9 +3466,9 @@ test('Move on two cards picked in the sheet sends exactly those indices', async 
   })
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Move,/ }).click()
-  await page.locator('.boxops-picker').getByRole('button', { name: 'Some cards' }).click()
-  await page.locator('.boxops-picker').getByRole('button', { name: 'None' }).click()
-  const cards = page.locator('.boxops-picker-card input')
+  await page.locator('.bn-set-picker').getByRole('button', { name: 'Some cards' }).click()
+  await page.locator('.bn-set-picker').getByRole('button', { name: 'None' }).click()
+  const cards = page.locator('.bn-set-picker-card input')
   await cards.nth(0).check()
   await cards.nth(1).check()
   await page.locator('.bn-field .bn-pick').click()
@@ -4180,12 +4188,12 @@ test('a listing hold is named on the delete panel rather than discovered by pres
   await page.getByRole('button', { name: /^Delete$/ }).click()
 
   /* D134: a listed copy is the only remaining ground for `box_not_empty_of_commitments` — a
-     sold or retired record no longer blocks and is named as something that will be BURIED
-     instead, never as a reason the box is refused. This fixture's sold (1) and retired (1)
-     read as "2 other departed records". */
+     sold or retired record no longer blocks and is named as something that will stay on the
+     Deleted boxes shelf instead, never as a reason the box is refused. This fixture's sold (1)
+     and retired (1) read as "2 sold or retired records". */
   await expect(page.locator('.boxops-confirm')).toContainText('3 cards listed')
-  await expect(page.locator('.boxops-confirm')).toContainText('2 other departed records')
-  await expect(page.locator('.boxops-confirm')).toContainText('will be buried')
+  await expect(page.locator('.boxops-confirm')).toContainText('2 sold or retired records')
+  await expect(page.locator('.boxops-confirm')).toContainText('will stay on the Deleted boxes shelf')
 })
 
 test('the control that releases does not exist until the free plan has answered', async ({
@@ -4571,6 +4579,31 @@ test('S1 — bringing a card back names the box, never its number', async ({ pag
   expect(sent?.body).toEqual({ undo: true })
 })
 
+test('the card Actions menu takes focus, moves by arrow keys, and Escape returns it', async ({ page }) => {
+  /* `BoxBrowse.tsx:CardOps` was a hand-rolled menu: focus stayed on the page behind it and Tab
+   * left it. It is the kit `Popover` now. Focus lands on the first item, the arrows walk the
+   * items, Tab past the last closes it, and Escape puts focus back on the button. */
+  await open(page)
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
+  const trigger = page.getByRole('button', { name: 'Actions' })
+  await trigger.click()
+  const items = page.getByRole('menuitem')
+  await expect(page.getByRole('menu', { name: 'Card actions' })).toBeVisible()
+  await expect(items.first()).toBeFocused()
+  await page.keyboard.press('End')
+  await expect(items.last()).toBeFocused()
+  await page.keyboard.press('Home')
+  await expect(items.first()).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(items.nth(1)).toBeFocused()
+  await page.keyboard.press('ArrowUp')
+  await expect(items.first()).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(items).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+})
+
 test('UN-7 — a sale built on is refused, and "This card is still here" is a different write', async ({
   page,
 }) => {
@@ -4750,6 +4783,29 @@ test('S3 — with Hide sold on, a search count excludes what the fold already hi
   await expect(page.locator('.browse-filterbar .bn-filtercount-figure')).toHaveText('0 of 3 boxes')
 })
 
+test('D271 — a search that finds nothing offers the near name, and pressing it runs that search', async ({ page }) => {
+  const cards: Cards = {
+    '2/1': card({ index: 1, state: 'identified', name: 'Renekton', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+  }
+  const store: Store = {
+    cards,
+    search: (query) => {
+      const answer = searchAnswer(query, cards)
+      return answer.groups.length === 0 && /rekenton/i.test(query) ? { ...answer, did_you_mean: 'Renekton' } : answer
+    },
+  }
+  await open(page, TWO_BOXES, store, () => PRICING, SALE)
+
+  await page.getByRole('searchbox').fill('Rekenton')
+  const hint = page.getByRole('button', { name: 'Did you mean Renekton?' })
+  await expect(hint).toBeVisible()
+  /* D313: the line is drawn whole with the empty state, and is a thumb's height. */
+  expect((await hint.boundingBox())?.height).toBeGreaterThanOrEqual(40)
+  await hint.click()
+  await expect(page.getByRole('searchbox')).toHaveValue('Renekton')
+  await expect(page.getByText(/^Nothing matches/)).toHaveCount(0)
+})
+
 test('UX-244 — one copy moves to another box from its own row, and the receipt names the section (D300)', async ({ page }) => {
   await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
   const sent: { path: string; body: unknown }[] = []
@@ -4837,7 +4893,7 @@ test('UX-244 — a stale section on Move re-opens the pick with one plain senten
    * an effect reverts it, so this waits out a full render pass first. */
   await dialog.locator('.bn-section-pick-item').click()
   await expect(move).toBeEnabled()
-  await page.waitForTimeout(300)
+  await page.waitForTimeout(300) // keep: asserts the pick is not reverted a beat after it lands, a revert is an async effect that only elapsed time shows
   await expect(move).toBeEnabled()
   await expect(dialog.locator('.bn-section-pick-item[aria-checked="true"]')).toHaveCount(1)
 })
@@ -5539,7 +5595,7 @@ for (const [cutoff, plays, why] of [
       await expect(() => expect(page.evaluate(GLINTS)).resolves.toBeGreaterThan(0)).toPass({ timeout: 2000 })
       await expect(() => expect(page.evaluate(GLINTS)).resolves.toBe(0)).toPass({ timeout: 3000 })
     } else {
-      await page.waitForTimeout(400)
+      await page.waitForTimeout(400) // keep: asserts no glint plays over 400ms
       expect(await page.evaluate(GLINTS)).toBe(0)
     }
   })
@@ -5552,7 +5608,7 @@ test('a card with no market reading never glints, whatever the cutoff', async ({
   await expandAll(page)
   await page.locator('.browse-row', { hasText: 'Eiscue' }).first().click()
   await expect(page.locator('.card-locations-row.is-current .nb')).toHaveAttribute('aria-label', /Galio/)
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(400) // keep: asserts no glint plays over 400ms
   expect(await page.evaluate(GLINTS)).toBe(0)
 })
 
@@ -5561,7 +5617,7 @@ test('the glint reads the readings table and never the run snapshot', async ({ p
   await gated('0.01', {})(page)
   await expect(page.locator('.card-locations-row.is-current .nb-here svg')).toBeVisible()
   await page.locator('.browse-row').nth(1).click()
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(400) // keep: asserts no glint plays over 400ms
   expect(await page.evaluate(GLINTS)).toBe(0)
 })
 
@@ -6209,7 +6265,7 @@ test("the box's census and its forecast are told apart, and the fill says which 
   /* SAME COMPLAINT ONE COLUMN OVER, and the same absence. `cards 543 · sold 0 · fill 543 · next
      index 544` is 46 cells = 354.2px in a 299px track, so it wrapped — and it is not a digit
      count: box 1's shorter line wraps identically. It is four words and three interpuncts. */
-  const meta = page.locator('.boxops-census')
+  const meta = page.locator('.bn-set-census')
   await expect(meta).toBeVisible()
   expect(await meta.innerText()).not.toContain('·')
 
@@ -6224,7 +6280,7 @@ test("the box's census and its forecast are told apart, and the fill says which 
      `Next index` is D10's high-water mark — what the allocator hands out next — and it is named
      apart from them rather than sitting in the row as a fourth count of cards. */
   await expect(censusValue(page, 'Next capture')).toHaveText('8')
-  await expect(page.locator('.boxops-census-cell', { hasText: 'Next capture' })).toHaveCount(1)
+  await expect(page.locator('.bn-set-census-cell', { hasText: 'Next capture' })).toHaveCount(1)
 
   /* A box has no seal (`D299`), so no census figure can be a frozen one. */
   expect((await page.locator('.boxops-census-qual').allInnerTexts()).join(' ')).not.toMatch(/sealed/)
@@ -6232,7 +6288,7 @@ test("the box's census and its forecast are told apart, and the fill says which 
   /* And no figure wraps away from its own label at either width. */
   for (const width of [1440, 1280]) {
     await setViewport(page, { width, height: 900 })
-    const cells = await page.locator('.boxops-census-cell').evaluateAll((nodes) =>
+    const cells = await page.locator('.bn-set-census-cell').evaluateAll((nodes) =>
       nodes.map((node) => {
         const value = node.querySelector('dd') as HTMLElement
         return { h: value.getBoundingClientRect().height, line: Number.parseFloat(window.getComputedStyle(value).lineHeight) }
@@ -6266,7 +6322,7 @@ test('a narrow copies column shortens the bar, never the position label', async 
      departed copy still carries no bar, and this case measures a row that has one. */
   const row = page.locator('.card-locations-row').filter({ has: page.locator('.position-bar') }).first()
   await expect(row).toBeVisible()
-  await page.waitForTimeout(150)
+  await settleMotion(page)
 
   const geom = await row.evaluate((el) => {
     const bar = el.querySelector('.position-bar') as HTMLElement
@@ -6386,7 +6442,7 @@ test('every copy row draws the same bar height, located or not', async ({ page }
   await expect(page.locator('.card-locations-owner .position-bar').first()).toBeVisible()
   /* The bar's own transitions are 320ms and one of them is on `width`; measuring inside them
      reads a bar mid-ease. */
-  await page.waitForTimeout(400)
+  await settleMotion(page)
 
   const hs = await page
     .locator('.card-locations-owner .position-bar')
@@ -7481,7 +7537,7 @@ test('D132 — a named section is said in the walk header, in the bar\'s sentenc
   await expect(field).toHaveValue('Rares')
   await field.fill('Top rares')
   await page.getByRole('button', { name: 'Save names' }).click()
-  await expect(page.locator('.boxops-editor')).toHaveCount(0)
+  await expect(page.locator('.bn-set-editor')).toHaveCount(0)
 })
 
 // ---------------------------------------------------------------------------------------
@@ -8431,7 +8487,7 @@ test.skip(
      what is being changed here is WHEN the answer lands, never what is in it. */
   await page.route(/\/inventory\/\d+$/, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
-    await new Promise((resolve) => setTimeout(resolve, 400))
+    await new Promise((resolve) => setTimeout(resolve, 400)) // keep: stubbed answer held 400 ms on purpose, a latency fixture
     return route.fallback()
   })
   await expandAll(page)
@@ -8517,7 +8573,7 @@ test.skip(
      gives the one-shot snapshot below comfortable room over CI's own latency. */
   await page.route(/\/inventory\/7$/, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
-    await new Promise((resolve) => setTimeout(resolve, 800))
+    await new Promise((resolve) => setTimeout(resolve, 800)) // keep: stubbed answer held 800 ms on purpose, a latency fixture
     return route.fallback()
   })
 
@@ -8793,7 +8849,7 @@ test('the control that re-ranks appearing moves no copy row', async ({ page }) =
      agrees after 300ms is the settled one. */
   let before = await listTop()
   for (let i = 0; i < 20; i++) {
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(300) // keep: the poll interval of a settle loop, it compares two reads apart in time
     const again = await listTop()
     if (again === before) break
     before = again
@@ -8922,7 +8978,7 @@ async function rowFrames(page: Page, go: () => Promise<void>, ms: number): Promi
     const rows = [...document.querySelectorAll('.card-locations-row')]
     return rows.length > 0 && rows.every((row) => row.getAnimations().length === 0 && row.closest('.inventory-held') === null)
   })
-  await page.waitForTimeout(ms)
+  await page.waitForTimeout(ms) // keep: the observation window is the measurement
   return await page.evaluate(() => (window as unknown as { __rowFrames: RowFrame[] }).__rowFrames)
 }
 
@@ -8958,7 +9014,7 @@ for (const how of ['held arrow key', 'click']) test(`the copies list does not mo
   await open(page, SIFT_BOXES, { cards: siftCards(), search: (query) => searchAnswer(query, siftCards()) })
   /* A real server answers in tens of milliseconds, not none. */
   await page.route(/\/search/, async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 150))
+    await new Promise((resolve) => setTimeout(resolve, 150)) // keep: stubbed answer held 150 ms on purpose, a latency fixture
     return route.fallback()
   })
   await expandAll(page)

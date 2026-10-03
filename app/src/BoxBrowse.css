@@ -599,7 +599,7 @@
 
 /* the card menu */
 .browse-cardops { position: relative; flex: none; }
-.browse-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 220px; }
+.browse-menu { min-width: 220px; }
 .browse-claims-who { font-size: var(--bn-fs-md); color: var(--bn-ink-3); overflow-wrap: anywhere; }
 .browse-menu-note { padding: var(--bn-2) var(--bn-3); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); max-width: 240px; }
 /* The kit holds this floor now (D117) — it left `.bn-menu-item` at 36px and this sheet lifted
@@ -943,3 +943,6 @@
   .browse-queued .bn-notice a { position: relative; }
   .browse-queued .bn-notice a::after { content: ''; position: absolute; inset: -16px -4px; }
 }
+
+/* The word a record of a deleted box left by, at the row's right end. */
+.browse-row-how { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }

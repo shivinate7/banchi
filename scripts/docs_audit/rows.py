@@ -104,6 +104,7 @@ from .registry_scopes import (
 from .rules import check_identifier_spelling, check_rule_enforcement
 from .screens import check_logo, check_storage_keys
 from .spelling import check_shell_substitution
+from .sleeps import check_fixed_sleeps
 from .stability import check_font_stability, check_layout_transitions, check_scrollbar_gutter, check_state_layout
 from .status_reach import check_closed_vocabularies, check_status_sources, check_tested_by_reach
 from .strings import check_no_mechanism_on_screen, check_typed_interpunct, check_views_opsec
@@ -224,6 +225,7 @@ ROWS: Tuple[AuditRow, ...] = (
     AuditRow("scrollbar gutter", 1, check_scrollbar_gutter, ()),
     AuditRow("font stability", 1, check_font_stability, ()),
     AuditRow("layout transitions", 1, check_layout_transitions, ()),
+    AuditRow("fixed sleeps", 1, check_fixed_sleeps, ()),
     AuditRow("state layout", 1, check_state_layout, ()),
     AuditRow("breakpoints", 1, check_breakpoints, ()),
     AuditRow("breakpoint columns", 3, check_breakpoint_columns, ()),

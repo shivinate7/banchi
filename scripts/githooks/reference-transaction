@@ -30,8 +30,8 @@
 #      is not on origin until something pushes it — and pushing to main is what the pre-push
 #      hook beside this one refuses.
 #   3a. Packing (`pack-refs`, `gc`): dropping a loose main whose value is unchanged. main does not move. See the block at the deletion test.
-#   4. PKMNSCAN_MAIN=off, the visible escape hatch, spelled the way PKMNSCAN_GATE=off and
-#      PKMNSCAN_DOCS=off already are in this repo.
+#   4. PKMNSCAN_MAIN=off, the visible escape hatch, spelled the way PKMNSCAN_DOCS=off
+#      already is in this repo.
 #
 # THE `old` COLUMN IS NOT EVIDENCE AND THIS HOOK IGNORES IT. That is the single most important
 # line in this file, it is not what the format suggests, and both bugs this hook shipped with
@@ -59,6 +59,17 @@
 # for itself, and the same one guard-opsec.sh took after it over-triggered.
 
 set -uo pipefail
+
+# Append one line to the refusal log (scripts/refusal_log.py, the one home). Fails open: a log
+# that cannot be written never changes this hook's verdict or output.
+rlog() {
+  local top
+  top="$(git rev-parse --show-toplevel 2>/dev/null)" || return 0
+  [ -f "$top/scripts/refusal_log.py" ] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  python3 "$top/scripts/refusal_log.py" "$@" >/dev/null 2>&1 || true
+  return 0
+}
 
 # `prepared` is the phase that can still refuse. `committed` is a report — and since
 # 2026-09-12 it is one this hook makes, see the block below. `aborted` and any unknown phase
@@ -168,10 +179,11 @@ while IFS=' ' read -r _old new ref rest; do
       cdir="$(git rev-parse --git-common-dir 2>/dev/null)" || cdir=""
       [ -n "$cdir" ] && [ -f "$cdir/refs/heads/main" ] && continue
     fi
+    rlog reference-transaction main-delete "refs/heads/main"
     echo "" >&2
     echo "REFUSED: this would DELETE refs/heads/main." >&2
     echo "" >&2
-    echo "  Escape hatch, if you really mean it:  PKMNSCAN_MAIN=off git ..." >&2
+    echo "  Bypass: owner-only: ask the owner to run this command." >&2
     echo "" >&2
     exit 1
   fi
@@ -191,6 +203,7 @@ while IFS=' ' read -r _old new ref rest; do
 
   short_new="$(git rev-parse --short "$new" 2>/dev/null || echo "$new")"
   short_cur="$(git rev-parse --short "$current" 2>/dev/null || echo "$current")"
+  rlog reference-transaction main-move "refs/heads/main $short_cur -> $short_new"
   echo "" >&2
   echo "REFUSED: main does not move locally." >&2
   echo "" >&2
@@ -208,7 +221,7 @@ while IFS=' ' read -r _old new ref rest; do
   echo "    gh pr create --fill" >&2
   echo "" >&2
   echo "  To sync main after a PR is merged:   git switch main && git pull" >&2
-  echo "  Escape hatch, deliberate and loud:   PKMNSCAN_MAIN=off git ..." >&2
+  echo "  Bypass: owner-only: ask the owner to run this command." >&2
   echo "" >&2
   exit 1
 done <<EOF

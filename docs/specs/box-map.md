@@ -3,8 +3,7 @@
 **Status: BUILT.** The Shelf view on `#/inventory` (`?view=shelf`, labeled "Map" on the switch)
 draws it. D264 (a section moves as one object) records the rulings. D294 (each card carries a
 fraction order key) records the store half, the move routes and the undo. D262 (a moved card keeps
-its price) records the safety step. `app/tests/boxmap.spec.ts` and harness test T7 check it. Two
-receipt lines are not built (DEBT38). Section numbers are stable ids, because code cites them.
+its price) records the safety step. `app/tests/boxmap.spec.ts` and harness test T7 check it. Section numbers are stable ids, because code cites them.
 
 The owner's picture: sections are modular building blocks. A section is its own small object, and
 its divider travels with it. The move shows two boxes side by side from above. A section drops
@@ -88,9 +87,11 @@ the owner's orientation. For a section moved from RB Origins into the middle of 
   not a landmark), so the receipt counts cards.
 - **The renumber line.** A card's number counts within its section, so a section move changes no
   card number. It can change section numbers, and the receipt says which.
-- **Two more lines are designed and not built** (DEBT38). One says how many moved cards are owed
-  to open orders. The other says which section the next capture joins when the moved section was
-  last. Press S first to start a new section.
+- **Two more lines, each absent at zero.** One says how many moved cards are owed to open orders
+  (`receipt.owed`). It counts, per SKU, the lesser of the copies moved and the copies owed, since
+  a copy is fungible (D212). The other says which section the next capture joins when the moved
+  section was last in its box, or a same-box move made it last (`receipt.next_capture`). Press S first to start a new section.
+  The batch route carries both. The Shelf draws them under the steps.
 - **The receipt stays** until the owner closes it or the next move replaces it. Its "Done" press
   writes nothing.
 
@@ -117,8 +118,6 @@ move.
 
 - **The side-by-side view at 390.** Two columns of about 170px may hold section names. Draw it and
   show the owner before a change.
-- **The Graveyard after a move.** A 40-card move adds 40 rows. One row per move may read better.
-  The owner did not ask.
 - **A merged-out box.** D83 (a moved card) says a box emptied by a merge cannot be reclaimed. D134
   (a departed record is buried, not kept) may make that sentence stale. The reading awaits the
   owner's word.

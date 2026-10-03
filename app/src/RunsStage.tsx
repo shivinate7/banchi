@@ -107,7 +107,7 @@ export function matchProblemTitle(code: string): string {
 
 /** The six, in the order the bar draws them — the bar's one tooltip teaches them. */
 const STAGE_NAMES = STAGES.map((name) => name.toLowerCase())
-const STAGE_WORDS = `${STAGE_NAMES.slice(0, -1).join(', ')} and ${STAGE_NAMES[STAGE_NAMES.length - 1]}`
+export const STAGE_WORDS = `${STAGE_NAMES.slice(0, -1).join(', ')} and ${STAGE_NAMES[STAGE_NAMES.length - 1]}`
 
 /** When something happened, in the words a person uses for it: the kit's one relative format
  *  (`dates.ts`'s `relativeDate`), or nothing where there is no date. */

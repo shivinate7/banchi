@@ -1,18 +1,19 @@
 import { Fragment, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react'
 
 import {
-  describeFailure, getHoldingsValue, getOrders, getSkuPhotos, getSoldPrices,
+  describeFailure, getHoldingsValue, getOrders, getSkuPhotosSettled, getSoldPrices,
   photoUrl, type Failure, type SkuPhotoEntry, type SoldPricesLookup,
 } from './server'
-import type { HoldingsRange, HoldingsTotal, HoldingsValuePayload, OrderLineWire, OrderRow } from './types'
+import type { HoldingsRange, HoldingsTotal, HoldingsValuePayload, OrderRow } from './types'
 import {
   Button, CardThumb, EmptyState, Icon, IconButton, Money, Notice, Page, Pill,
   ProductLink, ReloadButton, Segmented, SortHeader, type SortValue,
 } from './kit'
 import { moneyGrouped } from './money'
+import { salesOf, sum, type Sale } from './revenueMath'
 import { absoluteDate, monthOf, saleDate, weekOf } from './dates'
 import { useCardCropWhenSeen } from './cardCrop'
-import { matchQuery } from './kit/match'
+import { didYouMean, matchQuery } from './kit/match'
 import { SearchField } from './SearchField'
 import { ReadingAge } from './CardLocations'
 import './Revenue.css'
@@ -53,22 +54,6 @@ import './Revenue.css'
  * best sellers and a foil/rarity mix tile — the table stays underneath for the full,
  * sortable, drillable list D217 asked for.
  */
-
-/** The one word this screen treats as "not a sale" — folded the way `is_terminal_status`
- *  folds its own vocabulary, but for exactly one status rather than that whole terminal set. */
-function isCanceled(status: string | null): boolean {
-  return (status ?? '').trim().toLowerCase() === 'canceled'
-}
-
-/** `"None"` IS TCGPLAYER'S OWN LITERAL STRING FOR A PRODUCT WITH NO RARITY
- *  (`pipeline/games.py`'s own `rarities_not_claimed` entry, both Riftbound and One Piece):
- *  73 sealed products and 12 rarity-less tokens in Riftbound alone carry it verbatim in the
- *  `Rarity` column, never blank. Read as `null` here so it never draws as though "None" were
- *  a real rarity a card was identified under — the same normalisation `pipeline/games.py`
- *  already names for exactly this string. */
-function realRarity(raw: string | null): string | null {
-  return raw === 'None' ? null : raw
-}
 
 type Period = '3m' | '6m' | 'ytd' | 'all' | 'custom'
 
@@ -117,124 +102,6 @@ const BOARD_SIZE = 10
 /** How many printings' thumbnails this screen asks the server about at once — bounded so a
  *  long "Show all" list cannot turn into hundreds of lookups in one press. */
 const PHOTO_LOOKUP_CAP = 40
-
-/** One line, with its order's placed-at date and a real number for `unit_price` — the one
- *  arithmetic step this screen performs, over a string the wire sends because money crosses
- *  it as text (`OrderLineWire`'s own comment). A line with no usable DATE cannot be placed on
- *  the sparkline at all and is left out, counted once in `dropped`. A line with no usable
- *  PRICE is kept — `priceKnown` says so, and `salesOf`'s own header explains why. */
-type Sale = {
-  /** The order's identity (`OrderRow.key`) — never shown, only counted and grouped by. */
-  readonly order: string
-  /** The order's label (`OrderRow.number`) — what the drill-down shows a person. */
-  readonly orderNumber: string
-  readonly at: Date
-  readonly name: string
-  /** True where `name` fell back to the line's own SKU because the feed sent no name —
-   *  the fact `nameIsSku` at the render site draws in mono rather than guessing from the
-   *  string's own shape. */
-  readonly nameIsSku: boolean
-  readonly sku: string
-  readonly quantity: number
-  /** `0` where `priceKnown` is false — never read on its own without checking that flag. */
-  readonly unitPrice: number
-  /** `false` where TCGplayer's own feed carried no usable price on this line
-   *  (D298, finding 1: `unit_price: ""`, not `null`, is how the feed says
-   *  so). */
-  readonly priceKnown: boolean
-  /** `0` where `priceKnown` is false. */
-  readonly gross: number
-  readonly condition: string | null
-  readonly rarity: string | null
-  /** `OrderLineWire.kind` verbatim — `'sealed'` is the one value this screen reads on its own
-   *  (item 5, item 2 of the review round): a sealed line never has a rarity, and it is never
-   *  drawn as though one is simply unread. */
-  readonly kind: string | null
-  /** THE `skus` TABLE'S OWN PRODUCT/SET TEXT FOR THIS SKU (`OrderLineWire.product_line`/
-   *  `set_name`), never the feed's own line fields — carried through so a short display name
-   *  can be built off a long TCGplayer product title (item 3, review round) without this
-   *  screen inventing product taxonomy of its own. `null` where the SKU is not in that table. */
-  readonly productLine: string | null
-  readonly setName: string | null
-}
-
-/** `true` where the OPERATOR closed this line as never shipping — a refund or a
- *  cancellation, `store/orders.CLOSE_NOT_SHIPPING`'s own words for `not_shipping` — during fulfilment,
- *  matched by SKU against the same order's `OrderLineProgress` list (D225,
- *  `docs/specs/sales-plan.md` §2). `closed_reason` rides on every order's `progress`
- *  already; this screen was simply never reading it. NOT THE MARKETPLACE'S WORD: the value
- *  is recorded by a person during fulfilment, so a line can be a real refund the operator
- *  never got around to closing, and this can only ever undercount, never overcount. */
-function isClosedNotShipping(order: OrderRow, sku: string): boolean {
-  return order.progress.some((p) => p.sku === sku && p.closed_reason === 'not_shipping')
-}
-
-/** `null` for a `unit_price` this screen cannot read as a real number: TCGplayer's `null`
- *  ("said nothing") and its `""` (D298, finding 1) read the same way — both
- *  mean the feed carried no price on this line, never a guessed one. `Number('')` is `0` in
- *  JavaScript, which is the bug this guards: an empty string must never reach `Number()`. */
-function parsePrice(raw: string | null): number | null {
-  if (raw === null) return null
-  const trimmed = raw.trim()
-  if (trimmed === '') return null
-  const n = Number(trimmed)
-  return Number.isFinite(n) ? n : null
-}
-
-function salesOf(
-  orders: readonly OrderRow[],
-): {
-  readonly sales: Sale[]
-  readonly dropped: number
-  readonly refundExcluded: number
-  readonly canceledOrders: number
-} {
-  const sales: Sale[] = []
-  let dropped = 0
-  let refundExcluded = 0
-  let canceledOrders = 0
-  for (const order of orders) {
-    if (isCanceled(order.status)) {
-      canceledOrders += 1
-      continue
-    }
-    if (order.placed_at === null) {
-      dropped += order.lines.length
-      continue
-    }
-    const at = new Date(order.placed_at)
-    if (Number.isNaN(at.getTime())) {
-      dropped += order.lines.length
-      continue
-    }
-    for (const line of order.lines as readonly OrderLineWire[]) {
-      if (isClosedNotShipping(order, line.sku)) {
-        refundExcluded += 1
-        continue
-      }
-      const price = parsePrice(line.unit_price)
-      const priceKnown = price !== null
-      sales.push({
-        order: order.key,
-        orderNumber: order.number,
-        at,
-        name: line.name ?? line.sku,
-        nameIsSku: line.name === null,
-        sku: line.sku,
-        quantity: line.quantity,
-        unitPrice: priceKnown ? price : 0,
-        priceKnown,
-        gross: priceKnown ? price * line.quantity : 0,
-        condition: line.condition,
-        rarity: realRarity(line.rarity),
-        kind: line.kind,
-        productLine: line.product_line ?? null,
-        setName: line.set_name ?? null,
-      })
-    }
-  }
-  return { sales, dropped, refundExcluded, canceledOrders }
-}
 
 /** The condition string carries the finish (CLAUDE.md: "the grade stays on every row"). A
  *  foil printing is one whose condition names it — never a guess off the card's own name. */
@@ -353,10 +220,6 @@ function weekStart(d: Date): Date {
   const s = startOfDay(d)
   s.setDate(s.getDate() + diff)
   return s
-}
-
-function sum(sales: readonly Sale[]): number {
-  return sales.reduce((total, sale) => total + sale.gross, 0)
 }
 
 function orderCount(sales: readonly Sale[]): number {
@@ -717,6 +580,7 @@ function RowThumb({
   name,
   photos,
   stockPhotos,
+  pendingSkus,
   size,
 }: {
   readonly sku: string
@@ -727,6 +591,8 @@ function RowThumb({
    *  applies to it: the rig's own crop rectangle describes THIS store's photograph, not a
    *  catalogue image, so it draws through the SAME `CardThumb` with `crop={null}`. */
   readonly stockPhotos: Readonly<Record<string, string>>
+  /** SKUs still waiting on a final answer: the slot draws empty, never "No photo found". */
+  readonly pendingSkus: ReadonlySet<string>
   readonly size: 'sm' | 'md' | 'lg'
 }) {
   const entry = photos[sku]
@@ -740,6 +606,7 @@ function RowThumb({
         src={src}
         alt={name}
         size={size}
+        pending={src === null && pendingSkus.has(sku)}
         crop={entry === undefined ? null : crop}
         focus={THUMB_FOCUS}
         className={entry === undefined ? 'revenue-thumb-stock' : undefined}
@@ -759,8 +626,6 @@ function MetaLine({ product }: { readonly product: Product }) {
 const scrollToEnd = (el: HTMLDivElement | null) => {
   if (el !== null) el.scrollLeft = el.scrollWidth
 }
-
-const STOCK_RETRY_MS = 5000
 
 export function Revenue() {
   const [orders, setOrders] = useState<OrderRow[] | null>(null)
@@ -858,7 +723,11 @@ export function Revenue() {
   // sets and pricing?"): a stock (catalogue) photo for a SKU with no own photographed copy
   // on hand — the SAME resolver Sets and Pricing already draw theirs from, never a second one.
   const [stockPhotos, setStockPhotos] = useState<Readonly<Record<string, string>>>({})
+  /** SKUs whose photo answer is not final yet: their slot holds its size and draws no "No photo found". */
+  const [pendingSkus, setPendingSkus] = useState<ReadonlySet<string>>(new Set())
   const asked = useRef<Set<string>>(new Set())
+  /** SKUs with a final photo answer: a re-run never asks them again or draws them pending. */
+  const finalSkus = useRef<Set<string>>(new Set())
 
   // UNSOLD STOCK (D236) — same posture as `prices`, own loading/failure state, never touching
   // `prices`/`pricesLoading` (that is D225's SOLD figure and this is never allowed to merge
@@ -923,7 +792,11 @@ export function Revenue() {
   )
 
   const activeRange = activeBucket === null ? null : buckets.find((b) => b.key === activeBucket) ?? null
-  const scopeSales = activeRange === null ? inPeriod : inPeriod.filter((s) => s.at >= activeRange.start && s.at < activeRange.end)
+  // Memoized: `products` and the photo lookup key off its identity, so a fresh array each render re-asked every render.
+  const scopeSales = useMemo(
+    () => (activeRange === null ? inPeriod : inPeriod.filter((s) => s.at >= activeRange.start && s.at < activeRange.end)),
+    [inPeriod, activeRange],
+  )
 
   const products = useMemo(() => {
     const by = new Map<string, Product>()
@@ -972,40 +845,37 @@ export function Revenue() {
       return sortDir === 'asc' ? base : -base
     })
   }, [scopeSales, query, sortKey, sortDir, view])
+  const nearName = useMemo(
+    () => (query.trim() === '' ? null : didYouMean(query, new Set(scopeSales.map((sale) => sale.name)))),
+    [scopeSales, query],
+  )
 
   // THE THUMBNAIL PRESS, ON ARRIVAL, NOT GATED. Asks only about the SKUs this screen is
   // about to draw (the podium and board window, bounded by `PHOTO_LOOKUP_CAP`), and never
   // asks about a SKU twice.
   useEffect(() => {
     const askedSkus = asked.current
+    const finals = finalSkus.current
     const skus = products.slice(0, PHOTO_LOOKUP_CAP).map((p) => p.sku).filter((sku) => !askedSkus.has(sku))
     if (skus.length === 0) return
     skus.forEach((sku) => askedSkus.add(sku))
-    let alive = true
-    let retry: number | undefined
-    const ask = (wanted: string[], again: boolean) =>
-      getSkuPhotos(wanted)
-        .then((found) => {
-          if (!alive) return
-          setPhotos((prev) => ({ ...prev, ...found.photos }))
-          setStockPhotos((prev) => ({ ...prev, ...found.stockPhotos }))
-          // The catalogue loads in the background on first ask and answers nothing until it
-          // has, so a SKU still missing gets one more ask a few seconds on.
-          const missing = wanted.filter((sku) => !(sku in found.photos) && !(sku in found.stockPhotos))
-          if (again && missing.length > 0) retry = window.setTimeout(() => ask(missing, false), STOCK_RETRY_MS)
-        })
-        .catch(() => {
-          // A failed thumbnail lookup falls back to the plain tile CardThumb already draws for
-          // a missing photo — the same shape a photographed SKU with no on-hand copy gets, so
-          // this screen never needs a second failure state for it.
-        })
-    ask(skus, true)
+    const stop = getSkuPhotosSettled(skus, (found) => {
+      skus.forEach((sku) => found.pending.includes(sku) || finals.add(sku))
+      setPhotos((prev) => ({ ...prev, ...found.photos }))
+      setStockPhotos((prev) => ({ ...prev, ...found.stockPhotos }))
+      setPendingSkus((prev) => {
+        const next = new Set(prev)
+        skus.forEach((sku) => next.delete(sku))
+        found.pending.forEach((sku) => next.add(sku))
+        return next
+      })
+    })
+    setPendingSkus((prev) => new Set([...prev, ...skus]))
     return () => {
-      alive = false
-      window.clearTimeout(retry)
+      stop()
       // A sort, filter or scope change re-runs this effect; a SKU whose answer was dropped
       // with it must be asked again, not remembered as asked.
-      skus.forEach((sku) => askedSkus.delete(sku))
+      skus.forEach((sku) => finals.has(sku) || askedSkus.delete(sku))
     }
   }, [products])
 
@@ -1375,14 +1245,14 @@ export function Revenue() {
       </div>
 
       {products.length === 0 ? (
-        <EmptyState icon="search" title="Nothing sold under that name in this period." />
+        <EmptyState icon="search" title="Nothing sold under that name in this period." didYouMean={{ name: nearName, onPick: setQuery }} />
       ) : (
         <>
           <section className="revenue-podium">
             {podium.map((p, i) => (
               <article className="revenue-tile" key={p.sku}>
                 <div className="revenue-tile-art">
-                  <RowThumb sku={p.sku} name={p.name} photos={photos} stockPhotos={stockPhotos} size="lg" />
+                  <RowThumb sku={p.sku} name={p.name} photos={photos} stockPhotos={stockPhotos} pendingSkus={pendingSkus} size="lg" />
                   <span className="revenue-tile-rank">{i + 1}</span>
                 </div>
                 <div className="revenue-tile-body">
@@ -1452,7 +1322,7 @@ export function Revenue() {
                 {board.map((p, i) => (
                   <li key={p.sku}>
                     <span className="revenue-board-rk">{i + 4}</span>
-                    <RowThumb sku={p.sku} name={p.name} photos={photos} stockPhotos={stockPhotos} size="sm" />
+                    <RowThumb sku={p.sku} name={p.name} photos={photos} stockPhotos={stockPhotos} pendingSkus={pendingSkus} size="sm" />
                     <div className="revenue-board-who">
                       <ProductLink sku={p.sku} name={p.name}>
                         <span className="revenue-tile-name" title={p.nameIsSku ? undefined : short(p).full}>

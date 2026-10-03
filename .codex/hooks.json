@@ -98,16 +98,6 @@
           }
         ]
       }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "scripts/stop-gate.sh"
-          }
-        ]
-      }
     ]
   }
 }
