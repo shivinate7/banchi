@@ -77,6 +77,10 @@ def prepare(
 
     started = time.time()
     try:
+        if not fingerprints_only:
+            # A HALF FILE FROM A DEAD DOWNLOAD IS NOT THE MODEL and is 372 MB at worst. Every
+            # Prepare clears it first, whether or not the model itself is already here.
+            match.model_path().with_name(match.MODEL_FILENAME + ".part").unlink(missing_ok=True)
         if not fingerprints_only and not match.model_ready():
             say(f"downloading the model file ({match.MODEL_BYTES / 1_000_000:.0f} MB) from {match.MODEL_URL}")
             last = [0.0]

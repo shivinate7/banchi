@@ -75,6 +75,8 @@ The pool is the fingerprinted printings of the sets that apply to the card.
 - **Sealed product and anything with no number** is never matched. It has no card photo to compare.
 - **Promo sets are left out of the pool.** A promo set is a set whose name holds "Promo".
   A card hinted into a promo set is never matched. It goes to the second look.
+- **A pool of one printing** (a set or a card name with a single printing) needs no change. The guard checks the best answer's name against the no-image names, so it still works.
+  A one-printing pool can only mislead when its one printing has no photo, and then the guard blocks the name.
 - **A set the index does not cover** cannot be guarded. Every card that needs it goes to the second look until the fingerprint refresh press covers it.
 - For Pokemon, D170 already makes every run name its sets. An unhinted Pokemon card cannot reach a matcher run.
   The pool is therefore never the whole Pokemon category.
@@ -94,6 +96,8 @@ Section 3 gives the result. For a card the matcher does not accept, the same pre
 1. The matcher writes no identification for it.
 2. The press sends the card to a Haiku batch at once. This is the second look. Only these cards are sent.
 3. Haiku's answer is not saved as the card's identity. It goes to the review queue.
+   The cache entry for that answer carries the second-look marker. A later press that adopts the entry from the cache keeps the hold.
+   A person's answer in review is what releases it.
    The entry shows the photo, Haiku's answer and the matcher's top pick. A person decides.
 4. The run record keeps the matcher's reason and top pick for each such card, beside Haiku's answer.
    The receipt says how many cards the matcher took and how many went to the second look.
@@ -104,7 +108,9 @@ A card Haiku answers wrongly cannot reach a listing, because a person sees it fi
 **Money is named before it is spent (D180).** The quote states how many cards the matcher will take free.
 It states how many go to the second look, and what that costs. The press needs the same confirm as a paid send.
 When the index is ready, the preflight runs the matcher over the selection and counts the cards. The figure is measured.
-Before the index exists, the quote uses the unaccepted share from the held-out check (37%, measured). The quote says "estimated".
+A dry run over more than 200 cards does not run the matcher, because the screen's request waits for it. The real press always counts, in its own child.
+Whenever the quote is not measured, it uses 40% as the unaccepted share and says "estimated". The held-out check measured 37.5%, with a 95% upper bound of 39.2%.
+So the estimate rounds up and never understates. It is also never under the count of cards the pool rules already send to the second look.
 The background reader (section 8) stays free. It never spends. A card it cannot accept waits for a press.
 
 **The owner's word on promos: "i have no promos".** Printings with no stock image that are promos are left out of the matcher's pool.
@@ -122,8 +128,9 @@ Organized Play promos repeat main-set numbers.
 
 **What catches it.** The promo guard is cheap. At queue build and at preflight, the run asks the store one question:
 does any held card sit in a promo set of this game? If yes, unhinted cards of that game go to the second look.
-It is one query on `cards.set_name`, which has an index. The build adopts it. A promo that is hinted into its promo set goes to the second look without it.
-A promo whose set name does not hold "Promo" is not caught. That is an open item.
+It is one query on `cards.set_name`, which has an index. It is built (`held_promo_games` in `identify/match.py`) and runs once per read and per preflight.
+The reason code is `promo_held`. A store that cannot be read counts as holding a promo in every game. A promo that is hinted into its promo set goes to the second look without it.
+A promo whose set name does not hold "Promo" is not caught. A card whose `set_name` was never filled in is not seen. Both are open items.
 
 **The 229 products with no photo** (measured). The CDN answers 403 with an XML error for every size of each image URL.
 The working images answer 200. CloudFront answers 403 for a key that does not exist. So each is a product with a URL and no photo.

@@ -17469,9 +17469,10 @@ PHOTO_LANE_PREFIXES = ("/photo/", "/assets/")
 # the store lock hold all four slots for up to `LOCK_TIMEOUT_SECONDS`, and `/status` is what the
 # app asks "is the server alive" with. Each route below was probed on a scratch store with the
 # lock held and answers without it. NOT HERE ON PURPOSE: the heavy lock-free reads (`/orders`,
-# `/inventory`, `/boxes`, `/pipeline/*`). They are GIL-bound, and sharing the photo bound with
+# `/inventory`, `/boxes`, `/pipeline/*` except `/pipeline/match`, which is a stat, one cached
+# hash verdict and a count query, polled every few seconds). They are GIL-bound, and sharing the photo bound with
 # them would give back the photo starvation this lane exists to remove. That is DEBT11's open gap.
-PHOTO_LANE_EXACT = ("/status", "/queues", "/capture/sitting", "/games")
+PHOTO_LANE_EXACT = ("/status", "/queues", "/capture/sitting", "/games", "/pipeline/match")
 # How many bytes the sorter peeks: enough for the request line of every route above.
 _SORT_PEEK_BYTES = 64
 # How long a silent connection waits for its first byte before it goes to the slot pool by default.
