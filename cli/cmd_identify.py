@@ -43,7 +43,7 @@ from typing import Dict, List, Optional, Sequence
 
 import geometry
 from cli import runs
-from identify import batch, cost, images, prompt, sidecar
+from identify import batch, cost, images, match, prompt, sidecar
 from pipeline import games
 from pipeline import join
 from pipeline import selection as selection_mod
@@ -139,6 +139,10 @@ STAGE_PENDING = "pending"  # undecided; once the preflight is over, this IS the 
 STAGE_CACHED = "cached"  # the store already owns this answer — never prepared, never sent
 STAGE_UNREADABLE = "unreadable"  # the bytes would not hash, or would not decode
 STAGE_REFUSED = "refused"  # no prompt to read it with — named, not sent, not dropped
+# The free reader looked at this card and could not place it. It is NOT sent, NOT dropped and
+# NOT failed: it writes no identification, never reaches the review queue, and stays in the
+# selection as needing identification, for the owner's paid press (the engine-pick spec, §2).
+STAGE_UNREAD = "unread"
 
 
 def _selection_from(args) -> selection_mod.Selection:
@@ -355,6 +359,11 @@ class Item:
     game: str = games.DEFAULT_GAME
     entry: Optional[dict] = None
     strategy: Optional[str] = None
+    # WHICH ENGINE ANSWERED THIS CARD. `haiku` is the paid read; `marqo-b` the free one. A cache
+    # hit carries the engine of the entry it adopted.
+    engine: str = cache_mod.ENGINE_HAIKU
+    # Why the free reader left this card unread: a `match.Result`, set with STAGE_UNREAD.
+    unread: Optional[match.Result] = None
 
     @property
     def key(self) -> str:
@@ -588,6 +597,43 @@ def _game_lines(items: List[Item]) -> List[str]:
     return lines
 
 
+def _match_request(item: Item) -> match.Request:
+    return match.Request(
+        key=item.key,
+        photo=Path(item.capture.photo),
+        game=item.game,
+        strategy=str(item.strategy),
+        set_hint=item.capture.set_hint,
+    )
+
+
+def _run_matcher(to_read: List[Item], say) -> batch.BatchRun:
+    """The free reader's whole read, in the transport's own result shape, so `_apply` and
+    everything after it is the one path for either engine.
+
+    An ACCEPTED card becomes a `succeeded` outcome carrying the same `Identification` a paid
+    answer parses to. A card the reader cannot place becomes STAGE_UNREAD and gets no outcome
+    at all: no identification, no cache entry, no review queue row. It is not a failure and it
+    is not dropped; it stays in the selection as needing identification."""
+    with match.Index() as index:
+        results = match.read([_match_request(i) for i in to_read], index, log=say)
+    by_key = {item.key: item for item in to_read}
+    outcomes: Dict[str, batch.Outcome] = {}
+    for result in results:
+        item = by_key[result.key]
+        if result.accepted and result.payload is not None:
+            item.engine = cache_mod.ENGINE_MATCHER
+            outcomes[_custom_id(item.key)] = batch.Outcome(
+                custom_id=_custom_id(item.key),
+                status=batch.SUCCEEDED,
+                identification=prompt.parse(result.payload, str(item.strategy)),
+            )
+        else:
+            item.stage = STAGE_UNREAD
+            item.unread = result
+    return batch.BatchRun(outcomes=outcomes)
+
+
 def _apply(items_by_key: Dict[str, Item], run_result: batch.BatchRun) -> None:
     for key, outcome in run_result.outcomes.items():
         item = items_by_key.get(key)
@@ -698,6 +744,7 @@ def _adopt_cached(item: Item, entry, fingerprints: Dict[str, str]) -> None:
     """
     item.cached = True
     item.stage = STAGE_CACHED
+    item.engine = entry.engine
     item.identification = dict(entry.identification)
     item.status = batch.SUCCEEDED
     expected = fingerprints.get(item.strategy)
@@ -903,6 +950,12 @@ def run(args, say) -> int:
         except LookupError:  # unwritten or unregistered — refused below, never hashed
             continue
     queued = set(snapshot.review.entries) | set(snapshot.parked.entries)
+    # THE FREE READER. `engine` is who reads this press. `reread_matcher` is the paid press's
+    # explicit choice to buy matcher-read cards again; it means nothing to the free reader,
+    # which skips every answered card.
+    engine = getattr(args, "engine", cache_mod.ENGINE_HAIKU) or cache_mod.ENGINE_HAIKU
+    reread_matcher = bool(getattr(args, "reread_matcher", False)) and engine == cache_mod.ENGINE_HAIKU
+    free = engine == cache_mod.ENGINE_MATCHER
     current_by_key = {
         item.key: fingerprints[item.strategy]
         for item in items
@@ -920,7 +973,9 @@ def run(args, say) -> int:
         # answer the store already owns, which is exactly the set this loop exists to find.
         if item.photo_sha256 is None:
             continue
-        entry = snapshot.cache.reusable(item.key, item.photo_sha256)
+        entry = snapshot.cache.reusable(
+            item.key, item.photo_sha256, reread_matcher=reread_matcher
+        )
         if entry is None:
             continue
         if item.key in stale_targets:
@@ -971,7 +1026,10 @@ def run(args, say) -> int:
     cropped = 0
     unfit: List[Item] = []
     for item in items:
-        if item.stage != STAGE_PENDING:
+        # THE FREE READER CROPS AND DECODES ITS OWN PHOTOGRAPH (`identify/match.py`), at the size
+        # its model takes. Preparing a 1200 px JPEG for a call that is never made would only cost
+        # the decode this press exists to avoid.
+        if item.stage != STAGE_PENDING or free:
             continue
         try:
             # CROP TO THE DETECTED CARD BEFORE THE DOWNSCALE, when asked for. Local, free and
@@ -1038,7 +1096,16 @@ def run(args, say) -> int:
     say(f"cache hits      {len([i for i in items if i.stage == STAGE_CACHED])}")
     say(f"to send         {len(to_send)}")
     say(f"payload         {payload_bytes / 1_000_000:.1f} MB in {chunks} batch chunk(s)")
-    say(f"estimated cost  ${_estimate(to_send)}")
+    say(f"estimated cost  ${'0.00' if free else _estimate(to_send)}")
+    if free:
+        # FREE, AND HONEST ABOUT WHAT IT CANNOT COUNT. The pool rules leave some cards unread
+        # before any photograph is decoded, and those are counted here. The margin, the floor and
+        # the look-alike guard judge the best answer, so they are counted only after the read.
+        pre = match.preflight([_match_request(i) for i in to_send])
+        say(f"engine          {engine} (free: it reads the cards it can place and leaves the rest unread)")
+        say(f"can read        {pre['can_read']} of {len(to_send)} by the pool rules")
+        for code, count in sorted(pre["unread"].items()):
+            say(f"unread          {count} {code}")
     if args.crop:
         # NAMED IN THE PREFLIGHT because it changes the bytes, and the preflight's whole job
         # is to say what is about to be sent. A refusal count of anything but zero is worth
@@ -1076,7 +1143,7 @@ def run(args, say) -> int:
     for name in sorted(fingerprints):
         if name != prompt.DEFAULT_PROFILE:
             say(f"                {fingerprints[name]}  ({name})")
-    say(f"model           {prompt.MODEL}")
+    say(f"model           {match.MODEL_FILENAME} {match.MODEL_SHA256[:12]}" if free else f"model           {prompt.MODEL}")
     say("games")
     for line in _game_lines(items):
         say(line)
@@ -1143,6 +1210,11 @@ def run(args, say) -> int:
     say(f"store           {snapshot.queue_summary}")
     say("")
 
+    if free and to_send and not match.status()["ready"]:
+        say("refused: the free reader is not prepared. Press Prepare on the runs sheet first: it "
+            "downloads the model file and builds the fingerprints, once.")
+        return 1
+
     if args.dry_run:
         say("--dry-run: nothing submitted, nothing written.")
         return 0
@@ -1177,6 +1249,9 @@ def run(args, say) -> int:
                 # collide with; naming it releases that run's claims and nobody else's.
                 resuming=(Path(args.run_dir).name if getattr(args, "run_dir", None) else None),
                 capture_dir=_recorded_dir(roots),
+                # THE SAME CHOICE THE CONSULT PASS MADE. Recomputing without it would drop every
+                # re-read card from the claim and bill them with nothing holding them.
+                reread_matcher=reread_matcher,
             )
             if conflicts:
                 # NOTHING WAS WRITTEN, so leaving the block commits nothing — `Rows.changes()`
@@ -1202,7 +1277,9 @@ def run(args, say) -> int:
                 f"Nothing is being submitted."
             )
             for item in to_send:
-                entry = store.read().cache.reusable(item.key, item.photo_sha256 or "")
+                entry = store.read().cache.reusable(
+                    item.key, item.photo_sha256 or "", reread_matcher=reread_matcher
+                )
                 if entry is not None:
                     _adopt_cached(item, entry, fingerprints)
             to_send = [i for i in items if i.stage == STAGE_PENDING]
@@ -1216,7 +1293,9 @@ def run(args, say) -> int:
             for item in list(to_send):
                 if item.key in held:
                     continue
-                entry = store.read().cache.reusable(item.key, item.photo_sha256 or "")
+                entry = store.read().cache.reusable(
+                    item.key, item.photo_sha256 or "", reread_matcher=reread_matcher
+                )
                 if entry is None:
                     continue
                 _adopt_cached(item, entry, fingerprints)
@@ -1273,6 +1352,8 @@ def run(args, say) -> int:
             "reidentify_stale": bool(args.reidentify_stale),
             "force_resubmit": bool(args.force_resubmit),
             "variant": getattr(args, "variant", None),
+            "engine": engine,
+            "reread_matcher": reread_matcher,
         },
     )
     say(f"run             {run_dir.directory}")
@@ -1316,6 +1397,15 @@ def run(args, say) -> int:
         _apply(items_by_key, result)
         usage_in += result.usage.input_tokens
         usage_out += result.usage.output_tokens
+    elif to_send and free:
+        result = _run_matcher(to_send, say)
+        _apply(items_by_key, result)
+        read_count = len(result.outcomes)
+        say(f"read            {read_count} of {len(to_send)}; "
+            f"{len(to_send) - read_count} left unread, for a paid press")
+        for item in to_send:
+            if item.stage == STAGE_UNREAD and item.unread is not None:
+                say(f"                {item.key}: {item.unread.code} - {item.unread.detail}")
     elif to_send:
         try:
             result = batch.run_batch(
@@ -1332,7 +1422,7 @@ def run(args, say) -> int:
         usage_out += result.usage.output_tokens
 
     # --------------------------------------------------------------------- retry rounds
-    for attempt in range(1, args.retry_budget + 1):
+    for attempt in range(1, 1 if free else args.retry_budget + 1):
         wanted = []
         crops = False
         for item in items:
@@ -1418,6 +1508,7 @@ def run(args, say) -> int:
                 "detection": item.detection,
                 "retries": item.retries,
                 "retry_reasons": item.retry_reasons,
+                "engine": item.engine,
                 "identification": item.identification,
                 # THE ITEM'S OWN DIGEST, NOT THE PREPARED BYTES'. This read
                 # `item.prepared.sha256 if item.prepared else None`, and under hash-first a
@@ -1428,6 +1519,10 @@ def run(args, say) -> int:
                 "photo_sha256": item.photo_sha256,
             }
             for item in items
+            # A CARD THE FREE READER LEFT UNREAD IS NOT IN THE RUN'S RECORD. The record is what
+            # the join reads, and a card with no identification there is a failed read bound
+            # for the main queue. This card failed nothing: it stays needing identification.
+            if item.stage != STAGE_UNREAD
         },
     }
     run_dir.write_identifications(payload)
@@ -1497,6 +1592,7 @@ def run(args, say) -> int:
                     # reattached result for a card whose sidecar no longer names one,
                     # which `_collect` parsed under the default for the same reason.
                     fingerprints.get(item.strategy, fingerprint),
+                    engine=item.engine,
                 )
                 if clash:
                     disagreements.append(clash)
@@ -1573,7 +1669,10 @@ def run(args, say) -> int:
 
     # --------------------------------------------------------------------------- report
     answered = [i for i in items if i.identification is not None]
-    failed = [i for i in items if i.identification is None]
+    # AN UNREAD CARD IS NEITHER ANSWERED NOR FAILED: the free reader looked and could not place
+    # it. It is named below, counted by reason, and left needing identification.
+    unread = [i for i in items if i.stage == STAGE_UNREAD]
+    failed = [i for i in items if i.identification is None and i.stage != STAGE_UNREAD]
     stale = [i for i in items if i.stale_prompt]
     not_detected = [i for i in items if i.detection == NOT_DETECTED]
     unfit_crops = [i for i in items if i.detection == UNFIT_CROP]
@@ -1617,6 +1716,14 @@ def run(args, say) -> int:
         for clash in disagreements:
             say(f"                  {clash['position']}: human {clash['human']} vs "
                 f"model {clash['model']}")
+    if unread:
+        reasons: Dict[str, int] = {}
+        for item in unread:
+            code = item.unread.code if item.unread is not None else "unread"
+            reasons[str(code)] = reasons.get(str(code), 0) + 1
+        say(f"unread          {len(unread)} card(s) left unread and still needing identification "
+            f"(never sent, never queued): "
+            + ", ".join(f"{count} {code}" for code, count in sorted(reasons.items())))
     if failed:
         say(f"failed          {len(failed)} card(s) go to the main queue as "
             f"identification_failed — never dropped:")

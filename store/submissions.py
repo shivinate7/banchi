@@ -336,6 +336,7 @@ class Submissions:
         pid: Optional[int] = None,
         capture_dir: Optional[str] = None,
         receipt: Optional[str] = None,
+        reread_matcher: bool = False,
     ) -> Tuple[Optional["Submission"], List[Tuple["Submission", List[str]]]]:
         """RECOMPUTE the send list, check it against every live claim, and claim it. One act.
 
@@ -384,7 +385,8 @@ class Submissions:
             key
             for key, digest in candidates.items()
             if digest and (
-                str(key) in forced or cache.reusable(str(key), str(digest)) is None
+                str(key) in forced
+                or cache.reusable(str(key), str(digest), reread_matcher=reread_matcher) is None
             )
         )
         conflicts = self.overlap(wanted)

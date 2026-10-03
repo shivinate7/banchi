@@ -227,6 +227,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="re-read weak, uncleared answers that came from an older prompt",
     )
     identify.add_argument(
+        "--engine",
+        choices=("marqo-b", "haiku"),
+        default="haiku",
+        help="who reads the cards (default: haiku, the paid read). marqo-b is the free "
+        "stock-photo reader: it reads only the cards it can place with a margin and leaves "
+        "the rest unread, for a paid press. It never calls the API.",
+    )
+    identify.add_argument(
+        "--reread-matcher",
+        action="store_true",
+        help="with the paid read, buy again the cards the free reader already answered. "
+        "Without it they are skipped. It never touches a human-cleared answer.",
+    )
+    identify.add_argument(
         "--dry-run",
         action="store_true",
         help="everything except the API call",

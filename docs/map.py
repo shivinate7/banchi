@@ -1491,9 +1491,11 @@ COMPONENTS = [
                                        "and `do_pipeline_worklist` take it as an optional "
                                        "parameter, `None` by default, so no harness test "
                                        "opens a socket. Never raises: a join miss or an "
-                                       "unreachable catalogue both answer `None`.",
-                               "governed_by": ["D8", "D15", "D25", "D35", "D86", "D278", "D254",
-                                               "D299", "D301"],
+                                       "unreachable catalogue both answer `None`. `catalog_products` "
+                                       "and `catalog_sets` list a WHOLE set (with or without an image "
+                                       "URL), blocking, for the matcher's index build only.",
+                               "governed_by": ["D8", "D15", "D25", "D35", "D86", "D170", "D278",
+                                               "D254", "D299", "D301"],
                                "tested_by": ["T7"]},
             "selection.py": {"does": "WHICH CARDS A PRESS IS OVER — one object, read by the"
                                      "wire and the CLI alike, and the drawer is a TERM in it "
@@ -1674,6 +1676,20 @@ COMPONENTS = [
             "sidecar.py": {"does": "reading a capture directory: photos, JSON sidecars, position", "governed_by": ["D2", "D3", "D10", "D21", "D22", "D23", "D183"]},
             "images.py": {"does": "downscale, encode, hash a photograph for the API, and refuse a crop that is not the card",
                           "governed_by": ["D2", "D23", "D75", "D125"], "tested_by": ["T6"]},
+            "match.py": {"does": "the free reader (D2, the owner picks the engine per run): a "
+                                 "photograph and each stock photo become one 768-number fingerprint "
+                                 "(Marqo ecommerce-B's image tower, ONNX, on onnxruntime), and the nearest "
+                                 "stock fingerprints are the candidates. A card is READ only when the "
+                                 "margin and floor clear `MARGIN_MIN` and `FLOOR_MIN`, its pool is one "
+                                 "hinted set or every non-promo set of its game, and the best answer "
+                                 "shares no card name with a printing that has no stock photo (the "
+                                 "look-alike guard). Any other card is left UNREAD: no identification, "
+                                 "never queued, no fallback. The index (`inventory/fingerprints.sqlite`) "
+                                 "holds vectors only and names the model file's sha256, so another "
+                                 "model's index is refused (D301's one exception: each stock image is "
+                                 "read once, in memory). Stdlib at import; numpy, Pillow and onnxruntime "
+                                 "load lazily.",
+                         "governed_by": ["D2", "D3", "D76", "D88", "D170", "D213", "D301"]},
             "cost.py": {"does": "the price sheet, and the ONE place it is applied — the preflight's "
                                 "estimate before a send, the collect's record of what the send used, "
                                 "and server/pipeline_routes.py:_usage filling the figure in for a run "
