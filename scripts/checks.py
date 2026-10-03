@@ -85,6 +85,20 @@ CHECKS = (
         "governed_by": ("D18",),
     },
     {
+        "target": "unit",
+        "shard": "product",
+        "runs": "npm --prefix app run unit",
+        "asserts": "The unit tier: logic and data cases in app/tests/unit/*.unit.ts, run by "
+                   "Playwright's runner with no browser and no dev server. Today: the tab "
+                   "title function over every ROUTES entry.",
+        "needs": ("node", "app deps"),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "It runs node, and the commit hook runs a bare python3.",
+        "gates": True,
+        "governed_by": ("D18",),
+    },
+    {
         "target": "docs-audit",
         "shard": "static",
         "runs": "python3 scripts/docs-audit.py",

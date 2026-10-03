@@ -150,7 +150,7 @@ The legacy aliases at the foot of tokens.css are dead. A new rule may not read o
 - **Type has three roles.** `--bn-font-display` (Manrope, headings), `--bn-font-ui` (Inter),
   `--bn-font-mono` (JetBrains Mono, machine strings only: SKUs, run names, reason codes, key caps,
   card numbers). Tables use Inter tabular-nums. Money uses `.bn-money` (D221, money stays mono), asserted by
-  `app/tests/money-face.spec.ts`. Body is 14px.
+  `app/tests/text-checks.spec.ts`. Body is 14px.
 - **The kit is `app/src/kit/` and `app/src/kit.css`.** `#/gallery` renders it. Reach for the kit before
   you write a primitive.
 - **Register.** Sentences on screen, not machine strings. Enum values are labeled. An empty state is a
@@ -159,7 +159,7 @@ The legacy aliases at the foot of tokens.css are dead. A new rule may not read o
 - **No typed middle dot or bullet (U+00B7, U+2022) in a user-visible string** (D218, a typed dot is a defect).
   CSS draws the separator. The `typed interpunct` row of `make docs-audit` enforces it, with a shrinking list (D280, lists of offenders).
 - **Text shape is three checks, none a count** (D284, three checks replace one ceiling):
-  `app/tests/text-shape.spec.ts`, `app/tests/machine-words.spec.ts`, `app/tests/money-face.spec.ts`. Each reads
+  all in `app/tests/text-checks.spec.ts`, one sweep. Each reads
   a shrinking allow list in `app/tests/`, keyed to the finding.
 - **The mark is generated** (D102, the mark has its own palette). `scripts/build-mark.mjs` writes it. Never put a `border-radius` on it.
 - **`base.css` sets four floors** (D50, feedback is the product's; D118, a press changes what is on screen):

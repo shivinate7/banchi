@@ -1464,8 +1464,7 @@ pipeline-internal noun in any other user-visible string in `app/src`.
 
 Less text is always better than more. D284's pinned-ceiling ratchet is retired, on the owner's
 ruling (`D284`, 2026-09-23): no more stagnant static pin. Three checks replace
-it, run by `make design-check`: `app/tests/text-shape.spec.ts` (a repetition and a sentence-
-shape check), `app/tests/machine-words.spec.ts` (D196's own gap, over rendered text) and
-`app/tests/money-face.spec.ts` (D221, over the mono face). `make text-density`
+it, run by `make design-check` in one sweep, `app/tests/text-checks.spec.ts`: a repetition and a
+sentence-shape check, D196's own gap over rendered text, and D221's mono face. `make text-density`
 (`scripts/text-density/`) is the third piece, a repeatable on-demand reviewer rather than a
 gate.
