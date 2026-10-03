@@ -507,7 +507,7 @@ and this would be built on a guess.
 **The trace is Tier 1.** `app/src/trace.ts` records the signal and the gate-verdict frames and never
 continuous video. Nothing about it touches the capture server or the store. The file goes to the
 browser's Downloads folder and nowhere else. Tier-2 video is unbuilt and would be a rig-day debugging
-instrument at most. There is no auto-advance of boxes and no second store. The one feeder control is the dispenser button (D-dispenser-button), which starts and stops the dispenser and never touches the trigger. Nothing
+instrument at most. There is no auto-advance of boxes and no second store. The one feeder control is the dispenser button (D316), which starts and stops the dispenser and never touches the trigger. Nothing
 persists the mode, because arming is an act (D19).
 
 ## 6. When does this need recalibrating?

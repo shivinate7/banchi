@@ -124,7 +124,7 @@ make catalog-mirror # dry run only. ARGS=--dry-run samples over HTTP HEAD.
 
 ## The front end
 
-Vite + React 19 + TypeScript over the capture server and nothing else, save one Bluetooth link to the dispenser (D-dispenser-button). No pipeline logic in the
+Vite + React 19 + TypeScript over the capture server and nothing else, save one Bluetooth link to the dispenser (D316 (A Capture button starts and stops)). No pipeline logic in the
 browser. No second store. No auth. `app/src/server.ts` is the only client-call file.
 `app/src/types.ts` is the only wire-shape file.
 

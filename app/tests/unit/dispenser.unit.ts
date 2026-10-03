@@ -1,5 +1,5 @@
 // Protects: The dispenser deals one card per command, paced, over an allow-listed link, and stops on empty, error, silence, a lost link or Stop.
-// Governs: D-dispenser-button, D19
+// Governs: D316, D19
 import { expect, test } from './unit'
 import { createDealer, DEAL_GAP_MS } from '../../src/dealer'
 
