@@ -503,6 +503,9 @@ def _payload(strategy: str, product: Tuple[str, str, str, str], name: str, print
     return body
 
 
+CHUNK = 32
+
+
 def read(
     requests: Sequence[Request],
     index: Index,
@@ -510,7 +513,23 @@ def read(
     aspect: float = 0.716,
     log: Callable[[str], None] = lambda _m: None,
 ) -> List[Result]:
-    """One `Result` per request, in order. Accepted or left unread, never guessed."""
+    """One `Result` per request, in order. Accepted or left unread, never guessed.
+
+    IN CHUNKS OF `CHUNK`, BECAUSE A CROP IS A FULL-RESOLUTION IMAGE (about 9 MB decoded) and a whole
+    box held at once is gigabytes. Each chunk is cropped, embedded and ranked, then released."""
+    out: List[Result] = []
+    for start in range(0, len(requests), CHUNK):
+        out.extend(_read_chunk(requests[start : start + CHUNK], index, model, aspect, log))
+    return out
+
+
+def _read_chunk(
+    requests: Sequence[Request],
+    index: Index,
+    model: Optional[Path],
+    aspect: float,
+    log: Callable[[str], None],
+) -> List[Result]:
     import numpy as np
 
     out: Dict[str, Result] = {}

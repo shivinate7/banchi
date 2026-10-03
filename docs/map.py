@@ -4997,6 +4997,16 @@ COMPONENTS = [
                         "size and SHA-256 to pin in `identify/match.py`. The app never runs it.",
                 "governed_by": ["D2"],
             },
+            "match-heldout.py": {
+                "does": "the held-out check on the free reader's accept rule, a gate before adoption "
+                        "and not part of `make check`: reads photographs the spike never saw (the "
+                        "store read-only, minus an exclude list, or a manifest), scores each answer "
+                        "against the owner's confirmed identification, and fails on any wrong answer "
+                        "accepted or any absent-truth card accepted. Reports the accepted share and "
+                        "the rule-of-three bound and sets no pass mark on them. Exit 2 is a read that "
+                        "could not run.",
+                "governed_by": ["D2", "D88"],
+            },
             "match-parity.py": {
                 "does": "proves a matcher model file against torch's answer with onnxruntime alone: "
                         "the pinned size and SHA-256, and a cosine of at least 0.9999 on every "
