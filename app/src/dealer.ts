@@ -240,6 +240,7 @@ export function createDealer() {
 
   /** Stop sends STOP after any write in flight. A card already moving still lands. */
   async function stop(why?: string): Promise<void> {
+    pending = false // every stop cancels a Start that is waiting for the old card
     if (state !== 'dealing') return
     clearTimers()
     state = 'stopped'
