@@ -2061,6 +2061,60 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     })()
   }
 
+  /* ONE ORDER, STOOD DOWN BY THE LINES THAT ARE OPEN NOW (the Manage panel). `Ledger.close_line` skips
+     a line already closed with the same reason and re-stamps one closed with another, and
+     `reopen_line` reopens every closed line it is given. So the order-shaped call, and an Undo over
+     it, would reopen a line closed earlier on purpose. This names only the open lines, and Undo
+     names that same list. Nothing open, or nothing moved, is a plain sentence with no Undo. */
+  const onStandDownOrder = (order: OrderRow, reason: OrderCloseReason) => {
+    void (async () => {
+      setBusy('close')
+      setFailure(null)
+      try {
+        const aim = order.progress
+          .filter((row) => row.closed_at == null && row.outstanding > 0)
+          .map((row) => ({ source: order.source, number: order.number, sku: row.sku }))
+        const done = aim.length === 0 ? null : await closeLines(aim, reason)
+        if (!live.current) return
+        if (done === null || done.moved === 0) {
+          toast({
+            kind: 'ok',
+            icon: 'info',
+            title: 'Nothing to stand down',
+            body: 'Every line of this order is already closed.',
+          })
+        } else {
+          toast({
+            kind: 'receipt',
+            icon: 'check',
+            title: 'Stood down 1 order',
+            body: `${done.still_open} still open. Nothing was marked sold.`,
+            ttlMs: UNDO_WINDOW_MS,
+            action: {
+              label: 'Undo',
+              onPress: () => {
+                void (async () => {
+                  try {
+                    await reopenLines(aim)
+                    touchHub()
+                  } catch (err) {
+                    toast({ ...refusalToast(err), icon: 'alert' })
+                  }
+                })()
+              },
+            },
+          })
+        }
+        await reread()
+      } catch (err) {
+        if (!live.current) return
+        setFailure(describeFailure(err))
+      } finally {
+        if (live.current) setBusy(null)
+      }
+    })()
+  }
+
   /* -------------------------------------------------------- the one-time backlog reconcile */
 
   /* D203. A SECOND backlog `is_terminal_status` cannot see: orders
@@ -2300,7 +2354,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         onFill={onFill}
         onDeclareKind={onDeclareKind}
         onCloseLine={onCloseLine}
-        onStandDown={onStandDown}
+        onStandDownOrder={onStandDownOrder}
         onFetch={onFetch}
         onReread={() => void reread()}
         /* THE STORE'S OWN CONTROLS (UX-165, UX-193), two small squares on the filter bar's line
@@ -2783,7 +2837,7 @@ function PullStage({
   onFill,
   onDeclareKind,
   onCloseLine,
-  onStandDown,
+  onStandDownOrder,
   onFetch,
   statusControl,
   statusPanel,
@@ -2814,7 +2868,7 @@ function PullStage({
   readonly onFill: FillHandler
   readonly onDeclareKind: KindHandler
   readonly onCloseLine: CloseLineHandler
-  readonly onStandDown: StandDownHandler
+  readonly onStandDownOrder: (order: OrderRow, reason: OrderCloseReason) => void
   readonly onFetch: () => void
   readonly statusControl: ReactNode
   readonly statusPanel: ReactNode
@@ -3907,7 +3961,7 @@ function PullStage({
             onDeclareKind={onDeclareKind}
             onCloseLine={onCloseLine}
             onReread={onReread}
-            onStandDown={onStandDown}
+            onStandDownOrder={onStandDownOrder}
           />
         )}
       </Sheet>
@@ -3967,7 +4021,7 @@ function ManagePanel({
   onDeclareKind,
   onCloseLine,
   onReread,
-  onStandDown,
+  onStandDownOrder,
 }: {
   readonly group: BuyerGroup
   readonly answers: ReadonlyMap<string, ResolvedOrder>
@@ -3982,7 +4036,7 @@ function ManagePanel({
   readonly onDeclareKind: KindHandler
   readonly onCloseLine: CloseLineHandler
   readonly onReread: () => void
-  readonly onStandDown: StandDownHandler
+  readonly onStandDownOrder: (order: OrderRow, reason: OrderCloseReason) => void
 }) {
   const [editing, setEditing] = useState<string | null>(null)
   const [pressed, setPressed] = useState<OrderCloseReason | null>(null)
@@ -3991,7 +4045,7 @@ function ManagePanel({
   if (order !== undefined) {
     const stand = (reason: OrderCloseReason) => {
       setPressed(reason)
-      onStandDown([order], reason)
+      onStandDownOrder(order, reason)
     }
     return (
       <div className="orders-manage-orders">
@@ -4334,6 +4388,19 @@ function OrderDetail({
      still owed, never the `status` string (D91) — so an order closed because every copy was
      already pulled draws nothing here exactly as before, and one closed by the marketplace
      while copies remain open gets its lines and its Pull button back. */
+  /* A STOOD-DOWN LINE SAYS SO IN PLAIN WORDS, whether it was the whole order or one line: a done
+     order otherwise drew only "Done", which reads as filled. The reason is named when the stood-down
+     lines share one. */
+  const stood = order.progress.filter((row) => row.closed_at != null)
+  const reasons = new Set(stood.map((row) => row.closed_reason))
+  const stoodWord =
+    stood.length === 0
+      ? null
+      : `${stood.length >= order.lines.length ? 'Stood down' : `${stood.length} of ${order.lines.length} lines stood down`}${
+          reasons.size === 1 ? (reasons.has('not_shipping') ? ', cancelled or refunded' : reasons.has('shipped_elsewhere') ? ', shipped elsewhere' : '') : ''
+        }`
+  const stoodNote = stoodWord === null ? null : <p className="orders-order-stood"><Icon name="check" size={14} /> {stoodWord}</p>
+
   const body =
     !ownsAWalkableBody(order) ? null : answer === null ? (
       <div className="orders-reason orders-reason-warn">
@@ -4430,6 +4497,7 @@ function OrderDetail({
         )}
       </div>
 
+      {stoodNote}
       {body}
     </article>
   )

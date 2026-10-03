@@ -3466,7 +3466,7 @@ test('Stand down this order stands down only that order, with a receipt and an U
   await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length).toBe(1)
   /* ONE ORDER, NEVER THE BUYER'S WHOLE SET, AND THE REASON IS THE BUYER'S CANCEL. */
   expect(wire.find((one) => one.path === '/orders/close')?.body).toEqual({
-    orders: [{ source: 'TCGplayer', number: SECOND_ORDER }],
+    lines: [{ source: 'TCGplayer', number: SECOND_ORDER, sku: SKU }],
     reason: 'not_shipping',
   })
 
@@ -3476,9 +3476,57 @@ test('Stand down this order stands down only that order, with a receipt and an U
   await receipt.locator('button.bn-toast-action').click()
   await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length).toBe(2)
   expect(wire.filter((one) => one.path === '/orders/close')[1]?.body).toEqual({
-    orders: [{ source: 'TCGplayer', number: SECOND_ORDER }],
+    lines: [{ source: 'TCGplayer', number: SECOND_ORDER, sku: SKU }],
     undo: true,
   })
+})
+
+/* UNDO IS EXACT. A line closed earlier is not the stand-down's to reopen: `reopen_line` reopens every
+ * closed line it is given, so the stand-down names only the lines open now, and Undo names that list. */
+const SIBLING_SKU = '9197754'
+function halfClosedOrder(closedBoth = false): OrderRow {
+  const base = order()
+  const sibling = { ...line().line, sku: SIBLING_SKU, name: 'Sunrise', number: '030' }
+  const row = base.progress[0]!
+  return order({
+    wanted: 2,
+    lines: [base.lines[0]!, sibling],
+    progress: [
+      { ...row, closed_at: '2026-09-01T10:00:00+00:00', closed_reason: 'shipped_elsewhere' },
+      { ...row, sku: SIBLING_SKU, closed_at: closedBoth ? '2026-09-01T10:00:00+00:00' : null, closed_reason: closedBoth ? 'not_shipping' : null },
+    ],
+  })
+}
+
+test('stand down plus Undo leaves a line closed earlier alone', async ({ page }) => {
+  const wire = await open(page, { orders: payloadOf([halfClosedOrder()], []) })
+  await openManage(page)
+  await page.locator('.orders-manage-sheet').getByRole('button', { name: 'Stand down this order: cancelled or refunded' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length).toBe(1)
+  const aim = [{ source: 'TCGplayer', number: ORDER_NUMBER, sku: SIBLING_SKU }]
+  expect(wire.find((one) => one.path === '/orders/close')?.body).toEqual({ lines: aim, reason: 'not_shipping' })
+  await page.locator('.bn-toast-receipt button.bn-toast-action').click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length).toBe(2)
+  expect(wire.filter((one) => one.path === '/orders/close')[1]?.body).toEqual({ lines: aim, undo: true })
+})
+
+test('standing down an order with nothing open says so plainly, with no write and no Undo', async ({ page }) => {
+  const wire = await open(page, { orders: payloadOf([halfClosedOrder(true)], []) })
+  await openManage(page)
+  await page.locator('.orders-manage-sheet').getByRole('button', { name: 'Stand down this order: already shipped' }).click()
+  const toastEl = page.locator('.bn-toast').filter({ hasText: 'Nothing to stand down' })
+  await expect(toastEl).toContainText('already closed')
+  await expect(toastEl.locator('button.bn-toast-action')).toHaveCount(0)
+  expect(wire.filter((one) => one.path === '/orders/close')).toEqual([])
+})
+
+test('a stood-down order says "Stood down" in plain words, with the reason', async ({ page }) => {
+  const done = order({ open: false, status: 'Cancelled', terminal: true })
+  done.progress = [{ ...done.progress[0]!, closed_at: '2026-09-01T10:00:00+00:00', closed_reason: 'not_shipping' }]
+  await open(page, { orders: payloadOf([done], []) })
+  await pickFacet(page, 'Show', /^Done/)
+  await openManage(page)
+  await expect(page.locator('.orders-manage-sheet .orders-order-stood')).toHaveText('Stood down, cancelled or refunded')
 })
 
 test('a refused stand-down says why inside the panel, with its code', async ({ page }) => {

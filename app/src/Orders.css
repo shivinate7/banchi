@@ -1228,3 +1228,6 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-strip-card.is-done { opacity: var(--bn-disabled); }
 .orders-strip-count { position: absolute; right: var(--bn-1); bottom: var(--bn-1); display: inline-flex; align-items: center; gap: var(--bn-0-5); padding: 0 var(--bn-1); border-radius: var(--bn-r-xs); background: var(--bn-surface); font-size: var(--bn-fs-xs); font-weight: 700; font-variant-numeric: tabular-nums; }
 .orders-strip-missing { flex: none; }
+
+/* ---- a stood-down order says so ---- */
+.orders-order-stood { display: flex; align-items: center; gap: var(--bn-1); margin: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
