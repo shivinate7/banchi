@@ -7,7 +7,7 @@ is today's behaviour, so a machine without the model is exactly one that never h
 
 The model is one class. Its ONNX includes the post-processing. The photo is STRETCHED to
 640x640 RGB 0..1 with no letterbox, and the best score of 300 wins. The box is the card
-itself, axis aligned and unpadded: the margin belongs to `identify.images.crop_rect`.
+itself, axis aligned and unpadded: `identify.images.crop_rect` pads it by `PAD_BY_METHOD`.
 `method` is "dfine". `geometry/model/rebuild.py` rebuilds the file from the labels.
 """
 
@@ -20,6 +20,15 @@ from geometry.detect import CARD_ASPECT, CardBox, detect_card
 MODEL = Path(__file__).resolve().parent / "model" / "dfine_card_640.onnx"
 SIZE = 640
 MIN_SCORE = 0.25
+
+# THE MARGIN FOLLOWS THE FINDER. The model's box is measured at a 4% pad (0 loose crops in 74;
+# 6 at 8%). A method not listed here takes the caller's default, `identify.images.CROP_PAD`.
+PAD_BY_METHOD = {"dfine": 0.04}
+
+
+def pad_for(box, default: float) -> float:
+    return PAD_BY_METHOD.get(box.method, default)
+
 
 _lock = threading.Lock()
 _session = None  # None: not tried yet. False: tried and unavailable.

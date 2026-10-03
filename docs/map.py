@@ -1659,7 +1659,7 @@ COMPONENTS = [
             "batch.py": {"does": "Batch API submit/poll/collect. Batch, never sequential.", "governed_by": ["D2", "D21", "D23"], "tested_by": ["T1"]},
             "sidecar.py": {"does": "reading a capture directory: photos, JSON sidecars, position", "governed_by": ["D2", "D3", "D10", "D21", "D22", "D23", "D183"]},
             "images.py": {"does": "downscale, encode, hash a photograph for the API, and refuse a crop that is not the card",
-                          "governed_by": ["D2", "D23", "D75"], "tested_by": ["T6"]},
+                          "governed_by": ["D2", "D23", "D75", "D125"], "tested_by": ["T6"]},
             "cost.py": {"does": "the price sheet, and the ONE place it is applied — the preflight's "
                                 "estimate before a send, the collect's record of what the send used, "
                                 "and server/pipeline_routes.py:_usage filling the figure in for a run "
