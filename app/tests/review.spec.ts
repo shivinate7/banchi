@@ -1201,6 +1201,7 @@ test('a second-look card shows the free reader pick in its details, and not its 
   await page.locator('.review-details-summary').click()
   const fact = page.locator('.review-fact', { hasText: 'Free reader' })
   await expect(fact).toHaveCount(1)
+  await expect(fact.locator('dt')).toHaveText('Free reader')
   await expect(fact.locator('dd')).toHaveText('Pikachu 058')
   await expect(page.locator('.review-card')).not.toContainText('margin_too_small')
 })

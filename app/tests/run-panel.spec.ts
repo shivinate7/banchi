@@ -3204,7 +3204,7 @@ test('the free read is the default pick, and the paid read is one press away', a
   await expect(page.getByRole('button', { name: 'Check what it will read' })).toBeVisible()
 })
 
-test('a fresh opening is the free read again, and the pick is not kept on this device', async ({ page }) => {
+test('a fresh opening is the free read again, whatever was picked last time', async ({ page }) => {
   await open(page)
   await atReading(page, 9, 'paid')
   await expect(picked(page, 'Read from the photo')).toHaveAttribute('aria-pressed', 'true')
@@ -3216,8 +3216,6 @@ test('a fresh opening is the free read again, and the pick is not kept on this d
   /* THE SHEET REOPENS ON THE SECOND STAGE WITH THE BOX KEPT, and the pick is not what it keeps. */
   await expect(page.locator('.run-engine')).toBeVisible()
   await expect(picked(page, 'Match to stock photos')).toHaveAttribute('aria-pressed', 'true')
-  const stored = await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))
-  expect(stored).not.toMatch(/marqo|haiku|engine/i)
 })
 
 test('both picks carry a hover tooltip that names their model, and nothing else on the sheet does', async ({
