@@ -58,6 +58,7 @@ rather than by a footnote nobody has to read.
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
@@ -265,22 +266,47 @@ def aggregate_totals(series: List[SkuSeries], on_hand_count: int) -> List[TotalP
     shares one bucket width; a caller that mixes ranges here has already broken D278's own
     rule and this function will compute a meaningless gap column rather than raise, because
     the mixing is a caller bug this module cannot see from its own arguments alone.
+
+    THE WINDOW RULE: SKUs sweep on their own days, so one range's bucket starts can sit on
+    several phases a day or two apart. Every priced point snaps to a common grid of
+    `width_days`, anchored on the latest start of any priced point: its window is dated
+    `anchor - k * width_days`, where `k = (anchor - start) // width_days`; it covers the
+    `width_days` days ending on that date. A total sums every
+    SKU with a priced point in that window and is dated by the window start. A SKU never
+    counts twice in one window (its latest point wins). `gap_before` is true when a window
+    between two totals has no priced point at all. When the width is unknown (under two
+    adjacent points) or a start does not parse, a point keeps its own start as its window.
     """
     if not series:
         return []
-    width_days = 0
+    width_days = max((_bucket_width_from_series(one) for one in series if one.points), default=0)
+    starts = []
     for one in series:
-        if one.points:
-            width_days = _bucket_width_from_series(one)
-            break
+        for point in one.points:
+            if point.value is not None:
+                with contextlib.suppress(ValueError):
+                    starts.append(date.fromisoformat(point.start))
+    anchor = max(starts, default=None)
+
+    def window(start: str) -> str:
+        if anchor is None or width_days <= 0:
+            return start
+        try:
+            back = (anchor - date.fromisoformat(start)).days
+        except ValueError:
+            return start
+        return (anchor - timedelta(days=(back // width_days) * width_days)).isoformat()
+
     by_start: Dict[str, Decimal] = {}
     priced_by_start: Dict[str, int] = {}
     for one in series:
+        latest_in_window: Dict[str, Decimal] = {}
         for point in one.points:
-            if point.value is None:
-                continue
-            by_start[point.start] = by_start.get(point.start, Decimal("0")) + Decimal(point.value)
-            priced_by_start[point.start] = priced_by_start.get(point.start, 0) + 1
+            if point.value is not None:
+                latest_in_window[window(point.start)] = Decimal(point.value)
+        for key, value in latest_in_window.items():
+            by_start[key] = by_start.get(key, Decimal("0")) + value
+            priced_by_start[key] = priced_by_start.get(key, 0) + 1
     totals: List[TotalPoint] = []
     prev_start: Optional[str] = None
     for start in sorted(by_start):
