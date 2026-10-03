@@ -1478,7 +1478,7 @@ for (const width of [390, 820]) {
     /* BELOW 768 THE QUIET DOORS SIT BEHIND MORE (D277, Q4): opened first, then measured. */
     const more = page.getByRole('button', { name: 'More send options' })
     const door = page.locator('.send-act').getByRole('button', { name: /Download/ })
-    await expect(door.or(more)).toBeVisible()
+    await expect(door.or(more).first()).toBeVisible()
     if (!(await door.isVisible())) await more.click()
     await expect(press).toContainText('2 live copies move to')
     const before = { press: await press.boundingBox(), door: await door.boundingBox() }

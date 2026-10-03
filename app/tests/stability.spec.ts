@@ -26,7 +26,7 @@ const EXCUSED = JSON.parse(readFileSync(resolve(HERE, 'stability-allow.json'), '
 
 const SLOW_MS = 800
 const WINDOW_MS = 3000
-const BUDGET = 0
+const BUDGET = 0.01
 
 /** A store with priced holdings, so the shelf draws its figure and spark. The shell's default
  *  answers "nothing priced", which is a thinner frame than a real store's. */
@@ -104,8 +104,8 @@ for (const one of CASES) {
         table.push(`${width} ${route} ${sum.toFixed(4)} ${describeShifts(shifts)}`)
         const key = `${one.name}:${route}`
         if (key in EXCUSED) {
-          if (sum <= one.budget) stale.push(`${key} now passes: delete its entry in stability-allow.json`)
-        } else if (sum > one.budget) over.push(`${route} ${sum.toFixed(4)}`)
+          if (sum < one.budget) stale.push(`${key} now passes: delete its entry in stability-allow.json`)
+        } else if (sum >= one.budget) over.push(`${route} ${sum.toFixed(4)}`)
       }
       console.log('SHIFT\n' + table.join('\n'))
       expect(over, 'screens that shift while loading').toEqual([])

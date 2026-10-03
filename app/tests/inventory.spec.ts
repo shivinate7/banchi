@@ -1182,7 +1182,7 @@ async function openBoxOps(page: Page) {
   const rename = page.getByRole('button', { name: 'Rename' })
   const manage = page.getByRole('button', { name: 'Manage' })
   /* Wait for the state that decides: the sheet is already open, or its opener has drawn. */
-  await expect(rename.or(manage)).toBeVisible()
+  await expect(rename.or(manage).first()).toBeVisible()
   if (!(await rename.isVisible())) await manage.click()
   await expect(page.getByRole('button', { name: 'Rename' })).toBeVisible()
 }
@@ -1197,7 +1197,7 @@ async function openCardOps(page: Page) {
   const correct = page.getByRole('menuitem', { name: 'Correct' })
   const actions = page.getByRole('button', { name: 'Actions' })
   /* Wait for the state that decides: the menu is already open, or its opener has drawn. */
-  await expect(correct.or(actions)).toBeVisible()
+  await expect(correct.or(actions).first()).toBeVisible()
   if (!(await correct.isVisible())) await actions.click()
   await expect(page.getByRole('menuitem', { name: 'Correct' })).toBeVisible()
 }
@@ -6287,7 +6287,7 @@ test("the box's census and its forecast are told apart, and the fill says which 
   await expect(page.locator('.bn-set-census-cell', { hasText: 'Next capture' })).toHaveCount(1)
 
   /* A box has no seal (`D299`), so no census figure can be a frozen one. */
-  expect(await page.locator('.boxops-census').innerText()).not.toMatch(/sealed|so far/)
+  expect(await page.locator('.bn-set-census').innerText()).not.toMatch(/sealed|so far/)
 
   /* And no figure wraps away from its own label at either width. */
   for (const width of [1440, 1280]) {
@@ -6511,7 +6511,7 @@ test('the box fill is qualified once, on the identity line', async ({ page }) =>
      THE FIELD STAYS AND ONLY THE QUALIFIER GOES, which is the half worth asserting: `BoxOps.tsx`
      promises these key names grep to `inventory.json`, so a fix that dropped `fill` outright would
      have broken a different promise to keep this one. */
-  await expect(page.locator('.boxops-census-cell', { hasText: 'Fill' }).locator('.boxops-census-note')).toHaveCount(0)
+  await expect(page.locator('.bn-set-census-cell', { hasText: 'Fill' }).locator('.bn-set-census-note')).toHaveCount(0)
   await expect(censusValue(page, 'Fill')).toHaveText('7')
 
   /* A box has no lid (`D299`), so the sheet's head names no lid state at all:
@@ -7635,7 +7635,7 @@ function facetBoxes() {
 async function pickFacet(page: Page, facet: 'Game' | 'Set' | 'Rarity', option: string | RegExp) {
   const popover = page.locator('.bn-filterbar-popover')
   const trigger = page.locator('.browse-filterbar .bn-filterbar-trigger:visible')
-  await expect(popover.or(trigger)).toBeVisible()
+  await expect(popover.or(trigger).first()).toBeVisible()
   if (!(await popover.isVisible())) await trigger.click()
   await popover.locator('.bn-pick', { hasText: new RegExp(`^${facet}`) }).click()
   await page.locator('.bn-pick-opt', { hasText: option }).first().click()
@@ -7645,7 +7645,7 @@ async function pickFacet(page: Page, facet: 'Game' | 'Set' | 'Rarity', option: s
 async function facetOptions(page: Page, facet: 'Game' | 'Set' | 'Rarity'): Promise<string[]> {
   const popover = page.locator('.bn-filterbar-popover')
   const trigger = page.locator('.browse-filterbar .bn-filterbar-trigger:visible')
-  await expect(popover.or(trigger)).toBeVisible()
+  await expect(popover.or(trigger).first()).toBeVisible()
   if (!(await popover.isVisible())) await trigger.click()
   await popover.locator('.bn-pick', { hasText: new RegExp(`^${facet}`) }).click()
   const texts = (await page.locator('.bn-pick-opt').allInnerTexts()).map((text) => text.replace(/\s+/g, ' ').trim())
