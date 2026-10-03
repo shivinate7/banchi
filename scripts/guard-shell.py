@@ -8,7 +8,7 @@ what D171 rules a rule IS. A rule is read once, at the start, and then competes 
 work. So these seven are mechanical. Their numbers are stable ids: 3 (`gh api -f`) and 4
 (`ln -s` over a path) are retired on the owner's word, and nothing renumbers.
 
-CLAUDE CODE RUNS THIS WITH `--skip checkout,stash,reset`. The shared layer's guard
+CLAUDE CODE RUNS THIS WITH `GUARD_SHELL_SKIP=checkout,stash,reset` (`--skip` is an alias). The shared layer's guard
 (`claude-settings/hooks/guard.py`, rule 1, shared-tree) owns clauses 1, 7 and 8 there, so the
 Claude-side copy is cut on the owner's word. Codex runs no shared guard and runs all seven.
 
@@ -196,7 +196,7 @@ class Verdict(NamedTuple):
     notes: List[str]        # printed, exit 0 — what this file looked at and could not read
 
 
-#: Clauses the caller left to another guard (`--skip`). Set once, by `main`, for one hook run.
+#: Clauses the caller left to another guard (`GUARD_SHELL_SKIP`, or `--skip`). Set once, by `main`, for one hook run.
 SKIPPED: Set[str] = set()
 
 
@@ -1852,12 +1852,21 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    args = build_parser().parse_args(list(argv) if argv is not None else None)
+    args, unknown = build_parser().parse_known_args(list(argv) if argv is not None else None)
+    if unknown:
+        if not args.hook:
+            build_parser().error("unrecognized arguments: " + " ".join(unknown))
+        # A hook's flags come from the session's settings, its script from this branch: an older copy
+        # must ignore a newer flag, never block the tool call (docs/agent-traps.md).
+        print("warning: hook ignores unknown flags: " + " ".join(unknown), file=sys.stderr)
     if args.clauses:
         for clause in CLAUSES:
             print("{0:<10} {1:<22} {2}".format(clause.name, clause.hatch + "=off", clause.rule))
         return 0
-    SKIPPED.update(name for name in args.skip.split(",") if name in HATCH)
+    # GUARD_SHELL_SKIP is the hook option's home: an environment variable, so a copy that does not
+    # know it ignores it. `--skip` stays as an alias for branches that already pass it.
+    skip = os.environ.get("GUARD_SHELL_SKIP", "") + "," + args.skip
+    SKIPPED.update(name for name in skip.split(",") if name in HATCH)
     if args.hook:
         try:
             payload = json.loads(sys.stdin.read() or "{}")

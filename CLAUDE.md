@@ -309,7 +309,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **Opsec.** A live unredeemed code card is a bearer instrument. No code-card photo in a listing, README,
   screenshot or commit. `scripts/githooks/pre-commit` enforces it, armed by `make hooks`.
 - **Seven shell mistakes are refused before they run** by `scripts/guard-shell.py --hook` on Bash and Write/Edit (D135, Codex reads the same rules).
-  Claude Code passes `--skip checkout,stash,reset`, because the shared layer's guard owns those three there. Codex runs all seven.
+  Claude Code sets `GUARD_SHELL_SKIP=checkout,stash,reset` (`--skip` is an alias), because the shared layer's guard owns those three there. Codex runs all seven.
   Each clause fails open on its own bugs. A tool call that sets a real `PKMNSCAN_*=off` is refused as owner-only, with no switch named, unless it is a recovery lever (`PKMNSCAN_KILL`, `PKMNSCAN_SUITE_LOCK`, `PKMNSCAN_SERVE_MAIN`, `PKMNSCAN_SYNC`). Only the owner's terminal and CI set the rest (D042 (main moves by pull request) and D179 (shell mistakes are refused by resolving)). Each has an owner-held escape hatch, never printed to an agent: `PKMNSCAN_CHECKOUT`, `PKMNSCAN_TREE`,
   `PKMNSCAN_WAIT`, `PKMNSCAN_PUSH`, `PKMNSCAN_STASH`, `PKMNSCAN_RESET`, `PKMNSCAN_NARRATE`
   (D235, the heartbeat is refused a pipe). The narrate clause names its subjects, a short per-incident roster

@@ -3278,8 +3278,8 @@ COMPONENTS = [
                         "itself reads them. The Write|Edit half parses nothing at all, so no "
                         "shell form "
                         "skirts it. ONE HATCH PER CLAUSE, so no clause can be disarmed by the "
-                        "switch that guards another. Claude Code passes `--skip "
-                        "checkout,stash,reset` because the shared layer owns those three; "
+                        "switch that guards another. Claude Code sets `GUARD_SHELL_SKIP="
+                        "checkout,stash,reset` (`--skip` is an alias) because the shared layer owns those three; "
                         "Codex runs all seven. Fails OPEN on "
                         "its own bugs, including a missing `shell_parse.py`, and an operand it "
                         "cannot resolve is REPORTED rather than passed silently.",

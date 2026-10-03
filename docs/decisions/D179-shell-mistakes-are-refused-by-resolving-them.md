@@ -26,12 +26,12 @@ exactly when it is not needed.
 
 ### Amended on the owner's word: what Claude Code runs
 
-Claude Code runs `scripts/guard-shell.py --hook --skip checkout,stash,reset`. The shared layer's
+Claude Code runs `GUARD_SHELL_SKIP=checkout,stash,reset scripts/guard-shell.py --hook`. The shared layer's
 guard (`claude-settings` `hooks/guard.py`, rule 1, shared-tree) owns clauses 1, 7 and 8 there:
 it refuses a checkout or restore over a modified path, a stash that takes another tree's entry,
 and a hard reset over uncommitted work, each judged against the state of its subject. The
 Claude-side copy was cut so one refusal speaks once. `.codex/hooks.json` runs all seven,
-because Codex runs no shared guard (D135). The `--skip` flag names clauses by their table name
+because Codex runs no shared guard (D135). `GUARD_SHELL_SKIP` (and its alias `--skip`) names clauses by their table name
 and an unknown name skips nothing. Clauses 3 and 4 are gone for both tools.
 
 ### The five, and what each cost
