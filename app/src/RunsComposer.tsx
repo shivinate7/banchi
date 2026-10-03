@@ -294,7 +294,7 @@ export function selectionLine(
   const named = (box: number) => boxLabel(box, boxes?.find((row) => row.box === box)?.name)
   const parts: string[] = []
   if (draft.start === 'needed') {
-    parts.push('Pending')
+    parts.push('Everything that still needs reading')
   } else if (draft.start === 'drawers') {
     if (draft.boxes.length === 0) return 'Pick a box. You can pick several.'
     parts.push(
@@ -384,15 +384,26 @@ function MatchPrepare({
   trouble,
   preparing,
   onPrepare,
+  onRetry,
 }: {
   readonly state: MatchState | null
   readonly trouble: string | null
   readonly preparing: boolean
   readonly onPrepare: () => void
+  readonly onRetry: () => void
 }) {
   if (state === null) {
     return trouble !== null ? (
-      <Notice tone="warn">{trouble}</Notice>
+      <Notice
+        tone="warn"
+        action={
+          <Button size="sm" variant="quiet" onClick={onRetry}>
+            Try again
+          </Button>
+        }
+      >
+        {trouble}
+      </Notice>
     ) : (
       <Loading rows={1} label="Checking whether matching is ready" />
     )
@@ -1241,9 +1252,6 @@ export function RunsComposer({
             <div className="runs-composer-stage runs-composer-read" key="read">
               <div className="runs-reading">
                 <div className="run-engine">
-                  <div className="run-read-head">
-                    <span className="run-read-title">Who reads these cards</span>
-                  </div>
                   <Segmented<Engine>
                     className="run-engines"
                     label="Who reads these cards"
@@ -1278,6 +1286,9 @@ export function RunsComposer({
                       trouble={matchTrouble}
                       preparing={preparing}
                       onPrepare={() => void doPrepare()}
+                      onRetry={() => {
+                        matchPoll.refresh()
+                      }}
                     />
                   ) : null}
                 </div>

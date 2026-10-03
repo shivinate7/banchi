@@ -233,6 +233,12 @@ const CANNOT: ReadonlyArray<readonly [string, string, string]> = [
       'ledger are what the screen resolves against.',
   ],
   [
+    '/pipeline/match/prepare',
+    'demo_no_download',
+    'Setting up the free reader downloads a model file and reads stock photos on the machine at the ' +
+      'rig. Nothing downloads in this demo.',
+  ],
+  [
     '/capture',
     'demo_no_camera',
     'Capture writes a photograph to disk on the machine at the rig. This demo has no disk ' +
@@ -789,6 +795,15 @@ function read(path: string): unknown {
   if (route === '/pipeline/price-now') return priceNow(params.getAll('sku').filter((s) => s !== ''))
   if (route === '/skus/photos') return skuPhotos(params.getAll('sku').filter((s) => s !== ''))
   if (route === '/search') return search(params.get('q') ?? '')
+  /* The free reader is never set up on a published page: the answer the real server gives on a
+   * fresh checkout (`model_bytes` is `identify/matchconst.py:MODEL_BYTES`), so Photos shows its first-run card and Prepare is refused above. */
+  if (route === '/pipeline/match') {
+    return {
+      model_present: false, model_ok: false, model_bytes: 371_700_983, index_present: false,
+      index_current: false, ready: false, running: false, progress: null, model_url: '',
+      margin_min: 0, floor_min: 0,
+    }
+  }
   /* A seller's sales are private (DEBT70), so no bundle holds them: the answer the real server
    * gives with no sales export, for any SKU. The screen words it as a sentence. */
   const realized = /^\/pipeline\/products\/([^/]+)\/realized$/.exec(route)
