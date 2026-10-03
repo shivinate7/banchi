@@ -795,10 +795,8 @@ function read(path: string): unknown {
   if (route === '/pipeline/price-now') return priceNow(params.getAll('sku').filter((s) => s !== ''))
   if (route === '/skus/photos') return skuPhotos(params.getAll('sku').filter((s) => s !== ''))
   if (route === '/search') return search(params.get('q') ?? '')
-  /* A seller's sales are private (DEBT70), so no bundle holds them: the answer the real server
-   * gives with no sales export, for any SKU. The screen words it as a sentence. */
   /* The free reader is never set up on a published page: the answer the real server gives on a
-   * fresh checkout, so Photos shows its first-run card and Prepare is refused above. */
+   * fresh checkout (`model_bytes` is `identify/matchconst.py:MODEL_BYTES`), so Photos shows its first-run card and Prepare is refused above. */
   if (route === '/pipeline/match') {
     return {
       model_present: false, model_ok: false, model_bytes: 371_700_983, index_present: false,
@@ -806,6 +804,8 @@ function read(path: string): unknown {
       margin_min: 0, floor_min: 0,
     }
   }
+  /* A seller's sales are private (DEBT70), so no bundle holds them: the answer the real server
+   * gives with no sales export, for any SKU. The screen words it as a sentence. */
   const realized = /^\/pipeline\/products\/([^/]+)\/realized$/.exec(route)
   if (realized !== null) return { sku: decodeURIComponent(realized[1] ?? ''), configured: false }
   /* THE BURIED HALF OF THE ONE RECORDED GRAVEYARD, filtered as the route filters it. */

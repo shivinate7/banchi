@@ -1287,7 +1287,6 @@ export function RunsComposer({
                       preparing={preparing}
                       onPrepare={() => void doPrepare()}
                       onRetry={() => {
-                        setMatchTrouble(null)
                         matchPoll.refresh()
                       }}
                     />
