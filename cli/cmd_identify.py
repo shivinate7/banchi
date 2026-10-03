@@ -47,6 +47,7 @@ from identify import batch, cost, images, prompt, sidecar
 from pipeline import games
 from pipeline import join
 from pipeline import selection as selection_mod
+from store import cache as cache_mod
 from store import files as store_files
 from store import master
 from store import submissions
@@ -700,7 +701,12 @@ def _adopt_cached(item: Item, entry, fingerprints: Dict[str, str]) -> None:
     item.identification = dict(entry.identification)
     item.status = batch.SUCCEEDED
     expected = fingerprints.get(item.strategy)
-    item.stale_prompt = expected is not None and entry.prompt_fingerprint != expected
+    # A matcher entry was never read by a prompt, so it is never stale against one.
+    item.stale_prompt = (
+        entry.engine == cache_mod.ENGINE_HAIKU
+        and expected is not None
+        and entry.prompt_fingerprint != expected
+    )
 
 
 def _give_back_unspent(claim, run_dir, store, say) -> bool:
