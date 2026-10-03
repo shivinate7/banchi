@@ -352,12 +352,14 @@ test('SYNTHETIC: Stop with a START in flight, then Start within 0.45 s, waits fo
   await advance(150)
   // 400 ms: still before the old COMPLETE at 420 ms
   expect(rig.writes.filter((w) => w === 'MOTOR:START')).toHaveLength(1)
-  await advance(2_000)
-  // after the old COMPLETE (420 ms) and well inside the 1 s settle, the new START has gone out, once
-  const starts = rig.writes.filter((w) => w === 'MOTOR:START')
-  expect(starts).toHaveLength(2)
+  await advance(19)
+  expect(rig.writes.filter((w) => w === 'MOTOR:START')).toHaveLength(1)
+  // the old COMPLETE lands at 420 ms and releases the deferred START, once, after the STOP
+  await advance(10)
+  expect(rig.writes.filter((w) => w === 'MOTOR:START')).toHaveLength(2)
   expect(rig.writes.indexOf('MOTOR:STOP')).toBeLessThan(rig.writes.lastIndexOf('MOTOR:START'))
   expect(rig.maxInFlight).toBe(1)
+  await dealer.stop()
 })
 
 test('SYNTHETIC: Stop with a START in flight and no COMPLETE ever, a Start waits out a ~1 s settle after STOP', async () => {
@@ -367,8 +369,10 @@ test('SYNTHETIC: Stop with a START in flight and no COMPLETE ever, a Start waits
   void dealer.stop()
   await advance(50)
   void dealer.start()
-  await advance(800)
+  // STOP at 100 ms: the settle ends at 1100 ms
+  await advance(940)
   expect(rig.writes.filter((w) => w === 'MOTOR:START')).toHaveLength(1)
-  await advance(1_500)
+  await advance(20)
   expect(rig.writes.filter((w) => w === 'MOTOR:START')).toHaveLength(2)
+  await dealer.stop()
 })
