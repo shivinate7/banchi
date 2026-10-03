@@ -8736,6 +8736,11 @@ test('undoing the sale takes the staleness back with it', async ({ page }) => {
   await expandAll(page)
   await page.getByRole('searchbox').fill('Thievul')
   await expect(page.locator('.card-locations-row .card-locations-identity').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
+  /* THE RAIL'S OWN SEARCH IS A SEPARATE `useSearch()` FROM THE COPIES LIST'S (see the sibling
+     case "the control that re-ranks appearing moves no copy row"). The rows above prove only
+     the second has settled; pressing while the rail is mid-debounce lets its FIRST answer land
+     after the sale and the chip is never drawn. Wait for the rail to name box 7. */
+  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^ME01 spares/)
 
   await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.locator('.browse-hero-rerank')).toHaveAttribute('aria-label', /Order is 1 copy stale/)
