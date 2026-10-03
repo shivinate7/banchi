@@ -1067,10 +1067,14 @@ CODEX_ONLY = frozenset({
     ("PreToolUse", "Bash", "scripts/reap.py --hook"),
 })
 
-#: `--skip NAMES` tells `scripts/guard-shell.py` which clauses the shared layer owns, and the `PKMNSCAN_SILENT_WRITE_ONLY=file` prefix narrows `scripts/silent-write-guard.py` to its file clause. The prefix is dropped too. Claude
+#: `--skip NAMES` tells `scripts/guard-shell.py` which clauses the shared layer owns, and the `PKMNSCAN_SILENT_WRITE_ONLY=file` prefix narrows `scripts/silent-write-guard.py` to its file clause. The row expects that prefix on the Claude entry and no prefix on the Codex entry. Claude
 #: Code passes it and Codex does not, so it is not part of which hook fires.
 _SKIP_FLAG = re.compile(r"\s+--skip\s+\S+")
-_ONLY_ENV = re.compile(r"^PKMNSCAN_SILENT_WRITE_ONLY=\S+\s+")
+
+#: The one hook Claude Code runs narrowed by an environment prefix, and Codex runs bare. The
+#: row expects the prefix on the Claude entry and its absence on the Codex entry.
+NARROWED_ENV = "PKMNSCAN_SILENT_WRITE_ONLY=file "
+NARROWED_HOOK = ("PreToolUse", "Bash", "scripts/silent-write-guard.py --hook")
 
 
 def _hook_triples(data: object) -> Set[Tuple[str, str, str]]:
@@ -1111,7 +1115,7 @@ def _hook_triples(data: object) -> Set[Tuple[str, str, str]]:
                     continue
                 command = hook.get("command")
                 if isinstance(command, str) and command:
-                    triples.add((str(event), str(matcher), _ONLY_ENV.sub("", _SKIP_FLAG.sub("", command))))
+                    triples.add((str(event), str(matcher), _SKIP_FLAG.sub("", command)))
     return triples
 
 
@@ -1195,6 +1199,22 @@ def check_codex_hooks(report: Report) -> None:
 
     codex_triples = _hook_triples(codex_data)
     claude_triples = _hook_triples(claude_data)
+
+    # The narrowed hook: Claude's entry carries the prefix and Codex's carries none. Strip the
+    # prefix from Claude's side after checking it, so the comparison below sees one hook.
+    event, matcher, bare = NARROWED_HOOK
+    narrowed = (event, matcher, NARROWED_ENV + bare)
+    if narrowed in claude_triples:
+        claude_triples = (claude_triples - {narrowed}) | {NARROWED_HOOK}
+    elif NARROWED_HOOK in claude_triples:
+        findings.append(Finding(".claude/settings.json",
+                                f"runs `{bare}` without the `{NARROWED_ENV.strip()}` prefix. "
+                                "Claude Code runs the unread-file clause alone (D171)."))
+    if narrowed in codex_triples:
+        findings.append(Finding(".codex/hooks.json",
+                                f"runs `{narrowed[2]}`. Codex runs the full hook, with no "
+                                "prefix (D171)."))
+        codex_triples = (codex_triples - {narrowed}) | {NARROWED_HOOK}
 
     def describe(event: str, matcher: str, command: str) -> str:
         return f"{event}" + (f" (matcher `{matcher}`)" if matcher else "") + f" -> `{command}`"

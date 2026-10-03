@@ -361,7 +361,7 @@ def _only_file() -> bool:
 
     An environment variable, never a flag: an old copy of this script on an older branch
     ignores a variable and runs the full check, while an unknown flag exits 2 and blocks
-    every Bash call. An unknown value runs the full check and warns once. It never exits
+    every Bash call. An unknown value runs the full check and warns on every call, since each Bash call is a new process. It never exits
     non-zero over configuration.
     """
     value = os.environ.get("PKMNSCAN_SILENT_WRITE_ONLY", "")

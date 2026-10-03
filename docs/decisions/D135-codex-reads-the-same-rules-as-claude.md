@@ -56,9 +56,10 @@ for Claude Code, so `.claude/settings.json` no longer runs `scripts/reap.py --ho
 all of them in full. `CODEX_ONLY` in `check_codex_hooks` names the one hook only Codex runs, and
 the row fails when Claude Code runs it again or Codex loses it. The `--skip` flag is dropped
 before the triples are compared. Claude Code runs `PKMNSCAN_SILENT_WRITE_ONLY=file scripts/silent-write-guard.py --hook`, the unread-file clause alone,
-because the shared silent-write rule (claude-settings PR 257) covers pull, fetch, `make merge`,
-`gh pr merge` and closed descriptors. Codex keeps the full hook. The variable prefix is dropped like `--skip`
-before the triples are compared. It is a variable, not a flag. An older branch's copy ignores a variable and runs the full check. An unknown flag exits 2 and blocks every Bash call. The file clause is cut from Claude Code when its fire count is
+because the shared silent-write rule (claude-settings PR 257) covers part of it. That part is a silenced pull,
+a fetch into a local ref, `make merge`, `gh pr merge` and closed descriptors. Pipe-tail,
+`bash -c` and `>&/dev/null` silencing are pending in the shared rule. Codex keeps the full hook.
+The `codex hooks` row expects the prefix on the Claude entry and none on the Codex entry. It is a variable, not a flag. An older branch's copy ignores a variable and runs the full check. An unknown flag exits 2 and blocks every Bash call. The file clause is cut from Claude Code when its fire count is
 reviewed with claude-settings.
 
 **`scripts/docs_audit/env_map.py:check_codex_hooks` reads both files as `(event, matcher, command)` triples and reports whichever side is missing what the other runs**, plus any command that
