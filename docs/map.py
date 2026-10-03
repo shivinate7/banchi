@@ -9288,6 +9288,19 @@ COMPONENTS = [
                         "`tests/unit/`.",
                 "governed_by": ["D18"],
             },
+            "tests/unit/dispenser.unit.ts": {
+                "does": "`dealer.ts`'s link and paced loop against a fake `navigator.bluetooth` that "
+                        "replays tcg-dealer's recorded sequences (paced loop, empty hopper) plus "
+                        "labeled synthetic ones (fault, silence, lost link, Stop mid-write). The "
+                        "fake refuses any write off the allow list or out of turn. Run by `make unit`.",
+                "governed_by": ["D-dispenser-button", "D19"],
+            },
+            "tests/dispenser.spec.ts": {
+                "does": "the dispenser control on the real capture screen with the same fake: "
+                        "the reason shows in Manual, \"Needs Chrome\" with no Bluetooth, and a fire "
+                        "with no box stops dealing with STOP the last write.",
+                "governed_by": ["D-dispenser-button", "D18", "D19", "D313"],
+            },
             "tests/unit/tab-title.unit.ts": {
                 "does": "the tab title function over every ROUTES entry, read through "
                         "`scripts/kit-adoption.mjs --routes`: the unit tier's pilot, no browser. "
