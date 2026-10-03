@@ -205,6 +205,175 @@ test('Layout enters edit mode; a queued drop writes nothing until Confirm, which
   expect(sent[1]).toEqual({ path: '/boxes/sections/undo', body: { move: 'm1' } })
 })
 
+/* THE GRIP IS A DRAG HANDLE: a real pointer drag from "Drag section <name> of <box>" onto a slot
+ * of a box. The left half of a slot drops in front of it, the right half after it. */
+async function dragGrip(page: Page, grip: string, boxName: string, slot: number, half: 'left' | 'right') {
+  const handle = page.getByRole('button', { name: grip })
+  await handle.scrollIntoViewIfNeeded()
+  const from = (await handle.boundingBox())!
+  const target = page.locator(`section[aria-label="${boxName}"] [data-shelf-slot="${slot}"]`)
+  await target.scrollIntoViewIfNeeded()
+  const to = (await target.boundingBox())!
+  const sx = from.x + from.width / 2
+  const sy = from.y + from.height / 2
+  const tx = to.x + to.width * (half === 'left' ? 0.25 : 0.75)
+  const ty = to.y + to.height / 2
+  await page.mouse.move(sx, sy)
+  await page.mouse.down()
+  for (let i = 1; i <= 8; i++) await page.mouse.move(sx + ((tx - sx) * i) / 8, sy + ((ty - sy) * i) / 8)
+  await page.mouse.up()
+}
+
+test('grip drag: a section dropped on the left half of Commons reorders within its box', async ({ page }) => {
+  const sent = await openShelf(page)
+  await page.getByRole('button', { name: 'Layout' }).click()
+  await dragGrip(page, 'Drag section Signatures of RB Origins', 'RB Origins', 1, 'left')
+  await expect(page.getByText('1 change queued.', { exact: false })).toBeVisible()
+  await page.getByRole('button', { name: 'Confirm' }).click()
+  expect(sent).toHaveLength(1)
+  expect((sent[0]!.body as { moves: unknown[] }).moves).toEqual([
+    { kind: 'section', box: 1, first: 3, last: 3, to_box: 1, before: 1 },
+  ])
+})
+
+test('grip drag: a section dropped on the right half of Promos moves to the far end of another box', async ({ page }) => {
+  const sent = await openShelf(page)
+  await page.getByRole('button', { name: 'Layout' }).click()
+  await dragGrip(page, 'Drag section Uncommons of RB Origins', 'Mixed Singles', 2, 'right')
+  await expect(page.getByText('1 change queued.', { exact: false })).toBeVisible()
+  await page.getByRole('button', { name: 'Confirm' }).click()
+  expect(sent).toHaveLength(1)
+  expect((sent[0]!.body as { moves: unknown[] }).moves).toEqual([
+    { kind: 'section', box: 1, first: 2, last: 2, to_box: 2, before: null },
+  ])
+})
+
+test('grip drag: a drop queues and writes nothing; Confirm sends once; u sends the undo', async ({ page }) => {
+  const sent = await openShelf(page)
+  await page.getByRole('button', { name: 'Layout' }).click()
+  await dragGrip(page, 'Drag section Uncommons of RB Origins', 'Mixed Singles', 2, 'right')
+  await expect(page.getByText('1 change queued.', { exact: false })).toBeVisible()
+  expect(sent).toHaveLength(0)
+  await page.getByRole('button', { name: 'Confirm' }).click()
+  await expect(page.locator('.shelf-receipt')).toContainText('1 change to make.')
+  expect(sent.filter((s) => s.path === '/boxes/sections/move-batch')).toHaveLength(1)
+  await page.keyboard.press('u')
+  await expect(page.locator('.shelf-receipt')).toContainText('Put back.')
+  expect(sent.at(-1)).toEqual({ path: '/boxes/sections/undo', body: { move: 'm1' } })
+})
+
+test('grip drag: a plain click on a grip shows the hint and opens no picker', async ({ page }) => {
+  const sent = await openShelf(page)
+  await page.getByRole('button', { name: 'Layout' }).click()
+  await expect(page.getByText('Drag a section to move it.')).toBeVisible()
+  await page.getByRole('button', { name: 'Drag section Uncommons of RB Origins' }).click()
+  await expect(page.getByText('Drag to move it, or press the arrow.')).toBeVisible()
+  await expect(page.locator('.shelf-lift')).toHaveCount(0)
+  expect(sent).toHaveLength(0)
+})
+
+test('grip: Enter on a focused grip opens the destination picker, and the name says so', async ({ page }) => {
+  await openShelf(page)
+  await page.getByRole('button', { name: 'Layout' }).click()
+  const grip = page.getByRole('button', { name: 'Drag section Uncommons of RB Origins' })
+  await expect(grip).toHaveAccessibleName(/Press Enter to choose a box\.$/)
+  await grip.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.shelf-lift')).toBeVisible()
+})
+
+for (const [slot, half] of [[2, 'left'], [2, 'right'], [3, 'left']] as const) {
+  test(`grip drag: a drop on its own place (slot ${slot}, ${half}) queues nothing`, async ({ page }) => {
+    const sent = await openShelf(page)
+    await page.getByRole('button', { name: 'Layout' }).click()
+    await dragGrip(page, 'Drag section Uncommons of RB Origins', 'RB Origins', slot, half)
+    await expect(page.getByText('Drag a section to move it.')).toBeVisible()
+    await expect(page.getByText('change queued', { exact: false })).toHaveCount(0)
+    await expect(page.locator('.shelf-drop-mark')).toHaveCount(0)
+    expect(sent).toHaveLength(0)
+  })
+}
+
+test('grip drag: a drop on an empty box queues a move to that box', async ({ page }) => {
+  const empty = box(4, 'Empty Box', [])
+  const sent = await openShelf(page, RESULT, [...BOXES, empty])
+  await page.getByRole('button', { name: 'Layout' }).click()
+  const handle = page.getByRole('button', { name: 'Drag section Uncommons of RB Origins' })
+  const target = page.locator('section[aria-label="Empty Box"]')
+  await target.scrollIntoViewIfNeeded()
+  const from = (await handle.boundingBox())!
+  const to = (await target.boundingBox())!
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 })
+  await page.mouse.up()
+  await expect(page.getByText('1 change queued.', { exact: false })).toBeVisible()
+  await page.getByRole('button', { name: 'Confirm' }).click()
+  expect((sent[0]!.body as { moves: unknown[] }).moves).toEqual([
+    { kind: 'section', box: 1, first: 2, last: 2, to_box: 4, before: null },
+  ])
+})
+
+test('grip drag: nothing is sent while the pointer is still down', async ({ page }) => {
+  const sent = await openShelf(page)
+  await page.getByRole('button', { name: 'Layout' }).click()
+  const handle = page.getByRole('button', { name: 'Drag section Uncommons of RB Origins' })
+  const target = page.locator('section[aria-label="Mixed Singles"] [data-shelf-slot="2"]')
+  await target.scrollIntoViewIfNeeded()
+  const from = (await handle.boundingBox())!
+  const to = (await target.boundingBox())!
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(to.x + to.width * 0.75, to.y + to.height / 2, { steps: 8 })
+  await expect(page.locator('.shelf-drop-mark')).toHaveCount(1)
+  await page.waitForTimeout(300) // keep: a held drag sends nothing for this window
+  expect(sent).toHaveLength(0)
+  await page.mouse.up()
+  await expect(page.getByText('1 change queued.', { exact: false })).toBeVisible()
+  expect(sent).toHaveLength(0)
+})
+
+test('grip drag: a lost capture ends the drag, so a later release queues nothing', async ({ page }) => {
+  const sent = await openShelf(page)
+  await page.getByRole('button', { name: 'Layout' }).click()
+  const handle = page.getByRole('button', { name: 'Drag section Uncommons of RB Origins' })
+  const target = page.locator('section[aria-label="Mixed Singles"] [data-shelf-slot="2"]')
+  await target.scrollIntoViewIfNeeded()
+  const from = (await handle.boundingBox())!
+  const to = (await target.boundingBox())!
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(to.x + to.width * 0.75, to.y + to.height / 2, { steps: 8 })
+  await expect(page.locator('.shelf-drop-mark')).toHaveCount(1)
+  await handle.evaluate((el) => el.dispatchEvent(new PointerEvent('lostpointercapture', { pointerId: 1, bubbles: true })))
+  await expect(page.locator('.shelf-drop-mark')).toHaveCount(0)
+  await page.mouse.up()
+  await page.mouse.click(to.x + to.width * 0.75, to.y + to.height / 2)
+  await expect(page.getByText('change queued', { exact: false })).toHaveCount(0)
+  await expect(page.locator('.shelf-drop-mark')).toHaveCount(0)
+  expect(sent).toHaveLength(0)
+})
+
+test('grip drag: at 820 wide, a drag held at the bottom edge autoscrolls to a box below the fold', async ({ page }) => {
+  await setViewport(page, { width: 820, height: 600 })
+  const many = Array.from({ length: 8 }, (_, i) => box(i + 1, `Box ${i + 1}`, [section(1, `Sec ${i + 1}`, 6), section(2, `Part ${i + 1}`, 6)]))
+  await openShelf(page, RESULT, many)
+  await page.getByRole('button', { name: 'Layout' }).click()
+  const handle = page.getByRole('button', { name: 'Drag section Sec 1 of Box 1' })
+  const from = (await handle.boundingBox())!
+  const last = page.locator('section[aria-label="Box 8"]')
+  expect((await last.boundingBox())!.y).toBeGreaterThan(600)
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(from.x + from.width / 2, 590, { steps: 8 })
+  await expect.poll(async () => (await last.boundingBox())!.y, { timeout: 8000 }).toBeLessThan(560)
+  const slot = last.locator('[data-shelf-slot="2"]')
+  const to = (await slot.boundingBox())!
+  await page.mouse.move(to.x + to.width * 0.75, to.y + to.height / 2, { steps: 8 })
+  await page.mouse.up()
+  await expect(page.getByText('1 change queued.', { exact: false })).toBeVisible()
+})
+
 test('the receipt names the cards owed to open orders and the section the next capture joins, and each line is absent at zero', async ({ page }) => {
   await openShelf(page)
   await page.getByRole('button', { name: 'Layout' }).click()
