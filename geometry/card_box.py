@@ -22,6 +22,11 @@ from geometry.detect import CARD_ASPECT, CardBox, detect_card
 MODEL = Path(__file__).resolve().parent / "model" / "dfine_card_640.onnx"
 SIZE = 640
 MIN_SCORE = 0.25
+# A SHAPE GATE, THE ONE `detect_card` HAS. The model can score a part of a card or of a scene
+# confidently (0.70 on a dark strip of a synthetic frame, aspect 0.25), and a box nobody believes
+# must reach `detect_card` rather than a refusal downstream. The thinnest of the 243 labelled cards
+# is 0.603, so 0.5 loses none of them.
+MIN_BOX_ASPECT = 0.5
 
 # THE MARGIN FOLLOWS THE FINDER. The model's box is measured at a 4% pad (0 loose crops in 74;
 # 6 at 8%). A method not listed here takes the caller's default, `identify.images.CROP_PAD`.
@@ -102,6 +107,8 @@ def model_card(source) -> Optional[CardBox]:
         if x1 <= x0 or y1 <= y0:
             return None
         w, h = (x1 - x0) * width, (y1 - y0) * height
+        if min(w, h) / max(w, h) < MIN_BOX_ASPECT:
+            return None
         return CardBox(
             angle=0.0, left=x0, top=y0, right=x1, bottom=y1,
             fill=score, aspect=min(w, h) / max(w, h), method="dfine",
