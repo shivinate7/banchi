@@ -179,7 +179,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--crop",
         action="store_true",
         help="crop each photo to the detected card before downscaling. Local and free "
-             "(geometry.detect_card, no model call); a frame where detection refuses is "
+             "(geometry.locate_card, the local crop model); a frame where detection refuses is "
              "sent whole. Spends the pixel budget on the card instead of the desk.",
     )
     identify.add_argument("--label", help="run label (default: the capture dir's name)")
