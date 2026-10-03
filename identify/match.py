@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import os
 import random
 import re
 import sqlite3
@@ -143,6 +144,86 @@ def card_name(name: str) -> str:
 
 def is_promo_set(set_name: str) -> bool:
     return "promo" in (set_name or "").lower()
+
+
+# ------------------------------------------------------------------------ the download
+
+
+class ModelDownloadError(RuntimeError):
+    """The model file could not be fetched or did not match its pin. The message is plain."""
+
+
+def download_model(
+    dest: Optional[Path] = None,
+    url: str = MODEL_URL,
+    *,
+    progress: Callable[[int, int], None] = lambda _done, _total: None,
+    opener: Callable[..., "object"] = urllib.request.urlopen,
+) -> Path:
+    """Fetch the pinned model file. ONLY ON THE OWNER'S PREPARE PRESS: nothing in this module
+    calls it, and the CLI reaches it only through `match prepare`.
+
+    The bytes go to a `.part` file, are checked against `MODEL_BYTES` and `MODEL_SHA256`, and
+    only then renamed into place, so a half file or a wrong file is never the model. A failed
+    check deletes the part and says so."""
+    target = Path(dest) if dest is not None else model_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    part = target.with_name(target.name + ".part")
+    digest = hashlib.sha256()
+    done = 0
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": "banchi-matcher-model/1"})
+        with opener(request, timeout=60) as response, open(part, "wb") as handle:
+            total = int(response.headers.get("Content-Length") or MODEL_BYTES)
+            for block in iter(lambda: response.read(1 << 20), b""):
+                handle.write(block)
+                digest.update(block)
+                done += len(block)
+                progress(done, total)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except urllib.error.HTTPError as exc:
+        part.unlink(missing_ok=True)
+        raise ModelDownloadError(
+            f"The model file could not be downloaded: the server answered {exc.code}. "
+            "The release that holds it may not be published yet."
+        ) from exc
+    except Exception as exc:
+        part.unlink(missing_ok=True)
+        raise ModelDownloadError(f"The model file could not be downloaded: {type(exc).__name__}.") from exc
+    if done != MODEL_BYTES or digest.hexdigest() != MODEL_SHA256:
+        part.unlink(missing_ok=True)
+        raise ModelDownloadError(
+            "The downloaded file is not the model Banchi expects (wrong size or checksum), so it was thrown away."
+        )
+    os.replace(part, target)
+    return target
+
+
+# The fixed synthetic images the parity check embeds: structured enough to light every part of
+# the graph, deterministic, and no photograph of a card.
+PARITY_IMAGES = 50
+PARITY_SEED = 20261003
+
+
+def parity_images() -> List["object"]:
+    import numpy as np
+    from PIL import Image
+
+    rng = np.random.RandomState(PARITY_SEED)
+    out = []
+    for n in range(PARITY_IMAGES):
+        height, width = 300 + 7 * n, 210 + 5 * n
+        y, x = np.mgrid[0:height, 0:width]
+        frame = np.zeros((height, width, 3), np.float32)
+        for channel in range(3):
+            fx, fy, phase = rng.uniform(0.002, 0.04), rng.uniform(0.002, 0.04), rng.uniform(0, 6.28)
+            frame[..., channel] = 127 + 120 * np.sin(fx * x + fy * y + phase)
+        top, left = rng.randint(0, height // 2), rng.randint(0, width // 2)
+        frame[top : top + height // 3, left : left + width // 3] = rng.uniform(0, 255, 3)
+        frame += rng.normal(0, 6, frame.shape)
+        out.append(Image.fromarray(np.clip(frame, 0, 255).astype(np.uint8), "RGB"))
+    return out
 
 
 # ------------------------------------------------------------------------ the index

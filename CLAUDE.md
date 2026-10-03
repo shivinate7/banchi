@@ -101,6 +101,11 @@ make catalog-mirror # dry run only. ARGS=--dry-run samples over HTTP HEAD.
                                    #   import-listed.csv and import-subthreshold.csv. --split-games writes one file per game.
                                    #   --live-guard FILE trims rows so TCGplayer never holds more copies than
                                    #   are here. --reprice-live F adds a price-only row per live card F names.
+./pkmnscan match    status | prepare [--model-only | --fingerprints-only]  # the free reader's setup. Prepare
+                                   # downloads the pinned model file and reads each stock photo once (D301, stock photos
+                                   # are hotlinked, never mirrored; this is its one exception). Nothing starts it but the
+                                   # owner's press. `identify --engine marqo-b`
+                                   # is the reading: it leaves unplaced cards unread, never queued, no fallback.
 ./pkmnscan cards    name | audit [--verbose] | photos [--write] [--limit N] | identity [--write]
                                    # stable card names. `make cid-audit` runs the audit.
 ./pkmnscan prices   adopt [--write] | show [--held]  # the price corpus. Adopt folds legacy decisions.json in.

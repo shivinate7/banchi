@@ -366,7 +366,7 @@ COMPONENTS = [
                                     "fill-gaps `--box` is `--assume-box` — two opposite jobs "
                                     "that were wearing one name, and the fill has fired on 0 of "
                                     "2,535 real captures.",
-                            "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D180", "D86",
+                            "governed_by": ["D1", "D2", "D3", "D9", "D21", "D25", "D36", "D180", "D86",
                                             "D87", "D100", "D145", "D172", "D189", "D210",
                                             "D213", "D219", "D239", "D242",
                                             "D259",
@@ -444,6 +444,14 @@ COMPONENTS = [
                                         "the table and writes nothing.",
                                 "governed_by": ["D189", "D86"],
                                 "tested_by": ["T7"]},
+            "cmd_match.py": {"does": "`pkmnscan match status | prepare` — the free reader's one-time "
+                                     "setup (D2). `status` is free. `prepare` downloads the pinned model "
+                                     "file if absent, then reads each stock photo of every set the "
+                                     "store holds plus every Riftbound set once and keeps the "
+                                     "fingerprint (D301's one exception). Resumable, never spends, "
+                                     "never touches card state, and nothing starts it but the owner's "
+                                     "press. Progress is `inventory/match-prepare.json`.",
+                             "governed_by": ["D2", "D33", "D170", "D301"]},
             "cmd_boxes.py": {"does": "`pkmnscan boxes names` — the one-time backfill that "
                                      "gives every unnamed box the stored name `Box <number>` "
                                      "(`store/master.py:Inventory.box_name_plan`). Previews by "
@@ -4981,6 +4989,20 @@ COMPONENTS = [
                         "up. It imports server/ports.py rather than re-deriving the slot, "
                         "for the reason D43 spends its length on: two spellings of one "
                         "derivation is the drift, not the arithmetic.",
+            },
+            "export-matcher-model.py": {
+                "does": "a developer step, run once per model in a throwaway venv that has torch: "
+                        "exports Marqo ecommerce-B's image tower to ONNX and writes the parity "
+                        "reference (torch's own vectors for fixed synthetic images). Prints the "
+                        "size and SHA-256 to pin in `identify/match.py`. The app never runs it.",
+                "governed_by": ["D2"],
+            },
+            "match-parity.py": {
+                "does": "proves a matcher model file against torch's answer with onnxruntime alone: "
+                        "the pinned size and SHA-256, and a cosine of at least 0.9999 on every "
+                        "reference vector through the shipped Pillow and numpy preprocessing. "
+                        "Exit 2 is a file that could not be read, never a pass.",
+                "governed_by": ["D2"],
             },
             "audit-history.py": {
                 "does": "replays today's auditor over every historical tree to answer one "
