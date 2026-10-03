@@ -981,11 +981,8 @@ def check_hook_roster(report: Report) -> None:
     and an entry with no suffix is rejected. So the hooks are listed BY HAND, and a list kept
     by hand is a list that stops being kept.
 
-    It stopped twice. D42 added `reference-transaction` and `pre-push` and wrote both entries;
-    `post-merge` and `post-checkout` landed later with the `make hooks` staleness reminder and
-    neither was written. Measured 2026-09-05: five hooks on disk, three in the map. The map's
-    own comment calls this hole hypothetical — it had already fired once when that sentence
-    was written, and fired again afterwards.
+    It stopped once. D42 added `reference-transaction` and `pre-push` and wrote both entries;
+    two later hooks landed with no entry. Measured: five hooks on disk, three in the map.
 
     **This is the narrowest possible reader of that hole**, and deliberately not a widening of
     `scan_plan` to admit extensionless entries. That was the obvious fix and it is the wrong
@@ -1062,6 +1059,18 @@ def check_hook_roster(report: Report) -> None:
 CODEX_HOOKS = ROOT / ".codex" / "hooks.json"
 CLAUDE_SETTINGS = ROOT / ".claude" / "settings.json"
 
+#: Hooks only Codex runs, on the owner's word: the shared layer's guard (`claude-settings`
+#: `hooks/guard.py`, rule 2) owns it for Claude Code, and Codex runs no shared guard.
+#: Every other hook must be in both files. An entry here that Claude Code runs again, or that
+#: Codex dropped, is a finding, so this list cannot go stale in either direction.
+CODEX_ONLY = frozenset({
+    ("PreToolUse", "Bash", "scripts/reap.py --hook"),
+})
+
+#: `--skip NAMES` tells `scripts/guard-shell.py` which clauses the shared layer owns. Claude
+#: Code passes it and Codex does not, so it is not part of which hook fires.
+_SKIP_FLAG = re.compile(r"\s+--skip\s+\S+")
+
 
 def _hook_triples(data: object) -> Set[Tuple[str, str, str]]:
     """(event, matcher, command) out of a settings-shaped `hooks` block.
@@ -1072,6 +1081,9 @@ def _hook_triples(data: object) -> Set[Tuple[str, str, str]]:
     (`SessionStart`, `Stop`, `SessionEnd`, `WorktreeRemove`), so it is read as `""` rather
     than skipped — an event that gains a matcher in one file and not the other is exactly
     the drift this reads for, and a triple can only report that by carrying the field.
+
+    A `--skip NAMES` flag is dropped from the command for the same reason: the guard is the same
+    hook with fewer clauses.
 
     `timeout` is deliberately not part of the triple. It changes how patient a hook is, not
     which hooks fire, and folding it in would make a slower `session-teardown.sh` in one
@@ -1098,7 +1110,7 @@ def _hook_triples(data: object) -> Set[Tuple[str, str, str]]:
                     continue
                 command = hook.get("command")
                 if isinstance(command, str) and command:
-                    triples.add((str(event), str(matcher), command))
+                    triples.add((str(event), str(matcher), _SKIP_FLAG.sub("", command)))
     return triples
 
 
@@ -1196,7 +1208,23 @@ def check_codex_hooks(report: Report) -> None:
                 "skip. Add the same event, matcher and command here.",
             )
         )
-    for event, matcher, command in sorted(codex_triples - claude_triples):
+    for event, matcher, command in sorted(CODEX_ONLY - codex_triples):
+        findings.append(
+            Finding(
+                ".codex/hooks.json",
+                f"lost {describe(event, matcher, command)}, which CODEX_ONLY says only Codex "
+                "runs. Codex has no shared guard, so restore it or drop it from CODEX_ONLY.",
+            )
+        )
+    for event, matcher, command in sorted(CODEX_ONLY & claude_triples):
+        findings.append(
+            Finding(
+                ".claude/settings.json",
+                f"runs {describe(event, matcher, command)} again, so CODEX_ONLY is stale. "
+                "Drop it from CODEX_ONLY, or drop it here (the shared layer owns it).",
+            )
+        )
+    for event, matcher, command in sorted(codex_triples - claude_triples - CODEX_ONLY):
         findings.append(
             Finding(
                 ".claude/settings.json",
@@ -1223,7 +1251,7 @@ def check_codex_hooks(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(claude_triples)} hooks in .claude/settings.json, all mirrored in "
-        f".codex/hooks.json",
+        f".codex/hooks.json, which also runs {len(CODEX_ONLY)} the shared layer owns for Claude Code",
         scanned=len(claude_triples),
     )
 

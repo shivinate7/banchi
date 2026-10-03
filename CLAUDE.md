@@ -303,11 +303,12 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   **NOT MECHANIZED:** a machine cannot tell a date from a version number, a port or a test fixture without intent.
 - **Opsec.** A live unredeemed code card is a bearer instrument. No code-card photo in a listing, README,
   screenshot or commit. `scripts/githooks/pre-commit` enforces it, armed by `make hooks`.
-- **Nine shell mistakes are refused before they run** by `scripts/guard-shell.py --hook` on Bash and Write/Edit (D135, Codex reads the same rules).
-  Each clause fails open on its own bugs. A tool call that sets a real `PKMNSCAN_*=off` is refused as owner-only, with no switch named, unless it is a recovery lever (`PKMNSCAN_KILL`, `PKMNSCAN_SUITE_LOCK`, `PKMNSCAN_SERVE_MAIN`, `PKMNSCAN_SYNC`). Only the owner's terminal and CI set the rest (D042 (main moves by pull request) and D179 (shell mistakes are refused by resolving)). Each has an owner-held escape hatch, never printed to an agent: `PKMNSCAN_CHECKOUT`, `PKMNSCAN_TREE`, `PKMNSCAN_GH`,
-  `PKMNSCAN_LINK`, `PKMNSCAN_WAIT`, `PKMNSCAN_PUSH`, `PKMNSCAN_STASH`, `PKMNSCAN_RESET`, `PKMNSCAN_NARRATE`
-  (D235, the heartbeat is refused a pipe). The ninth clause names its subjects, a short per-incident roster
-  that the self-test reconciles. The other eight resolve what a command would do. `make guard-shell-selftest` proves each one in a throwaway repo.
+- **Seven shell mistakes are refused before they run** by `scripts/guard-shell.py --hook` on Bash and Write/Edit (D135, Codex reads the same rules).
+  Claude Code passes `--skip checkout,stash,reset`, because the shared layer's guard owns those three there. Codex runs all seven.
+  Each clause fails open on its own bugs. A tool call that sets a real `PKMNSCAN_*=off` is refused as owner-only, with no switch named, unless it is a recovery lever (`PKMNSCAN_KILL`, `PKMNSCAN_SUITE_LOCK`, `PKMNSCAN_SERVE_MAIN`, `PKMNSCAN_SYNC`). Only the owner's terminal and CI set the rest (D042 (main moves by pull request) and D179 (shell mistakes are refused by resolving)). Each has an owner-held escape hatch, never printed to an agent: `PKMNSCAN_CHECKOUT`, `PKMNSCAN_TREE`,
+  `PKMNSCAN_WAIT`, `PKMNSCAN_PUSH`, `PKMNSCAN_STASH`, `PKMNSCAN_RESET`, `PKMNSCAN_NARRATE`
+  (D235, the heartbeat is refused a pipe). The narrate clause names its subjects, a short per-incident roster
+  that the self-test reconciles. The other six resolve what a command would do. `make guard-shell-selftest` proves each one in a throwaway repo.
   A hatch counts only as a real assignment (env prefix, `export` or `env`), never a mention. Every `PKMNSCAN_*=off` a command sets is logged, and `make status` shows the last 24 hours. A hatch set in the environment is not logged, and `make status` lists it under `hatches` (D179, shell mistakes are refused by resolving them).
 - **A citation names a symbol, never a line.** Write a decision id, a section or `module.symbol` (no `.py`).
   A method is "`module.Class`'s `method`". A CSS rule is its selector.

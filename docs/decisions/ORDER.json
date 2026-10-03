@@ -45,7 +45,6 @@
     "D041-an-address-is-a-rank-not-a-list.md",
     "D042-main-moves-only-by-pull-request.md",
     "D043-each-checkout-gets-its-own-port.md",
-    "D044-icloud-conflict-copies-fail-the-commit.md",
     "D045-a-copy-s-label-walks-to-that-copy.md",
     "D047-never-commit-a-symlink-leaving-the-repo.md",
     "D050-interactive-feedback-belongs-to-the-product.md",

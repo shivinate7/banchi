@@ -134,14 +134,6 @@ SOURCES = (
                "through this file, which owns its format",
     },
     {
-        "path": "scripts/icloud-sweep.py",
-        "kind": "file",
-        "requires": (),
-        "why": "counts iCloud Drive conflict copies — run by icloud() below. Run rather than "
-               "reimplemented, so the pattern that decides what a conflict copy IS lives in "
-               "one file",
-    },
-    {
         "path": "scripts/serve.py",
         "kind": "defs",
         "requires": ("report", "live_pid"),
@@ -1051,39 +1043,6 @@ def ports_and_store() -> List[str]:
     return out
 
 
-def icloud() -> List[str]:
-    """How many iCloud Drive conflict copies are lying in this tree.
-
-    Reported and never acted on. They are untracked, the pre-commit hook already refuses to
-    COMMIT one, and `make hooks` installs only what git tracks — so the two ways one could do
-    damage are closed and what is left is clutter that a person clears when they feel like it.
-    What was NOT closed until this line existed is noticing: they are invisible to every
-    normal command, and the way they surfaced was a commit failing on the repo-map orphan rule
-    and, once, one being installed as a git hook.
-
-    Silent when there are none, which has been the permanent case since the repo moved off
-    iCloud Drive on 2026-08-29. Kept rather than deleted for D44's amended reason: the check is
-    a scan of this tree, and a tree can be put back inside a synced folder without telling it.
-    """
-    found = resolve("scripts/icloud-sweep.py")
-    if not found:
-        return []
-    done = subprocess.run(
-        [sys.executable, str(found[0])],
-        cwd=str(ROOT), capture_output=True, text=True, check=False,
-    )
-    summary = ""
-    for line in done.stdout.splitlines():
-        if line.startswith("icloud-sweep:"):
-            summary = line.split(":", 1)[1].strip()
-    if not summary or summary == "no conflict copies":
-        return []
-    return [
-        field("iCloud copies", summary.split("  (")[0]),
-        cont("`make icloud-sweep` lists them; ARGS=--delete removes the identical ones"),
-    ]
-
-
 def leftovers() -> List[str]:
     """A pointer, never a count (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep"). The sweep that counts is claude-settings' and takes
     minutes on this machine, so `make status` does not run it."""
@@ -1188,7 +1147,7 @@ def render() -> str:
     lines += blind_spots(mapdata)
     lines.append(field("the map", "`make map` renders docs/map.py — a package, a path, a"))
     lines.append(cont("decision id, or `--stale` for prose its file has outrun."))
-    lines += ["", "REPO"] + repo() + hooks() + guards() + ports_and_store() + icloud() + leftovers()
+    lines += ["", "REPO"] + repo() + hooks() + guards() + ports_and_store() + leftovers()
     lines += ["", "SERVING"] + serving() + slow_requests()
     lines += ["", "STORE"] + store()
 

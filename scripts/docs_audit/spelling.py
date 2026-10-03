@@ -505,7 +505,6 @@ def spelling_findings_many(items: List[Tuple[str, str]], timeout: float = 120, w
 
 SHELL_SUFFIXES = (".sh",)
 SHELL_EXTRA = ("scripts/githooks/pre-commit", "scripts/githooks/pre-push",
-               "scripts/githooks/post-merge", "scripts/githooks/post-checkout",
                "scripts/githooks/reference-transaction")
 
 _DQ = re.compile(r'"(?:[^"\\]|\\.)*"')

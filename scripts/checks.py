@@ -1013,10 +1013,10 @@ CHECKS = (
         "writes": "a clone, a linked worktree or two and a few short-lived processes, all "
                   "under `mktemp -d`.",
         "commit_path": False,
-        "why_off_commit_path": "D18 — it writes, and it signals processes. It drives the one "
-                               "tool here besides icloud-sweep that can delete a worktree.",
+        "why_off_commit_path": "D18 — it writes, and it signals processes. It drives a "
+                               "tool that can delete a worktree.",
         "gates": True,
-        "governed_by": ("D18", "D44", "D138"),
+        "governed_by": ("D18", "D138"),
     },
     {
         "target": "reap-selftest",
@@ -1069,22 +1069,22 @@ CHECKS = (
         "target": "guard-shell-selftest",
         "shard": "guards-1",
         "runs": "bash scripts/guard-shell-selftest.sh",
-        "asserts": "scripts/guard-shell.py, the PreToolUse hook that refuses six shell "
+        "asserts": "scripts/guard-shell.py, the PreToolUse hook that refuses seven shell "
                    "mistakes this repo has already paid for: `git checkout` over a modified "
-                   "file, a write outside this checkout, `gh api -f` with no method, `ln -s` "
-                   "at an existing path, a polling loop, and `git push <remote> HEAD` (or the "
-                   "branch's own literal name) when the tracked upstream is a different name. "
-                   "FIVE OF THE SIX INCIDENTS ARE "
+                   "file, a write outside this checkout, a polling loop, `git push <remote> "
+                   "HEAD` (or the branch's own literal name) when the tracked upstream is a "
+                   "different name, a stash, a hard reset and a narrated wait. "
+                   "FOUR OF THE INCIDENTS ARE "
                    "PERFORMED rather than asserted about — 240 lines really destroyed by a "
                    "real `git checkout`, a real worktree whose root differs from its main "
-                   "checkout's, a real `harness/images/images` created by a real `ln -s`, "
+                   "checkout's, "
                    "`pgrep -f` really matching a process that merely NAMES its pattern, and a "
                    "real local branch made to track a differently-named remote branch. The "
                    "half that decides whether the guard survives is the false positives, and "
                    "the git ones are RUN in the fixture before they are scored: a branch, a "
-                   "clean path, `--staged`, a named source, `-sfn`, `--method GET`, `graphql`, "
+                   "clean path, `--staged`, a named source, "
                    "a pid wait, a bounded retry, the ordinary first push of a new branch, an "
-                   "upstream already matching its own name, and every `git`/`gh`/`ln` line "
+                   "upstream already matching its own name, and every `git`/`gh` line "
                    "swept out of "
                    "this repo's own tooling. Each hatch is scored in both of "
                    "its forms, and the clause table is READ rather than retyped, so a new "

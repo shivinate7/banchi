@@ -51,7 +51,6 @@ fail() {
   case "$1" in
     "the armed hooks"*) rule=armed-stale ;;
     "fixtures/"*) rule=fixtures ;;
-    "iCloud"*) rule=icloud ;;
     "a secrets"*) rule=secrets ;;
     "symlink with"*) rule=symlink-absolute ;;
     "symlink pointing"*) rule=symlink-outside ;;
@@ -71,8 +70,7 @@ fail() {
 # ZEROTH RULE: THE ARMED COPY IS THE ONE THAT RUNS, SO IT HAD BETTER BE THE ONE THAT MERGED.
 #
 # `make hooks` copies scripts/githooks/ into .git/hooks-armed and nothing keeps the copy in
-# step afterwards. post-merge and post-checkout print a reminder, and that reminder is not
-# enough: it fires only on pull or branch switch, it scrolls away, and it allowed the armed
+# step afterwards. A reminder is not enough: it scrolls away, and it allowed the armed
 # pre-commit to sit four days behind a merged sigil check with every commit skipping it.
 # A gate that silently stops running is worse than no gate, because the green is believed.
 #
@@ -148,34 +146,6 @@ if [ -n "$changed_fixtures" ]; then
   fail "fixtures/ is ground truth for the round-trip test and is read-only.
   Changed: $(echo "$changed_fixtures" | tr '\n' ' ')
   If the schema genuinely changed, re-export from TCGplayer and commit that as a new fixture."
-fi
-
-# iCloud Drive conflict copies. This repo LEFT iCloud Drive on 2026-08-29 and the rule stays
-# armed anyway (D44, amended): it costs one grep, and the hazard is a property of a synced
-# DIRECTORY rather than of this project — a checkout made inside one on any machine brings it
-# straight back. iCloud resolves a same-file race by writing a SECOND file beside the original
-# with " 2"
-# appended to the stem — `pre-push 2`, `githooks-selftest 2.sh`. They are untracked, so they
-# are invisible until something says `git add -A`, which is exactly what an agent session
-# says. Measured on 2026-08-29: three appeared in one afternoon, and one of them was
-# installed as a git hook by `make hooks` before that target learned to enumerate through
-# `git ls-files`.
-#
-# Refused rather than reported, because the failure is silent and permanent: a committed
-# `foo 2.py` is a second copy of a module that no import reaches and no test runs, and it
-# will be read later as a file somebody meant to write. Deleting it is always right; the
-# original is the tracked one.
-#
-# The pattern is the stem ending in a space and digits, before an optional extension. A
-# deliberate `Section 2.md` would trip it — the bypass below is the answer, and nothing in
-# this repo is named that way today.
-[ "${PKMNSCAN_DUPES:-}" = "off" ] && icloud_dupes="" || icloud_dupes="$(printf '%s\n' "$staged" | grep -E '(^|/)[^/]* [0-9]+(\.[A-Za-z0-9]+)?$' || true)"
-if [ -n "$icloud_dupes" ]; then
-  fail "iCloud Drive conflict copies staged:
-$(printf '%s\n' "$icloud_dupes" | sed 's/^/    /')
-  These are duplicates iCloud wrote beside the real file, not files anyone authored.
-  Delete them — the tracked original is the one you want.
-  Bypass: owner-only: ask the owner to run this command."
 fi
 
 # SECRETS FILES (D312, the hook refuses a secrets file). Refused: any staged

@@ -357,8 +357,8 @@ def _sync(root: Path, confirm: bool, fetch: bool) -> Verdict:
     if ports.is_linked_worktree(subject):
         return _quiet("subject-is-linked")
 
-    # GATED ON `main` BEING A REAL LOCAL BRANCH, the same gate `scripts/serve.py:off_main` and
-    # `scripts/githooks/post-checkout` use, so a repository whose trunk is called something
+    # GATED ON `main` BEING A REAL LOCAL BRANCH, the same gate `scripts/serve.py:off_main`
+    # uses, so a repository whose trunk is called something
     # else is not in violation for it — and so CI, a primary checkout on a detached HEAD with
     # no local `main`, is silent rather than syncing itself mid-run.
     local_main = _rev(subject, MAIN_REF)
