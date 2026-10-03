@@ -15,7 +15,6 @@ import math
 import threading
 import urllib.request
 from pathlib import Path
-from types import SimpleNamespace
 
 from harness.tests import Checks
 from harness.tests.t7.common import REPO_ROOT, isolated_home, quiet
