@@ -1318,6 +1318,29 @@ skip_cli "bogus,,nonsense" "$tmp/main" "git checkout work.py"
 skip_cli "checkout,bogus" "$tmp/main" "git stash pop"
 [ $? -eq 2 ] && ok "…and a known name beside it skips only its own clause" || bad "--skip checkout also skipped the stash clause"
 
+# GUARD_SHELL_SKIP is the hook option's home; `--skip` is its alias; both together skip the union.
+skip_env() {   # skip_env <env-list> <flags...> -- <cwd> <command> -> exit code
+  local env_list="$1"; shift; local args=(--hook)
+  while [ "$1" != "--" ]; do args+=("$1"); shift; done; shift
+  out="$(printf '%s' "$2" \
+        | CWD="$1" python3 -c 'import json,os,sys; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":sys.stdin.read()}}))' \
+        | GUARD_SHELL_SKIP="$env_list" python3 "$GUARD" "${args[@]}" 2>&1)"
+  return $?
+}
+skip_env checkout -- "$tmp/main" "git checkout work.py"
+[ $? -eq 0 ] && ok "GUARD_SHELL_SKIP=checkout skips the checkout clause" || bad "GUARD_SHELL_SKIP=checkout did not skip the checkout clause"
+skip_env checkout -- "$tmp/main" "git stash pop"
+[ $? -eq 2 ] && ok "…and only that clause: a stash in a shared tree is still refused" || bad "GUARD_SHELL_SKIP=checkout also skipped the stash clause"
+skip_env "" --skip checkout -- "$tmp/main" "git checkout work.py"; a=$?
+skip_env "" --skip checkout -- "$tmp/main" "git stash pop"; b=$?
+if [ $a -eq 0 ] && [ $b -eq 2 ]; then ok "--skip checkout behaves as the variable does"
+else bad "--skip checkout: checkout exit $a, stash exit $b (want 0 and 2)"; fi
+skip_env checkout --skip stash -- "$tmp/main" "git checkout work.py"; a=$?
+skip_env checkout --skip stash -- "$tmp/main" "git stash pop"; b=$?
+skip_env checkout --skip stash -- "$tmp/main" "git reset --hard"; c=$?
+if [ $a -eq 0 ] && [ $b -eq 0 ] && [ $c -eq 2 ]; then ok "the variable and --skip together skip the union, and no more"
+else bad "variable plus flag: checkout $a, stash $b, reset $c (want 0, 0, 2)"; fi
+
 # Re-arm the mismatch: a branch tracking a DIFFERENTLY named upstream (later sections repoint it).
 (cd "$tmp/main" && git checkout -q -B skip-mismatch main 2>/dev/null \
   && git config branch.skip-mismatch.remote origin \
@@ -1343,6 +1366,14 @@ why="$(refusal_line_ok "$rl" "guard-shell:wait" "sess-1")" && ok "…and writes 
 rl_bad="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" python3 "$GUARD" --hook 2>&1)"; rl_bad_status=$?
 if [ $rl_bad_status -eq 2 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
 else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
+
+echo ""
+echo "  an unknown flag: a hook warns and allows, the command line still refuses"
+bogus_out="$(printf '{}' | python3 "$GUARD" --hook --bogus 2>&1 >/dev/null)"; bogus_status=$?
+if [ $bogus_status -eq 0 ] && [ -n "$bogus_out" ]; then ok "--hook --bogus exits 0 and warns on stderr"
+else bad "--hook --bogus: exit $bogus_status, stderr '$bogus_out' (want 0 and a warning)"; fi
+python3 "$GUARD" --bogus >/dev/null 2>&1 </dev/null
+[ $? -eq 2 ] && ok "without --hook, an unknown flag still exits 2" || bad "without --hook, an unknown flag did not exit 2"
 
 echo ""
 printf '  %d passed, %d failed\n' "$pass" "$fail"
