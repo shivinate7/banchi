@@ -9,7 +9,8 @@ dir, so every worktree of a clone writes one file. One line per refusal, TAB-sep
 so that a rule can be judged by how often it fires (`make status` reads the last 24 hours back
 through `recent`). LOG ONLY: no verdict reads it. FAILS OPEN: any error here is swallowed, so a
 log that cannot be written never changes a guard's verdict or output. One `os.write` on an
-`O_APPEND` descriptor per line, so concurrent agents never interleave a line.
+`O_APPEND` descriptor per line, so concurrent agents never interleave a line. The file
+rotates once past MAX_BYTES and `recent` reads only the last TAIL_BYTES.
 
 The snippet is what the guard matched, never a whole command, a file body or a secret: callers
 pass a heading, a path or a masked verdict. Shell hooks call the CLI:
@@ -29,12 +30,15 @@ LOG = "pkmnscan-refusals.log"
 ENV_PATH = "PKMNSCAN_REFUSAL_LOG"        # a file path; the self-tests point it at a fixture
 STAMP = "%Y-%m-%dT%H:%M:%S%z"
 SNIPPET_MAX = 80
+MAX_BYTES = 256 * 1024                   # the log rotates to `<log>.1` past this size
+TAIL_BYTES = 64 * 1024                   # `recent` reads only this much of the end
+GIT_TIMEOUT = 1                          # seconds; a refusal must never wait long on a log
 
 
 def _git(args, cwd: str) -> str:
     try:
         done = subprocess.run(["git", *args], cwd=cwd or None, capture_output=True, text=True,
-                              check=False, timeout=10)
+                              check=False, timeout=GIT_TIMEOUT)
         return done.stdout.strip() if done.returncode == 0 else ""
     except (OSError, subprocess.SubprocessError):
         return ""
@@ -63,6 +67,11 @@ def log(guard: str, rule: str, snippet: str = "", session: str = "", cwd: str = 
         session = session or os.environ.get("CLAUDE_SESSION_ID", "")
         line = "\t".join([datetime.now().astimezone().strftime(STAMP), clean(f"{guard}:{rule}"),
                           clean(snippet), clean(session), clean(root)]) + "\n"
+        try:
+            if os.path.getsize(path) > MAX_BYTES:
+                os.replace(path, path + ".1")
+        except OSError:
+            pass
         fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
         try:
             os.write(fd, line.encode("utf-8", "replace"))
@@ -79,14 +88,20 @@ def recent(cwd: str = "", hours: int = 24) -> Dict[str, int]:
     if not path or not os.path.isfile(path):
         return {}
     cutoff = datetime.now().astimezone().timestamp() - hours * 3600
-    with open(path, encoding="utf-8", errors="replace") as handle:
-        for row in handle:
-            parts = row.rstrip("\n").split("\t")
-            try:
-                if len(parts) >= 2 and datetime.strptime(parts[0], STAMP).timestamp() >= cutoff:
-                    found[parts[1]] += 1
-            except ValueError:
-                continue
+    with open(path, "rb") as handle:
+        handle.seek(0, os.SEEK_END)
+        start = max(0, handle.tell() - TAIL_BYTES)
+        handle.seek(start)
+        rows = handle.read().decode("utf-8", "replace").split("\n")
+    if start:
+        rows = rows[1:]                  # the first row of a tail may be cut mid-line
+    for row in rows:
+        parts = row.rstrip("\n").split("\t")
+        try:
+            if len(parts) >= 2 and datetime.strptime(parts[0], STAMP).timestamp() >= cutoff:
+                found[parts[1]] += 1
+        except ValueError:
+            continue
     return dict(found)
 
 

@@ -377,10 +377,11 @@ def hook(payload: dict) -> int:
     verdict = read_command(command)
     if not verdict.silenced:
         return 0
+    print(refusal(verdict.silenced), file=sys.stderr)
+    sys.stderr.flush()
     if refusal_log:
         refusal_log.log("silent-write-guard", "silent", ", ".join(sorted({i.verb for i in verdict.silenced})),
                         str(payload.get("session_id") or ""), str(payload.get("cwd") or ""))
-    print(refusal(verdict.silenced), file=sys.stderr)
     return 2
 
 

@@ -1132,11 +1132,13 @@ def hook(payload: dict) -> int:
         lines.append("  write in flight:  make down ARGS=--confirm   (in that checkout)")
     lines.append("")
     lines.append("  PKMNSCAN_KILL=off runs the command anyway.")
-    if refusal_log:
-        pids = [str(t.pid) for t in bad] + [str(t.pid) for t, _ in owner_bad]
-        refusal_log.log("reap", "kill", "pids " + ",".join(pids + list(intent.unresolved)),
-                        str(payload.get("session_id") or ""), str(payload.get("cwd") or ""))
     print("\n".join(lines), file=sys.stderr)
+    sys.stderr.flush()
+    if refusal_log:
+        refusal_log.log("reap", "kill",
+                        "{0} target(s), {1} unresolved".format(len(bad) + len(owner_bad),
+                                                               len(intent.unresolved)),
+                        str(payload.get("session_id") or ""), str(payload.get("cwd") or ""))
     return 2
 
 

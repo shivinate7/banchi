@@ -1974,11 +1974,12 @@ def hook(payload: dict, owner_only: bool = True) -> int:
             return 0
         verdict = read_write(target, cwd)
     if verdict.refusals:
+        print(render(verdict.refusals), file=sys.stderr)
+        sys.stderr.flush()               # the refusal is out before any log work
         for refusal in verdict.refusals:
             if refusal_log:
                 refusal_log.log("guard-shell", refusal.clause, refusal.heading,
                                 str(payload.get("session_id") or ""), cwd)
-        print(render(verdict.refusals), file=sys.stderr)
         return 2
     for note in verdict.notes:
         print("guard-shell: {0}".format(note), file=sys.stderr)

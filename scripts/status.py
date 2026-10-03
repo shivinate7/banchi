@@ -816,6 +816,10 @@ def guards() -> List[str]:
     else:
         lines.append(field("hatches", "none set — every guard in this shell is armed"))
 
+    redirect = os.environ.get("PKMNSCAN_REFUSAL_LOG")
+    if redirect:
+        lines.append(field("hatches", f"PKMNSCAN_REFUSAL_LOG={redirect} — every refusal is "
+                                      "logged there, and not to this clone's log"))
     lines += hatch_uses(ROOT)
     lines += refusals(ROOT)
 

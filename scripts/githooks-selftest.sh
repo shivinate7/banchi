@@ -678,6 +678,40 @@ rl_bad="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" git commit
 if [ $rl_bad_status -ne 0 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
 else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
 
+# pre-commit (a staged secrets file) and pre-push (a push to main): same three assertions.
+git -C "$rlrepo" switch -q -c rlb
+echo k > "$rlrepo/.env"
+git -C "$rlrepo" add -f .env
+rl="$tmp/precommit.log"
+rl_out="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$rl" git commit -qm "secrets" 2>&1)"; rl_status=$?
+[ $rl_status -ne 0 ] && ok "pre-commit still refuses a staged secrets file" || bad "pre-commit let a secrets file through"
+why="$(refusal_line_ok "$rl" "pre-commit:secrets")" && ok "…and writes one well-formed line" || bad "the pre-commit log line: $why"
+rl_bad="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" git commit -qm "secrets" 2>&1)"; rl_bad_status=$?
+if [ $rl_bad_status -ne 0 ] && [ "$rl_bad" = "$rl_out" ]; then ok "pre-commit: an unwritable log path changes neither verdict nor output"
+else bad "pre-commit: an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
+git -C "$rlrepo" reset -q -- .env
+git init -q --bare "$tmp/rlorigin.git"
+git -C "$rlrepo" remote add origin "$tmp/rlorigin.git"
+rl="$tmp/prepush.log"
+rl_out="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$rl" git push origin rlb:main 2>&1)"; rl_status=$?
+[ $rl_status -ne 0 ] && ok "pre-push still refuses a push to main" || bad "pre-push let a push to main through"
+why="$(refusal_line_ok "$rl" "pre-push:main-push")" && ok "…and writes one well-formed line" || bad "the pre-push log line: $why"
+rl_bad="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" git push origin rlb:main 2>&1)"; rl_bad_status=$?
+if [ $rl_bad_status -ne 0 ] && [ "$rl_bad" = "$rl_out" ]; then ok "pre-push: an unwritable log path changes neither verdict nor output"
+else bad "pre-push: an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
+
+# The log is bounded: past its cap it rotates, and the reader sees only the tail.
+rl="$tmp/big.log"
+python3 -c "
+import os, sys
+sys.path.insert(0, '$REPO_ROOT/scripts')
+import refusal_log as r
+os.environ['PKMNSCAN_REFUSAL_LOG'] = '$rl'
+for _ in range(4000):
+    r.log('t', 'rule', 'x' * 40)
+sys.exit(0 if os.path.getsize('$rl') <= r.MAX_BYTES and os.path.exists('$rl.1') and r.recent() else 1)
+" && ok "the refusal log rotates past its cap and its tail still reads" || bad "the refusal log grew past its cap or did not rotate"
+
 # The opsec PreToolUse hook is a shell script of its own: same three assertions.
 OPSEC="$REPO_ROOT/scripts/guard-opsec.sh"
 rl="$tmp/opsec.log"
