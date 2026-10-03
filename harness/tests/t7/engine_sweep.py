@@ -438,15 +438,15 @@ def check_sweep_lock(checks: Checks) -> None:
 
         # stop_watcher_of trusts the lock, never the pid.
         sweep._write_json(root / ".serve" / "match-sweep.json", {"pid": 4242, "lock": str(sweep.lock_path())})
-        signalled = []
-        with mock.patch.object(sweep.os, "kill", lambda pid, sig: signalled.append((pid, sig))):
-            checks.equal((sweep.stop_watcher_of(root), signalled), (None, []), "stop_watcher_of signals nothing while the lock is free")
+        signaled = []
+        with mock.patch.object(sweep.os, "kill", lambda pid, sig: signaled.append((pid, sig))):
+            checks.equal((sweep.stop_watcher_of(root), signaled), (None, []), "stop_watcher_of signals nothing while the lock is free")
             held = sweep.acquire_lock()
             try:
                 answer = sweep.stop_watcher_of(root)
             finally:
                 held.close()
-        checks.equal((answer, signalled), (4242, [(4242, signal.SIGTERM)]), "and SIGTERMs the recorded pid while the lock is held")
+        checks.equal((answer, signaled), (4242, [(4242, signal.SIGTERM)]), "and SIGTERMs the recorded pid while the lock is held")
 
         # SIGTERM: the handler stops the worker, then exits 0. The handler is captured, not installed.
         _capture(game="pokemon", set_hint="sv9")
