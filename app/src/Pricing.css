@@ -504,7 +504,7 @@
 .pricing-rule-row { border-bottom: 1px solid var(--bn-line); padding-bottom: var(--bn-2); }
 .pricing-rule-row:last-child { border-bottom: 0; }
 .pricing-rule-row > button { border-bottom: 0; }
-.pricing-rule-says { margin: 0; min-height: calc(3 * 1.4em); line-height: 1.4; padding: 0 var(--bn-3) 0 calc(var(--bn-3) + 28px + var(--bn-3)); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.pricing-rule-says { margin: 0; min-height: calc(3 * var(--bn-lh-base) * 1em); line-height: var(--bn-lh-base); padding: 0 var(--bn-3) 0 calc(var(--bn-3) + 28px + var(--bn-3)); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 .pricing-rule-row > .pricing-custom { padding: var(--bn-2) var(--bn-3) 0 calc(var(--bn-3) + 28px + var(--bn-3)); }
 
 /* A NARROW DESK COLUMN KEEPS THE BAR ONE LINE TOO (Q4): below the 899px tier the two quiet
