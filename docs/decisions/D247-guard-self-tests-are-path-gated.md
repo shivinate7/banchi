@@ -128,5 +128,8 @@ Third, `guard-scope.py:NARROW` narrows a derived subject to what is read: `exist
 `EXTRA_SUBJECTS` adds what `browser-scope-selftest` reads and the deriver cannot see.
 Fourth, `serve-selftest` and `audit-self-test` skip a Python subject whose AST, docstrings
 stripped, is equal on both sides (`browser-scope.py:ast_equal`). A parse error, a module that
-reads `__doc__`, and anything under `harness/` for `audit-self-test` run.
+reads `__doc__`, a file the self-test names (it may patch it by exact text: `serve.py`,
+`sigil-check.py`) and anything under `harness/` for `audit-self-test` run. The harness subjects
+also follow bare string constants (`pkmnscan`) and the `scripts/*.py` files it names to the data
+they read (`demo-assets/`, not its `mirror/`), plus the `app/tsconfig*.json` files.
 The measured saving is unmeasured until the first CI runs after merge.

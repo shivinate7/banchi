@@ -308,6 +308,18 @@ def header_equal(before: Optional[str], after: Optional[str]) -> bool:
         return False
 
 
+def skippable_on_ast(sources: Sequence[Path]) -> Callable[[str], bool]:
+    """The `ast_skip` predicate for a gate whose test sources are `sources`: a file the test
+    NAMES (its path or its file name appears in any of them) is never skipped on equal AST,
+    because a test that names a file may patch it by exact text, and a quote swap or a comment
+    then breaks its anchor while the AST is unchanged. An unreadable source: nothing skips."""
+    try:
+        text = "\n".join(Path(q).read_text(encoding="utf-8", errors="replace") for q in sources)
+    except OSError:
+        return lambda path: False
+    return lambda path: path not in text and Path(path).name not in text
+
+
 def classify_paths(paths: Sequence[str], read_side: SideReader,
                    scope: Sequence[dict] = SCOPE, subject: str = "what a browser draws",
                    noun: str = "the matrix",

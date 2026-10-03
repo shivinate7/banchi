@@ -450,37 +450,71 @@ EXTRA_SUBJECTS = {
 
 # Targets whose test executes its subjects, so a docstring or comment edit cannot move a verdict.
 # The predicate leaves out what the audit reads as TEXT: `harness/` docstrings carry claims it checks.
-AST_SKIP = {"audit-self-test": lambda path: not path.startswith("harness/")}
+def ast_skip_for(target: str):
+    """The `ast_skip` predicate for a target, or None. Never for a file the test names (it may
+    patch it by text: `sigil-check.py` by the code-invariants self-test), and never `harness/`."""
+    if target != "audit-self-test":
+        return None
+    sources = [ROOT / "scripts" / "docs-audit.py", *sorted((ROOT / "scripts" / "docs_audit").glob("*.py"))]
+    named = _browser_scope().skippable_on_ast(sources)
+    return lambda path: not path.startswith("harness/") and named(path)
+
+
+# A directory the harness reaches but never reads in part: a change under it cannot move a verdict.
+HARNESS_UNREAD = {"demo-assets": ("mirror",)}
 
 
 def harness_subjects() -> Tuple[str, ...]:
     """What `harness/run.py` reads, derived from every module under `harness/`.
 
-    A local package or top-level module imported anywhere there, a top-level directory named by a
-    `ROOT / "x"` path chain, and the TS import closure of every `app/src/*.ts` such a chain
-    names (`standing.ts` and `storeHistory.ts` today). Raises on an unreadable module: `classify`
-    turns that into RUN.
+    From each module: a local package or top-level module it imports; a top-level name a
+    `ROOT / "x"` chain or a bare string constant names (`"pkmnscan"`, `"./pkmnscan"`: a
+    subprocess target or an opened data path); and the TS import closure of every `app/src/*.ts`
+    a chain names (`standing.ts`, `storeHistory.ts`). A `scripts/*.py` file so named is scanned
+    the same way, to a fixed point, because it reads on the harness's behalf (`demo-seed.py`
+    reads `demo-assets/`). Raises on an unreadable module: `classify` turns that into RUN.
     """
     browser = _browser_scope()
     tops: Set[str] = set()
     ts_roots: Set[str] = set()
-    for module in sorted((ROOT / "harness").rglob("*.py")):
+    queue = sorted((ROOT / "harness").rglob("*.py"))
+    seen: Set[Path] = set()
+    while queue:
+        module = queue.pop()
+        if module in seen:
+            continue
+        seen.add(module)
         tree = ast.parse(module.read_text())
         collector = _PathCollector()
         collector.visit(tree)
-        for hit in collector.hits:
-            tops.add(hit.split("/")[0])
-            if hit.startswith("app/src/") and hit.endswith((".ts", ".tsx")):
-                ts_roots.add(hit)
+        hits = set(collector.hits)
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 tops |= {a.name.split(".")[0] for a in node.names}
             elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
                 tops.add(node.module.split(".")[0])
+            elif (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                  and node.value and len(node.value) < 200 and not re.search(r"\s", node.value)):
+                hits.add(node.value[2:] if node.value.startswith("./") else node.value)
+        for hit in hits:
+            tops.add(hit.split("/")[0])
+            if hit.startswith("app/src/") and hit.endswith((".ts", ".tsx")):
+                ts_roots.add(hit)
+            if hit.startswith("scripts/") and hit.endswith(".py") and (ROOT / hit).is_file():
+                queue.append(ROOT / hit)
     subjects: Set[str] = set()
-    for top in tops - {"app", ".git", ".env"}:
+    real = set(os.listdir(ROOT))  # exact names: a case-folding disk must not make "Store" a hit
+    for top in sorted(t for t in tops if t in real or f"{t}.py" in real) :
+        if top == "app" or top.startswith("."):
+            continue
         if (ROOT / top).is_dir():
-            subjects.add(f"{top}/**")
+            unread = HARNESS_UNREAD.get(top, ())
+            if unread:
+                for child in sorted((ROOT / top).iterdir()):
+                    if child.name not in unread:
+                        subjects.add(f"{top}/{child.name}" + ("/**" if child.is_dir() else ""))
+            else:
+                subjects.add(f"{top}/**")
         elif (ROOT / f"{top}.py").is_file():
             subjects.add(f"{top}.py")
         elif (ROOT / top).is_file():
@@ -488,9 +522,10 @@ def harness_subjects() -> Tuple[str, ...]:
     for root in ts_roots:
         if (ROOT / root).is_file():
             subjects |= browser.import_closure([root])
-    # What the owner named that no harness source spells: the vendored catalog is data the
-    # harness opens through the packages, and the two files below pin what runs.
+    # What no harness source spells: the vendored catalog is data the packages open, and
+    # `requirements.txt`, the lockfile and the tsconfigs pin what runs and how `standing.ts` bundles.
     subjects |= {"vendor/**", "requirements.txt", "app/package-lock.json"}
+    subjects |= {f"app/{q.name}" for q in (ROOT / "app").glob("tsconfig*.json")}
     return tuple(sorted(subjects))
 
 
@@ -551,7 +586,7 @@ def classify(target: str, base: Optional[str], head: str) -> Tuple[bool, List[st
         verdict = browser.classify_paths(
             paths, browser.git_reader(start, head), scope=scope,
             subject=f"what `make {target}` reads", noun=target,
-            ast_skip=AST_SKIP.get(target))
+            ast_skip=ast_skip_for(target))
         lines = [f"{len(paths)} changed path(s) from {start[:12]} to {head}:"] + list(
             verdict.lines)
         if not verdict.run:
@@ -839,7 +874,7 @@ def selftest() -> int:
     def comment_verdict(old: str, new: str) -> bool:
         return browser.classify_paths(
             ["cli/cmd_prices.py"], lambda side, path: old if side == "base" else new,
-            scope=audit_scope, subject="x", noun="y", ast_skip=AST_SKIP["audit-self-test"]).run
+            scope=audit_scope, subject="x", noun="y", ast_skip=ast_skip_for("audit-self-test")).run
 
     check("audit-self-test skips a docstring-only edit of a subject",
           comment_verdict('"""a."""\nx = 1\n', '"""b."""\nx = 1  # c\n'), False)
@@ -848,7 +883,13 @@ def selftest() -> int:
     check("audit-self-test runs when a subject no longer parses",
           comment_verdict('"""a."""\nx = 1\n', "x = (\n"), True)
     check("the harness gate never skips on comments (no ast_skip for it)",
-          "harness" not in AST_SKIP, True)
+          ast_skip_for("harness"), None)
+    check("audit-self-test runs on a quote swap in a file its self-tests name",
+          browser.classify_paths(
+              ["scripts/sigil-check.py"],
+              lambda side, path: "x = 'a'\n" if side == "base" else 'x = "a"\n',
+              scope=(*audit_scope, {"path": "scripts/sigil-check.py", "why": "x"}),
+              subject="x", noun="y", ast_skip=ast_skip_for("audit-self-test")).run, True)
 
     print("\nPASS" if ok else "\nFAIL")
     return 0 if ok else 1
