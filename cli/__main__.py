@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from cli import (  # noqa: E402
     cmd_boxes,
+    cmd_match,
     cmd_cards,
     cmd_emit,
     cmd_identify,
@@ -227,6 +228,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="re-read weak, uncleared answers that came from an older prompt",
     )
     identify.add_argument(
+        "--engine",
+        choices=("marqo-b", "haiku"),
+        default="haiku",
+        help="who reads the cards (default: haiku, the paid read). marqo-b is the free "
+        "stock-photo reader first: it accepts the cards it can place with a margin, and each "
+        "card it cannot accept goes to a Haiku second look in the same press, held for review.",
+    )
+    identify.add_argument(
+        "--reread-matcher",
+        action="store_true",
+        help="with the paid read, buy again the cards the free reader already answered. "
+        "Without it they are skipped. It never touches a human-cleared answer.",
+    )
+    identify.add_argument(
         "--dry-run",
         action="store_true",
         help="everything except the API call",
@@ -274,6 +289,23 @@ def build_parser() -> argparse.ArgumentParser:
     boxes_names.add_argument(
         "--write", action="store_true", help="actually write; previews without it"
     )
+
+    # ---------------------------------------------------------------------------- match
+    # THE FREE READER'S SETUP (D2). The reading is `identify --engine marqo-b`; this is the
+    # one-time preparation: the pinned model file and the stock-photo fingerprints.
+    match = sub.add_parser(
+        "match",
+        help="set up the free reader: status is free, prepare downloads the model and reads the stock photos.",
+    )
+    match_sub = match.add_subparsers(dest="match_action")
+    match_status = match_sub.add_parser("status", help="what is ready. Free.")
+    match_status.add_argument("--json", action="store_true", help="also print one line of JSON")
+    match_prepare = match_sub.add_parser(
+        "prepare",
+        help="download the model file if absent, then read each stock photo once and keep its fingerprint.",
+    )
+    match_prepare.add_argument("--model-only", action="store_true", help="the model file only")
+    match_prepare.add_argument("--fingerprints-only", action="store_true", help="the fingerprints only")
 
     # ---------------------------------------------------------------------------- cards
     # THE CARD'S STABLE NAME (D172). Two of the three subcommands write nothing EVER, and
@@ -767,6 +799,7 @@ COMMANDS = {
     "rescue": cmd_rescue.run,
     "cards": cmd_cards.run,
     "boxes": cmd_boxes.run,
+    "match": cmd_match.run,
 }
 
 

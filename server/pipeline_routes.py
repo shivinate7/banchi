@@ -165,6 +165,7 @@ from store.pricearchive import RANGE_WIDTH_DAYS  # noqa: E402
 # in it, so this costs one stdlib module. The command module could not be imported for them:
 # it reaches geometry, PIL and sqlite.
 from identify import cost  # noqa: E402
+from identify import match as matcher  # noqa: E402
 from identify import sidecar  # noqa: E402
 from store import Store, files, master  # noqa: E402
 from store import db as store_db  # noqa: E402
@@ -406,6 +407,15 @@ _TO_SEND = re.compile(r"^to send\s+(\d+)\s*$", re.M)
 _ESTIMATE = re.compile(r"^estimated cost\s+\$([0-9.]+)\s*$", re.M)
 _CACHE_HITS = re.compile(r"^cache hits\s+(\d+)\s*$", re.M)
 _PHOTOGRAPHS = re.compile(r"^photographs\s+(\d+)\s*$", re.M)
+# The free reader's preflight lines, and the paid press's count of cards the free reader already
+# answered (`cli/cmd_identify.py`). Lifted, never recomputed, like the figures above.
+_MATCHER_READ = re.compile(r"^matcher-read\s+(\d+)\b", re.M)
+_CAN_READ = re.compile(r"^can read\s+(\d+) of (\d+)\b", re.M)
+_UNREAD_LINE = re.compile(r"^unread\s+(\d+) ([a-z_]+)\s*$", re.M)
+# The matcher-first press's quote: how many cards the free reader takes and how many go to the
+# paid second look, and whether the pass was measured or estimated from the held-out share.
+_FREE_READ = re.compile(r"^free read\s+(\d+) of (\d+) (measured|estimated)\s*$", re.M)
+_SECOND_LOOK = re.compile(r"^second look\s+(\d+) of (\d+) (measured|estimated)\s*$", re.M)
 
 
 class PipelineRefusal(Exception):
@@ -1112,6 +1122,95 @@ def _claim_rows() -> List[dict]:
     return rows
 
 
+# ------------------------------------------------------------------------ the free reader
+
+
+def _prepare_pid() -> Optional[int]:
+    """The pid of a running `match prepare`, or None. It reads the progress file the child
+    writes, so a prepare started by a server that has since restarted still counts."""
+    record = files.read_json(matcher.progress_path(), None)
+    if not isinstance(record, dict) or record.get("state") != "running":
+        return None
+    pid = record.get("pid")
+    if not isinstance(pid, int):
+        return None
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return None
+    return pid
+
+
+def do_pipeline_match() -> dict:
+    """`GET /pipeline/match` — is the free reader prepared, and is a Prepare running. FREE:
+    it reads the model file's size and hash, the fingerprint index's counts and the progress
+    file, and loads no model.
+
+    The picker reads `ready` to decide whether the free pick can be pressed, and the Prepare
+    card reads the rest. `model_url` is the release asset the press would download, named so
+    the screen can say where the file comes from before anything is fetched."""
+    state = matcher.status()
+    progress = files.read_json(matcher.progress_path(), None)
+    running = _prepare_pid() is not None
+    if isinstance(progress, dict) and progress.get("state") == "running" and not running:
+        # A child that died leaves its last write behind. Say so rather than draw a bar that
+        # never moves.
+        progress = {**progress, "state": "failed", "message": "Preparing stopped before it finished. Press Prepare to carry on."}
+    return {
+        **state,
+        "running": running,
+        "progress": progress if isinstance(progress, dict) else None,
+        "model_url": matcher.MODEL_URL,
+        "margin_min": matcher.MARGIN_MIN,
+        "floor_min": matcher.FLOOR_MIN,
+    }
+
+
+def do_pipeline_match_prepare(payload: dict) -> Tuple[HTTPStatus, dict]:
+    """`POST /pipeline/match/prepare` — the owner's Prepare press. It DOWNLOADS the model file
+    (372 MB, once) and READS each stock photo once. It spends no money, and it needs the owner's
+    `confirm` because it downloads: nothing in the app fetches either on its own.
+
+    Spawns a detached `pkmnscan match prepare` and answers at once. The screen polls
+    `GET /pipeline/match`. A second press while one runs is refused, never doubled."""
+    if payload.get("confirm") is not True:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "confirm_required",
+            "Preparing downloads a large file and reads stock photos, so it needs your confirmation.",
+        )
+    running = _prepare_pid()
+    if running is not None:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "prepare_already_running",
+            "Preparing is already running. It will finish on its own.",
+        )
+    argv = [str(PKMNSCAN), "match", "prepare"]
+    log_path = matcher.progress_path().with_suffix(".log")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(log_path, "ab", buffering=0) as log:
+            log.write(f"$ {' '.join(argv)}\n".encode("utf-8"))
+            child = subprocess.Popen(  # noqa: S603
+                argv,
+                cwd=str(REPO_ROOT),
+                env=_env(),
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+                start_new_session=True,  # detached: a prepare outlives this server, like a run
+            )
+    except OSError as exc:
+        files.log_cause("match prepare spawn", exc)
+        raise PipelineRefusal(
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            "spawn_failed",
+            f"Could not start preparing because {files.plain_cause(exc)}. Try again, and if it repeats, restart the app on the Mac.",
+        ) from None
+    return HTTPStatus.ACCEPTED, {"started": True, "pid": child.pid}
+
+
 def do_pipeline_submissions() -> dict:
     """`GET /pipeline/submissions` — what is claimed right now, and what it cost to know."""
     rows = _claim_rows()
@@ -1220,6 +1319,25 @@ def _identify_flags(payload: dict) -> List[str]:
     max_edge = _max_edge(payload)
     if max_edge is not None:
         flags += ["--max-edge", str(max_edge)]
+    engine = payload.get("engine")
+    if engine is not None:
+        if engine not in ("haiku", "marqo-b"):
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "engine_invalid",
+                "Pick the free read or the paid read.",
+            )
+        flags += ["--engine", engine]
+    if payload.get("reread_matcher") is True:
+        # THE PAID PRESS'S EXPLICIT CHOICE to buy again the cards the free reader answered.
+        # Never sent with the free engine, where it means nothing.
+        if engine == "marqo-b":
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "reread_needs_the_paid_read",
+                "Reading matched cards again is a choice of the paid read, not of the free one.",
+            )
+        flags.append("--reread-matcher")
     retry = payload.get("retry_budget")
     if retry is not None:
         if not isinstance(retry, int) or isinstance(retry, bool) or not (0 <= retry <= 3):
@@ -1246,11 +1364,22 @@ def _parse_preflight(text: str) -> dict:
         found = pattern.search(text)
         return cast(found.group(1)) if found else None
 
+    can_read = _CAN_READ.search(text)
+    free_read = _FREE_READ.search(text)
+    second_look = _SECOND_LOOK.search(text)
     return {
         "photographs": _one(_PHOTOGRAPHS, int),
         "cache_hits": _one(_CACHE_HITS, int),
         "to_send": _one(_TO_SEND, int),
         "estimate_usd": _one(_ESTIMATE, float),
+        # The free reader's figures. `None` where the press was not the free reader's (or an
+        # older preflight said nothing), so a changed preflight is a missing figure.
+        "matcher_read": _one(_MATCHER_READ, int),
+        "can_read": int(can_read.group(1)) if can_read else None,
+        "free_read": int(free_read.group(1)) if free_read else None,
+        "second_look": int(second_look.group(1)) if second_look else None,
+        "second_look_measured": (second_look.group(3) == "measured") if second_look else None,
+        "unread": {code: int(count) for count, code in _UNREAD_LINE.findall(text)},
     }
 
 

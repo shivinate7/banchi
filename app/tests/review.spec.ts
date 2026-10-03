@@ -4,7 +4,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest, settleAnimations } from './shell'
 import type { Place } from '../src/types'
-import { runRow } from './routeFixtures'
+import { NO_FREE_FIELDS, runRow, stubMatchState } from './routeFixtures'
 import { setViewport } from './phoneSwitch'
 
 /* THE REVIEW QUEUE, ASSERTED — AND UNTIL THIS FILE EXISTED, NOTHING ASSERTED IT AT ALL.
@@ -95,7 +95,13 @@ type Entry = {
   reason: string
   candidates: Candidate[]
   market: string | null
-  read: { name: string; number: string; set: string; rarity_claim?: string[] }
+  read: {
+    name: string
+    number: string
+    set: string
+    rarity_claim?: string[]
+    matcher_pick?: { name: string | null; number: string | null; set: string | null; reason: string } | null
+  }
   confidence: string
   first_seen: string
   age_days: number
@@ -1165,6 +1171,60 @@ test('the claim is a chip, so it is on screen before the sentence is read', asyn
   await expect(chip).toContainText('Epic')
 })
 
+/* THE FREE READER'S TOP PICK, on a card it did not accept and whose paid answer is held here
+   (`docs/specs/identify-engine-pick.md` section 2). The fact is the pick beside the paid answer, so
+   the person sees both readings of one photograph. An entry the free reader never saw carries no
+   `matcher_pick` at all, and draws no fact. */
+const SECOND_LOOK_ENTRY: Entry = {
+    ...entry(61, 'low_confidence', '1.20', [
+      {
+        sku: '9100002',
+        name: 'Raichu',
+        set: 'Base Set',
+        number: '014/102',
+        condition: 'Near Mint',
+        market: '1.20',
+        rarity: 'Rare',
+      },
+    ]),
+    read: {
+      name: 'Raichu',
+      number: '014/102',
+      set: 'Base Set',
+      matcher_pick: { name: 'Pikachu', number: '058', set: 'Base Set', reason: 'margin_too_small' },
+    },
+}
+const SECOND_LOOK: Entry[] = [SECOND_LOOK_ENTRY]
+
+test('a second-look card shows the free reader pick in its details, and not its reason code', async ({ page }) => {
+  await open(page, SECOND_LOOK)
+  await page.locator('.review-details-summary').click()
+  const fact = page.locator('.review-fact', { hasText: 'Free reader' })
+  await expect(fact).toHaveCount(1)
+  await expect(fact.locator('dt')).toHaveText('Free reader')
+  await expect(fact.locator('dd')).toHaveText('Pikachu 058')
+  await expect(page.locator('.review-card')).not.toContainText('margin_too_small')
+})
+
+test('a card the free reader never saw draws no Free reader fact', async ({ page }) => {
+  await open(page, NAMED_CONTRADICTION)
+  await page.locator('.review-details-summary').click()
+  await expect(page.locator('.review-fact', { hasText: 'Photo read' })).toHaveCount(1)
+  await expect(page.locator('.review-fact', { hasText: 'Free reader' })).toHaveCount(0)
+})
+
+test('a pick with no name says there was none, rather than drawing an empty fact', async ({ page }) => {
+  const bare: Entry[] = [
+    {
+      ...SECOND_LOOK_ENTRY,
+      read: { ...SECOND_LOOK_ENTRY.read, matcher_pick: { name: null, number: null, set: null, reason: 'no_card_found' } },
+    },
+  ]
+  await open(page, bare)
+  await page.locator('.review-details-summary').click()
+  await expect(page.locator('.review-fact', { hasText: 'Free reader' }).locator('dd')).toHaveText('no pick')
+})
+
 test('an entry queued before the fields existed keeps the wording it had', async ({ page }) => {
   /* A queue file outlives the run that wrote it, so this is an ordinary case and not a
      migration. The fallback is asserted because a screen that drew "You claimed this stack
@@ -1453,6 +1513,8 @@ async function runsReads(page: Page, runs: unknown[], keys: string[] = []): Prom
   const asked: Asked[] = []
   let current = keys
   const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  /* THE FREE READER, PREPARED: it is the Identify sheet's default pick and the sheet reads its state on opening. */
+  await stubMatchState(page)
   const record = (path: string, route: { request(): { postDataJSON(): unknown; method(): string } }) =>
     asked.push({ path, body: route.request().method() === 'POST' ? (route.request().postDataJSON() as Record<string, unknown>) : null })
   await page.route(/\/pipeline\/waiting$/, (route) => {
@@ -1481,7 +1543,7 @@ async function runsReads(page: Page, runs: unknown[], keys: string[] = []): Prom
         capture_dirs: ['/tmp/captures/cards'],
         console: 'estimated cost $0.04\n',
         claimed: null,
-        total: { photographs: 12, cache_hits: 0, to_send: 12, estimate_usd: 0.04, cards: 12 },
+        total: { photographs: 12, cache_hits: 0, to_send: 12, estimate_usd: 0.04, cards: 12, ...NO_FREE_FIELDS },
       }),
     )
   })

@@ -1,5 +1,6 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
 import { CAPTURE_PORT, DEV_PORT } from '../devPort'
+import { NO_FREE_FIELDS, stubMatchState } from './routeFixtures'
 
 /* NOTHING IN THIS DIRECTORY MAY REACH THE CAPTURE SERVER, AND UNTIL THIS FILE EXISTED TEN
  * SPECS DID — WHICH TURNED OUT TO BE THE SMALL HALF.
@@ -416,6 +417,9 @@ async function stubCropPreview(page: Page): Promise<void> {
 }
 
 async function stubStore(page: Page): Promise<void> {
+  /* THE FREE READER'S STATE, which the Identify sheet reads when it opens (free is its default pick).
+     Prepared, so the sheet quotes on opening, as every spec that opens it was written to expect. */
+  await stubMatchState(page)
   await page.route(/\/photo\/by-card\//, (route) =>
     route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG }),
   )
@@ -436,7 +440,7 @@ async function stubStore(page: Page): Promise<void> {
       capture_dirs: [],
       console: '',
       claimed: null,
-      total: { photographs: 14, cache_hits: 3, to_send: 11, estimate_usd: 0.46, cards: 14 },
+      total: { photographs: 14, cache_hits: 3, to_send: 11, estimate_usd: 0.46, cards: 14, ...NO_FREE_FIELDS },
     }),
   )
 

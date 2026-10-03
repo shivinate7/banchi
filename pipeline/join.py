@@ -758,6 +758,21 @@ def where_phrase(game: str, position: Position) -> str:
 
 
 @dataclass(frozen=True)
+class MatcherPick:
+    """The free reader's top pick for a card it did not accept (the engine-pick spec, section 2).
+
+    A card that carries one went to the paid second look, and its answer is held for the review
+    queue beside this pick. `code` is why the reader did not accept it."""
+
+    code: str
+    name: Optional[str] = None
+    number: Optional[str] = None
+    set: Optional[str] = None
+    floor: Optional[float] = None
+    margin: Optional[float] = None
+
+
+@dataclass(frozen=True)
 class IdentifiedCard:
     """One physical card after identification. `photo` is what the review queue shows.
 
@@ -797,6 +812,10 @@ class IdentifiedCard:
     photo: Optional[str] = None
     set_hint: Optional[str] = None
     confidence: Optional[str] = None
+    # SET ONLY ON A SECOND-LOOK CARD. `default_router` sends such a card to review whatever the
+    # paid read's confidence and whatever `review_below` says: the owner's flow never lists a
+    # card on the paid read's word after the free reader could not accept it.
+    second_look: Optional[MatcherPick] = None
 
     # D23's multi-select rarity claim: the exact `Rarity` cells the operator said this
     # card's stack holds, read off the capture sidecar by `cli/resolve.py`. A TUPLE, not a
@@ -2766,6 +2785,10 @@ def default_router(
         confidence = (
             None if resolution.stage == variant.HUMAN_ANSWERED else card.confidence
         )
+        gate = review_below
+        if card.second_look is not None and resolution.stage != variant.HUMAN_ANSWERED:
+            # THE SECOND LOOK IS NEVER AUTO-SAVED: a low reading under a low gate is review.
+            confidence, gate = routing.CONFIDENCE_LOW, routing.CONFIDENCE_LOW
         return routing.route(
             resolved=resolved,
             reason=resolution.reason,
@@ -2773,7 +2796,7 @@ def default_router(
             price=resolution.market_price,
             candidate_prices=found.market_prices,
             threshold=threshold,
-            review_below=review_below,
+            review_below=gate,
         )
 
     return route

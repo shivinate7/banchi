@@ -43,10 +43,11 @@ from typing import Dict, List, Optional, Sequence
 
 import geometry
 from cli import runs
-from identify import batch, cost, images, prompt, sidecar
+from identify import batch, cost, images, match, prompt, sidecar
 from pipeline import games
 from pipeline import join
 from pipeline import selection as selection_mod
+from store import cache as cache_mod
 from store import files as store_files
 from store import master
 from store import submissions
@@ -354,6 +355,16 @@ class Item:
     game: str = games.DEFAULT_GAME
     entry: Optional[dict] = None
     strategy: Optional[str] = None
+    # WHICH ENGINE ANSWERED THIS CARD. `haiku` is the paid read; `marqo-b` the free one. A cache
+    # hit carries the engine of the entry it adopted.
+    engine: str = cache_mod.ENGINE_HAIKU
+    # Why the free reader did not accept this card: its `match.Result`, with the top pick. A card
+    # that carries one went to the paid second look in the same press, and its answer is held
+    # for the review queue (the engine-pick spec, section 2).
+    unread: Optional[match.Result] = None
+    # The second-look marker of a CACHED answer, read off the entry. A card adopted from the cache
+    # has no `unread`, and this keeps its review hold (the engine-pick spec, section 2).
+    held_second_look: Optional[dict] = None
 
     @property
     def key(self) -> str:
@@ -587,6 +598,56 @@ def _game_lines(items: List[Item]) -> List[str]:
     return lines
 
 
+def _match_request(item: Item) -> match.Request:
+    return match.Request(
+        key=item.key,
+        photo=Path(item.capture.photo),
+        game=item.game,
+        strategy=str(item.strategy),
+        set_hint=item.capture.set_hint,
+    )
+
+
+def _run_matcher(to_read: List[Item], say) -> batch.BatchRun:
+    """The free reader's whole read, in the transport's own result shape, so `_apply` and
+    everything after it is the one path for either engine.
+
+    An ACCEPTED card becomes a `succeeded` outcome carrying the same `Identification` a paid
+    answer parses to. Any other card gets no outcome and keeps its `match.Result` in `unread`:
+    the caller sends it to the paid second look in the same press. Nothing is guessed."""
+    with match.Index() as index:
+        results = match.read([_match_request(i) for i in to_read], index, log=say)
+    by_key = {item.key: item for item in to_read}
+    outcomes: Dict[str, batch.Outcome] = {}
+    for result in results:
+        item = by_key[result.key]
+        if result.accepted and result.payload is not None:
+            item.engine = cache_mod.ENGINE_MATCHER
+            outcomes[_custom_id(item.key)] = batch.Outcome(
+                custom_id=_custom_id(item.key),
+                status=batch.SUCCEEDED,
+                identification=prompt.parse(result.payload, str(item.strategy)),
+            )
+        else:
+            item.unread = result
+    return batch.BatchRun(outcomes=outcomes)
+
+
+def _second_look_record(item: Item) -> Optional[dict]:
+    """What the free reader thought of a card it did not accept, for the review queue."""
+    if item.unread is None:
+        return item.held_second_look
+    top = item.unread.candidates[0] if item.unread.candidates else {}
+    return {
+        "code": item.unread.code,
+        "name": top.get("name"),
+        "number": top.get("number"),
+        "set": top.get("set"),
+        "floor": item.unread.floor,
+        "margin": item.unread.margin,
+    }
+
+
 def _apply(items_by_key: Dict[str, Item], run_result: batch.BatchRun) -> None:
     for key, outcome in run_result.outcomes.items():
         item = items_by_key.get(key)
@@ -697,10 +758,17 @@ def _adopt_cached(item: Item, entry, fingerprints: Dict[str, str]) -> None:
     """
     item.cached = True
     item.stage = STAGE_CACHED
+    item.engine = entry.engine
+    item.held_second_look = entry.second_look
     item.identification = dict(entry.identification)
     item.status = batch.SUCCEEDED
     expected = fingerprints.get(item.strategy)
-    item.stale_prompt = expected is not None and entry.prompt_fingerprint != expected
+    # A matcher entry was never read by a prompt, so it is never stale against one.
+    item.stale_prompt = (
+        entry.engine == cache_mod.ENGINE_HAIKU
+        and expected is not None
+        and entry.prompt_fingerprint != expected
+    )
 
 
 def _give_back_unspent(claim, run_dir, store, say) -> bool:
@@ -897,6 +965,12 @@ def run(args, say) -> int:
         except LookupError:  # unwritten or unregistered — refused below, never hashed
             continue
     queued = set(snapshot.review.entries) | set(snapshot.parked.entries)
+    # THE FREE READER. `engine` is who reads this press. `reread_matcher` is the paid press's
+    # explicit choice to buy matcher-read cards again; it means nothing to the free reader,
+    # which skips every answered card.
+    engine = getattr(args, "engine", cache_mod.ENGINE_HAIKU) or cache_mod.ENGINE_HAIKU
+    reread_matcher = bool(getattr(args, "reread_matcher", False)) and engine == cache_mod.ENGINE_HAIKU
+    free = engine == cache_mod.ENGINE_MATCHER
     current_by_key = {
         item.key: fingerprints[item.strategy]
         for item in items
@@ -908,13 +982,23 @@ def run(args, say) -> int:
         else set()
     )
 
+    matcher_read = 0
     for item in items:
         # THE DIGEST, NOT THE PREPARED BYTES. This read `item.prepared.sha256` and skipped on
         # `prepared is None`; under hash-first that test would have skipped every card whose
         # answer the store already owns, which is exactly the set this loop exists to find.
         if item.photo_sha256 is None:
             continue
-        entry = snapshot.cache.reusable(item.key, item.photo_sha256)
+        held = snapshot.cache.get(item.key)
+        if (
+            held is not None
+            and held.engine == cache_mod.ENGINE_MATCHER
+            and (held.cleared_by_human or held.photo_sha256 == item.photo_sha256)
+        ):
+            matcher_read += 1  # answered by the free reader, whether this press skips it or not
+        entry = snapshot.cache.reusable(
+            item.key, item.photo_sha256, reread_matcher=reread_matcher
+        )
         if entry is None:
             continue
         if item.key in stale_targets:
@@ -965,6 +1049,10 @@ def run(args, say) -> int:
     cropped = 0
     unfit: List[Item] = []
     for item in items:
+        # THE MATCHER-FIRST PRESS PREPARES EVERY CARD TOO. The matcher crops and decodes its own
+        # photograph, but the cards it cannot accept go to the paid second look in this same
+        # press and need the prepared bytes. Preparing all of them costs a decode per card and
+        # saves the restructure that would prepare only the unaccepted ones.
         if item.stage != STAGE_PENDING:
             continue
         try:
@@ -1030,9 +1118,52 @@ def run(args, say) -> int:
     # directory was reported to the operator as a CACHE HIT, on the one line they read to
     # decide whether the run is worth paying for. There is now a value that means cache hit.
     say(f"cache hits      {len([i for i in items if i.stage == STAGE_CACHED])}")
+    if matcher_read:
+        # THE PAID PRESS'S ASK. These cards were answered by the free reader. A paid press skips
+        # them unless `--reread-matcher` asks to buy them again; either way the figure is here, so
+        # the screen can show what the ask covers before it is turned on.
+        say(f"matcher-read    {matcher_read} card(s) the free reader answered "
+            f"({'being read again' if reread_matcher else 'skipped'} by this press)")
     say(f"to send         {len(to_send)}")
     say(f"payload         {payload_bytes / 1_000_000:.1f} MB in {chunks} batch chunk(s)")
-    say(f"estimated cost  ${_estimate(to_send)}")
+    # THE MATCHER-FIRST QUOTE (D180: money is named before it is spent). When the free reader is
+    # prepared this is a MEASURED pass over the selection: the same read the press repeats, free
+    # and bounded by the preflight's own timeout. Before the index exists the second-look count
+    # is ESTIMATED from the share the held-out check measured, and the line says so.
+    matcher_run: Optional[batch.BatchRun] = None
+    second_look: List[Item] = list(to_send)
+    measured = False
+    ready = bool(free and to_send and match.status()["ready"])
+    # A DRY RUN OVER A LONG SELECTION ESTIMATES, because the screen's request waits for it. A real
+    # press runs in its own detached child and always counts.
+    if ready and (not args.dry_run or len(to_send) <= match.MEASURE_MAX):
+        matcher_run = _run_matcher(to_send, say)
+        second_look = [i for i in to_send if i.unread is not None]
+        measured = True
+    if free:
+        if measured:
+            second_count = len(second_look)
+            second_cost = _estimate(second_look)
+        else:
+            # NEVER UNDER THE FLOOR THE POOL RULES ALREADY PROVE: a card the pool rules cannot
+            # match goes to the second look for certain, so the estimate is at least that many.
+            pool_floor = len(to_send) - match.preflight([_match_request(i) for i in to_send])["can_read"]
+            second_count = max(round(len(to_send) * match.UNACCEPTED_SHARE), pool_floor)
+            share = Decimal(second_count) / Decimal(max(len(to_send), 1))
+            second_cost = (_estimate(to_send) * share).quantize(Decimal("0.01"))
+    say(f"estimated cost  ${second_cost if free else _estimate(to_send)}")
+    if free:
+        # FREE FIRST, PAID ONLY ON THE LOW-CONFIDENCE CARDS. The pool rules refuse some cards
+        # before any photograph is decoded, and those are counted here. The margin, the floor and
+        # the look-alike guard judge the best answer, so they are counted only after the read.
+        pre = match.preflight([_match_request(i) for i in to_send])
+        basis = "measured" if measured else "estimated"
+        say(f"engine          {engine} first, then haiku on the cards it cannot accept")
+        say(f"free read       {len(to_send) - second_count} of {len(to_send)} {basis}")
+        say(f"second look     {second_count} of {len(to_send)} {basis}")
+        say(f"can read        {pre['can_read']} of {len(to_send)} by the pool rules")
+        for code, count in sorted(pre["unread"].items()):
+            say(f"unread          {count} {code}")
     if args.crop:
         # NAMED IN THE PREFLIGHT because it changes the bytes, and the preflight's whole job
         # is to say what is about to be sent. A refusal count of anything but zero is worth
@@ -1070,7 +1201,10 @@ def run(args, say) -> int:
     for name in sorted(fingerprints):
         if name != prompt.DEFAULT_PROFILE:
             say(f"                {fingerprints[name]}  ({name})")
-    say(f"model           {prompt.MODEL}")
+    if free:
+        say(f"model           {match.MODEL_FILENAME} {match.MODEL_SHA256[:12]}, then {prompt.MODEL}")
+    else:
+        say(f"model           {prompt.MODEL}")
     say("games")
     for line in _game_lines(items):
         say(line)
@@ -1141,6 +1275,11 @@ def run(args, say) -> int:
         say("--dry-run: nothing submitted, nothing written.")
         return 0
 
+    if free and to_send and not ready:
+        say("refused: the free reader is not prepared. Press Prepare on the runs sheet first: it "
+            "downloads the model file and builds the fingerprints, once.")
+        return 1
+
     # ------------------------------------------------------- claim what is about to be bought
     #
     # THE LAST FREE ACT BEFORE THE MONEY, AND THE ONLY THING THAT STOPS A DOUBLE INVOICE
@@ -1171,6 +1310,9 @@ def run(args, say) -> int:
                 # collide with; naming it releases that run's claims and nobody else's.
                 resuming=(Path(args.run_dir).name if getattr(args, "run_dir", None) else None),
                 capture_dir=_recorded_dir(roots),
+                # THE SAME CHOICE THE CONSULT PASS MADE. Recomputing without it would drop every
+                # re-read card from the claim and bill them with nothing holding them.
+                reread_matcher=reread_matcher,
             )
             if conflicts:
                 # NOTHING WAS WRITTEN, so leaving the block commits nothing — `Rows.changes()`
@@ -1196,7 +1338,9 @@ def run(args, say) -> int:
                 f"Nothing is being submitted."
             )
             for item in to_send:
-                entry = store.read().cache.reusable(item.key, item.photo_sha256 or "")
+                entry = store.read().cache.reusable(
+                    item.key, item.photo_sha256 or "", reread_matcher=reread_matcher
+                )
                 if entry is not None:
                     _adopt_cached(item, entry, fingerprints)
             to_send = [i for i in items if i.stage == STAGE_PENDING]
@@ -1210,7 +1354,9 @@ def run(args, say) -> int:
             for item in list(to_send):
                 if item.key in held:
                     continue
-                entry = store.read().cache.reusable(item.key, item.photo_sha256 or "")
+                entry = store.read().cache.reusable(
+                    item.key, item.photo_sha256 or "", reread_matcher=reread_matcher
+                )
                 if entry is None:
                     continue
                 _adopt_cached(item, entry, fingerprints)
@@ -1267,6 +1413,8 @@ def run(args, say) -> int:
             "reidentify_stale": bool(args.reidentify_stale),
             "force_resubmit": bool(args.force_resubmit),
             "variant": getattr(args, "variant", None),
+            "engine": engine,
+            "reread_matcher": reread_matcher,
         },
     )
     say(f"run             {run_dir.directory}")
@@ -1308,8 +1456,58 @@ def run(args, say) -> int:
             _give_back_unspent(claim, run_dir, store, say)
             return 1
         _apply(items_by_key, result)
+        # THE MARKER SURVIVES A RESUME: the matcher's reason and pick were written to the
+        # manifest before the batch was submitted, and this process never ran the matcher.
+        held = {
+            row["key"]: row
+            for row in run_dir.manifest.get("second_look") or []
+            if isinstance(row, dict) and "key" in row
+        }
+        for item in items:
+            row = held.get(item.key)
+            if row is not None and item.held_second_look is None:
+                item.held_second_look = {k: v for k, v in row.items() if k != "key"}
         usage_in += result.usage.input_tokens
         usage_out += result.usage.output_tokens
+    elif to_send and free:
+        # THE FREE READ WAS TAKEN IN THE PREFLIGHT, over the selection before the claim could
+        # narrow it, so only the cards still in this press are applied.
+        live = {_custom_id(i.key) for i in to_send}
+        _apply(items_by_key, batch.BatchRun(
+            outcomes={k: v for k, v in matcher_run.outcomes.items() if k in live}
+        ))
+        read_count = sum(1 for i in to_send if i.identification is not None)
+        second = [i for i in to_send if i.identification is None]
+        # THE RECEIPT'S FIGURES, in the manifest the runs sheet reads: how many the free reader
+        # matched, and which cards went to the second look and why. Written before the paid
+        # batch, so a run that dies later still says what the free read did.
+        run_dir.set(
+            matched=read_count,
+            second_look=[
+                {"key": item.key, **_second_look_record(item)}
+                for item in second
+                if item.unread is not None
+            ],
+        )
+        say(f"read            {read_count} of {len(to_send)} by the free reader; "
+            f"{len(second)} go to the second look")
+        for item in second:
+            if item.unread is not None:
+                say(f"                {item.key}: {item.unread.code} - {item.unread.detail}")
+        if second:
+            try:
+                result = batch.run_batch(
+                    _requests(second, with_crops=False, say=say),
+                    log=say,
+                    on_submit=run_dir.add_batch_id,
+                )
+            except batch.BatchError as exc:
+                say(f"identification did not run: {exc}")
+                _give_back_unspent(claim, run_dir, store, say)
+                return 1
+            _apply(items_by_key, result)
+            usage_in += result.usage.input_tokens
+            usage_out += result.usage.output_tokens
     elif to_send:
         try:
             result = batch.run_batch(
@@ -1412,6 +1610,11 @@ def run(args, say) -> int:
                 "detection": item.detection,
                 "retries": item.retries,
                 "retry_reasons": item.retry_reasons,
+                "engine": item.engine,
+                # A SECOND-LOOK CARD'S ANSWER IS HELD FOR REVIEW, never listed on the paid read's
+                # word alone: `cli/resolve.py` routes any record carrying this to the queue, and
+                # shows the matcher's top pick beside the paid answer.
+                "second_look": _second_look_record(item),
                 "identification": item.identification,
                 # THE ITEM'S OWN DIGEST, NOT THE PREPARED BYTES'. This read
                 # `item.prepared.sha256 if item.prepared else None`, and under hash-first a
@@ -1491,6 +1694,8 @@ def run(args, say) -> int:
                     # reattached result for a card whose sidecar no longer names one,
                     # which `_collect` parsed under the default for the same reason.
                     fingerprints.get(item.strategy, fingerprint),
+                    engine=item.engine,
+                    second_look=_second_look_record(item),
                 )
                 if clash:
                     disagreements.append(clash)
@@ -1567,6 +1772,7 @@ def run(args, say) -> int:
 
     # --------------------------------------------------------------------------- report
     answered = [i for i in items if i.identification is not None]
+    second_looked = [i for i in items if i.unread is not None]
     failed = [i for i in items if i.identification is None]
     stale = [i for i in items if i.stale_prompt]
     not_detected = [i for i in items if i.detection == NOT_DETECTED]
@@ -1611,6 +1817,13 @@ def run(args, say) -> int:
         for clash in disagreements:
             say(f"                  {clash['position']}: human {clash['human']} vs "
                 f"model {clash['model']}")
+    if second_looked:
+        reasons: Dict[str, int] = {}
+        for item in second_looked:
+            reasons[str(item.unread.code)] = reasons.get(str(item.unread.code), 0) + 1
+        say(f"second look     {len(second_looked)} card(s) the free reader could not accept went "
+            f"to the paid read and wait in review: "
+            + ", ".join(f"{count} {code}" for count, code in sorted(reasons.items())))
     if failed:
         say(f"failed          {len(failed)} card(s) go to the main queue as "
             f"identification_failed — never dropped:")

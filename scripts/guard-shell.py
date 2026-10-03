@@ -1202,8 +1202,8 @@ def _default_branch(remote: str, cwd: str) -> str:
     `origin`'s. A throwaway repo that has never had that symbolic ref written (this guard's
     own selftest fixture, most `git init`-then-`push` clones) falls back to the same rule
     the claude-settings sweep uses for the primary checkout: the first of
-    `main`, `master` that exists as a local branch. Nothing here is a guess dressed as a
-    read — an unreadable remote and an absent local branch both return "", and the caller
+    `main`, `master` that exists as a local branch. Nothing here is a guess dressed as
+    a read — an unreadable remote and an absent local branch both return "", and the caller
     treats that exactly like the pre-2026-09-13 code did: no exemption, still refused.
     """
     ok, out = _run(["git", "symbolic-ref", "--quiet", "--short",

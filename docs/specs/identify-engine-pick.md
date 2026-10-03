@@ -1,6 +1,6 @@
 # Pick the identification engine for each run
 
-**Status: DESIGN. Nothing is built.** D2 (identification is Haiku vision, end to end) carries the
+**Status: phase 1 is built (the per-run picker, the free read, the second look). The background reader (section 8) is not built.** D2 (identification is Haiku vision, end to end) carries the
 owner's ruling. For each run, the owner picks who reads the cards: Haiku or the stock-photo matcher.
 The free read is the default pick, on the owner's ruling.
 
@@ -44,15 +44,15 @@ The eval scripts and raw results live in a scratchpad. They are not in the repo.
 | `finish`: normal, holo, reverse holo or unknown | Cannot read foil. It reports `unknown` every time. | The finish ladder (D3, variants resolve by a fixed ladder) runs on the claim and the catalog. See below. |
 | `confidence`: high, medium, low | Has a cosine margin and a similarity | The accept rule in section 3 sets `high` or `low`. |
 | The set hint, as a prompt hint | The hint narrows the candidate pool | See the set rules below. |
-| A read of any card, stock photo or not | Cannot place a card whose printing has no stock photo | Leaves that card unread. See below. |
+| A read of any card, stock photo or not | Cannot place a card whose printing has no stock photo | Does not accept that card. The paid read gives it a second look. See below. |
 
 **Finish (D3).** The prompt gives Haiku a finish field with an `unknown` member. The ladder already
 treats no detection as a `detected_finish` of `None`. Rung 1 is the capture-time claim. Rung 2 is the
 catalog row, when one condition remains. Rung 3 is detection. Rung 4 is review.
 
 A matcher run never reaches rung 3. A card with no claim and more than one stocked finish ends at rung 4.
-It lands in review with the existing reason `ambiguous_no_signal`. Review gets only cards the matcher accepted (`pipeline/variant.py`).
-The matcher read it and the ladder could not finish it. No new reason code is needed.
+It lands in review with the existing reason `ambiguous_no_signal`. Review gets the cards the matcher accepted that the ladder could not finish (`pipeline/variant.py`).
+It also gets every second-look card (section 2). No new reason code is needed for the first kind.
 
 Detection is weak evidence in any case. On box 2, the owner's measurement put its false contradictions at 42%.
 That is why the ladder lets a claim outrank it. How many unclaimed multi-finish cards sit in the owner's boxes today is unmeasured.
@@ -69,13 +69,15 @@ The pool is the fingerprinted printings of the sets that apply to the card.
 - **A hinted card.** Its pool is its hinted set.
 - **An unhinted card.** Its set is unknown, so its pool is every set of its game, except the promo sets (below).
 - **The look-alike guard.** After the match, the matcher compares the best answer's card name with the names of the pool's no-image printings.
-  If the best answer shares a name with one, the card is left unread. Every other card stays eligible, whatever else is missing from its set.
+  If the best answer shares a name with one, the card is not accepted. Every other card stays eligible, whatever else is missing from its set.
 - **The premise, measured:** a no-image printing loses to its same-name twin. When the true printing has no photo, its sibling with the same name wins.
   In the absent-photo test, 96 of the wrong accepted answers were same-name siblings (section 3). The held-out check (section 3) tests the guard.
 - **Sealed product and anything with no number** is never matched. It has no card photo to compare.
 - **Promo sets are left out of the pool.** A promo set is a set whose name holds "Promo".
-  A card hinted into a promo set is never read by the matcher. It goes to the paid read.
-- **A set the index does not cover** cannot be guarded. Every card that needs it is left unread until the fingerprint refresh press covers it.
+  A card hinted into a promo set is never matched. It goes to the second look.
+- **A pool of one printing** (a set or a card name with a single printing) needs no change. The guard checks the best answer's name against the no-image names, so it still works.
+  A one-printing pool can only mislead when its one printing has no photo, and then the guard blocks the name.
+- **A set the index does not cover** cannot be guarded. Every card that needs it goes to the second look until the fingerprint refresh press covers it.
 - For Pokemon, D170 already makes every run name its sets. An unhinted Pokemon card cannot reach a matcher run.
   The pool is therefore never the whole Pokemon category.
 - For Riftbound, "every set of its game" is every Riftbound group that holds a numbered product. Riftbound's export scope is `category`,
@@ -83,19 +85,33 @@ The pool is the fingerprinted printings of the sets that apply to the card.
 - A named set did not help accuracy in the spike. On Riftbound, pool-wide and set-only top-1 were both 98.7% (measured, first round).
   The pool rule exists for the absent-photo case. It does not exist for accuracy.
 
-**Cards the matcher leaves unread.** A card is left unread in four cases. The look-alike guard fires. Its set is not in the index. Its margin M is below the rule in section 3.
+**Cards the matcher does not accept.** The owner's flow: *"we have the free one do all first and then for those it
+finds under a threshold of accuracy they get a second look by haiku and then it reaches my queue. so haiku isnt on all of them just the low con"*.
+One press runs both reads. The matcher reads every selected card first. Four things stop it accepting a card.
+The look-alike guard fires. Its pool is not complete, so the guard cannot run. Its margin M is below the rule in section 3.
 Its floor S is below the rule in section 3. The first rounds of the spike never tested the absent-photo case.
 So a second test removed the true card's stock photos from the pool. Every answer is then wrong by construction.
-Section 3 gives the result. For an unread card, the matcher run does this and nothing else:
+Section 3 gives the result. For a card the matcher does not accept, the same press does this:
 
-1. It writes no identification. The card stays in the selection as needing identification.
-2. The run goes on for the other cards. The preflight and the receipt both say how many cards were left unread, and why.
-3. A matcher press never calls Anthropic. Nothing falls back on its own.
-   A free press must never spend money by surprise. This is the owner's ruling.
-4. The owner presses the paid read for those cards, by choice.
+1. The matcher writes no identification for it.
+2. The press sends the card to a Haiku batch at once. This is the second look. Only these cards are sent.
+3. Haiku's answer is not saved as the card's identity. It goes to the review queue.
+   The cache entry for that answer carries the second-look marker. A later press that adopts the entry from the cache keeps the hold.
+   A person's answer in review is what releases it.
+   The entry shows the photo, Haiku's answer and the matcher's top pick. A person decides.
+4. The run record keeps the matcher's reason and top pick for each such card, beside Haiku's answer.
+   The receipt says how many cards the matcher took and how many went to the second look.
 
-An unread card never goes to review. Review holds a card the matcher accepted and the finish ladder could not finish.
-The run record keeps the reason and the top three candidates for each unread card. It writes no identification for it.
+This replaces the earlier rule that left such cards unread until a separate paid press. Nothing is guessed at any step.
+A card Haiku answers wrongly cannot reach a listing, because a person sees it first.
+
+**Money is named before it is spent (D180).** The quote states how many cards the matcher will take free.
+It states how many go to the second look, and what that costs. The press needs the same confirm as a paid send.
+When the index is ready, the preflight runs the matcher over the selection and counts the cards. The figure is measured.
+A dry run over more than 200 cards does not run the matcher, because the screen's request waits for it. The real press always counts, in its own child.
+Whenever the quote is not measured, it uses 40% as the unaccepted share and says "estimated". The held-out check measured 37.5%, with a 95% upper bound of 39.2%.
+So the estimate rounds up and never understates. It is also never under the count of cards the pool rules already send to the second look.
+The background reader (section 8) stays free. It never spends. A card it cannot accept waits for a press.
 
 **The owner's word on promos: "i have no promos".** Printings with no stock image that are promos are left out of the matcher's pool.
 Unhinted Riftbound cards match against the main sets. A promo card is never read by the matcher. It goes to the paid read.
@@ -111,9 +127,10 @@ It covered all 2,961 Riftbound cards the store has held in any state, which are 
 Organized Play promos repeat main-set numbers.
 
 **What catches it.** The promo guard is cheap. At queue build and at preflight, the run asks the store one question:
-does any held card sit in a promo set of this game? If yes, unhinted cards of that game are left unread for the paid read.
-It is one query on `cards.set_name`, which has an index. The build adopts it. A promo that is hinted into its promo set is left unread without it.
-A promo whose set name does not hold "Promo" is not caught. That is an open item.
+does any held card sit in a promo set of this game? If yes, unhinted cards of that game go to the second look.
+It is one query on `cards.set_name`, which has an index. It is built (`held_promo_games` in `identify/match.py`) and runs once per read and per preflight.
+The reason code is `promo_held`. A store that cannot be read counts as holding a promo in every game. A promo that is hinted into its promo set goes to the second look without it.
+A promo whose set name does not hold "Promo" is not caught. A card whose `set_name` was never filled in is not seen. Both are open items.
 
 **The 229 products with no photo** (measured). The CDN answers 403 with an XML error for every size of each image URL.
 The working images answer 200. CloudFront answers 403 for a key that does not exist. So each is a product with a URL and no photo.
@@ -131,7 +148,7 @@ They count as "no stock image". They sit in the index as no-image printings, and
 
 **How many of the owner's cards are eligible today** (measured, before the read). The store holds 3,501 numbered cards with a SKU:
 2,959 Riftbound and 542 Pokemon. The guard blocks 163 card names. 479 held cards carry one of those names (414 hinted, 65 unhinted).
-**Eligible: 3,022 of 3,501 (86.3%).** The 479 are left unread, and the paid read handles them.
+**Eligible: 3,022 of 3,501 (86.3%).** The 479 go to the second look.
 This is a pre-read estimate. The guard fires on the best answer, so a card with a blocked name may still be read when its best answer has another name.
 It is a floor on eligibility. How many of the 479 the real read accepts is unmeasured.
 
@@ -144,10 +161,11 @@ The matcher serves `pokemon`, `riftbound` and `one_piece`.
 The matcher answers with its best card and two numbers. The margin M is the cosine of the best match
 minus the cosine of the second. The floor S is the cosine of the best match.
 
-**Accept only when all three hold:** the look-alike guard does not fire (section 2), M is at least 0.02, and S is
+**Accept only when all three hold:** the look-alike guard does not fire (section 2), M is at least 0.05, and S is
 at least 0.755. An accepted card gets `confidence` of `high` in the identification record.
-**Every other card is left unread** (section 2). It is not routed to review, and no `low` record is written for it.
-No new join branch is built, because an unread card never reaches the join.
+The margin floor of 0.05 is the owner's ruling: *"maybe those under .05 get a haiku auto pass"*.
+**Every other card gets the second look** (section 2). Haiku's answer for it is held for review.
+The join marks such a card as a second-look card, and the router sends it to review at any confidence setting.
 
 Measured on the 500 photographs, Marqo-B:
 
@@ -169,14 +187,17 @@ Measured on the 500 photographs, Marqo-B:
   Each time it fit the margin on one half and scored the other half.
   Marqo-B accepted 99% of cards at a mean precision of 99.4% and a worst split of 98.8% (measured).
   A half of 250 cards cannot show 99.5%.
-- The values 0.02 and 0.755 were chosen on the same 500 cards. They are a starting point, not a result.
+- The value 0.755 was chosen on the same 500 cards. The margin floor is the owner's ruling, checked on held-out photographs below.
   Both values live in one constant, beside the eval that produced them.
   The record also carries the model file hash.
 - **Build-lane gate: a held-out check confirms the thresholds and the look-alike guard before adoption.**
   The owner supplies photographs that the spike never saw, and the eval scores them with the fixed constants.
-  The set includes cards whose same-name twin has no stock image, and the check must show the guard leaves each of them unread.
+  The set includes cards whose same-name twin has no stock image, and the check must show the guard does not accept each of them.
   The build lane does not ship the matcher pick until that check reports no wrong answer among the accepted cards,
   and reports the share accepted. A failed check lowers the constants or ends the build. It never edits the held-out set.
+- **Held-out result (measured, 3,001 fresh store photographs).** At a margin of 0.05, 1,876 cards are accepted (62.5%) and 0 are wrong.
+  At 0.02 the check accepted 2,104 cards and found 3 real wrong answers. Correct accepts under a margin of 0.04 are 6.6% of all correct accepts.
+  The unaccepted share is about 37%. It sets the estimate in the quote.
 - Rotation retries do not help Marqo-B. Take the best of four rotations. Its top-1 on 13 sideways battlefield cards falls from 85% to 77%.
   Its top-1 on upright Riftbound cards stays at 99% (measured). The retry lowered upright top-1 for each of the nine other models in the first round of ten.
   Only CLIP L/14 gained, from 92% to 100% on the 13 sideways cards. The matcher does not retry.
@@ -208,7 +229,7 @@ The pool index records the snapshot it was built from, so a stale index is visib
 
 **The index lists every printing.** The index holds each numbered product of each set it covers, with its fingerprint or its no-image mark.
 It is current when its model file hash matches the matcher's file. A set not in the index cannot be guarded (section 2).
-The preflight names each such set and the cards it leaves unread because of it.
+The preflight names each such set and the cards it sends to the second look because of it.
 
 **The index.** One stock image becomes one vector of 768 floats, which is 3 KB.
 The spike's 1,365 images make about 4.2 MB (measured). The index lives under `inventory/`, beside the other
@@ -317,25 +338,24 @@ It exempts a word-list hit only. The build lane must export both constants under
 | Pick | Label | Line under it |
 |---|---|---|
 | `haiku` | Read from the photo | Reads the name, the number and the foil. Costs about the quoted amount. |
-| `marqo-b` | Match to stock photos | Free. Needs a stock photo for each card. Cannot tell foil from normal. Cards it is unsure of are left unread, and you can read them with the paid read. |
+| `marqo-b` | Match to stock photos | Reads every card free first. Cards it is unsure of get a second look from the paid read, then wait in your review queue. |
 
 **A tooltip on each pick.** Both picks carry a `title` tooltip, and both name their model.
 The Haiku pick uses `HAIKU_NAME_TOOLTIP`. The matcher pick uses `MATCHER_NAME_TOOLTIP`.
 
 - The cost line comes from the free preflight. `POST /pipeline/preflight` takes the engine.
-  It returns a dollar amount for Haiku and zero for the matcher.
+  It returns a dollar amount for both. The matcher's amount covers only the second look.
 - The accuracy line carries no percentage. The two figures do not compare.
   The line names outcomes: what the engine reads, what it cannot read, and where doubt goes.
-- The matcher quote adds three counts. They are the cards it can match, the cards it must leave unread because
-  the look-alike guard blocks, and the cards already answered. A card can also be left unread after the read, when its margin is too small.
-  The quote cannot count those, so it says so. It also adds the setup state.
+- The matcher quote adds the cards read free and the cards that go to the second look. Each is marked measured or estimated (section 2).
+  It also adds the pool-rule counts and the setup state.
 - **A paid press over cards the free reader matched asks every time, and the default answer is skip.**
   A selection can hold cards the matcher accepted. Those are answered.
   The Haiku preflight quote names the count it would bill, and that count excludes them.
   The ask is a second line on the quote: "Also read again the 412 cards that matching decided".
   That line shows its own cost. It is off until the owner turns it on, and it asks again at every press.
   This replaces the earlier idea of a cross-check default. Nothing cross-checks the free read by default.
-- The press button names the cards, as D180 requires. It reads "Match 412 cards, free" for the matcher.
+- The press button names the cards, as D180 requires. It reads "Match 412 cards, then spend $0.17 on the second look" for the matcher.
   It reads "Read 412 cards, about $0.45" for Haiku.
 - When the matcher is picked, the crop and size choice is hidden. The matcher always uses the same crop.
 - The free read is the default pick each time the composer opens. The pick is not stored on the device.
@@ -348,9 +368,9 @@ starts only on the owner's press.
   A press reads the missing and stale images, in memory, and stores the fingerprints (D301, amended).
   It reports the printings read and the printings still with no image when it ends. Nothing else starts it.
 
-**The receipt.** The run record shows the engine. It then shows three counts: matched, left unread, and already answered.
+**The receipt.** The run record shows the engine. It then shows the counts: matched, second look, and already answered.
 A matched card the finish ladder cannot finish goes to Review as before. The run line reads, for example,
-"Matched 412 cards. 9 were left unread for a paid read. 37 of the matched cards need a finish answer in Review."
+"Matched 412 free. 150 got a second look from the paid read and wait in review."
 
 The manifest records the engine in `flags`. It records the model hash and the pool snapshot in the existing
 `model` field and a new run field. A review queue entry carries the engine that read it, beside the existing read fields.
@@ -475,8 +495,12 @@ Turning the toggle on never downloads. With no model or no index, the toggle rea
 
 ## 9. The owner's rulings
 
-- A card the matcher cannot accept is left unread and stays in the selection. It never goes to review. Nothing falls back on its own (sections 2 and 3).
-- The matcher leaves unread a card whose best answer shares a name with a no-image printing (section 2).
+- The margin floor is 0.05. The S floor of 0.755 stays (section 3). The owner's word: *"maybe those under .05 get a haiku auto pass"*.
+- One press runs the free reader on every card, then sends each card it does not accept to Haiku for a second look. Haiku is on the low-confidence cards only (section 2).
+- Haiku's second-look answer goes to the review queue with the photo, the answer and the matcher's top pick. It is never saved on its own (section 2).
+- The quote names the free count, the second-look count and the cost before any spend. The press needs the paid confirm. The background reader never spends (section 2).
+- The matcher does not accept a card whose best answer shares a name with a no-image printing (section 2).
+- Dropped on the owner's word: the option that skips names with two or more printings, and the twin-margin options.
 - D301 is amended for one fingerprint read of each stock image. A model change rebuilds every fingerprint (section 4).
 - The model file is a release asset of `shivinate7/banchi`, with a pinned hash, downloaded when the owner presses a control (section 5).
 - The control uses plain words. The model name sits in one hover tooltip, as a named exception in D196 (section 6).

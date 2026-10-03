@@ -76,6 +76,7 @@ import type {
   PricingRestoreResult,
   PricingWorklist,
   RunSelection,
+  MatchState,
   RunSend,
   RunPreflight,
   RunStarted,
@@ -2408,7 +2409,28 @@ function onTheWire(send: RunSend): Record<string, unknown> {
     run: selection.run,
     crop: send.crop,
     max_edge: send.maxEdge,
+    engine: send.engine,
+    reread_matcher: send.rereadMatcher === true ? true : undefined,
   }
+}
+
+/** Is the free reader prepared, and is a Prepare running. FREE: a size, a hash, an index's counts
+ *  and a progress file; the server loads no model to answer it. */
+export async function getMatchState(): Promise<MatchState> {
+  return (await request('/pipeline/match', NO_CACHE)) as MatchState
+}
+
+/** THE OWNER'S PREPARE PRESS. It downloads the model file (once) and reads each stock photo once.
+ *  It spends no money and needs `confirm: true` because it downloads; nothing else in the app
+ *  fetches either. Answers at once. `getMatchState` carries the progress.
+ *
+ *  Refusals worth branching on: `prepare_already_running` (a second press while one runs). */
+export async function prepareMatch(): Promise<{ started: boolean; pid: number }> {
+  return (await request('/pipeline/match/prepare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as { started: boolean; pid: number }
 }
 
 /**

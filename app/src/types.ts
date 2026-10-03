@@ -741,6 +741,9 @@ export type QueueRead = {
    *  file written before 2026-09-11, and the screen draws the same sentence for both, which
    *  is the honest one — it does not know what was claimed. */
   rarity_claim?: string[] | null
+  /** The free reader's top pick, present only on a card it did not accept, whose paid answer is
+   *  held here. Absent on every other entry. */
+  matcher_pick?: { name: string | null; number: string | null; set: string | null; reason: string } | null
 }
 
 /** One card waiting for a human. `store/queues.py:QueueEntry`, minus the two Python
@@ -2973,6 +2976,39 @@ export type RunSend = {
   selection: RunSelection
   crop?: boolean
   maxEdge?: number
+  /** Who reads the cards. Absent means the paid read, so an old caller never switches engines by
+   *  omission. The runs sheet always sends one (`engines.ts`). */
+  engine?: 'marqo-b' | 'haiku'
+  /** The paid press's explicit choice to buy again the cards the free reader answered. Never
+   *  sent with the free engine. */
+  rereadMatcher?: boolean
+}
+
+/** `GET /pipeline/match`: is the free reader prepared, and is a Prepare running. Free; the server
+ *  loads no model to answer it. */
+export type MatchState = {
+  model_present: boolean
+  model_ok: boolean
+  model_bytes: number
+  index_present: boolean
+  index_current: boolean
+  ready: boolean
+  /** Stock photos read, printings with none, and sets covered. Absent until an index exists. */
+  fingerprints?: number
+  no_image?: number
+  sets?: number
+  running: boolean
+  progress: {
+    state: 'running' | 'done' | 'failed'
+    phase: 'model' | 'fingerprints'
+    done: number
+    total: number
+    message: string
+  } | null
+  /** Where the model file is fetched from, so the screen can say so before anything downloads. */
+  model_url: string
+  margin_min: number
+  floor_min: number
 }
 
 
@@ -3107,6 +3143,16 @@ export type RunPreflightTotal = {
   to_send: number | null
   estimate_usd: number | null
   cards: number
+  /** Cards the free reader already answered (named only by a press that has some), and, for a
+   *  free press, how many the pool rules let it read and why the rest are left unread. */
+  matcher_read: number | null
+  can_read: number | null
+  /** The matcher-first press: cards the free reader takes, cards that go to the paid second look,
+   *  and whether the pass was measured (true) or estimated from the held-out share (false). */
+  free_read: number | null
+  second_look: number | null
+  second_look_measured: boolean | null
+  unread: Record<string, number>
 }
 
 /** ONE QUOTE, where it used to be a list of one or more. D180's rule was that the response shape

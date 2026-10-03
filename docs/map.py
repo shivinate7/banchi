@@ -366,7 +366,7 @@ COMPONENTS = [
                                     "fill-gaps `--box` is `--assume-box` — two opposite jobs "
                                     "that were wearing one name, and the fill has fired on 0 of "
                                     "2,535 real captures.",
-                            "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D180", "D86",
+                            "governed_by": ["D1", "D2", "D3", "D9", "D21", "D25", "D36", "D180", "D86",
                                             "D87", "D100", "D145", "D172", "D189", "D210",
                                             "D213", "D219", "D239", "D242",
                                             "D259",
@@ -444,6 +444,14 @@ COMPONENTS = [
                                         "the table and writes nothing.",
                                 "governed_by": ["D189", "D86"],
                                 "tested_by": ["T7"]},
+            "cmd_match.py": {"does": "`pkmnscan match status | prepare` — the free reader's one-time "
+                                     "setup (D2). `status` is free. `prepare` downloads the pinned model "
+                                     "file if absent, then reads each stock photo of every set the "
+                                     "store holds plus every Riftbound set once and keeps the "
+                                     "fingerprint (D301's one exception). Resumable, never spends, "
+                                     "never touches card state, and nothing starts it but the owner's "
+                                     "press. Progress is `inventory/match-prepare.json`.",
+                             "governed_by": ["D2", "D33", "D170", "D301"]},
             "cmd_boxes.py": {"does": "`pkmnscan boxes names` — the one-time backfill that "
                                      "gives every unnamed box the stored name `Box <number>` "
                                      "(`store/master.py:Inventory.box_name_plan`). Previews by "
@@ -1491,9 +1499,11 @@ COMPONENTS = [
                                        "and `do_pipeline_worklist` take it as an optional "
                                        "parameter, `None` by default, so no harness test "
                                        "opens a socket. Never raises: a join miss or an "
-                                       "unreachable catalogue both answer `None`.",
-                               "governed_by": ["D8", "D15", "D25", "D35", "D86", "D278", "D254",
-                                               "D299", "D301"],
+                                       "unreachable catalogue both answer `None`. `catalog_products` "
+                                       "and `catalog_sets` list a WHOLE set (with or without an image "
+                                       "URL), blocking, for the matcher's index build only.",
+                               "governed_by": ["D8", "D15", "D25", "D35", "D86", "D170", "D278",
+                                               "D254", "D299", "D301"],
                                "tested_by": ["T7"]},
             "selection.py": {"does": "WHICH CARDS A PRESS IS OVER — one object, read by the"
                                      "wire and the CLI alike, and the drawer is a TERM in it "
@@ -1674,6 +1684,20 @@ COMPONENTS = [
             "sidecar.py": {"does": "reading a capture directory: photos, JSON sidecars, position", "governed_by": ["D2", "D3", "D10", "D21", "D22", "D23", "D183"]},
             "images.py": {"does": "downscale, encode, hash a photograph for the API, and refuse a crop that is not the card",
                           "governed_by": ["D2", "D23", "D75", "D125"], "tested_by": ["T6"]},
+            "match.py": {"does": "the free reader (D2, the owner picks the engine per run): a "
+                                 "photograph and each stock photo become one 768-number fingerprint "
+                                 "(Marqo ecommerce-B's image tower, ONNX, on onnxruntime), and the nearest "
+                                 "stock fingerprints are the candidates. A card is READ only when the "
+                                 "margin and floor clear `MARGIN_MIN` and `FLOOR_MIN`, its pool is one "
+                                 "hinted set or every non-promo set of its game, and the best answer "
+                                 "shares no card name with a printing that has no stock photo (the "
+                                 "look-alike guard). Any other card is left UNREAD: no identification, "
+                                 "never queued, no fallback. The index (`inventory/fingerprints.sqlite`) "
+                                 "holds vectors only and names the model file's sha256, so another "
+                                 "model's index is refused (D301's one exception: each stock image is "
+                                 "read once, in memory). Stdlib at import; numpy, Pillow and onnxruntime "
+                                 "load lazily.",
+                         "governed_by": ["D2", "D3", "D76", "D88", "D170", "D213", "D301"]},
             "cost.py": {"does": "the price sheet, and the ONE place it is applied — the preflight's "
                                 "estimate before a send, the collect's record of what the send used, "
                                 "and server/pipeline_routes.py:_usage filling the figure in for a run "
@@ -4874,6 +4898,30 @@ COMPONENTS = [
                         "for the reason D43 spends its length on: two spellings of one "
                         "derivation is the drift, not the arithmetic.",
             },
+            "export-matcher-model.py": {
+                "does": "a developer step, run once per model in a throwaway venv that has torch: "
+                        "exports Marqo ecommerce-B's image tower to ONNX and writes the parity "
+                        "reference (torch's own vectors for fixed synthetic images). Prints the "
+                        "size and SHA-256 to pin in `identify/match.py`. The app never runs it.",
+                "governed_by": ["D2"],
+            },
+            "match-heldout.py": {
+                "does": "the held-out check on the free reader's accept rule, a gate before adoption "
+                        "and not part of `make check`: reads photographs the spike never saw (the "
+                        "store read-only, minus an exclude list, or a manifest), scores each answer "
+                        "against the owner's confirmed identification, and fails on any wrong answer "
+                        "accepted or any absent-truth card accepted. Reports the accepted share and "
+                        "the rule-of-three bound and sets no pass mark on them. Exit 2 is a read that "
+                        "could not run.",
+                "governed_by": ["D2", "D88"],
+            },
+            "match-parity.py": {
+                "does": "proves a matcher model file against torch's answer with onnxruntime alone: "
+                        "the pinned size and SHA-256, and a cosine of at least 0.9999 on every "
+                        "reference vector through the shipped Pillow and numpy preprocessing. "
+                        "Exit 2 is a file that could not be read, never a pass.",
+                "governed_by": ["D2"],
+            },
             "audit-history.py": {
                 "does": "replays today's auditor over every historical tree to answer one "
                         "question: which checks have ever had something to say. Reads "
@@ -7575,7 +7623,7 @@ COMPONENTS = [
                                      "one fill is the spend button inside the panel.",
                              "governed_by": ["D5", "D33", "D38", "D39", "D100", "D103", "D104",
                                              "D105", "D117", "D118", "D180", "D218",
-                                             "D291"]},
+                                             "D291", "D313"]},
             # ---- the runs screen's parts (Banchi, 2026-09) ----
             "src/RunsStage.tsx": {"does": "WHERE A RUN IS, in one vocabulary for the list, the "
                                           "run panel and Home. The server says which of the four "
@@ -7642,7 +7690,17 @@ COMPONENTS = [
                                      "governed_by": ["D13", "D27", "D32", "D33", "D39", "D180",
                                                      "D183", "D56", "D58", "D65", "D76", "D277",
                                                      "D94", "D91", "D118", "D145", "D172", "D174",
-                                                     "D196", "D269", "D275", "D291"]},
+                                                     "D196", "D207", "D269", "D275", "D291", "D313",
+                                                     "D2"]},
+            "src/engines.ts": {"does": "WHO READS THE CARDS: the two engines the runs sheet offers, `marqo-b` "
+                                       "(the free reader, which matches a photograph to stock photos) and "
+                                       "`haiku` (the paid read), and the free read as the default pick. It "
+                                       "holds `HAIKU_NAME_TOOLTIP` and `MATCHER_NAME_TOOLTIP`, the two "
+                                       "strings D196 allows to name a model, on the owner's word. The "
+                                       "`no mechanism on screen` row reads each constant from this file and "
+                                       "exempts exactly that text, so each is declared on one line with one "
+                                       "pair of quotes.",
+                               "governed_by": ["D2", "D196"]},
             "src/RunsLog.tsx": {"does": "a command's stdout, verbatim, in a well that follows its "
                                         "tail, counts its lines, folds and copies. NOTHING HERE "
                                         "SUMMARISES WHAT A COMMAND SAID — D33 puts every "

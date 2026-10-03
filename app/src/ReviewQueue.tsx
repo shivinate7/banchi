@@ -2547,6 +2547,16 @@ function Facts({ row }: { row: Row }) {
       mono: true,
     },
     { label: 'Photo read', value: text(entry.read.detected_finish) ?? 'none', mono: true },
+    ...(entry.read.matcher_pick
+      ? [
+          {
+            label: 'Free reader',
+            value: [entry.read.matcher_pick.name, entry.read.matcher_pick.number]
+              .filter((part) => part)
+              .join(' ') || 'no pick',
+          },
+        ]
+      : []),
     {
       label: 'Queue',
       value:

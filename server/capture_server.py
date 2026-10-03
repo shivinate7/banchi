@@ -67,7 +67,11 @@
     POST   /pipeline/waiting               the photographed, unclaimed cards a spend over a
                                            selection would buy. FREE, decodes nothing
     POST   /pipeline/crop-preview          what the reading sends: the cut, and the digits
-    POST   /pipeline/identify              START A RUN. THE ONE THAT SPENDS MONEY
+    POST   /pipeline/identify              START A RUN. THE ONE THAT SPENDS MONEY (with the free
+                                           engine it spends nothing, and still asks)
+    GET    /pipeline/match                 is the free reader prepared. FREE, loads no model
+    POST   /pipeline/match/prepare         the owner's Prepare press: download the model file,
+                                           read each stock photo once. Spends no money
     GET    /tcg/sets                       D65's real set names for a game, for the hint field
     GET    /pipeline/submissions           the cards a live run has already claimed and is
                                            paying to read. FREE, and the count that comes
@@ -16607,6 +16611,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # holds nothing — the count that has to be on screen before the control that
                 # releases one exists, which is `GET /boxes/<box>/photos`' shape (D89).
                 return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_submissions())
+            if path == "/pipeline/match":
+                # IS THE FREE READER PREPARED (`docs/specs/identify-engine-pick.md`). Free: a size, a
+                # hash, an index's counts and a progress file. It loads no model.
+                return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_match())
             if path == "/pipeline/runs":
                 return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_runs())
             if path == "/pipeline/markdowns":
@@ -17163,6 +17171,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if path == "/pipeline/identify":
                 status, body = pipeline_routes.do_pipeline_identify(self._body())
                 return self._json(status, body)
+            if path == "/pipeline/match/prepare":
+                # THE OWNER'S PREPARE PRESS: downloads the model file and reads each stock photo
+                # once. It needs a `confirm` because it downloads. Nothing else in the app does.
+                status, body = pipeline_routes.do_pipeline_match_prepare(self._body())
+                return self._json(status, body)
             # THE ONE OUTBOUND CALL, and it is not the one that spends. It fetches the
             # operator's own Filtered Export from TCGplayer with the session cookie in
             # `.env`, so `join` no longer needs a file downloaded and uploaded by hand.
@@ -17456,9 +17469,10 @@ PHOTO_LANE_PREFIXES = ("/photo/", "/assets/")
 # the store lock hold all four slots for up to `LOCK_TIMEOUT_SECONDS`, and `/status` is what the
 # app asks "is the server alive" with. Each route below was probed on a scratch store with the
 # lock held and answers without it. NOT HERE ON PURPOSE: the heavy lock-free reads (`/orders`,
-# `/inventory`, `/boxes`, `/pipeline/*`). They are GIL-bound, and sharing the photo bound with
+# `/inventory`, `/boxes`, `/pipeline/*` except `/pipeline/match`, which is a stat, one cached
+# hash verdict and a count query, polled every few seconds). They are GIL-bound, and sharing the photo bound with
 # them would give back the photo starvation this lane exists to remove. That is DEBT11's open gap.
-PHOTO_LANE_EXACT = ("/status", "/queues", "/capture/sitting", "/games")
+PHOTO_LANE_EXACT = ("/status", "/queues", "/capture/sitting", "/games", "/pipeline/match")
 # How many bytes the sorter peeks: enough for the request line of every route above.
 _SORT_PEEK_BYTES = 64
 # How long a silent connection waits for its first byte before it goes to the slot pool by default.

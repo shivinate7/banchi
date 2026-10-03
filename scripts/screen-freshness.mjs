@@ -201,6 +201,7 @@ const RECORDED = {
     'getProductRealized',                     // the product page's realized-price read
     'getPriceMovers', 'getSavedTrends',       // #/pricing's movers and the saved overnight trends
     'getSkuPhotosSettled',                    // the stock-photo read that waits out a cold group
+    'getMatchState',                          // the free reader's readiness (model, fingerprints)
     // The markdown lens's three (D103) — the survey table, and D278's history and trends
     // strip re-addressed at a stamp instead of a run.
     'getMarkdownTable', 'markdownHistory', 'markdownTrends',
@@ -242,6 +243,7 @@ const RECORDED = {
     'getInventorySets',
   ],
   writes: [
+    'prepareMatch',                           // the free reader's one-time setup press
     'capture', 'updateCard', 'undoCapture', 'reshootPhoto', 'answerReview', 'standDown',
     'undoStandDown', 'undoAnswer', 'answerReviewGroup', 'markSold', 'undoSale', 'retireCard',
     'undoRetire', 'createBox', 'updateBox', 'openSection', 'applyBoxClaims', 'removeCardInPlace',
