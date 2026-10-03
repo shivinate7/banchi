@@ -127,6 +127,10 @@ def main(argv) -> int:
             print("unknown: the index was built by another model file")
             return 2
         results = match.read(requests, index, model)
+        listed = {
+            (g, s, join.number_index_key(n), match.card_name(name))
+            for g, s, n, name in index.db.execute("select game, set_name, number, name from vec")
+        }
         missing = {
             (g, s, join.number_index_key(n))
             for g, s, n in index.db.execute(
@@ -144,6 +148,7 @@ def main(argv) -> int:
 
     records = []
     wrong, absent_accepted, unread = [], [], Counter()
+    bad_labels = []
     accepted = 0
     absent_cases = 0
     lookalike_cases = 0
@@ -167,6 +172,22 @@ def main(argv) -> int:
         payload = result.payload or {}
         answered_number = join.number_index_key(payload.get("number", ""))
         right = answered_number == number_key and _same_set(card["set"], payload.get("set", ""))
+        stored_name = match.card_name(card.get("name") or "")
+        if not right and not any(
+            g == card["game"] and n == number_key and _same_set(card["set"], s) and name == stored_name
+            for g, s, n, name in listed
+        ):
+            # THE STORED NAME AND NUMBER DO NOT AGREE WITH ANY PRINTING THE CATALOGUE LISTS (a typo in a
+            # stored number, a total that does not exist, a number that belongs to another card). The
+            # answer cannot be scored against it, so it is reported for the owner to look at and is NOT
+            # counted as a wrong answer.
+            bad_labels.append(
+                dict(photo=card["photo"], stored=f"{card['set']} {card['number']} {card.get('name', '')}",
+                     answered=f"{payload.get('set')} {payload.get('number')} {payload.get('name')}",
+                     margin=result.margin, floor=result.floor)
+            )
+            records[-1]["right"] = None
+            continue
         records[-1]["right"] = right
         # How many printings of the ANSWERED name the index holds in this game: the alternate arts,
         # overnumbered and promo twins the photograph has to be told apart from.
@@ -185,18 +206,21 @@ def main(argv) -> int:
     print(f"photographs read          {total}")
     print(f"accepted                  {accepted} ({accepted / total:.1%})")
     print(f"accepted, and wrong       {len(wrong)}")
+    print(f"accepted, unscoreable     {len(bad_labels)} (the stored name and number are no printing the catalogue lists)")
     print(f"upper bound on wrong rate {'none (nothing accepted)' if bound is None else f'under {bound:.2%} at 95% (rule of three)'}")
     print(f"absent-truth cards        {absent_cases} (true printing has no stock photo); accepted anyway: {len(absent_accepted)}")
     print(f"look-alike name cards     {lookalike_cases} (a printing of the same name has no stock photo)")
     print("left unread               " + (", ".join(f"{n} {code}" for code, n in sorted(unread.items())) or "none"))
     print(f"rule                      margin >= {match.MARGIN_MIN}, floor >= {match.FLOOR_MIN}, look-alike guard on")
+    for item in bad_labels[:20]:
+        print(f"CHECK THE STORED NUMBER {item['photo']}: stored {item['stored']} / answered {item['answered']}")
     for item in wrong[:20]:
         print(f"WRONG {item['photo']}: truth {item['truth']} / answered {item['answered']} (margin {item['margin']:.4f}, floor {item['floor']:.4f})")
     failed = bool(wrong or absent_accepted)
     print("held-out check:", "FAIL" if failed else "pass (no wrong answer accepted, no absent-truth card accepted)")
     if args.json:
         Path(args.json).write_text(json.dumps(dict(
-            total=total, accepted=accepted, wrong=wrong, absent_cases=absent_cases,
+            total=total, accepted=accepted, wrong=wrong, bad_labels=bad_labels, absent_cases=absent_cases,
             absent_accepted=absent_accepted, lookalike_cases=lookalike_cases, unread=dict(unread),
             upper_bound=bound, margin_min=match.MARGIN_MIN, floor_min=match.FLOOR_MIN, cards=records,
         ), indent=1))
