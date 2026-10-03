@@ -55,7 +55,7 @@ cards. So the loop is: START, wait for COMPLETE, pause `DEAL_GAP_MS`, repeat.
   "Lost the dispenser. Check it is on, then connect again.", "No answer. Check it is on and nothing
   else is using it.", "Stopped: a card was not photographed. Resume captures first.", "The dispenser
   reported a fault. Check it, then connect again.", "Bluetooth is off. Turn it on, then connect again.",
-  "Could not connect. Check it is on, then try again." A cancelled chooser says nothing. The line is
+  "Could not connect. Check it is on, then try again." A canceled chooser says nothing. The line is
   muted small text with two lines reserved.
 - Tokens only. No hotkey. No storage key.
 
