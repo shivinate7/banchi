@@ -227,9 +227,31 @@
    row's single cap — widened for THIS row alone, never the shared `.capture-row` template,
    so every other row's column stays put. */
 .capture-row-keypair { grid-template-columns: 42px auto auto minmax(0, 1fr) 14px; }
-/* No chevron: the switch row's value column takes the 14px a chevron would hold, so 'Off' is never clipped by a long label in a narrow rail. */
-.capture-row-switch { grid-template-columns: 22px auto minmax(0, 1fr) auto; }
-.capture-row-switch .capture-lab { overflow: hidden; text-overflow: ellipsis; }
+/* The switch row has no fold, so its chevron column holds a switch track instead: same five columns as
+   its siblings, so 'On'/'Off' ends where theirs do. The kit has no switch; this one is local to the one row
+   that needs it, drawn with tokens. */
+.capture-track {
+  position: relative;
+  width: 14px;
+  height: 8px;
+  border-radius: var(--bn-r-full);
+  background: var(--bn-ink-4);
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.capture-track::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--bn-surface);
+  transition: translate var(--bn-t-fast) var(--bn-ease);
+}
+.capture-row-switch:disabled .capture-track { opacity: 0.4; }
+.capture-row-switch[aria-checked='true'] .capture-track { background: var(--bn-accent); }
+.capture-row-switch[aria-checked='true'] .capture-track::after { translate: 6px 0; }
 .capture-row-icon { color: var(--bn-ink-3); flex: none; }
 .capture-lab { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-2); white-space: nowrap; }
 /* `.capture-right` is the flex row that holds the value AND its sub-line as siblings — never
@@ -639,6 +661,9 @@
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  /* An implicit `auto` column grows to the foot's nowrap min-content (box name + tuning readout) and
+     spills past the stage, so the frame is wider than its column and clipped. Pin it to the stage. */
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
   border-radius: var(--bn-r-xl);
@@ -928,7 +953,8 @@
   font-size: var(--bn-fs-sm);
   color: var(--vf-ink-2);
 }
-.capture-foot-box { display: flex; align-items: center; gap: var(--bn-2); min-width: 0; }
+.capture-foot-box { display: flex; align-items: center; gap: var(--bn-2); min-width: 96px; flex: 0 1 auto; overflow: hidden; }
+.capture-foot-box > .capture-foot-next { flex: none; }
 .capture-foot-box > .bn-icon { color: var(--vf-ink-3); flex: none; }
 .capture-foot-box-name { font-weight: 600; color: var(--vf-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .capture-foot-next {
@@ -1248,12 +1274,13 @@
 .capture-carried { animation: capture-drop var(--bn-t-slow) var(--bn-ease-spring) both; }
 
 /* ---- tuning drawer: a pill in the stage foot, a panel floating above it ------------------------------------------ */
-.capture-tuning { position: relative; flex: none; }
+.capture-tuning { position: relative; flex: 0 1 auto; min-width: 0; }
 .capture-tuning > summary {
   display: flex;
   align-items: center;
   gap: var(--bn-1-5);
   height: 26px;
+  min-width: 0;
   padding: 0 var(--bn-2) 0 var(--bn-2);
   border-radius: var(--bn-r-full);
   background: var(--bn-surface-2);
@@ -1274,6 +1301,7 @@
   font-weight: 500;
   color: var(--vf-ink-3);
   max-width: 220px;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1593,3 +1621,9 @@
   .capture-entrybox .capture-filter { min-height: var(--bn-control-h-sm); }
   .capture-note-wrap .bn-input { min-height: var(--bn-control-h-sm); }
 }
+
+/* A long box name ellipsizes; "Identify" and "on Runs" stay whole and the button stays inside its card. */
+.capture-onward .bn-btn { min-width: 0; max-width: 100%; }
+.capture-onward-label { display: flex; gap: var(--bn-1); min-width: 0; }
+.capture-onward-end { flex: none; }
+.capture-onward-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
