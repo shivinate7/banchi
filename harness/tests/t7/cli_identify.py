@@ -2715,7 +2715,7 @@ def check_identify_preflight_stage(checks: Checks) -> None:
             )
             checks.ok(
                 spoken(first, "crop").startswith(
-                    "crop            to the detected card +8% — "
+                    "crop            to the detected card — "
                 )
                 and "of the 2 being sent" in spoken(first, "crop"),
                 "THE CROP COUNTERS' DENOMINATOR IS THE SEND LIST AND THE LINE SAYS SO. "
@@ -5444,10 +5444,139 @@ def check_cli_refusals(checks: Checks) -> None:
         )
 
 
+def check_run_and_preview_share_locate_card(checks: Checks) -> None:
+    """D125: a paid run and the crop preview cut with `identify.images.prepare_located`.
+
+    The finder is stubbed, never the model: `locate_card` answers a dfine box we choose and
+    `detect_card` answers a different one, so each assertion names which finder it reached.
+    The batch is faked, so nothing is paid for.
+    """
+    from unittest import mock
+
+    from PIL import ImageDraw
+
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+    from identify import images
+    from server import pipeline_routes
+
+    geo = images.geometry
+    size = (1500, 2600)
+    base = dict(angle=0.0, fill=1.0, aspect=0.714)
+    # A card-shaped box that IS the card, and one cut out of its flat interior (refused).
+    good = dict(left=0.2, top=0.19, right=0.87, bottom=0.73)
+    inner = dict(left=0.35, top=0.40, right=0.45, bottom=0.52)
+
+    def photograph(path):
+        frame = images.Image.new("RGB", size, (26, 28, 32))
+        ImageDraw.Draw(frame).rectangle((300, 500, 1300, 1896), fill=(238, 232, 214))
+        frame.save(path, format="JPEG", quality=92)
+
+    def fake_run_batch(requests, log=None, on_submit=None):
+        return batch.BatchRun(
+            outcomes={
+                r.custom_id: batch.Outcome(
+                    r.custom_id,
+                    batch.SUCCEEDED,
+                    identification=prompt.parse(
+                        {
+                            "name": "Pikachu",
+                            "number": "025",
+                            "printed_total": "102",
+                            "finish": "normal",
+                            "confidence": "high",
+                        },
+                        r.strategy,
+                    ),
+                )
+                for r in requests
+            }
+        )
+
+    def scenario(located, detected):
+        """-> (box the run cut with, the preview's sample, the frame's box)."""
+        cut: list = []
+        real_prepare = images.prepare
+
+        def spying_prepare(path, **kwargs):
+            cut.append(kwargs.get("crop_box"))
+            return real_prepare(path, **kwargs)
+
+        with isolated_home() as home:
+            caps = Path(home) / "captures" / "cards" / "box3"
+            caps.mkdir(parents=True)
+            photograph(caps / "0001.jpg")
+            (caps / "0001.json").write_text(
+                json.dumps({"box": 3, "index": 1, "position": 1, "game": "pokemon"}), "utf-8"
+            )
+            with mock.patch.object(geo, "locate_card", lambda *a, **k: located), mock.patch.object(
+                geo, "detect_card", lambda *a, **k: detected
+            ), mock.patch.object(cmd_identify.batch, "run_batch", fake_run_batch), mock.patch.object(
+                images, "prepare", spying_prepare
+            ):
+                with quiet():
+                    code = cmd_identify.run(
+                        cli_entry.build_parser().parse_args(["identify", str(caps), "--crop"]),
+                        lambda line: None,
+                    )
+                checks.equal(code, 0, "the run exits 0")
+                run_cut = list(cut)  # the run's calls only; the preview's come after
+                sample = pipeline_routes.do_pipeline_crop_preview(
+                    {"box": 3, "crop": True, "max_edge": 1200}
+                )["sample"]
+            return run_cut, sample
+
+    # 1. The run cuts at locate_card's dfine box, padded 4% a side.
+    dfine = geo.CardBox(method="dfine", **base, **good)
+    tone = geo.CardBox(method="tone", **base, left=0.25, top=0.21, right=0.83, bottom=0.71)
+    cut, sample = scenario(dfine, tone)
+    checks.equal(
+        [b.method for b in cut if b is not None],
+        ["dfine"],
+        "a run crops with locate_card's box: the one prepare call carries the dfine box, "
+        "not detect_card's",
+    )
+    cw, ch = (good["right"] - good["left"]) * size[0], (good["bottom"] - good["top"]) * size[1]
+    left, top, right, bottom = images.crop_rect(size, cut[-1])
+    checks.ok(
+        abs((right - left) - cw * 1.08) < 2 and abs((bottom - top) - ch * 1.08) < 2,
+        "and it cuts at that rect with the 4% dfine pad a side",
+        f"{right - left:.0f}x{bottom - top:.0f} against {cw * 1.08:.0f}x{ch * 1.08:.0f}",
+    )
+    # 3. The preview draws the rect the run cut.
+    checks.equal(
+        tuple(sample["rect"]),
+        (left, top, right, bottom),
+        "the preview's rect equals the run's crop_rect for the same photograph",
+    )
+    checks.equal(sample["method"], "dfine", "and the preview names the same finder")
+
+    # 2. A refused dfine box falls back to detect_card's box, in the run and the preview.
+    bad = geo.CardBox(method="dfine", **base, **inner)
+    probe = images.Image.new("RGB", size, (26, 28, 32))
+    ImageDraw.Draw(probe).rectangle((300, 500, 1300, 1896), fill=(238, 232, 214))
+    checks.ok(
+        images.crop_refusal(probe, bad) is not None and images.crop_refusal(probe, tone) is None,
+        "fixture: the dfine box is refused and the fallback box is accepted",
+    )
+    cut, sample = scenario(bad, tone)
+    checks.ok(
+        bool(cut) and cut[-1] is not None and cut[-1].method == "tone",
+        "a refused dfine box falls back: the run's last cut is detect_card's box",
+        str([b and b.method for b in cut]),
+    )
+    checks.equal(
+        (sample["method"], tuple(sample["rect"] or ())),
+        ("tone", tuple(images.crop_rect(size, tone))),
+        "and the preview ends on detect_card's box and rect too",
+    )
+
+
 CHECKS = (
     check_cli_seams,
     check_code_ledger,
     check_identify_preflight_stage,
+    check_run_and_preview_share_locate_card,
     check_review_stand_down,
     check_review_catalog,
     check_correct_answer,
