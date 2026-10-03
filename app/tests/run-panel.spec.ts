@@ -1708,7 +1708,7 @@ test('no DRAWER is picked for the operator, and the default start is a state rat
      control that spends still does not exist until that has answered, which is asserted in its
      own case above. */
   await openComposer(page)
-  await expect(page.locator('.runs-composer-note')).toContainText('Pending')
+  await expect(page.locator('.runs-composer-note')).toContainText('Everything that still needs reading')
   const next = page.getByRole('button', { name: /^Next: photos$/ })
   await expect(next).toBeEnabled()
 
