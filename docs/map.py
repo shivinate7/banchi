@@ -223,7 +223,7 @@ SHIPPED = [
               "channel decision is RECORDED AND NOT EXECUTED; six venue families were researched and "
               "every one came back marginal, which is what the track is actually waiting on."},
     {"n": 19, "on": "2026-08-31", "title": "The rig's guards, and the docs that check themselves",
-     "note": "D42, D43, D44, D47, D138, D60, D140, D73, D74, D80. Not a feature and it is a step anyway, "
+     "note": "D42, D43, D47, D138, D60, D140, D73, D74, D80. Not a feature and it is a step anyway, "
               "on the same footing as steps 1-3: main moves only by pull request with two local git "
               "hooks standing in for branch protection GitHub will not sell on this plan, every "
               "checkout gets its own store AND its own ports so a worktree can no longer answer the "
@@ -2304,8 +2304,7 @@ COMPONENTS = [
             "githooks/pre-commit": {
                 "does": "the commit gate: fixtures read-only, every staged image outside "
                         "captures/ decoded for a QR and refused on a decode or an unavailable "
-                        "scanner (`PKMNSCAN_QR=off` is the hatch), no iCloud Drive conflict "
-                        "copy (`foo 2.py`) staged while the repo still lives there, no "
+                        "scanner (`PKMNSCAN_QR=off` is the hatch), no "
                         "printed code-card layout in the staged diff, no symlink whose target "
                         "leaves the repository (D47 — a tracked absolute link points at "
                         "itself in the tree it names, and checking it out removes the "
@@ -2321,7 +2320,7 @@ COMPONENTS = [
                 # after it drifts, which is why an edit has to be stopped and not caught.
                 # D14 is why a code-shaped literal is worth a rule at all: the other track
                 # on the shared rig handles bearer instruments.
-                "governed_by": ["D11", "D14", "D16", "D18", "D24", "D44", "D47", "D58", "D70",
+                "governed_by": ["D11", "D14", "D16", "D18", "D24", "D47", "D58", "D70",
                                 "D92", "D295", "D303", "D312"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
                         "declare. Listed, so its absence would be a finding; a sibling "
@@ -2344,18 +2343,7 @@ COMPONENTS = [
                         "reset, `branch -f`, `update-ref`, delete. Allows exactly one thing, "
                         "a move to a commit origin/main already carries, which is what "
                         "pulling a merged pull request looks like. PKMNSCAN_MAIN=off is the "
-                        "visible escape hatch, and every refusal prints it. AND SINCE "
-                        "2026-09-12 IT ALSO REPORTS WHAT main IS CARRYING once it has moved "
-                        "(D140): at the `committed` phase it reads "
-                        "the commit refs/heads/main just landed on and prints, loudly, when "
-                        "that commit holds an unclaimed `## D-<slug>` heading. It refuses "
-                        "nothing and exits 0 whatever it finds — by then the pull request is "
-                        "merged and origin carries the slug regardless, so holding this clone "
-                        "back would repair nothing. It lives here rather than only in "
-                        "the merge tool for the one property no script in a checkout has: "
-                        "core.hooksPath is a single installed directory in the common .git "
-                        "dir, so every working tree of this clone runs THIS copy, and 24 of "
-                        "the 30 were behind main's merge script the day it was written.",
+                        "visible escape hatch, and every refusal prints it.",
                 # A ref hook rather than a commit hook because the incident that produced it
                 # created no commit: a fast-forward moves a ref and runs no commit hook. D42
                 # carries that argument and the measured reason the payload's `old` column is
@@ -2363,44 +2351,9 @@ COMPONENTS = [
                 # value, so `old == new` is what a DELETION looks like. D18 governs the shape
                 # rather than the content: this file is on the path that decides whether a
                 # commit proceeds, so it reads and refuses and never writes.
-                "governed_by": ["D18", "D42", "D140",
-                                ],
+                "governed_by": ["D18", "D42"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE either — no suffix. It is the "
                         "case the comment above this modules block predicted by name.",
-            },
-            "githooks/post-merge": {
-                "does": "prints the `make hooks` reminder the moment a pull makes the "
-                        "installed copy of these hooks stale. Before it, that was visible "
-                        "only in `make status`, which is exactly the moment nobody runs it.",
-                # Nothing is enforced here and nothing should be: a post-merge hook that
-                # refused would refuse AFTER the merge, which is the wrong end of the
-                # operation. It prints.
-                "governed_by": ["D42"],
-                "note": "Extensionless, unscanned, listed by hand — see the sibling below. "
-                        "It and post-checkout were missing from this list from the day they "
-                        "landed until 2026-09-05, which is what `hook roster` now reads.",
-            },
-            "githooks/post-checkout": {
-                "does": "the same reminder on a branch switch, for the same reason: "
-                        "core.hooksPath never travels, so a checkout can leave the armed "
-                        "copy behind the tree. AND D158's second, unrelated job since "
-                        "2026-09-11: when the PRIMARY checkout moves to anything that is "
-                        "not main it says so, because D138 serves the owner's real store out "
-                        "of that one directory and the branch it stands on decides which "
-                        "code does it. A linked worktree is silent — D43 gave it its own "
-                        "store and its own ports to be wrong on its own. It WARNS and never "
-                        "refuses: git has no `pre-checkout` hook, so by the time this runs "
-                        "the switch has already happened. AND SINCE 2026-09-12 IT SAYS WHAT "
-                        "THE SERVER WILL DO ABOUT IT (D158): whether a supervisor "
-                        "is actually live here — D158's warning asserted one was, checking "
-                        "nothing — and whether the branch just checked out carries the "
-                        "refusal in its own scripts/serve.py, naming `make down` when it does "
-                        "not. THIS HALF LIVES IN A HOOK because `make hooks` COPIES it into "
-                        "the common `.git` dir, so the copy git runs is the one thing a "
-                        "branch switch cannot rewrite — while scripts/serve.py, where the "
-                        "refusal itself lives, is exactly what a switch replaces.",
-                "governed_by": ["D42", "D43", "D138", "D158", "D176"],
-                "note": "Extensionless, unscanned, listed by hand.",
             },
             "githooks/pre-push": {
                 "does": "D42's remote half: refuses any push whose REMOTE ref is main, which "
@@ -2526,37 +2479,11 @@ COMPONENTS = [
                         "legitimate pull, the escape hatch and a fresh clone. A refusal must "
                         "carry the hook's own marker to count, because git declines some of "
                         "these by itself and two cases were green on that before the check "
-                        "existed. AND SIX CASES OVER D158's BRANCH WARNING since "
-                        "2026-09-11, which assert OUTPUT and not exit status: post-checkout "
-                        "exits 0 whichever way it decides, so an `expect allow` case would "
-                        "pass on a hook that printed nothing at all. `main` is a real local "
-                        "branch in the two worktree cases, so their silence can only come "
-                        "from the primary/linked test rather than from the gate beside it. "
-                        "AND SIX MORE OVER THE UNCLAIMED-ID REPORT since 2026-09-12 "
-                        "(D140): a fixture main is moved onto a "
-                        "slugged commit and the report is asserted by its marker, by the id "
-                        "it names, by firing ONCE, and by main having moved anyway — it "
-                        "refuses nothing, so exit status says nothing about it. The case that "
-                        "proves it reads `refs/heads/main` and not every line of the payload "
-                        "uses `update-ref --stdin`, because a fetch with two refspecs issues "
-                        "ONE TRANSACTION PER REF on this machine — measured, rather than "
-                        "assumed, when the arm came back vacuous. "
-                        "AND THREE MORE THE SAME DAY for what a switch says the SERVER "
-                        "will do (D158): a live supervisor "
-                        "whose serve.py carries the refusal, one whose serve.py predates it, "
-                        "and no supervisor at all — which must claim nothing about one, "
-                        "D158's warning having asserted a running server without checking. "
-                        "The first two copy THIS REPO'S OWN serve.py in, the second through a "
-                        "sed that renames the token the hook greps for, so renaming that "
-                        "token is a failed commit rather than a hook that quietly tells "
-                        "every switch the guard is missing.",
+                        "existed.",
                 # D18 is why it is in `make check` and never in the git hook: it writes. It has
                 # a second reason the audit's self-test does not — it exercises the guard by
                 # violating it, so wired into the commit path it would refuse its own commits.
-                # D43 and D138 join with D158: the cases turn on a linked worktree having its own
-                # store, and on the primary checkout being the one the live server is built from.
-                "governed_by": ["D18", "D42", "D43", "D138", "D140", "D158", "D176", "D303",
-                                "D312"],
+                "governed_by": ["D18", "D42", "D303", "D312"],
             },
             "lan-check.py": {
                 "does": "answers whether the owner's LAN URL still works, end to end and from "
@@ -2588,7 +2515,7 @@ COMPONENTS = [
                         "`~/.claude/sessions/<pid>.json`, never inferred from mtimes; see "
                         "`_same_process` for why every unreadable case resolves to LIVE. "
                         "Repo-agnostic: no import from this tree.",
-                "governed_by": ["D18", "D42", "D44", "D47", "D138", "D127", "D305"],
+                "governed_by": ["D18", "D42", "D47", "D138", "D127", "D305"],
             },
             "serve-selftest.py": {
                 "does": "THE SUPERVISOR'S BUILD JOB, PROVED AGAINST A THROWAWAY TREE (D138). "
@@ -2684,7 +2611,7 @@ COMPONENTS = [
                         "session does not count itself as somebody else, and an unreadable "
                         "liveness answer reads as live. The sweep proper is claude-settings' "
                         "and is proved by its own tests.",
-                "governed_by": ["D18", "D44", "D138", "D127",
+                "governed_by": ["D18", "D138", "D127",
                                 "D305"],
             },
             "reap.py": {
@@ -3323,18 +3250,16 @@ COMPONENTS = [
                 "governed_by": ["D18", "D127", "D171", "D173"],
             },
             "guard-shell.py": {
-                "does": "the PreToolUse hook on Bash AND Write|Edit that refuses six shell "
+                "does": "the PreToolUse hook on Bash AND Write|Edit that refuses seven shell "
                         "mistakes this repo has already paid for, each with a measured "
                         "incident: `git checkout`/`git restore` over a MODIFIED path (240 "
                         "lines destroyed 2026-09-06, and the same command typed again over "
                         "CLAUDE.md on 2026-09-12); a write outside this checkout (~1,500 "
                         "lines into the owner's main tree on `main`, hot-reloaded into their "
-                        "live capture server); `gh api -f` with no method (a field implies a "
-                        "body, so a GET was POSTed and hung past a tool timeout); `ln -s` at "
-                        "an existing path (`harness/images/images`, and 133 MB renamed away "
-                        "by iCloud); a polling loop (a `pgrep` waiter whose pattern is "
+                        "live capture server); a polling loop (a `pgrep` waiter whose pattern is "
                         "not the process, and a backgrounded driver that ran 119 rounds over "
-                        "3h58m across a compaction); and `git push <remote> HEAD` (or the "
+                        "3h58m across a compaction); a stash; a hard reset; a narrated wait; and "
+                        "`git push <remote> HEAD` (or the "
                         "current branch's own literal name) when the tracked upstream is a "
                         "different, NON-DEFAULT branch (a coordinator's push silently created "
                         "a stray `pr-h-readings-table-local` on origin instead of updating the "
@@ -3348,13 +3273,14 @@ COMPONENTS = [
                         "RESOLVES RATHER THAN MATCHES TEXT, "
                         "which is reap.py's standard and the only way these have answers: "
                         "`git status --porcelain` decides whether an operand is a modified "
-                        "path, `os.path.lexists` decides whether a link destination is there, "
-                        "a backgrounded command's loop is READ out of the shell script it "
+                        "path, a backgrounded command's loop is READ out of the shell script it "
                         "names, and `branch.<name>.remote`/`.merge` are read exactly as git "
                         "itself reads them. The Write|Edit half parses nothing at all, so no "
                         "shell form "
-                        "skirts it. SIX HATCHES AND NOT ONE, so the symlink clause cannot be "
-                        "disarmed by the switch that guards uncommitted work. Fails OPEN on "
+                        "skirts it. ONE HATCH PER CLAUSE, so no clause can be disarmed by the "
+                        "switch that guards another. Claude Code passes `--skip "
+                        "checkout,stash,reset` because the shared layer owns those three; "
+                        "Codex runs all seven. Fails OPEN on "
                         "its own bugs, including a missing `shell_parse.py`, and an operand it "
                         "cannot resolve is REPORTED rather than passed silently.",
                 # D171 is the ruling that a rule read once competes with the work, which is
@@ -3365,22 +3291,18 @@ COMPONENTS = [
                                 "D171", "D173", "D305"],
             },
             "guard-shell-selftest.sh": {
-                "does": "proves guard-shell.py by COMMITTING its six mistakes in a throwaway "
-                        "repository with a linked worktree. Five of the six incidents are "
+                "does": "proves guard-shell.py by COMMITTING its seven mistakes in a throwaway "
+                        "repository with a linked worktree. Four of the incidents are "
                         "PERFORMED before the guard is asked about them: 240 uncommitted lines "
                         "really destroyed by a real `git checkout`, a worktree whose root "
-                        "really differs from its main checkout's, a real "
-                        "`harness/images/images` created by a real `ln -s` at an existing "
-                        "directory, `pgrep -f` really reporting a process that merely "
+                        "really differs from its main checkout's, "
+                        "`pgrep -f` really reporting a process that merely "
                         "NAMES its pattern, and a real local branch made to track a "
                         "differently-named remote branch — the exact mechanism a background "
                         "agent's push created one by (`git push -u origin <local>:<remote>`). "
-                        "The sixth (the `gh api` field/method one) is asserted about rather than "
-                        "reproduced, because posing it would spend somebody's rate limit — so "
-                        "`gh api --help` is read instead, and the arm fails if `-f` or "
-                        "`--method` stop being gh's flags. THE FALSE POSITIVES ARE THE OTHER "
+                        "THE FALSE POSITIVES ARE THE OTHER "
                         "HALF and the git ones are RUN in the fixture first: a branch, a clean "
-                        "path, `--staged`, a named source, `-sfn`, `--method GET`, `graphql`, "
+                        "path, `--staged`, a named source, "
                         "a pid wait, a bounded retry, a foreground loop, a backgrounded "
                         "`make design-check ARGS=--wait`, the ordinary first push of a new "
                         "branch, an upstream already matching its own name, the ordinary first "
@@ -3388,7 +3310,7 @@ COMPONENTS = [
                         "default, set at birth — the case refused until the 2026-09-13 "
                         "amendment), the same case read off a real `origin/HEAD` symbolic ref "
                         "rather than the local-branch fallback, and every "
-                        "`git`/`gh`/`ln` line swept "
+                        "`git`/`gh` line swept "
                         "out of this repo's own tooling. It also asserts the platform fact the "
                         "refusal declines to assume — BSD `pgrep` excludes its own ancestors "
                         "unless `-a` — and scores every hatch in both forms off the guard's "
@@ -3477,17 +3399,6 @@ COMPONENTS = [
                 # D138 is the behaviour it is careful not to break; D18 keeps it off the commit
                 # path, exactly as the SessionStart guard beside it is kept off.
                 "governed_by": ["D18", "D138"],
-            },
-            "icloud-sweep.py": {
-                "does": "lists iCloud Drive conflict copies (`foo 2.py`) and, with --delete, "
-                        "removes ONLY those byte-identical to their original. A differing copy "
-                        "is reported and left alone — it is not provably a duplicate, and "
-                        "guessing there is how a cleanup tool destroys work. Never touches a "
-                        "tracked file: `git ls-files --others` is its only enumeration.",
-                # D44 is the decision. D18 keeps it off the gate: it is the one target in this
-                # repo that can delete a file, so it is neither in `make check` nor in the
-                # git hook.
-                "governed_by": ["D18", "D44"],
             },
             "ignore-check.sh": {"does": "the other half of D47: `git check-ignore` over every path "
                                         "a worktree provisions, asserting each is ignored WHATEVER "
@@ -3840,7 +3751,7 @@ COMPONENTS = [
                 # link this repo's own history ever produced.
                 "governed_by": ["D1", "D2", "D3", "D6", "D7", "D8", "D9", "D10", "D11", "D12",
                                 "D16", "D17", "D18", "D22", "D23", "D24", "D26", "D27", "D31",
-                                "D33", "D39", "D41", "D43", "D44", "D47", "D50", "D51", "D60",
+                                "D33", "D39", "D41", "D43", "D47", "D50", "D51", "D60",
                                 "D63", "D65", "D67", "D69", "D70", "D74", "D75", "D76", "D80",
                                 "D81", "D83", "D84", "D86", "D87", "D88", "D90", "D92", "D94",
                                 "D97", "D101", "D102", "D104", "D110", "D113", "D119",
@@ -4096,8 +4007,8 @@ COMPONENTS = [
                         "D138's live server in BOTH arms rather than only the clean one — the "
                         "arm a working session lands in is the other one, since a tree somebody "
                         "is working in has uncommitted files by definition, and it carried the "
-                        "warning without the reason. One of D158's three readers of this fact; "
-                        "the other two are githooks/post-checkout and status.py.",
+                        "warning without the reason. One of D158's two readers of this fact; "
+                        "the other is status.py.",
                 # D18 is the one that decides where this may run rather than what it does.
                 # It WRITES — a venv and a cache copy — so it belongs at session start and
                 # must never be moved onto the commit path or into `make check`. D16 is
@@ -4164,7 +4075,9 @@ COMPONENTS = [
                         "2026-09-27 ruling), with `make map` for the full text — never "
                         "permissionDecision, which would "
                         "auto-approve every Write in the project. Never blocks, never "
-                        "writes, exits 0 on its own bugs, silent for files no entry covers. "
+                        "writes, exits 0 on its own bugs, silent for files no entry covers, and "
+                        "prints once per file per session (a SessionStart `--reset` clears "
+                        "it, so a compaction prints again). "
                         "Its decision_gists() is reused by status.py, never reimplemented.",
                 # D2 and D3 are the docstring's worked examples, not rulings about the hook.
                 # D3 is the decision an agent violated because nothing told it, which is why
@@ -4550,9 +4463,9 @@ COMPONENTS = [
                 "note": "D247 is the argument: what a "
                         "guard self-test can and cannot catch, why a separate audit found all "
                         "38 targets live and none dead weight, and the one derivation gap "
-                        "found (`githooks-selftest.sh` names three of its five hooks only in "
+                        "found (`githooks-selftest.sh` names two of its three hooks only in "
                         "prose, so a hit under `scripts/githooks/` widens to the whole "
-                        "directory rather than trusting the two literal names). IT FAILS OPEN "
+                        "directory rather than trusting the one literal name). IT FAILS OPEN "
                         "IN EVERY DIRECTION: no merge-base, an unreadable diff, an EMPTY diff, "
                         "an unscoped target, and any exception raised while deriving a "
                         "subject all answer RUN. `make docs-audit`'s `guard scope` row and "
@@ -4864,7 +4777,7 @@ COMPONENTS = [
                 # Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D7", "D16", "D17", "D18", "D25", "D26", "D36", "D42", "D43", "D44",
+                "governed_by": ["D7", "D16", "D17", "D18", "D25", "D26", "D36", "D42", "D43",
                                 "D47", "D180", "D138", "D54", "D58", "D60", "D278", "D63", "D65",
                                 "D67", "D68", "D74", "D76", "D80", "D82", "D83", "D86",
                                 "D87", "D88", "D89", "D92", "D104", "D122", "D123", "D127",
@@ -4945,11 +4858,7 @@ COMPONENTS = [
                 # D42 joins because hooks() no longer merely reports a config: it encodes where
                 # the hooks must be INSTALLED, and reads NOT ARMED for the working-tree
                 # arrangement that entry started with and then had to retract.
-                # D44 governs icloud(), which is a REPORT and never an action — and which is
-                # kept now that the repo has left iCloud for that entry's amended reason: the
-                # hazard belongs to a synced directory, and a tree can be put inside one
-                # without telling this script.
-                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D127", "D138", "D158", "D179"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D80", "D86", "D88", "D127", "D138", "D158", "D179"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
@@ -4967,7 +4876,7 @@ COMPONENTS = [
                         "unasked at session start, and `make status` passes `--check` and "
                         "writes nothing. Only an ABSENT file or this repo's own shape at "
                         "the wrong port is rewritten; anything a person edited is reported "
-                        "and left alone, which is D44's asymmetry rather than a new one. "
+                        "and left alone, which is the conservative asymmetry rather than a new one. "
                         "Both writers claim the port slot FIRST, so the file never names a "
                         "hash port another checkout holds.",
                 # D43 is the whole subject — the port follows the checkout's PATH, and this
@@ -4976,11 +4885,10 @@ COMPONENTS = [
                 # previews the MAIN TREE from a worktree and the only signal is the one you
                 # were hoping for. D18 is why the `--check` path reports rather than repairs,
                 # and why none of this is on the commit path at all.
-                # D44 is the asymmetry it borrows for the conservative path: `make
-                # icloud-sweep` deletes only what is provably a duplicate and only ever
+                # The conservative path deletes only what is provably a duplicate and only
                 # reports what differs, because guessing is the one way a cleanup tool
                 # destroys work. A provisioner running unasked has more reason, not less.
-                "governed_by": ["D18", "D43", "D44",
+                "governed_by": ["D18", "D43",
                                 "D261"],
                 "note": "STDLIB ONLY, AND BARE `python3` MUST RUN IT. The hook calls this "
                         "BEFORE it builds `.venv`, because the port is wanted whether or "
@@ -7916,10 +7824,10 @@ COMPONENTS = [
                                         "trend leave the row, below 559px the row is two lines with Market under the "
                                         "price. Below the shell's 640 step the bar is fixed above the tab bar and the "
                                         "list clears its measured height. Money in the price field is mono (D221).",
-                                "governed_by": ["D5", "D9", "D28", "D38", "D41", "D86", "D50",
-                                                "D54", "D56", "D278", "D277",
-                                                "D103", "D105", "D117", "D118", "D123", "D125",
-                                                "D197", "D218", "D221", "D273"]},
+                                "governed_by": ["D5", "D9", "D28", "D38", "D41", "D50", "D54",
+                                                "D56", "D86", "D103", "D105", "D117", "D118",
+                                                "D123", "D125", "D197", "D218", "D221", "D273",
+                                                "D277", "D278", "D313"]},
             # D278 is the screen half of pipeline/pricehistory.py. D8 governs it because that
             # entry names the export as the pricing source: this draws a reading BESIDE that
             # figure and writes nothing, and the day it prices anything is a change to D8.

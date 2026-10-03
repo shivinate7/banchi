@@ -1083,7 +1083,7 @@ def off_main(root: Path = REPO_ROOT) -> Optional[str]:
     all — a container copy, the throwaway tree `scripts/serve-selftest.py` builds — has no
     branch to be wrong about and reads as `None`.
 
-    AND IT IS GATED ON `main` BEING A REAL LOCAL BRANCH, the same gate `post-checkout` uses, so
+    AND IT IS GATED ON `main` BEING A REAL LOCAL BRANCH, the same gate `scripts/primary_sync.py` uses, so
     a checkout of another repository that happens to run this file is not in violation for
     calling its trunk something else. It is also what keeps this quiet on CI, where the checkout
     is a primary one standing on a detached HEAD with no local `main` — measured, and the reason

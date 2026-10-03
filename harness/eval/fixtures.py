@@ -59,8 +59,7 @@ API_KEY_ENV = "POKEMONTCG_API_KEY"
 # WHERE THE MIRROR LIVES, AND IT IS A KNOB BECAUSE OF ITS SIZE (D15). `PKMNSCAN_IMAGE_MIRROR`
 # has been documented since build-order step 9 was written and read by nothing until 2026-08-30,
 # when D47 made setting it the remedy rather than a preference: the repository was inside iCloud
-# Drive, and 133 MB of derived binaries syncing there is what produced the conflict copies D44
-# refuses at the commit.
+# Drive, and 133 MB of derived binaries syncing there is what produced the conflict copies.
 #
 # IT IS UNSET AGAIN AS OF 2026-08-29 AND THE MIRROR IS BACK AT THE DEFAULT BELOW, the repo having
 # left iCloud and taken that reason with it (D47, amended). Unset is not unbuilt: this line still

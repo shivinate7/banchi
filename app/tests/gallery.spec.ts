@@ -1269,3 +1269,25 @@ test('a meter with many cells never paints them over its end label at a narrow w
     expect(apart, 'no cell is painted over the label').toBe(true)
   }
 })
+
+/* WHOLE PHOTOGRAPH, NEVER A CROP: THE FULFILLER'S PHOTOGRAPH DRAWS THE WHOLE IMAGE, AT OR OVER THE SCREEN FLOOR.
+ *
+ * `object-fit: cover` filled the frame by construction, so a floor on painted size (320px, short
+ * edge) passed while the card's bottom edge, where its number and rarity sit, was cut off. A
+ * detector reading would catch that and is slow and can refuse, so this asks the two
+ * things that make a clipping impossible: the fit is not a clipping one, and the frame has the
+ * image's own aspect, so `contain` leaves no bar and the painted short edge is the frame's. */
+test('the fulfiller photograph holds the whole image, clear of the 320px floor', async ({
+  page,
+}) => {
+  const photo = page.locator(PHOTO).first()
+  await expect(photo).toHaveCSS('object-fit', 'contain')
+  const box = await photo.evaluate((node) => {
+    const img = node as HTMLImageElement
+    const r = img.getBoundingClientRect()
+    return { w: r.width, h: r.height, nw: img.naturalWidth, nh: img.naturalHeight }
+  })
+  expect(box.nw).toBeGreaterThan(0)
+  expect(Math.abs(box.w / box.h - box.nw / box.nh)).toBeLessThan(0.01)
+  expect(Math.min(box.w, box.h)).toBeGreaterThanOrEqual(320)
+})

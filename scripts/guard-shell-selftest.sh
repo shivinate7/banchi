@@ -13,7 +13,6 @@
 #
 #   1. a file is modified, `git checkout <it>` is run for real, and the work is gone
 #   2. a worktree is made, and its root is a different directory from the main checkout's
-#   4. `ln -s` at an existing directory creates the nested link instead of failing
 #   5. `pgrep -f <tag>` matches the shell whose own command line carries that tag
 #   6. a local branch is really made to track a differently-named remote branch — the exact
 #      way a background agent's push created one — and `git push origin HEAD` is asked about
@@ -23,13 +22,9 @@
 # mechanism — a pattern matching the searcher — is not what anybody expects. Here it is a
 # measurement.
 #
-# Clause 3 cannot be reproduced without spending somebody's network and rate limit, so it is
-# the one asserted about — and `gh api --help` is read where gh exists, so that `-f` and
-# `--method` are at least still the flags this guard is talking about.
-#
 # THE FALSE POSITIVES ARE THE HALF THAT DECIDES WHETHER THIS GUARD SURVIVES. A guard that
 # fires on honest work is switched off inside a day, and then it is gone silently. So every
-# shape this repo actually types is pinned as PASSING — including the `git`, `gh` and `ln`
+# shape this repo actually types is pinned as PASSING — including the `git`
 # lines swept out of its own selftests, Makefile and workflows — and the git cases are RUN in
 # the fixture first, because a case that is secretly a typo sails past the guard for the wrong
 # reason (`a-guard-must-see-its-subject`, applied to a shell string).
@@ -449,93 +444,6 @@ refuses "\`if tee <main>/…; then\` — a keyword is not a command"            
 refuses "a \`bash <<EOF\` heredoc whose body writes into the other checkout" "$WT" "bash <<'EOF'
 echo x > $tmp/main/work.py
 EOF"
-
-echo ""
-echo "  3. \`gh api\` with a field and no method"
-
-# NOT REPRODUCIBLE WITHOUT SOMEBODY'S RATE LIMIT, so the flags are at least checked against
-# the gh that is installed. A clause whose flags gh has renamed is a clause about nothing.
-if command -v gh >/dev/null 2>&1; then
-  help="$(gh api --help 2>&1)"
-  case "$help" in
-    *"--field"*|*"-f,"*) ok "gh api still takes \`-f/--field\` (read from \`gh api --help\`)" ;;
-    *) bad "gh api --help no longer mentions --field; this clause may be about nothing" ;;
-  esac
-  case "$help" in
-    *"--method"*) ok "gh api still takes \`--method\`" ;;
-    *) bad "gh api --help no longer mentions --method" ;;
-  esac
-else
-  bad "SKIPPED, and a skipped required case is a failure: gh is not installed, so the flag check cannot be posed"
-fi
-
-refuses "the 2026-09-12 command"  "$tmp/main" "gh api 'repos/{owner}/{repo}/commits/abc123/check-runs' -f per_page=100"
-refuses "\`-F\` is the same mistake"  "$tmp/main" "gh api repos/o/r/issues -F state=open"
-refuses "\`--field\`"                "$tmp/main" "gh api repos/o/r/issues --field state=open"
-refuses "\`--raw-field\`"            "$tmp/main" "gh api repos/o/r/issues --raw-field state=open"
-refuses "\`--field=k=v\`"            "$tmp/main" "gh api repos/o/r/issues --field=state=open"
-refuses "the bundled short form"    "$tmp/main" "gh api repos/o/r/issues -fstate=open"
-refuses "\`--paginate\` does not name a method" "$tmp/main" "gh api --paginate repos/o/r/issues -f per_page=100"
-
-judge "$tmp/main" "gh api repos/o/r/check-runs -f per_page=100"
-case "$out" in *"repos/o/r/check-runs?per_page=100"*) ok "the refusal prints the query-string form it wants" ;;
-  *) bad "the refusal does not show the query-string form" ;; esac
-case "$out" in
-  *"PKMNSCAN_GH=off"*) bad "the refusal names the GH switch to an agent" ;;
-  *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
-  *) bad "the refusal carries no owner-only line" ;; esac
-
-allows "\`--method GET\` says what it means"   "$tmp/main" "gh api --method GET repos/o/r/issues -f per_page=100"
-allows "\`-X POST\` says what it means"        "$tmp/main" "gh api -X POST repos/o/r/issues -f state=open"
-allows "\`-XPATCH\`, bundled"                  "$tmp/main" "gh api -XPATCH repos/o/r/issues -f state=open"
-allows "\`--method=DELETE\`"                   "$tmp/main" "gh api --method=DELETE repos/o/r/issues -f x=1"
-allows "\`graphql\` is a POST by design"       "$tmp/main" "gh api graphql -f query=abc"
-allows "a query string and no field"          "$tmp/main" "gh api 'repos/o/r/issues?per_page=100'"
-allows "the form check.yml actually uses"     "$tmp/main" "gh api \"repos/o/r/actions/artifacts?name=x&per_page=10\" --jq '.artifacts'"
-allows "no field at all"                      "$tmp/main" "gh api repos/o/r/commits/abc/check-runs"
-allows "\`gh pr view\` is not \`gh api\`"       "$tmp/main" "gh pr view 300 --json mergeable"
-allows "\`gh pr merge\` with its own -f"        "$tmp/main" "gh pr merge 300 --squash"
-
-echo ""
-echo "  4. \`ln -s\` at a path that already exists, reproduced"
-
-# ------------------------------------------------- 4a. the incident, performed in the fixture
-(
-  cd "$WT" || exit 1
-  mkdir -p harness/images
-  ln -s "$tmp/main/harness/images" harness/images 2>/dev/null
-)
-if [ -L "$WT/harness/images/images" ]; then
-  ok "\`ln -s <dir> <existing dir>\` created harness/images/images instead of failing"
-else
-  bad "the nested-symlink incident did not reproduce"
-fi
-rm -f "$WT/harness/images/images"
-
-refuses "the 2026-08-29 command"        "$WT" "ln -s $tmp/main/harness/images harness/images"
-refuses "an existing FILE destination"   "$tmp/main" "ln -s /somewhere work.py"
-refuses "one operand, landing on a name that exists" "$tmp/main" "ln -s $tmp/main/clean.txt"
-refuses "the multi-operand directory form" "$tmp/main" "ln -s $tmp/main/harness/images/a.jpg $tmp/main/clean.txt harness/images"
-
-judge "$WT" "ln -s $tmp/main/harness/images harness/images"
-case "$out" in *"harness/images/images"*) ok "the refusal names the nested link it would create" ;;
-  *) bad "the refusal does not name the nested path" ;; esac
-case "$out" in
-  *"PKMNSCAN_LINK=off"*) bad "the refusal names the LINK switch to an agent" ;;
-  *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
-  *) bad "the refusal carries no owner-only line" ;; esac
-case "$out" in *"ln -sfn"*) ok "the refusal names \`ln -sfn\`" ;;
-  *) bad "the refusal does not name ln -sfn" ;; esac
-
-allows "\`-sfn\`, which is what the rule asks for" "$WT" "ln -sfn $tmp/main/harness/images harness/images"
-allows "\`-sf\`"                       "$WT" "ln -sf $tmp/main/harness/images harness/images"
-allows "\`-sn\`"                       "$WT" "ln -sn $tmp/main/harness/images harness/images"
-allows "\`--symbolic --force\`"         "$WT" "ln --symbolic --force $tmp/main/clean.txt harness/images"
-allows "an absent destination"         "$WT" "ln -s $tmp/main/clean.txt nothing-here-yet"
-allows "the form worktree-provision.sh uses, at an absent path" \
-  "$WT" "[ -e harness/cache ] || ln -s $tmp/main/harness/images harness/cache"
-allows "a HARD link is not this clause's business" "$WT" "ln $tmp/main/clean.txt harness/images"
-allows "an unexpanded destination"     "$WT" "ln -s \$mirror \$dest"
 
 echo ""
 echo "  5. a polling loop, and why the pattern one cannot work"
@@ -1164,7 +1072,7 @@ allows "swept: \`git checkout -q -- clean.txt\` (clean)" "$tmp/main" "git checko
 echo ""
 echo "  the owner-only clause: an agent's tool call may not set a guard switch"
 
-# THE OLDER CASES CALL `hook(payload, owner_only=False)`, so they judge the other nine clauses.
+# THE OLDER CASES CALL `hook(payload, owner_only=False)`, so they judge the other clauses.
 # These go through the real `--hook`, armed, as a session's own tool call would.
 judge_agent() {   # judge_agent <cwd> <command> -> exit code, output in $out
   out="$(printf '%s' "$2" \
@@ -1234,8 +1142,6 @@ echo ""
 echo "  the escape hatches, in both of PKMNSCAN_KILL's two forms"
 
 allows "checkout, inline" "$tmp/main" "PKMNSCAN_CHECKOUT=off git checkout work.py"
-allows "gh, inline"       "$tmp/main" "PKMNSCAN_GH=off gh api repos/o/r -f a=1"
-allows "link, inline"     "$tmp/main" "PKMNSCAN_LINK=off ln -s /x work.py"
 allows "wait, inline"     "$tmp/main" "PKMNSCAN_WAIT=off until ! pgrep -f x; do sleep 5; done"
 allows "tree, inline"     "$WT" "PKMNSCAN_TREE=off cat > $tmp/main/work.py"
 
@@ -1283,14 +1189,14 @@ for mention in \
 PKMNSCAN_STASH=off
 EOF" \
   "# PKMNSCAN_TREE=off" \
-  "printf 'PKMNSCAN_LINK=off'" \
+  "printf 'PKMNSCAN_WAIT=off'" \
 ; do
   judge "$tmp/main" "$mention"
 done
 after_plain="$(cat "$hatchlog" 2>/dev/null | wc -l | tr -d ' ')"
 if [ "$before" = "$after_plain" ]; then ok "a plain command and six MENTIONS of a hatch write no hatch-log line"
 else bad "a plain command or a mention wrote $((after_plain - before)) hatch-log line(s)"; fi
-for real in "PKMNSCAN_GH=off gh api x" "env PKMNSCAN_LINK=off ls" "PKMNSCAN_WAIT=off echo hi"; do
+for real in "PKMNSCAN_PUSH=off git status" "env PKMNSCAN_STASH=off ls" "PKMNSCAN_WAIT=off echo hi"; do
   b="$(cat "$hatchlog" | wc -l | tr -d ' ')"
   judge "$tmp/main" "$real"
   a="$(cat "$hatchlog" | wc -l | tr -d ' ')"
@@ -1315,8 +1221,6 @@ hatch_env() {   # hatch_env <name> <cwd> <command>
   if [ $? -eq 0 ]; then ok "$1=off in the environment"; else bad "$1=off in the environment did not disarm it"; fi
 }
 hatch_env PKMNSCAN_CHECKOUT "$tmp/main" "git checkout work.py"
-hatch_env PKMNSCAN_GH       "$tmp/main" "gh api repos/o/r -f a=1"
-hatch_env PKMNSCAN_LINK     "$tmp/main" "ln -s /x work.py"
 hatch_env PKMNSCAN_WAIT     "$tmp/main" "until ! pgrep -f x; do sleep 5; done"
 hatch_env PKMNSCAN_PUSH     "$tmp/main" "git push origin HEAD"
 hatch_env PKMNSCAN_STASH    "$tmp/main" "git stash pop"
@@ -1329,10 +1233,10 @@ out="$(CWD="$WT" TARGET="$tmp/main/work.py" python3 -c 'import json,os; print(js
 if [ $? -eq 0 ]; then ok "PKMNSCAN_TREE=off in the environment"; else bad "PKMNSCAN_TREE=off in the environment did not disarm it"; fi
 
 # EVERY CLAUSE HAS A HATCH AND EVERY HATCH IS PRINTED. The table is read rather than retyped,
-# so a seventh clause added without one fails here instead of shipping unescapable.
+# so a clause added without one fails here instead of shipping unescapable.
 count="$(python3 "$GUARD" --clauses | wc -l | tr -d ' ')"
-if [ "$count" = "9" ]; then ok "nine clauses, nine hatches, read from the guard's own table"
-else bad "the clause table has $count rows; this file scores nine"; fi
+if [ "$count" = "7" ]; then ok "seven clauses, seven hatches, read from the guard's own table"
+else bad "the clause table has $count rows; this file scores seven"; fi
 if python3 "$GUARD" --clauses | grep -qv "PKMNSCAN_.*=off"; then
   bad "a clause in the table names no escape hatch"
 else
@@ -1384,13 +1288,58 @@ fi
 
 LIBDIR="$HERE"
 echo ""
+echo "  --skip: clauses another guard owns, through the real CLI"
+
+# THE REAL CLI, NOT `hook()`: `--skip` is parsed by `main`, and Claude Code runs exactly
+# `--hook --skip checkout,stash,reset`. Earlier sections leave the tree in unknown states,
+# so it is dirtied again here, and a refused case is meaningless on a clean tree.
+(cd "$tmp/main" && git checkout -q main 2>/dev/null; printf 'one\ntwo\nthree\nskip-section\n' > work.py)
+skip_cli() {   # skip_cli <skip-list|-> <cwd> <command> -> exit code
+  local args=(--hook); [ "$1" = "-" ] || args+=(--skip "$1")
+  out="$(printf '%s' "$3" \
+        | CWD="$2" python3 -c 'import json,os,sys; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":sys.stdin.read()}}))' \
+        | python3 "$GUARD" "${args[@]}" 2>&1)"
+  return $?
+}
+skip_cli_write() {   # skip_cli_write <skip-list> <cwd> <file_path>
+  out="$(CWD="$2" TARGET="$3" python3 -c 'import json,os; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"file_path":os.environ["TARGET"]}}))' \
+        | python3 "$GUARD" --hook --skip "$1" 2>&1)"
+  return $?
+}
+SKIPS="checkout,stash,reset"
+for c in "git stash pop" "git reset --hard" "git checkout work.py"; do
+  skip_cli - "$tmp/main" "$c"; a=$?
+  skip_cli "$SKIPS" "$tmp/main" "$c"; b=$?
+  if [ $a -eq 2 ] && [ $b -eq 0 ]; then ok "\`$c\`: refused without --skip, allowed with it"
+  else bad "\`$c\`: exit $a without --skip, $b with it (want 2 and 0)"; fi
+done
+skip_cli "bogus,,nonsense" "$tmp/main" "git checkout work.py"
+[ $? -eq 2 ] && ok "an unknown name in --skip skips nothing" || bad "an unknown name in --skip skipped a clause"
+skip_cli "checkout,bogus" "$tmp/main" "git stash pop"
+[ $? -eq 2 ] && ok "…and a known name beside it skips only its own clause" || bad "--skip checkout also skipped the stash clause"
+
+# Re-arm the mismatch: a branch tracking a DIFFERENTLY named upstream (later sections repoint it).
+(cd "$tmp/main" && git checkout -q -B skip-mismatch main 2>/dev/null \
+  && git config branch.skip-mismatch.remote origin \
+  && git config branch.skip-mismatch.merge refs/heads/claude/skip-mismatch)
+skip_cli - "$tmp/main" "git push origin HEAD"
+[ $? -eq 2 ] || bad "the skip-section push fixture did not arm: the mismatch is not refused without --skip"
+skip_cli "$SKIPS" "$tmp/main" "git push origin HEAD"
+[ $? -eq 2 ] && ok "with --skip, the push mismatch is still refused" || bad "--skip let the push mismatch through"
+(cd "$tmp/main" && git checkout -q main 2>/dev/null)
+skip_cli "$SKIPS" "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
+[ $? -eq 2 ] && ok "with --skip, a polling loop is still refused" || bad "--skip let a polling loop through"
+skip_cli_write "$SKIPS" "$WT" "$tmp/main/work.py"
+[ $? -eq 2 ] && ok "with --skip, a write outside the checkout is still refused" || bad "--skip let a write outside the checkout through"
+
+echo ""
 echo "  the refusal log"
 . "$LIBDIR/refusal-log-assert.sh"
 rl="$tmp/refusals.log"
-rl_payload='{"session_id":"sess-1","cwd":"'"$tmp"'","tool_input":{"command":"gh api -f k=v repos/x/y"}}'
+rl_payload='{"session_id":"sess-1","cwd":"'"$tmp"'","tool_input":{"command":"until ! pgrep -f x; do sleep 5; done"}}'
 rl_out="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$rl" python3 "$GUARD" --hook 2>&1)"; rl_status=$?
 [ $rl_status -eq 2 ] && ok "a refused command still exits 2" || bad "the logged refusal exited $rl_status"
-why="$(refusal_line_ok "$rl" "guard-shell:gh" "sess-1")" && ok "…and writes one well-formed line" || bad "the refusal log line: $why"
+why="$(refusal_line_ok "$rl" "guard-shell:wait" "sess-1")" && ok "…and writes one well-formed line" || bad "the refusal log line: $why"
 rl_bad="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" python3 "$GUARD" --hook 2>&1)"; rl_bad_status=$?
 if [ $rl_bad_status -eq 2 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
 else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi

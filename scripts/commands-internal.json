@@ -9,7 +9,6 @@
   "demo-mirror-rebuild": "re-runs `demo-mirror` from its own gitignored snapshot; a variant of a target already documented",
   "demo-photos": "owner's Mac only; curates the tracked photograph set, not a build or verification step",
   "down": "stops what `make up` started; the pair of a documented target, not independently notable",
-  "icloud-sweep": "one-off cleanup for an iCloud-synced checkout; not part of the normal build or verification path",
   "identity-replay": "one-off dev tool for replaying an identity migration against a fixture; no standing caller",
   "lan-check": "reaches the network, so it never gates a commit; a diagnostic for the owner's own LAN, not a build step",
   "launch-config": "writes `.claude/launch.json` for this checkout's own port; called by other targets, never run standalone by a session",

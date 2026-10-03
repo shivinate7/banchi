@@ -88,11 +88,11 @@ every target at once. It adds checks, so it is not a hatch. Every skip prints th
 cannot see is invisible to `derive_subjects`. That includes a dynamic `getattr`. It also
 includes a subprocess call built from a runtime string. Or a filename read from an
 environment variable. A self-test would then skip on a change that should have run it.
-`githooks-selftest.sh` is the one case found where this actually bites. It names two of its
-five hooks as literal strings: `reference-transaction`, `post-checkout`. It names the rest
+`githooks-selftest.sh` is the one case found where this actually bites. It names one of its
+three hooks as a literal string: `reference-transaction`. It names the rest
 only in prose — "its pre-push sibling". The reader widens any hit under
-`scripts/githooks/` to the whole directory for this reason. It does not trust the two names
-it can see over the three it cannot. No other roster entry needed that widening. If a
+`scripts/githooks/` to the whole directory for this reason. It does not trust the one name
+it can see over the two it cannot. No other roster entry needed that widening. If a
 future one does, the same rule applies with no new list. A new guard self-test is not
 scoped until it is added to `ROSTER` by hand. That is the same rule `docs/map.py` already
 applies. A new file is not covered until an entry names it.

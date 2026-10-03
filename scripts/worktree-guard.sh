@@ -110,11 +110,9 @@ fi
 # many words. Offered a guard that only reported, they answered: *"why can't both parts sync,
 # remember this is a one man show, it's just me working."*
 #
-# TWO PARTS, AND `post-checkout` CAN SEE ONLY ONE OF THEM. That hook fires on a branch switch
-# and NOT on `git pull`, `git merge` or `git rebase` — measured — so it cannot see main going
-# stale, only the tree going off it. "On main" and "at origin/main" are therefore genuinely
-# separate questions, and this is one of the two readers that has ever printed the second.
-# Now it answers both instead of printing them.
+# TWO PARTS: "on main" and "at origin/main" are genuinely separate questions, and this is one
+# of the two readers that has ever printed the second. Now it answers both instead of printing
+# them.
 #
 # THE REPORT BELOW IS KEPT AND IS NOT REDUNDANT. `scripts/primary_sync.py` refuses rather than
 # discards — uncommitted tracked work, a half-finished rebase, a main that is not a
@@ -127,11 +125,10 @@ fi
 # the ahead/behind/dirty counts are printed so the reader can tell which they have. The 2026-08-30
 # incident above is the merged instance of it, and the 2026-09-11 one is the other: this tree on
 # `claude/env-key-rotation`, three live sessions in it, unmerged work, nothing anywhere saying so.
-# D158 is why there are three readers of this one fact rather than this one — git has no
-# `pre-checkout` hook, so no single moment can refuse the move, and a warning at one missable
-# moment is a warning that gets missed. `scripts/githooks/post-checkout` says it at the moment
-# of the switch, `make status` says it under SERVING beside the server it qualifies, and this
-# says it to a session that arrives after the fact and would otherwise never ask.
+# D158 is why there are two readers of this one fact rather than this one — git has no
+# `pre-checkout` hook, so no single moment can refuse the move. `make status` says it under
+# SERVING beside the server it qualifies, and this says it to a session that arrives after the
+# fact and would otherwise never ask.
 #
 # `.git` is a DIRECTORY here, which is exactly the test the block above uses inverted: a
 # linked worktree gets a FILE. A worktree ON a feature branch is correct and is not reported.
