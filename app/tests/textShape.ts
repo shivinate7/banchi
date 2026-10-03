@@ -1,4 +1,4 @@
-/* THE ONE MEASUREMENT `text-shape.spec.ts` READS, kept in its own module so the function
+/* THE ONE MEASUREMENT `text-checks.spec.ts` READS, kept in its own module so the function
  * handed to `page.evaluate` stays a single, self-contained closure — Playwright serialises it
  * by `toString()`, so it may not read anything from this file's outer scope, only from its own
  * nested helpers and the live DOM. See D284.
@@ -36,7 +36,7 @@
  * A CLOSED `<details>` CONTRIBUTES NOTHING, with no special-casing needed: the UA stylesheet
  * sets `display: none` on everything under it but the `<summary>`, and this walk already skips
  * anything `visible()` says is not painted — the same argument `D269` makes for
- * `machine-words.spec.ts` reading `innerText` instead of `textContent`.
+ * `text-checks.spec.ts` reading `innerText` instead of `textContent`.
  */
 
 /** Each hit carries a `key`: the text `text-shape-allow.json` lists it under. A repeated
@@ -317,7 +317,7 @@ export function measureTextShape(): TextShapeResult {
  *   - a 30-word sentence: `long-sentence`;
  *   - a heading wrapped alone in a `<header>`, its caption AFTER the wrapper, so only the
  *     climb out of `<header>` finds it: `caption-heading`.
- * Run from `app/`: `TEXT_SHAPE_MUTATE='#/' npx playwright test tests/text-shape.spec.ts`. */
+ * Run from `app/`: `TEXT_SHAPE_MUTATE='#/' npx playwright test tests/text-checks.spec.ts`. */
 export function injectRepeatedSentence(): void {
   const root = document.querySelector('.bn-view')
   if (!root) return

@@ -969,7 +969,7 @@ test('no global key acts under an open layer', async ({ page }) => {
   await page.keyboard.press('c')
   await page.keyboard.press('Meta+ArrowRight')
   await page.keyboard.press('Meta+.')
-  await page.waitForTimeout(200)
+  await page.waitForTimeout(200) // keep: asserts the keys press nothing while the drawer is open
   expect(await page.evaluate(() => window.location.hash)).toBe('#/')
   await expect(page.locator('.bn-drawer')).toBeVisible()
   expect(await page.locator('.bn-shell').getAttribute('data-rail'), 'Cmd-. moved the rail under the drawer').toBe(railBefore)

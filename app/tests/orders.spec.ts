@@ -3,7 +3,7 @@
 import { test, expect, type Locator, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
-import { settleMotion } from './motionSettled'
+import { afterPaint, settleMotion } from './motionSettled'
 
 /** A real, tiny image `route.fulfill` can hand back for a photo read — `inventory.spec.ts`'s
  *  own constant, copied rather than imported (that file's is private): a PNG would need a
@@ -288,8 +288,11 @@ async function startWalk(page: Page): Promise<void> {
 
 /** OPEN THE SELECTED BUYER'S `Manage` SHEET: that buyer's own orders, per order (stand-down,
  *  close-line, declare-kind, hand-fill). Needs a selected buyer on screen already. */
-async function openManage(page: Page): Promise<void> {
+async function openManage(page: Page, at: 'order' | 'overview' = 'order'): Promise<void> {
   await page.locator('main.orders .orders-manage').first().click()
+  /* THE SHEET OPENS ON THE BUYER'S OVERVIEW, one row per order. `order` (the default) also opens
+     the first order's editor, which is where the lines and the stand-down live. */
+  if (at === 'order') await page.locator('.orders-manage-sheet .bn-set-op').first().click()
 }
 
 /** OPEN THE STORE'S OWN SHEET from the page header (UX-165, UX-193): the fetch/paste well, the
@@ -2256,7 +2259,7 @@ test('a buyer with two open orders walks both at once — one selection, one pla
 
   /* AND EACH ORDER'S OWN STAND-DOWN/CLOSE-LINE/DECLARE-KIND/HAND-FILL STAYS REACHABLE — behind
      `Manage` now, not a "By order" fold (deleted with `BuyerDetail`). */
-  await openManage(page)
+  await openManage(page, 'overview')
   await expect(page.locator('.orders-manage-orders')).toContainText(ORDER_NUMBER)
   await expect(page.locator('.orders-manage-orders')).toContainText(SECOND_ORDER)
 })
@@ -2293,7 +2296,7 @@ test('selecting a two-order buyer sends exactly one batched POST /orders/picks, 
 
   /* Wait for the first answer, then give a second call the time it would need to be sent. */
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/picks')).length).toBe(1)
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(400) // keep: asserts no second picks call is sent
 
   const picksCalls = wire.filter((one) => one.path.endsWith('/orders/picks'))
   expect(picksCalls).toHaveLength(1)
@@ -2315,7 +2318,7 @@ test('a picks answer that leaves a key out is not asked for again (the 4,934-req
   await page.locator('.orders-index-row').first().click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/picks')).length).toBeGreaterThan(0)
   /* A window long enough for the loop to have sent hundreds. */
-  await page.waitForTimeout(1000)
+  await page.waitForTimeout(1000) // keep: asserts the picks loop sends at most two calls
   expect(wire.filter((one) => one.path.endsWith('/orders/picks')).length).toBeLessThanOrEqual(2)
 })
 
@@ -3397,6 +3400,149 @@ test('the Manage sheet traps focus, closes on Escape, and gives focus back to th
   await page.keyboard.press('Escape')
   await expect(sheet).toBeHidden()
   await expect(manage).toBeFocused()
+})
+
+/* THE MANAGE PANEL (the bar of Inventory's Manage box): an Overview, one row per order, and an
+ * editor behind each row with a way back. Red on the old sheet, which drew every order's lines at
+ * once and had no overview, no rows and no back link. */
+function twoOrderBuyer(): OrdersPayload {
+  const secondLine = () =>
+    line({
+      order: SECOND_ORDER,
+      order_key: secondOrderKey,
+      sku: '9197754',
+      picks: [pick({ index: 30, capture_id: 'cap-second', card_name: 'Sunrise', card_number: '030' })],
+      line: { ...line().line, sku: '9197754', name: 'Sunrise', number: '030' },
+    })
+  return payloadOf(
+    [order(), order({ key: secondOrderKey, number: SECOND_ORDER })],
+    [
+      { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
+      { key: secondOrderKey, number: SECOND_ORDER, complete: false, outstanding: 1, lines: [secondLine()] },
+    ],
+  )
+}
+
+test('Manage opens on an overview of the buyer, one row per order, and each row opens an editor with a way back', async ({ page }) => {
+  await open(page, { orders: twoOrderBuyer() })
+  await openManage(page, 'overview')
+
+  const sheet = page.locator('.orders-manage-sheet')
+  await expect(sheet.locator('.bn-set-group', { hasText: 'Overview' }).locator('.bn-set-census-cell')).toHaveCount(3)
+  await expect(sheet.locator('.bn-set-census-cell', { hasText: 'Orders' })).toContainText('2')
+  await expect(sheet.locator('.bn-set-census-cell', { hasText: 'Cards owed' })).toContainText('2')
+  await expect(sheet.locator('.bn-set-census-cell', { hasText: 'Picked' })).toContainText('0')
+  await expect(sheet.locator('.orders-manage-status')).toContainText('Ready')
+
+  const rows = sheet.locator('.bn-set-group', { hasText: 'Open one to see its lines' }).locator('.bn-set-op')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(0)).toContainText(ORDER_NUMBER)
+  await expect(rows.nth(1)).toContainText(SECOND_ORDER)
+  await expect(rows.nth(1)).toContainText('1 card owed')
+  /* NO LINES UNTIL A ROW IS PRESSED: nothing on screen moves unless the person moved it. */
+  await expect(sheet).not.toContainText('Sunrise')
+
+  await rows.nth(1).click()
+  await expect(sheet.getByRole('button', { name: 'All settings' })).toBeVisible()
+  await expect(sheet).toContainText('Sunrise')
+  await expect(sheet).not.toContainText('Volcanion')
+
+  await sheet.getByRole('button', { name: 'All settings' }).click()
+  await expect(sheet.locator('.bn-set-census-cell', { hasText: 'Cards owed' })).toBeVisible()
+  await expect(sheet).not.toContainText('Sunrise')
+})
+
+test('Stand down this order stands down only that order, with a receipt and an Undo', async ({ page }) => {
+  const wire = await open(page, { orders: twoOrderBuyer() })
+  await openManage(page, 'overview')
+  const sheet = page.locator('.orders-manage-sheet')
+  await sheet.locator('.bn-set-op', { hasText: SECOND_ORDER }).click()
+
+  const group = sheet.locator('.bn-set-group-danger')
+  await expect(group).toContainText('Stand down this order')
+  await expect(group).toContainText('Can be undone')
+  await group.getByRole('button', { name: 'Stand down this order: cancelled or refunded' }).click()
+
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length).toBe(1)
+  /* ONE ORDER, NEVER THE BUYER'S WHOLE SET, AND THE REASON IS THE BUYER'S CANCEL. */
+  expect(wire.find((one) => one.path === '/orders/close')?.body).toEqual({
+    lines: [{ source: 'TCGplayer', number: SECOND_ORDER, sku: SKU }],
+    reason: 'not_shipping',
+  })
+
+  const receipt = page.locator('.bn-toast-receipt')
+  await expect(receipt).toContainText('Stood down 1 order')
+  await expect(receipt).toContainText('Nothing was marked sold')
+  await receipt.locator('button.bn-toast-action').click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length).toBe(2)
+  expect(wire.filter((one) => one.path === '/orders/close')[1]?.body).toEqual({
+    lines: [{ source: 'TCGplayer', number: SECOND_ORDER, sku: SKU }],
+    undo: true,
+  })
+})
+
+/* UNDO IS EXACT. A line closed earlier is not the stand-down's to reopen: `reopen_line` reopens every
+ * closed line it is given, so the stand-down names only the lines open now, and Undo names that list. */
+const SIBLING_SKU = '9197754'
+function halfClosedOrder(closedBoth = false): OrderRow {
+  const base = order()
+  const sibling = { ...line().line, sku: SIBLING_SKU, name: 'Sunrise', number: '030' }
+  const row = base.progress[0]!
+  return order({
+    wanted: 2,
+    lines: [base.lines[0]!, sibling],
+    progress: [
+      { ...row, closed_at: '2026-09-01T10:00:00+00:00', closed_reason: 'shipped_elsewhere' },
+      { ...row, sku: SIBLING_SKU, closed_at: closedBoth ? '2026-09-01T10:00:00+00:00' : null, closed_reason: closedBoth ? 'not_shipping' : null },
+    ],
+  })
+}
+
+test('stand down plus Undo leaves a line closed earlier alone', async ({ page }) => {
+  const wire = await open(page, { orders: payloadOf([halfClosedOrder()], []) })
+  await openManage(page)
+  await page.locator('.orders-manage-sheet').getByRole('button', { name: 'Stand down this order: cancelled or refunded' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length).toBe(1)
+  const aim = [{ source: 'TCGplayer', number: ORDER_NUMBER, sku: SIBLING_SKU }]
+  expect(wire.find((one) => one.path === '/orders/close')?.body).toEqual({ lines: aim, reason: 'not_shipping' })
+  await page.locator('.bn-toast-receipt button.bn-toast-action').click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length).toBe(2)
+  expect(wire.filter((one) => one.path === '/orders/close')[1]?.body).toEqual({ lines: aim, undo: true })
+})
+
+test('standing down an order with nothing open says so plainly, with no write and no Undo', async ({ page }) => {
+  const wire = await open(page, { orders: payloadOf([halfClosedOrder(true)], []) })
+  await openManage(page)
+  await page.locator('.orders-manage-sheet').getByRole('button', { name: 'Stand down this order: already shipped' }).click()
+  const toastEl = page.locator('.bn-toast').filter({ hasText: 'Nothing to stand down' })
+  await expect(toastEl).toContainText('already closed')
+  await expect(toastEl.locator('button.bn-toast-action')).toHaveCount(0)
+  expect(wire.filter((one) => one.path === '/orders/close')).toEqual([])
+})
+
+test('a stood-down order says "Stood down" in plain words, with the reason', async ({ page }) => {
+  const done = order({ open: false, status: 'Cancelled', terminal: true })
+  done.progress = [{ ...done.progress[0]!, closed_at: '2026-09-01T10:00:00+00:00', closed_reason: 'not_shipping' }]
+  await open(page, { orders: payloadOf([done], []) })
+  await pickFacet(page, 'Show', /^Done/)
+  await openManage(page)
+  await expect(page.locator('.orders-manage-sheet .orders-order-stood')).toHaveText('Stood down, cancelled or refunded')
+})
+
+test('a refused stand-down says why inside the panel, with its code', async ({ page }) => {
+  await open(page, { orders: twoOrderBuyer() })
+  await page.route(/\/orders\/close$/, (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'order_not_open', message: 'That order is already closed.' } }),
+    }),
+  )
+  await openManage(page)
+  const sheet = page.locator('.orders-manage-sheet')
+  await sheet.getByRole('button', { name: 'Stand down this order: already shipped' }).click()
+  await expect(sheet.locator('.bn-notice')).toContainText('That order is already closed.')
+  await expect(sheet.locator('.bn-notice')).toContainText('order_not_open')
 })
 
 test('the selected buyer\'s own orders stay reachable in Manage for stand-down, close-line and declare-kind', async ({ page }) => {
@@ -4571,7 +4717,7 @@ test('finishing a buyer never asks for another buyer\'s walk, and draws no card 
   await expect(page.locator('.orders-walk-done')).toContainText('All 1 sold.')
 
   /* A window long enough for the stray plan to have been asked for and to have landed. */
-  await page.waitForTimeout(600)
+  await page.waitForTimeout(600) // keep: asserts the stray plan is never asked for
   expect(asked.filter((keys) => keys.includes(secondBuyerKey))).toEqual([])
   await expect(page.locator('.browse-card')).toHaveCount(0)
   await expect(page.getByRole('button', { name: /^Mark sold/ })).toHaveCount(0)
@@ -5148,7 +5294,7 @@ test('paging with the arrows skips a pick the Hide picked fold has taken off the
 test('a digit pressed while a sale is in flight says one sale at a time', async ({ page }) => {
   const wire = await open(page, { orders: oneOpenOrder(), walkPlan: twoCopyPlan(), pull: SPARE_PULL })
   await page.route(/\/orders\/pull$/, async (route) => {
-    await new Promise((settled) => setTimeout(settled, 1500))
+    await new Promise((settled) => setTimeout(settled, 1500)) // keep: stubbed answer held 1500 ms on purpose, a latency fixture
     await route.fallback()
   })
   await expect(page.locator('.card-locations-sell[aria-keyshortcuts]').first()).toBeVisible()
@@ -5262,7 +5408,7 @@ test('a pane taller than the window reaches its last copy by page scroll, at 144
   await page.mouse.move(900, 500)
   for (let i = 0; i < 40 && !(await inView()); i += 1) {
     await page.mouse.wheel(0, 300)
-    await page.waitForTimeout(60)
+    await afterPaint(page)
   }
   expect(await inView(), 'the last copy never came into view by the wheel').toBe(true)
   /* NOT ONLY AT THE END OF THE PAGE: a pinned column releases its lower half only when the whole rail has scrolled by. */
@@ -5279,6 +5425,6 @@ test('a digit sells nothing while the pane is hidden and the sheet is closed', a
   await expect(page.locator(`${CURRENT_PICK} .card-locations-row`)).toHaveCount(2)
   await page.addStyleTag({ content: '.orders-cardcol { display: none !important; }' })
   await page.keyboard.press('1')
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(400) // keep: asserts a digit sells nothing
   expect(wire.filter((one) => one.path.endsWith('/orders/pull'))).toHaveLength(0)
 })

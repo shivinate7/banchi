@@ -113,6 +113,8 @@ import type {
   ClaimRelease,
   HoldingsRange,
   HoldingsValuePayload,
+  PriceMoversPayload,
+  SavedTrendsPayload,
   RunMatchAnswer,
 } from './types'
 
@@ -3341,6 +3343,24 @@ export async function getHoldingsValue(range: HoldingsRange = 'month'): Promise<
   )) as HoldingsValuePayload
 }
 
+/**
+ * Listed SKUs whose market moved more than the threshold since listing, and how the last
+ * scheduled market read ended (`GET /pipeline/movers`, DEBT69). A plain read: it shows what
+ * moved and changes no price.
+ */
+export async function getPriceMovers(): Promise<PriceMoversPayload> {
+  return (await request('/pipeline/movers', NO_CACHE)) as PriceMoversPayload
+}
+
+/**
+ * The Trends strips the daily job saved overnight, and how that read ended
+ * (`GET /pipeline/trends-saved`, D278). A local read with no market request, so `#/pricing` may
+ * draw it at first paint. The Trends press (`getPriceTrends`) stays, to refresh.
+ */
+export async function getSavedTrends(): Promise<SavedTrendsPayload> {
+  return (await request('/pipeline/trends-saved', NO_CACHE)) as SavedTrendsPayload
+}
+
 /** One SKU's answer from `getSkuPhotos` — the first on-hand copy of that SKU that still
  *  carries a photograph, exactly `photoUrl`'s own `(box, index, cid)` triple. */
 export type SkuPhotoEntry = { box: number; index: number; cid: string | null; capture_id?: string | null }
@@ -3355,6 +3375,9 @@ export type SkuPhotoEntry = { box: number; index: number; cid: string | null; ca
 export type SkuPhotos = {
   readonly photos: Readonly<Record<string, SkuPhotoEntry>>
   readonly stockPhotos: Readonly<Record<string, string>>
+  /** SKUs with no URL yet because their catalogue group is still loading. A SKU in
+   *  neither field and not here has a final answer: no photo. */
+  readonly pending: readonly string[]
 }
 
 /** `sku -> its photo`, for exactly the SKUs asked. A SKU with no photograph of either kind
@@ -3365,13 +3388,44 @@ export type SkuPhotos = {
  *  Sets and Pricing already read. A plain read, costs nothing, so this screen calls it on
  *  arrival rather than gating it behind a press. */
 export async function getSkuPhotos(skus: string[]): Promise<SkuPhotos> {
-  if (skus.length === 0) return { photos: {}, stockPhotos: {} }
+  if (skus.length === 0) return { photos: {}, stockPhotos: {}, pending: [] }
   const query = skus.map((sku) => `sku=${encodeURIComponent(sku)}`).join('&')
   const body = (await request(`/skus/photos?${query}`, NO_CACHE)) as {
     photos: Record<string, SkuPhotoEntry>
     stock_photos: Record<string, string>
+    pending?: string[]
   }
-  return { photos: body.photos, stockPhotos: body.stock_photos }
+  return { photos: body.photos, stockPhotos: body.stock_photos, pending: body.pending ?? [] }
+}
+
+/** Waits between re-asks for pending SKUs. Its length is the cap: after the last wait the SKU
+ *  is answered final, no photo. */
+export const SKU_PHOTO_BACKOFF_MS = [1000, 2000, 4000, 8000, 8000, 8000] as const
+
+/** `getSkuPhotos`, settled: calls `onAnswer` with each ask's answer, and re-asks only the
+ *  SKUs still pending, on `SKU_PHOTO_BACKOFF_MS`. The last `onAnswer` has `pending: []`.
+ *  Returns a stop function. The one client path for a SKU's photo, so no screen keeps its
+ *  own retry. */
+export function getSkuPhotosSettled(skus: string[], onAnswer: (answer: SkuPhotos) => void): () => void {
+  let stopped = false
+  let timer: number | undefined
+  const ask = (wanted: string[], round: number) =>
+    getSkuPhotos(wanted)
+      .then((found) => {
+        if (stopped) return
+        const more = found.pending.length > 0 && round < SKU_PHOTO_BACKOFF_MS.length
+        onAnswer(more ? found : { ...found, pending: [] })
+        if (more) timer = window.setTimeout(() => ask([...found.pending], round + 1), SKU_PHOTO_BACKOFF_MS[round])
+      })
+      .catch(() => {
+        // A failed lookup is a final "no photo", as it always was.
+        if (!stopped) onAnswer({ photos: {}, stockPhotos: {}, pending: [] })
+      })
+  void ask(skus, 0)
+  return () => {
+    stopped = true
+    window.clearTimeout(timer)
+  }
 }
 
 /** Every on-hand card, grouped by set, one row per distinct card with its quantity — the

@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "design-check": "playwright test"
+    "design-check": "playwright test",
+    "unit": "playwright test -c playwright.unit.config.ts"
   },
   "dependencies": {
     "react": "^19.2.0",

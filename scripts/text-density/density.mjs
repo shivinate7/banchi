@@ -9,7 +9,7 @@
 //     node scripts/text-density/density.mjs [--route '#/pricing'] [--top N] [--json]
 //
 // IT MEASURES THE SAME SCREENS, IN THE SAME STATE, AS THE TWO GATES. It does not open its own
-// browser against a store. It runs `app/tests/text-shape.spec.ts` with `TEXT_DENSITY=1`, which
+// browser against a store. It runs `app/tests/text-checks.spec.ts` with `TEXT_DENSITY=1`, which
 // sweeps every route through `app/tests/routeSweep.ts` (the populated fixture of
 // `routeFixtures.ts`, at 1440 and 390, each screen read only once loaded) and writes each
 // route's `textShape.ts:measureTextShape` result instead of asserting it. So a worktree with
@@ -56,7 +56,7 @@ function measure() {
   if (existsSync(RECEIPT)) rmSync(RECEIPT)
   const run = spawnSync(
     'npx',
-    ['playwright', 'test', 'tests/text-shape.spec.ts', '-g', 'repeats no sentence', '--workers=1', '--reporter=line'],
+    ['playwright', 'test', 'tests/text-checks.spec.ts', '-g', 'one sweep', '--workers=1', '--reporter=line'],
     { cwd: APP_DIR, env: { ...process.env, TEXT_DENSITY: '1' }, encoding: 'utf8' },
   )
   if (run.status !== 0 || !existsSync(RECEIPT)) {

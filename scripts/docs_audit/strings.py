@@ -50,7 +50,7 @@ APP_TS_COMPILER = ROOT / "app" / "node_modules" / "typescript" / "lib" / "typesc
 
 # THE ONE PLACE THIS LIST LIVES IS scripts/machine-words.json, not a Python dict, since D196's
 # 2026-09-23 amendment (D284) put a SECOND reader on it: `app/tests/
-# machine-words.spec.ts` reads the rendered TEXT every route draws, catching server- and
+# text-checks.spec.ts` reads the rendered TEXT every route draws, catching server- and
 # demo-composed strings this AST walk cannot (it only sees JSX literals). One file, so growing
 # the list edits one dictionary rather than two that can drift apart. `run`, `box`, `export`,
 # `listing` and `TCGplayer` are deliberately NOT in it — they are the operator's own words,
@@ -89,7 +89,7 @@ _NO_MECHANISM_RE = re.compile(
 # card. `docs/decisions/` is covered by the bare `docs` prefix, deliberately — a path INTO
 # it is exactly the citation-by-path `cite-decisions-by-id-not-path` already warns against.
 # SAME SOURCE `scripts/machine-words.json`'s `repoTopDirs` HOLDS, so the browser-side check
-# (`machine-words.spec.ts`, which flags a rendered request-path shape with the identical top
+# (`text-checks.spec.ts`, which flags a rendered request-path shape with the identical top
 # dirs) cannot drift from this one — a second hand-typed tuple here is exactly the drift this
 # file's own header warns against.
 _REPO_TOP_DIRS = tuple(_machine_words()["repoTopDirs"])

@@ -24,7 +24,7 @@ import type {
   LotResult,
 } from './types'
 import { Button, EmptyState, FilterBar, Icon, IconButton, Loading, Notice, Page, Pill, ReloadButton, Segmented, Select, Sheet, Stat, type FilterFacet, type FilterValue, type IconName } from './kit'
-import { matchQuery } from './kit/match'
+import { didYouMean, matchQuery } from './kit/match'
 import { toast } from './kit/toast'
 import { absoluteDate } from './dates'
 import './Codes.css'
@@ -593,6 +593,11 @@ export function Codes() {
       })
     })
   }, [ledger, filter, stateFilter, laneFilter])
+
+  const nearName = useMemo(
+    () => (ledger === null || filter.trim() === '' ? null : didYouMean(filter, new Set(ledger.entries.map((e) => e.product_display ?? '')))),
+    [ledger, filter],
+  )
 
   const laneCounts = useMemo(() => {
     const counts: Record<LaneFilter, number> = { all: 0, premium: 0, bulk: 0, unclaimed: 0 }
@@ -1243,6 +1248,7 @@ export function Codes() {
                     icon="search"
                     title="Nothing matches"
                     body="No code matches those filters."
+                    didYouMean={{ name: nearName, onPick: setFilter }}
                     actions={
                       <Button icon="x" words="only-primary" onClick={clearFilters}>
                         Clear filters

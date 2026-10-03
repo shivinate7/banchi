@@ -2,6 +2,7 @@
 // Governs: D134, D196, D313
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { settleFonts } from './fontsReady'
+import { settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 
 /* THE DELETED BOXES SHELF, AND `#/inventory`'S "MOVED FROM" (D134 point 5, amended by the owner's
@@ -117,7 +118,7 @@ test.describe('the Deleted boxes shelf', () => {
     await openInventory(page, DEPARTED)
     const first = page.locator('.browse-boxcell').first()
     await expect(first).toBeVisible()
-    await page.waitForTimeout(500) // the page's entrance has settled
+    await settleMotion(page)
     const before = await first.boundingBox()
     await page.getByRole('button', { name: 'Records from deleted boxes' }).click()
     await expect(page.getByRole('heading', { name: 'Thievul' })).toBeVisible()
@@ -169,16 +170,25 @@ test.describe('the Deleted boxes shelf reads and steps like a box', () => {
   })
 
   test('a late answer moves nothing: the screen waits for it before drawing the rail (D313)', async ({ page }) => {
+    // The answer is held until the case has measured the walk, so "late" is a state the case holds, not a guessed delay.
+    let release = () => {}
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
     await openInventory(page, DEPARTED, {
       graveyard: async (route) => {
-        await new Promise((resume) => setTimeout(resume, 1500))
+        await held
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: DEPARTED }) })
       },
     })
     const cells = page.locator('.browse-boxcell')
     const walk = page.locator('.browse-walk')
+    // Still unanswered: the screen waits, so no rail and no shelf are drawn yet.
+    await expect(cells).toHaveCount(0)
+    await expect(walk).toHaveCount(0)
+    release()
     await expect(walk).toBeVisible()
-    await page.waitForTimeout(500) // the page's entrance has settled
+    await settleMotion(page)
     const before = await walk.boundingBox()
     // The shelf may arrive after the first box cell did, but the walk beneath must not move for it.
     await expect(page.getByRole('button', { name: 'Records from deleted boxes' })).toBeVisible()

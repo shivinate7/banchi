@@ -63,8 +63,12 @@ Codes, the shortcut sheet's key caps, and Capture's box number all use `raw` for
 
 ### What is still open
 
-- **Typos and a near match.** FLT-05 asked for the closest name on a miss. Not ruled. A
-  product decision, not a matcher defect — see ROUND 12, below.
+- ~~Typos and a near match.~~ CLOSED by the owner's word: the owner picked "Suggest". On a
+  search with ZERO results, `EmptyState`'s `didYouMean` shows "Did you mean <name>?" as a tap
+  target that runs that search. The matcher's ranking and results are untouched. The server
+  (`match.did_you_mean`, in `do_search`'s answer) and the browser (`kit/match.ts:didYouMean`)
+  share `kit/didyoumean.cases.json`. A query under five characters, or under a 0.7 ratio, gets
+  no hint. Matching the typo into the ranking stays unbuilt.
 - ~~Speed at the owner's scale.~~ CLOSED. Rounds 4-11 measured the owner's own real store
   (~3,510 cards) directly, repeatedly, on every query shape this entry names. Every shape
   stays under 240ms p95 on a quiet machine. This bullet was stale by round 5 and is struck

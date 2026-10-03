@@ -3,7 +3,7 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { createRequire } from 'node:module'
 import { sealEveryTest } from './shell'
-import { settleMotion } from './motionSettled'
+import { afterPaint, settleMotion } from './motionSettled'
 import { PHONE_OFF_REASON, PHONE_SPECS_ON, phoneOff, setViewport } from './phoneSwitch'
 
 /* THE ROW SHAPES `#/gallery` DRAWS THAT NOTHING ELSE IN THIS APP EVER DRAWS.
@@ -381,14 +381,14 @@ async function setTheme(page: import('@playwright/test').Page, theme: 'light' | 
     else document.documentElement.removeAttribute('data-theme')
   }, theme)
   // a theme flip eases every colour over a beat (base.css); read after it lands
-  await page.waitForTimeout(450)
+  await settleMotion(page)
 }
 
 test('the kit is a Page: one h1, one width, one top gap, no sideways scroll, at every width', async ({ page }) => {
   for (const [width, height] of WIDTHS) {
     if (phoneOff(width)) continue
     await setViewport(page, { width, height })
-    await page.waitForTimeout(100)
+    await afterPaint(page)
     const m = await page.evaluate(() => {
       const main = document.querySelector<HTMLElement>('main[data-bn-page]')
       const h1 = main?.querySelector('h1')
@@ -574,7 +574,7 @@ test('a confirm is an alertdialog, its first focus is Cancel, and a held Enter c
   for (let i = 0; i < 5; i++) await page.keyboard.down('Enter')
   await page.keyboard.up('Enter')
   /* a closing layer keeps drawing for its leave beat, so wait it out and ask whether it is leaving */
-  await page.waitForTimeout(400)
+  await afterPaint(page)
   await expect(dialog, 'a held Enter closed the confirm').toBeVisible()
   await expect(dialog, 'a held Enter closed the confirm').not.toHaveAttribute('data-leaving')
   await page.keyboard.press('Escape')
@@ -592,7 +592,7 @@ test('a busy confirm cannot be closed by Close, Escape or the scrim', async ({ p
   await expect(dialog.getByRole('button', { name: 'Close' })).toBeDisabled()
   await page.keyboard.press('Escape')
   await page.mouse.click(4, 4)
-  await page.waitForTimeout(300)
+  await afterPaint(page)
   await expect(dialog, 'a busy confirm closed').toBeVisible()
   await expect(dialog, 'a busy confirm closed').not.toHaveAttribute('data-leaving')
   /* the specimen's write finishes, and then it closes */
@@ -1202,7 +1202,7 @@ test('axe finds nothing on the kit at 390 and 1440 in both themes, but what is l
           await opener.scrollIntoViewIfNeeded()
           await opener.click()
           await expect(page.locator('[data-bn-overlay="sheet"]')).toBeVisible()
-          await page.waitForTimeout(400)
+          await settleMotion(page)
         }
         const violations = await page.evaluate(async () => {
           const w = window as unknown as {

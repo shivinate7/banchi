@@ -381,7 +381,7 @@ test('the reconcile sheet dims the Runs sheet it was opened from, and a press th
    Held open by a delayed stub and measured before and during. Nothing reaches TCGplayer. */
 test('the fetch press keeps its place and size while it runs', async ({ page }) => {
   await page.route(/\/pipeline\/live-export$/, async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    await new Promise((resolve) => setTimeout(resolve, 1500)) // keep: stubbed answer held 1500 ms on purpose, a latency fixture
     await route.fulfill({
       status: 409,
       contentType: 'application/json',

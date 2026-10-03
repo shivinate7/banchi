@@ -1382,6 +1382,19 @@ if [ -f "$HERE/silent-write-guard.py" ]; then
   else bad "silent-write-guard.py no longer refuses a silenced commit — the extraction broke it"; fi
 fi
 
+LIBDIR="$HERE"
+echo ""
+echo "  the refusal log"
+. "$LIBDIR/refusal-log-assert.sh"
+rl="$tmp/refusals.log"
+rl_payload='{"session_id":"sess-1","cwd":"'"$tmp"'","tool_input":{"command":"gh api -f k=v repos/x/y"}}'
+rl_out="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$rl" python3 "$GUARD" --hook 2>&1)"; rl_status=$?
+[ $rl_status -eq 2 ] && ok "a refused command still exits 2" || bad "the logged refusal exited $rl_status"
+why="$(refusal_line_ok "$rl" "guard-shell:gh" "sess-1")" && ok "…and writes one well-formed line" || bad "the refusal log line: $why"
+rl_bad="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" python3 "$GUARD" --hook 2>&1)"; rl_bad_status=$?
+if [ $rl_bad_status -eq 2 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
+else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
+
 echo ""
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ] || exit 1
