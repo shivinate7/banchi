@@ -401,7 +401,7 @@ COMPONENTS = [
                                         "second copy of it.",
                                 "governed_by": ["D1", "D2", "D21", "D23", "D33", "D36", "D43",
                                                 "D180", "D63", "D145", "D163", "D172",
-                                                "D174"]},
+                                                "D174", "D125"]},
             "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews. "
                                     "SEEDS inventory/prices.json's rule and basis on the first "
                                     "join of an EMPTY corpus and never reassigns them (D86) "
@@ -1746,7 +1746,7 @@ COMPONENTS = [
                           "governed_by": ["D1", "D22", "D23", "D75"], "tested_by": ["T6"]},
             "crop.py": {"does": "cut the crop-retry regions out of a registered card",
                         "governed_by": ["D1", "D22", "D75"], "tested_by": ["T6"]},
-            "card_box.py": {"does": "the crop preview's card finder: a fine-tuned D-FINE-N on onnxruntime, detect_card behind it as the safety path",
+            "card_box.py": {"does": "the card finder for runs and the crop preview: a fine-tuned D-FINE-N on onnxruntime, detect_card behind it as the safety path",
                             "governed_by": ["D125"]},
             "model/dfine_card_640.onnx": {"does": "the D-FINE-N weights, 15.5 MB, committed on the owner's word",
                                           "governed_by": ["D125"]},

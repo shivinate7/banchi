@@ -1056,27 +1056,21 @@ def run(args, say) -> int:
         if item.stage != STAGE_PENDING:
             continue
         try:
-            # CROP TO THE DETECTED CARD BEFORE THE DOWNSCALE, when asked for. Local, free and
-            # deterministic — `geometry.detect_card` is the same border search T6 covers and
-            # Gate B's photographs proved, with no model call and no network.
+            # CROP TO THE DETECTED CARD BEFORE THE DOWNSCALE, when asked for. Local and free:
+            # `images.prepare_located` asks `geometry.locate_card`, the model with `detect_card`
+            # behind it, and is the same cut the crop preview makes (D125).
             #
             # A REFUSAL FALLS BACK TO THE WHOLE FRAME rather than failing the card. Detection
             # answers `None` when it cannot find a card (T6: "'Not found' must be a refusal,
             # never a guess"), and the honest response to that is to send what we always sent
             # — the run costs a little more and reads exactly as it would have.
-            box = None
-            if args.crop:
-                try:
-                    box = geometry.detect_card(item.capture.photo)
-                except Exception:
-                    box = None
-            item.prepared = images.prepare(
-                item.capture.photo, max_edge=args.max_edge, crop_box=box
+            box, item.prepared = images.prepare_located(
+                item.capture.photo, max_edge=args.max_edge, crop=args.crop
             )
             # COUNTED OFF WHAT WAS ACTUALLY MADE, not off what was asked for. `prepare`
             # applies `images.crop_refusal` and can decline a box detection did return —
             # a rectangle inside the card, which crops the collector number away — so a
-            # counter incremented beside `detect_card` above would report a crop that
+            # counter incremented beside the finder above would report a crop that
             # never happened. Three outcomes, and the preflight names all three.
             if box is not None:
                 if item.prepared.crop_refused is None:
@@ -1183,7 +1177,7 @@ def run(args, say) -> int:
         # comment on purpose — this is the figure an operator reads while deciding to spend,
         # and a denominator that changed silently is a published measurement rotting.
         not_found = len(to_send) - cropped - len(unfit)
-        say(f"crop            to the detected card +{images.CROP_PAD*100:.0f}% "
+        say(f"crop            to the detected card "
             f"— {cropped} cropped of the {len(to_send)} being sent"
             + (f", {not_found} sent whole (no card found)" if not_found else "")
             + (f", {len(unfit)} sent whole (box unfit to crop to)" if unfit else ""))

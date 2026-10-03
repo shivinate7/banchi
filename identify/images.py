@@ -366,6 +366,33 @@ def card_crop(image, box, pad: Optional[float] = None, aspect: float = geometry.
     return image.crop(crop_rect(image.size, box, pad, aspect))
 
 
+def prepare_located(path, max_edge: int = MAX_EDGE, crop: bool = True, find: Optional[bool] = None):
+    """`(box, Prepared)`: the one cut a run and the crop preview both make (D125).
+
+    The finder is `geometry.locate_card` (the model, `detect_card` behind it). A model box that
+    `crop_refusal` refuses falls back to `detect_card`'s box, and the guard lives here because
+    `geometry` may not import `identify`. A finder that raises sends the whole frame.
+    `box` is what the finder answered, cut with only when `crop` is set. `find` defaults to
+    `crop`: the preview finds with the crop off too, to report the finder's answer.
+    """
+    box = None
+    if crop if find is None else find:
+        try:
+            box = geometry.locate_card(path)
+        except Exception:
+            box = None
+    prepared = prepare(path, max_edge=max_edge, crop_box=box if crop else None)
+    if crop and prepared.crop_refused and box is not None and box.method == "dfine":
+        try:
+            fallback = geometry.detect_card(path)
+        except Exception:
+            fallback = None
+        if fallback is not None:
+            box = fallback
+            prepared = prepare(path, max_edge=max_edge, crop_box=box)
+    return box, prepared
+
+
 def prepare(path, max_edge: int = MAX_EDGE, crop_box=None) -> Prepared:
     """Read a photo from disk and return exactly what should be sent for it.
 
