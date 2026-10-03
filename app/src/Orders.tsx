@@ -2566,7 +2566,7 @@ function ReconcileBacklogPanel({
             {candidates.length === 1
               ? `1 order, placed ${dayLabel(dayOf(oldest))}.`
               : `${candidates.length} orders, placed ${dayLabel(dayOf(oldest))} to ${dayLabel(dayOf(newest))}.`}{' '}
-            Status: {joinPhrases(breakdown.map(([status, count]) => `${count} ${status.toLowerCase().replace(/\s+-\s+/g, ' and ')}`))}.
+            Status: {breakdown.map(([status, count]) => (status === 'no status' ? `${count} with no status` : `${count} ${status.toLowerCase()}`)).join('; ')}.
           </p>
           {live.length === 0 ? null : (
             <Notice

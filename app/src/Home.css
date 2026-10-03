@@ -74,6 +74,7 @@ a.home-standing-row:hover .home-standing-rule { scale: 1.5 1; }
 /* A LATE SENTENCE NEVER OUTGROWS ITS FRAME (D313): each is clamped to the lines its frame reserves, on any face. The full text is its title. */
 .home-standing-say, .home-foot-sum, .home-foot-last { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--clamp, 1); overflow: hidden; }
 .home-foot-sum, .home-foot-last { --clamp: 2; }
+.home-foot-last { --home-foot-lh: 1.5; }
 .home-standing-say { --clamp: var(--standing-lines, 1); }
 .home-standing-lead { font-weight: 700; color: var(--tone); }
 .home-standing-say strong { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -115,7 +116,7 @@ a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate
 }
 .home-foot-sold:hover { color: var(--bn-accent); text-decoration: none; }
 .home-foot-sold:hover b { color: var(--bn-accent); }
-.home-foot-last { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-3); line-height: 1.5; }
+.home-foot-last { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-3); line-height: var(--home-foot-lh); }
 .home-foot-last b { color: var(--bn-ink-2); font-weight: 700; font-variant-numeric: tabular-nums; }
 .home-foot-last em { font-style: normal; color: var(--bn-ink-3); }
 
@@ -304,7 +305,7 @@ a.home-deck { pointer-events: auto; }
   .home-stage:nth-child(n + 4) { grid-column: span 3; }
   .home-stage-arrow { display: none; }
   /* Beside the hero card the foot is narrow: the last sitting wraps to two lines, so both are held. */
-  .home-foot-last { min-height: calc(2 * 1.5em); }
+  .home-foot-last { min-height: calc(2 * var(--home-foot-lh) * 1em); }
 }
 @media (max-width: 559px) {
   .home-spine { grid-template-columns: repeat(2, minmax(0, 1fr)); }
