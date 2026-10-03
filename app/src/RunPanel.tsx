@@ -295,6 +295,22 @@ function identifyCost(detail: RunDetail, state: StepState): ReactNode {
   )
 }
 
+/** Whether the free reader read this run. The manifest names the engine in its flags. */
+function freeRun(detail: RunDetail): boolean {
+  const flags = detail.manifest.flags as { engine?: unknown } | undefined
+  return flags?.engine === 'marqo-b'
+}
+
+/** What the free reader did, as a sentence with its figures: matched, and left unread. */
+function matchReceipt(detail: RunDetail): string {
+  const matched = typeof detail.manifest.matched === 'number' ? detail.manifest.matched : 0
+  const unread = Array.isArray(detail.manifest.unread) ? detail.manifest.unread.length : 0
+  const cards = (n: number) => `${n} card${n === 1 ? '' : 's'}`
+  return unread > 0
+    ? `Matched ${cards(matched)}. ${cards(unread)} left unread for a paid read.`
+    : `Matched ${cards(matched)}.`
+}
+
 /** Whether the figure beside the tokens is the run's own record or today's rates over it. */
 function costSaid(detail: RunDetail): string {
   return detail.usage.cost_backfilled === true
@@ -922,7 +938,11 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                   {detail.usage.cost_usd != null ? (
                     <span className="bn-muted" title={costSaid(detail)}>
                       {detail.usage.cost_usd === 0 ? (
-                        'Nothing spent — every card was already cached'
+                        freeRun(detail) ? (
+                          'Free'
+                        ) : (
+                          'Nothing spent — every card was already cached'
+                        )
                       ) : (
                         <>
                           Cost <Spent usd={detail.usage.cost_usd} />
@@ -932,6 +952,11 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                   ) : null}
                   {detail.batch_ids.length > 0 ? (
                     <span className="bn-mono runs-batch">{detail.batch_ids.join(', ')}</span>
+                  ) : null}
+                  {freeRun(detail) ? (
+                    /* THE FREE READER'S RECEIPT: a figure for each of the three things it did. An
+                       unread card is not a failure and is in no queue: it still needs a read. */
+                    <span className="bn-muted">{matchReceipt(detail)}</span>
                   ) : null}
                 </div>
                 {detail.live ? (

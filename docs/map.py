@@ -7705,7 +7705,7 @@ COMPONENTS = [
                                      "one fill is the spend button inside the panel.",
                              "governed_by": ["D5", "D33", "D38", "D39", "D100", "D103", "D104",
                                              "D105", "D117", "D118", "D180", "D218",
-                                             "D291"]},
+                                             "D291", "D313"]},
             # ---- the runs screen's parts (Banchi, 2026-09) ----
             "src/RunsStage.tsx": {"does": "WHERE A RUN IS, in one vocabulary for the list, the "
                                           "run panel and Home. The server says which of the four "
@@ -7772,7 +7772,17 @@ COMPONENTS = [
                                      "governed_by": ["D13", "D27", "D32", "D33", "D39", "D180",
                                                      "D183", "D56", "D58", "D65", "D76", "D277",
                                                      "D94", "D91", "D118", "D145", "D172", "D174",
-                                                     "D196", "D269", "D275", "D291"]},
+                                                     "D196", "D207", "D269", "D275", "D291", "D313",
+                                                     "D2"]},
+            "src/engines.ts": {"does": "WHO READS THE CARDS: the two engines the runs sheet offers, `marqo-b` "
+                                       "(the free reader, which matches a photograph to stock photos) and "
+                                       "`haiku` (the paid read), and the free read as the default pick. It "
+                                       "holds `HAIKU_NAME_TOOLTIP` and `MATCHER_NAME_TOOLTIP`, the two "
+                                       "strings D196 allows to name a model, on the owner's word. The "
+                                       "`no mechanism on screen` row reads each constant from this file and "
+                                       "exempts exactly that text, so each is declared on one line with one "
+                                       "pair of quotes.",
+                               "governed_by": ["D2", "D196"]},
             "src/RunsLog.tsx": {"does": "a command's stdout, verbatim, in a well that follows its "
                                         "tail, counts its lines, folds and copies. NOTHING HERE "
                                         "SUMMARISES WHAT A COMMAND SAID — D33 puts every "

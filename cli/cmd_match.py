@@ -24,7 +24,6 @@ from __future__ import annotations
 import json
 import os
 import time
-from pathlib import Path
 from typing import Callable, Optional
 
 from identify import match
@@ -32,13 +31,9 @@ from store import files as store_files
 from store.session import Store
 
 
-def progress_path() -> Path:
-    return store_files.inventory_dir() / "match-prepare.json"
-
-
 def _write_progress(state: str, phase: str, done: int, total: int, message: str = "", started: Optional[float] = None) -> None:
     store_files.write_json(
-        progress_path(),
+        match.progress_path(),
         {
             "state": state,  # running | done | failed
             "phase": phase,  # model | fingerprints

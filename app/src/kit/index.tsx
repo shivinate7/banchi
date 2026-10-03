@@ -911,7 +911,7 @@ export function Segmented<T extends string>({
   className,
 }: {
   readonly value: T
-  readonly options: readonly { readonly value: T; readonly label: ReactNode; readonly icon?: IconName; readonly kbd?: string }[]
+  readonly options: readonly { readonly value: T; readonly label: ReactNode; readonly icon?: IconName; readonly kbd?: string; readonly title?: string }[]
   readonly onChange: (next: T) => void
   readonly label?: string
   /** `'sm'` matches a 28px row of search/select controls (S10) — see kit.css's own note on
@@ -927,6 +927,7 @@ export function Segmented<T extends string>({
           type="button"
           className={['bn-seg-item', size === 'sm' ? 'bn-seg-item-sm' : ''].filter(Boolean).join(' ')}
           aria-pressed={option.value === value}
+          title={option.title}
           onClick={() => onChange(option.value)}
         >
           {option.icon ? <Icon name={option.icon} size={14} /> : null}

@@ -967,12 +967,20 @@ def run(args, say) -> int:
         else set()
     )
 
+    matcher_read = 0
     for item in items:
         # THE DIGEST, NOT THE PREPARED BYTES. This read `item.prepared.sha256` and skipped on
         # `prepared is None`; under hash-first that test would have skipped every card whose
         # answer the store already owns, which is exactly the set this loop exists to find.
         if item.photo_sha256 is None:
             continue
+        held = snapshot.cache.get(item.key)
+        if (
+            held is not None
+            and held.engine == cache_mod.ENGINE_MATCHER
+            and (held.cleared_by_human or held.photo_sha256 == item.photo_sha256)
+        ):
+            matcher_read += 1  # answered by the free reader, whether this press skips it or not
         entry = snapshot.cache.reusable(
             item.key, item.photo_sha256, reread_matcher=reread_matcher
         )
@@ -1094,6 +1102,12 @@ def run(args, say) -> int:
     # directory was reported to the operator as a CACHE HIT, on the one line they read to
     # decide whether the run is worth paying for. There is now a value that means cache hit.
     say(f"cache hits      {len([i for i in items if i.stage == STAGE_CACHED])}")
+    if matcher_read:
+        # THE PAID PRESS'S ASK. These cards were answered by the free reader. A paid press skips
+        # them unless `--reread-matcher` asks to buy them again; either way the figure is here, so
+        # the screen can show what the ask covers before it is turned on.
+        say(f"matcher-read    {matcher_read} card(s) the free reader answered "
+            f"({'being read again' if reread_matcher else 'skipped'} by this press)")
     say(f"to send         {len(to_send)}")
     say(f"payload         {payload_bytes / 1_000_000:.1f} MB in {chunks} batch chunk(s)")
     say(f"estimated cost  ${'0.00' if free else _estimate(to_send)}")
@@ -1401,6 +1415,17 @@ def run(args, say) -> int:
         result = _run_matcher(to_send, say)
         _apply(items_by_key, result)
         read_count = len(result.outcomes)
+        # THE RECEIPT'S FIGURES, in the manifest the runs sheet reads: how many the free reader
+        # matched, and which cards it left unread and why. Written here, before the record, so a
+        # run that dies later still says what the read did.
+        run_dir.set(
+            matched=read_count,
+            unread=[
+                [item.key, item.unread.code]
+                for item in to_send
+                if item.stage == STAGE_UNREAD and item.unread is not None
+            ],
+        )
         say(f"read            {read_count} of {len(to_send)}; "
             f"{len(to_send) - read_count} left unread, for a paid press")
         for item in to_send:

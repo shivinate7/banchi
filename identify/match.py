@@ -112,6 +112,11 @@ def index_path() -> Path:
     return store_files.inventory_dir() / "fingerprints.sqlite"
 
 
+def progress_path() -> Path:
+    """Where `pkmnscan match prepare` writes its progress, read by the runs sheet."""
+    return store_files.inventory_dir() / "match-prepare.json"
+
+
 def sha256_of_file(path: Path) -> str:
     digest = hashlib.sha256()
     with open(path, "rb") as handle:
