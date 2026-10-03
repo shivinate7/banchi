@@ -2734,17 +2734,17 @@ test('the chip says which rule is live, and it is derived rather than remembered
   await open(page)
 
   await page.getByRole('button', { name: 'Change' }).click()
-  const match = page.getByRole('button', { name: 'Match market' })
+  const match = page.getByRole('button', { name: 'Match market, in force' })
   const under = page.getByRole('button', { name: 'Market −5%' })
 
-  /* The run loads at `match`/`market`, so that chip is the live one before anything is
+  /* The run loads at `match`/`market`, so that row is the live one before anything is
      pressed — read off the corpus's policy, not off a selection this screen remembers. */
-  await expect(match).toHaveAttribute('aria-pressed', 'true')
-  await expect(under).toHaveAttribute('aria-pressed', 'false')
+  await expect(match).toBeVisible()
+  await expect(under).toHaveAccessibleName('Market −5%')
 
   await under.click()
-  await expect(under).toHaveAttribute('aria-pressed', 'true')
-  await expect(match).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByRole('button', { name: 'Market −5%, in force' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Match market', exact: true })).toBeVisible()
 })
 
 test('a hand-typed rule lights no chip rather than a stale one', async ({ page }) => {
@@ -2759,10 +2759,7 @@ test('a hand-typed rule lights no chip rather than a stale one', async ({ page }
   await page.getByRole('button', { name: 'Change' }).click()
 
   for (const label of ['Match market', 'Market −5%', 'TCG Low −1%']) {
-    await expect(page.getByRole('button', { name: label })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    )
+    await expect(page.getByRole('button', { name: label, exact: true })).toBeVisible()
   }
 })
 
@@ -4279,6 +4276,104 @@ test('the rule sheet writes the cut-off to both keys, and says how many cards it
   /* ONE FIGURE, BOTH KEYS (the owner, 2026-09-03). */
   expect(sentPolicy(wire).threshold).toBe('0.45')
   expect(sentPolicy(wire).sub_threshold).toEqual({ flat: '0.45' })
+})
+
+test('rule panel: a rule pick gets a receipt, and Undo puts the old rule back', async ({ page }) => {
+  const wire = await open(page)
+  await page.getByRole('button', { name: 'Change' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Pricing rule' })
+  await sheet.getByRole('button', { name: 'Market −5%', exact: true }).click()
+  const receipt = page.locator('.bn-toast', { hasText: 'Pricing rule changed' })
+  await expect(receipt).toBeVisible()
+  await expect.poll(() => sentPolicy(wire).rule).toBe('undercut:5')
+  await receipt.getByRole('button', { name: 'Undo' }).click()
+  await expect(sheet.getByRole('button', { name: 'Match market, in force' })).toBeVisible()
+  await expect.poll(() => sentPolicy(wire).rule).toBe('match')
+})
+
+test('rule panel: a run cut-off change gets a receipt, and Undo hands the run back to the store', async ({ page }) => {
+  await open(page)
+  await page.getByRole('button', { name: 'Change' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Pricing rule' })
+  await sheet.getByRole('button', { name: 'Give this run its own cut-off' }).click()
+  const receipt = page.locator('.bn-toast', { hasText: 'Cut-off changed for this run' })
+  await expect(receipt).toBeVisible()
+  await expect(sheet.getByRole('button', { name: 'Follow the store again' })).toBeVisible()
+  await receipt.getByRole('button', { name: 'Undo' }).click()
+  await expect(sheet.getByRole('button', { name: 'Give this run its own cut-off' })).toBeVisible()
+})
+
+for (const [market, listed] of [['4.00', '3.80'], ['10.00', '9.50']] as [string, string][]) {
+  test(`rule panel: the example price is the server's figure for the rule (${listed})`, async ({ page }) => {
+    await open(page, {
+      skus: [
+        sku({
+          snap: { market, direct_low: null, low: market, low_with_shipping: market, now: null },
+          presets: { market_match: market, market_undercut_5: listed, low_undercut_1: null },
+        }),
+      ],
+    })
+    await page.getByRole('button', { name: 'Change' }).click()
+    const sheet = page.getByRole('dialog', { name: 'Pricing rule' })
+    const row = sheet.locator('.pricing-rule-row', { hasText: 'Market −5%' })
+    await expect(row).toContainText(`Articuno - 161/159 at $${market}`)
+    await expect(row).toContainText(`$${listed}`)
+    await expect(sheet.locator('.pricing-rule-row', { hasText: 'TCG Low −1%' })).not.toContainText('lists at')
+  })
+}
+
+test('rule panel: the Overview and the checked row agree, also after Custom is pressed before typing', async ({ page }) => {
+  await open(page)
+  await page.getByRole('button', { name: 'Change' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Pricing rule' })
+  const overview = sheet.locator('.bn-set-census-cell', { hasText: 'Rule' }).first()
+  await sheet.getByRole('button', { name: 'Custom', exact: true }).click()
+  await expect(sheet.getByRole('button', { name: 'Custom', exact: true })).toHaveAttribute('aria-expanded', 'true')
+  await expect(overview).toContainText('Match market')
+  await expect(sheet.getByRole('button', { name: 'Match market, in force' })).toBeVisible()
+  await sheet.getByRole('button', { name: 'Market −5%', exact: true }).click()
+  await expect(overview).toContainText('Market −5%')
+  await expect(sheet.getByRole('button', { name: 'Market −5%, in force' })).toBeVisible()
+})
+
+test('rule panel: undoing a custom rule closes Custom and clears its draft', async ({ page }) => {
+  await open(page)
+  await page.getByRole('button', { name: 'Change' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Pricing rule' })
+  await sheet.getByRole('button', { name: 'Custom', exact: true }).click()
+  const pct = sheet.getByLabel('Percentage')
+  await pct.fill('10')
+  await pct.press('Enter')
+  await expect(sheet.getByRole('button', { name: 'Custom, in force' })).toBeVisible()
+  await page.locator('.bn-toast:not([data-leaving])', { hasText: 'Pricing rule changed' }).getByRole('button', { name: 'Undo' }).click()
+  await expect(sheet.getByRole('button', { name: 'Match market, in force' })).toBeVisible()
+  await expect(sheet.getByLabel('Percentage')).toHaveCount(0)
+  await sheet.getByRole('button', { name: 'Custom', exact: true }).click()
+  await expect(sheet.getByLabel('Percentage')).toHaveValue('')
+})
+
+test('rule panel: a newer rule change retires the older toast, so Undo cannot clobber it', async ({ page }) => {
+  const wire = await open(page)
+  await page.getByRole('button', { name: 'Change' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Pricing rule' })
+  await sheet.getByRole('button', { name: 'Market −5%', exact: true }).click()
+  await sheet.getByRole('button', { name: 'TCG Low −1%', exact: true }).click()
+  const live = page.locator('.bn-toast:not([data-leaving])', { hasText: 'Pricing rule changed' })
+  await expect(live).toHaveCount(1)
+  await live.getByRole('button', { name: 'Undo' }).click()
+  await expect.poll(() => sentPolicy(wire).rule).toBe('undercut:5')
+})
+
+test('rule panel: the example card is the same under every lens', async ({ page }) => {
+  await open(page)
+  await page.getByRole('button', { name: 'Change' }).click()
+  const row = page.getByRole('dialog', { name: 'Pricing rule' }).locator('.pricing-rule-row', { hasText: 'Market −5%' })
+  const before = await row.locator('.pricing-rule-says').innerText()
+  await page.keyboard.press('Escape')
+  const lens = page.getByRole('radio', { name: /^Not selling/ })
+  if (await lens.count()) await lens.click()
+  await page.getByRole('button', { name: 'Change' }).click()
+  await expect(page.getByRole('dialog', { name: 'Pricing rule' }).locator('.pricing-rule-row', { hasText: 'Market −5%' }).locator('.pricing-rule-says')).toHaveText(before)
 })
 
 test('a product name opens the one product view, and T opens it from the keyboard', async ({ page }) => {
