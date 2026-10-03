@@ -244,6 +244,8 @@ def run(ok) -> None:
     shared = hook("Write|Edit", "scripts/guard-opsec.sh")
     reap = hook("Bash", "scripts/reap.py --hook")
     silent = hook("Bash", "scripts/silent-write-guard.py --hook")
+    narrow = "PKMNSCAN_SILENT_WRITE_ONLY=file,bash-c "
+    silent_c = hook("Bash", narrow + "scripts/silent-write-guard.py --hook")
     extra = hook("Bash", "scripts/janitor.py --hook")
 
     def codex_hooks_findings(claude: list, codex: list) -> list:
@@ -260,17 +262,31 @@ def run(ok) -> None:
                 env_map.CLAUDE_SETTINGS, env_map.CODEX_HOOKS = saved
         return [f for row in rep.checks for f in row.findings]
 
-    found = codex_hooks_findings([shared, silent], [shared, silent, reap])
+    found = codex_hooks_findings([shared, silent_c], [shared, silent, reap])
     ok(not found, "green: Claude lacks the CODEX_ONLY hook and Codex runs it", str(found))
-    found = codex_hooks_findings([shared, silent, reap], [shared, silent, reap])
+    found = codex_hooks_findings([shared, silent_c, reap], [shared, silent, reap])
     ok(len(found) == 1 and "CODEX_ONLY is stale" in str(found[0]),
        "red: Claude runs a CODEX_ONLY hook again", str(found))
-    found = codex_hooks_findings([shared, silent], [shared, silent])
+    found = codex_hooks_findings([shared, silent_c], [shared, silent])
     ok(len(found) == 1 and "lost" in str(found[0]),
        "red: Codex loses a CODEX_ONLY hook", str(found))
-    found = codex_hooks_findings([shared, silent], [shared, silent, reap, extra])
+    found = codex_hooks_findings([shared, silent_c], [shared, silent, reap, extra])
     ok(len(found) == 1 and "does not run" in str(found[0]),
        "red: an unlisted Codex-only hook appears", str(found))
+
+    # PKMNSCAN_SILENT_WRITE_ONLY pin: Claude's entry carries `file,bash-c`, Codex's carries none.
+    found = codex_hooks_findings([shared, silent_c], [shared, silent, reap])
+    ok(not found, "green: Claude has the file,bash-c prefix and Codex has none", str(found))
+    for label, claude_entry in (
+        ("only `file`", hook("Bash", "PKMNSCAN_SILENT_WRITE_ONLY=file scripts/silent-write-guard.py --hook")),
+        ("no prefix", silent),
+    ):
+        found = codex_hooks_findings([shared, claude_entry], [shared, silent, reap])
+        ok(any(f.where == ".claude/settings.json" for f in found),
+           f"red: Claude's entry has {label}", str(found))
+    found = codex_hooks_findings([shared, silent_c], [shared, silent_c, reap])
+    ok(any(f.where == ".codex/hooks.json" and "full hook" in f.message for f in found),
+       "red: Codex's entry has the prefix", str(found))
 
     # GUARD_SHELL_SKIP pin: Claude's Bash entry skips three clauses, every other guard-shell entry is empty.
     gs = "scripts/guard-shell.py --hook"
