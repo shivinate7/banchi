@@ -2,7 +2,7 @@
 
 **Status: DESIGN. Nothing is built.** D2 (identification is Haiku vision, end to end) carries the
 owner's ruling. For each run, the owner picks who reads the cards: Haiku or the stock-photo matcher.
-Haiku stays the default.
+Haiku as the default is a proposal. The owner confirms it.
 
 This spec answers six questions. What can the matcher not do? When may it decide? Where do its
 candidates come from? What does it weigh? Where does the pick sit on screen? How does the pipeline
@@ -41,46 +41,62 @@ The eval scripts and raw results live in a scratchpad. They are not in the repo.
 |---|---|---|
 | Name read from the print | Takes the name from the matched catalog entry | Writes the same fields. No gap when the card is in the pool. |
 | Collector `number` and `printed_total`, as printed | Takes both from the matched entry: the tcgcsv `Number` cell, or the vendored set file | Builds the join key with `number_index_key` from catalog data. It is exact. No gap when the card is in the pool. |
-| `finish`: normal, holo, reverse holo or unknown | Cannot read foil. It reports `unknown` every time. | The finish ladder (D3) runs on the claim and the catalog. See below. |
+| `finish`: normal, holo, reverse holo or unknown | Cannot read foil. It reports `unknown` every time. | The finish ladder (D3, variants resolve by a fixed ladder) runs on the claim and the catalog. See below. |
 | `confidence`: high, medium, low | Has a cosine margin and a similarity | The accept rule in section 3 sets `high` or `low`. |
 | The set hint, as a prompt hint | The hint narrows the candidate pool | See the set rules below. |
-| A read of any card, stock photo or not | Cannot place a card whose printing has no stock photo | Never guesses that card. See below and section 4. |
+| A read of any card, stock photo or not | Cannot place a card whose printing has no stock photo | Leaves that card unread. See below. |
 
 **Finish (D3).** The prompt gives Haiku a finish field with an `unknown` member. The ladder already
 treats no detection as a `detected_finish` of `None`. Rung 1 is the capture-time claim. Rung 2 is the
 catalog row, when one condition remains. Rung 3 is detection. Rung 4 is review.
 
 A matcher run never reaches rung 3. A card with no claim and more than one stocked finish ends at rung 4.
-It lands in review with the existing reason `ambiguous_no_signal` (`pipeline/variant.py`).
-No new reason code is needed.
+It lands in review with the existing reason `ambiguous_no_signal`. Review gets only cards the matcher accepted (`pipeline/variant.py`).
+The matcher read it and the ladder could not finish it. No new reason code is needed.
 
 Detection is weak evidence in any case. On box 2, the owner's measurement put its false contradictions at 42%.
 That is why the ladder lets a claim outrank it. How many unclaimed multi-finish cards sit in the owner's boxes today is unmeasured.
 
-**Set hints and widening (D76, D170).** These rules scope the TCGplayer export fetch. They do not scope the Haiku read.
+**Set hints and widening (D76, a set hint's width is per game; D170, a Pokemon run names its sets).**
+These rules scope the TCGplayer export fetch. They do not scope the Haiku read.
 They stay unchanged for both engines, because both engines still join against the export.
 The matcher adds one use of the same facts: the candidate pool.
 
-- A Pokemon matcher run names its sets, as D170 already requires.
-  `_scope_for_run` is the one function that decides this. It refuses a run that would widen.
-  That refusal also protects the pool, so the pool is never the whole category.
-- A Riftbound matcher run uses every Riftbound set that has stock photos.
-  That is 1,177 images across the store's four Riftbound sets in the spike (measured).
-  Riftbound's export scope is `category`, so the pool and the export agree.
+**The rule: the matcher reads a card only when its whole candidate pool is complete.**
+
+- **A hinted card.** Its pool is its hinted set. The set must be complete.
+- **An unhinted card.** Its set is unknown, so its pool is every set of its game. Every one of those sets must be complete.
+  If any set of the game is incomplete, the card is left unread. A per-set test would let the matcher accept a guess here.
+- **Sealed product and anything with no number** is never matched. It has no card photo to compare.
+- A set is complete when every numbered product in it has a stock image and a stored fingerprint (section 4).
+- For Pokemon, D170 already makes every run name its sets. An unhinted Pokemon card cannot reach a matcher run.
+  The pool is therefore never the whole Pokemon category.
+- For Riftbound, "every set of its game" is every Riftbound group that holds a numbered product. Riftbound's export scope is `category`,
+  so the pool and the export agree.
 - A named set did not help accuracy in the spike. On Riftbound, pool-wide and set-only top-1 were both 98.7% (measured, first round).
-  The pool rule exists for the size of the Pokemon category. It does not exist for accuracy.
+  The rule exists for correctness when a set is incomplete. It does not exist for accuracy.
 
-**Cards with no stock image.** Two kinds exist. Sealed product has no number and no card photo.
-A numbered printing can also lack one. The first rounds of the spike never tested this case.
+**Cards the matcher leaves unread.** A card is left unread in three cases. Its pool is incomplete. Its margin M is below the rule in section 3.
+Its floor S is below the rule in section 3. The first rounds of the spike never tested the absent-photo case.
 So a second test removed the true card's stock photos from the pool. Every answer is then wrong by construction.
-Section 3 gives the result. Per card, the matcher run does this and nothing else:
+Section 3 gives the result. For an unread card, the matcher run does this and nothing else:
 
-1. If the card's set has no complete pool, the card is left unread. It stays in the selection as needing identification.
-2. The preflight and the receipt both say how many cards were left, and why. The owner presses the paid read for them.
-3. A matcher press never calls Anthropic. There is never an automatic fallback to Haiku.
+1. It writes no identification. The card stays in the selection as needing identification.
+2. The run goes on for the other cards. The preflight and the receipt both say how many cards were left unread, and why.
+3. A matcher press never calls Anthropic. Nothing falls back on its own.
    A free press must never spend money by surprise. This is the owner's ruling.
+4. The owner presses the paid read for those cards, by choice.
 
-A card the matcher left unread does not go to review. Review is for a card the matcher read and doubted.
+An unread card never goes to review. Review holds a card the matcher accepted and the finish ladder could not finish.
+The run record keeps the reason and the top three candidates for each unread card. It writes no identification for it.
+
+**How many of the owner's cards are eligible today** (measured, from the store opened read-only, and the stock-image
+coverage listing). The store holds 3,503 cards with a SKU: 2,961 Riftbound and 542 Pokemon. 3,501 have a number.
+2,802 carry a set hint and sit in a set whose numbered products all have an image URL.
+The other 699 are unhinted Riftbound cards. Every one of the 8 Riftbound groups that holds a numbered product has an image URL for all of them.
+So 3,501 of 3,503 (99.9%) meet the rule on image URLs. The two others have no number.
+This is an upper bound. A set counts as complete only when every fingerprint is stored.
+The fingerprint index run (section 4) confirms it and writes the per-set coverage table.
 
 **Games the matcher refuses.** `pokemon_code` and `misc` have no stock photos.
 Code cards follow their own rules. No code-card photo is ever embedded, copied or matched.
@@ -91,11 +107,10 @@ The matcher serves `pokemon`, `riftbound` and `one_piece`.
 The matcher answers with its best card and two numbers. The margin M is the cosine of the best match
 minus the cosine of the second. The floor S is the cosine of the best match.
 
-**Accept only when all three hold:** the card's set pool is complete, M is at least 0.02, and S is
-at least 0.755. Everything else gets `confidence` of `low` in the same identification record.
-The existing routing gate (`review_below`, set to low by default) sends it to the review queue with
-its photo. No new join branch is built. The record also carries the top three candidates.
-The queue can draw them as evidence.
+**Accept only when all three hold:** the card's candidate pool is complete (section 2), M is at least 0.02, and S is
+at least 0.755. An accepted card gets `confidence` of `high` in the identification record.
+**Every other card is left unread** (section 2). It is not routed to review, and no `low` record is written for it.
+No new join branch is built, because an unread card never reaches the join.
 
 Measured on the 500 photographs, Marqo-B:
 
@@ -112,6 +127,7 @@ Measured on the 500 photographs, Marqo-B:
   Among the wrong accepted answers in the first row, 96 were siblings with the same name.
 - A complete pool is therefore a hard precondition. A threshold cannot replace it.
   Even with both thresholds, 12.2% of absent-truth answers pass. Completeness removes that case.
+  For an unhinted card the pool is every set of the game, so one incomplete set blocks every unhinted card of that game.
 - The spike did not demonstrate 99.5% precision. It split the 500 cards at random 20 times.
   Each time it fit the margin on one half and scored the other half.
   Marqo-B accepted 99% of cards at a mean precision of 99.4% and a worst split of 98.8% (measured).
@@ -149,12 +165,12 @@ D301 (stock photos are hotlinked, never mirrored) governs how they are used toda
 
 **How fresh they are.** tcgcsv answers come from `Market`. They are cached for `TCGCSV_TTL_SECONDS`, which is one hour.
 The vendored Pokemon tree is a committed snapshot. `vendor/pokemon-tcg-data/SNAPSHOT.json` records when it was taken.
-Only `make catalog-refresh` renews it. A set released after the snapshot has no row (DEBT44).
+Only `make catalog-refresh` renews it. A set released after the snapshot has no row (DEBT44, the vendored tree lags a new set).
 The pool index records the snapshot it was built from, so a stale index is visible.
 
-**Complete pool.** A set pool is complete when every numbered product in its tcgcsv group, or in its
-vendored set file, has an image. A scope that includes an incomplete set is not eligible for the matcher.
-The preflight names each such set.
+**Complete pool.** A set is complete when every numbered product in its tcgcsv group, or in its vendored
+set file, has an image and a stored fingerprint that matches the current model file. Section 2 says which
+cards need which sets. The preflight names each incomplete set, and the cards it leaves unread because of it.
 
 **The index.** One stock image becomes one vector of 768 floats, which is 3 KB.
 The spike's 1,365 images make about 4.2 MB (measured). The index lives under `inventory/`, beside the other
@@ -164,8 +180,14 @@ Building the index needs the image bytes once. D301 (stock photos are hotlinked,
 on the owner's word for this one read. The server reads each stock image, computes its fingerprint, and drops the bytes.
 Only the fingerprint is stored. A fingerprint records the model file hash and the source URL.
 **A change of model rebuilds every fingerprint.** An old fingerprint never meets a new model.
-The read is the matcher's own step. The owner starts it from a screen. The spike fetched 1,365 images at a polite pace,
-which took a few minutes (measured).
+The read is the matcher's own step. The owner starts it from a screen (section 6). The spike fetched 1,365 images
+at a polite pace, which took a few minutes (measured).
+
+**A matcher press never builds or refreshes fingerprints.** It reads only fingerprints that are already stored.
+A fingerprint is stale when the model file hash differs, or when the set now holds a numbered product with no fingerprint.
+A stale or missing fingerprint makes its set incomplete, so the cards that need that set are left unread.
+Only the owner's press on the fingerprint control (section 6) reads images, and it shows its size first.
+A matcher press never downloads, and it never spends money.
 
 ## 5. Weight
 
@@ -243,6 +265,7 @@ Marqo-B is the best on accuracy for its cost. CLIP L/14 ties it on accuracy at a
 **Where.** The runs sheet. `Runs.tsx` draws `RunsComposer`, the staged composer for the one press that can spend money.
 Its second stage, "One reading for this press", already holds a per-press choice about how photographs are read.
 The pick is a segmented control above that choice, labeled "Who reads these cards".
+Haiku as the default pick is a proposal. The owner confirms it.
 It is one term of the press, so the selection stays the cards the operator named (D180, a press names the cards it covers).
 Nothing else about selection changes.
 
@@ -256,21 +279,40 @@ The build lane must export the constant under that name, or the exemption finds 
 | Pick | Label | Line under it |
 |---|---|---|
 | `haiku` | Read from the photo | Reads the name, the number and the foil. Costs about the quoted amount. |
-| `marqo-b` | Match to stock photos | Free. Needs a stock photo for each card. Cannot tell foil from normal. Cards it is unsure of go to Review with their photo. |
+| `marqo-b` | Match to stock photos | Free. Needs a stock photo for each card. Cannot tell foil from normal. Cards it is unsure of are left unread, and you can read them with the paid read. |
+
+**A tooltip on each pick.** Both picks carry a `title` tooltip. The matcher's tooltip is `MATCHER_NAME_TOOLTIP` and names the model.
+The Haiku pick's tooltip is a plain sentence about what the read does. It carries no model name,
+because the owner's exception is one string (D196). If the owner wants the Haiku name in its tooltip, that needs a second
+named exception. This is an open point for the owner.
 
 - The cost line comes from the free preflight. `POST /pipeline/preflight` takes the engine.
   It returns a dollar amount for Haiku and zero for the matcher.
 - The accuracy line carries no percentage. The two figures do not compare.
   The line names outcomes: what the engine reads, what it cannot read, and where doubt goes.
-- The matcher quote adds three counts. They are the cards it can match, the cards it must leave because
-  their set has no complete pool, and the cards already answered. It also adds the setup state.
+- The matcher quote adds three counts. They are the cards it can match, the cards it must leave unread because
+  their pool is incomplete, and the cards already answered. A card can also be left unread after the read, when its margin is too small.
+  The quote cannot count those, so it says so. It also adds the setup state.
+- **A Haiku press reads the unread cards only, by default.** A selection can hold cards the matcher accepted.
+  Those are answered. The Haiku preflight quote names the count it would bill, and that count excludes them.
+  Reading them again is an explicit choice, a second line on the quote: "Also read again the 412 cards that matching decided".
+  That line shows its own cost, and it is off until the owner turns it on.
 - The press button names the cards, as D180 requires. It reads "Match 412 cards, free" for the matcher.
   It reads "Read 412 cards, about $0.45" for Haiku.
 - When the matcher is picked, the crop and size choice is hidden. The matcher always uses the same crop.
 - Haiku is the default pick each time the composer opens. The pick is not stored on the device.
 
-**The receipt.** The run record shows the engine. It then shows four counts: matched and decided, sent to Review,
-left unread, and already answered. The run line reads, for example, "Matched 412 cards. 37 went to Review. 9 were left for a Haiku read."
+**Fingerprint control.** The runs sheet has one card named "Prepare matching" with two parts. Each part shows its size first and
+starts only on the owner's press.
+
+- The model file: 372 MB, a download (section 5).
+- The fingerprints: the number of stock images to read, one read each, and how many sets are complete today.
+  A press reads the missing and stale images, in memory, and stores the fingerprints (D301, amended).
+  It reports sets complete and sets incomplete when it ends. Nothing else starts it.
+
+**The receipt.** The run record shows the engine. It then shows three counts: matched, left unread, and already answered.
+A matched card the finish ladder cannot finish goes to Review as before. The run line reads, for example,
+"Matched 412 cards. 9 were left unread for a paid read. 37 of the matched cards need a finish answer in Review."
 
 The manifest records the engine in `flags`. It records the model hash and the pool snapshot in the existing
 `model` field and a new run field. A review queue entry carries the engine that read it, beside the existing read fields.
@@ -283,7 +325,7 @@ One reports the matcher state. One downloads on a `confirm`.
 
 **A route is not a feature (hard rule).** The build is done only when the route, the `server.ts` function
 and this control exist, and a human can reach them. Where it writes, done also needs a receipt and a way back.
-The way back is a Haiku press. It overwrites a matcher answer (section 7).
+The way back is the explicit re-read choice on a Haiku press. It overwrites a matcher answer (section 7).
 
 ## 7. One path for both engines
 
@@ -294,7 +336,8 @@ It returns the same `BatchRun` shape, with zero usage. Everything after `_apply`
 
 - The run payload records the same `identification` dictionary: name, number, printed total, finish `unknown`, and confidence.
 - Collect has nothing to collect. A matcher run finishes in its child process. The run directory is polled as before.
-- `join` reads the same `IdentifiedCard`. The routing gate sends `low` to review. `emit` is untouched.
+- `join` reads the same `IdentifiedCard`. A matcher record always carries `high`, because a card the matcher doubts is never written.
+  The finish ladder still routes by its own reasons. `emit` is untouched.
 - The run is a detached child, like a Haiku run (D33, every pipeline step is reachable from a screen).
   It outlives a closed tab or a server restart.
 - A matcher run takes the same claim on its cards as a Haiku run (D174, the claim that stops two live presses reading one card).
@@ -306,9 +349,10 @@ A stale entry is kept unless the press asks to re-identify stale answers.
 Without a change, a Haiku press would adopt a matcher answer as paid for. So:
 
 - Each entry carries `engine`. An entry with no `engine` is `haiku`.
-- A Haiku press adopts only Haiku entries and human-cleared entries.
-- A matcher press never overwrites a Haiku entry or a human-cleared entry. It skips them as answered.
-- A Haiku press overwrites a matcher entry. That is the way back.
+- A Haiku press adopts Haiku entries, human-cleared entries and matcher entries as answered. It does not bill them.
+- The explicit re-read choice (section 6) overwrites matcher entries only. It never overwrites a human-cleared entry.
+- A matcher press never overwrites any entry. It skips every answered card.
+- The way back from a matcher answer is the explicit re-read choice.
 - The matcher's fingerprint is the model file hash, the pool snapshot and the thresholds.
 
 **Tests the build must add.**
@@ -321,9 +365,12 @@ Without a change, a Haiku press would adopt a matcher answer as paid for. So:
 
 ## 8. The owner's rulings
 
-- A card with no stock photo is left unread, and the run says how many. There is no automatic fallback to Haiku (section 2).
+- A card the matcher cannot accept is left unread and stays in the selection. It never goes to review. Nothing falls back on its own (sections 2 and 3).
+- The matcher reads a card only when its whole candidate pool is complete (section 2).
 - D301 is amended for one fingerprint read of each stock image. A model change rebuilds every fingerprint (section 4).
 - The model file is a release asset of `shivinate7/banchi`, with a pinned hash, downloaded when the owner presses a control (section 5).
 - The control uses plain words. The model name sits in one hover tooltip, as a named exception in D196 (section 6).
 - Before adoption, a held-out check confirms the thresholds. That is a build-lane gate (section 3).
 - Process only: the build starts on fp32. The build lane commits the eval scripts.
+
+**Open for the owner.** Whether Haiku is the default pick. Whether the Haiku pick's tooltip may name Haiku, as a second named exception.

@@ -65,8 +65,11 @@ The owner's word: plain words on the engine control, with the model name in a ho
 `docs/specs/identify-engine-pick.md` section 6 draws the control. This is the only exception to the rule.
 
 - The exempt string is `MATCHER_NAME_TOOLTIP`, exported from `app/src/engines.ts`.
-- The `no mechanism on screen` row reads that constant from its file. It never holds a copy of the text.
+- The exception covers the word-list hit only. A decision id, a repository path or a CLI string inside that text still fails the row.
+- The control writes `title={MATCHER_NAME_TOOLTIP}`. The AST walk cannot read an identifier at the use site.
+  So the row reads the constant's declared text from its file and checks that text as a string a person reads.
 - The row exempts a string only when the whole string equals the constant. A longer string that holds it is caught.
-- `Haiku` and `Marqo` are now on the word list in `scripts/machine-words.json`. Any other string that names a model is caught.
+- The constant is declared on one line, with one pair of quotes, no backslash and no `${`. Any other shape is a finding.
+- `Haiku` and `Marqo` are on the word list in `scripts/machine-words.json`. Any other string that names a model is caught.
 - If the file or the constant is absent, nothing is exempt.
-- The label on the control stays in plain words. Only the tooltip names the model.
+- The label on each pick stays in plain words. Only this one tooltip names the model.

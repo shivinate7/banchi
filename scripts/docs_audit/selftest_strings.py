@@ -7,10 +7,12 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List
 
-from .core import _sibling
+from .core import Report, _sibling, module_globals
 from .strings import (
     NO_MECHANISM_EXEMPT_FILES,
-    _model_name_exception,
+    _machine_words_allow,
+    _model_name_constant,
+    check_no_mechanism_on_screen,
     _no_mechanism_findings,
     TYPED_INTERPUNCT_EXTRACT_ARGS,
     TYPED_INTERPUNCT_RULE,
@@ -37,7 +39,7 @@ def run(ok) -> None:
        "the no-mechanism-on-screen exemption is pinned to exactly one file, `Gallery.tsx`",
        f"got: {sorted(NO_MECHANISM_EXEMPT_FILES)}")
 
-    print("\nno mechanism: the model-name exception is one string, read from the constant")
+    print("\nno mechanism: the model-name exception covers the word-list hit and nothing else")
     tip = "Marqo ecommerce-B, run on this Mac"
     rows = [{"file": "app/src/RunsComposer.tsx", "line": 1, "text": tip},
             {"file": "app/src/RunsComposer.tsx", "line": 2, "text": "Marqo ecommerce-B, run on this Mac, v2"},
@@ -47,11 +49,46 @@ def run(ok) -> None:
        "the exempt tooltip passes; a longer string that holds it, and any other model name, are caught")
     found_none, _used = _no_mechanism_findings(rows[:1], {}, None)
     ok(len(found_none) == 1, "with no constant in the code, the same string is caught")
+    bad = "Marqo ecommerce-B (" + "D" + "301), run on this Mac"   # assembled, so this file cites no decision
+    found_id, _used = _no_mechanism_findings([{"file": "app/src/engines.ts", "line": 0, "text": bad}], {}, bad)
+    ok(len(found_id) == 1, "a tooltip carrying a decision id fails the row even though it equals the constant")
+    bad = "Marqo ecommerce-B, see docs/specs/identify-engine-pick.md"
+    found_path, _used = _no_mechanism_findings([{"file": "app/src/engines.ts", "line": 0, "text": bad}], {}, bad)
+    ok(len(found_path) == 1, "a tooltip carrying a repository path fails the same way")
     with tempfile.TemporaryDirectory() as exc_dir:
         probe = Path(exc_dir) / "engines.ts"
         probe.write_text("export const MATCHER_NAME_TOOLTIP = 'Marqo ecommerce-B, run on this Mac'\n")
-        ok(_model_name_exception(probe) == tip, "the exception text is read from the exported constant")
-        ok(_model_name_exception(Path(exc_dir) / "absent.ts") is None, "no file, no exception")
+        ok(_model_name_constant(probe) == (tip, None), "the exception text is read from the exported constant")
+        ok(_model_name_constant(Path(exc_dir) / "absent.ts") == (None, None), "no file, no exception")
+        probe.write_text("export const MATCHER_NAME_TOOLTIP = 'Marqo\\'s ecommerce-B'\n")
+        got_text, got_problem = _model_name_constant(probe)
+        ok(got_text is None and got_problem is not None, "a constant declared outside the one shape is a finding, never a truncated read")
+
+        # THE WIRING. The row itself must read the constant and exempt exactly that text.
+        _row_fn = check_no_mechanism_on_screen
+        _read_constant = _model_name_constant   # patching rebinds the name everywhere, so keep the real reader
+        fake = [{"file": "app/src/RunsComposer.tsx", "line": 7, "text": "Match to stock photos"}]
+        saved = (module_globals()["_run_user_strings"], module_globals()["_model_name_constant"], module_globals()["_machine_words_allow"])
+        try:
+            probe.write_text("export const MATCHER_NAME_TOOLTIP = 'Marqo ecommerce-B, run on this Mac'\n")
+            module_globals()["_run_user_strings"] = lambda _a: list(fake)
+            module_globals()["_machine_words_allow"] = lambda: {}
+            module_globals()["_model_name_constant"] = lambda: _read_constant(probe)
+            _r = Report(); _row_fn(_r)
+            _row = [c for c in _r.checks if c.check == "no mechanism on screen"][0]
+            ok(not _row.findings, "the row reads the constant and passes its tooltip",
+               "; ".join(f.message for f in _row.findings))
+            probe.write_text("export const MATCHER_NAME_TOOLTIP = 'Marqo ecommerce-B (" + "D" + "301)'\n")
+            _r = Report(); _row_fn(_r)
+            _row = [c for c in _r.checks if c.check == "no mechanism on screen"][0]
+            ok(len(_row.findings) == 1, "the row fails a constant that carries a decision id: the constant's text is checked")
+            module_globals()["_model_name_constant"] = lambda: (None, None)
+            probe.write_text("export const MATCHER_NAME_TOOLTIP = 'Marqo ecommerce-B, run on this Mac'\n")
+            _r = Report(); _row_fn(_r)
+            _row = [c for c in _r.checks if c.check == "no mechanism on screen"][0]
+            ok(not _row.findings, "no constant read means the row has nothing to check from it")
+        finally:
+            module_globals()["_run_user_strings"], module_globals()["_model_name_constant"], module_globals()["_machine_words_allow"] = saved
 
     print("\ntyped interpunct: the two extractor widenings, and the ratchet's own arithmetic")
     with tempfile.TemporaryDirectory() as tmp_name:

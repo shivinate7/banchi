@@ -1,12 +1,12 @@
 ## D2 — Identification is Haiku vision, end to end
 
-**Identification is Claude Haiku vision over the Batch API, owned end to end. The owner picks the engine for each run.** The default pick is Haiku. The owner's word: *"i think i should be able to pick if i want it processed by haiku or marqo-b"*.
+**Identification is Claude Haiku vision over the Batch API, owned end to end. The owner picks the engine for each run.** The default pick is Haiku, as a proposal that the owner confirms. The owner's word: *"i think i should be able to pick if i want it processed by haiku or marqo-b"*.
 
 The second engine is a stock-photo matcher. It runs an open image-embedding model (Marqo ecommerce-B on onnxruntime). It ranks a card's photo against the stock photos of the cards the run could hold. `docs/specs/identify-engine-pick.md` is the design. It is not built.
 
 **Both engines are owned in this repo. Both write the same record.** A run, its collect, its join and its emit are one path for either engine (D180, a press names the cards it covers; D33, every pipeline step is reachable from a screen). The pick is one term of the press and one field of the run record.
 
-**The matcher never decides alone.** A card it cannot place with a margin goes to the review queue with its photo. A card with no stock photo is never guessed. It goes to review, or to Haiku if the owner allows that.
+**The matcher never decides alone, and it never guesses.** It reads a card only when the card's whole candidate pool is complete and the match clears a margin. Any other card is left unread. It stays in the selection as needing identification. It never goes to review. Nothing falls back on its own. The run goes on for the other cards and says how many it left unread. The owner presses the paid read for those cards.
 
 **What stays true of Haiku.** OCR was researched and rejected at about 85-90% accuracy. Haiku costs about a tenth of a cent a card through the Batch API. That is negligible, so cost is not the reason the matcher exists. The set hint is an optional accelerator that the capture app records. Identification works without it, and better with it.
 
