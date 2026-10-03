@@ -70,10 +70,11 @@ regardless — D136's pass record is the only thing that skips the matrix on mai
         case count: Playwright's own `--shard` left one shard near 513 s and another near
         306 s. SPEC ... narrows the universe (the `specs` output); none means every spec.
         Whole files, slowest first, onto the lightest shard, from `scripts/browser-spec-
-        times.json` (file name to seconds: each test's median over 50 `check.yml` runs).
+        times.json` (file name to seconds: each spec's median over the runs given to `shard-refresh`).
         A spec with no time gets the mean, so a stale table costs balance, never coverage.
     scripts/browser-scope.py shard-refresh FILE ... [--write]
-        Re-time from `.serve/design-check.json` files (`fileSeconds`). Every full-suite run uploads
+        Re-time from `.serve/design-check.json` files (`fileSeconds`); a spec's time is the median
+        over the files that list it, so pass several runs' files for a median. Every full-suite run uploads
         each shard's as `design-check-times-N`; download them and run this. Previews.
     scripts/browser-scope.py list
     scripts/browser-scope.py selftest
@@ -88,6 +89,7 @@ import ast
 import json
 import os
 import re
+import statistics
 import subprocess
 import sys
 from pathlib import Path
@@ -1165,11 +1167,14 @@ def load_spec_times() -> Dict[str, float]:
 
 
 def shard_refresh(files: Sequence[str], write: bool) -> int:
-    total: Dict[str, float] = {}
+    # A spec runs on one shard per run, so it appears once per run's file set: the median of
+    # its occurrences is its median over the runs given (one run gives that run's value).
+    seen: Dict[str, List[float]] = {}
     for f in files:
         for name, secs in json.loads(Path(f).read_text(encoding="utf-8")).get(
                 "fileSeconds", {}).items():
-            total[name] = total.get(name, 0.0) + secs
+            seen.setdefault(name, []).append(secs)
+    total = {k: statistics.median(v) for k, v in seen.items()}
     if not total:
         print("no `fileSeconds` in those files; refusing to write an empty table")
         return 1
