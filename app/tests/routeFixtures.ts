@@ -704,6 +704,10 @@ export async function seedPopulatedProduct(page: Page): Promise<void> {
       body: JSON.stringify(productHistory()),
     }),
   )
+  // The realized-price read: no sales export given, so the section says so and draws no figure.
+  await page.route(/\/pipeline\/products\/[^/]+\/realized$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sku: '0', configured: false }) }),
+  )
 }
 
 /* ------------------------------------------------------------------------ #/review */

@@ -4162,6 +4162,9 @@ test('a product name opens the one product view, and T opens it from the keyboar
       body: JSON.stringify({ sku: '8608859', name: 'Articuno - 161/159', set_name: 'SV: Prismatic Evolutions', condition: 'Near Mint Holofoil', source: 'archive', history_begins: null, never_sold: true, ranges: [] }),
     }),
   )
+  await page.route(/\/pipeline\/products\/[^/]+\/realized$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sku: '8608859', configured: false }) }),
+  )
   await page.route(/\/orders$/, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"orders":[]}' }))
   await page.route(/\/search\?/, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"query":"","groups":[]}' }))
   await open(page)
