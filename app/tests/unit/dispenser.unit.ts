@@ -239,7 +239,7 @@ test('paced loop, 10 of 10: START, wait for COMPLETE, gap, repeat, with the gap 
   await advance(1)
   expect(rig.writes).toEqual(['MOTOR:START', 'MOTOR:START'])
   // eight more cards: the 10th COMPLETE lands 420 ms after the 10th START
-  await advance(8 * (420 + DEAL_GAP_MS))
+  await advance(8 * (420 + DEAL_GAP_MS) + 420)
   expect(read(dealer).cards).toBe(10)
   expect(rig.writes.filter((w) => w === 'MOTOR:START')).toHaveLength(10)
   expect(rig.maxInFlight).toBe(1)
