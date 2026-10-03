@@ -2,7 +2,7 @@
 // Governs: D86, D59, D278, D277, D118, D218
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
-import { settleMotion } from './motionSettled'
+import { afterPaint, settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 import { expectOneStagger } from './staggerCheck'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
@@ -197,8 +197,8 @@ async function open(
      *  SKUs each request carries. */
     trends?: (skus: string[]) => unknown
     /** What `GET /pipeline/trends-saved` answers: the strips the daily job saved, and how that
-     *  read ended. `delayMs` holds the answer, so a case can look at the screen before it lands. */
-    saved?: { skus: Record<string, unknown>; note: unknown; delayMs?: number }
+     *  read ended. `hold` keeps the answer back until it settles, so a case can look at the screen before it lands. */
+    saved?: { skus: Record<string, unknown>; note: unknown; hold?: Promise<void> }
     /** THE WORKLIST OVER SEVERAL RUNS (D86). A case that names this is asking about the merge
      *  itself — which run holds which copy, and what each one answers — so it hands over the
      *  whole thing rather than being assembled from `skus` and `runs` above. Every other case
@@ -284,7 +284,7 @@ async function open(
   await page.route(/\/pipeline\/send$/, async (route) => {
     const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>
     wire.push({ method: 'POST', path: '/pipeline/send', body })
-    if (options.sendDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.sendDelayMs))
+    if (options.sendDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.sendDelayMs)) // keep: stubbed answer held options.sendDelayMs ms on purpose, a latency fixture
     const answer: { status: number; body?: unknown; code?: string; data?: unknown } = (
       options.send ?? (() => ({ status: 200, body: { send: sendSummary(), console: '' } }))
     )(body)
@@ -401,7 +401,7 @@ async function open(
   if (options.saved !== undefined) {
     const saved = options.saved
     await page.route(/\/pipeline\/trends-saved$/, async (route) => {
-      if (saved.delayMs) await new Promise((r) => setTimeout(r, saved.delayMs))
+      if (saved.hold) await saved.hold
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -566,7 +566,7 @@ async function open(
      a case that hands over `worklist` is testing the merge. The answers are NOT on this
      payload: they are the corpus's, read through `/pricing` above. */
   await page.route(/\/pipeline\/pricing/, async (route) => {
-    if (options.pricingDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.pricingDelayMs))
+    if (options.pricingDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.pricingDelayMs)) // keep: stubbed answer held options.pricingDelayMs ms on purpose, a latency fixture
     const listed = options.worklist?.runs ??
       options.runs ?? [{ run: RUN, box: 7, box_name: 'Riftbound epics', skus: 1 }]
     const rows =
@@ -1946,7 +1946,7 @@ test('tabbing across a suggested row writes nothing', async ({ page }) => {
 
   await field(page).focus()
   await page.keyboard.press('Tab')
-  await page.waitForTimeout(200)
+  await page.waitForTimeout(200) // keep: asserts a tab writes nothing
 
   /* A HELD TAB THROUGH A HUNDRED ROWS MUST NOT WRITE A HUNDRED OVERRIDES. Focus is not a
      decision, and neither is leaving a field you did not type in. */
@@ -1995,7 +1995,7 @@ test('a letter snaps the price to its column, and does not commit', async ({ pag
 
   /* A SNAP YOU CANNOT INSPECT IS A SNAP YOU CANNOT CHECK. It sets the field and stops there;
      the extra Enter is what makes `l`, look, Enter possible. */
-  await page.waitForTimeout(150)
+  await page.waitForTimeout(150) // keep: asserts the snap writes nothing
   expect(wire.filter((row) => row.method === 'PUT')).toHaveLength(0)
 })
 
@@ -2012,7 +2012,7 @@ test('a snap onto a blank column refuses, says so, and writes nothing', async ({
      next join, an hour later. The field is untouched and the refusal is on screen now. */
   await expect(field(page)).toHaveValue('22.03')
   await expect(page.locator('.pricing-refusal')).toContainText('No Lowest price on this row')
-  await page.waitForTimeout(150)
+  await page.waitForTimeout(150) // keep: asserts the refusal writes nothing
   expect(wire.filter((row) => row.method === 'PUT')).toHaveLength(0)
 })
 
@@ -2845,10 +2845,15 @@ test('a refused press keeps the saved strip and shows the refusal beside it', as
 
 test('D313: the panel holds its three lines whether the saved read has arrived or not', async ({ page }) => {
   await watchShifts(page)
-  await open(page, { skus: SAVED_ROWS(), saved: { ...savedTrends(NOW_S() - 3600), delayMs: 900 } })
+  let release = () => {}
+  const hold = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await open(page, { skus: SAVED_ROWS(), saved: { ...savedTrends(NOW_S() - 3600), hold } })
   const panel = page.locator('.pricemovers')
   await expect(panel).toBeVisible()
   const before = await panel.boundingBox()
+  release()
   await expect(page.locator('.pricemovers-read-text').last()).toContainText('Trends were read')
   const after = await panel.boundingBox()
   expect(Math.round(after!.height)).toBe(Math.round(before!.height))
@@ -2858,8 +2863,12 @@ test('D313: the panel holds its three lines whether the saved read has arrived o
 
 test('D313: a row keeps its size from saved strip to reading to read', async ({ page }) => {
   await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 3600) })
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
   await page.route(/\/pipeline\/runs\/[^/]+\/trends/, async (route) => {
-    await new Promise((r) => setTimeout(r, 700))
+    await held
     const asked = new URL(route.request().url()).searchParams.getAll('sku')
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(trends(asked)) })
   })
@@ -2874,6 +2883,7 @@ test('D313: a row keeps its size from saved strip to reading to read', async ({ 
   await loadTrends(page).click()
   await expect(strip(page).first()).toHaveClass(/pricetrend-reading/)
   expect(await size()).toEqual(saved)
+  release()
   await expect(strip(page).first().locator('svg')).toHaveCount(2)
   await expect(strip(page).first()).not.toHaveClass(/pricetrend-reading/)
   expect(await size()).toEqual(saved)
@@ -4577,13 +4587,14 @@ for (const width of [1440, 820]) {
     await setViewport(page, { width, height: 900 })
     await open(page, { skus: FILTER_SKUS })
     await settleFonts(page)
-    await page.waitForTimeout(800)
+    await settleMotion(page)
+    await afterPaint(page)
     const search = page.getByRole('searchbox', { name: 'Search this list' })
     for (const [text, rows] of [['dunsparce', 1], ['', 4]] as const) {
       const from = await markNow(page)
       await search.fill(text)
       await expect(page.locator('.pricing-row')).toHaveCount(rows)
-      await page.waitForTimeout(600)
+      await page.waitForTimeout(600) // keep: shifts are read over the 500ms window after the filter
       const inWindow = (await readShifts(page)).shifts.filter((sh) => sh.at >= from - 100 && sh.at < from + 500)
       expect(sumOf(inWindow), `the filter moved ${describeShifts(inWindow)}`).toBeLessThan(0.0005)
     }

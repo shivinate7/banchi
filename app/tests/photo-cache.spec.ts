@@ -3,6 +3,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest, card } from './shell'
 import { seedPopulatedPricing } from './routeFixtures'
+import { afterPaint } from './motionSettled'
 
 /* HOME, REVIEW AND PRICING ADDRESS PHOTOGRAPHS BY NAME AND BY VERSION (D172).
  *
@@ -67,13 +68,13 @@ test('Home asks for no photograph before the card read answers, or of a card tha
   const boxesRead = page.waitForResponse(/\/boxes$/)
   await page.goto('/')
   await boxesRead
-  await page.waitForTimeout(500) // a wait for the render after `/boxes`, not an assertion
+  await afterPaint(page)
   await expect(page.locator('.home-deck')).toBeVisible()
   expect(asked, 'no /photo/ request while the card read is out').toEqual([])
   const answered = page.waitForResponse(/\/inventory\/recent/)
   release()
   await answered
-  await page.waitForTimeout(500) // a wait for the render after the card read
+  await afterPaint(page)
   await expect(page.locator('.home-deck[data-empty="true"]')).toBeVisible()
   expect(await page.evaluate(() => [...document.images].filter((i) => i.src.includes('/photo/')).length)).toBe(0)
   expect(asked, 'no /photo/ request at all').toEqual([])
