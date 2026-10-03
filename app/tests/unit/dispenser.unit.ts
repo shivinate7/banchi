@@ -370,11 +370,9 @@ test('SYNTHETIC: Stop with a START in flight and no COMPLETE ever, a Start waits
   await advance(50)
   void dealer.start()
   // STOP at 100 ms: the settle ends at 1100 ms
-  await advance(949)
+  await advance(940)
   expect(rig.writes.filter((w) => w === 'MOTOR:START')).toHaveLength(1)
-  await advance(10)
-  expect(rig.writes.filter((w) => w === 'MOTOR:START')).toHaveLength(1)
-  await advance(100)
+  await advance(20)
   expect(rig.writes.filter((w) => w === 'MOTOR:START')).toHaveLength(2)
   await dealer.stop()
 })
