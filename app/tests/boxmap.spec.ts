@@ -108,6 +108,22 @@ test('read-only: every box is drawn horizontally, Back/Front replaces the senten
   expect(widths[2]).toBeGreaterThan(widths[1] ?? 0)
 })
 
+test('the map starts one section gap under the head: no reserved band holds the toolbar down', async ({ page }) => {
+  await openShelf(page)
+  /* The standard gap is the page head's own margin token (--bn-4), read in the browser, never a pixel copy. */
+  const { gap, token } = await page.evaluate(() => {
+    const head = document.querySelector('.bn-page-head') as HTMLElement
+    const bar = document.querySelector('.shelf-mode-bar') as HTMLElement
+    const probe = document.createElement('div')
+    probe.style.height = 'var(--bn-4)'
+    document.body.append(probe)
+    const token = probe.getBoundingClientRect().height
+    probe.remove()
+    return { gap: bar.getBoundingClientRect().top - head.getBoundingClientRect().bottom, token }
+  })
+  expect(gap).toBeCloseTo(token, 0)
+})
+
 test('Layout enters edit mode; a queued drop writes nothing until Confirm, which sends the whole draft once', async ({ page }) => {
   const sent = await openShelf(page)
   await page.getByRole('button', { name: 'Layout' }).click()
