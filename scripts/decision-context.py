@@ -21,8 +21,15 @@ Silent for files no entry covers, which is most of them. A hook that speaks on e
 gets muted, and the disabled PreToolUse block in .claude/settings.json is this repo's own
 evidence for that: guard-opsec.sh over-triggered and was turned off within a day.
 
+ONCE PER FILE PER SESSION, on the owner's word. The nudge for a file is printed the first time
+the session edits it and is silent after, because the session already holds it. The paths shown
+are kept in a temp file named for the session id. A SessionStart event deletes that file
+(`--reset`), so a compaction, which drops the printed text from the context, prints each file
+again. No session id in the payload means no memory, so the nudge prints every time.
+
     scripts/decision-context.py                  read a hook payload on stdin
     scripts/decision-context.py --check <path>   print what a given file would show
+    scripts/decision-context.py --reset          SessionStart: forget what this session was shown
 """
 
 from __future__ import annotations
@@ -31,6 +38,7 @@ import ast
 import json
 import re
 import sys
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -251,6 +259,27 @@ def render(relative: str, entry: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
+def _seen_file(payload: Dict[str, object]) -> Optional[Path]:
+    """The temp file holding the paths this session was already shown, or None without an id."""
+    safe = re.sub(r"[^A-Za-z0-9_-]", "", str(payload.get("session_id") or ""))
+    return Path(tempfile.gettempdir()) / f"pkmnscan-decision-context-{safe}" if safe else None
+
+
+def already_shown(payload: Dict[str, object], relative: str) -> bool:
+    """True when this session saw `relative` already. Records it when it did not. Fail-soft."""
+    seen = _seen_file(payload)
+    if seen is None:
+        return False
+    try:
+        if seen.exists() and relative in seen.read_text(encoding="utf-8").splitlines():
+            return True
+        with seen.open("a", encoding="utf-8") as handle:
+            handle.write(relative + "\n")
+    except OSError:
+        pass
+    return False
+
+
 def relative_to_root(raw: str) -> Optional[str]:
     if not raw:
         return None
@@ -269,6 +298,11 @@ def main(argv: Sequence[str]) -> int:
         return 0
 
     payload = json.loads(sys.stdin.read() or "{}")
+    if argv[:1] == ["--reset"]:
+        seen = _seen_file(payload)
+        if seen is not None:
+            seen.unlink(missing_ok=True)
+        return 0
     relative = relative_to_root(str(payload.get("tool_input", {}).get("file_path", "")))
     if not relative:
         return 0
@@ -276,7 +310,7 @@ def main(argv: Sequence[str]) -> int:
     if not entry:
         return 0
     context = render(relative, entry)
-    if not context:
+    if not context or already_shown(payload, relative):
         return 0
 
     # additionalContext is the documented way to hand a PreToolUse hook's text to the

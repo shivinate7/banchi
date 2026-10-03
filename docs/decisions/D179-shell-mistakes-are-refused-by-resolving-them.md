@@ -24,6 +24,16 @@ file of the session that broke rank 19's rule four days after writing it — is 
 *"phrased as an explanation to recall rather than a prohibition to trip over"* will be recalled
 exactly when it is not needed.
 
+### Amended on the owner's word: what Claude Code runs
+
+Claude Code runs `scripts/guard-shell.py --hook --skip checkout,stash,reset`. The shared layer's
+guard (`claude-settings` `hooks/guard.py`, rule 1, shared-tree) owns clauses 1, 7 and 8 there:
+it refuses a checkout or restore over a modified path, a stash that takes another tree's entry,
+and a hard reset over uncommitted work, each judged against the state of its subject. The
+Claude-side copy was cut so one refusal speaks once. `.codex/hooks.json` runs all seven,
+because Codex runs no shared guard (D135). The `--skip` flag names clauses by their table name
+and an unknown name skips nothing. Clauses 3 and 4 are gone for both tools.
+
 ### The five, and what each cost
 
 **1. `git checkout <path>` / `git restore <path>` over a modified file.** 2026-09-06: three
@@ -41,17 +51,8 @@ symptom was silent and read as a different bug: the worktree's own dev server we
 the worktree's unedited `app/`. This is D43's subject — every checkout has its own store, its
 own ports, its own inventory — with the one door D43 did not close.
 
-**3. `gh api -f k=v` with no method.** 2026-09-12: a field implies a body, so gh sends POST. The
-call hung past a 120s tool timeout and left a background process to reap, *"which reads as a
-network problem rather than as a malformed request"* — and it was hit while building the
-SHA-pinned merge wait, so the malformed request blocked a fix.
-
-**4. `ln -s` at a path that already exists.** 2026-08-29:
-`ln -s <main>/harness/images harness/images` over an existing directory nested a second
-`images` link INSIDE it instead of failing. Copying that back landed a symlink loop,
-`Path.mkdir(exist_ok=True)` raised `FileExistsError`, T1 died naming only the symptom, and
-iCloud renamed the real 133 MB directory — the largest thing in this tree, with no backup
-anywhere — to `images 2`, empty.
+**3 and 4 are retired.** `gh api -f k=v` with no method (a field implies a body, so gh sends POST)
+and `ln -s` at a path that already exists were removed on the owner's word, with their hatches. The numbers stay as stable ids and nothing renumbers.
 
 **5. A polling loop.** 2026-09-12, twice in one day. A session that had read the rule four days
 earlier wrote `until ! pgrep -f 'scratchpad/drive.sh'`; the loop never went false, its chained
@@ -72,12 +73,12 @@ anybody's to find.
 ### The predicate is resolution, and that is the whole design
 
 `git checkout main` and `git checkout CLAUDE.md` are the same verb; the first is a branch and
-the second destroys work. `ln -s a b` is right on Monday and wrong on Tuesday. A backgrounded
+the second destroys work. A backgrounded
 script's loop is not in the command at all — it is in the file.
 **So the guard asks the system, read-only, exactly as `scripts/reap.py:hook` does for a kill:**
 `git status --porcelain` decides
 whether an operand is a modified path, `git rev-parse --verify` decides whether it is a commit,
-`os.path.lexists` decides whether a link destination is there, and the shell script a
+and the shell script a
 backgrounded command names is READ. `reap.py`'s standard is that `pkill -f capture_server.py` is
 allowed when the only match is yours; the same standard here is that `git checkout main` is
 allowed because `main` is not a file.
@@ -101,7 +102,7 @@ wearing a guard's clothes.
 
 ### Five hatches, not one, and none is printed to an agent
 
-`PKMNSCAN_CHECKOUT`, `PKMNSCAN_TREE`, `PKMNSCAN_GH`, `PKMNSCAN_LINK`, `PKMNSCAN_WAIT` — each
+`PKMNSCAN_CHECKOUT`, `PKMNSCAN_TREE`, `PKMNSCAN_WAIT` and the later clauses' hatches — each
 `=off`, each honoured in the environment, and each the owner's to set. The owner's word: a refusal never prints a blocked switch's name to an agent. It prints "owner-only: ask the owner to run this command". `clause_owner_only` refuses an agent's tool call that sets any real `PKMNSCAN_*=off`, read by `_hatches_set`, so a mention passes. Four recovery levers stay open to an agent because each frees a stuck session: `PKMNSCAN_KILL`, `PKMNSCAN_SUITE_LOCK`, `PKMNSCAN_SERVE_MAIN` and `PKMNSCAN_SYNC`, and they keep their printed names. The owner's terminal and CI are not tool calls, so the clause never sees them. The clause lives in `hook`, not in `read_command`. The self-test's older cases call `hook(payload, owner_only=False)`, and only its owner-only cases go through `--hook`. There is no switch for it. **Known residual:** a Write of a script, then `bash script.sh`, sets a switch that no stage of any Bash command shows. The clause cannot see it. **One switch for the whole hook would mean disarming the clause that guards uncommitted work in order to make a symlink**, and a hatch reached for by reflex is a guard
 already gone. The recovery the 2026-09-06 incident actually needed — `git checkout --` in the
 main tree, to unwind writes that had landed there — is one hatch away, and the owner holds it.
@@ -398,7 +399,7 @@ hours per rule on one line, beside the hatch lines.
 
 ### Standing
 
-**BUILT and self-tested**: six clauses, `scripts/guard-shell-selftest.sh` with five
+**BUILT and self-tested**: seven clauses, `scripts/guard-shell-selftest.sh` with four
 reproductions, the swept allow list, every hatch in both forms, and the fail-open floor.
 **RECORDED**: this entry, `docs/map.py`, CLAUDE.md, `scripts/checks.py` and both hook rosters.
 **NEITHER**: nothing. What is unproven is what every hook here shares and

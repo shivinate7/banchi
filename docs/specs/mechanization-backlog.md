@@ -605,7 +605,7 @@ Kept so nobody re-proposes them. A rejected mechanism usually fires on honest wo
 - **A `+make icloud-selftest`.** Zero incidents, and the hazard class cannot occur now that the checkout
   lives outside iCloud.
 - **Refusing `git add -A` and `git add --all`.** A correct everyday command. The incident had a different
-  cause, a bare `ln -s` into an existing path. An existence test on `ln -s` catches it at the cause.
+  cause, a bare `ln -s` into an existing path. The guard for that cause was removed on the owner's word.
 - **A PreToolUse Bash hook that refuses a bare `gh pr merge` without an env marker.** Every measured
   incident went through `make merge` from the wrong tree, so the tree is the subject. Rank 28 fixes it
   there.

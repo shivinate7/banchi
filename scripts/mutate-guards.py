@@ -43,7 +43,7 @@ TWO MODES:
                                                      one is wrong.
 
 SCOPE. This does not attempt every mutation-tested guard in `make check` — the brief that built
-this file named five in priority order and this covers those five: `guard-shell.py` (9
+this file named five in priority order and this covers those five: `guard-shell.py` (7
 clauses), `silent-write-guard.py`, `reap.py`, `primary_sync.py`, `revert-audit.py`. Each guard's
 mutation list writes at least one arm per RULE that guard enforces, following the parent
 model's own comment ("Each one breaks exactly one rule. One mutation per rule at least"). A
@@ -195,16 +195,6 @@ GUARD_SHELL_MUTATIONS: Tuple[Mutation, ...] = (
         '        return Verdict([], [])\n    return Verdict([_tree_refusal(verdict[0], root, file_path)], [])',
         '    verdict = _outside(file_path, cwd, root)\n    if not verdict:\n'
         '        return Verdict([], [])\n    return Verdict([], [])',
-    ),
-    Mutation(
-        "gh clause: never refuse a field with no method",
-        '        if has_method or not fields:\n            continue',
-        '        if True:\n            continue',
-    ),
-    Mutation(
-        "link clause: never refuse ln -s at an existing path",
-        '        if not symbolic or safe or not operands:\n            continue',
-        '        if True:\n            continue',
     ),
     Mutation(
         "wait clause: never refuse a loop that polls a pattern",

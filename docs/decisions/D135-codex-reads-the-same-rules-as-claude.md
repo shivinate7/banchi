@@ -7,7 +7,7 @@ drift, missing `make reap`, the eight-key storage roster and D132 — a byte-ide
 of `.claude/skills/tcgplayer-csv/SKILL.md` at the equivalent path under a separate,
 untracked `.agents/skills/` directory, and
 `.codex/` holding `config.toml` (a shell-environment policy, machine-local) and `hooks.json`
-(the same six-then-eight hooks `.claude/settings.json` runs, by the same scripts). None of the
+(the hooks `.claude/settings.json` runs, by the same scripts, plus the two named in `CODEX_ONLY`). None of the
 three was tracked, so none of it reached a clone, a worktree, or a PR — every Codex session
 anywhere but that one Mac read stale prose, a stale skill, or no hooks at all.
 
@@ -49,6 +49,14 @@ neither of which `.codex/hooks.json` had. A Codex session could have run an unre
 `pkill` a Claude Code session in this repo cannot, and a worktree it removed would never
 notify a supervisor to stop. Both are added to `.codex/hooks.json` in the same change that
 adds the guard below, so the row starts green rather than starts by reporting the gap.
+
+**One divergence is declared, on the owner's word.** The shared layer's guard owns the pkill and
+silent-write rules for Claude Code, so `.claude/settings.json` no longer runs
+`scripts/reap.py --hook` or `scripts/silent-write-guard.py --hook`, and it runs
+`scripts/guard-shell.py` with `--skip checkout,stash,reset`. Codex runs no shared guard and keeps
+all three in full. `CODEX_ONLY` in `check_codex_hooks` names the two hooks only Codex runs, and
+the row fails when Claude Code runs one again or Codex loses one. The `--skip` flag is dropped
+before the triples are compared.
 
 **`scripts/docs_audit/env_map.py:check_codex_hooks` reads both files as `(event, matcher, command)` triples and reports whichever side is missing what the other runs**, plus any command that
 names a script no longer in the tree. It is MECHANICAL — a hook roster is a literal, checkable
