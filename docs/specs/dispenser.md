@@ -1,6 +1,6 @@
 # Dispenser button
 
-Governed by D-dispenser-button (a Capture button starts and stops the dispenser). Built: no.
+Governed by D-dispenser-button (a Capture button starts and stops the dispenser). Built: yes.
 
 ## What the owner gets
 
@@ -35,8 +35,12 @@ cards. So the loop is: START, wait for COMPLETE, pause `DEAL_GAP_MS`, repeat.
 
 ## When it may deal
 
-- Start is enabled only when motion is armed with a baseline and the camera is ready. Otherwise the
-  reason shows: "Turn on motion first". With no `navigator.bluetooth`: "Needs Chrome on the Mac".
+- Start is enabled only when motion is armed with a baseline and capture is possible: the Capture
+  button's own blockers (a box picked, a game loaded and verified, the camera ready, no halt). Otherwise
+  the reason shows, e.g. "Pick a box first", "Turn on motion first". With no `navigator.bluetooth`:
+  "Needs Chrome on the Mac".
+- A Start pressed while the last START awaits its COMPLETE waits for it, or 1 s after Stop. Every stop
+  cancels a waiting Start.
 - Stop sends `MOTOR:STOP` after any write in flight. A card already moving still lands.
 - Dealing stops when: Capture unmounts; the tab is hidden; capture halts (`halt !== null`); the
   dropped count rises since Start; the camera stops being ready; motion is switched off.
@@ -49,7 +53,10 @@ cards. So the loop is: START, wait for COMPLETE, pause `DEAL_GAP_MS`, repeat.
 - One reserved status line in a kit `Slot`, always present (D313, nothing moves). Lines:
   "Not connected", "Connected", "Dealing, 12 cards", "Stopped after 12 cards", "Out of cards after 12",
   "Lost the dispenser. Check it is on, then connect again.", "No answer. Check it is on and nothing
-  else is using it.", "Stopped: a card was not photographed. Resume captures first."
+  else is using it.", "Stopped: a card was not photographed. Resume captures first.", "The dispenser
+  reported a fault. Check it, then connect again.", "Bluetooth is off. Turn it on, then connect again.",
+  "Could not connect. Check it is on, then try again." A cancelled chooser says nothing. The line is
+  muted small text with two lines reserved.
 - Tokens only. No hotkey. No storage key.
 
 ## Code
