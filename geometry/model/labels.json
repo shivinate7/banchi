@@ -1,0 +1,4233 @@
+[
+ {
+  "i": 0,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/7f/7f62b888173167bce38ad0b375012da8b9fcf7750cb97e1f19f33284b9eef22c.jpg",
+  "box": 1,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    276.9070129394531,
+    1335.433349609375
+   ],
+   [
+    1964.9468994140625,
+    1365.7120361328125
+   ],
+   [
+    1926.1300048828125,
+    3529.751220703125
+   ],
+   [
+    238.09011840820312,
+    3499.472900390625
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "no 2-source consensus; picked cl"
+ },
+ {
+  "i": 1,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/3a/3ace5339d5c57cbe3fb0815827277202752c68fb080d761df4d4bf52d7e36428.jpg",
+  "box": 1,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    283.2019348144531,
+    991.7374877929688
+   ],
+   [
+    1891.201904296875,
+    1039.7374267578125
+   ],
+   [
+    1826.6455078125,
+    3202.377685546875
+   ],
+   [
+    218.6454620361328,
+    3154.377685546875
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "picked cl by eye over consensus"
+ },
+ {
+  "i": 2,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/98/98f71db10c0d911fb183bcce97db7cf35bafbd501a20f27c3bfa44f3e5d6e11e.jpg",
+  "box": 1,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    345.0,
+    1653.8690476190477
+   ],
+   [
+    1837.5,
+    1653.8690476190477
+   ],
+   [
+    1837.5,
+    3738.6309523809523
+   ],
+   [
+    345.0,
+    3738.6309523809523
+   ]
+  ],
+  "source": "det",
+  "verdict": "FIX",
+  "note": "no 2-source consensus; picked det"
+ },
+ {
+  "i": 3,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/11/11edbb9655889dd2cd9ff79d5fc56d98aa4a41cbddbbee3bfa05389d1e20d22c.jpg",
+  "box": 1,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    252.0,
+    1482.0
+   ],
+   [
+    1908.0,
+    1482.0
+   ],
+   [
+    1908.0,
+    3726.0
+   ],
+   [
+    252.0,
+    3726.0
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 4,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/1b/1bd6603eaac3dee9faed9d1298bac1482291da5e11a144690a4ffe9dc3af3bbb.jpg",
+  "box": 1,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    293.9215087890625,
+    1029.217529296875
+   ],
+   [
+    1850.5074462890625,
+    1067.1829833984375
+   ],
+   [
+    1799.0760498046875,
+    3175.879638671875
+   ],
+   [
+    242.48997497558594,
+    3137.914306640625
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "picked cl by eye over consensus"
+ },
+ {
+  "i": 5,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/d4/d4d7bb7a00731eb9f2792e2b563f8bc9784049b7009b6cd054cc5ecacb60176e.jpg",
+  "box": 1,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    306.3941345214844,
+    1468.1297607421875
+   ],
+   [
+    1920.8636474609375,
+    1478.4129638671875
+   ],
+   [
+    1907.8345947265625,
+    3523.94775390625
+   ],
+   [
+    293.365234375,
+    3513.66455078125
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "no 2-source consensus; picked cl"
+ },
+ {
+  "i": 6,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/22/22fd04595acb5bb15d772c8d23d38940a1cdf3117665761a8f8422f8ba5e68ae.jpg",
+  "box": 1,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    165.0,
+    1022.9166666666667
+   ],
+   [
+    2002.5,
+    1022.9166666666667
+   ],
+   [
+    2002.5,
+    3589.583333333333
+   ],
+   [
+    165.0,
+    3589.583333333333
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 7,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/8e/8e92ae5c94b0eb5a2359358c6b710e4ced9d4a1b719f68bc4617d6e523e69312.jpg",
+  "box": 1,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    108.0,
+    460.79999999999995
+   ],
+   [
+    1944.0,
+    460.79999999999995
+   ],
+   [
+    1944.0,
+    2995.2000000000003
+   ],
+   [
+    108.0,
+    2995.2000000000003
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 8,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/e5/e5ec0f33ec85b24a09f84ccc6a57ff3834ffb1982c904692aa879ba02d328ed6.jpg",
+  "box": 1,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    268.3103942871094,
+    1204.9599609375
+   ],
+   [
+    1964.0635986328125,
+    1245.3350830078125
+   ],
+   [
+    1909.5604248046875,
+    3534.4658203125
+   ],
+   [
+    213.80718994140625,
+    3494.090576171875
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 9,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/14/14ce1e30a3cef2b8e4e597d3b1effb1fadc45e0334890fb1304218ebfd85e41f.jpg",
+  "box": 1,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    300.0,
+    1546.0119047619048
+   ],
+   [
+    1882.5,
+    1546.0119047619048
+   ],
+   [
+    1882.5,
+    3756.4880952380954
+   ],
+   [
+    300.0,
+    3756.4880952380954
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 10,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/ca/ca5df1cc93f072b63078d8cf201c8d68cf766f0dd691680a9599b6424d797515.jpg",
+  "box": 1,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    112.5,
+    810.0
+   ],
+   [
+    1852.5,
+    810.0
+   ],
+   [
+    1852.5,
+    3397.5
+   ],
+   [
+    112.5,
+    3397.5
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 11,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/51/510413ace88ec3281ae71b25dda2507d6d23f89f2d2faf059a7b09c4ac7e1d5f.jpg",
+  "box": 1,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    290.0,
+    990.0
+   ],
+   [
+    1930.0,
+    990.0
+   ],
+   [
+    1930.0,
+    3210.0
+   ],
+   [
+    290.0,
+    3210.0
+   ]
+  ],
+  "source": "det+gc",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 12,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/0e/0e243ecae78530885c2c44cf2970b186199edf9b6c4a098db645aebee9d606ff.jpg",
+  "box": 1,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    307.5,
+    1533.2738095238096
+   ],
+   [
+    1897.5,
+    1533.2738095238096
+   ],
+   [
+    1897.5,
+    3754.2261904761904
+   ],
+   [
+    307.5,
+    3754.2261904761904
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 13,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/21/21701b16a91e9219c5527d2fa8ad003d16b389a1569eb05de49f27ef9d8a47c2.jpg",
+  "box": 1,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    270.0,
+    959.9998168945312
+   ],
+   [
+    1929.9996337890625,
+    959.9998168945312
+   ],
+   [
+    1929.9996337890625,
+    3209.999267578125
+   ],
+   [
+    270.0,
+    3209.999267578125
+   ]
+  ],
+  "source": "det+gc",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 14,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/a9/a9f042ffdc4467c39375ba4a835a80feaaf7520d60371401d169d9f84f8ccece.jpg",
+  "box": 1,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    300.0,
+    1098.3333333333335
+   ],
+   [
+    1927.5,
+    1098.3333333333335
+   ],
+   [
+    1927.5,
+    3371.6666666666665
+   ],
+   [
+    300.0,
+    3371.6666666666665
+   ]
+  ],
+  "source": "det",
+  "verdict": "FIX",
+  "note": "no 2-source consensus; picked det"
+ },
+ {
+  "i": 15,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/a2/a27951a8366b3d160bab125f1f8b4dc0717310261a389eb58b6e58f43ca302a8.jpg",
+  "box": 1,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    350.0,
+    1100.0
+   ],
+   [
+    1909.9996337890625,
+    1100.0
+   ],
+   [
+    1909.9996337890625,
+    3209.999755859375
+   ],
+   [
+    350.0,
+    3209.999755859375
+   ]
+  ],
+  "source": "det+gc",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 16,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/19/19f7107e2fc7dfa3906781074e2b98ac58a8315965d83a7e69bb1be40c499fd3.jpg",
+  "box": 1,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    259.6202087402344,
+    1363.358154296875
+   ],
+   [
+    1954.444091796875,
+    1402.2303466796875
+   ],
+   [
+    1905.560791015625,
+    3533.53076171875
+   ],
+   [
+    210.737060546875,
+    3494.65869140625
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "no 2-source consensus; picked cl"
+ },
+ {
+  "i": 17,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/6e/6ee946cd29bc320d9870030170ddbd4faeaf8e2329ba486073e357d4208a5a0c.jpg",
+  "box": 2,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    226.79999999999998,
+    787.1999999999999
+   ],
+   [
+    1998.0,
+    787.1999999999999
+   ],
+   [
+    1998.0,
+    3168.0
+   ],
+   [
+    226.79999999999998,
+    3168.0
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 18,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/2a/2a4b3e087627a95b6da42fcfa7eb08f8af198be8e77553cd6ebed911bf656726.jpg",
+  "box": 2,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    86.4,
+    652.8000000000001
+   ],
+   [
+    1836.0,
+    652.8000000000001
+   ],
+   [
+    1836.0,
+    3148.7999999999997
+   ],
+   [
+    86.4,
+    3148.7999999999997
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 19,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/cb/cb842ef400c848bba2bbb22c553adce7b4d6b6113fb907c6007037941ed62992.jpg",
+  "box": 2,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    123.12,
+    683.52
+   ],
+   [
+    1872.72,
+    683.52
+   ],
+   [
+    1872.72,
+    3148.7999999999997
+   ],
+   [
+    123.12,
+    3148.7999999999997
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 20,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/1a/1aefa4f3a2560b6e01cd6f6d465848c63f3203e36d1b3c008d5e0c953b808b78.jpg",
+  "box": 2,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    274.32,
+    864.0
+   ],
+   [
+    1879.2,
+    864.0
+   ],
+   [
+    1879.2,
+    3187.2
+   ],
+   [
+    274.32,
+    3187.2
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 21,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/3b/3b6f97c04c0c2afd3f28f355d747481ad27256323dfd4248f0ee08cbbe178298.jpg",
+  "box": 2,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    216.0,
+    787.1999999999999
+   ],
+   [
+    2019.6000000000001,
+    787.1999999999999
+   ],
+   [
+    2019.6000000000001,
+    3187.2
+   ],
+   [
+    216.0,
+    3187.2
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 22,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/65/6535b786da46ff5d4a7d81445bb2888a2111b7ce06d07f139c5fab128272fce8.jpg",
+  "box": 2,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    179.28,
+    714.24
+   ],
+   [
+    1944.0,
+    714.24
+   ],
+   [
+    1944.0,
+    3148.7999999999997
+   ],
+   [
+    179.28,
+    3148.7999999999997
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 23,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/1b/1bfcb49fab4518a5038ddee4a084523a7f04440eb30ec478d3d9dd44f4cde96a.jpg",
+  "box": 2,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    179.28,
+    768.0
+   ],
+   [
+    1907.28,
+    768.0
+   ],
+   [
+    1907.28,
+    3187.2
+   ],
+   [
+    179.28,
+    3187.2
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 24,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/bc/bc8c047c155bd121b2a12a9505d16b9418f7717d6cc202c8168b9a0cb47cbb51.jpg",
+  "box": 2,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    129.6,
+    791.04
+   ],
+   [
+    1885.68,
+    791.04
+   ],
+   [
+    1885.68,
+    3187.2
+   ],
+   [
+    129.6,
+    3187.2
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 25,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/15/1595155f690256acd2fb7b1395db18151082b6cf73f7d6a51d849f0a7e2e2c74.jpg",
+  "box": 2,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    144.72,
+    652.8000000000001
+   ],
+   [
+    1944.0,
+    652.8000000000001
+   ],
+   [
+    1944.0,
+    3187.2
+   ],
+   [
+    144.72,
+    3187.2
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 26,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/64/64b8484b3b1ae97c5948fdb45c2dd4c7cd6ed83bf4df175e62285adeb868ff8d.jpg",
+  "box": 2,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    179.28,
+    729.6
+   ],
+   [
+    1803.6,
+    729.6
+   ],
+   [
+    1803.6,
+    3148.7999999999997
+   ],
+   [
+    179.28,
+    3148.7999999999997
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 27,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/14/1484341f9a27aad0695e4bab5ab3fd5e7c6ec00156ed2304bf34e62cbca496c3.jpg",
+  "box": 2,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    216.0,
+    729.6
+   ],
+   [
+    1900.8,
+    729.6
+   ],
+   [
+    1900.8,
+    3168.0
+   ],
+   [
+    216.0,
+    3168.0
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 28,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/3f/3f54a5333c193fa34783faf532d90a8797771f780a2ba7e167da958bb896b56b.jpg",
+  "box": 2,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    216.0,
+    729.6
+   ],
+   [
+    2015.2800000000002,
+    729.6
+   ],
+   [
+    2015.2800000000002,
+    3198.72
+   ],
+   [
+    216.0,
+    3198.72
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 29,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/86/861dd2c44925f584e095c20202f49a6c1a06bdc7e765c938b6620dc83f2a5819.jpg",
+  "box": 2,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    183.60000000000002,
+    768.0
+   ],
+   [
+    2030.3999999999999,
+    768.0
+   ],
+   [
+    2030.3999999999999,
+    3187.2
+   ],
+   [
+    183.60000000000002,
+    3187.2
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 30,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/c8/c8bf1c684a4fd882f7f34c0d94a041f49a9e0e1a9938a4a190581c245de8f6e1.jpg",
+  "box": 2,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    200.88,
+    729.6
+   ],
+   [
+    1928.88,
+    729.6
+   ],
+   [
+    1928.88,
+    3187.2
+   ],
+   [
+    200.88,
+    3187.2
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 31,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/42/42611a6eac0cb9c4973ab9bf3636d6c7ee7f4ed7ebfe738aba041d7809f9a860.jpg",
+  "box": 2,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    169.1250457763672,
+    795.866455078125
+   ],
+   [
+    1891.52001953125,
+    804.4354858398438
+   ],
+   [
+    1879.8828125,
+    3143.53173828125
+   ],
+   [
+    157.48782348632812,
+    3134.962646484375
+   ]
+  ],
+  "source": "det+gc",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 32,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/38/38bad40753030794123938a9e6018fb0f4ff24c97ad2a3e906a654e5ac7ae3bb.jpg",
+  "box": 2,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    237.6,
+    768.0
+   ],
+   [
+    2002.3200000000002,
+    768.0
+   ],
+   [
+    2002.3200000000002,
+    3148.7999999999997
+   ],
+   [
+    237.6,
+    3148.7999999999997
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 33,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/8e/8ead8f9dbcd1370b67f1d3369ad1dcefdf97366983b9a3e6c621bf6396350511.jpg",
+  "box": 2,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    112.23538970947266,
+    777.5216064453125
+   ],
+   [
+    1998.98388671875,
+    795.6633911132812
+   ],
+   [
+    1976.3817138671875,
+    3146.31103515625
+   ],
+   [
+    89.63304138183594,
+    3128.169189453125
+   ]
+  ],
+  "source": "det+gc",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 34,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/a6/a6aa39c21d7210fee01181628ed85293e71b74cc5c4092d5381d9678ed907279.jpg",
+  "box": 3,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    302.40000000000003,
+    1075.2
+   ],
+   [
+    2015.2800000000002,
+    1075.2
+   ],
+   [
+    2015.2800000000002,
+    3033.6000000000004
+   ],
+   [
+    302.40000000000003,
+    3033.6000000000004
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 35,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/f0/f04bea80959256cde22b03f9c86f3b4417d7d05d177d91f27e629927b05015ce.jpg",
+  "box": 3,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    410.4,
+    979.2
+   ],
+   [
+    1857.6,
+    979.2
+   ],
+   [
+    1857.6,
+    3072.0
+   ],
+   [
+    410.4,
+    3072.0
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 36,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/c8/c8d5d42c14d0df9929caf9825d20a26365c4a6e7985b31bafca11f26727d419f.jpg",
+  "box": 3,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    274.32,
+    1056.0
+   ],
+   [
+    1609.2,
+    1056.0
+   ],
+   [
+    1609.2,
+    3072.0
+   ],
+   [
+    274.32,
+    3072.0
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 37,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/38/38852286ce423523b75fb227b1dbc4382c888da6e720eb187e6b29ff5ed6e298.jpg",
+  "box": 3,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": null,
+  "source": null,
+  "verdict": "REJECT",
+  "note": "card dark and runs to frame bottom, edges unclear"
+ },
+ {
+  "i": 38,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/1d/1dbb72f3ec1e2ed1bec744fc45ce0b78d0a308f5885090e104abb27e75dd345c.jpg",
+  "box": 3,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    252.72000000000003,
+    971.52
+   ],
+   [
+    1872.72,
+    971.52
+   ],
+   [
+    1872.72,
+    3072.0
+   ],
+   [
+    252.72000000000003,
+    3072.0
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 39,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/ac/acda032bb97e68600420092323fe51882bd8c335fe07dbfd7e744b26dd462f01.jpg",
+  "box": 3,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    410.4,
+    1075.2
+   ],
+   [
+    1872.72,
+    1075.2
+   ],
+   [
+    1872.72,
+    3072.0
+   ],
+   [
+    410.4,
+    3072.0
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 40,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/ab/ab26bd1ade910c5bf2c2901e8f3663bc5241a7fd6bd56b86dcb7ddded32a139d.jpg",
+  "box": 3,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    324.0,
+    971.52
+   ],
+   [
+    1799.28,
+    971.52
+   ],
+   [
+    1799.28,
+    3052.8
+   ],
+   [
+    324.0,
+    3052.8
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 41,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/bc/bc427107b5edbd955b8badfffc6c88fd5c897141037b9084a02cac4eef6d8440.jpg",
+  "box": 3,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    252.72000000000003,
+    1152.0
+   ],
+   [
+    1836.0,
+    1152.0
+   ],
+   [
+    1836.0,
+    3206.3999999999996
+   ],
+   [
+    252.72000000000003,
+    3206.3999999999996
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 42,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/3b/3b3baec3bcf2b084185e4cf9fc1c80a2761c97cf60ca7ea535c1d856518be53c.jpg",
+  "box": 3,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    360.72,
+    952.3199999999999
+   ],
+   [
+    1764.7199999999998,
+    952.3199999999999
+   ],
+   [
+    1764.7199999999998,
+    3033.6000000000004
+   ],
+   [
+    360.72,
+    3033.6000000000004
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 43,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/70/703ea4678c8fcbb281c117307ef49d1b028db43e000c53944f9f91295a955524.jpg",
+  "box": 3,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    259.2,
+    1059.8400000000001
+   ],
+   [
+    1907.28,
+    1059.8400000000001
+   ],
+   [
+    1907.28,
+    3340.8
+   ],
+   [
+    259.2,
+    3340.8
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 44,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/1c/1c5a736b93bd367dc8b30ee61ba1a0af74ac8568168ec7e6bcdf24d69e293b84.jpg",
+  "box": 3,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    324.0,
+    921.5999999999999
+   ],
+   [
+    1857.6,
+    921.5999999999999
+   ],
+   [
+    1857.6,
+    3014.4
+   ],
+   [
+    324.0,
+    3014.4
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 45,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/a2/a29287112db0774225609657c12ad68a400f4bfefcf3c66e7814f88fe379da28.jpg",
+  "box": 3,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    421.2,
+    1152.0
+   ],
+   [
+    1944.0,
+    1152.0
+   ],
+   [
+    1944.0,
+    3187.2
+   ],
+   [
+    421.2,
+    3187.2
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 46,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/d2/d29e57b625ec74f7dcad412e118822a3b4727a60d07a7fb7bbcba9b251715937.jpg",
+  "box": 3,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    395.28,
+    844.8
+   ],
+   [
+    1907.28,
+    844.8
+   ],
+   [
+    1907.28,
+    2918.4
+   ],
+   [
+    395.28,
+    2918.4
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 47,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/13/13d84c93a7b23c9f4514e01007e736f70a8f5383fcd2cd4e6b70e8d0f032c59a.jpg",
+  "box": 3,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    503.28000000000003,
+    1094.3999999999999
+   ],
+   [
+    1764.7199999999998,
+    1094.3999999999999
+   ],
+   [
+    1764.7199999999998,
+    2995.2000000000003
+   ],
+   [
+    503.28000000000003,
+    2995.2000000000003
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 48,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/a8/a81fad967bc30d046ebd10cac2a0ec7814fc4c6fd2a6c898dec2b5652296f69f.jpg",
+  "box": 3,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    252.72000000000003,
+    1067.52
+   ],
+   [
+    1885.68,
+    1067.52
+   ],
+   [
+    1885.68,
+    3225.6
+   ],
+   [
+    252.72000000000003,
+    3225.6
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 49,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/12/12c48d57f4213bc38921f8373a1ddca0a3b1f43df6ae349be1951b997dec173e.jpg",
+  "box": 3,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    324.0,
+    1067.52
+   ],
+   [
+    1872.72,
+    1067.52
+   ],
+   [
+    1872.72,
+    3225.6
+   ],
+   [
+    324.0,
+    3225.6
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 50,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/b7/b79417d309fddea0c2a6a02cde910fa9123a5666443b8609d80d9be30ee8e5fd.jpg",
+  "box": 3,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    395.28,
+    1228.8
+   ],
+   [
+    1872.72,
+    1228.8
+   ],
+   [
+    1872.72,
+    3225.6
+   ],
+   [
+    395.28,
+    3225.6
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 51,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/4b/4bbc0d44f6375e801af652d602e1f9cb54cf2f53fc553068212576a86e1635e3.jpg",
+  "box": 4,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    90.0,
+    746.9642857142858
+   ],
+   [
+    1957.5,
+    746.9642857142858
+   ],
+   [
+    1957.5,
+    3355.535714285714
+   ],
+   [
+    90.0,
+    3355.535714285714
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 52,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/bc/bcc5bb9a6542a7b36b80f8c08d352ca04343a20d03b2e39e59671c1488179e34.jpg",
+  "box": 4,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    144.72,
+    998.4000000000001
+   ],
+   [
+    1907.28,
+    998.4000000000001
+   ],
+   [
+    1907.28,
+    3436.8
+   ],
+   [
+    144.72,
+    3436.8
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 53,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/ce/cea1819597bbdce92cbd842b04f7f569380e4d89607efb66b16e0b8f5bdbb366.jpg",
+  "box": 4,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    18.590457916259766,
+    615.1135864257812
+   ],
+   [
+    2029.2718505859375,
+    629.7902221679688
+   ],
+   [
+    2009.3726806640625,
+    3355.966552734375
+   ],
+   [
+    -1.3087799549102783,
+    3341.289794921875
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "picked cl by eye over consensus"
+ },
+ {
+  "i": 54,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/a3/a3939032e5b0f8a719478ec8ec1d42296d9103fae20718618cc78f87e62a74b8.jpg",
+  "box": 4,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    102.30425262451172,
+    726.930419921875
+   ],
+   [
+    2007.5211181640625,
+    757.3328857421875
+   ],
+   [
+    1964.7381591796875,
+    3438.394775390625
+   ],
+   [
+    59.52143096923828,
+    3407.9921875
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "picked cl by eye over consensus"
+ },
+ {
+  "i": 55,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/75/75098dc0cc0547fb9d132fe3f97428cb4bc6d009cab5f9fba3ee58e9f646c2e6.jpg",
+  "box": 4,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    108.0,
+    821.76
+   ],
+   [
+    1928.88,
+    821.76
+   ],
+   [
+    1928.88,
+    3110.4
+   ],
+   [
+    108.0,
+    3110.4
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 56,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/b1/b108ad18d67c45d6e582e11bb9a8400406e96730c29a020255fcea2b618d1511.jpg",
+  "box": 4,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    45.0,
+    720.0
+   ],
+   [
+    1927.5,
+    720.0
+   ],
+   [
+    1927.5,
+    3435.0
+   ],
+   [
+    45.0,
+    3435.0
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 57,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/e2/e2d524972dc98e8011b7e7545267093fc61263f57e7811c3f75090169fae21b1.jpg",
+  "box": 4,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    75.0,
+    838.6309523809525
+   ],
+   [
+    2047.5,
+    838.6309523809525
+   ],
+   [
+    2047.5,
+    3593.8690476190477
+   ],
+   [
+    75.0,
+    3593.8690476190477
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 58,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/ac/acaee32f0e6b1eaa642675178971f0ef33a758995fc2f7846915bcf1a2e60d3f.jpg",
+  "box": 4,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    62.59554672241211,
+    395.4456481933594
+   ],
+   [
+    2170.823486328125,
+    423.0041198730469
+   ],
+   [
+    2131.29345703125,
+    3447.03662109375
+   ],
+   [
+    23.065584182739258,
+    3419.47802734375
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "no 2-source consensus; picked cl"
+ },
+ {
+  "i": 59,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/88/88dbfd3b586fb87472e9d3927e412aad648062e42d89c9e0a3d174155dc57356.jpg",
+  "box": 4,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    90.00018310546875,
+    947.9998168945312
+   ],
+   [
+    1931.999755859375,
+    947.9998168945312
+   ],
+   [
+    1931.999755859375,
+    3449.999267578125
+   ],
+   [
+    90.00018310546875,
+    3449.999267578125
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "no 2-source consensus; picked cl"
+ },
+ {
+  "i": 60,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/70/705207038d7ebea622efbfc92964a4ec61a653587ebc951ef60d291f334dea6a.jpg",
+  "box": 4,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    71.31230926513672,
+    837.8926391601562
+   ],
+   [
+    2045.3697509765625,
+    863.4633178710938
+   ],
+   [
+    2009.6689453125,
+    3619.56591796875
+   ],
+   [
+    35.611392974853516,
+    3593.99560546875
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "no 2-source consensus; picked cl"
+ },
+ {
+  "i": 61,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/5e/5e09c3ff094b9990202b1e457833f6692fcdc211e8fe8daebc0bfdcb2401fc26.jpg",
+  "box": 4,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    133.15068493150685,
+    1143.035019455253
+   ],
+   [
+    1989.86301369863,
+    1143.035019455253
+   ],
+   [
+    1989.86301369863,
+    3765.291828793774
+   ],
+   [
+    133.15068493150685,
+    3765.291828793774
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 62,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/45/456f670237e9dc11b300a9c27e00c0f401ad0d826e9734617c40dd5894b1af42.jpg",
+  "box": 4,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    209.6608123779297,
+    819.1688232421875
+   ],
+   [
+    2138.947265625,
+    900.1695556640625
+   ],
+   [
+    2035.1524658203125,
+    3372.369140625
+   ],
+   [
+    105.86615753173828,
+    3291.368408203125
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "no 2-source consensus; picked cl"
+ },
+ {
+  "i": 63,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/5c/5c405b962c82161d656682bcd1650a05e36ddcb0bf7e5a88fa0623558f2fd713.jpg",
+  "box": 4,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    216.0,
+    844.8
+   ],
+   [
+    1872.72,
+    844.8
+   ],
+   [
+    1872.72,
+    3072.0
+   ],
+   [
+    216.0,
+    3072.0
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 64,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/1c/1cb28bf499632c0b4fde1688d77b2b779f134c0bc309d658fc83cb721322d40c.jpg",
+  "box": 4,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    217.5,
+    584.702380952381
+   ],
+   [
+    1920.0,
+    584.702380952381
+   ],
+   [
+    1920.0,
+    2962.7976190476193
+   ],
+   [
+    217.5,
+    2962.7976190476193
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 65,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/de/ded56a8b9e200a2be84285cc39c7c145a5f51b00043f01a78ee01379b328daae.jpg",
+  "box": 4,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    324.0,
+    971.52
+   ],
+   [
+    1907.28,
+    971.52
+   ],
+   [
+    1907.28,
+    3072.0
+   ],
+   [
+    324.0,
+    3072.0
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 66,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/71/7114454000aba55b3beb47e398a9380d657fef36bf4a710fc415a18e657e045c.jpg",
+  "box": 4,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    90.0,
+    685.5952380952381
+   ],
+   [
+    2040.0,
+    685.5952380952381
+   ],
+   [
+    2040.0,
+    3409.404761904762
+   ],
+   [
+    90.0,
+    3409.404761904762
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 67,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/cb/cb44c53327b8d3642a72c639a37db99246966d8e938f0a23a076c7447738c191.jpg",
+  "box": 4,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    105.0,
+    1059.047619047619
+   ],
+   [
+    2025.0,
+    1059.047619047619
+   ],
+   [
+    2025.0,
+    3740.9523809523807
+   ],
+   [
+    105.0,
+    3740.9523809523807
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 68,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/a8/a8936d2bd54a4c69aa5970cf2e1f98494e995562db625849a1a8cfcea0a3929e.jpg",
+  "box": 5,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    287.28000000000003,
+    1228.8
+   ],
+   [
+    1792.8,
+    1228.8
+   ],
+   [
+    1792.8,
+    3225.6
+   ],
+   [
+    287.28000000000003,
+    3225.6
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 69,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/86/8678d3d35c578f55c4aa93e169d346f5289613c0128e51f92d789ea89e37bd7f.jpg",
+  "box": 5,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    264.0,
+    1158.0
+   ],
+   [
+    1770.0,
+    1158.0
+   ],
+   [
+    1770.0,
+    3192.0
+   ],
+   [
+    264.0,
+    3192.0
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "picked cl by eye over consensus"
+ },
+ {
+  "i": 70,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/f5/f5516e12d478c2247be370f128c5a9505c12152656f8b8c6a67924a4633cb283.jpg",
+  "box": 5,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    126.0,
+    1007.9998168945312
+   ],
+   [
+    1775.9996337890625,
+    1007.9998168945312
+   ],
+   [
+    1775.9996337890625,
+    3185.999267578125
+   ],
+   [
+    126.0,
+    3185.999267578125
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "picked cl by eye over consensus"
+ },
+ {
+  "i": 71,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/9e/9e71194e7eceedbce8db404bd6f482098f05b2dfaf50d1ce7b18ed16caf64234.jpg",
+  "box": 5,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    382.32,
+    1036.8000000000002
+   ],
+   [
+    1814.3999999999999,
+    1036.8000000000002
+   ],
+   [
+    1814.3999999999999,
+    3129.6
+   ],
+   [
+    382.32,
+    3129.6
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 72,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/76/76e1eeec46725a56c603d1fd2745c48ade1af5fafa0dc53e74e90b2d652fb5fe.jpg",
+  "box": 5,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    416.88,
+    1063.68
+   ],
+   [
+    1885.68,
+    1063.68
+   ],
+   [
+    1885.68,
+    3148.7999999999997
+   ],
+   [
+    416.88,
+    3148.7999999999997
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 73,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/ce/ce0dfb8cb831bf0b68cc5fc639f3597cd8db0131f138278b50c956a8f8b12d46.jpg",
+  "box": 5,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    312.0,
+    906.0
+   ],
+   [
+    1956.0,
+    906.0
+   ],
+   [
+    1956.0,
+    3096.0
+   ],
+   [
+    312.0,
+    3096.0
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "picked cl by eye over consensus"
+ },
+ {
+  "i": 74,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/1b/1b245e2f77cbd1aca26e49fe611b0df23d0fcce1432235dea2f2e01238af219e.jpg",
+  "box": 5,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    234.0,
+    1038.0
+   ],
+   [
+    1818.0,
+    1038.0
+   ],
+   [
+    1818.0,
+    3180.0
+   ],
+   [
+    234.0,
+    3180.0
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "picked cl by eye over consensus"
+ },
+ {
+  "i": 75,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/2e/2e9a151dbfd3220cbd198e83fe11ae14984b3164e058d051f2bc63cf835bf518.jpg",
+  "box": 5,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    372.0,
+    893.9998168945312
+   ],
+   [
+    2039.9996337890625,
+    893.9998168945312
+   ],
+   [
+    2039.9996337890625,
+    3095.999267578125
+   ],
+   [
+    372.0,
+    3095.999267578125
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "picked cl by eye over consensus"
+ },
+ {
+  "i": 76,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/ab/aba283f260c66b5f9e86120898f867080a8ae8c0e9f03774ef15433c0d18ab44.jpg",
+  "box": 5,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    375.1611633300781,
+    932.12939453125
+   ],
+   [
+    2028.06591796875,
+    946.2567138671875
+   ],
+   [
+    2009.697509765625,
+    3095.38134765625
+   ],
+   [
+    356.79266357421875,
+    3081.254150390625
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "no 2-source consensus; picked cl"
+ },
+ {
+  "i": 77,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/96/965533b56072059ed67e812b95db61d0fb37383f6536b536060921fe2c7cee4a.jpg",
+  "box": 5,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    416.88,
+    1094.3999999999999
+   ],
+   [
+    1814.3999999999999,
+    1094.3999999999999
+   ],
+   [
+    1814.3999999999999,
+    3148.7999999999997
+   ],
+   [
+    416.88,
+    3148.7999999999997
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 78,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/41/4183577ca4a02b7e4c38e19304631c5adbf01297d1e820eadf0bd3bef2b7c56e.jpg",
+  "box": 5,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    287.28000000000003,
+    1075.2
+   ],
+   [
+    1691.28,
+    1075.2
+   ],
+   [
+    1691.28,
+    3148.7999999999997
+   ],
+   [
+    287.28000000000003,
+    3148.7999999999997
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 79,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/fd/fd7d7a40ae6713097d46450eb722136a550e671933f7df0d6417ee30bf21d403.jpg",
+  "box": 5,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    276.0,
+    1043.999755859375
+   ],
+   [
+    1883.9996337890625,
+    1043.999755859375
+   ],
+   [
+    1883.9996337890625,
+    3179.999267578125
+   ],
+   [
+    276.0,
+    3179.999267578125
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "picked cl by eye over consensus"
+ },
+ {
+  "i": 80,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/3d/3d5e4f2e0578f515879a7908cef557c8e1d860a41955a50797684f2033085682.jpg",
+  "box": 5,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    410.4,
+    1067.52
+   ],
+   [
+    1857.6,
+    1067.52
+   ],
+   [
+    1857.6,
+    3133.4399999999996
+   ],
+   [
+    410.4,
+    3133.4399999999996
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 81,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/a6/a6e625bf2db029151f2b15125b5e7d35b73dd3a9c35982970c1f40baf1df7846.jpg",
+  "box": 5,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    302.40000000000003,
+    1113.6
+   ],
+   [
+    1691.28,
+    1113.6
+   ],
+   [
+    1691.28,
+    3141.12
+   ],
+   [
+    302.40000000000003,
+    3141.12
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 82,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/0f/0f1a8fff5579a816709687572378efd24e15757429f1092d6364c3fed44bfb85.jpg",
+  "box": 5,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    366.5174865722656,
+    921.4942626953125
+   ],
+   [
+    2008.830322265625,
+    940.591064453125
+   ],
+   [
+    1983.5650634765625,
+    3113.41357421875
+   ],
+   [
+    341.25213623046875,
+    3094.31689453125
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "no 2-source consensus; picked cl"
+ },
+ {
+  "i": 83,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/e7/e7d40a26d49819605473ff2940a7a394f1c0ab34df262b13dc2fb0dd4dfb7aaa.jpg",
+  "box": 5,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    144.0,
+    984.0
+   ],
+   [
+    1770.0,
+    984.0
+   ],
+   [
+    1770.0,
+    3174.0
+   ],
+   [
+    144.0,
+    3174.0
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "picked cl by eye over consensus"
+ },
+ {
+  "i": 84,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/fe/fee2fb694d09c7ec34fbac157e6ac90bfa5502ec1ee522f67033a4fd358aaaa6.jpg",
+  "box": 5,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    246.0,
+    1020.0
+   ],
+   [
+    1884.0,
+    1020.0
+   ],
+   [
+    1884.0,
+    3174.0
+   ],
+   [
+    246.0,
+    3174.0
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "picked cl by eye over consensus"
+ },
+ {
+  "i": 85,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/ea/ea0723cace262ee61c34db255efc771601a0c92c3e578822eeab7401a4510f23.jpg",
+  "box": 6,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    315.0,
+    1411.0714285714287
+   ],
+   [
+    1935.0,
+    1411.0714285714287
+   ],
+   [
+    1935.0,
+    3673.9285714285716
+   ],
+   [
+    315.0,
+    3673.9285714285716
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 86,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/ee/ee4e6bd12c0fecd0d3583cdcacd091660a4ff9cb47c79236585a8ee3effc3393.jpg",
+  "box": 6,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    313.2,
+    1363.1999999999998
+   ],
+   [
+    1885.68,
+    1363.1999999999998
+   ],
+   [
+    1885.68,
+    3544.32
+   ],
+   [
+    313.2,
+    3544.32
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 87,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/8a/8af851a05586fb9de4e88a8df1541ac6a54fe6507f907cfd5ab9317f325ccd0d.jpg",
+  "box": 6,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    337.5,
+    1499.5238095238096
+   ],
+   [
+    1927.5,
+    1499.5238095238096
+   ],
+   [
+    1927.5,
+    3720.4761904761904
+   ],
+   [
+    337.5,
+    3720.4761904761904
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 88,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/92/922717685c8aa9009e1327af964bcbd6936eb53023f5ffed79bff1a3fbc320ab.jpg",
+  "box": 6,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    324.0,
+    1574.3999999999999
+   ],
+   [
+    1890.0,
+    1574.3999999999999
+   ],
+   [
+    1890.0,
+    3705.6
+   ],
+   [
+    324.0,
+    3705.6
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 89,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/94/94edf0fc5093af3fa517551b7b03584b7ba5f99520a6576f39a7256f22ce4429.jpg",
+  "box": 6,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    292.81219482421875,
+    1575.1395263671875
+   ],
+   [
+    1953.68994140625,
+    1564.6937255859375
+   ],
+   [
+    1966.85205078125,
+    3657.478515625
+   ],
+   [
+    305.974365234375,
+    3667.92431640625
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "picked cl by eye over consensus"
+ },
+ {
+  "i": 90,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/f3/f3718197aea2df788e895999c166a934c874f317f8205faf5fb5a98dede02e00.jpg",
+  "box": 6,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    341.28000000000003,
+    1509.1200000000001
+   ],
+   [
+    1911.6,
+    1509.1200000000001
+   ],
+   [
+    1911.6,
+    3628.7999999999997
+   ],
+   [
+    341.28000000000003,
+    3628.7999999999997
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 91,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/d0/d0557ef8fd3573839a0d39a339d5655efde1959f0aa54e1d181415469bf1a2ee.jpg",
+  "box": 6,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    280.8,
+    1536.0
+   ],
+   [
+    1868.4,
+    1536.0
+   ],
+   [
+    1868.4,
+    3648.0
+   ],
+   [
+    280.8,
+    3648.0
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 92,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/ef/efb19ef2e08a48a9e2b78a3da1080b4c70d084c13684c2380475b3e1123a9c99.jpg",
+  "box": 6,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    324.0,
+    1497.6000000000001
+   ],
+   [
+    1944.0,
+    1497.6000000000001
+   ],
+   [
+    1944.0,
+    3686.3999999999996
+   ],
+   [
+    324.0,
+    3686.3999999999996
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 93,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/c0/c055e36ac378c3bbfc476149bc2814e8d71d145d7a78e32db846668745b608af.jpg",
+  "box": 6,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    324.0,
+    1363.1999999999998
+   ],
+   [
+    1885.68,
+    1363.1999999999998
+   ],
+   [
+    1885.68,
+    3552.0
+   ],
+   [
+    324.0,
+    3552.0
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 94,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/1e/1e14ec7b2a5bd17a3c9bc26c20fa34ab789a6f7db801b61c21b5acf93f93a9cd.jpg",
+  "box": 6,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    324.0,
+    1075.2
+   ],
+   [
+    2002.3200000000002,
+    1075.2
+   ],
+   [
+    2002.3200000000002,
+    3609.6
+   ],
+   [
+    324.0,
+    3609.6
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 95,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/2a/2ad6091b6f988e254b56ae62357cda7f6722d59e3c40f0eecd95a69e84ebf278.jpg",
+  "box": 6,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    324.0,
+    1420.8
+   ],
+   [
+    1872.72,
+    1420.8
+   ],
+   [
+    1872.72,
+    3544.32
+   ],
+   [
+    324.0,
+    3544.32
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 96,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/7a/7abd738d2a4c57dd71de271c4ebeda8a369a3eb72e7dab0a3438df99ba477c4f.jpg",
+  "box": 6,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    324.0,
+    1405.44
+   ],
+   [
+    1885.68,
+    1405.44
+   ],
+   [
+    1885.68,
+    3552.0
+   ],
+   [
+    324.0,
+    3552.0
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 97,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/c7/c7cb952e1166dc12fdc1fc7ea02e9dfffd8d4c7a685d6868e47824772b92ced6.jpg",
+  "box": 6,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    367.20000000000005,
+    1489.92
+   ],
+   [
+    1872.72,
+    1489.92
+   ],
+   [
+    1872.72,
+    3674.8799999999997
+   ],
+   [
+    367.20000000000005,
+    3674.8799999999997
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 98,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/1c/1cdd01dcc82306c0549ad18a194ae96f73330e40a0ee9b4e3524cfe2ce4069af.jpg",
+  "box": 6,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    263.57391357421875,
+    1428.2364501953125
+   ],
+   [
+    1967.744384765625,
+    1422.1717529296875
+   ],
+   [
+    1975.7169189453125,
+    3662.44921875
+   ],
+   [
+    271.5465087890625,
+    3668.513671875
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "no 2-source consensus; picked cl"
+ },
+ {
+  "i": 99,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/1b/1b13459fe28543882ed34535f37be76bd055df4c4b65d84b0b2f9d4102c7db6a.jpg",
+  "box": 6,
+  "group": "seed7",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    348.0,
+    1530.0
+   ],
+   [
+    1931.9996337890625,
+    1530.0
+   ],
+   [
+    1931.9996337890625,
+    3659.99951171875
+   ],
+   [
+    348.0,
+    3659.99951171875
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 100,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/59/59958bf2222650db060f5c7ec290f3cf03de33823090fd9b85f143273b89bb41.jpg",
+  "box": 4,
+  "group": "extra-refused",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    274.32,
+    883.2
+   ],
+   [
+    1944.0,
+    883.2
+   ],
+   [
+    1944.0,
+    3072.0
+   ],
+   [
+    274.32,
+    3072.0
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 101,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/76/766e3c5fc05b01eb7fa2492fca8e6322d0e6213083a9ebf795ae16b0d91a1b2c.jpg",
+  "box": 4,
+  "group": "extra-refused",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    252.72000000000003,
+    883.2
+   ],
+   [
+    1944.0,
+    883.2
+   ],
+   [
+    1944.0,
+    3072.0
+   ],
+   [
+    252.72000000000003,
+    3072.0
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 102,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/cc/cc51c0ee861033a43c8a38af0ca994908950a34c326381115b9d9f46203409e0.jpg",
+  "box": 3,
+  "group": "extra-refused",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    231.12,
+    883.2
+   ],
+   [
+    1885.68,
+    883.2
+   ],
+   [
+    1885.68,
+    3072.0
+   ],
+   [
+    231.12,
+    3072.0
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 103,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/70/709efa00c2df0c0862cf38ec3938dbcba32c0935af597ea70f0706697c86fd8d.jpg",
+  "box": 3,
+  "group": "extra-refused",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    237.6,
+    971.52
+   ],
+   [
+    1907.28,
+    971.52
+   ],
+   [
+    1907.28,
+    3325.44
+   ],
+   [
+    237.6,
+    3325.44
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 104,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/f8/f838e115df54d17117e2fe9ae2d75df6f70b20710075291244f011bcaae32500.jpg",
+  "box": 3,
+  "group": "extra-refused",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    287.28000000000003,
+    971.52
+   ],
+   [
+    1944.0,
+    971.52
+   ],
+   [
+    1944.0,
+    3072.0
+   ],
+   [
+    287.28000000000003,
+    3072.0
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 105,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/b8/b88f396b0ebf139a8eeb07a25d4954743935d1c5c1f52d604f0de988aaf34f82.jpg",
+  "box": 3,
+  "group": "extra-refused",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    216.0,
+    902.4
+   ],
+   [
+    1907.28,
+    902.4
+   ],
+   [
+    1907.28,
+    3033.6000000000004
+   ],
+   [
+    216.0,
+    3033.6000000000004
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 106,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/58/580932f62cb843a407b1bdff26e9e6c363f3c71633622c933c61f14724214507.jpg",
+  "box": 3,
+  "group": "extra-refused",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    395.28,
+    1459.2
+   ],
+   [
+    1872.72,
+    1459.2
+   ],
+   [
+    1872.72,
+    3571.2000000000003
+   ],
+   [
+    395.28,
+    3571.2000000000003
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 107,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/df/df9e68de0751460f33f7d280766521ab184c895e3951695dc1995c6ed4c9b9c2.jpg",
+  "box": 3,
+  "group": "extra-refused",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    287.28000000000003,
+    1489.92
+   ],
+   [
+    1872.72,
+    1489.92
+   ],
+   [
+    1872.72,
+    3571.2000000000003
+   ],
+   [
+    287.28000000000003,
+    3571.2000000000003
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 108,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/e6/e646b2278f15a67339d82e0dc2c7cf0c168ff94d6a70517e4dd3e6c3b78fcd27.jpg",
+  "box": 3,
+  "group": "extra-refused",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    287.28000000000003,
+    1489.92
+   ],
+   [
+    1885.68,
+    1489.92
+   ],
+   [
+    1885.68,
+    3571.2000000000003
+   ],
+   [
+    287.28000000000003,
+    3571.2000000000003
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 109,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/ad/adf330f91b38f1e03358027fb7deae5644bd58bd7f5628f41eb1eb934b06d000.jpg",
+  "box": 6,
+  "group": "extra-refused",
+  "W": 2160,
+  "H": 3840,
+  "corners": null,
+  "source": null,
+  "verdict": "REJECT",
+  "note": "two cards overlap, lower edge unclear"
+ },
+ {
+  "i": 110,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/b0/b0d330cf5650f7718aa7e9558b78904d01c569fc1ee8c07260a6860abed75b4f.jpg",
+  "box": 4,
+  "group": "extra-overrun",
+  "W": 2160,
+  "H": 3840,
+  "corners": null,
+  "source": null,
+  "verdict": "REJECT",
+  "note": "blurred close-up, edges unclear"
+ },
+ {
+  "i": 111,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/1d/1dc52dc3864e4a125c130ccc057007c0d895ebc4b53251d928f6fa467fddbcee.jpg",
+  "box": 4,
+  "group": "extra-overrun",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    92.88,
+    806.4
+   ],
+   [
+    1944.0,
+    806.4
+   ],
+   [
+    1944.0,
+    3390.7200000000003
+   ],
+   [
+    92.88,
+    3390.7200000000003
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 112,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/6d/6d53588f48231f1b21b8b7cac74ba89867f4e6a897a36e15248de732f518c9e9.jpg",
+  "box": 4,
+  "group": "extra-overrun",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    324.0,
+    1067.52
+   ],
+   [
+    1944.0,
+    1067.52
+   ],
+   [
+    1944.0,
+    3133.4399999999996
+   ],
+   [
+    324.0,
+    3133.4399999999996
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 113,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/34/34a56e1fc7bbc5a4bfb9e6e8bb2c31fe30969baf34aab7350a0622168d00228d.jpg",
+  "box": 4,
+  "group": "extra-overrun",
+  "W": 2160,
+  "H": 3840,
+  "corners": null,
+  "source": null,
+  "verdict": "REJECT",
+  "note": "top edge lost in blur, card nearly fills frame"
+ },
+ {
+  "i": 114,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/f1/f1c535aa28ba3cc3505f7dd5e2ad769a807409d296b5847be47452f08aa4cf73.jpg",
+  "box": 5,
+  "group": "extra-overrun",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    174.0,
+    893.9998168945312
+   ],
+   [
+    1841.9996337890625,
+    893.9998168945312
+   ],
+   [
+    1841.9996337890625,
+    3089.999267578125
+   ],
+   [
+    174.0,
+    3089.999267578125
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "no 2-source consensus; picked cl"
+ },
+ {
+  "i": 115,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/90/902b724ede3d41a7ece1fe85d6ef930e3625fb99e9a661ddcf620b1b483fc5c7.jpg",
+  "box": 5,
+  "group": "extra-overrun",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    274.32,
+    1059.8400000000001
+   ],
+   [
+    1872.72,
+    1059.8400000000001
+   ],
+   [
+    1872.72,
+    3133.4399999999996
+   ],
+   [
+    274.32,
+    3133.4399999999996
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 116,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/19/1983b748c68867e26b2656caa764653c700e8a8258ff241b75e33c833d4f7cf4.jpg",
+  "box": 6,
+  "group": "extra-mask",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    108.0,
+    1374.0
+   ],
+   [
+    1848.0,
+    1374.0
+   ],
+   [
+    1848.0,
+    3636.0
+   ],
+   [
+    108.0,
+    3636.0
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 117,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/7d/7dc38592b527aad846cf3597cdc3448fe254135f91a403aa93d4f145e76ba72f.jpg",
+  "box": 6,
+  "group": "extra-mask",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    282.0,
+    1554.0
+   ],
+   [
+    1890.0,
+    1554.0
+   ],
+   [
+    1890.0,
+    3726.0
+   ],
+   [
+    282.0,
+    3726.0
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 118,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/2d/2d42fb9f68190b498812fa7e1550423486f38a6b343bccdee914a591c0bc02fa.jpg",
+  "box": 1,
+  "group": "extra-mask",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    204.0,
+    1590.0
+   ],
+   [
+    1908.0,
+    1590.0
+   ],
+   [
+    1908.0,
+    3762.0
+   ],
+   [
+    204.0,
+    3762.0
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 119,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/61/616e399f1f998c14b74260723de369e853213019883c864297d6dcdb4f7a96b0.jpg",
+  "box": 4,
+  "group": "extra-mask",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    137.71812080536913,
+    785.7915057915059
+   ],
+   [
+    1942.5503355704698,
+    785.7915057915059
+   ],
+   [
+    1942.5503355704698,
+    3380.3861003861
+   ],
+   [
+    137.71812080536913,
+    3380.3861003861
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 120,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/48/48f11b3edb03d06d2c378052cda1f716091718eb0360f22bf7d4603665342e6b.jpg",
+  "box": 4,
+  "group": "extra-mask",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    117.55102040816327,
+    811.1627906976744
+   ],
+   [
+    1895.5102040816325,
+    811.1627906976744
+   ],
+   [
+    1895.5102040816325,
+    3363.720930232558
+   ],
+   [
+    117.55102040816327,
+    3363.720930232558
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 121,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/e9/e9926aa77e8c34d65c724b26dfdf4e589f8e9da1f6ad7216d9c7c4caf85460d0.jpg",
+  "box": 4,
+  "group": "extra-mask",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    124.89795918367348,
+    1101.3953488372094
+   ],
+   [
+    2013.061224489796,
+    1101.3953488372094
+   ],
+   [
+    2013.061224489796,
+    3787.906976744186
+   ],
+   [
+    124.89795918367348,
+    3787.906976744186
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 122,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/47/47e4ef7525d94388a45632c212cf33b7b81e6d8718a5d878bf0d5e60681ff0b4.jpg",
+  "box": 4,
+  "group": "extra-lowfill",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    194.4,
+    384.0
+   ],
+   [
+    2073.6,
+    384.0
+   ],
+   [
+    2073.6,
+    3072.0
+   ],
+   [
+    194.4,
+    3072.0
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 123,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/54/5419cb4bf6e6b22853358016c23aee5d8c4b5f56686782d564cc36cc86793837.jpg",
+  "box": 1,
+  "group": "extra-lowfill",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    264.48979591836735,
+    1537.6337378805345
+   ],
+   [
+    1888.1632653061224,
+    1537.6337378805345
+   ],
+   [
+    1888.1632653061224,
+    3805.622076072954
+   ],
+   [
+    264.48979591836735,
+    3805.622076072954
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 124,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/a5/a51580a7063e9bed661cf2a9c202457dc3ee045065c75352dae02d5031289270.jpg",
+  "box": 6,
+  "group": "extra-lowfill",
+  "W": 2160,
+  "H": 3840,
+  "corners": null,
+  "source": null,
+  "verdict": "REJECT",
+  "note": "top edge hidden by glare of blurred card"
+ },
+ {
+  "i": 125,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/35/35611cdb35d9f98624ac7936a54c707a74bf0f45c29cc53dd7cab30f84a6e467.jpg",
+  "box": 3,
+  "group": "extra-lowfill",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    293.4538269042969,
+    1586.22802734375
+   ],
+   [
+    1777.0616455078125,
+    1611.3739013671875
+   ],
+   [
+    1742.887939453125,
+    3627.608642578125
+   ],
+   [
+    259.2803039550781,
+    3602.462646484375
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "no 2-source consensus; picked cl"
+ },
+ {
+  "i": 126,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/a8/a8e95f4e8623a427c21cc4a59940613f0c4aa6bddeef8166e7a324c2bf5d1537.jpg",
+  "box": 2,
+  "group": "extra-lowfill",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    129.6,
+    675.8399999999999
+   ],
+   [
+    1872.72,
+    675.8399999999999
+   ],
+   [
+    1872.72,
+    3129.6
+   ],
+   [
+    129.6,
+    3129.6
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 127,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/3e/3ed576efa7a3cfeb7ce41b95c02de2630dc85cd3a261c13ff406441eeb830020.jpg",
+  "box": 6,
+  "group": "extra-lowfill",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    258.0,
+    1410.0
+   ],
+   [
+    1986.0,
+    1410.0
+   ],
+   [
+    1986.0,
+    3672.0
+   ],
+   [
+    258.0,
+    3672.0
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 128,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/80/80febff746911845ff86796e5282fd986351b188309a4601877f773b5ce4b436.jpg",
+  "box": 4,
+  "group": "extra-lowfill",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    124.05405405405406,
+    1079.0697674418604
+   ],
+   [
+    2028.6486486486485,
+    1079.0697674418604
+   ],
+   [
+    2028.6486486486485,
+    3780.4651162790697
+   ],
+   [
+    124.05405405405406,
+    3780.4651162790697
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 129,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/91/91c4065fffd13294cf047390404b80aae38d0c8f7e98ba25b01f8058774c92e1.jpg",
+  "box": 5,
+  "group": "extra-lowfill",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    447.12,
+    1102.08
+   ],
+   [
+    1836.0,
+    1102.08
+   ],
+   [
+    1836.0,
+    3098.88
+   ],
+   [
+    447.12,
+    3098.88
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 130,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/55/55906b73d2ef89eceab0b3c867d28ba47f50ef73976945fbe06b6f2b0397ff11.jpg",
+  "box": 6,
+  "group": "extra-lowfill",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    287.28000000000003,
+    1536.0
+   ],
+   [
+    1786.32,
+    1536.0
+   ],
+   [
+    1786.32,
+    3624.96
+   ],
+   [
+    287.28000000000003,
+    3624.96
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 131,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/ac/ac3a39e40a79cca07cbbd2ef715b3a46fbc2abf2df2fa41de8c9be9fdfcc22b5.jpg",
+  "box": 6,
+  "group": "extra-lowfill",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    294.0,
+    1416.0
+   ],
+   [
+    1956.0,
+    1416.0
+   ],
+   [
+    1956.0,
+    3642.0
+   ],
+   [
+    294.0,
+    3642.0
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "no 2-source consensus; picked cl"
+ },
+ {
+  "i": 132,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/0c/0c77d1d720709ec218b5842420f18f54fd4ac2f76b19a364e6d0d4181fc2e2d2.jpg",
+  "box": 6,
+  "group": "extra-lowfill",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    395.28,
+    1555.2
+   ],
+   [
+    1907.28,
+    1555.2
+   ],
+   [
+    1907.28,
+    3648.0
+   ],
+   [
+    395.28,
+    3648.0
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 133,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/c1/c1d2e9d915049696cb7779aeaa8321ad34b81799640096d4d576c5a7518af667.jpg",
+  "box": 4,
+  "group": "extra-lowfill",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    132.0,
+    989.9998168945312
+   ],
+   [
+    1889.9996337890625,
+    989.9998168945312
+   ],
+   [
+    1889.9996337890625,
+    3437.999267578125
+   ],
+   [
+    132.0,
+    3437.999267578125
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 134,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/32/32d712646a8ff888da86218dd53d7c89fc6a8e08134b23ffa35e95113399f7a1.jpg",
+  "box": 6,
+  "group": "extra-lowfill",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    307.5,
+    1445.595238095238
+   ],
+   [
+    1942.5,
+    1445.595238095238
+   ],
+   [
+    1942.5,
+    3729.404761904762
+   ],
+   [
+    307.5,
+    3729.404761904762
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 135,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/7d/7d968f5b9890f3d612f3932c0a59691cc655bbef91c6b71ad73cbf536b1357b2.jpg",
+  "box": 3,
+  "group": "extra-lowfill",
+  "W": 2160,
+  "H": 3840,
+  "corners": null,
+  "source": null,
+  "verdict": "REJECT",
+  "note": "card tilted several degrees, corners need a rotated quad"
+ },
+ {
+  "i": 136,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/ee/ee348cba1b14fb5b17acb92f2c0d68b6b126ef024b25605fb9d6b7e93c77ce39.jpg",
+  "box": 1,
+  "group": "extra-bigarea",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    157.67999999999998,
+    518.4000000000001
+   ],
+   [
+    2073.6,
+    518.4000000000001
+   ],
+   [
+    2073.6,
+    3187.2
+   ],
+   [
+    157.67999999999998,
+    3187.2
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 137,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/f6/f6aebdbeb0b2cd7d549aeda65d7c5d606d56f211967febba7a6eaa60b23f1aac.jpg",
+  "box": 3,
+  "group": "extra-bigarea",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    302.40000000000003,
+    1597.4399999999998
+   ],
+   [
+    1799.28,
+    1597.4399999999998
+   ],
+   [
+    1799.28,
+    3628.7999999999997
+   ],
+   [
+    302.40000000000003,
+    3628.7999999999997
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 138,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/bb/bbfad26b2fe0e9bb7a358441cf86a4bbf8dcd3d16f337873d340c235887c08db.jpg",
+  "box": 3,
+  "group": "extra-bigarea",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    395.28,
+    1512.96
+   ],
+   [
+    1743.1200000000001,
+    1512.96
+   ],
+   [
+    1743.1200000000001,
+    3571.2000000000003
+   ],
+   [
+    395.28,
+    3571.2000000000003
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 139,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/4f/4ffd5f6cd93f012ffc8fad8d7b476ce17323dbd544a6c2a5f0390e17a544fa1d.jpg",
+  "box": 2,
+  "group": "extra-bigarea",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    108.0,
+    683.52
+   ],
+   [
+    2073.6,
+    683.52
+   ],
+   [
+    2073.6,
+    3148.7999999999997
+   ],
+   [
+    108.0,
+    3148.7999999999997
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 140,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/17/17cf9b0bb3a95a9f227edffd1b21eb07d712a4361707c3ea96d54a159918fb92.jpg",
+  "box": 3,
+  "group": "extra-bigarea",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    410.4,
+    1612.8
+   ],
+   [
+    1900.8,
+    1612.8
+   ],
+   [
+    1900.8,
+    3571.2000000000003
+   ],
+   [
+    410.4,
+    3571.2000000000003
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 141,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/4b/4b791fe7006201cec56531dba11c466c941196f31646c6bb4e0f25bde2b628e7.jpg",
+  "box": 1,
+  "group": "extra-bigarea",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    157.67999999999998,
+    921.5999999999999
+   ],
+   [
+    2052.0,
+    921.5999999999999
+   ],
+   [
+    2052.0,
+    3590.4
+   ],
+   [
+    157.67999999999998,
+    3590.4
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 142,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/89/89b1c6c793f6222d1bf9aecd66915ad5df576f427e37d2cda4748525abd009c6.jpg",
+  "box": 4,
+  "group": "extra-None",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    30.248910903930664,
+    668.3804321289062
+   ],
+   [
+    1968.8482666015625,
+    685.8453979492188
+   ],
+   [
+    1945.18994140625,
+    3311.902587890625
+   ],
+   [
+    6.590627193450928,
+    3294.4375
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "picked cl by eye over consensus"
+ },
+ {
+  "i": 143,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/af/af7a62675ba1fdf29228ab2cb9798b8effa1467134a3f8daaf278346efc63fdd.jpg",
+  "box": 1,
+  "group": "extra-None",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    300.0,
+    1591.7857142857142
+   ],
+   [
+    1897.5,
+    1591.7857142857142
+   ],
+   [
+    1897.5,
+    3823.214285714286
+   ],
+   [
+    300.0,
+    3823.214285714286
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 144,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/2f/2f6e546744d9c6fac582c1dad35c2924ed0117eb1696b53a36e5157bd5bc6db3.jpg",
+  "box": 1,
+  "group": "extra-None",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    216.0,
+    1009.9200000000001
+   ],
+   [
+    1944.0,
+    1009.9200000000001
+   ],
+   [
+    1944.0,
+    3206.3999999999996
+   ],
+   [
+    216.0,
+    3206.3999999999996
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 145,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/93/939bf56244566fd082f883cdf558accfd57b6470fa40ea0cd19c34ca5c40a4e3.jpg",
+  "box": 4,
+  "group": "extra-None",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    114.0,
+    762.0
+   ],
+   [
+    1908.0,
+    762.0
+   ],
+   [
+    1908.0,
+    3216.0
+   ],
+   [
+    114.0,
+    3216.0
+   ]
+  ],
+  "source": "cl",
+  "verdict": "FIX",
+  "note": "no 2-source consensus; picked cl"
+ },
+ {
+  "i": 146,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/35/35d03c7b5e05b73f2713cd56fb46cabb7016b941572e0e8c52396a1e3dc8fb13.jpg",
+  "box": 2,
+  "group": "extra-None",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    179.28,
+    729.6
+   ],
+   [
+    2015.2800000000002,
+    729.6
+   ],
+   [
+    2015.2800000000002,
+    3187.2
+   ],
+   [
+    179.28,
+    3187.2
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ },
+ {
+  "i": 147,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/01/01af196df5c1bd77af7832a9405d714621d9f641fece287a23fc1344fa03d73f.jpg",
+  "box": 1,
+  "group": "extra-None",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    282.5970153808594,
+    1360.831787109375
+   ],
+   [
+    1932.9466552734375,
+    1375.50146484375
+   ],
+   [
+    1913.8348388671875,
+    3525.572021484375
+   ],
+   [
+    263.4851989746094,
+    3510.90234375
+   ]
+  ],
+  "source": "det+cl",
+  "verdict": "ACCEPT",
+  "note": ""
+ },
+ {
+  "i": 148,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/e4/e4c0cd7318b20525a45ba55d1dbf04133e66ac6f00058cd6743786fee8c5ac71.jpg",
+  "box": 6,
+  "group": "extra-None",
+  "W": 2160,
+  "H": 3840,
+  "corners": null,
+  "source": null,
+  "verdict": "REJECT",
+  "note": "two cards stack, front card bottom edge unclear"
+ },
+ {
+  "i": 149,
+  "path": "/Users/shivinate/Developer/pkmnscan/photos/b4/b41cc48ceaf411b840d763c3a3f60e0b978aaa643ab72dca149806db2ba126d7.jpg",
+  "box": 3,
+  "group": "extra-None",
+  "W": 2160,
+  "H": 3840,
+  "corners": [
+   [
+    410.4,
+    1059.8400000000001
+   ],
+   [
+    1786.32,
+    1059.8400000000001
+   ],
+   [
+    1786.32,
+    3225.6
+   ],
+   [
+    410.4,
+    3225.6
+   ]
+  ],
+  "source": "manual-by-eye",
+  "verdict": "FIX",
+  "note": "corners placed by eye on 10% grid"
+ }
+]

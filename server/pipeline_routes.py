@@ -1571,7 +1571,8 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
     capture = captures[at]
 
     try:
-        detected = geometry.detect_card(capture.photo)
+        # THE MODEL FIRST, `detect_card` BEHIND IT (D125): `locate_card` falls back itself.
+        detected = geometry.locate_card(capture.photo)
     except Exception:
         # The same swallow `cli/cmd_identify.py` performs around this call, and for the same
         # reason: detection is an optimisation, and a photograph it cannot read is sent whole

@@ -75,3 +75,4 @@ from geometry.crop import (  # noqa: F401
     TITLE_BAND,
     crop_regions,
 )
+from geometry.card_box import locate_card  # noqa: F401

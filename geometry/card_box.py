@@ -1,0 +1,93 @@
+"""The card's box from a fine-tuned D-FINE-N model on onnxruntime (D125). `locate_card` is the one call.
+
+THE MODEL ANSWERS FIRST, `detect_card` ANSWERS WHEN IT CANNOT. The crop preview asks
+`locate_card`. A missing model file, a missing onnxruntime, a score under `MIN_SCORE` or any
+error at all returns `detect_card`'s answer instead. That fallback is the SAFETY PATH and it
+is today's behaviour, so a machine without the model is exactly one that never had it.
+
+The model is one class. Its ONNX includes the post-processing. The photo is STRETCHED to
+640x640 RGB 0..1 with no letterbox, and the best score of 300 wins. The box is the card
+itself, axis aligned and unpadded: the margin belongs to `identify.images.crop_rect`.
+`method` is "dfine". `geometry/model/rebuild.py` rebuilds the file from the labels.
+"""
+
+import threading
+from pathlib import Path
+from typing import Optional
+
+from geometry.detect import CARD_ASPECT, CardBox, detect_card
+
+MODEL = Path(__file__).resolve().parent / "model" / "dfine_card_640.onnx"
+SIZE = 640
+MIN_SCORE = 0.25
+
+_lock = threading.Lock()
+_session = None  # None: not tried yet. False: tried and unavailable.
+
+
+def _load():
+    global _session
+    with _lock:
+        if _session is None:
+            try:
+                import onnxruntime as ort
+
+                _session = ort.InferenceSession(str(MODEL), providers=["CPUExecutionProvider"])
+            except Exception:
+                _session = False
+    return _session or None
+
+
+def resize_linear(array, nw, nh):
+    """Pixel-centre bilinear with no antialiasing (cv2.INTER_LINEAR), which is what training saw."""
+    import numpy as np
+
+    h, w = array.shape[:2]
+    ys = np.clip((np.arange(nh) + 0.5) * h / nh - 0.5, 0, h - 1)
+    xs = np.clip((np.arange(nw) + 0.5) * w / nw - 0.5, 0, w - 1)
+    y0, x0 = np.floor(ys).astype(int), np.floor(xs).astype(int)
+    y1, x1 = np.minimum(y0 + 1, h - 1), np.minimum(x0 + 1, w - 1)
+    fy, fx = (ys - y0)[:, None, None], (xs - x0)[None, :, None]
+    a = array.astype(np.float32)
+    top = a[y0][:, x0] * (1 - fx) + a[y0][:, x1] * fx
+    bottom = a[y1][:, x0] * (1 - fx) + a[y1][:, x1] * fx
+    return np.rint(top * (1 - fy) + bottom * fy).astype(np.uint8)
+
+
+def model_card(source) -> Optional[CardBox]:
+    """The model's box, or None when it is unavailable or not sure. Never raises."""
+    try:
+        import numpy as np
+        from PIL import Image
+
+        session = _load()
+        if session is None:
+            return None
+        with Image.open(source) as opened:
+            image = opened.convert("RGB")
+        width, height = image.size
+        pixels = resize_linear(np.asarray(image), SIZE, SIZE)
+        inputs = {
+            "images": pixels.transpose(2, 0, 1)[None].astype(np.float32) / 255.0,
+            "orig_target_sizes": np.array([[SIZE, SIZE]], np.int64),
+        }
+        _, boxes, scores = session.run(None, inputs)
+        best = int(np.argmax(scores[0]))
+        score = float(scores[0, best])
+        if score < MIN_SCORE:
+            return None
+        x0, y0, x1, y1 = (min(max(float(v) / SIZE, 0.0), 1.0) for v in boxes[0, best])
+        if x1 <= x0 or y1 <= y0:
+            return None
+        w, h = (x1 - x0) * width, (y1 - y0) * height
+        return CardBox(
+            angle=0.0, left=x0, top=y0, right=x1, bottom=y1,
+            fill=score, aspect=min(w, h) / max(w, h), method="dfine",
+        )
+    except Exception:
+        return None
+
+
+def locate_card(source, aspect: Optional[float] = CARD_ASPECT) -> Optional[CardBox]:
+    """The model's box, else `detect_card`'s (the safety path). None means a human should look."""
+    return model_card(source) or detect_card(source, aspect)
