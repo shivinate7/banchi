@@ -623,7 +623,7 @@ async function openComposer(page: Page) {
      back to Cards, which is where every case below was written to begin. */
   await expect(page.locator('.run-quote, .runs-composer .bn-notice-danger').first()).toBeVisible()
   const cards = page.locator('.runs-stages').getByRole('button', { name: 'Cards' })
-  if ((await cards.count()) > 0) await cards.click()
+  await cards.click()
   await expect(page.locator('.runs-starts')).toBeVisible()
 }
 
@@ -644,7 +644,7 @@ async function pickBox(page: Page, box = 9) {
      run. Choosing the start first is idempotent — `Segmented` re-presses without toggling —
      so every existing caller of this helper keeps meaning what it meant. */
   const drawers = page.locator('.runs-starts').getByRole('button', { name: 'Boxes' })
-  if (await drawers.isVisible()) await drawers.click()
+  await drawers.click()
   const label = boxTitle(BOX_NAMES[box] ?? null, box)
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   await page.locator('.runs-boxes').getByRole('button', { name: new RegExp(`^${escaped}\\b`) }).click()
@@ -1606,7 +1606,9 @@ test('adding a drawer voids the estimate, exactly as changing a reading does', a
   const wire = await open(page)
   await atReading(page)
   await checkCost(page)
-  await expect(page.locator('.run-button-money')).toHaveCount(1)
+  const spend = page.locator('.run-button-money')
+  await expect(spend).toHaveCount(1)
+  const oldTotal = (await spend.innerText()).trim()
 
   /* THE MONEY GATE'S RULE, APPLIED TO THE SELECTION. "A confirm whose first step described a
      different set of cards is not a confirm at all" — and a second drawer is a different set of
@@ -1618,10 +1620,15 @@ test('adding a drawer voids the estimate, exactly as changing a reading does', a
   await page.locator('.runs-stages').getByRole('button', { name: 'Cards' }).click()
   await pickBox(page, 12)
   await expect(page.locator('.runs-stages').getByRole('button', { name: 'Cost' })).toHaveCount(0)
-  await expect(page.locator('.run-button-money')).toHaveCount(0)
 
   await toReading(page)
   await checkCost(page)
+  /* THE OLD TOTAL NEVER SHOWS ON THE COST STAGE: the button there is the new quote's, for two
+     drawers. A count of 0 on the stage before the quote proves nothing, since the button cannot
+     draw there at all. */
+  await expect(spend).toHaveCount(1)
+  expect((await spend.innerText()).trim()).not.toBe(oldTotal)
+  await expect(page.getByText(oldTotal, { exact: true })).toHaveCount(0)
   const asked = wire.filter((row) => row.path === '/pipeline/preflight').pop()
   expect((asked?.body as { box?: number[] }).box).toEqual([9, 12])
 })
