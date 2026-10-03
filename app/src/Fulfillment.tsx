@@ -30,7 +30,7 @@ import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { placePartsOf, placeWordsOf, sayPlace } from './position'
-import { Icon, Logo, Modal, Page, useOverlayLayer, useUndoHotkey } from './kit'
+import { DidYouMean, Icon, Logo, Modal, Page, useOverlayLayer, useUndoHotkey } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { isEditableTarget } from './keys'
 import { useSearch } from './useSearch'
@@ -1255,7 +1255,12 @@ export function Fulfillment() {
     } else if (found === null) {
       hits = null
     } else if (found.total === 0) {
-      hits = <p className="fulfillment-say ff-say">No card here has that name. Check the spelling.</p>
+      hits = (
+        <>
+          <p className="fulfillment-say ff-say">No card here has that name. Check the spelling.</p>
+          <DidYouMean name={results?.did_you_mean} onPick={setQuery} />
+        </>
+      )
     } else if (found.groups.length === 0 && found.pooledAway) {
       hits = (
         <p className="fulfillment-say ff-say">

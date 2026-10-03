@@ -715,7 +715,7 @@ test('a refused divider is a sentence beside the control, and never a halt', asy
   await page.keyboard.press('s')
 
   /* OWNER, 2026-09-28: an empty section is a normal no-op. One capitalised sentence, quiet
-     (not the red refusal), and no machine string anywhere on the screen. `machine-words.spec`
+     (not the red refusal), and no machine string anywhere on the screen. `text-checks.spec`
      sweeps loaded screens only and never an error state, so this is where the raw reason
      code is caught: any snake_case token in the visible text is red. */
   const note = page.locator('.capture-section .capture-quiet').filter({ hasText: 'still empty' })

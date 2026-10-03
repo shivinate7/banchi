@@ -157,11 +157,15 @@ def card_rect(size, box, aspect: float = geometry.CARD_ASPECT):
     question `crop_rect` and the run panel's band both ask, and a rename would move a
     docstring several entries cite for the sake of deleting one line.
     """
+    # A finder in `PAD_BY_METHOD` boxes the card itself (D125), so the correction for
+    # `detect_card`'s too-short boxes would pad twice: it is skipped for those.
+    if box.method in geometry.PAD_BY_METHOD:
+        aspect = None
     return geometry.corrected_bounds(size, box, aspect)
 
 
 def crop_rect(
-    size, box, pad: float = CROP_PAD, aspect: float = geometry.CARD_ASPECT
+    size, box, pad: Optional[float] = None, aspect: float = geometry.CARD_ASPECT
 ):
     """THE PIXELS `card_crop` CUTS, as a plain `(left, top, right, bottom)`.
 
@@ -177,6 +181,8 @@ def crop_rect(
     Clamped to the frame, so the rectangle is always drawable and always the real cut: a
     card near an edge pads into nothing rather than off the picture.
     """
+    # `pad=None` IS THE FINDER'S OWN MARGIN (D125): `geometry.PAD_BY_METHOD`, else `CROP_PAD`.
+    pad = geometry.pad_for(box, CROP_PAD) if pad is None else pad
     width, height = size
     left, top, right, bottom = card_rect(size, box, aspect)
     box_w, box_h = right - left, bottom - top
@@ -302,7 +308,7 @@ def detail_share(image, rect) -> float:
 
 
 def crop_refusal(
-    image, box, pad: float = CROP_PAD, aspect: float = geometry.CARD_ASPECT
+    image, box, pad: Optional[float] = None, aspect: float = geometry.CARD_ASPECT
 ) -> Optional[str]:
     """Why this box must NOT be cropped to, or None to go ahead. See the block above.
 
@@ -341,7 +347,7 @@ def crop_refusal(
     return None
 
 
-def card_crop(image, box, pad: float = CROP_PAD, aspect: float = geometry.CARD_ASPECT):
+def card_crop(image, box, pad: Optional[float] = None, aspect: float = geometry.CARD_ASPECT):
     """The detected card plus `pad`, clamped to the frame. `box` is a `geometry.CardBox`.
 
     IN MEMORY, NEVER ON DISK, and that placement is the whole safety argument. A crop

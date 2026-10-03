@@ -143,6 +143,7 @@
   transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
 .pricing-group:last-child .pricing-row:last-child { border-bottom: 0; }
+.pricing-row:nth-child(even) { background-color: var(--bn-row-stripe); }
 .pricing-row:hover { background: var(--bn-hover); }
 .pricing-row[data-cap='full'] .pricing-id,
 .pricing-row[data-cap='full'] .pricing-ref { opacity: 0.72; }

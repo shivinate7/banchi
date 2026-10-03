@@ -140,7 +140,7 @@ const PATHS = {
  *  these draws it for this meaning and no other; a new meaning is a new path. */
 export const ICON_MEANINGS: Partial<Record<keyof typeof PATHS, string>> = {
   history: 'A log of past events, newest first: the run list',
-  headstone: 'Cards that have left the store: the graveyard',
+  headstone: 'A card that has left: sold, retired or from a deleted box',
   chart: 'A price over time: a product or a row',
   archive: 'Retire a card: put it away, not delete it',
   refresh: 'Read again from the server: reload',

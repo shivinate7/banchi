@@ -142,6 +142,7 @@ test.describe('#/product — the per-product view', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.route(/\/pipeline\/products\/[^/]+\/history$/, (route) => json(route, historyPayload()))
+    await page.route(/\/pipeline\/products\/[^/]+\/realized$/, (route) => json(route, { sku: '0', configured: false }))
     await page.route(/\/orders$/, (route) => json(route, ordersPayload()))
     // THE PRINTINGS SWITCH ASKS `/search` ON ITS OWN (`usePrintings`), as soon as the
     // product's name loads — sealCapture aborts anything a test does not stub. One group
@@ -195,7 +196,7 @@ test.describe('#/product — the per-product view', () => {
     })
     await expect(page).toHaveURL(/#\/gallery$/)
     // A beat for the OLD defect's own effect to have fired, if it still could.
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(300) // keep: asserts the old effect never rewrites the hash
     await expect(page).toHaveURL(/#\/gallery$/)
   })
 

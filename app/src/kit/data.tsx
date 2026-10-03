@@ -383,6 +383,7 @@ export function CardThumb({
   crop = null,
   focus,
   className,
+  pending = false,
 }: {
   /** The photograph's URL, or null when there is none. */
   readonly src: string | null
@@ -393,8 +394,20 @@ export function CardThumb({
   readonly crop?: Crop | null
   readonly focus?: number
   readonly className?: string
+  /** The answer is not final yet: the slot holds its size and draws neither a photo nor the
+   *  no-photo state. Ignored once `src` is set. */
+  readonly pending?: boolean
 }) {
   const [failed, setFailed] = useState<string | null>(null)
+  if (pending && src === null) {
+    return (
+      <span
+        className={['bn-thumb', `bn-thumb-${size}`, className ?? ''].filter(Boolean).join(' ')}
+        data-pending="true"
+        aria-busy="true"
+      />
+    )
+  }
   const missing = src === null || failed === src
   const style = missing ? undefined : cropStyle(crop, focus)
   return (

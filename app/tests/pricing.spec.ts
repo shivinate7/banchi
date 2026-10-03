@@ -2,7 +2,7 @@
 // Governs: D86, D59, D278, D277, D118, D218
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
-import { settleMotion } from './motionSettled'
+import { afterPaint, settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 import { expectOneStagger } from './staggerCheck'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
@@ -196,6 +196,9 @@ async function open(
      *  payload, because the client CHUNKS the walk and the interesting cases are about which
      *  SKUs each request carries. */
     trends?: (skus: string[]) => unknown
+    /** What `GET /pipeline/trends-saved` answers: the strips the daily job saved, and how that
+     *  read ended. `hold` keeps the answer back until it settles, so a case can look at the screen before it lands. */
+    saved?: { skus: Record<string, unknown>; note: unknown; hold?: Promise<void> }
     /** THE WORKLIST OVER SEVERAL RUNS (D86). A case that names this is asking about the merge
      *  itself — which run holds which copy, and what each one answers — so it hands over the
      *  whole thing rather than being assembled from `skus` and `runs` above. Every other case
@@ -281,7 +284,7 @@ async function open(
   await page.route(/\/pipeline\/send$/, async (route) => {
     const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>
     wire.push({ method: 'POST', path: '/pipeline/send', body })
-    if (options.sendDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.sendDelayMs))
+    if (options.sendDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.sendDelayMs)) // keep: stubbed answer held options.sendDelayMs ms on purpose, a latency fixture
     const answer: { status: number; body?: unknown; code?: string; data?: unknown } = (
       options.send ?? (() => ({ status: 200, body: { send: sendSummary(), console: '' } }))
     )(body)
@@ -383,6 +386,29 @@ async function open(
       body: JSON.stringify((options.trends ?? trends)(asked)),
     })
   })
+
+  /* THE PANEL'S TWO ON-ARRIVAL LOCAL READS (DEBT69): nothing moved, nothing saved. */
+  await page.route(/\/pipeline\/movers$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ threshold: '0.10', listed: 0, unmeasured: 0, movers: [], refresh: null }),
+    }),
+  )
+  await page.route(/\/pipeline\/trends-saved$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ skus: {}, note: null }) }),
+  )
+  if (options.saved !== undefined) {
+    const saved = options.saved
+    await page.route(/\/pipeline\/trends-saved$/, async (route) => {
+      if (saved.hold) await saved.hold
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ skus: saved.skus, note: saved.note }),
+      })
+    })
+  }
 
   await page.route(/\/pipeline\/runs\/[^/]+\/history/, async (route) => {
     const url = new URL(route.request().url())
@@ -540,7 +566,7 @@ async function open(
      a case that hands over `worklist` is testing the merge. The answers are NOT on this
      payload: they are the corpus's, read through `/pricing` above. */
   await page.route(/\/pipeline\/pricing/, async (route) => {
-    if (options.pricingDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.pricingDelayMs))
+    if (options.pricingDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.pricingDelayMs)) // keep: stubbed answer held options.pricingDelayMs ms on purpose, a latency fixture
     const listed = options.worklist?.runs ??
       options.runs ?? [{ run: RUN, box: 7, box_name: 'Riftbound epics', skus: 1 }]
     const rows =
@@ -1920,7 +1946,7 @@ test('tabbing across a suggested row writes nothing', async ({ page }) => {
 
   await field(page).focus()
   await page.keyboard.press('Tab')
-  await page.waitForTimeout(200)
+  await page.waitForTimeout(200) // keep: asserts a tab writes nothing
 
   /* A HELD TAB THROUGH A HUNDRED ROWS MUST NOT WRITE A HUNDRED OVERRIDES. Focus is not a
      decision, and neither is leaving a field you did not type in. */
@@ -1969,7 +1995,7 @@ test('a letter snaps the price to its column, and does not commit', async ({ pag
 
   /* A SNAP YOU CANNOT INSPECT IS A SNAP YOU CANNOT CHECK. It sets the field and stops there;
      the extra Enter is what makes `l`, look, Enter possible. */
-  await page.waitForTimeout(150)
+  await page.waitForTimeout(150) // keep: asserts the snap writes nothing
   expect(wire.filter((row) => row.method === 'PUT')).toHaveLength(0)
 })
 
@@ -1986,7 +2012,7 @@ test('a snap onto a blank column refuses, says so, and writes nothing', async ({
      next join, an hour later. The field is untouched and the refusal is on screen now. */
   await expect(field(page)).toHaveValue('22.03')
   await expect(page.locator('.pricing-refusal')).toContainText('No Lowest price on this row')
-  await page.waitForTimeout(150)
+  await page.waitForTimeout(150) // keep: asserts the refusal writes nothing
   expect(wire.filter((row) => row.method === 'PUT')).toHaveLength(0)
 })
 
@@ -2757,6 +2783,107 @@ test('the strip draws nothing until it is asked for, and the press is what asks'
   await loadTrends(page).click()
   await expect(strip(page).first().locator('svg')).toHaveCount(2)
   expect(wire.filter((call) => call.path.includes('/trends')).length).toBeGreaterThan(0)
+})
+
+// ------------------------------------------------------------------ saved strips (DEBT69, D278, D313)
+
+const SAVED_ROWS = () => [sku({ sku: '111', name: 'First card' }), sku({ sku: '222', name: 'Second card' })]
+const NOW_S = () => Math.floor(Date.now() / 1000)
+const savedTrends = (at: number, note: Record<string, unknown> = {}) => ({
+  skus: Object.fromEntries(
+    ['111', '222'].map((sku) => [sku, { at, ranges: trends([sku]).skus[sku]!.ranges }]),
+  ),
+  note: { at, ok: true, asked: 2, read: 2, no_history: 0, unreadable: 0, failed: 0, message: '', ...note },
+})
+
+test('saved strips draw at first paint without one request at the market host', async ({ page }) => {
+  const wire = await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 7 * 3600) })
+  await expect(strip(page).first().locator('svg')).toHaveCount(2)
+  expect(wire.filter((call) => call.path.includes('/trends'))).toHaveLength(0)
+  await expect(strip(page).first()).toHaveAttribute('title', /Read 7 hours ago/)
+  await expect(page.locator('.pricemovers-read-text').last()).toContainText('Trends were read 7 hours ago for 2 cards')
+})
+
+test('a strip older than the newest overnight read is dimmed and carries its own date', async ({ page }) => {
+  const now = NOW_S()
+  const saved = savedTrends(now - 3600)
+  ;(saved.skus['222'] as { at: number }).at = now - 5 * 86400
+  await open(page, { skus: SAVED_ROWS(), saved })
+  await expect(strip(page).nth(1).locator('svg')).toHaveCount(2)
+  await expect(strip(page).nth(0)).not.toHaveAttribute('data-stale', 'true')
+  await expect(strip(page).nth(1)).toHaveAttribute('data-stale', 'true')
+  await expect(strip(page).nth(1)).toHaveAttribute('title', /Read 5 days ago/)
+})
+
+test('a partial overnight read says how many could not be read, and which had no history', async ({ page }) => {
+  await open(page, {
+    skus: SAVED_ROWS(),
+    saved: savedTrends(NOW_S() - 3600, { asked: 10, read: 6, no_history: 2, unreadable: 2, failed: 1, ok: false, message: 'new: connection reset' }),
+  })
+  const line = page.locator('.pricemovers-read-text').last()
+  await expect(line).toContainText('for 6 of 10 cards')
+  await expect(line).toContainText('2 could not be read')
+  await expect(line).toContainText('2 have no history')
+  await expect(line).toContainText('1 step failed')
+})
+
+test('a refused press keeps the saved strip and shows the refusal beside it', async ({ page }) => {
+  await open(page, {
+    skus: SAVED_ROWS(),
+    saved: savedTrends(NOW_S() - 3600),
+    trends: (asked) => ({ ...trends([]), asked: asked.length, refused: Object.fromEntries(asked.map((sku) => [sku, 'the mirror refused the request'])) }),
+  })
+  await expect(strip(page).first().locator('svg')).toHaveCount(2)
+  await loadTrends(page).click()
+  await expect(strip(page).first()).toHaveAttribute('data-kept-refused', 'true')
+  await expect(strip(page).first().locator('svg')).toHaveCount(2)
+  await expect(strip(page).first()).toHaveAttribute('title', /the mirror refused the request/)
+})
+
+test('D313: the panel holds its three lines whether the saved read has arrived or not', async ({ page }) => {
+  await watchShifts(page)
+  let release = () => {}
+  const hold = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await open(page, { skus: SAVED_ROWS(), saved: { ...savedTrends(NOW_S() - 3600), hold } })
+  const panel = page.locator('.pricemovers')
+  await expect(panel).toBeVisible()
+  const before = await panel.boundingBox()
+  release()
+  await expect(page.locator('.pricemovers-read-text').last()).toContainText('Trends were read')
+  const after = await panel.boundingBox()
+  expect(Math.round(after!.height)).toBe(Math.round(before!.height))
+  const { shifts } = await readShifts(page)
+  expect(sumOf(shifts.filter((s) => s.moved.some((m) => m.includes('pricemovers'))))).toBeLessThan(0.001)
+})
+
+test('D313: a row keeps its size from saved strip to reading to read', async ({ page }) => {
+  await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 3600) })
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route(/\/pipeline\/runs\/[^/]+\/trends/, async (route) => {
+    await held
+    const asked = new URL(route.request().url()).searchParams.getAll('sku')
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(trends(asked)) })
+  })
+  const row = page.locator('.pricing-row').first()
+  const size = async () => {
+    const cell = await strip(page).first().boundingBox()
+    const whole = await row.boundingBox()
+    return [Math.round(cell!.width), Math.round(cell!.height), Math.round(whole!.height)]
+  }
+  await expect(strip(page).first().locator('svg')).toHaveCount(2)
+  const saved = await size()
+  await loadTrends(page).click()
+  await expect(strip(page).first()).toHaveClass(/pricetrend-reading/)
+  expect(await size()).toEqual(saved)
+  release()
+  await expect(strip(page).first().locator('svg')).toHaveCount(2)
+  await expect(strip(page).first()).not.toHaveClass(/pricetrend-reading/)
+  expect(await size()).toEqual(saved)
 })
 
 test('the strip carries a shape and a sign, and no money at all', async ({ page }) => {
@@ -4257,6 +4384,9 @@ test('a product name opens the one product view, and T opens it from the keyboar
       body: JSON.stringify({ sku: '8608859', name: 'Articuno - 161/159', set_name: 'SV: Prismatic Evolutions', condition: 'Near Mint Holofoil', source: 'archive', history_begins: null, never_sold: true, ranges: [] }),
     }),
   )
+  await page.route(/\/pipeline\/products\/[^/]+\/realized$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sku: '8608859', configured: false }) }),
+  )
   await page.route(/\/orders$/, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"orders":[]}' }))
   await page.route(/\/search\?/, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"query":"","groups":[]}' }))
   await open(page)
@@ -4552,13 +4682,14 @@ for (const width of [1440, 820]) {
     await setViewport(page, { width, height: 900 })
     await open(page, { skus: FILTER_SKUS })
     await settleFonts(page)
-    await page.waitForTimeout(800)
+    await settleMotion(page)
+    await afterPaint(page)
     const search = page.getByRole('searchbox', { name: 'Search this list' })
     for (const [text, rows] of [['dunsparce', 1], ['', 4]] as const) {
       const from = await markNow(page)
       await search.fill(text)
       await expect(page.locator('.pricing-row')).toHaveCount(rows)
-      await page.waitForTimeout(600)
+      await page.waitForTimeout(600) // keep: shifts are read over the 500ms window after the filter
       const inWindow = (await readShifts(page)).shifts.filter((sh) => sh.at >= from - 100 && sh.at < from + 500)
       expect(sumOf(inWindow), `the filter moved ${describeShifts(inWindow)}`).toBeLessThan(0.0005)
     }

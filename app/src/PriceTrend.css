@@ -74,3 +74,17 @@
 
 .pricetrend-reading { gap: var(--bn-2); }
 .pricetrend-skel { display: block; width: 56px; height: 26px; border-radius: var(--bn-r-xs); background: var(--bn-surface-2); }
+
+/* A strip read well before the newest overnight read is dimmed, and its title carries its date. */
+.pricetrend[data-stale='true'] .pricetrend-mini { opacity: 0.55; }
+/* The refusal mark sits over the kept strip's corner and never changes the cell's size. */
+.pricetrend[data-kept-refused='true'] { position: relative; }
+.pricetrend-flag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: var(--bn-fs-xs);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--bn-warn);
+}

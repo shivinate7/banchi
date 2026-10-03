@@ -73,6 +73,22 @@ import re
 import sys
 from typing import List, NamedTuple, Optional, Sequence
 
+
+def _hatch_set_by(name: str, command: str) -> bool:
+    """Whether `command` REALLY sets `name=off`: guard-shell's `_hatches_set`, the one parser.
+
+    A mention in an argument, comment or quoted string does not count. Unloadable: not set.
+    """
+    try:
+        import importlib.util
+        here = os.path.dirname(os.path.abspath(__file__))
+        spec = importlib.util.spec_from_file_location("guard_shell", os.path.join(here, "guard-shell.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return name in mod._hatches_set(command)
+    except Exception:                                         # noqa: BLE001 — fail open
+        return False
+
 # THE PARSER MOVED TO `scripts/shell_parse.py` ON 2026-09-12, UNCHANGED, because a second
 # guard needed it. `scripts/guard-shell.py` refuses five shell mistakes and every one of them
 # has to read a command the same way this file does — and the four defects this tokenizer took
@@ -89,6 +105,10 @@ try:
     import shell_parse
 except Exception:                                             # noqa: BLE001 — fail open
     shell_parse = None                                        # type: ignore[assignment]
+try:
+    import refusal_log                                        # the one refusal log
+except Exception:                                             # noqa: BLE001 — fail open
+    refusal_log = None                                        # type: ignore[assignment]
 
 WIDTH = 76
 
@@ -330,7 +350,7 @@ def refusal(silenced: Sequence[Silenced]) -> str:
                  "hiding it:")
     lines.append("      git commit -F - && git log --oneline -1")
     lines.append("")
-    lines.append("  PKMNSCAN_SILENT=off runs the command anyway.")
+    lines.append("  Bypass: owner-only: ask the owner to run this command.")
     return "\n".join(lines)
 
 
@@ -352,12 +372,16 @@ def hook(payload: dict) -> int:
     command = str(tool_input.get("command") or "")
     if not command:
         return 0
-    if os.environ.get("PKMNSCAN_SILENT") == "off" or "PKMNSCAN_SILENT=off" in command:
+    if os.environ.get("PKMNSCAN_SILENT") == "off" or _hatch_set_by("PKMNSCAN_SILENT", command):
         return 0
     verdict = read_command(command)
     if not verdict.silenced:
         return 0
     print(refusal(verdict.silenced), file=sys.stderr)
+    sys.stderr.flush()
+    if refusal_log:
+        refusal_log.log("silent-write-guard", "silent", ", ".join(sorted({i.verb for i in verdict.silenced})),
+                        str(payload.get("session_id") or ""), str(payload.get("cwd") or ""))
     return 2
 
 

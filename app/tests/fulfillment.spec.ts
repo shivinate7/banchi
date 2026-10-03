@@ -219,25 +219,21 @@ function inventoryBody(states: Store) {
   return { version: 1, cards: rows }
 }
 
-/* THE STAND-IN PHOTO IS LANDSCAPE, AND THAT IS THE FIXTURE'S WHOLE JOB.
+/* THE STAND-IN PHOTO IS THE RIG'S OWN SHAPE, 9:16 PORTRAIT, AND THAT IS THE FIXTURE'S WHOLE JOB.
  *
- * It was drawn at 63x88 — the card's own shape, which is exactly the shape the stylesheet
- * gives the element — so `object-fit: cover` had nothing to crop, and the one cropped image in
- * this app was measured with its crop switched off. A rig frame is a landscape video frame
- * with a portrait card inside it, so this is 4:3 and the fit rule does real work: swap `cover`
- * for `contain` and the painted card drops to 270px on its short edge while the element's own
- * box stays 360. The old fixture could not tell those two apart, which made the ">= 320px"
- * row a measurement of a CSS rule rather than of a photograph.
+ * The rig stores 2160x3840, and the Fulfiller draws the whole frame (`object-fit:
+ * contain`) in a frame of that same shape, so the painted short edge is the element's
+ * own and the ">= 320px" row measures a photograph. An earlier stand-in was 4:3 landscape,
+ * drawn to make `cover` do real work; it made `contain` look like a 270px regression when it
+ * was the fixture that was the wrong shape.
  *
  * SVG rather than a base64 PNG because a PNG has to be handed to `route.fulfill` as a Buffer,
- * and `app/tsconfig.json` declares `"types": ["vite/client"]` with no Node types — so `Buffer`
- * does not exist in this project's type world and adding it would be a dependency and a
- * tsconfig edit for a fixture. A string body needs neither, and this one is legible in the
- * diff besides. */
+ * and `app/tsconfig.json` declares `"types": ["vite/client"]` with no Node types. A string body
+ * needs neither, and this one is legible in the diff besides. */
 const PHOTO_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120">' +
-  '<rect width="160" height="120" fill="#e6e7ea"/>' +
-  '<rect x="57" y="4" width="46" height="112" fill="#52555b"/></svg>'
+  '<svg xmlns="http://www.w3.org/2000/svg" width="90" height="160">' +
+  '<rect width="90" height="160" fill="#e6e7ea"/>' +
+  '<rect x="6" y="10" width="78" height="120" fill="#52555b"/></svg>'
 
 /** Sales the page recorded, in order, so a test can assert what the screen actually sent.
  *
@@ -913,7 +909,7 @@ async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<St
     mood.reads = (mood.reads ?? 0) + 1
     // Long enough to read the screen and short enough not to be the test's runtime. The
     // loading state is the one screen here that nothing else can hold still.
-    if (mood.slow === true) await new Promise((done) => setTimeout(done, 1200))
+    if (mood.slow === true) await new Promise((done) => setTimeout(done, 1200)) // keep: stubbed answer held 1200 ms on purpose, a latency fixture
     if (mood.fail === true) {
       await route.fulfill({
         status: 500,
@@ -2390,7 +2386,7 @@ for (const screen of WIDTHS) {
     // card.
     expect(painted.natural, 'the photo did not decode, so nothing was measured').toBeGreaterThan(0)
     expect(
-      Math.min(painted.width, painted.height),
+      Math.round(Math.min(painted.width, painted.height)), // whole pixels: a 9:16 box lays out 568.875 tall
       `painted short edge at ${screen.width}px`,
     ).toBeGreaterThanOrEqual(PHOTO_FLOOR)
   })
@@ -3237,7 +3233,7 @@ for (const screen of WIDTHS) {
     // photograph in it — the difference between measuring a CSS rule and measuring a card.
     expect(painted.natural, 'the photo did not decode, so nothing was measured').toBeGreaterThan(0)
     expect(
-      Math.min(painted.width, painted.height),
+      Math.round(Math.min(painted.width, painted.height)),
       `painted short edge at ${screen.width}px`,
     ).toBeGreaterThanOrEqual(PHOTO_FLOOR)
 

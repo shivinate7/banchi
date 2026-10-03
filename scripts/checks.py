@@ -9,15 +9,15 @@ and the summary was WRONG: it said `harness + docs-audit + the self-tests + lint
 while five more targets ran, and had said so since those five landed. CLAUDE.md caught up; the
 front door never did, and nothing compared them.
 
-So the composition becomes data with a reader. The `check registry` row in `scripts/docs-audit.py` consumes
-this file and reconciles it against the Makefile recipe and the published prose. No row
-enforces D18 on the commit path yet.
+So the composition is data. The `check registry` row in `scripts/docs-audit.py` reads the
+entries' shape, and the `commit path` row reads them against the pre-commit hook.
 
-**THIS FILE DOES NOT DRIVE `make check` AND MUST NOT.** The Makefile recipe is what runs; this
-is a parallel declaration reconciled against it. The distinction is the whole point of the
-shape: a wrong entry here is an explainer that lies, which the audit catches, whereas a
-registry that DROVE the suite could silently stop running a check — and a check that silently
-stops running is the failure this repo has paid for more than any other.
+**THIS FILE DRIVES `make check`, `make ci-check` AND THE FOUR CI SHARDS.** Each `shard` field
+names the CI shard that runs the entry (`None`: a standalone CI job runs it, `revert-guard`).
+`scripts/checks.py --targets [shard]` prints the targets in registry order; the Makefile runs
+them as one `make` call each, so the suite runs in a known order and stops at the first
+failure. Adding a check is one entry here and a Makefile rule. Registry order is the run
+order: product first, guard self-tests last.
 
 `CHECKS` is a tuple of pure literals for the reason `docs/map.py` and `scripts/status.py`'s
 `SOURCES` are: the audit parses it with `ast.literal_eval` rather than importing it, because a
@@ -29,6 +29,7 @@ tool.
 
     scripts/checks.py            the table
     scripts/checks.py <target>   one entry, in full
+    scripts/checks.py --targets [shard]   the targets, in run order
 """
 
 from __future__ import annotations
@@ -57,7 +58,7 @@ NEEDS = {
 }
 
 
-# One entry per target in the Makefile's `check:` recipe, in recipe order.
+# One entry per check, in run order. `shard` is the CI shard that runs it.
 #
 # `writes` IS A SENTENCE AND NOT A FLAG, and that is deliberate: "it writes" is the start of
 # the question D18 asks, never the end of it. An empty string means it writes nothing anywhere.
@@ -68,6 +69,7 @@ NEEDS = {
 CHECKS = (
     {
         "target": "harness",
+        "shard": "product",
         "runs": "$(PYTHON) harness/run.py",
         "asserts": "Every verification test in harness/run.py's TESTS list. RECOUNT FROM THERE "
                    "— this entry deliberately carries no number, because a count published "
@@ -83,7 +85,22 @@ CHECKS = (
         "governed_by": ("D18",),
     },
     {
+        "target": "unit",
+        "shard": "product",
+        "runs": "npm --prefix app run unit",
+        "asserts": "The unit tier: logic and data cases in app/tests/unit/*.unit.ts, run by "
+                   "Playwright's runner with no browser and no dev server. Today: the tab "
+                   "title function over every ROUTES entry.",
+        "needs": ("node", "app deps"),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "It runs node, and the commit hook runs a bare python3.",
+        "gates": True,
+        "governed_by": ("D18",),
+    },
+    {
         "target": "docs-audit",
+        "shard": "static",
         "runs": "python3 scripts/docs-audit.py",
         "asserts": "Every reference in the markdown resolves against the code it names. Exit 1 "
                    "is provably wrong and blocks; exit 2 is the coupling question, printed and "
@@ -97,6 +114,7 @@ CHECKS = (
     },
     {
         "target": "revert-guard",
+        "shard": None,
         "runs": "python3 scripts/revert-audit.py branch",
         "asserts": "What this branch would land on origin/main — the clean merge's tree, or "
                    "the branch's diff off the merge-base when the merge conflicts — puts no "
@@ -117,6 +135,7 @@ CHECKS = (
     },
     {
         "target": "port-agreement",
+        "shard": "static",
         "runs": "python3 scripts/port-agreement.py",
         "asserts": "server/ports.py and app/devPort.ts answer the same port for the same "
                    "checkout path. Two languages hold one algorithm and neither can import the "
@@ -132,6 +151,7 @@ CHECKS = (
     },
     {
         "target": "set-hint-agreement",
+        "shard": "static",
         "runs": "python3 scripts/set-hint-agreement.py",
         "asserts": "The capture screen and the export fetch resolve a set hint alike. The same "
                    "shape as port-agreement one decision over, and worse when it drifts: a "
@@ -146,6 +166,7 @@ CHECKS = (
     },
     {
         "target": "readiness-agreement",
+        "shard": "static",
         "runs": "python3 scripts/readiness-agreement.py",
         "asserts": "`app/src/readiness.ts` against `pipeline/decisions.py:blocking`, which it "
                    "re-implements on purpose (D54 — the screen settles on the keystroke, so a "
@@ -168,6 +189,7 @@ CHECKS = (
     },
     {
         "target": "screen-freshness",
+        "shard": "static",
         "runs": "node scripts/screen-freshness.mjs",
         "asserts": "Every server write in app/src has a way back — a re-read, an invalidation "
                    "signal, or a reason in the code why none is owed. It finds NOTHING today: "
@@ -182,6 +204,7 @@ CHECKS = (
     },
     {
         "target": "screen-freshness-selftest",
+        "shard": "guards-2",
         "runs": "node scripts/screen-freshness.mjs --self-test",
         "asserts": "The freshness guard's own classifier, against pinned cases in both "
                    "directions: a write with a re-read after it, the same write with nothing "
@@ -204,6 +227,7 @@ CHECKS = (
     },
     {
         "target": "sigil-check",
+        "shard": "static",
         "runs": "python3 scripts/sigil-check.py --self-test && python3 scripts/sigil-check.py",
         "asserts": "A bare `#` on an owner-side screen draws D58's COUNT and never the store "
                    "key. Three renderers spelled both with one sigil — the sticky section "
@@ -221,6 +245,7 @@ CHECKS = (
     },
     {
         "target": "css-var-check",
+        "shard": "static",
         "runs": "python3 scripts/css-var-check.py",
         "asserts": "A `var(--x)` with no fallback, where `--x` is defined nowhere — the whole "
                    "declaration drops silently, with no console warning. Five of these "
@@ -248,6 +273,7 @@ CHECKS = (
     },
     {
         "target": "css-var-check-selftest",
+        "shard": "guards-2",
         "runs": "python3 scripts/css-var-check.py --self-test",
         "asserts": "the guard sees its own subject before it is trusted: a genuinely undefined "
                    "`var()` fails, one with a fallback passes, one defined only from TSX "
@@ -268,6 +294,7 @@ CHECKS = (
     },
     {
         "target": "hand-search-selftest",
+        "shard": "guards-2",
         "runs": "python3 scripts/hand-search-selftest.py",
         "asserts": "app/eslint.config.js's HAND_SEARCH_RULES sees every shape D271 names, "
                    "on the real `npx eslint --stdin`: each of `includes`/`startsWith`/"
@@ -290,6 +317,7 @@ CHECKS = (
     },
     {
         "target": "token-literal-check",
+        "shard": "static",
         "runs": "python3 scripts/token-literal-check.py",
         "asserts": "A CSS literal exactly equal to a design token's value, in its own "
                    "property family (D256, token literals are pinned): "
@@ -317,6 +345,7 @@ CHECKS = (
     },
     {
         "target": "kit-adoption",
+        "shard": "static",
         "runs": "node scripts/kit-adoption.mjs",
         "asserts": "Every screen inherits the page scaffold (D275). R1: every "
                    "`ROUTES` view in app/src/App.tsx renders `<Page>` from the kit, directly "
@@ -344,6 +373,7 @@ CHECKS = (
     },
     {
         "target": "ignore-check",
+        "shard": "static",
         "runs": "sh scripts/ignore-check.sh",
         "asserts": "Every path a worktree provisions is gitignored — as a file, as a directory "
                    "and as a symlink (D47).",
@@ -358,6 +388,7 @@ CHECKS = (
     },
     {
         "target": "lint",
+        "shard": "static",
         "runs": "npm --prefix app run lint; ruff check . (ruff.toml)",
         "asserts": "eslint over app/, one rule per bug this project caught itself, plus ruff "
                    "over the Python packages on a slice measured against this tree — pyflakes, "
@@ -372,6 +403,7 @@ CHECKS = (
     },
     {
         "target": "typecheck",
+        "shard": "static",
         "runs": "npm --prefix app run typecheck",
         "asserts": "tsc --noEmit over app/.",
         "needs": ("node", "app deps"),
@@ -383,6 +415,7 @@ CHECKS = (
     },
     {
         "target": "audit-self-test",
+        "shard": "guards-1",
         "runs": "python3 scripts/docs-audit.py --self-test",
         "asserts": "The auditor's own extractors, against fixtures it builds and destroys. It "
                    "sat red and unnoticed until 2026-08-24 because nothing ran it at all.",
@@ -398,6 +431,7 @@ CHECKS = (
     },
     {
         "target": "mutate-anchors",
+        "shard": "guards-1",
         "runs": "python3 scripts/mutate-guards.py --verify-anchors",
         "asserts": "Every mutation in `scripts/mutate-guards.py` still has its anchor text "
                    "present exactly once in the guard it targets. 35 arms over 6 guards, in "
@@ -418,6 +452,7 @@ CHECKS = (
     },
     {
         "target": "githooks-selftest",
+        "shard": "guards-1",
         "runs": "bash scripts/githooks-selftest.sh",
         "asserts": "D42's two hooks over main, exercised in a bare repo and a clone built for "
                    "the run. A refusal must carry the hooks' own `REFUSED:` marker, so git's "
@@ -433,6 +468,7 @@ CHECKS = (
     },
     {
         "target": "revert-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/revert-audit.py selftest",
         "asserts": "The revert guard, against a throwaway origin and clone that rebuild the "
                    "#218/#221 sequence: a deletion merged, a branch cut from before it that "
@@ -451,6 +487,7 @@ CHECKS = (
     },
     {
         "target": "decisions-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/split-decisions.py --selftest",
         "asserts": "`docs/decisions/` is a complete, well-formed set: every file "
                    "`ORDER.json` names is present, every markdown file present is named, no "
@@ -476,6 +513,7 @@ CHECKS = (
     },
     {
         "target": "debts-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/split-debts.py --selftest",
         "asserts": "`docs/debts/` is a complete, well-formed set — the debts twin of "
                    "`decisions-selftest`, same shape: every file `ORDER.json` names is "
@@ -497,6 +535,7 @@ CHECKS = (
     },
     {
         "target": "gates-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/split-gates.py --selftest",
         "asserts": "`docs/gates/` is a complete, well-formed set: every file `ORDER.json` "
                    "names is present, every markdown file present is named, no step id "
@@ -521,6 +560,7 @@ CHECKS = (
     },
     {
         "target": "submission-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/submission-selftest.py",
         "asserts": "store/submissions.py — the claim table that refuses a second `identify` "
                    "press over cards a live run is already paying to read — by violating it "
@@ -545,6 +585,7 @@ CHECKS = (
     },
     {
         "target": "cid-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/cid-selftest.py",
         "asserts": "D172's stable card name and the photograph store filed under it, by "
                    "violating both against a throwaway store. The naming's SOURCE CENSUS, "
@@ -573,6 +614,7 @@ CHECKS = (
     },
     {
         "target": "pricearchive-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/pricearchive-selftest.py",
         "asserts": "D254's whole rebuild: resolve_by_sku's three "
                    "tiers (an archive-verified productId, the SKU's own row in a cached "
@@ -602,6 +644,7 @@ CHECKS = (
     },
     {
         "target": "archive-review-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/archive-review-selftest.py",
         "asserts": "cli/archive_review.py against a throwaway store, no network: an "
                    "identification refusal reaches the review queue with its photograph "
@@ -626,6 +669,7 @@ CHECKS = (
     },
     {
         "target": "holdings-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/holdings-selftest.py",
         "asserts": "pipeline/holdings.py against fixtures built in the file (D236) — no "
                    "store on disk, no network. On-hand quantity honors TERMINAL_STATES and "
@@ -654,6 +698,7 @@ CHECKS = (
     },
     {
         "target": "identity-checks-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/identity-checks-selftest.py",
         "asserts": "pipeline/identity_checks.py's four stored-data checks against literal "
                    "CardRecord fixtures, no store, no network (D239). One positive and one "
@@ -678,6 +723,7 @@ CHECKS = (
     },
     {
         "target": "price-postings-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/price-postings-selftest.py && "
                "python3 scripts/price-postings-selftest.py --mutate-to-upsert",
         "asserts": "store/postings.py's price_postings table against a throwaway store, no "
@@ -704,6 +750,7 @@ CHECKS = (
     },
     {
         "target": "product-history-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/product-history-selftest.py",
         "asserts": "pipeline/productview.py and "
                    "server/pipeline_routes.py:do_product_history against a throwaway "
@@ -727,6 +774,7 @@ CHECKS = (
     },
     {
         "target": "sku-number-contradictions-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/sku-number-contradictions-selftest.py",
         "asserts": "pipeline/sku_number_contradictions.py against literal NumberRecord "
                    "fixtures and duck-typed Market fakes, no store, no network (D242). "
@@ -750,6 +798,7 @@ CHECKS = (
     },
     {
         "target": "readings-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/readings-selftest.py",
         "asserts": "the cached market-reading table (store/readings.py) and the two-source "
                    "walk that fills it (pipeline/readings.py), by comparing `collect()` "
@@ -775,6 +824,7 @@ CHECKS = (
     },
     {
         "target": "skus-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/skus-selftest.py",
         "asserts": "the store-owned SKU table (store/skus.py) and the walk that fills it "
                    "(pipeline/skus.py), docs/specs/identity-follows-sku.md §3.2 lane 0. "
@@ -803,6 +853,7 @@ CHECKS = (
     },
     {
         "target": "identity-store-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/identity-store-selftest.py",
         "asserts": "Inventory.bind_sku/unbind_sku, the one writer (store/master.py, "
                    "docs/specs/identity-follows-sku.md §4.1 lane 1), and "
@@ -839,6 +890,7 @@ CHECKS = (
     },
     {
         "target": "identity-binding-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/identity-binding-selftest.py",
         "asserts": "pipeline/identity_binding.py, the migration's classifier and the merged "
                    "D242 report (docs/specs/identity-follows-sku.md §5.5, §7, lane 2), "
@@ -871,6 +923,7 @@ CHECKS = (
     },
     {
         "target": "identity-readers-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/identity-readers-selftest.py && "
                 "python3 scripts/identity-readers-selftest.py --mutate-identity-fields && "
                 "python3 scripts/identity-readers-selftest.py --mutate-no-fallback && "
@@ -907,6 +960,7 @@ CHECKS = (
     },
     {
         "target": "identity-cli-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/identity-cli-selftest.py",
         "asserts": "the CLI writers (cli/cmd_emit.py, cli/cmd_identify.py, cli/cmd_join.py, "
                    "cli/cmd_reconcile.py, docs/specs/identity-follows-sku.md §4.2 lane 3b), "
@@ -948,6 +1002,7 @@ CHECKS = (
     },
     {
         "target": "janitor-selftest",
+        "shard": "guards-1",
         "runs": "bash scripts/janitor-selftest.sh",
         "asserts": "scripts/janitor.py (--teardown), against a throwaway "
                    "clone with a fake liveness oracle and real processes in their own process "
@@ -965,6 +1020,7 @@ CHECKS = (
     },
     {
         "target": "reap-selftest",
+        "shard": "guards-1",
         "runs": "bash scripts/reap-selftest.sh",
         "asserts": "scripts/reap.py, against a throwaway checkout, a throwaway sibling "
                    "directory standing in for everywhere-else, and real processes in their own "
@@ -985,6 +1041,7 @@ CHECKS = (
     },
     {
         "target": "silent-write-selftest",
+        "shard": "guards-1",
         "runs": "bash scripts/silent-write-selftest.sh",
         "asserts": "scripts/silent-write-guard.py, the PreToolUse hook that refuses a git "
                    "write whose own output is discarded. THE INCIDENT IS REPRODUCED rather "
@@ -1010,6 +1067,7 @@ CHECKS = (
     },
     {
         "target": "guard-shell-selftest",
+        "shard": "guards-1",
         "runs": "bash scripts/guard-shell-selftest.sh",
         "asserts": "scripts/guard-shell.py, the PreToolUse hook that refuses six shell "
                    "mistakes this repo has already paid for: `git checkout` over a modified "
@@ -1053,6 +1111,7 @@ CHECKS = (
     },
     {
         "target": "suite-lock-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/suite-lock.py selftest",
         "asserts": "scripts/suite-lock.py, by violating it: a holder, a second run refused, a "
                    "`--wait` that queues and announces itself, and a holder killed with -9 to "
@@ -1072,13 +1131,14 @@ CHECKS = (
     },
     {
         "target": "browser-scope-selftest",
+        "shard": "guards-1",
         "runs": "python3 scripts/browser-scope.py selftest",
         "asserts": "the browser-matrix classifier's spec map (D215), on "
                    "fixtures and on the real tree: `app/src/kit/` narrows nothing, a real "
                    "screen (`Inventory.tsx`) reaches its own spec and every `routesFromNav(` "
                    "spec but not an unrelated one, an unknown `app/` path and a path carrying "
                    "whitespace both select every spec rather than a guess, and "
-                   "`PKMNSCAN_BROWSER_SCOPE=off` does too.",
+                   "`PKMNSCAN_BROWSER_SCOPE=all` does too.",
         "needs": ("python3",),
         "writes": "",
         "commit_path": False,
@@ -1089,6 +1149,7 @@ CHECKS = (
     },
     {
         "target": "serve-selftest",
+        "shard": "guards-2",
         "runs": "python3 scripts/serve-selftest.py",
         "asserts": "the supervisor's build job (D138), against a throwaway checkout whose "
                    "`vite build` is a shell stub. What is under test is the supervisor and "
@@ -1113,6 +1174,7 @@ CHECKS = (
     },
     {
         "target": "sync-selftest",
+        "shard": "guards-2",
         "runs": "python3 scripts/sync-selftest.py",
         "asserts": "the primary checkout's self-sync, proved by violating it in throwaway "
                    "clones with their own worktrees and a real bare origin. Both parts, from "
@@ -1141,6 +1203,7 @@ CHECKS = (
     },
     {
         "target": "verdict-selftest",
+        "shard": "guards-2",
         "runs": "python3 scripts/verdict-selftest.py",
         "asserts": "app/design-check-reporter.ts, run for real against one passing and one "
                    "failing spec: the verdict, the counts, the failing title and its "
@@ -1171,6 +1234,7 @@ CHECKS = (
     },
     {
         "target": "js-breakpoints-selftest",
+        "shard": "guards-2",
         "runs": "python3 scripts/js-breakpoints.py selftest",
         "asserts": "the pure extraction and comparison behind `make docs-audit`'s `js "
                    "breakpoints` row (D123): a JS media-query width is read out of a "
@@ -1192,6 +1256,7 @@ CHECKS = (
     },
     {
         "target": "subagent-override-selftest",
+        "shard": "guards-2",
         "runs": "python3 scripts/subagent-override-selftest.py",
         "asserts": "`make docs-audit`'s `subagent override` row, by violating it in a real "
                    "throwaway git repository with a real nested worktree (the shape "
@@ -1218,6 +1283,7 @@ CHECKS = (
     },
     {
         "target": "guard-scope-selftest",
+        "shard": "guards-2",
         "runs": "python3 scripts/guard-scope.py selftest",
         "asserts": "the SECOND path gate: for each of the fifteen guard self-tests in "
                    "`guard-scope.py:ROSTER`, that a subject is derived from its own source "
@@ -1225,7 +1291,7 @@ CHECKS = (
                    "and the roster name each other in both directions, that a fresh import "
                    "added to a fixture is picked up with no edit to this file, that a "
                    "sub-chain (`ROOT / \"scripts\"` alone) never surfaces as a false subject, "
-                   "and the fail-open cases: an unscoped target, `PKMNSCAN_GUARD_SCOPE=off`, "
+                   "and the fail-open cases: an unscoped target, `PKMNSCAN_GUARD_SCOPE=all`, "
                    "and a nonexistent head commit all RUN.",
         "needs": ("python3", "git"),
         "writes": "two throwaway fixture files under `tempfile.TemporaryDirectory()`, to "
@@ -1238,6 +1304,7 @@ CHECKS = (
     },
     {
         "target": "token-literal-check-selftest",
+        "shard": "guards-2",
         "runs": "python3 scripts/token-literal-check.py --self-test",
         "asserts": "the guard sees its own subject before it is trusted: a literal exactly "
                    "equal to a token in its own family fails; the same value as var() "
@@ -1261,6 +1328,7 @@ CHECKS = (
     },
     {
         "target": "kit-adoption-selftest",
+        "shard": "guards-2",
         "runs": "node scripts/kit-adoption.mjs --self-test",
         "asserts": "the guard sees its own subject before it is trusted: a route view "
                    "without `<Page>` fails, a component called Page that is not the kit's "
@@ -1283,6 +1351,7 @@ CHECKS = (
     },
     {
         "target": "port-slots-selftest",
+        "shard": "guards-2",
         "runs": "python3 scripts/port-slots.py selftest",
         "asserts": "two throwaway trees forced into one port slot, each with a real Vite and a "
                    "real Playwright. With nothing claimed, a test run in one tree refuses the "
@@ -1303,6 +1372,7 @@ CHECKS = (
     },
     {
         "target": "match-selftest",
+        "shard": "guards-2",
         "runs": "python3 scripts/match-selftest.py",
         "asserts": "FLT-06/04's one forgiving matcher, server side (UX-173). "
                    "server/match.py against every row of app/src/kit/match.cases.json — the "
@@ -1329,6 +1399,7 @@ CHECKS = (
     },
     {
         "target": "serve-scope-selftest",
+        "shard": "guards-2",
         "runs": "python3 scripts/serve-scope.py selftest",
         "asserts": "serve-scope.py's own verdicts, its CARRY and SCOPE reconciliation both ways, a CARRY drift it must catch, and its fail-open arms (no merge-base, a failed diff) forced through a stub matcher so a flipped arm goes red. Also that the serve-selftest recipe skips on the skip exit code and nothing else.",
         "needs": ("python3",),
@@ -1340,6 +1411,7 @@ CHECKS = (
     },
     {
         "target": "demo-record-selftest",
+        "shard": "guards-2",
         "runs": "$(PYTHON) scripts/demo-record-selftest.py",
         "asserts": "The demo recorder's child server never hangs on a full output pipe: its stdout is drained for the life of the sweep, against a fake child that floods it.",
         "needs": ("python3",),
@@ -1351,6 +1423,7 @@ CHECKS = (
     },
     {
         "target": "demo-mirror-daily-selftest",
+        "shard": "guards-2",
         "runs": "python3 scripts/demo-mirror-daily.py --selftest",
         "asserts": "The daily mirror's fence refuses a diff that touches any path outside demo-assets/mirror/ (sibling prefix, traversal and a real diff included) and passes a mirror-only one.",
         "needs": ("python3",),
@@ -1362,6 +1435,7 @@ CHECKS = (
     },
     {
         "target": "demo-record-resume-selftest",
+        "shard": "guards-2",
         "runs": "$(PYTHON) scripts/demo-record-resume-selftest.py",
         "asserts": 'An interrupted demo recording resumes from its cache of answered routes instead of starting again, against the real functions and a fake collector.',
         "needs": ("python3",),
@@ -1373,6 +1447,7 @@ CHECKS = (
     },
     {
         "target": "demo-record-walkplan-selftest",
+        "shard": "guards-2",
         "runs": "$(PYTHON) scripts/demo-record-walkplan-selftest.py",
         "asserts": "The recorder's walk-plan subject list stays small and never grows with the number of open orders.",
         "needs": ("python3",),
@@ -1384,6 +1459,7 @@ CHECKS = (
     },
     {
         "target": "pricehistory-cache-selftest",
+        "shard": "guards-2",
         "runs": "$(PYTHON) scripts/pricehistory-cache-selftest.py",
         "asserts": 'Catalog answers never expire from the price-history cache while current prices keep their own finite lifetime, against a fake clock and a counting fetcher.',
         "needs": ("python3",),
@@ -1395,6 +1471,7 @@ CHECKS = (
     },
     {
         "target": "pricehistory-offline-selftest",
+        "shard": "guards-2",
         "runs": "$(PYTHON) scripts/pricehistory-offline-selftest.py",
         "asserts": 'The price-history market fails fast once the network is unreachable instead of sleeping through every retry, against a counting fetcher and a fake clock.',
         "needs": ("python3",),
@@ -1406,6 +1483,7 @@ CHECKS = (
     },
     {
         "target": "repair-born-game-selftest",
+        "shard": "guards-2",
         "runs": "$(PYTHON) scripts/repair-born-game-selftest.py",
         "asserts": 'The born-game repair sets the game on cards with a bound SKU, leaves the rest alone, refuses an unmapped SKU by name and writes nothing on a preview.',
         "needs": ("python3",),
@@ -1417,6 +1495,7 @@ CHECKS = (
     },
     {
         "target": "stockimages-cache-selftest",
+        "shard": "guards-2",
         "runs": "$(PYTHON) scripts/stockimages-cache-selftest.py",
         "asserts": 'Stock images answer offline from a warmed disk cache and answer nothing, with no network call, when the cache is empty.',
         "needs": ("python3",),
@@ -1428,6 +1507,7 @@ CHECKS = (
     },
     {
         "target": "sku-name-contradictions-selftest",
+        "shard": "guards-2",
         "runs": "$(PYTHON) scripts/sku-name-contradictions-selftest.py",
         "asserts": 'The check for one SKU with disagreeing names flags a real contradiction and leaves a short title beside its full name alone.',
         "needs": ("python3",),
@@ -1439,6 +1519,7 @@ CHECKS = (
     },
     {
         "target": "pipeline-trends-archive-ids-selftest",
+        "shard": "guards-2",
         "runs": "$(PYTHON) scripts/pipeline-trends-archive-ids-selftest.py",
         "asserts": "The trends route reuses the archive's verified product ids and never resolves a product it already covers.",
         "needs": ("python3",),
@@ -1498,9 +1579,8 @@ def table() -> str:
         "",
         "  `make explain ARGS=<target>` for one entry in full.",
         "",
-        "The Makefile's `check:` recipe is what actually runs; this file is a parallel",
-        "declaration, and `make docs-audit`'s `check registry` row fails the commit that",
-        "lets the two disagree.",
+        "This file is the one list that `make check`, `make ci-check` and the",
+        "CI shards run.",
     ]
     return "\n".join(lines)
 
@@ -1529,17 +1609,20 @@ def one(name: str) -> str:
         block("", entry["why_off_commit_path"])
     block("gates", "a finding fails `make check`." if entry["gates"]
           else "NO — it reports and `make check` carries on.")
-    # Rendered wherever it is declared, so the field is not a sentence only the audit reads.
-    # `check registry` pairs it against the `ci-check:` recipe in both directions: present
-    # exactly where the target is absent from that recipe.
-    if entry.get("why_off_ci"):
-        block("ci-check", "NOT run on CI.")
-        block("", entry["why_off_ci"])
+    block("ci shard", entry["shard"] or "none: a standalone CI job runs it.")
     block("governed by", ", ".join(entry["governed_by"]) + "  — docs/decisions/")
     return "\n".join(lines)
 
 
 def main(argv: Sequence[str]) -> int:
+    if argv and argv[0] == "--targets":
+        shard = argv[1] if len(argv) > 1 else None
+        names = [e["target"] for e in CHECKS if shard is None or e["shard"] == shard]
+        if not names:
+            print(f"no check in shard `{shard}`", file=sys.stderr)
+            return 1
+        print(" ".join(names))
+        return 0
     if argv:
         print(one(argv[0]))
         return 0 if any(e["target"] == argv[0] for e in CHECKS) else 1

@@ -64,6 +64,15 @@ row of chips beside the header, pressed on the one currently drawn. One press sw
 another. It never pools two SKUs into one chart. Switching printings replaces which SKU is
 read. It works the same way choosing a different search result does.
 
+**The batched Trends strip: a press for refresh, an overnight read by the owner's word.** The
+Trends press on `#/pricing` stays, to refresh. The daily job (`scripts/price-refresh-daily.py`)
+also reads the strip overnight for every row the press would read, through the press's own route
+(`do_pipeline_trends`) at its own courtesy pace, and saves each strip with the second it was read
+(`inventory/price-trends.json`). `#/pricing` draws the saved strips at first paint from that local
+file, with the relative date of the read. It never reads the market host on render, so a visit
+still fires no request there. A failed or partial overnight read is said on the screen as "N of M
+cards". The job reads and saves only. It makes no paid read, no price write and no sweep.
+
 **Not mechanized.** Whether `ProductLink`'s door reads as reachable is a claim about a person.
 CLAUDE.md already marks that claim unmechanizable for D227. Its own words: "a machine cannot
 know which screen a human would look for a capability on." `make design-check` is the nearest

@@ -1008,7 +1008,7 @@ test('arrow keys walk the box, and a text field keeps its own caret keys', async
   await edge.click()
   const before = wire.filter((row) => row.path === '/pipeline/crop-preview').length
   await page.keyboard.press('ArrowRight')
-  await page.waitForTimeout(500)
+  await page.waitForTimeout(500) // keep: asserts the arrow key sends no extra crop-preview
   await expect(page.locator('.run-preview-count')).toContainText('card 2 of 543')
   expect(wire.filter((row) => row.path === '/pipeline/crop-preview').length).toBe(before)
 })

@@ -60,7 +60,7 @@ is provable without touching either real file) and then asserts the two real fil
 **What this is not.** `.codex/config.toml` stays untracked, gitignored beside
 `.claude/settings.local.json` with a comment saying why: a shell-environment policy is
 machine-local the same way a local Claude Code settings override is, and neither belongs in
-the tree that ships to every checkout. Nothing about `PKMNSCAN_GATE` or any other value in it
+the tree that ships to every checkout. Nothing about any value in it
 is asserted here.
 
 ### What is BUILT, RECORDED, NEITHER

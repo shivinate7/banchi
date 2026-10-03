@@ -719,6 +719,9 @@ def sweep_coverage(server: Server, space: Dict[str, object], recorded: Dict[str,
     # ------------------------------------------------------------ `#/revenue`'s two presses
     for span in HOLDINGS_RANGES:
         take("/pipeline/holdings-value?range=%s" % span)
+    # `#/pricing`'s price moves since listing (DEBT69): one plain read, drawn on arrival.
+    take("/pipeline/movers")
+    take("/pipeline/trends-saved")
     # "Compare to today's market": one reading per SKU, merged in the browser for whatever
     # set the screen asks about — the trends index's own shape, one route over.
     for sku in space["skus"]:  # type: ignore[union-attr]

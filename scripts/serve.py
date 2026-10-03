@@ -1986,10 +1986,10 @@ def do_guard_foreground(_args: argparse.Namespace) -> int:
     quietly moved would serve a DIFFERENT store); what this removes is the ability to create it
     by accident.
 
-    `PKMNSCAN_FOREGROUND=ok` bypasses, in the shape `PKMNSCAN_MAIN=off` already uses — a guard
+    `PKMNSCAN_FOREGROUND=off` bypasses, in the shape `PKMNSCAN_MAIN=off` already uses — a guard
     with no visible way past it gets disarmed somewhere worse.
     """
-    if os.environ.get(FOREGROUND_ENV, "").strip().lower() in ("ok", "1", "yes"):
+    if os.environ.get(FOREGROUND_ENV, "").strip().lower() == "off":
         return 0
     pid = supervisor_pid()
     if pid is None:
@@ -2004,7 +2004,7 @@ def do_guard_foreground(_args: argparse.Namespace) -> int:
     print("  make dev              hot reload on its own port, against this server")
     print("  make up ARGS=--restart   bounce the supervisor instead")
     print("  make down             stop it, then run this again")
-    print(f"  {FOREGROUND_ENV}=ok make …   run anyway")
+    print("  Bypass: owner-only: ask the owner to run this command.")
     return 1
 
 

@@ -2640,6 +2640,18 @@ def run() -> Result:
             "the refusal names both directions",
         )
 
+    # TWO ROWS FOR ONE SKU never reach disk (D7: duplicates aggregate by SKU). MUTATION-TESTED:
+    # set the gate in `join.write_import` to `if False` and this fails on both lines.
+    with tempfile.TemporaryDirectory() as tmp:
+        twice_path = Path(tmp) / "must-not-exist.csv"
+        one_row = next(iter(by_sku.values()))
+        c.raises(
+            join.OutputSuppressed,
+            lambda: join.write_import(catalog, twice_path, [dict(one_row), dict(one_row)]),
+            "write_import refuses two rows for one SKU",
+        )
+        c.ok(not twice_path.exists(), "and no file is written for the duplicate")
+
     # A matched SKU holding no card is direction two of the same pairing.
     hollow = join.JoinReport(cards_in=0)
     hollow.matches[SECRET_RARE_SKU] = join.SkuMatch(

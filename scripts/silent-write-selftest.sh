@@ -180,8 +180,9 @@ fi
 # went where is one a session argues with instead of learning from.
 judge "$INCIDENT"
 case "$out" in
-  *"PKMNSCAN_SILENT=off"*) ok "the refusal prints the escape hatch" ;;
-  *) bad "the refusal does not name PKMNSCAN_SILENT=off" ;;
+  *"PKMNSCAN_SILENT"*) bad "the refusal names the switch to an agent" ;;
+  *"owner-only: ask the owner"*) ok "the refusal is owner-only and names no switch" ;;
+  *) bad "the refusal carries no owner-only line" ;;
 esac
 case "$out" in
   *"stdout -> /dev/null"*) ok "the refusal names stdout's destination" ;;
@@ -351,6 +352,7 @@ echo ""
 echo "  the escape hatch, in both of PKMNSCAN_KILL's two forms"
 
 allows "inline in the command"  "PKMNSCAN_SILENT=off git commit -m x >/dev/null 2>&1"
+refuses "a mere mention does not lift it" "echo PKMNSCAN_SILENT=off; git commit -m x >/dev/null 2>&1"
 
 out="$(printf '%s' "git commit -m x >/dev/null 2>&1" \
       | python3 -c 'import json,sys; print(json.dumps({"tool_input":{"command":sys.stdin.read()}}))' \
@@ -377,6 +379,19 @@ fails_open "a null command"              '{"tool_input":{"command":null}}'
 fails_open "a payload that is a list"    '[1,2,3]'
 fails_open "no stdin at all"             ''
 fails_open "an unbalanced quote"         '{"tool_input":{"command":"git commit -m '"'"'oops >/dev/null 2>&1"}}'
+
+LIBDIR="$HERE"
+echo ""
+echo "  the refusal log"
+. "$LIBDIR/refusal-log-assert.sh"
+rl="$tmp/refusals.log"
+rl_payload='{"session_id":"sess-1","cwd":"'"$tmp"'","tool_input":{"command":"git commit -m x >/dev/null 2>&1"}}'
+rl_out="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$rl" python3 "$GUARD" --hook 2>&1)"; rl_status=$?
+[ $rl_status -eq 2 ] && ok "a refused command still exits 2" || bad "the logged refusal exited $rl_status"
+why="$(refusal_line_ok "$rl" "silent-write-guard:silent" "sess-1")" && ok "…and writes one well-formed line" || bad "the refusal log line: $why"
+rl_bad="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" python3 "$GUARD" --hook 2>&1)"; rl_bad_status=$?
+if [ $rl_bad_status -eq 2 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
+else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
 
 echo ""
 printf '  %d passed, %d failed\n' "$pass" "$fail"

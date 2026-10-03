@@ -15,9 +15,7 @@ Each test module exposes:
                     to please a checker. Five of six drifted while nothing enforced this.
     run() -> Result
 
-A stub raises NotImplementedYet with a message beginning "NOT_IMPLE" + "MENTED". That
-literal is also what scripts/stop-gate.sh keys on to know the harness is still
-scaffolding: deleting the last one arms the Stop hook. So use it only in test modules,
+A stub raises NotImplementedYet with a message beginning "NOT_IMPLE" + "MENTED". So use it only in test modules,
 and only to mean "this test is a stub" — it is split across a concatenation here so that
 this file, which is not a test, does not count as one.
 """

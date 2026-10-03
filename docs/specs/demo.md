@@ -99,7 +99,7 @@ recorded here means the path is not a read this demo replays.
 - `/graveyard`, `/inventory/recent` at Home's own depth, and `/pipeline/submissions`.
 - Every `/boxes` facet filter the three menus can make (D213), each facet unset or one value.
 - Each value band (`top`, `bottom`, `gaps`) whole, once per box. The browser cuts the page.
-- `/pipeline/holdings-value` for each range, and `/pipeline/price-now` for each SKU.
+- `/pipeline/holdings-value` for each range, `/pipeline/price-now` for each SKU, and `/pipeline/movers` once.
 - `/pipeline/products/<sku>/history` for each SKU, when the server can answer it.
 - Three POST routes that only read: `/inventory/copies` per SKU, `/orders/picks` per order, and
   `/orders/walk-plan`. A POST read is keyed `POST <path> <body>` with the body's keys sorted
@@ -186,8 +186,7 @@ change, changed by hand. Anything subtler is a refusal and never a guess.
 
 - **The place labels.** D58 renumbers cards after a sale on the next read. The demo does not
   recompose a label.
-- **The graveyard and the walk plans.** A card sold in the demo does not appear in the graveyard,
-  and a recorded walk plan still lists it.
+- **The walk plans.** A card sold in the demo is still listed by a recorded walk plan.
 - **The order ledger.** The pull, the close and the fill each write it, and its arithmetic is server
   logic. All three are refused.
 - **A typed catalog lookup on Review.** Only the empty lookup a card opens with could be recorded,
@@ -234,7 +233,7 @@ things:
 - Every recorded card has its photograph in the build.
 - Each screen draws its photographs with a 200.
 - Mark sold then Undo, a Game pick, a typed search and a review answer with its undo all work.
-- The order walk, the graveyard, product history, the value band and "Value my stock" open.
+- The order walk, the Deleted boxes shelf, product history, the value band and "Value my stock" open.
 - No screen draws "Not in this demo." on arrival.
 
 Every screen is reached from the demo's root, by the sidebar or by a control on the screen. The one

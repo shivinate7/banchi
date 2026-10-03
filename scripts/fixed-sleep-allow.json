@@ -1,0 +1,9 @@
+{
+  "entries": [
+    {
+      "file": "app/tests/run-panel.spec.ts",
+      "count": 1,
+      "reason": "The poll interval of a scroll-height settle loop in a helper that test/flaky-helpers is rewriting. Fix it there and delete this entry."
+    }
+  ]
+}

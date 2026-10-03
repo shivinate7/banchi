@@ -109,9 +109,6 @@ function refusalCode(err: unknown): string {
   return err instanceof ServerError ? err.code : ''
 }
 
-/* Graveyard reads the one label table through here (UX review, 2026-09-20). */
-export { reasonWord }
-
 /** WHO TAKES THE NUMBER (UX-190). A card counts the cards in its section (D58, amended by
  *  D260), so when one leaves, the card in front of it (toward the
  *  owner, `neighbors.next`) takes its number, and every card after it steps down one. The rows

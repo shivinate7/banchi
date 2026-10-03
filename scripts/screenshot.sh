@@ -166,7 +166,7 @@ IDENTITY
     echo "  This checkout: $here" >&2
     echo "  That server:   $served" >&2
     echo "  Fix: make dev in THIS checkout (it claims a port of its own first)." >&2
-    echo "  To render it anyway: PKMNSCAN_CHECKOUT_IDENTITY=off" >&2
+    echo "  To render it anyway: owner-only: ask the owner to run this command." >&2
     return 1
   fi
   identity_checked=1

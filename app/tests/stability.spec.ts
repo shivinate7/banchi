@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { card, sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
-import { settleMotion } from './motionSettled'
+import { afterPaint, settleMotion } from './motionSettled'
 import { routesFromNav } from './routes'
 import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, line, order, seedPopulatedOrders, severalOrders, severalOrdersWalkPlan } from './routeFixtures'
 import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
@@ -58,7 +58,7 @@ async function slowReads(page: Page): Promise<void> {
     () => true,
     async (route) => {
       const type = route.request().resourceType()
-      if (type === 'fetch' || type === 'xhr') await new Promise((r) => setTimeout(r, SLOW_MS))
+      if (type === 'fetch' || type === 'xhr') await new Promise((r) => setTimeout(r, SLOW_MS)) // keep: stubbed answer held SLOW_MS ms on purpose, a latency fixture
       await route.fallback()
     },
   )
@@ -69,7 +69,7 @@ async function shiftOf(page: Page, route: string): Promise<{ sum: number; shifts
   await page.goto('about:blank')
   await page.goto(`/${route}`)
   await settleFonts(page)
-  await page.waitForTimeout(WINDOW_MS)
+  await page.waitForTimeout(WINDOW_MS) // keep: the window is the measurement, shifts are read over WINDOW_MS
   const shifts = (await readShifts(page)).shifts.filter((s) => s.at < WINDOW_MS)
   return { sum: sumOf(shifts), shifts }
 }
@@ -121,7 +121,7 @@ test('failed: a failed history read leaves no skeleton on Home', async ({ page }
   await page.route(/\/inventory\/history$/, (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"no"}' }))
   await page.goto('/#/')
   await expect(page.locator('.home-foot-sum')).toBeVisible()
-  await page.waitForTimeout(1500)
+  await page.waitForTimeout(1500) // keep: asserts no skeleton ever appears after the failed read
   await expect(page.locator('.home-foot .bn-skeleton')).toHaveCount(0)
   await expect(page.locator('.home-hold')).toHaveCount(0)
 })
@@ -154,7 +154,7 @@ for (const width of [1440, 820]) for (const seeded of [true, false]) for (const 
         const type = route.request().resourceType()
         if (type === 'fetch' || type === 'xhr') {
           const url = route.request().url()
-          await new Promise((r) => setTimeout(r, LANDS.find(([re]) => re.test(url))?.[1] ?? SLOW_MS))
+          await new Promise((r) => setTimeout(r, LANDS.find(([re]) => re.test(url))?.[1] ?? SLOW_MS)) // keep: each read lands at its own LANDS delay, a latency fixture
         }
         await route.fallback()
       },
@@ -195,22 +195,38 @@ const READ_MS = 700
 const CLUSTER_MS = 150
 const OUT_SUM = 0.005
 
-async function heldReads(page: Page, read: RegExp): Promise<{ on: boolean }> {
-  const gate = { on: false }
+/** `served` counts the held reads that have answered, so a press waits on the answer and not on a guessed time. */
+type Gate = { on: boolean; served: number }
+
+async function heldReads(page: Page, read: RegExp): Promise<Gate> {
+  const gate: Gate = { on: false, served: 0 }
   await page.route(read, async (route) => {
-    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS))
+    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS)) // keep: stubbed answer held READ_MS ms on purpose, a latency fixture
+    gate.served += 1
     await route.fallback()
   })
   return gate
 }
 
 /** Press, then read the shifts of the read-out window and of the swap that follows it. */
-async function heldPress(page: Page, gate: { on: boolean }, press: () => Promise<void>) {
-  await page.waitForTimeout(800)
+async function heldPress(page: Page, gate: Gate, press: () => Promise<void>) {
+  await settleMotion(page)
+  await afterPaint(page)
   gate.on = true
+  const served = gate.served
   const from = await markNow(page)
   await press()
-  await page.waitForTimeout(READ_MS * 2 + 400)
+  /* The frame is held: something on screen is marked busy or held. That is asserted, so a press that
+     held nothing cannot pass for one that held and swapped. */
+  const HELD = '[aria-busy="true"], [data-held="true"]'
+  await expect(page.locator(HELD).first(), 'the press held no frame while its read was out').toBeAttached()
+  /* The held read answers, then the swap draws: the answer is counted, then the marks come off. Both are
+     conditions of the page, so the window cannot close before the swap is drawn. */
+  await expect.poll(() => gate.served, { message: 'the held read never answered' }).toBeGreaterThan(served)
+  await expect(page.locator(HELD), 'the frame never let go of the old content').toHaveCount(0)
+  await settleMotion(page)
+  await afterPaint(page)
+  await page.waitForTimeout(CLUSTER_MS * 2) // keep: a second layout change within CLUSTER_MS of the swap is a second cluster, and only elapsed time shows it
   gate.on = false
   const all = (await readShifts(page)).shifts.filter((s) => s.at >= from)
   const out = all.filter((s) => s.at < from + READ_MS - 150)
@@ -297,8 +313,64 @@ for (const width of [1440, 820]) {
     await page.goto(screen('inventory'))
     await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
     await expect(page.locator('.card-locations').first()).toBeVisible()
-    await page.waitForTimeout(1500)
+    await settleMotion(page)
     const r = await heldPress(page, gate, () => page.keyboard.press('ArrowRight'))
+    expectHeld(r)
+  })
+}
+
+/* THE DELETED BOXES SHELF: entering it is one swap with no read behind it, and leaving it for a box
+   holds the frame like any other box press. The shelf's records are the same shape as a box's, so
+   any move is the frame. */
+const L1_BURIED = [
+  { name: 'Thievul', index: 1 },
+  { name: 'Eiscue', index: 2 },
+  { name: 'Pikachu', index: 3 },
+].map((c) => ({
+  left_at: '2026-09-24T10:00:00+00:00', how: 'sold', box: 7, index: c.index, box_name: 'Old rares', name: c.name,
+  number: '025', game: 'pokemon', set_hint: null, sku: '9000001', condition: 'Near Mint', retire_reason: null,
+  order: null, run: null, captured_at: '2026-09-01T10:00:00+00:00', photo_sha256: null, buried: true, buried_at: '2026-09-26T00:00:00+00:00',
+}))
+
+for (const width of [1440, 820]) {
+  test(`held frame: pressing the Deleted boxes shelf swaps the walk once, at ${width}`, async ({ page }) => {
+    /* The buried records are read once when Browse opens, so this press has no read to hold: the
+       shelf draws from what is already here, and the swap is the only change. */
+    await l1Inventory(page)
+    await page.route(/\/graveyard(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: L1_BURIED }) }))
+    await watchShifts(page)
+    await setViewport(page, { width, height: 1000 })
+    await page.goto(screen('inventory'))
+    await expect(page.locator('.card-locations').first()).toBeVisible()
+    await settleMotion(page)
+    await afterPaint(page)
+    const from = await markNow(page)
+    await page.getByRole('button', { name: 'Records from deleted boxes' }).click()
+    await expect(page.getByRole('heading', { name: 'Thievul' })).toBeVisible()
+    await settleMotion(page)
+    await afterPaint(page)
+    await page.waitForTimeout(CLUSTER_MS * 2) // keep: a second layout change within CLUSTER_MS of the swap is a second cluster, and only elapsed time shows it
+    let clusters = 0
+    let last = -Infinity
+    const shifts = (await readShifts(page)).shifts.filter((s) => s.at >= from)
+    for (const s of shifts) {
+      if (s.at - last > CLUSTER_MS) clusters += 1
+      last = s.at
+    }
+    expect(clusters, `one press, ${clusters} layout changes: ${describeShifts(shifts)}`).toBeLessThanOrEqual(1)
+  })
+
+  test(`held frame: leaving the Deleted boxes shelf for a box holds the shelf until the read lands, at ${width}`, async ({ page }) => {
+    await l1Inventory(page)
+    await page.route(/\/graveyard(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: L1_BURIED }) }))
+    const gate = await heldReads(page, /\/inventory\/\d+$/)
+    await watchShifts(page)
+    await setViewport(page, { width, height: 1000 })
+    await page.goto(screen('inventory'))
+    await expect(page.locator('.card-locations').first()).toBeVisible()
+    await page.getByRole('button', { name: 'Records from deleted boxes' }).click()
+    await expect(page.getByRole('heading', { name: 'Thievul' })).toBeVisible()
+    const r = await heldPress(page, gate, () => page.locator('.browse-boxcell', { hasText: 'SV commons' }).click())
     expectHeld(r)
   })
 }
@@ -307,11 +379,12 @@ for (const width of [1440, 820]) {
    holds the buyer it showed until the answer lands, then swaps once. The answer for several buyers
    is taller than the answer for one, which is content and is why only the read-out window and the
    cluster count are asked of it. */
-async function l1Orders(page: Page): Promise<{ on: boolean }> {
+async function l1Orders(page: Page): Promise<Gate> {
   await seedPopulatedOrders(page)
-  const gate = { on: false }
+  const gate: Gate = { on: false, served: 0 }
   await page.route(/\/orders\/walk-plan$/, async (route) => {
-    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS))
+    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS)) // keep: stubbed answer held READ_MS ms on purpose, a latency fixture
+    gate.served += 1
     const keys = (route.request().postDataJSON() as { keys: string[] }).keys
     const plan = severalOrdersWalkPlan()
     const stop = plan.stops[0]!
@@ -350,7 +423,7 @@ for (const width of [1440, 820]) {
 /* REVIEW: THE LOOKUP OPENS OVER A READ. `Search` replaces the candidate list with the export's rows,
    which are asked for when it opens. The candidates stay, dimmed, until the rows land, so the
    actions under the stage hold their place and the swap is one change. */
-async function l1Review(page: Page): Promise<{ on: boolean }> {
+async function l1Review(page: Page): Promise<Gate> {
   const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   const candidates = [0, 1, 2].map((at) => ({
     sku: `860800${at}`,
@@ -381,9 +454,10 @@ async function l1Review(page: Page): Promise<{ on: boolean }> {
       parked: [],
     }),
   )
-  const gate = { on: false }
+  const gate: Gate = { on: false, served: 0 }
   await page.route(/\/review\/\d+\/\d+\/catalog/, async (route) => {
-    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS))
+    if (gate.on) await new Promise((r) => setTimeout(r, READ_MS)) // keep: stubbed answer held READ_MS ms on purpose, a latency fixture
+    gate.served += 1
     json(route, {
       box: 2,
       index: 1,
@@ -429,7 +503,7 @@ for (const width of [1440, 820]) {
     await page.keyboard.press('1')
     await page.keyboard.press('ArrowRight')
     await page.keyboard.press('j')
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(300) // keep: asserts no key writes over 300ms
     expect(writes, 'a key sold a copy from the old plan').toEqual([])
     gate.on = false
   })
@@ -750,7 +824,7 @@ test('L2 shell: the offline banner overlays and moves nothing (S6)', async ({ pa
   await watchShifts(page)
   await setViewport(page, { width: 1440, height: 1000 })
   /* A screen whose own content does not read the server's status, so a shift here is the banner's. */
-  await page.goto(screen('graveyard'))
+  await page.goto(screen('codes'))
   await settleFonts(page)
   const top = () => page.evaluate(() => document.querySelector('.bn-view')!.getBoundingClientRect().top)
   const before = await top()
@@ -759,7 +833,7 @@ test('L2 shell: the offline banner overlays and moves nothing (S6)', async ({ pa
   await page.route(/\/status$/, (route) => route.abort())
   await page.evaluate(() => window.dispatchEvent(new Event('focus')))
   await expect(page.locator('.bn-banner')).toBeVisible()
-  await page.waitForTimeout(600)
+  await page.waitForTimeout(600) // keep: asserts the view holds its place for 600ms under the banner
   expect(await top(), 'the view holds its place under the banner').toBe(before)
   const moved = (await readShifts(page)).shifts.filter((s) => s.at >= mark)
   expect(sumOf(moved), describeShifts(moved)).toBeLessThan(SHELL_BUDGET)
@@ -780,13 +854,15 @@ test('L2 shell: Home holds its frame when the server goes offline (S6)', async (
   await setViewport(page, { width: 1440, height: 1000 })
   await page.goto(screen(''))
   await settleFonts(page)
-  await page.waitForTimeout(2500)
+  await expect(page.locator('.home-foot .bn-skeleton')).toHaveCount(0)
+  await settleMotion(page)
+  await afterPaint(page)
   const mark = await markNow(page)
   await page.unroute(/\/status$/)
   await page.route(/\/status$/, (route) => route.abort())
   await page.evaluate(() => window.dispatchEvent(new Event('focus')))
   await expect(page.locator('.bn-banner')).toBeVisible()
-  await page.waitForTimeout(800)
+  await page.waitForTimeout(800) // keep: asserts Home holds still for 800ms after the banner
   const moved = (await readShifts(page)).shifts.filter((x) => x.at >= mark)
   expect(sumOf(moved), describeShifts(moved)).toBeLessThan(SHELL_BUDGET)
   await page.unroute(/\/status$/)
@@ -810,11 +886,11 @@ test('L2 shell: a new toast leaves the older ones where they are (S16)', async (
   const first = page.locator('.bn-toast').first()
   await send(1)
   await expect(first).toBeVisible()
-  await page.waitForTimeout(500)
+  await settleMotion(page)
   const at = await first.boundingBox()
   await send(2)
   await send(3)
-  await page.waitForTimeout(500)
+  await page.waitForTimeout(500) // keep: asserts the first toast holds still for 500ms under newer ones
   expect(await first.boundingBox(), 'the first toast holds its place under two newer ones').toEqual(at)
 })
 
@@ -835,9 +911,12 @@ test('L2 shell: a toast expiring leaves the others where they are (S16)', async 
   await sendToast(page, 2, 20000)
   const second = page.locator('.bn-toast', { hasText: 'Sold card 2' })
   await expect(second).toBeVisible()
-  await page.waitForTimeout(300)
+  await settleMotion(page)
   const at = await second.boundingBox()
-  await page.waitForTimeout(1500)
+  /* an expired toast fades and keeps its box (`data-leaving`), so the expiry is the attribute, not the removal. */
+  await expect(page.locator('.bn-toast', { hasText: 'Sold card 1' })).toHaveAttribute('data-leaving', 'true')
+  await settleMotion(page)
+  await afterPaint(page)
   expect(await second.boundingBox(), 'the second toast holds its place when the first expires').toEqual(at)
 })
 
@@ -848,10 +927,10 @@ test('L2 shell: a toast past the fifth leaves the others where they are (S16)', 
   for (const i of [1, 2, 3, 4, 5]) await sendToast(page, i, 20000)
   const second = page.locator('.bn-toast', { hasText: 'Sold card 2' })
   await expect(second).toBeVisible()
-  await page.waitForTimeout(500)
+  await settleMotion(page)
   const at = await second.boundingBox()
   await sendToast(page, 6, 20000)
-  await page.waitForTimeout(600)
+  await page.waitForTimeout(600) // keep: asserts the second toast holds still for 600ms after a sixth
   expect(await second.boundingBox(), 'the sixth toast does not move the second').toEqual(at)
 })
 
@@ -893,11 +972,11 @@ test('L2 shell: web fonts arriving late move nothing (S17)', async ({ page }) =>
     })
   const before = await read()
   /* Past the block period, so a face that lands now would be a late one. */
-  await page.waitForTimeout(500)
+  await page.waitForTimeout(500) // keep: the block period is a real 100ms+ duration; a face landing after it is a late one
   const mark = await markNow(page)
   release()
   await page.evaluate(() => document.fonts.ready)
-  await page.waitForTimeout(500)
+  await page.waitForTimeout(500) // keep: asserts no probe line moves after the face lands
   const after = await read()
   const moved = (await readShifts(page)).shifts.filter((x) => x.at >= mark)
   const off = Object.keys(before)
@@ -910,7 +989,7 @@ test('L2 shell: web fonts arriving late move nothing (S17)', async ({ page }) =>
 test('L2 shell: a Sales podium thumbnail arriving moves nothing (S18)', async ({ page }) => {
   const STOCK = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
   await page.route(STOCK, async (route) => {
-    await new Promise((r) => setTimeout(r, 2000))
+    await new Promise((r) => setTimeout(r, 2000)) // keep: stubbed answer held 2000 ms on purpose, a latency fixture
     await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88"><rect width="63" height="88" fill="#ccc"/></svg>' })
   })
   const order = {
@@ -929,10 +1008,11 @@ test('L2 shell: a Sales podium thumbnail arriving moves nothing (S18)', async ({
   await setViewport(page, { width: 1440, height: 1000 })
   await page.goto(`/#/revenue`)
   await expect(page.locator('.revenue-podium .revenue-tile').first()).toBeVisible()
-  await page.waitForTimeout(1500)
+  await settleMotion(page)
+  await afterPaint(page)
   const mark = await markNow(page)
   await expect(page.locator('.revenue-podium .bn-thumb-img').first()).toBeVisible({ timeout: 8000 })
-  await page.waitForTimeout(600)
+  await page.waitForTimeout(600) // keep: asserts nothing moves for 600ms after the thumbnail lands
   const moved = (await readShifts(page)).shifts.filter((s) => s.at >= mark)
   expect(sumOf(moved), describeShifts(moved)).toBe(0)
 })
@@ -1005,17 +1085,20 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
         await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
         await expect(page.locator('.card-locations').first()).toBeVisible()
         await settleFonts(page)
-        await page.waitForTimeout(500)
+        await settleMotion(page)
+        await afterPaint(page)
         const before = await read()
         if (!(await oneRow())) bad.push('before: the facts row is not one pill tall')
         await page.getByRole('button', { name: /Mark sold/ }).first().click()
         await expect(page.locator('.browse-hero-sub')).toContainText('Sold')
-        await page.waitForTimeout(500)
+        await settleMotion(page)
+        await afterPaint(page)
         if (JSON.stringify(await read()) !== JSON.stringify(before)) bad.push('sale')
         if (!(await oneRow())) bad.push('sale: the facts row is not one pill tall')
         await page.getByRole('button', { name: /^Undo/ }).first().click()
         await expect(page.locator('.browse-hero-sub')).not.toContainText('Sold')
-        await page.waitForTimeout(500)
+        await settleMotion(page)
+        await afterPaint(page)
         if (JSON.stringify(await read()) !== JSON.stringify(before)) bad.push('undo')
         if (!(await oneRow())) bad.push('undo: the facts row is not one pill tall')
       }
@@ -1100,7 +1183,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
 const STRIP_PARTS = ['.orders-strip', '.orders-cardcol .browse-band', '.orders-cardcol .browse-photo-frame', '.orders-panel', '.orders-pick-nav'] as const
 for (const width of [1440, 820]) for (const wide of [false, true]) {
   const via = (name: string) => `held frame: ${name}${wide ? ', wide face' : ''}, at ${width}`
-  const stripScreen = async (page: Page): Promise<{ gate: { on: boolean }; boxes: () => Promise<string> }> => {
+  const stripScreen = async (page: Page): Promise<{ gate: Gate; boxes: () => Promise<string> }> => {
     if (wide) {
       await page.route(/\.(woff2?|ttf)(\?|$)/, (route) => route.abort())
       await page.addInitScript(() => {
@@ -1112,9 +1195,10 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
       })
     }
     await seedPopulatedOrders(page)
-    const gate = { on: false }
+    const gate: Gate = { on: false, served: 0 }
     await page.route(/\/orders\/walk-plan$/, async (route) => {
-      if (gate.on) await new Promise((r) => setTimeout(r, READ_MS))
+      if (gate.on) await new Promise((r) => setTimeout(r, READ_MS)) // keep: stubbed answer held READ_MS ms on purpose, a latency fixture
+      gate.served += 1
       const plan = severalOrdersWalkPlan()
       const stop = plan.stops[0]!
       stop.takes = [0, 1, 2].map((i) => ({ ...stop.takes[0]!, sku: `919148${i}` }))
@@ -1140,7 +1224,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
       const before = await boxes()
       const r = await heldPress(page, gate, async () => {
         await press(page)
-        await page.waitForTimeout(250)
+        await page.waitForTimeout(250) // keep: asserts no box moves for 250ms while the plan is out
         expect(await boxes(), 'a box moved while the plan was out').toBe(before)
       })
       expectHeld(r, 0.001)
