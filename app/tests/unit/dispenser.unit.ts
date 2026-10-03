@@ -232,7 +232,7 @@ test('paced loop, 10 of 10: START, wait for COMPLETE, gap, repeat, with the gap 
   expect(read(dealer).cards).toBe(0)
   await advance(1)
   expect(read(dealer).cards).toBe(1)
-  expect(read(dealer).said).toBe('Dealing, 1 cards')
+  expect(read(dealer).said).toBe('Dealing, 1 card')
   // the next START waits DEAL_GAP_MS after COMPLETE, and not a tick less
   await advance(DEAL_GAP_MS - 1)
   expect(rig.writes).toEqual(['MOTOR:START'])
