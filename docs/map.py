@@ -1673,7 +1673,7 @@ COMPONENTS = [
             "batch.py": {"does": "Batch API submit/poll/collect. Batch, never sequential.", "governed_by": ["D2", "D21", "D23"], "tested_by": ["T1"]},
             "sidecar.py": {"does": "reading a capture directory: photos, JSON sidecars, position", "governed_by": ["D2", "D3", "D10", "D21", "D22", "D23", "D183"]},
             "images.py": {"does": "downscale, encode, hash a photograph for the API, and refuse a crop that is not the card",
-                          "governed_by": ["D2", "D23", "D75"], "tested_by": ["T6"]},
+                          "governed_by": ["D2", "D23", "D75", "D125"], "tested_by": ["T6"]},
             "cost.py": {"does": "the price sheet, and the ONE place it is applied — the preflight's "
                                 "estimate before a send, the collect's record of what the send used, "
                                 "and server/pipeline_routes.py:_usage filling the figure in for a run "
@@ -1706,6 +1706,16 @@ COMPONENTS = [
                           "governed_by": ["D1", "D22", "D23", "D75"], "tested_by": ["T6"]},
             "crop.py": {"does": "cut the crop-retry regions out of a registered card",
                         "governed_by": ["D1", "D22", "D75"], "tested_by": ["T6"]},
+            "card_box.py": {"does": "the crop preview's card finder: a fine-tuned D-FINE-N on onnxruntime, detect_card behind it as the safety path",
+                            "governed_by": ["D125"]},
+            "model/dfine_card_640.onnx": {"does": "the D-FINE-N weights, 15.5 MB, committed on the owner's word",
+                                          "governed_by": ["D125"]},
+            "model/labels.json": {"does": "corner labels on the owner's rig photographs, the first 150 (REJECT rows dropped at build)",
+                                  "governed_by": ["D125"]},
+            "model/labels_new.json": {"does": "corner labels, the last 100",
+                                      "governed_by": ["D125"]},
+            "model/rebuild.py": {"does": "rebuild the ONNX: labels to COCO, then the export of a trained D-FINE-N checkpoint",
+                                 "governed_by": ["D125"]},
         },
     },
     {
@@ -5660,7 +5670,7 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20",
+                "governed_by": ["D1", "D2", "D125", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20",
                                 "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36",
                                 "D43", "D47", "D180", "D86", "D54", "D56", "D58", "D59", "D278",
                                 "D65", "D67", "D68", "D76", "D277", "D87",
