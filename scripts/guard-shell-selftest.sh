@@ -1288,6 +1288,51 @@ fi
 
 LIBDIR="$HERE"
 echo ""
+echo "  --skip: clauses another guard owns, through the real CLI"
+
+# THE REAL CLI, NOT `hook()`: `--skip` is parsed by `main`, and Claude Code runs exactly
+# `--hook --skip checkout,stash,reset`. Earlier sections leave the tree in unknown states,
+# so it is dirtied again here, and a refused case is meaningless on a clean tree.
+(cd "$tmp/main" && git checkout -q main 2>/dev/null; printf 'one\ntwo\nthree\nskip-section\n' > work.py)
+skip_cli() {   # skip_cli <skip-list|-> <cwd> <command> -> exit code
+  local args=(--hook); [ "$1" = "-" ] || args+=(--skip "$1")
+  out="$(printf '%s' "$3" \
+        | CWD="$2" python3 -c 'import json,os,sys; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":sys.stdin.read()}}))' \
+        | python3 "$GUARD" "${args[@]}" 2>&1)"
+  return $?
+}
+skip_cli_write() {   # skip_cli_write <skip-list> <cwd> <file_path>
+  out="$(CWD="$2" TARGET="$3" python3 -c 'import json,os; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"file_path":os.environ["TARGET"]}}))' \
+        | python3 "$GUARD" --hook --skip "$1" 2>&1)"
+  return $?
+}
+SKIPS="checkout,stash,reset"
+for c in "git stash pop" "git reset --hard" "git checkout work.py"; do
+  skip_cli - "$tmp/main" "$c"; a=$?
+  skip_cli "$SKIPS" "$tmp/main" "$c"; b=$?
+  if [ $a -eq 2 ] && [ $b -eq 0 ]; then ok "\`$c\`: refused without --skip, allowed with it"
+  else bad "\`$c\`: exit $a without --skip, $b with it (want 2 and 0)"; fi
+done
+skip_cli "bogus,,nonsense" "$tmp/main" "git checkout work.py"
+[ $? -eq 2 ] && ok "an unknown name in --skip skips nothing" || bad "an unknown name in --skip skipped a clause"
+skip_cli "checkout,bogus" "$tmp/main" "git stash pop"
+[ $? -eq 2 ] && ok "…and a known name beside it skips only its own clause" || bad "--skip checkout also skipped the stash clause"
+
+# Re-arm the mismatch: a branch tracking a DIFFERENTLY named upstream (later sections repoint it).
+(cd "$tmp/main" && git checkout -q -B skip-mismatch main 2>/dev/null \
+  && git config branch.skip-mismatch.remote origin \
+  && git config branch.skip-mismatch.merge refs/heads/claude/skip-mismatch)
+skip_cli - "$tmp/main" "git push origin HEAD"
+[ $? -eq 2 ] || bad "the skip-section push fixture did not arm: the mismatch is not refused without --skip"
+skip_cli "$SKIPS" "$tmp/main" "git push origin HEAD"
+[ $? -eq 2 ] && ok "with --skip, the push mismatch is still refused" || bad "--skip let the push mismatch through"
+(cd "$tmp/main" && git checkout -q main 2>/dev/null)
+skip_cli "$SKIPS" "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
+[ $? -eq 2 ] && ok "with --skip, a polling loop is still refused" || bad "--skip let a polling loop through"
+skip_cli_write "$SKIPS" "$WT" "$tmp/main/work.py"
+[ $? -eq 2 ] && ok "with --skip, a write outside the checkout is still refused" || bad "--skip let a write outside the checkout through"
+
+echo ""
 echo "  the refusal log"
 . "$LIBDIR/refusal-log-assert.sh"
 rl="$tmp/refusals.log"

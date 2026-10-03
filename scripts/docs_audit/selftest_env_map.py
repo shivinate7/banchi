@@ -232,6 +232,46 @@ def run(ok) -> None:
         str(by_label["codex hooks"]),
     )
 
+    # CODEX_ONLY: two hooks the shared layer owns for Claude Code. Driven on temp files through
+    # the row's own two path globals, with the pair spelled out so a widened CODEX_ONLY shows.
+    print("\ncodex hooks: the CODEX_ONLY pair is allowed in Codex only, in both directions")
+    import json
+    from . import env_map
+
+    def hook(matcher: str, command: str) -> dict:
+        return {"matcher": matcher, "hooks": [{"type": "command", "command": command}]}
+
+    shared = hook("Write|Edit", "scripts/guard-opsec.sh")
+    reap = hook("Bash", "scripts/reap.py --hook")
+    silent = hook("Bash", "scripts/silent-write-guard.py --hook")
+    extra = hook("Bash", "scripts/janitor.py --hook")
+
+    def codex_hooks_findings(claude: list, codex: list) -> list:
+        with tempfile.TemporaryDirectory() as tmp:
+            c, x = Path(tmp) / "settings.json", Path(tmp) / "hooks.json"
+            c.write_text(json.dumps({"hooks": {"PreToolUse": claude}}), encoding="utf-8")
+            x.write_text(json.dumps({"hooks": {"PreToolUse": codex}}), encoding="utf-8")
+            saved = env_map.CLAUDE_SETTINGS, env_map.CODEX_HOOKS
+            env_map.CLAUDE_SETTINGS, env_map.CODEX_HOOKS = c, x
+            try:
+                rep = Report()
+                check_codex_hooks(rep)
+            finally:
+                env_map.CLAUDE_SETTINGS, env_map.CODEX_HOOKS = saved
+        return [f for row in rep.checks for f in row.findings]
+
+    found = codex_hooks_findings([shared], [shared, reap, silent])
+    ok(not found, "green: Claude lacks the two CODEX_ONLY hooks and Codex runs them", str(found))
+    found = codex_hooks_findings([shared, reap], [shared, reap, silent])
+    ok(len(found) == 1 and "CODEX_ONLY is stale" in str(found[0]),
+       "red: Claude runs a CODEX_ONLY hook again", str(found))
+    found = codex_hooks_findings([shared], [shared, reap])
+    ok(len(found) == 1 and "lost" in str(found[0]),
+       "red: Codex loses a CODEX_ONLY hook", str(found))
+    found = codex_hooks_findings([shared], [shared, reap, silent, extra])
+    ok(len(found) == 1 and "does not run" in str(found[0]),
+       "red: an unlisted Codex-only hook appears", str(found))
+
     # The staged-mode primitives, which have no loud failure mode: every one of them
     # answers plausibly against the worktree while auditing a tree the commit will not
     # produce. Driven through the module globals because that is how audit() drives them.
