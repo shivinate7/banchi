@@ -1100,8 +1100,12 @@ def _refuse_unreadable_claim() -> None:
     Its SKUs are unknown, so it could conflict with anything. The keys go to stderr; the screen
     gets one sentence and the release control (`do_release_unreadable`).
     """
+    store = Store()
     try:
-        Store().read().send_claims.live()
+        # Under the store's flock: a first open of the database sets WAL mode, which fails
+        # "database is locked" against a writer, and two presses at once is that writer.
+        with files.exclusive(store.directory):
+            store.read().send_claims.live()
     except files.UnreadableClaim as exc:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT, "claim_unreadable", pipeline_routes._unreadable_claim_sentence(exc)
