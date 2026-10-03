@@ -252,9 +252,9 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
     Filtered to paths that exist as real files, so a renamed subject falls out on its own
     instead of pointing at nothing, and a false hit (a decorative string that happens to look
     like a path) never survives. A hit under `scripts/githooks/` widens to the whole
-    directory: `githooks-selftest.sh` names two of its five hooks as literal paths and the
-    rest only in prose ("its pre-push sibling") — a reader that stopped at the two named
-    ones would silently narrow what the gate can see, which is the exact failure this
+    directory: `githooks-selftest.sh` names one of its three hooks as a literal path and the
+    rest only in prose ("its pre-push sibling") — a reader that stopped at the one named
+    would silently narrow what the gate can see, which is the exact failure this
     workstream exists to close.
     """
     if not test_path.exists():

@@ -336,6 +336,34 @@ def run(ok) -> None:
         gists = context.decision_gists(path=entries) if context else {}
         ok(past_end in gists, "the decision-context hook resolves a three-digit entry", str(list(gists)))
 
+    # Once per session: the real hook script, its state file in a throwaway TMPDIR.
+    import json
+    import os
+    import subprocess
+    import sys
+
+    hook = ROOT / "scripts" / "decision-context.py"
+    with tempfile.TemporaryDirectory() as state:
+        def fire(*flags: str, session: str | None = "sess-a", target: str = "scripts/guard-shell.py") -> str:
+            payload: dict = {"tool_input": {"file_path": str(ROOT / target)}}
+            if session:
+                payload["session_id"] = session
+            done = subprocess.run(
+                [sys.executable, str(hook), *flags], input=json.dumps(payload),
+                capture_output=True, text=True, env={**os.environ, "TMPDIR": state},
+            )
+            return done.stdout.strip()
+
+        first, second = fire(), fire()
+        ok(bool(first), "decision-context prints on a session's first edit of a file")
+        ok(second == "", "…and prints nothing on its second edit of the same file", second[:80])
+        ok(bool(fire(target="scripts/decision-context.py")), "…the memory is per file: another file still prints")
+        ok(fire(session="sess-b") == first, "another session still gets the first print")
+        fire("--reset")
+        ok(fire() == first, "after --reset it prints again")
+        ok(fire(session=None) == first and fire(session=None) == first,
+           "with no session id it prints every time")
+
     print("\nextractor finds real references")
     for line, expected in REAL_PATHS:
         found = path_candidates(line)

@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck unit venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent demo-mirror-daily-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet lint typecheck unit venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent demo-mirror-daily-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -799,19 +799,7 @@ screen-freshness-selftest:
 		echo "screen-freshness-selftest: SKIPPED — this branch does not touch scripts/screen-freshness.mjs. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
-# NOT IN `check`, AND NOT IN THE GIT HOOK. It is the one target here that can DELETE a file,
-# so D18's rule applies at its strongest: nothing that writes may run on the path that decides
-# whether a commit proceeds. It is also not a defect to have conflict copies lying around —
-# the pre-commit hook already refuses to COMMIT one — so failing `check` over them would gate
-# a tidy-up on a condition the owner's filesystem creates on its own schedule.
-#
-# `make status` reports the count, which is where a thing you should know but need not act on
-# belongs. Deleting is opt-in: `make icloud-sweep ARGS=--delete`.
-icloud-sweep:
-	@python3 scripts/icloud-sweep.py $(ARGS)
-
-# NOT IN `check`, AND NOT IN THE GIT HOOK, for icloud-sweep's reason exactly: these two are the
-# only targets here that can delete a file, and D18 forbids a writer on the path that decides
+# NOT IN `check`, AND NOT IN THE GIT HOOK. This is a target that can delete a file, and D18 forbids a writer on the path that decides
 # whether a commit proceeds. Nor is leftover exhaust a defect to fail a commit over — it is a
 # condition the owner's own sessions create on their own schedule.
 #
@@ -1250,16 +1238,13 @@ silent-write-selftest:
 
 .PHONY: silent-write-selftest
 
-# EIGHT SHELL MISTAKES THIS REPO HAS ALREADY PAID FOR, refused before they run. Every one was a
+# SEVEN SHELL MISTAKES THIS REPO HAS ALREADY PAID FOR, refused before they run. Every one was a
 # rule somebody had written down and a later session broke anyway — which is D171's ruling
-# about what a rule IS, applied to eight more commands:
+# about what a rule IS, applied to seven more commands:
 #
 #   `git checkout <modified path>`     2026-09-06, ~240 lines of uncommitted work destroyed
 #   a write outside this checkout      2026-09-06, ~1,500 lines into the owner's MAIN tree, on
 #                                      main, hot-reloaded into their live capture server
-#   `gh api -f k=v` with no method     2026-09-12, a GET silently POSTed and hung past a timeout
-#   `ln -s` at an existing path        2026-08-29, harness/images/images and a 133 MB directory
-#                                      renamed away by iCloud
 #   a polling loop                     2026-09-12 twice: a `pgrep` waiter whose pattern is not
 #                                      the process, and a backgrounded driver that ran 119
 #                                      rounds over 3h58m across a compaction
@@ -1271,7 +1256,7 @@ silent-write-selftest:
 #   `git reset --hard`/`--merge`       over uncommitted tracked work
 #
 # `scripts/guard-shell.py --hook` is a PreToolUse hook on Bash and on Write|Edit — not a target
-# you run — and this self-test is what proves it. FIVE OF THE EIGHT INCIDENTS ARE PERFORMED in a
+# you run — and this self-test is what proves it. FOUR OF THE INCIDENTS ARE PERFORMED in a
 # throwaway repository before the guard is asked about them, which is reap-selftest's standard;
 # the false positives are RUN there too, because a case that is secretly a typo passes for the
 # wrong reason. IN `check`, NEVER IN THE GIT HOOK: it writes a temp repository (D18).

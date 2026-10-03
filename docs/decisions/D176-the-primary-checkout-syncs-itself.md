@@ -19,9 +19,8 @@ merged as #282 and already behind `origin/main`, with four.
 **Part 2 — `refs/heads/main` is at `refs/remotes/origin/main`.** `make status` reported
 `0 ahead of main, 70 behind it` for a day in August and nobody read it.
 
-**Neither subsumes the other, and one hook can see only one of them.** `post-checkout` fires on a
-branch switch and **not** on `git pull`, `git merge` or `git rebase` — so it can see the tree go
-*off* main and can never see main go *stale*. That is why "on main" and "at origin/main" are
+**Neither subsumes the other.** A branch switch shows the tree going *off* main and never shows
+main going *stale*, because `git pull`, `git merge` and `git rebase` are not switches. That is why "on main" and "at origin/main" are
 genuinely separate questions here, and why the readers that matter are the ones that run when
 main **moves**: `scripts/serve.py`'s four adoption moments, which tick once a second.
 

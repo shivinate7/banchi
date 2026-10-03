@@ -75,6 +75,14 @@
             "command": "scripts/worktree-guard.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/decision-context.py --reset"
+          }
+        ]
       }
     ],
     "SessionEnd": [

@@ -4,7 +4,7 @@
 decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep");
 `make janitor` runs it.
 
-THE SAFETY RULE (D44, provably dead or reported): a thing is stopped only when nothing can be
+THE SAFETY RULE (provably dead or reported): a thing is stopped only when nothing can be
 live in it. Liveness is read from `~/.claude/sessions/<pid>.json`, never from mtimes. See
 `_same_process` for why an unreadable case resolves to LIVE.
 
