@@ -1,6 +1,6 @@
 # Dispenser button
 
-Governed by D-dispenser-button (a Capture button starts and stops the dispenser). Built: yes.
+Governed by D316 (a Capture button starts and stops the dispenser). Built: yes.
 
 ## What the owner gets
 
