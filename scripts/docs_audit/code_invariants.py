@@ -1572,6 +1572,32 @@ def check_threshold_agreement(report: Report) -> None:
     )
 
 
+_MODEL_BYTES_PY_RE = re.compile(r"^MODEL_BYTES = ([\d_]+)", re.M)
+_MODEL_BYTES_TS_RE = re.compile(r"model_bytes: ([\d_]+)")
+
+
+def check_model_bytes_agreement(report: Report) -> None:
+    """The demo wire's `model_bytes`, copied from `identify/matchconst.py:MODEL_BYTES`."""
+    py = _MODEL_BYTES_PY_RE.search(read(ROOT / "identify" / "matchconst.py"))
+    ts = _MODEL_BYTES_TS_RE.search(read(ROOT / "app" / "src" / "demoServer.ts"))
+    findings: List[Finding] = []
+    if py is None or ts is None:
+        findings.append(Finding(
+            "app/src/demoServer.ts",
+            "`MODEL_BYTES = <n>` or `model_bytes: <n>` is gone, so this row cannot compare them.",
+        ))
+    elif py.group(1).replace("_", "") != ts.group(1).replace("_", ""):
+        findings.append(Finding(
+            "app/src/demoServer.ts",
+            f"`model_bytes: {ts.group(1)}` and `identify/matchconst.py:MODEL_BYTES` is "
+            f"`{py.group(1)}`. The demo's setup card quotes a size the real one does not.",
+        ))
+    report.add(
+        "model bytes agreement", MECHANICAL, findings,
+        "app/src/demoServer.ts:model_bytes against identify/matchconst.py:MODEL_BYTES", scanned=1,
+    )
+
+
 _SERVE_DIST_RE = re.compile(r'^DIST = "([^"]+)"', re.M)
 _CAPTURE_APP_DIST_RE = re.compile(
     r'APP_DIST = Path\(__file__\)\.resolve\(\)\.parent\.parent / "app" / "dist"'
