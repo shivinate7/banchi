@@ -62,23 +62,28 @@ These rules scope the TCGplayer export fetch. They do not scope the Haiku read.
 They stay unchanged for both engines, because both engines still join against the export.
 The matcher adds one use of the same facts: the candidate pool.
 
-**The rule: the matcher reads a card only when its whole candidate pool is complete.**
+**The rule: a printing with no stock image blocks only a match that shares its card name.**
+The fingerprint index (section 4) lists every numbered product of every set it covers, with or without a photo.
+The pool is the fingerprinted printings of the sets that apply to the card.
 
-- **A hinted card.** Its pool is its hinted set. The set must be complete.
-- **An unhinted card.** Its set is unknown, so its pool is every set of its game. Every one of those sets must be complete.
-  If any set of the game is incomplete, the card is left unread. A per-set test would let the matcher accept a guess here.
+- **A hinted card.** Its pool is its hinted set.
+- **An unhinted card.** Its set is unknown, so its pool is every set of its game, except the promo sets (below).
+- **The look-alike guard.** After the match, the matcher compares the best answer's card name with the names of the pool's no-image printings.
+  If the best answer shares a name with one, the card is left unread. Every other card stays eligible, whatever else is missing from its set.
+- **The premise, measured:** a no-image printing loses to its same-name twin. When the true printing has no photo, its sibling with the same name wins.
+  In the absent-photo test, 96 of the wrong accepted answers were same-name siblings (section 3). The held-out check (section 3) tests the guard.
 - **Sealed product and anything with no number** is never matched. It has no card photo to compare.
-- A set is complete when every numbered product in it has a stock image and a stored fingerprint (section 4).
 - **Promo sets are left out of the pool.** A promo set is a set whose name holds "Promo".
-  An unhinted card matches against the main sets only. A card hinted into a promo set is never read by the matcher. It goes to the paid read.
+  A card hinted into a promo set is never read by the matcher. It goes to the paid read.
+- **A set the index does not cover** cannot be guarded. Every card that needs it is left unread until the fingerprint refresh press covers it.
 - For Pokemon, D170 already makes every run name its sets. An unhinted Pokemon card cannot reach a matcher run.
   The pool is therefore never the whole Pokemon category.
 - For Riftbound, "every set of its game" is every Riftbound group that holds a numbered product. Riftbound's export scope is `category`,
   so the pool and the export agree.
 - A named set did not help accuracy in the spike. On Riftbound, pool-wide and set-only top-1 were both 98.7% (measured, first round).
-  The rule exists for correctness when a set is incomplete. It does not exist for accuracy.
+  The pool rule exists for the absent-photo case. It does not exist for accuracy.
 
-**Cards the matcher leaves unread.** A card is left unread in three cases. Its pool is incomplete. Its margin M is below the rule in section 3.
+**Cards the matcher leaves unread.** A card is left unread in four cases. The look-alike guard fires. Its set is not in the index. Its margin M is below the rule in section 3.
 Its floor S is below the rule in section 3. The first rounds of the spike never tested the absent-photo case.
 So a second test removed the true card's stock photos from the pool. Every answer is then wrong by construction.
 Section 3 gives the result. For an unread card, the matcher run does this and nothing else:
@@ -112,33 +117,23 @@ A promo whose set name does not hold "Promo" is not caught. That is an open item
 
 **The 229 products with no photo** (measured). The CDN answers 403 with an XML error for every size of each image URL.
 The working images answer 200. CloudFront answers 403 for a key that does not exist. So each is a product with a URL and no photo.
-They count as "no stock image".
+They count as "no stock image". They sit in the index as no-image printings, and the guard reads their names.
 
 | Group | Products | What they are |
 |---|---|---|
 | Organized Play Promotional Cards | 174 | Promos. Left out of the pool by the owner's rule. |
 | Promotional Cards | 6 | Promos. Left out of the pool. |
-| Radiance | 11 | A small set with no photo at all. Not a promo by name. |
+| Radiance | 11 | An unreleased set, due in about a month. No special case: its names are blocked by the guard until images exist. |
 | Spiritforged, Unleashed, Vendetta | 38 | Runes (numbers such as R01b) and Tokens (numbers such as T01 // T05). Not promos. Not broken links. |
 
-- The 38 are ordinary products of the main sets. The promo rule does not cover them. They keep those three sets incomplete.
 - The owner holds 96 Runes (measured). Their printings all have photos. None of the 38 is held today.
-  A Rune of a printing with no photo would match a sibling Rune of the same name. That is the look-alike failure of section 3.
+- The fingerprint refresh press picks up Radiance after release. It reads the missing images and clears those names from the guard.
 
-**How many of the owner's cards are eligible today** (measured). The store holds 3,501 numbered cards with a SKU: 2,959 Riftbound and 542 Pokemon.
-
-| Rule | Eligible | Share |
-|---|---|---|
-| Promo sets out, and every other set must be complete | 844 | 24.1% |
-| Plus a family guard on Runes and Tokens (below), hinted cards only | 2,800 | 80.0% |
-| Plus unhinted cards, with Radiance treated as outside the pool | 3,407 | 97.3% |
-
-**The family guard.** A match whose best candidate is a Rune or a Token product is left unread. The paid read decides the variant.
-Rune and Token numbers do not have the `N/M` shape. The guard removes the 38 from the completeness test and leaves the three main sets complete for every other card.
-It costs the 94 held Rune or Token cards (3% of Riftbound). It needs no new guess. Whether it holds for a Rune that matches a non-Rune is unmeasured.
-
-**Radiance** has 11 numbered products and no photo. A Radiance card photographed with no hint would match a main-set card.
-The 97.3% row assumes the owner rules Radiance out of the pool. The store holds no Radiance card. That ruling is open.
+**How many of the owner's cards are eligible today** (measured, before the read). The store holds 3,501 numbered cards with a SKU:
+2,959 Riftbound and 542 Pokemon. The guard blocks 163 card names. 479 held cards carry one of those names (414 hinted, 65 unhinted).
+**Eligible: 3,022 of 3,501 (86.3%).** The 479 are left unread, and the paid read handles them.
+This is a pre-read estimate. The guard fires on the best answer, so a card with a blocked name may still be read when its best answer has another name.
+It is a floor on eligibility. How many of the 479 the real read accepts is unmeasured.
 
 **Games the matcher refuses.** `pokemon_code` and `misc` have no stock photos.
 Code cards follow their own rules. No code-card photo is ever embedded, copied or matched.
@@ -149,7 +144,7 @@ The matcher serves `pokemon`, `riftbound` and `one_piece`.
 The matcher answers with its best card and two numbers. The margin M is the cosine of the best match
 minus the cosine of the second. The floor S is the cosine of the best match.
 
-**Accept only when all three hold:** the card's candidate pool is complete (section 2), M is at least 0.02, and S is
+**Accept only when all three hold:** the look-alike guard does not fire (section 2), M is at least 0.02, and S is
 at least 0.755. An accepted card gets `confidence` of `high` in the identification record.
 **Every other card is left unread** (section 2). It is not routed to review, and no `low` record is written for it.
 No new join branch is built, because an unread card never reaches the join.
@@ -167,9 +162,9 @@ Measured on the 500 photographs, Marqo-B:
   It also accepts three of four wrong answers when the true card is absent.
 - The right art with the wrong printing is the cause. When a printing is missing, its sibling wins with a high margin.
   Among the wrong accepted answers in the first row, 96 were siblings with the same name.
-- A complete pool is therefore a hard precondition. A threshold cannot replace it.
-  Even with both thresholds, 12.2% of absent-truth answers pass. Completeness removes that case.
-  For an unhinted card the pool is every set of the game, so one incomplete set blocks every unhinted card of that game.
+- The look-alike guard (section 2) is therefore a hard precondition. A threshold cannot replace it.
+  Even with both thresholds, 12.2% of absent-truth answers pass. The guard removes the same-name case, which is where they come from.
+  The guard is not yet measured on real photographs. The held-out check below tests it.
 - The spike did not demonstrate 99.5% precision. It split the 500 cards at random 20 times.
   Each time it fit the margin on one half and scored the other half.
   Marqo-B accepted 99% of cards at a mean precision of 99.4% and a worst split of 98.8% (measured).
@@ -177,8 +172,9 @@ Measured on the 500 photographs, Marqo-B:
 - The values 0.02 and 0.755 were chosen on the same 500 cards. They are a starting point, not a result.
   Both values live in one constant, beside the eval that produced them.
   The record also carries the model file hash.
-- **Build-lane gate: a held-out check confirms the thresholds before adoption.**
+- **Build-lane gate: a held-out check confirms the thresholds and the look-alike guard before adoption.**
   The owner supplies photographs that the spike never saw, and the eval scores them with the fixed constants.
+  The set includes cards whose same-name twin has no stock image, and the check must show the guard leaves each of them unread.
   The build lane does not ship the matcher pick until that check reports no wrong answer among the accepted cards,
   and reports the share accepted. A failed check lowers the constants or ends the build. It never edits the held-out set.
 - Rotation retries do not help Marqo-B. Take the best of four rotations. Its top-1 on 13 sideways battlefield cards falls from 85% to 77%.
@@ -210,9 +206,9 @@ The vendored Pokemon tree is a committed snapshot. `vendor/pokemon-tcg-data/SNAP
 Only `make catalog-refresh` renews it. A set released after the snapshot has no row (DEBT44, the vendored tree lags a new set).
 The pool index records the snapshot it was built from, so a stale index is visible.
 
-**Complete pool.** A set is complete when every numbered product in its tcgcsv group, or in its vendored
-set file, has an image and a stored fingerprint that matches the current model file. Section 2 says which
-cards need which sets. The preflight names each incomplete set, and the cards it leaves unread because of it.
+**The index lists every printing.** The index holds each numbered product of each set it covers, with its fingerprint or its no-image mark.
+It is current when its model file hash matches the matcher's file. A set not in the index cannot be guarded (section 2).
+The preflight names each such set and the cards it leaves unread because of it.
 
 **The index.** One stock image becomes one vector of 768 floats, which is 3 KB.
 The spike's 1,365 images make about 4.2 MB (measured). The index lives under `inventory/`, beside the other
@@ -227,7 +223,7 @@ at a polite pace, which took a few minutes (measured).
 
 **A matcher press never builds or refreshes fingerprints.** It reads only fingerprints that are already stored.
 A fingerprint is stale when the model file hash differs, or when the set now holds a numbered product with no fingerprint.
-A stale or missing fingerprint makes its set incomplete, so the cards that need that set are left unread.
+A stale fingerprint is never read. A missing one leaves its printing as a no-image printing, and the guard blocks its name.
 Only the owner's press on the fingerprint control (section 6) reads images, and it shows its size first.
 A matcher press never downloads, and it never spends money.
 
@@ -331,7 +327,7 @@ The Haiku pick uses `HAIKU_NAME_TOOLTIP`. The matcher pick uses `MATCHER_NAME_TO
 - The accuracy line carries no percentage. The two figures do not compare.
   The line names outcomes: what the engine reads, what it cannot read, and where doubt goes.
 - The matcher quote adds three counts. They are the cards it can match, the cards it must leave unread because
-  their pool is incomplete, and the cards already answered. A card can also be left unread after the read, when its margin is too small.
+  the look-alike guard blocks, and the cards already answered. A card can also be left unread after the read, when its margin is too small.
   The quote cannot count those, so it says so. It also adds the setup state.
 - **A paid press over cards the free reader matched asks every time, and the default answer is skip.**
   A selection can hold cards the matcher accepted. Those are answered.
@@ -348,9 +344,9 @@ The Haiku pick uses `HAIKU_NAME_TOOLTIP`. The matcher pick uses `MATCHER_NAME_TO
 starts only on the owner's press.
 
 - The model file: 372 MB, a download (section 5).
-- The fingerprints: the number of stock images to read, one read each, and how many sets are complete today.
+- The fingerprints: the number of stock images to read, one read each, and how many printings still have no image.
   A press reads the missing and stale images, in memory, and stores the fingerprints (D301, amended).
-  It reports sets complete and sets incomplete when it ends. Nothing else starts it.
+  It reports the printings read and the printings still with no image when it ends. Nothing else starts it.
 
 **The receipt.** The run record shows the engine. It then shows three counts: matched, left unread, and already answered.
 A matched card the finish ladder cannot finish goes to Review as before. The run line reads, for example,
@@ -430,7 +426,7 @@ The sweep then reads the new photograph. A Haiku row keeps today's behavior.
 **What it never reads.**
 
 - An unhinted Pokemon card, because its pool is the whole category (section 2, D170).
-- A card in any set whose pool is incomplete (section 2).
+- A card whose best answer shares a name with a no-image printing (section 2).
 - A card from another game's rules: code cards and `misc`.
 - It never borrows a hint from a neighbor or from the box. A hint is evidence about the card that carries it (D76).
 
@@ -451,21 +447,22 @@ Freeing the session does not return the memory in the same process (measured). S
 - A **worker** that the watcher starts when the queue is not empty. It loads the model, reads the queue to empty, and exits.
   Exit returns the memory. A cold start to the first vector took 0.26 seconds with the file cached (measured).
 
-The gate: the idle resident memory of the watcher, with an empty queue, must stay under 30 MB. The owner confirms the number.
-The build lane measures it on the shipped build, and the matcher does not ship if it fails.
+The gate is a measurement, and it has no pass mark yet. The owner said: "let's measure first".
+The build lane measures the watcher's idle resident memory, with an empty queue, on the shipped build.
+It brings the number to the owner before ship, and the owner sets the pass mark then.
 A queue with cards in it may use the 454 MB peak, in the worker only.
 
 **While cards are being fed (the capture gate).** Until the capture-speed gate is measured, the sweep reads in the gaps only.
 It waits 3 seconds after the last capture before it starts the worker, and it stops the worker at the next capture.
 The gate: 300 feeder-paced captures on a scratch store, run twice, with the reader and without it.
 The metric is the p99 time of a capture request. If the p99 with the reader is worse than the p99 without it
-by no more than a margin the owner sets, the sweep may read "always". If it is worse than that, the sweep stays on "gaps only".
+the owner decides from the two figures whether the sweep may read "always" or stays on "gaps only". There is no pass mark yet.
 Until that measurement exists, gaps only is the rule. This is unmeasured.
 
 **The toggle.** The on and off switch lives in the rig settings on the Capture screen. That is the `Setup` group in the Rig panel of `CaptureScreen`.
 Its state is a row in the store's `meta` table. It is not a device key, and it is not in `deviceMemory.ts`.
 The setup press downloads the model file and builds the fingerprints once (section 6, "Prepare matching"). It asks first, and it shows both sizes.
-Turning the toggle on never downloads. With no model or no complete pool, the toggle reads as on and the sweep does nothing.
+Turning the toggle on never downloads. With no model or no index, the toggle reads as on and the sweep does nothing.
 
 **What the screens show (D313, nothing on screen moves unless the person moved it).**
 
@@ -479,7 +476,7 @@ Turning the toggle on never downloads. With no model or no complete pool, the to
 ## 9. The owner's rulings
 
 - A card the matcher cannot accept is left unread and stays in the selection. It never goes to review. Nothing falls back on its own (sections 2 and 3).
-- The matcher reads a card only when its whole candidate pool is complete (section 2).
+- The matcher leaves unread a card whose best answer shares a name with a no-image printing (section 2).
 - D301 is amended for one fingerprint read of each stock image. A model change rebuilds every fingerprint (section 4).
 - The model file is a release asset of `shivinate7/banchi`, with a pinned hash, downloaded when the owner presses a control (section 5).
 - The control uses plain words. The model name sits in one hover tooltip, as a named exception in D196 (section 6).
@@ -488,17 +485,11 @@ Turning the toggle on never downloads. With no model or no complete pool, the to
 
 - The free read is the default pick. Both tooltips name their model. D196 holds both as named exceptions (section 6).
 - The free read may run in the background, always, if its idle memory is barely any. D1 and D273 are rewritten for it (section 8).
+- A printing with no stock image blocks only a match that shares its card name. Radiance is no special case (section 2).
+- The pass marks for idle memory and capture speed are not set. Measure first, then bring the numbers to the owner (section 8).
 - While cards are being fed, the reader reads in the gaps only, until a capture-speed gate is measured (section 8).
 - A paid press over matched cards asks every time and defaults to skip (section 6).
 - The on and off toggle is in the rig settings. Its state is a store row. The setup press downloads once (section 8).
 
-**Open for the owner.** The idle memory number for the gate: the proposal is 30 MB. The margin for the capture-speed gate.
-
-**Open for the owner: the Runes and Tokens.** The promo rule does not cover them, and the owner holds 96.
-
-- **Option A: no family guard.** Eligible 844 (24.1%). Spiritforged, Unleashed and Vendetta stay incomplete. Most Riftbound cards need the paid read.
-- **Option B: the family guard, hinted cards only.** Eligible 2,800 (80.0%). Unhinted Riftbound cards stay unread, as D170 already requires of Pokemon.
-- **Option C: B, plus unhinted cards, with Radiance ruled out of the pool.** Eligible 3,407 (97.3%).
-  The risk is an unhinted Radiance card read as a main-set card, and a promo whose set name does not hold "Promo". The store holds neither today.
-- **Recommendation: B now.** It recovers 80% with no new guess. Take C after the owner rules on Radiance, and after a held-out run that includes
-  a Rune or a Token and a Radiance card.
+**Open for the owner.** The two gates are measurements with no pass mark. The build lane brings the numbers before ship.
+The held-out check (section 3) also tests the look-alike guard, with photographs of cards whose same-name twin has no stock image.

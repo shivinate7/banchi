@@ -6,7 +6,7 @@ The second engine is a stock-photo matcher. It runs an open image-embedding mode
 
 **Both engines are owned in this repo. Both write the same record.** A run, its collect, its join and its emit are one path for either engine (D180, a press names the cards it covers; D33, every pipeline step is reachable from a screen). The pick is one term of the press and one field of the run record.
 
-**The matcher never decides alone, and it never guesses.** It reads a card only when the card's whole candidate pool is complete and the match clears a margin. Any other card is left unread. It stays in the selection as needing identification. It never goes to review. Nothing falls back on its own. The run goes on for the other cards and says how many it left unread. The owner presses the paid read for those cards.
+**The matcher never decides alone, and it never guesses.** It reads a card only when the match clears a margin and the best answer shares no card name with a printing that has no stock image. Any other card is left unread. It stays in the selection as needing identification. It never goes to review. Nothing falls back on its own. The run goes on for the other cards and says how many it left unread. The owner presses the paid read for those cards.
 
 **What stays true of Haiku.** OCR was researched and rejected at about 85-90% accuracy. Haiku costs about a tenth of a cent a card through the Batch API. That is negligible, so cost is not the reason the matcher exists. The set hint is an optional accelerator that the capture app records. Identification works without it, and better with it.
 
