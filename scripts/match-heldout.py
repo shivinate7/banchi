@@ -210,7 +210,7 @@ def main(argv) -> int:
     print(f"upper bound on wrong rate {'none (nothing accepted)' if bound is None else f'under {bound:.2%} at 95% (rule of three)'}")
     print(f"absent-truth cards        {absent_cases} (true printing has no stock photo); accepted anyway: {len(absent_accepted)}")
     print(f"look-alike name cards     {lookalike_cases} (a printing of the same name has no stock photo)")
-    print("left unread               " + (", ".join(f"{n} {code}" for code, n in sorted(unread.items())) or "none"))
+    print("not accepted             " + (", ".join(f"{n} {code}" for code, n in sorted(unread.items())) or "none"))
     print(f"rule                      margin >= {match.MARGIN_MIN}, floor >= {match.FLOOR_MIN}, look-alike guard on")
     for item in bad_labels[:20]:
         print(f"CHECK THE STORED NUMBER {item['photo']}: stored {item['stored']} / answered {item['answered']}")

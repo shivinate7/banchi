@@ -5,14 +5,16 @@ engine is Marqo ecommerce-B's IMAGE tower, exported to ONNX and run on onnxrunti
 one model runtime). A photograph and a stock photo are each one 768-number fingerprint, and the
 nearest stock fingerprints are the candidates.
 
-IT NEVER DECIDES ALONE, AND IT NEVER GUESSES. A card is READ only when every rule below holds.
-Any other card is left UNREAD: no identification is written, the card stays in the selection as
-needing identification, and nothing falls back to the paid read on its own.
+IT NEVER GUESSES. A card is ACCEPTED only when every rule below holds. Any other card is NOT
+ACCEPTED: this module writes no identification for it. The caller sends it to a second look by
+the paid read in the same press, and that answer goes to the review queue beside the matcher's
+top pick (the owner's flow: the free reader first, the paid read only on the low-confidence
+cards, a human last).
 
   accept rule     the margin M (best minus second cosine) is at least `MARGIN_MIN` AND the
                   floor S (best cosine) is at least `FLOOR_MIN`. Both were fit on the spike's
-                  500 photographs, so they are a starting point and the held-out check
-                  (`scripts/match-heldout.py`) is the gate before anyone adopts them.
+                  500 photographs. The margin floor is the owner's ruling (0.05: cards under it get the second
+                  look). The held-out check (`scripts/match-heldout.py`) measured it at 0 wrong.
   look-alike      a printing with no stock image loses to its same-name twin (measured: 96 of
   guard           the wrong answers accepted in the absent-photo test were same-name siblings).
                   So a best answer that shares a card name with a no-image printing in the pool
@@ -63,7 +65,11 @@ from store.cache import ENGINE_MATCHER as ENGINE
 # THE ACCEPT RULE. One home. Fit on the spike's 500 photographs (margin alone filters almost
 # nothing; with the floor, 0 wrong of 459 accepted, 91.8% accepted) and NOT yet confirmed on
 # photographs the spike never saw.
-MARGIN_MIN = 0.02
+MARGIN_MIN = 0.05
+# THE SHARE OF CARDS THE READER DOES NOT ACCEPT, measured on the held-out check's 3,001 store
+# photographs at this margin (1,876 accepted, so 37 percent are not). It is the quote's estimate
+# before the index exists, and the quote says "estimated" while it is used.
+UNACCEPTED_SHARE = 0.37
 FLOOR_MIN = 0.755
 TOP_N = 3
 

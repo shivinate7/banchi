@@ -412,6 +412,10 @@ _PHOTOGRAPHS = re.compile(r"^photographs\s+(\d+)\s*$", re.M)
 _MATCHER_READ = re.compile(r"^matcher-read\s+(\d+)\b", re.M)
 _CAN_READ = re.compile(r"^can read\s+(\d+) of (\d+)\b", re.M)
 _UNREAD_LINE = re.compile(r"^unread\s+(\d+) ([a-z_]+)\s*$", re.M)
+# The matcher-first press's quote: how many cards the free reader takes and how many go to the
+# paid second look, and whether the pass was measured or estimated from the held-out share.
+_FREE_READ = re.compile(r"^free read\s+(\d+) of (\d+) (measured|estimated)\s*$", re.M)
+_SECOND_LOOK = re.compile(r"^second look\s+(\d+) of (\d+) (measured|estimated)\s*$", re.M)
 
 
 class PipelineRefusal(Exception):
@@ -1361,6 +1365,8 @@ def _parse_preflight(text: str) -> dict:
         return cast(found.group(1)) if found else None
 
     can_read = _CAN_READ.search(text)
+    free_read = _FREE_READ.search(text)
+    second_look = _SECOND_LOOK.search(text)
     return {
         "photographs": _one(_PHOTOGRAPHS, int),
         "cache_hits": _one(_CACHE_HITS, int),
@@ -1370,6 +1376,9 @@ def _parse_preflight(text: str) -> dict:
         # older preflight said nothing), so a changed preflight is a missing figure.
         "matcher_read": _one(_MATCHER_READ, int),
         "can_read": int(can_read.group(1)) if can_read else None,
+        "free_read": int(free_read.group(1)) if free_read else None,
+        "second_look": int(second_look.group(1)) if second_look else None,
+        "second_look_measured": (second_look.group(3) == "measured") if second_look else None,
         "unread": {code: int(count) for count, code in _UNREAD_LINE.findall(text)},
     }
 

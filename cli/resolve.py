@@ -2490,6 +2490,7 @@ def _resolve(
                 # run is the record of what the sidecars claimed when identify ran.
                 rarity_claim=_rarity_claim(record.get("rarity_claim")),
                 confidence=identification.get("confidence"),
+                second_look=_second_look(record.get("second_look")),
                 answered_sku=held.sku if answered else None,
                 answered_condition=held.condition if answered else None,
                 committed=committed,
@@ -2663,6 +2664,21 @@ def _candidate_rows(
     return out
 
 
+def _second_look(raw) -> Optional[join.MatcherPick]:
+    """The run record's `second_look` block as the carrier's field. Absent or malformed is None:
+    a record from before the flow existed has none, and nothing here guesses one."""
+    if not isinstance(raw, dict) or not raw.get("code"):
+        return None
+    return join.MatcherPick(
+        code=str(raw["code"]),
+        name=raw.get("name"),
+        number=raw.get("number"),
+        set=raw.get("set"),
+        floor=raw.get("floor"),
+        margin=raw.get("margin"),
+    )
+
+
 def queue_entry(queued: join.QueuedCard) -> queues.QueueEntry:
     card = queued.card
     price = queued.destination.price
@@ -2701,6 +2717,20 @@ def queue_entry(queued: join.QueuedCard) -> queues.QueueEntry:
             # Both are additive and neither moves a byte of what was already there.
             "rarity_claim": (
                 None if card.rarity_claim is None else list(card.rarity_claim)
+            ),
+            # THE FREE READER'S TOP PICK, on a card whose paid answer is held for review. Absent
+            # for every other card, so no entry written before the flow existed changes.
+            **(
+                {}
+                if card.second_look is None
+                else {
+                    "matcher_pick": {
+                        "name": card.second_look.name,
+                        "number": card.second_look.number,
+                        "set": card.second_look.set,
+                        "reason": card.second_look.code,
+                    }
+                }
             ),
         },
         confidence=card.confidence,

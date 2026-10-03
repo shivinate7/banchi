@@ -2,15 +2,15 @@
 
 **Identification is Claude Haiku vision over the Batch API, owned end to end. The owner picks the engine for each run.** The default pick is the free read. The owner's word: *"i think i should be able to pick if i want it processed by haiku or marqo-b"*.
 
-The second engine is a stock-photo matcher. It runs an open image-embedding model (Marqo ecommerce-B on onnxruntime). It ranks a card's photo against the stock photos of the cards the run could hold. `docs/specs/identify-engine-pick.md` is the design. It is not built.
+The second engine is a stock-photo matcher. It runs an open image-embedding model (Marqo ecommerce-B on onnxruntime). It ranks a card's photo against the stock photos of the cards the run could hold. `docs/specs/identify-engine-pick.md` is the design. It is built in the runs sheet and the identify command.
 
 **Both engines are owned in this repo. Both write the same record.** A run, its collect, its join and its emit are one path for either engine (D180, a press names the cards it covers; D33, every pipeline step is reachable from a screen). The pick is one term of the press and one field of the run record.
 
-**The matcher never decides alone, and it never guesses.** It reads a card only when the match clears a margin and the best answer shares no card name with a printing that has no stock image. Any other card is left unread. It stays in the selection as needing identification. It never goes to review. Nothing falls back on its own. The run goes on for the other cards and says how many it left unread. The owner presses the paid read for those cards.
+**The matcher never guesses, and Haiku reads only the cards it does not accept.** The owner's word: *"we have the free one do all first and then for those it finds under a threshold of accuracy they get a second look by haiku and then it reaches my queue. so haiku isnt on all of them just the low con"*. One press runs the matcher over every selected card. It accepts a card only when the margin is at least 0.05 (the owner: *"maybe those under .05 get a haiku auto pass"*), the floor holds, the best answer shares no card name with a printing that has no stock image, and the pool is complete. Every other card goes to a Haiku batch in the same press. Haiku's answer is never saved on its own. It goes to the review queue with the photo, Haiku's answer and the matcher's top pick. The quote names the free count, the second-look count and the cost before any spend, and the press needs the paid confirm (D180).
 
 **What stays true of Haiku.** OCR was researched and rejected at about 85-90% accuracy. Haiku costs about a tenth of a cent a card through the Batch API. That is negligible, so cost is not the reason the matcher exists. The set hint is an optional accelerator that the capture app records. Identification works without it, and better with it.
 
-**The free read may also run in the background.** It reads captured cards that have no answer. It writes one identification row and never changes card state. A paid press over cards it matched asks every time, and the default answer is skip. The design is `docs/specs/identify-engine-pick.md`, section 8.
+**The free read may also run in the background.** It reads captured cards that have no answer. It writes one identification row and never changes card state. It never spends: a card it cannot accept waits for a press. A paid press over cards it matched asks every time, and the default answer is skip. The design is `docs/specs/identify-engine-pick.md`, section 8.
 
 **Haiku does two things the matcher cannot.** It reads the printed collector number. It reports a finish, which feeds D3 (variants resolve by a fixed ladder).
 

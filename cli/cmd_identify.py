@@ -139,10 +139,6 @@ STAGE_PENDING = "pending"  # undecided; once the preflight is over, this IS the 
 STAGE_CACHED = "cached"  # the store already owns this answer — never prepared, never sent
 STAGE_UNREADABLE = "unreadable"  # the bytes would not hash, or would not decode
 STAGE_REFUSED = "refused"  # no prompt to read it with — named, not sent, not dropped
-# The free reader looked at this card and could not place it. It is NOT sent, NOT dropped and
-# NOT failed: it writes no identification, never reaches the review queue, and stays in the
-# selection as needing identification, for the owner's paid press (the engine-pick spec, §2).
-STAGE_UNREAD = "unread"
 
 
 def _selection_from(args) -> selection_mod.Selection:
@@ -362,7 +358,9 @@ class Item:
     # WHICH ENGINE ANSWERED THIS CARD. `haiku` is the paid read; `marqo-b` the free one. A cache
     # hit carries the engine of the entry it adopted.
     engine: str = cache_mod.ENGINE_HAIKU
-    # Why the free reader left this card unread: a `match.Result`, set with STAGE_UNREAD.
+    # Why the free reader did not accept this card: its `match.Result`, with the top pick. A card
+    # that carries one went to the paid second look in the same press, and its answer is held
+    # for the review queue (the engine-pick spec, section 2).
     unread: Optional[match.Result] = None
 
     @property
@@ -612,9 +610,8 @@ def _run_matcher(to_read: List[Item], say) -> batch.BatchRun:
     everything after it is the one path for either engine.
 
     An ACCEPTED card becomes a `succeeded` outcome carrying the same `Identification` a paid
-    answer parses to. A card the reader cannot place becomes STAGE_UNREAD and gets no outcome
-    at all: no identification, no cache entry, no review queue row. It is not a failure and it
-    is not dropped; it stays in the selection as needing identification."""
+    answer parses to. Any other card gets no outcome and keeps its `match.Result` in `unread`:
+    the caller sends it to the paid second look in the same press. Nothing is guessed."""
     with match.Index() as index:
         results = match.read([_match_request(i) for i in to_read], index, log=say)
     by_key = {item.key: item for item in to_read}
@@ -629,9 +626,23 @@ def _run_matcher(to_read: List[Item], say) -> batch.BatchRun:
                 identification=prompt.parse(result.payload, str(item.strategy)),
             )
         else:
-            item.stage = STAGE_UNREAD
             item.unread = result
     return batch.BatchRun(outcomes=outcomes)
+
+
+def _second_look_record(item: Item) -> Optional[dict]:
+    """What the free reader thought of a card it did not accept, for the review queue."""
+    if item.unread is None:
+        return None
+    top = item.unread.candidates[0] if item.unread.candidates else {}
+    return {
+        "code": item.unread.code,
+        "name": top.get("name"),
+        "number": top.get("number"),
+        "set": top.get("set"),
+        "floor": item.unread.floor,
+        "margin": item.unread.margin,
+    }
 
 
 def _apply(items_by_key: Dict[str, Item], run_result: batch.BatchRun) -> None:
@@ -1034,10 +1045,11 @@ def run(args, say) -> int:
     cropped = 0
     unfit: List[Item] = []
     for item in items:
-        # THE FREE READER CROPS AND DECODES ITS OWN PHOTOGRAPH (`identify/match.py`), at the size
-        # its model takes. Preparing a 1200 px JPEG for a call that is never made would only cost
-        # the decode this press exists to avoid.
-        if item.stage != STAGE_PENDING or free:
+        # THE MATCHER-FIRST PRESS PREPARES EVERY CARD TOO. The matcher crops and decodes its own
+        # photograph, but the cards it cannot accept go to the paid second look in this same
+        # press and need the prepared bytes. Preparing all of them costs a decode per card and
+        # saves the restructure that would prepare only the unaccepted ones.
+        if item.stage != STAGE_PENDING:
             continue
         try:
             # CROP TO THE DETECTED CARD BEFORE THE DOWNSCALE, when asked for. Local, free and
@@ -1110,13 +1122,34 @@ def run(args, say) -> int:
             f"({'being read again' if reread_matcher else 'skipped'} by this press)")
     say(f"to send         {len(to_send)}")
     say(f"payload         {payload_bytes / 1_000_000:.1f} MB in {chunks} batch chunk(s)")
-    say(f"estimated cost  ${'0.00' if free else _estimate(to_send)}")
+    # THE MATCHER-FIRST QUOTE (D180: money is named before it is spent). When the free reader is
+    # prepared this is a MEASURED pass over the selection: the same read the press repeats, free
+    # and bounded by the preflight's own timeout. Before the index exists the second-look count
+    # is ESTIMATED from the share the held-out check measured, and the line says so.
+    matcher_run: Optional[batch.BatchRun] = None
+    second_look: List[Item] = list(to_send)
+    measured = False
+    if free and to_send and match.status()["ready"]:
+        matcher_run = _run_matcher(to_send, say)
+        second_look = [i for i in to_send if i.unread is not None]
+        measured = True
     if free:
-        # FREE, AND HONEST ABOUT WHAT IT CANNOT COUNT. The pool rules leave some cards unread
+        if measured:
+            second_count = len(second_look)
+            second_cost = _estimate(second_look)
+        else:
+            second_count = round(len(to_send) * match.UNACCEPTED_SHARE)
+            second_cost = (_estimate(to_send) * Decimal(str(match.UNACCEPTED_SHARE))).quantize(Decimal("0.01"))
+    say(f"estimated cost  ${second_cost if free else _estimate(to_send)}")
+    if free:
+        # FREE FIRST, PAID ONLY ON THE LOW-CONFIDENCE CARDS. The pool rules refuse some cards
         # before any photograph is decoded, and those are counted here. The margin, the floor and
         # the look-alike guard judge the best answer, so they are counted only after the read.
         pre = match.preflight([_match_request(i) for i in to_send])
-        say(f"engine          {engine} (free: it reads the cards it can place and leaves the rest unread)")
+        basis = "measured" if measured else "estimated"
+        say(f"engine          {engine} first, then haiku on the cards it cannot accept")
+        say(f"free read       {len(to_send) - second_count} of {len(to_send)} {basis}")
+        say(f"second look     {second_count} of {len(to_send)} {basis}")
         say(f"can read        {pre['can_read']} of {len(to_send)} by the pool rules")
         for code, count in sorted(pre["unread"].items()):
             say(f"unread          {count} {code}")
@@ -1157,7 +1190,10 @@ def run(args, say) -> int:
     for name in sorted(fingerprints):
         if name != prompt.DEFAULT_PROFILE:
             say(f"                {fingerprints[name]}  ({name})")
-    say(f"model           {match.MODEL_FILENAME} {match.MODEL_SHA256[:12]}" if free else f"model           {prompt.MODEL}")
+    if free:
+        say(f"model           {match.MODEL_FILENAME} {match.MODEL_SHA256[:12]}, then {prompt.MODEL}")
+    else:
+        say(f"model           {prompt.MODEL}")
     say("games")
     for line in _game_lines(items):
         say(line)
@@ -1224,14 +1260,14 @@ def run(args, say) -> int:
     say(f"store           {snapshot.queue_summary}")
     say("")
 
-    if free and to_send and not match.status()["ready"]:
-        say("refused: the free reader is not prepared. Press Prepare on the runs sheet first: it "
-            "downloads the model file and builds the fingerprints, once.")
-        return 1
-
     if args.dry_run:
         say("--dry-run: nothing submitted, nothing written.")
         return 0
+
+    if free and to_send and matcher_run is None:
+        say("refused: the free reader is not prepared. Press Prepare on the runs sheet first: it "
+            "downloads the model file and builds the fingerprints, once.")
+        return 1
 
     # ------------------------------------------------------- claim what is about to be bought
     #
@@ -1412,25 +1448,44 @@ def run(args, say) -> int:
         usage_in += result.usage.input_tokens
         usage_out += result.usage.output_tokens
     elif to_send and free:
-        result = _run_matcher(to_send, say)
-        _apply(items_by_key, result)
-        read_count = len(result.outcomes)
+        # THE FREE READ WAS TAKEN IN THE PREFLIGHT, over the selection before the claim could
+        # narrow it, so only the cards still in this press are applied.
+        live = {_custom_id(i.key) for i in to_send}
+        _apply(items_by_key, batch.BatchRun(
+            outcomes={k: v for k, v in matcher_run.outcomes.items() if k in live}
+        ))
+        read_count = sum(1 for i in to_send if i.identification is not None)
+        second = [i for i in to_send if i.identification is None]
         # THE RECEIPT'S FIGURES, in the manifest the runs sheet reads: how many the free reader
-        # matched, and which cards it left unread and why. Written here, before the record, so a
-        # run that dies later still says what the read did.
+        # matched, and which cards went to the second look and why. Written before the paid
+        # batch, so a run that dies later still says what the free read did.
         run_dir.set(
             matched=read_count,
-            unread=[
+            second_look=[
                 [item.key, item.unread.code]
-                for item in to_send
-                if item.stage == STAGE_UNREAD and item.unread is not None
+                for item in second
+                if item.unread is not None
             ],
         )
-        say(f"read            {read_count} of {len(to_send)}; "
-            f"{len(to_send) - read_count} left unread, for a paid press")
-        for item in to_send:
-            if item.stage == STAGE_UNREAD and item.unread is not None:
+        say(f"read            {read_count} of {len(to_send)} by the free reader; "
+            f"{len(second)} go to the second look")
+        for item in second:
+            if item.unread is not None:
                 say(f"                {item.key}: {item.unread.code} - {item.unread.detail}")
+        if second:
+            try:
+                result = batch.run_batch(
+                    _requests(second, with_crops=False, say=say),
+                    log=say,
+                    on_submit=run_dir.add_batch_id,
+                )
+            except batch.BatchError as exc:
+                say(f"identification did not run: {exc}")
+                _give_back_unspent(claim, run_dir, store, say)
+                return 1
+            _apply(items_by_key, result)
+            usage_in += result.usage.input_tokens
+            usage_out += result.usage.output_tokens
     elif to_send:
         try:
             result = batch.run_batch(
@@ -1447,7 +1502,7 @@ def run(args, say) -> int:
         usage_out += result.usage.output_tokens
 
     # --------------------------------------------------------------------- retry rounds
-    for attempt in range(1, 1 if free else args.retry_budget + 1):
+    for attempt in range(1, args.retry_budget + 1):
         wanted = []
         crops = False
         for item in items:
@@ -1534,6 +1589,10 @@ def run(args, say) -> int:
                 "retries": item.retries,
                 "retry_reasons": item.retry_reasons,
                 "engine": item.engine,
+                # A SECOND-LOOK CARD'S ANSWER IS HELD FOR REVIEW, never listed on the paid read's
+                # word alone: `cli/resolve.py` routes any record carrying this to the queue, and
+                # shows the matcher's top pick beside the paid answer.
+                "second_look": _second_look_record(item),
                 "identification": item.identification,
                 # THE ITEM'S OWN DIGEST, NOT THE PREPARED BYTES'. This read
                 # `item.prepared.sha256 if item.prepared else None`, and under hash-first a
@@ -1544,10 +1603,6 @@ def run(args, say) -> int:
                 "photo_sha256": item.photo_sha256,
             }
             for item in items
-            # A CARD THE FREE READER LEFT UNREAD IS NOT IN THE RUN'S RECORD. The record is what
-            # the join reads, and a card with no identification there is a failed read bound
-            # for the main queue. This card failed nothing: it stays needing identification.
-            if item.stage != STAGE_UNREAD
         },
     }
     run_dir.write_identifications(payload)
@@ -1694,10 +1749,8 @@ def run(args, say) -> int:
 
     # --------------------------------------------------------------------------- report
     answered = [i for i in items if i.identification is not None]
-    # AN UNREAD CARD IS NEITHER ANSWERED NOR FAILED: the free reader looked and could not place
-    # it. It is named below, counted by reason, and left needing identification.
-    unread = [i for i in items if i.stage == STAGE_UNREAD]
-    failed = [i for i in items if i.identification is None and i.stage != STAGE_UNREAD]
+    second_looked = [i for i in items if i.unread is not None]
+    failed = [i for i in items if i.identification is None]
     stale = [i for i in items if i.stale_prompt]
     not_detected = [i for i in items if i.detection == NOT_DETECTED]
     unfit_crops = [i for i in items if i.detection == UNFIT_CROP]
@@ -1741,14 +1794,13 @@ def run(args, say) -> int:
         for clash in disagreements:
             say(f"                  {clash['position']}: human {clash['human']} vs "
                 f"model {clash['model']}")
-    if unread:
+    if second_looked:
         reasons: Dict[str, int] = {}
-        for item in unread:
-            code = item.unread.code if item.unread is not None else "unread"
-            reasons[str(code)] = reasons.get(str(code), 0) + 1
-        say(f"unread          {len(unread)} card(s) left unread and still needing identification "
-            f"(never sent, never queued): "
-            + ", ".join(f"{count} {code}" for code, count in sorted(reasons.items())))
+        for item in second_looked:
+            reasons[str(item.unread.code)] = reasons.get(str(item.unread.code), 0) + 1
+        say(f"second look     {len(second_looked)} card(s) the free reader could not accept went "
+            f"to the paid read and wait in review: "
+            + ", ".join(f"{count} {code}" for count, code in sorted(reasons.items())))
     if failed:
         say(f"failed          {len(failed)} card(s) go to the main queue as "
             f"identification_failed — never dropped:")

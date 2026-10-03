@@ -357,7 +357,7 @@ function unreadLine(code: string, n: number): string {
     case 'no_index':
       return `${cards} are in a set that has no stock photos read yet`
     default:
-      return `${cards} cannot be read for free`
+      return `${cards} go to the second look`
   }
 }
 
@@ -895,9 +895,7 @@ export function RunsComposer({
         toast({
           kind: 'ok',
           title: `${runLabel(first, boxes) ?? line} started`,
-          body: free
-            ? `Free (${plural(quote?.total.to_send ?? 0, 'card')})`
-            : `${money(quote?.total.estimate_usd)} (${plural(quote?.total.to_send ?? 0, 'card')})`,
+          body: `${money(quote?.total.estimate_usd)} (${plural(quote?.total.to_send ?? 0, 'card')})`,
         })
       }
     })
@@ -970,7 +968,7 @@ export function RunsComposer({
           <div className="runs-composer-heading">
             <span className="bn-eyebrow">
               <span>Identify</span>
-              <span>{free ? 'free' : 'costs money'}</span>
+              <span>{free ? 'free first' : 'costs money'}</span>
             </span>
             <h2 className="runs-composer-title" id="runs-composer-title">
               {stageTitle}
@@ -1269,7 +1267,7 @@ export function RunsComposer({
                   />
                   <p className="run-step-fine runs-engine-says">
                     {free
-                      ? 'Free. Needs a stock photo for each card and cannot tell foil from normal. Cards it is unsure of are left unread, and you can read them with the paid read.'
+                      ? 'Reads every card for free first. It needs a stock photo for each card and cannot tell foil from normal. Cards it is unsure of get a second look from the paid read, then wait in your review queue.'
                       : 'Reads the name, the number and the foil from the photograph. Costs money, quoted before anything is spent.'}
                   </p>
                   {free ? (
@@ -1485,8 +1483,8 @@ export function RunsComposer({
           {stage === 'quote' && quote !== null ? (
             <div className="runs-composer-stage runs-quote run-quote" key="quote">
               <div className="runs-quote-figure">
-                <span className="bn-label">{free ? 'Cost' : 'Estimated cost'}</span>
-                <span className="runs-quote-money">{free ? 'Free' : money(quote.total.estimate_usd)}</span>
+                <span className="bn-label">{free ? 'Second look, estimated cost' : 'Estimated cost'}</span>
+                <span className="runs-quote-money">{money(quote.total.estimate_usd)}</span>
                 <span className="runs-quote-line">
                   <span>
                     <strong>{plural(quote.total.to_send ?? 0, 'card')}</strong> {free ? 'to match' : 'to send'}
@@ -1499,11 +1497,22 @@ export function RunsComposer({
                      The margin judges the best answer, so cards left unread for that reason are
                      counted after the read, and the line says so. */
                   <span className="runs-quote-line">
-                    <span>{count(quote.total.can_read)} can be matched</span>
+                    <span>
+                      {quote.total.second_look_measured === false ? 'About ' : ''}
+                      {count(quote.total.free_read)} read free
+                    </span>
+                    <span>
+                      {quote.total.second_look_measured === false ? 'about ' : ''}
+                      {count(quote.total.second_look)} get a second look from the paid read
+                    </span>
+                    <span>
+                      {quote.total.second_look_measured === false
+                        ? 'Estimated until stock photos are prepared'
+                        : 'Counted by reading them now'}
+                    </span>
                     {Object.entries(quote.total.unread).map(([code, n]) => (
                       <span key={code}>{unreadLine(code, n)}</span>
                     ))}
-                    <span>Others may be left unread once they are looked at</span>
                   </span>
                 ) : null}
                 <span className="runs-quote-line">
@@ -1650,17 +1659,17 @@ export function RunsComposer({
                       onClick={() => void doStart()}
                     >
                       {free
-                        ? `Match ${count(quote.total.to_send)} cards, free`
+                        ? `Match ${count(quote.total.to_send)} cards, then spend ${money(quote.total.estimate_usd)} on the second look`
                         : `Spend ${money(quote.total.estimate_usd)} and identify ${count(quote.total.to_send)} cards`}
                     </Button>
                     <span className="runs-quote-fine">
                       {free
-                        ? 'One run. It costs nothing, takes a minute or two, and keeps going if you close this tab.'
+                        ? 'One run. The free read costs nothing. The second look is paid, and its answers wait in your review queue. It keeps going if you close this tab.'
                         : 'One run. Identification takes minutes to hours and keeps going if you close this tab.'}
                     </span>
                     {/* THE SETTING ITSELF, ALWAYS ON SCREEN AND NEVER ONLY INSIDE THE WARNING —
                         otherwise the figure could be raised and never lowered again. */}
-                    {free ? null : (
+                    {(
                     <label className="runs-field-inline runs-spend-set">
                       <span>Ask me above</span>
                       <span className="bn-muted">$</span>

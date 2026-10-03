@@ -301,13 +301,13 @@ function freeRun(detail: RunDetail): boolean {
   return flags?.engine === 'marqo-b'
 }
 
-/** What the free reader did, as a sentence with its figures: matched, and left unread. */
+/** What the free reader did, as a sentence with its figures: matched, and sent to a second look. */
 function matchReceipt(detail: RunDetail): string {
   const matched = typeof detail.manifest.matched === 'number' ? detail.manifest.matched : 0
-  const unread = Array.isArray(detail.manifest.unread) ? detail.manifest.unread.length : 0
+  const second = Array.isArray(detail.manifest.second_look) ? detail.manifest.second_look.length : 0
   const cards = (n: number) => `${n} card${n === 1 ? '' : 's'}`
-  return unread > 0
-    ? `Matched ${cards(matched)}. ${cards(unread)} left unread for a paid read.`
+  return second > 0
+    ? `Matched ${cards(matched)} free. ${cards(second)} got a second look from the paid read and wait in review.`
     : `Matched ${cards(matched)}.`
 }
 
@@ -954,8 +954,8 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                     <span className="bn-mono runs-batch">{detail.batch_ids.join(', ')}</span>
                   ) : null}
                   {freeRun(detail) ? (
-                    /* THE FREE READER'S RECEIPT: a figure for each of the three things it did. An
-                       unread card is not a failure and is in no queue: it still needs a read. */
+                    /* THE FREE READER'S RECEIPT: what it matched, and how many went to the second
+                       look. A second-look card is not a failure: its answer waits in review. */
                     <span className="bn-muted">{matchReceipt(detail)}</span>
                   ) : null}
                 </div>

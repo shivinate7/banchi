@@ -741,6 +741,9 @@ export type QueueRead = {
    *  file written before 2026-09-11, and the screen draws the same sentence for both, which
    *  is the honest one — it does not know what was claimed. */
   rarity_claim?: string[] | null
+  /** The free reader's top pick, present only on a card it did not accept, whose paid answer is
+   *  held here. Absent on every other entry. */
+  matcher_pick?: { name: string | null; number: string | null; set: string | null; reason: string } | null
 }
 
 /** One card waiting for a human. `store/queues.py:QueueEntry`, minus the two Python
@@ -3144,6 +3147,11 @@ export type RunPreflightTotal = {
    *  free press, how many the pool rules let it read and why the rest are left unread. */
   matcher_read: number | null
   can_read: number | null
+  /** The matcher-first press: cards the free reader takes, cards that go to the paid second look,
+   *  and whether the pass was measured (true) or estimated from the held-out share (false). */
+  free_read: number | null
+  second_look: number | null
+  second_look_measured: boolean | null
   unread: Record<string, number>
 }
 

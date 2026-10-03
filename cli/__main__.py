@@ -232,8 +232,8 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("marqo-b", "haiku"),
         default="haiku",
         help="who reads the cards (default: haiku, the paid read). marqo-b is the free "
-        "stock-photo reader: it reads only the cards it can place with a margin and leaves "
-        "the rest unread, for a paid press. It never calls the API.",
+        "stock-photo reader first: it accepts the cards it can place with a margin, and each "
+        "card it cannot accept goes to a Haiku second look in the same press, held for review.",
     )
     identify.add_argument(
         "--reread-matcher",
