@@ -801,7 +801,7 @@ function read(path: string): unknown {
    * fresh checkout, so Photos shows its first-run card and Prepare is refused above. */
   if (route === '/pipeline/match') {
     return {
-      model_present: false, model_ok: false, model_bytes: 0, index_present: false,
+      model_present: false, model_ok: false, model_bytes: 371_700_983, index_present: false,
       index_current: false, ready: false, running: false, progress: null, model_url: '',
       margin_min: 0, floor_min: 0,
     }

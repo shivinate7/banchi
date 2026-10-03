@@ -384,15 +384,26 @@ function MatchPrepare({
   trouble,
   preparing,
   onPrepare,
+  onRetry,
 }: {
   readonly state: MatchState | null
   readonly trouble: string | null
   readonly preparing: boolean
   readonly onPrepare: () => void
+  readonly onRetry: () => void
 }) {
   if (state === null) {
     return trouble !== null ? (
-      <Notice tone="warn">{trouble}</Notice>
+      <Notice
+        tone="warn"
+        action={
+          <Button size="sm" variant="quiet" onClick={onRetry}>
+            Try again
+          </Button>
+        }
+      >
+        {trouble}
+      </Notice>
     ) : (
       <Loading rows={1} label="Checking whether matching is ready" />
     )
@@ -1275,6 +1286,10 @@ export function RunsComposer({
                       trouble={matchTrouble}
                       preparing={preparing}
                       onPrepare={() => void doPrepare()}
+                      onRetry={() => {
+                        setMatchTrouble(null)
+                        matchPoll.refresh()
+                      }}
                     />
                   ) : null}
                 </div>
