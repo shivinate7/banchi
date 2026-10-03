@@ -1060,12 +1060,11 @@ CODEX_HOOKS = ROOT / ".codex" / "hooks.json"
 CLAUDE_SETTINGS = ROOT / ".claude" / "settings.json"
 
 #: Hooks only Codex runs, on the owner's word: the shared layer's guard (`claude-settings`
-#: `hooks/guard.py`, rules 1c and 2) owns both for Claude Code, and Codex runs no shared guard.
+#: `hooks/guard.py`, rule 2) owns it for Claude Code, and Codex runs no shared guard.
 #: Every other hook must be in both files. An entry here that Claude Code runs again, or that
 #: Codex dropped, is a finding, so this list cannot go stale in either direction.
 CODEX_ONLY = frozenset({
     ("PreToolUse", "Bash", "scripts/reap.py --hook"),
-    ("PreToolUse", "Bash", "scripts/silent-write-guard.py --hook"),
 })
 
 #: `--skip NAMES` tells `scripts/guard-shell.py` which clauses the shared layer owns. Claude
