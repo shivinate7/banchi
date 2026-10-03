@@ -183,12 +183,13 @@ test.describe('the Deleted boxes shelf reads and steps like a box', () => {
     })
     const cells = page.locator('.browse-boxcell')
     const walk = page.locator('.browse-walk')
+    // Still unanswered: the screen waits, so no rail and no shelf are drawn yet.
+    await expect(cells).toHaveCount(0)
+    await expect(walk).toHaveCount(0)
+    release()
     await expect(walk).toBeVisible()
     await settleMotion(page)
-    // Still unanswered: the shelf is not on screen yet.
-    await expect(page.getByRole('button', { name: 'Records from deleted boxes' })).toHaveCount(0)
     const before = await walk.boundingBox()
-    release()
     // The shelf may arrive after the first box cell did, but the walk beneath must not move for it.
     await expect(page.getByRole('button', { name: 'Records from deleted boxes' })).toBeVisible()
     expect(await walk.boundingBox(), 'the walk moved when the shelf arrived').toEqual(before)
