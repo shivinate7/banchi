@@ -3848,7 +3848,7 @@ function UnreachableLine({ at }: { at: Unreachable | null }) {
     parts.push(
       <a key="reallocated" href="#/runs">
         {stranded > 0 ? `${stranded} in ` : ''}
-        {strandedRuns.length} {strandedRuns.length === 1 ? 'reading' : 'readings'} need a rebind
+        {strandedRuns.length} {strandedRuns.length === 1 ? 'reading' : 'readings'} {stranded === 0 && strandedRuns.length === 1 ? 'waits' : 'wait'} on a re-link
       </a>,
     )
   if (parts.length === 0) return null

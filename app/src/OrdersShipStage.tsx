@@ -409,8 +409,8 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
             ) : null}
           </label>
           <p className="shipping-empty-note">
-            Never written to disk, held 30 minutes. No buyer info shown here — only in the file you
-            download.
+            Nothing is saved, and the file is forgotten after 30 minutes. No buyer info shows here, only in the
+            file you download.
           </p>
           <div className="shipping-lane-guide" aria-label="The three lanes">
             {SHIP_LANES.map((lane) => (
