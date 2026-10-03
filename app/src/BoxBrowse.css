@@ -518,13 +518,14 @@
 @container pane (max-width: 520px) {
   .browse-hero-head { grid-template-columns: minmax(0, 1fr); padding: var(--bn-4); }
   .browse-hero-lead {
-    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-columns: minmax(min-content, 1fr);
     padding-top: var(--bn-3);
     border-top: 1px solid var(--bn-line);
     margin-top: var(--bn-2);
   }
   .browse-hero-side { order: 3; }
   .browse-hero-fig { min-width: 0; }
+  .browse-hero-fig + .browse-hero-fig { padding-left: var(--bn-3); margin-left: var(--bn-3); }
   .browse-hero-fig-live { width: auto; }
 }
 .browse-queuechip { text-decoration: none; }

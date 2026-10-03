@@ -21,7 +21,7 @@ import { RunFiles } from './RunFiles'
 import { RunRescue } from './RunRescue'
 import { FileButton } from './RunsDrop'
 import { LogWell } from './RunsLog'
-import { COMMANDS, STAGE_WORDS, StageBar, StagePill, matchProblemTitle, runningFor, stageOf, whenLabel, type Command } from './RunsStage'
+import { COMMANDS, StageBar, StagePill, matchProblemTitle, runningFor, stageOf, whenLabel, type Command } from './RunsStage'
 import { boxOf, runBoxLabel } from './runScope'
 import { roundsToNothing } from './money'
 import { matchWaiting } from './autoMatch'
@@ -771,7 +771,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
             </span>
           )}
         </div>
-        {runs.length === 0 ? null : <p className="run-list-key">Each bar fills as a run passes {STAGE_WORDS}.</p>}
+        {runs.length === 0 ? null : <p className="run-list-key">Each bar shows how far a run has come. Hover a bar to see its steps.</p>}
         {pageFailure !== null ? (
           <div className="runs-trouble">
             <Notice tone={failureTone(pageFailure)} code={pageFailure.code}>
