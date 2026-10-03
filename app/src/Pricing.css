@@ -498,6 +498,8 @@
 /* THE HEADER'S ICON PRESSES SIT FAR ENOUGH APART THAT EACH 40PX HIT AREA IS ITS OWN (D117). */
 .pricing .bn-head-actions { gap: var(--bn-3); }
 /* THE FOUR RULES WRAP AS A UNIT IN A NARROW SHEET, never past its edge (UX-035). */
+/* THE RULE'S NAME MAY TAKE ONE LINE OR TWO; THE OVERVIEW HOLDS TWO, so picking a rule moves nothing (D313). */
+.pricing-sheet .bn-set-census-cell dd { line-height: 1.2; min-height: 2.4em; }
 .pricing-sheet { display: flex; flex-direction: column; gap: var(--bn-5); }
 .pricing-rule-row { border-bottom: 1px solid var(--bn-line); padding-bottom: var(--bn-2); }
 .pricing-rule-row:last-child { border-bottom: 0; }
