@@ -54,16 +54,18 @@ class _FakeIndex:
         )
 
 
-def _read_one(sims, names, blocked=()):
-    """One Riftbound card read against a pool whose cosines are `sims`, best first."""
+def _read_one(sims, names, blocked=(), *, hint=None, promo_games=frozenset()):
+    """One Riftbound card read against a pool whose cosines are `sims`, best first.
+
+    `promo_games` is passed explicitly, so no case reads the store's own promo census."""
     import numpy as np
 
     real_crop, real_embed = match._crop, match.embed
     match._crop = lambda _photo, _aspect: object()
     match.embed = lambda cards, _path=None: np.array([[1.0, 0.0, 0.0, 0.0]] * len(cards))
     try:
-        request = match.Request("1/1", Path("unused.jpg"), "riftbound", "riftbound_card_v1")
-        return match.read([request], _FakeIndex(sims, names, blocked))[0]
+        request = match.Request("1/1", Path("unused.jpg"), "riftbound", "riftbound_card_v1", hint)
+        return match.read([request], _FakeIndex(sims, names, blocked), promo_games=set(promo_games))[0]
     finally:
         match._crop, match.embed = real_crop, real_embed
 
@@ -130,6 +132,29 @@ def check_matcher_accept_rule(checks: Checks) -> None:
         "and it still keeps the top candidate for the review screen",
     )
 
+    # THE PROMO GUARD (spec section 2). A store that holds a promo card of a game has an incomplete
+    # pool for it: an unhinted card of that game is held back, a hinted one is read as before.
+    unhinted = _read_one([0.95, 0.4, 0.3], names, promo_games={"riftbound"})
+    checks.equal(
+        (unhinted.accepted, unhinted.code),
+        (False, match.UNREAD_PROMO_HELD),
+        "an unhinted card of a game the store holds a promo of is not accepted, and is held for the promo guard",
+    )
+    checks.equal(
+        [c["name"] for c in unhinted.candidates] if unhinted.candidates else [],
+        [],
+        "and the promo hold is a pool rule, so it carries no candidates",
+    )
+    hinted = _read_one([0.95, 0.4, 0.3], names, hint="Set A", promo_games={"riftbound"})
+    checks.ok(hinted.accepted, "a hinted card of that game is left alone by the guard", hinted.detail)
+    other = _read_one([0.95, 0.4, 0.3], names, promo_games={"pokemon"})
+    checks.ok(other.accepted, "and a promo held in another game does not touch this one")
+    checks.equal(
+        _read_one([0.95, 0.4, 0.3], names, promo_games={match.ALL_GAMES}).code,
+        match.UNREAD_PROMO_HELD,
+        "a store that could not be read holds a promo in every game",
+    )
+
     # THE SAME GUARD THROUGH THE REAL INDEX: a `no_url` row blocks its name, an `ok` row reads.
     import tempfile
 
@@ -159,7 +184,7 @@ def check_matcher_accept_rule(checks: Checks) -> None:
             match.embed = lambda cards, _path=None: np.stack([vec] * len(cards))
             try:
                 request = match.Request("1/1", Path("unused.jpg"), "riftbound", "riftbound_card_v1")
-                real = match.read([request], index)[0]
+                real = match.read([request], index, promo_games=set())[0]
             finally:
                 match._crop, match.embed = real_crop, real_embed
         checks.equal(
@@ -264,12 +289,13 @@ def _accepted(key):
 def check_identify_free_first(checks: Checks) -> None:
     """`identify --engine marqo-b` with a fake matcher and a fake batch transport.
 
-    Three Pokemon photographs: `4/1` the free reader accepts, `4/2` and `4/3` it does not. Only
-    the last two may reach the paid batch, the preflight says whether its count is estimated or
-    measured, a press with no index is refused, and the run record keeps what the free reader
-    thought of each card it passed on."""
+    Four Pokemon photographs: `4/1` the free reader accepts, `4/2` to `4/4` it does not. Only the
+    last three may reach the paid batch; the preflight says whether its count is estimated or
+    measured; a press with no index is refused; the run record keeps what the free reader thought
+    of each card it passed on, on a cached press and on a resumed one too."""
     from cli import __main__ as cli_entry
-    from cli import cmd_identify
+    from cli import cmd_identify, resolve
+    from store.session import Store
 
     checks.note("")
     checks.note("IDENTIFY, FREE FIRST — fake matcher, fake batch (nothing paid, nothing downloaded)")
@@ -277,61 +303,67 @@ def check_identify_free_first(checks: Checks) -> None:
     def spoken(lines, prefix):
         return next((line for line in lines if line.startswith(prefix)), "")
 
+    def photos(directory, box, count):
+        directory.mkdir()
+        for index in range(1, count + 1):
+            identify_images.Image.new("RGB", (64, 89), (40 * index, (90 + 30 * index + 70 * box) % 256, 200 - 50 * index)).save(
+                directory / f"{box}-00{index}.jpg", "JPEG"
+            )
+            (directory / f"{box}-00{index}.json").write_text(
+                json.dumps({"box": box, "position": index, "game": "pokemon", "set_hint": "SV09"}), "utf-8"
+            )
+
+    def newest_cards(home):
+        runs = sorted(d for d in (Path(home) / "runs").iterdir() if d.is_dir())
+        return json.loads((runs[-1] / "identifications.json").read_text("utf-8"))["cards"]
+
     with isolated_home() as home:
         caps = Path(home) / "free-caps"
-        caps.mkdir()
-        for index in (1, 2, 3):
-            identify_images.Image.new("RGB", (64, 89), (40 * index, 90 + 30 * index, 200 - 50 * index)).save(
-                caps / f"4-00{index}.jpg", "JPEG"
-            )
-            (caps / f"4-00{index}.json").write_text(
-                json.dumps({"box": 4, "position": index, "game": "pokemon", "set_hint": "SV09"}), "utf-8"
-            )
-
+        photos(caps, 4, 4)
         sent: list = []
         asked: list = []
+        accepted = {"4/1"}
+
+        def answer(custom_id, strategy):
+            return batch.Outcome(
+                custom_id, batch.SUCCEEDED,
+                identification=prompt.parse(
+                    {"name": "Raichu", "number": "026", "printed_total": "102", "finish": "normal", "confidence": "high"},
+                    strategy,
+                ),
+            )
 
         def fake_run_batch(requests, log=None, on_submit=None):
-            outcomes = {}
-            for request in requests:
-                sent.append(request.custom_id)
-                outcomes[request.custom_id] = batch.Outcome(
-                    request.custom_id, batch.SUCCEEDED,
-                    identification=prompt.parse(
-                        {"name": "Raichu", "number": "026", "printed_total": "102",
-                         "finish": "normal", "confidence": "high"},
-                        request.strategy,
-                    ),
-                )
-            return batch.BatchRun(outcomes=outcomes)
+            sent.extend(r.custom_id for r in requests)
+            return batch.BatchRun(outcomes={r.custom_id: answer(r.custom_id, r.strategy) for r in requests})
 
-        def fake_read(requests, index, model=None, aspect=0.716, log=lambda _m: None):
+        def fake_read(requests, index, model=None, aspect=0.716, log=lambda _m: None, promo_games=None):
             asked.append([r.key for r in requests])
-            return [_accepted(r.key) if r.key == "4/1" else _unaccepted(r.key) for r in requests]
+            return [_accepted(r.key) if r.key in accepted else _unaccepted(r.key) for r in requests]
 
-        real = (cmd_identify.batch.run_batch, match.read, match.status)
+        real = (cmd_identify.batch.run_batch, match.read, match.status, match.preflight, match.MEASURE_MAX)
         cmd_identify.batch.run_batch = fake_run_batch
         match.read = fake_read
-        argv = ["identify", str(caps), "--engine", "marqo-b"]
 
-        def press(*extra):
+        def press(directory, *extra):
             lines: list = []
+            argv = ["identify", str(directory), "--engine", "marqo-b", *extra]
             with quiet():
-                code = cmd_identify.run(cli_entry.build_parser().parse_args(argv + list(extra)), lines.append)
+                code = cmd_identify.run(cli_entry.build_parser().parse_args(argv), lines.append)
             return code, lines
 
         try:
             # ------------------------------------------------ no index: estimated, and refused
             match.status = lambda *_a, **_k: {"ready": False}
-            code, lines = press("--dry-run")
+            code, lines = press(caps, "--dry-run")
             checks.equal(code, 0, "a free dry run with no index exits 0")
             checks.equal(
                 spoken(lines, "second look"),
-                "second look     1 of 3 estimated",
-                "with no index the second-look count is ESTIMATED from the held-out share (0.37 of 3)",
+                "second look     4 of 4 estimated",
+                "with no index every card is a certain second look: the pool rules cannot read any",
             )
             checks.equal(asked, [], "and the estimate read no photograph")
-            code, lines = press()
+            code, lines = press(caps)
             checks.equal(code, 1, "the press with no index is refused")
             checks.ok(
                 any("not prepared" in line for line in lines),
@@ -339,46 +371,133 @@ def check_identify_free_first(checks: Checks) -> None:
                 "\n".join(lines[-4:]),
             )
             checks.equal(sent, [], "and nothing reached the paid batch")
-            checks.equal(
-                list((Path(home)).glob("**/identifications.json")), [], "and no run record was written"
-            )
+            checks.equal(list(Path(home).glob("**/identifications.json")), [], "and no run record was written")
 
-            # ------------------------------------------------ an index: measured, only 4/2 and 4/3 paid
+            # ------------------------------------------------ a long selection: estimated, never run
+            # N = max(round(0.40 x M), the cards the pool rules cannot read). M is 4 here, so 0.40 gives 2.
             match.status = lambda *_a, **_k: {"ready": True}
-            code, lines = press("--dry-run")
+            match.MEASURE_MAX = 3
+            for can_read, expected in ((4, 2), (1, 3), (0, 4)):
+                match.preflight = lambda requests, *_a, can_read=can_read, **_k: {
+                    "cards": len(requests), "can_read": can_read, "unread": {}, "state": {"ready": True},
+                }
+                code, lines = press(caps, "--dry-run")
+                checks.equal(
+                    spoken(lines, "second look"),
+                    f"second look     {expected} of 4 estimated",
+                    f"a dry run over 4 > MEASURE_MAX cards with {can_read} readable by the pool rules estimates "
+                    f"max(round(0.40 x 4), {4 - can_read}) = {expected}",
+                )
+            checks.equal(asked, [], "and a dry run past MEASURE_MAX never runs the matcher")
+            match.MEASURE_MAX, match.preflight = real[4], real[3]
+
+            # ------------------------------------------------ an index: measured, only 4/2 to 4/4 paid
+            code, lines = press(caps, "--dry-run")
             checks.equal(code, 0, "a free dry run with an index exits 0")
             checks.equal(
                 spoken(lines, "second look"),
-                "second look     2 of 3 measured",
-                "with an index the count is MEASURED by a free pass over the selection",
+                "second look     3 of 4 measured",
+                "within MEASURE_MAX the count is MEASURED by a free pass over the selection",
             )
-            checks.equal(
-                spoken(lines, "free read"), "free read       1 of 3 measured", "and so is the free read"
-            )
+            checks.equal(spoken(lines, "free read"), "free read       1 of 4 measured", "and so is the free read")
             checks.equal(sent, [], "a dry run sends nothing")
 
-            code, lines = press()
+            code, lines = press(caps)
             checks.equal(code, 0, "the free press with an index exits 0")
             checks.equal(
                 sorted(sent),
-                ["4-2f-2", "4-2f-3"],
-                "ONLY THE CARDS THE FREE READER DID NOT ACCEPT reach the Haiku batch (`4/2`, `4/3`)",
+                ["4-2f-2", "4-2f-3", "4-2f-4"],
+                "ONLY THE CARDS THE FREE READER DID NOT ACCEPT reach the Haiku batch (`4/2` to `4/4`)",
             )
-            run_dirs = sorted(d for d in (Path(home) / "runs").iterdir() if d.is_dir()) if (Path(home) / "runs").is_dir() else []
-            records = [p for d in run_dirs for p in [d / "identifications.json"] if p.exists()]
-            cards = json.loads(records[-1].read_text("utf-8"))["cards"] if records else {}
-            checks.equal(sorted(cards), ["4/1", "4/2", "4/3"], "the record holds all three cards")
-            checks.equal(cards.get("4/1", {}).get("second_look"), None, "the accepted card carries no second_look")
-            checks.equal(cards.get("4/1", {}).get("engine"), cache_mod.ENGINE_MATCHER, "and names the free reader as its engine")
-            look = cards.get("4/2", {}).get("second_look") or {}
+            cards = newest_cards(home)
+            checks.equal(sorted(cards), ["4/1", "4/2", "4/3", "4/4"], "the record holds all four cards")
+            checks.equal(cards["4/1"].get("second_look"), None, "the accepted card carries no second_look")
+            checks.equal(cards["4/1"].get("engine"), cache_mod.ENGINE_MATCHER, "and names the free reader as its engine")
+            look = cards["4/2"].get("second_look") or {}
             checks.equal(
                 (look.get("code"), look.get("name"), look.get("number"), look.get("set"), look.get("floor"), look.get("margin")),
                 (match.UNREAD_MARGIN, "Raichu", "026", "Base Set", 0.91, 0.031),
                 "a passed-on card carries second_look: why, the top pick, and the figures",
             )
-            checks.equal(cards.get("4/2", {}).get("engine"), cache_mod.ENGINE_HAIKU, "and its answer names the paid read")
+            checks.equal(cards["4/2"].get("engine"), cache_mod.ENGINE_HAIKU, "and its answer names the paid read")
+
+            # ------------------------------------------------ the cache keeps the hold
+            held = Store().read().cache.get("4/2")
+            checks.equal(held.second_look, look if look else None, "the cache entry of a second-look answer carries the hold")
+            sent_before = len(sent)
+            code, _lines = press(caps)
+            checks.equal(code, 0, "a second press over the same cards exits 0")
+            checks.equal(len(sent), sent_before, "and buys nothing: every answer is cached")
+            again = newest_cards(home)
+            checks.equal(again["4/2"].get("cached"), True, "the second-look card was adopted from the cache")
+            checks.equal(
+                again["4/2"].get("second_look"),
+                look,
+                "AND ITS RECORD STILL CARRIES second_look: a cached hold is never lost to a later press",
+            )
+            checks.equal(again["4/1"].get("second_look"), None, "while the accepted card still carries none")
+
+            pick = resolve._second_look(again["4/2"].get("second_look"))
+            card = join.IdentifiedCard(
+                position=join.Position(box=3, index=1), name="Dunsparce", number="120", printed_total="159",
+                metadata_finish="normal", photo="captures/box3/0001.jpg", confidence="high", second_look=pick,
+            )
+            catalog = join.Catalog(tcgcsv.read_export(REPO_ROOT / "fixtures/sv09_export_untouched.csv"))
+            joined = join.join_batch([card], catalog, router=join.default_router(review_below=routing.CONFIDENCE_NONE))
+            checks.equal(
+                ([q.destination.reason for q in joined.queued], list(joined.matches)),
+                ([routing.LOW_CONFIDENCE], []),
+                "and the join routes that cached card to review under review_below=none",
+            )
+
+            # ------------------------------------------------ a resume keeps the hold from the manifest
+            resumed = Path(home) / "resume-caps"
+            photos(resumed, 5, 2)
+            accepted.clear()
+            accepted.add("5/1")
+
+            def dying_batch(requests, log=None, on_submit=None):
+                if on_submit is not None:
+                    on_submit("msgbatch_x")
+                raise batch.BatchError("the line dropped")
+
+            cmd_identify.batch.run_batch = dying_batch
+            code, _lines = press(resumed)
+            checks.equal(code, 1, "a free press whose batch dies exits 1")
+            run_dir = sorted(d for d in (Path(home) / "runs").iterdir() if d.is_dir())[-1]
+            manifest_file = run_dir / "manifest.json"
+            manifest = json.loads(manifest_file.read_text("utf-8")) if manifest_file.exists() else {}
+            rows = manifest.get("second_look") or []
+            checks.equal(
+                [(row.get("key"), row.get("code")) for row in rows],
+                [("5/2", match.UNREAD_MARGIN)],
+                "the manifest lists each second-look card as a dict with its key and its code, before the batch",
+            )
+            # The resumed press's matcher now accepts both cards, so only the manifest can say 5/2 was held.
+            accepted.add("5/2")
+
+            def fake_collect(ids, **_kwargs):
+                return batch.BatchRun(
+                    outcomes={custom: answer(custom, "pokemon_card_v1") for custom in ("5-2f-1", "5-2f-2")}
+                )
+
+            real_collect = cmd_identify.batch.collect_batches
+            cmd_identify.batch.collect_batches = fake_collect
+            try:
+                code, _lines = press(resumed, "--run-dir", str(run_dir))
+            finally:
+                cmd_identify.batch.collect_batches = real_collect
+            checks.equal(code, 0, "a resume into that run reattaches and exits 0")
+            records = json.loads((run_dir / "identifications.json").read_text("utf-8"))["cards"]
+            checks.equal(
+                (records["5/2"].get("second_look") or {}).get("code"),
+                match.UNREAD_MARGIN,
+                "THE RESUMED RECORD KEEPS second_look: the hold came from the manifest, this process never ran the matcher",
+            )
+            checks.equal((records["5/2"].get("second_look") or {}).get("name"), "Raichu", "with the matcher's pick")
+            checks.ok("key" not in (records["5/2"].get("second_look") or {}), "and without the manifest's own key field")
         finally:
-            cmd_identify.batch.run_batch, match.read, match.status = real
+            cmd_identify.batch.run_batch, match.read, match.status, match.preflight, match.MEASURE_MAX = real
 
 
 # ------------------------------------------------------------------------ the join
@@ -489,6 +608,16 @@ def check_cache_engines(checks: Checks) -> None:
     paid = held(haiku, "Paid")
     checks.equal(paid.reusable("3/1", "sha-old", reread_matcher=True), paid.get("3/1"), "reread_matcher leaves a paid entry reusable")
 
+    # THE REVIEW HOLD RIDES THE ENTRY: a second-look answer put with its pick comes back with it.
+    pick = {"code": match.UNREAD_MARGIN, "name": "Raichu", "number": "026", "set": "Base Set", "floor": 0.91, "margin": 0.03}
+    holder = cache_mod.Cache.parse({})
+    holder.put("3/1", said("Paid"), "sha", "fp", engine=haiku, second_look=pick)
+    checks.equal(holder.reusable("3/1", "sha").second_look, pick, "an entry put with second_look is reusable with it, unchanged")
+    checks.equal(held(haiku, "Paid").get("3/1").second_look, None, "and an entry put without one has none")
+    checks.equal(
+        cache_mod.Cache.parse(holder.to_payload()).get("3/1").second_look, pick, "and the hold survives a round trip through the store payload"
+    )
+
     old = cache_mod.Cache.parse(
         {"3/1": {"identification": said("Old"), "photo_sha256": "s", "prompt_fingerprint": "f", "at": "t"}}
     )
@@ -500,10 +629,135 @@ def check_cache_engines(checks: Checks) -> None:
     )
 
 
+# ------------------------------------------------------------------------ the model verdict, the promo census, Prepare
+
+
+def check_model_ready_hashes_once(checks: Checks) -> None:
+    """`match.model_ready` hashes the 372 MB file once per (path, size, mtime), and again on a change.
+
+    `GET /pipeline/match` is polled every few seconds. The pin is swapped for a small file's, and
+    the hash function is replaced by a counter that calls the real one."""
+    import os
+    import tempfile
+
+    checks.note("")
+    checks.note("MODEL READY — one hash per stat, a new one after a change")
+    body = b"MODEL" * 100
+    saved = match.MODEL_BYTES, match.MODEL_SHA256, match.sha256_of_file
+    calls: list = []
+
+    def counting(path):
+        calls.append(str(path))
+        return saved[2](path)
+
+    match.MODEL_BYTES, match.MODEL_SHA256, match.sha256_of_file = len(body), hashlib.sha256(body).hexdigest(), counting
+    match._verdicts.clear()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "m.onnx"
+            target.write_bytes(body)
+            checks.ok(match.model_ready(target) and match.model_ready(target), "a right file is ready, twice")
+            checks.equal(len(calls), 1, "and two calls with the same stat hash once")
+            stat = target.stat()
+            os.utime(target, ns=(stat.st_atime_ns, stat.st_mtime_ns + 5_000_000_000))
+            checks.ok(match.model_ready(target), "a changed mtime on the same bytes is still ready")
+            checks.equal(len(calls), 2, "and a changed mtime hashes again")
+            target.write_bytes(b"EVIL!" * 100)  # the pinned size, other content, a new mtime
+            os.utime(target, ns=(stat.st_atime_ns, stat.st_mtime_ns + 9_000_000_000))
+            checks.ok(not match.model_ready(target), "a file replaced in place with other bytes of the same size is not ready")
+            checks.equal(len(calls), 3, "because the replacement was hashed, not trusted from the old verdict")
+            target.write_bytes(body + b"x")
+            checks.ok(not match.model_ready(target), "a file of another size is not ready")
+            checks.equal(len(calls), 3, "and a size change is refused without a hash")
+            target.write_bytes(body)
+            os.utime(target, ns=(stat.st_atime_ns, stat.st_mtime_ns + 11_000_000_000))
+            checks.ok(match.model_ready(target), "restored bytes are ready again")
+            checks.equal(len(calls), 4, "after a fresh hash")
+    finally:
+        match.MODEL_BYTES, match.MODEL_SHA256, match.sha256_of_file = saved
+        match._verdicts.clear()
+
+
+def check_promo_census(checks: Checks) -> None:
+    """`match.held_promo_games` names the games the store holds a promo card of, and ignores a sold one."""
+    import sqlite3
+
+    from server import capture_server
+    from harness.tests.t7.common import capture_payload
+    from store import db, files
+
+    checks.note("")
+    checks.note("PROMO CENSUS — the games a held promo card makes unsafe to read unhinted")
+    with isolated_home():
+        checks.equal(match.held_promo_games(), set(), "a store that does not exist holds no promo")
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(1))
+        conn = sqlite3.connect(db.path(files.inventory_dir()))
+
+        def mark(index, set_name, game, state="captured"):
+            conn.execute(
+                "update cards set set_name=?, game=?, state=? where box=1 and idx=?",
+                (set_name, game, state, index),
+            )
+            conn.commit()
+
+        checks.equal(match.held_promo_games(), set(), "a store of cards with no set holds none")
+        mark(1, "Origins Promos", "riftbound")
+        checks.equal(match.held_promo_games(), {"riftbound"}, "a held promo card names its game")
+        mark(2, "SV Black Star Promo", None, state="sold")
+        checks.equal(match.held_promo_games(), {"riftbound"}, "a SOLD promo card is ignored")
+        mark(3, "SV Black Star Promo", None)
+        checks.equal(match.held_promo_games(), {"riftbound", "pokemon"}, "a held promo card with no game is a Pokemon one")
+        conn.close()
+    with isolated_home():
+        capture_server.do_capture(capture_payload(1))
+        db.path(files.inventory_dir()).write_bytes(b"this is not a database")
+        checks.equal(match.held_promo_games(), {match.ALL_GAMES}, "a store that cannot be read holds a promo in every game, never none")
+
+
+def check_prepare_clears_stale_part(checks: Checks) -> None:
+    """Prepare removes a half file from a dead download even when the model itself is ready."""
+    from cli import cmd_match
+
+    checks.note("")
+    checks.note("PREPARE — a stale .part goes, whether or not the model is ready")
+    with isolated_home():
+        part = match.model_path().with_name(match.MODEL_FILENAME + ".part")
+        part.parent.mkdir(parents=True, exist_ok=True)
+        part.write_bytes(b"half a model")
+        real_ready = match.model_ready
+        match.model_ready = lambda *_a, **_k: True
+        try:
+            said: list = []
+            code = cmd_match.prepare(said.append, model_only=True)
+        finally:
+            match.model_ready = real_ready
+        checks.equal(code, 0, "a model-only Prepare over a ready model exits 0")
+        checks.ok(not part.exists(), "and the stale part file is gone")
+        checks.ok(any("already here" in line for line in said), "and the model was not downloaded again")
+
+
+def check_match_route_lane(checks: Checks) -> None:
+    """`GET /pipeline/match` is a photo-lane route (a stat, one cached verdict, a count), and its siblings are not."""
+    from server import capture_server
+
+    checks.note("")
+    checks.note("LANE — the free reader's state is polled, so it rides the photo lane")
+    lane = capture_server.photo_lane_path
+    checks.ok(lane("/pipeline/match"), "`/pipeline/match` is served by the photo lane")
+    checks.ok(lane("/pipeline/match?x=1") and lane("/pipeline/match/"), "with a query or a trailing slash too")
+    checks.ok(not lane("/pipeline/match/prepare"), "`/pipeline/match/prepare` is not: it spawns a download")
+    checks.ok(not lane("/pipeline/preflight") and not lane("/pipeline/runs"), "and no other pipeline route is")
+
+
 CHECKS = (
     check_matcher_accept_rule,
     check_model_download,
     check_identify_free_first,
     check_second_look_routing,
     check_cache_engines,
+    check_model_ready_hashes_once,
+    check_promo_census,
+    check_prepare_clears_stale_part,
+    check_match_route_lane,
 )
