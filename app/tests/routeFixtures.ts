@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 import type {
   CodeEntry,
   CodeLedger,
+  MatchState,
   OrderRow,
   OrdersPayload,
   PickRow,
@@ -116,6 +117,53 @@ export async function seedPopulatedRuns(page: Page): Promise<void> {
       contentType: 'application/json',
       body: JSON.stringify({ runs: severalRuns() }),
     }),
+  )
+}
+
+/* ------------------------------------------------------------------ the free reader */
+
+/** What `GET /pipeline/match` answers, in the shape the route returns: the free reader is
+ *  prepared (model on disk, an index built by it). A case that wants another state overrides the
+ *  fields it means, so "not prepared" is `matchState({ ready: false, index_present: false })`
+ *  and nothing else about the answer is a second copy of a shape. */
+export function matchState(overrides: Partial<MatchState> = {}): MatchState {
+  return {
+    model_present: true,
+    model_ok: true,
+    model_bytes: 371_700_983,
+    index_present: true,
+    index_current: true,
+    ready: true,
+    fingerprints: 52000,
+    no_image: 120,
+    sets: 310,
+    running: false,
+    progress: null,
+    model_url: 'https://github.com/shivinate7/banchi/releases/download/matcher-model-1/marqo-b-image.onnx',
+    margin_min: 0.05,
+    floor_min: 0.755,
+    ...overrides,
+  }
+}
+
+/** The preflight total's free-reader fields, all absent: what a paid quote carries. Spread it into
+ *  a `total` so a fixture cannot forget one of the six (a free quote reads `unread` with
+ *  `Object.entries`, and a missing one crashes the sheet rather than failing a case). */
+export const NO_FREE_FIELDS = {
+  matcher_read: null,
+  can_read: null,
+  free_read: null,
+  second_look: null,
+  second_look_measured: null,
+  unread: {},
+} as const
+
+/** Stub `GET /pipeline/match`, the free reader's state, which the Identify sheet reads when it opens.
+ *  Free, writes nothing. `POST /pipeline/match/prepare` is NOT answered here: it downloads, and a spec
+ *  that presses Prepare stubs it itself, so the seal reports any spec that reaches it by accident. */
+export async function stubMatchState(page: Page, state: MatchState = matchState()): Promise<void> {
+  await page.route(/\/pipeline\/match$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(state) }),
   )
 }
 

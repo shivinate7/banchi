@@ -2,7 +2,9 @@
 // Governs: D32, D33, D36, D56, D65, D174, D180, D291
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
-import { runRow } from './routeFixtures'
+import { NO_FREE_FIELDS, matchState, runRow, stubMatchState } from './routeFixtures'
+import { HAIKU_NAME_TOOLTIP, MATCHER_NAME_TOOLTIP } from '../src/engines'
+import type { MatchState } from '../src/types'
 import { expectOneStagger } from './staggerCheck'
 import { boxTitle } from '../src/kit/dataRules'
 
@@ -175,6 +177,8 @@ function cropPreviewPayload(crop: boolean, maxEdge: number, offset: number, game
  *  selection now, and `box` is a term that is an array even for one drawer so a reader never
  *  has to ask which shape it got. */
 type SelectionBody = {
+  engine?: string
+  reread_matcher?: boolean
   confirm?: unknown
   box?: number[]
   keys?: string[]
@@ -241,11 +245,37 @@ async function open(
      *  wire either way, so a case can assert that the match ran with nobody pressing — or that
      *  it did not. Default: not waiting, which changes nothing on screen. */
     match?: (body: Record<string, unknown>) => unknown
+    /** `GET /pipeline/match`: the free reader's state. PREPARED by default, which is what a free
+     *  quote needs; a case about the not-prepared state passes `{ ready: false, ... }`. */
+    matchState?: Partial<MatchState>
+    /** What a FREE quote answers (the matcher-first press): cards the free reader takes and cards
+     *  that go to the paid second look, per drawer, and whether the pass was measured. A paid quote
+     *  carries none of them. */
+    free?: {
+      freeRead?: number
+      secondLook?: number
+      measured?: boolean
+      unread?: Record<string, number>
+    }
+    /** Cards the free reader already answered in this selection: the paid press's ask. */
+    matcherRead?: number
+    /** What `POST /pipeline/match/prepare` answers. Recorded into the wire, never started. */
+    prepare?: unknown
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
   const record = (method: string, url: string, body: unknown) =>
     wire.push({ method, path: new URL(url).pathname, body })
+
+  await stubMatchState(page, matchState(options.matchState))
+  await page.route(/\/pipeline\/match\/prepare$/, async (route) => {
+    record('POST', route.request().url(), route.request().postDataJSON())
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(options.prepare ?? { started: true, pid: 4242 }),
+    })
+  })
 
   await page.route(/\/pipeline\/runs\/[^/]+\/match$/, async (route) => {
     const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>
@@ -335,6 +365,9 @@ async function open(
     const legs = Math.max(1, drawers.length)
     const perBox = options.toSend ?? 36
     const perBoxMoney = options.estimate ?? 0.42
+    /* A FREE QUOTE IS THE ONE THE BODY ASKS FOR: `engine` is on the wire, so the fixture answers the
+       way the server would and a screen that sent the wrong engine reads the wrong figures. */
+    const free = body.engine === 'marqo-b'
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -353,6 +386,17 @@ async function open(
           to_send: perBox * legs,
           estimate_usd: Number((perBoxMoney * legs).toFixed(2)),
           cards: 40 * legs,
+          ...NO_FREE_FIELDS,
+          matcher_read: free ? null : options.matcherRead ? options.matcherRead * legs : null,
+          ...(free
+            ? {
+                can_read: perBox * legs,
+                free_read: (options.free?.freeRead ?? 30) * legs,
+                second_look: (options.free?.secondLook ?? perBox - (options.free?.freeRead ?? 30)) * legs,
+                second_look_measured: options.free?.measured ?? true,
+                unread: options.free?.unread ?? {},
+              }
+            : {}),
         },
       }),
     })
@@ -607,9 +651,17 @@ async function pickBox(page: Page, box = 9) {
 }
 
 /** Forward from the boxes stage to the reading stage. */
-async function toReading(page: Page) {
+async function toReading(page: Page, reader: 'paid' | 'free' = 'paid') {
   await page.getByRole('button', { name: /^Next: photos$/ }).click()
-  await expect(page.locator('.run-readings').first()).toBeVisible()
+  await expect(page.locator('.run-engine')).toBeVisible()
+  /* THE FREE READ IS THE DEFAULT PICK EVERY TIME THE SHEET OPENS (`engines.ts`), and every case in this
+     file that predates the picker was written about the PAID reading: its crop and edge controls, its
+     `Check cost`, its confirm. Those cases press the paid pick here, once, so they still test what
+     they meant. A case about the picker itself passes `'free'` and finds the sheet as the owner does. */
+  if (reader === 'paid') {
+    await page.locator('.run-engines').getByRole('button', { name: 'Read from the photo' }).click()
+  }
+  if (reader === 'paid') await expect(page.locator('.run-readings').first()).toBeVisible()
 }
 
 /** Back to the reading stage from the cost stage, by the footer's own way back. */
@@ -621,10 +673,10 @@ async function backToReading(page: Page) {
 /** The state most of this file's cases start from: the dialog open on box 9's reading, one
  *  press from the free preflight. This is what `openPanel` used to mean before the panel
  *  became a dialog — a scoped screen with `Check cost` on it. */
-async function atReading(page: Page, box = 9) {
+async function atReading(page: Page, box = 9, reader: 'paid' | 'free' = 'paid') {
   await openComposer(page)
   await pickBox(page, box)
-  await toReading(page)
+  await toReading(page, reader)
 }
 
 /** The free preflight — step one of the two-press money gate. */
