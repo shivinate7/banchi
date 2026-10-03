@@ -3,6 +3,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import type { BoxRecord, SectionDetail, SectionMoveBatchResult } from '../src/types'
 import { settleFonts } from './fontsReady'
+import { settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 import { setViewport } from './phoneSwitch'
 
@@ -301,11 +302,13 @@ test('grip drag: a drop on an empty box queues a move to that box', async ({ pag
   const handle = page.getByRole('button', { name: 'Drag section Uncommons of RB Origins' })
   const target = page.locator('section[aria-label="Empty Box"]')
   await target.scrollIntoViewIfNeeded()
+  await settleMotion(page) // the new box's entry motion moves it; a rect read inside it misses the drop
   const from = (await handle.boundingBox())!
   const to = (await target.boundingBox())!
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
   await page.mouse.down()
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 })
+  await expect(page.locator('.shelf-drop-mark')).toHaveCount(1) // the empty box took the target before release
   await page.mouse.up()
   await expect(page.getByText('1 change queued.', { exact: false })).toBeVisible()
   await page.getByRole('button', { name: 'Confirm' }).click()
