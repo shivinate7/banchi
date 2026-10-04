@@ -8746,6 +8746,16 @@ COMPONENTS = [
                         "would type-check, pass, and delete one card of three. Observed "
                         "failing against exactly that mutation before it was kept.",
             },
+            "tests/capture-freeze.spec.ts": {
+                "does": "a long sitting must not freeze Capture: 60 captures on a canvas camera "
+                        "with a longtask observer, none over 50 ms around capture 60, and none "
+                        "over 4 s with motion armed and idle at 60 cards. Run by "
+                        "`make design-check`.",
+                "governed_by": ["D10", "D164"],
+                "note": "Red on the unmemoized filmstrip (50 to 72 ms tasks from about capture "
+                        "25), green on the memoized one. POST /capture is intercepted, so "
+                        "nothing reaches a store.",
+            },
             "tests/capture-section.spec.ts": {
                 "does": "sub-box capture's Section row (docs/specs/subbox-capture.md): the row "
                         "names the pick, its count and where it physically goes; `[`/`]` step "
