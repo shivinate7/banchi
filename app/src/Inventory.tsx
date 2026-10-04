@@ -20,7 +20,7 @@ import {
   markSold,
   moveCard,
   undoMove,
-  photoUrl,
+  previewUrl,
   retireCard,
   undoRetire,
   undoSale,
@@ -1386,7 +1386,7 @@ function RetirePanel({
   onCancel: () => void
 }) {
   const [broken, setBroken] = useState(false)
-  const src = photoUrl(copy.place.box, copy.place.index, copy)
+  const src = previewUrl(copy.place.box, copy.place.index, copy)
   const gone = !copy.has_photo || src === null || broken
 
 

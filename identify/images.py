@@ -22,6 +22,7 @@ in the box.
 from __future__ import annotations
 
 import base64
+import functools
 import hashlib
 import io
 from dataclasses import dataclass
@@ -391,6 +392,37 @@ def prepare_located(path, max_edge: int = MAX_EDGE, crop: bool = True, find: Opt
             box = fallback
             prepared = prepare(path, max_edge=max_edge, crop_box=box)
     return box, prepared
+
+
+@functools.lru_cache(maxsize=2048)
+def _preview_rect(path: str, mtime_ns: int, size: int):
+    # `mtime_ns` and `size` are the cache key's version: a re-shoot writes new bytes.
+    try:
+        with Image.open(path) as opened:
+            opened.load()
+            image = opened.copy()
+    except Exception:
+        return None
+    box = None
+    try:
+        box = geometry.locate_card(path)
+    except Exception:
+        pass
+    # A refused box shows the whole photograph: no second finder after the guard.
+    if box is None or crop_refusal(image, box) is not None:
+        return None
+    return crop_rect(image.size, box)
+
+
+def preview_rect(path):
+    """`(l, t, r, b)` a card preview crops to, or None to show the whole photograph.
+
+    THE ONE HOME OF THE PREVIEW CUT: `locate_card` (`detect_card` behind it), guarded by `crop_refusal` over `crop_rect`'s padded rectangle.
+    No threshold of its own. Cached per photograph and file version, so the finder runs once.
+    """
+    _require()
+    stat = Path(path).stat()
+    return _preview_rect(str(path), stat.st_mtime_ns, stat.st_size)
 
 
 def prepare(path, max_edge: int = MAX_EDGE, crop_box=None) -> Prepared:

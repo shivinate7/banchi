@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { BoxRecord, SearchCopy, SearchGroup, SectionDetail } from './types'
-import { isDeparted, photoUrl, placeSentence } from './server'
+import { isDeparted, placeSentence, previewUrl } from './server'
 import { PlaceNeighbors } from './PlaceNeighbors'
 import { PullConfirm } from './PullConfirm'
 import { PositionBar } from './PositionBar'
@@ -853,7 +853,7 @@ function FulfillerCard({
           /* BY NAME (D172): `_copy_row` puts the card's own `cid` on every `SearchCopy`, so
              this thumbnail is THIS copy, not whatever occupies its slot by the time the
              picture loads. A name that is no photograph's gives no address, and no request. */
-          const src = photoSrc === undefined ? photoUrl(copy.place.box, copy.place.index, copy) : photoSrc(copy)
+          const src = photoSrc === undefined ? previewUrl(copy.place.box, copy.place.index, copy) : photoSrc(copy)
           const noPhoto = !copy.has_photo || src === null || missing.includes(copy.key)
           const where = copy.place.label
           /* D218: the alt text is a sentence built AROUND the label ("The card in X"), where

@@ -18,6 +18,7 @@ import {
   getOrders,
   markSold,
   photoUrl,
+  previewUrl,
   placeSentence,
   positionLabel,
   pullCopy,
@@ -1104,7 +1105,7 @@ export function Fulfillment() {
     /* BY NAME WHERE THE ROW HAS ONE (D172) — the inventory and search paths do, an order
        pick does not; see `Sellable.cid`. He is looking at a photograph to decide whether the
        card in his hand is the card on the screen, so it had better be this card's. */
-    const src = photoUrl(chosen.box, chosen.index, chosen)
+    const src = previewUrl(chosen.box, chosen.index, chosen)
     const missing = src === null || photoMissing === chosen.key
     const forOrder = chosen.order
 
@@ -1644,7 +1645,7 @@ export function Fulfillment() {
       >
         <img
           className="ff-zoom-img"
-          /* The same address the confirm frame drew, so the big view is a cache hit. */
+          /* The whole photograph, uncropped: zoom is where the crop is checked. */
           src={photoUrl(chosen.box, chosen.index, chosen) ?? undefined}
           alt={`The card in ${sayPlace(chosen.place)}, bigger`}
         />

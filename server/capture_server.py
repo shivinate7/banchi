@@ -299,7 +299,9 @@ import base64
 import binascii
 import contextlib
 import errno
+import functools
 import hashlib
+import io
 import json
 import os
 import re
@@ -3570,8 +3572,26 @@ def _etag_matches(header: Optional[str], etag: str) -> bool:
     return "*" in offered or etag in [t[2:] if t.startswith("W/") else t for t in offered]
 
 
+@functools.lru_cache(maxsize=256)
+def _cropped_preview(path: str, mtime_ns: int, size: int) -> Optional[bytes]:
+    """The card region of one photograph as JPEG, or None when the preview shows it whole."""
+    from identify import images
+    from PIL import Image
+
+    rect = images.preview_rect(path)
+    if rect is None:
+        return None
+    with Image.open(path) as opened:
+        out = io.BytesIO()
+        opened.convert("RGB").crop(rect).save(out, "JPEG", quality=90)
+    return out.getvalue()
+
+
 def do_photo_by_card(
-    cid: str, if_none_match: Optional[str] = None, version: Optional[str] = None
+    cid: str,
+    if_none_match: Optional[str] = None,
+    version: Optional[str] = None,
+    crop: bool = False,
 ) -> Tuple[Optional[bytes], str]:
     """The photograph called `cid` (D172), and the validator that follows its BYTES.
 
@@ -3603,13 +3623,25 @@ def do_photo_by_card(
             "photo_not_found",
             f"No photograph stored under {cid[:12]}….",
         )
+    def body() -> bytes:
+        if crop:
+            stat = path.stat()
+            try:
+                cut = _cropped_preview(str(path), stat.st_mtime_ns, stat.st_size)
+            except Exception:
+                cut = None
+            if cut is not None:
+                return cut
+        return path.read_bytes()
+
+    suffix = "c" if crop else ""
     if version:
-        etag = '"' + cid[:16] + "-" + hashlib.sha256(version.encode("utf-8")).hexdigest()[:16] + '"'
+        etag = '"' + cid[:16] + "-" + hashlib.sha256(version.encode("utf-8")).hexdigest()[:16] + suffix + '"'
         if _etag_matches(if_none_match, etag):
             return None, etag
-        return path.read_bytes(), etag
-    blob = path.read_bytes()
-    etag = '"' + hashlib.sha256(blob).hexdigest()[:32] + '"'
+        return body(), etag
+    blob = body()
+    etag = '"' + hashlib.sha256(blob).hexdigest()[:32] + suffix + '"'
     return (None if _etag_matches(if_none_match, etag) else blob), etag
 
 
@@ -16141,7 +16173,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
         """
         query = parse_qs(urlparse(self.path).query)
         version = (query.get("v") or [None])[0]
-        blob, etag = do_photo_by_card(cid, self.headers.get("If-None-Match"), version)
+        crop = (query.get("crop") or [None])[0] == "card"
+        blob, etag = do_photo_by_card(cid, self.headers.get("If-None-Match"), version, crop)
         control = "public, max-age=31536000, immutable" if version else "no-cache"
         headers = (("ETag", etag), ("Cache-Control", control))
         if blob is None:
