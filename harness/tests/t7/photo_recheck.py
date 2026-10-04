@@ -270,31 +270,56 @@ class _NoListing(_Catalog):
         return None
 
 
-def check_transient_failures_do_not_date_the_row(checks: Checks) -> None:
+def _later(days, call):
+    """`call()` with the clock `days` ahead."""
+    real = time.time
+    with mock.patch.object(time, "time", lambda: real() + days * DAY):
+        return call()
+
+
+def check_failure_retry_clocks(checks: Checks) -> None:
     checks.note("")
-    checks.note("PHOTO RECHECK — only 403, 404 and 410 date a row for a week; a transient failure is tried at the next look")
+    checks.note("PHOTO RECHECK — 403, 404 and 410 wait a week; a transient failure or an unread catalog waits a day")
     if getattr(match, "recheck_no_photo", None) is None:
         checks.ok(False, "`match.recheck_no_photo` exists")
         return
-    causes = {"u1": "URLError", "u2": "http_503", "u3": "http_500", "u4": "http_403", "u5": "http_404", "u6": "http_410"}
+    causes = {"u1": "http_429", "u2": "http_503", "u3": "http_500", "u4": "http_403", "u5": "http_404", "u6": "http_410"}
+    transient, answered = {"u1", "u2", "u3"}, {"u4", "u5", "u6"}
+
+    def look(stock, days):
+        asked = []
+
+        def fetch(url):
+            asked.append(url)
+            return None, causes[url]
+
+        _later(days, lambda: _look(stock, fetch))
+        return set(asked)
+
     with isolated_home():
         stock = _seed([(f"p{i}", f"N{i}", f"u{i}", match.S_NO_PHOTO, 8) for i in range(1, 7)])
-        before = {f"p{i}": _row(f"p{i}")[1] for i in range(1, 7)}
-        _look(stock, lambda url: (None, causes[url]))
-        for i in (1, 2, 3):
-            checks.equal(_row(f"p{i}")[1], before[f"p{i}"], f"a {causes[f'u{i}']} answer leaves `at` alone, so the next look asks again")
-        for i in (4, 5, 6):
-            checks.ok(_row(f"p{i}")[1] > _stamp(1), f"a {causes[f'u{i}']} answer dates the row for a week")
+        checks.equal(look(stock, 0), transient | answered, "pass 1 reaches every row (a 429 or 5xx does not end it)")
+        checks.equal(look(stock, 0), set(), "the same day, nothing is asked again")
+        checks.equal(look(stock, 2), transient, "two days on, only the transient rows are due")
+        checks.equal(look(stock, 8), transient | answered, "eight days on, every row is due")
     with isolated_home():
         _seed([("a1", "Lost", "", match.S_NO_URL, 8)])
-        before = _row("a1")[1]
-        fetch = _fetcher(set())
-        _look(_NoListing({}), fetch)
-        checks.equal((_row("a1")[1], fetch.asked), (before, []), "a set whose catalog read returned nothing leaves its no_url rows undated")
+        stock = _NoListing({})
+        reads = []
+        for days in (0, 0, 2):
+            before = len(stock.reads)
+            _later(days, lambda: _look(stock, _fetcher(set())))
+            reads.append(len(stock.reads) - before)
+        checks.equal(reads, [1, 0, 1], "a set whose catalog read returned nothing is read again after a day, not the same day")
     with isolated_home():
         _seed([("a1", "Lost", "", match.S_NO_URL, 8)])
-        _look(_Catalog({"Set A": [("a1", "Lost", "")]}), _fetcher(set()))
-        checks.ok(_row("a1")[1] > _stamp(1), "control: a catalog that answers with no URL for it dates the row for a week")
+        stock = _Catalog({"Set A": [("a1", "Lost", "")]})
+        reads = []
+        for days in (0, 2, 8):
+            before = len(stock.reads)
+            _later(days, lambda: _look(stock, _fetcher(set())))
+            reads.append(len(stock.reads) - before)
+        checks.equal(reads, [1, 0, 1], "control: a catalog that answers with no URL for it waits a week")
 
 
 def check_one_pass_is_bounded_oldest_first(checks: Checks) -> None:
@@ -481,7 +506,7 @@ CHECKS = (
     check_gained_photo_is_matchable_and_retried,
     check_no_url_rows_are_reread_once_per_set,
     check_recheck_holds_no_lock_across_fetches,
-    check_transient_failures_do_not_date_the_row,
+    check_failure_retry_clocks,
     check_one_pass_is_bounded_oldest_first,
     check_transient_rows_retry_in_a_day_not_first_in_line,
     check_network_failure_ends_the_pass,
