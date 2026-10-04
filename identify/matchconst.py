@@ -7,8 +7,9 @@ one home, and `home()` here is `store.files.home()` spelled without the package 
 keeps the two equal).
 """
 
-import importlib.util
 import os
+import sys
+import time
 from pathlib import Path
 
 SERVED_GAMES = ("pokemon", "riftbound", "one_piece")
@@ -31,9 +32,25 @@ def inventory_dir() -> Path:
     return home() / INVENTORY_DIRNAME
 
 
+_RUNTIME_RETRY_SECONDS = 30.0
+_runtime = {"ok": False, "at": None}
+
+
 def runtime_importable() -> bool:
-    """Can the model runtime be imported. The one answer; it loads nothing."""
-    try:
-        return importlib.util.find_spec("onnxruntime") is not None
-    except (ImportError, ValueError):
+    """Can everything a read needs be imported. One real import, a success cached for good and
+    a failure retried at most every `_RUNTIME_RETRY_SECONDS`."""
+    if any(sys.modules.get(name, True) is None for name in ("numpy", "onnxruntime", "PIL")):
+        return False  # an import already blocked by name: no cache says otherwise
+    if _runtime["ok"]:
+        return True
+    now = time.monotonic()
+    if _runtime["at"] is not None and now - _runtime["at"] < _RUNTIME_RETRY_SECONDS:
         return False
+    try:
+        import numpy  # noqa: F401
+        import onnxruntime  # noqa: F401
+        import PIL  # noqa: F401
+        _runtime["ok"] = True
+    except Exception:  # noqa: BLE001 — a broken install can raise more than ImportError
+        _runtime["at"] = now
+    return _runtime["ok"]

@@ -1138,7 +1138,16 @@ def _prepare_pid() -> Optional[int]:
     if not isinstance(pid, int):
         return None
     # `kill -0` succeeds on a zombie, so ask for the state: an exited child is not running.
-    state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+    try:
+        state = subprocess.run(
+            ["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, timeout=2
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        try:
+            os.kill(pid, 0)  # ps unavailable: the old alive check beats a 500 on a polled route
+        except OSError:
+            return None
+        return pid
     if not state or state.startswith("Z"):
         return None
     return pid

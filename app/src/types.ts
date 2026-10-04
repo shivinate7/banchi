@@ -2989,6 +2989,8 @@ export type RunSend = {
 export type MatchSweep = {
   on: boolean
   running: boolean
+  /** Set while the reader's runtime cannot load on this machine; the worker cannot run then. */
+  blocked: null | 'runtime_missing'
   matched: number
 }
 
@@ -3008,6 +3010,8 @@ export type MatchState = {
   no_image?: number
   sets?: number
   running: boolean
+  /** The reader's runtime cannot load, so Prepare is refused (409 runtime_missing). */
+  runtime_missing?: boolean
   progress: {
     state: 'running' | 'done' | 'failed'
     phase: 'model' | 'fingerprints'
