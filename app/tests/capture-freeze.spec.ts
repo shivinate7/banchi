@@ -4,6 +4,7 @@ import { expect, test } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { CARD, GAP_LUMA, armMotion, control, fakeBluetooth, injectScene, writes } from './dispenserRig'
 import type { Page } from '@playwright/test'
+import { DEALING_RAIL_TILES } from '../src/dealer'
 
 /* A LONG SITTING MUST NOT FREEZE THE MAIN THREAD. A `longtask` observer reports only tasks of
  * 50 ms or more, so "no entry" is the bar. Two cases:
@@ -110,9 +111,6 @@ async function pickCameraAndBox(page: Page): Promise<void> {
   await page.keyboard.press('Enter')
 }
 
-/* Mirrors `DEALING_RAIL_TILES` in CaptureScreen.tsx, which is not exported and cannot be imported here
- * (the module pulls in CSS, which Playwright's loader rejects). Import it once it lives in a CSS-free module. */
-const DEALING_RAIL_TILES = 15
 const rail = (page: Page) => page.locator('footer.capture-undo')
 const tiles = (page: Page) => rail(page).locator('.capture-undo-row')
 const lastPanel = (page: Page) => page.locator('aside.capture-last')
