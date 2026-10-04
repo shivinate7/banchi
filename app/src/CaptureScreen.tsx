@@ -775,8 +775,8 @@ function SwitchRow({
       className="capture-row capture-row-switch"
       role="switch"
       aria-checked={on === true}
-      disabled={on === null || busy}
-      title={title}
+      disabled={(on === null && !down) || busy}
+      title={on === null && down ? 'Could not read the switch. Press to try again.' : title}
       onClick={onToggle}
     >
       <span aria-hidden="true" />
@@ -1162,22 +1162,24 @@ export function CaptureScreen() {
   const [sweepOn, setSweepOn] = useState<boolean | null>(null)
   const [sweepBusy, setSweepBusy] = useState(false)
   const [sweepDown, setSweepDown] = useState(false)
-  useEffect(() => {
-    if (sweepOn !== null) return
-    let live = true
-    getMatchSweep()
-      .then((answer) => {
-        if (!live) return
-        setSweepDown(false)
-        setSweepOn(answer.on)
-      })
-      .catch(() => live && setSweepDown(true))
-    return () => {
-      live = false
-    }
-  }, [sweepOn])
+  /* A FAILED READ RETRIES ON THE POLL'S IDLE CADENCE, and a press on the "Unavailable" row asks again at once:
+     the switch never waits on the state it would recover. */
+  const { refresh: rereadSweep } = usePoll<MatchSweep>({
+    fn: () => getMatchSweep(),
+    onData: (answer) => {
+      setSweepDown(false)
+      setSweepOn(answer.on)
+    },
+    onError: () => setSweepDown(true),
+    liveMs: 20_000,
+    idleMs: 20_000,
+    enabled: sweepOn === null,
+  })
   const flipSweep = () => {
-    if (sweepOn === null) return
+    if (sweepOn === null) {
+      rereadSweep()
+      return
+    }
     setSweepBusy(true)
     setMatchSweep(!sweepOn)
       .then((answer) => {
