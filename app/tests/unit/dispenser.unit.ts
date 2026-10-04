@@ -426,9 +426,9 @@ test('a save before COMPLETE counts: START needs COMPLETE and one save, in eithe
   const dealer = await dealing()
   await advance(100)
   dealer.noteSaved() // the save lands first, COMPLETE at 420 ms
-  await advance(300)
+  await advance(COMPLETE[1] - 100) // now at COMPLETE
   expect(starts()).toBe(1) // COMPLETE only just landed: gap not yet over
-  await advance(DEAL_GAP_MS + 10)
+  await advance(DEAL_GAP_MS + 30)
   expect(starts()).toBe(2)
   await dealer.stop()
 })
