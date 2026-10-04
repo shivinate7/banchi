@@ -874,6 +874,8 @@ function FulfillerCard({
                   <img
                     key={copy.key}
                     className="card-locations-photo"
+                    /* A real photo is a request through the photo lane, and a tile list must not fire them all at once. A caller photoSrc (the gallery specimen) is no request. */
+                    loading={photoSrc === undefined ? 'lazy' : undefined}
                     src={src ?? undefined}
                     alt={whereSpoken === null ? 'The card' : `The card in ${whereSpoken}`}
                     onError={() =>

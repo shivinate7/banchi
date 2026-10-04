@@ -61,6 +61,11 @@ def _load():
     return _session or None
 
 
+def model_failed() -> bool:
+    """True while the model's last load failed, so `locate_card` is answering with `detect_card`."""
+    return _session is False
+
+
 def resize_linear(array, nw, nh):
     """Pixel-centre bilinear with no antialiasing (cv2.INTER_LINEAR), which is what training saw."""
     import numpy as np
@@ -90,8 +95,11 @@ def model_card(source) -> Optional[CardBox]:
         session = _load()
         if session is None:
             return None
-        with Image.open(source) as opened:
-            image = opened.convert("RGB")
+        if isinstance(source, Image.Image):
+            image = source.convert("RGB")  # an open frame: the preview decodes once per cut
+        else:
+            with Image.open(source) as opened:
+                image = opened.convert("RGB")
         width, height = image.size
         pixels = resize_linear(np.asarray(image), SIZE, SIZE)
         inputs = {

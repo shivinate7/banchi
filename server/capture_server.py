@@ -299,9 +299,7 @@ import base64
 import binascii
 import contextlib
 import errno
-import functools
 import hashlib
-import io
 import json
 import os
 import re
@@ -3572,21 +3570,6 @@ def _etag_matches(header: Optional[str], etag: str) -> bool:
     return "*" in offered or etag in [t[2:] if t.startswith("W/") else t for t in offered]
 
 
-@functools.lru_cache(maxsize=256)
-def _cropped_preview(path: str, mtime_ns: int, size: int) -> Optional[bytes]:
-    """The card region of one photograph as JPEG, or None when the preview shows it whole."""
-    from identify import images
-    from PIL import Image
-
-    rect = images.preview_rect(path)
-    if rect is None:
-        return None
-    with Image.open(path) as opened:
-        out = io.BytesIO()
-        opened.convert("RGB").crop(rect).save(out, "JPEG", quality=90)
-    return out.getvalue()
-
-
 def do_photo_by_card(
     cid: str,
     if_none_match: Optional[str] = None,
@@ -3610,6 +3593,21 @@ def do_photo_by_card(
     IT DOES NOT TOUCH THE STORE. The path is a function of the argument, so an unknown or
     malformed name is a 404 from the filesystem rather than a lookup.
     """
+    return do_photo_by_card_ex(cid, if_none_match, version, crop)[:2]
+
+
+def do_photo_by_card_ex(
+    cid: str,
+    if_none_match: Optional[str] = None,
+    version: Optional[str] = None,
+    crop: bool = False,
+) -> Tuple[Optional[bytes], str, bool]:
+    """`do_photo_by_card` plus `final`: False when the bytes are a stopgap (the finder was
+    busy or failed), so the route must not send them under a long cache.
+
+    A CROP NEVER WAITS FOR THE FINDER. One finder runs at a time (`identify.images.preview_cut`);
+    a request that finds it busy answers the whole photograph at once, under an ETag ending `p`
+    that no final answer shares, so a later view gets the crop."""
     if not photos.is_photo_cid(cid):
         raise BadRequest(
             HTTPStatus.NOT_FOUND,
@@ -3623,26 +3621,34 @@ def do_photo_by_card(
             "photo_not_found",
             f"No photograph stored under {cid[:12]}….",
         )
-    def body() -> bytes:
-        if crop:
-            stat = path.stat()
-            try:
-                cut = _cropped_preview(str(path), stat.st_mtime_ns, stat.st_size)
-            except Exception:
-                cut = None
-            if cut is not None:
-                return cut
-        return path.read_bytes()
+    from identify import images
 
-    suffix = "c" if crop else ""
+    rule = "c" + images.CROP_RULE_VERSION if crop else ""
+
+    def body() -> Tuple[bytes, str, bool]:
+        """Bytes, the ETag suffix they earn, and whether they are final."""
+        if crop:
+            try:
+                cut = images.preview_cut(path, wait=False)
+            except Exception:
+                cut = (None, None, False)
+            if cut is None:
+                return path.read_bytes(), "p", False
+            _, jpeg, final = cut
+            if jpeg is not None:
+                return jpeg, rule if final else "p", final
+            return path.read_bytes(), rule if final else "p", final
+        return path.read_bytes(), "", True
+
     if version:
-        etag = '"' + cid[:16] + "-" + hashlib.sha256(version.encode("utf-8")).hexdigest()[:16] + suffix + '"'
-        if _etag_matches(if_none_match, etag):
-            return None, etag
-        return body(), etag
-    blob = body()
+        stem = '"' + cid[:16] + "-" + hashlib.sha256(version.encode("utf-8")).hexdigest()[:16]
+        if _etag_matches(if_none_match, stem + rule + '"'):
+            return None, stem + rule + '"', True
+        blob, suffix, final = body()
+        return blob, stem + suffix + '"', final
+    blob, suffix, final = body()
     etag = '"' + hashlib.sha256(blob).hexdigest()[:32] + suffix + '"'
-    return (None if _etag_matches(if_none_match, etag) else blob), etag
+    return (None if _etag_matches(if_none_match, etag) else blob), etag, final
 
 
 def do_inventory() -> dict:
@@ -16174,8 +16180,15 @@ class CaptureHandler(BaseHTTPRequestHandler):
         query = parse_qs(urlparse(self.path).query)
         version = (query.get("v") or [None])[0]
         crop = (query.get("crop") or [None])[0] == "card"
-        blob, etag = do_photo_by_card(cid, self.headers.get("If-None-Match"), version, crop)
-        control = "public, max-age=31536000, immutable" if version else "no-cache"
+        blob, etag, final = do_photo_by_card_ex(cid, self.headers.get("If-None-Match"), version, crop)
+        # A crop is cached for a day and then revalidated, so a finder or guard change (the
+        # ETag carries `CROP_RULE_VERSION`) reaches old URLs. A stopgap lives seconds.
+        control = (
+            "no-cache" if not version
+            else "public, max-age=15" if not final
+            else "public, max-age=86400" if crop
+            else "public, max-age=31536000, immutable"
+        )
         headers = (("ETag", etag), ("Cache-Control", control))
         if blob is None:
             self.send_response(int(HTTPStatus.NOT_MODIFIED))
