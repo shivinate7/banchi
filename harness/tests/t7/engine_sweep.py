@@ -566,39 +566,24 @@ def check_sweep_cid_guard(checks: Checks) -> None:
 
 
 def check_sweep_runtime_cause(checks: Checks) -> None:
-    from cli import cmd_match
-
     checks.note("")
-    checks.note("SWEEP CAUSE — a worker that cannot load the runtime leaves `blocked` on GET /pipeline/match/sweep")
+    checks.note("SWEEP CAUSE — `blocked` on GET /pipeline/match/sweep is derived from the runtime now, never stored")
     with isolated_home(), _tree():
         _capture(game="pokemon", set_hint="sv9")
-        _switch(True)
-        checks.equal(pipeline_routes.do_pipeline_match_sweep().get("blocked"), None, "before any worker: blocked is null")
-
-        def run_worker(boom):
-            def read(_requests, _index):
-                if boom:
-                    raise boom
-                _switch(False)  # a queue that never empties must end, not hang
-                return []
-
-            with mock.patch.object(match, "status", lambda: {"ready": True}), mock.patch.object(
-                match, "Index", _FakeIndex
-            ), mock.patch.object(match, "read", read), mock.patch.object(os, "nice", lambda _n: 0), mock.patch(
-                "signal.signal", lambda *_a: None
-            ), quiet():
-                return cmd_match.sweep_worker(lambda _line: None)
-
-        checks.equal(run_worker(ImportError("no onnxruntime")), sweep.EXIT_NOT_READY, "the worker exits 3")
-        checks.equal(
-            pipeline_routes.do_pipeline_match_sweep().get("blocked"), "runtime_missing",
-            "and GET /pipeline/match/sweep reports blocked: runtime_missing",
-        )
-        run_worker(None)
-        checks.equal(
-            pipeline_routes.do_pipeline_match_sweep().get("blocked"), None,
-            "a later worker that loads the runtime clears it",
-        )
+        for on in (True, False):  # the switch and the queue do not matter: the answer is the present state
+            _switch(on)
+            for importable, want in ((False, "runtime_missing"), (True, None)):
+                with mock.patch.object(matchconst, "runtime_importable", lambda value=importable: value):
+                    checks.equal(
+                        pipeline_routes.do_pipeline_match_sweep().get("blocked"), want,
+                        f"switch {'on' if on else 'off'}, runtime {'importable' if importable else 'missing'}: blocked is {want!r}",
+                    )
+        sweep.set_blocked("runtime_missing")  # a value a past worker left behind
+        with mock.patch.object(matchconst, "runtime_importable", lambda: True):
+            checks.equal(
+                pipeline_routes.do_pipeline_match_sweep().get("blocked"), None,
+                "a stale stored cause does not show once the runtime is installed",
+            )
 
 
 CHECKS = (

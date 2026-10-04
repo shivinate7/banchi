@@ -138,6 +138,7 @@ export function matchState(overrides: Partial<MatchState> = {}): MatchState {
     no_image: 120,
     sets: 310,
     running: false,
+    runtime_missing: false,
     progress: null,
     model_url: 'https://github.com/shivinate7/banchi/releases/download/matcher-model-1/marqo-b-image.onnx',
     margin_min: 0.05,
