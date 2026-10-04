@@ -323,6 +323,71 @@ def apply_join(writable, resolved, full_exports: Dict[Path, tcgcsv.Export], path
     return added_main, added_parked, released, moved_live, kept_live
 
 
+def seed_corpus(run_dir, resolved):
+    """THE ONE HOME of the pricing corpus's join-time seed, and the choice scoped to this run.
+    Seeded, never pruned. Raises what `corpus.Corpus.read` raises on an unusable file; the
+    caller says so. Returns `(book, added, written, choice)`. Opens the corpus's own file lock,
+    so it must run OUTSIDE any `Store.write` (the two locks never nest).
+    """
+    with files.exclusive(files.inventory_dir()):
+        book = corpus.Corpus.read()
+        added = []
+        for sku in sorted(resolved.no_market_data_skus):
+            if sku not in book.answers:
+                book.answers[sku] = corpus.Answer(value=None, channel="unknown", from_run=run_dir.name)
+                added.append(sku)
+
+        # `rule` AND `basis` ARE THE CORPUS'S AND ARE NOT REASSIGNED FROM THE RUN. D86 Part One,
+        # unchanged and pointed one level up: the manifest records what THIS join ran with and
+        # `report.txt` prints it, and a record of what happened is not the answer to what should
+        # happen. `--rule` seeds an EMPTY corpus and nothing else, because a document that cannot
+        # answer its own question is not a document.
+        if not book.answers and book.rule == "match" and book.basis == "market":
+            book.rule, book.basis = str(resolved.rule), resolved.basis
+        written = book.write()
+    choice = book.scoped_to(
+        set(resolved.matches),
+        run_name=run_dir.name,
+        unpriced=resolved.no_market_data_skus,
+    )
+
+    return book, added, written, choice
+
+
+def write_pricing_table(run_dir, resolved, choice, snapshot):
+    """Write `pricing.json` for this join. The caller takes a FRESH snapshot after the store
+    write: the write moved `live` and drew `staged` down. Returns `(table, path)`."""
+    pricing_path = run_dir.path(runs.PRICING)
+    table = _pricing_table(run_dir, resolved, choice, snapshot)
+    pricing_path.write_text(json.dumps(table, indent=2) + "\n", encoding="utf-8")
+    return table, pricing_path
+
+
+def record_join(run_dir, resolved, review_below) -> None:
+    """The manifest a join leaves: what it verified. `joined=True` is what the worklist and the
+    unsent ledger read a run by."""
+    run_dir.set(
+        exports={g.game: g.source for g in resolved.joins.values()},
+        rule=str(resolved.rule),
+        basis=resolved.basis,
+        review_below_confidence=review_below,
+        joined=True,
+        counts={
+            "cards_in": sum(g.report.cards_in for g in resolved.joins.values()),
+            "skus": len(resolved.matches),
+            "queued_main": sum(
+                len(g.report.queue(routing.MAIN)) for g in resolved.joins.values()
+            )
+            + len(resolved.failures),
+            "queued_parked": sum(
+                len(g.report.queue(routing.PARKED)) for g in resolved.joins.values()
+            ),
+            "no_market_data": len(resolved.no_market_data_skus),
+            "sub_threshold": len(resolved.sub_threshold_skus),
+        },
+    )
+
+
 def run(args, say) -> int:
     # ------------------------------------------------------------ store-backed, or a run dir
     #
@@ -680,37 +745,17 @@ def run(args, say) -> int:
     # to drop unanswered entries this run no longer matched, which is right for a file scoped
     # to one run and catastrophic for one that is not: pruning against box 3's matches would
     # delete box 7's answers. Nothing here can see the other boxes, so nothing here may remove.
-    with files.exclusive(files.inventory_dir()):
-        try:
-            book = corpus.Corpus.read()
-        except (
-            decisions.MalformedDecisions,
-            pricing.UnknownRule,
-            pricing.UnknownBasis,
-            pricing.InvalidThreshold,
-        ) as exc:
-            say(f"{corpus.FILENAME} is unusable: {exc}")
-            say("Fix it, or delete it and let this join write a fresh one.")
-            return 1
-        added = []
-        for sku in sorted(resolved.no_market_data_skus):
-            if sku not in book.answers:
-                book.answers[sku] = corpus.Answer(value=None, channel="unknown", from_run=run_dir.name)
-                added.append(sku)
-
-        # `rule` AND `basis` ARE THE CORPUS'S AND ARE NOT REASSIGNED FROM THE RUN. D86 Part One,
-        # unchanged and pointed one level up: the manifest records what THIS join ran with and
-        # `report.txt` prints it, and a record of what happened is not the answer to what should
-        # happen. `--rule` seeds an EMPTY corpus and nothing else, because a document that cannot
-        # answer its own question is not a document.
-        if not book.answers and book.rule == "match" and book.basis == "market":
-            book.rule, book.basis = str(resolved.rule), resolved.basis
-        written = book.write()
-    choice = book.scoped_to(
-        set(resolved.matches),
-        run_name=run_dir.name,
-        unpriced=resolved.no_market_data_skus,
-    )
+    try:
+        book, added, written, choice = seed_corpus(run_dir, resolved)
+    except (
+        decisions.MalformedDecisions,
+        pricing.UnknownRule,
+        pricing.UnknownBasis,
+        pricing.InvalidThreshold,
+    ) as exc:
+        say(f"{corpus.FILENAME} is unusable: {exc}")
+        say("Fix it, or delete it and let this join write a fresh one.")
+        return 1
 
     say(f"prices           {written}")
     say(f"                 {choice.describe}")
@@ -743,14 +788,7 @@ def run(args, say) -> int:
     # every join for the same reason the report is: it describes THIS join, and a stale copy
     # beside a fresh report would be the two-files-from-two-moments problem the pricing route
     # exists to avoid.
-    pricing_path = run_dir.path(runs.PRICING)
-    # A FRESH SNAPSHOT, not the one read at the top of this command. The write block above
-    # moved `live` and drew `staged` down, so the snapshot taken before it is stale by
-    # exactly the counts this table reports — and a screen drawing `pushed 2 staged 0` from
-    # the wrong side of a join is a screen that disagrees with `emit` about what TCGplayer
-    # holds. Lock-free, because every write in this store is an atomic replace.
-    table = _pricing_table(run_dir, resolved, choice, store.read())
-    pricing_path.write_text(json.dumps(table, indent=2) + "\n", encoding="utf-8")
+    table, pricing_path = write_pricing_table(run_dir, resolved, choice, store.read())
     say(f"pricing table    {len(resolved.matches)} SKU(s) -> {pricing_path}")
 
     # -------------------------------------------------------------- readings cache (D189)
@@ -779,26 +817,7 @@ def run(args, say) -> int:
     # files' own Product Line cells above. An old run's scalar `export` key is read-side
     # backfilled by `runs.Run.exports_by_game` and never rewritten here — this writes
     # what THIS join verified, nothing else.
-    run_dir.set(
-        exports={g.game: g.source for g in resolved.joins.values()},
-        rule=str(resolved.rule),
-        basis=resolved.basis,
-        review_below_confidence=args.review_below_confidence,
-        joined=True,
-        counts={
-            "cards_in": sum(g.report.cards_in for g in resolved.joins.values()),
-            "skus": len(resolved.matches),
-            "queued_main": sum(
-                len(g.report.queue(routing.MAIN)) for g in resolved.joins.values()
-            )
-            + len(resolved.failures),
-            "queued_parked": sum(
-                len(g.report.queue(routing.PARKED)) for g in resolved.joins.values()
-            ),
-            "no_market_data": len(resolved.no_market_data_skus),
-            "sub_threshold": len(resolved.sub_threshold_skus),
-        },
-    )
+    record_join(run_dir, resolved, args.review_below_confidence)
 
     full_report = "\n".join(
         [f"run: {run_dir.name}"]

@@ -132,44 +132,61 @@ def prepare(
         return 1
 
 
-class _ExportCache:
-    """What one worker keeps of the exports it joins against: the parsed file per path (so a lock
-    held per chunk never pays a CSV parse) and the paths whose SKU rows are already folded in."""
+class _Session:
+    """What one worker keeps between chunks: the parsed export per path (so a lock held per chunk
+    never pays a CSV parse), the set names each export holds, the paths whose SKU rows are
+    already folded in, and the run its adopted cards belong to."""
+
+    # ponytail: a run closes at this many cards, so a chunk re-joins at most this many (one run per
+    # worker session would re-join every card the session ever adopted, under the lock).
+    RUN_CARDS = 64
 
     def __init__(self) -> None:
         self.parsed: dict = {}
+        self.sets: dict = {}
         self.folded: set = set()
+        self.run = None
+        self.keys: list = []
+
+    def open_run(self):
+        """The run the next chunk's cards join into. A new one, named for the reader, when none is
+        open or the open one is full."""
+        from cli import runs
+
+        if self.run is None or len(self.keys) >= self.RUN_CARDS:
+            self.run = runs.create("match-sweep")
+            self.keys = []
+        return self.run
 
 
 def _export_for(game: str):
-    """The newest whole-category export this game holds, or None.
+    """The export a press would reuse for this game's whole category: `pipeline_routes._reusable`
+    (up to 900 s old, its scope note covering the scope), or None. The reader asks for the whole
+    category and never narrower: a narrower file would queue a card of a set it lacks as
+    `no_catalog_row`."""
+    from server import pipeline_routes, tcg_export
+    from pipeline import games
 
-    `inventory/.exports/<game>/`, newest by mtime, whose scope note says it was fetched for the
-    whole category (no set narrowing): a narrower file would queue a card of a set it lacks as
-    `no_catalog_row`, and nothing here may guess that it covers. No note, no use (D65)."""
-    folder = store_files.inventory_dir() / store_files.EXPORTS_DIRNAME / str(game)
-    if not folder.is_dir():
+    entry = games.get(game)
+    category = entry.get("tcgplayer_category_id")
+    if category is None:
         return None
-    # ponytail: newest-by-mtime, no age limit (the join only warns on age); add one if stale prices bite.
-    for path in sorted(folder.glob("export-tcgplayer-*.csv"), key=lambda p: p.stat().st_mtime, reverse=True):
-        try:
-            note = json.loads(Path(str(path) + ".scope.json").read_text("utf-8"))
-        except (OSError, ValueError):
-            continue
-        if isinstance(note, dict) and not note.get("set_ids"):
-            return path
-    return None
+    found = pipeline_routes._reusable(game, tcg_export.Scope(category_id=int(category)))
+    return None if found is None else found[0]
 
 
-def _write_chunk(store, results, meta, noted, *, adopt: bool, exports: "_ExportCache") -> int:
+def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session") -> int:
     """ONE `Store.write` for one chunk. Every card the reader ACCEPTS gets the press's own
-    adoption (`cmd_identify._adopt_cached` and `record_adopted`) and then the join's own write
-    (`cmd_join.apply_join`), so a free match is `identified` as a paid read is. A card the ladder
-    cannot settle lands in review as a press leaves it. An unaccepted card is only noted as tried.
-    Returns how many cards were accepted."""
+    adoption (`cmd_identify._adopt_cached` and `record_adopted`, stamped with a run) and then the
+    join's own write (`cmd_join.apply_join`), so a free match is `identified` as a paid read is. A
+    card the ladder cannot settle lands in review as a press leaves it. After the lock closes, the
+    run gets the join record a press's join leaves (corpus seed, `pricing.json`, manifest), so the
+    worklist, the unsent ledger and emit see the card. An unaccepted card is only noted as tried.
+    A card is not adopted when no reusable export exists for its game, or its set hint names no
+    set the export holds. Returns how many cards were accepted."""
     from cli import cmd_identify, cmd_join, resolve, runs
     from identify import sidecar
-    from pipeline import corpus, games, pricing, routing, tcgcsv
+    from pipeline import corpus, games, pricing, routing, setnames, tcgcsv
 
     accepted = 0
     paths: dict = {}
@@ -178,9 +195,13 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, exports: "_ExportC
             if (path := _export_for(game)) is not None:
                 paths[game] = path
     for path in paths.values():  # parsed BEFORE the lock opens: a capture never waits on a CSV parse
-        if path not in exports.parsed:
-            exports.parsed[path] = (tcgcsv.read_export(path), runs.describe_source(path))
+        if path not in session.parsed:
+            export = tcgcsv.read_export(path)
+            session.parsed[path] = (export, runs.describe_source(path))
+            session.sets[path] = sorted({str(r.get(tcgcsv.SET_COLUMN) or "") for r in export.rows} - {""})
     threshold = pricing.check_threshold(corpus.Corpus.read().policy_for(None)["threshold"]) if paths else None
+    run = session.open_run() if paths and any(r.accepted for r in results) else None
+    resolved = None
     with store.write() as writable:
         adopted = []
         for result in results:
@@ -207,6 +228,8 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, exports: "_ExportC
             game = str(card.game or games.DEFAULT_GAME)
             if game not in paths:
                 continue
+            if now.set_hint and setnames.resolve(now.set_hint, session.sets[paths[game]]) is None:
+                continue  # the export holds no such set: a press names it, never a guess
             item = cmd_identify.Item(
                 capture=sidecar.Capture(
                     photo=meta[result.key][3], box=now.box, index=now.index, set_hint=now.set_hint,
@@ -215,23 +238,30 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, exports: "_ExportC
                 photo_sha256=digest, game=game, strategy=str(games.get(game)["prompt"]),
             )
             cmd_identify._adopt_cached(item, writable.cache.get(result.key), {})
-            if cmd_identify.record_adopted(writable, item):
+            if cmd_identify.record_adopted(writable, item, run.name):
                 adopted.append(result.key)
         if adopted:
-            run = runs.Run(directory=store_files.runs_dir() / "match-sweep", manifest={})
+            keys = session.keys + adopted
             resolved = resolve.load_from_store(
-                run, adopted, paths, threshold=threshold,
+                run, keys, paths, threshold=threshold,
                 rule=pricing.MATCH, basis=pricing.BASIS_MARKET, review_below=routing.CONFIDENCE_LOW,
-                snapshot=writable, export_cache=exports.parsed,
+                snapshot=writable, export_cache=session.parsed,
             )
             full, source = {}, {}
             for game_join in resolved.joins.values():
                 path = Path(str(game_join.source["path"]))
-                if path not in exports.folded:
-                    full[path] = exports.parsed[path][0]
+                if path not in session.folded:
+                    full[path] = session.parsed[path][0]
                     source[path] = game_join.source
-                    exports.folded.add(path)
+                    session.folded.add(path)
             cmd_join.apply_join(writable, resolved, full, source)
+            session.keys = keys
+    if resolved is not None:
+        run.manifest["selection"] = {"keys": list(session.keys)}
+        run.set(selection=run.manifest["selection"])
+        _book, _added, _written, choice = cmd_join.seed_corpus(run, resolved)
+        cmd_join.write_pricing_table(run, resolved, choice, store.read())
+        cmd_join.record_join(run, resolved, routing.CONFIDENCE_LOW)
     return accepted
 
 
@@ -260,7 +290,7 @@ def sweep_worker(say) -> int:
     signal.signal(signal.SIGTERM, lambda _signum, _frame: stop.append(True))
     store = Store()
     accepted = tried = 0
-    exports = _ExportCache()
+    session = _Session()
     try:
         with match.Index() as index:
             sweep.set_blocked(None)
@@ -293,13 +323,13 @@ def sweep_worker(say) -> int:
                 results = match.read(requests, index) if requests else []
                 before = dict(noted)
                 try:
-                    accepted += _write_chunk(store, results, meta, noted, adopt=True, exports=exports)
+                    accepted += _write_chunk(store, results, meta, noted, adopt=True, session=session)
                 except join.EmptyCatalog:
                     # THE EXPORT CANNOT ANSWER THIS CHUNK: nothing was written (the write rolled
                     # back). Bank the answers only, as before; a press adopts them.
                     noted.clear()
                     noted.update(before)
-                    accepted += _write_chunk(store, results, meta, noted, adopt=False, exports=exports)
+                    accepted += _write_chunk(store, results, meta, noted, adopt=False, session=session)
                 sweep.remember_tried(noted)
                 sweep.clear_inflight()
                 sweep.reset_chunk()

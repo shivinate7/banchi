@@ -439,7 +439,10 @@ It leaves the queue until it is re-shot or the model changes. It waits for a pre
 
 **What it writes.** For each card it accepts: an `identifications` row with engine `marqo-b`, then the press's own adoption.
 The card becomes `identified` through `cmd_identify._adopt_cached` and `record_adopted`. The join's own write follows
-(`cmd_join.apply_join`: SKU table, queues, live counters) against the game's newest whole-category export.
+(`cmd_join.apply_join`: SKU table, queues, live counters) against the export a press would reuse (`pipeline_routes._reusable`, whole category, up to 900 s old).
+Each adopted card carries a run named `match-sweep`, closed at 64 cards. After the chunk's lock closes the run gets a press's join record:
+corpus seed, `pricing.json` and manifest. So the worklist, the unsent ledger and emit see the card as they see a press card.
+A card whose set hint names no set in the export is not adopted.
 A card the ladder cannot settle is queued for review as a press queues it (`ambiguous_no_signal`).
 The whole chunk is one `Store.write`. A game with no such export is not adopted: the row is banked and a press adopts it.
 An unaccepted card stays `captured` for the press's paid second look. Nothing spends. A press bills nothing for an adopted card and never adopts it twice.
