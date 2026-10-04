@@ -4082,7 +4082,11 @@ export function CaptureScreen() {
     /* THE CARDS NOT DRAWN WHILE DEALING ARE ONE SPACER, NOT ONE CELL EACH: its size is the hidden
      * count times the tile's own size (CaptureScreen.css), so the rail keeps the height it will
      * have when they load in, and a capture's cost does not grow with the sitting (D313). */
-    const hidden = dealing ? Math.max(stripFloor, undoStack.length) - shown.length : 0
+    const total = Math.max(stripFloor, undoStack.length)
+    const hidden = dealing ? total - shown.length : 0
+    /* ROWS, NOT CARDS, FROM THE TOTAL: the full rail draws ceil(total / columns) rows, and the shown
+     * tiles already fill ceil(shown / columns) of them, partial last row included. */
+    const spacerRows = Math.ceil(total / RAIL_COLUMNS) - Math.ceil(shown.length / RAIL_COLUMNS)
     const floor = dealing ? 0 : stripFloor
     const used = new Map<string, RailEntry>()
     const list = (
@@ -4112,9 +4116,9 @@ export function CaptureScreen() {
         })}
         {hidden > 0 ? (
           <li
-            className="capture-undo-spacer"
+            className={spacerRows > 0 ? 'capture-undo-spacer' : 'capture-undo-spacer capture-undo-spacer-flat'}
             aria-hidden="true"
-            style={{ '--hidden-cards': hidden, '--hidden-rows': Math.ceil(hidden / RAIL_COLUMNS) } as CSSProperties}
+            style={{ '--hidden-cards': hidden, '--hidden-rows': spacerRows } as CSSProperties}
           />
         ) : null}
         {Array.from({ length: Math.max(0, floor - shown.length) }).map((_, at) => (
@@ -4125,32 +4129,82 @@ export function CaptureScreen() {
     railCache.current = used
     return list
   }, [dealing, undoStack, slotStamps, revision, spansDrawers, stripFloor, onUndoCell, onRemoveCell])
-  /* THE RANK-DEPENDENT FACE OF EVERY TILE, WRITTEN ONCE PER CHANGE. A tile's rank moves for every
-   * tile on a capture, and React would have to render all N to say so; this writes five values per
-   * tile straight onto the DOM instead (no element is created), before paint. The same text and
-   * attributes the tiles carried when React drew them. */
-  useLayoutEffect(() => {
-    let rank = 0
-    for (const item of Array.from(railListRef.current?.children ?? [])) {
-      const row = item.querySelector<HTMLButtonElement>('.capture-undo-row')
-      const key = row?.querySelector<HTMLElement>('.capture-key')
-      if (row === null || row === undefined || key === null || key === undefined) continue
-      const where = row.dataset.where ?? ''
-      /* BUSY IS WRITTEN HERE TOO, NOT PASSED: it flips twice per capture and would rebuild every tile. */
-      row.disabled = busy
-      item.querySelector<HTMLButtonElement>('.capture-undo-drop')?.toggleAttribute('disabled', busy)
-      const label = rank === 0 ? `Undo the newest capture, ${where}` : `Undo ${rank + 1} captures, back to ${where}`
-      if (row.getAttribute('aria-label') !== label) row.setAttribute('aria-label', label)
-      const undo = rank === 0 ? 'Undo' : `Undo ${rank + 1}`
-      if (row.dataset.undo !== undo) row.dataset.undo = undo
-      const text = rank === 0 ? UNDO_KEY_LABEL : String(rank + 1)
-      if (key.textContent !== text) key.textContent = text
-      const cls = rank === 0 ? 'capture-key is-newest' : 'capture-key'
-      if (key.className !== cls) key.className = cls
-      if (rank >= DEALING_RAIL_TILES) item.classList.add('capture-undo-still')
-      rank += 1
+  /* THE RANK-DEPENDENT FACE OF A TILE, WRITTEN ONTO THE DOM. A tile's rank moves for every tile on a
+   * capture, and React would have to render all N to say so. This writes six values per tile
+   * instead (no element is created), and only for the tiles a person can reach or see: the newest
+   * `DEALING_RAIL_TILES` and the tiles in the scroller's view. A tile further out is written when
+   * it scrolls in or takes focus, before it can be read or pressed. Same text and attributes the
+   * tiles carried when React drew them. */
+  const busyNow = useRef(busy)
+  busyNow.current = busy
+  const railVisible = useRef(new Set<Element>())
+  const railSeen = useRef(new WeakSet<Element>())
+  const railObserver = useRef<{ root: Element; observer: IntersectionObserver } | null>(null)
+  const writeTile = useCallback((item: Element, rank: number) => {
+    const row = item.querySelector<HTMLButtonElement>('.capture-undo-row')
+    const key = row?.querySelector<HTMLElement>('.capture-key')
+    if (row === null || row === undefined || key === null || key === undefined) return
+    const where = row.dataset.where ?? ''
+    if (row.disabled !== busyNow.current) {
+      row.disabled = busyNow.current
+      item.querySelector<HTMLButtonElement>('.capture-undo-drop')?.toggleAttribute('disabled', busyNow.current)
     }
-  }, [railList, busy])
+    const label = rank === 0 ? `Undo the newest capture, ${where}` : `Undo ${rank + 1} captures, back to ${where}`
+    if (row.getAttribute('aria-label') !== label) row.setAttribute('aria-label', label)
+    const undo = rank === 0 ? 'Undo' : `Undo ${rank + 1}`
+    if (row.dataset.undo !== undo) row.dataset.undo = undo
+    const text = rank === 0 ? UNDO_KEY_LABEL : String(rank + 1)
+    if (key.textContent !== text) key.textContent = text
+    const cls = rank === 0 ? 'capture-key is-newest' : 'capture-key'
+    if (key.className !== cls) key.className = cls
+    if (rank >= DEALING_RAIL_TILES) item.classList.add('capture-undo-still')
+  }, [])
+  useLayoutEffect(() => {
+    const list = railListRef.current
+    if (list === null) return
+    if (railObserver.current?.root !== list) {
+      railObserver.current?.observer.disconnect()
+      railVisible.current.clear()
+      railSeen.current = new WeakSet()
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) {
+              railVisible.current.delete(entry.target)
+              continue
+            }
+            railVisible.current.add(entry.target)
+            writeTile(entry.target, Array.prototype.indexOf.call(list.children, entry.target))
+          }
+        },
+        { root: list },
+      )
+      railObserver.current = { root: list, observer }
+    }
+    const { observer } = railObserver.current
+    const children = list.children
+    for (let rank = 0; rank < children.length; rank += 1) {
+      const item = children[rank]!
+      if (!railSeen.current.has(item)) {
+        railSeen.current.add(item)
+        if (item.querySelector('.capture-undo-row') !== null) observer.observe(item)
+        writeTile(item, rank)
+      } else if (rank < DEALING_RAIL_TILES || railVisible.current.has(item)) writeTile(item, rank)
+    }
+  }, [railList, busy, writeTile])
+  /* A tile out of view that takes focus is written first, so what a screen reader reads is current. */
+  const onRailFocus = useCallback(
+    (event: FocusEvent) => {
+      const item = (event.target as Element).closest('.capture-undo-list > li')
+      if (item?.parentElement) writeTile(item, Array.prototype.indexOf.call(item.parentElement.children, item))
+    },
+    [writeTile],
+  )
+  useEffect(() => {
+    const list = railListRef.current
+    list?.addEventListener('focusin', onRailFocus)
+    return () => list?.removeEventListener('focusin', onRailFocus)
+  }, [railList, onRailFocus])
   const dealerSaid = !dealerSupported() ? dealerReason : dealerIdle && dealerReason !== null ? dealerReason : dealer.said
 
   /** WHETHER THERE IS ANYTHING TO CLEAR, which is what disables the control rather than hiding
