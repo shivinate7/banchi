@@ -1432,6 +1432,17 @@ CHECKS = (
         "why_off_commit_path": "D18: a self-test that runs on demand in `make check`, never in the git hook. It is fast and path-gated nowhere.",
         "gates": True,
         "governed_by": ("D18", "D295"),
+    },    {
+        "target": "demo-mirror-daily-photos-selftest",
+        "shard": "guards-2",
+        "runs": "python3 scripts/demo-mirror-daily-photos-selftest.py",
+        "asserts": "The daily mirror ships every photograph its bundle names: a new demo-assets/mirror/photos/ file is not ignored, the photo store's own photos/ stays ignored, and a run never merges a bundle whose photographs are not committed.",
+        "needs": ("python3",),
+        "writes": '',
+        "commit_path": False,
+        "why_off_commit_path": "D18: a self-test that runs on demand in `make check`, never in the git hook. It is fast and path-gated nowhere.",
+        "gates": True,
+        "governed_by": ("D18", "D172", "D295"),
     },
     {
         "target": "demo-record-resume-selftest",
