@@ -345,15 +345,15 @@ test('the photograph is the largest thing on the screen', async ({ page }) => {
      The arithmetic is written above `--rv-chrome` in `ReviewQueue.css`, where the pieces are. */
   /* THE BAND TAKES ITS HEIGHT FROM THE PHOTOGRAPH (the owner's ruling), so the 23% above is history. Measured with the band
      drawn: 1440 draws 338.6x602 = 0.157 and 820 draws 172.1x306 = 0.071 of the viewport. The floor is the lower, rounded
-     down to two places: 0.07, and a 300px long edge (the lower of 602 and 306, rounded down) in place of 700. */
-  for (const width of [1440, 820]) {
+     down to two places, per width: 1440 holds 0.15 and a 600px long edge, 820 holds 0.07 and 300px, in place of 0.23 and 700. */
+  for (const [width, floor, edge] of [[1440, 0.15, 600], [820, 0.07, 300]] as const) {
     await setViewport(page, { width, height: DESK.height })
     await settleAnimations(page)
     const box = await page.locator('.review-photo').boundingBox()
     expect(box).not.toBeNull()
     const share = (box!.width * box!.height) / (width * DESK.height)
-    expect(share, `the photograph at ${width}`).toBeGreaterThanOrEqual(0.07)
-    expect(Math.max(box!.width, box!.height), `the long edge at ${width}`).toBeGreaterThanOrEqual(300)
+    expect(share, `the photograph at ${width}`).toBeGreaterThanOrEqual(floor)
+    expect(Math.max(box!.width, box!.height), `the long edge at ${width}`).toBeGreaterThanOrEqual(edge)
   }
 })
 
