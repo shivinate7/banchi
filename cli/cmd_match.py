@@ -216,7 +216,7 @@ def sweep_worker(say) -> int:
     except Exception as exc:  # noqa: BLE001
         # THE CHUNK HALVES (a lone card is set aside), so one bad photograph cannot take the next worker down.
         say(f"sweep           stopped by {type(exc).__name__}: {exc}")
-        sweep.settle_inflight()
+        sweep.settle_inflight(crashed=True)
         return 1
     say(f"sweep           {accepted} matched, {tried} left for a press")
     return 0

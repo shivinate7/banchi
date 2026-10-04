@@ -2990,6 +2990,8 @@ export type MatchSweep = {
   on: boolean
   running: boolean
   matched: number
+  /** Cards the reader set aside for crashing it alone: out of the free queue, never paid. */
+  aside: number
 }
 
 /** `GET /pipeline/match`: is the free reader prepared, and is a Prepare running. Free; the server

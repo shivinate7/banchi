@@ -78,6 +78,9 @@ def main() -> int:
             tried_file = scratch.home / "inventory" / "match-sweep-tried.json"
             if tried_file.exists():
                 tried = len(json.loads(tried_file.read_text()).get("keys", {}))
+            aside_file = scratch.home / "inventory" / "match-sweep-crash.json"
+            if aside_file.exists():  # a set-aside card is done too
+                tried += len(json.loads(aside_file.read_text()).get("aside", {}))
             if worker_seen and waiting - tried <= 0 and not children_of(watcher, "sweep-worker"):
                 break
             time.sleep(0.1)

@@ -378,7 +378,7 @@ D258 (identity follows the SKU) keeps those read fields as evidence.
 
 **The wire.** `RunSend` gains `engine`, default `marqo-b`. `sendOfKeys` sets it and `onTheWire` in `app/src/server.ts` sends it. The route defaults to `marqo-b` when none is sent, and an explicit `haiku` still passes.
 `app/src/types.ts` carries its shape. `POST /pipeline/identify` keeps its `confirm` field for both engines.
-One gate stays one press. The CLI takes `--engine`. Two free routes serve setup.
+One gate stays one press. The CLI takes `--engine`, default `marqo-b`; `--engine haiku` is the paid read alone. Two free routes serve setup.
 One reports the matcher state. One downloads on a `confirm`.
 
 **A route is not a feature (hard rule).** The build is done only when the route, the `server.ts` function

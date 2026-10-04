@@ -357,10 +357,13 @@ def _stop(worker) -> None:
         worker.wait()
 
 
-def settle_inflight() -> int:
+def settle_inflight(crashed: bool = False) -> int:
     """Settle the chunk a dead worker was reading. A crash is not a read, so no card is tried.
 
-    The chunk is halved for the next try. A chunk of one that died is set aside (see `aside`).
+    ONLY `crashed=True` counts: the watcher saw a worker exit that our own stop did not cause, or the
+    worker caught its own exception. The chunk is then halved, and a chunk of one is set aside (see
+    `aside`). Any other leftover (our stop, a server restart, a dead watcher) is an interruption: the
+    file is removed and the chunk is retried whole.
 
     The worker writes the chunk it is about to read and clears it afterwards. A file still here
     belongs to a worker that died inside the chunk (a crash, an out-of-memory kill). Returns how
@@ -374,7 +377,9 @@ def settle_inflight() -> int:
     keys = record.get("keys")
     settled = {str(k): str(v) for k, v in keys.items()} if isinstance(keys, dict) else {}
     record = _crash_record()
-    if len(settled) == 1:
+    if not crashed:
+        pass
+    elif len(settled) == 1:
         record["aside"] = {**aside(), **settled}
         record.pop("chunk", None)
     elif settled:
@@ -477,13 +482,15 @@ def watch(
                 elif code != 0 and not stopped_by_us:
                     # EVERY OTHER FAILURE WAITS LONGER EACH TIME, and the next chunk is smaller, so
                     # a bad photograph ends up alone and set aside. Never tried, never paid.
-                    settle_inflight()
+                    settle_inflight(crashed=True)
                     delay = min(FAILURE_BACKOFF_CAP_SECONDS, FAILURE_BACKOFF_SECONDS * (2 ** failures))
                     failures += 1
                     backoff_until = now() + delay
                 else:
                     failures = 0
-                _write_state(worker=None, aside=len(aside()))
+                    if stopped_by_us:
+                        clear_inflight()  # our stop is not a crash: retry the chunk whole
+                _write_state(worker=None)
                 continue
             sleep(poll)
         _write_state(worker=None, stopped=True)
