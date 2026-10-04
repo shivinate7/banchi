@@ -771,6 +771,52 @@ def _adopt_cached(item: Item, entry, fingerprints: Dict[str, str]) -> None:
     )
 
 
+def record_adopted(writable, item: Item, run_name: Optional[str] = None) -> bool:
+    """Record one item's answer on its card. THE ONE HOME of the write a paid press, a press over
+    cached answers and the background reader's adoption all make. Parses a cached item (its
+    `parsed` is None by `_adopt_cached`'s rule). Returns whether a record was written.
+    """
+    if item.identification is None or not item.capture.has_position:
+        return False
+    if item.parsed is None:
+        try:
+            item.parsed = prompt.parse(item.identification, item.strategy or prompt.DEFAULT_PROFILE)
+        except (prompt.MalformedIdentification, LookupError):
+            return False
+    # THE PARSED FIELDS, NOT THE RAW PAYLOAD'S KEYS. The raw payload is
+    # per-profile in shape — a misc card answers `printed_id`, a code card
+    # answers `code` — and reading `.get("number")` off it wrote a record
+    # only Pokemon's profile could ever fill. The parser is where each
+    # profile already says which of its fields is the name and which is the
+    # identifier, so the record reads the parser's answer: for a code card
+    # that is C8's whole mechanism — the transcribed code lands in `number`,
+    # which is the column `GET /search` matches, and the dispute lookup is
+    # the existing search. For a Pokemon card the values differ from the raw
+    # keys only by the parser's own hygiene (strip, `#`-removal, case fold
+    # on confidence), which is what the join reads anyway.
+    writable.inventory.record_identification(
+        item.key,
+        name=item.parsed.name,
+        number=item.parsed.number,
+        printed_total=item.parsed.printed_total,
+        confidence=item.parsed.confidence,
+        run=run_name,
+        # THE RAW `finish` KEY, WHICH IS WHAT `cli/resolve.py:load` READS. The
+        # parsed fields above are the parser's hygiene applied to the model's
+        # answer; this one has no parsed twin, and `load` takes it off the
+        # identification dict exactly like this before handing it to
+        # `_detected` — so the store and the run record now carry one value,
+        # read the same way. Interpreting it here would put the per-game finish
+        # whitelist in a second place; `_detected` applies it at the point of
+        # use and this line stores the raw answer unchanged.
+        detected_finish=(item.identification or {}).get("finish"),
+        read_disputes=_read_disputes_for(
+            writable, item.key, item.parsed.name
+        ),
+    )
+    return True
+
+
 def _give_back_unspent(claim, run_dir, store, say) -> bool:
     """Release this run's claim IF it can be proved nothing was submitted. Returns whether it did.
 
@@ -1671,7 +1717,15 @@ def run(args, say) -> int:
                         note=item.capture.note,
                     )
                 )
-            if item.identification is None or item.cached:
+            if item.cached:
+                # A CACHED ANSWER IS ADOPTED ONTO A CARD THAT IS STILL `captured` AND NEVER ONTO
+                # ONE THE READER OR AN EARLIER PRESS ALREADY IDENTIFIED. Without this a press over
+                # cached free matches left every card `captured`.
+                held = writable.inventory.cards.get(item.key)
+                if held is not None and held.state == master.CAPTURED:
+                    record_adopted(writable, item, run_dir.name)
+                continue
+            if item.identification is None:
                 continue
             # THE DIGEST GATES THE CACHE WRITE, not the prepared bytes. An entry is keyed by
             # the photograph it answers for, so a card with no digest has nothing to key on
@@ -1694,37 +1748,7 @@ def run(args, say) -> int:
                 if clash:
                     disagreements.append(clash)
             if item.capture.has_position and item.parsed is not None:
-                # THE PARSED FIELDS, NOT THE RAW PAYLOAD'S KEYS. The raw payload is
-                # per-profile in shape — a misc card answers `printed_id`, a code card
-                # answers `code` — and reading `.get("number")` off it wrote a record
-                # only Pokemon's profile could ever fill. The parser is where each
-                # profile already says which of its fields is the name and which is the
-                # identifier, so the record reads the parser's answer: for a code card
-                # that is C8's whole mechanism — the transcribed code lands in `number`,
-                # which is the column `GET /search` matches, and the dispute lookup is
-                # the existing search. For a Pokemon card the values differ from the raw
-                # keys only by the parser's own hygiene (strip, `#`-removal, case fold
-                # on confidence), which is what the join reads anyway.
-                writable.inventory.record_identification(
-                    item.key,
-                    name=item.parsed.name,
-                    number=item.parsed.number,
-                    printed_total=item.parsed.printed_total,
-                    confidence=item.parsed.confidence,
-                    run=run_dir.name,
-                    # THE RAW `finish` KEY, WHICH IS WHAT `cli/resolve.py:load` READS. The
-                    # parsed fields above are the parser's hygiene applied to the model's
-                    # answer; this one has no parsed twin, and `load` takes it off the
-                    # identification dict exactly like this before handing it to
-                    # `_detected` — so the store and the run record now carry one value,
-                    # read the same way. Interpreting it here would put the per-game finish
-                    # whitelist in a second place; `_detected` applies it at the point of
-                    # use and this line stores the raw answer unchanged.
-                    detected_finish=(item.identification or {}).get("finish"),
-                    read_disputes=_read_disputes_for(
-                        writable, item.key, item.parsed.name
-                    ),
-                )
+                record_adopted(writable, item, run_dir.name)
 
         # C8's ledger, in the same locked session that recorded the cards it indexes.
         # TWO COPIES WITH TWO JOBS: `inventory/codes.jsonl` is the standing index the

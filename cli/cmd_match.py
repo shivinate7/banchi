@@ -27,7 +27,10 @@ import signal
 import time
 from typing import Callable, Dict, Optional
 
+from pathlib import Path
+
 from identify import match, sweep
+from pipeline import join
 from store import db
 from store import files as store_files
 from store import photos
@@ -129,13 +132,117 @@ def prepare(
         return 1
 
 
+class _ExportCache:
+    """What one worker keeps of the exports it joins against: the parsed file per path (so a lock
+    held per chunk never pays a CSV parse) and the paths whose SKU rows are already folded in."""
+
+    def __init__(self) -> None:
+        self.parsed: dict = {}
+        self.folded: set = set()
+
+
+def _export_for(game: str):
+    """The newest whole-category export this game holds, or None.
+
+    `inventory/.exports/<game>/`, newest by mtime, whose scope note says it was fetched for the
+    whole category (no set narrowing): a narrower file would queue a card of a set it lacks as
+    `no_catalog_row`, and nothing here may guess that it covers. No note, no use (D65)."""
+    folder = store_files.inventory_dir() / store_files.EXPORTS_DIRNAME / str(game)
+    if not folder.is_dir():
+        return None
+    # ponytail: newest-by-mtime, no age limit (the join only warns on age); add one if stale prices bite.
+    for path in sorted(folder.glob("export-tcgplayer-*.csv"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            note = json.loads(Path(str(path) + ".scope.json").read_text("utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(note, dict) and not note.get("set_ids"):
+            return path
+    return None
+
+
+def _write_chunk(store, results, meta, noted, *, adopt: bool, exports: "_ExportCache") -> int:
+    """ONE `Store.write` for one chunk. Every card the reader ACCEPTS gets the press's own
+    adoption (`cmd_identify._adopt_cached` and `record_adopted`) and then the join's own write
+    (`cmd_join.apply_join`), so a free match is `identified` as a paid read is. A card the ladder
+    cannot settle lands in review as a press leaves it. An unaccepted card is only noted as tried.
+    Returns how many cards were accepted."""
+    from cli import cmd_identify, cmd_join, resolve, runs
+    from identify import sidecar
+    from pipeline import corpus, games, pricing, routing, tcgcsv
+
+    accepted = 0
+    paths: dict = {}
+    if adopt:
+        for game in {str(meta[r.key][0].game or games.DEFAULT_GAME) for r in results if r.accepted}:
+            if (path := _export_for(game)) is not None:
+                paths[game] = path
+    for path in paths.values():  # parsed BEFORE the lock opens: a capture never waits on a CSV parse
+        if path not in exports.parsed:
+            exports.parsed[path] = (tcgcsv.read_export(path), runs.describe_source(path))
+    threshold = pricing.check_threshold(corpus.Corpus.read().policy_for(None)["threshold"]) if paths else None
+    with store.write() as writable:
+        adopted = []
+        for result in results:
+            card, capture_id, digest, _photo = meta[result.key]
+            now = writable.inventory.cards.get(result.key)
+            # THE CARD MAY HAVE CHANGED WHILE IT WAS READ: gone, no longer captured,
+            # re-shot (a new capture id) or renamed (a new cid). Then this answer is
+            # about bytes that no longer stand there.
+            if (
+                now is None
+                or now.state != "captured"
+                or now.capture_id != card.capture_id
+                or now.cid != card.cid
+            ):
+                continue
+            if not (result.accepted and result.payload is not None):
+                noted[result.key] = capture_id
+                continue
+            writable.cache.put(
+                result.key, result.payload, digest, match.MODEL_SHA256,
+                engine=ENGINE_MATCHER, cid=card.cid,
+            )
+            accepted += 1
+            game = str(card.game or games.DEFAULT_GAME)
+            if game not in paths:
+                continue
+            item = cmd_identify.Item(
+                capture=sidecar.Capture(
+                    photo=meta[result.key][3], box=now.box, index=now.index, set_hint=now.set_hint,
+                    game=now.game, metadata_finish=tuple(now.metadata_finish) if now.metadata_finish else None,
+                ),
+                photo_sha256=digest, game=game, strategy=str(games.get(game)["prompt"]),
+            )
+            cmd_identify._adopt_cached(item, writable.cache.get(result.key), {})
+            if cmd_identify.record_adopted(writable, item):
+                adopted.append(result.key)
+        if adopted:
+            run = runs.Run(directory=store_files.runs_dir() / "match-sweep", manifest={})
+            resolved = resolve.load_from_store(
+                run, adopted, paths, threshold=threshold,
+                rule=pricing.MATCH, basis=pricing.BASIS_MARKET, review_below=routing.CONFIDENCE_LOW,
+                snapshot=writable, export_cache=exports.parsed,
+            )
+            full, source = {}, {}
+            for game_join in resolved.joins.values():
+                path = Path(str(game_join.source["path"]))
+                if path not in exports.folded:
+                    full[path] = exports.parsed[path][0]
+                    source[path] = game_join.source
+                    exports.folded.add(path)
+            cmd_join.apply_join(writable, resolved, full, source)
+    return accepted
+
+
 def sweep_worker(say) -> int:
     """The background reader's worker (`identify/sweep.py` starts it): read the queue, then exit.
 
     It loads the model once and reads the waiting cards a few at a time until the queue is empty,
-    the switch is off or it is sent SIGTERM. It writes one thing, an `identifications` row with
-    engine `marqo-b`, through `Cache.put`, which never overwrites a Haiku or a cleared row. It
-    never writes card state, and it never spends. A card it cannot accept is remembered as tried
+    the switch is off or it is sent SIGTERM. For each card it ACCEPTS it writes an `identifications`
+    row with engine `marqo-b` (`Cache.put`, which never overwrites a Haiku or a cleared row) and
+    then adopts it as a press does: the card is `identified`, joined against the game's export and
+    routed (`_write_chunk`). It never spends. A card it cannot accept is remembered as tried
     against this photograph and waits for a press.
 
     EXIT CODES the watcher reads: 0 done, 3 "not ready" (no model file or index, or a runtime that
@@ -153,6 +260,7 @@ def sweep_worker(say) -> int:
     signal.signal(signal.SIGTERM, lambda _signum, _frame: stop.append(True))
     store = Store()
     accepted = tried = 0
+    exports = _ExportCache()
     try:
         with match.Index() as index:
             sweep.set_blocked(None)
@@ -181,30 +289,17 @@ def sweep_worker(say) -> int:
                         key=key, photo=path, game=game,
                         strategy=str(games.get(game)["prompt"]), set_hint=card.set_hint,
                     ))
-                    meta[key] = (card, capture_id, photos.sha256_of(path))
+                    meta[key] = (card, capture_id, photos.sha256_of(path), path)
                 results = match.read(requests, index) if requests else []
-                with store.write() as writable:
-                    for result in results:
-                        card, capture_id, digest = meta[result.key]
-                        now = writable.inventory.cards.get(result.key)
-                        # THE CARD MAY HAVE CHANGED WHILE IT WAS READ: gone, no longer captured,
-                        # re-shot (a new capture id) or renamed (a new cid). Then this answer is
-                        # about bytes that no longer stand there.
-                        if (
-                            now is None
-                            or now.state != "captured"
-                            or now.capture_id != card.capture_id
-                            or now.cid != card.cid
-                        ):
-                            continue
-                        if result.accepted and result.payload is not None:
-                            writable.cache.put(
-                                result.key, result.payload, digest, match.MODEL_SHA256,
-                                engine=ENGINE_MATCHER, cid=card.cid,
-                            )
-                            accepted += 1
-                        else:
-                            noted[result.key] = capture_id
+                before = dict(noted)
+                try:
+                    accepted += _write_chunk(store, results, meta, noted, adopt=True, exports=exports)
+                except join.EmptyCatalog:
+                    # THE EXPORT CANNOT ANSWER THIS CHUNK: nothing was written (the write rolled
+                    # back). Bank the answers only, as before; a press adopts them.
+                    noted.clear()
+                    noted.update(before)
+                    accepted += _write_chunk(store, results, meta, noted, adopt=False, exports=exports)
                 sweep.remember_tried(noted)
                 sweep.clear_inflight()
                 sweep.reset_chunk()

@@ -229,6 +229,100 @@ def _preview(args, run_dir, plan, resolved, say, *, keys=None) -> int:
     return 0
 
 
+def apply_join(writable, resolved, full_exports: Dict[Path, tcgcsv.Export], path_source: Dict[Path, dict]):
+    """THE ONE HOME of what a join writes into the store: the SKU table fold, the queues, and the
+    live counters. `run` below and the background reader's adoption (`cli/cmd_match.py`) both call
+    it, inside a `Store.write` they own. Returns `(added_main, added_parked, released, moved_live,
+    kept_live)`.
+    """
+    main, parked = resolve.entries_for(resolved)
+    freed = resolved.processed_positions - resolved.queued_positions
+    for path, full_export in full_exports.items():
+        at, source_name = _skus_stamp(path_source[path])
+        skus_walk.apply_rows(
+            full_export.rows, at=at, source=source_name,
+            skus=writable.skus, events=writable.inventory.events,
+        )
+    # Upsert and release as one unit — `queues.apply_run` also releases the entry a
+    # re-routed position leaves behind in the OTHER queue, which the two independent
+    # release calls that used to sit here could not see. Found by a real run: 16
+    # positions moved review -> parked and every stale review entry survived.
+    added_main, added_parked, released = queues.apply_run(
+        writable.review, writable.parked, main, parked, freed
+    )
+
+    # `live` is refreshed here and costs nothing new: the export's `Total Quantity` is
+    # already read for D7's refill math (`SkuMatch.live_before`). A SKU that now shows
+    # quantity against it on TCGplayer has been moved live by a human, and nothing else
+    # in this pipeline would ever notice.
+    #
+    # IT IS SET, NOT INCREMENTED, AND IT IS SET FROM WHICHEVER READING IS NEWER (D87,
+    # amended 2026-09-02). D8 and D11 put the authority in the export, and it keeps it
+    # for the moment the file was read; the store's own `live` is a reading with its
+    # own time (`Listing.live_as_of` — a sale, a D34 release, a `reconcile --live`), and
+    # `Listing.observe_live` adopts the export's figure only where the file is newer.
+    # An export the store has since overtaken is KEPT and the report says so, per
+    # game, because "Join again" on `#/runs` reuses the run's recorded export — which
+    # for run 2026-09-01-box3-01 was fetched fifteen minutes BEFORE the emit, read a
+    # blank `Total Quantity` on every SKU it had just listed, and took the store from
+    # 1,072 live copies to 700 on the ordinary path. A count that walked up on its own
+    # would still be a second source of truth; a reading dated later than the file is
+    # not a second source, it is the same fact observed later.
+    #
+    # PER GAME, because the time is the FILE's and two games may have been joined
+    # against two files. `resolved.matches` is the union of these per-game maps, so
+    # the SKUs visited are the same ones it would have visited.
+    #
+    # This block used to choose WHICH positions went live — the first `live_before`
+    # copies in box-walk order took a `live` state and the rest stayed `staged`. That
+    # made listing progress an address for no physical reason (the owner's ruling is
+    # that copies of one SKU are fungible), and it could not represent the ordinary
+    # case of a SKU showing more live quantity than this pipeline ever pushed.
+    moved_live = []
+    kept_live: dict = {}
+    for game_join in resolved.joins.values():
+        as_of = str(game_join.source["mtime"])
+        for match in game_join.report.matches.values():
+            quantity = max(0, int(match.live_before))
+            # Peeked rather than got-or-created: `Inventory.listing` creates on read,
+            # and calling it for every matched SKU would fill the file with empty
+            # records whose only content is that the SKU exists — which the export
+            # already says, better.
+            if writable.inventory.listings.get(match.sku) is None and quantity == 0:
+                continue
+            listing = writable.inventory.listing(match.sku, condition=match.condition)
+            before = listing.live
+            verdict = listing.observe_live(quantity, as_of)
+            # `CLEARED` MOVES NO COPIES AND IS NOT REPORTED HERE (D115). The figure agreed
+            # and the file simply postdated sales this store had counted, so the counter
+            # was emptied — nothing to draw down (`quantity - before` is 0), nothing kept,
+            # and nothing corrected. Reporting it beside the moved readings would put a
+            # zero on `moved_live` and a line under a heading about copies that moved.
+            if verdict in (master.UNCHANGED, master.CLEARED):
+                continue
+            if verdict == master.KEPT:
+                kept_live.setdefault(game_join.game, []).append(
+                    (match.sku, before, listing.live_observed_at, quantity)
+                )
+                continue
+            moved_live.append((match.sku, before, quantity))
+
+            # Copies that just went live are no longer staged. `reconcile` is the only
+            # thing that puts a copy in `staged` and nothing else would ever take it
+            # out, so without this drawdown `staged_stale` names every SKU that has
+            # ever staged, forever — a warning that fires on success is a warning
+            # nobody reads.
+            #
+            # Drawn down by the RISE in live quantity, never by the absolute reading.
+            # The absolute number would also erase copies staged since the last join,
+            # which are exactly the copies the stale warning exists to find. Only on an
+            # ADOPTED reading: a kept one moved nothing, so nothing went live.
+            newly_live = quantity - before
+            if newly_live > 0 and listing.staged > 0:
+                listing.bump(master.STAGED, -min(listing.staged, newly_live))
+    return added_main, added_parked, released, moved_live, kept_live
+
+
 def run(args, say) -> int:
     # ------------------------------------------------------------ store-backed, or a run dir
     #
@@ -506,11 +600,6 @@ def run(args, say) -> int:
         return _preview(args, run_dir, plan, resolved, say, keys=keys)
 
     # --------------------------------------------------------------- write the queues
-    main, parked = resolve.entries_for(resolved)
-    # A card this run resolved leaves whichever queue it was sitting in. Scoped to the
-    # positions this run actually processed, so joining box 3 cannot evict box 7's entries.
-    freed = resolved.processed_positions - resolved.queued_positions
-
     # THE SKU TABLE FILL (docs/specs/identity-follows-sku.md §3.2, item 3: "An export a
     # person hands the CLI ... cli/cmd_join.py's --export"). EVERY ROW, not
     # `game_join.export`'s D137 narrowing (Near Mint and Sealed, this game's own Product
@@ -528,90 +617,9 @@ def run(args, say) -> int:
             path_source[path] = game_join.source
 
     with store.write() as writable:
-        for path, full_export in full_exports.items():
-            at, source_name = _skus_stamp(path_source[path])
-            skus_walk.apply_rows(
-                full_export.rows, at=at, source=source_name,
-                skus=writable.skus, events=writable.inventory.events,
-            )
-        # Upsert and release as one unit — `queues.apply_run` also releases the entry a
-        # re-routed position leaves behind in the OTHER queue, which the two independent
-        # release calls that used to sit here could not see. Found by a real run: 16
-        # positions moved review -> parked and every stale review entry survived.
-        added_main, added_parked, released = queues.apply_run(
-            writable.review, writable.parked, main, parked, freed
+        added_main, added_parked, released, moved_live, kept_live = apply_join(
+            writable, resolved, full_exports, path_source
         )
-
-        # `live` is refreshed here and costs nothing new: the export's `Total Quantity` is
-        # already read for D7's refill math (`SkuMatch.live_before`). A SKU that now shows
-        # quantity against it on TCGplayer has been moved live by a human, and nothing else
-        # in this pipeline would ever notice.
-        #
-        # IT IS SET, NOT INCREMENTED, AND IT IS SET FROM WHICHEVER READING IS NEWER (D87,
-        # amended 2026-09-02). D8 and D11 put the authority in the export, and it keeps it
-        # for the moment the file was read; the store's own `live` is a reading with its
-        # own time (`Listing.live_as_of` — a sale, a D34 release, a `reconcile --live`), and
-        # `Listing.observe_live` adopts the export's figure only where the file is newer.
-        # An export the store has since overtaken is KEPT and the report says so, per
-        # game, because "Join again" on `#/runs` reuses the run's recorded export — which
-        # for run 2026-09-01-box3-01 was fetched fifteen minutes BEFORE the emit, read a
-        # blank `Total Quantity` on every SKU it had just listed, and took the store from
-        # 1,072 live copies to 700 on the ordinary path. A count that walked up on its own
-        # would still be a second source of truth; a reading dated later than the file is
-        # not a second source, it is the same fact observed later.
-        #
-        # PER GAME, because the time is the FILE's and two games may have been joined
-        # against two files. `resolved.matches` is the union of these per-game maps, so
-        # the SKUs visited are the same ones it would have visited.
-        #
-        # This block used to choose WHICH positions went live — the first `live_before`
-        # copies in box-walk order took a `live` state and the rest stayed `staged`. That
-        # made listing progress an address for no physical reason (the owner's ruling is
-        # that copies of one SKU are fungible), and it could not represent the ordinary
-        # case of a SKU showing more live quantity than this pipeline ever pushed.
-        moved_live = []
-        kept_live: dict = {}
-        for game_join in resolved.joins.values():
-            as_of = str(game_join.source["mtime"])
-            for match in game_join.report.matches.values():
-                quantity = max(0, int(match.live_before))
-                # Peeked rather than got-or-created: `Inventory.listing` creates on read,
-                # and calling it for every matched SKU would fill the file with empty
-                # records whose only content is that the SKU exists — which the export
-                # already says, better.
-                if writable.inventory.listings.get(match.sku) is None and quantity == 0:
-                    continue
-                listing = writable.inventory.listing(match.sku, condition=match.condition)
-                before = listing.live
-                verdict = listing.observe_live(quantity, as_of)
-                # `CLEARED` MOVES NO COPIES AND IS NOT REPORTED HERE (D115). The figure agreed
-                # and the file simply postdated sales this store had counted, so the counter
-                # was emptied — nothing to draw down (`quantity - before` is 0), nothing kept,
-                # and nothing corrected. Reporting it beside the moved readings would put a
-                # zero on `moved_live` and a line under a heading about copies that moved.
-                if verdict in (master.UNCHANGED, master.CLEARED):
-                    continue
-                if verdict == master.KEPT:
-                    kept_live.setdefault(game_join.game, []).append(
-                        (match.sku, before, listing.live_observed_at, quantity)
-                    )
-                    continue
-                moved_live.append((match.sku, before, quantity))
-
-                # Copies that just went live are no longer staged. `reconcile` is the only
-                # thing that puts a copy in `staged` and nothing else would ever take it
-                # out, so without this drawdown `staged_stale` names every SKU that has
-                # ever staged, forever — a warning that fires on success is a warning
-                # nobody reads.
-                #
-                # Drawn down by the RISE in live quantity, never by the absolute reading.
-                # The absolute number would also erase copies staged since the last join,
-                # which are exactly the copies the stale warning exists to find. Only on an
-                # ADOPTED reading: a kept one moved nothing, so nothing went live.
-                newly_live = quantity - before
-                if newly_live > 0 and listing.staged > 0:
-                    listing.bump(master.STAGED, -min(listing.staged, newly_live))
-
         queue_line = writable.queue_summary
         counts = writable.inventory.counts()
         stages = writable.inventory.listing_counts()
