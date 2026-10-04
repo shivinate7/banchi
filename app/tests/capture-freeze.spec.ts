@@ -70,7 +70,7 @@ async function stubWire(page: Page, count: number): Promise<{ undone: string[] }
         c.fillStyle = `rgb(${(i * 7 + k * 31) % 256},${(i * 13 + k * 17) % 256},${(i * 29 + k * 5) % 256})`
         c.fillRect((k * 97 + i * 11) % 1800, (k * 53 + i * 7) % 1000, 120, 80)
       }
-      out.push(canvas.toDataURL('image/jpeg', 0.9).split(',')[1] ?? '')
+      out.push(canvas.toDataURL('image/jpeg', 0.9).replace(/^data:[^;]*;base64,/, ''))
     }
     return out
   }, count)
