@@ -428,7 +428,13 @@ Without a change, a Haiku press would adopt a matcher answer as paid for. So:
 or a target set has no fingerprints (`match.unread_targets`). It starts none while one runs.
 `capture_server.serve` calls it at start and runs `pipeline_routes.stock_setup_loop` on a daemon thread, so a card from
 a new set starts a read. With the model runtime missing (`matchconst.runtime_importable`), nothing starts.
-The switch is the env `PKMNSCAN_AUTO_SETUP`: `on` forces auto-start. Unset, it is refused when `CI` or `PKMNSCAN_HARNESS` is set, so no suite downloads.
+The first look and the loop run on the daemon thread, so the server answers at once.
+The switch is the env `PKMNSCAN_AUTO_SETUP`: `on` forces auto-start. Unset, it is refused when `CI` or `PKMNSCAN_HARNESS` is set
+(`make harness` and the Playwright config set it), and in a linked worktree: only the primary checkout auto-starts.
+A look that would start the same setup again (a set the catalogue cannot name, a failed download) waits 30 minutes.
+A retry downloads the model from zero, because `match prepare` clears the partial file first.
+`pipeline_routes._spawn_prepare` is the one door: under a lock it writes the running record before it spawns, so a second start is refused.
+A tried mark made while a Prepare runs never counts once the Prepare ends.
 `match.index_stamp` changes when the index gains a set. `sweep.tried` counts a tried mark from an older stamp as empty,
 so cards tried before their set was read are tried again.
 

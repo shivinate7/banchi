@@ -163,13 +163,19 @@ def switched_on(conn: sqlite3.Connection) -> bool:
     return bool(row) and row[0] == "on"
 
 
+BUILDING = "building"  # a mark made while a Prepare ran: it never matches a finished index
+
+
 def tried() -> Dict[str, str]:
     record = _read_json(tried_path())
     if not isinstance(record, dict) or record.get("model") != MODEL_SHA256:
         return {}
     from identify import match  # lazy: match pulls the heavy readers
 
-    if record.get("stamp") != match.index_stamp():
+    stamp = record.get("stamp")
+    if stamp == BUILDING and match.prepare_pid() is not None:
+        pass  # the index is still being built: hold the marks for now
+    elif stamp != match.index_stamp():
         return {}  # a set was read since: cards tried before it are tried again
     keys = record.get("keys")
     return {str(k): str(v) for k, v in keys.items()} if isinstance(keys, dict) else {}
@@ -182,7 +188,7 @@ def remember_tried(additions: Dict[str, str]) -> None:
     keys.update(additions)
     from identify import match
 
-    _write_json(tried_path(), {"model": MODEL_SHA256, "stamp": match.index_stamp(), "keys": keys})
+    _write_json(tried_path(), {"model": MODEL_SHA256, "stamp": BUILDING if match.prepare_pid() is not None else match.index_stamp(), "keys": keys})
 
 
 _QUEUE_SQL = (

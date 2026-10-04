@@ -375,9 +375,9 @@ function askCostLine(total: RunPreflight['total'], on: boolean): string {
   return on ? `These are in the figure above: about ${about}.` : `Reading them again would add about ${about}.`
 }
 
-/** The free reader's setup, on the second stage. THE OWNER'S PRESS IS THE ONLY THING THAT DOWNLOADS
- *  OR READS: the card says the sizes first and the press starts it. Free, so no money gate, but the
- *  download is a large one and the owner asked that nothing fetch on its own. While it runs the line
+/** The free reader's setup, on the second stage. THE SERVER STARTS THIS BY ITSELF when the model file
+ *  or a set's stock photos are missing, so the press is a manual refresh. The card says the sizes first.
+ *  Free, so no money gate. While it runs the line
  *  holds its own box, so the stage does not move (D313). */
 function MatchPrepare({
   state,

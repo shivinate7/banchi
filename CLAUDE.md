@@ -107,7 +107,7 @@ make catalog-mirror # dry run only. ARGS=--dry-run samples over HTTP HEAD.
                                    # `serve` start and whenever the store holds a card from an unread set (never with the
                                    # runtime missing); the runs sheet's Prepare press is a manual refresh. Env
                                    # `PKMNSCAN_AUTO_SETUP=on` forces auto-start; unset, it is refused when `CI` or
-                                   # `PKMNSCAN_HARNESS` is set, so no suite downloads. `match --sweep` is the background reader's watcher (off until the
+                                   # `PKMNSCAN_HARNESS` is set (`make harness` sets it) and in a linked worktree. `match --sweep` is the background reader's watcher (off until the
                                    # Capture screen's Rig switch is on; never spends; reads even mid-feed).
                                    # `identify --engine marqo-b`
                                    # reads free first, then sends each card it cannot accept to Haiku, held for review.
