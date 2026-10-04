@@ -2433,7 +2433,10 @@ const nextOf = (name: string): Entry[] => [
 
 for (const width of [820, 1440]) {
   test(`the next-card chip is not clipped and keeps one height at ${width} wide, light`, async ({ page }) => {
-    await page.addInitScript(() => window.localStorage.setItem('banchi.theme', 'light'))
+    await page.addInitScript(() => {
+      // eslint-disable-next-line no-restricted-syntax -- SEEDING THE VERY KEY UNDER TEST (the theme); the same disable themes.spec.ts carries.
+      window.localStorage.setItem('banchi.theme', 'light')
+    })
     const heights: number[] = []
     for (const name of ['Mew', 'Snorlax, Sleeping Giant']) {
       await open(page, nextOf(name)) // a later route for /queues wins over the earlier one
@@ -2450,10 +2453,13 @@ for (const width of [820, 1440]) {
           clipped: kids.filter((k) => !k.classList.contains('review-next-name') && k.scrollWidth > k.clientWidth).map((k) => `${k.className}: ${k.scrollWidth}>${k.clientWidth}`),
           inside: box.left >= photo.left && box.right <= photo.right && box.top >= photo.top && box.bottom <= photo.bottom,
           height: box.height,
+          nameWidth: el.querySelector('.review-next-name')!.getBoundingClientRect().width,
         }
       })
       expect(read.clipped, `${name}: text cut by its own box`).toEqual([])
       expect(read.inside, `${name}: chip box leaves the photograph`).toBe(true)
+      /* The chip exists to say WHICH card is next: at 820 the name keeps room to be read (it may end in an ellipsis). */
+      if (width === 820) expect(read.nameWidth, `${name}: the name collapses`).toBeGreaterThanOrEqual(60)
       heights.push(read.height)
     }
     expect(heights[1], 'chip height changes with its text').toBe(heights[0])
