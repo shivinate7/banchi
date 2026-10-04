@@ -5028,6 +5028,14 @@ COMPONENTS = [
                 # D42 holds the standing grant to auto-merge a mirror-only PR.
                 "governed_by": ["D42", "D70", "D295"],
             },
+            "demo-mirror-daily-photos-selftest.py": {
+                "does": "`make demo-mirror-daily-photos-selftest`: the daily mirror ships every "
+                        "photograph its bundle names. Proves, in throwaway repos with the real "
+                        "`.gitignore`, that a new `demo-assets/mirror/photos/` file is not "
+                        "ignored, that the photo store's own `photos/` stays ignored, and that "
+                        "a run never merges a bundle whose photographs are not committed.",
+                "governed_by": ["D172", "D295"],
+            },
             "demo-histories.py": {
                 "does": "`make demo-histories`: records every demo card's price history, all "
                         "four ranges, from infinite-api into a NEW dated directory under "
