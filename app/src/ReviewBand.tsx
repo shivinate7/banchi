@@ -113,7 +113,7 @@ export function ReviewBand({
         <span className="review-band-presses">
           <span className="review-band-slot">
             {!loaded || left === 0 ? null : (
-              <Button variant="primary" icon="zap" busy={busy} disabled={busy} onClick={() => onRead(keys ?? [])} className="review-band-read">
+              <Button variant="primary" icon="zap" busy={busy} disabled={busy} onClick={() => onRead(sweep?.paid_keys ?? [])} className="review-band-read">
                 Read the {left} left
                 {about === null ? null : roundsToNothing(about) ? (
                   ', under a cent'

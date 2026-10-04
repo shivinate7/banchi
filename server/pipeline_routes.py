@@ -1194,7 +1194,7 @@ def _sweep_poll_state(keys: str) -> dict:
     named = [key for key in keys.split(",") if key]
     record = sweep._read_json(sweep.state_path())
     worker = isinstance(record, dict) and bool(record.get("worker"))
-    on, here, paid, unread = False, 0, 0, 0
+    on, here, paid_keys, unread = False, 0, [], 0
     try:
         conn = store_db.open_read_only(store_db.path(files.inventory_dir()))
     except FileNotFoundError:
@@ -1222,7 +1222,7 @@ def _sweep_poll_state(keys: str) -> dict:
                     if asides.get(key) == capture_id:
                         continue
                     if seen.get(key) == capture_id:
-                        paid += 1
+                        paid_keys.append(key)
                     else:
                         unread += 1
         finally:
@@ -1234,7 +1234,8 @@ def _sweep_poll_state(keys: str) -> dict:
         "blocked": None if matchconst.runtime_importable() else "runtime_missing",
         "aside": len(sweep.aside()),
         "matched_here": here,
-        "paid": paid,
+        "paid": len(paid_keys),
+        "paid_keys": paid_keys,
         "unread": unread,
     }
 

@@ -577,6 +577,8 @@ Turning the toggle on never downloads. With no model or no index, the toggle rea
     It names its count and cost, and it starts the paid look with no confirm.
   - It has one way back: "Back to Capture".
   - The band holds its loaded size from the first paint. A count that changes moves nothing. It polls as the Capture counter does.
+  - The photo gives up the band's height, so a card is answered without scrolling.
+  - The same read adds `paid_keys`, the keys counted in `paid`. The press sends only those keys, so the spend never exceeds the quote.
 - A per-card detail shows on request only: the engine, the match and the margin.
 
 **What a paid press does over matched cards.** Section 6 gives the rule. It asks every time, and the default is skip.

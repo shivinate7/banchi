@@ -2997,6 +2997,8 @@ export type MatchSweep = {
   matched_here?: number
   /** Only on the keys-scoped read: named cards that wait for a paid look (tried by the free reader, not accepted, not set aside). */
   paid?: number
+  /** Only on the keys-scoped read: the named keys counted in `paid`. A paid press sends these and no others. */
+  paid_keys?: string[]
   /** Only on the keys-scoped read: named cards the free reader has not looked at yet (not set aside). */
   unread?: number
   /** Only on the keys-scoped read: the watcher's state file names a worker. */

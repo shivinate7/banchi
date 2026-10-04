@@ -839,9 +839,8 @@ export function ReviewQueue() {
   const spending = useRef(false)
   const [spendBusy, setSpendBusy] = useState(false)
   const identifyNow = useCallback(async (scope: readonly string[]) => {
-    /* The band's scope, narrowed to the cards a spend would buy: a card with an answer is never sent again. */
-    const inside = new Set(scope)
-    const keys = pending.filter((key) => inside.has(key))
+    /* The band names the keys it counted as waiting for a paid look; the spend is exactly those. */
+    const keys = scope
     if (spending.current || keys.length === 0) return
     spending.current = true
     setSpendBusy(true)
@@ -862,7 +861,7 @@ export function ReviewQueue() {
       spending.current = false
       setSpendBusy(false)
     }
-  }, [pending])
+  }, [])
 
   /* The run list is read only when there is a strip to price: a store with nothing waiting
      pays for no second read. */
