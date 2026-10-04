@@ -333,7 +333,7 @@ def check_sweep_routes(checks: Checks) -> None:
                 checks.equal(len(spawned), 1, "and starts the watcher")
                 status, body, _ = request(port, "GET", "/pipeline/match/sweep")
                 answer = json.loads(body)
-                checks.equal(sorted(answer), ["matched", "on", "running"], "GET answers on, running and matched")
+                checks.equal(sorted(answer), ["blocked", "matched", "on", "running"], "GET answers on, running, matched and blocked")
                 checks.equal(
                     (answer["on"], answer["matched"]), (True, 2),
                     "on is the stored switch, matched counts marqo-b rows only",
