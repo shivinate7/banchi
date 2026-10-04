@@ -350,6 +350,10 @@
 .capture-section-val { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; align-items: stretch; text-align: right; }
 .capture-section-val strong { min-width: 0; font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .capture-section-val span { min-width: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The sub-line ("next card N, before section M") wraps whole rather than cutting a word, inside
+   a two-line height held for every pick so a pick never moves the row (D313). */
+.capture-section-val > span { white-space: normal; overflow: visible; min-height: 2.5em; }
+.capture-section-val > span > .capture-list-part { white-space: nowrap; }
 .capture-section-val.is-empty strong,
 .capture-section-val.is-default strong { color: var(--bn-ink-3); font-weight: 400; }
 .capture-row-lg:has(.is-empty) { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 1.5px var(--bn-accent); }
