@@ -2085,6 +2085,12 @@ test.describe('the Review summary band', () => {
     spends: { body: Record<string, unknown> }[]
     /** hold the first keys-scoped answer back until released */
     hold: Promise<void> | null
+    /** Pokemon cards in scope with no set hint: the free reader never queues them (`unhinted` on the wire) */
+    unhinted: number
+    /** keys that carry a free-reader row AND an open review row */
+    alsoReview: string[]
+    /** runs when a spend lands, so a case can move the cards the way the server would */
+    onSpend: (() => void) | null
   }
 
   const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
@@ -2120,7 +2126,7 @@ test.describe('the Review summary band', () => {
   async function seed(page: Page, over: Partial<Wire> = {}): Promise<Wire> {
     const wire: Wire = {
       on: true, running: false, blocked: null, aside: 0, fates: { ...FATES },
-      sittingOpen: true, asked: [], spends: [], hold: null, ...over,
+      sittingOpen: true, asked: [], spends: [], hold: null, unhinted: 0, alsoReview: [], onSpend: null, ...over,
     }
     await page.route(/\/capture\/sitting$/, (route) =>
       route.fulfill(json({ open: wire.sittingOpen, gap_minutes: 30, cards: wire.sittingOpen ? SITTING.map(sittingCard) : [] })),
@@ -2139,11 +2145,11 @@ test.describe('the Review summary band', () => {
       if (wire.hold !== null) await wire.hold
       const count = (fate: Fate) => keys.filter((key) => wire.fates[key] === fate).length
       return route.fulfill(
-        json({ on: wire.on, running: wire.on && wire.running, worker: wire.running, blocked: wire.blocked, aside: wire.aside, matched_here: count('matched'), paid: count('paid'), paid_keys: keys.filter((key) => wire.fates[key] === 'paid'), unread: count('unread') }),
+        json({ on: wire.on, running: wire.on && wire.running, worker: wire.running, blocked: wire.blocked, aside: wire.aside, matched_here: count('matched'), paid: count('paid'), matched_keys: keys.filter((key) => wire.fates[key] === 'matched'), unhinted: wire.unhinted, paid_keys: keys.filter((key) => wire.fates[key] === 'paid'), unread: count('unread') }),
       )
     })
     await page.route(/\/queues$/, (route) =>
-      route.fulfill(json({ review: Object.keys(wire.fates).filter((key) => wire.fates[key] === 'review').map(reviewEntry), parked: [] })),
+      route.fulfill(json({ review: [...Object.keys(wire.fates).filter((key) => wire.fates[key] === 'review'), ...wire.alsoReview].map(reviewEntry), parked: [] })),
     )
     await page.route(/\/pipeline\/waiting$/, (route) =>
       route.fulfill(json({ keys: Object.keys(wire.fates).filter((key) => ['matched', 'paid', 'unread'].includes(wire.fates[key] ?? '')), claimed: 0 })),
@@ -2154,6 +2160,7 @@ test.describe('the Review summary band', () => {
     await page.route(/\/review\/\d+\/\d+\/catalog/, (route) => route.fulfill(json({ box: 3, index: 8, game: 'pokemon', query: '', searched: false, rows: [], found: 0, truncated: false })))
     await page.route(/\/pipeline\/identify$/, (route) => {
       wire.spends.push({ body: route.request().postDataJSON() as Record<string, unknown> })
+      wire.onSpend?.()
       return route.fulfill(
         json({ started: [{ run: '2026-09-25-box3-01', path: '/tmp/runs/x', pid: 999, selection: { keys: [] }, scope: null, cards: 2, argv: [] }], failed: [] }),
       )
@@ -2313,6 +2320,50 @@ test.describe('the Review summary band', () => {
       await seed(page, { aside: 3 })
       await openReview(page)
       await expect(health(page)).toHaveText(/3 set aside/i)
+    })
+
+    test('after a press with the sitting open, the band reads again and does not offer the same cards twice', async ({ page }) => {
+      const wire = await seed(page)
+      wire.onSpend = () => {
+        wire.fates['3/4'] = 'done'
+        wire.fates['3/5'] = 'done'
+      }
+      await openReview(page)
+      await expect(press(page)).toContainText('Read the 2 left')
+      await press(page).click()
+      await expect.poll(() => wire.spends.length).toBe(1)
+      const reads = wire.asked.length
+      await expect.poll(() => wire.asked.length, { timeout: 6_000 }).toBeGreaterThan(reads) // keep: one poll tick, never the 20s idle one
+      await expect(press(page)).toHaveCount(0)
+    })
+
+    test('a card with an open review row counts only in waiting for you, never also in matched free', async ({ page }) => {
+      await seed(page, { alsoReview: ['3/1'] })
+      await openReview(page)
+      await expect(count(page, 'waiting for you')).toHaveText(/3\s+waiting for you/i)
+      await expect(count(page, 'matched free')).toHaveText(/2\s+matched free/i)
+    })
+
+    test('the health line shows set aside beside matching now', async ({ page }) => {
+      await seed(page, { running: true, aside: 2 })
+      await openReview(page)
+      await expect(health(page)).toHaveText(/matching now/i)
+      await expect(health(page)).toHaveText(/2 set aside/i)
+    })
+
+    test('the health line names the cards that need a set named', async ({ page }) => {
+      await seed(page, { unhinted: 2 })
+      await openReview(page)
+      await expect(health(page)).toHaveText(/2 need a set named/i)
+    })
+
+    test('a carried scope wins over the open sitting', async ({ page }) => {
+      const carried = ['3/2', '3/3', '3/4']
+      await page.addInitScript((keys) => window.sessionStorage.setItem('banchi.run-scope', JSON.stringify({ keys })), carried)
+      const wire = await seed(page)
+      await openReview(page)
+      await expect(count(page, 'matched free')).toHaveText(/2\s+matched free/i)
+      expect(wire.asked.at(-1), 'the band reads the handed-off cards, not the sitting').toEqual(carried)
     })
 
     test('the band names no mechanism', async ({ page }) => {
