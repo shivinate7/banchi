@@ -990,6 +990,9 @@ function Track({
   )
 }
 
+/** The newest tiles the Recent rail draws while the dispenser deals: three rows of its five columns. */
+const DEALING_RAIL_TILES = 15
+
 /* TWO TARGETS DRAW THE SAME TILE WHEN EVERY FIELD AGREES. `undoStack` rebuilds each target object
  * whenever the sitting moves, so identity says nothing; the fields do. */
 function sameTarget(a: UndoTarget, b: UndoTarget): boolean {
@@ -1076,11 +1079,11 @@ function UndoCell({
   nonce: string
   busy: boolean
   spansDrawers: boolean
-  onUndo: (depth: number) => void
+  onUndo: (target: UndoTarget) => void
   onRemove: (target: UndoTarget) => void
 }) {
   return (
-    <li className="bn-stagger-item" style={{ '--i': at } as CSSProperties}>
+    <li className={at >= DEALING_RAIL_TILES ? 'bn-stagger-item capture-undo-still' : 'bn-stagger-item'} style={{ '--i': at } as CSSProperties}>
       {/* THE CELL WRAPS TWO SIBLING BUTTONS RATHER THAN NESTING ONE INSIDE THE
           OTHER — an interactive element cannot hold a second one and stay valid,
           and the two mean different things: the row still walks the plan back to
@@ -1090,7 +1093,7 @@ function UndoCell({
         <button
           type="button"
           className="capture-undo-row"
-          onClick={() => onUndo(at + 1)}
+          onClick={() => onUndo(target)}
           disabled={busy}
           data-undo={at === 0 ? 'Undo' : `Undo ${at + 1}`}
           aria-label={
@@ -3341,7 +3344,14 @@ export function CaptureScreen() {
    * callbacks never change identity, so a tile re-renders only when its own props move. */
   const undoBackRef = useRef(undoBack)
   undoBackRef.current = undoBack
-  const onUndoCell = useCallback((depth: number) => void undoBackRef.current(depth), [])
+  /* A TILE NAMES ITS CARD, NOT ITS RANK: the rail can hold a list older than the live one while the
+   * dispenser deals, so the depth is read off the live stack at the press. */
+  const undoStackRef = useRef<UndoTarget[]>([])
+  undoStackRef.current = undoStack
+  const onUndoCell = useCallback((target: UndoTarget) => {
+    const at = undoStackRef.current.findIndex((entry) => entry.box === target.box && entry.index === target.index)
+    if (at >= 0) void undoBackRef.current(at + 1)
+  }, [])
   const onRemoveCell = useCallback((target: UndoTarget) => {
     setUndoNote(null)
     setRemoveConfirm(target)
@@ -4019,6 +4029,36 @@ export function CaptureScreen() {
           ? (blockerWord[blockers[0]?.key ?? ''] ?? 'Capture is blocked')
           : null
   const dealerIdle = dealer.state === 'connected' || dealer.state === 'stopped'
+
+  /* WHILE THE DISPENSER DEALS THE RECENT RAIL SHOWS ONLY THE NEWEST `DEALING_RAIL_TILES` (D316):
+   * a capture then costs a constant, not one tile per card in the sitting. When dealing ends the
+   * older tiles load in BELOW those, which stay where they are, with no entrance animation. The
+   * Last capture panel is untouched, and undo and its keys read the live `undoStack`. The one
+   * source of "dealing" is `useDealer`. */
+  const dealing = dealer.state === 'dealing'
+  const railList = useMemo(() => {
+    const shown = dealing ? undoStack.slice(0, DEALING_RAIL_TILES) : undoStack
+    const floor = dealing ? Math.min(stripFloor, DEALING_RAIL_TILES) : stripFloor
+    return (
+      <ul className="capture-undo-list">
+        {shown.map((target, at) => (
+          <UndoCell
+            key={`${target.box}/${target.index}`}
+            target={target}
+            at={at}
+            nonce={`${slotStamps[`${target.box}/${target.index}`] ?? 0}.${revision}`}
+            busy={busy}
+            spansDrawers={spansDrawers}
+            onUndo={onUndoCell}
+            onRemove={onRemoveCell}
+          />
+        ))}
+        {Array.from({ length: Math.max(0, floor - shown.length) }).map((_, at) => (
+          <li key={`ghost-${at}`} className="capture-undo-ghost" aria-hidden="true" />
+        ))}
+      </ul>
+    )
+  }, [dealing, undoStack, slotStamps, revision, busy, spansDrawers, stripFloor, onUndoCell, onRemoveCell])
   const dealerSaid = !dealerSupported() ? dealerReason : dealerIdle && dealerReason !== null ? dealerReason : dealer.said
 
   /** WHETHER THERE IS ANYTHING TO CLEAR, which is what disables the control rather than hiding
@@ -5134,29 +5174,17 @@ export function CaptureScreen() {
               </p>
             )}
           </div>
+          {/* THE LIMIT NOTE'S ROOM IS KEPT (D313): one line, always reserved, so the rail never moves. */}
+          <Slot className="capture-film-paused" show={dealing && undoStack.length > DEALING_RAIL_TILES}>
+            <p className="capture-quiet">Showing the newest {DEALING_RAIL_TILES} while the dispenser deals.</p>
+          </Slot>
 
           {undoStack.length === 0 ? (
             <p className="capture-quiet capture-film-empty">
               Your latest captures show up here, ready to undo.
             </p>
           ) : (
-            <ul className="capture-undo-list">
-              {undoStack.map((target, at) => (
-                <UndoCell
-                  key={`${target.box}/${target.index}`}
-                  target={target}
-                  at={at}
-                  nonce={slotNonce(target.box, target.index)}
-                  busy={busy}
-                  spansDrawers={spansDrawers}
-                  onUndo={onUndoCell}
-                  onRemove={onRemoveCell}
-                />
-              ))}
-              {Array.from({ length: Math.max(0, stripFloor - undoStack.length) }).map((_, at) => (
-                <li key={`ghost-${at}`} className="capture-undo-ghost" aria-hidden="true" />
-              ))}
-            </ul>
+            railList
           )}
 
           {/* THE NOTE'S ROOM IS KEPT (D313): an undo's answer lands in a slot that is already one
