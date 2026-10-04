@@ -66,6 +66,8 @@
 .capture-odo .bn-stat { min-width: 64px; }
 /* One step under the title: the figures read as the run's odometer, not as the page's name. */
 .capture-odo .bn-stat-value { font-size: var(--bn-fs-2xl); }
+.capture-odo-matched { display: flex; align-items: center; gap: var(--bn-4); flex: none; width: calc(1px + 64px + 2 * var(--bn-4) + 2ch); }
+.capture-odo-matched .bn-stat-value { font-variant-numeric: tabular-nums; min-width: 4ch; }
 .capture-odo-rule { width: 1px; height: 24px; background: var(--bn-line); }
 .capture-odo-verdict { margin-left: var(--bn-1); }
 .capture-odo-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: var(--bn-0-5); }

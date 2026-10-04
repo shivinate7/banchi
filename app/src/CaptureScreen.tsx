@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, ReactNode } from 'react'
 
 import { PositionLabel } from './PositionLabel'
+import { usePoll } from './usePoll'
 import type {
   BoxRecord,
   CardSummary,
@@ -9,6 +10,7 @@ import type {
   FinishClaim,
   GameEntry,
   GameRegistry,
+  MatchSweep,
   RemoveResult,
   SectionDetail,
 } from './types'
@@ -1156,25 +1158,10 @@ export function CaptureScreen() {
   const [rigOpen, setRigOpen] = useState(restored.box === null)
   const rigTouched = useRef(false)
   /* THE BACKGROUND READER'S SWITCH is a store row, not a device key: it is a fact about this store.
-     It is read once, when the rig is first shown, and written by the person pressing the row. */
+     It is polled with the sitting's count (below) and written by the person pressing the row. */
   const [sweepOn, setSweepOn] = useState<boolean | null>(null)
   const [sweepBusy, setSweepBusy] = useState(false)
   const [sweepDown, setSweepDown] = useState(false)
-  const rigShown = rigOpen || (openField !== null && RIG_FIELDS.has(openField))
-  useEffect(() => {
-    if (!rigShown || sweepOn !== null) return
-    let live = true
-    getMatchSweep()
-      .then((answer) => {
-        if (!live) return
-        setSweepDown(false)
-        setSweepOn(answer.on)
-      })
-      .catch(() => live && setSweepDown(true))
-    return () => {
-      live = false
-    }
-  }, [rigShown, sweepOn])
   const flipSweep = () => {
     if (sweepOn === null) return
     setSweepBusy(true)
@@ -2666,6 +2653,25 @@ export function CaptureScreen() {
     return shots.slice(from)
   }, [shots])
 
+  /* ONE POLL READS THE SWITCH, THE WATCHER AND THE SITTING'S MATCHED COUNT (the head's third counter).
+     It reads `matched_here` for this sitting's keys, about 3 s while the reader works and 20 s otherwise.
+     The server never probes the watcher's lock on this path, so polling cannot stop it starting. */
+  const [matchedHere, setMatchedHere] = useState(0)
+  const sittingKeys = useMemo(() => sitting.map((shot) => shot.card.key), [sitting])
+  usePoll<MatchSweep>({
+    fn: () => getMatchSweep(sittingKeys),
+    onData: (answer) => {
+      setSweepDown(false)
+      setSweepOn(answer.on)
+      setMatchedHere(answer.matched_here ?? 0)
+    },
+    onError: () => setSweepDown(true),
+    liveMs: 3_000,
+    idleMs: 20_000,
+    isLive: (answer) => answer.running,
+    restartKey: sittingKeys.length,
+  })
+
   /* THE ODOMETER COUNTS THE SITTING, AND THE SPLIT UNDERNEATH SAYS WHERE IT WENT.
    *
    * It counted `shots.filter((shot) => shot.card.box === box)` until 2026-09-12, so changing
@@ -3951,6 +3957,15 @@ export function CaptureScreen() {
         <Stat value={runCount === null ? '0' : String(runCount.shots)} label="captured" />
         <span className="capture-odo-rule" aria-hidden="true" />
         <Stat value={box === null ? '—' : String(nextCaptureCardNumber ?? '?')} label="next card" />
+        {/* ALWAYS A SLOT OF FIXED WIDTH, so the switch flipping adds no width and moves neither counter (D313). */}
+        <span className="capture-odo-matched">
+          {sweepOn === true ? (
+            <>
+              <span className="capture-odo-rule" aria-hidden="true" />
+              <Stat value={String(matchedHere)} label="matched" />
+            </>
+          ) : null}
+        </span>
         {runCount === null ? null : runCount.gaps === 0 && runCount.ids === runCount.shots ? (
           <Pill tone="ok" icon="check" className="capture-odo-verdict">
             no gaps

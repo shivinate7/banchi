@@ -2992,6 +2992,10 @@ export type MatchSweep = {
   /** Set while the reader's runtime cannot load on this machine; the worker cannot run then. */
   blocked: null | 'runtime_missing'
   matched: number
+  /** Only on the keys-scoped read: how many of the named keys the free reader has matched. */
+  matched_here?: number
+  /** Only on the keys-scoped read: the watcher's state file names a worker. */
+  worker?: boolean
 }
 
 /** `GET /pipeline/match`: is the free reader prepared, and is a Prepare running. Free; the server

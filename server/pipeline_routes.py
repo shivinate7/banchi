@@ -1206,10 +1206,46 @@ def _sweep_state() -> dict:
     return {"on": on, "running": sweep.running(), "blocked": None if matchconst.runtime_importable() else "runtime_missing", "matched": _swept_count()}
 
 
-def do_pipeline_match_sweep() -> dict:
+def _sweep_poll_state(keys: str) -> dict:
+    """The Capture head's polled read: NO lock probe (`sweep.running` and `sweep.acquire_lock` would
+    hold the flock a starting watcher needs), one read-only connection, the worker from the state file.
+    `running` here is `worker`: the watcher's own file says a worker is reading right now."""
+    named = [key for key in keys.split(",") if key]
+    record = sweep._read_json(sweep.state_path())
+    worker = isinstance(record, dict) and bool(record.get("worker"))
+    on, matched, here = False, 0, 0
+    try:
+        conn = store_db.open_read_only(store_db.path(files.inventory_dir()))
+    except FileNotFoundError:
+        conn = None
+    if conn is not None:
+        try:
+            on = store_db.match_sweep_on(conn)
+            sql = "select count(*) from identifications where json_extract(payload, '$.engine') = ?"
+            matched = int(conn.execute(sql, (cache_mod.ENGINE_MATCHER,)).fetchone()[0])
+            for at in range(0, len(named), 500):  # under SQLite's variable cap
+                chunk = named[at : at + 500]
+                row = conn.execute(
+                    f"{sql} and key in ({','.join('?' * len(chunk))})", (cache_mod.ENGINE_MATCHER, *chunk)
+                ).fetchone()
+                here += int(row[0])
+        finally:
+            conn.close()
+    return {
+        "on": on,
+        "running": worker,
+        "worker": worker,
+        "blocked": None if matchconst.runtime_importable() else "runtime_missing",
+        "matched": matched,
+        "matched_here": here,
+    }
+
+
+def do_pipeline_match_sweep(keys: Optional[str] = None) -> dict:
     """`GET /pipeline/match/sweep` — is the background reader switched on, is its watcher alive,
-    and how many cards has it matched. FREE: a meta row, a pid check and one count."""
-    return _sweep_state()
+    and how many cards has it matched. FREE: a meta row, a pid check and one count. With `keys`
+    (the sitting's position keys, comma separated) it is the polled read: see `_sweep_poll_state`."""
+    return _sweep_state() if keys is None else _sweep_poll_state(keys)
 
 
 def _spawn_sweep_watcher() -> Optional[int]:
