@@ -7,6 +7,7 @@ one home, and `home()` here is `store.files.home()` spelled without the package 
 keeps the two equal).
 """
 
+import importlib.util
 import os
 from pathlib import Path
 
@@ -28,3 +29,11 @@ def home() -> Path:
 
 def inventory_dir() -> Path:
     return home() / INVENTORY_DIRNAME
+
+
+def runtime_importable() -> bool:
+    """Can the model runtime be imported. The one answer; it loads nothing."""
+    try:
+        return importlib.util.find_spec("onnxruntime") is not None
+    except (ImportError, ValueError):
+        return False

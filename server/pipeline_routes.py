@@ -168,6 +168,7 @@ from identify import cost  # noqa: E402
 from identify import match as matcher  # noqa: E402
 from identify import sidecar  # noqa: E402
 from identify import sweep  # noqa: E402
+from identify.matchconst import runtime_importable  # noqa: E402
 from store import Store, files, master  # noqa: E402
 from store import cache as cache_mod  # noqa: E402
 from store import db as store_db  # noqa: E402
@@ -1136,9 +1137,9 @@ def _prepare_pid() -> Optional[int]:
     pid = record.get("pid")
     if not isinstance(pid, int):
         return None
-    try:
-        os.kill(pid, 0)
-    except OSError:
+    # `kill -0` succeeds on a zombie, so ask for the state: an exited child is not running.
+    state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+    if not state or state.startswith("Z"):
         return None
     return pid
 
@@ -1161,6 +1162,7 @@ def do_pipeline_match() -> dict:
     return {
         **state,
         "running": running,
+        "runtime_missing": not runtime_importable(),
         "progress": progress if isinstance(progress, dict) else None,
         "model_url": matcher.MODEL_URL,
         "margin_min": matcher.MARGIN_MIN,
@@ -1192,7 +1194,7 @@ def _sweep_state() -> dict:
         on = store_db.match_sweep_on(conn)
     finally:
         conn.close()
-    return {"on": on, "running": sweep.running(), "matched": _swept_count()}
+    return {"on": on, "running": sweep.running(), "blocked": sweep.blocked(), "matched": _swept_count()}
 
 
 def do_pipeline_match_sweep() -> dict:
@@ -1286,6 +1288,13 @@ def do_pipeline_match_prepare(payload: dict) -> Tuple[HTTPStatus, dict]:
             HTTPStatus.CONFLICT,
             "prepare_already_running",
             "Preparing is already running. It will finish on its own.",
+        )
+    if not runtime_importable():
+        files.log_cause("match prepare", ImportError("onnxruntime is not importable in this venv"))
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "runtime_missing",
+            "The reader's setup on this Mac is out of date, so Prepare cannot run yet. Update the app's setup, then press Prepare again.",
         )
     argv = [str(PKMNSCAN), "match", "prepare"]
     log_path = matcher.progress_path().with_suffix(".log")
