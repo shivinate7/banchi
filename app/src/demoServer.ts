@@ -809,7 +809,11 @@ function read(path: string): unknown {
   const realized = /^\/pipeline\/products\/([^/]+)\/realized$/.exec(route)
   if (realized !== null) return { sku: decodeURIComponent(realized[1] ?? ''), configured: false }
   /* The background reader is off in the demo: the answer the real server gives when it is not swept. */
-  if (route === '/pipeline/match/sweep') return { on: false, running: false, matched: 0 }
+  if (route === '/pipeline/match/sweep') {
+    return params.has('keys')
+      ? { on: false, running: false, worker: false, blocked: null, aside: 0, matched_here: 0, matched_keys: [], paid: 0, paid_keys: [], unread: 0, unhinted: 0 }
+      : { on: false, running: false, matched: 0 }
+  }
   /* THE BURIED HALF OF THE ONE RECORDED GRAVEYARD, filtered as the route filters it. */
   const graveyard = responses['/graveyard']
   if (route === '/graveyard' && params.get('buried') === '1' && graveyard !== undefined) {

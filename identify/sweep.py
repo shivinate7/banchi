@@ -230,14 +230,26 @@ def remember_tried(additions: Dict[str, str]) -> None:
     _write_json(tried_path(), {"model": MODEL_SHA256, "stamp": stamp, "building": sorted(building), "keys": keys})
 
 
-_QUEUE_SQL = (
-    "select c.key, coalesce(c.capture_id, '') from cards c "
-    "where c.state = 'captured' "
+_QUEUE_WHERE = (
+    "c.state = 'captured' "
     "and coalesce(c.game, 'pokemon') in ({games}) "
     "and not (coalesce(c.game, 'pokemon') = 'pokemon' and trim(coalesce(c.set_hint, '')) = '') "
     "and not exists (select 1 from identifications i where i.key = c.key) "
-    "order by c.captured_at, c.key"
 )
+_QUEUE_SQL = "select c.key, coalesce(c.capture_id, '') from cards c where " + _QUEUE_WHERE + "order by c.captured_at, c.key"
+
+
+def queued_among(conn: sqlite3.Connection, keys: Sequence[str]) -> Dict[str, str]:
+    """`{key: capture id}` of the named keys that pass the queue's own filter (served game, hinted, captured, no
+    identification), before the tried and set-aside marks. The band reads it, so it never restates the filter."""
+    marks = ",".join("?" for _ in SERVED_GAMES)
+    out: Dict[str, str] = {}
+    for at in range(0, len(keys), 500):  # under SQLite's variable cap
+        chunk = list(keys[at : at + 500])
+        sql = "select c.key, coalesce(c.capture_id, '') from cards c where " + _QUEUE_WHERE.format(games=marks)
+        sql += f"and c.key in ({','.join('?' * len(chunk))})"
+        out.update((str(k), str(v)) for k, v in conn.execute(sql, (*SERVED_GAMES, *chunk)))
+    return out
 
 
 def queue(conn: sqlite3.Connection, limit: Optional[int] = None) -> List[Tuple[str, str]]:

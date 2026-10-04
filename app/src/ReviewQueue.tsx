@@ -66,9 +66,10 @@ import { LogWell } from './RunsLog'
 import { RunsContent, boxInHash, perCardRate, runInHash, stateInHash } from './Runs'
 import { openingSelection, sendOfKeys } from './RunsComposer'
 import { carriedScope, type CarriedScope } from './runHandoff'
-import { money, roundsToNothing } from './money'
+import { money } from './money'
 import { monthDay } from './dates'
 import { SearchField } from './SearchField'
+import { ReviewBand } from './ReviewBand'
 import './ReviewQueue.css'
 import { isRetiredReason, reasonLabel } from './reasons'
 import { collectorNumber as sharedCollectorNumber } from './cardNumber'
@@ -773,11 +774,9 @@ export function ReviewQueue() {
   const [pendingFailure, setPendingFailure] = useState<Failure | null>(null)
   /* THE COUNT HAS BEEN ANSWERED (D313): until it is, the strip's frame is held, hidden, at its
      loaded size, so the answer fills it and moves nothing. */
-  const [counted, setCounted] = useState(false)
   /** `/status` has answered, either way: a failed read must not hold the strip's frame forever. */
   const [statusDone, setStatusDone] = useState(false)
   /** The per-card rate has answered, either way: the estimate is the last thing to land in the strip. */
-  const [rateDone, setRateDone] = useState(false)
   const [rate, setRate] = useState<number | null>(null)
   useEffect(() => {
     let live = true
@@ -808,7 +807,6 @@ export function ReviewQueue() {
     if (!ask) {
       setPending([])
       setPendingFailure(null)
-      if (statusDone) setCounted(true)
       return
     }
     let live = true
@@ -817,13 +815,11 @@ export function ReviewQueue() {
         if (!live) return
         setPending(answer.keys)
         setPendingFailure(null)
-        setCounted(true)
       })
       .catch((err: unknown) => {
         if (!live) return
         setPending([])
         setPendingFailure(describeFailure(err))
-        setCounted(true)
       })
     return () => {
       live = false
@@ -842,18 +838,18 @@ export function ReviewQueue() {
    * nothing on the screen (D118). */
   const spending = useRef(false)
   const [spendBusy, setSpendBusy] = useState(false)
-  const identifyNow = useCallback(async () => {
-    if (spending.current || pending.length === 0) return
+  const identifyNow = useCallback(async (scope: readonly string[]) => {
+    /* The band names the keys it counted as waiting for a paid look; the spend is exactly those. */
+    const keys = scope
+    if (spending.current || keys.length === 0) return
     spending.current = true
     setSpendBusy(true)
     try {
-      const answer = await startRun(sendOfKeys(pending))
+      const answer = await startRun(sendOfKeys(keys))
       const first = answer.started[0]
       if (first !== undefined) {
-        /* The same receipt a composer-started run gets: a toast, then the run open in the
-           sheet, where its own progress reads itself while it is live. */
+        /* A toast and no sheet: the band's press opens nothing. Past runs holds the run. */
         toast({ kind: 'ok', title: 'Identify started', body: `${first.cards} ${first.cards === 1 ? 'card' : 'cards'} sent to be read.` })
-        openRuns(false, first.run)
       } else {
         const failed = answer.failed[0]
         toast({ kind: 'refusal', tone: failed === undefined ? 'warn' : failureTone(failed), title: 'Nothing was paid for', body: failed?.sentence ?? failed?.message ?? 'The run did not start.' })
@@ -865,7 +861,7 @@ export function ReviewQueue() {
       spending.current = false
       setSpendBusy(false)
     }
-  }, [pending, openRuns])
+  }, [])
 
   /* The run list is read only when there is a strip to price: a store with nothing waiting
      pays for no second read. */
@@ -878,16 +874,10 @@ export function ReviewQueue() {
         if (live) setRate(perCardRate(runs))
       })
       .catch(() => undefined)
-      .finally(() => {
-        if (live) setRateDone(true)
-      })
     return () => {
       live = false
     }
   }, [waiting, reloads])
-  const about = rate === null ? null : rate * captured
-  /** The strip may show: the count answered, and when there is a count, its estimate too. */
-  const ready = counted && (captured === 0 || rateDone)
 
   useEffect(() => {
     let live = true
@@ -1614,45 +1604,21 @@ export function ReviewQueue() {
         </>
       }
     >
-      {/* THE STRIP (D291): drawn only when the pipeline has cards waiting. The owner picks
-          at the press (2026-09-25): wait for the free pre-check, or go straight to the bill.
-          Both presses keep their words, because both are about money. "Identify now" takes
-          the one solid fill, because it is the press that spends and must read as the loud
-          one. "Check first" is ghost beside it. */}
+      {/* THE SUMMARY BAND (D291, `docs/specs/identify-engine-pick.md` section 8): where the Identify strip stood. It holds its
+          loaded size from the first paint, so nothing below it moves (D313). */}
       {pendingFailure === null ? null : (
         <Notice tone={failureTone(pendingFailure)} title={pendingFailure.message} code={pendingFailure.code} className="review-identify-refusal">
           The cards waiting to be read could not be counted, so nothing can be identified from here yet.
         </Notice>
       )}
-      {/* HELD HIDDEN until the count AND the estimate have answered, so the offer fills a frame
-          that was already there (D313). With nothing waiting the frame then goes (UNRESOLVED:
-          that is one collapse, see the PR). */}
-      {ready && captured === 0 ? null : (
-      <div className="review-identify-strip" data-state={ready ? 'offer' : 'held'} inert={!ready}>
-          <span className="review-identify-strip-said">
-            <Icon name="zap" size={16} />
-            <span>
-              Identify {captured} {captured === 1 ? 'card' : 'cards'}
-              {about === null ? null : (
-                /* AN ESTIMATE, SAID AS ONE at every size: the `~` and the title both, "under a
-                   cent" included. It is this store's own past cost per card, never a quote. */
-                <span className="review-identify-estimate" title="An estimate from this store's past runs, not a quote">
-                  , ~{roundsToNothing(about) ? 'under a cent' : <Money value={about} />}
-                  <span className="bn-sr"> (estimate)</span>
-                </span>
-              )}
-            </span>
-          </span>
-          <span className="review-identify-strip-presses">
-            <Button variant="ghost" icon="eye" onClick={() => openRuns(true)} disabled={spendBusy} className="review-identify-open">
-              Check first
-            </Button>
-            <Button variant="primary" icon="zap" busy={spendBusy} disabled={spendBusy} onClick={() => void identifyNow()} className="review-identify-now">
-              Identify now
-            </Button>
-          </span>
-        </div>
-      )}
+      <ReviewBand
+        waiting={pending}
+        reviewKeys={rows === null ? null : rows.filter((row) => row.queue === 'review').map((row) => `${row.entry.box}/${row.entry.index}`)}
+        rate={rate}
+        busy={spendBusy}
+        carried={carried === null ? null : carried.keys}
+        onRead={identifyNow}
+      />
 
       {!lens ? null : (
         <FilterBar

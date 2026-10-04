@@ -7111,6 +7111,14 @@ COMPONENTS = [
                                 "D41", "D50", "D77", "D117", "D118", "D123", "D162", "D259", "D291",
                                 "D313"],
             },
+            "src/ReviewBand.tsx": {
+                "does": "THE REVIEW SUMMARY BAND, at the top of Review in the Identify strip's old "
+                        "slot: four counts, a health line, one paid press and the way back to "
+                        "Capture. Scope is the sitting's keys, the same the Capture head's counter "
+                        "sends. It polls the keys-scoped sweep read with `usePoll` and holds its "
+                        "loaded size from the first paint (D313).",
+                "governed_by": ["D291", "D313"],
+            },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
                         "correction on 2026-08-23 was that this is \"find a card in a box-based "

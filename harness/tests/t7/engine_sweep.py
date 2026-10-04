@@ -669,6 +669,88 @@ def check_sweep_sitting_count(checks: Checks) -> None:
             thread.join(timeout=5)
 
 
+def check_sweep_band_counts(checks: Checks) -> None:
+    """THE CONTRACT THE REVIEW SUMMARY BAND READS (`identify-engine-pick.md` section 8), named here for the builder:
+    `GET /pipeline/match/sweep?keys=<csv>` also answers `paid` (named keys that wait for a paid look: captured, no
+    identification row, tried by the free reader and not accepted, not set aside) and `unread` (named keys the
+    free reader has not looked at: captured, no identification row, not tried, not set aside). A matched key, a
+    Haiku-read key and an unknown key count in neither. Same no-lock-probe path as `matched_here`."""
+    checks.note("")
+    checks.note("SWEEP BAND COUNTS — keys-scoped paid and unread")
+    with isolated_home():
+        mine = [_capture(game="pokemon", set_hint="sv9") for _ in range(5)]
+        matched, tried_one, read_paid, fresh, outside = mine
+        _put(matched, MATCHER)
+        _put(read_paid, HAIKU)
+        capture_id = {key: card.capture_id for key, card in Store().read().inventory.cards.items()}
+        sweep.remember_tried({tried_one: capture_id[tried_one] or ""})
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = _spawn_server(httpd)
+        try:
+            path = "/pipeline/match/sweep?keys=" + ",".join([matched, tried_one, read_paid, fresh, "99/99"])
+            status, body, _ = request(port, "GET", path)
+            answer = json.loads(body) if status == 200 else {}
+            checks.equal(status, 200, "GET with keys answers")
+            checks.equal(answer.get("matched_here"), 1, "matched_here is unchanged")
+            checks.equal(answer.get("paid"), 1, "paid counts the tried, unaccepted, unread-by-Haiku card only")
+            checks.equal(answer.get("unread"), 1, "unread counts the card the free reader has not looked at only")
+            status, body, _ = request(port, "GET", "/pipeline/match/sweep?keys=" + outside)
+            answer = json.loads(body) if status == 200 else {}
+            checks.equal((answer.get("paid"), answer.get("unread")), (0, 1), "a key outside the named set is never counted")
+            status, body, _ = request(port, "GET", "/pipeline/match/sweep?keys=")
+            answer = json.loads(body) if status == 200 else {}
+            checks.equal((answer.get("paid"), answer.get("unread")), (0, 0), "an empty keys list counts zero")
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+
+def check_sweep_band_scope(checks: Checks) -> None:
+    """THE REST OF THE BAND'S CONTRACT, named for the builder. On `GET /pipeline/match/sweep?keys=`:
+    `unread` mirrors `sweep._QUEUE_SQL`: a card in a game the free reader does not serve, and a Pokemon card with an empty
+    `set_hint`, are NOT unread (the free reader never queues them). A card in an unserved game is in `paid` and `paid_keys`
+    (the paid look reads it, tried or not). A Pokemon card with no set hint is in neither, and `unhinted` counts it.
+    `matched_keys` lists the named keys that carry a free-reader row (`matched_here` is its length), so the band can leave out
+    a card that also has an open review row. `aside` counts only the named keys that are set aside, never the table's."""
+    checks.note("")
+    checks.note("SWEEP BAND SCOPE — queue mirror, unhinted, matched_keys, scoped aside")
+    with isolated_home():
+        served = _capture(game="pokemon", set_hint="sv9")
+        unserved = _capture(game="pokemon_code")
+        unhinted = _capture(game="pokemon")
+        matched = _capture(game="pokemon", set_hint="sv9")
+        elsewhere = _capture(game="pokemon", set_hint="sv9")
+        crashed = _capture(game="pokemon", set_hint="sv9")
+        _put(matched, MATCHER)
+        cards = Store().read().inventory.cards
+        sweep._write_json(
+            sweep.crash_path(),
+            {"model": matchconst.MODEL_SHA256, "aside": {elsewhere: cards[elsewhere].capture_id or "", crashed: cards[crashed].capture_id or ""}},
+        )
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = _spawn_server(httpd)
+        try:
+            named = [served, unserved, unhinted, matched, crashed]
+            status, body, _ = request(port, "GET", "/pipeline/match/sweep?keys=" + ",".join(named))
+            answer = json.loads(body) if status == 200 else {}
+            checks.equal(status, 200, "GET with keys answers")
+            checks.equal(answer.get("unread"), 1, "unread is the served, hinted card only: not the unserved game, not the unhinted Pokemon")
+            checks.equal(answer.get("paid_keys"), [unserved], "an unserved-game card is in paid_keys, an unhinted Pokemon card is not")
+            checks.equal(answer.get("paid"), 1, "paid counts the unserved-game card")
+            checks.equal(answer.get("unhinted"), 1, "unhinted counts the Pokemon card with no set hint")
+            checks.equal(answer.get("matched_keys"), [matched], "matched_keys names the card carrying a free-reader row")
+            checks.equal(answer.get("aside"), 1, "aside counts only the named card set aside, not the one outside the keys")
+            status, body, _ = request(port, "GET", "/pipeline/match/sweep?keys=" + served)
+            checks.equal(json.loads(body).get("aside") if status == 200 else None, 0, "aside is 0 when none of the named keys is set aside")
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+
 CHECKS = (
     check_sweep_queue,
     check_sweep_watcher,
@@ -684,5 +766,7 @@ CHECKS = (
     check_reshoot_drops_matcher_row,
     check_sweep_routes,
     check_sweep_sitting_count,
+    check_sweep_band_counts,
+    check_sweep_band_scope,
     check_sweep_imports_light,
 )

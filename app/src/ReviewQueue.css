@@ -47,7 +47,8 @@
      a padding changed above without changing this reintroduces exactly the overflow that stood
      for a week, silently. `100dvh` rather than `100vh` so a phone's collapsing address bar is
      counted the same way. */
-  --rv-chrome: 172px;
+  --rv-band-h: 114px;
+  --rv-chrome: calc(172px + var(--rv-band-h) + var(--bn-3));
   --rv-stage-w: calc(var(--rv-photo-h) * 0.5625 + var(--rv-well-pad) * 2);
   --rv-rail-w: 292px;
   /* The well is a dark neutral in both themes: a bright surround crushes the sheen the
@@ -75,7 +76,11 @@
 :root[data-theme='dark'] .review-well,
 :root[data-theme='dark'] .review-group-grid { box-shadow: var(--bn-shadow-2), inset 0 0 0 1px var(--bn-line-strong); }
 @media (max-width: 1199px) {
-  .review { --rv-photo-h: min(calc(100vh - 168px), 640px); }
+  .review { --rv-photo-h: min(calc(100vh - 168px), 640px); --rv-band-h: 126px; }
+  /* The health line takes its own row, and the band is sized for that row always, so a short line and a long one give one height. */
+  .review .review-band { padding-block: var(--bn-2); gap: var(--bn-2); }
+  .review .review-band-foot { row-gap: var(--bn-1); }
+  .review-band-health { flex-basis: 100%; }
 }
 @media (max-width: 1023px) {
   .review { --rv-photo-h: min(calc(100vh - 216px), 620px); }
@@ -89,6 +94,9 @@
    NO `padding-top` OVERRIDE (2026-09-27, "move Review"): the kit's own `--bn-page-top` applies,
    same as every other screen. `padding-bottom` absorbs the 8px this gave up. */
 .review.bn-page { padding-bottom: var(--bn-2); }
+/* THE SCREEN ARRIVES BY FADE ALONE (D313): the kit's `bn-page-in` also rises 6px, which carries the summary band, and
+   every card under it, through a movement the person did not make. */
+.review.bn-page { animation-name: bn-fade; }
 .review-pagehead { margin-bottom: var(--bn-3); }
 /* Three icon-only presses now sit in this header. `.bn-head-actions`'s own gap (`--bn-2`,
    8px) is enough between a worded press and its neighbour, but not between two 28px faces
@@ -103,44 +111,47 @@
 .review-progress-parked { color: var(--bn-ink-3); }
 .review-progress-parked::before { content: '·'; margin: 0 var(--bn-2); color: var(--bn-ink-4); }
 
-/* D291: the strip, drawn only when cards wait. One line, a warm tint so
-   it reads as a call to act rather than a fact — the same tint family the group-offer chip
-   in the header uses. */
-/* THE IDENTIFY STRIP (D291): a sentence and one worded press, on one line at desk width and
-   stacked on a phone. A well, not a warning: cards waiting to be read is the normal state of a
-   store between runs. */
-.review-identify-strip {
+/* THE SUMMARY BAND (`docs/specs/identify-engine-pick.md`, section 8): four figures, a health line, one press and the way
+   back. A well, not a warning. It holds its loaded size from the first paint (D313): equal columns with the number
+   above its label, so a figure gaining a digit moves nothing, and a health line and a press row that always take their
+   room. */
+.review-band {
+  display: grid;
+  block-size: var(--rv-band-h);
+  box-sizing: border-box;
+  gap: var(--bn-3);
+  margin: 0 0 var(--bn-3);
+  padding: var(--bn-3) var(--bn-4);
+  border: 1px solid var(--bn-line);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface-2);
+}
+.review-band-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--bn-3) var(--bn-4);
+}
+.review-band-foot {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--bn-2) var(--bn-3);
-  margin: 0 0 var(--bn-3);
-  padding: var(--bn-2) var(--bn-2) var(--bn-2) var(--bn-4);
-  border: 1px solid var(--bn-line);
-  border-radius: var(--bn-r-lg);
-  background: var(--bn-surface-2);
 }
-.review-identify-strip[data-state='held'] { visibility: hidden; }
-/* NOTHING BELOW THE STRIP IS LAID OUT UNTIL THE STRIP KNOWS ITS STATE (D313): with nothing
-   waiting the held frame goes, and whatever stood under it would move up by its height. Not yet
-   laid out, it has nothing to move; it appears once, in its final place. */
-.review-identify-strip[data-state='held'] ~ * { display: none; }
-.review-identify-strip-said {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--bn-2);
-  color: var(--bn-ink);
+.review-band-health {
+  min-block-size: 1lh;
+  color: var(--bn-ink-3);
   font-size: var(--bn-fs-md);
-  font-weight: 600;
 }
-.review-identify-strip-said .bn-icon { color: var(--bn-ink-3); }
-.review-identify-strip-said .bn-money { font-weight: 600; }
-.review-identify-strip-presses { display: inline-flex; gap: var(--bn-2); }
+.review-band-presses { display: inline-flex; gap: var(--bn-2); margin-inline-start: auto; }
+/* THE PRESS KEEPS ITS PLACE: a fixed-width slot, so the press arriving, changing its words or leaving moves nothing (D313). */
+.review-band-slot { display: inline-flex; flex: none; inline-size: 20rem; }
+.review-band-slot .bn-btn { inline-size: 100%; justify-content: center; }
 @media (max-width: 559px) {
-  .review-identify-strip { padding: var(--bn-3); }
-  .review-identify-strip-presses { width: 100%; }
-  .review-identify-strip-presses .bn-btn { flex: 1; }
+  .review-band-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .review-band-presses { width: 100%; }
+  .review-band-slot { flex: 1; inline-size: auto; }
+  .review-band-presses .bn-btn { flex: 1; }
 }
 
 /* D291: `.bn-sheet`'s own default width (kit.css, 420px) is sized for a

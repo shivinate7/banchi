@@ -1189,12 +1189,12 @@ def _sweep_state() -> dict:
 
 def _sweep_poll_state(keys: str) -> dict:
     """The Capture head's polled read: NO lock probe (`sweep.running` and `sweep.acquire_lock` would
-    hold the flock a starting watcher needs), one read-only connection, no table-wide count (so no `matched`), the worker from the state file.
+    hold the flock a starting watcher needs), one read-only connection, no table-wide count (so no `matched`), `paid` and `unread` from the tried marks, the worker from the state file.
     `running` here is `worker`: the watcher's own file says a worker is reading right now."""
     named = [key for key in keys.split(",") if key]
     record = sweep._read_json(sweep.state_path())
     worker = isinstance(record, dict) and bool(record.get("worker"))
-    on, here = False, 0
+    on, matched_keys, paid_keys, unread, unhinted = False, [], [], 0, 0
     try:
         conn = store_db.open_read_only(store_db.path(files.inventory_dir()))
     except FileNotFoundError:
@@ -1202,22 +1202,55 @@ def _sweep_poll_state(keys: str) -> dict:
     if conn is not None:
         try:
             on = store_db.match_sweep_on(conn)
-            sql = "select count(*) from identifications where json_extract(payload, '$.engine') = ?"
+            asides = sweep.aside()
+            seen = sweep.tried()
             for at in range(0, len(named), 500):  # under SQLite's variable cap
                 chunk = named[at : at + 500]
-                row = conn.execute(
-                    f"{sql} and key in ({','.join('?' * len(chunk))})", (cache_mod.ENGINE_MATCHER, *chunk)
-                ).fetchone()
-                here += int(row[0])
+                marks = ",".join("?" * len(chunk))
+                matched_keys += [
+                    str(row[0])
+                    for row in conn.execute(
+                        f"select key from identifications where json_extract(payload, '$.engine') = ? and key in ({marks})",
+                        (cache_mod.ENGINE_MATCHER, *chunk),
+                    )
+                ]
+            # Every unidentified captured card lands in one place. Queued (the watcher's own filter): paid when tried
+            # and not accepted, unread when not, nowhere when set aside. A game the free reader does not serve: paid.
+            # A Pokemon card with no set hint: `unhinted`.
+            queued = sweep.queued_among(conn, named)
+            for at in range(0, len(named), 500):
+                chunk = named[at : at + 500]
+                for key, capture_id, game in conn.execute(
+                    "select c.key, coalesce(c.capture_id, ''), coalesce(c.game, 'pokemon') from cards c where c.state = 'captured' "
+                    "and not exists (select 1 from identifications i where i.key = c.key) "
+                    f"and c.key in ({','.join('?' * len(chunk))})", chunk
+                ):
+                    if key in queued:
+                        if asides.get(key) == capture_id:
+                            continue
+                        if seen.get(key) == capture_id:
+                            paid_keys.append(key)
+                        else:
+                            unread += 1
+                    elif game not in matchconst.SERVED_GAMES:
+                        paid_keys.append(key)
+                    else:
+                        unhinted += 1
         finally:
             conn.close()
+    named_set = set(named)
     return {
         "on": on,
         "running": worker,
         "worker": worker,
         "blocked": None if matchconst.runtime_importable() else "runtime_missing",
-        "aside": len(sweep.aside()),
-        "matched_here": here,
+        "aside": sum(1 for key in sweep.aside() if key in named_set),
+        "matched_here": len(matched_keys),
+        "matched_keys": matched_keys,
+        "paid": len(paid_keys),
+        "paid_keys": paid_keys,
+        "unread": unread,
+        "unhinted": unhinted,
     }
 
 

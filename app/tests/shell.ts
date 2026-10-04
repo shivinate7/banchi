@@ -310,7 +310,12 @@ async function stubShell(page: Page, cards: number): Promise<void> {
   await page.route(/\/pipeline\/trends-saved$/, (route) => json(route, { skus: {}, note: null }))
   /* THE BACKGROUND READER'S SWITCH: the Capture screen's Rig panel reads it when it is first shown.
    *  Off, nothing running. A spec about the switch registers its own handler after this one. */
-  await page.route(/\/pipeline\/match\/sweep$/, (route) => json(route, { on: false, running: false, matched: 0 }))
+  await page.route(/\/pipeline\/match\/sweep(\?.*)?$/, (route) =>
+    json(route, { on: false, running: false, blocked: null, aside: 0, matched: 0, matched_here: 0, matched_keys: [], paid: 0, paid_keys: [], unread: 0, unhinted: 0 }),
+  )
+  /* THE REVIEW BAND'S OTHER READ, `GET /pipeline/match` (the free reader's state, for its health line), is the same on every
+   *  screen that draws Review, so the shell answers it quietly too. */
+  await stubMatchState(page)
 
   await page.route(/\/status$/, (route) =>
     json(route, {
