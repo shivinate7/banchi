@@ -1736,7 +1736,7 @@ test('Identify now spends exactly the cards the strip priced, with no pre-check'
   await page.locator('.review-identify-now').click()
 
   await expect.poll(() => spends.length).toBe(1)
-  expect(spends[0]?.body).toEqual({ confirm: true, keys: keysOf(12), crop: true, max_edge: 1200 })
+  expect(spends[0]?.body).toEqual({ confirm: true, keys: keysOf(12), crop: true, max_edge: 1200, engine: 'marqo-b' })
   expect(asked.map((row) => row.path)).not.toContain('/pipeline/preflight')
   /* No confirm screen: the composer never opens. The receipt is a toast with the server's own
      count, then the run itself, open in the Runs sheet, where its own progress reads itself. */
@@ -1774,7 +1774,7 @@ test('a ticked handoff is the set the strip names and Identify now spends', asyn
   expect(asked.find((row) => row.path === '/pipeline/waiting')?.body).toEqual({ keys: ticked })
   await page.locator('.review-identify-now').click()
   await expect.poll(() => spends.length).toBe(1)
-  expect(spends[0]?.body).toEqual({ confirm: true, keys: ['9/2', '9/3'], crop: true, max_edge: 1200 })
+  expect(spends[0]?.body).toEqual({ confirm: true, keys: ['9/2', '9/3'], crop: true, max_edge: 1200, engine: 'marqo-b' })
 })
 
 /* A REFUSED PRESS MOVES NOTHING (D118). The refusal is a toast, never a notice that grows the

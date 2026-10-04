@@ -376,9 +376,9 @@ The manifest records the engine in `flags`. It records the model hash and the po
 `model` field and a new run field. A review queue entry carries the engine that read it, beside the existing read fields.
 D258 (identity follows the SKU) keeps those read fields as evidence.
 
-**The wire.** `RunSend` gains `engine`, default `marqo-b`. `onTheWire` in `app/src/server.ts` sends it.
+**The wire.** `RunSend` gains `engine`, default `marqo-b`. `sendOfKeys` sets it and `onTheWire` in `app/src/server.ts` sends it. The route defaults to `marqo-b` when none is sent, and an explicit `haiku` still passes.
 `app/src/types.ts` carries its shape. `POST /pipeline/identify` keeps its `confirm` field for both engines.
-One gate stays one press. The CLI takes `--engine`. Two free routes serve setup.
+One gate stays one press. The CLI takes `--engine`, default `marqo-b`; `--engine haiku` is the paid read alone. Two free routes serve setup.
 One reports the matcher state. One downloads on a `confirm`.
 
 **A route is not a feature (hard rule).** The build is done only when the route, the `server.ts` function
@@ -504,7 +504,9 @@ The peak is above the 454 MB of the model alone, because the worker also holds t
 Exit code 3 means the model file, the index or the runtime is not ready, and the wait is 300 seconds.
 The worker writes its log to `.serve/match-sweep.log`. Before each chunk it records the cards in `match-sweep-inflight.json`.
 On exit 3 from a missing runtime it also writes `match-sweep-blocked.json`. `GET /pipeline/match/sweep` reports `blocked: "runtime_missing"` only while the runtime is not importable now, so the answer follows the present state. `GET /pipeline/match` carries `runtime_missing`, and Prepare refuses with 409 `runtime_missing`.
-A worker that dies inside a chunk, even by an out-of-memory kill, leaves the file. The next start marks those cards tried.
+A worker that dies inside a chunk, even by an out-of-memory kill, leaves the file. A crash is not a read, so no card is marked tried and every card stays in the free queue.
+The next chunk is half the size. A card that crashes a chunk of one is set aside in `match-sweep-crash.json`: out of the free queue, never tried, never paid.
+`GET /pipeline/match/sweep` counts them as `aside`.
 **One watcher runs at a time, by one lock.** The watcher holds an `flock` on `inventory/match-sweep.lock`. A held lock is the only thing that reads as running, so a reused pid cannot.
 The watcher writes `.serve/match-sweep.json` and a reap owner mark (D305). `make down` and `make reap` stop it, and a SIGTERM stops the worker before the watcher exits.
 It exits when its store or its tree is gone.

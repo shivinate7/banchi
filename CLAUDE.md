@@ -89,7 +89,8 @@ make catalog-index  # build catalog.sqlite. Gitignored generator.
 make catalog-index-selftest  # that builder on a fixture. Not in `make check`.
 make catalog-mirror # dry run only. ARGS=--dry-run samples over HTTP HEAD.
 ./pkmnscan scan     <capture-dir>   # code cards only: read QRs into the ledger. Free.
-./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. Costs money. --dry-run first.
+./pkmnscan identify <capture-dir>   # free read first, then the paid second look for the rest. Costs money. --dry-run first.
+                                   #   --engine haiku is the paid read alone.
                                    #   Selection-based: --state, --box, --keys, --game/--section/--since.
 ./pkmnscan rescue   <run-dir>       # re-address a stranded run by digest. Previews. --write.
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable. --dry-run.
