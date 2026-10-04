@@ -89,7 +89,8 @@ make catalog-index  # build catalog.sqlite. Gitignored generator.
 make catalog-index-selftest  # that builder on a fixture. Not in `make check`.
 make catalog-mirror # dry run only. ARGS=--dry-run samples over HTTP HEAD.
 ./pkmnscan scan     <capture-dir>   # code cards only: read QRs into the ledger. Free.
-./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. Costs money. --dry-run first.
+./pkmnscan identify <capture-dir>   # free read first, then the paid second look for the rest. Costs money. --dry-run first.
+                                   #   --engine haiku is the paid read alone.
                                    #   Selection-based: --state, --box, --keys, --game/--section/--since.
 ./pkmnscan rescue   <run-dir>       # re-address a stranded run by digest. Previews. --write.
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable. --dry-run.
@@ -103,8 +104,11 @@ make catalog-mirror # dry run only. ARGS=--dry-run samples over HTTP HEAD.
                                    #   are here. --reprice-live F adds a price-only row per live card F names.
 ./pkmnscan match    status | prepare [--model-only | --fingerprints-only]  # the free reader's setup. Prepare
                                    # downloads the pinned model file and reads each stock photo once (D301, stock photos
-                                   # are hotlinked, never mirrored; this is its one exception). Nothing starts it but the
-                                   # owner's press. `match --sweep` is the background reader's watcher (off until the
+                                   # are hotlinked, never mirrored; this is its one exception). It starts by itself at
+                                   # `serve` start and whenever the store holds a card from an unread set (never with the
+                                   # runtime missing); the runs sheet's Prepare press is a manual refresh. Env
+                                   # `PKMNSCAN_AUTO_SETUP=on` forces auto-start; unset, it is refused when `CI` or
+                                   # `PKMNSCAN_HARNESS` is set (`make harness` sets it) and in a linked worktree. `match --sweep` is the background reader's watcher (off until the
                                    # Capture screen's Rig switch is on; never spends; reads even mid-feed).
                                    # `identify --engine marqo-b`
                                    # reads free first, then sends each card it cannot accept to Haiku, held for review.

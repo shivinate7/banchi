@@ -736,6 +736,85 @@ def check_prepare_clears_stale_part(checks: Checks) -> None:
         checks.ok(any("already here" in line for line in said), "and the model was not downloaded again")
 
 
+def check_prepare_dead_child(checks: Checks) -> None:
+    """A Prepare child that exited is not running, even while it is still a zombie of the server."""
+    import subprocess
+    import sys
+    import time
+
+    from server import pipeline_routes
+
+    checks.note("")
+    checks.note("PREPARE DEAD CHILD — an exited child (zombie or reaped) is not running, and the screen says so")
+    for reaped in (False, True):
+        with isolated_home():
+            child = subprocess.Popen([sys.executable, "-c", "import sys; sys.exit(2)"], stdout=subprocess.PIPE)
+            try:
+                # EOF on the pipe means the child is exiting. It is not reaped until `child.wait()`,
+                # so it ends as a zombie. A bounded look at its state, not an open-ended wait.
+                child.stdout.read()
+                for _ in range(100):
+                    stat = subprocess.run(["ps", "-o", "stat=", "-p", str(child.pid)], capture_output=True, text=True)
+                    if stat.stdout.strip().startswith("Z"):
+                        break
+                    time.sleep(0.02)
+                checks.ok(stat.stdout.strip().startswith("Z"), f"setup: the child is a zombie (ps says {stat.stdout.strip()!r})")
+                if reaped:
+                    child.wait()
+                match.progress_path().parent.mkdir(parents=True, exist_ok=True)
+                match.progress_path().write_text(json.dumps({
+                    "state": "running", "phase": "fingerprints", "done": 15, "total": 1773,
+                    "message": "Reading stock photos", "pid": child.pid, "started": 1.0, "at": 2.0,
+                }))
+                answer = pipeline_routes.do_pipeline_match()
+            finally:
+                child.wait()
+            kind = "reaped" if reaped else "zombie"
+            checks.equal(answer["running"], False, f"a {kind} child: GET /pipeline/match says running false")
+            progress = answer["progress"] or {}
+            checks.equal(progress.get("state"), "failed", f"a {kind} child: the progress state is failed")
+            checks.ok(
+                "Press Prepare to carry on" in progress.get("message", ""),
+                f"a {kind} child: the message tells the owner to press Prepare again",
+            )
+
+
+def check_prepare_runtime_missing(checks: Checks) -> None:
+    """With the model runtime not importable, Prepare refuses before it spawns, and GET says why."""
+    import sys
+    from http import HTTPStatus
+    from unittest import mock
+
+    from server import pipeline_routes
+
+    checks.note("")
+    checks.note("PREPARE RUNTIME MISSING — refused before any spawn, in plain words; GET carries `runtime_missing`")
+    spawned: list = []
+    with isolated_home(), mock.patch.dict(sys.modules, {"onnxruntime": None}), mock.patch.object(
+        pipeline_routes.subprocess, "Popen", lambda *a, **k: spawned.append(a) or mock.Mock(pid=1)
+    ):
+        refused = None
+        try:
+            pipeline_routes.do_pipeline_match_prepare({"confirm": True})
+        except pipeline_routes.PipelineRefusal as caught:
+            refused = caught
+        checks.ok(refused is not None, "Prepare is refused")
+        checks.equal(getattr(refused, "code", None), "runtime_missing", "with the code runtime_missing")
+        checks.equal(getattr(refused, "status", None), HTTPStatus.CONFLICT, "and status 409")
+        checks.equal(spawned, [], "and nothing is spawned")
+        words = str(refused or "").lower()
+        checks.ok(
+            bool(words) and not any(w in words for w in ("onnx", "module", "package", "python", "pip", "venv", "import")),
+            "the sentence names no module, package or tool",
+        )
+        checks.equal(pipeline_routes.do_pipeline_match().get("runtime_missing"), True, "GET /pipeline/match: runtime_missing is true")
+    with isolated_home():
+        checks.equal(
+            pipeline_routes.do_pipeline_match().get("runtime_missing"), False,
+            "control: with the runtime importable, runtime_missing is false",
+        )
+
+
 def check_match_route_lane(checks: Checks) -> None:
     """`GET /pipeline/match` is a photo-lane route (a stat, one cached verdict, a count), and its siblings are not."""
     from server import capture_server
@@ -758,5 +837,7 @@ CHECKS = (
     check_model_ready_hashes_once,
     check_promo_census,
     check_prepare_clears_stale_part,
+    check_prepare_dead_child,
+    check_prepare_runtime_missing,
     check_match_route_lane,
 )

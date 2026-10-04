@@ -44,7 +44,9 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import os
+import subprocess
 import random
 import re
 import sqlite3
@@ -796,7 +798,7 @@ def build_index(
             report.unresolved.append(f"{game} | {set_name}")
             continue
         products, unnumbered = listed
-        canonical = (stock.display_name(game, set_name) if game == "pokemon" else None) or set_name
+        canonical = canonical_set(stock, game, set_name)
         if (game, canonical) in seen_sets:
             continue
         seen_sets.add((game, canonical))
@@ -891,6 +893,134 @@ def build_index(
     return report
 
 
+RECHECK_ROWS_PER_PASS = 20  # one weekly pass asks the oldest this many rows, so a big backlog drains over passes
+# ponytail: `vec.note` doubles as the retry class (an answer from the CDN waits a week, any other cause a day); a column for the next-ask time if a third wait is needed.
+_ANSWERED = ("http_403", "http_404", "http_410")  # the CDN's answer for a missing file: the row waits a week
+_NETWORK = ("URLError", "timeout", "TimeoutError")  # the network is down: the pass ends at once
+
+
+def _stamp_now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def recheck_no_photo(
+    stock,
+    *,
+    fetch: Callable[[str], Tuple[Optional[bytes], Optional[str]]] = None,  # type: ignore[assignment]
+    model: Optional[Path] = None,
+    days: int = 7,
+) -> BuildReport:
+    """One free weekly pass: ask again the `no_photo` and `no_url` rows last asked over `days` days ago, the oldest
+    `RECHECK_ROWS_PER_PASS` by `vec.at`. Never an `ok` row, never a whole set. A `no_url` row's set has its catalogue
+    listing read once for a URL. A row that now has an image is fingerprinted. A row the CDN or the catalogue
+    answered for (403, 404, 410, or a listing with no URL) gets `at` set to now and waits another week. Any other
+    failure (5xx, 429, decode) is transient: it sets `at` to now and `note` to the cause, and a row with such a note
+    is asked again after one day, not seven. A network failure (`URLError`, timeout), returned or raised, ends the
+    pass at once and writes nothing for that row. A set whose listing could not be read leaves its rows undated.
+    Nothing spends.
+
+    Locking: no write transaction is open across a fetch. Each result is one short write on its own connection,
+    after a re-read of the row: a row that is `ok` by then (a Prepare finished mid-look) is left alone.
+    The pass holds the Prepare's own running record (`prepare_pid`) for its whole length, so one Prepare runs at a
+    time and the sweep's tried marks made meanwhile are `building` marks, dropped when the pass ends.
+    That is how a miss is never stamped with the post-gain `index_stamp` against a pool loaded before the gain.
+    The caller (`pipeline_routes.recheck_stock_photos`) checks that no Prepare runs. Nothing here does, so a direct call
+    over a running Prepare would overwrite its record.
+    # ponytail: the check and the record write are two steps with no lock; a Prepare started in that gap is not
+    # stopped, and both write whole rows, so the cost is a repeat read."""
+    from PIL import Image
+
+    report = BuildReport()
+    if not index_path().exists():
+        return report
+    target_model = model or model_path()
+    sha = MODEL_SHA256 if model is None else sha256_of_file(target_model)
+    cutoff = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - days * 86400))
+    cutoff_day = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 86400))
+    gate = threading.Lock()
+    clock = [0.0]
+    reader = fetch or (lambda url: fetch_bytes(url, gate=gate, clock=clock))
+    record = {"state": "running", "phase": "recheck", "done": 0, "total": 0, "message": "Checking printings with no photo", "pid": os.getpid(), "at": time.time()}
+    store_files.write_json(progress_path(), record)
+    try:
+        with Index() as index:
+            have = index.meta("model_sha256")
+            if have and have != sha:
+                raise IndexError_("the fingerprints were built by another model file. Clear them first.")
+            old = index.db.execute(
+                "select game, set_name, product_id, number, name, url, status from vec where status in (?,?) and "
+                "((note is not null and note not in (?,?,?) and at < ?) or ((note is null or note in (?,?,?)) and at < ?)) "
+                "order by at, product_id limit ?",
+                (S_NO_PHOTO, S_NO_URL, *_ANSWERED, cutoff_day, *_ANSWERED, cutoff, RECHECK_ROWS_PER_PASS),
+            ).fetchall()
+        listed: Dict[Tuple[str, str], Optional[Dict[str, str]]] = {}
+        for game, set_name in sorted({(r[0], r[1]) for r in old if r[6] == S_NO_URL}):
+            products = stock.catalog_products(game, set_name)  # one catalogue read per affected set
+            listed[(game, set_name)] = None if products is None else {p.product_id: p.url for p in products[0]}
+        report.sets = len({(r[0], r[1]) for r in old})
+
+        def write(row, sql: str, args: tuple) -> None:
+            with Index() as index:
+                current = index.db.execute(
+                    "select status from vec where game=? and set_name=? and product_id=?", (row[0], row[1], row[2])
+                ).fetchone()
+                if current and current[0] != S_OK:
+                    index.db.execute(sql, args + (row[0], row[1], row[2]))
+                    index.db.commit()
+
+        gained: List[Tuple[tuple, str, "object"]] = []
+        for row in old:
+            url = row[5]
+            if row[6] == S_NO_URL:
+                found = listed[(row[0], row[1])]
+                if found is None:
+                    # the listing could not be read: the same one-day transient clock, so the set is not read again every look
+                    write(row, "update vec set note=?, at=? where game=? and set_name=? and product_id=?", ("catalog_unreadable", _stamp_now()))
+                    continue
+                url = found.get(row[2]) or ""
+            report.products += 1
+            if not url:
+                report.no_image += 1
+                write(row, "update vec set url='', status=?, note=null, at=? where game=? and set_name=? and product_id=?", (S_NO_URL, _stamp_now()))
+                continue
+            try:
+                raw, cause = reader(url)
+            except (urllib.error.URLError, TimeoutError) as exc:
+                raw, cause = None, type(exc).__name__
+            if cause in _NETWORK:
+                # the pass ends, and this row is dated on the one-day clock so a dead URL does not block the rows behind it
+                write(row, "update vec set note=?, at=? where game=? and set_name=? and product_id=?", (cause, _stamp_now()))
+                break
+            array = None
+            if raw is not None:
+                try:
+                    image = Image.open(io.BytesIO(raw))
+                    image.load()
+                    array = preprocess(image)
+                except Exception as exc:  # noqa: BLE001
+                    cause = "decode_" + type(exc).__name__
+            if array is not None:
+                gained.append((row, url, array))
+            elif cause in _ANSWERED:
+                report.no_image += 1
+                write(row, "update vec set url=?, status=?, note=?, at=? where game=? and set_name=? and product_id=?", (url, S_NO_PHOTO, cause, _stamp_now()))
+            else:
+                report.unreadable += 1  # transient: dated now with its cause, so the oldest-first order moves on and it returns in a day
+                write(row, "update vec set note=?, at=? where game=? and set_name=? and product_id=?", (str(cause), _stamp_now()))
+        if gained:
+            import numpy as np
+
+            vectors = _session(target_model).run(None, {"pixels": np.stack([a for _r, _u, a in gained]).astype(np.float32)})[0].astype(np.float32)
+            for (row, url, _a), vector in zip(gained, vectors):
+                write(row, "update vec set url=?, status=?, note=null, vec=?, at=? where game=? and set_name=? and product_id=?", (url, S_OK, vector.tobytes(), _stamp_now()))
+                report.embedded += 1
+    finally:
+        mine = store_files.read_json(progress_path(), None)
+        if isinstance(mine, dict) and mine.get("pid") == os.getpid() and mine.get("state") == "running":
+            store_files.write_json(progress_path(), {**record, "state": "done", "at": time.time()})
+    return report
+
+
 def targets_for(stock, store_pairs: Iterable[Tuple[str, str]]) -> List[Tuple[str, str]]:
     """The sets to fingerprint: every `(game, set)` the store holds cards for, plus every
     Riftbound set. Only the served games."""
@@ -905,3 +1035,60 @@ def targets_for(stock, store_pairs: Iterable[Tuple[str, str]]) -> List[Tuple[str
             seen.add(("riftbound", set_name))
             wanted.append(("riftbound", set_name))
     return wanted
+
+
+def canonical_set(stock, game: str, set_name: str) -> str:
+    """The name `build_index` stores a set under: the catalogue's own, else the store's."""
+    return (stock.display_name(game, set_name) if game == "pokemon" else None) or set_name
+
+
+def unread_targets(stock, store_pairs: Iterable[Tuple[str, str]]) -> List[Tuple[str, str]]:
+    """`targets_for` minus the sets the fingerprint index already holds, compared by canonical name."""
+    with Index() as index:
+        held = {(g, n) for g, n in index.db.execute("select game, set_name from sets")}
+    return [t for t in targets_for(stock, store_pairs) if (t[0], canonical_set(stock, *t)) not in held]
+
+
+def prepare_pid() -> Optional[int]:
+    """The pid of a running `match prepare`, or None. It reads the progress file the child
+    writes, so a prepare started by a server that has since restarted still counts."""
+    try:
+        record = json.loads(progress_path().read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(record, dict) or record.get("state") != "running":
+        return None
+    pid = record.get("pid")
+    if not isinstance(pid, int):
+        return None
+    if pid == os.getpid():
+        return pid  # the server's own placeholder, written before the spawn: alive, and no ps needed
+    # `kill -0` succeeds on a zombie, so ask for the state: an exited child is not running.
+    try:
+        state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, timeout=2).stdout.strip()
+    except Exception:  # noqa: BLE001  any ps failure, however it shows, falls back to the alive check
+        try:
+            os.kill(pid, 0)  # ps unavailable: the old alive check beats a 500 on a polled route
+        except OSError:
+            return None
+        return pid
+    if not state or state.startswith("Z"):
+        return None
+    return pid
+
+
+def index_stamp() -> str:
+    """Changes when the index gains a set or a fingerprint. A card tried before its set or photo was read is tried again.
+    Reads the file directly, so a missing index is "0" and nothing is created."""
+    try:
+        db = sqlite3.connect(f"file:{index_path()}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return "0"
+    try:
+        return str(db.execute("select count(*) from sets").fetchone()[0]) + ":" + str(
+            db.execute("select count(*) from vec where status=?", (S_OK,)).fetchone()[0]
+        )
+    except sqlite3.Error:
+        return "0"
+    finally:
+        db.close()

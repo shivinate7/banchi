@@ -66,6 +66,8 @@
 .capture-odo .bn-stat { min-width: 64px; }
 /* One step under the title: the figures read as the run's odometer, not as the page's name. */
 .capture-odo .bn-stat-value { font-size: var(--bn-fs-2xl); }
+.capture-odo-matched { display: flex; align-items: center; gap: var(--bn-4); flex: none; width: calc(1px + 64px + 2 * var(--bn-4) + 2ch); }
+.capture-odo-matched .bn-stat-value { font-variant-numeric: tabular-nums; min-width: 4ch; }
 .capture-odo-rule { width: 1px; height: 24px; background: var(--bn-line); }
 .capture-odo-verdict { margin-left: var(--bn-1); }
 .capture-odo-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: var(--bn-0-5); }
@@ -223,10 +225,11 @@
 }
 .capture-row:hover .capture-k-pair .capture-k { color: var(--bn-accent); border-color: var(--bn-accent); }
 .capture-k-pair { justify-self: start; }
-/* The Section row's own two-key pick (`[` `]`) needs a wider first track than every other
-   row's single cap — widened for THIS row alone, never the shared `.capture-row` template,
-   so every other row's column stays put. */
-.capture-row-keypair { grid-template-columns: 42px auto auto minmax(0, 1fr) 14px; }
+/* The Section row's two-key pick (`[` `]`) has no icon: the pair spans the key and icon columns
+   (22px, and 15px, the icon's own size) so its label starts where every other row's label does. */
+.capture-row-keypair { grid-template-columns: 22px 15px minmax(0, 1fr) auto 14px; }
+.capture-row-keypair .capture-k-pair { grid-column: 1 / 3; }
+.capture-row-lg.capture-row-keypair { grid-template-columns: 22px 15px minmax(0, 1fr) 14px; }
 /* The switch row has no fold, so its chevron column holds a switch track instead: same five columns as
    its siblings, so 'On'/'Off' ends where theirs do. The kit has no switch; this one is local to the one row
    that needs it, drawn with tokens. */
@@ -306,6 +309,7 @@
 }
 :root[data-theme='dark'] .capture-row-lg { background: var(--bn-surface-3); }
 .capture-row-lg .capture-k,
+.capture-row-lg .capture-k-pair,
 .capture-row-lg .capture-row-icon,
 .capture-row-lg .capture-chev { grid-row: 1 / 3; }
 .capture-row-lg .capture-row-icon { color: var(--bn-ink-2); }
@@ -323,7 +327,6 @@
 /* The Section row is a large row so its sub-line takes the full width under the label rather
    than what is left beside it, and reads whole ("next card N, before section M"). Its key pair
    keeps its wider first track. */
-.capture-row-lg.capture-row-keypair { grid-template-columns: 42px auto minmax(0, 1fr) 14px; column-gap: var(--bn-1-5); }
 .capture-row-lg .capture-section-val { text-align: left; }
 /* Every state draws both lines, each a whole number of pixels tall (from its own font size), so no state's text can move the row (D313). */
 .capture-row-lg .capture-section-val strong,
@@ -1059,6 +1062,8 @@
 }
 .capture-film-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3); flex-wrap: wrap; padding: 0 var(--bn-0-5); }
 .capture-film-hint { display: flex; align-items: center; gap: var(--bn-1-5); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.capture-film-paused { font-size: var(--bn-fs-sm); line-height: 1.45; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.capture-film-paused p { white-space: inherit; overflow: inherit; text-overflow: inherit; } /* one `.capture-quiet` line, always reserved (D313) */
 .capture-undo-note { font-size: var(--bn-fs-sm); line-height: 1.45; } /* one `.capture-quiet` line (D313) */
 /* NOT `.bn-live-count`: the words "12 recent" are the figure, so the floor is the whole phrase */
 .capture-undo-depth { min-inline-size: 9ch; margin-left: var(--bn-1-5); font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--bn-ink-3); }
@@ -1080,8 +1085,33 @@
   overflow-y: auto;
   overscroll-behavior-y: contain;
   scrollbar-width: thin;
+  /* THE TILE'S OWN SIZE, DERIVED, NEVER TUNED: five columns across the list's content width, each
+     9:16 like `.capture-undo-thumb`. The spacer and the skipped tiles both read it. */
+  container-type: inline-size;
+  --undo-tile-h: calc((100cqw - 4 * var(--bn-2)) / 5 * 16 / 9);
 }
 .capture-undo-list > li { min-width: 0; animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) both; }
+/* Tiles that load in after a deal arrive still (D313): no `.bn-stagger-item`, so no `!important` name to beat. */
+.capture-undo-list > li.capture-undo-still {
+  animation: none;
+  /* OFF-SCREEN TILES SKIP LAYOUT AND PAINT, and keep the size they would have (D313). */
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto var(--undo-tile-h);
+  /* PAINT CONTAINMENT CLIPS AT THE ITEM'S BORDER BOX, and a tile draws past its own: the keycap
+     badge, the corner drop button's reach, the hover lift and the focus ring. `overflow-clip-margin`
+     moves that clip out by the overhang token, for painting only: it adds nothing to the list's
+     scrollable overflow, so no scrollbar appears and no tile moves (D313). */
+  overflow-clip-margin: var(--bn-4);
+}
+/* ONE CELL FOR EVERY CARD NOT DRAWN WHILE THE DISPENSER DEALS: the hidden rows at the tile's own
+   size plus the row gaps between them, which is the height those tiles take once they load in. */
+.capture-undo-list > li.capture-undo-spacer {
+  grid-column: 1 / -1;
+  height: calc(var(--hidden-rows) * (var(--undo-tile-h) + var(--bn-1-5)) - var(--bn-1-5));
+  animation: none;
+}
+/* Fewer cards hidden than fill one more row: the shown tiles' last row already holds them. */
+.capture-undo-list > li.capture-undo-spacer-flat { display: none; }
 .capture-undo-row {
   position: relative;
   display: block;
@@ -1436,7 +1466,13 @@
     overscroll-behavior-x: contain;
     scrollbar-width: thin;
   }
-  .capture-undo-list > li { flex: none; width: 56px; }
+  .capture-undo-list { --undo-tile-w: 56px; --undo-tile-h: calc(var(--undo-tile-w) * 16 / 9); }
+  .capture-undo-list > li { flex: none; width: var(--undo-tile-w); }
+  .capture-undo-list > li.capture-undo-spacer-flat { display: block; }
+  .capture-undo-list > li.capture-undo-spacer {
+    height: auto;
+    width: calc(var(--hidden-cards) * (var(--undo-tile-w) + var(--bn-4)) - var(--bn-4));
+  }
   /* Sized by the row the stage leaves it, not by a ratio of its own: the frame inside is
      already container-bound, so it simply takes what is left under the run card. */
   .capture-last { align-self: stretch; height: auto; max-height: none; }

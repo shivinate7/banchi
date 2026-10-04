@@ -451,7 +451,7 @@ def check_code_ledger(checks: Checks) -> None:
         try:
             with quiet():
                 exit_code = cmd_identify.run(
-                    cli_entry.build_parser().parse_args(["identify", str(caps)]),
+                    cli_entry.build_parser().parse_args(["identify", str(caps), "--engine", "haiku"]),
                     lambda *a: None,
                 )
             checks.equal(exit_code, 0, "`pkmnscan identify` exits 0 over the stub transport")
@@ -507,7 +507,7 @@ def check_code_ledger(checks: Checks) -> None:
             sent_before = len(transported)
             with quiet():
                 exit_code = cmd_identify.run(
-                    cli_entry.build_parser().parse_args(["identify", str(caps)]),
+                    cli_entry.build_parser().parse_args(["identify", str(caps), "--engine", "haiku"]),
                     lambda *a: None,
                 )
             checks.equal(exit_code, 0, "a second identify over the same directory exits 0")
@@ -2674,7 +2674,7 @@ def check_identify_preflight_stage(checks: Checks) -> None:
             with quiet():
                 code = cmd_identify.run(
                     cli_entry.build_parser().parse_args(
-                        ["identify", str(caps), "--crop"]
+                        ["identify", str(caps), "--crop", "--engine", "haiku"]
                     ),
                     first.append,
                 )
@@ -2732,7 +2732,7 @@ def check_identify_preflight_stage(checks: Checks) -> None:
             with quiet():
                 code = cmd_identify.run(
                     cli_entry.build_parser().parse_args(
-                        ["identify", str(caps), "--crop"]
+                        ["identify", str(caps), "--crop", "--engine", "haiku"]
                     ),
                     second.append,
                 )
@@ -5426,7 +5426,7 @@ def check_cli_refusals(checks: Checks) -> None:
             "below is a layer down where the selection flags can be seen too",
         )
         with quiet() as said:
-            code = entry.main(["identify"])
+            code = entry.main(["identify", "--engine", "haiku"])
         checks.equal(code, 1, "and naming nothing exits 1 — a refusal, not a usage error")
         checks.ok(
             "--all" in said.getvalue(),
@@ -5435,7 +5435,7 @@ def check_cli_refusals(checks: Checks) -> None:
             f"said: {said.getvalue().strip()!r}",
         )
         with quiet() as said:
-            code = entry.main(["identify", "--all", "--dry-run"])
+            code = entry.main(["identify", "--all", "--dry-run", "--engine", "haiku"])
         checks.equal(
             code,
             1,
@@ -5516,7 +5516,7 @@ def check_run_and_preview_share_locate_card(checks: Checks) -> None:
             ):
                 with quiet():
                     code = cmd_identify.run(
-                        cli_entry.build_parser().parse_args(["identify", str(caps), "--crop"]),
+                        cli_entry.build_parser().parse_args(["identify", str(caps), "--crop", "--engine", "haiku"]),
                         lambda line: None,
                     )
                 checks.equal(code, 0, "the run exits 0")

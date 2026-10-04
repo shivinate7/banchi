@@ -16682,7 +16682,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if path == "/pipeline/match/sweep":
                 # THE BACKGROUND READER'S SWITCH AND ITS COUNT, for the Capture screen's Setup.
                 # Free: a meta row, a pid check and one count.
-                return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_match_sweep())
+                keys = parse_qs(parsed.query, keep_blank_values=True).get("keys")
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pipeline_match_sweep(None if keys is None else keys[0])
+                )
             if path == "/pipeline/runs":
                 return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_runs())
             if path == "/pipeline/markdowns":
@@ -17538,7 +17541,10 @@ _slots = threading.BoundedSemaphore(REQUEST_SLOTS)
 # The value and the measurement are DEBT11's.
 PHOTO_SLOTS = 4
 _photo_slots = threading.BoundedSemaphore(PHOTO_SLOTS)
-PHOTO_LANE_PREFIXES = ("/photo/", "/assets/")
+# `/pipeline/match/sweep?keys=` is the Capture head's matched-count poll (about every 3 s): one meta row
+# and an indexed key lookup on a read-only connection, no lock and no probe. A prefix, so the sorter's
+# 64-byte peek sees it whole. The keyless GET and the PUT are NOT here: they probe the watcher's lock.
+PHOTO_LANE_PREFIXES = ("/photo/", "/assets/", "/pipeline/match/sweep?keys=")
 # THE SAME LANE CARRIES THE LOCK-FREE READS THE APP POLLS (DEBT11). Four writers parked on
 # the store lock hold all four slots for up to `LOCK_TIMEOUT_SECONDS`, and `/status` is what the
 # app asks "is the server alive" with. Each route below was probed on a scratch store with the
@@ -17930,6 +17936,13 @@ def serve(host: str = HOST, port: int = PORT) -> None:
     # A SWITCHED-ON BACKGROUND READER whose watcher did not survive the restart starts again. A
     # detached child, outside this server; it takes no request slot.
     pipeline_routes.ensure_sweep()
+    # THE FREE SETUP RUNS BY ITSELF, off the main thread so the server answers at once: one
+    # `ensure_stock_setup` look, then a loop that looks again for a new set.
+    def _stock_setup() -> None:
+        pipeline_routes.ensure_stock_setup()
+        pipeline_routes.stock_setup_loop()
+
+    threading.Thread(target=_stock_setup, daemon=True, name="stock-setup").start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

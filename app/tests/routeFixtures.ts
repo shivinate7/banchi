@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test'
+import { stubStore } from './shell'
 
 import type {
   CodeEntry,
@@ -138,6 +139,7 @@ export function matchState(overrides: Partial<MatchState> = {}): MatchState {
     no_image: 120,
     sets: 310,
     running: false,
+    runtime_missing: false,
     progress: null,
     model_url: 'https://github.com/shivinate7/banchi/releases/download/matcher-model-1/marqo-b-image.onnx',
     margin_min: 0.05,
@@ -978,4 +980,62 @@ export const POPULATED_ROUTE_SEEDS: Record<string, (page: Page) => Promise<void>
   [PRODUCT_ROUTE]: seedPopulatedProduct,
   '#/review': seedPopulatedReview,
   '#/pricing': seedPopulatedPricing,
+}
+
+
+/* THE MATCHED COUNTER'S WIRE CONTRACT (owner ruling: a third head counter, "matched").
+ *   GET /pipeline/match/sweep?keys=<csv of this sitting's position keys, e.g. 3/1,3/2>
+ *     -> { on, running, blocked, matched, matched_here }
+ *   `matched_here` is how many of the named keys carry a free-reader row. The screen reads it with
+ *   `usePoll`, about 3s while `running` is true and 20s otherwise. Shared by `capture-matched.spec.ts`
+ *   and the stability row, so the two read one fixture. */
+export type Sweep = { on: boolean; running: boolean; matchedHere: number; asked: string[] }
+
+const sittingCard = (index: number) => ({
+  box: 3,
+  index,
+  key: `3/${index}`,
+  label: `Box 3, Section 1, Card ${index}`,
+  section: 1,
+  card: index,
+  new_box: index === 1,
+  created: true,
+  photo: `/tmp/3-${index}.jpg`,
+  capture_id: null,
+  place: { box_total: index },
+  captured_at: '2026-09-25T12:00:00+00:00',
+  set_hint: null,
+  metadata_finish: null,
+  game: 'pokemon',
+  state: 'captured',
+})
+
+/** A sitting of `n` captured cards, and a sweep route the test steers through the returned object. */
+export async function stubMatched(page: Page, n: number, start: Partial<Sweep> = {}): Promise<Sweep> {
+  await stubStore(page)
+  const sweep: Sweep = { on: true, running: true, matchedHere: 0, asked: [], ...start }
+  await page.route(/\/capture\/sitting$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ open: true, gap_minutes: 30, cards: Array.from({ length: n }, (_, i) => sittingCard(i + 1)) }),
+    }),
+  )
+  await page.route(/\/pipeline\/match\/sweep(\?.*)?$/, async (route) => {
+    const request = route.request()
+    if (request.method() === 'PUT') sweep.on = (request.postDataJSON() as { on: boolean }).on
+    else sweep.asked.push(new URL(request.url()).searchParams.get('keys') ?? '')
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        on: sweep.on,
+        running: sweep.on && sweep.running,
+        blocked: null,
+        matched: 500,
+        matched_here: sweep.matchedHere,
+      }),
+    })
+  })
+  return sweep
 }

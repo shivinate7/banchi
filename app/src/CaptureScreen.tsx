@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 
 import { PositionLabel } from './PositionLabel'
+import { usePoll } from './usePoll'
 import type {
   BoxRecord,
   CardSummary,
@@ -9,6 +10,7 @@ import type {
   FinishClaim,
   GameEntry,
   GameRegistry,
+  MatchSweep,
   RemoveResult,
   SectionDetail,
 } from './types'
@@ -59,7 +61,7 @@ import { captureBoxLabel } from './runScope'
 // before it is a different sitting. Imported rather than restated — see `sitting` below.
 import { GAP_MINUTES } from './storeHistory'
 import { Button, ConfirmSheet, Icon, IconButton, Kbd, Notice, Page, Pill, Slot, Stat } from './kit'
-import { dealerSupported, useDealer } from './dealer'
+import { DEALING_RAIL_TILES, dealerSupported, useDealer } from './dealer'
 import { matchQuery } from './kit/match'
 import { toast } from './kit/toast'
 import { placePartsOf } from './position'
@@ -773,8 +775,8 @@ function SwitchRow({
       className="capture-row capture-row-switch"
       role="switch"
       aria-checked={on === true}
-      disabled={on === null || busy}
-      title={title}
+      disabled={(on === null && !down) || busy}
+      title={on === null && down ? 'Could not read the switch. Press to try again.' : title}
       onClick={onToggle}
     >
       <span aria-hidden="true" />
@@ -990,6 +992,138 @@ function Track({
   )
 }
 
+/** One tile the rail drew last time, with what it was drawn from. */
+type RailEntry = { target: UndoTarget; nonce: string; spans: boolean; el: ReactNode }
+
+/** The Recent rail's grid columns: `.capture-undo-list`'s `repeat(5, ...)` and the spacer's row count read the same five. */
+const RAIL_COLUMNS = 5
+
+/** A slot's photo nonce: its own stamp and the box's revision. The one place it is composed. */
+function nonceOf(stamps: Record<string, number>, revision: number, box: number, index: number): string {
+  return `${stamps[`${box}/${index}`] ?? 0}.${revision}`
+}
+
+/* TWO TARGETS DRAW THE SAME TILE WHEN EVERY FIELD AGREES. `undoStack` rebuilds each target object
+ * whenever the sitting moves, so identity says nothing; the fields do. */
+function sameTarget(a: UndoTarget, b: UndoTarget): boolean {
+  return (
+    a.box === b.box && a.index === b.index && a.label === b.label && a.cid === b.cid &&
+    a.captureId === b.captureId && a.sectionDiv === b.sectionDiv && a.boxName === b.boxName && a.cardNo === b.cardNo
+  )
+}
+
+/* THE PART OF A TILE THAT DOES NOT DEPEND ON ITS RANK. The rank (`at`) moves for every tile on
+ * every capture, so the tile's own button must re-render; its photograph and caption must not,
+ * or a capture costs one image and caption per card in the sitting. */
+const UndoFace = memo(
+  function UndoFace({ target, nonce, spansDrawers }: { target: UndoTarget; nonce: string; spansDrawers: boolean }) {
+    return (
+      <>
+        <img
+          className="capture-undo-thumb capture-undo-thumb-portrait"
+          src={photoSrc(target.box, target.index, { cid: target.cid, capture_id: target.captureId }, nonce)}
+          alt=""
+          loading="lazy"
+          decoding="async"
+        />
+        {/* THE DRAWER GOES IN THE CAPTION, WHICH IS ALREADY ABSOLUTE — `left: 0;
+            right: 0; bottom: 0` over the bottom of the thumbnail, so a second
+            line grows UPWARD over the photograph and moves no layout at all
+            (D118). The cell's height is the thumbnail's `aspect-ratio`, which
+            this cannot reach.
+            THE BOX'S NAME, never its number or a store key (D259, owner 2026-09-28):
+            `boxTitle` over the record's stored name, and the card's own number
+            from the rendered label. A tile with no label names its box alone. */}
+        <span className="capture-undo-pos">
+          {spansDrawers || undoFigure(target) === null ? (
+            <span className="capture-undo-drawer">{boxTitle(target.boxName, target.box)}</span>
+          ) : null}
+          {undoFigure(target)}
+        </span>
+      </>
+    )
+  },
+  (prev, next) => prev.nonce === next.nonce && prev.spansDrawers === next.spansDrawers && sameTarget(prev.target, next.target),
+)
+
+const UndoDrop = memo(
+  function UndoDrop({ target, onRemove }: { target: UndoTarget; onRemove: (target: UndoTarget) => void }) {
+    return (
+      <IconButton
+        icon="trash"
+        label="Remove just this card"
+        name={`Remove just this card, ${positionText(target)}`}
+        tone="danger"
+        size="sm"
+        className="capture-undo-drop"
+        /* THE FACE FOLLOWS `--undo-drop-size` (CaptureScreen.css), 40px on a
+           phone or a coarse pointer (D117), and the kit's own 24px `sm` face
+           everywhere else. IconButton merges `style` over its inline face size,
+           so no `!important` is needed to beat it. */
+        style={{ width: 'var(--undo-drop-size, 24px)', height: 'var(--undo-drop-size, 24px)' }}
+        onClick={(event) => {
+          event.stopPropagation()
+          onRemove(target)
+        }}
+      />
+    )
+  },
+  (prev, next) => prev.onRemove === next.onRemove && sameTarget(prev.target, next.target),
+)
+
+/* ONE FILMSTRIP TILE, RANK-FREE. A tile's props are its card and nothing about where it sits, so a
+ * capture changes no existing tile's props and `railElements` hands React the very same element
+ * for each, which it skips. What depends on rank (the keycap, the "Undo N" label, the data
+ * attribute, the off-screen class) is written onto the DOM once per change by `railRank`, a
+ * layout effect over the list, because React cannot be asked to render N tiles per capture. The
+ * attributes below are the ones that do not move. `at` only seeds the entrance stagger. */
+const UndoCell = memo(function UndoCell({
+  target,
+  at,
+  nonce,
+  spansDrawers,
+  onUndo,
+  onRemove,
+}: {
+  target: UndoTarget
+  at: number
+  nonce: string
+  spansDrawers: boolean
+  onUndo: (target: UndoTarget, at: number) => void
+  onRemove: (target: UndoTarget) => void
+}) {
+  return (
+    <li className={at >= DEALING_RAIL_TILES ? 'capture-undo-still' : 'bn-stagger-item'} style={{ '--i': at } as CSSProperties}>
+      {/* THE CELL WRAPS TWO SIBLING BUTTONS RATHER THAN NESTING ONE INSIDE THE
+          OTHER — an interactive element cannot hold a second one and stay valid,
+          and the two mean different things: the row still walks the plan back to
+          here (`undoBack`, unchanged, D164); the corner control is section 6's
+          granular press, `removeCardInPlace` aimed at this one card alone. */}
+      <div className="capture-undo-cell">
+        <button
+          type="button"
+          className="capture-undo-row"
+          onClick={(event) => {
+            const item = event.currentTarget.closest('li')
+            onUndo(target, item === null ? -1 : Array.prototype.indexOf.call(item.parentElement?.children ?? [], item))
+          }}
+          data-where={positionText(target)}
+        >
+          <UndoFace target={target} nonce={nonce} spansDrawers={spansDrawers} />
+          <span className="capture-key" />
+        </button>
+        {/* SECTION 6: THIS CARD ALONE, NOT EVERYTHING NEWER THAN IT. The owner's
+            own complaint — undoing a mid-sitting shot loses every capture after
+            it too. `removeCardInPlace` is the route that already exists for it
+            (D10 ruling 1), and this is its second door, beside the row's own. */}
+        <UndoDrop target={target} onRemove={onRemove} />
+      </div>
+    </li>
+  )
+}, (prev, next) =>
+  prev.nonce === next.nonce && prev.spansDrawers === next.spansDrawers &&
+  prev.onUndo === next.onUndo && prev.onRemove === next.onRemove && sameTarget(prev.target, next.target))
+
 /** WHAT AN UNDO THUMBNAIL DRAWS UNDER THE CARD — the whole figure, sigil and all, because the
  *  two cases it covers are two different numbers and they may not wear one sigil (D92).
  *
@@ -1156,27 +1290,28 @@ export function CaptureScreen() {
   const [rigOpen, setRigOpen] = useState(restored.box === null)
   const rigTouched = useRef(false)
   /* THE BACKGROUND READER'S SWITCH is a store row, not a device key: it is a fact about this store.
-     It is read once, when the rig is first shown, and written by the person pressing the row. */
+     It is read once on mount, so the head's counter shows with the rig folded, and written by the person pressing the row. */
   const [sweepOn, setSweepOn] = useState<boolean | null>(null)
   const [sweepBusy, setSweepBusy] = useState(false)
   const [sweepDown, setSweepDown] = useState(false)
-  const rigShown = rigOpen || (openField !== null && RIG_FIELDS.has(openField))
-  useEffect(() => {
-    if (!rigShown || sweepOn !== null) return
-    let live = true
-    getMatchSweep()
-      .then((answer) => {
-        if (!live) return
-        setSweepDown(false)
-        setSweepOn(answer.on)
-      })
-      .catch(() => live && setSweepDown(true))
-    return () => {
-      live = false
-    }
-  }, [rigShown, sweepOn])
+  /* A FAILED READ RETRIES ON THE POLL'S IDLE CADENCE, and a press on the "Unavailable" row asks again at once:
+     the switch never waits on the state it would recover. */
+  const { refresh: rereadSweep } = usePoll<MatchSweep>({
+    fn: () => getMatchSweep(),
+    onData: (answer) => {
+      setSweepDown(false)
+      setSweepOn(answer.on)
+    },
+    onError: () => setSweepDown(true),
+    liveMs: 20_000,
+    idleMs: 20_000,
+    enabled: sweepOn === null,
+  })
   const flipSweep = () => {
-    if (sweepOn === null) return
+    if (sweepOn === null) {
+      rereadSweep()
+      return
+    }
     setSweepBusy(true)
     setMatchSweep(!sweepOn)
       .then((answer) => {
@@ -1325,8 +1460,7 @@ export function CaptureScreen() {
   const stampSlot = useCallback((box: number, index: number) => {
     setSlotStamps((prev) => ({ ...prev, [`${box}/${index}`]: (prev[`${box}/${index}`] ?? 0) + 1 }))
   }, [])
-  const slotNonce = (box: number, index: number): string =>
-    `${slotStamps[`${box}/${index}`] ?? 0}.${revision}`
+  const slotNonce = (box: number, index: number): string => nonceOf(slotStamps, revision, box, index)
   /* Bumped on every capture the server answered, and only then: the viewfinder flashes
    * on it. Undo bumps `revision` (the photo URL must change) and never this. */
   const [flash, setFlash] = useState(0)
@@ -2666,6 +2800,25 @@ export function CaptureScreen() {
     return shots.slice(from)
   }, [shots])
 
+  /* THE HEAD'S THIRD COUNTER: `matched_here` for this sitting's keys, polled only while the switch is on
+     and a card exists, about 3 s while the reader works and 20 s otherwise. The server never probes the
+     watcher's lock on this path, so polling cannot stop it starting. */
+  const [matchedHere, setMatchedHere] = useState(0)
+  const sittingKeys = useMemo(() => sitting.map((shot) => shot.card.key), [sitting])
+  usePoll<MatchSweep>({
+    fn: () => getMatchSweep(sittingKeys),
+    onData: (answer) => {
+      setSweepDown(false)
+      setSweepOn(answer.on)
+      setMatchedHere(answer.matched_here ?? 0)
+    },
+    onError: () => setSweepDown(true),
+    liveMs: 3_000,
+    idleMs: 20_000,
+    isLive: (answer) => answer.running,
+    enabled: sweepOn === true && sittingKeys.length > 0,
+  })
+
   /* THE ODOMETER COUNTS THE SITTING, AND THE SPLIT UNDERNEATH SAYS WHERE IT WENT.
    *
    * It counted `shots.filter((shot) => shot.card.box === box)` until 2026-09-12, so changing
@@ -3216,6 +3369,30 @@ export function CaptureScreen() {
     },
     [patchOnHand, patchSectionCount, stampSlot, undoStack],
   )
+  /* STABLE HANDLES FOR THE FILMSTRIP'S MEMOIZED TILES: the ref is re-pointed each render, the
+   * callbacks never change identity, so a tile re-renders only when its own props move. */
+  const undoBackRef = useRef(undoBack)
+  undoBackRef.current = undoBack
+  /* A TILE NAMES ITS CARD, NOT ITS RANK: the rail can hold a list older than the live one while the
+   * dispenser deals, so the depth is read off the live stack at the press. */
+  const undoStackRef = useRef<UndoTarget[]>([])
+  undoStackRef.current = undoStack
+  const onUndoCell = useCallback((target: UndoTarget, painted: number) => {
+    const at = undoStackRef.current.findIndex((entry) => entry.box === target.box && entry.index === target.index)
+    if (at < 0) return
+    /* THE TILE WAS PAINTED AS "UNDO <painted + 1>". If cards landed since, that depth now reaches
+     * cards the rail never showed, so nothing is undone and the person presses again. */
+    if (at !== painted) {
+      toast({ kind: 'refusal', title: 'New cards arrived. Press again.' })
+      return
+    }
+    void undoBackRef.current(at + 1)
+  }, [])
+  const onRemoveCell = useCallback((target: UndoTarget) => {
+    setUndoNote(null)
+    setRemoveConfirm(target)
+  }, [])
+
 
   /** UN-15: takes the divider back out through `closeSection`, by its own key — the keyed
    *  route `ux/divider-fix` built, which reaches a middle divider and not only the box's
@@ -3889,6 +4066,146 @@ export function CaptureScreen() {
           ? (blockerWord[blockers[0]?.key ?? ''] ?? 'Capture is blocked')
           : null
   const dealerIdle = dealer.state === 'connected' || dealer.state === 'stopped'
+
+  /* WHILE THE DISPENSER DEALS THE RECENT RAIL SHOWS ONLY THE NEWEST `DEALING_RAIL_TILES` (D316):
+   * a capture then costs a constant, not one tile per card in the sitting. When dealing ends the
+   * older tiles load in BELOW those, which stay where they are, with no entrance animation. The
+   * Last capture panel is untouched, and undo and its keys read the live `undoStack`. The one
+   * source of "dealing" is `useDealer`. */
+  const dealing = dealer.state === 'dealing'
+  /* ponytail: a cache written inside `useMemo`, the one impure step. It only holds elements the last
+   * run built, so a dropped memo costs one full rebuild and is never wrong. */
+  const railCache = useRef(new Map<string, RailEntry>())
+  const railListRef = useRef<HTMLUListElement>(null)
+  const railList = useMemo(() => {
+    const shown = dealing ? undoStack.slice(0, DEALING_RAIL_TILES) : undoStack
+    /* THE CARDS NOT DRAWN WHILE DEALING ARE ONE SPACER, NOT ONE CELL EACH: its size is the hidden
+     * count times the tile's own size (CaptureScreen.css), so the rail keeps the height it will
+     * have when they load in, and a capture's cost does not grow with the sitting (D313). */
+    const total = Math.max(stripFloor, undoStack.length)
+    const hidden = dealing ? total - shown.length : 0
+    /* ROWS, NOT CARDS, FROM THE TOTAL: the full rail draws ceil(total / columns) rows, and the shown
+     * tiles already fill ceil(shown / columns) of them, partial last row included. */
+    const spacerRows = Math.ceil(total / RAIL_COLUMNS) - Math.ceil(shown.length / RAIL_COLUMNS)
+    const floor = dealing ? 0 : stripFloor
+    const used = new Map<string, RailEntry>()
+    const list = (
+      <ul className="capture-undo-list" ref={railListRef}>
+        {shown.map((target, at) => {
+          const key = `${target.box}/${target.index}`
+          const nonce = nonceOf(slotStamps, revision, target.box, target.index)
+          const had = railCache.current.get(key)
+          /* THE SAME ELEMENT OBJECT FOR A TILE NOTHING ABOUT WHICH CHANGED: React skips it without
+             rendering it or diffing its props, so a capture creates one element, not one per card. */
+          const el =
+            had !== undefined && had.nonce === nonce && had.spans === spansDrawers && sameTarget(had.target, target) ? (
+              had.el
+            ) : (
+              <UndoCell
+                key={key}
+                target={target}
+                at={at}
+                nonce={nonce}
+                spansDrawers={spansDrawers}
+                onUndo={onUndoCell}
+                onRemove={onRemoveCell}
+              />
+            )
+          used.set(key, { target, nonce, spans: spansDrawers, el })
+          return el
+        })}
+        {hidden > 0 ? (
+          <li
+            className={spacerRows > 0 ? 'capture-undo-spacer' : 'capture-undo-spacer capture-undo-spacer-flat'}
+            aria-hidden="true"
+            style={{ '--hidden-cards': hidden, '--hidden-rows': spacerRows } as CSSProperties}
+          />
+        ) : null}
+        {Array.from({ length: Math.max(0, floor - shown.length) }).map((_, at) => (
+          <li key={`ghost-${at}`} className="capture-undo-ghost" aria-hidden="true" />
+        ))}
+      </ul>
+    )
+    railCache.current = used
+    return list
+  }, [dealing, undoStack, slotStamps, revision, spansDrawers, stripFloor, onUndoCell, onRemoveCell])
+  /* THE RANK-DEPENDENT FACE OF A TILE, WRITTEN ONTO THE DOM. A tile's rank moves for every tile on a
+   * capture, and React would have to render all N to say so. This writes six values per tile
+   * instead (no element is created), and only for the tiles a person can reach or see: the newest
+   * `DEALING_RAIL_TILES` and the tiles in the scroller's view. A tile further out is written when
+   * it scrolls in or takes focus, before it can be read or pressed. Same text and attributes the
+   * tiles carried when React drew them. */
+  const busyNow = useRef(busy)
+  busyNow.current = busy
+  const railVisible = useRef(new Set<Element>())
+  const railSeen = useRef(new WeakSet<Element>())
+  const railObserver = useRef<{ root: Element; observer: IntersectionObserver } | null>(null)
+  const writeTile = useCallback((item: Element, rank: number) => {
+    const row = item.querySelector<HTMLButtonElement>('.capture-undo-row')
+    const key = row?.querySelector<HTMLElement>('.capture-key')
+    if (row === null || row === undefined || key === null || key === undefined) return
+    const where = row.dataset.where ?? ''
+    if (row.disabled !== busyNow.current) {
+      row.disabled = busyNow.current
+      item.querySelector<HTMLButtonElement>('.capture-undo-drop')?.toggleAttribute('disabled', busyNow.current)
+    }
+    const label = rank === 0 ? `Undo the newest capture, ${where}` : `Undo ${rank + 1} captures, back to ${where}`
+    if (row.getAttribute('aria-label') !== label) row.setAttribute('aria-label', label)
+    const undo = rank === 0 ? 'Undo' : `Undo ${rank + 1}`
+    if (row.dataset.undo !== undo) row.dataset.undo = undo
+    const text = rank === 0 ? UNDO_KEY_LABEL : String(rank + 1)
+    if (key.textContent !== text) key.textContent = text
+    const cls = rank === 0 ? 'capture-key is-newest' : 'capture-key'
+    if (key.className !== cls) key.className = cls
+    if (rank >= DEALING_RAIL_TILES) item.classList.add('capture-undo-still')
+  }, [])
+  useLayoutEffect(() => {
+    const list = railListRef.current
+    if (list === null) return
+    if (railObserver.current?.root !== list) {
+      railObserver.current?.observer.disconnect()
+      railVisible.current.clear()
+      railSeen.current = new WeakSet()
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) {
+              railVisible.current.delete(entry.target)
+              continue
+            }
+            railVisible.current.add(entry.target)
+            writeTile(entry.target, Array.prototype.indexOf.call(list.children, entry.target))
+          }
+        },
+        { root: list },
+      )
+      railObserver.current = { root: list, observer }
+    }
+    const { observer } = railObserver.current
+    const children = list.children
+    for (let rank = 0; rank < children.length; rank += 1) {
+      const item = children[rank]!
+      if (!railSeen.current.has(item)) {
+        railSeen.current.add(item)
+        if (item.querySelector('.capture-undo-row') !== null) observer.observe(item)
+        writeTile(item, rank)
+      } else if (rank < DEALING_RAIL_TILES || railVisible.current.has(item)) writeTile(item, rank)
+    }
+  }, [railList, busy, writeTile])
+  useEffect(() => () => railObserver.current?.observer.disconnect(), [])
+  /* A tile out of view that takes focus is written first, so what a screen reader reads is current. */
+  const onRailFocus = useCallback(
+    (event: FocusEvent) => {
+      const item = (event.target as Element).closest('.capture-undo-list > li')
+      if (item?.parentElement) writeTile(item, Array.prototype.indexOf.call(item.parentElement.children, item))
+    },
+    [writeTile],
+  )
+  useEffect(() => {
+    const list = railListRef.current
+    list?.addEventListener('focusin', onRailFocus)
+    return () => list?.removeEventListener('focusin', onRailFocus)
+  }, [railList, onRailFocus])
   const dealerSaid = !dealerSupported() ? dealerReason : dealerIdle && dealerReason !== null ? dealerReason : dealer.said
 
   /** WHETHER THERE IS ANYTHING TO CLEAR, which is what disables the control rather than hiding
@@ -3951,6 +4268,15 @@ export function CaptureScreen() {
         <Stat value={runCount === null ? '0' : String(runCount.shots)} label="captured" />
         <span className="capture-odo-rule" aria-hidden="true" />
         <Stat value={box === null ? '—' : String(nextCaptureCardNumber ?? '?')} label="next card" />
+        {/* ALWAYS A SLOT OF FIXED WIDTH, so the switch flipping adds no width and moves neither counter (D313). */}
+        <span className="capture-odo-matched">
+          {sweepOn === true ? (
+            <>
+              <span className="capture-odo-rule" aria-hidden="true" />
+              <Stat value={String(matchedHere)} label="matched" />
+            </>
+          ) : null}
+        </span>
         {runCount === null ? null : runCount.gaps === 0 && runCount.ids === runCount.shots ? (
           <Pill tone="ok" icon="check" className="capture-odo-verdict">
             no gaps
@@ -4725,7 +5051,6 @@ export function CaptureScreen() {
           <Row
             k={SECTION_STEP_KEYS}
             label="Section"
-            icon="divider"
             size="lg"
             className={openField === 'section' ? 'capture-row-covered' : undefined}
             right={
@@ -4766,7 +5091,7 @@ export function CaptureScreen() {
             }}
           />
           {openField !== 'section' ? null : (
-            <OpenField k={SECTION_STEP_KEYS} label="Section" icon="divider" meta="Pick one" pin onClose={closeField}>
+            <OpenField k={SECTION_STEP_KEYS} label="Section" meta="Pick one" pin onClose={closeField}>
               <div className="capture-opts">
                 {sectionsDetail.map((span, position) => {
                   const isLast = span.section === sectionsDetail.length
@@ -5007,86 +5332,17 @@ export function CaptureScreen() {
               </p>
             )}
           </div>
+          {/* THE LIMIT NOTE'S ROOM IS KEPT (D313): one line, always reserved, so the rail never moves. */}
+          <Slot className="capture-film-paused" show={dealing && undoStack.length > DEALING_RAIL_TILES}>
+            <p className="capture-quiet">Showing the newest {DEALING_RAIL_TILES} while the dispenser deals.</p>
+          </Slot>
 
           {undoStack.length === 0 ? (
             <p className="capture-quiet capture-film-empty">
               Your latest captures show up here, ready to undo.
             </p>
           ) : (
-            <ul className="capture-undo-list">
-              {undoStack.map((target, at) => (
-                <li key={`${target.box}/${target.index}`} className="bn-stagger-item" style={{ '--i': at } as CSSProperties}>
-                  {/* THE CELL WRAPS TWO SIBLING BUTTONS RATHER THAN NESTING ONE INSIDE THE
-                      OTHER — an interactive element cannot hold a second one and stay valid,
-                      and the two mean different things: the row still walks the plan back to
-                      here (`undoBack`, unchanged, D164); the corner control is section 6's
-                      granular press, `removeCardInPlace` aimed at this one card alone. */}
-                  <div className="capture-undo-cell">
-                    <button
-                      type="button"
-                      className="capture-undo-row"
-                      onClick={() => void undoBack(at + 1)}
-                      disabled={busy}
-                      data-undo={at === 0 ? 'Undo' : `Undo ${at + 1}`}
-                      aria-label={
-                        at === 0
-                          ? `Undo the newest capture, ${positionText(target)}`
-                          : `Undo ${at + 1} captures, back to ${positionText(target)}`
-                      }
-                    >
-                      <img
-                        className="capture-undo-thumb capture-undo-thumb-portrait"
-                        src={photoSrc(target.box, target.index, { cid: target.cid, capture_id: target.captureId }, slotNonce(target.box, target.index))}
-                        alt=""
-                      />
-                      {/* THE DRAWER GOES IN THE CAPTION, WHICH IS ALREADY ABSOLUTE — `left: 0;
-                          right: 0; bottom: 0` over the bottom of the thumbnail, so a second
-                          line grows UPWARD over the photograph and moves no layout at all
-                          (D118). The cell's height is the thumbnail's `aspect-ratio`, which
-                          this cannot reach.
-                          THE BOX'S NAME, never its number or a store key (D259, owner 2026-09-28):
-                          `boxTitle` over the record's stored name, and the card's own number
-                          from the rendered label. A tile with no label names its box alone. */}
-                      <span className="capture-undo-pos">
-                        {spansDrawers || undoFigure(target) === null ? (
-                          <span className="capture-undo-drawer">{boxTitle(target.boxName, target.box)}</span>
-                        ) : null}
-                        {undoFigure(target)}
-                      </span>
-                      <span className={at === 0 ? 'capture-key is-newest' : 'capture-key'}>
-                        {at === 0 ? UNDO_KEY_LABEL : at + 1}
-                      </span>
-                    </button>
-                    {/* SECTION 6: THIS CARD ALONE, NOT EVERYTHING NEWER THAN IT. The owner's
-                        own complaint — undoing a mid-sitting shot loses every capture after
-                        it too. `removeCardInPlace` is the route that already exists for it
-                        (D10 ruling 1), and this is its second door, beside the row's own. */}
-                    <IconButton
-                      icon="trash"
-                      label="Remove just this card"
-                      name={`Remove just this card, ${positionText(target)}`}
-                      tone="danger"
-                      size="sm"
-                      className="capture-undo-drop"
-                      /* THE FACE FOLLOWS `--undo-drop-size` (CaptureScreen.css), 40px on a
-                         phone or a coarse pointer (D117), and the kit's own 24px `sm` face
-                         everywhere else. IconButton merges `style` over its inline face size,
-                         so no `!important` is needed to beat it. */
-                      style={{ width: 'var(--undo-drop-size, 24px)', height: 'var(--undo-drop-size, 24px)' }}
-                      disabled={busy}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        setUndoNote(null)
-                        setRemoveConfirm(target)
-                      }}
-                    />
-                  </div>
-                </li>
-              ))}
-              {Array.from({ length: Math.max(0, stripFloor - undoStack.length) }).map((_, at) => (
-                <li key={`ghost-${at}`} className="capture-undo-ghost" aria-hidden="true" />
-              ))}
-            </ul>
+            railList
           )}
 
           {/* THE NOTE'S ROOM IS KEPT (D313): an undo's answer lands in a slot that is already one
@@ -5752,7 +6008,7 @@ export function CaptureScreen() {
             />
           )}
           <SwitchRow
-            label="Match in the background"
+            label="Background Match"
             icon="image"
             on={sweepOn}
             busy={sweepBusy}

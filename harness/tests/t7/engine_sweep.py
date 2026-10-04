@@ -333,7 +333,7 @@ def check_sweep_routes(checks: Checks) -> None:
                 checks.equal(len(spawned), 1, "and starts the watcher")
                 status, body, _ = request(port, "GET", "/pipeline/match/sweep")
                 answer = json.loads(body)
-                checks.equal(sorted(answer), ["matched", "on", "running"], "GET answers on, running and matched")
+                checks.equal(sorted(answer), ["aside", "blocked", "matched", "on", "running"], "GET answers on, running, matched, blocked and aside")
                 checks.equal(
                     (answer["on"], answer["matched"]), (True, 2),
                     "on is the stored switch, matched counts marqo-b rows only",
@@ -507,20 +507,21 @@ def check_sweep_crash(checks: Checks) -> None:
         checks.equal(run_worker(ImportError("no onnxruntime")), sweep.EXIT_NOT_READY, "an ImportError in the worker is exit 3")
         checks.ok(not sweep.inflight_path().exists(), "and leaves no inflight file")
         checks.equal(run_worker(RuntimeError("bad photo")), 1, "any other exception is exit 1")
-        checks.equal(sweep.tried(), ids, "with every card of the chunk tried at its capture id")
+        checks.equal(sweep.tried(), {}, "a crash marks no card tried: the chunk stays in the free queue")
+        checks.equal(sorted(_queue()), sorted(ids), "and every card of the chunk is queued to be read free again")
         checks.ok(not sweep.inflight_path().exists(), "and the inflight file settled")
 
         sweep.mark_inflight({"9/9": "left-over-1"})
         with mock.patch.object(match, "status", lambda: {"ready": False}), quiet():
             cmd_match.sweep_worker(lambda _line: None)
-        checks.equal(sweep.tried().get("9/9"), "left-over-1", "a leftover inflight file is settled as tried at worker start")
+        checks.ok("9/9" not in sweep.tried(), "a leftover inflight file marks no card tried; it is settled at worker start")
         checks.ok(not sweep.inflight_path().exists(), "and removed")
         sweep.mark_inflight({"9/7": "left-over-0"})
         _watch(last=[1000.0], clock=[1001.0], workers=[], polls=1)  # inside the quiet time: no worker
-        checks.equal(sweep.tried().get("9/7"), "left-over-0", "a leftover inflight file is settled when the watcher starts")
+        checks.ok("9/7" not in sweep.tried(), "a leftover inflight file marks no card tried; it is settled when the watcher starts")
         sweep.mark_inflight({"9/8": "left-over-2"})
         _watch(last=[0.0], clock=[1000.0], workers=[_Worker(1)], polls=1)
-        checks.equal(sweep.tried().get("9/8"), "left-over-2", "a leftover inflight file is settled after a failed worker exit")
+        checks.ok("9/8" not in sweep.tried(), "a leftover inflight file marks no card tried; it is settled after a failed worker exit")
 
         real_popen = subprocess.Popen
 
@@ -533,6 +534,41 @@ def check_sweep_crash(checks: Checks) -> None:
             sweep._spawn_worker()
         log = root / ".serve" / "match-sweep.log"
         checks.ok(log.is_file() and "worker-boom" in log.read_text(), "worker stderr lands in .serve/match-sweep.log")
+
+
+def check_sweep_crash_stays_free(checks: Checks) -> None:
+    """OWNER: "crashing should never result in being a reason to move to the paid pile". Only a clean
+    read that could not accept a card marks it tried (`check_sweep_worker`'s card B)."""
+    checks.note("")
+    checks.note("SWEEP CRASH STAYS FREE — a worker that dies mid-batch leaves its cards in the free queue")
+    with isolated_home(), _tree():
+        keys = [_capture(game="pokemon", set_hint="sv9") for _ in range(2)]
+        _switch(True)
+        ids = {k: Store().read().inventory.cards[k].capture_id for k in keys}
+        for code in (1, -9):  # a non-zero exit, then a kill
+            sweep.mark_inflight(dict(ids))
+            _watch(last=[0.0], clock=[1000.0], workers=[_Worker(code)], polls=1)
+            checks.equal(sweep.tried(), {}, f"after worker exit {code} no card is tried")
+            checks.equal(sorted(_queue()), sorted(keys), f"after worker exit {code} both cards are queued for the free read")
+        sweep.mark_inflight(dict(ids))
+        sweep.settle_inflight()
+        checks.equal(sorted(_queue()), sorted(keys), "settle_inflight alone leaves the dead worker's cards queued")
+
+
+def check_run_route_defaults_free(checks: Checks) -> None:
+    """`docs/specs/identify-engine-pick.md` "The wire": `RunSend` engine defaults to `marqo-b`. A direct
+    caller that omits `engine` must get the free read, never the CLI's own haiku default."""
+    checks.note("")
+    checks.note("RUN ROUTE DEFAULTS FREE — no engine on the wire means --engine marqo-b")
+
+    def engine_of(payload):
+        flags = pipeline_routes._identify_flags(payload)
+        return flags[flags.index("--engine") + 1] if "--engine" in flags else None
+
+    checks.equal(engine_of({}), "marqo-b", "a run request with no engine passes --engine marqo-b")
+    checks.equal(engine_of({"crop": True, "max_edge": 1200}), "marqo-b", "so does one that sets only the reading")
+    checks.equal(engine_of({"engine": "haiku"}), "haiku", "the composer's explicit paid pick still passes --engine haiku")
+    checks.equal(engine_of({"engine": "marqo-b"}), "marqo-b", "and the explicit free pick passes --engine marqo-b")
 
 
 def check_sweep_cid_guard(checks: Checks) -> None:
@@ -565,6 +601,74 @@ def check_sweep_cid_guard(checks: Checks) -> None:
         checks.ok(renamed not in engines, "a card whose cid changed mid-read gets no row from the old answer")
 
 
+def check_sweep_runtime_cause(checks: Checks) -> None:
+    checks.note("")
+    checks.note("SWEEP CAUSE — `blocked` on GET /pipeline/match/sweep is derived from the runtime now, never stored")
+    with isolated_home(), _tree():
+        _capture(game="pokemon", set_hint="sv9")
+        for on in (True, False):  # the switch and the queue do not matter: the answer is the present state
+            _switch(on)
+            for importable, want in ((False, "runtime_missing"), (True, None)):
+                with mock.patch.object(matchconst, "runtime_importable", lambda value=importable: value):
+                    checks.equal(
+                        pipeline_routes.do_pipeline_match_sweep().get("blocked"), want,
+                        f"switch {'on' if on else 'off'}, runtime {'importable' if importable else 'missing'}: blocked is {want!r}",
+                    )
+        sweep.set_blocked("runtime_missing")  # a value a past worker left behind
+        with mock.patch.object(matchconst, "runtime_importable", lambda: True):
+            checks.equal(
+                pipeline_routes.do_pipeline_match_sweep().get("blocked"), None,
+                "a stale stored cause does not show once the runtime is installed",
+            )
+
+
+# ------------------------------------------------------------ 5b. the Capture head's matched counter
+
+
+def check_sweep_sitting_count(checks: Checks) -> None:
+    """THE CONTRACT THE CAPTURE HEAD'S "matched" COUNTER READS (owner ruling), named here for the builder:
+    `GET /pipeline/match/sweep?keys=<csv of position keys>` adds `matched_here` (how many named keys carry a
+    free-reader row; unknown keys and Haiku rows count zero) and `worker` (the watcher's own state file
+    names a worker). The polled path NEVER probes the lock: `sweep.acquire_lock` and `sweep.running` are
+    not called, so a poll can never hold the flock a starting watcher needs."""
+    checks.note("")
+    checks.note("SWEEP SITTING COUNT — keys-scoped matched_here and worker, read with no lock probe")
+    with isolated_home():
+        mine = [_capture(game="pokemon", set_hint="sv9") for _ in range(3)]
+        _put(mine[0], MATCHER)
+        _put(mine[1], HAIKU)
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = _spawn_server(httpd)
+        path = "/pipeline/match/sweep?keys=" + ",".join([*mine, "99/99"])
+
+        def boom(*_a, **_k):
+            raise AssertionError("the polled path probed the lock")
+
+        try:
+            with mock.patch.object(sweep, "acquire_lock", boom), mock.patch.object(sweep, "running", boom):
+                status, body, _ = request(port, "GET", path)
+                answer = json.loads(body) if status == 200 else {}
+                checks.equal(status, 200, "GET with keys answers with no lock probe")
+                checks.equal(answer.get("matched_here"), 1, "matched_here counts the named keys with a free-reader row only")
+                checks.equal(answer.get("worker"), False, "worker is false with no state file")
+                status, body, _ = request(port, "GET", "/pipeline/match/sweep?keys=")
+                checks.equal((status, json.loads(body).get("matched_here")), (200, 0), "an empty keys list counts zero")
+                sweep._write_state(worker=4242)
+                status, body, _ = request(port, "GET", path)
+                checks.equal(json.loads(body).get("worker") if status == 200 else None, True, "worker is true when the state file names one")
+            for _ in range(5):
+                request(port, "GET", path)
+            handle = sweep.acquire_lock()
+            checks.ok(handle is not None, "after repeated polls the lock is free: a watcher can still start")
+            if handle is not None:
+                handle.close()
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+
 CHECKS = (
     check_sweep_queue,
     check_sweep_watcher,
@@ -572,9 +676,13 @@ CHECKS = (
     check_sweep_quiet,
     check_sweep_lock,
     check_sweep_crash,
+    check_sweep_crash_stays_free,
+    check_run_route_defaults_free,
+    check_sweep_runtime_cause,
     check_sweep_cid_guard,
     check_sweep_worker,
     check_reshoot_drops_matcher_row,
     check_sweep_routes,
+    check_sweep_sitting_count,
     check_sweep_imports_light,
 )

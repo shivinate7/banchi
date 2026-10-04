@@ -817,7 +817,7 @@ def selftest() -> int:
     check("identity-checks-selftest runs on pipeline/__init__.py, a parent of what it imports",
           verdict("identity-checks-selftest", ["pipeline/__init__.py"]), True)
     check("reap-selftest still skips on a leaf module it never imports",
-          verdict("reap-selftest", ["identify/batch.py"]), False)
+          verdict("reap-selftest", ["pipeline/livecheck.py"]), False)
     check("githooks-selftest runs on a hook this reader never sees as a literal path",
           verdict("githooks-selftest", ["scripts/githooks/pre-push"]), True)
     check("an empty diff runs every target",

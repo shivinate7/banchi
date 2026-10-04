@@ -13,7 +13,7 @@ barely any. So it is two processes.
 It lives outside the capture server and takes no request slot. It reads photographs from disk and
 writes one thing: an `identifications` row with engine `marqo-b`, through the cache's own `put`,
 which never overwrites a Haiku or a cleared row. It never writes card state and it NEVER SPENDS:
-a card the reader cannot accept is remembered as tried and waits for a press.
+a card the reader cannot accept is remembered as tried and waits for a press. A CRASH IS NOT A READ: it never marks a card tried.
 
 THE QUEUE is every card in state `captured`, in a game the matcher serves, with no identifications
 row, other than an unhinted Pokemon card (D170: its pool is the whole category) and a card already
@@ -26,8 +26,10 @@ works (`--quiet`): the worker then starts only when the newest capture is that o
 at the next one. The measuring script uses it for its other arms.
 
 IT CANNOT CRASH-LOOP. A worker that exits non-zero is waited out for longer each time (30 s doubling
-to 30 minutes), its stderr goes to `.serve/match-sweep.log`, and the cards it was reading when it died
-are marked tried so one bad photograph cannot take it down again.
+to 30 minutes) and its stderr goes to `.serve/match-sweep.log`. The cards it was reading stay queued
+(a crash never moves a card to the paid pile). The next chunk is half the size. A card that crashes a
+chunk of one is SET ASIDE: out of the free queue, never tried, never paid, and counted in
+`.serve/match-sweep` state as `aside` until it is re-shot or the model changes.
 
 ONE WATCHER, BY ONE LOCK. The watcher holds an `flock` on `inventory/match-sweep.lock` for its whole
 life. A held lock is the only thing that reads as running: a pid is reused and a lock is not. The
@@ -106,6 +108,53 @@ def tried_path() -> Path:
     return inventory_dir() / "match-sweep-tried.json"
 
 
+def crash_path() -> Path:
+    """The chunk size after a crash, and the cards set aside for crashing a chunk of one."""
+    return inventory_dir() / "match-sweep-crash.json"
+
+
+def _crash_record() -> dict:
+    record = _read_json(crash_path())
+    if not isinstance(record, dict) or record.get("model") != MODEL_SHA256:
+        return {"aside": {}}
+    return record
+
+
+def aside() -> Dict[str, str]:
+    keys = _crash_record().get("aside")
+    return {str(k): str(v) for k, v in keys.items()} if isinstance(keys, dict) else {}
+
+
+def chunk_limit(default: int) -> int:
+    """The worker's chunk size: `default`, or half the chunk that last crashed."""
+    chunk = _crash_record().get("chunk")
+    return min(default, chunk) if isinstance(chunk, int) and chunk >= 1 else default
+
+
+def reset_chunk() -> None:
+    record = _crash_record()
+    if "chunk" in record:
+        record.pop("chunk")
+        _write_json(crash_path(), {"model": MODEL_SHA256, **{k: v for k, v in record.items() if k != "model"}})
+
+
+def blocked_path() -> Path:
+    """Why the worker could not run. A file of its own: `_write_state` carries the watcher's pid."""
+    return inventory_dir() / "match-sweep-blocked.json"
+
+
+def blocked() -> Optional[str]:
+    record = _read_json(blocked_path())
+    return record.get("cause") if isinstance(record, dict) else None
+
+
+def set_blocked(cause: Optional[str]) -> None:
+    if cause is None:
+        blocked_path().unlink(missing_ok=True)
+    elif blocked() != cause:
+        _write_json(blocked_path(), {"cause": cause})
+
+
 def _read_json(path: Path):
     try:
         return json.loads(path.read_text("utf-8"))
@@ -150,16 +199,35 @@ def tried() -> Dict[str, str]:
     record = _read_json(tried_path())
     if not isinstance(record, dict) or record.get("model") != MODEL_SHA256:
         return {}
+    from identify import match  # lazy: match pulls the heavy readers
+
+    running = match.prepare_pid() is not None
+    if not running and record.get("stamp") != match.index_stamp():
+        return {}  # a set was read since: cards tried before it are tried again
     keys = record.get("keys")
-    return {str(k): str(v) for k, v in keys.items()} if isinstance(keys, dict) else {}
+    if not isinstance(keys, dict):
+        return {}
+    # A mark made while a Prepare ran was made against a half-built index: it holds only until the Prepare ends.
+    building = set(record.get("building") or ()) if not running else set()
+    return {str(k): str(v) for k, v in keys.items() if k not in building}
 
 
 def remember_tried(additions: Dict[str, str]) -> None:
     if not additions:
         return
+    from identify import match
+
+    record = _read_json(tried_path())
+    valid = isinstance(record, dict) and record.get("model") == MODEL_SHA256
     keys = tried()
     keys.update(additions)
-    _write_json(tried_path(), {"model": MODEL_SHA256, "keys": keys})
+    if match.prepare_pid() is not None:
+        building = set(record.get("building") or ()) if valid else set()
+        building |= set(additions)
+        stamp = record.get("stamp") if valid else match.index_stamp()  # older marks keep the stamp they had
+    else:
+        building, stamp = set(), match.index_stamp()
+    _write_json(tried_path(), {"model": MODEL_SHA256, "stamp": stamp, "building": sorted(building), "keys": keys})
 
 
 _QUEUE_SQL = (
@@ -175,7 +243,7 @@ _QUEUE_SQL = (
 def queue(conn: sqlite3.Connection, limit: Optional[int] = None) -> List[Tuple[str, str]]:
     """`(position key, capture id)` of the cards waiting, oldest first, minus those already tried."""
     marks = ",".join("?" for _ in SERVED_GAMES)
-    seen = tried()
+    seen = {**aside(), **tried()}
     out: List[Tuple[str, str]] = []
     for key, capture_id in conn.execute(_QUEUE_SQL.format(games=marks), tuple(SERVED_GAMES)):
         if seen.get(key) == capture_id:
@@ -325,8 +393,13 @@ def _stop(worker) -> None:
         worker.wait()
 
 
-def settle_inflight() -> int:
-    """Mark the cards a dead worker was reading as tried, so they cannot take the next one down.
+def settle_inflight(crashed: bool = False) -> int:
+    """Settle the chunk a dead worker was reading. A crash is not a read, so no card is tried.
+
+    ONLY `crashed=True` counts: the watcher saw a worker exit that our own stop did not cause, or the
+    worker caught its own exception. The chunk is then halved, and a chunk of one is set aside (see
+    `aside`). Any other leftover (our stop, a server restart, a dead watcher) is an interruption: the
+    file is removed and the chunk is retried whole.
 
     The worker writes the chunk it is about to read and clears it afterwards. A file still here
     belongs to a worker that died inside the chunk (a crash, an out-of-memory kill). Returns how
@@ -339,7 +412,15 @@ def settle_inflight() -> int:
         return 0
     keys = record.get("keys")
     settled = {str(k): str(v) for k, v in keys.items()} if isinstance(keys, dict) else {}
-    remember_tried(settled)
+    record = _crash_record()
+    if not crashed:
+        pass
+    elif len(settled) == 1:
+        record["aside"] = {**aside(), **settled}
+        record.pop("chunk", None)
+    elif settled:
+        record["chunk"] = max(1, len(settled) // 2)
+    _write_json(crash_path(), {**record, "model": MODEL_SHA256})
     inflight_path().unlink()
     return len(settled)
 
@@ -435,14 +516,16 @@ def watch(
                 if code == EXIT_NOT_READY:
                     backoff_until = now() + NOT_READY_BACKOFF_SECONDS
                 elif code != 0 and not stopped_by_us:
-                    # EVERY OTHER FAILURE WAITS LONGER EACH TIME, and the cards it died on are
-                    # tried, so a bad photograph or a broken runtime cannot loop the machine.
-                    settle_inflight()
+                    # EVERY OTHER FAILURE WAITS LONGER EACH TIME, and the next chunk is smaller, so
+                    # a bad photograph ends up alone and set aside. Never tried, never paid.
+                    settle_inflight(crashed=True)
                     delay = min(FAILURE_BACKOFF_CAP_SECONDS, FAILURE_BACKOFF_SECONDS * (2 ** failures))
                     failures += 1
                     backoff_until = now() + delay
                 else:
                     failures = 0
+                    if stopped_by_us:
+                        clear_inflight()  # our stop is not a crash: retry the chunk whole
                 _write_state(worker=None)
                 continue
             sleep(poll)

@@ -2976,8 +2976,8 @@ export type RunSend = {
   selection: RunSelection
   crop?: boolean
   maxEdge?: number
-  /** Who reads the cards. Absent means the paid read, so an old caller never switches engines by
-   *  omission. The runs sheet always sends one (`engines.ts`). */
+  /** Who reads the cards. Absent means the free read (the server defaults to marqo-b), so a caller
+   *  that omits it never pays. The paid read is an explicit pick (`engines.ts`). */
   engine?: 'marqo-b' | 'haiku'
   /** The paid press's explicit choice to buy again the cards the free reader answered. Never
    *  sent with the free engine. */
@@ -2989,7 +2989,16 @@ export type RunSend = {
 export type MatchSweep = {
   on: boolean
   running: boolean
-  matched: number
+  /** Set while the reader's runtime cannot load on this machine; the worker cannot run then. */
+  blocked: null | 'runtime_missing'
+  /** Absent on the keys-scoped read, which counts no table. */
+  matched?: number
+  /** Only on the keys-scoped read: how many of the named keys the free reader has matched. */
+  matched_here?: number
+  /** Only on the keys-scoped read: the watcher's state file names a worker. */
+  worker?: boolean
+  /** Cards the reader set aside for crashing it alone: out of the free queue, never paid. */
+  aside: number
 }
 
 /** `GET /pipeline/match`: is the free reader prepared, and is a Prepare running. Free; the server
@@ -3008,6 +3017,8 @@ export type MatchState = {
   no_image?: number
   sets?: number
   running: boolean
+  /** The reader's runtime cannot load, so Prepare is refused (409 runtime_missing). */
+  runtime_missing: boolean
   progress: {
     state: 'running' | 'done' | 'failed'
     phase: 'model' | 'fingerprints'

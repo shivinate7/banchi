@@ -144,6 +144,7 @@ from pipeline import worklist  # noqa: E402
 # run's parsed `pricing.json`; importing the module under it would make which one you
 # got a matter of where in the function you were standing.
 from pipeline import pricing as pricing_mod  # noqa: E402
+from server import ports  # noqa: E402
 from server import tcg_export  # noqa: E402
 from server import tcg_import  # noqa: E402
 # STDLIB-ONLY AT MODULE SCOPE, LIKE EVERY OTHER IMPORT HERE. `pipeline/pricehistory.py`
@@ -168,6 +169,7 @@ from identify import cost  # noqa: E402
 from identify import match as matcher  # noqa: E402
 from identify import sidecar  # noqa: E402
 from identify import sweep  # noqa: E402
+from identify import matchconst  # noqa: E402
 from store import Store, files, master  # noqa: E402
 from store import cache as cache_mod  # noqa: E402
 from store import db as store_db  # noqa: E402
@@ -1128,19 +1130,8 @@ def _claim_rows() -> List[dict]:
 
 
 def _prepare_pid() -> Optional[int]:
-    """The pid of a running `match prepare`, or None. It reads the progress file the child
-    writes, so a prepare started by a server that has since restarted still counts."""
-    record = files.read_json(matcher.progress_path(), None)
-    if not isinstance(record, dict) or record.get("state") != "running":
-        return None
-    pid = record.get("pid")
-    if not isinstance(pid, int):
-        return None
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        return None
-    return pid
+    """The pid of a running `match prepare`, or None (`identify/match.py:prepare_pid`)."""
+    return matcher.prepare_pid()
 
 
 def do_pipeline_match() -> dict:
@@ -1161,6 +1152,7 @@ def do_pipeline_match() -> dict:
     return {
         **state,
         "running": running,
+        "runtime_missing": not matchconst.runtime_importable(),
         "progress": progress if isinstance(progress, dict) else None,
         "model_url": matcher.MODEL_URL,
         "margin_min": matcher.MARGIN_MIN,
@@ -1192,13 +1184,48 @@ def _sweep_state() -> dict:
         on = store_db.match_sweep_on(conn)
     finally:
         conn.close()
-    return {"on": on, "running": sweep.running(), "matched": _swept_count()}
+    return {"on": on, "running": sweep.running(), "blocked": None if matchconst.runtime_importable() else "runtime_missing", "matched": _swept_count(), "aside": len(sweep.aside())}
 
 
-def do_pipeline_match_sweep() -> dict:
+def _sweep_poll_state(keys: str) -> dict:
+    """The Capture head's polled read: NO lock probe (`sweep.running` and `sweep.acquire_lock` would
+    hold the flock a starting watcher needs), one read-only connection, no table-wide count (so no `matched`), the worker from the state file.
+    `running` here is `worker`: the watcher's own file says a worker is reading right now."""
+    named = [key for key in keys.split(",") if key]
+    record = sweep._read_json(sweep.state_path())
+    worker = isinstance(record, dict) and bool(record.get("worker"))
+    on, here = False, 0
+    try:
+        conn = store_db.open_read_only(store_db.path(files.inventory_dir()))
+    except FileNotFoundError:
+        conn = None
+    if conn is not None:
+        try:
+            on = store_db.match_sweep_on(conn)
+            sql = "select count(*) from identifications where json_extract(payload, '$.engine') = ?"
+            for at in range(0, len(named), 500):  # under SQLite's variable cap
+                chunk = named[at : at + 500]
+                row = conn.execute(
+                    f"{sql} and key in ({','.join('?' * len(chunk))})", (cache_mod.ENGINE_MATCHER, *chunk)
+                ).fetchone()
+                here += int(row[0])
+        finally:
+            conn.close()
+    return {
+        "on": on,
+        "running": worker,
+        "worker": worker,
+        "blocked": None if matchconst.runtime_importable() else "runtime_missing",
+        "aside": len(sweep.aside()),
+        "matched_here": here,
+    }
+
+
+def do_pipeline_match_sweep(keys: Optional[str] = None) -> dict:
     """`GET /pipeline/match/sweep` — is the background reader switched on, is its watcher alive,
-    and how many cards has it matched. FREE: a meta row, a pid check and one count."""
-    return _sweep_state()
+    and how many cards has it matched. FREE: a meta row, a pid check and one count. With `keys`
+    (the sitting's position keys, comma separated) it is the polled read: see `_sweep_poll_state`."""
+    return _sweep_state() if keys is None else _sweep_poll_state(keys)
 
 
 def _spawn_sweep_watcher() -> Optional[int]:
@@ -1267,10 +1294,124 @@ def ensure_sweep() -> None:
             files.log_cause("match sweep ensure", exc)
 
 
+_spawn_lock = threading.Lock()
+_SETUP_BACKOFF = 1800.0  # a look that would start the same setup again waits this long
+
+
+def _spawn_prepare():
+    """The one door to a detached `pkmnscan match prepare`: the press and the automatic setup both use it.
+    One at a time: under a lock it writes a running record BEFORE the spawn, so a second caller in the
+    window before the child's first write is refused."""
+    argv = [str(PKMNSCAN), "match", "prepare"]
+    log_path = matcher.progress_path().with_suffix(".log")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with _spawn_lock:
+        if _prepare_pid() is not None:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT, "prepare_already_running", "Preparing is already running. It will finish on its own."
+            )
+        record = {"state": "running", "phase": "model", "done": 0, "total": 0, "message": "Starting", "pid": os.getpid(), "at": time.time()}
+        files.write_json(matcher.progress_path(), record)
+        try:
+            with open(log_path, "ab", buffering=0) as log:
+                log.write(f"$ {' '.join(argv)}\n".encode("utf-8"))
+                child = subprocess.Popen(  # noqa: S603
+                    argv,
+                    cwd=str(REPO_ROOT),
+                    env=_env(),
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    stdin=subprocess.DEVNULL,
+                    start_new_session=True,  # detached: a prepare outlives this server, like a run
+                )
+        except OSError:
+            files.write_json(matcher.progress_path(), {**record, "state": "failed", "message": "Preparing could not start."})
+            raise
+        # Name the child, unless it has already written its own record (done or failed included).
+        if files.read_json(matcher.progress_path(), None) == record:
+            files.write_json(matcher.progress_path(), {**record, "pid": child.pid})
+        return child
+
+
+def _auto_setup_allowed() -> bool:
+    """`PKMNSCAN_AUTO_SETUP=on` forces it. Unset, a CI or harness run never downloads, and
+    only the primary checkout does, and only over its own store (a `PKMNSCAN_HOME` elsewhere is a
+    throwaway or a demo, never a place to download 372 MB into)."""
+    switch = os.environ.get("PKMNSCAN_AUTO_SETUP")
+    if switch is not None:
+        return switch == "on"
+    return not (os.environ.get("CI") or os.environ.get("PKMNSCAN_HARNESS")) and files.home() == ports.REPO_ROOT.resolve() and ports.is_primary_checkout(ports.REPO_ROOT)
+
+
+def _ensure(stock, skip=None):
+    """One look. Returns the signature of what it started setup for, or None when it started nothing.
+    `skip` is a signature not to start again."""
+    try:
+        if not _auto_setup_allowed() or not matchconst.runtime_importable() or _prepare_pid() is not None:
+            return None
+        from cli import cmd_match
+
+        stock = stock or STOCK_IMAGES
+        model = matcher.model_ready()
+        unread = matcher.unread_targets(stock, cmd_match._store_pairs())
+        if model and not unread:
+            return None
+        signature = (model, tuple(unread))
+        if signature == skip:
+            return None
+        _spawn_prepare()
+        return signature
+    except PipelineRefusal:
+        return None
+    except Exception as exc:  # noqa: BLE001
+        files.log_cause("stock setup ensure", exc)
+        return None
+
+
+def ensure_stock_setup(*, stock=None) -> bool:
+    """One look: start `match prepare` when the model file is missing or a target set is unread,
+    and none runs. FREE. True when it started one. Silent on any failure."""
+    return _ensure(stock) is not None
+
+
+def recheck_stock_photos(*, stock=None, fetch=None, model=None) -> bool:
+    """One weekly look, free: ask again the printings with no stock photo (`match.recheck_no_photo`).
+    Under the same guards as `_ensure`, and never while a Prepare runs. True when it looked. Silent on failure.
+    """
+    # ponytail: `match.recheck_no_photo` writes the Prepare running record after its own check, with no lock;
+    # a Prepare spawned in that gap is not stopped, and the cost is a repeat read.
+    try:
+        if not _auto_setup_allowed() or not matchconst.runtime_importable() or _prepare_pid() is not None or not matcher.model_ready():
+            return False
+        matcher.recheck_no_photo(stock or STOCK_IMAGES, fetch=fetch, model=model)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        files.log_cause("stock photo recheck", exc)
+        return False
+
+
+def stock_setup_loop(poll: float = 60.0, *, stock=None, sleep=time.sleep, max_looks: Optional[int] = None) -> None:
+    """The background check `serve` runs on a daemon thread: a new set in the store gets read.
+    A setup that left the same things missing (a set the catalogue cannot name, a failed
+    download) is not started again for `_SETUP_BACKOFF` seconds. The partial model file is not
+    resumed: `match prepare` clears it first (a bandaid; a resumable download is the cause)."""
+    looks = 0
+    last = None  # (signature, when)
+    while max_looks is None or looks < max_looks:
+        sleep(poll)
+        now = time.monotonic()
+        skip = last[0] if last and now - last[1] < _SETUP_BACKOFF else None
+        signature = _ensure(stock, skip)
+        if signature is not None:
+            last = (signature, now)
+        recheck_stock_photos(stock=stock)
+        looks += 1
+
+
 def do_pipeline_match_prepare(payload: dict) -> Tuple[HTTPStatus, dict]:
-    """`POST /pipeline/match/prepare` — the owner's Prepare press. It DOWNLOADS the model file
-    (372 MB, once) and READS each stock photo once. It spends no money, and it needs the owner's
-    `confirm` because it downloads: nothing in the app fetches either on its own.
+    """`POST /pipeline/match/prepare` — the manual Prepare refresh. It DOWNLOADS the model file
+    (372 MB, once) and READS each stock photo once. It spends no money. The same work starts by
+    itself (`ensure_stock_setup`); the press needs `confirm` because it can download.
 
     Spawns a detached `pkmnscan match prepare` and answers at once. The screen polls
     `GET /pipeline/match`. A second press while one runs is refused, never doubled."""
@@ -1287,21 +1428,15 @@ def do_pipeline_match_prepare(payload: dict) -> Tuple[HTTPStatus, dict]:
             "prepare_already_running",
             "Preparing is already running. It will finish on its own.",
         )
-    argv = [str(PKMNSCAN), "match", "prepare"]
-    log_path = matcher.progress_path().with_suffix(".log")
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+    if not matchconst.runtime_importable():
+        files.log_cause("match prepare", ImportError("onnxruntime is not importable in this venv"))
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "runtime_missing",
+            "The reader's setup on this Mac is out of date, so Prepare cannot run yet. Update the app's setup, then press Prepare again.",
+        )
     try:
-        with open(log_path, "ab", buffering=0) as log:
-            log.write(f"$ {' '.join(argv)}\n".encode("utf-8"))
-            child = subprocess.Popen(  # noqa: S603
-                argv,
-                cwd=str(REPO_ROOT),
-                env=_env(),
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL,
-                start_new_session=True,  # detached: a prepare outlives this server, like a run
-            )
+        child = _spawn_prepare()
     except OSError as exc:
         files.log_cause("match prepare spawn", exc)
         raise PipelineRefusal(
@@ -1420,7 +1555,8 @@ def _identify_flags(payload: dict) -> List[str]:
     max_edge = _max_edge(payload)
     if max_edge is not None:
         flags += ["--max-edge", str(max_edge)]
-    engine = payload.get("engine")
+    # EVERY PRESS READS FREE FIRST (`docs/specs/identify-engine-pick.md`, "The wire"): no engine is marqo-b.
+    engine = payload.get("engine", "marqo-b")
     if engine is not None:
         if engine not in ("haiku", "marqo-b"):
             raise PipelineRefusal(

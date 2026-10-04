@@ -238,10 +238,10 @@ def build_parser() -> argparse.ArgumentParser:
     identify.add_argument(
         "--engine",
         choices=("marqo-b", "haiku"),
-        default="haiku",
-        help="who reads the cards (default: haiku, the paid read). marqo-b is the free "
-        "stock-photo reader first: it accepts the cards it can place with a margin, and each "
-        "card it cannot accept goes to a Haiku second look in the same press, held for review.",
+        default="marqo-b",
+        help="who reads the cards (default: marqo-b, the free stock-photo reader first: it accepts "
+        "the cards it can place with a margin, and each card it cannot accept goes to a Haiku "
+        "second look in the same press, held for review). haiku is the paid read alone.",
     )
     identify.add_argument(
         "--reread-matcher",

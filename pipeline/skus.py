@@ -198,6 +198,23 @@ def apply_rows(
     return report
 
 
+def changed_rows(rows, *, at: int, source: str, skus: Skus) -> list:
+    """The rows of one export that `apply_rows` would NOT leave unchanged, folding them into
+    `skus` as it goes. Run it on a READ snapshot's `skus` (nothing flushes it) to decide, outside
+    the store lock, which rows the locked `apply_rows` has to replay: a re-read export is almost
+    all `UNCHANGED`, and folding ten thousand rows under the lock is the cost this avoids.
+    """
+    out = []
+    for row in rows:
+        built = row_from_csv(row, at=at, source=source)
+        if built is None:
+            continue
+        sku, incoming = built
+        if skus.fold(sku, incoming).outcome not in (UNCHANGED, STALE):
+            out.append(row)
+    return out
+
+
 def fill(skus: Skus, events: List[dict]) -> Report:
     """The whole-disk walk `pkmnscan skus adopt` runs: every cached export this machine has,
     oldest stamp first, folded into `skus` — see the module docstring for why the order

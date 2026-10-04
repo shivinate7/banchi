@@ -76,4 +76,5 @@ DEBT74 the mark's four HELD base parameters were never compared
 DEBT76 the walk's card sheet on a phone has no Mark sold
 DEBT77 every phone-width spec is off
 DEBT82 The Fulfiller's boxes slide once when the Pick list lands
+DEBT83 Off-screen rail tiles still cost a little per capture
 ```

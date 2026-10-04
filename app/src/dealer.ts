@@ -39,6 +39,9 @@ const REPLY = '7e8a1e12-1234-4bcd-8aef-1234567890ab'
 const ALLOWED = ['MOTOR:START', 'MOTOR:STOP'] as const
 type Command = (typeof ALLOWED)[number]
 /** Pause after COMPLETE before the next START (about 0.6 s a card, the pace motion was tuned on). */
+/** The newest tiles the Recent rail draws while the dispenser deals: three rows of its five columns. */
+export const DEALING_RAIL_TILES = 15
+
 export const DEAL_GAP_MS = 200
 /** After COMPLETE, how long the card's photo may take to save before the dealer stops. */
 export const SAVE_WAIT_MS = 3_000

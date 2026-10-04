@@ -54,12 +54,18 @@ def children_of(pid: int, word: str) -> List[int]:
 
 
 class Scratch:
-    def __init__(self, model: Path, index: Path) -> None:
+    def __init__(self, model: Path, index: Path, export: Optional[Path] = None) -> None:
         self.home = Path(tempfile.mkdtemp(prefix="sweep-scratch-"))
         inventory = self.home / "inventory"
         (inventory / "models").mkdir(parents=True)
         os.symlink(model.resolve(), inventory / "models" / model.name)
         shutil.copy(index, inventory / "fingerprints.sqlite")
+        if export is not None:
+            # THE READER ADOPTS A CARD ONLY AGAINST A WHOLE-CATEGORY EXPORT OF ITS GAME, with its scope note.
+            folder = inventory / ".exports" / "riftbound"
+            folder.mkdir(parents=True)
+            shutil.copy(export, folder / export.name)
+            shutil.copy(str(export) + ".scope.json", folder / (export.name + ".scope.json"))
         self.port = free_port()
         # THE SERVER ONLY ANSWERS WRITES TO ITS OWN APP'S ORIGINS, so the scratch port is named.
         self.env = {
