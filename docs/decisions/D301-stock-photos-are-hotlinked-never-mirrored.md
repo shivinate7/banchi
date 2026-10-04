@@ -68,3 +68,4 @@ The server reads the bytes of each image once and computes that fingerprint. It 
 - A change of model rebuilds every fingerprint. An old fingerprint never meets a new model.
 - A fingerprint records the model file hash and the source URL.
 - The read is the matcher's own step. It runs by itself when the capture server starts and anything is missing, and whenever the store holds a card from a set not yet read. The Prepare press on the runs sheet is a manual refresh. Nothing here spends money, and nothing starts with the model runtime missing.
+- A printing with no image is asked again at most once a week, in the background, with no press. A `no_photo` printing is read again. A `no_url` printing has its set's catalog listing read once for a URL, then is read. A printing that gains an image is fingerprinted. The rest wait another week.

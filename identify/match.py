@@ -893,6 +893,81 @@ def build_index(
     return report
 
 
+def recheck_no_photo(
+    stock,
+    *,
+    fetch: Callable[[str], Tuple[Optional[bytes], Optional[str]]] = None,  # type: ignore[assignment]
+    model: Optional[Path] = None,
+    days: int = 7,
+) -> BuildReport:
+    """One free weekly look: ask again the `no_photo` and `no_url` rows last asked over `days` days ago,
+    never an `ok` row and never a whole set. A `no_url` row's set has its catalogue listing read once for a
+    URL. A row that now has an image is fingerprinted. Any other row gets `at` set to now and waits another
+    week. `vec.at` is the last-asked time. Nothing spends."""
+    from PIL import Image
+
+    report = BuildReport()
+    if not index_path().exists():
+        return report
+    target_model = model or model_path()
+    sha = MODEL_SHA256 if model is None else sha256_of_file(target_model)
+    cutoff = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - days * 86400))
+    gate = threading.Lock()
+    clock = [0.0]
+    reader = fetch or (lambda url: fetch_bytes(url, gate=gate, clock=clock))
+    with Index() as index:
+        have = index.meta("model_sha256")
+        if have and have != sha:
+            raise IndexError_("the fingerprints were built by another model file. Clear them first.")
+        old = index.db.execute(
+            "select game, set_name, product_id, number, name, url, status from vec where status in (?,?) and at < ?",
+            (S_NO_PHOTO, S_NO_URL, cutoff),
+        ).fetchall()
+        listed: Dict[Tuple[str, str], Dict[str, str]] = {}
+        for game, set_name in sorted({(r[0], r[1]) for r in old if r[6] == S_NO_URL}):
+            products = stock.catalog_products(game, set_name)  # one catalogue read per affected set
+            listed[(game, set_name)] = {p.product_id: p.url for p in products[0]} if products else {}
+        report.sets = len({(r[0], r[1]) for r in old})
+        gained: List[Tuple[tuple, "object"]] = []
+
+        def mark(row, url, status_, cause) -> None:
+            index.db.execute(
+                "update vec set url=?, status=?, note=?, at=? where game=? and set_name=? and product_id=?",
+                (url, status_, cause, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), row[0], row[1], row[2]),
+            )
+
+        for row in old:
+            report.products += 1
+            url = row[5] or listed.get((row[0], row[1]), {}).get(row[2]) or ""
+            raw, cause = reader(url) if url else (None, None)
+            array = None
+            if raw is not None:
+                try:
+                    image = Image.open(io.BytesIO(raw))
+                    image.load()
+                    array = preprocess(image)
+                except Exception as exc:  # noqa: BLE001
+                    cause = "decode_" + type(exc).__name__
+            if array is not None:
+                gained.append((row, array))
+                continue
+            report.no_image += 1
+            mark(row, url, S_NO_PHOTO if cause in ("http_403", "http_404", "http_410") else row[6], cause)
+        for start in range(0, len(gained), 16):
+            import numpy as np
+
+            chunk = gained[start : start + 16]
+            vectors = _session(target_model).run(None, {"pixels": np.stack([a for _r, a in chunk]).astype(np.float32)})[0].astype(np.float32)
+            for (row, _a), vector in zip(chunk, vectors):
+                index.db.execute(
+                    "update vec set url=?, status=?, note=null, vec=?, at=? where game=? and set_name=? and product_id=?",
+                    (row[5] or listed[(row[0], row[1])][row[2]], S_OK, vector.tobytes(), time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), row[0], row[1], row[2]),
+                )
+            report.embedded += len(chunk)
+        index.db.commit()
+    return report
+
+
 def targets_for(stock, store_pairs: Iterable[Tuple[str, str]]) -> List[Tuple[str, str]]:
     """The sets to fingerprint: every `(game, set)` the store holds cards for, plus every
     Riftbound set. Only the served games."""
@@ -950,14 +1025,16 @@ def prepare_pid() -> Optional[int]:
 
 
 def index_stamp() -> str:
-    """Changes when the index gains a set. A card tried before its set was read is tried again.
+    """Changes when the index gains a set or a fingerprint. A card tried before its set or photo was read is tried again.
     Reads the file directly, so a missing index is "0" and nothing is created."""
     try:
         db = sqlite3.connect(f"file:{index_path()}?mode=ro", uri=True)
     except sqlite3.Error:
         return "0"
     try:
-        return str(db.execute("select count(*) from sets").fetchone()[0])
+        return str(db.execute("select count(*) from sets").fetchone()[0]) + ":" + str(
+            db.execute("select count(*) from vec where status=?", (S_OK,)).fetchone()[0]
+        )
     except sqlite3.Error:
         return "0"
     finally:
