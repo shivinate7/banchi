@@ -50,7 +50,8 @@ const clearLong = (page: Page) => page.evaluate(() => { (window as unknown as { 
 
 /** The wire, and one distinct real-size JPEG per photo index, made once in a scratch page so the
  *  encode never lands in the page under test. */
-async function stubWire(page: Page, count: number): Promise<void> {
+async function stubWire(page: Page, count: number): Promise<{ undone: string[] }> {
+  const undone: string[] = []
   const scratch = await page.context().newPage()
   const photos = await scratch.evaluate((n) => {
     const canvas = document.createElement('canvas')
@@ -88,9 +89,40 @@ async function stubWire(page: Page, count: number): Promise<void> {
       place: { box_total: index, located: true, label: `Box 5, Card ${index}` },
     }, 201))
   })
+  await page.route(/\/inventory\/\d+\/\d+(\/remove)?$/, (r) => {
+    const path = new URL(r.request().url()).pathname
+    undone.push(`${r.request().method()} ${path}`)
+    const index = Number(/\/inventory\/\d+\/(\d+)/.exec(path)?.[1] ?? 0)
+    return r.fulfill(json({
+      deleted: `5/${index}`, box: 5, index, photo_deleted: true, sidecar_deleted: true, review_deleted: false,
+      parked_deleted: false, cache_deleted: true, shifted: 0, next_index: index - 1, on_hand: index - 1,
+    }))
+  })
   await page.route(/\/photo\/\d+\/\d+/, (r) => {
     const at = Number(/\/photo\/\d+\/(\d+)/.exec(r.request().url())?.[1] ?? 1)
     return r.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.from(photos[(at - 1) % count] ?? '', 'base64') })
+  })
+  return { undone }
+}
+
+/** A canvas camera at 1920x1080, for the hand-fed cases. */
+async function handCamera(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 1920
+    canvas.height = 1080
+    const context = canvas.getContext('2d')
+    if (context !== null) {
+      context.fillStyle = 'rgb(180,180,180)'
+      context.fillRect(0, 0, 1920, 1080)
+    }
+    const stream = canvas.captureStream(30)
+    const media = navigator.mediaDevices as unknown as {
+      enumerateDevices: () => Promise<unknown[]>
+      getUserMedia: () => Promise<MediaStream>
+    }
+    media.enumerateDevices = async () => [{ deviceId: 'canvas', kind: 'videoinput', label: 'Canvas Cam Link', groupId: 'g' }]
+    media.getUserMedia = async () => stream
   })
 }
 
@@ -115,12 +147,13 @@ const rail = (page: Page) => page.locator('footer.capture-undo')
 const tiles = (page: Page) => rail(page).locator('.capture-undo-row')
 const lastPanel = (page: Page) => page.locator('aside.capture-last')
 
-test('300 captures while the dispenser deals: no long task, the rail paused, the last capture live', async ({ page }) => {
-  const CAPTURES = 300
-  test.setTimeout(1_500_000)
+/** The dispenser connected and dealing into box 5. `dealOne(n)` waits for the machine to settle
+ *  on the empty stand, lands card n in front of the lens, and resolves once the Last capture
+ *  panel shows it at full size. */
+async function startDealing(page: Page, count: number) {
   await observeLongTasks(page)
   await fakeBluetooth(page)
-  await stubWire(page, CAPTURES)
+  const wire = await stubWire(page, count)
   await pickCameraAndBox(page)
   await armMotion(page)
   await injectScene(page)
@@ -130,7 +163,6 @@ test('300 captures while the dispenser deals: no long task, the rail paused, the
   await expect(start).toBeEnabled({ timeout: 5_000 })
   await start.click()
   await expect(control(page, 'Stop dispenser')).toBeVisible()
-
   const setScene = (base: number) =>
     page.evaluate((b) => { (window as unknown as { __scene: { base: number } }).__scene.base = b }, base)
   const starts = async () => (await writes(page)).filter((w) => w === 'MOTOR:START').length
@@ -139,9 +171,7 @@ test('300 captures while the dispenser deals: no long task, the rail paused, the
     return Number(spans.map((t) => /^empty\s+(\d+)$/.exec(t.trim())?.[1]).find((v) => v !== undefined) ?? 0)
   }
   let gaps = 0
-  const perCapture: number[][] = []
-  let railMoved = ''
-  for (let n = 1; n <= CAPTURES; n += 1) {
+  const dealOne = async (n: number) => {
     await expect.poll(starts, { timeout: 15_000 }).toBeGreaterThanOrEqual(n)
     await clearLong(page)
     // the machine fires on a card only after it has settled on the empty stand, so wait on its own count
@@ -152,6 +182,23 @@ test('300 captures while the dispenser deals: no long task, the rail paused, the
     await expect(img).toHaveAttribute('alt', `Capture at Box 5, Card ${n}`, { timeout: 15_000 })
     await setScene(GAP_LUMA)
     await expect.poll(() => img.evaluate((el) => (el as HTMLImageElement).naturalWidth), { timeout: 15_000 }).toBe(1920)
+  }
+  const stop = async () => {
+    await setScene(GAP_LUMA)
+    await control(page, 'Stop dispenser').click()
+    await expect(control(page, 'Start dispenser')).toBeVisible({ timeout: 10_000 })
+  }
+  return { wire, dealOne, stop }
+}
+
+test('300 captures while the dispenser deals: no long task, the rail paused, the last capture live', async ({ page }) => {
+  const CAPTURES = 300
+  test.setTimeout(1_500_000)
+  const { dealOne, stop } = await startDealing(page, CAPTURES)
+  const perCapture: number[][] = []
+  let railMoved = ''
+  for (let n = 1; n <= CAPTURES; n += 1) {
+    await dealOne(n)
     perCapture.push(await longTasks(page))
     const count = await tiles(page).count()
     const top = (await tiles(page).first().getAttribute('aria-label')) ?? ''
@@ -161,9 +208,7 @@ test('300 captures while the dispenser deals: no long task, the rail paused, the
   const summary = perCapture.map((tasks, i) => (tasks.length > 0 ? `#${i + 1}:${tasks.join('+')}` : '')).filter(Boolean).slice(-12).join(' ')
   const last10 = perCapture.slice(-10).flat()
 
-  await setScene(GAP_LUMA)
-  await control(page, 'Stop dispenser').click()
-  await expect(control(page, 'Start dispenser')).toBeVisible({ timeout: 10_000 })
+  await stop()
   // the catch-up render may be long and is not barred
   await expect(tiles(page)).toHaveCount(CAPTURES, { timeout: 30_000 })
 
@@ -175,23 +220,7 @@ test('60 hand-fed captures raise no long task', async ({ page }) => {
   const CAPTURES = 60
   test.setTimeout(180_000)
   await observeLongTasks(page)
-  await page.addInitScript(() => {
-    const canvas = document.createElement('canvas')
-    canvas.width = 1920
-    canvas.height = 1080
-    const context = canvas.getContext('2d')
-    if (context !== null) {
-      context.fillStyle = 'rgb(180,180,180)'
-      context.fillRect(0, 0, 1920, 1080)
-    }
-    const stream = canvas.captureStream(30)
-    const media = navigator.mediaDevices as unknown as {
-      enumerateDevices: () => Promise<unknown[]>
-      getUserMedia: () => Promise<MediaStream>
-    }
-    media.enumerateDevices = async () => [{ deviceId: 'canvas', kind: 'videoinput', label: 'Canvas Cam Link', groupId: 'g' }]
-    media.getUserMedia = async () => stream
-  })
+  await handCamera(page)
   await stubWire(page, CAPTURES)
   await pickCameraAndBox(page)
   await expect(page.getByRole('button', { name: 'Capture', exact: true })).toBeEnabled()
@@ -205,4 +234,56 @@ test('60 hand-fed captures raise no long task', async ({ page }) => {
   }
   const summary = perCapture.map((tasks, i) => (tasks.length > 0 ? `#${i + 1}:${tasks.join('+')}` : '')).filter(Boolean).slice(-12).join(' ')
   expect(perCapture.slice(-3).flat(), `long tasks (ms) around capture ${CAPTURES}; last flagged: ${summary || 'none'}`).toEqual([])
+})
+
+test('a tile press after more captures landed undoes nothing, says so, and U still undoes the newest', async ({ page }) => {
+  await observeLongTasks(page)
+  await handCamera(page)
+  const wire = await stubWire(page, 8)
+  await pickCameraAndBox(page)
+  const shoot = async (n: number) => {
+    await page.keyboard.press('c')
+    await expect(tiles(page).first()).toHaveAttribute('aria-label', new RegExp(`Card ${n}$`))
+  }
+  for (const n of [1, 2, 3]) await shoot(n)
+  // Hold the press handler of the Card 1 tile as it was painted (Undo 3), then let two captures land.
+  await page.evaluate(() => {
+    const row = [...document.querySelectorAll('footer.capture-undo .capture-undo-row')].at(-1) as HTMLElement
+    const key = Object.keys(row).find((k) => k.startsWith('__reactProps$'))
+    const props = key === undefined ? undefined : (row as unknown as Record<string, { onClick?: () => void }>)[key]
+    if (props?.onClick === undefined) throw new Error('no React press handler on the oldest tile')
+    ;(window as unknown as { __stale: () => void }).__stale = props.onClick
+  })
+  for (const n of [4, 5]) await shoot(n)
+  await page.evaluate(() => (window as unknown as { __stale: () => void }).__stale())
+  await expect(page.locator('.bn-toast', { hasText: 'New cards arrived. Press again.' })).toBeVisible()
+  expect(wire.undone, 'the stale press undid nothing').toEqual([])
+  await expect(tiles(page)).toHaveCount(5)
+  await page.keyboard.press('u')
+  await expect(tiles(page)).toHaveCount(4)
+  expect(wire.undone.length, 'U undid exactly one card').toBe(1)
+  expect(wire.undone[0]).toContain('/inventory/5/5')
+})
+
+test('past 15 cards the rail keeps its height across Stop and nothing below it moves', async ({ page }) => {
+  const CARDS = DEALING_RAIL_TILES + 5
+  test.setTimeout(300_000)
+  const { dealOne, stop } = await startDealing(page, CARDS)
+  for (let n = 1; n <= CARDS; n += 1) await dealOne(n)
+  const geometry = () =>
+    page.evaluate(() => {
+      const footer = document.querySelector('footer.capture-undo') as HTMLElement
+      const list = footer.querySelector('.capture-undo-list') as HTMLElement
+      const below = [...document.querySelectorAll('footer.capture-undo ~ *')].map((el) => Math.round(el.getBoundingClientRect().top))
+      return { list: Math.round(list.getBoundingClientRect().height), footerTop: Math.round(footer.getBoundingClientRect().top), below }
+    })
+  await expect(page.locator('footer.capture-undo .capture-undo-ghost').first()).toBeAttached()
+  const dealing = await geometry()
+  await stop()
+  await expect(tiles(page)).toHaveCount(CARDS, { timeout: 30_000 })
+  await expect(page.locator('footer.capture-undo .capture-undo-ghost')).toHaveCount(0)
+  const stopped = await geometry()
+  expect(stopped.list, 'the rail list holds its height across Stop').toBe(dealing.list)
+  expect(stopped.footerTop, 'the rail does not move').toBe(dealing.footerTop)
+  expect(stopped.below, 'nothing below the rail moves').toEqual(dealing.below)
 })

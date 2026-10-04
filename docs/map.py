@@ -8750,7 +8750,8 @@ COMPONENTS = [
                 "does": "a long sitting must not freeze Capture: 300 dealt captures with a "
                         "longtask observer (none over 50 ms in the last 10, the rail and the Last "
                         "capture panel as ruled, the rail whole after Stop) and 60 hand-fed "
-                        "captures. Run by `make design-check`.",
+                        "captures, a stale tile press refused with a toast, and the rail's height held "
+                        "across Stop. Run by `make design-check`.",
                 "governed_by": ["D10", "D164", "D313", "D316"],
                 "note": "Red on the unmemoized filmstrip (50 to 72 ms tasks from about capture "
                         "25), green on the memoized one. POST /capture is intercepted, so "
