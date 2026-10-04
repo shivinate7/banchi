@@ -814,6 +814,8 @@ function read(path: string): unknown {
       ? { on: false, running: false, worker: false, blocked: null, aside: 0, matched_here: 0, matched_keys: [], paid: 0, paid_keys: [], unread: 0, unhinted: 0 }
       : { on: false, running: false, matched: 0 }
   }
+  /* No capture sitting is open on a published page: the answer the real server gives when nothing was captured lately. */
+  if (route === '/capture/sitting') return { open: false, gap_minutes: 30, cards: [] }
   /* THE BURIED HALF OF THE ONE RECORDED GRAVEYARD, filtered as the route filters it. */
   const graveyard = responses['/graveyard']
   if (route === '/graveyard' && params.get('buried') === '1' && graveyard !== undefined) {
@@ -848,6 +850,8 @@ export async function demoRequest(path: string, init?: RequestInit): Promise<unk
     if (path === '/inventory/copies') return copies(body)
     if (path === '/orders/picks') return picks(body)
     if (path === '/orders/walk-plan') return walkPlan(body)
+    /* The free count of cards a paid read would buy: none, since the frozen store has no unidentified card and no claim. */
+    if (path === '/pipeline/waiting') return { keys: [], claimed: 0 }
   }
 
   let match: RegExpExecArray | null
