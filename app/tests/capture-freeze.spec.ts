@@ -5,7 +5,7 @@ import { sealEveryTest, settleAnimations } from './shell'
 import { CARD, GAP_LUMA, armMotion, control, fakeBluetooth, injectScene, writes } from './dispenserRig'
 import type { CDPSession, Page } from '@playwright/test'
 import { setViewport } from './phoneSwitch'
-import { DEALING_RAIL_TILES } from '../src/dealer'
+import { DEALING_RAIL_TILES, SAVE_WAIT_MS } from '../src/dealer'
 
 /* A LONG SITTING MUST NOT FREEZE THE MAIN THREAD. A `longtask` observer reports only tasks of
  * 50 ms or more, so "no entry" is the bar. Two cases:
@@ -40,6 +40,11 @@ sealEveryTest()
  *  throttled 4x over CDP so every machine measures the same regime. The probe is a 10 ms timer: how
  *  late it fires is how long the main thread was blocked, summed into `__jank`, which sees the cost
  *  that stays under the 50 ms long-task line. */
+/* The CPU rate over the measured span, and over the drive around it. `FREEZE_THROTTLE=6` runs both at 6x,
+ * to prove the drive does not depend on runner speed. */
+const STRESS = Number(process.env.FREEZE_THROTTLE ?? 0)
+const MEASURED_RATE = STRESS > 0 ? STRESS : 4
+const DRIVE_RATE = STRESS > 0 ? STRESS : 1
 const sessions = new WeakMap<Page, CDPSession>()
 const throttle = (page: Page, rate: number) => sessions.get(page)?.send('Emulation.setCPUThrottlingRate', { rate })
 async function observeLongTasks(page: Page): Promise<void> {
@@ -195,7 +200,16 @@ function judge(cost: number[], long: number[][], window: number, firstAt = 0): s
  *  panel shows it at full size. */
 async function startDealing(page: Page, count: number) {
   await observeLongTasks(page)
-  await throttle(page, 1)
+  await throttle(page, DRIVE_RATE)
+  /* THE DEALER'S NO-PHOTO WAIT IS A WALL-CLOCK WINDOW, AND A SLOW RUNNER CAN LAND A CARD AFTER IT. These
+   * cases assert the rail and its cost, not that the dealer stops when no photo comes (dispenser.spec.ts
+   * and the dealer's unit tests own that), so the page's one timer of exactly `SAVE_WAIT_MS` is stretched
+   * tenfold here: the drive then waits on events, never on a clock. Every other timer is untouched. */
+  await page.addInitScript((save) => {
+    const real = window.setTimeout.bind(window) as (fn: TimerHandler, ms?: number, ...args: unknown[]) => number
+    window.setTimeout = ((fn: TimerHandler, ms?: number, ...args: unknown[]) =>
+      real(fn, ms === save ? save * 10 : ms, ...args)) as typeof window.setTimeout
+  }, SAVE_WAIT_MS)
   await fakeBluetooth(page)
   const wire = await stubWire(page, count)
   await pickCameraAndBox(page)
@@ -230,7 +244,7 @@ async function startDealing(page: Page, count: number) {
     await expect.poll(emptyStands, { timeout: 15_000 }).toBeGreaterThan(gaps)
     gaps = await emptyStands()
     await clearLong(page)
-    await throttle(page, 4)
+    await throttle(page, MEASURED_RATE)
     await setScene(n % 2 === 1 ? CARD : CARD - 50) // the card lands in front of the lens; each differs from the last fired
     const img = lastPanel(page).locator('img.capture-media')
     await expect(img).toHaveAttribute('alt', `Capture at Box 5, Card ${n}`, { timeout: 15_000 })
@@ -238,7 +252,7 @@ async function startDealing(page: Page, count: number) {
     await expect.poll(() => img.evaluate((el) => (el as HTMLImageElement).naturalWidth), { timeout: 15_000 }).toBe(1920)
     cost = await blockedMs(page)
     longs = await longTasks(page)
-    await throttle(page, 1)
+    await throttle(page, DRIVE_RATE)
   }
   const stop = async () => {
     await setScene(GAP_LUMA)
