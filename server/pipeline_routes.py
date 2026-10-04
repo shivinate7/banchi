@@ -1203,7 +1203,7 @@ def _sweep_state() -> dict:
         on = store_db.match_sweep_on(conn)
     finally:
         conn.close()
-    return {"on": on, "running": sweep.running(), "blocked": sweep.blocked(), "matched": _swept_count()}
+    return {"on": on, "running": sweep.running(), "blocked": None if runtime_importable() else sweep.blocked(), "matched": _swept_count()}
 
 
 def do_pipeline_match_sweep() -> dict:
