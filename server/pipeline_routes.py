@@ -1208,12 +1208,12 @@ def _sweep_state() -> dict:
 
 def _sweep_poll_state(keys: str) -> dict:
     """The Capture head's polled read: NO lock probe (`sweep.running` and `sweep.acquire_lock` would
-    hold the flock a starting watcher needs), one read-only connection, the worker from the state file.
+    hold the flock a starting watcher needs), one read-only connection, no table-wide count (so no `matched`), the worker from the state file.
     `running` here is `worker`: the watcher's own file says a worker is reading right now."""
     named = [key for key in keys.split(",") if key]
     record = sweep._read_json(sweep.state_path())
     worker = isinstance(record, dict) and bool(record.get("worker"))
-    on, matched, here = False, 0, 0
+    on, here = False, 0
     try:
         conn = store_db.open_read_only(store_db.path(files.inventory_dir()))
     except FileNotFoundError:
@@ -1222,7 +1222,6 @@ def _sweep_poll_state(keys: str) -> dict:
         try:
             on = store_db.match_sweep_on(conn)
             sql = "select count(*) from identifications where json_extract(payload, '$.engine') = ?"
-            matched = int(conn.execute(sql, (cache_mod.ENGINE_MATCHER,)).fetchone()[0])
             for at in range(0, len(named), 500):  # under SQLite's variable cap
                 chunk = named[at : at + 500]
                 row = conn.execute(
@@ -1236,7 +1235,6 @@ def _sweep_poll_state(keys: str) -> dict:
         "running": worker,
         "worker": worker,
         "blocked": None if matchconst.runtime_importable() else "runtime_missing",
-        "matched": matched,
         "matched_here": here,
     }
 

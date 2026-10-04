@@ -17495,7 +17495,10 @@ _slots = threading.BoundedSemaphore(REQUEST_SLOTS)
 # The value and the measurement are DEBT11's.
 PHOTO_SLOTS = 4
 _photo_slots = threading.BoundedSemaphore(PHOTO_SLOTS)
-PHOTO_LANE_PREFIXES = ("/photo/", "/assets/")
+# `/pipeline/match/sweep?keys=` is the Capture head's matched-count poll (about every 3 s): one meta row
+# and an indexed key lookup on a read-only connection, no lock and no probe. A prefix, so the sorter's
+# 64-byte peek sees it whole. The keyless GET and the PUT are NOT here: they probe the watcher's lock.
+PHOTO_LANE_PREFIXES = ("/photo/", "/assets/", "/pipeline/match/sweep?keys=")
 # THE SAME LANE CARRIES THE LOCK-FREE READS THE APP POLLS (DEBT11). Four writers parked on
 # the store lock hold all four slots for up to `LOCK_TIMEOUT_SECONDS`, and `/status` is what the
 # app asks "is the server alive" with. Each route below was probed on a scratch store with the

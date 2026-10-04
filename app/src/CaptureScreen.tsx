@@ -1158,13 +1158,12 @@ export function CaptureScreen() {
   const [rigOpen, setRigOpen] = useState(restored.box === null)
   const rigTouched = useRef(false)
   /* THE BACKGROUND READER'S SWITCH is a store row, not a device key: it is a fact about this store.
-     It is read once, when the rig is first shown, and written by the person pressing the row. */
+     It is read once on mount, so the head's counter shows with the rig folded, and written by the person pressing the row. */
   const [sweepOn, setSweepOn] = useState<boolean | null>(null)
   const [sweepBusy, setSweepBusy] = useState(false)
   const [sweepDown, setSweepDown] = useState(false)
-  const rigShown = rigOpen || (openField !== null && RIG_FIELDS.has(openField))
   useEffect(() => {
-    if (!rigShown || sweepOn !== null) return
+    if (sweepOn !== null) return
     let live = true
     getMatchSweep()
       .then((answer) => {
@@ -1176,7 +1175,7 @@ export function CaptureScreen() {
     return () => {
       live = false
     }
-  }, [rigShown, sweepOn])
+  }, [sweepOn])
   const flipSweep = () => {
     if (sweepOn === null) return
     setSweepBusy(true)
@@ -2685,7 +2684,6 @@ export function CaptureScreen() {
     idleMs: 20_000,
     isLive: (answer) => answer.running,
     enabled: sweepOn === true && sittingKeys.length > 0,
-    restartKey: sittingKeys.length,
   })
 
   /* THE ODOMETER COUNTS THE SITTING, AND THE SPLIT UNDERNEATH SAYS WHERE IT WENT.
