@@ -1203,7 +1203,7 @@ def _sweep_state() -> dict:
         on = store_db.match_sweep_on(conn)
     finally:
         conn.close()
-    return {"on": on, "running": sweep.running(), "blocked": None if matchconst.runtime_importable() else "runtime_missing", "matched": _swept_count()}
+    return {"on": on, "running": sweep.running(), "blocked": None if matchconst.runtime_importable() else "runtime_missing", "matched": _swept_count(), "aside": len(sweep.aside())}
 
 
 def _sweep_poll_state(keys: str) -> dict:
@@ -1235,6 +1235,7 @@ def _sweep_poll_state(keys: str) -> dict:
         "running": worker,
         "worker": worker,
         "blocked": None if matchconst.runtime_importable() else "runtime_missing",
+        "aside": len(sweep.aside()),
         "matched_here": here,
     }
 
@@ -1472,7 +1473,8 @@ def _identify_flags(payload: dict) -> List[str]:
     max_edge = _max_edge(payload)
     if max_edge is not None:
         flags += ["--max-edge", str(max_edge)]
-    engine = payload.get("engine")
+    # EVERY PRESS READS FREE FIRST (`docs/specs/identify-engine-pick.md`, "The wire"): no engine is marqo-b.
+    engine = payload.get("engine", "marqo-b")
     if engine is not None:
         if engine not in ("haiku", "marqo-b"):
             raise PipelineRefusal(

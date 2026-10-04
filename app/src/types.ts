@@ -2976,8 +2976,8 @@ export type RunSend = {
   selection: RunSelection
   crop?: boolean
   maxEdge?: number
-  /** Who reads the cards. Absent means the paid read, so an old caller never switches engines by
-   *  omission. The runs sheet always sends one (`engines.ts`). */
+  /** Who reads the cards. Absent means the free read (the server defaults to marqo-b), so a caller
+   *  that omits it never pays. The paid read is an explicit pick (`engines.ts`). */
   engine?: 'marqo-b' | 'haiku'
   /** The paid press's explicit choice to buy again the cards the free reader answered. Never
    *  sent with the free engine. */
@@ -2997,6 +2997,8 @@ export type MatchSweep = {
   matched_here?: number
   /** Only on the keys-scoped read: the watcher's state file names a worker. */
   worker?: boolean
+  /** Cards the reader set aside for crashing it alone: out of the free queue, never paid. */
+  aside: number
 }
 
 /** `GET /pipeline/match`: is the free reader prepared, and is a Prepare running. Free; the server
