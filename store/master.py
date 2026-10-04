@@ -3669,6 +3669,10 @@ class Inventory:
             )
         return after
 
+    def _cards_between(self, box, floor, hi) -> bool:
+        """Is a card key on hand in [floor, hi)? One test for both branches of `open_section`."""
+        return any(floor <= float(k) < hi for _, k in self.box_order(box).pairs)
+
     def open_section(self, number, after=None, layout_token=None) -> Tuple[int, ...]:
         """Put a divider in front of the next card. The capture screen's `S`.
 
@@ -3710,7 +3714,7 @@ class Inventory:
             divs = self.dividers_of(entry.box)
             if ordinal < len(divs):
                 floor, hi = divs[ordinal - 1], divs[ordinal]
-                if not any(floor <= float(k) < hi for _, k in self.box_order(entry.box).pairs):
+                if not self._cards_between(entry.box, floor, hi):
                     raise SectionEmpty(
                         f"Section {ordinal} of {self.box_title(entry.box)} holds nothing yet. "
                         f"Capture a card into it before starting another after it."
@@ -3720,8 +3724,10 @@ class Inventory:
         # IN KEY SPACE (D294): the divider goes where the next card's KEY is, the back.
         at = self.next_key(entry.box)
         layout = list(entry.layout()) or [1]
-        last = layout[-1]
-        if last >= at:
+        # The last section is empty when no card key lies at or after its divider (the same
+        # test as the `after` branch). `next_key` lands past an empty divider, so comparing
+        # the divider to it let S write a second empty section.
+        if not self._cards_between(entry.box, layout[-1], float("inf")):
             raise SectionEmpty(
                 f"Section {len(layout)} of {self.box_title(entry.box)} holds nothing yet. "
                 f"Capture a card into it before starting another."
