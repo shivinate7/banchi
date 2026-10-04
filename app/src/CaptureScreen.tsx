@@ -2885,6 +2885,8 @@ export function CaptureScreen() {
     [box, boxBid, pickedSection, sectionPickKey],
   )
 
+  /* The dispenser's `noteSaved`, set once `useDealer` runs below `doCapture`. */
+  const savedRef = useRef<() => void>(() => {})
   const doCapture = useCallback(async () => {
     if (busyRef.current) return
     // A halted run ignores the trigger entirely. Not "queues it": spec 5.5 rejected
@@ -3053,6 +3055,7 @@ export function CaptureScreen() {
         }
         stampSlot(card.box, card.index)
         setFlash((prev) => prev + 1)
+        savedRef.current() // D316: the dispenser may deal the next card
         setUndoNote(null)
         // UN-15: a card behind the divider is "built on" (undo.md 11.1) — this capture is in
         // the SAME box as the pending divider, so its own undo takes over.
@@ -3866,6 +3869,7 @@ export function CaptureScreen() {
     ready: blockers.length === 0,
     armed: motionArmed,
   })
+  savedRef.current = dealer.noteSaved
   /* One reason per blocker the Capture button already answers to: the same `blockers` list, never a copy. */
   const blockerWord: Record<string, string> = {
     halt: 'Resume captures first',

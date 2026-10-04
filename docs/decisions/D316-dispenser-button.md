@@ -7,7 +7,7 @@ The owner ruled the scope: a button that turns the dispenser on, and nothing of 
 **The rule.**
 - **Two presses.** Connect picks and links the dispenser. Start deals. Stop is the same button while dealing.
 - **One home.** `app/src/dealer.ts` holds the link, the command allow list (`MOTOR:START`, `MOTOR:STOP`) and the paced loop. No other file talks to the dispenser.
-- **One card per command.** The loop sends START, waits for `MOTOR:COMPLETE`, pauses, and repeats. A dead page or a lost link ends dealing within one card.
+- **One card per command.** The loop sends START, waits for `MOTOR:COMPLETE` and for the card's photo to save (`dealer.noteSaved()`), pauses, and repeats. No photo within `SAVE_WAIT_MS` stops dealing. The owner ruled this after two runs where a timer-paced deal left 2 to 3 of about 70 cards unphotographed. A dead page or a lost link ends dealing within one card.
 - **It deals only while motion can photograph.** The control is off until motion is armed and the camera is ready. Any capture failure stops it.
 - **Nothing is stored.** Chrome holds the pairing grant. "Dealing" never persists and never resumes on its own (D19, arming is an act).
 - **The screen word is "dispenser"**, the owner's word.

@@ -24,11 +24,16 @@ card as today. Nothing about the trigger changes.
 ## The loop
 
 One START ejects one card, then `MOTOR:COMPLETE` arrives after about 0.42 s. A burst of STARTs drops
-cards. So the loop is: START, wait for COMPLETE, pause `DEAL_GAP_MS`, repeat.
+cards. So the loop is: START, wait for COMPLETE and for the card's photo to save, pause `DEAL_GAP_MS`, repeat.
+The next card waits for the photo. The dealer never deals on a timer alone.
 
 - `DEAL_GAP_MS = 200` (about 0.6 s per card, the pace motion was tuned on). The owner tests a shorter
   pause on the first real run. It is one exported constant.
-- COMPLETE: count one card, send the next START.
+- COMPLETE: count one card. The next START needs COMPLETE and one save since the last START, in either
+  order, then `DEAL_GAP_MS`. `dealer.noteSaved()` is the save; Capture calls it where a capture's save
+  succeeds. Extra saves for one card let one card through. A save while not dealing counts for nothing.
+- No save within `SAVE_WAIT_MS` (3000, exported) after COMPLETE: stop, send STOP, and say "Stopped: no
+  photo came after the last card. Check the tray." Stop cancels the wait.
 - `MOTOR:END`: the hopper is empty. Stop, not an error.
 - `MOTOR:ERROR`, `MOTOR:CLEARED`, `MOTOR:CARDLEN_SET`, any other reply, 5 s with no reply, or a lost
   link: stop. One `finish(reason)` ends every path.
@@ -53,7 +58,7 @@ cards. So the loop is: START, wait for COMPLETE, pause `DEAL_GAP_MS`, repeat.
 - One reserved status line in a kit `Slot`, always present (D313, nothing moves). Lines:
   "Not connected", "Connected", "Dealing, 12 cards", "Stopped after 12 cards", "Out of cards after 12",
   "Lost the dispenser. Check it is on, then connect again.", "No answer. Check it is on and nothing
-  else is using it.", "Stopped: a card was not photographed. Resume captures first.", "The dispenser
+  else is using it.", "Stopped: a card was not photographed. Resume captures first.", "Stopped: no photo came after the last card. Check the tray.", "The dispenser
   reported a fault. Check it, then connect again.", "Bluetooth is off. Turn it on, then connect again.",
   "Could not connect. Check it is on, then try again." A canceled chooser says nothing. The line is
   muted small text with two lines reserved.
