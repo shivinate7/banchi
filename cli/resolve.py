@@ -2232,6 +2232,8 @@ def load_from_store(
     live_cap: Optional[int] = None,
     threshold: Decimal = pricing.THRESHOLD,
     quantities: Optional[Mapping[str, int]] = None,
+    snapshot=None,
+    export_cache: Optional[Dict[Path, Tuple[tcgcsv.Export, Dict[str, object]]]] = None,
 ) -> Resolved:
     """`load`'s store-backed twin: no run directory to read, no frozen snapshot to reconcile.
 
@@ -2248,9 +2250,14 @@ def load_from_store(
     called, so there is no snapshot to reconcile and no reallocated box to be fooled by: a
     key's CURRENT occupant is read directly, which is correct by construction rather than by
     a check. That is `load`'s docstring's "replay path" distinction, the other way round.
+
+    `snapshot` IS FOR A CALLER INSIDE ITS OWN `Store.write` (the background reader's adoption):
+    it must see the cards it has just identified, which a fresh read cannot. `export_cache`
+    keeps each parsed export for the caller's lifetime, so a lock held per chunk does not pay
+    a CSV parse per chunk.
     """
     mapping = OrderedDict((game, Path(path)) for game, path in exports.items())
-    snapshot = Store().read()
+    snapshot = snapshot if snapshot is not None else Store().read()
     payload = store_payload(keys, snapshot.inventory)
     return _resolve(
         run,
@@ -2266,6 +2273,7 @@ def load_from_store(
         realigned={},
         departed=[],
         unverified=[],
+        export_cache=export_cache,
     )
 
 
@@ -2284,6 +2292,7 @@ def _resolve(
     realigned: Dict[str, str],
     departed: List[str],
     unverified: List[int],
+    export_cache: Optional[Dict[Path, Tuple[tcgcsv.Export, Dict[str, object]]]] = None,
 ) -> Resolved:
     """The shared tail of `load` and `load_from_store`: build one catalog per game, walk the
     ladder, route every card.
@@ -2317,8 +2326,13 @@ def _resolve(
     sources: Dict[Path, Dict[str, object]] = {}
     for _path in mapping.values():
         if _path not in parsed:
+            if export_cache is not None and _path in export_cache:
+                parsed[_path], sources[_path] = export_cache[_path]
+                continue
             parsed[_path] = tcgcsv.read_export(_path)
             sources[_path] = runs.describe_source(_path)
+            if export_cache is not None:
+                export_cache[_path] = (parsed[_path], sources[_path])
 
     held_cards = snapshot.inventory.cards
     # Read the store's SKU-grouped columns ONCE and hand the same

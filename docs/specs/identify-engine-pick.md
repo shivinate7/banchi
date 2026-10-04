@@ -452,8 +452,18 @@ The game must be one the matcher serves. An unhinted Pokemon card is never queue
 A card the worker looked at and did not accept is recorded as tried, against that photograph and that model file.
 It leaves the queue until it is re-shot or the model changes. It waits for a press.
 
-**What it writes.** One thing: an `identifications` row with engine `marqo-b`. It never writes card state.
-It never sets a SKU, a name or a number on a card. Those follow D258 (identity follows the SKU) and the join.
+**What it writes.** For each card it accepts: an `identifications` row with engine `marqo-b`, then the press's own adoption.
+The card becomes `identified` through `cmd_identify._adopt_cached` and `record_adopted`. The join's own write follows
+(`cmd_join.apply_join`: SKU table, queues, live counters) against the newest export the Mac holds for the game whose scope note covers the whole category, of any age (`pipeline_routes._held_exports` and `_covers`).
+The press keeps its 900 s rule, because an export is also a price reading (D166). The reader uses the file only to name and adopt cards.
+Every reading and `pricing.json` it writes carries the export's own mtime (the oldest, for a run over several games), never the time of the adoption, so the pricing screens see the true age of the prices.
+Each adopted card carries a run named `match-sweep`, closed at 64 cards. After the chunk's lock closes the run gets a press's join record:
+corpus seed, `pricing.json` and manifest. So the worklist, the unsent ledger and emit see the card as they see a press card.
+A card whose set hint names no set in the export is not adopted.
+A card the ladder cannot settle is queued for review as a press queues it (`ambiguous_no_signal`).
+The whole chunk is one `Store.write`. A game with no such export is not adopted: the row is banked and a press adopts it.
+An unaccepted card stays `captured` for the press's paid second look. Nothing spends. A press bills nothing for an adopted card and never adopts it twice.
+It never sets a SKU, a name or a number outside that path. Those follow D258 (identity follows the SKU) and the join.
 The row records the card's `cid`. A move or a renumber changes the position key and never the `cid`.
 The row is keyed like every cache row, by position, and the `cid` lets a reader match it back to the card.
 

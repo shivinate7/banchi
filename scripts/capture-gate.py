@@ -37,7 +37,7 @@ FEEDER_SECONDS = 0.623
 
 
 def run_arm(arm: str, args) -> dict:
-    scratch = Scratch(args.model, args.index)
+    scratch = Scratch(args.model, args.index, args.export)
     watcher = None
     try:
         scratch.start()
@@ -64,6 +64,7 @@ def run_arm(arm: str, args) -> dict:
         result = summary(arm, latencies)
         result["latencies_ms"] = [round(v * 1000, 1) for v in latencies]
         read = scratch.sql("select count(*) from identifications")[0][0]
+        print(f"{'':<14} {scratch.sql(chr(115)+'elect count(*) from cards where state<>?', ('captured',))[0][0]} card(s) identified by the end of the feed")
         print(f"{'':<14} the reader had written {read} row(s) by the end of the feed")
         result["rows_during_feed"] = read
         return result
@@ -78,6 +79,7 @@ def main() -> int:
     parser.add_argument("--model", required=True, type=Path)
     parser.add_argument("--index", required=True, type=Path)
     parser.add_argument("--photos", required=True, type=Path, help="JSON list of photograph paths")
+    parser.add_argument("--export", type=Path, help="a riftbound export with its .scope.json: the reader adopts only against one")
     parser.add_argument("--captures", type=int, default=300)
     parser.add_argument("--arms", default="off,always,gaps")
     parser.add_argument("--json", type=Path, help="write the three results here")
