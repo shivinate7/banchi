@@ -21,6 +21,7 @@ Nothing downloads: the stock catalog, the photo fetch and the embedder are fakes
 
 from __future__ import annotations
 
+import contextlib
 import io
 import time
 from unittest import mock
@@ -353,7 +354,6 @@ def check_transient_rows_retry_in_a_day_not_first_in_line(checks: Checks) -> Non
     with isolated_home():
         n = 2 * cap
         stock = _seed([(f"p{i}", f"N{i}", f"u{i}", match.S_NO_PHOTO, 60 - i) for i in range(n)])  # p0 is the oldest
-        first = _fetcher(set())
         first_asked = []
 
         def decode_fails(url):
@@ -387,16 +387,14 @@ def check_network_failure_ends_the_pass(checks: Checks) -> None:
             stock = _seed([(f"p{i}", f"N{i}", f"u{i}", match.S_NO_PHOTO, 20 - i) for i in range(5)])
             asked = []
 
-            def fetch(url, make=make):
+            def fetch(url, make=make, asked=asked):
                 asked.append(url)
                 if make is None:
                     raise urllib.error.URLError("down")
                 return make(url)
 
-            try:
+            with contextlib.suppress(urllib.error.URLError):
                 _look(stock, fetch)
-            except urllib.error.URLError:
-                pass
             checks.equal(len(asked), 1, f"{label} on the first row: the pass asks exactly 1 row")
 
 
@@ -411,7 +409,7 @@ def check_dead_url_does_not_block_the_rows_behind(checks: Checks) -> None:
             stock = _seed([("dead", "Dead", "udead", match.S_NO_PHOTO, 30)] + [(f"p{i}", f"N{i}", f"u{i}", match.S_NO_PHOTO, 20 - i) for i in range(5)])
             asked = []
 
-            def fetch(url, cause=cause):
+            def fetch(url, cause=cause, asked=asked):
                 asked.append(url)
                 return (None, cause) if url == "udead" else (None, "http_403")
 
