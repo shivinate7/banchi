@@ -1061,7 +1061,10 @@ def _fuzz_dividers(seeds, rounds, sections=False):
                 j = rng.randrange(len(phys[b])) + 1 if sections else None
                 state["stale"] = sections and rng.random() < 0.25
                 state["gone"] = False
-                empty_ok = not phys[b][-1]
+                # FROM THE STORE, NOT THE MODEL: S refuses exactly when the section it follows
+                # holds no card on hand (the owner's ruling), so a refusal is legal only then,
+                # and an S that goes through over such a section is a failure too.
+                empty_ok = not _layout(inv, b)[-1]
                 try:
                     if kind == "capture" and sections:
                         capture(b, j)
@@ -1069,10 +1072,12 @@ def _fuzz_dividers(seeds, rounds, sections=False):
                         capture(b)
                     elif kind == "S" and sections:
                         # S AFTER A PICKED SECTION: the new one goes right after it (Q1).
-                        empty_ok = not phys[b][j - 1]
+                        empty_ok = not _layout(inv, b)[j - 1]
                         aim = after_at(b, _divs(b)[j - 1])
                         stale(b)
                         capture_server.do_open_section(b, aim)
+                        if empty_ok:
+                            bad.append((seed, ops, "S went through over an empty section", b, j))
                         phys[b].insert(j, [])
                     elif kind == "undo_S" and sections:
                         if phys[b][j - 1] or j < 2:
@@ -1098,6 +1103,8 @@ def _fuzz_dividers(seeds, rounds, sections=False):
                             drop(b, cid)
                     elif kind == "S":
                         capture_server.do_open_section(b, dict())
+                        if empty_ok:
+                            bad.append((seed, ops, "S went through over an empty section", b, -1))
                         phys[b].append([])
                     elif kind == "undo_S":
                         if phys[b][-1] or len(phys[b]) < 2:
@@ -2331,12 +2338,26 @@ def check_empty_section_starts(checks: Checks) -> None:
         spans((1, 5, 13), sparse), [(1, 1, 4), (2, 5, 3), (3, 8, 1)],
         "(d) control: no empty section, nothing changes",
     )
-    # A departed (sold or retired) record at index 21 sits right before the divider at 22.
-    # `occupied` is on hand only, so 21 is not in it, and the section behind 22 is empty.
+    # THE RULE BOTH WAYS. Key 21 is a record in the box (an order covering every record,
+    # on-hand keys plus 21) and the divider is at 22. A departed record is not a card
+    # (D58), so it adds nothing and the empty section starts at 9. The same layout with no
+    # record at 21 has an unused key there, which is planned room (I5, a planned divider
+    # keeps its card number), so it starts at 10.
+    def spans_in(layout, keys):
+        order = master.BoxOrder(tuple((k, float(k)) for k in sorted(keys)))
+        return [
+            (s["section"], s["start"], s["count"])
+            for s in capture_server._section_spans(1, layout, len(sparse), sparse, order=order)
+        ]
+
     checks.equal(
-        spans((1, 5, 22), sparse), [(1, 1, 4), (2, 5, 4), (3, 9, 0)],
+        spans_in((1, 5, 22), sparse + (21,)), [(1, 1, 4), (2, 5, 4), (3, 9, 0)],
         "(e) a trailing empty section after a departed record starts at the cards on hand "
         "plus one, not one past it",
+    )
+    checks.equal(
+        spans_in((1, 5, 22), sparse), [(1, 1, 4), (2, 5, 4), (3, 10, 0)],
+        "(e) control: with no record at key 21 it is planned room and the number is kept",
     )
 
 
