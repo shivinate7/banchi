@@ -442,9 +442,12 @@ so cards tried before their set was read are tried again.
 **Weekly re-check.** A printing with no image is asked again at most once a week, in the background, with no press. Nothing spends.
 `pipeline_routes.recheck_stock_photos` runs once per look of `stock_setup_loop`, under the same guards as the free setup
 (`_auto_setup_allowed`, runtime importable, model file present, no Prepare running). It calls `match.recheck_no_photo`.
-That asks again each `no_photo` and `no_url` row whose `vec.at` is over 7 days old, and never an `ok` row or a whole set.
+That asks again the oldest `match.RECHECK_ROWS_PER_PASS` `no_photo` and `no_url` rows whose `vec.at` is over 7 days old, and never an `ok` row or a whole set.
+It holds no write transaction across a fetch, and it skips a row that is `ok` by write time.
+It holds the Prepare's running record while it looks, so the sweep's tried marks made then are dropped when it ends.
 A `no_photo` printing is fetched again. A `no_url` printing has its set's catalog listing read once for a URL, then is fetched.
-A printing that gains an image is fingerprinted and becomes matchable. The rest get `at` set to now and wait another week.
+A printing that gains an image is fingerprinted and becomes matchable. A row answered with 403, 404 or 410, or a listing with no URL, gets `at` set to now and waits another week.
+A transient failure, or a set whose listing could not be read, leaves the row undated, so the next look asks again.
 
 **The owner's ruling: the free read may run in the background, and always.** It is allowed on one condition:
 with an empty queue it uses barely any memory. This section bends two decisions, D1 and D273 (question 3).

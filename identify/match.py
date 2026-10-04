@@ -893,6 +893,13 @@ def build_index(
     return report
 
 
+RECHECK_ROWS_PER_PASS = 20  # one weekly pass asks the oldest this many rows, so a big backlog drains over passes
+
+
+def _stamp_now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
 def recheck_no_photo(
     stock,
     *,
@@ -900,10 +907,22 @@ def recheck_no_photo(
     model: Optional[Path] = None,
     days: int = 7,
 ) -> BuildReport:
-    """One free weekly look: ask again the `no_photo` and `no_url` rows last asked over `days` days ago,
-    never an `ok` row and never a whole set. A `no_url` row's set has its catalogue listing read once for a
-    URL. A row that now has an image is fingerprinted. Any other row gets `at` set to now and waits another
-    week. `vec.at` is the last-asked time. Nothing spends."""
+    """One free weekly pass: ask again the `no_photo` and `no_url` rows last asked over `days` days ago, the oldest
+    `RECHECK_ROWS_PER_PASS` by `vec.at`. Never an `ok` row, never a whole set. A `no_url` row's set has its catalogue
+    listing read once for a URL. A row that now has an image is fingerprinted. A row the CDN or the catalogue
+    answered for (403, 404, 410, or a listing with no URL) gets `at` set to now and waits another week. A transient
+    failure, or a set whose listing could not be read, leaves the row undated, so the next look asks again.
+    Nothing spends.
+
+    Locking: no write transaction is open across a fetch. Each result is one short write on its own connection,
+    after a re-read of the row: a row that is `ok` by then (a Prepare finished mid-look) is left alone.
+    The pass holds the Prepare's own running record (`prepare_pid`) for its whole length, so one Prepare runs at a
+    time and the sweep's tried marks made meanwhile are `building` marks, dropped when the pass ends.
+    That is how a miss is never stamped with the post-gain `index_stamp` against a pool loaded before the gain.
+    The caller (`pipeline_routes.recheck_stock_photos`) checks that no Prepare runs. Nothing here does, so a direct call
+    over a running Prepare would overwrite its record.
+    # ponytail: the check and the record write are two steps with no lock; a Prepare started in that gap is not
+    # stopped, and both write whole rows, so the cost is a repeat read."""
     from PIL import Image
 
     report = BuildReport()
@@ -915,31 +934,46 @@ def recheck_no_photo(
     gate = threading.Lock()
     clock = [0.0]
     reader = fetch or (lambda url: fetch_bytes(url, gate=gate, clock=clock))
-    with Index() as index:
-        have = index.meta("model_sha256")
-        if have and have != sha:
-            raise IndexError_("the fingerprints were built by another model file. Clear them first.")
-        old = index.db.execute(
-            "select game, set_name, product_id, number, name, url, status from vec where status in (?,?) and at < ?",
-            (S_NO_PHOTO, S_NO_URL, cutoff),
-        ).fetchall()
-        listed: Dict[Tuple[str, str], Dict[str, str]] = {}
+    record = {"state": "running", "phase": "recheck", "done": 0, "total": 0, "message": "Checking printings with no photo", "pid": os.getpid(), "at": time.time()}
+    progress_path().write_text(json.dumps(record), "utf-8")
+    try:
+        with Index() as index:
+            have = index.meta("model_sha256")
+            if have and have != sha:
+                raise IndexError_("the fingerprints were built by another model file. Clear them first.")
+            old = index.db.execute(
+                "select game, set_name, product_id, number, name, url, status from vec where status in (?,?) and at < ? order by at, product_id limit ?",
+                (S_NO_PHOTO, S_NO_URL, cutoff, RECHECK_ROWS_PER_PASS),
+            ).fetchall()
+        listed: Dict[Tuple[str, str], Optional[Dict[str, str]]] = {}
         for game, set_name in sorted({(r[0], r[1]) for r in old if r[6] == S_NO_URL}):
             products = stock.catalog_products(game, set_name)  # one catalogue read per affected set
-            listed[(game, set_name)] = {p.product_id: p.url for p in products[0]} if products else {}
+            listed[(game, set_name)] = None if products is None else {p.product_id: p.url for p in products[0]}
         report.sets = len({(r[0], r[1]) for r in old})
-        gained: List[Tuple[tuple, "object"]] = []
 
-        def mark(row, url, status_, cause) -> None:
-            index.db.execute(
-                "update vec set url=?, status=?, note=?, at=? where game=? and set_name=? and product_id=?",
-                (url, status_, cause, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), row[0], row[1], row[2]),
-            )
+        def write(row, sql: str, args: tuple) -> None:
+            with Index() as index:
+                current = index.db.execute(
+                    "select status from vec where game=? and set_name=? and product_id=?", (row[0], row[1], row[2])
+                ).fetchone()
+                if current and current[0] != S_OK:
+                    index.db.execute(sql, args + (row[0], row[1], row[2]))
+                    index.db.commit()
 
+        gained: List[Tuple[tuple, str, "object"]] = []
         for row in old:
+            url = row[5]
+            if row[6] == S_NO_URL:
+                found = listed[(row[0], row[1])]
+                if found is None:
+                    continue  # the listing could not be read: undated, asked again at the next look
+                url = found.get(row[2]) or ""
             report.products += 1
-            url = row[5] or listed.get((row[0], row[1]), {}).get(row[2]) or ""
-            raw, cause = reader(url) if url else (None, None)
+            if not url:
+                report.no_image += 1
+                write(row, "update vec set url='', status=?, note=null, at=? where game=? and set_name=? and product_id=?", (S_NO_URL, _stamp_now()))
+                continue
+            raw, cause = reader(url)
             array = None
             if raw is not None:
                 try:
@@ -949,22 +983,21 @@ def recheck_no_photo(
                 except Exception as exc:  # noqa: BLE001
                     cause = "decode_" + type(exc).__name__
             if array is not None:
-                gained.append((row, array))
-                continue
-            report.no_image += 1
-            mark(row, url, S_NO_PHOTO if cause in ("http_403", "http_404", "http_410") else row[6], cause)
-        for start in range(0, len(gained), 16):
+                gained.append((row, url, array))
+            elif cause in ("http_403", "http_404", "http_410"):
+                report.no_image += 1
+                write(row, "update vec set url=?, status=?, note=?, at=? where game=? and set_name=? and product_id=?", (url, S_NO_PHOTO, cause, _stamp_now()))
+            else:
+                report.unreadable += 1  # transient: undated
+        if gained:
             import numpy as np
 
-            chunk = gained[start : start + 16]
-            vectors = _session(target_model).run(None, {"pixels": np.stack([a for _r, a in chunk]).astype(np.float32)})[0].astype(np.float32)
-            for (row, _a), vector in zip(chunk, vectors):
-                index.db.execute(
-                    "update vec set url=?, status=?, note=null, vec=?, at=? where game=? and set_name=? and product_id=?",
-                    (row[5] or listed[(row[0], row[1])][row[2]], S_OK, vector.tobytes(), time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), row[0], row[1], row[2]),
-                )
-            report.embedded += len(chunk)
-        index.db.commit()
+            vectors = _session(target_model).run(None, {"pixels": np.stack([a for _r, _u, a in gained]).astype(np.float32)})[0].astype(np.float32)
+            for (row, url, _a), vector in zip(gained, vectors):
+                write(row, "update vec set url=?, status=?, note=null, vec=?, at=? where game=? and set_name=? and product_id=?", (url, S_OK, vector.tobytes(), _stamp_now()))
+                report.embedded += 1
+    finally:
+        progress_path().write_text(json.dumps({**record, "state": "done", "at": time.time()}), "utf-8")
     return report
 
 

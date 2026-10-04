@@ -1377,7 +1377,9 @@ def ensure_stock_setup(*, stock=None) -> bool:
 def recheck_stock_photos(*, stock=None, fetch=None, model=None) -> bool:
     """One weekly look, free: ask again the printings with no stock photo (`match.recheck_no_photo`).
     Under the same guards as `_ensure`, and never while a Prepare runs. True when it looked. Silent on failure.
-    # ponytail: the Prepare check is not held across the look; both write whole rows, so a clash costs a repeat read."""
+    """
+    # ponytail: `match.recheck_no_photo` writes the Prepare running record after its own check, with no lock;
+    # a Prepare spawned in that gap is not stopped, and the cost is a repeat read.
     try:
         if not _auto_setup_allowed() or not matchconst.runtime_importable() or _prepare_pid() is not None or not matcher.model_ready():
             return False
