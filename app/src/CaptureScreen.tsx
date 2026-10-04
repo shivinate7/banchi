@@ -4192,6 +4192,7 @@ export function CaptureScreen() {
       } else if (rank < DEALING_RAIL_TILES || railVisible.current.has(item)) writeTile(item, rank)
     }
   }, [railList, busy, writeTile])
+  useEffect(() => () => railObserver.current?.observer.disconnect(), [])
   /* A tile out of view that takes focus is written first, so what a screen reader reads is current. */
   const onRailFocus = useCallback(
     (event: FocusEvent) => {

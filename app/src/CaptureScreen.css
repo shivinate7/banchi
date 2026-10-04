@@ -1097,16 +1097,12 @@
   /* OFF-SCREEN TILES SKIP LAYOUT AND PAINT, and keep the size they would have (D313). */
   content-visibility: auto;
   contain-intrinsic-block-size: auto var(--undo-tile-h);
-  /* PAINT CONTAINMENT CLIPS AT THE ITEM'S PADDING BOX, and a tile draws past its own: the keycap
-     badge, the corner drop button's reach, the hover lift and the focus ring. So the item carries
-     its own overhang as padding and takes it back as margin: the tile keeps its cell and its
-     neighbours do not move. Clicks pass through the padding to what is under it. */
-  box-sizing: content-box;
-  padding: var(--bn-4);
-  margin: calc(-1 * var(--bn-4));
-  pointer-events: none;
+  /* PAINT CONTAINMENT CLIPS AT THE ITEM'S BORDER BOX, and a tile draws past its own: the keycap
+     badge, the corner drop button's reach, the hover lift and the focus ring. `overflow-clip-margin`
+     moves that clip out by the overhang token, for painting only: it adds nothing to the list's
+     scrollable overflow, so no scrollbar appears and no tile moves (D313). */
+  overflow-clip-margin: var(--bn-4);
 }
-.capture-undo-list > li.capture-undo-still > * { pointer-events: auto; }
 /* ONE CELL FOR EVERY CARD NOT DRAWN WHILE THE DISPENSER DEALS: the hidden rows at the tile's own
    size plus the row gaps between them, which is the height those tiles take once they load in. */
 .capture-undo-list > li.capture-undo-spacer {
