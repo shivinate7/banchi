@@ -229,7 +229,7 @@ def _preview(args, run_dir, plan, resolved, say, *, keys=None) -> int:
     return 0
 
 
-def apply_join(writable, resolved, full_exports: Dict[Path, tcgcsv.Export], path_source: Dict[Path, dict]):
+def apply_join(writable, resolved, fold_rows: Dict[Path, list], path_source: Dict[Path, dict]):
     """THE ONE HOME of what a join writes into the store: the SKU table fold, the queues, and the
     live counters. `run` below and the background reader's adoption (`cli/cmd_match.py`) both call
     it, inside a `Store.write` they own. Returns `(added_main, added_parked, released, moved_live,
@@ -237,10 +237,10 @@ def apply_join(writable, resolved, full_exports: Dict[Path, tcgcsv.Export], path
     """
     main, parked = resolve.entries_for(resolved)
     freed = resolved.processed_positions - resolved.queued_positions
-    for path, full_export in full_exports.items():
+    for path, rows in fold_rows.items():
         at, source_name = _skus_stamp(path_source[path])
         skus_walk.apply_rows(
-            full_export.rows, at=at, source=source_name,
+            rows, at=at, source=source_name,
             skus=writable.skus, events=writable.inventory.events,
         )
     # Upsert and release as one unit — `queues.apply_run` also releases the entry a
@@ -683,7 +683,7 @@ def run(args, say) -> int:
 
     with store.write() as writable:
         added_main, added_parked, released, moved_live, kept_live = apply_join(
-            writable, resolved, full_exports, path_source
+            writable, resolved, {p: e.rows for p, e in full_exports.items()}, path_source
         )
         queue_line = writable.queue_summary
         counts = writable.inventory.counts()

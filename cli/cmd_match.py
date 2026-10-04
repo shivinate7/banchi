@@ -134,8 +134,8 @@ def prepare(
 
 class _Session:
     """What one worker keeps between chunks: the parsed export per path (so a lock held per chunk
-    never pays a CSV parse), the set names each export holds, the paths whose SKU rows are
-    already folded in, and the run its adopted cards belong to."""
+    never pays a CSV parse), the set names each export holds, each file's (mtime, size) as parsed,
+    and the run its adopted cards belong to."""
 
     # ponytail: a run closes at this many cards, so a chunk re-joins at most this many (one run per
     # worker session would re-join every card the session ever adopted, under the lock).
@@ -144,15 +144,22 @@ class _Session:
     def __init__(self) -> None:
         self.parsed: dict = {}
         self.sets: dict = {}
-        self.folded: set = set()
+        self.stamp: dict = {}
         self.run = None
         self.keys: list = []
 
     def open_run(self):
-        """The run the next chunk's cards join into. A new one, named for the reader, when none is
-        open or the open one is full."""
+        """The run the next chunk's cards join into: the newest `match-sweep` run while it holds
+        fewer than `RUN_CARDS` cards (a worker lives for one queue, so a run per worker would be a
+        run per chunk), else a new one."""
         from cli import runs
 
+        if self.run is None:
+            for directory in sorted(store_files.runs_dir().glob("*-match-sweep-*"), reverse=True)[:1]:
+                run = runs.open_run(directory)
+                keys = list((run.manifest.get("selection") or {}).get("keys") or [])
+                if len(keys) < self.RUN_CARDS:
+                    self.run, self.keys = run, keys
         if self.run is None or len(self.keys) >= self.RUN_CARDS:
             self.run = runs.create("match-sweep")
             self.keys = []
@@ -175,87 +182,135 @@ def _export_for(game: str):
     return None if found is None else found[0]
 
 
-def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session") -> int:
-    """ONE `Store.write` for one chunk. Every card the reader ACCEPTS gets the press's own
-    adoption (`cmd_identify._adopt_cached` and `record_adopted`, stamped with a run) and then the
-    join's own write (`cmd_join.apply_join`), so a free match is `identified` as a paid read is. A
-    card the ladder cannot settle lands in review as a press leaves it. After the lock closes, the
-    run gets the join record a press's join leaves (corpus seed, `pricing.json`, manifest), so the
-    worklist, the unsent ledger and emit see the card. An unaccepted card is only noted as tried.
-    A card is not adopted when no reusable export exists for its game, or its set hint names no
-    set the export holds. Returns how many cards were accepted."""
-    from cli import cmd_identify, cmd_join, resolve, runs
-    from identify import sidecar
-    from pipeline import corpus, games, pricing, routing, setnames, tcgcsv
+def _still_here(inventory, card, key) -> bool:
+    """THE CARD MAY HAVE CHANGED WHILE IT WAS READ: gone, no longer captured, re-shot (a new
+    capture id) or renamed (a new cid). Then the answer is about bytes that no longer stand there."""
+    now = inventory.cards.get(key)
+    return (
+        now is not None
+        and now.state == "captured"
+        and now.capture_id == card.capture_id
+        and now.cid == card.cid
+    )
 
-    accepted = 0
+
+def _adopt(target, accepted, meta, paths, session, *, rehearsal=False):
+    """THE ADOPTION, ONE FUNCTION FOR BOTH ITS CALLERS: the prep runs it on a read snapshot
+    (nothing flushes it) and the lock runs it on the writable one. Bank each accepted answer, then
+    take it onto the card as a press does (`cmd_identify._adopt_cached`, `record_adopted`).
+    Returns the keys adopted. A card is not adopted when no reusable export exists for its game,
+    or its set hint names no set the export holds: a press names those, never a guess."""
+    from cli import cmd_identify
+    from identify import sidecar
+    from pipeline import games, setnames
+
+    adopted = []
+    for result in accepted:
+        card, _capture_id, digest, photo = meta[result.key]
+        target.cache.put(
+            result.key, result.payload, digest, match.MODEL_SHA256,
+            engine=ENGINE_MATCHER, cid=card.cid,
+        )
+        game = str(card.game or games.DEFAULT_GAME)
+        if game not in paths:
+            continue
+        now = target.inventory.cards[result.key]
+        if now.set_hint and setnames.resolve(now.set_hint, session.sets[paths[game]]) is None:
+            continue
+        item = cmd_identify.Item(
+            capture=sidecar.Capture(
+                photo=photo, box=now.box, index=now.index, set_hint=now.set_hint, game=now.game,
+                metadata_finish=tuple(now.metadata_finish) if now.metadata_finish else None,
+            ),
+            photo_sha256=digest, game=game, strategy=str(games.get(game)["prompt"]),
+        )
+        if rehearsal:
+            item.identification = dict(result.payload)
+        else:
+            cmd_identify._adopt_cached(item, target.cache.get(result.key), {})
+        if cmd_identify.record_adopted(target, item, session.open_run().name):
+            adopted.append(result.key)
+    return adopted
+
+
+def _stamp(path):
+    st = path.stat()
+    return st.st_mtime_ns, st.st_size
+
+
+def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session") -> int:
+    """ONE `Store.write` for one chunk, holding the lock only for writes. Every card the reader
+    ACCEPTS gets the press's own adoption (`_adopt`) and then the join's own write
+    (`cmd_join.apply_join`), so a free match is `identified` as a paid read is. A card the ladder
+    cannot settle lands in review as a press leaves it. An unaccepted card is only noted as tried.
+
+    THE JOIN'S READS HAPPEN BEFORE THE LOCK OPENS: the export parse, the catalog and the ladder
+    (`resolve.load_from_store` over a read snapshot with the adoption applied to it in memory), and
+    which SKU rows the export would change. The lock replays the adoption, re-checks that every
+    card is still `captured` under the same capture id and that the export is still the file the
+    prep read, and applies the prepared join. A card or export that moved sends the chunk back to
+    the prep, twice at most, then it only banks the answers. After the lock closes the run gets a
+    press's join record (corpus seed, `pricing.json`, manifest). Returns how many were accepted."""
+    from cli import cmd_join, resolve, runs
+    from pipeline import corpus, games, pricing, routing, skus as skus_walk, tcgcsv
+
     paths: dict = {}
+    stamps: dict = {}
     if adopt:
         for game in {str(meta[r.key][0].game or games.DEFAULT_GAME) for r in results if r.accepted}:
             if (path := _export_for(game)) is not None:
                 paths[game] = path
-    for path in paths.values():  # parsed BEFORE the lock opens: a capture never waits on a CSV parse
-        if path not in session.parsed:
+    for path in paths.values():
+        stamp = _stamp(path)
+        if stamps.setdefault(path, stamp) != stamp or session.stamp.get(path) != stamp:
             export = tcgcsv.read_export(path)
             session.parsed[path] = (export, runs.describe_source(path))
             session.sets[path] = sorted({str(r.get(tcgcsv.SET_COLUMN) or "") for r in export.rows} - {""})
+            session.stamp[path] = stamp
     threshold = pricing.check_threshold(corpus.Corpus.read().policy_for(None)["threshold"]) if paths else None
-    run = session.open_run() if paths and any(r.accepted for r in results) else None
-    resolved = None
-    with store.write() as writable:
-        adopted = []
-        for result in results:
-            card, capture_id, digest, _photo = meta[result.key]
-            now = writable.inventory.cards.get(result.key)
-            # THE CARD MAY HAVE CHANGED WHILE IT WAS READ: gone, no longer captured,
-            # re-shot (a new capture id) or renamed (a new cid). Then this answer is
-            # about bytes that no longer stand there.
-            if (
-                now is None
-                or now.state != "captured"
-                or now.capture_id != card.capture_id
-                or now.cid != card.cid
+
+    for attempt in range(3):
+        live = [r for r in results if r.accepted and r.payload is not None]
+        resolved, fold, run = None, {}, None
+        if paths and live and attempt < 2:
+            snap = store.read()
+            ready = [r for r in live if _still_here(snap.inventory, meta[r.key][0], r.key)]
+            adopted = _adopt(snap, ready, meta, paths, session, rehearsal=True)
+            if adopted:
+                run = session.open_run()
+                resolved = resolve.load_from_store(
+                    run, session.keys + adopted, paths, threshold=threshold,
+                    rule=pricing.MATCH, basis=pricing.BASIS_MARKET, review_below=routing.CONFIDENCE_LOW,
+                    snapshot=snap, export_cache=session.parsed,
+                )
+                skus_snap = store.read().skus
+                for game_join in resolved.joins.values():
+                    path = Path(str(game_join.source["path"]))
+                    at, name = cmd_join._skus_stamp(game_join.source)
+                    fold[path] = skus_walk.changed_rows(session.parsed[path][0].rows, at=at, source=name, skus=skus_snap)
+        accepted = 0
+        with store.write() as writable:
+            if resolved is not None and (
+                any(_stamp(p) != stamps[p] for p in paths.values())
+                or [r.key for r in ready if not _still_here(writable.inventory, meta[r.key][0], r.key)]
             ):
-                continue
-            if not (result.accepted and result.payload is not None):
-                noted[result.key] = capture_id
-                continue
-            writable.cache.put(
-                result.key, result.payload, digest, match.MODEL_SHA256,
-                engine=ENGINE_MATCHER, cid=card.cid,
-            )
-            accepted += 1
-            game = str(card.game or games.DEFAULT_GAME)
-            if game not in paths:
-                continue
-            if now.set_hint and setnames.resolve(now.set_hint, session.sets[paths[game]]) is None:
-                continue  # the export holds no such set: a press names it, never a guess
-            item = cmd_identify.Item(
-                capture=sidecar.Capture(
-                    photo=meta[result.key][3], box=now.box, index=now.index, set_hint=now.set_hint,
-                    game=now.game, metadata_finish=tuple(now.metadata_finish) if now.metadata_finish else None,
-                ),
-                photo_sha256=digest, game=game, strategy=str(games.get(game)["prompt"]),
-            )
-            cmd_identify._adopt_cached(item, writable.cache.get(result.key), {})
-            if cmd_identify.record_adopted(writable, item, run.name):
-                adopted.append(result.key)
-        if adopted:
-            keys = session.keys + adopted
-            resolved = resolve.load_from_store(
-                run, keys, paths, threshold=threshold,
-                rule=pricing.MATCH, basis=pricing.BASIS_MARKET, review_below=routing.CONFIDENCE_LOW,
-                snapshot=writable, export_cache=session.parsed,
-            )
-            full, source = {}, {}
-            for game_join in resolved.joins.values():
-                path = Path(str(game_join.source["path"]))
-                if path not in session.folded:
-                    full[path] = session.parsed[path][0]
-                    source[path] = game_join.source
-                    session.folded.add(path)
-            cmd_join.apply_join(writable, resolved, full, source)
-            session.keys = keys
+                continue  # something moved since the prep: nothing written, prepare again
+            ok = [r for r in (ready if resolved is not None else live)
+                  if _still_here(writable.inventory, meta[r.key][0], r.key)]
+            for result in results:
+                if not (result.accepted and result.payload is not None) and _still_here(
+                    writable.inventory, meta[result.key][0], result.key
+                ):
+                    noted[result.key] = meta[result.key][1]
+            accepted = len(ok)
+            if resolved is not None:
+                keys = _adopt(writable, ok, meta, paths, session)
+                source = {Path(str(g.source["path"])): g.source for g in resolved.joins.values()}
+                cmd_join.apply_join(writable, resolved, fold, source)
+                session.keys = session.keys + keys
+            else:
+                _adopt(writable, ok, meta, {}, session)
+        break
     if resolved is not None:
         run.manifest["selection"] = {"keys": list(session.keys)}
         run.set(selection=run.manifest["selection"])
