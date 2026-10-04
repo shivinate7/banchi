@@ -608,6 +608,7 @@ Turning the toggle on never downloads. With no model or no index, the toggle rea
 - The reader reads even mid-feed. The owner's word: *"Even mid-feed"*. The quiet time is 0, from the measured capture gate (section 8).
 - A paid press over matched cards asks every time and defaults to skip (section 6).
 - The on and off toggle is in the rig settings. Its state is a store row. The setup press downloads once (section 8).
+- A selection handed to Review wins over the open Capture sitting, because it is the newer, explicit pick (section 8).
 
 **Open for the owner.** The two gates are measurements with no pass mark. The build lane brings the numbers before ship.
 The held-out check (section 3) also tests the look-alike guard, with photographs of cards whose same-name twin has no stock image.

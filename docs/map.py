@@ -9992,7 +9992,7 @@ COMPONENTS = [
                 # suppress it for the other ninety-nine.
                 "governed_by": ["D4", "D13", "D16", "D23", "D24", "D28", "D29", "D32", "D35", "D37",
                                 "D41", "D77", "D76", "D118", "D136", "D174", "D284",
-                                "D218", "D221", "D291"],
+                                "D218", "D221", "D291", "D313"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "

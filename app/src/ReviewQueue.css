@@ -407,9 +407,9 @@
   min-width: 0;
   white-space: nowrap;
 }
-.review-next-label { font-weight: 700; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); }
-.review-next-name { color: var(--bn-ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.review-next-price { --digits: 9; color: var(--bn-ink-2); font-weight: 600; } /* "$1,234.50" (D313) */
+.review-next-label { font-weight: 700; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); flex: none; }
+.review-next-name { color: var(--bn-ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+.review-next-price { --digits: 9; flex: none; color: var(--bn-ink-2); font-weight: 600; } /* "$1,234.50" (D313) */
 .review-caption-slot { font-size: var(--bn-fs-sm); line-height: var(--bn-lh-snug); }
 .review-next-empty { color: var(--bn-ink-3); font-weight: 500; }
 
