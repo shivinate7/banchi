@@ -144,6 +144,7 @@ from pipeline import worklist  # noqa: E402
 # run's parsed `pricing.json`; importing the module under it would make which one you
 # got a matter of where in the function you were standing.
 from pipeline import pricing as pricing_mod  # noqa: E402
+from server import ports  # noqa: E402
 from server import tcg_export  # noqa: E402
 from server import tcg_import  # noqa: E402
 # STDLIB-ONLY AT MODULE SCOPE, LIKE EVERY OTHER IMPORT HERE. `pipeline/pricehistory.py`
@@ -1129,28 +1130,8 @@ def _claim_rows() -> List[dict]:
 
 
 def _prepare_pid() -> Optional[int]:
-    """The pid of a running `match prepare`, or None. It reads the progress file the child
-    writes, so a prepare started by a server that has since restarted still counts."""
-    record = files.read_json(matcher.progress_path(), None)
-    if not isinstance(record, dict) or record.get("state") != "running":
-        return None
-    pid = record.get("pid")
-    if not isinstance(pid, int):
-        return None
-    # `kill -0` succeeds on a zombie, so ask for the state: an exited child is not running.
-    try:
-        state = subprocess.run(
-            ["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, timeout=2
-        ).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        try:
-            os.kill(pid, 0)  # ps unavailable: the old alive check beats a 500 on a polled route
-        except OSError:
-            return None
-        return pid
-    if not state or state.startswith("Z"):
-        return None
-    return pid
+    """The pid of a running `match prepare`, or None (`identify/match.py:prepare_pid`)."""
+    return matcher.prepare_pid()
 
 
 def do_pipeline_match() -> dict:
@@ -1313,10 +1294,107 @@ def ensure_sweep() -> None:
             files.log_cause("match sweep ensure", exc)
 
 
+_spawn_lock = threading.Lock()
+_SETUP_BACKOFF = 1800.0  # a look that would start the same setup again waits this long
+
+
+def _spawn_prepare():
+    """The one door to a detached `pkmnscan match prepare`: the press and the automatic setup both use it.
+    One at a time: under a lock it writes a running record BEFORE the spawn, so a second caller in the
+    window before the child's first write is refused."""
+    argv = [str(PKMNSCAN), "match", "prepare"]
+    log_path = matcher.progress_path().with_suffix(".log")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with _spawn_lock:
+        if _prepare_pid() is not None:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT, "prepare_already_running", "Preparing is already running. It will finish on its own."
+            )
+        record = {"state": "running", "phase": "model", "done": 0, "total": 0, "message": "Starting", "pid": os.getpid(), "at": time.time()}
+        files.write_json(matcher.progress_path(), record)
+        try:
+            with open(log_path, "ab", buffering=0) as log:
+                log.write(f"$ {' '.join(argv)}\n".encode("utf-8"))
+                child = subprocess.Popen(  # noqa: S603
+                    argv,
+                    cwd=str(REPO_ROOT),
+                    env=_env(),
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    stdin=subprocess.DEVNULL,
+                    start_new_session=True,  # detached: a prepare outlives this server, like a run
+                )
+        except OSError:
+            files.write_json(matcher.progress_path(), {**record, "state": "failed", "message": "Preparing could not start."})
+            raise
+        # Name the child, unless it has already written its own record (done or failed included).
+        if files.read_json(matcher.progress_path(), None) == record:
+            files.write_json(matcher.progress_path(), {**record, "pid": child.pid})
+        return child
+
+
+def _auto_setup_allowed() -> bool:
+    """`PKMNSCAN_AUTO_SETUP=on` forces it. Unset, a CI or harness run never downloads, and
+    only the primary checkout does, and only over its own store (a `PKMNSCAN_HOME` elsewhere is a
+    throwaway or a demo, never a place to download 372 MB into)."""
+    switch = os.environ.get("PKMNSCAN_AUTO_SETUP")
+    if switch is not None:
+        return switch == "on"
+    return not (os.environ.get("CI") or os.environ.get("PKMNSCAN_HARNESS")) and files.home() == ports.REPO_ROOT.resolve() and ports.is_primary_checkout(ports.REPO_ROOT)
+
+
+def _ensure(stock, skip=None):
+    """One look. Returns the signature of what it started setup for, or None when it started nothing.
+    `skip` is a signature not to start again."""
+    try:
+        if not _auto_setup_allowed() or not matchconst.runtime_importable() or _prepare_pid() is not None:
+            return None
+        from cli import cmd_match
+
+        stock = stock or STOCK_IMAGES
+        model = matcher.model_ready()
+        unread = matcher.unread_targets(stock, cmd_match._store_pairs())
+        if model and not unread:
+            return None
+        signature = (model, tuple(unread))
+        if signature == skip:
+            return None
+        _spawn_prepare()
+        return signature
+    except PipelineRefusal:
+        return None
+    except Exception as exc:  # noqa: BLE001
+        files.log_cause("stock setup ensure", exc)
+        return None
+
+
+def ensure_stock_setup(*, stock=None) -> bool:
+    """One look: start `match prepare` when the model file is missing or a target set is unread,
+    and none runs. FREE. True when it started one. Silent on any failure."""
+    return _ensure(stock) is not None
+
+
+def stock_setup_loop(poll: float = 60.0, *, stock=None, sleep=time.sleep, max_looks: Optional[int] = None) -> None:
+    """The background check `serve` runs on a daemon thread: a new set in the store gets read.
+    A setup that left the same things missing (a set the catalogue cannot name, a failed
+    download) is not started again for `_SETUP_BACKOFF` seconds. The partial model file is not
+    resumed: `match prepare` clears it first (a bandaid; a resumable download is the cause)."""
+    looks = 0
+    last = None  # (signature, when)
+    while max_looks is None or looks < max_looks:
+        sleep(poll)
+        now = time.monotonic()
+        skip = last[0] if last and now - last[1] < _SETUP_BACKOFF else None
+        signature = _ensure(stock, skip)
+        if signature is not None:
+            last = (signature, now)
+        looks += 1
+
+
 def do_pipeline_match_prepare(payload: dict) -> Tuple[HTTPStatus, dict]:
-    """`POST /pipeline/match/prepare` — the owner's Prepare press. It DOWNLOADS the model file
-    (372 MB, once) and READS each stock photo once. It spends no money, and it needs the owner's
-    `confirm` because it downloads: nothing in the app fetches either on its own.
+    """`POST /pipeline/match/prepare` — the manual Prepare refresh. It DOWNLOADS the model file
+    (372 MB, once) and READS each stock photo once. It spends no money. The same work starts by
+    itself (`ensure_stock_setup`); the press needs `confirm` because it can download.
 
     Spawns a detached `pkmnscan match prepare` and answers at once. The screen polls
     `GET /pipeline/match`. A second press while one runs is refused, never doubled."""
@@ -1340,21 +1418,8 @@ def do_pipeline_match_prepare(payload: dict) -> Tuple[HTTPStatus, dict]:
             "runtime_missing",
             "The reader's setup on this Mac is out of date, so Prepare cannot run yet. Update the app's setup, then press Prepare again.",
         )
-    argv = [str(PKMNSCAN), "match", "prepare"]
-    log_path = matcher.progress_path().with_suffix(".log")
-    log_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with open(log_path, "ab", buffering=0) as log:
-            log.write(f"$ {' '.join(argv)}\n".encode("utf-8"))
-            child = subprocess.Popen(  # noqa: S603
-                argv,
-                cwd=str(REPO_ROOT),
-                env=_env(),
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL,
-                start_new_session=True,  # detached: a prepare outlives this server, like a run
-            )
+        child = _spawn_prepare()
     except OSError as exc:
         files.log_cause("match prepare spawn", exc)
         raise PipelineRefusal(

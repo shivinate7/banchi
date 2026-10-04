@@ -44,7 +44,9 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import os
+import subprocess
 import random
 import re
 import sqlite3
@@ -796,7 +798,7 @@ def build_index(
             report.unresolved.append(f"{game} | {set_name}")
             continue
         products, unnumbered = listed
-        canonical = (stock.display_name(game, set_name) if game == "pokemon" else None) or set_name
+        canonical = canonical_set(stock, game, set_name)
         if (game, canonical) in seen_sets:
             continue
         seen_sets.add((game, canonical))
@@ -905,3 +907,58 @@ def targets_for(stock, store_pairs: Iterable[Tuple[str, str]]) -> List[Tuple[str
             seen.add(("riftbound", set_name))
             wanted.append(("riftbound", set_name))
     return wanted
+
+
+def canonical_set(stock, game: str, set_name: str) -> str:
+    """The name `build_index` stores a set under: the catalogue's own, else the store's."""
+    return (stock.display_name(game, set_name) if game == "pokemon" else None) or set_name
+
+
+def unread_targets(stock, store_pairs: Iterable[Tuple[str, str]]) -> List[Tuple[str, str]]:
+    """`targets_for` minus the sets the fingerprint index already holds, compared by canonical name."""
+    with Index() as index:
+        held = {(g, n) for g, n in index.db.execute("select game, set_name from sets")}
+    return [t for t in targets_for(stock, store_pairs) if (t[0], canonical_set(stock, *t)) not in held]
+
+
+def prepare_pid() -> Optional[int]:
+    """The pid of a running `match prepare`, or None. It reads the progress file the child
+    writes, so a prepare started by a server that has since restarted still counts."""
+    try:
+        record = json.loads(progress_path().read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(record, dict) or record.get("state") != "running":
+        return None
+    pid = record.get("pid")
+    if not isinstance(pid, int):
+        return None
+    if pid == os.getpid():
+        return pid  # the server's own placeholder, written before the spawn: alive, and no ps needed
+    # `kill -0` succeeds on a zombie, so ask for the state: an exited child is not running.
+    try:
+        state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, timeout=2).stdout.strip()
+    except Exception:  # noqa: BLE001  any ps failure, however it shows, falls back to the alive check
+        try:
+            os.kill(pid, 0)  # ps unavailable: the old alive check beats a 500 on a polled route
+        except OSError:
+            return None
+        return pid
+    if not state or state.startswith("Z"):
+        return None
+    return pid
+
+
+def index_stamp() -> str:
+    """Changes when the index gains a set. A card tried before its set was read is tried again.
+    Reads the file directly, so a missing index is "0" and nothing is created."""
+    try:
+        db = sqlite3.connect(f"file:{index_path()}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return "0"
+    try:
+        return str(db.execute("select count(*) from sets").fetchone()[0])
+    except sqlite3.Error:
+        return "0"
+    finally:
+        db.close()

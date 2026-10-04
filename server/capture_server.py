@@ -17890,6 +17890,13 @@ def serve(host: str = HOST, port: int = PORT) -> None:
     # A SWITCHED-ON BACKGROUND READER whose watcher did not survive the restart starts again. A
     # detached child, outside this server; it takes no request slot.
     pipeline_routes.ensure_sweep()
+    # THE FREE SETUP RUNS BY ITSELF, off the main thread so the server answers at once: one
+    # `ensure_stock_setup` look, then a loop that looks again for a new set.
+    def _stock_setup() -> None:
+        pipeline_routes.ensure_stock_setup()
+        pipeline_routes.stock_setup_loop()
+
+    threading.Thread(target=_stock_setup, daemon=True, name="stock-setup").start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
