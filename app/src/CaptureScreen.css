@@ -1085,10 +1085,26 @@
   overflow-y: auto;
   overscroll-behavior-y: contain;
   scrollbar-width: thin;
+  /* THE TILE'S OWN SIZE, DERIVED, NEVER TUNED: five columns across the list's content width, each
+     9:16 like `.capture-undo-thumb`. The spacer and the skipped tiles both read it. */
+  container-type: inline-size;
+  --undo-tile-h: calc((100cqw - 4 * var(--bn-2)) / 5 * 16 / 9);
 }
 .capture-undo-list > li { min-width: 0; animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) both; }
 /* Tiles that load in after a deal arrive still (D313): no `.bn-stagger-item`, so no `!important` name to beat. */
-.capture-undo-list > li.capture-undo-still { animation: none; }
+.capture-undo-list > li.capture-undo-still {
+  animation: none;
+  /* OFF-SCREEN TILES SKIP LAYOUT AND PAINT, and keep the size they would have (D313). */
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto var(--undo-tile-h);
+}
+/* ONE CELL FOR EVERY CARD NOT DRAWN WHILE THE DISPENSER DEALS: the hidden rows at the tile's own
+   size plus the row gaps between them, which is the height those tiles take once they load in. */
+.capture-undo-list > li.capture-undo-spacer {
+  grid-column: 1 / -1;
+  height: calc(var(--hidden-rows) * (var(--undo-tile-h) + var(--bn-1-5)) - var(--bn-1-5));
+  animation: none;
+}
 .capture-undo-row {
   position: relative;
   display: block;
@@ -1443,7 +1459,12 @@
     overscroll-behavior-x: contain;
     scrollbar-width: thin;
   }
-  .capture-undo-list > li { flex: none; width: 56px; }
+  .capture-undo-list { --undo-tile-w: 56px; --undo-tile-h: calc(var(--undo-tile-w) * 16 / 9); }
+  .capture-undo-list > li { flex: none; width: var(--undo-tile-w); }
+  .capture-undo-list > li.capture-undo-spacer {
+    height: auto;
+    width: calc(var(--hidden-cards) * (var(--undo-tile-w) + var(--bn-4)) - var(--bn-4));
+  }
   /* Sized by the row the stage leaves it, not by a ratio of its own: the frame inside is
      already container-bound, so it simply takes what is left under the run card. */
   .capture-last { align-self: stretch; height: auto; max-height: none; }

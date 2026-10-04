@@ -992,6 +992,12 @@ function Track({
   )
 }
 
+/** One tile the rail drew last time, with what it was drawn from. */
+type RailEntry = { target: UndoTarget; nonce: string; spans: boolean; el: ReactNode }
+
+/** The Recent rail's grid columns: `.capture-undo-list`'s `repeat(5, ...)` and the spacer's row count read the same five. */
+const RAIL_COLUMNS = 5
+
 /** A slot's photo nonce: its own stamp and the box's revision. The one place it is composed. */
 function nonceOf(stamps: Record<string, number>, revision: number, box: number, index: number): string {
   return `${stamps[`${box}/${index}`] ?? 0}.${revision}`
@@ -1017,6 +1023,8 @@ const UndoFace = memo(
           className="capture-undo-thumb capture-undo-thumb-portrait"
           src={photoSrc(target.box, target.index, { cid: target.cid, capture_id: target.captureId }, nonce)}
           alt=""
+          loading="lazy"
+          decoding="async"
         />
         {/* THE DRAWER GOES IN THE CAPTION, WHICH IS ALREADY ABSOLUTE — `left: 0;
             right: 0; bottom: 0` over the bottom of the thumbnail, so a second
@@ -1039,7 +1047,7 @@ const UndoFace = memo(
 )
 
 const UndoDrop = memo(
-  function UndoDrop({ target, busy, onRemove }: { target: UndoTarget; busy: boolean; onRemove: (target: UndoTarget) => void }) {
+  function UndoDrop({ target, onRemove }: { target: UndoTarget; onRemove: (target: UndoTarget) => void }) {
     return (
       <IconButton
         icon="trash"
@@ -1053,7 +1061,6 @@ const UndoDrop = memo(
            everywhere else. IconButton merges `style` over its inline face size,
            so no `!important` is needed to beat it. */
         style={{ width: 'var(--undo-drop-size, 24px)', height: 'var(--undo-drop-size, 24px)' }}
-        disabled={busy}
         onClick={(event) => {
           event.stopPropagation()
           onRemove(target)
@@ -1061,19 +1068,19 @@ const UndoDrop = memo(
       />
     )
   },
-  (prev, next) => prev.busy === next.busy && prev.onRemove === next.onRemove && sameTarget(prev.target, next.target),
+  (prev, next) => prev.onRemove === next.onRemove && sameTarget(prev.target, next.target),
 )
 
-/* ONE FILMSTRIP TILE. The strip draws the whole sitting, and `CaptureScreen` re-renders on every
- * motion diagnostic (5 per second) and on every capture. The tile itself is cheap and renders
- * each time (its rank `at` moves for every tile on a capture); its photograph, caption and
- * remove button are memoized on the target's fields, so they skip every render that did not
- * change that card. */
-function UndoCell({
+/* ONE FILMSTRIP TILE, RANK-FREE. A tile's props are its card and nothing about where it sits, so a
+ * capture changes no existing tile's props and `railElements` hands React the very same element
+ * for each, which it skips. What depends on rank (the keycap, the "Undo N" label, the data
+ * attribute, the off-screen class) is written onto the DOM once per change by `railRank`, a
+ * layout effect over the list, because React cannot be asked to render N tiles per capture. The
+ * attributes below are the ones that do not move. `at` only seeds the entrance stagger. */
+const UndoCell = memo(function UndoCell({
   target,
   at,
   nonce,
-  busy,
   spansDrawers,
   onUndo,
   onRemove,
@@ -1081,7 +1088,6 @@ function UndoCell({
   target: UndoTarget
   at: number
   nonce: string
-  busy: boolean
   spansDrawers: boolean
   onUndo: (target: UndoTarget, at: number) => void
   onRemove: (target: UndoTarget) => void
@@ -1097,29 +1103,26 @@ function UndoCell({
         <button
           type="button"
           className="capture-undo-row"
-          onClick={() => onUndo(target, at)}
-          disabled={busy}
-          data-undo={at === 0 ? 'Undo' : `Undo ${at + 1}`}
-          aria-label={
-            at === 0
-              ? `Undo the newest capture, ${positionText(target)}`
-              : `Undo ${at + 1} captures, back to ${positionText(target)}`
-          }
+          onClick={(event) => {
+            const item = event.currentTarget.closest('li')
+            onUndo(target, item === null ? -1 : Array.prototype.indexOf.call(item.parentElement?.children ?? [], item))
+          }}
+          data-where={positionText(target)}
         >
           <UndoFace target={target} nonce={nonce} spansDrawers={spansDrawers} />
-          <span className={at === 0 ? 'capture-key is-newest' : 'capture-key'}>
-            {at === 0 ? UNDO_KEY_LABEL : at + 1}
-          </span>
+          <span className="capture-key" />
         </button>
         {/* SECTION 6: THIS CARD ALONE, NOT EVERYTHING NEWER THAN IT. The owner's
             own complaint — undoing a mid-sitting shot loses every capture after
             it too. `removeCardInPlace` is the route that already exists for it
             (D10 ruling 1), and this is its second door, beside the row's own. */}
-        <UndoDrop target={target} busy={busy} onRemove={onRemove} />
+        <UndoDrop target={target} onRemove={onRemove} />
       </div>
     </li>
   )
-}
+}, (prev, next) =>
+  prev.nonce === next.nonce && prev.spansDrawers === next.spansDrawers &&
+  prev.onUndo === next.onUndo && prev.onRemove === next.onRemove && sameTarget(prev.target, next.target))
 
 /** WHAT AN UNDO THUMBNAIL DRAWS UNDER THE CARD — the whole figure, sigil and all, because the
  *  two cases it covers are two different numbers and they may not wear one sigil (D92).
@@ -4070,29 +4073,84 @@ export function CaptureScreen() {
    * Last capture panel is untouched, and undo and its keys read the live `undoStack`. The one
    * source of "dealing" is `useDealer`. */
   const dealing = dealer.state === 'dealing'
+  /* ponytail: a cache written inside `useMemo`, the one impure step. It only holds elements the last
+   * run built, so a dropped memo costs one full rebuild and is never wrong. */
+  const railCache = useRef(new Map<string, RailEntry>())
+  const railListRef = useRef<HTMLUListElement>(null)
   const railList = useMemo(() => {
     const shown = dealing ? undoStack.slice(0, DEALING_RAIL_TILES) : undoStack
-    const floor = dealing ? Math.max(stripFloor, undoStack.length) : stripFloor
-    return (
-      <ul className="capture-undo-list">
-        {shown.map((target, at) => (
-          <UndoCell
-            key={`${target.box}/${target.index}`}
-            target={target}
-            at={at}
-            nonce={nonceOf(slotStamps, revision, target.box, target.index)}
-            busy={busy}
-            spansDrawers={spansDrawers}
-            onUndo={onUndoCell}
-            onRemove={onRemoveCell}
+    /* THE CARDS NOT DRAWN WHILE DEALING ARE ONE SPACER, NOT ONE CELL EACH: its size is the hidden
+     * count times the tile's own size (CaptureScreen.css), so the rail keeps the height it will
+     * have when they load in, and a capture's cost does not grow with the sitting (D313). */
+    const hidden = dealing ? Math.max(stripFloor, undoStack.length) - shown.length : 0
+    const floor = dealing ? 0 : stripFloor
+    const used = new Map<string, RailEntry>()
+    const list = (
+      <ul className="capture-undo-list" ref={railListRef}>
+        {shown.map((target, at) => {
+          const key = `${target.box}/${target.index}`
+          const nonce = nonceOf(slotStamps, revision, target.box, target.index)
+          const had = railCache.current.get(key)
+          /* THE SAME ELEMENT OBJECT FOR A TILE NOTHING ABOUT WHICH CHANGED: React skips it without
+             rendering it or diffing its props, so a capture creates one element, not one per card. */
+          const el =
+            had !== undefined && had.nonce === nonce && had.spans === spansDrawers && sameTarget(had.target, target) ? (
+              had.el
+            ) : (
+              <UndoCell
+                key={key}
+                target={target}
+                at={at}
+                nonce={nonce}
+                spansDrawers={spansDrawers}
+                onUndo={onUndoCell}
+                onRemove={onRemoveCell}
+              />
+            )
+          used.set(key, { target, nonce, spans: spansDrawers, el })
+          return el
+        })}
+        {hidden > 0 ? (
+          <li
+            className="capture-undo-spacer"
+            aria-hidden="true"
+            style={{ '--hidden-cards': hidden, '--hidden-rows': Math.ceil(hidden / RAIL_COLUMNS) } as CSSProperties}
           />
-        ))}
+        ) : null}
         {Array.from({ length: Math.max(0, floor - shown.length) }).map((_, at) => (
           <li key={`ghost-${at}`} className="capture-undo-ghost" aria-hidden="true" />
         ))}
       </ul>
     )
-  }, [dealing, undoStack, slotStamps, revision, busy, spansDrawers, stripFloor, onUndoCell, onRemoveCell])
+    railCache.current = used
+    return list
+  }, [dealing, undoStack, slotStamps, revision, spansDrawers, stripFloor, onUndoCell, onRemoveCell])
+  /* THE RANK-DEPENDENT FACE OF EVERY TILE, WRITTEN ONCE PER CHANGE. A tile's rank moves for every
+   * tile on a capture, and React would have to render all N to say so; this writes five values per
+   * tile straight onto the DOM instead (no element is created), before paint. The same text and
+   * attributes the tiles carried when React drew them. */
+  useLayoutEffect(() => {
+    let rank = 0
+    for (const item of Array.from(railListRef.current?.children ?? [])) {
+      const row = item.querySelector<HTMLButtonElement>('.capture-undo-row')
+      const key = row?.querySelector<HTMLElement>('.capture-key')
+      if (row === null || row === undefined || key === null || key === undefined) continue
+      const where = row.dataset.where ?? ''
+      /* BUSY IS WRITTEN HERE TOO, NOT PASSED: it flips twice per capture and would rebuild every tile. */
+      row.disabled = busy
+      item.querySelector<HTMLButtonElement>('.capture-undo-drop')?.toggleAttribute('disabled', busy)
+      const label = rank === 0 ? `Undo the newest capture, ${where}` : `Undo ${rank + 1} captures, back to ${where}`
+      if (row.getAttribute('aria-label') !== label) row.setAttribute('aria-label', label)
+      const undo = rank === 0 ? 'Undo' : `Undo ${rank + 1}`
+      if (row.dataset.undo !== undo) row.dataset.undo = undo
+      const text = rank === 0 ? UNDO_KEY_LABEL : String(rank + 1)
+      if (key.textContent !== text) key.textContent = text
+      const cls = rank === 0 ? 'capture-key is-newest' : 'capture-key'
+      if (key.className !== cls) key.className = cls
+      if (rank >= DEALING_RAIL_TILES) item.classList.add('capture-undo-still')
+      rank += 1
+    }
+  }, [railList, busy])
   const dealerSaid = !dealerSupported() ? dealerReason : dealerIdle && dealerReason !== null ? dealerReason : dealer.said
 
   /** WHETHER THERE IS ANYTHING TO CLEAR, which is what disables the control rather than hiding
