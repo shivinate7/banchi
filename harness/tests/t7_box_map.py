@@ -2329,6 +2329,62 @@ def check_empty_section_starts(checks: Checks) -> None:
         spans((1, 5, 13), sparse), [(1, 1, 4), (2, 5, 3), (3, 8, 1)],
         "(d) control: no empty section, nothing changes",
     )
+    # A departed (sold or retired) record at index 21 sits right before the divider at 22.
+    # `occupied` is on hand only, so 21 is not in it, and the section behind 22 is empty.
+    checks.equal(
+        spans((1, 5, 22), sparse), [(1, 1, 4), (2, 5, 4), (3, 9, 0)],
+        "(e) a trailing empty section after a departed record starts at the cards on hand "
+        "plus one, not one past it",
+    )
+
+
+def check_s_refuses_empty_last_section(checks: Checks) -> None:
+    """S refuses while the last section holds no card ON HAND, so two empty sections in a row
+    cannot exist (the owner's ruling). A departed record (sold, retired) is not in the box
+    (D58, and `close_section`'s own rule), so it does not make the section non-empty. The
+    store's `open_section` once counted any record's key, and a sold card behind the last
+    divider let S write a second empty divider."""
+    checks.note("")
+    checks.note("S ON AN EMPTY LAST SECTION - refused unless a card on hand is behind the divider")
+
+    def cap(box):
+        capture_server.do_capture(capture_payload(box))
+
+    def sections():
+        return list(Store().read().inventory.box(1).sections)
+
+    def press_s():
+        try:
+            capture_server.do_open_section(1, dict())
+            return "opened"
+        except master.SectionEmpty:
+            return "SectionEmpty"
+
+    with isolated_home():
+        capture_server.do_create_box(dict(box=1, name="A"))
+        for _ in range(3):
+            cap(1)
+        checks.equal(press_s(), "opened", "control: the last section holds a card, S opens one")
+        checks.equal(press_s(), "SectionEmpty", "a divider after the last card: S refuses")
+        checks.equal(sections(), [1, 4], "and writes no second divider")
+
+    for how in ("sold", "retired"):
+        with isolated_home():
+            capture_server.do_create_box(dict(box=1, name="A"))
+            for _ in range(3):
+                cap(1)
+            capture_server.do_open_section(1, dict())
+            cap(1)
+            if how == "sold":
+                capture_server.do_mark_sold(1, 4, dict())
+            else:
+                capture_server.do_retire(1, 4, dict(reason="lost"))
+            before = sections()
+            checks.equal(
+                press_s(), "SectionEmpty",
+                f"the only card behind the last divider is {how}: S refuses, the section is empty",
+            )
+            checks.equal(sections(), before, "and writes no second divider")
 
 
 CHECKS = (
@@ -2338,4 +2394,5 @@ CHECKS = (
     check_divider_editor_keys, check_delete_keeps_dividers, check_merge_speed,
     check_r5_links_and_empty_sections, check_divider_anchor, check_capture_into_section,
     check_layout_batch, check_move_receipt_lines, check_empty_section_starts,
+    check_s_refuses_empty_last_section,
 )
