@@ -61,25 +61,26 @@ def _jpeg() -> bytes:
     return out.getvalue()
 
 
-def _shoot(said: dict, hint: str = "SV09") -> str:
+def _shoot(said: dict, hint: str = "SV09", game: str = "pokemon") -> str:
     """One captured Pokemon card hinted to `hint`, through the real route. Returns its key."""
     before = set(Store().read().inventory.cards)
-    body = capture_payload(3, capture_id=f"adopt-{next(_N)}", game="pokemon", set_hint=hint)
+    body = capture_payload(3, capture_id=f"adopt-{next(_N)}", game=game, set_hint=hint)
     body["image"] = base64.b64encode(_jpeg()).decode("ascii")
     capture_server.do_capture(body)
     return next(iter(set(Store().read().inventory.cards) - before))
 
 
-def _seed_export(*, blank_market: str = "", age: float = 0.0) -> Path:
+def _seed_export(*, blank_market: str = "", age: float = 0.0, game: str = "pokemon", source=None, category: int = 3) -> Path:
     """The fixture export where the reader looks for one: `inventory/.exports/<game>/`.
 
     A scope note sits beside it (the shape `pipeline_routes._write_note` writes: the whole
     Pokemon category, no set narrowing), so a reader that reuses only covered, fresh exports
     finds it too."""
-    folder = files.inventory_dir() / files.EXPORTS_DIRNAME / "pokemon"
+    source = source or FIXTURE_EXPORT
+    folder = files.inventory_dir() / files.EXPORTS_DIRNAME / game
     folder.mkdir(parents=True, exist_ok=True)
     target = folder / "export-tcgplayer-adopt-fixture.csv"
-    shutil.copyfile(FIXTURE_EXPORT, target)
+    shutil.copyfile(source, target)
     if blank_market:  # a catalog row with no market price: an UNPRICED SKU
         table = tcgcsv.read_export(FIXTURE_EXPORT)
         rows = [dict(r, **{tcgcsv.MARKET_PRICE_COLUMN: ""}) if r["TCGplayer Id"] == blank_market else r for r in table.rows]
@@ -88,7 +89,7 @@ def _seed_export(*, blank_market: str = "", age: float = 0.0) -> Path:
         stamp = time.time() - age
         os.utime(target, (stamp, stamp))
     Path(str(target) + ".scope.json").write_text(
-        json.dumps({"game": "pokemon", "category_id": 3, "set_ids": [], "scope": "category",
+        json.dumps({"game": game, "category_id": category, "set_ids": [], "scope": "category",
                     "widened": True, "bytes": target.stat().st_size, "at": master.now()}),
         "utf-8",
     )
@@ -383,6 +384,143 @@ def check_adopted_card_is_priced(checks: Checks) -> None:
             checks.equal(_corpus(), twin[2], f"2. {label}: and the corpus holds the twin's answers (an unpriced SKU is seeded, not left out)")
 
 
+RIFTBOUND_EXPORT = FIXTURE_EXPORT.with_name("riftbound_export_untouched.csv")  # the largest in fixtures/ (1.7 MB)
+ADAPTATRON = {"name": "Adaptatron", "number": "056", "printed_total": "298", "finish": "unknown", "confidence": "high"}
+
+
+@contextmanager
+def _after_prep(action, *, times: int):
+    """Run `action()` after the prep's join reads, the first `times` calls: the window between
+    the prep (a read snapshot, no lock) and the lock. Yields the list of prep calls."""
+    from cli import resolve
+
+    calls = []
+    real = resolve.load_from_store
+
+    def prep(*a, **k):
+        out = real(*a, **k)
+        calls.append(1)
+        if len(calls) <= times:
+            action()
+        return out
+
+    with mock.patch.object(resolve, "load_from_store", prep):
+        yield calls
+
+
+def _touch(path: Path, back: float) -> None:
+    stamp = time.time() - back
+    os.utime(path, (stamp, stamp))
+
+
+def check_lock_hold_cold_session(checks: Checks) -> None:
+    """BOUND: inside a sweep chunk's `Store.write`, ZERO export parses, catalog walks (`load_from_store`)
+    and ladder walks. The server is threaded, so every capture request waits out the hold, and the
+    hold may only write what the prep prepared. This is a count and not a stopwatch because a
+    stopwatch is a cry-wolf guard: measured here, the hold was 23 ms with the reads outside it and
+    59 ms with them inside (one parse of the export alone is 15 to 22 ms), a 2.5x gap that CI load
+    swallows. The hold is still reported. The worker is cold (a new session, nothing parsed ahead)
+    over `riftbound_export_untouched.csv`, 1.7 MB, the largest export in `fixtures/`."""
+    from cli import resolve
+
+    checks.note("")
+    checks.note("LOCK HOLD — a cold session over the largest export reads nothing of the export under the lock")
+    with isolated_home():
+        keys = [_shoot(ADAPTATRON, hint="", game="riftbound") for _ in range(8)]
+        _seed_export(game="riftbound", source=RIFTBOUND_EXPORT, category=89)
+        held, under, holds = [], [], []
+        real_write, real_parse, real_load = store_session.Store.write, tcgcsv.read_export, resolve.load_from_store
+
+        @contextmanager
+        def timed(self, *a, **k):
+            with real_write(self, *a, **k) as snap:
+                held.append(1)
+                start = time.perf_counter()
+                try:
+                    yield snap
+                finally:
+                    held.pop()
+                    holds.append(time.perf_counter() - start)
+
+        def watch(real, name):
+            def wrapped(*a, **k):
+                if held:
+                    under.append(name)
+                return real(*a, **k)
+            return wrapped
+
+        with mock.patch.object(store_session.Store, "write", timed), \
+                mock.patch.object(tcgcsv, "read_export", watch(real_parse, "read_export")), \
+                mock.patch.object(resolve, "load_from_store", watch(real_load, "load_from_store")):
+            _sweep(_results(keys, {k: ADAPTATRON for k in keys}))
+        checks.equal({_card(k)[0] for k in keys}, {master.IDENTIFIED}, "the eight accepted Riftbound cards are identified")
+        checks.equal(under, [], f"1. no export parse or catalog walk runs inside the lock (longest hold {max(holds) * 1000:.0f} ms)")
+
+
+def check_moved_between_prep_and_lock(checks: Checks) -> None:
+    checks.note("")
+    checks.note("PREP TO LOCK — a card or an export that moved is not adopted on stale prep")
+    with isolated_home():
+        a, b = _shoot(ARTICUNO), _shoot(DUNSPARCE)
+        _seed_export()
+        first = _results((a, b), {a: ARTICUNO, b: DUNSPARCE})
+        asked = []
+
+        def once(requests, *rest, **kw):  # the re-shot photograph is NOT accepted when it is read again
+            asked.append(1)
+            return first(requests, *rest, **kw) if len(asked) == 1 else _results((a, b), {})(requests, *rest, **kw)
+
+        with _after_prep(lambda: engine_sweep._reshoot(a), times=1):
+            _sweep(once)
+        checks.equal(_card(a)[0], master.CAPTURED, "2. a card re-shot between prep and lock is not adopted")
+        checks.equal(_card(b)[0], master.IDENTIFIED, "2. and the card beside it is")
+    with isolated_home():
+        a, b = _shoot(ARTICUNO), _shoot(DUNSPARCE)
+        export = _seed_export()
+        _touch(export, 5)
+        with _after_prep(lambda: _touch(export, 9), times=1) as calls:
+            _sweep(_results((a, b), {a: ARTICUNO, b: DUNSPARCE}))
+        checks.equal(len(calls), 2, "3. an export changed between prep and lock sends the chunk back to prep")
+        checks.equal({_card(k)[0] for k in (a, b)}, {master.IDENTIFIED}, "3. and the second prep adopts the cards on the file as it now stands")
+    with isolated_home():
+        a, b = _shoot(ARTICUNO), _shoot(DUNSPARCE)
+        export = _seed_export()
+        _touch(export, 5)
+        flips = iter(range(100, 200))
+        with _after_prep(lambda: _touch(export, next(flips)), times=9) as calls:
+            _sweep(_results((a, b), {a: ARTICUNO, b: DUNSPARCE}))
+        checks.equal(len(calls), 2, "3. an export that keeps changing is prepared twice, never a third time")
+        checks.equal({_card(k)[0] for k in (a, b)}, {master.CAPTURED}, "3. then the chunk only banks answers: the cards stay captured")
+        cache = Store().read().cache
+        checks.ok(all((cache.get(k) or mock.Mock(engine=None)).engine == MATCHER for k in (a, b)), "3. with each answer banked as a marqo-b row")
+        checks.ok(_review((a, b)) == [] and _skus() == [], "3. and nothing queued or joined")
+
+
+def check_one_run_across_restarts(checks: Checks) -> None:
+    from cli import runs
+
+    checks.note("")
+    checks.note("RUN REUSE — chunks across worker restarts join into one `match-sweep` run until it holds 64 cards")
+
+    def sweep_new(count: int) -> None:
+        keys = [_shoot(ARTICUNO) for _ in range(count)]
+        _sweep(_results(keys, {k: ARTICUNO for k in keys}))
+
+    def sweep_runs() -> list:
+        found = sorted(files.runs_dir().glob("*-match-sweep-*")) if files.runs_dir().exists() else []
+        return [len((runs.open_run(d).manifest.get("selection") or {}).get("keys") or []) for d in found]
+
+    with isolated_home():
+        _seed_export()
+        sweep_new(16)
+        sweep_new(8)  # a second worker, a new session
+        checks.equal(sweep_runs(), [24], "4. two workers, three chunks: one `match-sweep` run holding all 24 cards")
+        sweep_new(40)
+        checks.equal(sweep_runs(), [64], "4. a third worker fills the same run to 64 cards")
+        sweep_new(2)
+        checks.equal(sweep_runs(), [64, 2], "4. the next worker opens a new run: the full one is left alone")
+
+
 def check_adoption_export_gate(checks: Checks) -> None:
     checks.note("")
     checks.note("EXPORT GATE — the reader adopts only on an export a press would reuse, covering the card's set")
@@ -406,4 +544,7 @@ CHECKS = (
     check_sweep_one_lock_per_chunk,
     check_adopted_card_is_priced,
     check_adoption_export_gate,
+    check_lock_hold_cold_session,
+    check_moved_between_prep_and_lock,
+    check_one_run_across_restarts,
 )
