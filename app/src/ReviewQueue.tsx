@@ -771,6 +771,9 @@ export function ReviewQueue() {
   const [pending, setPending] = useState<readonly string[]>([])
   /* A REFUSAL TO COUNT IS SAID IN THE STRIP'S OWN PLACE, never a silent empty list. */
   const [pendingFailure, setPendingFailure] = useState<Failure | null>(null)
+  /* THE COUNT HAS BEEN ANSWERED (D313): until it is, the strip's frame is held, hidden, at its
+     loaded size, so the answer fills it and moves nothing. */
+  const [counted, setCounted] = useState(false)
   const [rate, setRate] = useState<number | null>(null)
   useEffect(() => {
     let live = true
@@ -798,6 +801,7 @@ export function ReviewQueue() {
     if (!ask) {
       setPending([])
       setPendingFailure(null)
+      if (status !== null) setCounted(true)
       return
     }
     let live = true
@@ -806,16 +810,18 @@ export function ReviewQueue() {
         if (!live) return
         setPending(answer.keys)
         setPendingFailure(null)
+        setCounted(true)
       })
       .catch((err: unknown) => {
         if (!live) return
         setPending([])
         setPendingFailure(describeFailure(err))
+        setCounted(true)
       })
     return () => {
       live = false
     }
-  }, [ask, carried, reloads])
+  }, [ask, carried, reloads, status])
   const captured = pending.length
 
   /* "IDENTIFY NOW" (the owner's ruling, 2026-09-25): the paid run at once, with no pre-check and
@@ -1575,7 +1581,9 @@ export function ReviewQueue() {
           <ReloadButton onReload={reload} busy={disabled} label="Reload the queue" hotkey={false} className="review-reload" />
           {/* D291: past runs, and every other Runs capability, behind one link. */}
           <IconButton icon="history" label="Past runs" onClick={() => openRuns(false)} className="review-runs-open" />
-          {everyone.length === 0 ? null : (
+          {/* HELD WHILE THE QUEUES LOAD (D313): hidden at its own size, so the answer fills it and
+              the buttons beside it stay put. */}
+          {everyone.length === 0 && !loading ? null : (
             <IconButton
               icon="list"
               label="Queue"
@@ -1586,6 +1594,8 @@ export function ReviewQueue() {
               badge={everyone.length}
               onClick={() => setQueueOpen(true)}
               className="review-queue-toggle"
+              style={loading ? { visibility: 'hidden' } : undefined}
+              inert={loading}
               aria-expanded={queueOpen}
             />
           )}
@@ -1602,8 +1612,8 @@ export function ReviewQueue() {
           The cards waiting to be read could not be counted, so nothing can be identified from here yet.
         </Notice>
       )}
-      {captured === 0 ? null : (
-        <div className="review-identify-strip">
+      {captured === 0 && counted ? null : (
+        <div className={counted ? 'review-identify-strip' : 'review-identify-strip review-identify-strip-holding'} inert={!counted}>
           <span className="review-identify-strip-said">
             <Icon name="zap" size={16} />
             <span>

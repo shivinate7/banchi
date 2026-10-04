@@ -4971,18 +4971,9 @@ export function CaptureScreen() {
                 icon="zap"
                 iconRight="arrowRight"
                 block
-                onClick={() => (window.location.hash = `#/runs?box=${box}`)}
+                onClick={() => (window.location.hash = '#/review')}
               >
-                {/* THE NAME HERE TOO (D142), even though the destination
-                    draws `Box 4 · Mixed Singles`. This button is read on THIS screen, by
-                    somebody who has just finished feeding a drawer, and it names the drawer
-                    they fed — `#/runs` composing the pair when they get there is that screen's
-                    job and is right for its own reason (`boxLabel` in `runScope.ts`). */}
-                <span className="capture-onward-label">
-                <span className="capture-onward-end">Identify</span>
-                <span className="capture-onward-name">{captureBoxLabel(box, boxName)}</span>
-                <span className="capture-onward-end">on Runs</span>
-                </span>
+                Review
               </Button>
             </div>
           ) : null}

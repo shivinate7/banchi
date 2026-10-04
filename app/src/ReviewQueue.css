@@ -121,6 +121,7 @@
   border-radius: var(--bn-r-lg);
   background: var(--bn-surface-2);
 }
+.review-identify-strip-holding { visibility: hidden; }
 .review-identify-strip-said {
   display: inline-flex;
   align-items: center;
