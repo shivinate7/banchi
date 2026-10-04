@@ -1189,12 +1189,12 @@ def _sweep_state() -> dict:
 
 def _sweep_poll_state(keys: str) -> dict:
     """The Capture head's polled read: NO lock probe (`sweep.running` and `sweep.acquire_lock` would
-    hold the flock a starting watcher needs), one read-only connection, no table-wide count (so no `matched`), the worker from the state file.
+    hold the flock a starting watcher needs), one read-only connection, no table-wide count (so no `matched`), `paid` and `unread` from the tried marks, the worker from the state file.
     `running` here is `worker`: the watcher's own file says a worker is reading right now."""
     named = [key for key in keys.split(",") if key]
     record = sweep._read_json(sweep.state_path())
     worker = isinstance(record, dict) and bool(record.get("worker"))
-    on, here = False, 0
+    on, here, paid, unread = False, 0, 0, 0
     try:
         conn = store_db.open_read_only(store_db.path(files.inventory_dir()))
     except FileNotFoundError:
@@ -1209,6 +1209,22 @@ def _sweep_poll_state(keys: str) -> dict:
                     f"{sql} and key in ({','.join('?' * len(chunk))})", (cache_mod.ENGINE_MATCHER, *chunk)
                 ).fetchone()
                 here += int(row[0])
+            # Paid: tried by the free reader against this photograph and not accepted. Unread: not tried. Neither: set aside.
+            asides = sweep.aside()
+            seen = sweep.tried()
+            for at in range(0, len(named), 500):
+                chunk = named[at : at + 500]
+                for key, capture_id in conn.execute(
+                    "select c.key, coalesce(c.capture_id, '') from cards c where c.state = 'captured' "
+                    "and not exists (select 1 from identifications i where i.key = c.key) "
+                    f"and c.key in ({','.join('?' * len(chunk))})", chunk
+                ):
+                    if asides.get(key) == capture_id:
+                        continue
+                    if seen.get(key) == capture_id:
+                        paid += 1
+                    else:
+                        unread += 1
         finally:
             conn.close()
     return {
@@ -1218,6 +1234,8 @@ def _sweep_poll_state(keys: str) -> dict:
         "blocked": None if matchconst.runtime_importable() else "runtime_missing",
         "aside": len(sweep.aside()),
         "matched_here": here,
+        "paid": paid,
+        "unread": unread,
     }
 
 

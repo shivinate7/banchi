@@ -559,12 +559,24 @@ Turning the toggle on never downloads. With no model or no index, the toggle rea
 **What the screens show (D313, nothing on screen moves unless the person moved it).**
 
 - The Capture head shows a third counter, "matched", beside "captured" and "next card": how many of this sitting's cards the free reader has matched.
-  It shows only while the Background Match switch is on, and no other screen shows progress. It reads
+  It shows only while the Background Match switch is on. It reads
   `GET /pipeline/match/sweep?keys=<the sitting's position keys>`, which adds `matched_here` and `worker`, with `usePoll` at about 3 s while a worker
-  runs and 20 s otherwise. That path never probes the watcher's lock, so polling cannot stop the reader from starting, and it reads the store read-only, in the cheap photo lane, with no table-wide count.
+  runs and 20 s otherwise. That path never probes the watcher's lock, so polling cannot stop the reader from starting.
+  It reads the store read-only, in the cheap photo lane, with no table-wide count.
   The counter has tabular figures and a slot of fixed width from the first paint. It does not animate, and the switch flipping moves neither other counter.
 - The runs sheet shows one snapshot count: how many cards the free reader has matched. It sits on the "Prepare matching" card, read when the sheet opens
   and when the owner presses refresh. It never ticks. It counts every `marqo-b` row, from a press or from the background reader.
+- Capture's "Review" button opens Review. The top of Review is the summary band. It replaces the Identify strip, in the same slot.
+  - Its scope is this sitting. It uses the same position keys as the Capture head's "matched" counter, so the two numbers agree.
+    With no sitting on this device, the scope is every captured card that has no identification.
+  - It shows four counts, each a labeled number: matched free, waiting for a paid look, not yet looked at, and waiting for you.
+    The same keys-scoped read adds `paid` and `unread` beside `matched_here`. A card set aside counts in neither.
+  - It shows one health line: matching now, needs setup, or how many cards were set aside.
+    It reads `running`, `blocked` and `aside` from `GET /pipeline/match/sweep`.
+  - It has one press, "Read the N left, about $X". N is the cards waiting for a paid look. The press shows only when N is above 0.
+    It names its count and cost, and it starts the paid look with no confirm.
+  - It has one way back: "Back to Capture".
+  - The band holds its loaded size from the first paint. A count that changes moves nothing. It polls as the Capture counter does.
 - A per-card detail shows on request only: the engine, the match and the margin.
 
 **What a paid press does over matched cards.** Section 6 gives the rule. It asks every time, and the default is skip.
@@ -574,7 +586,9 @@ Turning the toggle on never downloads. With no model or no index, the toggle rea
 - The margin floor is 0.05. The S floor of 0.755 stays (section 3). The owner's word: *"maybe those under .05 get a haiku auto pass"*.
 - One press runs the free reader on every card, then sends each card it does not accept to Haiku for a second look. Haiku is on the low-confidence cards only (section 2).
 - Haiku's second-look answer goes to the review queue with the photo, the answer and the matcher's top pick. It is never saved on its own (section 2).
-- The quote names the free count, the second-look count and the cost before any spend. The press needs the paid confirm. The background reader never spends (section 2).
+- The quote names the free count, the second-look count and the cost before any spend. The runs sheet's press needs the paid confirm.
+  The Review band's press names its count and cost on the button and needs no confirm. The background reader never spends (section 2, section 8).
+- Capture's onward button is "Review" and lands on the Review summary band. The band's scope is the same cards as the Capture "matched" counter (section 8).
 - The matcher does not accept a card whose best answer shares a name with a no-image printing (section 2).
 - Dropped on the owner's word: the option that skips names with two or more printings, and the twin-margin options.
 - D301 is amended for one fingerprint read of each stock image. A model change rebuilds every fingerprint (section 4).
