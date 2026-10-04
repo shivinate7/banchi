@@ -508,7 +508,7 @@ A worker that dies inside a chunk, even by an out-of-memory kill, leaves the fil
 The watcher writes `.serve/match-sweep.json` and a reap owner mark (D305). `make down` and `make reap` stop it, and a SIGTERM stops the worker before the watcher exits.
 It exits when its store or its tree is gone.
 
-**The toggle.** The on and off switch is one row, "Match in the background", in the Rig panel of the Capture screen.
+**The toggle.** The on and off switch is one row, "Background Match", in the Rig panel of the Capture screen.
 Its state is the `match_sweep` row in the store's `meta` table. It is not a device key, and it is not in `deviceMemory.ts`.
 `PUT /pipeline/match/sweep` writes it and starts the watcher. `GET /pipeline/match/sweep` reads it.
 The row holds its size until the store answers (D313). The reader is off until the owner turns it on.

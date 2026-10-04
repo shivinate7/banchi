@@ -5752,7 +5752,7 @@ export function CaptureScreen() {
             />
           )}
           <SwitchRow
-            label="Match in the background"
+            label="Background Match"
             icon="image"
             on={sweepOn}
             busy={sweepBusy}
