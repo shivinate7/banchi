@@ -217,6 +217,107 @@ def check_no_url_rows_are_reread_once_per_set(checks: Checks) -> None:
         checks.equal(again.reads, [], "a second look at once reads no catalogue")
 
 
+def check_recheck_holds_no_lock_across_fetches(checks: Checks) -> None:
+    import sqlite3
+    import threading
+
+    checks.note("")
+    checks.note("PHOTO RECHECK — a look mid-fetch does not lock the index: a write from another connection lands inside 1 s")
+    if getattr(match, "recheck_no_photo", None) is None:
+        checks.ok(False, "`match.recheck_no_photo` exists")
+        return
+    with isolated_home():
+        stock = _seed([(f"p{i}", f"N{i}", f"u{i}", match.S_NO_PHOTO, 8) for i in range(1, 4)])
+        started, release, calls, errors = threading.Event(), threading.Event(), [], []
+
+        def fetch(_url):
+            calls.append(1)
+            if len(calls) == 1:
+                return None, "http_403"  # the first row is answered, so a transaction may open
+            started.set()
+            release.wait(10)
+            return None, "http_403"
+
+        def run():
+            try:
+                _look(stock, fetch)
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+
+        worker = threading.Thread(target=run, daemon=True)
+        worker.start()
+        checks.ok(started.wait(10), "the look reaches its second fetch")
+        outcome = "written"
+        t0 = time.monotonic()
+        try:
+            db = sqlite3.connect(str(match.index_path()), timeout=1)
+            db.execute("insert or replace into meta values('probe','1')")
+            db.commit()
+            db.close()
+        except sqlite3.Error as exc:
+            outcome = str(exc)
+        took = time.monotonic() - t0
+        release.set()
+        worker.join(10)
+        checks.equal(outcome, "written", "a write on the same fingerprints file succeeds while the look waits on a fetch")
+        checks.ok(took < 1.5, "and it does not wait out the look")
+        checks.equal(errors, [], "and the look itself ends clean")
+
+
+class _NoListing(_Catalog):
+    def catalog_products(self, _game, set_name):
+        self.reads.append(set_name)
+        return None
+
+
+def check_transient_failures_do_not_date_the_row(checks: Checks) -> None:
+    checks.note("")
+    checks.note("PHOTO RECHECK — only 403, 404 and 410 date a row for a week; a transient failure is tried at the next look")
+    if getattr(match, "recheck_no_photo", None) is None:
+        checks.ok(False, "`match.recheck_no_photo` exists")
+        return
+    causes = {"u1": "URLError", "u2": "http_503", "u3": "http_500", "u4": "http_403", "u5": "http_404", "u6": "http_410"}
+    with isolated_home():
+        stock = _seed([(f"p{i}", f"N{i}", f"u{i}", match.S_NO_PHOTO, 8) for i in range(1, 7)])
+        before = {f"p{i}": _row(f"p{i}")[1] for i in range(1, 7)}
+        _look(stock, lambda url: (None, causes[url]))
+        for i in (1, 2, 3):
+            checks.equal(_row(f"p{i}")[1], before[f"p{i}"], f"a {causes[f'u{i}']} answer leaves `at` alone, so the next look asks again")
+        for i in (4, 5, 6):
+            checks.ok(_row(f"p{i}")[1] > _stamp(1), f"a {causes[f'u{i}']} answer dates the row for a week")
+    with isolated_home():
+        _seed([("a1", "Lost", "", match.S_NO_URL, 8)])
+        before = _row("a1")[1]
+        fetch = _fetcher(set())
+        _look(_NoListing({}), fetch)
+        checks.equal((_row("a1")[1], fetch.asked), (before, []), "a set whose catalogue read returned nothing leaves its no_url rows undated")
+    with isolated_home():
+        _seed([("a1", "Lost", "", match.S_NO_URL, 8)])
+        _look(_Catalog({"Set A": [("a1", "Lost", "")]}), _fetcher(set()))
+        checks.ok(_row("a1")[1] > _stamp(1), "control: a catalogue that answers with no URL for it dates the row for a week")
+
+
+def check_one_pass_is_bounded_oldest_first(checks: Checks) -> None:
+    checks.note("")
+    checks.note("PHOTO RECHECK — one pass reads at most RECHECK_ROWS_PER_PASS rows, oldest `at` first")
+    cap = getattr(match, "RECHECK_ROWS_PER_PASS", None)
+    if getattr(match, "recheck_no_photo", None) is None or not isinstance(cap, int):
+        checks.ok(False, "`match.recheck_no_photo` and `match.RECHECK_ROWS_PER_PASS` exist")
+        return
+    checks.ok(0 < cap < 50, "the cap is a positive int under the 50 rows the case seeds")
+    if not 0 < cap < 50:
+        return
+    with isolated_home():
+        stock = _seed([(f"p{i}", f"N{i}", f"u{i}", match.S_NO_PHOTO, 8 + i) for i in range(50)])  # p49 is the oldest
+        first = _fetcher(set())
+        _look(stock, first)
+        checks.equal(len(first.asked), cap, "a pass asks exactly the cap of 50 stale rows")
+        checks.equal(sorted(first.asked), sorted(f"u{i}" for i in range(50 - cap, 50)), "and they are the oldest")
+        second = _fetcher(set())
+        _look(stock, second)
+        checks.equal(sorted(second.asked), sorted(f"u{i}" for i in range(max(0, 50 - 2 * cap), 50 - cap)), "the next pass takes the next oldest, so the backlog drains")
+
+
 def _guarded(env, *, primary=True, runtime=True, model=True, prepare=None):
     """Printings asked by `recheck_stock_photos` under the given guards."""
     with isolated_home():
@@ -265,5 +366,8 @@ CHECKS = (
     check_recent_check_asks_nothing,
     check_gained_photo_is_matchable_and_retried,
     check_no_url_rows_are_reread_once_per_set,
+    check_recheck_holds_no_lock_across_fetches,
+    check_transient_failures_do_not_date_the_row,
+    check_one_pass_is_bounded_oldest_first,
     check_recheck_guards,
 )
