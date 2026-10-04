@@ -6,6 +6,9 @@ Part of `harness/tests/t7_store_and_seams.py` (one verdict). Names the builder f
         only the `no_photo` rows of the index whose `vec.at` is more than `days` days old (never a whole set,
         never an `ok` row), by the same fetch `build_index` uses. A row that now has a photo is fingerprinted
         (status `ok`, a vector). A row that still has none gets `at` set to now, so it waits another week.
+  The same look covers `no_url` rows older than `days`: one `stock.catalog_products` read per set that holds
+        any (none for a set with no due row), then fetch and fingerprint each URL that appeared. A row still
+        without a URL gets `at` set to now.
   `match.index_stamp()`  also changes when a printing gains a fingerprint, so `sweep.tried()` empties and
         cards tried before are tried again. It is unchanged by a look that gained nothing.
   `pipeline_routes.recheck_stock_photos(*, stock=None, fetch=None, model=None) -> bool`  the guarded look:
@@ -169,6 +172,51 @@ def check_gained_photo_is_matchable_and_retried(checks: Checks) -> None:
         checks.equal(sweep.tried(), {}, "a gained fingerprint changes the stamp, so cards tried before are tried again")
 
 
+class _Catalog(_Stock):
+    """A catalogue that has grown URLs since the index was built, and counts its reads per set."""
+
+    def __init__(self, listing):
+        self.listing, self.reads = listing, []
+
+    def catalog_products(self, _game, set_name):
+        from pipeline.stockimages import CatalogProduct
+
+        self.reads.append(set_name)
+        return [CatalogProduct(pid, name, str(i), "10", url) for i, (pid, name, url) in enumerate(self.listing[set_name], 1)], 0
+
+
+def check_no_url_rows_are_reread_once_per_set(checks: Checks) -> None:
+    checks.note("")
+    checks.note("PHOTO RECHECK — a no_url printing: one catalogue read per set, a new URL is fetched and fingerprinted")
+    if getattr(match, "recheck_no_photo", None) is None:
+        checks.ok(False, "`match.recheck_no_photo` exists")
+        return
+    with isolated_home():
+        _seed([("a1", "Okay", "uo", match.S_OK, 30), ("a2", "Gains", "", match.S_NO_URL, 8),
+               ("a3", "Waits", "", match.S_NO_URL, 8), ("a4", "AlsoWaits", "", match.S_NO_URL, 8)], set_name="Set A")
+        _seed([("b1", "Gains too", "", match.S_NO_URL, 8)], set_name="Set B")
+        _seed([("c1", "Fresh", "", match.S_NO_URL, 1)], set_name="Set C")
+        stock = _Catalog({
+            "Set A": [("a1", "Okay", "uo"), ("a2", "Gains", "ua"), ("a3", "Waits", ""), ("a4", "AlsoWaits", "")],
+            "Set B": [("b1", "Gains too", "ub")],
+            "Set C": [("c1", "Fresh", "uc")],
+        })
+        fetch = _fetcher({"ua", "ub", "uc"})
+        _look(stock, fetch)
+        checks.equal(sorted(stock.reads), ["Set A", "Set B"], "one catalogue read per affected set, none for a set checked this week")
+        checks.equal(sorted(fetch.asked), ["ua", "ub"], "only the URLs that appeared are fetched")
+        checks.equal((_row("a2")[0], _row("b1")[0]), (match.S_OK, match.S_OK), "a printing whose URL appeared is fingerprinted")
+        checks.equal((_row("a3")[0], _row("c1")[0]), (match.S_NO_URL, match.S_NO_URL), "one still without a URL, or checked this week, is unchanged")
+        checks.ok(_row("a3")[1] > _stamp(1), "and the one still without a URL is dated now, so it waits another week")
+        with match.Index() as index:
+            pool = index.pool("pokemon", ["Set A"])
+        checks.ok("a2" in {r[2] for r in pool.rows}, "the printing is in the matchable pool")
+        checks.equal(pool.blocked, {match.card_name("Waits"), match.card_name("AlsoWaits")}, "and its name leaves the look-alike guard")
+        again = _Catalog(stock.listing)
+        _look(again, _fetcher(set()))
+        checks.equal(again.reads, [], "a second look at once reads no catalogue")
+
+
 def _guarded(env, *, primary=True, runtime=True, model=True, prepare=None):
     """Printings asked by `recheck_stock_photos` under the given guards."""
     with isolated_home():
@@ -216,5 +264,6 @@ CHECKS = (
     check_weekly_recheck_asks_only_the_old_no_photo,
     check_recent_check_asks_nothing,
     check_gained_photo_is_matchable_and_retried,
+    check_no_url_rows_are_reread_once_per_set,
     check_recheck_guards,
 )
