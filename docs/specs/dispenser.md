@@ -62,6 +62,7 @@ The next card waits for the photo. The dealer never deals on a timer alone.
   reported a fault. Check it, then connect again.", "Bluetooth is off. Turn it on, then connect again.",
   "Could not connect. Check it is on, then try again." A canceled chooser says nothing. The line is
   muted small text with two lines reserved.
+- While `state` is `dealing`, the Recent rail (`footer.capture-undo`) stays live but draws only the newest `DEALING_RAIL_TILES` (15) and says so in one reserved line. When dealing ends, including a no-photo stop or an error, older tiles load in below, with no animation and no scroll change. `aside.capture-last` stays live. Undo and its keys read the live whole-sitting stack, and a tile names its card.
 - Tokens only. No hotkey. No storage key.
 
 ## Code

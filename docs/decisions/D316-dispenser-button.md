@@ -9,6 +9,7 @@ The owner ruled the scope: a button that turns the dispenser on, and nothing of 
 - **One home.** `app/src/dealer.ts` holds the link, the command allow list (`MOTOR:START`, `MOTOR:STOP`) and the paced loop. No other file talks to the dispenser.
 - **One card per command.** The loop sends START, waits for `MOTOR:COMPLETE` and for the card's photo to save (`dealer.noteSaved()`), pauses, and repeats. No photo within `SAVE_WAIT_MS` stops dealing. The owner ruled this after two runs where a timer-paced deal left 2 to 3 of about 70 cards unphotographed. A dead page or a lost link ends dealing within one card.
 - **It deals only while motion can photograph.** The control is off until motion is armed and the camera is ready. Any capture failure stops it.
+- **The Recent rail shows the newest 15 while dealing.** `DEALING_RAIL_TILES` names the 15 once (three rows of five). One reserved line says so ("Showing the newest 15 while the dispenser deals."). When dealing ends for any reason, older tiles load in below them, which stay put, with no animation. The Last capture panel stays live. Undo data and keys cover the whole sitting (D164). "Dealing" is `useDealer`'s state, never a second source (D313, nothing moves unless the person moved it).
 - **Nothing is stored.** Chrome holds the pairing grant. "Dealing" never persists and never resumes on its own (D19, arming is an act).
 - **The screen word is "dispenser"**, the owner's word.
 
