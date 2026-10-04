@@ -260,19 +260,19 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session
         for game in {str(meta[r.key][0].game or games.DEFAULT_GAME) for r in results if r.accepted}:
             if (path := _export_for(game)) is not None:
                 paths[game] = path
-    for path in paths.values():
-        stamp = _stamp(path)
-        if stamps.setdefault(path, stamp) != stamp or session.stamp.get(path) != stamp:
-            export = tcgcsv.read_export(path)
-            session.parsed[path] = (export, runs.describe_source(path))
-            session.sets[path] = sorted({str(r.get(tcgcsv.SET_COLUMN) or "") for r in export.rows} - {""})
-            session.stamp[path] = stamp
     threshold = pricing.check_threshold(corpus.Corpus.read().policy_for(None)["threshold"]) if paths else None
 
     for attempt in range(3):
         live = [r for r in results if r.accepted and r.payload is not None]
         resolved, fold, run = None, {}, None
         if paths and live and attempt < 2:
+            for path in paths.values():  # EACH PREP READS THE FILE AS IT NOW STANDS, and the lock re-checks against that
+                stamps[path] = _stamp(path)
+                if session.stamp.get(path) != stamps[path]:
+                    export = tcgcsv.read_export(path)
+                    session.parsed[path] = (export, runs.describe_source(path))
+                    session.sets[path] = sorted({str(r.get(tcgcsv.SET_COLUMN) or "") for r in export.rows} - {""})
+                    session.stamp[path] = stamps[path]
             snap = store.read()
             ready = [r for r in live if _still_here(snap.inventory, meta[r.key][0], r.key)]
             adopted = _adopt(snap, ready, meta, paths, session, rehearsal=True)
