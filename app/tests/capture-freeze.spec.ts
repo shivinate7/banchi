@@ -1,9 +1,9 @@
 // Protects: The Capture screen stays responsive as a sitting grows: while the dispenser deals, the Recent rail pauses and the Last capture panel stays live, and a hand-fed sitting never stalls.
 // Governs: D10, D164, D313, D316
 import { expect, test } from '@playwright/test'
-import { sealEveryTest } from './shell'
+import { sealEveryTest, settleAnimations } from './shell'
 import { CARD, GAP_LUMA, armMotion, control, fakeBluetooth, injectScene, writes } from './dispenserRig'
-import type { Page } from '@playwright/test'
+import type { CDPSession, Page } from '@playwright/test'
 import { setViewport } from './phoneSwitch'
 import { DEALING_RAIL_TILES } from '../src/dealer'
 
@@ -40,8 +40,11 @@ sealEveryTest()
  *  throttled 4x over CDP so every machine measures the same regime. The probe is a 10 ms timer: how
  *  late it fires is how long the main thread was blocked, summed into `__jank`, which sees the cost
  *  that stays under the 50 ms long-task line. */
+const sessions = new WeakMap<Page, CDPSession>()
+const throttle = (page: Page, rate: number) => sessions.get(page)?.send('Emulation.setCPUThrottlingRate', { rate })
 async function observeLongTasks(page: Page): Promise<void> {
   const cdp = await page.context().newCDPSession(page)
+  sessions.set(page, cdp)
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 })
   await page.addInitScript(() => {
     const long: number[] = []
@@ -192,9 +195,12 @@ function judge(cost: number[], long: number[][], window: number): string {
  *  panel shows it at full size. */
 async function startDealing(page: Page, count: number) {
   await observeLongTasks(page)
+  await throttle(page, 1)
   await fakeBluetooth(page)
   const wire = await stubWire(page, count)
   await pickCameraAndBox(page)
+  await expect(page.getByRole('button', { name: 'Capture', exact: true })).toBeEnabled()
+  await settleAnimations(page)
   await armMotion(page)
   await injectScene(page)
   await expect(page.locator('.capture-motion-hud')).toBeAttached({ timeout: 5_000 })
@@ -211,37 +217,48 @@ async function startDealing(page: Page, count: number) {
     return Number(spans.map((t) => /^empty\s+(\d+)$/.exec(t.trim())?.[1]).find((v) => v !== undefined) ?? 0)
   }
   let gaps = 0
+  let cost = 0
+  let longs: number[] = []
+  /* THE DEALER'S CLOCK DOES NOT THROTTLE. It stops with "no photo" if a card's save has not come
+   * `SAVE_WAIT_MS` after COMPLETE, so the drive (waiting for START and for the machine's empty-stand
+   * settle) runs at full speed, and only the span from the card landing to its photo on screen runs at
+   * 4x, which is the span the cost is measured over. A slow runner that took its settle under the
+   * throttle landed the card after the dealer had given up, and the second START never came. */
   const dealOne = async (n: number) => {
     await expect.poll(starts, { timeout: 15_000 }).toBeGreaterThanOrEqual(n)
-    await clearLong(page)
     // the machine fires on a card only after it has settled on the empty stand, so wait on its own count
     await expect.poll(emptyStands, { timeout: 15_000 }).toBeGreaterThan(gaps)
     gaps = await emptyStands()
+    await clearLong(page)
+    await throttle(page, 4)
     await setScene(n % 2 === 1 ? CARD : CARD - 50) // the card lands in front of the lens; each differs from the last fired
     const img = lastPanel(page).locator('img.capture-media')
     await expect(img).toHaveAttribute('alt', `Capture at Box 5, Card ${n}`, { timeout: 15_000 })
     await setScene(GAP_LUMA)
     await expect.poll(() => img.evaluate((el) => (el as HTMLImageElement).naturalWidth), { timeout: 15_000 }).toBe(1920)
+    cost = await blockedMs(page)
+    longs = await longTasks(page)
+    await throttle(page, 1)
   }
   const stop = async () => {
     await setScene(GAP_LUMA)
     await control(page, 'Stop dispenser').click()
     await expect(control(page, 'Start dispenser')).toBeVisible({ timeout: 10_000 })
   }
-  return { wire, dealOne, stop }
+  return { wire, dealOne, stop, measured: () => ({ cost, longs }) }
 }
 
 test('300 captures while the dispenser deals: no growth in cost, the rail paused, the last capture live', async ({ page }) => {
   const CAPTURES = 300
   test.setTimeout(1_500_000)
-  const { dealOne, stop } = await startDealing(page, CAPTURES)
+  const { dealOne, stop, measured } = await startDealing(page, CAPTURES)
   const perCapture: number[][] = []
   const cost: number[] = []
   let railMoved = ''
   for (let n = 1; n <= CAPTURES; n += 1) {
     await dealOne(n)
-    perCapture.push(await longTasks(page))
-    cost.push(await blockedMs(page))
+    perCapture.push(measured().longs)
+    cost.push(measured().cost)
     const count = await tiles(page).count()
     const top = (await tiles(page).first().getAttribute('aria-label')) ?? ''
     if (railMoved === '' && (count !== Math.min(n, DEALING_RAIL_TILES) || !top.endsWith(`Card ${n}`)))
@@ -287,6 +304,7 @@ test('a tile press undoes exactly the depth its label shows, even from a handler
   await handCamera(page)
   const wire = await stubWire(page, 8)
   await pickCameraAndBox(page)
+  await expect(page.getByRole('button', { name: 'Capture', exact: true })).toBeEnabled()
   const shoot = async (n: number) => {
     await page.keyboard.press('c')
     await expect(tiles(page).first()).toHaveAttribute('aria-label', new RegExp(`Card ${n}$`), { timeout: 15_000 })
@@ -385,6 +403,7 @@ test('a tile far down the rail carries its live Undo label when it scrolls in or
   await handCamera(page)
   const wire = await stubWire(page, 40)
   await pickCameraAndBox(page)
+  await expect(page.getByRole('button', { name: 'Capture', exact: true })).toBeEnabled()
   const shoot = async (n: number) => {
     await page.keyboard.press('c')
     await expect(tiles(page).first()).toHaveAttribute('aria-label', new RegExp(`Card ${n}$`), { timeout: 15_000 })
