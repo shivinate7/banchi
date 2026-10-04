@@ -990,6 +990,11 @@ function Track({
   )
 }
 
+/** A slot's photo nonce: its own stamp and the box's revision. The one place it is composed. */
+function nonceOf(stamps: Record<string, number>, revision: number, box: number, index: number): string {
+  return `${stamps[`${box}/${index}`] ?? 0}.${revision}`
+}
+
 /* TWO TARGETS DRAW THE SAME TILE WHEN EVERY FIELD AGREES. `undoStack` rebuilds each target object
  * whenever the sitting moves, so identity says nothing; the fields do. */
 function sameTarget(a: UndoTarget, b: UndoTarget): boolean {
@@ -1076,11 +1081,11 @@ function UndoCell({
   nonce: string
   busy: boolean
   spansDrawers: boolean
-  onUndo: (target: UndoTarget) => void
+  onUndo: (target: UndoTarget, at: number) => void
   onRemove: (target: UndoTarget) => void
 }) {
   return (
-    <li className={at >= DEALING_RAIL_TILES ? 'bn-stagger-item capture-undo-still' : 'bn-stagger-item'} style={{ '--i': at } as CSSProperties}>
+    <li className={at >= DEALING_RAIL_TILES ? 'capture-undo-still' : 'bn-stagger-item'} style={{ '--i': at } as CSSProperties}>
       {/* THE CELL WRAPS TWO SIBLING BUTTONS RATHER THAN NESTING ONE INSIDE THE
           OTHER — an interactive element cannot hold a second one and stay valid,
           and the two mean different things: the row still walks the plan back to
@@ -1090,7 +1095,7 @@ function UndoCell({
         <button
           type="button"
           className="capture-undo-row"
-          onClick={() => onUndo(target)}
+          onClick={() => onUndo(target, at)}
           disabled={busy}
           data-undo={at === 0 ? 'Undo' : `Undo ${at + 1}`}
           aria-label={
@@ -1449,8 +1454,7 @@ export function CaptureScreen() {
   const stampSlot = useCallback((box: number, index: number) => {
     setSlotStamps((prev) => ({ ...prev, [`${box}/${index}`]: (prev[`${box}/${index}`] ?? 0) + 1 }))
   }, [])
-  const slotNonce = (box: number, index: number): string =>
-    `${slotStamps[`${box}/${index}`] ?? 0}.${revision}`
+  const slotNonce = (box: number, index: number): string => nonceOf(slotStamps, revision, box, index)
   /* Bumped on every capture the server answered, and only then: the viewfinder flashes
    * on it. Undo bumps `revision` (the photo URL must change) and never this. */
   const [flash, setFlash] = useState(0)
@@ -3345,9 +3349,16 @@ export function CaptureScreen() {
    * dispenser deals, so the depth is read off the live stack at the press. */
   const undoStackRef = useRef<UndoTarget[]>([])
   undoStackRef.current = undoStack
-  const onUndoCell = useCallback((target: UndoTarget) => {
+  const onUndoCell = useCallback((target: UndoTarget, painted: number) => {
     const at = undoStackRef.current.findIndex((entry) => entry.box === target.box && entry.index === target.index)
-    if (at >= 0) void undoBackRef.current(at + 1)
+    if (at < 0) return
+    /* THE TILE WAS PAINTED AS "UNDO <painted + 1>". If cards landed since, that depth now reaches
+     * cards the rail never showed, so nothing is undone and the person presses again. */
+    if (at !== painted) {
+      toast({ kind: 'refusal', title: 'New cards arrived. Press again.' })
+      return
+    }
+    void undoBackRef.current(at + 1)
   }, [])
   const onRemoveCell = useCallback((target: UndoTarget) => {
     setUndoNote(null)
@@ -4035,7 +4046,7 @@ export function CaptureScreen() {
   const dealing = dealer.state === 'dealing'
   const railList = useMemo(() => {
     const shown = dealing ? undoStack.slice(0, DEALING_RAIL_TILES) : undoStack
-    const floor = dealing ? Math.min(stripFloor, DEALING_RAIL_TILES) : stripFloor
+    const floor = dealing ? Math.max(stripFloor, undoStack.length) : stripFloor
     return (
       <ul className="capture-undo-list">
         {shown.map((target, at) => (
@@ -4043,7 +4054,7 @@ export function CaptureScreen() {
             key={`${target.box}/${target.index}`}
             target={target}
             at={at}
-            nonce={`${slotStamps[`${target.box}/${target.index}`] ?? 0}.${revision}`}
+            nonce={nonceOf(slotStamps, revision, target.box, target.index)}
             busy={busy}
             spansDrawers={spansDrawers}
             onUndo={onUndoCell}
