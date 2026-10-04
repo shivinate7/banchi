@@ -1117,3 +1117,31 @@ test('matched: the counter reads a number over "matched" and nothing else', asyn
   await expect(matchedStat(page, 'matched')).toHaveCount(1)
   await expect(matchedStat(page, 'matched')).toHaveText(/^\s*2\s*matched\s*$/)
 })
+
+/* A FAILED FIRST READ OF THE SWITCH RECOVERS. The row says "Unavailable" and is pressable; the press reads
+   again at once, and once a read lands the switch works and the matched counter appears. */
+test('Background Match: a failed first read shows Unavailable, a press re-reads, then the switch works', async ({ page }) => {
+  const sweep = await stubMatched(page, 5, { on: false, matchedHere: 3 })
+  let reads = 0
+  let failing = true // every read of the switch fails until the test lets one through
+  await page.route(/\/pipeline\/match\/sweep(\?.*)?$/, (route) => {
+    /* the switch's own read carries no `keys`; the counter's poll does, and is not the read under test */
+    if (route.request().method() !== 'GET' || new URL(route.request().url()).searchParams.has('keys')) return route.fallback()
+    reads += 1
+    if (failing) return route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":{"code":"boom","message":"no"}}' })
+    return route.fallback()
+  })
+  await page.goto('/#/capture')
+  const row = page.getByRole('switch', { name: /Background Match/ })
+  await expect(row).toContainText('Unavailable')
+  await expect(row).toBeEnabled()
+  failing = false
+  const before = reads
+  await row.click()
+  await expect(row).toContainText('Off')
+  expect(reads, 'the press read again').toBeGreaterThan(before)
+  await row.click()
+  await expect(row).toContainText('On')
+  expect(sweep.on).toBe(true)
+  await expect(page.locator('.capture-odo .bn-stat').filter({ hasText: 'matched' }).locator('.bn-stat-value')).toHaveText('3')
+})
