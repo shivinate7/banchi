@@ -1158,10 +1158,25 @@ export function CaptureScreen() {
   const [rigOpen, setRigOpen] = useState(restored.box === null)
   const rigTouched = useRef(false)
   /* THE BACKGROUND READER'S SWITCH is a store row, not a device key: it is a fact about this store.
-     It is polled with the sitting's count (below) and written by the person pressing the row. */
+     It is read once, when the rig is first shown, and written by the person pressing the row. */
   const [sweepOn, setSweepOn] = useState<boolean | null>(null)
   const [sweepBusy, setSweepBusy] = useState(false)
   const [sweepDown, setSweepDown] = useState(false)
+  const rigShown = rigOpen || (openField !== null && RIG_FIELDS.has(openField))
+  useEffect(() => {
+    if (!rigShown || sweepOn !== null) return
+    let live = true
+    getMatchSweep()
+      .then((answer) => {
+        if (!live) return
+        setSweepDown(false)
+        setSweepOn(answer.on)
+      })
+      .catch(() => live && setSweepDown(true))
+    return () => {
+      live = false
+    }
+  }, [rigShown, sweepOn])
   const flipSweep = () => {
     if (sweepOn === null) return
     setSweepBusy(true)
@@ -2653,9 +2668,9 @@ export function CaptureScreen() {
     return shots.slice(from)
   }, [shots])
 
-  /* ONE POLL READS THE SWITCH, THE WATCHER AND THE SITTING'S MATCHED COUNT (the head's third counter).
-     It reads `matched_here` for this sitting's keys, about 3 s while the reader works and 20 s otherwise.
-     The server never probes the watcher's lock on this path, so polling cannot stop it starting. */
+  /* THE HEAD'S THIRD COUNTER: `matched_here` for this sitting's keys, polled only while the switch is on
+     and a card exists, about 3 s while the reader works and 20 s otherwise. The server never probes the
+     watcher's lock on this path, so polling cannot stop it starting. */
   const [matchedHere, setMatchedHere] = useState(0)
   const sittingKeys = useMemo(() => sitting.map((shot) => shot.card.key), [sitting])
   usePoll<MatchSweep>({
@@ -2669,6 +2684,7 @@ export function CaptureScreen() {
     liveMs: 3_000,
     idleMs: 20_000,
     isLive: (answer) => answer.running,
+    enabled: sweepOn === true && sittingKeys.length > 0,
     restartKey: sittingKeys.length,
   })
 
