@@ -31,6 +31,7 @@ from harness.tests import Checks
 from harness.tests.t7.common import capture_payload, isolated_home, quiet
 from identify import match, sweep
 from server import capture_server, pipeline_routes
+from store import files
 from store.session import Store
 
 
@@ -240,7 +241,10 @@ def check_auto_setup_review_round(checks: Checks) -> None:
             (True, None, 1, "the primary checkout downloads by default"),
         ):
             extra = {} if switch is None else {SWITCH: switch}
-            with mock.patch.object(ports, "is_primary_checkout", lambda *_a, _p=primary: _p):
+            own = files.home()  # the throwaway store stands in for the checkout's own
+            with mock.patch.object(ports, "is_primary_checkout", lambda *_a, _p=primary: _p), mock.patch.object(
+                ports, "REPO_ROOT", own
+            ):
                 got = _spawns(lambda: pipeline_routes.ensure_stock_setup(stock=_Stock()), model=False, **extra)
             checks.equal(got, want, label)
     root = Path(__file__).resolve().parents[3]
@@ -271,6 +275,40 @@ def check_auto_setup_review_round(checks: Checks) -> None:
         checks.equal(sweep.tried(), {}, "a sweep during a Prepare marks no card tried against the half-built index")
 
 
+def check_auto_setup_round_three(checks: Checks) -> None:
+    from server import ports
+
+    checks.note("")
+    checks.note("AUTO SETUP — own store only, the child's record, older tried marks")
+    with isolated_home():
+        with mock.patch.object(ports, "is_primary_checkout", lambda *_a: True):
+            checks.equal(_spawns(lambda: pipeline_routes.ensure_stock_setup(stock=_Stock()), model=False), 0,
+                         "a primary checkout over a store elsewhere (the demo recorder) spawns nothing")
+    with isolated_home():
+        _Popen.calls = []
+
+        def child_finishes_first(argv, *_a, **_k):
+            _Popen.calls.append(list(argv))
+            match.progress_path().write_text(json.dumps({"state": "done", "message": "child"}))
+            return _Child(999_999)
+
+        with _env(**{SWITCH: "on"}), _runtime(), mock.patch.object(match, "model_ready", lambda *_a, **_k: False), mock.patch.object(
+            pipeline_routes.subprocess, "Popen", child_finishes_first
+        ), quiet():
+            pipeline_routes.ensure_stock_setup(stock=_Stock())
+        checks.equal(json.loads(match.progress_path().read_text()).get("state"), "done",
+                     "a child that already wrote done is not overwritten by the parent's pid write")
+    with isolated_home():
+        _read_set("pokemon", "Set A")
+        progress = match.progress_path()
+        progress.parent.mkdir(parents=True, exist_ok=True)
+        sweep.remember_tried({"1/1": "cap-old"})
+        progress.write_text(json.dumps({"state": "running", "pid": os.getpid()}))
+        sweep.remember_tried({"2/2": "cap-new"})
+        progress.write_text(json.dumps({"state": "done"}))
+        checks.equal(sweep.tried(), {"1/1": "cap-old"}, "a Prepare drops only the marks made while it ran; older ones survive")
+
+
 CHECKS = (
     check_auto_setup_start,
     check_auto_setup_new_set,
@@ -278,4 +316,5 @@ CHECKS = (
     check_auto_setup_no_runtime,
     check_auto_setup_off_in_ci,
     check_auto_setup_review_round,
+    check_auto_setup_round_three,
 )
