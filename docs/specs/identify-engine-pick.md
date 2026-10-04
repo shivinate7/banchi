@@ -503,6 +503,7 @@ The peak is above the 454 MB of the model alone, because the worker also holds t
 **It cannot crash-loop.** A worker that exits with any code but 0 or 3 is waited out for longer each time: 30 seconds, doubling to 30 minutes.
 Exit code 3 means the model file, the index or the runtime is not ready, and the wait is 300 seconds.
 The worker writes its log to `.serve/match-sweep.log`. Before each chunk it records the cards in `match-sweep-inflight.json`.
+On exit 3 from a missing runtime it also writes `match-sweep-blocked.json`. `GET /pipeline/match/sweep` reports `blocked: "runtime_missing"` only while the runtime is not importable now, so the answer follows the present state. `GET /pipeline/match` carries `runtime_missing`, and Prepare refuses with 409 `runtime_missing`.
 A worker that dies inside a chunk, even by an out-of-memory kill, leaves the file. The next start marks those cards tried.
 **One watcher runs at a time, by one lock.** The watcher holds an `flock` on `inventory/match-sweep.lock`. A held lock is the only thing that reads as running, so a reused pid cannot.
 The watcher writes `.serve/match-sweep.json` and a reap owner mark (D305). `make down` and `make reap` stop it, and a SIGTERM stops the worker before the watcher exits.
