@@ -1940,3 +1940,101 @@ test('arriving at Review, the Identify strip moves nothing', async ({ page }) =>
   const { shifts } = await readShifts(page)
   expect(sumOf(shifts), describeShifts(shifts)).toBe(0)
 })
+
+/* ------------------------------------------------------------ the Identify strip and Queue button hold their frames (D291) */
+
+/** Holds every `/queues` read until `release()`, registered after `open`'s own so it wins. */
+async function holdQueues(page: Page): Promise<() => void> {
+  let release: () => void = () => undefined
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  await page.route(/\/queues$/, async (route) => {
+    await gate
+    await route.fallback()
+  })
+  return () => release()
+}
+
+/* A FAILED `/status` LEAVES NO HIDDEN GAP. With no count to offer, the strip's frame must go, not
+ * stand inert and invisible between the header and the queue. */
+test('a failed status leaves no inert hidden gap where the Identify strip would be', async ({ page }) => {
+  await runsReads(page, PAST, keysOf(12))
+  await page.route(/\/status$/, (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":{"code":"x","message":"no"}}' }))
+  await open(page)
+  await page.waitForTimeout(800) // keep: absence needs the beat the late frame would take
+  await expect(page.locator('.review-identify-strip')).toHaveCount(0)
+})
+
+/* THE QUEUE BUTTON IS HELD ON THE FIRST LOAD ONLY. A reload, an undo and an Identify now each
+ * read the queues again; none may hide the button or take focus off it. */
+test('the Queue button keeps focus and stays visible across a reload', async ({ page }) => {
+  await open(page)
+  const toggle = page.locator('.review-queue-toggle')
+  await toggle.focus()
+  const release = await holdQueues(page)
+  await page.keyboard.press('r')
+  await page.waitForTimeout(300) // keep: the read is held, so the loading state is what is measured
+  await expect(toggle).toBeVisible()
+  await expect(toggle).toBeFocused()
+  release()
+  await page.waitForTimeout(300) // keep: the answer lands after the gate opens
+  await expect(toggle).toBeVisible()
+  await expect(toggle).toBeFocused()
+})
+
+test('the Queue button keeps focus and stays visible across an undo', async ({ page }) => {
+  const sent = await open(page)
+  await page.locator('.review-candidate').first().click()
+  await expect.poll(() => sent.filter((s) => s.method === 'POST').length).toBe(1)
+  const toggle = page.locator('.review-queue-toggle')
+  await toggle.focus()
+  const release = await holdQueues(page)
+  await page.keyboard.press('u')
+  await page.waitForTimeout(300) // keep: the read is held, so the loading state is what is measured
+  await expect(toggle).toBeVisible()
+  await expect(toggle).toBeFocused()
+  release()
+  await page.waitForTimeout(300) // keep: the answer lands after the gate opens
+  await expect(toggle).toBeVisible()
+  await expect(toggle).toBeFocused()
+})
+
+test('the Queue button stays visible across Identify now', async ({ page }) => {
+  await waiting(page, 12)
+  const reads = await runsReads(page, PAST, keysOf(12))
+  await spendRoute(page, { after: () => reads.answer([]) })
+  await open(page)
+  await expect(page.locator('.review-identify-strip-said')).toBeVisible()
+  const release = await holdQueues(page)
+  await page.locator('.review-identify-now').click()
+  await page.waitForTimeout(300) // keep: the read is held, so the loading state is what is measured
+  const toggle = page.locator('.review-queue-toggle')
+  await expect(toggle).toBeVisible()
+  await expect(toggle).not.toHaveAttribute('inert', /.*/)
+  release()
+})
+
+/* THE ESTIMATE ARRIVES AFTER THE COUNT AND MOVES NOTHING. The runs read is held, so the strip is
+ * measured with the count alone, then again once the estimate has landed, at 820. */
+test('the strip keeps its height when the estimate arrives after the count, at 820', async ({ page }) => {
+  await waiting(page, 12)
+  await runsReads(page, PAST, keysOf(12))
+  let release: () => void = () => undefined
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  await page.route(/\/pipeline\/runs$/, async (route) => {
+    await gate
+    await route.fallback()
+  })
+  await open(page)
+  await setViewport(page, { width: 820, height: 900 })
+  const strip = page.locator('.review-identify-strip')
+  await page.waitForTimeout(500) // keep: the count has landed, the estimate is held
+  const before = await strip.boundingBox()
+  const top = await page.locator('.review-body').boundingBox()
+  release()
+  await expect(strip.locator('.review-identify-estimate')).toBeVisible()
+  const after = await strip.boundingBox()
+  const topAfter = await page.locator('.review-body').boundingBox()
+  expect(before, 'the strip has a frame before the estimate').not.toBeNull()
+  expect(after?.height).toBe(before?.height)
+  expect(topAfter?.y).toBe(top?.y)
+})
