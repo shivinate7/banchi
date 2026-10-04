@@ -119,8 +119,10 @@ def check_preview_crop_yields_card(checks: Checks) -> None:
         w, h = image.size
         checks.ok(w < FRAME[0] and h < FRAME[1], f"the crop is smaller than the frame ({w}x{h})")
         checks.ok(
-            abs(w / h - CARD_ASPECT) < 0.06,
-            f"the crop's aspect is near geometry.CARD_ASPECT ({w / h:.3f})",
+            h > w and abs(w / h - CARD_ASPECT) < 0.08,
+            # D125: the finder's box is the card as the model sees it (0.778 here), never reshaped
+            # to CARD_ASPECT. So check portrait and near card aspect, not the corrected aspect.
+            f"the crop is card-shaped: portrait, near geometry.CARD_ASPECT ({w / h:.3f})",
         )
         band = image.crop((int(w * .05), int(h * .80), int(w * .40), h))
         white = sum(1 for p in band.getdata() if min(p) > 245) / (band.width * band.height)

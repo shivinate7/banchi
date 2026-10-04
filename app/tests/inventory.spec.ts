@@ -747,6 +747,9 @@ type OpenOptions = {
    *  (see the comment beside the route below), which is honest but means no case here ever
    *  drew the Wanted pill against a real claim. Passing this is how a test does. */
   ordersResolution?: readonly ResolvedOrder[]
+  /** Answers every `/photo` GET with this body, and reports each URL asked (the crop query). */
+  photoBody?: string
+  onPhoto?: (url: string) => void
 }
 
 async function open(
@@ -1035,7 +1038,8 @@ async function open(
      the slot would leave the named form unrouted — and `sealEveryTest` refuses an unrouted
      request, so the failure would arrive as a seal rather than as the assertion's own. */
   await page.route(/\/photo\/(by-card\/[0-9a-f]+|\d+\/\d+)/, async (route) => {
-    await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG })
+    options.onPhoto?.(route.request().url())
+    await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: options.photoBody ?? PHOTO_SVG })
   })
 
   /* THE RUN PANEL'S ONE READ ON MOUNT, stubbed like everything else and for the reason at the
@@ -2471,11 +2475,7 @@ for (const [name, answer, cropped] of [
 ] as const) {
   test(`the preview and the retire dialog ask for the card crop: ${name}`, async ({ page }) => {
     const asked: string[] = []
-    await page.route(/\/photo\/(by-card\/[0-9a-f]+|\d+\/\d+)/, async (route) => {
-      asked.push(route.request().url())
-      await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: answer })
-    })
-    await open(page)
+    await open(page, BOXES, STORE, () => PRICING, SALE, { photoBody: answer, onPhoto: (url) => asked.push(url) })
     const preview = page.locator('.browse-photo')
     await expect(preview).toHaveAttribute('src', /[?&]crop=card(&|$)/)
     await expect.poll(() => preview.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true)
@@ -3133,7 +3133,7 @@ test('a departed card draws no number, and the cards behind it count past it', a
    * D58 that is invisible on screen and load-bearing everywhere else: the sixth row draws
    * `Card 1` of section 2 and its photograph is still `/photo/2/6`. Nothing was renamed. */
   await page.locator('.browse-row').nth(5).click()
-  await expect(page.locator('.browse-photo')).toHaveAttribute('src', /\/photo\/2\/6\?v=cap-6$/)
+  await expect(page.locator('.browse-photo')).toHaveAttribute('src', /\/photo\/2\/6\?v=cap-6(&crop=card)?$/)
   await expect(page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity')).toHaveAttribute(
     'aria-label',
     'Box 2, Section 2, Card 1',
@@ -3817,7 +3817,7 @@ test('and the photograph follows the shift, because the URL names the capture', 
 
   /* Before: the slot's URL carries the id of the card standing in it. */
   const photo = page.locator('.browse-photo')
-  await expect(photo).toHaveAttribute('src', /\/photo\/2\/3\?v=cap-3$/)
+  await expect(photo).toHaveAttribute('src', /\/photo\/2\/3\?v=cap-3(&crop=card)?$/)
 
   await openCardOps(page)
   await page.getByRole('menuitem', { name: 'Remove' }).click()
@@ -3827,7 +3827,7 @@ test('and the photograph follows the shift, because the URL names the capture', 
      is re-fetched rather than reused. The facts beside it moved on their own and always
      did; it is the photograph that used to lie. */
   await expect(page.locator('.browse-about')).toContainText('Eiscue')
-  await expect(photo).toHaveAttribute('src', /\/photo\/2\/3\?v=cap-slid-into-3$/)
+  await expect(photo).toHaveAttribute('src', /\/photo\/2\/3\?v=cap-slid-into-3(&crop=card)?$/)
 })
 
 /* AND WHERE THE ROW CARRIES A NAME, THE ADDRESS IS THE NAME (D172).
@@ -3877,7 +3877,7 @@ test('a card whose row carries a name is addressed by the name, stamp and all', 
 
   await expect(page.locator('.browse-photo')).toHaveAttribute(
     'src',
-    new RegExp(`/photo/by-card/${NAME}\\?v=cap-1$`),
+    new RegExp(`/photo/by-card/${NAME}\\?v=cap-1(&crop=card)?$`),
   )
 })
 
