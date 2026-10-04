@@ -190,19 +190,24 @@ class _Session:
 
 
 def _export_for(game: str):
-    """The export a press would reuse for this game's whole category: `pipeline_routes._reusable`
-    (up to 900 s old, its scope note covering the scope), or None. The reader asks for the whole
-    category and never narrower: a narrower file would queue a card of a set it lacks as
-    `no_catalog_row`."""
+    """The newest export this game holds whose scope note covers the whole category, or None,
+    with NO age limit (owner's ruling). The 900 s rule belongs to a press, because an export is
+    also a price reading (D166); the reader only uses the file to name and adopt cards, and dates
+    everything it writes from it to the file's own mtime. `pipeline_routes._held_exports` orders
+    them and `_covers` is the press's own scope test. A narrower file is never used: it would
+    queue a card of a set it lacks as `no_catalog_row`."""
     from server import pipeline_routes, tcg_export
     from pipeline import games
 
-    entry = games.get(game)
-    category = entry.get("tcgplayer_category_id")
+    category = games.get(game).get("tcgplayer_category_id")
     if category is None:
         return None
-    found = pipeline_routes._reusable(game, tcg_export.Scope(category_id=int(category)))
-    return None if found is None else found[0]
+    scope = tcg_export.Scope(category_id=int(category))
+    for path in pipeline_routes._held_exports(game):
+        note = pipeline_routes._read_note(path)
+        if note is not None and pipeline_routes._covers(note, scope):
+            return path
+    return None
 
 
 def _still_here(inventory, card, key) -> bool:
@@ -340,7 +345,8 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session
                 keys = _adopt(writable, ok, meta, paths, session)
                 source = {Path(str(g.source["path"])): g.source for g in resolved.joins.values()}
                 cmd_join.apply_join(writable, resolved, fold, source)
-                at = int(time.time())
+                # DATED TO THE EXPORT, NEVER TO NOW: the oldest file joined, so the pricing screens see its true age.
+                at = min(int(Path(str(g.source["path"])).stat().st_mtime) for g in resolved.joins.values())
                 table = cmd_join._pricing_table(run, resolved, choice, writable)
                 cmd_join.record_readings(writable, run, table, at)
                 session.keys = session.keys + [k for k in keys if k not in session.keys]

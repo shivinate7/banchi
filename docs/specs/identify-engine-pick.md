@@ -439,7 +439,9 @@ It leaves the queue until it is re-shot or the model changes. It waits for a pre
 
 **What it writes.** For each card it accepts: an `identifications` row with engine `marqo-b`, then the press's own adoption.
 The card becomes `identified` through `cmd_identify._adopt_cached` and `record_adopted`. The join's own write follows
-(`cmd_join.apply_join`: SKU table, queues, live counters) against the export a press would reuse (`pipeline_routes._reusable`, whole category, up to 900 s old).
+(`cmd_join.apply_join`: SKU table, queues, live counters) against the newest export the Mac holds for the game whose scope note covers the whole category, of any age (`pipeline_routes._held_exports` and `_covers`).
+The press keeps its 900 s rule, because an export is also a price reading (D166). The reader uses the file only to name and adopt cards.
+Every reading and `pricing.json` it writes carries the export's own mtime (the oldest, for a run over several games), never the time of the adoption, so the pricing screens see the true age of the prices.
 Each adopted card carries a run named `match-sweep`, closed at 64 cards. After the chunk's lock closes the run gets a press's join record:
 corpus seed, `pricing.json` and manifest. So the worklist, the unsent ledger and emit see the card as they see a press card.
 A card whose set hint names no set in the export is not adopted.

@@ -453,7 +453,7 @@ COMPONENTS = [
                                      "fingerprint (D301's one exception). Resumable, never spends, "
                                      "never touches card state, and nothing starts it but the owner's "
                                      "press. Progress is `inventory/match-prepare.json`.",
-                             "governed_by": ["D2", "D33", "D65", "D170", "D301"]},
+                             "governed_by": ["D2", "D33", "D65", "D166", "D170", "D301"]},
             "cmd_boxes.py": {"does": "`pkmnscan boxes names` — the one-time backfill that "
                                      "gives every unnamed box the stored name `Box <number>` "
                                      "(`store/master.py:Inventory.box_name_plan`). Previews by "
