@@ -4,7 +4,8 @@ import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest, settleAnimations } from './shell'
 import type { Place } from '../src/types'
-import { NO_FREE_FIELDS, runRow, stubMatchState } from './routeFixtures'
+import { NO_FREE_FIELDS, runRow, seedPopulatedReview, stubMatchState } from './routeFixtures'
+import { describeShifts, readShifts, sumOf, watchShifts } from './layoutShift'
 import { setViewport } from './phoneSwitch'
 
 /* THE REVIEW QUEUE, ASSERTED — AND UNTIL THIS FILE EXISTED, NOTHING ASSERTED IT AT ALL.
@@ -1837,4 +1838,180 @@ test('the reason lens is disabled while an answer is in flight', async ({ page }
   await expect(trigger).toBeDisabled()
   release()
   await expect(trigger).toBeEnabled()
+})
+
+/* ------------------------------------------------------------ the route from Capture to Review (D291)
+ * Three defects and one rename found by a walk of the app. Every read is stubbed. */
+
+const routeJson = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+
+/** The reads Review, its Runs sheet and the composer make, with 12 cards waiting in box 5. */
+async function stubRouteReads(page: Page): Promise<void> {
+  const keys = Array.from({ length: 12 }, (_, at) => `5/${at + 1}`)
+  await stubMatchState(page)
+  await page.route(/\/status$/, (route) =>
+    route.fulfill(routeJson({ captures_root: 'captures', store: 'inventory/store.sqlite', store_exists: true, cards: 12, states: { captured: 12 }, queues: { review: 1, parked: 0 }, next_index: { '5': 13 } })),
+  )
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="9" height="16"/>' }))
+  await page.route(/\/queues$/, (route) => route.fulfill(routeJson({ review: [], parked: [] })))
+  await page.route(/\/pipeline\/waiting$/, (route) => route.fulfill(routeJson({ keys, claimed: 0 })))
+  await page.route(/\/pipeline\/runs$/, (route) => route.fulfill(routeJson({ runs: [] })))
+  await page.route(/\/boxes$/, (route) => route.fulfill(routeJson({ boxes: [] })))
+  await page.route(/\/inventory$/, (route) => route.fulfill(routeJson({ version: 2, cards: {} })))
+  await page.route(/\/games$/, (route) => route.fulfill(routeJson({ games: [] })))
+  await page.route(/\/pipeline\/submissions$/, (route) => route.fulfill(routeJson({ claims: [], counts: { claims: 0, keys: 0, stale: 0 } })))
+  await page.route(/\/pipeline\/preflight$/, (route) =>
+    route.fulfill(routeJson({ ok: true, exit_code: 0, selection: { state: 'captured' }, sentence: 'captured', scope: null, capture_dirs: [], console: '', claimed: null, total: { photographs: 12, cache_hits: 0, to_send: 12, estimate_usd: 0.04, cards: 12, ...NO_FREE_FIELDS } })),
+  )
+}
+
+/** Capture with box 5 holding cards, so the Shooting panel's onward button shows. */
+async function stubRouteCapture(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 640
+    canvas.height = 360
+    canvas.getContext('2d')?.fillRect(0, 0, 640, 360)
+    const stream = canvas.captureStream(30)
+    const media = navigator.mediaDevices as unknown as { enumerateDevices: () => Promise<unknown[]>; getUserMedia: () => Promise<MediaStream> }
+    media.enumerateDevices = async () => [{ deviceId: 'canvas', kind: 'videoinput', label: 'Canvas Cam Link', groupId: 'g' }]
+    media.getUserMedia = async () => stream
+  })
+  await page.addInitScript(() => {
+    /* eslint-disable-next-line no-restricted-syntax -- SEEDING THE VERY KEY UNDER TEST; the same disable capture-claims.spec.ts carries. */
+    window.localStorage.setItem('banchi.capture.setup', JSON.stringify({ box: 5, bid: 15, game: 'pokemon', setHint: '', finish: [], rarityClaim: [], product: null }))
+  })
+  const game = { key: 'pokemon', display: 'Pokémon', product_line: 'Pokemon', rarities: ['Common'], finishes: ['normal'], condition_by_finish: { normal: 'Near Mint' }, finish_by_rarity: { Common: ['normal'] }, located: true, join_key: 'number_over_printed_total', prompt: 'pokemon', crop_bands: ['title', 'number'], card_aspect: 0.716, unverified: false, catalogued: true }
+  await page.route(/\/games$/, (route) => route.fulfill(routeJson({ default: 'pokemon', products: [], product_game: 'pokemon_code', games: [game] })))
+  const box = { box: 5, bid: 15, name: 'Test box', sections: [1], state: 'open', capacity: null, fill: 12, next_index: 13, cards: 12, sold: 0, retired: 0, listed: 0, on_hand: 12, sections_detail: [{ section: 1, start: 1, end: null, count: 12, name: null, div: '1' }], layout_token: 'tok1' }
+  await page.route(/\/boxes$/, (route) => route.fulfill(routeJson({ boxes: [box] })))
+  await page.route(/\/capture\/sitting$/, (route) => route.fulfill(routeJson({ open: true, gap_minutes: 30, cards: [] })))
+  await page.route(/\/pipeline\/match\/sweep$/, (route) => route.fulfill(routeJson({ on: false, running: false, matched: 0, aside: 0, blocked: false })))
+}
+
+/* NO SCREEN LIST IS TYPED HERE: Review's route is `VIEW_ROUTE`, Runs' is derived from it, and
+   Capture's is read off the sidebar link the shell draws from `ROUTES`. Hashes only, no slash. */
+const REVIEW_HASH = VIEW_ROUTE.replace('/', '')
+const RUNS_HASH = REVIEW_HASH.replace('review', 'runs')
+
+/** The hash of Capture's own sidebar link, read from the page. */
+async function captureHash(page: Page): Promise<string> {
+  await page.goto(VIEW_ROUTE)
+  await expect(page.locator(VIEW)).toBeVisible()
+  const href = await page.locator('.bn-side a.bn-nav-link', { hasText: /capture/i }).first().getAttribute('href')
+  expect(href, 'the sidebar names Capture').not.toBeNull()
+  return href ?? ''
+}
+
+async function arriveFromRouteCapture(page: Page): Promise<string> {
+  await stubRouteReads(page)
+  await stubRouteCapture(page)
+  await setViewport(page, { width: 1440, height: 900 })
+  const capture = await captureHash(page)
+  await page.goto(`/${capture}`)
+  await settleFonts(page)
+  await expect(page.locator('.capture-onward button')).toBeVisible()
+  return capture
+}
+
+test('a typed #/runs leaves one history entry, so one Back returns', async ({ page }) => {
+  await stubRouteReads(page)
+  await setViewport(page, { width: 1440, height: 900 })
+  const capture = await captureHash(page)
+  await page.goto(`/${capture}`)
+  await page.evaluate((hash) => (window.location.hash = hash), RUNS_HASH)
+  await expect.poll(() => new URL(page.url()).hash).toContain(REVIEW_HASH)
+  await page.waitForTimeout(300) // keep: a redirect that pushes lands a tick after the first URL change
+  await page.goBack()
+  await expect.poll(() => new URL(page.url()).hash).toBe(capture)
+})
+
+test('the onward button then one Back returns to Capture', async ({ page }) => {
+  const capture = await arriveFromRouteCapture(page)
+  await page.locator('.capture-onward button').click()
+  await expect.poll(() => new URL(page.url()).hash).toContain(REVIEW_HASH)
+  await page.waitForTimeout(300) // keep: a redirect that pushes lands a tick after the first URL change
+  await page.goBack()
+  await expect.poll(() => new URL(page.url()).hash).toBe(capture)
+})
+
+test('the onward button lands on Review with no composer open', async ({ page }) => {
+  await arriveFromRouteCapture(page)
+  await page.locator('.capture-onward button').click()
+  await expect(page.locator('main.review')).toBeVisible()
+  await page.waitForTimeout(500) // keep: the composer opens a beat after arrival, so absence needs the beat
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+})
+
+test('the onward button reads just Review', async ({ page }) => {
+  await arriveFromRouteCapture(page)
+  await expect(page.locator('.capture-onward button')).toHaveText('Review')
+})
+
+test('arriving at Review, the Identify strip moves nothing', async ({ page }) => {
+  await stubRouteReads(page)
+  await seedPopulatedReview(page)
+  await watchShifts(page)
+  await setViewport(page, { width: 1440, height: 900 })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(page.locator('.review-identify-strip')).toBeVisible()
+  await page.waitForTimeout(800) // keep: the window is the measurement
+  const { shifts } = await readShifts(page)
+  expect(sumOf(shifts), describeShifts(shifts)).toBe(0)
+})
+
+/* ------------------------------------------------------------ the Identify strip and Queue button hold their frames (D291) */
+
+/** Holds every `/queues` read until `release()`, registered after `open`'s own so it wins. */
+async function holdQueues(page: Page): Promise<() => void> {
+  let release: () => void = () => undefined
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  await page.route(/\/queues$/, async (route) => {
+    await gate
+    await route.fallback()
+  })
+  return () => release()
+}
+
+/* A FAILED `/status` LEAVES NO HIDDEN GAP. With no count to offer, the strip's frame must go, not
+ * stand inert and invisible between the header and the queue. */
+test('a failed status leaves no inert hidden gap where the Identify strip would be', async ({ page }) => {
+  await runsReads(page, PAST, keysOf(12))
+  await page.route(/\/status$/, (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":{"code":"x","message":"no"}}' }))
+  await open(page)
+  await page.waitForTimeout(800) // keep: absence needs the beat the late frame would take
+  await expect(page.locator('.review-identify-strip')).toHaveCount(0)
+})
+
+/* THE QUEUE BUTTON IS HELD ON THE FIRST LOAD ONLY. A reload and an Identify now each
+ * read the queues again; none may hide the button or take focus off it. */
+test('the Queue button keeps focus and stays visible across a reload', async ({ page }) => {
+  await open(page)
+  const toggle = page.locator('.review-queue-toggle')
+  await toggle.focus()
+  const release = await holdQueues(page)
+  await page.keyboard.press('r')
+  await page.waitForTimeout(300) // keep: the read is held, so the loading state is what is measured
+  await expect(toggle).toBeVisible()
+  await expect(toggle).toBeFocused()
+  release()
+  await page.waitForTimeout(300) // keep: the answer lands after the gate opens
+  await expect(toggle).toBeVisible()
+  await expect(toggle).toBeFocused()
+})
+
+test('the Queue button stays visible across Identify now', async ({ page }) => {
+  await waiting(page, 12)
+  const reads = await runsReads(page, PAST, keysOf(12))
+  await spendRoute(page, { after: () => reads.answer([]) })
+  await open(page)
+  await expect(page.locator('.review-identify-strip-said')).toBeVisible()
+  const release = await holdQueues(page)
+  await page.locator('.review-identify-now').click()
+  await page.waitForTimeout(300) // keep: the read is held, so the loading state is what is measured
+  const toggle = page.locator('.review-queue-toggle')
+  await expect(toggle).toBeVisible()
+  await expect(toggle).not.toHaveAttribute('inert', /.*/)
+  release()
 })

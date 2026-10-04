@@ -347,11 +347,11 @@ export function RunsRedirect() {
        is that intent, read by `ReviewQueue.tsx` beside `run=`/`state=`/`box=`, which already
        carry their own intent and do not need it added.
 
-       `window.location.hash =`, never `history.replaceState`: the shell's own router
+       `window.location.replace`, never `history.replaceState`: the shell's own router
        (`App.tsx:useHashPath`) reads the path on `hashchange` alone, and `replaceState` does
        not fire it — the route would keep drawing this redirect with a URL already changed
-       under it. Every other navigation in this app sets `.hash` the same way. */
-    window.location.hash = `#/review${query === '' ? '?runs=1' : `?${query}`}`
+       under it. `replace` swaps the entry, so one Back leaves the redirect behind. */
+    window.location.replace(`#/review${query === '' ? '?runs=1' : `?${query}`}`)
   }, [])
   return null
 }
