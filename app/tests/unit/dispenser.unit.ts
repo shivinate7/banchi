@@ -84,14 +84,16 @@ const rig = {
   maxInFlight: 0,
   notify: [] as Listener[],
   down: [] as Listener[],
+  saver: null as (() => void) | null, // the photo save that follows each COMPLETE
 }
 
 function reset(pairs: Pair[], latency = 0): void {
-  Object.assign(rig, { pairs, next: 0, writes: [], rejected: [], latency, inFlight: 0, maxInFlight: 0, notify: [], down: [] })
+  Object.assign(rig, { pairs, next: 0, writes: [], rejected: [], latency, inFlight: 0, maxInFlight: 0, notify: [], down: [], saver: null })
 }
 function emit(text: string): void {
   const value = new DataView(new TextEncoder().encode(text).buffer)
   for (const fn of rig.notify) fn({ target: { value } })
+  if (text === 'MOTOR:COMPLETE') rig.saver?.() // the card's photo saves as it lands
 }
 function disconnect(): void {
   for (const fn of rig.down) fn({})
@@ -177,9 +179,10 @@ function read(dealer: unknown): Snap {
 }
 type Dealer = { connect: () => Promise<void>; start: () => unknown; stop: () => unknown }
 
-async function connected(pairs: Pair[], latency = 0): Promise<Dealer> {
+async function connected(pairs: Pair[], latency = 0, autoSave = true): Promise<Dealer> {
   reset(pairs, latency)
-  const dealer = createDealer() as unknown as Dealer
+  const dealer = createDealer() as unknown as Dealer & { noteSaved?: () => void }
+  if (autoSave) rig.saver = () => dealer.noteSaved?.()
   await dealer.connect()
   await flush()
   return dealer
@@ -397,7 +400,7 @@ type Saver = Dealer & { noteSaved: () => void }
 const starts = () => rig.writes.filter((w) => w === 'MOTOR:START').length
 const SAVE_WAIT = () => (dealerModule as unknown as { SAVE_WAIT_MS?: number }).SAVE_WAIT_MS
 async function dealing(): Promise<Saver> {
-  const dealer = (await connected(PACED_10)) as Saver
+  const dealer = (await connected(PACED_10, 0, false)) as Saver
   void dealer.start()
   await advance(0)
   return dealer
@@ -469,7 +472,7 @@ test('noteSaved while idle or not connected sends nothing and does not throw', a
   reset(PACED_10)
   const idle = createDealer() as unknown as Saver
   expect(() => idle.noteSaved()).not.toThrow()
-  const ready = (await connected(PACED_10)) as Saver
+  const ready = (await connected(PACED_10, 0, false)) as Saver
   expect(() => ready.noteSaved()).not.toThrow()
   await advance(5_000)
   expect(rig.writes).toEqual([])
