@@ -7,7 +7,7 @@ import { settleFonts } from './fontsReady'
 import type { Page } from '@playwright/test'
 import type { GameRegistry } from '../src/types'
 import { setViewport } from './phoneSwitch'
-import { afterPaint } from './motionSettled'
+import { afterPaint, settleMotion } from './motionSettled'
 
 /* SUB-BOX CAPTURE, LANE B — the Capture screen's own section picker
  * (docs/specs/subbox-capture.md §5). Lane A (the store, the server, the harness) is proved by
@@ -1064,7 +1064,12 @@ test.describe('Background Match', () => {
 /* THE CAPTURE HEAD'S THIRD COUNTER, "matched" (owner ruling: fixed width, one word, no mechanism noun). */
 const matchedStat = (page: Page, label: string): Locator => page.locator('.capture-odo .bn-stat').filter({ hasText: label })
 const bgSwitch = (page: Page) => page.getByRole('switch', { name: /Background Match/ })
-const boxOf = async (l: Locator) => (await l.boundingBox())!
+/** Document-relative: a real click scrolls the window, and a viewport box would read that as a move. */
+const boxOf = async (l: Locator) =>
+  l.evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    return { x: r.x + window.scrollX, y: r.y + window.scrollY, width: r.width, height: r.height }
+  })
 
 /* 1. WITH THE SWITCH ON: the number is the route's `matched_here`, it follows the route without a reload,
    the read names this sitting's keys, and 9 -> 10 does not change the box. */
@@ -1093,9 +1098,11 @@ test('matched: absent while the switch is off, and the flip moves neither other 
   await expect(bgSwitch(page)).toHaveAttribute('aria-checked', 'false')
   await expect(page.locator('.capture-odo .bn-stat')).toHaveCount(2)
   await expect(page.locator('.capture-odo')).not.toContainText('matched')
+  await settleMotion(page)
   const [cap0, next0] = [await boxOf(matchedStat(page, 'captured')), await boxOf(matchedStat(page, 'next card'))]
   await bgSwitch(page).click()
   await expect(matchedStat(page, 'matched')).toHaveCount(1)
+  await settleMotion(page)
   const [cap1, next1] = [await boxOf(matchedStat(page, 'captured')), await boxOf(matchedStat(page, 'next card'))]
   expect(cap1, 'captured moved when the matched counter appeared').toEqual(cap0)
   expect(next1, 'next card moved when the matched counter appeared').toEqual(next0)
