@@ -70,7 +70,7 @@ def _shoot(said: dict, hint: str = "SV09", game: str = "pokemon") -> str:
     return next(iter(set(Store().read().inventory.cards) - before))
 
 
-def _seed_export(*, blank_market: str = "", age: float = 0.0, game: str = "pokemon", source=None, category: int = 3) -> Path:
+def _seed_export(*, blank_market: str = "", age: float = 0.0, game: str = "pokemon", source=None, category: int = 3, set_ids=()) -> Path:
     """The fixture export where the reader looks for one: `inventory/.exports/<game>/`.
 
     A scope note sits beside it (the shape `pipeline_routes._write_note` writes: the whole
@@ -89,7 +89,7 @@ def _seed_export(*, blank_market: str = "", age: float = 0.0, game: str = "pokem
         stamp = time.time() - age
         os.utime(target, (stamp, stamp))
     Path(str(target) + ".scope.json").write_text(
-        json.dumps({"game": game, "category_id": category, "set_ids": [], "scope": "category",
+        json.dumps({"game": game, "category_id": category, "set_ids": list(set_ids), "scope": "category" if not set_ids else "sets",
                     "widened": True, "bytes": target.stat().st_size, "at": master.now()}),
         "utf-8",
     )
@@ -118,7 +118,7 @@ def _fake_matcher(read):
         yield
 
 
-def _sweep(read) -> int:
+def _sweep(read, expect_code: int = 0) -> int:
     """Run the background worker over the store's queue, once, under the fake matcher."""
     from cli import cmd_match
 
@@ -133,7 +133,7 @@ def _sweep(read) -> int:
 
     with _fake_matcher(counted), quiet():
         code = cmd_match.sweep_worker(lambda _line: None)
-    assert code == 0, f"the worker exited {code}"
+    assert code == expect_code, f"the worker exited {code}, expected {expect_code}"
     return len(reads)
 
 
@@ -494,6 +494,7 @@ def check_moved_between_prep_and_lock(checks: Checks) -> None:
         cache = Store().read().cache
         checks.ok(all((cache.get(k) or mock.Mock(engine=None)).engine == MATCHER for k in (a, b)), "3. with each answer banked as a marqo-b row")
         checks.ok(_review((a, b)) == [] and _skus() == [], "3. and nothing queued or joined")
+        checks.equal(list(files.runs_dir().glob("*match-sweep*")) if files.runs_dir().exists() else [], [], "4. two aborted preps leave no `match-sweep` run directory")
 
 
 def check_one_run_across_restarts(checks: Checks) -> None:
@@ -521,15 +522,72 @@ def check_one_run_across_restarts(checks: Checks) -> None:
         checks.equal(sweep_runs(), [64, 2], "4. the next worker opens a new run: the full one is left alone")
 
 
+def check_join_record_recovery(checks: Checks) -> None:
+    from cli import resolve, runs
+
+    checks.note("")
+    checks.note("RECOVERY — a kill between the lock and the manifest write is finished by the next chunk")
+
+    def the_run():
+        return runs.open_run(sorted(files.runs_dir().glob("*-match-sweep-*"))[0])
+
+    with isolated_home():
+        _seed_export()
+        a, b = _shoot(ARTICUNO), _shoot(DUNSPARCE)
+        from cli import cmd_join
+
+        with mock.patch.object(cmd_join, "record_join", mock.Mock(side_effect=RuntimeError("killed after the lock"))):
+            _sweep(_results((a, b), {a: ARTICUNO, b: DUNSPARCE}), expect_code=1)
+        checks.equal({_card(k)[0] for k in (a, b)}, {master.IDENTIFIED}, "(precondition) the store write landed before the kill")
+        checks.ok(not the_run().manifest.get("joined"), "(precondition) the run is not marked joined")
+        c = _shoot(ARTICUNO)
+        _sweep(_results((c,), {c: ARTICUNO}))
+        run = the_run()
+        checks.equal(run.manifest.get("joined"), True, "4. the next chunk re-joins the cut-short run and `joined` ends True")
+        checks.equal(sorted((run.manifest.get("selection") or {}).get("keys") or []), sorted([a, b, c]), "4. with the earlier cards and the new one in it")
+    with isolated_home():
+        _seed_export()
+        a, b = _shoot(ARTICUNO), _shoot(DUNSPARCE)
+        from cli import cmd_join
+
+        with mock.patch.object(cmd_join, "record_join", mock.Mock(side_effect=RuntimeError("killed after the lock"))):
+            _sweep(_results((a, b), {a: ARTICUNO, b: DUNSPARCE}), expect_code=1)
+        with Store().write() as snap:  # the manifest names a card that is `captured` again
+            snap.inventory.cards[a].state = master.CAPTURED
+        c = _shoot(ARTICUNO)
+        joined_keys = []
+        real = resolve.load_from_store
+
+        def spy(run, keys, *rest, **kw):
+            joined_keys.append(list(keys))
+            return real(run, keys, *rest, **kw)
+
+        with mock.patch.object(resolve, "load_from_store", spy):
+            _sweep(_results((c,), {c: ARTICUNO}))
+        checks.ok(joined_keys and all(a not in keys for keys in joined_keys), "4. a manifest card that is `captured` again is not joined", f"joined {joined_keys}")
+        checks.ok(any(b in keys for keys in joined_keys), "4. while the identified one still is")
+
+
 def check_adoption_export_gate(checks: Checks) -> None:
     checks.note("")
     checks.note("EXPORT GATE — the reader adopts only on an export a press would reuse, covering the card's set")
+    days = 3 * 86400
     with isolated_home():
         a, b = _shoot(ARTICUNO), _shoot(DUNSPARCE)
-        _seed_export(age=1000)  # past EXPORT_REUSE_S = 900
+        export = _seed_export(age=days)  # owner's ruling: the reader has NO age limit (a press keeps 900 s)
+        stamp = int(export.stat().st_mtime)
         _sweep(_results((a, b), {a: ARTICUNO, b: DUNSPARCE}))
-        checks.equal({_card(k)[0] for k in (a, b)}, {master.CAPTURED}, "3. a stale export (1000 s old) adopts nothing: the cards wait for a press")
-        checks.ok(_review((a, b)) == [] and _skus() == [], "3. and queue nothing, and fill no SKU table")
+        checks.equal(_card(a)[0], master.IDENTIFIED, "3. an export days old adopts: the reader has no age limit")
+        checks.ok(_review((b,)) == [(b, AMBIGUOUS)] and _skus() != [], "3. and the join queues and fills the SKU table as for a fresh one")
+        run = sorted(files.runs_dir().glob("*-match-sweep-*"))[0]
+        checks.equal(int((run / "pricing.json").stat().st_mtime), stamp, "2. the run's pricing.json carries the export's mtime, not the adoption time")
+        reads = {r.at for r in Store().read().readings.entries.values()}
+        checks.equal(reads, {stamp}, "2. and so does every market reading the reader wrote")
+    with isolated_home():
+        a = _shoot(ARTICUNO)
+        _seed_export(set_ids=(101,))  # a narrower scope than the whole category
+        _sweep(_results((a,), {a: ARTICUNO}))
+        checks.equal(_card(a)[0], master.CAPTURED, "3b. an export fetched for fewer sets than the whole category is still refused")
     with isolated_home():
         hinted, plain = _shoot(ARTICUNO, hint="SV10"), _shoot(ARTICUNO)
         _seed_export()  # holds SV09 only
@@ -547,4 +605,5 @@ CHECKS = (
     check_lock_hold_cold_session,
     check_moved_between_prep_and_lock,
     check_one_run_across_restarts,
+    check_join_record_recovery,
 )
