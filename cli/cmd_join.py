@@ -20,7 +20,9 @@ hard stop on a snapshot's age would block a legitimate run for a reason already 
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -323,13 +325,15 @@ def apply_join(writable, resolved, fold_rows: Dict[Path, list], path_source: Dic
     return added_main, added_parked, released, moved_live, kept_live
 
 
-def seed_corpus(run_dir, resolved):
+def seed_corpus(run_dir, resolved, *, write: bool = True):
     """THE ONE HOME of the pricing corpus's join-time seed, and the choice scoped to this run.
     Seeded, never pruned. Raises what `corpus.Corpus.read` raises on an unusable file; the
     caller says so. Returns `(book, added, written, choice)`. Opens the corpus's own file lock,
-    so it must run OUTSIDE any `Store.write` (the two locks never nest).
+    so it must run OUTSIDE any `Store.write` (the two locks never nest). `write=False` seeds
+    in memory only and takes no lock: the background reader scopes its pricing table off that
+    before its store write opens, and writes the file after.
     """
-    with files.exclusive(files.inventory_dir()):
+    with (files.exclusive(files.inventory_dir()) if write else contextlib.nullcontext()):
         book = corpus.Corpus.read()
         added = []
         for sku in sorted(resolved.no_market_data_skus):
@@ -344,7 +348,7 @@ def seed_corpus(run_dir, resolved):
         # answer its own question is not a document.
         if not book.answers and book.rule == "match" and book.basis == "market":
             book.rule, book.basis = str(resolved.rule), resolved.basis
-        written = book.write()
+        written = book.write() if write else None
     choice = book.scoped_to(
         set(resolved.matches),
         run_name=run_dir.name,
@@ -354,13 +358,23 @@ def seed_corpus(run_dir, resolved):
     return book, added, written, choice
 
 
-def write_pricing_table(run_dir, resolved, choice, snapshot):
-    """Write `pricing.json` for this join. The caller takes a FRESH snapshot after the store
-    write: the write moved `live` and drew `staged` down. Returns `(table, path)`."""
+def write_pricing_table(run_dir, table, at=None):
+    """Write `pricing.json` for this join, and return its path. `at` stamps the file's mtime:
+    a reading is dated by that mtime (`record_readings`), so a caller that dated the reading
+    before the file existed passes the same second here."""
     pricing_path = run_dir.path(runs.PRICING)
-    table = _pricing_table(run_dir, resolved, choice, snapshot)
     pricing_path.write_text(json.dumps(table, indent=2) + "\n", encoding="utf-8")
-    return table, pricing_path
+    if at is not None:
+        os.utime(pricing_path, (at, at))
+    return pricing_path
+
+
+def record_readings(writable, run_dir, table, at) -> None:
+    """THE ONE HOME of the run's market reading: `pricing.json`'s table folded into the store's
+    readings, inside a `Store.write` the caller owns. `at` is the pricing file's mtime, so
+    `readings adopt --write` recomputes the same second."""
+    found, source = readings_walk.reading_from_table(table, at=at, source=run_dir.name)
+    writable.readings.replace_source(readings_store.KIND_RUN, run_dir.name, found, source)
 
 
 def record_join(run_dir, resolved, review_below) -> None:
@@ -788,7 +802,8 @@ def run(args, say) -> int:
     # every join for the same reason the report is: it describes THIS join, and a stale copy
     # beside a fresh report would be the two-files-from-two-moments problem the pricing route
     # exists to avoid.
-    table, pricing_path = write_pricing_table(run_dir, resolved, choice, store.read())
+    table = _pricing_table(run_dir, resolved, choice, store.read())
+    pricing_path = write_pricing_table(run_dir, table)
     say(f"pricing table    {len(resolved.matches)} SKU(s) -> {pricing_path}")
 
     # -------------------------------------------------------------- readings cache (D189)
@@ -806,11 +821,8 @@ def run(args, say) -> int:
     # own cost from growing with the store: `pipeline/readings.py:collect()`'s expensive half
     # is the live CSV (up to the scale D170 measured for a comparable per-store export at
     # 50,000 cards), and a join never reads that file at all.
-    run_found, run_source = readings_walk.reading_from_table(
-        table, at=int(pricing_path.stat().st_mtime), source=run_dir.name,
-    )
     with store.write() as writable:
-        writable.readings.replace_source(readings_store.KIND_RUN, run_dir.name, run_found, run_source)
+        record_readings(writable, run_dir, table, int(pricing_path.stat().st_mtime))
 
     # ------------------------------------------------------------------------ persist
     # `exports` is the recorded shape: {game: source}, the mapping VERIFIED off the

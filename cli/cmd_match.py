@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import signal
 import time
 from typing import Callable, Dict, Optional
@@ -147,23 +148,45 @@ class _Session:
         self.stamp: dict = {}
         self.run = None
         self.keys: list = []
+        self.fresh = False  # the run was created by this worker and holds no joined card yet
+        self.resumed = False
+        self.recover = False  # the open run's last join did not finish: its cards join again
 
-    def open_run(self):
-        """The run the next chunk's cards join into: the newest `match-sweep` run while it holds
-        fewer than `RUN_CARDS` cards (a worker lives for one queue, so a run per worker would be a
-        run per chunk), else a new one."""
+    def resume(self, store) -> None:
+        """Pick up the newest `match-sweep` run while it holds fewer than `RUN_CARDS` cards (a
+        worker lives for one queue, so a run per worker would be a run per chunk). A run whose
+        manifest is not `joined` was cut short between the store write and its record: its cards
+        that are still identified join again with the next chunk (`recover`). Never creates."""
         from cli import runs
 
-        if self.run is None:
-            for directory in sorted(store_files.runs_dir().glob("*-match-sweep-*"), reverse=True)[:1]:
-                run = runs.open_run(directory)
-                keys = list((run.manifest.get("selection") or {}).get("keys") or [])
-                if len(keys) < self.RUN_CARDS:
-                    self.run, self.keys = run, keys
+        if self.resumed:
+            return
+        self.resumed = True
+        for directory in sorted(store_files.runs_dir().glob("*-match-sweep-*"), reverse=True)[:1]:
+            run = runs.open_run(directory)
+            keys = list((run.manifest.get("selection") or {}).get("keys") or [])
+            cards = store.read().inventory.cards
+            held = [k for k in keys if k in cards and cards[k].state != "captured"]
+            if len(held) < self.RUN_CARDS:
+                self.run, self.keys = run, held
+                self.recover = bool(held) and not run.manifest.get("joined")
+
+    def open_run(self):
+        """The run the next chunk's cards join into, created when none is open or it is full."""
+        from cli import runs
+
         if self.run is None or len(self.keys) >= self.RUN_CARDS:
             self.run = runs.create("match-sweep")
-            self.keys = []
+            self.keys, self.fresh = [], True
         return self.run
+
+    def drop_empty_run(self) -> None:
+        """A run this worker created and never joined a card into (every prep aborted) is
+        removed, so the runs sheet never lists an empty unjoined run."""
+        if self.fresh and self.run is not None and not self.keys:
+            shutil.rmtree(self.run.directory, ignore_errors=True)
+            self.run = None
+        self.fresh = False
 
 
 def _export_for(game: str):
@@ -257,7 +280,12 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session
     paths: dict = {}
     stamps: dict = {}
     if adopt:
-        for game in {str(meta[r.key][0].game or games.DEFAULT_GAME) for r in results if r.accepted}:
+        session.resume(store)
+        wanted = {str(meta[r.key][0].game or games.DEFAULT_GAME) for r in results if r.accepted}
+        if session.recover:
+            cards = store.read().inventory.cards
+            wanted |= {str(cards[k].game or games.DEFAULT_GAME) for k in session.keys}
+        for game in wanted:
             if (path := _export_for(game)) is not None:
                 paths[game] = path
     threshold = pricing.check_threshold(corpus.Corpus.read().policy_for(None)["threshold"]) if paths else None
@@ -265,7 +293,7 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session
     for attempt in range(3):
         live = [r for r in results if r.accepted and r.payload is not None]
         resolved, fold, run = None, {}, None
-        if paths and live and attempt < 2:
+        if paths and (live or session.recover) and attempt < 2:
             for path in paths.values():  # EACH PREP READS THE FILE AS IT NOW STANDS, and the lock re-checks against that
                 stamps[path] = _stamp(path)
                 if session.stamp.get(path) != stamps[path]:
@@ -276,19 +304,24 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session
             snap = store.read()
             ready = [r for r in live if _still_here(snap.inventory, meta[r.key][0], r.key)]
             adopted = _adopt(snap, ready, meta, paths, session, rehearsal=True)
-            if adopted:
+            if adopted or session.recover:
                 run = session.open_run()
                 resolved = resolve.load_from_store(
                     run, session.keys + adopted, paths, threshold=threshold,
                     rule=pricing.MATCH, basis=pricing.BASIS_MARKET, review_below=routing.CONFIDENCE_LOW,
                     snapshot=snap, export_cache=session.parsed,
                 )
+                book, _added, _written, choice = cmd_join.seed_corpus(run, resolved, write=False)
                 skus_snap = store.read().skus
                 for game_join in resolved.joins.values():
                     path = Path(str(game_join.source["path"]))
                     at, name = cmd_join._skus_stamp(game_join.source)
                     fold[path] = skus_walk.changed_rows(session.parsed[path][0].rows, at=at, source=name, skus=skus_snap)
         accepted = 0
+        if resolved is not None:
+            # THE INTENT, BEFORE THE LOCK: these keys are the run's, and it is not joined until its
+            # record is written. A kill after the store write leaves a run the next worker finishes.
+            run.set(selection={"keys": session.keys + adopted}, joined=False)
         with store.write() as writable:
             if resolved is not None and (
                 any(_stamp(p) != stamps[p] for p in paths.values())
@@ -307,16 +340,22 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session
                 keys = _adopt(writable, ok, meta, paths, session)
                 source = {Path(str(g.source["path"])): g.source for g in resolved.joins.values()}
                 cmd_join.apply_join(writable, resolved, fold, source)
-                session.keys = session.keys + keys
+                at = int(time.time())
+                table = cmd_join._pricing_table(run, resolved, choice, writable)
+                cmd_join.record_readings(writable, run, table, at)
+                session.keys = session.keys + [k for k in keys if k not in session.keys]
             else:
                 _adopt(writable, ok, meta, {}, session)
         break
     if resolved is not None:
-        run.manifest["selection"] = {"keys": list(session.keys)}
-        run.set(selection=run.manifest["selection"])
-        _book, _added, _written, choice = cmd_join.seed_corpus(run, resolved)
-        cmd_join.write_pricing_table(run, resolved, choice, store.read())
+        # FILES, OUTSIDE ANY LOCK, each safe to write again: `resume` finishes a run whose record
+        # is missing, and the join over the same keys writes the same files.
+        cmd_join.seed_corpus(run, resolved)
+        cmd_join.write_pricing_table(run, table, at)
+        run.set(selection={"keys": list(session.keys)})
         cmd_join.record_join(run, resolved, routing.CONFIDENCE_LOW)
+        session.recover = False
+    session.drop_empty_run()
     return accepted
 
 
