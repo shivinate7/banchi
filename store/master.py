@@ -1927,6 +1927,22 @@ class Inventory:
         live.sort(key=lambda row: row[0])
         return tuple(live)
 
+    def departed_indices(self, box: int) -> Tuple[int, ...]:
+        """The indices of `box`'s records that have left (`TERMINAL_STATES`), ascending, read
+        off two indexed columns like `occupied_indices`. The one rule for "departed"."""
+        box = _as_position_int(box, "box")
+        gone: List[int] = []
+        for key, (raw_index, state) in self.cards.select(("idx", "state"), box=box):
+            if raw_index is None:
+                card = self.cards[key]
+                raw_index, state = card.index, card.state
+            if state in TERMINAL_STATES:
+                try:
+                    gone.append(int(raw_index))
+                except (TypeError, ValueError):
+                    continue  # an unreadable index names no slot; `_walk` degrades the same way
+        return tuple(sorted(gone))
+
     def records_in(self, box) -> List[Tuple[int, str, Card]]:
         """`(index, key, card)` for every record in `box`, ascending, coerced the way
         `next_index` coerces and refusing the same way. What the box-scoped routes walk
@@ -3669,6 +3685,13 @@ class Inventory:
             )
         return after
 
+    def _cards_between(self, box, floor, hi) -> bool:
+        """Is a card ON HAND (not departed, D58) keyed in [floor, hi)? One test for both
+        branches of `open_section`."""
+        return any(
+            floor <= float(k) < hi for i, k in self.box_order(box).pairs if self._on_hand(box, i)
+        )
+
     def open_section(self, number, after=None, layout_token=None) -> Tuple[int, ...]:
         """Put a divider in front of the next card. The capture screen's `S`.
 
@@ -3710,7 +3733,7 @@ class Inventory:
             divs = self.dividers_of(entry.box)
             if ordinal < len(divs):
                 floor, hi = divs[ordinal - 1], divs[ordinal]
-                if not any(floor <= float(k) < hi for _, k in self.box_order(entry.box).pairs):
+                if not self._cards_between(entry.box, floor, hi):
                     raise SectionEmpty(
                         f"Section {ordinal} of {self.box_title(entry.box)} holds nothing yet. "
                         f"Capture a card into it before starting another after it."
@@ -3720,8 +3743,12 @@ class Inventory:
         # IN KEY SPACE (D294): the divider goes where the next card's KEY is, the back.
         at = self.next_key(entry.box)
         layout = list(entry.layout()) or [1]
-        last = layout[-1]
-        if last >= at:
+        # The last section is empty when no card key lies at or after its divider (the same
+        # test as the `after` branch). `next_key` lands past an empty divider, so comparing
+        # the divider to it let S write a second empty section.
+        # The floor is the last divider as `dividers_of` draws it, so a card moved in front of a
+        # one-section box (its key below the stored front) still counts.
+        if not self._cards_between(entry.box, self.dividers_of(entry.box)[-1], float("inf")):
             raise SectionEmpty(
                 f"Section {len(layout)} of {self.box_title(entry.box)} holds nothing yet. "
                 f"Capture a card into it before starting another."

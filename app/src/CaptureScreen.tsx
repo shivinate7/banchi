@@ -4725,16 +4725,18 @@ export function CaptureScreen() {
           <Row
             k={SECTION_STEP_KEYS}
             label="Section"
-            icon="divider"
+            size="lg"
             className={openField === 'section' ? 'capture-row-covered' : undefined}
             right={
               box === null ? (
                 <span className="capture-section-val is-empty">
                   <strong>Locked</strong>
+                  <span />
                 </span>
               ) : pickedSection === null ? (
                 <span className="capture-section-val is-default">
                   <strong>Section 1</strong>
+                  <span />
                 </span>
               ) : (
                 <span className="capture-section-val">
@@ -4763,7 +4765,7 @@ export function CaptureScreen() {
             }}
           />
           {openField !== 'section' ? null : (
-            <OpenField k={SECTION_STEP_KEYS} label="Section" icon="divider" meta="Pick one" pin onClose={closeField}>
+            <OpenField k={SECTION_STEP_KEYS} label="Section" meta="Pick one" pin onClose={closeField}>
               <div className="capture-opts">
                 {sectionsDetail.map((span, position) => {
                   const isLast = span.section === sectionsDetail.length
@@ -5749,7 +5751,7 @@ export function CaptureScreen() {
             />
           )}
           <SwitchRow
-            label="Match in the background"
+            label="Background Match"
             icon="image"
             on={sweepOn}
             busy={sweepBusy}

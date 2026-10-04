@@ -155,6 +155,7 @@ def sweep_worker(say) -> int:
     accepted = tried = 0
     try:
         with match.Index() as index:
+            sweep.set_blocked(None)
             while not stop:
                 conn = db.open_read_only(db.path(store_files.inventory_dir()))
                 try:
@@ -211,6 +212,7 @@ def sweep_worker(say) -> int:
         # A MISSING RUNTIME is "not ready", not a crash: the watcher waits 300 s and says why.
         say(f"sweep           the reader's runtime is not installed ({exc.name or exc}); nothing read")
         sweep.clear_inflight()
+        sweep.set_blocked("runtime_missing")
         return sweep.EXIT_NOT_READY
     except Exception as exc:  # noqa: BLE001
         # THE CARDS IN FLIGHT BECOME TRIED so one bad photograph cannot take the next worker down.

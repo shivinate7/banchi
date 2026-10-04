@@ -1031,8 +1031,8 @@ for (const [width, height] of [
 
 /* THE BACKGROUND READER'S SWITCH (docs/specs/identify-engine-pick.md, section 8), a row on the Rig
  * panel. No box is open, so the panel is shown on arrival. */
-test.describe('Match in the background', () => {
-  const row = (page: Page) => page.getByRole('switch', { name: /Match in the background/ })
+test.describe('Background Match', () => {
+  const row = (page: Page) => page.getByRole('switch', { name: /Background Match/ })
 
   test('holds its height while the switch state loads, and reads Off by default', async ({ page }) => {
     const wire = await open(page, { boxes: [], holdSweep: true, bare: true })
