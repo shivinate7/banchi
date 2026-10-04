@@ -1263,7 +1263,7 @@ test('ticking: the Capture head\'s matched counter shifts nothing as its number 
   const sweep = await stubMatched(page, 12, { matchedHere: 9 })
   await watchShifts(page)
   await setViewport(page, { width: 1440, height: 1000 })
-  await page.goto('/#/capture')
+  await page.goto(screen('capture'))
   await settleFonts(page)
   const value = page.locator('.capture-odo .bn-stat').filter({ hasText: 'matched' }).locator('.bn-stat-value')
   await expect(value).toHaveText('9')
