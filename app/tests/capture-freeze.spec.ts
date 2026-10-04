@@ -277,7 +277,11 @@ test('60 hand-fed captures do not cost more as the sitting grows', async ({ page
   expect(judge(cost, perCapture, 10), `blocked time over ${CAPTURES} hand-fed captures`).toBe('')
 })
 
-test('a tile press after more captures landed undoes nothing, says so, and U still undoes the newest', async ({ page }) => {
+test('a tile press undoes exactly the depth its label shows, even from a handler painted before more captures landed', async ({ page }) => {
+  /* WHY THE OLD RACE IS GONE. A tile no longer carries its rank: the press reads its depth from the
+   * tile's place in the live list, and a layout effect rewrites every label before paint on each
+   * capture. So a handler painted as "Undo 3" cannot undo 5: it is called here after two more
+   * captures landed, and must undo the depth the label shows at that moment, never the old one. */
   await observeLongTasks(page)
   await handCamera(page)
   const wire = await stubWire(page, 8)
@@ -287,23 +291,33 @@ test('a tile press after more captures landed undoes nothing, says so, and U sti
     await expect(tiles(page).first()).toHaveAttribute('aria-label', new RegExp(`Card ${n}$`), { timeout: 15_000 })
   }
   for (const n of [1, 2, 3]) await shoot(n)
-  // Hold the press handler of the Card 1 tile as it was painted (Undo 3), then let two captures land.
+  // Hold the press handler of the Card 1 tile as it was painted (labelled "Undo 3 captures").
   await page.evaluate(() => {
     const row = [...document.querySelectorAll('footer.capture-undo .capture-undo-row')].at(-1) as HTMLElement
     const key = Object.keys(row).find((k) => k.startsWith('__reactProps$'))
-    const props = key === undefined ? undefined : (row as unknown as Record<string, { onClick?: () => void }>)[key]
+    const props = key === undefined ? undefined : (row as unknown as Record<string, { onClick?: (e: unknown) => void }>)[key]
     if (props?.onClick === undefined) throw new Error('no React press handler on the oldest tile')
-    ;(window as unknown as { __stale: () => void }).__stale = props.onClick
+    ;(window as unknown as { __stale: (e: unknown) => void }).__stale = props.onClick
   })
+  await expect(tiles(page).last()).toHaveAttribute('aria-label', /^Undo 3 captures, back to .*Card 1$/)
   for (const n of [4, 5]) await shoot(n)
-  await page.evaluate(() => (window as unknown as { __stale: () => void }).__stale())
-  await expect(page.locator('.bn-toast', { hasText: 'New cards arrived. Press again.' })).toBeVisible()
-  expect(wire.undone, 'the stale press undid nothing').toEqual([])
-  await expect(tiles(page)).toHaveCount(5)
+  // U still undoes the newest, alone.
   await page.keyboard.press('u')
   await expect(tiles(page)).toHaveCount(4)
-  expect(wire.undone.length, 'U undid exactly one card').toBe(1)
-  expect(wire.undone[0]).toContain('/inventory/5/5')
+  expect(wire.undone).toEqual(['DELETE /inventory/5/5'])
+  // The label of the oldest tile has already moved on to its live depth: 4, not 3.
+  const label = (await tiles(page).last().getAttribute('aria-label')) ?? ''
+  expect(label).toMatch(/^Undo 4 captures, back to .*Card 1$/)
+  // The stale handler is pressed now: it must undo the four cards the label names, newest first.
+  await page.evaluate(() => {
+    const row = [...document.querySelectorAll('footer.capture-undo .capture-undo-row')].at(-1) as HTMLElement
+    ;(window as unknown as { __stale: (e: unknown) => void }).__stale({ currentTarget: row })
+  })
+  await expect(tiles(page)).toHaveCount(0)
+  expect(wire.undone, 'the press undid the depth its label showed, not the depth it was painted with').toEqual([
+    'DELETE /inventory/5/5', 'DELETE /inventory/5/4', 'DELETE /inventory/5/3', 'DELETE /inventory/5/2', 'DELETE /inventory/5/1',
+  ])
+  await expect(page.locator('.bn-toast', { hasText: 'New cards arrived' })).toHaveCount(0)
 })
 
 test('past 15 cards the rail keeps its height across Stop and nothing below it moves', async ({ page }) => {
@@ -318,11 +332,11 @@ test('past 15 cards the rail keeps its height across Stop and nothing below it m
       const below = [...document.querySelectorAll('footer.capture-undo ~ *')].map((el) => Math.round(el.getBoundingClientRect().top))
       return { list: Math.round(list.getBoundingClientRect().height), footerTop: Math.round(footer.getBoundingClientRect().top), below }
     })
-  await expect(page.locator('footer.capture-undo .capture-undo-ghost').first()).toBeAttached()
+  await expect(page.locator('footer.capture-undo .capture-undo-spacer').first()).toBeAttached()
   const dealing = await geometry()
   await stop()
   await expect(tiles(page)).toHaveCount(CARDS, { timeout: 30_000 })
-  await expect(page.locator('footer.capture-undo .capture-undo-ghost')).toHaveCount(0)
+  await expect(page.locator('footer.capture-undo .capture-undo-spacer')).toHaveCount(0)
   const stopped = await geometry()
   expect(stopped.list, 'the rail list holds its height across Stop').toBe(dealing.list)
   expect(stopped.footerTop, 'the rail does not move').toBe(dealing.footerTop)
