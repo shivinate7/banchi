@@ -148,8 +148,8 @@ def run(ok) -> None:
     if "T7" in registry and "T1" in registry:
         packages, _ = test_reach(registry["T7"])
         ok(
-            "store" in packages and "geometry" not in packages,
-            "T7 reaches store directly and does NOT reach geometry through cli — "
+            "store" in packages and "codes" not in packages,
+            "T7 reaches store directly and does NOT reach codes through cli — "
             "the transitive follow that would make this row vacuous is absent",
             str(sorted(packages)),
         )
