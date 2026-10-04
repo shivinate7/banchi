@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { getCaptureSitting, getMatchSweep, getMatchState, getQueues } from './server'
+import { getCaptureSitting, getMatchSweep, getMatchState, getQueues, getRuns } from './server'
 import type { MatchSweep } from './types'
 import { usePoll } from './usePoll'
 import { Button, Money } from './kit'
@@ -72,12 +72,30 @@ export function ReviewBand({
   const [sweep, setSweep] = useState<MatchSweep | null>(null)
   /* After a press, runs are reading: poll at the live pace until nothing is left to read. */
   const pressed = useRef(false)
+  /* Two answers alike after a press (a refused press, a reader that never starts) end it: back to the slow pace. */
+  const runLive = useRef(false)
+  const last = useRef<{ left: number; alike: number }>({ left: -1, alike: 0 })
   const { refresh } = usePoll<MatchSweep>({
-    fn: () => getMatchSweep([...(keys ?? [])]),
+    fn: async () => {
+      const answer = await getMatchSweep([...(keys ?? [])])
+      /* Runs are read only while a press is pending, never on an idle tick. */
+      if (pressed.current) runLive.current = await getRuns().then((runs) => runs.some((run) => run.live)).catch(() => false)
+      return answer
+    },
     onData: setSweep,
     liveMs: 3_000,
     idleMs: 20_000,
-    isLive: (answer) => answer.running || (pressed.current && (answer.paid ?? 0) + (answer.unread ?? 0) > 0),
+    isLive: (answer) => {
+      const left = (answer.paid ?? 0) + (answer.unread ?? 0)
+      if (answer.running || (pressed.current && runLive.current)) {
+        last.current = { left, alike: 0 }
+        return true
+      }
+      if (!pressed.current || left === 0) return false
+      last.current = { left, alike: last.current.left === left ? last.current.alike + 1 : 0 }
+      if (last.current.alike >= 2) pressed.current = false
+      return pressed.current
+    },
     enabled: keys !== null,
     restartKey: keys === null ? null : keys.join(','),
   })
@@ -134,6 +152,8 @@ export function ReviewBand({
 
   const read = async () => {
     pressed.current = true
+    runLive.current = false
+    last.current = { left: (sweep?.paid ?? 0) + (sweep?.unread ?? 0), alike: 0 }
     await onRead(sweep?.paid_keys ?? [])
     refresh()
   }
