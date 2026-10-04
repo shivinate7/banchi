@@ -2295,9 +2295,10 @@ def check_move_receipt_lines(checks: Checks) -> None:
 
 def check_empty_section_starts(checks: Checks) -> None:
     """An empty section starts at the cards before it plus one (D58), so the capture screen's
-    "next card" for it is that start plus zero. Sold cards leave gaps in the index, and a
-    divider typed past the last card used to keep its INDEX minus the gaps before it, so the
-    second of two trailing empty sections read card 498 where the next capture is card 497."""
+    "next card" for it is that start plus zero. The defect: a departed record (sold or retired)
+    right before a trailing divider counted as a card, so the empty section started one too
+    high (card 498 where the next capture is card 497). Unused keys past the last record are
+    planned room (I5), so a divider past another empty section keeps its planned number."""
     checks.note("")
     checks.note("EMPTY SECTION STARTS - an empty section starts after the last card on hand")
     sparse = (1, 2, 3, 4, 10, 11, 12, 20)  # 8 cards on hand, gaps in the index
@@ -2309,8 +2310,9 @@ def check_empty_section_starts(checks: Checks) -> None:
         ]
 
     checks.equal(
-        spans((1, 5, 21, 30), sparse), [(1, 1, 4), (2, 5, 4), (3, 9, 0), (4, 9, 0)],
-        "(a) two trailing empty sections both start at the card count plus one",
+        spans((1, 5, 21, 30), sparse), [(1, 1, 4), (2, 5, 4), (3, 9, 0), (4, 18, 0)],
+        "(a) two trailing empty sections: the first starts after the cards on hand, the "
+        "second keeps its planned number (section 3 plans 9 cards, so 18)",
     )
     checks.equal(
         spans((1, 5, 21), sparse), [(1, 1, 4), (2, 5, 4), (3, 9, 0)],
