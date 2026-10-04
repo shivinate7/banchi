@@ -320,6 +320,15 @@
 }
 .capture-row-lg .capture-right { grid-row: 2; grid-column: 3; justify-content: flex-start; }
 .capture-row-lg .capture-chev { grid-column: 4; }
+/* The Section row is a large row so its sub-line takes the full width under the label rather
+   than what is left beside it, and reads whole ("next card N, before section M"). Its key pair
+   keeps its wider first track. */
+.capture-row-lg.capture-row-keypair { grid-template-columns: 42px auto minmax(0, 1fr) 14px; column-gap: var(--bn-1-5); }
+.capture-row-lg .capture-section-val { text-align: left; }
+/* Every state draws both lines, each a whole number of pixels tall (from its own font size), so no state's text can move the row (D313). */
+.capture-row-lg .capture-section-val strong,
+.capture-row-lg .capture-section-val > span { height: 1.25em; line-height: 1.25em; height: round(up, 1.25em, 1px); line-height: round(up, 1.25em, 1px); }
+.capture-section-val .capture-list-part + .capture-list-part::before { margin: 0 var(--bn-1); }
 .capture-box-val { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
 .capture-box-val strong {
   font-family: var(--bn-font-display);
@@ -352,8 +361,8 @@
 .capture-section-val span { min-width: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .capture-section-val.is-empty strong,
 .capture-section-val.is-default strong { color: var(--bn-ink-3); font-weight: 400; }
-.capture-row-lg:has(.is-empty) { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 1.5px var(--bn-accent); }
-.capture-row-lg:has(.is-empty) .capture-row-icon { color: var(--bn-accent); }
+.capture-row-lg:has(.capture-box-val.is-empty) { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 1.5px var(--bn-accent); }
+.capture-row-lg:has(.capture-box-val.is-empty) .capture-row-icon { color: var(--bn-accent); }
 /* UX-137: declared AFTER `:has(.is-empty)` so an empty box still gets a visible hover
    (same specificity, source order decides) — every other field row tints on hover, and the
    large Box row did not, for the one case (no box chosen yet) an operator meets first. */
