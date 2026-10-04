@@ -2,6 +2,7 @@
 // Governs: D316, D19
 import { expect, test } from './unit'
 import { createDealer, DEAL_GAP_MS } from '../../src/dealer'
+import * as dealerModule from '../../src/dealer'
 
 /* THE DISPENSER'S LINK AND LOOP, driven with no React and no clock. `navigator.bluetooth` is a fake
  * that replays tcg-dealer's RECORDED sequences (fixtures/paced_loop_10_of_10.json and
@@ -83,14 +84,16 @@ const rig = {
   maxInFlight: 0,
   notify: [] as Listener[],
   down: [] as Listener[],
+  saver: null as (() => void) | null, // the photo save that follows each COMPLETE
 }
 
 function reset(pairs: Pair[], latency = 0): void {
-  Object.assign(rig, { pairs, next: 0, writes: [], rejected: [], latency, inFlight: 0, maxInFlight: 0, notify: [], down: [] })
+  Object.assign(rig, { pairs, next: 0, writes: [], rejected: [], latency, inFlight: 0, maxInFlight: 0, notify: [], down: [], saver: null })
 }
 function emit(text: string): void {
   const value = new DataView(new TextEncoder().encode(text).buffer)
   for (const fn of rig.notify) fn({ target: { value } })
+  if (text === 'MOTOR:COMPLETE') rig.saver?.() // the card's photo saves as it lands
 }
 function disconnect(): void {
   for (const fn of rig.down) fn({})
@@ -176,9 +179,10 @@ function read(dealer: unknown): Snap {
 }
 type Dealer = { connect: () => Promise<void>; start: () => unknown; stop: () => unknown }
 
-async function connected(pairs: Pair[], latency = 0): Promise<Dealer> {
+async function connected(pairs: Pair[], latency = 0, autoSave = true): Promise<Dealer> {
   reset(pairs, latency)
-  const dealer = createDealer() as unknown as Dealer
+  const dealer = createDealer() as unknown as Dealer & { noteSaved?: () => void }
+  if (autoSave) rig.saver = () => dealer.noteSaved?.()
   await dealer.connect()
   await flush()
   return dealer
@@ -389,4 +393,88 @@ test('SYNTHETIC: Stop, Start (pending), Stop again before the old COMPLETE: no S
   await advance(10_000)
   expect(rig.writes.filter((w) => w === 'MOTOR:START')).toHaveLength(1)
   expect(read(dealer).state).toBe('stopped')
+})
+
+/* ---- the next card waits for the last card's photo (D316) ---- */
+type Saver = Dealer & { noteSaved: () => void }
+const starts = () => rig.writes.filter((w) => w === 'MOTOR:START').length
+const SAVE_WAIT = () => (dealerModule as unknown as { SAVE_WAIT_MS?: number }).SAVE_WAIT_MS
+async function dealing(): Promise<Saver> {
+  const dealer = (await connected(PACED_10, 0, false)) as Saver
+  void dealer.start()
+  await advance(0)
+  return dealer
+}
+
+test('SAVE_WAIT_MS is exported and is 3000', () => {
+  expect(SAVE_WAIT()).toBe(3_000)
+})
+
+test('after COMPLETE no START goes out until noteSaved, then START follows after DEAL_GAP_MS', async () => {
+  const dealer = await dealing()
+  await advance(420 + 2_000) // COMPLETE at 420 ms, well inside SAVE_WAIT_MS
+  expect(starts()).toBe(1)
+  dealer.noteSaved()
+  await advance(DEAL_GAP_MS - 1)
+  expect(starts()).toBe(1)
+  await advance(2)
+  expect(starts()).toBe(2)
+  await dealer.stop()
+})
+
+test('a save before COMPLETE counts: START needs COMPLETE and one save, in either order', async () => {
+  const dealer = await dealing()
+  await advance(100)
+  dealer.noteSaved() // the save lands first, COMPLETE at 420 ms
+  await advance(COMPLETE[1] - 100) // now at COMPLETE
+  expect(starts()).toBe(1) // COMPLETE only just landed: gap not yet over
+  await advance(DEAL_GAP_MS + 30)
+  expect(starts()).toBe(2)
+  await dealer.stop()
+})
+
+test('no save within SAVE_WAIT_MS after COMPLETE stops the dealer with a line about the tray', async () => {
+  const dealer = await dealing()
+  await advance(420 + 3_000 + 50)
+  expect(starts()).toBe(1)
+  expect(read(dealer).state).toBe('stopped')
+  expect(rig.writes.at(-1)).toBe('MOTOR:STOP')
+  expect(read(dealer).said).toMatch(/no photo/i)
+  expect(read(dealer).said).toMatch(/tray/i)
+  expect(read(dealer).said).not.toMatch(/save|timeout|COMPLETE|MOTOR/i)
+})
+
+test('two saves for one card let one START through', async () => {
+  const dealer = await dealing()
+  await advance(500)
+  dealer.noteSaved()
+  dealer.noteSaved() // a hand in view: a second save for the same card
+  await advance(DEAL_GAP_MS + 10) // START 2 out at ~620 ms
+  expect(starts()).toBe(2)
+  await advance(420 + DEAL_GAP_MS + 100) // card 2 COMPLETEs; no save for it
+  expect(starts()).toBe(2)
+  await dealer.stop()
+})
+
+test('Stop while waiting for a save cancels the wait: a later noteSaved sends nothing', async () => {
+  const dealer = await dealing()
+  await advance(1_000) // COMPLETE landed, waiting for the save
+  await dealer.stop()
+  const writes = rig.writes.length
+  dealer.noteSaved()
+  await advance(5_000)
+  expect(rig.writes.length).toBe(writes)
+  expect(read(dealer).state).toBe('stopped')
+  expect(read(dealer).said).not.toMatch(/no photo/i) // the wait is cancelled, so its alarm never fires
+})
+
+test('noteSaved while idle or not connected sends nothing and does not throw', async () => {
+  reset(PACED_10)
+  const idle = createDealer() as unknown as Saver
+  expect(() => idle.noteSaved()).not.toThrow()
+  const ready = (await connected(PACED_10, 0, false)) as Saver
+  expect(() => ready.noteSaved()).not.toThrow()
+  await advance(5_000)
+  expect(rig.writes).toEqual([])
+  expect(read(ready).state).toBe('connected')
 })

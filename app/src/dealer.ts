@@ -40,6 +40,8 @@ const ALLOWED = ['MOTOR:START', 'MOTOR:STOP'] as const
 type Command = (typeof ALLOWED)[number]
 /** Pause after COMPLETE before the next START (about 0.6 s a card, the pace motion was tuned on). */
 export const DEAL_GAP_MS = 200
+/** After COMPLETE, how long the card's photo may take to save before the dealer stops. */
+export const SAVE_WAIT_MS = 3_000
 const SILENCE_MS = 5_000
 /** After Stop, how long a START still in the air may take to answer before its card is written off. */
 const SETTLE_MS = 1_000
@@ -49,6 +51,7 @@ const SAID_SILENT = 'No answer. Check it is on and nothing else is using it.'
 const SAID_FAULT = 'The dispenser reported a fault. Check it, then connect again.'
 export const SAID_OFF = 'Bluetooth is off. Turn it on, then connect again.'
 const SAID_FAILED = 'Could not connect. Check it is on, then try again.'
+export const SAID_NO_PHOTO = 'Stopped: no photo came after the last card. Check the tray.'
 export const SAID_DROPPED = 'Stopped: a card was not photographed. Resume captures first.'
 
 export type DealerState = 'idle' | 'connecting' | 'connected' | 'dealing' | 'stopped' | 'error'
@@ -78,6 +81,9 @@ export function createDealer() {
   let silence: ReturnType<typeof setTimeout> | undefined
   let gap: ReturnType<typeof setTimeout> | undefined
   let settle: ReturnType<typeof setTimeout> | undefined
+  let saveWait: ReturnType<typeof setTimeout> | undefined
+  let completed = false // this card's COMPLETE came
+  let saved = false // this card's photo saved
 
   const derive = (): string => {
     if (note !== null) return note
@@ -99,6 +105,7 @@ export function createDealer() {
   const clearTimers = () => {
     clearTimeout(silence)
     clearTimeout(gap)
+    clearTimeout(saveWait)
   }
   /* Writes go one at a time, in order: a Stop waits for the write in flight. */
   const write = (text: Command): Promise<void> => {
@@ -128,6 +135,8 @@ export function createDealer() {
   const deal = () => {
     if (state !== 'dealing') return
     awaiting = true
+    completed = false
+    saved = false
     write('MOTOR:START')
       .then(() => {
         if (state !== 'dealing') return
@@ -141,6 +150,12 @@ export function createDealer() {
         if (state === 'dealing') lost()
       })
   }
+  /* The next START needs this card's COMPLETE and its saved photo, in either order. */
+  const next = () => {
+    completed = false // extra saves for one card let one card through
+    clearTimeout(saveWait)
+    gap = setTimeout(deal, DEAL_GAP_MS)
+  }
   const onReply = (text: string) => {
     if (!awaiting) return
     if (text === 'MOTOR:COMPLETE') {
@@ -148,7 +163,11 @@ export function createDealer() {
       clearTimeout(silence)
       clearTimeout(settle)
       cards += 1
-      if (state === 'dealing') gap = setTimeout(deal, DEAL_GAP_MS)
+      if (state === 'dealing') {
+        completed = true
+        if (saved) next()
+        else saveWait = setTimeout(() => finish('stopped', SAID_NO_PHOTO, true), SAVE_WAIT_MS)
+      }
       publish() // a card already moving when Stop was pressed still counts
       release()
       return
@@ -263,6 +282,12 @@ export function createDealer() {
       subs.add(fn)
       return () => void subs.delete(fn)
     },
+    /** A capture's photo saved. Counts only while dealing. */
+    noteSaved() {
+      if (state !== 'dealing') return
+      saved = true
+      if (completed) next()
+    },
     /** Stop dealing and drop the listeners. For unmount. */
     dispose() {
       void stop()
@@ -315,5 +340,5 @@ export function useDealer({
     if (dropped > droppedAtStart.current) void dealer.stop(SAID_DROPPED)
   }, [dealer, dropped])
 
-  return { ...snap, connect: dealer.connect, start, stop: () => dealer.stop() }
+  return { ...snap, connect: dealer.connect, noteSaved: dealer.noteSaved, start, stop: () => dealer.stop() }
 }
