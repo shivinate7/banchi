@@ -86,6 +86,19 @@ def clear_stale_pr(root):
     sh("git", "push", "origin", "--delete", BRANCH, cwd=root, check=False)
 
 
+def check_photos(wt):
+    """Refuse a bundle that names a card whose photograph is neither staged nor tracked.
+    Incident: PR #695 merged a bundle naming 62 cards with no photographs (an ignore rule hid them)."""
+    have = set(sh("git", "ls-files", "--", ALLOWED + "photos", cwd=wt).splitlines())
+    miss = []
+    for f in sorted((Path(wt) / ALLOWED / "bundle").glob("*.json")):
+        cards = json.loads(f.read_text())["responses"].get("/inventory", {}).get("body", {}).get("cards", {})
+        miss += ["%sphotos/%s/%s.jpg" % (ALLOWED, c["box"], c["index"]) for c in cards.values() if c.get("photo")]
+    miss = [m for m in miss if m not in have]
+    if miss:
+        raise Stop("photos: bundle names %d card(s) with no staged or tracked photograph, first: %s" % (len(miss), miss[0]))
+
+
 def sh(*cmd, cwd=None, check=True):
     r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     if check and r.returncode:
@@ -119,6 +132,7 @@ def run(dry):
         if not sh("git", "status", "--porcelain", "--", ALLOWED, cwd=wt):
             return "unchanged (mirror step %ds)" % took
         sh("git", "add", "--", ALLOWED, cwd=wt)
+        check_photos(wt)
         sh("git", "commit", "-q", "-m",
            "demo: daily mirror refresh\n\nDone: scrubbed mirror rebuilt.\nNext: auto-merge on green CI.", cwd=wt)
         paths = fence_raw(sh("git", "diff", "--raw", "--no-renames", "origin/main...HEAD", cwd=wt).splitlines())

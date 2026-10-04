@@ -55,6 +55,9 @@ harness/images
 # a worktree can put a symlink at this name rather than a real directory.
 # ignore-check: bare on purpose, see the note at the top of this file
 photos
+# The committed demo mirror's photographs (D295) are the one place a photos/ is tracked.
+!demo-assets/mirror/photos/
+!demo-assets/mirror/photos/**
 
 # Derived, reproducible from a public API. The artefact worth committing is the score in
 # harness/results/, not the images that produced it or the raw model responses.
