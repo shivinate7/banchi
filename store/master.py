@@ -3670,8 +3670,11 @@ class Inventory:
         return after
 
     def _cards_between(self, box, floor, hi) -> bool:
-        """Is a card key on hand in [floor, hi)? One test for both branches of `open_section`."""
-        return any(floor <= float(k) < hi for _, k in self.box_order(box).pairs)
+        """Is a card ON HAND (not departed, D58) keyed in [floor, hi)? One test for both
+        branches of `open_section`."""
+        return any(
+            floor <= float(k) < hi for i, k in self.box_order(box).pairs if self._on_hand(box, i)
+        )
 
     def open_section(self, number, after=None, layout_token=None) -> Tuple[int, ...]:
         """Put a divider in front of the next card. The capture screen's `S`.

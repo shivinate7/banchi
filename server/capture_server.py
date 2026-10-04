@@ -2309,8 +2309,9 @@ def _positioner(
     if order.identity:
         return lambda index: join.Position(box, int(index), layout, occupied, **extra)
     mapped = tuple(order.of(i) for i in occupied)
+    gone = tuple(sorted(order.of(i) for i in extra.get("departed", ())))
     return lambda index: join.Position(
-        box, int(index), layout, occupied, ordered=(order.of(index), mapped, ()), **extra
+        box, int(index), layout, occupied, ordered=(order.of(index), mapped, gone), **extra
     )
 
 
@@ -12553,7 +12554,11 @@ def _section_spans(
     """
     # `occupied` is in physical order and `order` maps it (D294).
     order = order if order is not None else master.BoxOrder()
-    position_of = _positioner(box, layout, occupied, order)
+    # A DEPARTED RECORD STILL HOLDS ITS KEY: the room a divider has past the last record is
+    # counted from the last record of any state (`Position._divider`), so it must be told.
+    held = set(occupied)
+    departed = tuple(sorted(i for i, _ in order.pairs if i not in held))
+    position_of = _positioner(box, layout, occupied, order, departed=departed)
     per_section: Dict[int, int] = {}
     for index in occupied:
         section = position_of(index).section
@@ -12583,15 +12588,13 @@ def _section_spans(
             break
         at = end + 1
 
-    for ordinal, _slot_start in enumerate(mapped, start=1):
+    for ordinal, start in enumerate(mapped, start=1):
         if ordinal in seen:
             continue
         spans.append(
             {
                 "section": ordinal,
-                # D58: an empty section starts after the cards before it, never at its
-                # divider's index (which keeps the sold gaps and may sit past the last card).
-                "start": 1 + sum(n for sec, n in per_section.items() if sec < ordinal),
+                "start": start,
                 "end": mapped[ordinal] - 1 if ordinal < len(mapped) else None,
                 "count": per_section.get(ordinal, 0),
                 "name": (names or {}).get(ordinal),
