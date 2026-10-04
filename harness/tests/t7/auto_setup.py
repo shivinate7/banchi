@@ -280,10 +280,9 @@ def check_auto_setup_round_three(checks: Checks) -> None:
 
     checks.note("")
     checks.note("AUTO SETUP — own store only, the child's record, older tried marks")
-    with isolated_home():
-        with mock.patch.object(ports, "is_primary_checkout", lambda *_a: True):
-            checks.equal(_spawns(lambda: pipeline_routes.ensure_stock_setup(stock=_Stock()), model=False), 0,
-                         "a primary checkout over a store elsewhere (the demo recorder) spawns nothing")
+    with isolated_home(), mock.patch.object(ports, "is_primary_checkout", lambda *_a: True):
+        checks.equal(_spawns(lambda: pipeline_routes.ensure_stock_setup(stock=_Stock()), model=False), 0,
+                     "a primary checkout over a store elsewhere (the demo recorder) spawns nothing")
     with isolated_home():
         _Popen.calls = []
 
