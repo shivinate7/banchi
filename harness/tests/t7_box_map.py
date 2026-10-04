@@ -2329,6 +2329,13 @@ def check_empty_section_starts(checks: Checks) -> None:
         spans((1, 5, 13), sparse), [(1, 1, 4), (2, 5, 3), (3, 8, 1)],
         "(d) control: no empty section, nothing changes",
     )
+    # A departed (sold or retired) record at index 21 sits right before the divider at 22.
+    # `occupied` is on hand only, so 21 is not in it, and the section behind 22 is empty.
+    checks.equal(
+        spans((1, 5, 22), sparse), [(1, 1, 4), (2, 5, 4), (3, 9, 0)],
+        "(e) a trailing empty section after a departed record starts at the cards on hand "
+        "plus one, not one past it",
+    )
 
 
 def check_s_refuses_empty_last_section(checks: Checks) -> None:
