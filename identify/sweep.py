@@ -163,32 +163,39 @@ def switched_on(conn: sqlite3.Connection) -> bool:
     return bool(row) and row[0] == "on"
 
 
-BUILDING = "building"  # a mark made while a Prepare ran: it never matches a finished index
-
-
 def tried() -> Dict[str, str]:
     record = _read_json(tried_path())
     if not isinstance(record, dict) or record.get("model") != MODEL_SHA256:
         return {}
     from identify import match  # lazy: match pulls the heavy readers
 
-    stamp = record.get("stamp")
-    if stamp == BUILDING and match.prepare_pid() is not None:
-        pass  # the index is still being built: hold the marks for now
-    elif stamp != match.index_stamp():
+    running = match.prepare_pid() is not None
+    if not running and record.get("stamp") != match.index_stamp():
         return {}  # a set was read since: cards tried before it are tried again
     keys = record.get("keys")
-    return {str(k): str(v) for k, v in keys.items()} if isinstance(keys, dict) else {}
+    if not isinstance(keys, dict):
+        return {}
+    # A mark made while a Prepare ran was made against a half-built index: it holds only until the Prepare ends.
+    building = set(record.get("building") or ()) if not running else set()
+    return {str(k): str(v) for k, v in keys.items() if k not in building}
 
 
 def remember_tried(additions: Dict[str, str]) -> None:
     if not additions:
         return
-    keys = tried()
-    keys.update(additions)
     from identify import match
 
-    _write_json(tried_path(), {"model": MODEL_SHA256, "stamp": BUILDING if match.prepare_pid() is not None else match.index_stamp(), "keys": keys})
+    record = _read_json(tried_path())
+    valid = isinstance(record, dict) and record.get("model") == MODEL_SHA256
+    keys = tried()
+    keys.update(additions)
+    if match.prepare_pid() is not None:
+        building = set(record.get("building") or ()) if valid else set()
+        building |= set(additions)
+        stamp = record.get("stamp") if valid else match.index_stamp()  # older marks keep the stamp they had
+    else:
+        building, stamp = set(), match.index_stamp()
+    _write_json(tried_path(), {"model": MODEL_SHA256, "stamp": stamp, "building": sorted(building), "keys": keys})
 
 
 _QUEUE_SQL = (

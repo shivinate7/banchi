@@ -430,7 +430,7 @@ or a target set has no fingerprints (`match.unread_targets`). It starts none whi
 a new set starts a read. With the model runtime missing (`matchconst.runtime_importable`), nothing starts.
 The first look and the loop run on the daemon thread, so the server answers at once.
 The switch is the env `PKMNSCAN_AUTO_SETUP`: `on` forces auto-start. Unset, it is refused when `CI` or `PKMNSCAN_HARNESS` is set
-(`make harness` and the Playwright config set it), and in a linked worktree: only the primary checkout auto-starts.
+(`make harness` and the Playwright config set it), and unless the checkout is primary and the store is its own (`PKMNSCAN_HOME` unset or pointing at it): a linked worktree or a demo or throwaway store never auto-starts.
 A look that would start the same setup again (a set the catalogue cannot name, a failed download) waits 30 minutes.
 A retry downloads the model from zero, because `match prepare` clears the partial file first.
 `pipeline_routes._spawn_prepare` is the one door: under a lock it writes the running record before it spawns, so a second start is refused.

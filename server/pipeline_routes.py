@@ -1292,17 +1292,20 @@ def _spawn_prepare():
         except OSError:
             files.write_json(matcher.progress_path(), {**record, "state": "failed", "message": "Preparing could not start."})
             raise
-        files.write_json(matcher.progress_path(), {**record, "pid": child.pid})
+        # Name the child, unless it has already written its own record (done or failed included).
+        if files.read_json(matcher.progress_path(), None) == record:
+            files.write_json(matcher.progress_path(), {**record, "pid": child.pid})
         return child
 
 
 def _auto_setup_allowed() -> bool:
     """`PKMNSCAN_AUTO_SETUP=on` forces it. Unset, a CI or harness run never downloads, and
-    only the primary checkout does: a linked worktree has a store of its own."""
+    only the primary checkout does, and only over its own store (a `PKMNSCAN_HOME` elsewhere is a
+    throwaway or a demo, never a place to download 372 MB into)."""
     switch = os.environ.get("PKMNSCAN_AUTO_SETUP")
     if switch is not None:
         return switch == "on"
-    return not (os.environ.get("CI") or os.environ.get("PKMNSCAN_HARNESS")) and ports.is_primary_checkout(ports.REPO_ROOT)
+    return not (os.environ.get("CI") or os.environ.get("PKMNSCAN_HARNESS")) and files.home() == ports.REPO_ROOT.resolve() and ports.is_primary_checkout(ports.REPO_ROOT)
 
 
 def _ensure(stock, skip=None):
