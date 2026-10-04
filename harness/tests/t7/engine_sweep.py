@@ -586,6 +586,53 @@ def check_sweep_runtime_cause(checks: Checks) -> None:
             )
 
 
+# ------------------------------------------------------------ 5b. the Capture head's matched counter
+
+
+def check_sweep_sitting_count(checks: Checks) -> None:
+    """THE CONTRACT THE CAPTURE HEAD'S "matched" COUNTER READS (owner ruling), named here for the builder:
+    `GET /pipeline/match/sweep?keys=<csv of position keys>` adds `matched_here` (how many named keys carry a
+    free-reader row; unknown keys and Haiku rows count zero) and `worker` (the watcher's own state file
+    names a worker). The polled path NEVER probes the lock: `sweep.acquire_lock` and `sweep.running` are
+    not called, so a poll can never hold the flock a starting watcher needs."""
+    checks.note("")
+    checks.note("SWEEP SITTING COUNT — keys-scoped matched_here and worker, read with no lock probe")
+    with isolated_home():
+        mine = [_capture(game="pokemon", set_hint="sv9") for _ in range(3)]
+        _put(mine[0], MATCHER)
+        _put(mine[1], HAIKU)
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = _spawn_server(httpd)
+        path = "/pipeline/match/sweep?keys=" + ",".join([*mine, "99/99"])
+
+        def boom(*_a, **_k):
+            raise AssertionError("the polled path probed the lock")
+
+        try:
+            with mock.patch.object(sweep, "acquire_lock", boom), mock.patch.object(sweep, "running", boom):
+                status, body, _ = request(port, "GET", path)
+                answer = json.loads(body) if status == 200 else {}
+                checks.equal(status, 200, "GET with keys answers with no lock probe")
+                checks.equal(answer.get("matched_here"), 1, "matched_here counts the named keys with a free-reader row only")
+                checks.equal(answer.get("worker"), False, "worker is false with no state file")
+                status, body, _ = request(port, "GET", "/pipeline/match/sweep?keys=")
+                checks.equal((status, json.loads(body).get("matched_here")), (200, 0), "an empty keys list counts zero")
+                sweep._write_state(worker=4242)
+                status, body, _ = request(port, "GET", path)
+                checks.equal(json.loads(body).get("worker") if status == 200 else None, True, "worker is true when the state file names one")
+            for _ in range(5):
+                request(port, "GET", path)
+            handle = sweep.acquire_lock()
+            checks.ok(handle is not None, "after repeated polls the lock is free: a watcher can still start")
+            if handle is not None:
+                handle.close()
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+
 CHECKS = (
     check_sweep_queue,
     check_sweep_watcher,
@@ -598,5 +645,6 @@ CHECKS = (
     check_sweep_worker,
     check_reshoot_drops_matcher_row,
     check_sweep_routes,
+    check_sweep_sitting_count,
     check_sweep_imports_light,
 )
