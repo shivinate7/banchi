@@ -463,6 +463,19 @@ export function photoUrl(
   return `${base}/photo/${box}/${index}${stamp}`
 }
 
+/* A PREVIEW'S ADDRESS: `photoUrl` plus `crop=card`, so the server answers the card's region
+ * (`identify/images.py:preview_rect`) or the whole frame when the finder or its guard says so.
+ * The demo's bundled files are already what they are, so it asks for nothing. */
+export function previewUrl(
+  box: number,
+  index: number,
+  ref?: PhotoRef | null,
+  nonce?: string | null,
+): string | null {
+  const url = photoUrl(box, index, ref, nonce)
+  return url === null || DEMO ? url : `${url}${url.includes('?') ? '&' : '?'}crop=card`
+}
+
 /**
  * The position label the server rendered, or null when it sent none.
  *

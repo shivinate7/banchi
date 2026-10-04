@@ -55,7 +55,7 @@ import {
   correctAnswer,
   describeFailure,
   getPricing,
-  photoUrl,
+  previewUrl,
   reviewCatalog,
   undoConfirmIdentity,
   undoCorrectAnswer,
@@ -692,7 +692,7 @@ export function CardPane({ row, game, dimmed = false, preChips, postChips, queue
  * response and the inventory re-read that carries the new `capture_id` onto the row. Moved
  * from `BoxBrowse.tsx` whole — see that file's history for the measurement this rests on. */
 export function photoSrc(row: Row, nonce: string | null): string | null {
-  return photoUrl(row.card.box, row.card.index, row.card, nonce)
+  return previewUrl(row.card.box, row.card.index, row.card, nonce)
 }
 
 /** A `moved:` name is the tombstone a move left (D83). */

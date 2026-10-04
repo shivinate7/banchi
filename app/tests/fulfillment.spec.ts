@@ -3057,6 +3057,26 @@ test('the search narrows to the copies of one card, and clearing it gives the wh
   await expectWalk(page, WALK)
 })
 
+test('the search rows ask for the card crop', async ({ page }) => {
+  await openSearch(page, 'Eiscue', 2)
+  const photos = view(page).locator('.card-locations-copies .card-locations-photo')
+  await expect(photos).toHaveCount(2)
+  for (const photo of await photos.all()) {
+    await expect(photo).toHaveAttribute('src', /[?&]crop=card(&|$)/)
+    await expect(photo).toHaveAttribute('loading', 'lazy')
+  }
+})
+
+test('the pull photo asks for the card crop and its zoom shows the whole photo', async ({ page }) => {
+  await openList(page)
+  await openCard(page, 'Charizard ex')
+  await expect(view(page).locator('.fulfillment-photo')).toHaveAttribute('src', /[?&]crop=card(&|$)/)
+  await view(page).getByRole('button', { name: 'Show the photo bigger' }).click()
+  const zoomed = page.locator('.ff-zoom-img')
+  await expect(zoomed).toBeVisible()
+  expect(await zoomed.getAttribute('src')).not.toContain('crop=')
+})
+
 test('every copy the search finds is its own card, with its own photo, place, bar and action', async ({
   page,
 }) => {

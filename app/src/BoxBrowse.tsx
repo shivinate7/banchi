@@ -27,6 +27,7 @@ import {
   getPricing,
   getValueAggregates,
   photoUrl,
+  previewUrl,
   removeCardInPlace,
   reshootPhoto,
   updateCard,
@@ -711,7 +712,7 @@ function VariantChooser({
                   {photoCopy === undefined || photoUrl(photoCopy.place.box, photoCopy.place.index, photoCopy) === null ? (
                     <Icon name="image" size={18} />
                   ) : (
-                    <img src={photoUrl(photoCopy.place.box, photoCopy.place.index, photoCopy) ?? undefined} alt="" />
+                    <img loading="lazy" src={previewUrl(photoCopy.place.box, photoCopy.place.index, photoCopy) ?? undefined} alt="" />
                   )}
                 </span>
                 <span className="browse-variant-text">

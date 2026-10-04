@@ -674,7 +674,7 @@
   position: relative;
   display: block;
   width: 100%;
-  aspect-ratio: 9 / 16;
+  aspect-ratio: 63 / 88;
   padding: 0;
   border-radius: 22px;
   overflow: clip;
@@ -703,7 +703,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  aspect-ratio: 9 / 16;
+  aspect-ratio: 63 / 88;
   object-fit: contain;
   background: var(--bn-stage-bg);
   opacity: 0;
@@ -940,7 +940,7 @@
 .ff .card-locations-photo {
   display: block;
   width: 100%;
-  aspect-ratio: 9 / 16;
+  aspect-ratio: 63 / 88;
   object-fit: contain;
   border: 0;
   border-radius: 16px;
@@ -1082,9 +1082,12 @@
      puts the card photograph in this view at 320px on its short edge, because the Fulfiller
      confirms the card against it before pulling. 300 was chosen so the text column would end
      near the photograph's foot; it bought that tidiness by painting the one thing he checks
-     20px under the floor, which is not a trade this view is allowed to make. */
+     20px under the floor, which is not a trade this view is allowed to make.
+     408px, NOT 320: the frame is card-shaped (63/88) and a refused crop answers the whole 9/16
+     photograph, which `contain` paints at 0.786 of the frame's width. 408 x 0.786 clears 320
+     for BOTH answers, with no shape known before the image loads (D313). */
   .ff .card-locations-copy {
-    grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 408px) minmax(0, 1fr);
     column-gap: var(--bn-6);
     align-items: start;
   }

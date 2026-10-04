@@ -248,6 +248,18 @@ test.describe('the name -> variant chooser draws real collisions distinctly', ()
     expect(texts.join('\n')).toContain('Unleashed')
   })
 
+  test('each variant tile asks for the card crop', async ({ page }) => {
+    await open(page)
+    await page.getByPlaceholder('Search').fill('Mind Rune')
+
+    const thumbs = page.locator('.browse-variants .browse-variant-photo img')
+    await expect(thumbs.first()).toBeVisible()
+    for (const thumb of await thumbs.all()) {
+      await expect(thumb).toHaveAttribute('src', /[?&]crop=card(&|$)/)
+      await expect(thumb).toHaveAttribute('loading', 'lazy')
+    }
+  })
+
   test('two SKUs identical but for condition render as two tiles — already correct, asserted rather than assumed', async ({ page }) => {
     await open(page)
     await page.getByPlaceholder('Search').fill('Vanguard Armory')

@@ -7324,7 +7324,7 @@ COMPONENTS = [
                         "none is restated as a comment — they are asserted next door instead. "
                         "The temporary rule that hid the shell nav is gone: src/App.tsx stopped "
                         "rendering it on this route, which is the fix that rule named.",
-                "governed_by": ["D5", "D10", "D93", "D97", "D212", "D218", "D275"],
+                "governed_by": ["D5", "D10", "D93", "D97", "D212", "D218", "D275", "D313"],
             },
 
             # ---- step 6's component and the sheet that renders it ----

@@ -329,6 +329,8 @@ const RECORDED = {
     // Plain-words helpers: `failureTone` maps a failure to a tone, `refusalToast` builds a
     // toast from an error already in hand. Neither makes a request.
     'failureTone', 'refusalToast',
+    // The card preview's address: `photoUrl` plus `crop=card`. A string, no request.
+    'previewUrl',
   ],
 }
 

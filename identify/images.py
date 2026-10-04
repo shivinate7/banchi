@@ -22,8 +22,10 @@ in the box.
 from __future__ import annotations
 
 import base64
+import collections
 import hashlib
 import io
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -391,6 +393,100 @@ def prepare_located(path, max_edge: int = MAX_EDGE, crop: bool = True, find: Opt
             box = fallback
             prepared = prepare(path, max_edge=max_edge, crop_box=box)
     return box, prepared
+
+
+# ---------------------------------------------------------------- THE CARD PREVIEW CUT
+#
+# ONE HOME FOR THE PREVIEW CUT: `locate_card` (`detect_card` behind it), guarded by
+# `crop_refusal` over `crop_rect`'s padded rectangle. No threshold of its own.
+# `CROP_RULE_VERSION` rides in the crop's ETag: change the finder or the guard, bump it, and
+# every stored crop URL revalidates.
+CROP_RULE_VERSION = "1"
+PREVIEW_CACHE_BYTES = 48 * 1024 * 1024
+PREVIEW_JPEG_QUALITY = 90
+
+_preview_cache = collections.OrderedDict()  # key -> (rect, jpeg or None, size in bytes)
+_preview_cache_bytes = 0
+_preview_cache_lock = threading.Lock()
+_finder_lock = threading.Lock()  # at most one finder run at a time
+
+
+def _preview_key(path):
+    stat = Path(path).stat()  # a re-shoot writes new bytes: mtime and size are the version
+    return (str(path), stat.st_mtime_ns, stat.st_size)
+
+
+def _preview_cached(key):
+    with _preview_cache_lock:
+        hit = _preview_cache.get(key)
+        if hit is not None:
+            _preview_cache.move_to_end(key)
+        return hit
+
+
+def _preview_store(key, rect, blob):
+    global _preview_cache_bytes
+    size = len(blob or b"") + 200
+    with _preview_cache_lock:
+        if key in _preview_cache:
+            return
+        _preview_cache[key] = (rect, blob, size)
+        _preview_cache_bytes += size
+        while _preview_cache_bytes > PREVIEW_CACHE_BYTES and len(_preview_cache) > 1:
+            _, (_, _, dropped) = _preview_cache.popitem(last=False)
+            _preview_cache_bytes -= dropped
+
+
+def _preview_compute(path):
+    """`(rect, jpeg, final)`. `final` is False when the answer came from a failure (an
+    unreadable frame, a finder that raised, the model not loaded): serve it, never keep it."""
+    try:
+        with Image.open(path) as opened:
+            opened.load()
+            image = opened.copy()
+    except Exception:
+        return None, None, False
+    try:
+        box = geometry.locate_card(image)
+    except Exception:
+        return None, None, False
+    final = not geometry.card_box.model_failed()
+    # A refused box shows the whole photograph: no second finder after the guard.
+    if box is None or crop_refusal(image, box) is not None:
+        return None, None, final
+    rect = crop_rect(image.size, box)
+    out = io.BytesIO()
+    image.convert("RGB").crop(rect).save(out, "JPEG", quality=PREVIEW_JPEG_QUALITY)
+    return rect, out.getvalue(), final
+
+
+def preview_cut(path, wait: bool = True):
+    """`(rect, jpeg, final)` for one photograph, or None when the finder is busy and `wait` is
+    off (the caller answers the whole photograph at once). `rect` None is the guard's refusal
+    or no box. Only a final answer is cached, once per photograph and file version."""
+    _require()
+    key = _preview_key(path)
+    hit = _preview_cached(key)
+    if hit is not None:
+        return hit[0], hit[1], True
+    if not _finder_lock.acquire(blocking=wait):
+        return None
+    try:
+        hit = _preview_cached(key)
+        if hit is not None:
+            return hit[0], hit[1], True
+        rect, blob, final = _preview_compute(path)
+        if final:
+            _preview_store(key, rect, blob)
+        return rect, blob, final
+    finally:
+        _finder_lock.release()
+
+
+def preview_rect(path):
+    """`(l, t, r, b)` a card preview crops to, or None to show the whole photograph."""
+    cut = preview_cut(path)
+    return None if cut is None else cut[0]
 
 
 def prepare(path, max_edge: int = MAX_EDGE, crop_box=None) -> Prepared:
