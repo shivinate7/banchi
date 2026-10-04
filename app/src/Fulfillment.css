@@ -674,7 +674,7 @@
   position: relative;
   display: block;
   width: 100%;
-  aspect-ratio: 9 / 16;
+  aspect-ratio: 63 / 88;
   padding: 0;
   border-radius: 22px;
   overflow: clip;
@@ -703,7 +703,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  aspect-ratio: 9 / 16;
+  aspect-ratio: 63 / 88;
   object-fit: contain;
   background: var(--bn-stage-bg);
   opacity: 0;
@@ -940,7 +940,7 @@
 .ff .card-locations-photo {
   display: block;
   width: 100%;
-  aspect-ratio: 9 / 16;
+  aspect-ratio: 63 / 88;
   object-fit: contain;
   border: 0;
   border-radius: 16px;
