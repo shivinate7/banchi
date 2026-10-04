@@ -16,7 +16,7 @@ Part of `harness/tests/t7_store_and_seams.py` (one verdict). Names the builder f
         file present and no Prepare running. True when it looked. `stock_setup_loop` calls it once per look.
   No new stored field: `vec.at` is the last-asked time.
 
-Nothing downloads: the stock catalogue, the photo fetch and the embedder are fakes.
+Nothing downloads: the stock catalog, the photo fetch and the embedder are fakes.
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ class _Embedder:
 
 
 class _Products(_Stock):
-    """The catalogue lists the same URLs the index holds."""
+    """The catalog lists the same URLs the index holds."""
 
     def __init__(self, rows):
         self.rows = rows
@@ -173,7 +173,7 @@ def check_gained_photo_is_matchable_and_retried(checks: Checks) -> None:
 
 
 class _Catalog(_Stock):
-    """A catalogue that has grown URLs since the index was built, and counts its reads per set."""
+    """A catalog that has grown URLs since the index was built, and counts its reads per set."""
 
     def __init__(self, listing):
         self.listing, self.reads = listing, []
@@ -187,7 +187,7 @@ class _Catalog(_Stock):
 
 def check_no_url_rows_are_reread_once_per_set(checks: Checks) -> None:
     checks.note("")
-    checks.note("PHOTO RECHECK — a no_url printing: one catalogue read per set, a new URL is fetched and fingerprinted")
+    checks.note("PHOTO RECHECK — a no_url printing: one catalog read per set, a new URL is fetched and fingerprinted")
     if getattr(match, "recheck_no_photo", None) is None:
         checks.ok(False, "`match.recheck_no_photo` exists")
         return
@@ -203,7 +203,7 @@ def check_no_url_rows_are_reread_once_per_set(checks: Checks) -> None:
         })
         fetch = _fetcher({"ua", "ub", "uc"})
         _look(stock, fetch)
-        checks.equal(sorted(stock.reads), ["Set A", "Set B"], "one catalogue read per affected set, none for a set checked this week")
+        checks.equal(sorted(stock.reads), ["Set A", "Set B"], "one catalog read per affected set, none for a set checked this week")
         checks.equal(sorted(fetch.asked), ["ua", "ub"], "only the URLs that appeared are fetched")
         checks.equal((_row("a2")[0], _row("b1")[0]), (match.S_OK, match.S_OK), "a printing whose URL appeared is fingerprinted")
         checks.equal((_row("a3")[0], _row("c1")[0]), (match.S_NO_URL, match.S_NO_URL), "one still without a URL, or checked this week, is unchanged")
@@ -214,7 +214,7 @@ def check_no_url_rows_are_reread_once_per_set(checks: Checks) -> None:
         checks.equal(pool.blocked, {match.card_name("Waits"), match.card_name("AlsoWaits")}, "and its name leaves the look-alike guard")
         again = _Catalog(stock.listing)
         _look(again, _fetcher(set()))
-        checks.equal(again.reads, [], "a second look at once reads no catalogue")
+        checks.equal(again.reads, [], "a second look at once reads no catalog")
 
 
 def check_recheck_holds_no_lock_across_fetches(checks: Checks) -> None:
@@ -290,11 +290,11 @@ def check_transient_failures_do_not_date_the_row(checks: Checks) -> None:
         before = _row("a1")[1]
         fetch = _fetcher(set())
         _look(_NoListing({}), fetch)
-        checks.equal((_row("a1")[1], fetch.asked), (before, []), "a set whose catalogue read returned nothing leaves its no_url rows undated")
+        checks.equal((_row("a1")[1], fetch.asked), (before, []), "a set whose catalog read returned nothing leaves its no_url rows undated")
     with isolated_home():
         _seed([("a1", "Lost", "", match.S_NO_URL, 8)])
         _look(_Catalog({"Set A": [("a1", "Lost", "")]}), _fetcher(set()))
-        checks.ok(_row("a1")[1] > _stamp(1), "control: a catalogue that answers with no URL for it dates the row for a week")
+        checks.ok(_row("a1")[1] > _stamp(1), "control: a catalog that answers with no URL for it dates the row for a week")
 
 
 def check_one_pass_is_bounded_oldest_first(checks: Checks) -> None:
@@ -316,6 +316,120 @@ def check_one_pass_is_bounded_oldest_first(checks: Checks) -> None:
         second = _fetcher(set())
         _look(stock, second)
         checks.equal(sorted(second.asked), sorted(f"u{i}" for i in range(max(0, 50 - 2 * cap), 50 - cap)), "the next pass takes the next oldest, so the backlog drains")
+
+
+def check_transient_rows_retry_in_a_day_not_first_in_line(checks: Checks) -> None:
+    checks.note("")
+    checks.note("PHOTO RECHECK — a transient failure waits a day, so the next pass reaches the rows behind it")
+    cap = getattr(match, "RECHECK_ROWS_PER_PASS", None)
+    if getattr(match, "recheck_no_photo", None) is None or not isinstance(cap, int):
+        checks.ok(False, "`match.recheck_no_photo` and `match.RECHECK_ROWS_PER_PASS` exist")
+        return
+    with isolated_home():
+        n = 2 * cap
+        stock = _seed([(f"p{i}", f"N{i}", f"u{i}", match.S_NO_PHOTO, 60 - i) for i in range(n)])  # p0 is the oldest
+        first = _fetcher(set())
+        first_asked = []
+
+        def decode_fails(url):
+            first_asked.append(url)
+            return (b"not an image", None) if int(url[1:]) < cap else (None, "http_403")
+
+        _look(stock, decode_fails)
+        checks.equal(sorted(first_asked), sorted(f"u{i}" for i in range(cap)), "pass 1 asks the oldest rows, and they fail to decode")
+        second = _fetcher(set())
+        _look(stock, second)
+        checks.equal(sorted(second.asked), sorted(f"u{i}" for i in range(cap, n)), "pass 2 asks the rows behind them, not the same ones")
+        with match.Index() as index:
+            index.db.execute("update vec set at=? where product_id='p0'", (_stamp(2),))
+            index.db.commit()
+        third = _fetcher(set())
+        _look(stock, third)
+        checks.ok("u0" in third.asked, "a transient row is asked again once a day has passed")
+
+
+def check_network_failure_ends_the_pass(checks: Checks) -> None:
+    import urllib.error
+
+    checks.note("")
+    checks.note("PHOTO RECHECK — a network failure ends the pass at once")
+    if getattr(match, "recheck_no_photo", None) is None:
+        checks.ok(False, "`match.recheck_no_photo` exists")
+        return
+    for label, make in (("a URLError answer", lambda url: (None, "URLError")), ("a timeout answer", lambda url: (None, "timeout")),
+                        ("a raised URLError", None)):
+        with isolated_home():
+            stock = _seed([(f"p{i}", f"N{i}", f"u{i}", match.S_NO_PHOTO, 20 - i) for i in range(5)])
+            asked = []
+
+            def fetch(url, make=make):
+                asked.append(url)
+                if make is None:
+                    raise urllib.error.URLError("down")
+                return make(url)
+
+            try:
+                _look(stock, fetch)
+            except urllib.error.URLError:
+                pass
+            checks.equal(len(asked), 1, f"{label} on the first row: the pass asks exactly 1 row")
+
+
+def check_ok_row_is_not_overwritten(checks: Checks) -> None:
+    checks.note("")
+    checks.note("PHOTO RECHECK — a row that turned ok mid-pass is kept")
+    if getattr(match, "recheck_no_photo", None) is None:
+        checks.ok(False, "`match.recheck_no_photo` exists")
+        return
+    import numpy as np
+
+    with isolated_home():
+        stock = _seed([("p1", "Race", "u1", match.S_NO_PHOTO, 8)])
+
+        def fetch(_url):
+            with match.Index() as index:
+                index.db.execute("update vec set status=?, vec=?, note=null where product_id='p1'", (match.S_OK, np.zeros(match.DIM, np.float32).tobytes()))
+                index.db.commit()
+            return None, "http_404"
+
+        _look(stock, fetch)
+        with match.Index() as index:
+            row = index.db.execute("select status, vec is not null from vec where product_id='p1'").fetchone()
+        checks.equal(tuple(row), (match.S_OK, 1), "a 404 for a row a Prepare just fingerprinted leaves it ok, with its vector")
+
+
+def check_pass_record(checks: Checks) -> None:
+    import json
+    import os
+
+    checks.note("")
+    checks.note("PHOTO RECHECK — the pass holds the running record, and its closing write respects another owner")
+    if getattr(match, "recheck_no_photo", None) is None:
+        checks.ok(False, "`match.recheck_no_photo` exists")
+        return
+    with isolated_home():
+        stock = _seed([("p1", "A", "u1", match.S_NO_PHOTO, 8)])
+        seen = []
+
+        def fetch(_url):
+            seen.append(match.prepare_pid())
+            return None, "http_403"
+
+        _look(stock, fetch)
+        checks.ok(bool(seen) and seen[0] is not None, "while the pass runs, `prepare_pid()` is not None, so the sweep's marks are building marks")
+        checks.equal(match.prepare_pid(), None, "and after it ends, it is None again")
+    with isolated_home():
+        stock = _seed([("p1", "A", "u1", match.S_NO_PHOTO, 8)])
+        other = os.getpid() + 1
+
+        def fetch(_url):
+            match.progress_path().write_text(json.dumps({"state": "running", "pid": other, "phase": "fingerprints"}))
+            return None, "http_403"
+
+        _look(stock, fetch)
+        record = json.loads(match.progress_path().read_text())
+        checks.equal((record.get("state"), record.get("pid")), ("running", other),
+                     "a record another process took mid-pass is left alone by the pass's closing write")
 
 
 def _guarded(env, *, primary=True, runtime=True, model=True, prepare=None):
@@ -369,5 +483,9 @@ CHECKS = (
     check_recheck_holds_no_lock_across_fetches,
     check_transient_failures_do_not_date_the_row,
     check_one_pass_is_bounded_oldest_first,
+    check_transient_rows_retry_in_a_day_not_first_in_line,
+    check_network_failure_ends_the_pass,
+    check_ok_row_is_not_overwritten,
+    check_pass_record,
     check_recheck_guards,
 )
