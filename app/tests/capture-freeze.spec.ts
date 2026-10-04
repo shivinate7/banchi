@@ -1,11 +1,11 @@
-// Protects: The Capture screen stays responsive as a sitting grows, so the shutter and the motion trigger never stall the operator at card 60.
+// Protects: The Capture screen stays responsive as a sitting grows, so the shutter and the motion trigger never stall the operator at card 300.
 // Governs: D10, D164
 import { expect, test } from '@playwright/test'
 import { sealEveryTest } from './shell'
 
-/* A LONG SITTING MUST NOT FREEZE THE MAIN THREAD. 60 captures on a canvas camera, with a
+/* A LONG SITTING MUST NOT FREEZE THE MAIN THREAD. 300 captures on a canvas camera, with a
  * `longtask` observer (the browser reports only tasks of 50 ms or more, so "no entry" is the
- * bar). Measured on the dev server before the fix: 50 to 69 ms tasks from about capture 46.
+ * bar). 300, not 60: the owner's longest sitting is 555 cards and a cost that grows with the sitting hides at 60. Measured on the dev server before the fix: 50 to 69 ms tasks from about capture 46.
  * Camera and wire stubs follow `capture-undo.spec.ts` and `dispenser.spec.ts`; both keep theirs
  * file-local, so this one does too. Nothing reaches a store: `POST /capture` is answered here. */
 
@@ -23,12 +23,12 @@ const BOX = {
   sections_detail: [{ section: 1, start: 1, end: null, count: 0, name: null, div: '1' }], layout_token: 'tok1',
 }
 const json = (body: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(body) })
-const CAPTURES = 60
+const CAPTURES = 300
 
 sealEveryTest()
 
 test(`${CAPTURES} captures and an armed idle motion trigger raise no long task`, async ({ page }) => {
-  test.setTimeout(180_000)
+  test.setTimeout(900_000)
   await page.addInitScript(() => {
     const canvas = document.createElement('canvas')
     canvas.width = 1920
@@ -94,10 +94,10 @@ test(`${CAPTURES} captures and an armed idle motion trigger raise no long task`,
     await page.waitForTimeout(400) // keep: 400 ms render settle window
     perCapture.push(await longTasks())
   }
-  const summary = perCapture.map((tasks, i) => (tasks.length > 0 ? `#${i + 1}:${tasks.join('+')}` : '')).filter(Boolean).join(' ')
-  expect(perCapture.slice(-3).flat(), `long tasks (ms) around capture ${CAPTURES}; all captures: ${summary || 'none'}`).toEqual([])
+  const summary = perCapture.map((tasks, i) => (tasks.length > 0 ? `#${i + 1}:${tasks.join('+')}` : '')).filter(Boolean).slice(-12).join(' ')
+  expect(perCapture.slice(-10).flat(), `long tasks (ms) over the last 10 of ${CAPTURES} captures; last flagged: ${summary || 'none'}`).toEqual([])
 
-  // Motion armed and idle at 60 cards: the trigger's own loop must not stall the thread.
+  // Motion armed and idle at 300 cards: the trigger's own loop must not stall the thread.
   const rig = page.locator('.capture-rig-summary')
   if ((await rig.getAttribute('aria-expanded')) === 'false') await rig.click()
   await page.getByRole('button', { name: /Trigger/ }).click()
@@ -106,5 +106,5 @@ test(`${CAPTURES} captures and an armed idle motion trigger raise no long task`,
   await page.keyboard.press('Escape')
   await clear()
   await page.waitForTimeout(4_000) // keep: 4 s idle observation window
-  expect(await longTasks(), 'long tasks (ms) over 4 s armed and idle at 60 cards').toEqual([])
+  expect(await longTasks(), 'long tasks (ms) over 4 s armed and idle at 300 cards').toEqual([])
 })
