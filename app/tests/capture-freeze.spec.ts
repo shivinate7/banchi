@@ -9,7 +9,7 @@ import type { Page } from '@playwright/test'
  * 50 ms or more, so "no entry" is the bar. Two cases:
  *  1. DEALING, 300 captures (the owner's longest sitting is 555 cards, and a cost that grows with
  *     the sitting hides at 60): the rail (`footer.capture-undo`) stays live but draws only the
- *     newest DEALING_TILES tiles, first tile the latest card, the Last capture panel (`aside.capture-last`) shows each new
+ *     newest DEALING_RAIL_TILES tiles, first tile the latest card, the Last capture panel (`aside.capture-last`) shows each new
  *     photo, no task over 50 ms in the last 10 captures, and after Stop the rail catches up to all
  *     300. That one catch-up render may be long and is not barred.
  *  2. HAND FEED, 60 captures with the shutter: the old bar, so hand feeding cannot regress.
@@ -110,9 +110,9 @@ async function pickCameraAndBox(page: Page): Promise<void> {
   await page.keyboard.press('Enter')
 }
 
-/* The rail's cap while dealing. the product's own export is not there yet; replace this
- * with an import of it (CaptureScreen.tsx or dealer.ts) once the builder lands it. */
-const DEALING_TILES = 15
+/* Mirrors `DEALING_RAIL_TILES` in CaptureScreen.tsx, which is not exported and cannot be imported here
+ * (the module pulls in CSS, which Playwright's loader rejects). Import it once it lives in a CSS-free module. */
+const DEALING_RAIL_TILES = 15
 const rail = (page: Page) => page.locator('footer.capture-undo')
 const tiles = (page: Page) => rail(page).locator('.capture-undo-row')
 const lastPanel = (page: Page) => page.locator('aside.capture-last')
@@ -157,8 +157,8 @@ test('300 captures while the dispenser deals: no long task, the rail paused, the
     perCapture.push(await longTasks(page))
     const count = await tiles(page).count()
     const top = (await tiles(page).first().getAttribute('aria-label')) ?? ''
-    if (railMoved === '' && (count !== Math.min(n, DEALING_TILES) || !top.endsWith(`Card ${n}`)))
-      railMoved = `at capture ${n} the rail shows ${count} tiles, first "${top}"; want ${Math.min(n, DEALING_TILES)}, first Card ${n}`
+    if (railMoved === '' && (count !== Math.min(n, DEALING_RAIL_TILES) || !top.endsWith(`Card ${n}`)))
+      railMoved = `at capture ${n} the rail shows ${count} tiles, first "${top}"; want ${Math.min(n, DEALING_RAIL_TILES)}, first Card ${n}`
   }
   const summary = perCapture.map((tasks, i) => (tasks.length > 0 ? `#${i + 1}:${tasks.join('+')}` : '')).filter(Boolean).slice(-12).join(' ')
   const last10 = perCapture.slice(-10).flat()
