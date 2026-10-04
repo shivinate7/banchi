@@ -1360,7 +1360,7 @@ same number `#/inventory` and `#/orders` use.
 **Two of those floors were broken by the rebuild and fixed in the same session, and both
 failures were geometry rather than color.**
 
-- **The photograph's column is 320px, NOT 300.** `app/src/Fulfillment.css` had it at
+- **The photograph's column is 408px above 768px (a whole 9/16 photo in a 63/88 frame paints 0.786 of it, so 320px on the short edge for either answer), NOT 300.** `app/src/Fulfillment.css` had it at
   `minmax(0, 300px)` above 768px, chosen so the text column would end near the photograph's
   foot. It bought that tidiness by painting the one thing he checks before pulling 20px under
   the floor in the table above. The tidiness is not a trade this view is allowed to make.
