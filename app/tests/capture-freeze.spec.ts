@@ -65,9 +65,36 @@ test(`${CAPTURES} captures and an armed idle motion trigger raise no long task`,
       place: { box_total: index, located: true, label: `Box 5, Card ${index}` },
     }, 201))
   })
-  await page.route(/\/photo\/\d+\/\d+/, (r) =>
-    r.fulfill({ status: 200, contentType: 'image/gif', body: Buffer.from('R0lGODlhAQABAAAAACw=', 'base64') }),
-  )
+  /* REAL-SIZE PHOTOS, so image decode is in the measurement. The capture camera saves 1920x1080;
+     each index gets its own JPEG (a varied block and pixel) so the browser cannot share one
+     decode. Made once, in a scratch page, so the encode never lands in the page under test. */
+  const scratch = await page.context().newPage()
+  const photos = await scratch.evaluate((count) => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 1920
+    canvas.height = 1080
+    const c = canvas.getContext('2d')
+    if (c === null) throw new Error('no 2d context')
+    const out: string[] = []
+    for (let i = 1; i <= count; i += 1) {
+      const g = c.createLinearGradient(0, 0, 1920, 1080)
+      g.addColorStop(0, `hsl(${(i * 37) % 360},60%,45%)`)
+      g.addColorStop(1, `hsl(${(i * 91) % 360},50%,25%)`)
+      c.fillStyle = g
+      c.fillRect(0, 0, 1920, 1080)
+      for (let k = 0; k < 40; k += 1) {
+        c.fillStyle = `rgb(${(i * 7 + k * 31) % 256},${(i * 13 + k * 17) % 256},${(i * 29 + k * 5) % 256})`
+        c.fillRect((k * 97 + i * 11) % 1800, (k * 53 + i * 7) % 1000, 120, 80)
+      }
+      out.push(canvas.toDataURL('image/jpeg', 0.9).split(',')[1] ?? '')
+    }
+    return out
+  }, CAPTURES)
+  await scratch.close()
+  await page.route(/\/photo\/\d+\/\d+/, (r) => {
+    const at = Number(/\/photo\/\d+\/(\d+)/.exec(r.request().url())?.[1] ?? 1)
+    return r.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.from(photos[(at - 1) % CAPTURES] ?? '', 'base64') })
+  })
 
   await page.goto('/#/capture')
   await expect(page.locator('.capture-row').filter({ hasText: /Finish/ })).toBeVisible()
