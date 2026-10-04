@@ -24,6 +24,7 @@ import io
 import json
 import os
 import shutil
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
@@ -36,6 +37,7 @@ from harness.tests.t7.common import (
     isolated_home,
     quiet,
 )
+from pipeline import tcgcsv
 from identify import batch, match, prompt
 from identify import images as identify_images
 from server import capture_server
@@ -59,16 +61,16 @@ def _jpeg() -> bytes:
     return out.getvalue()
 
 
-def _shoot(said: dict) -> str:
-    """One captured SV09 Pokemon card, through the real route. Returns its position key."""
+def _shoot(said: dict, hint: str = "SV09") -> str:
+    """One captured Pokemon card hinted to `hint`, through the real route. Returns its key."""
     before = set(Store().read().inventory.cards)
-    body = capture_payload(3, capture_id=f"adopt-{next(_N)}", game="pokemon", set_hint="SV09")
+    body = capture_payload(3, capture_id=f"adopt-{next(_N)}", game="pokemon", set_hint=hint)
     body["image"] = base64.b64encode(_jpeg()).decode("ascii")
     capture_server.do_capture(body)
     return next(iter(set(Store().read().inventory.cards) - before))
 
 
-def _seed_export() -> Path:
+def _seed_export(*, blank_market: str = "", age: float = 0.0) -> Path:
     """The fixture export where the reader looks for one: `inventory/.exports/<game>/`.
 
     A scope note sits beside it (the shape `pipeline_routes._write_note` writes: the whole
@@ -78,6 +80,13 @@ def _seed_export() -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     target = folder / "export-tcgplayer-adopt-fixture.csv"
     shutil.copyfile(FIXTURE_EXPORT, target)
+    if blank_market:  # a catalog row with no market price: an UNPRICED SKU
+        table = tcgcsv.read_export(FIXTURE_EXPORT)
+        rows = [dict(r, **{tcgcsv.MARKET_PRICE_COLUMN: ""}) if r["TCGplayer Id"] == blank_market else r for r in table.rows]
+        tcgcsv.write_csv(target, table.header, rows)
+    if age:  # `pipeline_routes._reusable` reuses an export up to EXPORT_REUSE_S (900 s) old
+        stamp = time.time() - age
+        os.utime(target, (stamp, stamp))
     Path(str(target) + ".scope.json").write_text(
         json.dumps({"game": "pokemon", "category_id": 3, "set_ids": [], "scope": "category",
                     "widened": True, "bytes": target.stat().st_size, "at": master.now()}),
@@ -322,8 +331,79 @@ def check_sweep_one_lock_per_chunk(checks: Checks) -> None:
         checks.equal(len(writes), chunks, "and the worker enters `Store.write` once per chunk, not per card")
 
 
+def _worklist() -> list:
+    """`do_pipeline_worklist`'s SKU rows, minus what a run name or a photo digest would vary."""
+    from server import pipeline_routes
+
+    rows = pipeline_routes.do_pipeline_worklist([])["skus"] or []
+    keep = ("sku", "bucket", "copies", "add_to_quantity", "backstock", "live_before", "committed",
+            "copies_out", "nothing_to_add", "condition", "snap", "presets", "rule_price")
+    return sorted(
+        ({k: r.get(k) for k in keep} | {"at": sorted((p["box"], p["index"]) for p in r["positions"])} for r in rows),
+        key=lambda r: r["sku"],
+    )
+
+
+def _unsent() -> list:
+    """The unsent ledger the worklist's roster carries: copies owed per run, run name dropped."""
+    from server import pipeline_routes
+
+    roster = pipeline_routes.do_pipeline_worklist([])["roster"] or []
+    return sorted(r["unsent"] for r in roster if r.get("unsent"))
+
+
+def _corpus() -> dict:
+    from pipeline import corpus
+
+    return {sku: (a.value, a.channel) for sku, a in sorted(corpus.Corpus.read().answers.items())}
+
+
+def _twin_pricing(blank: str):
+    """The press, then the join, on a fresh store: what the worklist, the ledger and the corpus say."""
+    a, b, c = (_shoot(ARTICUNO), _shoot(DUNSPARCE), _shoot(DUNSPARCE))
+    export = _seed_export(blank_market=blank)
+    _press([a, b, c], {a: ARTICUNO, b: DUNSPARCE}, DUNSPARCE)
+    _join([a, b, c], export)
+    return _worklist(), _unsent(), _corpus()
+
+
+def check_adopted_card_is_priced(checks: Checks) -> None:
+    checks.note("")
+    checks.note("PRICING — a reader-adopted card is on the worklist, in the ledger and in the corpus as a press leaves it")
+    for blank, label in (("", "a priced SKU"), ("8608859", "an unpriced SKU")):
+        with isolated_home():
+            twin = _twin_pricing(blank)
+        checks.ok(bool(twin[0]) and bool(twin[1]), f"(twin, {label}) the press leaves a SKU on the worklist and copies in the unsent ledger")
+        with isolated_home():
+            a, b, c = (_shoot(ARTICUNO), _shoot(DUNSPARCE), _shoot(DUNSPARCE))
+            _seed_export(blank_market=blank)
+            _sweep(_results((a, b, c), {a: ARTICUNO, b: DUNSPARCE}))
+            checks.equal(_worklist(), twin[0], f"1. {label}: the adopted card is on the worklist with the press twin's SKU, bucket, price and presets")
+            checks.equal(_unsent(), twin[1], f"1. {label}: and the unsent ledger owes the twin's copies")
+            checks.equal(_corpus(), twin[2], f"2. {label}: and the corpus holds the twin's answers (an unpriced SKU is seeded, not left out)")
+
+
+def check_adoption_export_gate(checks: Checks) -> None:
+    checks.note("")
+    checks.note("EXPORT GATE — the reader adopts only on an export a press would reuse, covering the card's set")
+    with isolated_home():
+        a, b = _shoot(ARTICUNO), _shoot(DUNSPARCE)
+        _seed_export(age=1000)  # past EXPORT_REUSE_S = 900
+        _sweep(_results((a, b), {a: ARTICUNO, b: DUNSPARCE}))
+        checks.equal({_card(k)[0] for k in (a, b)}, {master.CAPTURED}, "3. a stale export (1000 s old) adopts nothing: the cards wait for a press")
+        checks.ok(_review((a, b)) == [] and _skus() == [], "3. and queue nothing, and fill no SKU table")
+    with isolated_home():
+        hinted, plain = _shoot(ARTICUNO, hint="SV10"), _shoot(ARTICUNO)
+        _seed_export()  # holds SV09 only
+        _sweep(_results((hinted, plain), {hinted: ARTICUNO, plain: ARTICUNO}))
+        checks.equal(_card(hinted)[0], master.CAPTURED, "4. a card hinted into a set the export lacks (SV10) is not adopted")
+        checks.equal(_card(plain)[0], master.IDENTIFIED, "4. while a card the export covers still is")
+
+
 CHECKS = (
     check_free_match_identifies,
     check_press_after_sweep,
     check_sweep_one_lock_per_chunk,
+    check_adopted_card_is_priced,
+    check_adoption_export_gate,
 )
