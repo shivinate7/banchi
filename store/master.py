@@ -1927,6 +1927,19 @@ class Inventory:
         live.sort(key=lambda row: row[0])
         return tuple(live)
 
+    def departed_indices(self, box: int) -> Tuple[int, ...]:
+        """The indices of `box`'s records that have left (`TERMINAL_STATES`), ascending, read
+        off two indexed columns like `occupied_indices`. The one rule for "departed"."""
+        box = _as_position_int(box, "box")
+        gone: List[int] = []
+        for key, (raw_index, state) in self.cards.select(("idx", "state"), box=box):
+            if raw_index is None:
+                card = self.cards[key]
+                raw_index, state = card.index, card.state
+            if state in TERMINAL_STATES:
+                gone.append(int(raw_index))
+        return tuple(sorted(gone))
+
     def records_in(self, box) -> List[Tuple[int, str, Card]]:
         """`(index, key, card)` for every record in `box`, ascending, coerced the way
         `next_index` coerces and refusing the same way. What the box-scoped routes walk

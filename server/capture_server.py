@@ -2467,6 +2467,7 @@ class _Places:
         # widening answers hundreds of rows, so 'ex' on a 3,000-card store spent 17s here.
         # One request, one snapshot: the order cannot move under this instance.
         self._order_cache: Dict[int, "master.BoxOrder"] = {}
+        self._departed_cache: Dict[int, Tuple[int, ...]] = {}
         # `_company`'s occupants mapped into order space, once per box (was once per card,
         # O(n^2) on a box). Same lifetime and safety as `_order_cache`: one request.
         self._company_indices: Dict[int, List[float]] = {}
@@ -2521,6 +2522,13 @@ class _Places:
             total = len(occupied) if occupied is not None else 0
             self._cache[number] = (entry, layout, int(total), occupied)
         return self
+
+    def _departed(self, box) -> Tuple[int, ...]:
+        """`Inventory.departed_indices`, once per box for this instance's life (one request)."""
+        number = int(box)
+        if number not in self._departed_cache:
+            self._departed_cache[number] = self._inventory.departed_indices(number)
+        return self._departed_cache[number]
 
     def _order(self, box) -> "master.BoxOrder":
         """`Inventory.box_order`, once per box for this instance's life (one request)."""
@@ -2843,6 +2851,7 @@ class _Places:
         position = _positioner(
             number, layout, occupied, self._order(number),
             box_name=entry.name if entry is not None else None,
+            departed=self._departed(number),
         )(at)
         slot = position.slot
 
@@ -12520,6 +12529,7 @@ def _section_spans(
     names: Optional[Dict[int, str]] = None,
     order: Optional[master.BoxOrder] = None,
     about: Optional[Dict[int, Tuple[Optional[str], Optional[str]]]] = None,
+    departed: Optional[Tuple[int, ...]] = None,
 ) -> List[dict]:
     """Every section of one box: where it starts, where it ends, how many cards are in it.
 
@@ -12556,8 +12566,9 @@ def _section_spans(
     order = order if order is not None else master.BoxOrder()
     # A DEPARTED RECORD STILL HOLDS ITS KEY: the room a divider has past the last record is
     # counted from the last record of any state (`Position._divider`), so it must be told.
-    held = set(occupied)
-    departed = tuple(sorted(i for i, _ in order.pairs if i not in held))
+    if departed is None:  # no store at hand (a bare call): every keyed record not on hand
+        held = set(occupied)
+        departed = tuple(sorted(i for i, _ in order.pairs if i not in held))
     position_of = _positioner(box, layout, occupied, order, departed=departed)
     per_section: Dict[int, int] = {}
     for index in occupied:
@@ -12908,7 +12919,7 @@ def _box_row(
     detail = (
         _section_spans(
             int(box), layout, len(occupied), occupied, inventory.section_names_for(box),
-            inventory.box_order(box), about,
+            inventory.box_order(box), about, inventory.departed_indices(box),
         )
         if layout is not None and occupied is not None
         else []
@@ -13230,13 +13241,7 @@ def do_put_box(box: int, payload: dict) -> dict:
             if occupied is not None:
                 # IN ORDER SPACE (D294): the dividers are stored as orders.
                 order = inventory.box_order(box)
-                gone = tuple(
-                    sorted(
-                        order.of(int(card.index))
-                        for card in inventory.cards.where(box=int(box))
-                        if _same_box(card, box) and card.state in master.TERMINAL_STATES
-                    )
-                )
+                gone = tuple(sorted(order.of(i) for i in inventory.departed_indices(box)))
                 in_order = tuple(order.of(i) for i in occupied)
                 sections = master.check_sections(
                     [
