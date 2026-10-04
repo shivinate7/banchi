@@ -20,9 +20,11 @@ Nothing downloads or loads a model: Popen, the stock catalog and the model check
 from __future__ import annotations
 
 import inspect
+import json
 import os
 import sys
 import types
+from pathlib import Path
 from unittest import mock
 
 from harness.tests import Checks
@@ -180,10 +182,100 @@ def check_auto_setup_off_in_ci(checks: Checks) -> None:
                      "the harness variable set, switch unset: nothing spawns")
 
 
+class _CanonStock(_Stock):
+    """`display_name` names the set the way `build_index` stores it, with its code prefix dropped."""
+
+    def display_name(self, _game, set_name):
+        return set_name.split(": ", 1)[-1]
+
+
+class _Child:
+    def __init__(self, pid):
+        self.pid = pid
+
+    def poll(self):
+        return None
+
+
+def _clocked_looks(*, model, looks=3, poll=60.0):
+    """Spawns over `looks` loop looks, `poll` seconds apart on a fake clock, whose children all die at once."""
+    _Popen.calls = []
+    clock = [1000.0]
+
+    def sleep(seconds):
+        clock[0] += seconds
+
+    def fake_popen(argv, *_a, **_k):
+        _Popen.calls.append(list(argv))
+        return _Child(999_999)
+
+    with _env(**{SWITCH: "on"}), _runtime(), mock.patch.object(match, "model_ready", lambda *_a, **_k: model), mock.patch.object(
+        pipeline_routes.subprocess, "Popen", fake_popen
+    ), mock.patch.object(pipeline_routes, "_prepare_pid", lambda: None), mock.patch.object(
+        pipeline_routes.time, "monotonic", lambda: clock[0]
+    ), quiet():
+        pipeline_routes.stock_setup_loop(poll, stock=_Stock(), sleep=sleep, max_looks=looks)
+    return len(_Popen.calls)
+
+
+def check_auto_setup_review_round(checks: Checks) -> None:
+    from server import ports
+
+    checks.note("")
+    checks.note("AUTO SETUP — review round: canonical names, backoff, checkout, one at a time, half-built index")
+    with isolated_home():
+        _read_set("pokemon", "Mega Evolution")
+        checks.equal(match.unread_targets(_CanonStock(), [("pokemon", "ME01: Mega Evolution")]), [],
+                     "a set stored with a code prefix counts as read under its canonical name")
+    with isolated_home():
+        _card_in("Set B")
+
+        checks.ok(_clocked_looks(model=True) <= 1, "a set the catalogue cannot resolve is not retried on every look")
+    with isolated_home():
+        checks.ok(_clocked_looks(model=False) <= 1, "a failed model download is not retried from zero on every look")
+    with isolated_home():
+        for primary, switch, want, label in (
+            (False, None, 0, "a linked worktree never auto-downloads on its own"),
+            (False, "on", 1, "a linked worktree downloads when the switch is on"),
+            (True, None, 1, "the primary checkout downloads by default"),
+        ):
+            extra = {} if switch is None else {SWITCH: switch}
+            with mock.patch.object(ports, "is_primary_checkout", lambda *_a, _p=primary: _p):
+                got = _spawns(lambda: pipeline_routes.ensure_stock_setup(stock=_Stock()), model=False, **extra)
+            checks.equal(got, want, label)
+    root = Path(__file__).resolve().parents[3]
+    checks.ok(bool(os.environ.get(HARNESS)), "a harness run sets the harness variable, so the guard fires in it")
+    checks.ok(HARNESS.split("_", 1)[1] in (root / "app" / "playwright.config.ts").read_text(), "and so does the Playwright config")
+    with isolated_home():
+        _Popen.calls = []
+        with _env(**{SWITCH: "on"}), _runtime(), mock.patch.object(match, "model_ready", lambda *_a, **_k: False), mock.patch.object(
+            pipeline_routes.subprocess, "Popen", lambda argv, *_a, **_k: (_Popen.calls.append(argv), _Child(os.getpid()))[1]
+        ), quiet():
+            pipeline_routes.ensure_stock_setup(stock=_Stock())
+            pipeline_routes.ensure_stock_setup(stock=_Stock())
+            try:
+                pipeline_routes.do_pipeline_match_prepare({"confirm": True})
+            except pipeline_routes.PipelineRefusal as refusal:
+                code = refusal.code
+            else:
+                code = "started"
+        checks.equal((len(_Popen.calls), code), (1, "prepare_already_running"),
+                     "before the child's first progress write, a second look and a press start no second Prepare")
+    with isolated_home():
+        _read_set("pokemon", "Set A")
+        progress = match.progress_path()
+        progress.parent.mkdir(parents=True, exist_ok=True)
+        progress.write_text(json.dumps({"state": "running", "pid": os.getpid()}))
+        sweep.remember_tried({"1/1": "cap-1"})
+        progress.write_text(json.dumps({"state": "done"}))
+        checks.equal(sweep.tried(), {}, "a sweep during a Prepare marks no card tried against the half-built index")
+
+
 CHECKS = (
     check_auto_setup_start,
     check_auto_setup_new_set,
     check_auto_setup_retry_tried,
     check_auto_setup_no_runtime,
     check_auto_setup_off_in_ci,
+    check_auto_setup_review_round,
 )
