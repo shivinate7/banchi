@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { getCaptureSitting, getMatchSweep, getMatchState } from './server'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { getCaptureSitting, getMatchSweep, getMatchState, getQueues } from './server'
 import type { MatchSweep } from './types'
 import { usePoll } from './usePoll'
 import { Button, Money } from './kit'
@@ -7,9 +7,12 @@ import { roundsToNothing } from './money'
 
 /* THE REVIEW SUMMARY BAND (`docs/specs/identify-engine-pick.md`, section 8). It sits where the Identify strip sat.
  *
- * THE SCOPE IS THIS SITTING: the Capture head's own keys, so "matched free" here and "matched" there agree. With no
- * sitting open, it is the cards the pipeline says wait (`waiting`, the parent's one list). One poll, `usePoll`, about
- * 3 s while a worker reads and 20 s otherwise, over the keys-scoped sweep read.
+ * THE SCOPE: a selection handed to Review (`carried`) wins; else this sitting, the Capture head's own keys, so "matched
+ * free" here and "matched" there agree; else the cards the pipeline says wait (`waiting`, the parent's one list). One poll,
+ * `usePoll`, about 3 s while a worker reads and 20 s otherwise, over the keys-scoped sweep read.
+ *
+ * EVERY CARD IN SCOPE LANDS IN EXACTLY ONE COUNT. The server splits the unanswered ones (matched, paid, unread, unhinted);
+ * a card that also has an open review row counts only in "waiting for you".
  *
  * IT HOLDS ITS LOADED SIZE FROM THE FIRST PAINT (D313): the four figures sit in equal columns with the number above the
  * label, so a figure gaining a digit moves nothing; the health line and the press row always take their room. */
@@ -23,6 +26,7 @@ const COUNTS = [
 
 export function ReviewBand({
   waiting,
+  carried,
   reviewKeys,
   rate,
   busy,
@@ -30,13 +34,15 @@ export function ReviewBand({
 }: {
   /** The cards a paid press would buy: captured, photographed, no identification, unclaimed. */
   readonly waiting: readonly string[]
+  /** The keys a selection handed to Review names, or null. */
+  readonly carried: readonly string[] | null
   /** Position keys of the open review rows, or null while the queues load. */
   readonly reviewKeys: readonly string[] | null
   /** This store's past cost per card, or null when it has none. */
   readonly rate: number | null
   readonly busy: boolean
-  /** Starts the paid look over the band's scope. */
-  readonly onRead: (scope: readonly string[]) => void
+  /** Starts the paid look over exactly these keys. */
+  readonly onRead: (keys: readonly string[]) => Promise<void>
 }) {
   /* undefined until the sitting answers: the band reads no scope before it knows which one it is. */
   const [sitting, setSitting] = useState<readonly string[] | null | undefined>(undefined)
@@ -60,39 +66,77 @@ export function ReviewBand({
     }
   }, [])
 
-  const keys = useMemo(() => (sitting === undefined ? null : (sitting ?? waiting)), [sitting, waiting])
+  /* The keys the scope names, or null when the scope is every waiting card. */
+  const named = carried ?? sitting ?? null
+  const keys = useMemo(() => (carried !== null ? carried : sitting === undefined ? null : (sitting ?? waiting)), [carried, sitting, waiting])
   const [sweep, setSweep] = useState<MatchSweep | null>(null)
-  usePoll<MatchSweep>({
+  /* After a press, runs are reading: poll at the live pace until nothing is left to read. */
+  const pressed = useRef(false)
+  const { refresh } = usePoll<MatchSweep>({
     fn: () => getMatchSweep([...(keys ?? [])]),
     onData: setSweep,
     liveMs: 3_000,
     idleMs: 20_000,
-    isLive: (answer) => answer.running,
+    isLive: (answer) => answer.running || (pressed.current && (answer.paid ?? 0) + (answer.unread ?? 0) > 0),
     enabled: keys !== null,
     restartKey: keys === null ? null : keys.join(','),
   })
 
-  /* Open review rows in the sitting. With no sitting the scope is every card nobody has answered, so every open row counts. */
-  const you = useMemo(() => {
-    if (reviewKeys === null) return null
-    if (sitting === null || sitting === undefined) return reviewKeys.length
-    const inside = new Set(sitting)
-    return reviewKeys.filter((key) => inside.has(key)).length
-  }, [reviewKeys, sitting])
+  /* Open review rows in scope; with no named scope every open row counts. A card with one counts here and nowhere else. */
+  /* The queues are read again whenever the matched set moves or the screen's own rows do, so a card that a reader
+     just matched while it waits on a row is never counted twice. */
+  const [openKeys, setOpenKeys] = useState<readonly string[] | null>(null)
+  const matchedSig = (sweep?.matched_keys ?? []).join(',')
+  const reviewSig = reviewKeys === null ? null : reviewKeys.join(',')
+  useEffect(() => {
+    if (reviewSig === null) return
+    let live = true
+    void getQueues()
+      .then((snapshot) => {
+        if (live) setOpenKeys(snapshot.review.filter((entry) => !entry.cleared_by_human).map((entry) => `${entry.box}/${entry.index}`))
+      })
+      .catch(() => live && setOpenKeys(reviewKeys))
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the signatures are WHEN to read; reviewKeys is the fallback
+  }, [matchedSig, reviewSig])
+  const reviewing = useMemo(() => {
+    const open = openKeys ?? reviewKeys
+    if (open === null) return null
+    if (named === null) return open
+    const inside = new Set(named)
+    return open.filter((key) => inside.has(key))
+  }, [openKeys, reviewKeys, named])
+  const matchedAlso = useMemo(() => {
+    const open = new Set(reviewing ?? [])
+    return (sweep?.matched_keys ?? []).filter((key) => open.has(key)).length
+  }, [sweep, reviewing])
 
-  const loaded = sweep !== null && you !== null
-  const figures = { matched: sweep?.matched_here ?? 0, paid: sweep?.paid ?? 0, unread: sweep?.unread ?? 0, you: you ?? 0 }
+  const loaded = sweep !== null && reviewing !== null
+  const figures = {
+    matched: Math.max(0, (sweep?.matched_here ?? 0) - matchedAlso),
+    paid: sweep?.paid ?? 0,
+    unread: sweep?.unread ?? 0,
+    you: reviewing?.length ?? 0,
+  }
   const left = figures.paid
   const about = rate === null ? null : rate * left
-  const health = !loaded
-    ? null
-    : sweep.blocked != null || needsSetup
-      ? 'Needs setup'
-      : sweep.running
-        ? 'Matching now'
-        : sweep.aside > 0
-          ? `${sweep.aside} set aside`
-          : null
+  const parts: string[] = []
+  if (loaded) {
+    if (sweep.blocked != null || needsSetup) parts.push('Needs setup')
+    else if (sweep.running) parts.push('Matching now')
+    if (sweep.aside > 0) parts.push(`${sweep.aside} set aside`)
+    const unhinted = sweep.unhinted ?? 0
+    if (unhinted > 0) parts.push(unhinted === 1 ? '1 needs a set named' : `${unhinted} need a set named`)
+  }
+  const health = parts.length === 0 ? null : parts.join(', ')
+
+  const read = async () => {
+    pressed.current = true
+    await onRead(sweep?.paid_keys ?? [])
+    refresh()
+  }
 
   return (
     <section className="review-band" aria-label="Where this sitting stands">
@@ -113,7 +157,7 @@ export function ReviewBand({
         <span className="review-band-presses">
           <span className="review-band-slot">
             {!loaded || left === 0 ? null : (
-              <Button variant="primary" icon="zap" busy={busy} disabled={busy} onClick={() => onRead(sweep?.paid_keys ?? [])} className="review-band-read">
+              <Button variant="primary" icon="zap" busy={busy} disabled={busy} onClick={() => void read()} className="review-band-read">
                 Read the {left} left
                 {about === null ? null : roundsToNothing(about) ? (
                   ', under a cent'

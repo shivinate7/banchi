@@ -577,6 +577,8 @@ Turning the toggle on never downloads. With no model or no index, the toggle rea
     It names its count and cost, and it starts the paid look with no confirm.
   - It has one way back: "Back to Capture".
   - The band holds its loaded size from the first paint. A count that changes moves nothing. It polls as the Capture counter does.
+  - Every card in scope lands in exactly one count. A card with an open review row counts only in "waiting for you".
+    A card no reader can read yet shows as "N need a set named". A selection handed to Review wins over the sitting.
   - The photo gives up the band's height, so a card is answered without scrolling.
   - The same read adds `paid_keys`, the keys counted in `paid`. The press sends only those keys, so the spend never exceeds the quote.
 - A per-card detail shows on request only: the engine, the match and the margin.

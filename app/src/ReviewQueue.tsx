@@ -1616,7 +1616,8 @@ export function ReviewQueue() {
         reviewKeys={rows === null ? null : rows.filter((row) => row.queue === 'review').map((row) => `${row.entry.box}/${row.entry.index}`)}
         rate={rate}
         busy={spendBusy}
-        onRead={(scope) => void identifyNow(scope)}
+        carried={carried === null ? null : carried.keys}
+        onRead={identifyNow}
       />
 
       {!lens ? null : (

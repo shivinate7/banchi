@@ -2999,6 +2999,10 @@ export type MatchSweep = {
   paid?: number
   /** Only on the keys-scoped read: the named keys counted in `paid`. A paid press sends these and no others. */
   paid_keys?: string[]
+  /** Only on the keys-scoped read: the named keys that carry a free-reader row. `matched_here` is its length. */
+  matched_keys?: string[]
+  /** Only on the keys-scoped read: named Pokemon cards with no set hint. No reader can read them yet, so they are in no other count. */
+  unhinted?: number
   /** Only on the keys-scoped read: named cards the free reader has not looked at yet (not set aside). */
   unread?: number
   /** Only on the keys-scoped read: the watcher's state file names a worker. */
