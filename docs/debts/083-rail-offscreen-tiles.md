@@ -1,4 +1,4 @@
-## DEBT-rail-offscreen-tiles — Off-screen rail tiles still cost a little per capture
+## DEBT83 — Off-screen rail tiles still cost a little per capture
 
 **With the full rail drawn (not dealing), each capture costs slightly more as the sitting grows.** Every tile stays in the DOM, and the browser re-lays and re-paints the whole grid when a tile lands. `content-visibility: auto` skips none of them, because Chrome judges it against the page viewport and not the rail's scroller.
 
