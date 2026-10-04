@@ -2249,6 +2249,46 @@ test.describe('the Review summary band', () => {
         expect(sent, 'only the paid cards in the sitting, never 3/13').not.toContain('3/13')
       })
 
+      test('a long health line keeps the presses inside the band, clear of the photo, and the band the same height', async ({ page }) => {
+        const wire = await seed(page, { running: true, aside: 2, unhinted: 2 })
+        await setViewport(page, size)
+        await openReview(page)
+        await expect(health(page)).toHaveText(/matching now/i)
+        await expect(health(page)).toHaveText(/2 set aside/i)
+        await expect(health(page)).toHaveText(/2 need a set named/i)
+        await expect(press(page)).toBeVisible()
+        await settleMotion(page)
+        const boxes = () =>
+          page.evaluate(() => {
+            const rect = (sel: string) => {
+              const r = document.querySelector(sel)?.getBoundingClientRect()
+              return r === undefined ? null : { x: r.x, y: r.y, right: r.right, bottom: r.bottom, height: r.height }
+            }
+            const line = document.querySelector('.review-band-health') as HTMLElement | null
+            const clipped = line === null ? true : [line, ...Array.from(line.querySelectorAll('*'))].some((el) => el.scrollWidth > el.clientWidth + 1 || getComputedStyle(el).textOverflow === 'ellipsis')
+            return { band: rect('.review-band'), press: rect('.review-band-read'), back: rect('.review-band-back'), health: rect('.review-band-health'), photo: rect('.review-photo'), clipped }
+          })
+        const long = await boxes()
+        const inside = (part: { x: number; y: number; right: number; bottom: number } | null) =>
+          part !== null && long.band !== null && part.x >= long.band.x - 1 && part.right <= long.band.right + 1 && part.y >= long.band.y - 1 && part.bottom <= long.band.bottom + 1
+        expect(inside(long.press), 'the press sits inside the band').toBe(true)
+        expect(inside(long.back), 'Back to Capture sits inside the band').toBe(true)
+        expect(inside(long.health), 'the health line sits inside the band').toBe(true)
+        expect(long.clipped, 'no part of the health line is clipped or ellipsised').toBe(false)
+        if (long.band !== null && long.photo !== null) {
+          expect(long.band.bottom, 'nothing in the band reaches the photo').toBeLessThanOrEqual(long.photo.y + 0.5)
+          for (const part of [long.press, long.back, long.health]) expect(part!.bottom).toBeLessThanOrEqual(long.photo.y + 0.5)
+        }
+        /* the same band with a short health line: nothing running, nothing set aside, nothing unhinted */
+        wire.running = false
+        wire.aside = 0
+        wire.unhinted = 0
+        await expect(health(page)).not.toHaveText(/set aside/i, { timeout: 8_000 }) // keep: waits one 3s poll tick
+        await settleMotion(page)
+        const short = await boxes()
+        expect(short.band!.height, 'the band changed height with a shorter health line').toBe(long.band!.height)
+      })
+
       test('the band holds its loaded size from first paint, and a count change moves nothing below it', async ({ page }) => {
         let release: () => void = () => undefined
         const wire = await seed(page, { running: true, hold: new Promise<void>((done) => (release = done)) })
