@@ -8747,11 +8747,11 @@ COMPONENTS = [
                         "failing against exactly that mutation before it was kept.",
             },
             "tests/capture-freeze.spec.ts": {
-                "does": "a long sitting must not freeze Capture: 60 captures on a canvas camera "
-                        "with a longtask observer, none over 50 ms around capture 60, and none "
-                        "over 4 s with motion armed and idle at 60 cards. Run by "
-                        "`make design-check`.",
-                "governed_by": ["D10", "D164"],
+                "does": "a long sitting must not freeze Capture: 300 dealt captures with a "
+                        "longtask observer (none over 50 ms in the last 10, the rail and the Last "
+                        "capture panel as ruled, the rail whole after Stop) and 60 hand-fed "
+                        "captures. Run by `make design-check`.",
+                "governed_by": ["D10", "D164", "D313", "D316"],
                 "note": "Red on the unmemoized filmstrip (50 to 72 ms tasks from about capture "
                         "25), green on the memoized one. POST /capture is intercepted, so "
                         "nothing reaches a store.",
@@ -9315,6 +9315,12 @@ COMPONENTS = [
                         "the reason shows in Manual, \"Needs Chrome\" with no Bluetooth, and a fire "
                         "with no box stops dealing with STOP the last write.",
                 "governed_by": ["D316", "D18", "D19", "D313"],
+            },
+            "tests/dispenserRig.ts": {
+                "does": "the dispenser's browser rig shared by dispenser.spec.ts and "
+                        "capture-freeze.spec.ts: the fake Bluetooth device, the canvas camera, "
+                        "motion armed, and the scene the test drives.",
+                "governed_by": ["D313", "D316"],
             },
             "tests/unit/tab-title.unit.ts": {
                 "does": "the tab title function over every ROUTES entry, read through "
