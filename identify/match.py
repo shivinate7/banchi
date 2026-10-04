@@ -905,3 +905,25 @@ def targets_for(stock, store_pairs: Iterable[Tuple[str, str]]) -> List[Tuple[str
             seen.add(("riftbound", set_name))
             wanted.append(("riftbound", set_name))
     return wanted
+
+
+def unread_targets(stock, store_pairs: Iterable[Tuple[str, str]]) -> List[Tuple[str, str]]:
+    """`targets_for` minus the sets the fingerprint index already holds."""
+    with Index() as index:
+        held = {(g, n) for g, n in index.db.execute("select game, set_name from sets")}
+    return [t for t in targets_for(stock, store_pairs) if t not in held]
+
+
+def index_stamp() -> str:
+    """Changes when the index gains a set. A card tried before its set was read is tried again.
+    Reads the file directly, so a missing index is "0" and nothing is created."""
+    try:
+        db = sqlite3.connect(f"file:{index_path()}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return "0"
+    try:
+        return str(db.execute("select count(*) from sets").fetchone()[0])
+    except sqlite3.Error:
+        return "0"
+    finally:
+        db.close()

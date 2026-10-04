@@ -1278,10 +1278,62 @@ def ensure_sweep() -> None:
             files.log_cause("match sweep ensure", exc)
 
 
+def _spawn_prepare():
+    """The one door to a detached `pkmnscan match prepare`: the press and the automatic setup both use it."""
+    argv = [str(PKMNSCAN), "match", "prepare"]
+    log_path = matcher.progress_path().with_suffix(".log")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_path, "ab", buffering=0) as log:
+        log.write(f"$ {' '.join(argv)}\n".encode("utf-8"))
+        return subprocess.Popen(  # noqa: S603
+            argv,
+            cwd=str(REPO_ROOT),
+            env=_env(),
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,  # detached: a prepare outlives this server, like a run
+        )
+
+
+def _auto_setup_allowed() -> bool:
+    """`PKMNSCAN_AUTO_SETUP=on` forces it. Unset, a CI or harness run never downloads."""
+    switch = os.environ.get("PKMNSCAN_AUTO_SETUP")
+    if switch is not None:
+        return switch == "on"
+    return not (os.environ.get("CI") or os.environ.get("PKMNSCAN_HARNESS"))
+
+
+def ensure_stock_setup(*, stock=None) -> bool:
+    """One look: start `match prepare` when the model file is missing or a target set is unread,
+    and none runs. FREE. True when it started one. Silent on any failure."""
+    try:
+        if not _auto_setup_allowed() or not matchconst.runtime_importable() or _prepare_pid() is not None:
+            return False
+        from cli import cmd_match
+
+        if matcher.model_ready() and not matcher.unread_targets(stock or STOCK_IMAGES, cmd_match._store_pairs()):
+            return False
+        _spawn_prepare()
+        return True
+    except Exception as exc:  # noqa: BLE001
+        files.log_cause("stock setup ensure", exc)
+        return False
+
+
+def stock_setup_loop(poll: float = 60.0, *, stock=None, sleep=time.sleep, max_looks: Optional[int] = None) -> None:
+    """The background check `serve` runs on a daemon thread: a new set in the store gets read."""
+    looks = 0
+    while max_looks is None or looks < max_looks:
+        sleep(poll)
+        ensure_stock_setup(stock=stock)
+        looks += 1
+
+
 def do_pipeline_match_prepare(payload: dict) -> Tuple[HTTPStatus, dict]:
-    """`POST /pipeline/match/prepare` — the owner's Prepare press. It DOWNLOADS the model file
-    (372 MB, once) and READS each stock photo once. It spends no money, and it needs the owner's
-    `confirm` because it downloads: nothing in the app fetches either on its own.
+    """`POST /pipeline/match/prepare` — the manual Prepare refresh. It DOWNLOADS the model file
+    (372 MB, once) and READS each stock photo once. It spends no money. The same work starts by
+    itself (`ensure_stock_setup`); the press needs `confirm` because it can download.
 
     Spawns a detached `pkmnscan match prepare` and answers at once. The screen polls
     `GET /pipeline/match`. A second press while one runs is refused, never doubled."""
@@ -1305,21 +1357,8 @@ def do_pipeline_match_prepare(payload: dict) -> Tuple[HTTPStatus, dict]:
             "runtime_missing",
             "The reader's setup on this Mac is out of date, so Prepare cannot run yet. Update the app's setup, then press Prepare again.",
         )
-    argv = [str(PKMNSCAN), "match", "prepare"]
-    log_path = matcher.progress_path().with_suffix(".log")
-    log_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with open(log_path, "ab", buffering=0) as log:
-            log.write(f"$ {' '.join(argv)}\n".encode("utf-8"))
-            child = subprocess.Popen(  # noqa: S603
-                argv,
-                cwd=str(REPO_ROOT),
-                env=_env(),
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL,
-                start_new_session=True,  # detached: a prepare outlives this server, like a run
-            )
+        child = _spawn_prepare()
     except OSError as exc:
         files.log_cause("match prepare spawn", exc)
         raise PipelineRefusal(

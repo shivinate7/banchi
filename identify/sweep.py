@@ -167,6 +167,10 @@ def tried() -> Dict[str, str]:
     record = _read_json(tried_path())
     if not isinstance(record, dict) or record.get("model") != MODEL_SHA256:
         return {}
+    from identify import match  # lazy: match pulls the heavy readers
+
+    if record.get("stamp") != match.index_stamp():
+        return {}  # a set was read since: cards tried before it are tried again
     keys = record.get("keys")
     return {str(k): str(v) for k, v in keys.items()} if isinstance(keys, dict) else {}
 
@@ -176,7 +180,9 @@ def remember_tried(additions: Dict[str, str]) -> None:
         return
     keys = tried()
     keys.update(additions)
-    _write_json(tried_path(), {"model": MODEL_SHA256, "keys": keys})
+    from identify import match
+
+    _write_json(tried_path(), {"model": MODEL_SHA256, "stamp": match.index_stamp(), "keys": keys})
 
 
 _QUEUE_SQL = (
