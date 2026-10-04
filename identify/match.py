@@ -894,6 +894,9 @@ def build_index(
 
 
 RECHECK_ROWS_PER_PASS = 20  # one weekly pass asks the oldest this many rows, so a big backlog drains over passes
+# ponytail: `vec.note` doubles as the retry class (an answer from the CDN waits a week, any other cause a day); a column for the next-ask time if a third wait is needed.
+_ANSWERED = ("http_403", "http_404", "http_410")  # the CDN's answer for a missing file: the row waits a week
+_NETWORK = ("URLError", "timeout", "TimeoutError")  # the network is down: the pass ends at once
 
 
 def _stamp_now() -> str:
@@ -910,8 +913,10 @@ def recheck_no_photo(
     """One free weekly pass: ask again the `no_photo` and `no_url` rows last asked over `days` days ago, the oldest
     `RECHECK_ROWS_PER_PASS` by `vec.at`. Never an `ok` row, never a whole set. A `no_url` row's set has its catalogue
     listing read once for a URL. A row that now has an image is fingerprinted. A row the CDN or the catalogue
-    answered for (403, 404, 410, or a listing with no URL) gets `at` set to now and waits another week. A transient
-    failure, or a set whose listing could not be read, leaves the row undated, so the next look asks again.
+    answered for (403, 404, 410, or a listing with no URL) gets `at` set to now and waits another week. Any other
+    failure (5xx, 429, decode) is transient: it sets `at` to now and `note` to the cause, and a row with such a note
+    is asked again after one day, not seven. A network failure (`URLError`, timeout), returned or raised, ends the
+    pass at once and writes nothing for that row. A set whose listing could not be read leaves its rows undated.
     Nothing spends.
 
     Locking: no write transaction is open across a fetch. Each result is one short write on its own connection,
@@ -931,19 +936,22 @@ def recheck_no_photo(
     target_model = model or model_path()
     sha = MODEL_SHA256 if model is None else sha256_of_file(target_model)
     cutoff = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - days * 86400))
+    cutoff_day = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 86400))
     gate = threading.Lock()
     clock = [0.0]
     reader = fetch or (lambda url: fetch_bytes(url, gate=gate, clock=clock))
     record = {"state": "running", "phase": "recheck", "done": 0, "total": 0, "message": "Checking printings with no photo", "pid": os.getpid(), "at": time.time()}
-    progress_path().write_text(json.dumps(record), "utf-8")
+    store_files.write_json(progress_path(), record)
     try:
         with Index() as index:
             have = index.meta("model_sha256")
             if have and have != sha:
                 raise IndexError_("the fingerprints were built by another model file. Clear them first.")
             old = index.db.execute(
-                "select game, set_name, product_id, number, name, url, status from vec where status in (?,?) and at < ? order by at, product_id limit ?",
-                (S_NO_PHOTO, S_NO_URL, cutoff, RECHECK_ROWS_PER_PASS),
+                "select game, set_name, product_id, number, name, url, status from vec where status in (?,?) and "
+                "((note is not null and note not in (?,?,?) and at < ?) or ((note is null or note in (?,?,?)) and at < ?)) "
+                "order by at, product_id limit ?",
+                (S_NO_PHOTO, S_NO_URL, *_ANSWERED, cutoff_day, *_ANSWERED, cutoff, RECHECK_ROWS_PER_PASS),
             ).fetchall()
         listed: Dict[Tuple[str, str], Optional[Dict[str, str]]] = {}
         for game, set_name in sorted({(r[0], r[1]) for r in old if r[6] == S_NO_URL}):
@@ -973,7 +981,12 @@ def recheck_no_photo(
                 report.no_image += 1
                 write(row, "update vec set url='', status=?, note=null, at=? where game=? and set_name=? and product_id=?", (S_NO_URL, _stamp_now()))
                 continue
-            raw, cause = reader(url)
+            try:
+                raw, cause = reader(url)
+            except (urllib.error.URLError, TimeoutError):
+                break  # the network is down
+            if cause in _NETWORK:
+                break
             array = None
             if raw is not None:
                 try:
@@ -984,11 +997,12 @@ def recheck_no_photo(
                     cause = "decode_" + type(exc).__name__
             if array is not None:
                 gained.append((row, url, array))
-            elif cause in ("http_403", "http_404", "http_410"):
+            elif cause in _ANSWERED:
                 report.no_image += 1
                 write(row, "update vec set url=?, status=?, note=?, at=? where game=? and set_name=? and product_id=?", (url, S_NO_PHOTO, cause, _stamp_now()))
             else:
-                report.unreadable += 1  # transient: undated
+                report.unreadable += 1  # transient: dated now with its cause, so the oldest-first order moves on and it returns in a day
+                write(row, "update vec set note=?, at=? where game=? and set_name=? and product_id=?", (str(cause), _stamp_now()))
         if gained:
             import numpy as np
 
@@ -997,7 +1011,9 @@ def recheck_no_photo(
                 write(row, "update vec set url=?, status=?, note=null, vec=?, at=? where game=? and set_name=? and product_id=?", (url, S_OK, vector.tobytes(), _stamp_now()))
                 report.embedded += 1
     finally:
-        progress_path().write_text(json.dumps({**record, "state": "done", "at": time.time()}), "utf-8")
+        mine = store_files.read_json(progress_path(), None)
+        if isinstance(mine, dict) and mine.get("pid") == os.getpid() and mine.get("state") == "running":
+            store_files.write_json(progress_path(), {**record, "state": "done", "at": time.time()})
     return report
 
 
