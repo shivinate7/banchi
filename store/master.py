@@ -1937,7 +1937,10 @@ class Inventory:
                 card = self.cards[key]
                 raw_index, state = card.index, card.state
             if state in TERMINAL_STATES:
-                gone.append(int(raw_index))
+                try:
+                    gone.append(int(raw_index))
+                except (TypeError, ValueError):
+                    continue  # an unreadable index names no slot; `_walk` degrades the same way
         return tuple(sorted(gone))
 
     def records_in(self, box) -> List[Tuple[int, str, Card]]:

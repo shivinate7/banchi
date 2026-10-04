@@ -327,7 +327,7 @@
 .capture-row-lg .capture-section-val { text-align: left; }
 /* Every state draws both lines, each a whole number of pixels tall (from its own font size), so no state's text can move the row (D313). */
 .capture-row-lg .capture-section-val strong,
-.capture-row-lg .capture-section-val > span { height: round(up, 1.25em, 1px); line-height: round(up, 1.25em, 1px); }
+.capture-row-lg .capture-section-val > span { height: 1.25em; line-height: 1.25em; height: round(up, 1.25em, 1px); line-height: round(up, 1.25em, 1px); }
 .capture-section-val .capture-list-part + .capture-list-part::before { margin: 0 var(--bn-1); }
 .capture-box-val { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
 .capture-box-val strong {
