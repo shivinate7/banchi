@@ -1840,6 +1840,37 @@ test('a refused press does not leave the band polling at the live pace', async (
   expect(sweeps, 'sweep reads in 8 s once the press changed nothing').toBe(settled)
 })
 
+/* THE BAND STAYS LIVE WHILE A PAID RUN IS IN FLIGHT. The in-flight signal is `GET /pipeline/runs` answering a row with
+ * `live: true`. The counts do not move for 10 s (a paid look is slow), yet the band keeps the 3 s pace; once the run ends
+ * and two answers are alike it slows. */
+test('a press that starts a long run keeps the band live until the run ends', async ({ page }) => {
+  test.setTimeout(45_000)
+  await waiting(page, 12)
+  await runsReads(page, PAST, keysOf(12))
+  await paidWait(page, keysOf(12))
+  await spendRoute(page)
+  let inFlight = false
+  await page.route(/\/pipeline\/runs$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ runs: [runRow({ live: inFlight, pid: 999 }), ...PAST] }) }),
+  )
+  let sweeps = 0
+  await page.route(/\/pipeline\/match\/sweep(\?.*)?$/, (route) => {
+    sweeps++
+    return route.fallback()
+  })
+  await open(page)
+  const base = sweeps
+  inFlight = true
+  await press(page).click()
+  setTimeout(() => { inFlight = false }, 10_000) // keep: run lasts ten seconds
+  await page.waitForTimeout(8_000) // keep: run in flight, counts frozen
+  expect(sweeps - base, 'sweep reads in 8 s while the run is in flight, counts unchanged').toBeGreaterThanOrEqual(3)
+  await page.waitForTimeout(8_000) // keep: run ends, two alike answers
+  const settled = sweeps
+  await page.waitForTimeout(8_000) // keep: slow pace is 20 s
+  expect(sweeps, 'sweep reads once the run ended and counts stopped changing').toBe(settled)
+})
+
 /* A DOUBLE PRESS BUYS ONCE. Two clicks land in one task, before React can draw the busy state,
  * so the only thing that can stop the second is the screen's own in-flight guard. The server's
  * claim (D174) still refuses a second tab; that half is `make submission-selftest`'s.
