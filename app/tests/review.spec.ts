@@ -1886,33 +1886,50 @@ async function stubRouteCapture(page: Page): Promise<void> {
   await page.route(/\/pipeline\/match\/sweep$/, (route) => route.fulfill(routeJson({ on: false, running: false, matched: 0, aside: 0, blocked: false })))
 }
 
-async function arriveFromRouteCapture(page: Page): Promise<void> {
+/* NO SCREEN LIST IS TYPED HERE: Review's route is `VIEW_ROUTE`, Runs' is derived from it, and
+   Capture's is read off the sidebar link the shell draws from `ROUTES`. Hashes only, no slash. */
+const REVIEW_HASH = VIEW_ROUTE.replace('/', '')
+const RUNS_HASH = REVIEW_HASH.replace('review', 'runs')
+
+/** The hash of Capture's own sidebar link, read from the page. */
+async function captureHash(page: Page): Promise<string> {
+  await page.goto(VIEW_ROUTE)
+  await expect(page.locator(VIEW)).toBeVisible()
+  const href = await page.locator('.bn-side a.bn-nav-link', { hasText: /capture/i }).first().getAttribute('href')
+  expect(href, 'the sidebar names Capture').not.toBeNull()
+  return href ?? ''
+}
+
+async function arriveFromRouteCapture(page: Page): Promise<string> {
   await stubRouteReads(page)
   await stubRouteCapture(page)
   await setViewport(page, { width: 1440, height: 900 })
-  await page.goto('/#/capture')
+  const capture = await captureHash(page)
+  await page.goto(`/${capture}`)
   await settleFonts(page)
   await expect(page.locator('.capture-onward button')).toBeVisible()
+  return capture
 }
 
 test('a typed #/runs leaves one history entry, so one Back returns', async ({ page }) => {
   await stubRouteReads(page)
   await setViewport(page, { width: 1440, height: 900 })
-  await page.goto('/#/capture')
-  await page.evaluate(() => (window.location.hash = '#/runs'))
-  await expect(page).toHaveURL(/#\/review/)
+  const capture = await captureHash(page)
+  await page.goto(`/${capture}`)
+  await page.evaluate((hash) => (window.location.hash = hash), RUNS_HASH)
+  await expect.poll(() => new URL(page.url()).hash).toContain(REVIEW_HASH)
   await page.waitForTimeout(300) // keep: a redirect that pushes lands a tick after the first URL change
   await page.goBack()
-  await expect(page).toHaveURL(/#\/capture$/)
+  await expect.poll(() => new URL(page.url()).hash).toBe(capture)
 })
 
 test('the onward button then one Back returns to Capture', async ({ page }) => {
-  await arriveFromRouteCapture(page)
+  const capture = await arriveFromRouteCapture(page)
   await page.locator('.capture-onward button').click()
-  await expect(page).toHaveURL(/#\/review/)
+  await expect.poll(() => new URL(page.url()).hash).toContain(REVIEW_HASH)
   await page.waitForTimeout(300) // keep: a redirect that pushes lands a tick after the first URL change
   await page.goBack()
-  await expect(page).toHaveURL(/#\/capture$/)
+  await expect.poll(() => new URL(page.url()).hash).toBe(capture)
 })
 
 test('the onward button lands on Review with no composer open', async ({ page }) => {
@@ -1933,7 +1950,7 @@ test('arriving at Review, the Identify strip moves nothing', async ({ page }) =>
   await seedPopulatedReview(page)
   await watchShifts(page)
   await setViewport(page, { width: 1440, height: 900 })
-  await page.goto('/#/review')
+  await page.goto(VIEW_ROUTE)
   await settleFonts(page)
   await expect(page.locator('.review-identify-strip')).toBeVisible()
   await page.waitForTimeout(800) // keep: the window is the measurement
