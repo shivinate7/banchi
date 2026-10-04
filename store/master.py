@@ -3730,7 +3730,9 @@ class Inventory:
         # The last section is empty when no card key lies at or after its divider (the same
         # test as the `after` branch). `next_key` lands past an empty divider, so comparing
         # the divider to it let S write a second empty section.
-        if not self._cards_between(entry.box, layout[-1], float("inf")):
+        # The floor is the last divider as `dividers_of` draws it, so a card moved in front of a
+        # one-section box (its key below the stored front) still counts.
+        if not self._cards_between(entry.box, self.dividers_of(entry.box)[-1], float("inf")):
             raise SectionEmpty(
                 f"Section {len(layout)} of {self.box_title(entry.box)} holds nothing yet. "
                 f"Capture a card into it before starting another."
