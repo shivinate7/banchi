@@ -76,7 +76,11 @@
 :root[data-theme='dark'] .review-well,
 :root[data-theme='dark'] .review-group-grid { box-shadow: var(--bn-shadow-2), inset 0 0 0 1px var(--bn-line-strong); }
 @media (max-width: 1199px) {
-  .review { --rv-photo-h: min(calc(100vh - 168px), 640px); }
+  .review { --rv-photo-h: min(calc(100vh - 168px), 640px); --rv-band-h: 126px; }
+  /* The health line takes its own row, and the band is sized for that row always, so a short line and a long one give one height. */
+  .review .review-band { padding-block: var(--bn-2); gap: var(--bn-2); }
+  .review .review-band-foot { row-gap: var(--bn-1); }
+  .review-band-health { flex-basis: 100%; }
 }
 @media (max-width: 1023px) {
   .review { --rv-photo-h: min(calc(100vh - 216px), 620px); }
