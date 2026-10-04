@@ -3063,6 +3063,7 @@ test('the search rows ask for the card crop', async ({ page }) => {
   await expect(photos).toHaveCount(2)
   for (const photo of await photos.all()) {
     await expect(photo).toHaveAttribute('src', /[?&]crop=card(&|$)/)
+    await expect(photo).toHaveAttribute('loading', 'lazy')
   }
 })
 

@@ -256,6 +256,7 @@ test.describe('the name -> variant chooser draws real collisions distinctly', ()
     await expect(thumbs.first()).toBeVisible()
     for (const thumb of await thumbs.all()) {
       await expect(thumb).toHaveAttribute('src', /[?&]crop=card(&|$)/)
+      await expect(thumb).toHaveAttribute('loading', 'lazy')
     }
   })
 

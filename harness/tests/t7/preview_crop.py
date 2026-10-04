@@ -180,8 +180,138 @@ def check_preview_finder_runs_once_per_photo(checks: Checks) -> None:
             )
 
 
+def _ex(cid, **kw):
+    """`do_photo_by_card_ex` on a versioned crop read: (bytes, etag, final)."""
+    return capture_server.do_photo_by_card_ex(cid, version=kw.pop("version", "v1"), crop=True, **kw)
+
+
+@contextmanager
+def _clean_preview_cache():
+    """Run with an empty preview cache and put back the cap and the rule version after."""
+    from identify import images
+
+    saved = (images.PREVIEW_CACHE_BYTES, images.CROP_RULE_VERSION)
+    images._preview_cache.clear()
+    images._preview_cache_bytes = 0
+    try:
+        yield images
+    finally:
+        images.PREVIEW_CACHE_BYTES, images.CROP_RULE_VERSION = saved
+        images._preview_cache.clear()
+        images._preview_cache_bytes = 0
+
+
+def check_preview_busy_finder_answers_whole_photo(checks: Checks) -> None:
+    """A busy finder is never waited on: whole photo, an ETag ending `p`, not final (no long cache)."""
+    checks.note("")
+    checks.note("PREVIEW CROP — A BUSY FINDER ANSWERS THE WHOLE PHOTO AT ONCE")
+    with isolated_home(), _clean_preview_cache() as images:
+        original = _jpeg(_clear_card_frame(tilt=0.3))
+        cid = _store_photo(original)
+        with _counting_finders() as calls:
+            images._finder_lock.acquire()
+            try:
+                blob, etag, final = _ex(cid)
+            finally:
+                images._finder_lock.release()
+            checks.ok(blob == original, "a busy finder answers the whole stored photo")
+            checks.ok(etag.endswith('p"'), f"its ETag ends in p ({etag})")
+            checks.ok(final is False, "the answer is not final, so the route sends no long cache")
+            checks.equal(calls["locate"], 0, "a busy finder runs no second finder")
+            blob, etag, final = _ex(cid)
+            checks.ok(blob is not None and blob != original, "the next read, finder free, is the crop")
+            checks.ok(final is True and not etag.endswith('p"'), "the crop is final and its ETag is not a p ETag")
+
+
+def check_preview_failures_are_never_cached(checks: Checks) -> None:
+    """A raising finder or a failed model load is served whole but runs the finder again next time."""
+    import geometry
+
+    checks.note("")
+    checks.note("PREVIEW CROP — A FAILURE IS SERVED BUT NEVER CACHED")
+    with isolated_home(), _clean_preview_cache():
+        original = _jpeg(_clear_card_frame(tilt=0.4))
+        cid = _store_photo(original)
+        real = geometry.locate_card
+        runs = {"n": 0}
+
+        def raising(*a, **k):
+            runs["n"] += 1
+            raise RuntimeError("finder broke")
+
+        geometry.locate_card = raising
+        try:
+            first = _ex(cid)
+            second = _ex(cid)
+        finally:
+            geometry.locate_card = real
+        checks.ok(first[0] == original and first[2] is False, "a raising finder answers the whole photo, not final")
+        checks.equal(runs["n"], 2, "a raising finder runs again on the next request")
+        checks.ok(second[1].endswith('p"'), "and its ETag still ends in p")
+
+        cid = _store_photo(_jpeg(_clear_card_frame(tilt=0.5)))
+        real_failed = geometry.card_box.model_failed
+        geometry.card_box.model_failed = lambda: True
+        try:
+            with _counting_finders() as calls:
+                a = _ex(cid)
+                b = _ex(cid)
+        finally:
+            geometry.card_box.model_failed = real_failed
+        checks.ok(a[2] is False and b[2] is False, "a failed model load is never final")
+        checks.equal(calls["locate"], 2, "a failed model load runs the finder again on the next request")
+        with _counting_finders() as calls:
+            ok = _ex(cid)
+            _ex(cid)
+        checks.ok(ok[2] is True and calls["locate"] == 1, "once the model loads, the answer is final and cached")
+
+
+def check_preview_cache_is_byte_bounded(checks: Checks) -> None:
+    """The cut-crop cache drops its oldest entry past the byte cap."""
+    checks.note("")
+    checks.note("PREVIEW CROP — THE BYTE CAP EVICTS OLD CROPS")
+    with isolated_home(), _clean_preview_cache() as images:
+        cids = [_store_photo(_jpeg(_clear_card_frame(tilt=0.6 + 0.1 * n))) for n in range(3)]
+        one = len(_cropped(cids[0]))
+        images._preview_cache.clear()
+        images._preview_cache_bytes = 0
+        images.PREVIEW_CACHE_BYTES = int(one * 1.5)  # room for one crop, not two
+        with _counting_finders() as calls:
+            for cid in cids:
+                _cropped(cid)
+            checks.equal(calls["locate"], 3, "three photos run the finder three times")
+            _cropped(cids[2])
+            checks.equal(calls["locate"], 3, "the newest crop is still cached")
+            _cropped(cids[0])
+            checks.equal(calls["locate"], 4, "the oldest crop was evicted, so its finder runs again")
+        checks.ok(
+            images._preview_cache_bytes <= images.PREVIEW_CACHE_BYTES * 1.5 and len(images._preview_cache) <= 2,
+            f"the cache holds at most what the cap allows ({images._preview_cache_bytes} bytes)",
+        )
+
+
+def check_preview_rule_version_changes_etag(checks: Checks) -> None:
+    """CROP_RULE_VERSION rides in the crop's ETag: a bump leaves no 304 for an old ETag."""
+    checks.note("")
+    checks.note("PREVIEW CROP — A NEW RULE VERSION GIVES A NEW ETAG")
+    with isolated_home(), _clean_preview_cache() as images:
+        cid = _store_photo(_jpeg(_clear_card_frame(tilt=0.7)))
+        blob, old, _ = _ex(cid)
+        checks.ok(blob is not None, "the first read sends bytes")
+        again, same, _ = _ex(cid, if_none_match=old)
+        checks.ok(again is None and same == old, "the same rule version answers 304 to its own ETag")
+        images.CROP_RULE_VERSION = images.CROP_RULE_VERSION + "-next"
+        fresh, new, _ = _ex(cid, if_none_match=old)
+        checks.ok(fresh is not None, "a changed rule version does not 304 the old ETag")
+        checks.ok(new != old, "a changed rule version gives a new ETag")
+
+
 CHECKS = (
     check_preview_crop_yields_card,
     check_preview_crop_refused_sends_whole_photo,
     check_preview_finder_runs_once_per_photo,
+    check_preview_busy_finder_answers_whole_photo,
+    check_preview_failures_are_never_cached,
+    check_preview_cache_is_byte_bounded,
+    check_preview_rule_version_changes_etag,
 )
