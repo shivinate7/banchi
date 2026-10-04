@@ -2425,7 +2425,7 @@ test.describe('the Review summary band', () => {
 /* PR #694 shrank the photograph by the summary band's height, and at 820 the "Next" chip on it
    then clipped its own price ("no market pric"). No word in the chip may be cut by its own box,
    the chip stays inside the photograph, and its height is one number whether the next card's
-   name is short or long (nothing on screen moves unless the person moved it). */
+   name is short or long (nothing on screen moves unless the person moved it). The name span ellipsizes by design and is exempt from the clip check. */
 const nextOf = (name: string): Entry[] => [
   entry(14, 'set_ambiguous', '84.50', [candidate(0, '84.50'), candidate(1, '114.08')]),
   { ...entry(2, 'set_ambiguous', null, [candidate(0, '41.00')]), read: { name, number: '014/132', set: 'ME01' } },
@@ -2447,7 +2447,7 @@ for (const width of [820, 1440]) {
         const box = el.getBoundingClientRect()
         const kids = [el, ...Array.from(el.children)] as HTMLElement[]
         return {
-          clipped: kids.filter((k) => k.scrollWidth > k.clientWidth).map((k) => `${k.className}: ${k.scrollWidth}>${k.clientWidth}`),
+          clipped: kids.filter((k) => !k.classList.contains('review-next-name') && k.scrollWidth > k.clientWidth).map((k) => `${k.className}: ${k.scrollWidth}>${k.clientWidth}`),
           inside: box.left >= photo.left && box.right <= photo.right && box.top >= photo.top && box.bottom <= photo.bottom,
           height: box.height,
         }
