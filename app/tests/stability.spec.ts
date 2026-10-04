@@ -11,6 +11,7 @@ import { routesFromNav } from './routes'
 import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, line, order, seedPopulatedOrders, severalOrders, severalOrdersWalkPlan } from './routeFixtures'
 import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
 import { setViewport } from './phoneSwitch'
+import { stubMatched } from './routeFixtures'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts, type Shift } from './layoutShift'
 
 /* LAYOUT SHIFT, PER CASE. THE FIRST CASE IS LOAD TIME, PER SCREEN, UNDER A SLOW SERVER.
@@ -1254,3 +1255,23 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
     expect(bad, 'these moved something the person did not move').toEqual([])
   })
 }
+
+/* A TICKING COUNTER MOVES NOTHING (D313). The Capture head's "matched" counter ticks while the free reader
+   runs. Its number grows 9 -> 10 -> 99 -> 100 -> 1000 and every step is a poll answer, never a press, so
+   the browser's own layout-shift entries over the ticks sum to zero. */
+test('ticking: the Capture head\'s matched counter shifts nothing as its number grows a digit', async ({ page }) => {
+  const sweep = await stubMatched(page, 12, { matchedHere: 9 })
+  await watchShifts(page)
+  await setViewport(page, { width: 1440, height: 1000 })
+  await page.goto('/#/capture')
+  await settleFonts(page)
+  const value = page.locator('.capture-odo .bn-stat').filter({ hasText: 'matched' }).locator('.bn-stat-value')
+  await expect(value).toHaveText('9')
+  const mark = await markNow(page)
+  for (const next of [10, 99, 100, 1000]) {
+    sweep.matchedHere = next
+    await expect(value).toHaveText(String(next), { timeout: 8_000 }) // keep: waits one 3s poll tick per step
+  }
+  const shifts = (await readShifts(page)).shifts.filter((s) => s.at >= mark)
+  expect(sumOf(shifts), describeShifts(shifts)).toBe(0)
+})
