@@ -453,7 +453,7 @@ COMPONENTS = [
                                      "fingerprint (D301's one exception). Resumable, never spends, "
                                      "never touches card state, and nothing starts it but the owner's "
                                      "press. Progress is `inventory/match-prepare.json`.",
-                             "governed_by": ["D2", "D33", "D170", "D301"]},
+                             "governed_by": ["D2", "D33", "D65", "D166", "D170", "D301"]},
             "cmd_boxes.py": {"does": "`pkmnscan boxes names` — the one-time backfill that "
                                      "gives every unnamed box the stored name `Box <number>` "
                                      "(`store/master.py:Inventory.box_name_plan`). Previews by "
@@ -8747,15 +8747,17 @@ COMPONENTS = [
                         "failing against exactly that mutation before it was kept.",
             },
             "tests/capture-freeze.spec.ts": {
-                "does": "a long sitting must not freeze Capture: 300 dealt captures with a "
-                        "longtask observer (none over 50 ms in the last 10, the rail and the Last "
-                        "capture panel as ruled, the rail whole after Stop) and 60 hand-fed "
-                        "captures, a stale tile press refused with a toast, and the rail's height held "
-                        "across Stop. Run by `make design-check`.",
+                "does": "a long sitting must not freeze Capture. Every case runs under a 4x CPU "
+                        "throttle and judges the median main-thread blocked time per capture: "
+                        "the last 10 may not exceed 1.4 times the first 10 plus 30 ms. Cases: "
+                        "300 dealt captures (the rail and the Last capture panel as ruled, the "
+                        "rail whole after Stop), 60 hand-fed captures, a stale tile press "
+                        "refused with a toast, and the rail's height held across Stop. Run by "
+                        "`make design-check`.",
                 "governed_by": ["D10", "D164", "D313", "D316"],
-                "note": "Red on the unmemoized filmstrip (50 to 72 ms tasks from about capture "
-                        "25), green on the memoized one. POST /capture is intercepted, so "
-                        "nothing reaches a store.",
+                "note": "Hand-fed 60 was red while every capture rebuilt every filmstrip tile "
+                        "(median 213 to 396 ms per capture, climbing). POST /capture is "
+                        "intercepted, so nothing reaches a store.",
             },
             "tests/capture-section.spec.ts": {
                 "does": "sub-box capture's Section row (docs/specs/subbox-capture.md): the row "

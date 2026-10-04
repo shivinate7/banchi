@@ -367,6 +367,7 @@ The setup also starts by itself (section 8, Free setup). A press is a manual ref
 - The fingerprints: the number of stock images to read, one read each, and how many printings still have no image.
   A press reads the missing and stale images, in memory, and stores the fingerprints (D301, amended).
   It reports the printings read and the printings still with no image when it ends.
+  A printing with no image is also asked again once a week, with no press (section 8, Weekly re-check).
 
 **The receipt.** The run record shows the engine. It then shows the counts: matched, second look, and already answered.
 A matched card the finish ladder cannot finish goes to Review as before. The run line reads, for example,
@@ -435,8 +436,20 @@ A look that would start the same setup again (a set the catalog cannot name, a f
 A retry downloads the model from zero, because `match prepare` clears the partial file first.
 `pipeline_routes._spawn_prepare` is the one door: under a lock it writes the running record before it spawns, so a second start is refused.
 A tried mark made while a Prepare runs never counts once the Prepare ends.
-`match.index_stamp` changes when the index gains a set. `sweep.tried` counts a tried mark from an older stamp as empty,
+`match.index_stamp` changes when the index gains a set or a fingerprint. `sweep.tried` counts a tried mark from an older stamp as empty,
 so cards tried before their set was read are tried again.
+
+**Weekly re-check.** A printing with no image is asked again at most once a week, in the background, with no press. Nothing spends.
+`pipeline_routes.recheck_stock_photos` runs once per look of `stock_setup_loop`, under the same guards as the free setup
+(`_auto_setup_allowed`, runtime importable, model file present, no Prepare running). It calls `match.recheck_no_photo`.
+That asks again the oldest `match.RECHECK_ROWS_PER_PASS` `no_photo` and `no_url` rows whose `vec.at` is over 7 days old, and never an `ok` row or a whole set.
+It holds no write transaction across a fetch, and it skips a row that is `ok` by write time.
+It holds the Prepare's running record while it looks, so the sweep's tried marks made then are dropped when it ends.
+A `no_photo` printing is fetched again. A `no_url` printing has its set's catalog listing read once for a URL, then is fetched.
+A printing that gains an image is fingerprinted and becomes matchable. A row answered with 403, 404 or 410, or a listing with no URL, gets `at` set to now and waits another week.
+Any other failure (5xx, 429, decode) is transient: the row keeps its status, its `vec.note` names the cause, and it is asked again after one day.
+A network failure (`URLError`, timeout) ends the pass at once, and dates the row it hit on the same one-day clock. A set whose listing could not be read dates its rows on the same one-day clock.
+The pass's closing write marks the running record done only while the record still names this process.
 
 **The owner's ruling: the free read may run in the background, and always.** It is allowed on one condition:
 with an empty queue it uses barely any memory. This section bends two decisions, D1 and D273 (question 3).
@@ -452,8 +465,18 @@ The game must be one the matcher serves. An unhinted Pokemon card is never queue
 A card the worker looked at and did not accept is recorded as tried, against that photograph and that model file.
 It leaves the queue until it is re-shot or the model changes. It waits for a press.
 
-**What it writes.** One thing: an `identifications` row with engine `marqo-b`. It never writes card state.
-It never sets a SKU, a name or a number on a card. Those follow D258 (identity follows the SKU) and the join.
+**What it writes.** For each card it accepts: an `identifications` row with engine `marqo-b`, then the press's own adoption.
+The card becomes `identified` through `cmd_identify._adopt_cached` and `record_adopted`. The join's own write follows
+(`cmd_join.apply_join`: SKU table, queues, live counters) against the newest export the Mac holds for the game whose scope note covers the whole category, of any age (`pipeline_routes._held_exports` and `_covers`).
+The press keeps its 900 s rule, because an export is also a price reading (D166). The reader uses the file only to name and adopt cards.
+Every reading and `pricing.json` it writes carries the export's own mtime (the oldest, for a run over several games), never the time of the adoption, so the pricing screens see the true age of the prices.
+Each adopted card carries a run named `match-sweep`, closed at 64 cards. After the chunk's lock closes the run gets a press's join record:
+corpus seed, `pricing.json` and manifest. So the worklist, the unsent ledger and emit see the card as they see a press card.
+A card whose set hint names no set in the export is not adopted.
+A card the ladder cannot settle is queued for review as a press queues it (`ambiguous_no_signal`).
+The whole chunk is one `Store.write`. A game with no such export is not adopted: the row is banked and a press adopts it.
+An unaccepted card stays `captured` for the press's paid second look. Nothing spends. A press bills nothing for an adopted card and never adopts it twice.
+It never sets a SKU, a name or a number outside that path. Those follow D258 (identity follows the SKU) and the join.
 The row records the card's `cid`. A move or a renumber changes the position key and never the `cid`.
 The row is keyed like every cache row, by position, and the `cid` lets a reader match it back to the card.
 
