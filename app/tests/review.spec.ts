@@ -2419,3 +2419,49 @@ test.describe('the Review summary band', () => {
     })
   })
 })
+
+/* ------------------------------------------------------- the lookahead chip, never clipped */
+
+/* PR #694 shrank the photograph by the summary band's height, and at 820 the "Next" chip on it
+   then clipped its own price ("no market pric"). No word in the chip may be cut by its own box,
+   the chip stays inside the photograph, and its height is one number whether the next card's
+   name is short or long (nothing on screen moves unless the person moved it). The name span ellipsizes by design and is exempt from the clip check. */
+const nextOf = (name: string): Entry[] => [
+  entry(14, 'set_ambiguous', '84.50', [candidate(0, '84.50'), candidate(1, '114.08')]),
+  { ...entry(2, 'set_ambiguous', null, [candidate(0, '41.00')]), read: { name, number: '014/132', set: 'ME01' } },
+]
+
+for (const width of [820, 1440]) {
+  test(`the next-card chip is not clipped and keeps one height at ${width} wide, light`, async ({ page }) => {
+    await page.addInitScript(() => {
+      // eslint-disable-next-line no-restricted-syntax -- SEEDING THE VERY KEY UNDER TEST (the theme); the same disable themes.spec.ts carries.
+      window.localStorage.setItem('banchi.theme', 'light')
+    })
+    const heights: number[] = []
+    for (const name of ['Mew', 'Snorlax, Sleeping Giant']) {
+      await open(page, nextOf(name)) // a later route for /queues wins over the earlier one
+      await setViewport(page, { width, height: DESK.height })
+      await settleFonts(page)
+      await settleEnter(page)
+      const chip = page.locator('.review-next')
+      await expect(chip).toContainText('no market price')
+      const read = await chip.evaluate((el) => {
+        const photo = el.parentElement!.querySelector('.review-frame')!.getBoundingClientRect()
+        const box = el.getBoundingClientRect()
+        const kids = [el, ...Array.from(el.children)] as HTMLElement[]
+        return {
+          clipped: kids.filter((k) => !k.classList.contains('review-next-name') && k.scrollWidth > k.clientWidth).map((k) => `${k.className}: ${k.scrollWidth}>${k.clientWidth}`),
+          inside: box.left >= photo.left && box.right <= photo.right && box.top >= photo.top && box.bottom <= photo.bottom,
+          height: box.height,
+          nameWidth: el.querySelector('.review-next-name')!.getBoundingClientRect().width,
+        }
+      })
+      expect(read.clipped, `${name}: text cut by its own box`).toEqual([])
+      expect(read.inside, `${name}: chip box leaves the photograph`).toBe(true)
+      /* The chip exists to say WHICH card is next: at 820 the name keeps room to be read (it may end in an ellipsis). */
+      if (width === 820) expect(read.nameWidth, `${name}: the name collapses`).toBeGreaterThanOrEqual(60)
+      heights.push(read.height)
+    }
+    expect(heights[1], 'chip height changes with its text').toBe(heights[0])
+  })
+}

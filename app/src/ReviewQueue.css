@@ -407,9 +407,21 @@
   min-width: 0;
   white-space: nowrap;
 }
-.review-next-label { font-weight: 700; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); }
-.review-next-name { color: var(--bn-ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.review-next-price { --digits: 9; color: var(--bn-ink-2); font-weight: 600; } /* "$1,234.50" (D313) */
+.review-next-label { font-weight: 700; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); flex: none; }
+.review-next-name { color: var(--bn-ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+.review-next-price { --digits: 9; flex: none; color: var(--bn-ink-2); font-weight: 600; } /* "$1,234.50" (D313) */
+/* Narrow: the photo is too small for one line. Two fixed lines, name beside NEXT, price below (D313). */
+@media (max-width: 899px) {
+  .review-next {
+    display: grid;
+    grid-template-columns: auto minmax(4rem, 1fr);
+    align-content: center;
+    column-gap: var(--bn-2);
+    height: 44px;
+    border-radius: var(--bn-r-lg);
+  }
+  .review-next-price { grid-column: 1 / -1; }
+}
 .review-caption-slot { font-size: var(--bn-fs-sm); line-height: var(--bn-lh-snug); }
 .review-next-empty { color: var(--bn-ink-3); font-weight: 500; }
 
@@ -1077,7 +1089,7 @@
   }
   /* The machine spelling beside each choice costs the note a third line at 366px wide; the
      label and the note are the choice, and the spelling is still in the receipt's title. */
-  .review-close-choice { grid-template-columns: auto minmax(0, 1fr); }
+  .review-close-choice { grid-template-columns: auto minmax(4rem, 1fr); }
   .review-close-choice .review-code { display: none; }
   .review-facts { grid-template-columns: minmax(0, 1fr); }
   .review-done { margin-top: var(--bn-4); padding: var(--bn-2); }
