@@ -751,6 +751,36 @@ def check_sweep_band_scope(checks: Checks) -> None:
             thread.join(timeout=5)
 
 
+def check_sweep_band_aside_is_current(checks: Checks) -> None:
+    """`aside` counts a named key only while the set-aside mark still holds: the card is captured, has no identification,
+    and carries the capture id the mark was made on. A card re-photographed after it was set aside is unread, never aside;
+    one that later got an identification is neither (it is matched or read)."""
+    checks.note("")
+    checks.note("SWEEP BAND ASIDE — a stale set-aside mark counts nowhere")
+    with isolated_home():
+        held = _capture(game="pokemon", set_hint="sv9")
+        reshot = _capture(game="pokemon", set_hint="sv9")
+        identified = _capture(game="pokemon", set_hint="sv9")
+        cards = Store().read().inventory.cards
+        marks = {key: cards[key].capture_id or "" for key in (held, reshot, identified)}
+        sweep._write_json(sweep.crash_path(), {"model": matchconst.MODEL_SHA256, "aside": marks})
+        _reshoot(reshot)
+        _put(identified, MATCHER)
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = _spawn_server(httpd)
+        try:
+            status, body, _ = request(port, "GET", "/pipeline/match/sweep?keys=" + ",".join([held, reshot, identified]))
+            answer = json.loads(body) if status == 200 else {}
+            checks.equal(status, 200, "GET with keys answers")
+            checks.equal(answer.get("aside"), 1, "aside counts only the card whose mark still holds")
+            checks.equal(answer.get("unread"), 1, "the re-photographed card is unread")
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+
 CHECKS = (
     check_sweep_queue,
     check_sweep_watcher,
@@ -768,5 +798,6 @@ CHECKS = (
     check_sweep_sitting_count,
     check_sweep_band_counts,
     check_sweep_band_scope,
+    check_sweep_band_aside_is_current,
     check_sweep_imports_light,
 )

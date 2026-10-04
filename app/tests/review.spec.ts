@@ -1818,6 +1818,28 @@ test('a refused press says so in a toast and moves nothing', async ({ page }) =>
   expect(after?.x).toBe(before?.x)
 })
 
+/* THE BAND'S 3 s POLL ENDS WHEN A PRESS CHANGES NOTHING. A refused press leaves `paid + unread` as it was, so after
+ * two answers alike the band is back on its slow pace; it must not poll at 3 s for as long as Review is open. */
+test('a refused press does not leave the band polling at the live pace', async ({ page }) => {
+  test.setTimeout(30_000)
+  await waiting(page, 12)
+  await runsReads(page, PAST, keysOf(12))
+  await paidWait(page, keysOf(12))
+  await spendRoute(page, { refuse: true })
+  let sweeps = 0
+  await page.route(/\/pipeline\/match\/sweep(\?.*)?$/, (route) => {
+    sweeps++
+    return route.fallback()
+  })
+  await open(page)
+  await press(page).click()
+  await expect(page.locator('.bn-toast', { hasText: 'Nothing was paid for' })).toBeVisible()
+  await page.waitForTimeout(4_000) // keep: press read plus one live tick
+  const settled = sweeps
+  await page.waitForTimeout(8_000) // keep: two live ticks, slow pace is 20 s
+  expect(sweeps, 'sweep reads in 8 s once the press changed nothing').toBe(settled)
+})
+
 /* A DOUBLE PRESS BUYS ONCE. Two clicks land in one task, before React can draw the busy state,
  * so the only thing that can stop the second is the screen's own in-flight guard. The server's
  * claim (D174) still refuses a second tab; that half is `make submission-selftest`'s.
