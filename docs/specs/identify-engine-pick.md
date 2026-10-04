@@ -503,14 +503,15 @@ The peak is above the 454 MB of the model alone, because the worker also holds t
 **It cannot crash-loop.** A worker that exits with any code but 0 or 3 is waited out for longer each time: 30 seconds, doubling to 30 minutes.
 Exit code 3 means the model file, the index or the runtime is not ready, and the wait is 300 seconds.
 The worker writes its log to `.serve/match-sweep.log`. Before each chunk it records the cards in `match-sweep-inflight.json`.
+On exit 3 from a missing runtime it also writes `match-sweep-blocked.json`. `GET /pipeline/match/sweep` reports `blocked: "runtime_missing"` only while the runtime is not importable now, so the answer follows the present state. `GET /pipeline/match` carries `runtime_missing`, and Prepare refuses with 409 `runtime_missing`.
 A worker that dies inside a chunk, even by an out-of-memory kill, leaves the file. A crash is not a read, so no card is marked tried and every card stays in the free queue.
 The next chunk is half the size. A card that crashes a chunk of one is set aside in `match-sweep-crash.json`: out of the free queue, never tried, never paid.
-The watcher's state file counts them as `aside`.
+`GET /pipeline/match/sweep` counts them as `aside`.
 **One watcher runs at a time, by one lock.** The watcher holds an `flock` on `inventory/match-sweep.lock`. A held lock is the only thing that reads as running, so a reused pid cannot.
 The watcher writes `.serve/match-sweep.json` and a reap owner mark (D305). `make down` and `make reap` stop it, and a SIGTERM stops the worker before the watcher exits.
 It exits when its store or its tree is gone.
 
-**The toggle.** The on and off switch is one row, "Match in the background", in the Rig panel of the Capture screen.
+**The toggle.** The on and off switch is one row, "Background Match", in the Rig panel of the Capture screen.
 Its state is the `match_sweep` row in the store's `meta` table. It is not a device key, and it is not in `deviceMemory.ts`.
 `PUT /pipeline/match/sweep` writes it and starts the watcher. `GET /pipeline/match/sweep` reads it.
 The row holds its size until the store answers (D313). The reader is off until the owner turns it on.

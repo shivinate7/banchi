@@ -333,7 +333,7 @@ def check_sweep_routes(checks: Checks) -> None:
                 checks.equal(len(spawned), 1, "and starts the watcher")
                 status, body, _ = request(port, "GET", "/pipeline/match/sweep")
                 answer = json.loads(body)
-                checks.equal(sorted(answer), ["aside", "matched", "on", "running"], "GET answers on, running, matched and aside")
+                checks.equal(sorted(answer), ["aside", "blocked", "matched", "on", "running"], "GET answers on, running, matched, blocked and aside")
                 checks.equal(
                     (answer["on"], answer["matched"]), (True, 2),
                     "on is the stored switch, matched counts marqo-b rows only",
@@ -601,6 +601,27 @@ def check_sweep_cid_guard(checks: Checks) -> None:
         checks.ok(renamed not in engines, "a card whose cid changed mid-read gets no row from the old answer")
 
 
+def check_sweep_runtime_cause(checks: Checks) -> None:
+    checks.note("")
+    checks.note("SWEEP CAUSE — `blocked` on GET /pipeline/match/sweep is derived from the runtime now, never stored")
+    with isolated_home(), _tree():
+        _capture(game="pokemon", set_hint="sv9")
+        for on in (True, False):  # the switch and the queue do not matter: the answer is the present state
+            _switch(on)
+            for importable, want in ((False, "runtime_missing"), (True, None)):
+                with mock.patch.object(matchconst, "runtime_importable", lambda value=importable: value):
+                    checks.equal(
+                        pipeline_routes.do_pipeline_match_sweep().get("blocked"), want,
+                        f"switch {'on' if on else 'off'}, runtime {'importable' if importable else 'missing'}: blocked is {want!r}",
+                    )
+        sweep.set_blocked("runtime_missing")  # a value a past worker left behind
+        with mock.patch.object(matchconst, "runtime_importable", lambda: True):
+            checks.equal(
+                pipeline_routes.do_pipeline_match_sweep().get("blocked"), None,
+                "a stale stored cause does not show once the runtime is installed",
+            )
+
+
 CHECKS = (
     check_sweep_queue,
     check_sweep_watcher,
@@ -610,6 +631,7 @@ CHECKS = (
     check_sweep_crash,
     check_sweep_crash_stays_free,
     check_run_route_defaults_free,
+    check_sweep_runtime_cause,
     check_sweep_cid_guard,
     check_sweep_worker,
     check_reshoot_drops_matcher_row,

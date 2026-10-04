@@ -138,6 +138,23 @@ def reset_chunk() -> None:
         _write_json(crash_path(), {"model": MODEL_SHA256, **{k: v for k, v in record.items() if k != "model"}})
 
 
+def blocked_path() -> Path:
+    """Why the worker could not run. A file of its own: `_write_state` carries the watcher's pid."""
+    return inventory_dir() / "match-sweep-blocked.json"
+
+
+def blocked() -> Optional[str]:
+    record = _read_json(blocked_path())
+    return record.get("cause") if isinstance(record, dict) else None
+
+
+def set_blocked(cause: Optional[str]) -> None:
+    if cause is None:
+        blocked_path().unlink(missing_ok=True)
+    elif blocked() != cause:
+        _write_json(blocked_path(), {"cause": cause})
+
+
 def _read_json(path: Path):
     try:
         return json.loads(path.read_text("utf-8"))
