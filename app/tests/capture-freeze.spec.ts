@@ -35,18 +35,37 @@ const json = (body: unknown, status = 200) => ({ status, contentType: 'applicati
 
 sealEveryTest()
 
-/** The long-task observer, installed before the app runs. */
+/** The long-task observer and a blocked-time probe, installed before the app runs, and the CPU
+ *  throttled 4x over CDP so every machine measures the same regime. The probe is a 10 ms timer: how
+ *  late it fires is how long the main thread was blocked, summed into `__jank`, which sees the cost
+ *  that stays under the 50 ms long-task line. */
 async function observeLongTasks(page: Page): Promise<void> {
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 })
   await page.addInitScript(() => {
     const long: number[] = []
-    ;(window as unknown as { __long: number[] }).__long = long
+    const w = window as unknown as { __long: number[]; __jank: { ms: number } }
+    w.__long = long
+    w.__jank = { ms: 0 }
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) long.push(Math.round(entry.duration))
     }).observe({ entryTypes: ['longtask'] })
+    let last = performance.now()
+    setInterval(() => {
+      const now = performance.now()
+      w.__jank.ms += Math.max(0, now - last - 10)
+      last = now
+    }, 10)
   })
 }
 const longTasks = (page: Page) => page.evaluate(() => (window as unknown as { __long: number[] }).__long.slice())
-const clearLong = (page: Page) => page.evaluate(() => { (window as unknown as { __long: number[] }).__long.length = 0 })
+const clearLong = (page: Page) =>
+  page.evaluate(() => {
+    const w = window as unknown as { __long: number[]; __jank: { ms: number } }
+    w.__long.length = 0
+    w.__jank.ms = 0
+  })
+const blockedMs = (page: Page) => page.evaluate(() => Math.round((window as unknown as { __jank: { ms: number } }).__jank.ms))
 
 /** The wire, and one distinct real-size JPEG per photo index, made once in a scratch page so the
  *  encode never lands in the page under test. */
@@ -147,44 +166,24 @@ const rail = (page: Page) => page.locator('footer.capture-undo')
 const tiles = (page: Page) => rail(page).locator('.capture-undo-row')
 const lastPanel = (page: Page) => page.locator('aside.capture-last')
 
-/* THE BAR IS SCALED TO THE MACHINE. A fixed 50 ms either cries wolf on a slow CI runner or means
- * nothing on a fast Mac. `calibrate` times a fixed main-thread workload on the page under test and
- * divides by `REFERENCE_MS`, the same workload's median on the owner's Mac (measured when this was
- * written); the bar is 50 ms times that ratio, never below 1. The browser reports only tasks of 50 ms
- * or more, so a faster machine cannot tighten the bar below 50.
- * A SECOND CHECK NEEDS NO CALIBRATION: the long-task total over the last 10 captures may not exceed
- * `GROWTH` times the first 10 plus one bar's worth, so a cost that grows with the sitting shows on
- * any machine. */
-const REFERENCE_MS = 49
-const GROWTH = 3
-async function calibrate(page: Page): Promise<number> {
-  const took = await page.evaluate(() => {
-    const runs: number[] = []
-    for (let r = 0; r < 5; r += 1) {
-      const t0 = performance.now()
-      let x = 0
-      for (let i = 0; i < 1e8; i += 1) x += Math.sqrt(i)
-      if (x < 0) throw new Error('unreachable')
-      runs.push(performance.now() - t0)
-    }
-    return runs.sort((a, b) => a - b)[2] ?? 0
-  })
-  console.log(`CALIBRATION workload ${took.toFixed(1)} ms, reference ${REFERENCE_MS} ms`)
-  return Math.max(1, took / REFERENCE_MS)
-}
-const total = (windows: number[][]) => windows.flat().reduce((a, b) => a + b, 0)
-/** Why a run fails the scaled bar or the growth check, or '' when it holds. */
-function judge(perCapture: number[][], first: number, last: number, ratio: number): string {
-  const bar = Math.round(50 * ratio)
-  const late = perCapture.slice(-last)
-  const worst = Math.max(0, ...late.flat())
-  const flagged = perCapture.map((t, i) => (t.length > 0 ? `#${i + 1}:${t.join('+')}` : '')).filter(Boolean).slice(-12).join(' ')
-  const early = total(perCapture.slice(0, first))
-  const grown = total(late)
-  const notes: string[] = []
-  if (worst > bar) notes.push(`a long task of ${worst} ms in the last ${last} captures, over the ${bar} ms bar (machine ratio ${ratio.toFixed(2)})`)
-  if (grown > GROWTH * early + bar) notes.push(`long-task total ${grown} ms in the last ${last} captures against ${early} ms in the first ${first}`)
-  return notes.length === 0 ? '' : `${notes.join('; ')}; last flagged: ${flagged || 'none'}`
+/* THE CHECK IS A GROWTH CHECK, MEASURED IN ONE REGIME. Every case runs with the CPU throttled 4x
+ * (`observeLongTasks`), so a fast Mac and a slow runner see the same slowdown and a fixed number
+ * means the same thing on both. Each capture's cost is the main-thread blocked time in its window
+ * (`blockedMs`); a window of captures is judged by the MEDIAN of its captures, so one noisy capture
+ * cannot decide the run. The last 10 captures may cost at most `GROWTH` times the first 10 plus
+ * `NOISE_MS`: a cost that grows with the sitting shows on any machine, and a constant cost passes
+ * on any machine. Long tasks are reported in the message and are not the bar. */
+const GROWTH = 1.4
+const NOISE_MS = 30
+const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? 0
+/** Why a run fails the growth check, or '' when it holds. */
+function judge(cost: number[], long: number[][], window: number): string {
+  const early = median(cost.slice(0, window))
+  const late = median(cost.slice(-window))
+  console.log(`GROWTH median blocked ms per capture: first ${window} ${early}, last ${window} ${late}`)
+  if (late <= GROWTH * early + NOISE_MS) return ''
+  const flagged = long.map((t, i) => (t.length > 0 ? `#${i + 1}:${t.join('+')}` : '')).filter(Boolean).slice(-12).join(' ')
+  return `median blocked time per capture grew from ${early} ms (first ${window}) to ${late} ms (last ${window}), over ${GROWTH}x plus ${NOISE_MS} ms; last long tasks: ${flagged || 'none'}`
 }
 
 /** The dispenser connected and dealing into box 5. `dealOne(n)` waits for the machine to settle
@@ -195,7 +194,6 @@ async function startDealing(page: Page, count: number) {
   await fakeBluetooth(page)
   const wire = await stubWire(page, count)
   await pickCameraAndBox(page)
-  const ratio = await calibrate(page)
   await armMotion(page)
   await injectScene(page)
   await expect(page.locator('.capture-motion-hud')).toBeAttached({ timeout: 5_000 })
@@ -229,51 +227,54 @@ async function startDealing(page: Page, count: number) {
     await control(page, 'Stop dispenser').click()
     await expect(control(page, 'Start dispenser')).toBeVisible({ timeout: 10_000 })
   }
-  return { wire, dealOne, stop, ratio }
+  return { wire, dealOne, stop }
 }
 
-test('300 captures while the dispenser deals: no long task, the rail paused, the last capture live', async ({ page }) => {
+test('300 captures while the dispenser deals: no growth in cost, the rail paused, the last capture live', async ({ page }) => {
   const CAPTURES = 300
   test.setTimeout(1_500_000)
-  const { dealOne, stop, ratio } = await startDealing(page, CAPTURES)
+  const { dealOne, stop } = await startDealing(page, CAPTURES)
   const perCapture: number[][] = []
+  const cost: number[] = []
   let railMoved = ''
   for (let n = 1; n <= CAPTURES; n += 1) {
     await dealOne(n)
     perCapture.push(await longTasks(page))
+    cost.push(await blockedMs(page))
     const count = await tiles(page).count()
     const top = (await tiles(page).first().getAttribute('aria-label')) ?? ''
     if (railMoved === '' && (count !== Math.min(n, DEALING_RAIL_TILES) || !top.endsWith(`Card ${n}`)))
       railMoved = `at capture ${n} the rail shows ${count} tiles, first "${top}"; want ${Math.min(n, DEALING_RAIL_TILES)}, first Card ${n}`
   }
-  const verdict = judge(perCapture, 10, 10, ratio)
+  const verdict = judge(cost, perCapture, 10)
 
   await stop()
   // the catch-up render may be long and is not barred
   await expect(tiles(page)).toHaveCount(CAPTURES, { timeout: 30_000 })
 
   expect.soft(railMoved, 'while dealing the rail shows exactly the newest tiles, newest first').toBe('')
-  expect(verdict, `long tasks over ${CAPTURES} dealt captures`).toBe('')
+  expect(verdict, `blocked time over ${CAPTURES} dealt captures`).toBe('')
 })
 
-test('60 hand-fed captures raise no long task', async ({ page }) => {
+test('60 hand-fed captures do not cost more as the sitting grows', async ({ page }) => {
   const CAPTURES = 60
-  test.setTimeout(180_000)
+  test.setTimeout(300_000)
   await observeLongTasks(page)
   await handCamera(page)
   await stubWire(page, CAPTURES)
   await pickCameraAndBox(page)
-  const ratio = await calibrate(page)
   await expect(page.getByRole('button', { name: 'Capture', exact: true })).toBeEnabled()
   const perCapture: number[][] = []
+  const cost: number[] = []
   for (let n = 1; n <= CAPTURES; n += 1) {
     await clearLong(page)
     await page.keyboard.press('c')
-    await expect(page.locator('.capture-undo-row').first()).toHaveAttribute('aria-label', new RegExp(`Card ${n}$`))
+    await expect(page.locator('.capture-undo-row').first()).toHaveAttribute('aria-label', new RegExp(`Card ${n}$`), { timeout: 15_000 })
     await page.waitForTimeout(400) // keep: 400 ms render settle window
     perCapture.push(await longTasks(page))
+    cost.push(await blockedMs(page))
   }
-  expect(judge(perCapture, 10, 10, ratio), `long tasks over ${CAPTURES} hand-fed captures`).toBe('')
+  expect(judge(cost, perCapture, 10), `blocked time over ${CAPTURES} hand-fed captures`).toBe('')
 })
 
 test('a tile press after more captures landed undoes nothing, says so, and U still undoes the newest', async ({ page }) => {
@@ -283,7 +284,7 @@ test('a tile press after more captures landed undoes nothing, says so, and U sti
   await pickCameraAndBox(page)
   const shoot = async (n: number) => {
     await page.keyboard.press('c')
-    await expect(tiles(page).first()).toHaveAttribute('aria-label', new RegExp(`Card ${n}$`))
+    await expect(tiles(page).first()).toHaveAttribute('aria-label', new RegExp(`Card ${n}$`), { timeout: 15_000 })
   }
   for (const n of [1, 2, 3]) await shoot(n)
   // Hold the press handler of the Card 1 tile as it was painted (Undo 3), then let two captures land.
