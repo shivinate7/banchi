@@ -1,11 +1,13 @@
 // Protects: The Capture section picker fills its row, steps with the bracket keys, sends S with the right section, falls back plainly on a stale pick, and never moves the shutter.
 // Governs: D118, D128, D164, D260, D264
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { stubMatched } from './routeFixtures'
+import { settleFonts } from './fontsReady'
 import type { Page } from '@playwright/test'
 import type { GameRegistry } from '../src/types'
 import { setViewport } from './phoneSwitch'
-import { afterPaint } from './motionSettled'
+import { afterPaint, settleMotion } from './motionSettled'
 
 /* SUB-BOX CAPTURE, LANE B — the Capture screen's own section picker
  * (docs/specs/subbox-capture.md §5). Lane A (the store, the server, the harness) is proved by
@@ -1057,4 +1059,89 @@ test.describe('Background Match', () => {
     await expect(row(page)).toContainText('Off')
     expect(wire.sweepPuts).toEqual([{ on: true }, { on: false }])
   })
+})
+
+/* THE CAPTURE HEAD'S THIRD COUNTER, "matched" (owner ruling: fixed width, one word, no mechanism noun). */
+const matchedStat = (page: Page, label: string): Locator => page.locator('.capture-odo .bn-stat').filter({ hasText: label })
+const bgSwitch = (page: Page) => page.getByRole('switch', { name: /Background Match/ })
+/** Document-relative: a real click scrolls the window, and a viewport box would read that as a move. */
+const boxOf = async (l: Locator) =>
+  l.evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    return { x: r.x + window.scrollX, y: r.y + window.scrollY, width: r.width, height: r.height }
+  })
+
+/* 1. WITH THE SWITCH ON: the number is the route's `matched_here`, it follows the route without a reload,
+   the read names this sitting's keys, and 9 -> 10 does not change the box. */
+test('matched: the head shows the sitting\'s matched count live, in a box of fixed width', async ({ page }) => {
+  const sweep = await stubMatched(page, 12, { matchedHere: 9 })
+  await page.goto('/#/capture')
+  await settleFonts(page)
+  const matched = matchedStat(page, 'matched')
+  await expect(matched).toHaveCount(1)
+  await expect(matched.locator('.bn-stat-value')).toHaveText('9')
+  expect(sweep.asked.at(-1), 'the read is scoped to this sitting\'s keys').toBe(Array.from({ length: 12 }, (_, i) => `3/${i + 1}`).join(','))
+  const before = await boxOf(matched)
+  sweep.matchedHere = 10
+  await expect(matched.locator('.bn-stat-value')).toHaveText('10', { timeout: 8_000 }) // keep: waits one 3s poll tick, no reload
+  const after = await boxOf(matched)
+  expect(after.width, 'the counter grew a digit and its box changed width').toBe(before.width)
+  expect(after.x).toBe(before.x)
+  expect(await matched.locator('.bn-stat-value').evaluate((el) => getComputedStyle(el).fontVariantNumeric)).toContain('tabular-nums')
+})
+
+/* 2. WITH THE SWITCH OFF: no counter, and flipping the switch moves neither of the other two. */
+test('matched: absent while the switch is off, and the flip moves neither other counter', async ({ page }) => {
+  await stubMatched(page, 12, { on: false, matchedHere: 4 })
+  await page.goto('/#/capture')
+  await settleFonts(page)
+  await expect(bgSwitch(page)).toHaveAttribute('aria-checked', 'false')
+  await expect(page.locator('.capture-odo .bn-stat')).toHaveCount(2)
+  await expect(page.locator('.capture-odo')).not.toContainText('matched')
+  await settleMotion(page)
+  const [cap0, next0] = [await boxOf(matchedStat(page, 'captured')), await boxOf(matchedStat(page, 'next card'))]
+  await bgSwitch(page).click()
+  await expect(matchedStat(page, 'matched')).toHaveCount(1)
+  await settleMotion(page)
+  const [cap1, next1] = [await boxOf(matchedStat(page, 'captured')), await boxOf(matchedStat(page, 'next card'))]
+  expect(cap1, 'captured moved when the matched counter appeared').toEqual(cap0)
+  expect(next1, 'next card moved when the matched counter appeared').toEqual(next0)
+  await bgSwitch(page).click()
+  await expect(page.locator('.capture-odo .bn-stat')).toHaveCount(2)
+})
+
+/* No mechanism words: the label is the one word, a number over it, no mechanism noun beside it. */
+test('matched: the counter reads a number over "matched" and nothing else', async ({ page }) => {
+  await stubMatched(page, 3, { matchedHere: 2 })
+  await page.goto('/#/capture')
+  await expect(matchedStat(page, 'matched')).toHaveCount(1)
+  await expect(matchedStat(page, 'matched')).toHaveText(/^\s*2\s*matched\s*$/)
+})
+
+/* A FAILED FIRST READ OF THE SWITCH RECOVERS. The row says "Unavailable" and is pressable; the press reads
+   again at once, and once a read lands the switch works and the matched counter appears. */
+test('Background Match: a failed first read shows Unavailable, a press re-reads, then the switch works', async ({ page }) => {
+  const sweep = await stubMatched(page, 5, { on: false, matchedHere: 3 })
+  let reads = 0
+  let failing = true // every read of the switch fails until the test lets one through
+  await page.route(/\/pipeline\/match\/sweep(\?.*)?$/, (route) => {
+    /* the switch's own read carries no `keys`; the counter's poll does, and is not the read under test */
+    if (route.request().method() !== 'GET' || new URL(route.request().url()).searchParams.has('keys')) return route.fallback()
+    reads += 1
+    if (failing) return route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":{"code":"boom","message":"no"}}' })
+    return route.fallback()
+  })
+  await page.goto('/#/capture')
+  const row = page.getByRole('switch', { name: /Background Match/ })
+  await expect(row).toContainText('Unavailable')
+  await expect(row).toBeEnabled()
+  failing = false
+  const before = reads
+  await row.click()
+  await expect(row).toContainText('Off')
+  expect(reads, 'the press read again').toBeGreaterThan(before)
+  await row.click()
+  await expect(row).toContainText('On')
+  expect(sweep.on).toBe(true)
+  await expect(page.locator('.capture-odo .bn-stat').filter({ hasText: 'matched' }).locator('.bn-stat-value')).toHaveText('3')
 })

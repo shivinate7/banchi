@@ -520,7 +520,11 @@ Turning the toggle on never downloads. With no model or no index, the toggle rea
 
 **What the screens show (D313, nothing on screen moves unless the person moved it).**
 
-- Nothing on the capture screen changes while the sweep reads. No count, no spinner, no new element.
+- The Capture head shows a third counter, "matched", beside "captured" and "next card": how many of this sitting's cards the free reader has matched.
+  It shows only while the Background Match switch is on, and no other screen shows progress. It reads
+  `GET /pipeline/match/sweep?keys=<the sitting's position keys>`, which adds `matched_here` and `worker`, with `usePoll` at about 3 s while a worker
+  runs and 20 s otherwise. That path never probes the watcher's lock, so polling cannot stop the reader from starting, and it reads the store read-only, in the cheap photo lane, with no table-wide count.
+  The counter has tabular figures and a slot of fixed width from the first paint. It does not animate, and the switch flipping moves neither other counter.
 - The runs sheet shows one snapshot count: how many cards the free reader has matched. It sits on the "Prepare matching" card, read when the sheet opens
   and when the owner presses refresh. It never ticks. It counts every `marqo-b` row, from a press or from the background reader.
 - A per-card detail shows on request only: the engine, the match and the margin.
