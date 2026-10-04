@@ -2293,11 +2293,49 @@ def check_move_receipt_lines(checks: Checks) -> None:
         )
 
 
+def check_empty_section_starts(checks: Checks) -> None:
+    """An empty section starts at the cards before it plus one (D58), so the capture screen's
+    "next card" for it is that start plus zero. Sold cards leave gaps in the index, and a
+    divider typed past the last card used to keep its INDEX minus the gaps before it, so the
+    second of two trailing empty sections read card 498 where the next capture is card 497."""
+    checks.note("")
+    checks.note("EMPTY SECTION STARTS - an empty section starts after the last card on hand")
+    sparse = (1, 2, 3, 4, 10, 11, 12, 20)  # 8 cards on hand, gaps in the index
+
+    def spans(layout, occupied):
+        return [
+            (s["section"], s["start"], s["count"])
+            for s in capture_server._section_spans(1, layout, len(occupied), occupied)
+        ]
+
+    checks.equal(
+        spans((1, 5, 21, 30), sparse), [(1, 1, 4), (2, 5, 4), (3, 9, 0), (4, 9, 0)],
+        "(a) two trailing empty sections both start at the card count plus one",
+    )
+    checks.equal(
+        spans((1, 5, 21), sparse), [(1, 1, 4), (2, 5, 4), (3, 9, 0)],
+        "(b) one trailing empty section starts at the card count plus one",
+    )
+    checks.equal(
+        spans((1, 5, 13, 21), sparse), [(1, 1, 4), (2, 5, 3), (3, 8, 1), (4, 9, 0)],
+        "(c) a middle empty section starts at the cards before it plus one",
+    )
+    checks.equal(
+        spans((1, 5, 13, 15, 21), sparse),
+        [(1, 1, 4), (2, 5, 3), (3, 8, 0), (4, 8, 1), (5, 9, 0)],
+        "(c) an empty section between two filled ones starts at the cards before it plus one",
+    )
+    checks.equal(
+        spans((1, 5, 13), sparse), [(1, 1, 4), (2, 5, 3), (3, 8, 1)],
+        "(d) control: no empty section, nothing changes",
+    )
+
+
 CHECKS = (
     check_box_map_safety, check_section_moves, check_order_key_migration,
     check_per_card_order, check_card_moves, check_delete_after_placement,
     check_undo_keeps_paid_answers, check_front_of_box, check_card_move_refusals,
     check_divider_editor_keys, check_delete_keeps_dividers, check_merge_speed,
     check_r5_links_and_empty_sections, check_divider_anchor, check_capture_into_section,
-    check_layout_batch, check_move_receipt_lines,
+    check_layout_batch, check_move_receipt_lines, check_empty_section_starts,
 )
