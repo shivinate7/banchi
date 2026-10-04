@@ -12583,13 +12583,15 @@ def _section_spans(
             break
         at = end + 1
 
-    for ordinal, start in enumerate(mapped, start=1):
+    for ordinal, _slot_start in enumerate(mapped, start=1):
         if ordinal in seen:
             continue
         spans.append(
             {
                 "section": ordinal,
-                "start": start,
+                # D58: an empty section starts after the cards before it, never at its
+                # divider's index (which keeps the sold gaps and may sit past the last card).
+                "start": 1 + sum(n for sec, n in per_section.items() if sec < ordinal),
                 "end": mapped[ordinal] - 1 if ordinal < len(mapped) else None,
                 "count": per_section.get(ordinal, 0),
                 "name": (names or {}).get(ordinal),
