@@ -437,8 +437,13 @@ The game must be one the matcher serves. An unhinted Pokemon card is never queue
 A card the worker looked at and did not accept is recorded as tried, against that photograph and that model file.
 It leaves the queue until it is re-shot or the model changes. It waits for a press.
 
-**What it writes.** One thing: an `identifications` row with engine `marqo-b`. It never writes card state.
-It never sets a SKU, a name or a number on a card. Those follow D258 (identity follows the SKU) and the join.
+**What it writes.** For each card it accepts: an `identifications` row with engine `marqo-b`, then the press's own adoption.
+The card becomes `identified` through `cmd_identify._adopt_cached` and `record_adopted`. The join's own write follows
+(`cmd_join.apply_join`: SKU table, queues, live counters) against the game's newest whole-category export.
+A card the ladder cannot settle is queued for review as a press queues it (`ambiguous_no_signal`).
+The whole chunk is one `Store.write`. A game with no such export is not adopted: the row is banked and a press adopts it.
+An unaccepted card stays `captured` for the press's paid second look. Nothing spends. A press bills nothing for an adopted card and never adopts it twice.
+It never sets a SKU, a name or a number outside that path. Those follow D258 (identity follows the SKU) and the join.
 The row records the card's `cid`. A move or a renumber changes the position key and never the `cid`.
 The row is keyed like every cache row, by position, and the `cid` lets a reader match it back to the card.
 
