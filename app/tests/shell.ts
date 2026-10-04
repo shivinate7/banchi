@@ -419,7 +419,7 @@ async function stubCropPreview(page: Page): Promise<void> {
   )
 }
 
-async function stubStore(page: Page): Promise<void> {
+export async function stubStore(page: Page): Promise<void> {
   /* THE FREE READER'S STATE, which the Identify sheet reads when it opens (free is its default pick).
      Prepared, so the sheet quotes on opening, as every spec that opens it was written to expect. */
   await stubMatchState(page)

@@ -1,6 +1,9 @@
 import { defineConfig, devices } from '@playwright/test'
 import { DEV_URL } from './devPort'
 
+// A test run never auto-downloads the free reader's setup (the server's own guard reads this).
+process.env.PKMNSCAN_HARNESS ??= '1'
+
 // docs/DESIGN.md: "The agent cannot see its own output, so these are Playwright
 // assertions, not prose." This config exists to run that table. Today it covers one
 // component; step 7 extends it to the Fulfillment view.

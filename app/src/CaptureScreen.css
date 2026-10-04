@@ -66,6 +66,8 @@
 .capture-odo .bn-stat { min-width: 64px; }
 /* One step under the title: the figures read as the run's odometer, not as the page's name. */
 .capture-odo .bn-stat-value { font-size: var(--bn-fs-2xl); }
+.capture-odo-matched { display: flex; align-items: center; gap: var(--bn-4); flex: none; width: calc(1px + 64px + 2 * var(--bn-4) + 2ch); }
+.capture-odo-matched .bn-stat-value { font-variant-numeric: tabular-nums; min-width: 4ch; }
 .capture-odo-rule { width: 1px; height: 24px; background: var(--bn-line); }
 .capture-odo-verdict { margin-left: var(--bn-1); }
 .capture-odo-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: var(--bn-0-5); }
@@ -1060,6 +1062,8 @@
 }
 .capture-film-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3); flex-wrap: wrap; padding: 0 var(--bn-0-5); }
 .capture-film-hint { display: flex; align-items: center; gap: var(--bn-1-5); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.capture-film-paused { font-size: var(--bn-fs-sm); line-height: 1.45; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.capture-film-paused p { white-space: inherit; overflow: inherit; text-overflow: inherit; } /* one `.capture-quiet` line, always reserved (D313) */
 .capture-undo-note { font-size: var(--bn-fs-sm); line-height: 1.45; } /* one `.capture-quiet` line (D313) */
 /* NOT `.bn-live-count`: the words "12 recent" are the figure, so the floor is the whole phrase */
 .capture-undo-depth { min-inline-size: 9ch; margin-left: var(--bn-1-5); font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--bn-ink-3); }
@@ -1083,6 +1087,8 @@
   scrollbar-width: thin;
 }
 .capture-undo-list > li { min-width: 0; animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) both; }
+/* Tiles that load in after a deal arrive still (D313): no `.bn-stagger-item`, so no `!important` name to beat. */
+.capture-undo-list > li.capture-undo-still { animation: none; }
 .capture-undo-row {
   position: relative;
   display: block;
