@@ -2422,8 +2422,9 @@ export async function getMatchState(): Promise<MatchState> {
 }
 
 /** The background reader's switch and its count. FREE: a store row, a pid check and one count. */
-export async function getMatchSweep(): Promise<MatchSweep> {
-  return (await request('/pipeline/match/sweep', NO_CACHE)) as MatchSweep
+export async function getMatchSweep(keys?: string[]): Promise<MatchSweep> {
+  const query = keys === undefined ? '' : `?keys=${encodeURIComponent(keys.join(','))}`
+  return (await request(`/pipeline/match/sweep${query}`, NO_CACHE)) as MatchSweep
 }
 
 /** The Capture screen's switch for the background reader. It writes one store row and, when on,

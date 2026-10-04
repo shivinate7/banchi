@@ -312,7 +312,7 @@ harness:
 	$(VENV_GUARD)
 	@python3 scripts/guard-scope.py classify --target harness --base origin/main; rc=$$?; \
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
-		$(PYTHON) harness/run.py; \
+		PKMNSCAN_HARNESS=1 $(PYTHON) harness/run.py; \
 	else \
 		echo "harness: SKIPPED — nothing in this branch reaches what harness/ reads. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
 	fi

@@ -239,13 +239,13 @@ Building the index needs the image bytes once. D301 (stock photos are hotlinked,
 on the owner's word for this one read. The server reads each stock image, computes its fingerprint, and drops the bytes.
 Only the fingerprint is stored. A fingerprint records the model file hash and the source URL.
 **A change of model rebuilds every fingerprint.** An old fingerprint never meets a new model.
-The read is the matcher's own step. The owner starts it from a screen (section 6). The spike fetched 1,365 images
+The read is the matcher's own step. It starts by itself (section 8, Free setup), and the owner's press on a screen (section 6) refreshes it. The spike fetched 1,365 images
 at a polite pace, which took a few minutes (measured).
 
 **A matcher press never builds or refreshes fingerprints.** It reads only fingerprints that are already stored.
 A fingerprint is stale when the model file hash differs, or when the set now holds a numbered product with no fingerprint.
 A stale fingerprint is never read. A missing one leaves its printing as a no-image printing, and the guard blocks its name.
-Only the owner's press on the fingerprint control (section 6) reads images, and it shows its size first.
+Only the free setup (section 8) and the owner's press on the fingerprint control (section 6) read images.
 A matcher press never downloads, and it never spends money.
 
 ## 5. Weight
@@ -294,10 +294,10 @@ It is not part of this design PR.
 The spike ran the same comparison on all 500 photographs and all 1,365 stock images.
 It gave the numbers in the table above.
 
-**The first-run download and who triggers it.** A download needs the owner's word.
-The owner gives it by pressing a button on a screen. The runs sheet shows a card named "Prepare matching".
-It states the size, 372 MB, and the source. A press starts the download and checks the hash.
-Until the download finishes, the matcher pick is dimmed with one sentence. Nothing downloads on its own.
+**The first-run download and who triggers it.** The owner ruled that the free setup runs by itself (section 8, Free setup).
+The 372 MB file downloads once, and the hash is checked. The runs sheet shows a card named "Prepare matching".
+It states the size and the source. A press there is a manual refresh.
+Until the download finishes, the matcher pick is dimmed with one sentence.
 
 **The source is a release asset of `shivinate7/banchi`**, with the file's SHA-256 pinned in code.
 It is one download of 372 MB. The owner chose this source. Marqo's license is Apache-2.0, which allows
@@ -360,13 +360,13 @@ The Haiku pick uses `HAIKU_NAME_TOOLTIP`. The matcher pick uses `MATCHER_NAME_TO
 - When the matcher is picked, the crop and size choice is hidden. The matcher always uses the same crop.
 - The free read is the default pick each time the composer opens. The pick is not stored on the device.
 
-**Fingerprint control.** The runs sheet has one card named "Prepare matching" with two parts. Each part shows its size first and
-starts only on the owner's press.
+**Fingerprint control.** The runs sheet has one card named "Prepare matching" with two parts. Each part shows its size first.
+The setup also starts by itself (section 8, Free setup). A press is a manual refresh.
 
 - The model file: 372 MB, a download (section 5).
 - The fingerprints: the number of stock images to read, one read each, and how many printings still have no image.
   A press reads the missing and stale images, in memory, and stores the fingerprints (D301, amended).
-  It reports the printings read and the printings still with no image when it ends. Nothing else starts it.
+  It reports the printings read and the printings still with no image when it ends.
 
 **The receipt.** The run record shows the engine. It then shows the counts: matched, second look, and already answered.
 A matched card the finish ladder cannot finish goes to Review as before. The run line reads, for example,
@@ -422,6 +422,21 @@ Without a change, a Haiku press would adopt a matcher answer as paid for. So:
 - T1 stays the Haiku gate.
 
 ## 8. Background reader
+
+**Free setup.** The free setup (`match prepare`) starts by itself, with no press. Nothing in it spends money.
+`pipeline_routes.ensure_stock_setup` looks once and starts one detached `match prepare` when the model file is missing
+or a target set has no fingerprints (`match.unread_targets`). It starts none while one runs.
+`capture_server.serve` calls it at start and runs `pipeline_routes.stock_setup_loop` on a daemon thread, so a card from
+a new set starts a read. With the model runtime missing (`matchconst.runtime_importable`), nothing starts.
+The first look and the loop run on the daemon thread, so the server answers at once.
+The switch is the env `PKMNSCAN_AUTO_SETUP`: `on` forces auto-start. Unset, it is refused when `CI` or `PKMNSCAN_HARNESS` is set
+(`make harness` and the Playwright config set it), and unless the checkout is primary and the store is its own (`PKMNSCAN_HOME` unset or pointing at it): a linked worktree or a demo or throwaway store never auto-starts.
+A look that would start the same setup again (a set the catalog cannot name, a failed download) waits 30 minutes.
+A retry downloads the model from zero, because `match prepare` clears the partial file first.
+`pipeline_routes._spawn_prepare` is the one door: under a lock it writes the running record before it spawns, so a second start is refused.
+A tried mark made while a Prepare runs never counts once the Prepare ends.
+`match.index_stamp` changes when the index gains a set. `sweep.tried` counts a tried mark from an older stamp as empty,
+so cards tried before their set was read are tried again.
 
 **The owner's ruling: the free read may run in the background, and always.** It is allowed on one condition:
 with an empty queue it uses barely any memory. This section bends two decisions, D1 and D273 (question 3).
@@ -520,7 +535,11 @@ Turning the toggle on never downloads. With no model or no index, the toggle rea
 
 **What the screens show (D313, nothing on screen moves unless the person moved it).**
 
-- Nothing on the capture screen changes while the sweep reads. No count, no spinner, no new element.
+- The Capture head shows a third counter, "matched", beside "captured" and "next card": how many of this sitting's cards the free reader has matched.
+  It shows only while the Background Match switch is on, and no other screen shows progress. It reads
+  `GET /pipeline/match/sweep?keys=<the sitting's position keys>`, which adds `matched_here` and `worker`, with `usePoll` at about 3 s while a worker
+  runs and 20 s otherwise. That path never probes the watcher's lock, so polling cannot stop the reader from starting, and it reads the store read-only, in the cheap photo lane, with no table-wide count.
+  The counter has tabular figures and a slot of fixed width from the first paint. It does not animate, and the switch flipping moves neither other counter.
 - The runs sheet shows one snapshot count: how many cards the free reader has matched. It sits on the "Prepare matching" card, read when the sheet opens
   and when the owner presses refresh. It never ticks. It counts every `marqo-b` row, from a press or from the background reader.
 - A per-card detail shows on request only: the engine, the match and the margin.

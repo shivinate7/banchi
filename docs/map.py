@@ -8746,6 +8746,17 @@ COMPONENTS = [
                         "would type-check, pass, and delete one card of three. Observed "
                         "failing against exactly that mutation before it was kept.",
             },
+            "tests/capture-freeze.spec.ts": {
+                "does": "a long sitting must not freeze Capture: 300 dealt captures with a "
+                        "longtask observer (none over 50 ms in the last 10, the rail and the Last "
+                        "capture panel as ruled, the rail whole after Stop) and 60 hand-fed "
+                        "captures, a stale tile press refused with a toast, and the rail's height held "
+                        "across Stop. Run by `make design-check`.",
+                "governed_by": ["D10", "D164", "D313", "D316"],
+                "note": "Red on the unmemoized filmstrip (50 to 72 ms tasks from about capture "
+                        "25), green on the memoized one. POST /capture is intercepted, so "
+                        "nothing reaches a store.",
+            },
             "tests/capture-section.spec.ts": {
                 "does": "sub-box capture's Section row (docs/specs/subbox-capture.md): the row "
                         "names the pick, its count and where it physically goes; `[`/`]` step "
@@ -9305,6 +9316,12 @@ COMPONENTS = [
                         "the reason shows in Manual, \"Needs Chrome\" with no Bluetooth, and a fire "
                         "with no box stops dealing with STOP the last write.",
                 "governed_by": ["D316", "D18", "D19", "D313"],
+            },
+            "tests/dispenserRig.ts": {
+                "does": "the dispenser's browser rig shared by dispenser.spec.ts and "
+                        "capture-freeze.spec.ts: the fake Bluetooth device, the canvas camera, "
+                        "motion armed, and the scene the test drives.",
+                "governed_by": ["D313", "D316"],
             },
             "tests/unit/tab-title.unit.ts": {
                 "does": "the tab title function over every ROUTES entry, read through "

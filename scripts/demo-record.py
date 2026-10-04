@@ -249,6 +249,7 @@ class Server:
         # once", it is permanently missing. This variable makes that one call join its own
         # threads before the server starts accepting requests.
         env["PKMNSCAN_STOCK_IMAGES_SYNC"] = "1"
+        env["PKMNSCAN_AUTO_SETUP"] = "off"  # the demo store never downloads the free reader
         script = str(REPO_ROOT / "server" / "capture_server.py")
         argv = [sys.executable, script]
         if self.offline:
