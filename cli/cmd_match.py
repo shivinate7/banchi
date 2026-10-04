@@ -169,7 +169,7 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, exports: "_ExportC
     Returns how many cards were accepted."""
     from cli import cmd_identify, cmd_join, resolve, runs
     from identify import sidecar
-    from pipeline import corpus, games, pricing, routing
+    from pipeline import corpus, games, pricing, routing, tcgcsv
 
     accepted = 0
     paths: dict = {}
@@ -177,6 +177,9 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, exports: "_ExportC
         for game in {str(meta[r.key][0].game or games.DEFAULT_GAME) for r in results if r.accepted}:
             if (path := _export_for(game)) is not None:
                 paths[game] = path
+    for path in paths.values():  # parsed BEFORE the lock opens: a capture never waits on a CSV parse
+        if path not in exports.parsed:
+            exports.parsed[path] = (tcgcsv.read_export(path), runs.describe_source(path))
     threshold = pricing.check_threshold(corpus.Corpus.read().policy_for(None)["threshold"]) if paths else None
     with store.write() as writable:
         adopted = []
