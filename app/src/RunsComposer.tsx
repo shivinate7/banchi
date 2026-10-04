@@ -254,7 +254,7 @@ export function openingSelection(carried: CarriedScope | null): RunSelection {
  *  no term at all is a press over the whole store. */
 export function sendOfKeys(keys: readonly string[]): RunSend {
   if (keys.length === 0) throw new Error('A spend must name at least one card.')
-  return { selection: { keys: [...keys] }, crop: DEFAULT_READING.crop, maxEdge: DEFAULT_READING.maxEdge }
+  return { selection: { keys: [...keys] }, crop: DEFAULT_READING.crop, maxEdge: DEFAULT_READING.maxEdge, engine: 'marqo-b' }
 }
 
 /**

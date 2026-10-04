@@ -141,7 +141,7 @@ def sweep_worker(say) -> int:
     EXIT CODES the watcher reads: 0 done, 3 "not ready" (no model file or index, or a runtime that
     cannot load: numpy or onnxruntime missing), 1 a crash. Before each chunk it records the cards
     in `match-sweep-inflight.json`, so a crash that leaves no Python exception behind (an
-    out-of-memory kill) still marks them tried and cannot loop."""
+    out-of-memory kill) still halves the next chunk and, alone, sets the card aside: it cannot loop."""
     from pipeline import games
 
     sweep.settle_inflight()
@@ -160,7 +160,7 @@ def sweep_worker(say) -> int:
                 try:
                     if not db.match_sweep_on(conn):
                         break
-                    waiting = sweep.queue(conn, limit=SWEEP_CHUNK)
+                    waiting = sweep.queue(conn, limit=sweep.chunk_limit(SWEEP_CHUNK))
                 finally:
                     conn.close()
                 if not waiting:
@@ -206,6 +206,7 @@ def sweep_worker(say) -> int:
                             noted[result.key] = capture_id
                 sweep.remember_tried(noted)
                 sweep.clear_inflight()
+                sweep.reset_chunk()
                 tried += len(noted)
     except ImportError as exc:
         # A MISSING RUNTIME is "not ready", not a crash: the watcher waits 300 s and says why.
@@ -213,7 +214,7 @@ def sweep_worker(say) -> int:
         sweep.clear_inflight()
         return sweep.EXIT_NOT_READY
     except Exception as exc:  # noqa: BLE001
-        # THE CARDS IN FLIGHT BECOME TRIED so one bad photograph cannot take the next worker down.
+        # THE CHUNK HALVES (a lone card is set aside), so one bad photograph cannot take the next worker down.
         say(f"sweep           stopped by {type(exc).__name__}: {exc}")
         sweep.settle_inflight()
         return 1
