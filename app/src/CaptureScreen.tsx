@@ -4722,7 +4722,7 @@ export function CaptureScreen() {
             k={SECTION_STEP_KEYS}
             label="Section"
             icon="divider"
-            className={openField === 'section' ? 'capture-row-covered' : undefined}
+            className={openField === 'section' ? 'capture-row-lg capture-row-covered' : 'capture-row-lg'}
             right={
               box === null ? (
                 <span className="capture-section-val is-empty">
