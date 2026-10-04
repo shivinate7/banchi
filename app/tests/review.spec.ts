@@ -325,9 +325,6 @@ test.beforeEach(async ({ page }) => stubBandReads(page))
 
 test('the photograph is the largest thing on the screen', async ({ page }) => {
   await open(page)
-  const photo = await page.locator('.review-photo').boundingBox()
-  expect(photo).not.toBeNull()
-
   /* 23%, NOT THE 25% FIRST WRITTEN, and the difference is an aspect ratio rather than a
      compromise. the first UI research pass computed its target from a bare card's 63:88;
      the served frame is 9:16, so the reachable ceiling with the header intact is 23.6%.
@@ -346,12 +343,18 @@ test('the photograph is the largest thing on the screen', async ({ page }) => {
      spent on the card and not on the desk — 86px off the page's own padding, the header's
      margin, the filter strip's margin and the well's — and the photograph is 728px, 23.0%.
      The arithmetic is written above `--rv-chrome` in `ReviewQueue.css`, where the pieces are. */
-  const share = (photo!.width * photo!.height) / (DESK.width * DESK.height)
-  expect(share).toBeGreaterThanOrEqual(0.23)
-
-  /* The honest instrument beside the area one: a 9:16 frame's CARD is only part of the area
-     being measured, so a long edge is what says the photograph is actually big. */
-  expect(Math.max(photo!.width, photo!.height)).toBeGreaterThanOrEqual(700)
+  /* THE BAND TAKES ITS HEIGHT FROM THE PHOTOGRAPH (the owner's ruling), so the 23% above is history. Measured with the band
+     drawn: 1440 draws 338.6x602 = 0.157 and 820 draws 172.1x306 = 0.071 of the viewport. The floor is the lower, rounded
+     down to two places: 0.07, and a 300px long edge (the lower of 602 and 306, rounded down) in place of 700. */
+  for (const width of [1440, 820]) {
+    await setViewport(page, { width, height: DESK.height })
+    await settleAnimations(page)
+    const box = await page.locator('.review-photo').boundingBox()
+    expect(box).not.toBeNull()
+    const share = (box!.width * box!.height) / (width * DESK.height)
+    expect(share, `the photograph at ${width}`).toBeGreaterThanOrEqual(0.07)
+    expect(Math.max(box!.width, box!.height), `the long edge at ${width}`).toBeGreaterThanOrEqual(300)
+  }
 })
 
 test('answering a card costs no scrolling, and the page never scrolls sideways', async ({
@@ -2136,7 +2139,7 @@ test.describe('the Review summary band', () => {
       if (wire.hold !== null) await wire.hold
       const count = (fate: Fate) => keys.filter((key) => wire.fates[key] === fate).length
       return route.fulfill(
-        json({ on: wire.on, running: wire.on && wire.running, worker: wire.running, blocked: wire.blocked, aside: wire.aside, matched_here: count('matched'), paid: count('paid'), unread: count('unread') }),
+        json({ on: wire.on, running: wire.on && wire.running, worker: wire.running, blocked: wire.blocked, aside: wire.aside, matched_here: count('matched'), paid: count('paid'), paid_keys: keys.filter((key) => wire.fates[key] === 'paid'), unread: count('unread') }),
       )
     })
     await page.route(/\/queues$/, (route) =>
