@@ -565,6 +565,42 @@ def check_sweep_cid_guard(checks: Checks) -> None:
         checks.ok(renamed not in engines, "a card whose cid changed mid-read gets no row from the old answer")
 
 
+def check_sweep_runtime_cause(checks: Checks) -> None:
+    from cli import cmd_match
+
+    checks.note("")
+    checks.note("SWEEP CAUSE — a worker that cannot load the runtime leaves `blocked` on GET /pipeline/match/sweep")
+    with isolated_home(), _tree():
+        _capture(game="pokemon", set_hint="sv9")
+        _switch(True)
+        checks.equal(pipeline_routes.do_pipeline_match_sweep().get("blocked"), None, "before any worker: blocked is null")
+
+        def run_worker(boom):
+            def read(_requests, _index):
+                if boom:
+                    raise boom
+                _switch(False)  # a queue that never empties must end, not hang
+                return []
+
+            with mock.patch.object(match, "status", lambda: {"ready": True}), mock.patch.object(
+                match, "Index", _FakeIndex
+            ), mock.patch.object(match, "read", read), mock.patch.object(os, "nice", lambda _n: 0), mock.patch(
+                "signal.signal", lambda *_a: None
+            ), quiet():
+                return cmd_match.sweep_worker(lambda _line: None)
+
+        checks.equal(run_worker(ImportError("no onnxruntime")), sweep.EXIT_NOT_READY, "the worker exits 3")
+        checks.equal(
+            pipeline_routes.do_pipeline_match_sweep().get("blocked"), "runtime_missing",
+            "and GET /pipeline/match/sweep reports blocked: runtime_missing",
+        )
+        run_worker(None)
+        checks.equal(
+            pipeline_routes.do_pipeline_match_sweep().get("blocked"), None,
+            "a later worker that loads the runtime clears it",
+        )
+
+
 CHECKS = (
     check_sweep_queue,
     check_sweep_watcher,
@@ -572,6 +608,7 @@ CHECKS = (
     check_sweep_quiet,
     check_sweep_lock,
     check_sweep_crash,
+    check_sweep_runtime_cause,
     check_sweep_cid_guard,
     check_sweep_worker,
     check_reshoot_drops_matcher_row,
