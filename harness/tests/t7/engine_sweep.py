@@ -669,6 +669,44 @@ def check_sweep_sitting_count(checks: Checks) -> None:
             thread.join(timeout=5)
 
 
+def check_sweep_band_counts(checks: Checks) -> None:
+    """THE CONTRACT THE REVIEW SUMMARY BAND READS (`identify-engine-pick.md` section 8), named here for the builder:
+    `GET /pipeline/match/sweep?keys=<csv>` also answers `paid` (named keys that wait for a paid look: captured, no
+    identification row, tried by the free reader and not accepted, not set aside) and `unread` (named keys the
+    free reader has not looked at: captured, no identification row, not tried, not set aside). A matched key, a
+    Haiku-read key and an unknown key count in neither. Same no-lock-probe path as `matched_here`."""
+    checks.note("")
+    checks.note("SWEEP BAND COUNTS — keys-scoped paid and unread")
+    with isolated_home():
+        mine = [_capture(game="pokemon", set_hint="sv9") for _ in range(5)]
+        matched, tried_one, read_paid, fresh, outside = mine
+        _put(matched, MATCHER)
+        _put(read_paid, HAIKU)
+        capture_id = {key: card.capture_id for key, card in Store().read().inventory.cards.items()}
+        sweep.remember_tried({tried_one: capture_id[tried_one] or ""})
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = _spawn_server(httpd)
+        try:
+            path = "/pipeline/match/sweep?keys=" + ",".join([matched, tried_one, read_paid, fresh, "99/99"])
+            status, body, _ = request(port, "GET", path)
+            answer = json.loads(body) if status == 200 else {}
+            checks.equal(status, 200, "GET with keys answers")
+            checks.equal(answer.get("matched_here"), 1, "matched_here is unchanged")
+            checks.equal(answer.get("paid"), 1, "paid counts the tried, unaccepted, unread-by-Haiku card only")
+            checks.equal(answer.get("unread"), 1, "unread counts the card the free reader has not looked at only")
+            status, body, _ = request(port, "GET", "/pipeline/match/sweep?keys=" + outside)
+            answer = json.loads(body) if status == 200 else {}
+            checks.equal((answer.get("paid"), answer.get("unread")), (0, 1), "a key outside the named set is never counted")
+            status, body, _ = request(port, "GET", "/pipeline/match/sweep?keys=")
+            answer = json.loads(body) if status == 200 else {}
+            checks.equal((answer.get("paid"), answer.get("unread")), (0, 0), "an empty keys list counts zero")
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+
 CHECKS = (
     check_sweep_queue,
     check_sweep_watcher,
@@ -684,5 +722,6 @@ CHECKS = (
     check_reshoot_drops_matcher_row,
     check_sweep_routes,
     check_sweep_sitting_count,
+    check_sweep_band_counts,
     check_sweep_imports_light,
 )
