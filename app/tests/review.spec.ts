@@ -1877,7 +1877,10 @@ async function stubRouteCapture(page: Page): Promise<void> {
     media.enumerateDevices = async () => [{ deviceId: 'canvas', kind: 'videoinput', label: 'Canvas Cam Link', groupId: 'g' }]
     media.getUserMedia = async () => stream
   })
-  await page.addInitScript(() => localStorage.setItem('banchi.capture.setup', JSON.stringify({ box: 5, bid: 15, game: 'pokemon', setHint: '', finish: [], rarityClaim: [], product: null })))
+  await page.addInitScript(() => {
+    /* eslint-disable-next-line no-restricted-syntax -- SEEDING THE VERY KEY UNDER TEST; the same disable capture-claims.spec.ts carries. */
+    window.localStorage.setItem('banchi.capture.setup', JSON.stringify({ box: 5, bid: 15, game: 'pokemon', setHint: '', finish: [], rarityClaim: [], product: null }))
+  })
   const game = { key: 'pokemon', display: 'Pokémon', product_line: 'Pokemon', rarities: ['Common'], finishes: ['normal'], condition_by_finish: { normal: 'Near Mint' }, finish_by_rarity: { Common: ['normal'] }, located: true, join_key: 'number_over_printed_total', prompt: 'pokemon', crop_bands: ['title', 'number'], card_aspect: 0.716, unverified: false, catalogued: true }
   await page.route(/\/games$/, (route) => route.fulfill(routeJson({ default: 'pokemon', products: [], product_game: 'pokemon_code', games: [game] })))
   const box = { box: 5, bid: 15, name: 'Test box', sections: [1], state: 'open', capacity: null, fill: 12, next_index: 13, cards: 12, sold: 0, retired: 0, listed: 0, on_hand: 12, sections_detail: [{ section: 1, start: 1, end: null, count: 12, name: null, div: '1' }], layout_token: 'tok1' }
