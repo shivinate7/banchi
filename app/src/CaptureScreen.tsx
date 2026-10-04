@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 
 import { PositionLabel } from './PositionLabel'
@@ -989,6 +989,99 @@ function Track({
     </div>
   )
 }
+
+/* ONE FILMSTRIP TILE, MEMOIZED. The strip draws the whole sitting, and `CaptureScreen` re-renders
+ * on every motion diagnostic (5 per second) and on every capture's own state writes. Drawn
+ * inline, each of those rebuilt every tile, so a capture cost grew with the cards already in
+ * the sitting (a 100 to 250 ms main-thread stall at the fire and again at the answer). Every
+ * prop here is a primitive, the target (rebuilt only when the sitting moves) or a stable
+ * callback, so a render that did not touch the sitting skips every tile. */
+const UndoCell = memo(function UndoCell({
+  target,
+  at,
+  nonce,
+  busy,
+  spansDrawers,
+  onUndo,
+  onRemove,
+}: {
+  target: UndoTarget
+  at: number
+  nonce: string
+  busy: boolean
+  spansDrawers: boolean
+  onUndo: (depth: number) => void
+  onRemove: (target: UndoTarget) => void
+}) {
+  return (
+    <li className="bn-stagger-item" style={{ '--i': at } as CSSProperties}>
+      {/* THE CELL WRAPS TWO SIBLING BUTTONS RATHER THAN NESTING ONE INSIDE THE
+          OTHER — an interactive element cannot hold a second one and stay valid,
+          and the two mean different things: the row still walks the plan back to
+          here (`undoBack`, unchanged, D164); the corner control is section 6's
+          granular press, `removeCardInPlace` aimed at this one card alone. */}
+      <div className="capture-undo-cell">
+        <button
+          type="button"
+          className="capture-undo-row"
+          onClick={() => onUndo(at + 1)}
+          disabled={busy}
+          data-undo={at === 0 ? 'Undo' : `Undo ${at + 1}`}
+          aria-label={
+            at === 0
+              ? `Undo the newest capture, ${positionText(target)}`
+              : `Undo ${at + 1} captures, back to ${positionText(target)}`
+          }
+        >
+          <img
+            className="capture-undo-thumb capture-undo-thumb-portrait"
+            src={photoSrc(target.box, target.index, { cid: target.cid, capture_id: target.captureId }, nonce)}
+            alt=""
+          />
+          {/* THE DRAWER GOES IN THE CAPTION, WHICH IS ALREADY ABSOLUTE — `left: 0;
+              right: 0; bottom: 0` over the bottom of the thumbnail, so a second
+              line grows UPWARD over the photograph and moves no layout at all
+              (D118). The cell's height is the thumbnail's `aspect-ratio`, which
+              this cannot reach.
+              THE BOX'S NAME, never its number or a store key (D259, owner 2026-09-28):
+              `boxTitle` over the record's stored name, and the card's own number
+              from the rendered label. A tile with no label names its box alone. */}
+          <span className="capture-undo-pos">
+            {spansDrawers || undoFigure(target) === null ? (
+              <span className="capture-undo-drawer">{boxTitle(target.boxName, target.box)}</span>
+            ) : null}
+            {undoFigure(target)}
+          </span>
+          <span className={at === 0 ? 'capture-key is-newest' : 'capture-key'}>
+            {at === 0 ? UNDO_KEY_LABEL : at + 1}
+          </span>
+        </button>
+        {/* SECTION 6: THIS CARD ALONE, NOT EVERYTHING NEWER THAN IT. The owner's
+            own complaint — undoing a mid-sitting shot loses every capture after
+            it too. `removeCardInPlace` is the route that already exists for it
+            (D10 ruling 1), and this is its second door, beside the row's own. */}
+        <IconButton
+          icon="trash"
+          label="Remove just this card"
+          name={`Remove just this card, ${positionText(target)}`}
+          tone="danger"
+          size="sm"
+          className="capture-undo-drop"
+          /* THE FACE FOLLOWS `--undo-drop-size` (CaptureScreen.css), 40px on a
+             phone or a coarse pointer (D117), and the kit's own 24px `sm` face
+             everywhere else. IconButton merges `style` over its inline face size,
+             so no `!important` is needed to beat it. */
+          style={{ width: 'var(--undo-drop-size, 24px)', height: 'var(--undo-drop-size, 24px)' }}
+          disabled={busy}
+          onClick={(event) => {
+            event.stopPropagation()
+            onRemove(target)
+          }}
+        />
+      </div>
+    </li>
+  )
+})
 
 /** WHAT AN UNDO THUMBNAIL DRAWS UNDER THE CARD — the whole figure, sigil and all, because the
  *  two cases it covers are two different numbers and they may not wear one sigil (D92).
@@ -3213,6 +3306,16 @@ export function CaptureScreen() {
     },
     [patchOnHand, patchSectionCount, stampSlot, undoStack],
   )
+  /* STABLE HANDLES FOR THE FILMSTRIP'S MEMOIZED TILES: the ref is re-pointed each render, the
+   * callbacks never change identity, so a tile re-renders only when its own props move. */
+  const undoBackRef = useRef(undoBack)
+  undoBackRef.current = undoBack
+  const onUndoCell = useCallback((depth: number) => void undoBackRef.current(depth), [])
+  const onRemoveCell = useCallback((target: UndoTarget) => {
+    setUndoNote(null)
+    setRemoveConfirm(target)
+  }, [])
+
 
   /** UN-15: takes the divider back out through `closeSection`, by its own key — the keyed
    *  route `ux/divider-fix` built, which reaches a middle divider and not only the box's
@@ -5008,73 +5111,16 @@ export function CaptureScreen() {
           ) : (
             <ul className="capture-undo-list">
               {undoStack.map((target, at) => (
-                <li key={`${target.box}/${target.index}`} className="bn-stagger-item" style={{ '--i': at } as CSSProperties}>
-                  {/* THE CELL WRAPS TWO SIBLING BUTTONS RATHER THAN NESTING ONE INSIDE THE
-                      OTHER — an interactive element cannot hold a second one and stay valid,
-                      and the two mean different things: the row still walks the plan back to
-                      here (`undoBack`, unchanged, D164); the corner control is section 6's
-                      granular press, `removeCardInPlace` aimed at this one card alone. */}
-                  <div className="capture-undo-cell">
-                    <button
-                      type="button"
-                      className="capture-undo-row"
-                      onClick={() => void undoBack(at + 1)}
-                      disabled={busy}
-                      data-undo={at === 0 ? 'Undo' : `Undo ${at + 1}`}
-                      aria-label={
-                        at === 0
-                          ? `Undo the newest capture, ${positionText(target)}`
-                          : `Undo ${at + 1} captures, back to ${positionText(target)}`
-                      }
-                    >
-                      <img
-                        className="capture-undo-thumb capture-undo-thumb-portrait"
-                        src={photoSrc(target.box, target.index, { cid: target.cid, capture_id: target.captureId }, slotNonce(target.box, target.index))}
-                        alt=""
-                      />
-                      {/* THE DRAWER GOES IN THE CAPTION, WHICH IS ALREADY ABSOLUTE — `left: 0;
-                          right: 0; bottom: 0` over the bottom of the thumbnail, so a second
-                          line grows UPWARD over the photograph and moves no layout at all
-                          (D118). The cell's height is the thumbnail's `aspect-ratio`, which
-                          this cannot reach.
-                          THE BOX'S NAME, never its number or a store key (D259, owner 2026-09-28):
-                          `boxTitle` over the record's stored name, and the card's own number
-                          from the rendered label. A tile with no label names its box alone. */}
-                      <span className="capture-undo-pos">
-                        {spansDrawers || undoFigure(target) === null ? (
-                          <span className="capture-undo-drawer">{boxTitle(target.boxName, target.box)}</span>
-                        ) : null}
-                        {undoFigure(target)}
-                      </span>
-                      <span className={at === 0 ? 'capture-key is-newest' : 'capture-key'}>
-                        {at === 0 ? UNDO_KEY_LABEL : at + 1}
-                      </span>
-                    </button>
-                    {/* SECTION 6: THIS CARD ALONE, NOT EVERYTHING NEWER THAN IT. The owner's
-                        own complaint — undoing a mid-sitting shot loses every capture after
-                        it too. `removeCardInPlace` is the route that already exists for it
-                        (D10 ruling 1), and this is its second door, beside the row's own. */}
-                    <IconButton
-                      icon="trash"
-                      label="Remove just this card"
-                      name={`Remove just this card, ${positionText(target)}`}
-                      tone="danger"
-                      size="sm"
-                      className="capture-undo-drop"
-                      /* THE FACE FOLLOWS `--undo-drop-size` (CaptureScreen.css), 40px on a
-                         phone or a coarse pointer (D117), and the kit's own 24px `sm` face
-                         everywhere else. IconButton merges `style` over its inline face size,
-                         so no `!important` is needed to beat it. */
-                      style={{ width: 'var(--undo-drop-size, 24px)', height: 'var(--undo-drop-size, 24px)' }}
-                      disabled={busy}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        setUndoNote(null)
-                        setRemoveConfirm(target)
-                      }}
-                    />
-                  </div>
-                </li>
+                <UndoCell
+                  key={`${target.box}/${target.index}`}
+                  target={target}
+                  at={at}
+                  nonce={slotNonce(target.box, target.index)}
+                  busy={busy}
+                  spansDrawers={spansDrawers}
+                  onUndo={onUndoCell}
+                  onRemove={onRemoveCell}
+                />
               ))}
               {Array.from({ length: Math.max(0, stripFloor - undoStack.length) }).map((_, at) => (
                 <li key={`ghost-${at}`} className="capture-undo-ghost" aria-hidden="true" />
