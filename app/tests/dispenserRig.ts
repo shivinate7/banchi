@@ -93,10 +93,14 @@ export async function writes(page: Page): Promise<string[]> {
 export const control = (page: Page, name: string) => page.getByRole('button', { name, exact: true })
 
 export async function armMotion(page: Page): Promise<void> {
-  // picking a box folds the Rig group; open it again when it is shut
+  // picking a box folds the Rig group, a moment after the pick; open it again whenever it is shut
   const rig = page.getByRole('region', { name: 'Rig' }).getByRole('button', { name: /^Rig/ })
-  if ((await rig.getAttribute('aria-expanded')) === 'false') await rig.click()
-  await page.getByRole('button', { name: /Trigger/ }).click()
+  const trigger = page.getByRole('button', { name: /Trigger/ })
+  await expect(async () => {
+    if (!(await trigger.isVisible())) await rig.click()
+    await expect(trigger).toBeVisible({ timeout: 1_000 })
+  }).toPass({ timeout: 15_000 })
+  await trigger.click()
   await page.getByRole('button', { name: 'motion', exact: true }).click()
   await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'motion')
 }
