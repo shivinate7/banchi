@@ -448,7 +448,7 @@ It holds the Prepare's running record while it looks, so the sweep's tried marks
 A `no_photo` printing is fetched again. A `no_url` printing has its set's catalog listing read once for a URL, then is fetched.
 A printing that gains an image is fingerprinted and becomes matchable. A row answered with 403, 404 or 410, or a listing with no URL, gets `at` set to now and waits another week.
 Any other failure (5xx, 429, decode) is transient: the row keeps its status, its `vec.note` names the cause, and it is asked again after one day.
-A network failure (`URLError`, timeout) ends the pass at once. A set whose listing could not be read leaves its rows undated.
+A network failure (`URLError`, timeout) ends the pass at once. A set whose listing could not be read dates its rows on the same one-day clock.
 The pass's closing write marks the running record done only while the record still names this process.
 
 **The owner's ruling: the free read may run in the background, and always.** It is allowed on one condition:

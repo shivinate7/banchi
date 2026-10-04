@@ -974,7 +974,9 @@ def recheck_no_photo(
             if row[6] == S_NO_URL:
                 found = listed[(row[0], row[1])]
                 if found is None:
-                    continue  # the listing could not be read: undated, asked again at the next look
+                    # the listing could not be read: the same one-day transient clock, so the set is not read again every look
+                    write(row, "update vec set note=?, at=? where game=? and set_name=? and product_id=?", ("catalog_unreadable", _stamp_now()))
+                    continue
                 url = found.get(row[2]) or ""
             report.products += 1
             if not url:
