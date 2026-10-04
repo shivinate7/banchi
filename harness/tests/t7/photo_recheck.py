@@ -400,6 +400,28 @@ def check_network_failure_ends_the_pass(checks: Checks) -> None:
             checks.equal(len(asked), 1, f"{label} on the first row: the pass asks exactly 1 row")
 
 
+def check_dead_url_does_not_block_the_rows_behind(checks: Checks) -> None:
+    checks.note("")
+    checks.note("PHOTO RECHECK — a row that always times out is dated a day, so the rows behind it are reached")
+    if getattr(match, "recheck_no_photo", None) is None:
+        checks.ok(False, "`match.recheck_no_photo` exists")
+        return
+    for cause in ("timeout", "URLError"):
+        with isolated_home():
+            stock = _seed([("dead", "Dead", "udead", match.S_NO_PHOTO, 30)] + [(f"p{i}", f"N{i}", f"u{i}", match.S_NO_PHOTO, 20 - i) for i in range(5)])
+            asked = []
+
+            def fetch(url, cause=cause):
+                asked.append(url)
+                return (None, cause) if url == "udead" else (None, "http_403")
+
+            _look(stock, fetch)
+            checks.equal(asked, ["udead"], f"pass 1: the oldest row answers {cause}, and the pass asks 1 row")
+            del asked[:]
+            _look(stock, fetch)
+            checks.equal(asked[:1], ["u0"], "pass 2, the same day: the next row is asked first, not the dead one")
+
+
 def check_ok_row_is_not_overwritten(checks: Checks) -> None:
     checks.note("")
     checks.note("PHOTO RECHECK — a row that turned ok mid-pass is kept")
@@ -510,6 +532,7 @@ CHECKS = (
     check_one_pass_is_bounded_oldest_first,
     check_transient_rows_retry_in_a_day_not_first_in_line,
     check_network_failure_ends_the_pass,
+    check_dead_url_does_not_block_the_rows_behind,
     check_ok_row_is_not_overwritten,
     check_pass_record,
     check_recheck_guards,
