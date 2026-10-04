@@ -3011,7 +3011,7 @@ export type MatchState = {
   sets?: number
   running: boolean
   /** The reader's runtime cannot load, so Prepare is refused (409 runtime_missing). */
-  runtime_missing?: boolean
+  runtime_missing: boolean
   progress: {
     state: 'running' | 'done' | 'failed'
     phase: 'model' | 'fingerprints'
