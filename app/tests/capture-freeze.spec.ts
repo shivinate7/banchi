@@ -4,6 +4,7 @@ import { expect, test } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { CARD, GAP_LUMA, armMotion, control, fakeBluetooth, injectScene, writes } from './dispenserRig'
 import type { Page } from '@playwright/test'
+import { setViewport } from './phoneSwitch'
 import { DEALING_RAIL_TILES } from '../src/dealer'
 
 /* A LONG SITTING MUST NOT FREEZE THE MAIN THREAD. A `longtask` observer reports only tasks of
@@ -341,4 +342,66 @@ test('past 15 cards the rail keeps its height across Stop and nothing below it m
   expect(stopped.list, 'the rail list holds its height across Stop').toBe(dealing.list)
   expect(stopped.footerTop, 'the rail does not move').toBe(dealing.footerTop)
   expect(stopped.below, 'nothing below the rail moves').toEqual(dealing.below)
+})
+
+/** The rail's shape: tile count, distinct tile rows, and the list's height. */
+const railShape = (page: Page) =>
+  page.evaluate(() => {
+    const list = document.querySelector('footer.capture-undo .capture-undo-list') as HTMLElement
+    const tops = [...list.querySelectorAll('.capture-undo-row')].map((el) => Math.round(el.getBoundingClientRect().top))
+    return { tiles: tops.length, rows: new Set(tops).size, height: Math.round(list.getBoundingClientRect().height) }
+  })
+
+test('dealing with fewer than 15 cards after an undo leaves the rail as it was at Start and at Stop', async ({ page }) => {
+  test.setTimeout(600_000)
+  const { dealOne, stop, wire } = await startDealing(page, 15)
+  for (let n = 1; n <= 15; n += 1) await dealOne(n)
+  await stop()
+  // Undo down to 7 cards with U, one press at a time.
+  for (let left = 14; left >= 7; left -= 1) {
+    await page.keyboard.press('u')
+    await expect(tiles(page)).toHaveCount(left, { timeout: 15_000 })
+  }
+  expect(wire.undone).toHaveLength(8)
+  for (const width of [1440, 820]) {
+    await setViewport(page, { width, height: 900 })
+    await expect(control(page, 'Start dispenser')).toBeVisible()
+    const before = await railShape(page)
+    await control(page, 'Start dispenser').click()
+    await expect(control(page, 'Stop dispenser')).toBeVisible()
+    await page.waitForTimeout(500) // keep: half a second of dealing with no card in the lens
+    const dealing = await railShape(page)
+    await control(page, 'Stop dispenser').click()
+    await expect(control(page, 'Start dispenser')).toBeVisible({ timeout: 10_000 })
+    const after = await railShape(page)
+    expect(dealing, `rail at Start, ${width}px`).toEqual(before)
+    expect(after, `rail at Stop, ${width}px`).toEqual(before)
+  }
+})
+
+test('a tile far down the rail carries its live Undo label when it scrolls in or takes focus, and its press undoes that depth', async ({ page }) => {
+  test.setTimeout(300_000)
+  await observeLongTasks(page)
+  await handCamera(page)
+  const wire = await stubWire(page, 40)
+  await pickCameraAndBox(page)
+  const shoot = async (n: number) => {
+    await page.keyboard.press('c')
+    await expect(tiles(page).first()).toHaveAttribute('aria-label', new RegExp(`Card ${n}$`), { timeout: 15_000 })
+  }
+  const RANK = 20
+  for (let n = 1; n <= 26; n += 1) await shoot(n)
+  // Rank 20 is Card 6 now. Scroll it into view: its label is its live one.
+  await tiles(page).nth(RANK).scrollIntoViewIfNeeded()
+  await expect(tiles(page).nth(RANK)).toHaveAttribute('aria-label', new RegExp(`^Undo ${RANK + 1} captures, back to .*Card 6$`))
+  // Two more captures, with the rail scrolled back to the newest, then focus the tile by keyboard.
+  await tiles(page).first().scrollIntoViewIfNeeded()
+  for (const n of [27, 28]) await shoot(n)
+  await tiles(page).nth(RANK).focus()
+  await expect(tiles(page).nth(RANK)).toHaveAttribute('aria-label', new RegExp(`^Undo ${RANK + 1} captures, back to .*Card 8$`))
+  await page.keyboard.press('Enter')
+  await expect(tiles(page)).toHaveCount(28 - (RANK + 1), { timeout: 30_000 })
+  expect(wire.undone, 'the press undid the depth its label showed').toEqual(
+    Array.from({ length: RANK + 1 }, (_, i) => `DELETE /inventory/5/${28 - i}`),
+  )
 })
