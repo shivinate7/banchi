@@ -59,7 +59,7 @@ import { captureBoxLabel } from './runScope'
 // before it is a different sitting. Imported rather than restated — see `sitting` below.
 import { GAP_MINUTES } from './storeHistory'
 import { Button, ConfirmSheet, Icon, IconButton, Kbd, Notice, Page, Pill, Slot, Stat } from './kit'
-import { dealerSupported, useDealer } from './dealer'
+import { DEALING_RAIL_TILES, dealerSupported, useDealer } from './dealer'
 import { matchQuery } from './kit/match'
 import { toast } from './kit/toast'
 import { placePartsOf } from './position'
@@ -989,9 +989,6 @@ function Track({
     </div>
   )
 }
-
-/** The newest tiles the Recent rail draws while the dispenser deals: three rows of its five columns. */
-const DEALING_RAIL_TILES = 15
 
 /* TWO TARGETS DRAW THE SAME TILE WHEN EVERY FIELD AGREES. `undoStack` rebuilds each target object
  * whenever the sitting moves, so identity says nothing; the fields do. */
