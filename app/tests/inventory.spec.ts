@@ -2441,6 +2441,59 @@ test('the preview and the retire dialog draw the whole photograph', async ({ pag
   await expect(page.locator('.inventory-confirm-photo')).toHaveCSS('object-fit', 'contain')
 })
 
+/* PREVIEWS CROP TO THE CARD (owner ruling after D38). The client always asks `?crop=card`; the
+ * server answers the card's region, or the whole frame when the finder finds nothing or the
+ * guard (`identify/images.crop_refusal`) refuses. This stub plays both answers: a card-shaped
+ * image for the crop, a tall 9/16 frame for the whole photograph. The preview's frame is
+ * card-shaped, so a crop must leave NO bars, and a whole photograph must still be drawn whole. */
+const CARD_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="630" height="880"><rect width="630" height="880" fill="#ccc"/></svg>'
+const FRAME_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1600"><rect width="900" height="1600" fill="#222"/></svg>'
+
+/** What `object-fit: contain` actually paints inside the element, against the element's box. */
+async function drawnVersusFrame(image: Locator) {
+  return image.evaluate((el: HTMLImageElement) => {
+    const frame = el.getBoundingClientRect()
+    const scale = Math.min(frame.width / el.naturalWidth, frame.height / el.naturalHeight)
+    return {
+      barsX: frame.width - el.naturalWidth * scale,
+      barsY: frame.height - el.naturalHeight * scale,
+      natural: [el.naturalWidth, el.naturalHeight],
+      fit: getComputedStyle(el).objectFit,
+    }
+  })
+}
+
+for (const [name, answer, cropped] of [
+  ['a card with a crop', CARD_SVG, true],
+  ['a card the server sends whole', FRAME_SVG, false],
+] as const) {
+  test(`the preview and the retire dialog ask for the card crop: ${name}`, async ({ page }) => {
+    const asked: string[] = []
+    await page.route(/\/photo\/(by-card\/[0-9a-f]+|\d+\/\d+)/, async (route) => {
+      asked.push(route.request().url())
+      await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: answer })
+    })
+    await open(page)
+    const preview = page.locator('.browse-photo')
+    await expect(preview).toHaveAttribute('src', /[?&]crop=card(&|$)/)
+    await expect.poll(() => preview.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true)
+    const read = await drawnVersusFrame(preview)
+    if (cropped) {
+      expect(read.barsX, 'no letterbox bars beside a cropped card').toBeLessThanOrEqual(1)
+      expect(read.barsY, 'no letterbox bars above a cropped card').toBeLessThanOrEqual(1)
+    } else {
+      expect(read.fit, 'a whole photograph is still drawn whole').toBe('contain')
+      expect(read.natural).toEqual([900, 1600])
+    }
+    await copyRow(page, CARD_1).getByRole('button', { name: 'Retire' }).click()
+    const retire = page.locator('.inventory-confirm-photo')
+    await expect(retire).toHaveAttribute('src', /[?&]crop=card(&|$)/)
+    expect(asked.length).toBeGreaterThan(0)
+  })
+}
+
 // ------------------------------------------------ the copies are a way back into the walk
 
 /** A SECOND BOX, FORTY CARDS DEEP, holding a third copy of the two-copy SKU at its far end.
