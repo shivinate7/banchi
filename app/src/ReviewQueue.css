@@ -122,6 +122,10 @@
   background: var(--bn-surface-2);
 }
 .review-identify-strip[data-state='held'] { visibility: hidden; }
+/* NOTHING BELOW THE STRIP IS LAID OUT UNTIL THE STRIP KNOWS ITS STATE (D313): with nothing
+   waiting the held frame goes, and whatever stood under it would move up by its height. Not yet
+   laid out, it has nothing to move; it appears once, in its final place. */
+.review-identify-strip[data-state='held'] ~ * { display: none; }
 .review-identify-strip-said {
   display: inline-flex;
   align-items: center;
