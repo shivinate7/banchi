@@ -985,9 +985,11 @@ def recheck_no_photo(
                 continue
             try:
                 raw, cause = reader(url)
-            except (urllib.error.URLError, TimeoutError):
-                break  # the network is down
+            except (urllib.error.URLError, TimeoutError) as exc:
+                raw, cause = None, type(exc).__name__
             if cause in _NETWORK:
+                # the pass ends, and this row is dated on the one-day clock so a dead URL does not block the rows behind it
+                write(row, "update vec set note=?, at=? where game=? and set_name=? and product_id=?", (cause, _stamp_now()))
                 break
             array = None
             if raw is not None:
