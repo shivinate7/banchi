@@ -92,7 +92,7 @@ const BOX = {
 
 async function open(
   page: Page,
-  options: { spans?: Span[]; boxes?: readonly unknown[]; holdSweep?: boolean; bare?: boolean } = {},
+  options: { spans?: Span[]; boxes?: readonly unknown[]; holdSweep?: boolean; bare?: boolean; sectionBumpsToken?: boolean } = {},
 ): Promise<{
   opens: { box: string; after?: string }[]
   closes: { box: string; div?: string }[]
@@ -246,8 +246,11 @@ async function open(
       })
     }
     if (method !== 'POST') return route.fallback()
-    const body = route.request().postDataJSON() as { after?: string }
+    const body = route.request().postDataJSON() as { after?: string; layout_token?: string }
     wire.opens.push({ box: '5', after: body.after })
+    // A real server refuses an S aimed with a token the box has moved past.
+    if (options.sectionBumpsToken === true && body.after !== undefined && body.layout_token !== token)
+      return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: { code: 'section_gone', message: 'That section is gone. Read the box again.' } }) })
     const afterOrdinal = body.after === undefined ? spans.length : (spans.find((s) => s.div === body.after)?.section ?? spans.length)
     const next: Span[] = []
     for (const s of spans) {
@@ -270,6 +273,8 @@ async function open(
     next.push({ section: afterOrdinal + 1, start: picked.start + picked.count, end: null, count: 0, name: null, div: newDiv })
     next.sort((a, b) => a.section - b.section)
     spans = next
+    // A real server re-spaces the box on S: the layout token changes with the new divider.
+    if (options.sectionBumpsToken === true) token = `tok${++tokenGen}`
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(boxRow()) })
   })
 
@@ -785,6 +790,34 @@ test('a capture that changes the token and section_div takes the response as the
       return JSON.parse(localStorage.getItem('banchi.capture.sections') ?? '{}') as Record<string, unknown>
     }),
   ).toMatchObject({ 'bid:15': { div: '7', token: 'tok-respaced' } })
+})
+
+test('S then a capture sends the new section and the new token, and never says the section is gone', async ({ page }) => {
+  const wire = await open(page, { sectionBumpsToken: true })
+  const posts: { section?: string; layout_token?: string }[] = []
+  page.on('request', (r) => {
+    if (r.method() === 'POST' && /\/capture$/.test(r.url())) posts.push(r.postDataJSON() as { section?: string; layout_token?: string })
+  })
+  await page.keyboard.press('s')
+  await expect.poll(() => wire.opens.length).toBe(1)
+  await expect(sectionRow(page)).toContainText('Section 4 of 4')
+  await page.getByRole('button', { name: 'Capture', exact: true }).click()
+  await expect.poll(() => posts.length).toBe(1)
+  expect(posts[0]).toMatchObject({ section: '11-3', layout_token: 'tok2' })
+  await expect(page.locator('.capture-refused').filter({ hasText: 'That section is gone' })).toHaveCount(0)
+  await expect(sectionRow(page)).toContainText('Section 4 of 4')
+})
+
+test('S twice in a row while the new section is empty stays quiet', async ({ page }) => {
+  const wire = await open(page, { sectionBumpsToken: true })
+  await page.keyboard.press('s')
+  await expect.poll(() => wire.opens.length).toBe(1)
+  await expect(sectionRow(page)).toContainText('Section 4 of 4')
+  await page.keyboard.press('s')
+  await expect.poll(() => wire.opens.length).toBe(2)
+  await expect(sectionRow(page)).toContainText('Section 5 of 5')
+  await expect(page.locator('.capture-refused').filter({ hasText: 'That section is gone' })).toHaveCount(0)
+  await expect(page.getByText('That section is gone')).toHaveCount(0)
 })
 
 test('a restore after a re-space requires the stored token to still match (finding 1)', async ({ page }) => {
