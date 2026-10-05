@@ -1,9 +1,9 @@
-## DEBT84 — The public demo's first screen waits on a 75 MB chunk
+## DEBT84 — The public demo's first screen is heavier than its budget
 
-**The demo's `demoServer` chunk is about 75 MB, and Home shows skeletons until it has arrived and evaluated.** Every read waits on it, because `server.ts`'s `request()` imports it before answering. On the CI runner it took about 15 s. A visitor on a slow link waits on the same skeletons.
+**The demo fetches each screen's recorded data when the screen asks (`docs/specs/demo.md`, "Fetched per screen"), and Home's first load is still 6.6 MB decoded against a 2.5 MiB budget asserted in `app/tests/demo-coverage.spec.ts`.** Before the split the `demoServer` chunk was 86 MB raw and Home's first load was 87.9 MB.
 
-- **Measured limit.** At 4x CPU throttle, first screen drawn in 4.0 s before the clone was removed and 2.9 s after. Of that, the chunk's transfer is about 0.5 s and its JSON parse about 0.2 s unthrottled. On the CI runner the wait reached about 15 s (one failed run, two traces). Unmeasured on a slow network.
-- **Not fixed because splitting the recording per route is its own change.** `demoServer.ts` reads the recording synchronously through `doc()`. Heavy keys (`/pipeline/pricing`, `/pipeline/holdings-value`) are over half the bytes and the first screen needs none of them, but lazy loading them means async reads throughout.
-- **Closes when** the first screen's data is under a stated size and its first paint is under a stated time, both asserted by a check.
+- **Measured.** Home's own reads are `/pipeline/pricing` 4.2 MB and `/orders` 1.5 MB. The app shell is about 1.6 MB and the index 0.44 MB. The budget cannot hold with these reads whole. Unmeasured on a slow network.
+- **Not fixed because** Home's tiles read whole worklists, and a leaner read is a change to a wire route, or a slim recording Home asks for by name, and neither is the demo's to invent.
+- **Closes when** the first screen's data is under the budget the check asserts, or the owner rules a budget the measured split meets.
 
 **Outcome at risk.** A reviewer opening the demo sees skeletons for many seconds.

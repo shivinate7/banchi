@@ -5972,6 +5972,13 @@ COMPONENTS = [
                                             "against the other tree's code. "
                                             "`PKMNSCAN_CHECKOUT_IDENTITY=off` skips it",
                                     "governed_by": ["D43", "D261"]},
+            "demoSplit.ts": {"does": "the demo build's split of the recorded responses (DEBT84): a "
+                                     "Vite plugin loaded only when `VITE_DEMO=1`, writing "
+                                     "`demo-data/` beside the app, one file per small route "
+                                     "family or per large response, and an index of key to file. "
+                                     "`demoServer.ts` fetches a file when a screen first asks. "
+                                     "The recorder's chunks are read as written.",
+                             "governed_by": ["D172"]},
             "vite.config.ts": {"does": "the dev server, strictPort — a busy port fails "
                                        "loudly rather than serving on 5174, where CLAUDE.md, the "
                                        "Makefile and scripts/views.txt would all three be wrong. "
@@ -6654,6 +6661,12 @@ COMPONENTS = [
                                           "bundle.",
                                   "governed_by": ["D10", "D20", "D26", "D28", "D37", "D43", "D86",
                                                   "D57", "D58", "D103", "D172"]},
+            "src/demoShared.ts": {"does": "what the demo's runtime and its build step agree on: "
+                                          "the canonical key spelling, the two derived Home reads "
+                                          "(`recentCards`, `historyCards`) and the folder the split "
+                                          "recording lives in. Imports nothing, so the Vite config "
+                                          "can load it.",
+                                  "governed_by": ["D172"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript. "
