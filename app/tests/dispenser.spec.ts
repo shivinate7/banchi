@@ -113,9 +113,9 @@ test('with a box picked, a capture that fails stops dealing and the last write i
   }, CARD)
   await expect(control(page, 'Start dispenser')).toBeVisible({ timeout: 8_000 })
   expect(capturePosts).toBeGreaterThan(0)
-  await expect(
-    page.locator('.capture-controls').getByText(/Stopped: a card was not photographed|Resume captures first/),
-  ).toBeVisible()
+  // the failed save is held: no Resume button exists, so Start's reason is the one thing to press
+  await expect(page.locator('.capture-controls').getByText('Retry saving first')).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Resume captures/ })).toHaveCount(0)
 
   const sent = await writes(page)
   expect(sent.at(-1)).toBe('MOTOR:STOP')
@@ -290,8 +290,7 @@ test('R3: while a photo is held, Capture sends no POST and the held frame surviv
   await captureButton(page).click({ force: true })
   await page.waitForTimeout(800) // keep: a wrongly sent POST gets time to land
   expect(wire.posts()).toBe(posts)
-  const resume = page.getByRole('button', { name: /^Resume captures/ })
-  await resume.click() // always pressed: it may clear the halt, and must not release a held photo
+  await expect(page.getByRole('button', { name: /^Resume captures/ })).toHaveCount(0) // a failed save has no Resume
   await captureButton(page).click({ force: true })
   const start = control(page, 'Start dispenser')
   await expect(start).toBeDisabled() // and so is the dispenser
