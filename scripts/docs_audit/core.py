@@ -880,48 +880,48 @@ UNSCOPED_WALK_EXPECTED = 16
 
 # Expensive store calls made once per loop item: (path, function, callee). The count only goes down; see `check_loop_expensive`.
 LOOP_EXPENSIVE_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
-    ("cli/cmd_identify.py", "run", "sidecar.scan"),   # one directory scan per capture root or run, bounded by the run count
-    ("cli/cmd_join.py", "run", "read_export"),   # one file read per export file, bounded by the export count, not by cards
-    ("cli/cmd_match.py", "_write_chunk", "read_export"),   # one file read per export file, bounded by the export count, not by cards
-    ("cli/cmd_match.py", "sweep_worker", "_write_chunk"),   # one file read per export file, bounded by the export count, not by cards
-    ("cli/cmd_pricearchive.py", "_sweep", "Store.write"),   # per send stamp or per sweep step, bounded by sends, and each write must be its own transaction
-    ("cli/requeue.py", "catalogs_from", "read_export"),   # one file read per export file, bounded by the export count, not by cards
-    ("cli/resolve.py", "_claim_files", "read_export"),   # one file read per export file, bounded by the export count, not by cards
-    ("cli/resolve.py", "_resolve", "read_export"),   # one file read per export file, bounded by the export count, not by cards
-    ("pipeline/pricehistory.py", "reading_for_row", "history"),   # one history read per price range, a fixed tiny set
-    ("pipeline/pricehistory.py", "readings_for_rows", "history"),   # one history read per price range, a fixed tiny set
-    ("pipeline/setnames.py", "known_sets", "read_export"),   # one file read per export file, bounded by the export count, not by cards
-    ("pipeline/skus.py", "fill", "read_export"),   # one file read per export file, bounded by the export count, not by cards
-    ("server/capture_server.py", "_ledger_pull", "holder_of"),   # walks open orders per card, so O(cards x open orders); candidate for one reverse index per request
-    ("server/capture_server.py", "_require_group_answers", "Store.read"),   # on the refusal path only, runs once and raises
-    ("server/capture_server.py", "do_boxes", "_layout_digest"),   # per-box work over a bounded box set, so the total is one pass over the cards
-    ("server/capture_server.py", "do_delete_box", "holder_of"),   # walks open orders per card, so O(cards x open orders); candidate for one reverse index per request
-    ("server/capture_server.py", "do_graveyard", "holder_of"),   # walks open orders per card, so O(cards x open orders); candidate for one reverse index per request
-    ("server/capture_server.py", "do_move_sections_batch", "_box_digest"),   # per-box work over a bounded box set, so the total is one pass over the cards
-    ("server/capture_server.py", "do_move_sections_batch", "_box_state"),   # per-box work over a bounded box set, so the total is one pass over the cards
-    ("server/capture_server.py", "do_move_sections_batch", "_layout_digest"),   # per-box work over a bounded box set, so the total is one pass over the cards
-    ("server/capture_server.py", "do_move_sections_batch", "_move_range_core"),   # per-box work over a bounded box set, so the total is one pass over the cards
-    ("server/capture_server.py", "do_move_sections_batch", "_move_sections_core"),   # per-box work over a bounded box set, so the total is one pass over the cards
-    ("server/capture_server.py", "do_move_sections_batch", "_next_capture_line"),   # per-box work over a bounded box set, so the total is one pass over the cards
-    ("server/capture_server.py", "do_undo_section_move", "_box_digest"),   # per-box work over a bounded box set, so the total is one pass over the cards
-    ("server/pipeline_routes.py", "_catalog_rows", "read_export"),   # one file read per export file, bounded by the export count, not by cards
-    ("server/pipeline_routes.py", "_run_live_by_sku", "read_export"),   # one file read per export file, bounded by the export count, not by cards
-    ("server/pipeline_routes.py", "_scanned", "sidecar.scan"),   # one directory scan per capture root or run, bounded by the run count
-    ("server/pipeline_routes.py", "_selection_captures", "sidecar.scan"),   # one directory scan per capture root or run, bounded by the run count
-    ("server/pipeline_routes.py", "_unsent_ledger", "_run_live_by_sku"),   # one file read per export file, bounded by the export count, not by cards
-    ("server/pipeline_routes.py", "do_pipeline_export", "_export_report"),   # one file read per export file, bounded by the export count, not by cards
-    ("server/send_routes.py", "_claim_refusal", "_markdown_blocks"),   # per send stamp or per sweep step, bounded by sends, and each write must be its own transaction
-    ("server/send_routes.py", "_credits", "_sold_since"),   # CANDIDATE: one Store().read() per SKU when the receipt has no sold_before; read once per request
-    ("server/send_routes.py", "_live_check", "_held_stamps"),   # per send stamp or per sweep step, bounded by sends, and each write must be its own transaction
-    ("server/send_routes.py", "_live_check", "_release"),   # per send stamp or per sweep step, bounded by sends, and each write must be its own transaction
-    ("server/send_routes.py", "_live_check", "_resolve_markdown"),   # one file read per export file, bounded by the export count, not by cards
-    ("server/send_routes.py", "_write_and_send", "_copies"),   # one file read per export file, bounded by the export count, not by cards
-    ("server/send_routes.py", "_write_and_send", "_names"),   # one file read per export file, bounded by the export count, not by cards
-    ("server/send_routes.py", "_write_and_send", "_price_rows"),   # one file read per export file, bounded by the export count, not by cards
-    ("store/master.py", "place", "_respace"),   # per-box work over a bounded box set, so the total is one pass over the cards
-    ("store/master.py", "place", "_try_place"),   # per-box work over a bounded box set, so the total is one pass over the cards
-    ("store/master.py", "section_tail_key", "_respace"),   # per-box work over a bounded box set, so the total is one pass over the cards
-    ("store/orders.py", "record_pull", "holder_of"),   # walks open orders per card, so O(cards x open orders); candidate for one reverse index per request
+    ("cli/cmd_identify.py", "run", "sidecar.scan"),   # one directory scan per capture root, bounded by the roots the person named
+    ("cli/cmd_join.py", "run", "read_export"),   # one export read per game join, bounded by the games
+    ("cli/cmd_match.py", "_write_chunk", "read_export"),   # one re-read per export path on purpose, so the lock re-checks the file as it stands; bounded by games
+    ("cli/cmd_match.py", "sweep_worker", "_write_chunk"),   # one call per chunk of results, and each call re-reads the exports by design (the entry above); chunk count grows with the sweep
+    ("cli/cmd_pricearchive.py", "_sweep", "Store.write"),   # one write per chunk of SKUs by design, so a long sweep commits as it goes; each write is its own transaction
+    ("cli/requeue.py", "catalogs_from", "read_export"),   # one export read per path the caller passed, bounded by games
+    ("cli/resolve.py", "_claim_files", "read_export"),   # one export read per distinct export path, bounded by games
+    ("cli/resolve.py", "_resolve", "read_export"),   # two sites, one export read per mapped path, cached in `parsed`; bounded by games
+    ("pipeline/pricehistory.py", "reading_for_row", "history"),   # one history read per range, and there are a fixed few ranges
+    ("pipeline/pricehistory.py", "readings_for_rows", "history"),   # one history read per range, and there are a fixed few ranges
+    ("pipeline/setnames.py", "known_sets", "read_export"),   # one read per CSV in the export directory, bounded by the exports kept
+    ("pipeline/skus.py", "fill", "read_export"),   # one read per export file in date order, bounded by the exports kept
+    ("server/capture_server.py", "_ledger_pull", "holder_of"),   # CANDIDATE: `holder_of` walks the open orders once per copy pulled
+    ("server/capture_server.py", "_require_group_answers", "Store.read"),   # runs only on the duplicate-position refusal path, once, then raises
+    ("server/capture_server.py", "do_boxes", "_layout_digest"),   # one layout read per box row, so the total is one pass over the cards
+    ("server/capture_server.py", "do_delete_box", "holder_of"),   # CANDIDATE: `holder_of` walks the open orders once per card in the box
+    ("server/capture_server.py", "do_graveyard", "holder_of"),   # CANDIDATE: `holder_of` walks the open orders once per card in the graveyard
+    ("server/capture_server.py", "do_move_sections_batch", "_box_digest"),   # one records_in read per box the batch touched, a bounded box set
+    ("server/capture_server.py", "do_move_sections_batch", "_box_state"),   # one records_in read per box the draft names, a bounded box set
+    ("server/capture_server.py", "do_move_sections_batch", "_layout_digest"),   # one layout read per box in the draft, bounded by the boxes the draft names
+    ("server/capture_server.py", "do_move_sections_batch", "_move_range_core"),   # one layout read per move in the batch; CANDIDATE if batches grow large
+    ("server/capture_server.py", "do_move_sections_batch", "_move_sections_core"),   # one layout read per move in the batch; CANDIDATE if batches grow large
+    ("server/capture_server.py", "do_move_sections_batch", "_next_capture_line"),   # one layout read per box the last move touched, at most three
+    ("server/capture_server.py", "do_undo_section_move", "_box_digest"),   # one records_in read per box the move recorded, at most three
+    ("server/pipeline_routes.py", "_catalog_rows", "read_export"),   # one export read per game of one run, bounded by games
+    ("server/pipeline_routes.py", "_run_live_by_sku", "read_export"),   # one export read per distinct export path of one run, bounded by games
+    ("server/pipeline_routes.py", "_scanned", "sidecar.scan"),   # one directory scan per capture root, bounded by the roots
+    ("server/pipeline_routes.py", "_selection_captures", "sidecar.scan"),   # one directory scan per capture root, bounded by the roots
+    ("server/pipeline_routes.py", "_unsent_ledger", "_run_live_by_sku"),   # CANDIDATE: re-reads each run's exports once per run, so it grows with the run count
+    ("server/pipeline_routes.py", "do_pipeline_export", "_export_report"),   # one previous-export read per game the answers cover, bounded by games
+    ("server/send_routes.py", "_claim_refusal", "_markdown_blocks"),   # the loop returns on its first pass, so the Store().read() runs once
+    ("server/send_routes.py", "_credits", "_sold_since"),   # CANDIDATE: one Store().read() per SKU when the receipt has no `sold_before`; read once per request
+    ("server/send_routes.py", "_live_check", "_held_stamps"),   # CANDIDATE: one Store().read() per due stamp; read once before the loop
+    ("server/send_routes.py", "_live_check", "_release"),   # one store write per due stamp, bounded by pending sends; each write must be its own transaction
+    ("server/send_routes.py", "_live_check", "_resolve_markdown"),   # one export read and one store write per pending markdown stamp, bounded by pending sends
+    ("server/send_routes.py", "_write_and_send", "_copies"),   # one read per import file this press wrote, at most one per game
+    ("server/send_routes.py", "_write_and_send", "_names"),   # one read per import file this press wrote, at most one per game
+    ("server/send_routes.py", "_write_and_send", "_price_rows"),   # one read per import file this press wrote, at most one per game
+    ("store/master.py", "place", "_respace"),   # the loop is `range(2)`, a fixed two passes
+    ("store/master.py", "place", "_try_place"),   # the loop is `range(2)`, a fixed two passes
+    ("store/master.py", "section_tail_key", "_respace"),   # the loop is `range(2)`, a fixed two passes
+    ("store/orders.py", "record_pull", "holder_of"),   # CANDIDATE: `holder_of` walks the open orders once per capture id pulled
 })
 LOOP_EXPENSIVE_EXPECTED = 42
 
