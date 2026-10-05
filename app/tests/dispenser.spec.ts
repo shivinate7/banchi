@@ -171,3 +171,72 @@ test('saves reach the server in capture order: card 2 is sent only after card 1 
   await expect(page.getByText('Box 5, Card 2').first()).toBeVisible()
   await control(page, 'Stop dispenser').click()
 })
+
+/* ---- a save that does not come back: the store must know where every card is ---- */
+const sceneTo = (page: Page, base: number) =>
+  page.evaluate((b) => {
+    ;(window as unknown as { __scene: { base: number } }).__scene.base = b
+  }, base)
+
+/** Card 1 fires and its save is held; card 2 is photographed behind it (queued, in memory). */
+async function twoCards(page: Page, wire: Awaited<ReturnType<typeof slowCapture>>): Promise<void> {
+  const start = control(page, 'Start dispenser')
+  await expect(start).toBeEnabled({ timeout: 5_000 })
+  await start.click()
+  await sceneTo(page, CARD)
+  await expect.poll(wire.posts, { timeout: 8_000 }).toBe(1)
+  await sceneTo(page, GAP_LUMA)
+  await page.waitForTimeout(400) // keep: let the gap register before the next card
+  await sceneTo(page, CARD - 40)
+  await page.waitForTimeout(400) // keep: card 2's fire lands behind save 1
+}
+
+/* CONTRACT: when card 1's save fails twice, the screen says `Box 5, Card 1 was not saved` (its own
+ * label, the slot it was to take) and offers a button named `Retry saving` that re-sends it, then card 2,
+ * in order. Card 2 is never sent in the meantime. */
+test('card 1 fails twice with card 2 queued: card 2 is never sent, the dealer stops, the screen names card 1', async ({ page }) => {
+  await ready(page, true)
+  const wire = await slowCapture(page, 1_500, (n) => n <= 2)
+  await twoCards(page, wire)
+  await expect.poll(wire.answered, { timeout: 10_000 }).toBe(2) // the save and its one retry, both failed
+  await page.waitForTimeout(2_000) // keep: card 2 gets time to be wrongly sent
+  expect(wire.events()).toEqual(['sent:1', 'answered:1', 'sent:2', 'answered:2']) // no third POST: card 2 held
+  await expect(control(page, 'Start dispenser')).toBeVisible() // the dealer is stopped
+  await expect(page.getByText(/Box 5, Card 1\b.*not saved|not saved.*Box 5, Card 1\b/i).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Retry saving' })).toBeVisible()
+})
+
+test('the not-saved line names the card that failed, never "the last card"', async ({ page }) => {
+  await ready(page, true)
+  const wire = await slowCapture(page, 1_500, (n) => n <= 2)
+  await twoCards(page, wire)
+  await expect.poll(wire.answered, { timeout: 10_000 }).toBe(2)
+  await expect(control(page, 'Start dispenser')).toBeVisible()
+  await expect(page.getByText(/Box 5, Card 1\b/).first()).toBeVisible()
+  await expect(page.getByText(/last card/i)).toHaveCount(0)
+})
+
+/* CONTRACT: a reload with saves out reports every unsaved card, by count, in the carried-over notice. */
+test('a reload with two saves in flight reports both unsaved cards', async ({ page }) => {
+  await ready(page, true)
+  const wire = await slowCapture(page, 60_000)
+  await twoCards(page, wire)
+  await page.reload()
+  await expect(page.locator('.capture-carried')).toContainText(/\b2\b.*(cards|captures)/i, { timeout: 10_000 })
+})
+
+test('Undo pressed while a save is out says so, plainly, and deletes nothing', async ({ page }) => {
+  await ready(page, true)
+  const wire = await slowCapture(page, (n) => (n === 1 ? 50 : 6_000))
+  const start = control(page, 'Start dispenser')
+  await expect(start).toBeEnabled({ timeout: 5_000 })
+  await start.click()
+  await sceneTo(page, CARD)
+  await expect.poll(wire.answered, { timeout: 8_000 }).toBe(1) // card 1 is saved
+  await sceneTo(page, GAP_LUMA)
+  await page.waitForTimeout(400) // keep: let the gap register before the next card
+  await sceneTo(page, CARD - 40)
+  await expect.poll(wire.posts, { timeout: 8_000 }).toBe(2) // card 2's save is out
+  await page.keyboard.press('u')
+  await expect(page.locator('.capture-undo-note')).toContainText(/saving|saved|wait/i, { timeout: 3_000 })
+})

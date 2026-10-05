@@ -90,7 +90,8 @@ export async function fakeBluetooth(page: Page): Promise<void> {
  *  that reached the wire, answered or not. Nothing reaches the real store. */
 export async function slowCapture(
   page: Page,
-  ms: number,
+  ms: number | ((post: number) => number),
+  failIf: (post: number) => boolean = () => false,
 ): Promise<{ posts: () => number; answered: () => number; events: () => string[] }> {
   let posts = 0
   let answered = 0
@@ -102,6 +103,14 @@ export async function slowCapture(
     setTimeout(() => { // keep: the slow save held
       answered += 1
       events.push(`answered:${index}`)
+      if (failIf(index)) {
+        void route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { code: 'capture_failed', message: 'The capture failed.' } }),
+        })
+        return
+      }
       void route.fulfill({
         status: 201,
         contentType: 'application/json',
@@ -111,7 +120,7 @@ export async function slowCapture(
           place: { box_total: index, located: true, label: `Box 5, Card ${index}` },
         }),
       })
-    }, ms)
+    }, typeof ms === 'number' ? ms : ms(index))
   })
   return { posts: () => posts, answered: () => answered, events: () => events.slice() }
 }
