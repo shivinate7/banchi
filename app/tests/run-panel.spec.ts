@@ -3252,7 +3252,7 @@ test('not prepared: the sheet says so, offers Prepare, and the quote waits', asy
   await toReading(page, 'free')
 
   await expect(page.locator('.runs-composer .bn-notice')).toContainText('Matching needs a one-time setup')
-  await expect(page.locator('.runs-composer .bn-notice')).toContainText('372 MB download')
+  await expect(page.locator('.runs-composer .bn-notice')).toContainText('354.5 MB download')
   await expect(page.getByRole('button', { name: 'Prepare matching' })).toBeEnabled()
   /* THE PRESS THAT WOULD READ IS DISABLED, AND NO QUOTE WAS ASKED FOR: a free quote over an
      unprepared reader would be a guess. */
