@@ -3152,7 +3152,7 @@ def _decorate_card(
     from types import SimpleNamespace
 
     record["number_display"] = join.display_number(record.get("number"), record.get("printed_total"))
-    if skus is not None:
+    if skus is not None and record.get("sku"):
         record.update(_listing_decoration(SimpleNamespace(**record), skus))
     try:
         place = places.of(record["box"] if box is None else box, record["index"] if index is None else index)

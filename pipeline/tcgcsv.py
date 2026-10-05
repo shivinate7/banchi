@@ -29,7 +29,8 @@ import io
 import threading
 from collections import OrderedDict
 from dataclasses import dataclass
-from decimal import ROUND_HALF_UP, Decimal
+import re
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
@@ -322,12 +323,21 @@ def format_price(value) -> str:
     return str(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
+_THOUSANDS = re.compile(r"^-?\d{1,3}(,\d{3})+(\.\d+)?$")
+
+
 def parse_price(value: str) -> Optional[Decimal]:
-    """THE money rule: a leading "$" and thousands commas are read, a blank is `None`, anything
-    else that is not a number raises `decimal.InvalidOperation`."""
-    value = (value or "").strip().lstrip("$").replace(",", "").strip()
+    """THE money rule: one leading "$" is read, a comma only as a thousands separator, a blank
+    is `None`, anything else that is not a number raises `decimal.InvalidOperation`."""
+    value = (value or "").strip()
     if not value:
         return None
+    if value.startswith("$"):
+        value = value[1:]
+    if "," in value:
+        if not _THOUSANDS.match(value):
+            raise InvalidOperation(value)
+        value = value.replace(",", "")
     return Decimal(value)
 
 
