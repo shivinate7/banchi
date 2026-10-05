@@ -70,7 +70,7 @@ from typing import Dict, List, Optional, Tuple
 from harness.eval import fixtures, runcache
 from harness.tests import Checks, Result
 from identify import batch, prompt
-from pipeline import join
+from pipeline import join, namefold
 
 NAME = "T1"
 DESCRIPTION = "Ground-truth ID eval against pokemontcg.io images"
@@ -247,6 +247,7 @@ def scorer_fingerprint() -> str:
         # What `_score` calls. Stubbing any of these moves a verdict, so each is hashed:
         # both name folds with the constants they read, the key composer and `has_number`.
         inspect.getsource(prompt.normalize_name),
+        inspect.getsource(namefold.fold_name_typography),
         repr((prompt._APOSTROPHES, prompt._DASHES, prompt._NAME_NOISE.pattern,
               prompt._NAME_NOISE.flags)),
         inspect.getsource(Score.__init__),

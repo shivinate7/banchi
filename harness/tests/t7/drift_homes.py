@@ -136,4 +136,48 @@ def check_set_fold_one_spelling(checks: Checks) -> None:
     checks.equal(setnames.fold(None), join.normalize_set(None), "set fold agrees on None")
 
 
-CHECKS = (check_name_fold_one_home, check_terminal_states_from_store, check_exif_one_pixel_space, check_set_fold_one_spelling)
+def check_exif_verbatim_bytes_upright(checks: Checks) -> None:
+    """`prepare`'s verbatim branch (no crop box, under the cap) sends the file's own bytes. Those bytes must
+    decode, EXIF ignored, to the size `sent_size` reports (the upright frame)."""
+    from PIL import Image
+    from identify import images
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path, upright = _exif6_jpeg(tmp)
+        got = images.prepare(path)
+        checks.equal(got.sent_size, upright, "prepare reports the upright frame as sent")
+        raw = Image.open(io.BytesIO(got.data))  # PIL's open honors no EXIF until exif_transpose
+        checks.ok(raw.size == got.sent_size, "the bytes prepare sends are the size sent_size reports",
+                  f"bytes decode to {raw.size}, sent_size {got.sent_size}, resized={got.resized}")
+
+
+def check_exif_crop_refusal_and_qr(checks: Checks) -> None:
+    """Coverage: `crop_refusal` given a path and `codes.qr.decode` both read an EXIF-rotated file upright."""
+    import numpy as np
+    import zxingcpp
+    from PIL import Image
+    from codes import qr
+    from geometry import detect
+    from identify import images
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path, _upright = _exif6_jpeg(tmp)
+        box = detect.CardBox(angle=0.0, left=0.1, top=0.1, right=0.9, bottom=0.9, fill=0.9, aspect=0.67)
+        checks.equal(images.crop_refusal(path, box), images.crop_refusal(detect.open_image(path), box),
+                     "crop_refusal on a path judges the upright frame")
+
+        payload = "https://example.com/exif-qr"
+        symbol = Image.fromarray(np.array(zxingcpp.write_barcode(zxingcpp.BarcodeFormat.QRCode, payload))).convert("RGB")
+        side = 360
+        upright = Image.new("RGB", (400, 600), (255, 255, 255))
+        upright.paste(symbol.resize((side, side), Image.NEAREST), (20, 120))
+        exif = Image.Exif()
+        exif[274] = 6
+        qr_path = str(Path(tmp) / "qr.jpg")
+        upright.rotate(90, expand=True).save(qr_path, "JPEG", quality=95, exif=exif)
+        read = qr.decode(qr_path)
+        checks.equal(read.payload if read else None, payload, "codes.qr.decode reads an EXIF-rotated file")
+
+
+CHECKS = (check_name_fold_one_home, check_terminal_states_from_store, check_exif_one_pixel_space,
+          check_exif_verbatim_bytes_upright, check_exif_crop_refusal_and_qr, check_set_fold_one_spelling)
