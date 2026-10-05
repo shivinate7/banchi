@@ -839,7 +839,6 @@ UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("server/capture_server.py", "do_boxes", "distinct"),
     ("server/pipeline_routes.py", "_value_rows", "select"),   # renamed from `do_pipeline_value`'s `.values()`; the aggregate pass is unavoidably store-wide (D277), so the CALL survives, only its shape and enclosing function change
     ("store/master.py", "to_payload", "items"),
-    ("store/master.py", "counts", "select"),
     ("store/master.py", "next_box_number", "distinct"),   # kept permanently — one indexed column, cheap; missed by the hand census
     ("cli/resolve.py", "box_views", "select"),   # renamed from `.values()`; the unbounded (`boxes=None`) branch every existing caller still uses is genuinely store-wide, for the same reason `_value_rows` is
     ("cli/resolve.py", "_cards_by_sku", "select"),   # one pass, replaces per-SKU `_copies_out`/`_committed_keys`/`_unsent_ledger` reads; the `_unsent_ledger` distinct scan above is deleted, not merely moved
@@ -875,7 +874,7 @@ UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
 # list already: the question it answers ("what game/set/rarity values exist, and how many
 # of each") is a store-wide aggregate by definition, over the same `GET /boxes` route that
 # already pays `_box_row`'s O(cards) cost once per box. Named as a cost paid, not hidden.
-UNSCOPED_WALK_EXPECTED = 15
+UNSCOPED_WALK_EXPECTED = 14
 
 # Expensive store calls made once per loop item: (path, function, callee). The count only goes down; see `check_loop_expensive`.
 LOOP_EXPENSIVE_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({

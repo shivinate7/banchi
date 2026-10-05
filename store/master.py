@@ -2121,10 +2121,11 @@ class Inventory:
         entry = self.box(box)
         names = dict(entry.section_names) if entry is not None else {}
         skip = {int(i) for i in exclude}
+        # Off the two indexed columns `box_order` reads; no `Card` is built.
         records = sorted(
-            (float(card.order_key), int(card.index))
-            for card in self.cards.where(box=_as_position_int(box, "box"))
-            if int(card.index) not in skip
+            (float(key), index)
+            for index, key in self.box_order(box).pairs
+            if index not in skip
         )
         dividers = [float(d) for d in (entry.layout() if entry is not None else ())]
         if dividers or records:
@@ -3862,8 +3863,8 @@ class Inventory:
 
     def counts(self) -> Dict[str, int]:
         counts = {state: 0 for state in STATES}
-        for _, (state,) in self.cards.select(("state",)):
-            counts[state] = counts.get(state, 0) + 1
+        for state, n in self.cards.count_by("state").items():
+            counts[state] = counts.get(state, 0) + n
         return counts
 
     def copies_on_hand(self, sku: str) -> List[Card]:

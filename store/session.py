@@ -241,16 +241,17 @@ class Store:
         finally:
             conn.close()
 
-    def history_at(self, key: str):
+    def history_at(self, key: str, exact: bool = False):
         """The events that could bear on one position, oldest first. `history()`'s scoped
         sibling (D191): the reversal readers each want one card's own
         lines plus its box's `renumbered` markers, not a full-table load filtered in
         Python. See `db.events_at`'s docstring for why the scope is the box and not the
-        bare position.
+        bare position. `exact=True` returns only the lines filed under `key` itself, for a
+        reader that ignores every other position.
         """
         conn = db.connect(self.directory)
         try:
-            return db.events_at(conn, key)
+            return db.events_at(conn, key, exact)
         finally:
             conn.close()
 
