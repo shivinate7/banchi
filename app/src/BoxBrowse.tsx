@@ -732,8 +732,8 @@ function VariantChooser({
           // already established for the case no export has ever priced this game.
           const subParts = [
             group.number_display,
-            group.set ?? group.set_hint,
             group.game ? gameLabel(group.game) : null,
+            group.set ?? group.set_hint,
             group.condition,
             showRarity ? group.rarity : null,
           ].filter((part): part is string => typeof part === 'string' && part !== '')
