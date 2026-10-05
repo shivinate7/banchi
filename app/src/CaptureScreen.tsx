@@ -2041,7 +2041,7 @@ export function CaptureScreen() {
       : null
 
   const pickSection = useCallback(
-    (div: string | null) => {
+    (div: string | null, token?: string | null) => {
       setSelectedDiv(div)
       setSectionPickNote(null)
       if (box === null) return
@@ -2055,7 +2055,7 @@ export function CaptureScreen() {
       // THE TOKEN RIDES ALONG WITH THE DIV (finding 1) — read now, at pick time, so a restore
       // later can tell "this key still names what it named" from "this key now resolves, by
       // coincidence, to a different section after a re-space".
-      rememberSectionPick(sectionPickKey(box, boxBid), { div, at: Date.now(), token: layoutToken ?? null })
+      rememberSectionPick(sectionPickKey(box, boxBid), { div, at: Date.now(), token: token ?? layoutToken ?? null })
     },
     [box, boxBid, layoutToken, sectionPickKey],
   )
@@ -3664,7 +3664,8 @@ export function CaptureScreen() {
         const newDiv = opened?.div ?? (selectedDiv === null && backDiv !== undefined ? String(backDiv) : null)
         // THE SCREEN PICKS THE NEW SECTION, exactly as it always has — only now that is not
         // always the last one.
-        if (opened !== null) pickSection(newDiv)
+        // The closure's `layoutToken` predates this answer; the answer's own token is the new one.
+        if (opened !== null) pickSection(newDiv, record.layout_token)
         // UN-15: which divider `U` takes back out, and when it went in — its OWN key, never
         // the box's last one: an S in the middle puts its divider somewhere past the front,
         // and the keyed route (`ux/divider-fix`) is what `undoDivider` needs to reach it.
