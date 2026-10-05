@@ -151,12 +151,9 @@ def check_exif_verbatim_bytes_upright(checks: Checks) -> None:
                   f"bytes decode to {raw.size}, sent_size {got.sent_size}, resized={got.resized}")
 
 
-def check_exif_crop_refusal_and_qr(checks: Checks) -> None:
-    """`crop_refusal` given a path reads an EXIF-rotated file upright (red-capable). `codes.qr.decode` is a smoke check only."""
-    import numpy as np
-    import zxingcpp
+def check_exif_crop_refusal_path(checks: Checks) -> None:
+    """`crop_refusal` given a path reads an EXIF-rotated file upright."""
     from PIL import Image
-    from codes import qr
     from geometry import detect
     from identify import images
 
@@ -169,18 +166,6 @@ def check_exif_crop_refusal_and_qr(checks: Checks) -> None:
         checks.ok(images.crop_refusal(sideways, box) is not None, "fixture: the raw sideways frame refuses this box")
         checks.equal(images.crop_refusal(path, box), None, "crop_refusal on a path judges the upright frame")
 
-        payload = "https://example.com/exif-qr"
-        symbol = Image.fromarray(np.array(zxingcpp.write_barcode(zxingcpp.BarcodeFormat.QRCode, payload))).convert("RGB")
-        side = 360
-        upright = Image.new("RGB", (400, 600), (255, 255, 255))
-        upright.paste(symbol.resize((side, side), Image.NEAREST), (20, 120))
-        exif = Image.Exif()
-        exif[274] = 6
-        qr_path = str(Path(tmp) / "qr.jpg")
-        upright.rotate(90, expand=True).save(qr_path, "JPEG", quality=95, exif=exif)
-        read = qr.decode(qr_path)
-        checks.equal(read.payload if read else None, payload, "smoke: codes.qr.decode reads an EXIF-rotated file (a QR decodes at any rotation, so this cannot go red on orientation)")
-
 
 CHECKS = (check_name_fold_one_home, check_terminal_states_from_store, check_exif_one_pixel_space,
-          check_exif_verbatim_bytes_upright, check_exif_crop_refusal_and_qr, check_set_fold_one_spelling)
+          check_exif_verbatim_bytes_upright, check_exif_crop_refusal_path, check_set_fold_one_spelling)
