@@ -795,13 +795,15 @@ export function SheetHost() {
   // one beat longer than the kit's leave (`useLeave`'s 140ms), so the sheet finishes its own
   const { mounted } = useLeave(current !== null, 180)
   const shown = current ?? (mounted ? last.current : null)
-  /* THE SHEET'S READS ON ITS OWN COMMIT ARE THE SHELL'S: named in render, so its mount effects already see it, and
-     handed back by this host's own effect, which runs after the sheet's. A read the sheet starts later, from a state
-     change, belongs to the screen it sits over and is dropped with it, silently (`aborted` draws nothing). */
-  setSheetOpen(shown !== null)
+  /* A SHEET'S READS LIVE AS LONG AS THE SHEET. While one is hosted, every read the app starts is the shell's (`setSheetOpen`,
+     read at call time in `request`), so leaving the screen it was opened over aborts none of them. Named in render, so the
+     sheet's mount effects already see it. */
+  const hosting = shown !== null
+  setSheetOpen(hosting)
   useEffect(() => {
-    setSheetOpen(false)
-  })
+    setSheetOpen(hosting)
+    return () => setSheetOpen(false)
+  }, [hosting])
   if (shown === null) return null
   const { Component, props, kind } = shown as unknown as {
     readonly kind: string

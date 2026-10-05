@@ -797,8 +797,8 @@ export function leaveReadScope(id: string): void {
 }
 const departing = new Map<string, number>()
 
-/** The sheet host says its commit is under way. A read started in it belongs to the shell, so leaving the screen the
- *  sheet was opened over does not abort the sheet's mount reads. */
+/** The sheet host says a sheet is hosted. A read started meanwhile belongs to the shell, so leaving the screen the sheet
+ *  was opened over never aborts it. A screen read that starts under an open sheet goes unaborted: a missed saving only. */
 let sheetOpen = false
 export function setSheetOpen(open: boolean): void {
   sheetOpen = open
