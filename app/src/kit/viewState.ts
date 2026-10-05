@@ -116,7 +116,9 @@ export function readFacets(query: URLSearchParams, facets: readonly FilterFacet[
   for (const facet of facets) {
     const known = new Set(facet.options.map((option) => option.value))
     const picked: string[] = []
-    for (const one of query.getAll(facet.key)) {
+    /* NO KEY IS REST; A KEY IS THE PICKS, and an empty value (`?show=`) is "none", so clearing a
+       default pick is a state the URL can say. */
+    for (const one of query.has(facet.key) ? query.getAll(facet.key) : (facet.defaultPicks ?? [])) {
       if (!known.has(one) || picked.includes(one)) continue
       picked.push(one)
     }
@@ -124,6 +126,18 @@ export function readFacets(query: URLSearchParams, facets: readonly FilterFacet[
     if (kept.length > 0) value[facet.key] = kept
   }
   return value
+}
+
+/** The picks a facet has at rest, as a `FilterValue` entry would hold them. */
+export function restPicks(facet: FilterFacet): readonly string[] {
+  return (facet.defaultPicks ?? []).filter((one) => facet.options.some((option) => option.value === one))
+}
+
+/** Whether `picked` is the facet's rest picks, in any order. */
+export function atRest(facet: FilterFacet, picked: readonly string[] | undefined): boolean {
+  const rest = restPicks(facet)
+  const now = picked ?? []
+  return now.length === rest.length && rest.every((one) => now.includes(one))
 }
 
 /** A sort, read against its options. A key no option carries falls back to `defaultValue`. A
@@ -229,16 +243,21 @@ export function useFacetParams(facets: readonly FilterFacet[]): readonly [Filter
   const signature = JSON.stringify(readFacets(query, facets))
   const value = useMemo(() => JSON.parse(signature) as FilterValue, [signature])
   const keys = facets.map((facet) => facet.key).join('\n')
+  /* Rest picks by key, as one string, so `set` keeps its identity while the options re-count. */
+  const rests = JSON.stringify(facets.map((facet) => [facet.key, restPicks(facet)]))
   const set = useCallback(
     (next: FilterValue): void => {
+      const restOf = new Map(JSON.parse(rests) as [string, string[]][])
       const patch: Record<string, readonly string[] | null> = {}
       for (const key of keys.split('\n')) {
-        const picked = next[key]
-        patch[key] = picked !== undefined && picked.length > 0 ? picked : null
+        const picked = next[key] ?? []
+        const rest = restOf.get(key) ?? []
+        if (picked.length === rest.length && rest.every((one) => picked.includes(one))) patch[key] = null
+        else patch[key] = picked.length > 0 ? picked : ['']
       }
       patchViewQuery(patch)
     },
-    [keys],
+    [keys, rests],
   )
   return [value, set] as const
 }

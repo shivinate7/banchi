@@ -51,7 +51,7 @@ import { hubState, setHub, touchHub, useHub, type Stage } from './OrdersHubStore
 import { PositionLabel } from './PositionLabel'
 import { RailFrame } from './RailFrame'
 import { sayPlace } from './position'
-import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, lineReason, FLAGGED_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
+import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, isSharedOrderNumber, lineReason, FLAGGED_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
 import {
   applyTake,
   buyerLabel,
@@ -896,12 +896,12 @@ const SORT_AT_REST: SortValue<OrderSortKey> = { key: 'waited', dir: 'asc' }
 /** The "Show" facet's choices: a buyer's one state, worst first (UX-171, UX-199), after
  *  Flagged, Short and Partly picked, the three ways a buyer owes a copy the store cannot fill
  *  (`orderBuyers.ts:UNFILLABLE_FACETS`). Home's "Cannot be filled" press opens all three. */
-type ShowValue = Status | typeof FLAGGED_FACET | typeof NONE_LEFT_FACET
-const SHOW_ORDER: readonly ShowValue[] = [FLAGGED_FACET, NONE_LEFT_FACET, 'look', 'short', 'ready', 'unresolved', 'done']
+type ShowValue = Status | typeof FLAGGED_FACET | typeof NONE_LEFT_FACET | 'open'
+const SHOW_ORDER: readonly ShowValue[] = [FLAGGED_FACET, NONE_LEFT_FACET, 'look', 'short', 'ready', 'unresolved', 'open', 'done']
 const NO_SHOWS: readonly ShowValue[] = []
 /** ONE STATE, ONE NAME: the facet and the row's pill read the same `STATUS_PILL` words. */
 const showLabel = (value: ShowValue): string =>
-  value === FLAGGED_FACET ? 'Flagged' : value === NONE_LEFT_FACET ? 'Short' : STATUS_PILL[value].label
+  value === FLAGGED_FACET ? 'Flagged' : value === NONE_LEFT_FACET ? 'Short' : value === 'open' ? 'Open' : STATUS_PILL[value].label
 
 const LANE_TONE: Record<ShippingLane, PillTone> = { envelope: 'ok', parcel: 'default', unjudged: 'warn' }
 const LANE_ICON: Record<ShippingLane, IconName> = { envelope: 'mail', parcel: 'package', unjudged: 'alert' }
@@ -1044,20 +1044,16 @@ type CloseLineHandler = (order: OrderRow, line: ResolvedLine, reason: OrderClose
 /** THE INBOUND LINK — `#/orders?order=<order key>`, READ HERE AND WRITTEN ELSEWHERE.
  *
  *  A caller that knows WHICH ORDER but not WHOSE links with this: `CardLocations`' wanted
- *  pill is the first, and the shape was anticipated before the link existed — `ResolvedLine`
- *  carries `order_key` beside `order` for exactly this reason, because the resolver keys on
- *  the number alone and the store keys on `source:number`. Resolving a buyer here instead
- *  would make every such caller read the order ledger to build a URL.
+ *  pill is the first. `ResolvedLine.order_key` is the store key, `source:number`, and is the
+ *  value to pass. `groupForOrderKey` matches it first, then a bare order number when exactly
+ *  one buyer holds it. A bare number two buyers share opens neither and the screen says so
+ *  (`isSharedOrderNumber`), because a guess would open the wrong buyer.
  *
- *  THE VALUE MUST BE THE STORE KEY — `source:number`, `ResolvedLine.order_key`, never the
- *  bare number `ResolvedLine.order` holds. `groupForOrderKey` matches on the store key, so a
- *  bare number resolves to nothing, the effect marks the link handled and returns, and the
- *  press does NOTHING while looking like a link. A caller with only a number has not got
- *  what this parameter takes.
+ *  A link that names an order, buyer or search opens with Show empty and Hide unpullable off,
+ *  so the row it names is listed, done or open (read once at mount, `restAtMount`).
  *
  *  This screen does not write it: the selection is a BUYER, so what it mirrors back is
- *  `?buyer=`. Both are read, `?buyer=` first, and a link naming one order is resolved
- *  through `groupForOrderKey` to whichever group holds it (D193). */
+ *  `?buyer=`. Both are read, `?buyer=` first (D193). */
 const ORDER_PARAM = 'order'
 /** THE SELECTION — `#/orders?buyer=<group key>`, read live through the view state, so Back and a
  *  typed URL both select (FLT-11). Written with `replaceState` (`patchViewQuery`), so stepping
@@ -2976,7 +2972,8 @@ function PullStage({
     const old = viewQuery.getAll('show')
     if (old.includes('missing')) patchViewQuery({ show: old.map((value) => (value === 'missing' ? FLAGGED_FACET : value)) })
   }, [viewQuery])
-  const [pullableAtRest] = useState(() => !IS_DEMO && !['show', 'status', 'buyer', 'order', 'q', 'unknown'].some((key) => viewQuery.has(key)))
+  const [restAtMount] = useState(() => !['show', 'status', 'buyer', 'order', 'q', 'unknown'].some((key) => viewQuery.has(key)))
+  const pullableAtRest = restAtMount && !IS_DEMO
   const [hideUnpullable, setHideUnpullable] = useViewFlag('pullable', pullableAtRest)
 
   /* THE SECOND TIER'S CACHE: real picks and places, fetched on demand for exactly the orders
@@ -3151,10 +3148,16 @@ function PullStage({
   const feedStatuses = useMemo(() => statusVocabulary(payload?.orders ?? []), [payload])
   const facetShape: readonly FilterFacet[] = useMemo(
     () => [
-      { key: 'show', label: 'Show', options: SHOW_ORDER.map((value) => ({ value, label: showLabel(value) })) },
+      {
+        key: 'show',
+        label: 'Show',
+        options: SHOW_ORDER.map((value) => ({ value, label: showLabel(value) })),
+        /* THE LANDING VIEW IS A VISIBLE PICK, never a hidden base: Open is selected at rest. */
+        defaultPicks: restAtMount ? ['open'] : [],
+      },
       { key: 'status', label: 'Status', options: feedStatuses.map((one) => ({ value: one.status, label: one.status })) },
     ],
-    [feedStatuses],
+    [feedStatuses, restAtMount],
   )
   const [picked, setPicked] = useFacetParams(facetShape)
   const shows = (picked.show ?? NO_SHOWS) as readonly ShowValue[]
@@ -3184,12 +3187,12 @@ function PullStage({
   const matchesShow = (group: BuyerGroup, value: ShowValue) =>
     value === 'done'
       ? inDoneBase(group)
-      : inOpenBase(group) &&
+      : value === 'open'
+        ? inOpenBase(group)
+        : inOpenBase(group) &&
         (value === FLAGGED_FACET || value === NONE_LEFT_FACET
           ? groupFacetCopies(group, answers, value).copies > 0
           : statusByGroup.get(group.key) === value)
-  const inBase = (group: BuyerGroup) =>
-    shows.length === 0 ? inOpenBase(group) : shows.some((value) => (value === 'done' ? inDoneBase(group) : inOpenBase(group)))
   const passesShow = (group: BuyerGroup) => shows.length === 0 || shows.some((value) => matchesShow(group, value))
 
   /* THE DRAWERS SORT REUSES THE WALK PLANNER'S OWN SOLVE (`D296`), never a second
@@ -3251,7 +3254,7 @@ function PullStage({
     setPinSig(basisSig)
     setPinned(new Set([...pinsNow, ...toPin.map((group) => group.key)]))
   }
-  const base = allGroups.filter(inBase)
+  const base = allGroups
   const freshShownGroups = sortGroups(
     base.filter((group) => passesFeed(group) && passesSearch(group) && passesHide(group) && passesShow(group)),
     sort,
@@ -3424,8 +3427,13 @@ function PullStage({
 
   /* THE SELECTION IS ALWAYS A ROW THE LIST DRAWS (UX-235): a filter that hides the selected
      buyer moves the selection to the first row shown, never to a buyer the list hides. */
-  const selectedKey =
-    selected !== null && shownGroups.some((group) => group.key === selected) ? selected : (shownGroups[0]?.key ?? null)
+  /* A bare order number two buyers share opens neither (a plain notice says so, below). */
+  const sharedNumber = buyerQ === '' && orderQ !== '' && isSharedOrderNumber(groups, orderQ)
+  const selectedKey = sharedNumber
+    ? null
+    : selected !== null && shownGroups.some((group) => group.key === selected)
+      ? selected
+      : (shownGroups[0]?.key ?? null)
   const selectedGroup = allGroups.find((group) => group.key === selectedKey) ?? null
 
   /* FETCH REAL PICKS FOR THE BUYER ACTUALLY OPEN. `OrderDetail`'s body and `BuyerDetail`'s
@@ -3502,17 +3510,6 @@ function PullStage({
    *  cross the filter bar and the buyer list before it reaches the walk. A skip link, one press
    *  that focuses a landmark already there, is the standard fix and needs no new key. */
   const walkRef = useRef<HTMLElement>(null)
-  /* A LINK TO A BUYER WITH NOTHING OPEN OPENS THE DONE VIEW, so the list draws the row the link
-     names (UX-235). Once per link value: a filter picked after it is the owner's to keep. */
-  const doneLinkHandled = useRef<string | null>(null)
-  useEffect(() => {
-    if (selected === null || doneLinkHandled.current === selected) return
-    const group = allGroups.find((one) => one.key === selected)
-    if (group === undefined) return // wait for the read this link is about
-    doneLinkHandled.current = selected
-    if (group.open.length === 0 && !shows.includes('done') && !finished.has(group.key)) patchViewQuery({ show: [...shows, 'done'] })
-  }, [selected, allGroups, shows, finished])
-
   /* THE ARROWS STEP THE LIST OF BUYERS where there is a list beside the detail. Never with a
    *  modifier (Cmd-arrow is the shell's, D51) and never out of a field.
    *
@@ -3672,7 +3669,7 @@ function PullStage({
   /* ONE EMPTY STATE, AND NOTHING UNDER IT (UX-234): no buyer panel, no walk, until a row shows. */
   if (shownGroups.length === 0) {
     const searched = query.trim() !== ''
-    const nothingOwed = shows.length === 0 && statuses.length === 0 && !hideUnknown && base.length === 0
+    const nothingOwed = shows.every((value) => value === 'open') && statuses.length === 0 && !hideUnknown && !allGroups.some(inOpenBase)
     return (
       <div className="orders-stage">
         {/* Same child position as the full stage, so the search box never remounts (focus survives a key). */}
@@ -3706,7 +3703,7 @@ function PullStage({
             <EmptyState
               icon="sparkles"
               title={shows.length === 1 && shows[0] === 'done' ? 'Nothing done yet' : 'No buyer in this view'}
-              body="Clear the filters to see every open buyer."
+              body="Clear the filters to see every buyer, open and done."
               actions={
                 <Button
                   icon="list"
@@ -3715,7 +3712,7 @@ function PullStage({
                     setHideUnpullable(false)
                   }}
                 >
-                  Show every open buyer
+                  Show every buyer
                 </Button>
               }
             />
@@ -3885,6 +3882,11 @@ function PullStage({
       <WalkLinePublisher words={shownWalking && shownGroup !== null ? chipWords : null} />
       {filterBar}
       {failure === null ? null : <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />}
+      {sharedNumber ? (
+        <Notice tone="warn" title={`More than one buyer has order ${orderQ}`}>
+          The link names only the number, so no buyer is opened. Pick the buyer from the list.
+        </Notice>
+      ) : null}
       {/* THE DEGRADED MAP, SAID ONCE (UX-266), in the kit's notice shape. The ledger answered and
           every Mark sold still works; only the other copies of each card are missing. */}
       {storeFailed ? (

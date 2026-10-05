@@ -180,13 +180,23 @@ export function groupForOrderKey(
   groups: { recent: readonly BuyerGroup[]; earlier: readonly BuyerGroup[] },
   orderKey: string,
 ): BuyerGroup | null {
-  for (const group of groups.recent) {
-    if (group.orders.some((order) => order.key === orderKey)) return group
-  }
-  for (const group of groups.earlier) {
-    if (group.orders.some((order) => order.key === orderKey)) return group
-  }
-  return null
+  const all = [...groups.recent, ...groups.earlier]
+  const exact = all.find((group) => group.orders.some((order) => order.key === orderKey))
+  if (exact !== undefined) return exact
+  /* A bare order number, second, so a link written with the number the buyer sees still opens
+     its buyer. Two buyers sharing it is no match: a guess would open the wrong one. */
+  const byNumber = all.filter((group) => group.orders.some((order) => order.number === orderKey))
+  return byNumber.length === 1 ? byNumber[0]! : null
+}
+
+/** A link's bare order number that two or more buyers' orders carry, and no store key. */
+export function isSharedOrderNumber(
+  groups: { recent: readonly BuyerGroup[]; earlier: readonly BuyerGroup[] },
+  orderKey: string,
+): boolean {
+  const all = [...groups.recent, ...groups.earlier]
+  if (all.some((group) => group.orders.some((order) => order.key === orderKey))) return false
+  return all.filter((group) => group.orders.some((order) => order.number === orderKey)).length > 1
 }
 
 /* ---- a buyer's status: one state per order, the worst per buyer (UX-199). Pure, so Home's

@@ -964,6 +964,7 @@ test('the Show facet lists a buyer only in its own state, and each count is the 
 
   await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
   const list = page.getByRole('listbox', { name: 'Show' })
+  await list.getByRole('option', { name: /^Open/ }).click() // re-pointed: Open is picked at rest, cleared before a narrowing pick
   /* EACH COUNT IS BUYERS, THE ROWS THE LIST WILL DRAW, never lines. */
   await expect(list.getByRole('option', { name: /^Partly picked/ })).toContainText('1')
   await expect(list.getByRole('option', { name: /^Ready/ })).toContainText('1')
@@ -2385,6 +2386,7 @@ test('under Done, every done buyer is listed open, however long ago it closed (U
   })
   await open(page, { orders: payloadOf([order(), stale], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
+  await pickFacet(page, 'Show', /^Open/) // re-pointed: Open is picked at rest, so Done alone needs it cleared
   await pickFacet(page, 'Show', /^Done/)
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Grace Hopper')
@@ -4804,6 +4806,7 @@ test('the Show facet offers "Flagged" (a product never seen, or sealed), counts 
 
   await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
   const list = page.getByRole('listbox', { name: 'Show' })
+  await list.getByRole('option', { name: /^Open/ }).click() // re-pointed: Open is picked at rest, cleared before a narrowing pick
   const option = list.getByRole('option', { name: /^Flagged/ })
   await expect(option).toContainText('1')
   await option.click()
@@ -4823,6 +4826,7 @@ test('"Short" lists a buyer whose product the store knows but has no copy left o
 
   await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
   const list = page.getByRole('listbox', { name: 'Show' })
+  await list.getByRole('option', { name: /^Open/ }).click() // re-pointed: Open is picked at rest, cleared before a narrowing pick
   await expect(list.getByRole('option', { name: /^Short/ })).toContainText('1')
   await expect(list.getByRole('option', { name: /^Flagged/ })).toContainText('1')
   await list.getByRole('option', { name: /^Short/ }).click()
@@ -4840,6 +4844,7 @@ test('a buyer whose only unfilled line is a sealed product is listed under Flagg
 
   await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
   const list = page.getByRole('listbox', { name: 'Show' })
+  await list.getByRole('option', { name: /^Open/ }).click() // re-pointed: Open is picked at rest, cleared before a narrowing pick
   await expect(list.getByRole('option', { name: /^Flagged/ })).toContainText('1')
   await list.getByRole('option', { name: /^Flagged/ }).click()
   await closeFilters(page)
@@ -4867,6 +4872,7 @@ test('the Show facet takes several picks: a buyer passes on any, and the URL kee
 
   await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
   const list = page.getByRole('listbox', { name: 'Show' })
+  await list.getByRole('option', { name: /^Open/ }).click() // re-pointed: Open is picked at rest, cleared before a narrowing pick
   await list.getByRole('option', { name: /^Partly picked/ }).click()
   await list.getByRole('option', { name: /^Done/ }).click()
   /* EACH COUNT STAYS ITS OWN ROWS: another pick in the same facet does not change it. */
@@ -5142,6 +5148,7 @@ test('a buyer with one Flagged order and one Short order counts two orders, and 
   await open(page, { orders: payloadOf([unseen.row, none.row], [{ ...unseen.resolved, outstanding: 1 }, { ...none.resolved, outstanding: 1 }]) })
   await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
   const list = page.getByRole('listbox', { name: 'Show' })
+  await list.getByRole('option', { name: /^Open/ }).click() // re-pointed: Open is picked at rest, cleared before a narrowing pick
   await list.getByRole('option', { name: /^Flagged/ }).click()
   await list.getByRole('option', { name: /^Short/ }).click()
   await closeFilters(page)
@@ -5457,3 +5464,165 @@ test('a digit sells nothing while the pane is hidden and the sheet is closed', a
   await page.waitForTimeout(400) // keep: asserts a digit sells nothing
   expect(wire.filter((one) => one.path.endsWith('/orders/pull'))).toHaveLength(0)
 })
+
+/* ------------------------------------------------------------------------------------- 21
+ *
+ * THE DEFAULT VIEW IS A SET OF VISIBLE PICKS (owner's rulings, amending D270): "search should find
+ * everything that my filters are set to", and the landing view must "feel apparent by going to
+ * filters and seeing stuff preselected". No hidden base: at rest Show carries an "Open" pick and
+ * Hide unpullable is on; clearing the picks lists open and done together; search narrows within
+ * what the bar shows and nothing else.
+ *
+ * FIXTURE. Alice: open, a card on hand. Bob: open, short (nothing on hand). Durran Wright: done,
+ * "Shipped - In Transit".
+ */
+const DURRAN_NUMBER = 'D0004'
+function restWorld(): OrdersPayload {
+  const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
+  const bob = seededOrder({ number: 'B0002', buyer: 'Bob', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'short' })
+  const durran = order({
+    key: `TCGplayer:${DURRAN_NUMBER}`,
+    number: DURRAN_NUMBER,
+    buyer: 'Durran Wright',
+    status: 'Shipped - In Transit',
+    open: false,
+    recorded: 1,
+    placed_at: '2026-07-01T00:00:00+00:00',
+    progress: [{ sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }],
+  })
+  return payloadOf([alice.row, bob.row, durran], [alice.resolved, { ...bob.resolved, outstanding: 2 }])
+}
+const restRows = (page: Page) => page.locator('.orders-index-row')
+const searchBox = (page: Page) => page.locator('.bn-filterbar-search .search-field-input')
+async function showOption(page: Page, name: RegExp): Promise<Locator> {
+  await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
+  return page.getByRole('listbox', { name: 'Show' }).getByRole('option', { name })
+}
+async function toggleShow(page: Page, name: RegExp): Promise<void> {
+  await (await showOption(page, name)).click()
+  await closeFilters(page)
+}
+
+for (const width of [1440, 820]) {
+  test.describe(`the default view is visible picks, at ${width}`, () => {
+    test.use({ viewport: { width, height: 900 } })
+
+    test('at rest the bar shows Open picked and Hide unpullable on, and the Filters badge is zero', async ({ page }) => {
+      await open(page, { orders: restWorld(), landing: true })
+      await expect(restRows(page)).toHaveCount(1)
+      await expect(restRows(page)).toContainText('Alice')
+      await expect(page.locator(`${VIEW} .bn-filterbar-trigger .bn-icon-count`)).toHaveCount(0)
+      await expect(await showOption(page, /^Open/)).toHaveAttribute('aria-selected', 'true')
+      await expect(page.getByRole('listbox', { name: 'Show' }).getByRole('option', { name: /^Done/ })).toHaveAttribute('aria-selected', 'false')
+      await page.keyboard.press('Escape')
+      await expect(page.locator('.bn-filterbar-sheet-body').getByRole('button', { name: /^Hide unpullable/ })).toHaveAttribute('aria-pressed', 'true')
+      await closeFilters(page)
+      /* Rest needs no query string, and a reload at rest stays at rest. */
+      await expect(page).not.toHaveURL(/\?/)
+      await page.reload()
+      await expect(restRows(page)).toHaveCount(1)
+      await expect(page).not.toHaveURL(/\?/)
+    })
+
+    test('clearing Open lists open and done together; Done alone lists done; Open plus Done lists both', async ({ page }) => {
+      await open(page, { orders: restWorld(), landing: true })
+      await toggleShow(page, /^Open/)
+      await expect(restRows(page)).toHaveCount(2)
+      await expect(restRows(page).filter({ hasText: 'Durran Wright' })).toHaveCount(1)
+      await toggleShow(page, /^Done/)
+      await expect(restRows(page)).toHaveCount(1)
+      await expect(restRows(page)).toContainText('Durran Wright')
+      await toggleShow(page, /^Open/)
+      await expect(restRows(page)).toHaveCount(2)
+      await expect(page).toHaveURL(/show=done/)
+      await expect(page).toHaveURL(/show=open/)
+    })
+
+    test('search narrows within what the bar shows: a done buyer is found only once Done is in', async ({ page }) => {
+      await open(page, { orders: restWorld(), landing: true })
+      await searchBox(page).fill('durran')
+      await expect(restRows(page)).toHaveCount(0)
+      await toggleShow(page, /^Done/)
+      await expect(restRows(page)).toHaveCount(1)
+      await expect(restRows(page)).toContainText('Durran Wright')
+      /* Clearing Show instead finds them too. */
+      await toggleShow(page, /^Done/)
+      await expect(restRows(page)).toHaveCount(0)
+      await toggleShow(page, /^Open/)
+      await expect(restRows(page)).toHaveCount(1)
+    })
+
+    test('Hide unpullable off reveals the open buyer with no card on hand', async ({ page }) => {
+      await open(page, { orders: restWorld(), landing: true })
+      await expect(restRows(page)).toHaveCount(1)
+      await (await openFilters(page)).getByRole('button', { name: /^Hide unpullable/ }).click()
+      await closeFilters(page)
+      await expect(restRows(page)).toHaveCount(2)
+      await expect(restRows(page).filter({ hasText: 'Bob' })).toHaveCount(1)
+      await expect(restRows(page).filter({ hasText: 'Durran Wright' })).toHaveCount(0)
+    })
+
+    test('a link that names an order or a search opens wide enough to show it, read once at mount', async ({ page }) => {
+      await open(page, { orders: restWorld() })
+      await page.goto(`${VIEW_ROUTE}?order=${DURRAN_NUMBER}`)
+      await page.reload()
+      await expect(page.locator('.orders-panel-name')).toHaveText('Durran Wright')
+      await page.goto(`${VIEW_ROUTE}?q=durran`)
+      await page.reload()
+      await expect(restRows(page)).toHaveCount(1)
+      await expect(restRows(page)).toContainText('Durran Wright')
+    })
+
+    /* A LINK TO A DONE BUYER WIDENS TO "NOTHING PICKED", never to "Done only" (review of #703). */
+    for (const link of [`order=TCGplayer%3A${DURRAN_NUMBER}`, 'buyer=name%3Adurran%20wright']) {
+      test(`?${link} opens the done buyer with Show empty and the open buyers still listed`, async ({ page }) => {
+        await open(page, { orders: restWorld() })
+        await page.goto(`${VIEW_ROUTE}?${link}`)
+        await page.reload()
+        await expect(page.locator('.orders-panel-name')).toHaveText('Durran Wright')
+        await expectShowEmpty(page)
+        await expect(restRows(page).filter({ hasText: 'Alice' })).toHaveCount(1)
+        await expect(restRows(page).filter({ hasText: 'Durran Wright' })).toHaveCount(1)
+      })
+    }
+
+    test('a bare order number two stores share opens neither buyer and says so; a unique one opens its buyer', async ({ page }) => {
+      const a = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
+      const b = seededOrder({ number: 'A0001', buyer: 'Bob', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'resolved' })
+      b.row.key = 'Other:A0001'
+      const world = payloadOf([a.row, b.row], [a.resolved, { ...b.resolved, key: 'Other:A0001' }])
+      await open(page, { orders: world })
+      await page.goto(`${VIEW_ROUTE}?order=A0001`)
+      await page.reload()
+      await expect(restRows(page)).toHaveCount(2)
+      await expect(page.locator(VIEW).locator('.bn-notice, [role="status"], [role="alert"]').filter({ hasText: 'A0001' })).toBeVisible()
+      await expect(page.locator(`${VIEW} .orders-index-row[aria-current="true"]`)).toHaveCount(0)
+
+      await open(page, { orders: restWorld() })
+      await page.goto(`${VIEW_ROUTE}?order=${DURRAN_NUMBER}`)
+      await page.reload()
+      await expect(page.locator('.orders-panel-name')).toHaveText('Durran Wright')
+    })
+
+    test('arrive by a link, press Clear all, reload: the view stays cleared', async ({ page }) => {
+      await open(page, { orders: restWorld() })
+      await page.goto(`${VIEW_ROUTE}?buyer=name%3Aalice&status=Ready+to+Ship`)
+      await page.reload()
+      await page.locator(`${VIEW} .bn-filtercount`).getByRole('button', { name: /^Clear/ }).click()
+      await expect(restRows(page)).toHaveCount(3)
+      await page.reload()
+      await expect(restRows(page)).toHaveCount(3)
+      await expectShowEmpty(page)
+      await expect(page.locator('.bn-filterbar-sheet-body').getByRole('button', { name: /^Hide unpullable/ })).toHaveAttribute('aria-pressed', 'false')
+    })
+  })
+}
+
+/** Every Show option is unpicked. Leaves the Filters sheet open on the Hide toggle's row. */
+async function expectShowEmpty(page: Page): Promise<void> {
+  await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
+  const options = page.getByRole('listbox', { name: 'Show' }).getByRole('option')
+  expect(await options.count()).toBeGreaterThan(0)
+  await expect(options.and(page.locator('[aria-selected="true"]'))).toHaveCount(0)
+  await page.keyboard.press('Escape')
+}
