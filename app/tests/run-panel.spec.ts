@@ -2381,7 +2381,9 @@ test('a widened scope carries its measured width against the cap, before the pre
   await openRun(page)
 
   const says = page.locator('.run-scope-says')
-  await expect(says).toContainText('32.6 MB')
+  /* 32,629,598 B in 1024 units, as the server counts its cap (33,554,432 B is "32 MB"). */
+  await expect(says).toContainText('31.1 MB')
+  await expect(says).toContainText(/of the 32(\.0)? MB/)
   await expect(says).toContainText('97%')
   /* AND THE REMEDY, not just the alarm. A figure with nothing to do about it is a figure an
      operator learns to skip. */
