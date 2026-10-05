@@ -9370,6 +9370,13 @@ COMPONENTS = [
                         "Run by `make unit`, in `make check`'s product shard.",
                 "governed_by": ["D5", "D275"],
             },
+            "tests/unit/formatter-homes.unit.ts": {
+                "does": "the four formatter homes: the ago phrase (`dates.relativeDate`), the count "
+                        "word and byte size (`kit/dataRules`), the local day key (`dates.localDay`). "
+                        "Behaviour cases plus a source check that no screen keeps a second copy. "
+                        "Run by `make unit`, in `make check`'s product shard.",
+                "governed_by": ["D5", "D275"],
+            },
             "tests/match.spec.ts": {
                 "does": "`kit/match.cases.json`'s case table, run data-driven, one Playwright test "
                         "per row: `matchQuery` against every case, pure, no browser. The other half "
