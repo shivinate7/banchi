@@ -370,9 +370,9 @@ def assert_scrubbed(bundle: Path, shipping: Path) -> None:
 # recording's own `responses` map had already grown past that on its own (measured: 101.3 MB
 # pretty-printed, 72.5 MB compact). `chunk_responses` splits it into files a plain `git push`
 # accepts with real margin — never a fixed file COUNT, which would either waste chunks on a
-# small demo or silently stop being enough once the store grows again. `app/src/demoServer.ts`
-# reads every chunk back with `import.meta.glob`, which needs no manifest and no fixed count:
-# it matches whatever files are on disk at build time.
+# small demo or silently stop being enough once the store grows again. `app/demoSplit.ts`
+# reads every chunk back at build time, which needs no manifest and no fixed count: it matches
+# whatever files are on disk, and splits them into the files `app/src/demoServer.ts` fetches.
 CHUNK_BYTES = 40 * 1024 * 1024
 BUNDLE_DIRNAME = "bundle"
 APP_BUNDLE_DIR = APP_BUNDLE.parent / BUNDLE_DIRNAME
@@ -451,8 +451,8 @@ def install() -> None:
     if APP_BUNDLE_DIR.exists():
         shutil.rmtree(APP_BUNDLE_DIR)
     shutil.copytree(chunk_dir, APP_BUNDLE_DIR)
-    # RECONSTRUCTED, NEVER THE SOURCE OF TRUTH — `app/src/demoServer.ts` reads the chunks
-    # directly (`import.meta.glob`). This single file exists only because
+    # RECONSTRUCTED, NEVER THE SOURCE OF TRUTH — `app/demoSplit.ts` reads the chunks
+    # directly at build time. This single file exists only because
     # `app/tests/demo-coverage.spec.ts` already reads one path and does not need to learn
     # the chunked shape too.
     APP_BUNDLE.write_text(json.dumps(merge_chunks(chunk_dir)), "utf-8")

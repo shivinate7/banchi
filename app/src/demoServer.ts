@@ -91,7 +91,13 @@ function loadFile(file: string): Promise<void> {
 }
 
 function index(): Promise<Record<string, string>> {
-  return (indexed ??= fetchData<Record<string, string>>('index.json'))
+  if (indexed === null) {
+    indexed = fetchData<Record<string, string>>('index.json')
+    indexed.catch(() => {
+      indexed = null // a failed read is asked again next time, never remembered
+    })
+  }
+  return indexed
 }
 
 /** Fetch the files that hold these canonical keys. A key the index lacks stays absent. */
@@ -99,7 +105,7 @@ async function ensure(keys: Iterable<string>): Promise<void> {
   const known = await index()
   const files = new Set<string>()
   for (const key of keys) {
-    const file = known[key]
+    const file = known[canonical(key)]
     if (file !== undefined) files.add(file)
   }
   await Promise.all([...files].map(loadFile))

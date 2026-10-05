@@ -60,9 +60,19 @@ export function demoSplit(): Plugin {
         })
         for (const [key] of rows) index[key] = file
       }
-      for (const rows of families.values()) {
+      for (const [family, rows] of families) {
         if (rows.reduce((sum, [, text]) => sum + text.length, 0) <= FAMILY_BYTES) emit(rows)
-        else for (const row of rows) emit([row])
+        else if (family === '/search') {
+          // Typed search reads every group at once, so these ship in a few files, not one each.
+          let pack: Array<[string, string]> = []
+          let size = 0
+          for (const row of rows) {
+            if (size + row[1].length > FAMILY_BYTES && pack.length > 0) { emit(pack); pack = []; size = 0 }
+            pack.push(row)
+            size += row[1].length
+          }
+          emit(pack)
+        } else for (const row of rows) emit([row])
       }
       this.emitFile({ type: 'asset', fileName: `${DEMO_DATA_DIR}/index.json`, source: JSON.stringify(index) })
     },
