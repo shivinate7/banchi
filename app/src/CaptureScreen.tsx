@@ -1614,6 +1614,8 @@ export function CaptureScreen() {
   const savesOut = useRef(0)
   const unsavedIds = useRef<string[]>(restoredIds.current.slice())
   const heldSaves = useRef<HeldSave[]>([])
+  /** The one answer to "is a photo held unsaved?": Capture, Start, Resume and Section all ask it. */
+  const photoHeld = useCallback(() => heldSaves.current.length > 0, [])
   const [heldView, setHeldView] = useState<Array<{ id: string; label: string }>>([])
   const retryingRef = useRef(false)
   const applyTail = useRef<Promise<boolean>>(Promise.resolve(true))
@@ -3090,7 +3092,7 @@ export function CaptureScreen() {
   }, [newCardNumber, nextForBox, box])
   const doCapture = useCallback(async () => {
     // While any photo is held unsaved nothing new is captured: Retry saving comes first.
-    if (heldSaves.current.length > 0) return
+    if (photoHeld()) return
     if (busyRef.current || (savesOut.current > 0 && !dealingRef.current)) return
     // A halted run ignores the trigger entirely. Not "queues it": spec 5.5 rejected
     // queue-and-continue outright, because photos held in the browser and not yet on the Mac
@@ -3343,6 +3345,7 @@ export function CaptureScreen() {
   }, [
     box,
     boxBid,
+    photoHeld,
     camera,
     finish,
     gameEntry,
@@ -3704,7 +3707,7 @@ export function CaptureScreen() {
 
   const sectionBusyRef = useRef(false)
   const doSection = useCallback(async () => {
-    if (box === null || sectionBusyRef.current) return
+    if (box === null || sectionBusyRef.current || photoHeld()) return // Retry saving first
     sectionBusyRef.current = true
     setSectionBusy(true)
     setSectionNote(null)
@@ -3823,7 +3826,7 @@ export function CaptureScreen() {
     })()
     sectionInFlightRef.current = run
     await run
-  }, [box, lastSection, layoutToken, pickSection, pickedSection, refreshShotLabels, selectedDiv])
+  }, [box, lastSection, layoutToken, photoHeld, pickSection, pickedSection, refreshShotLabels, selectedDiv])
 
   /* The seam, with both implementations behind it now. The key trigger is Gate B's; the
    * motion trigger is Gate C's, and the screen still does not know which one is armed —
@@ -3966,6 +3969,7 @@ export function CaptureScreen() {
   const canCapture =
     halt === null &&
     !busy &&
+    !photoHeld() &&
     box !== null &&
     camera.ready &&
     gameEntry !== null &&
@@ -4173,7 +4177,8 @@ export function CaptureScreen() {
   photoTakenRef.current = dealer.photoTaken
   dealingRef.current = dealer.state === 'dealing'
   /* Last in the list: a halt's own line stays the first reason. */
-  if (heldView.length > 0) {
+  const held = photoHeld()
+  if (held) {
     blockers.push({
       key: 'unsaved',
       icon: 'alert',
@@ -5401,11 +5406,12 @@ export function CaptureScreen() {
               kbd={SECTION_KEY_LABEL}
               block
               onClick={() => void doSection()}
-              disabled={box === null || sectionBusy}
+              disabled={box === null || sectionBusy || held}
               busy={sectionBusy}
             >
               Section
             </Button>
+            {held ? <p className="capture-quiet">{blockerWord.unsaved}</p> : null}
             {sectionNote === null ? null : (
               <p className={sectionNote.done ? 'capture-quiet capture-note-ok' : sectionNote.quiet ? 'capture-quiet' : 'capture-refused'}>
                 {sectionNote.done ? <Icon name="check" size={13} /> : sectionNote.quiet ? null : <Icon name="alert" size={13} />}
