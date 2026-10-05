@@ -617,4 +617,57 @@ def _model_cases(c, Image, ImageDraw) -> Result:
         "labels.json and labels_new.json parse: 243 usable after 7 REJECT rows, four corners each",
         f"{len(old)}+{len(new)} -> {len(usable)}",
     )
+
+    # 7. THE FREE READER CUTS THE PREVIEW'S BOX. One card box (`locate_card`), never `detect_card`
+    # alone. Phone frame: a card half the frame, inside a dark box, in a lighter frame. `detect_card`
+    # takes the dark box. The model is stubbed with the true card, since a synthetic card is not
+    # the model's training world. Synthetic only: no owner photo is ever a fixture.
+    import numpy as np
+
+    from identify import match
+
+    fw, fh = 2160, 3840
+    scene = Image.new("RGB", (fw, fh), (176, 170, 160))
+    draw = ImageDraw.Draw(scene)
+    draw.rectangle([230, 500, fw - 230, fh - 500], fill=(22, 22, 26))
+    cw = 1100
+    ch = round(cw / 0.716)
+    x0, y0 = (fw - cw) // 2, (fh - ch) // 2
+    draw.rectangle([x0, y0, x0 + cw, y0 + ch], fill=(236, 208, 120))
+    draw.rectangle([x0 + 50, y0 + 60, x0 + cw - 50, y0 + int(ch * 0.52)], fill=(70, 120, 170))
+    for i in range(14):
+        top = y0 + int(ch * 0.62) + i * 38
+        draw.rectangle([x0 + 70, top, x0 + cw - 70, top + 16], fill=(40, 30, 20))
+    truth = geometry.CardBox(
+        angle=0.0, left=x0 / fw, top=y0 / fh, right=(x0 + cw) / fw, bottom=(y0 + ch) / fh,
+        fill=0.9, aspect=0.716, method="dfine",
+    )
+    wrong = geometry.detect_card(scene, aspect=0.716)
+    c.ok(
+        wrong is not None and (wrong.right - wrong.left) * fw > cw * 1.3,
+        "fixture: detect_card alone boxes the dark box, not the card",
+        str(wrong),
+    )
+    with _tf.TemporaryDirectory() as work, mock.patch.object(card_box, "model_card", lambda *_a, **_k: truth):
+        shot = Path(work) / "phone.jpg"
+        scene.save(shot, quality=95)
+        from geometry import crop as geometry_crop
+
+        frame = geometry.detect.open_image(shot)
+        want = geometry_crop.registered_card(frame, geometry.locate_card(frame, aspect=0.716), 0.716)
+        got = match._crop(shot, 0.716)
+        if c.ok(got is not None, "the free reader finds a card in the phone frame"):
+            gw, gh = got.size
+            c.ok(
+                abs(gw / gh - 0.716) <= 0.05,
+                "free reader's crop has card aspect, within 0.05 of 0.716",
+                f"{gw}x{gh} = {gw / gh:.3f}",
+            )
+            a = np.asarray(got.convert("L").resize((64, 90)), dtype=float)
+            b = np.asarray(want.convert("L").resize((64, 90)), dtype=float)
+            c.ok(
+                float(np.abs(a - b).mean()) < 8.0,
+                "free reader's crop is the preview's box (locate_card), pixel for pixel within a small tolerance",
+                f"mean abs diff {float(np.abs(a - b).mean()):.1f} of 255",
+            )
     return c.result()
