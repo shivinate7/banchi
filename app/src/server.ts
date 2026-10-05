@@ -803,7 +803,8 @@ function request(path: string, init?: RequestInit): Promise<unknown> {
     return send(path, init).finally(() => openReads.clear())
   }
   const held = openReads.get(path)
-  if (held !== undefined) {
+  /* A READ EVERY ASKER OF WHICH IS LEAVING IS ABOUT TO BE ABORTED, so it is not joined. */
+  if (held !== undefined && [...held.scopes].some((id) => !departing.has(id))) {
     held.scopes.add(readScope)
     return held.promise
   }
