@@ -121,7 +121,7 @@ async function serveDemo(page: Page): Promise<string> {
 }
 
 /** Budget for anything that waits on the public demo's ~75 MB `demoServer` chunk to arrive and evaluate
- *  (about 15 s on the CI runner, so the 15 s expect default flakes). See DEBT-demo-chunk-size. */
+ *  (about 15 s on the CI runner, so the 15 s expect default flakes). See DEBT84. */
 const DEMO_CHUNK_BUDGET_MS = 30_000
 
 /** The demo's reads have landed and drawn: the screen holds content, no skeleton or busy mark stands,

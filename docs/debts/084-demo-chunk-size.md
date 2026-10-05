@@ -1,4 +1,4 @@
-## DEBT-demo-chunk-size — The public demo's first screen waits on a 75 MB chunk
+## DEBT84 — The public demo's first screen waits on a 75 MB chunk
 
 **The demo's `demoServer` chunk is about 75 MB, and Home shows skeletons until it has arrived and evaluated.** Every read waits on it, because `server.ts`'s `request()` imports it before answering. On the CI runner it took about 15 s. A visitor on a slow link waits on the same skeletons.
 
