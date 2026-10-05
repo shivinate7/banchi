@@ -2,6 +2,7 @@
 // Governs: D316, D19, D313
 import { expect, test } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { setViewport } from './phoneSwitch'
 import type { Page } from '@playwright/test'
 import { CARD, GAP_LUMA, armMotion, control, fakeBluetooth, injectScene, slowCapture, writes } from './dispenserRig'
 
@@ -433,7 +434,7 @@ test('R7: while held, undo (divider and back) sends no request and the divider s
 
 for (const [width, height] of [[1440, 900], [820, 1100]] as const) {
   test(`R9: after a second save failure the one notice is uncovered and Retry saving is clickable at ${width}`, async ({ page }) => {
-    await page.setViewportSize({ width, height })
+    await setViewport(page, { width, height })
     const wire = await held(page, (n) => n <= 2)
     const notice = unsaved(page)
     const title = notice.getByText('Box 5, Card 1 was not saved')
