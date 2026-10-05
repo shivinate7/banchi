@@ -68,8 +68,10 @@ const REFUSAL = 'Not in this demo.'
 // would weaken the seal for every OTHER spec that imports it — and lets the real request land.
 // `the seal still refuses a host not on the allow list` below proves every other outside host
 // is refused exactly as before (example.com stays the probe).
-// Loopback is allowed for this file's own HTTP server over dist-demo (`serveDemo`).
-sealEveryTest({ allowOutside: ['tcgplayer-cdn.tcgplayer.com', 'images.pokemontcg.io', '127.0.0.1', 'localhost'] })
+// The one loopback `host:port` of this file's own HTTP server over dist-demo (or the DEMO_PREVIEW_URL host)
+// joins this list in `beforeAll`, which runs before the seal reads it. Other ports on loopback stay refused.
+const ALLOWED: string[] = ['tcgplayer-cdn.tcgplayer.com', 'images.pokemontcg.io']
+sealEveryTest({ allowOutside: ALLOWED })
 
 test.skip(!BUILT && !REQUIRED, 'no dist-demo/ in this checkout: run `make demo-static` first')
 
@@ -91,10 +93,18 @@ test('the seal still refuses a host that is not on the allow list', () => {
   expect(isOutside(other, ['tcgplayer-cdn.tcgplayer.com'])).toBe(true)
 })
 
+test('the seal refuses a loopback port that is not the demo server', () => {
+  const own = new URL(serverOrigin || 'http://127.0.0.1:4999')
+  const list = [...ALLOWED, own.host]
+  expect(isOutside(new URL(`${own.origin}/x`), list)).toBe(false)
+  expect(isOutside(new URL('http://127.0.0.1:9999/x'), list)).toBe(true)
+  expect(isOutside(new URL('http://localhost:5173/x'), list)).toBe(true)
+})
+
 const TYPES: Record<string, string> = {
   '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css',
   '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg',
-  '.webp': 'image/webp', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.ico': 'image/x-icon',
+  '.webp': 'image/webp', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.ico': 'image/x-icon',
 }
 
 /** One real loopback HTTP server over `dist-demo`, shared by this worker's tests. A body goes over a
@@ -107,7 +117,12 @@ async function listen(): Promise<string> {
   if (server !== null) return serverOrigin
   const base = basePath()
   const made = createServer(async (req, res) => {
-    const pathname = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname)
+    let pathname: string
+    try {
+      pathname = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname)
+    } catch {
+      return void res.writeHead(400).end()
+    }
     let file = normalize(join(DIST, pathname.slice(base.length)))
     if (!pathname.startsWith(base) || !file.startsWith(DIST)) return void res.writeHead(403).end()
     if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html')
@@ -118,13 +133,16 @@ async function listen(): Promise<string> {
     if (/\/demoServer-[^/]*\.js$/.test(pathname) && process.env.DEMO_CHUNK_DELAY_MS)
       await new Promise((done) => setTimeout(done, Number(process.env.DEMO_CHUNK_DELAY_MS))) // keep: chunk delay from DEMO_CHUNK_DELAY_MS, a latency fixture on purpose
     res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream' })
-    createReadStream(file).pipe(res)
+    createReadStream(file).on('error', () => res.destroy()).pipe(res)
   })
   await new Promise<void>((done) => made.listen(0, '127.0.0.1', done))
   server = made
   serverOrigin = `http://127.0.0.1:${(made.address() as AddressInfo).port}`
   return serverOrigin
 }
+test.beforeAll(async () => {
+  ALLOWED.push(PREVIEW !== null ? new URL(PREVIEW).host : new URL(await listen()).host)
+})
 test.afterAll(async () => {
   const stop = server
   server = null

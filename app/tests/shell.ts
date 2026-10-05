@@ -241,7 +241,7 @@ const CARDS = {
 export function isOutside(url: URL, allowHosts: readonly string[]): boolean {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return false
   if (url.port === String(DEV_PORT) || url.port === String(CAPTURE_PORT)) return false
-  return !allowHosts.includes(url.hostname)
+  return !allowHosts.includes(url.hostname) && !allowHosts.includes(url.host) // an entry with a port (`127.0.0.1:4173`) pins that port
 }
 
 /** Refuse and record every request that would leave this machine, except a hostname this
