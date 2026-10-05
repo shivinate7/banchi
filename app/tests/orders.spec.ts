@@ -5572,5 +5572,57 @@ for (const width of [1440, 820]) {
       await expect(restRows(page)).toHaveCount(1)
       await expect(restRows(page)).toContainText('Durran Wright')
     })
+
+    /* A LINK TO A DONE BUYER WIDENS TO "NOTHING PICKED", never to "Done only" (review of #703). */
+    for (const link of [`order=TCGplayer%3A${DURRAN_NUMBER}`, 'buyer=name%3Adurran%20wright']) {
+      test(`?${link} opens the done buyer with Show empty and the open buyers still listed`, async ({ page }) => {
+        await open(page, { orders: restWorld() })
+        await page.goto(`${VIEW_ROUTE}?${link}`)
+        await page.reload()
+        await expect(page.locator('.orders-panel-name')).toHaveText('Durran Wright')
+        await expectShowEmpty(page)
+        await expect(restRows(page).filter({ hasText: 'Alice' })).toHaveCount(1)
+        await expect(restRows(page).filter({ hasText: 'Durran Wright' })).toHaveCount(1)
+      })
+    }
+
+    test('a bare order number two stores share opens neither buyer and says so; a unique one opens its buyer', async ({ page }) => {
+      const a = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
+      const b = seededOrder({ number: 'A0001', buyer: 'Bob', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'resolved' })
+      b.row.key = 'Other:A0001'
+      const world = payloadOf([a.row, b.row], [a.resolved, { ...b.resolved, key: 'Other:A0001' }])
+      await open(page, { orders: world })
+      await page.goto(`${VIEW_ROUTE}?order=A0001`)
+      await page.reload()
+      await expect(restRows(page)).toHaveCount(2)
+      await expect(page.locator(VIEW).locator('.bn-notice, [role="status"], [role="alert"]').filter({ hasText: 'A0001' })).toBeVisible()
+      await expect(page.locator(`${VIEW} .orders-index-row[aria-current="true"]`)).toHaveCount(0)
+
+      await open(page, { orders: restWorld() })
+      await page.goto(`${VIEW_ROUTE}?order=${DURRAN_NUMBER}`)
+      await page.reload()
+      await expect(page.locator('.orders-panel-name')).toHaveText('Durran Wright')
+    })
+
+    test('arrive by a link, press Clear all, reload: the view stays cleared', async ({ page }) => {
+      await open(page, { orders: restWorld() })
+      await page.goto(`${VIEW_ROUTE}?buyer=name%3Aalice&status=Ready+to+Ship`)
+      await page.reload()
+      await page.locator(`${VIEW} .bn-filtercount`).getByRole('button', { name: /^Clear/ }).click()
+      await expect(restRows(page)).toHaveCount(3)
+      await page.reload()
+      await expect(restRows(page)).toHaveCount(3)
+      await expectShowEmpty(page)
+      await expect(page.locator('.bn-filterbar-sheet-body').getByRole('button', { name: /^Hide unpullable/ })).toHaveAttribute('aria-pressed', 'false')
+    })
   })
+}
+
+/** Every Show option is unpicked. Leaves the Filters sheet open on the Hide toggle's row. */
+async function expectShowEmpty(page: Page): Promise<void> {
+  await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
+  const options = page.getByRole('listbox', { name: 'Show' }).getByRole('option')
+  expect(await options.count()).toBeGreaterThan(0)
+  await expect(options.and(page.locator('[aria-selected="true"]'))).toHaveCount(0)
+  await page.keyboard.press('Escape')
 }
