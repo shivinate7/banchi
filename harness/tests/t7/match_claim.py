@@ -13,6 +13,8 @@ INTERFACE THESE CHECKS ASSUME (the builder may rename, then re-point here):
 
 from __future__ import annotations
 
+import contextlib
+
 import numpy as np
 from unittest import mock
 
@@ -159,7 +161,7 @@ def check_rule3_clear_winner(checks: Checks, codes=None) -> None:
     checks.ok(not low_floor.accepted, "margin 0.09 at floor 0.69 refuses", f"{low_floor.code}")
 
 
-def _index_read(tmp, unreleased):
+def _index_read(tmp, unreleased, status="no_photo"):
     """A real `Index`: the right card in `Set`, and a no-photo printing of the same name in `Future`."""
     import pathlib
 
@@ -168,16 +170,25 @@ def _index_read(tmp, unreleased):
     good = np.array([1, 0, 0, 0], np.float32).tobytes()
     far = np.array([0.5, 0.8, 0, 0], np.float32).tobytes()
     rows = (("Set", "p0", "7", "Vex, Gloomist", "ok", good), ("Set", "p2", "9", "Kai, Dawnblade", "ok", far),
-            ("Future", "p1", "7", "Vex, Gloomist (Alternate Art)", "no_photo", None))
+            ("Future", "p1", "7", "Vex, Gloomist (Alternate Art)", status, None))
     for set_name, pid, number, name, status, blob in rows:
         index.db.execute("insert into vec(game,set_name,product_id,number,name,url,status,note,vec,at) "
                          "values('riftbound',?,?,?,?,'',?,'',?,'')", (set_name, pid, number, name, status, blob))
+    index.db.commit()  # the real `unreleased_sets` reads the file on its own connection
     request = match.Request("k", "photo.jpg", "riftbound", "tcg")
-    with mock.patch.object(match, "_crop", lambda *_a: object()), \
-            mock.patch.object(match, "embed", lambda *_a: np.array([[1, 0, 0, 0]], np.float32)), \
-            mock.patch.object(match, "_resolve_pool", lambda *_a: (("Set", "Future"), None, "")), \
-            mock.patch.object(match, "unreleased_sets", lambda _game: unreleased, create=True), \
-            mock.patch.object(match, "SERVED_GAMES", ("riftbound",)):
+    if unreleased is None:  # the REAL `unreleased_sets`, with no release dates (the mirror is offline)
+        stock = mock.Mock()
+        stock.catalog_published.return_value = {}
+        gate = [mock.patch.object(match, "_stock_images", lambda: stock),
+                mock.patch.object(match, "index_path", lambda: index.path)]
+    else:
+        gate = [mock.patch.object(match, "unreleased_sets", lambda _game: unreleased, create=True)]
+    with contextlib.ExitStack() as stack:
+        for patch in gate + [mock.patch.object(match, "_crop", lambda *_a: object()),
+                             mock.patch.object(match, "embed", lambda *_a: np.array([[1, 0, 0, 0]], np.float32)),
+                             mock.patch.object(match, "_resolve_pool", lambda *_a: (("Set", "Future"), None, "")),
+                             mock.patch.object(match, "SERVED_GAMES", ("riftbound",))]:
+            stack.enter_context(patch)
         result = match._read_chunk([request], index, None, 0.716, lambda _m: None)[0]
     index.close()
     return result
@@ -196,6 +207,27 @@ def check_rule4_unreleased_sets(checks: Checks, codes=None) -> None:
               "a no-photo printing in a released set still trips the guard", f"{released.code}")
 
 
+def check_unreleased_fallback_needs_no_photo_rows(checks: Checks) -> None:
+    """No dates: only a set with no row at all, or only `no_photo` rows, may count as unreleased.
+    A released set whose rows are all `unreadable` or `no_url` (a transient failure) is not."""
+    import tempfile
+
+    for status in ("unreadable", "no_url"):
+        with tempfile.TemporaryDirectory() as tmp:
+            got = _index_read(tmp, None, status)
+        checks.ok(not got.accepted and got.code == match.UNREAD_LOOKALIKE,
+                  f"no dates, a set of only {status} rows: its look-alike still trips the guard", f"{got.code}")
+
+
+def check_claim_as_bare_string(checks: Checks) -> None:
+    """A `rarity_claim` that arrives as one string is one cell, never a substring pool."""
+    near = [0.90, 0.88, 0.70]
+    got = _plain(near, claim="Epic Showcase", rarities=("Epic", "Rare", "Rare"))
+    checks.ok(not got.accepted, 'claim "Epic Showcase" (a bare string) does not fit an "Epic" printing', f"{got.code}")
+    star = _plain(near, claim="Epic", rarities=("Epic", "Epic Showcase", "Rare"))
+    checks.ok(star.accepted, 'claim "Epic" (a bare string) is one cell and removes "Epic Showcase"', f"{star.code}")
+
+
 def check_accept_reasons_distinct(checks: Checks) -> None:
     codes: dict = {}
     scratch = Checks()
@@ -208,4 +240,4 @@ def check_accept_reasons_distinct(checks: Checks) -> None:
 
 CHECKS = (check_claim_settles_printing, check_claim_never_guesses, check_claim_round_two, check_claim_four_candidates,
           check_rule1_claim_narrows, check_rule2_battlefield, check_rule3_clear_winner, check_rule4_unreleased_sets,
-          check_accept_reasons_distinct)
+          check_unreleased_fallback_needs_no_photo_rows, check_claim_as_bare_string, check_accept_reasons_distinct)
