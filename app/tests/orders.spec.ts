@@ -3102,6 +3102,35 @@ test('a search with nothing left says so by name and offers to clear it', async 
   await expect(page.locator('.orders-index-row')).toHaveCount(3)
 })
 
+/* TYPING IS NEVER INTERRUPTED. The owner typed 2-3 letters and the box acted as if Enter was
+   pressed. One real key at a time, at each width: the same input node stays in the DOM, keeps focus
+   and its caret at the end, holds every key typed, and a letter fires no shortcut. A string that
+   matches nothing swaps the list for the empty state, and the box must survive that too. */
+for (const width of [1440, 820]) {
+  for (const typed of ['alice', 'hopper', 'zzqxv']) {
+    test(`the search keeps focus and every key while typing "${typed}" at ${width}`, async ({ page }) => {
+      await setViewport(page, { width, height: 900 })
+      const wire = await open(page, { orders: threeBuyerPayload() })
+      const search = page.locator('.bn-filterbar-search .search-field-input')
+      await search.click()
+      await search.evaluate((node) => ((node as HTMLInputElement & { __same?: boolean }).__same = true))
+      const calls = wire.length
+      let sofar = ''
+      for (const key of typed) {
+        await page.keyboard.press(key, { delay: 120 })
+        sofar += key
+        await expect(search, `after "${sofar}"`).toBeFocused()
+        await expect(search).toHaveValue(sofar)
+        const caret = await search.evaluate((node) => (node as HTMLInputElement).selectionStart)
+        expect(caret, `caret after "${sofar}"`).toBe(sofar.length)
+        expect(await search.evaluate((node) => (node as HTMLInputElement & { __same?: boolean }).__same), `same node after "${sofar}"`).toBe(true)
+      }
+      await expect(page.locator('.bn-toast')).toHaveCount(0)
+      expect(wire.length, 'no key reached the wire').toBe(calls)
+    })
+  }
+}
+
 /* WHAT THE ROW SHOWS IS WHAT THE SEARCH FINDS (UX-175): a nameless buyer's drawn label, its date
    part alone, and an order number typed with spaces for its hyphens all match. */
 test('the search finds a nameless buyer by the label its row draws', async ({ page }) => {
