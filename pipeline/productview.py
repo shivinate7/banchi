@@ -50,7 +50,7 @@ class ProductNotFound(RuntimeError):
 
 def row_for_sku(snapshot: Snapshot, sku: str) -> dict:
     """The row `pipeline/pricehistory.py:Market.reading_for_row` is resolved against for
-    this one SKU. Raises `ProductNotFound` when no card has ever carried it.
+    this one SKU. Raises `ProductNotFound` when neither the `skus` table nor any card carries it.
 
     RESOLVED BY THE SKU, NEVER BY THE CARD'S OWN READ FIELDS FIRST
     (D254). This function is reached ONLY from the live-fallback
@@ -63,12 +63,16 @@ def row_for_sku(snapshot: Snapshot, sku: str) -> dict:
     export's `Product Name`/`Number` describe this SKU's product by definition, and a card's
     own stored fields are what this SKU's PRODUCT decision no longer trusts alone.
     """
-    rows = archive_walk.rows_from_store(snapshot)
-    row = rows.get(str(sku).strip())
+    key = str(sku).strip()
+    # The `skus` table answers a SKU no card carries yet (a card's SKU is stamped only at
+    # emit or confirm), and wins over a card's own read fields where both answer.
+    exported = archive_walk.merged_export_rows_by_sku(snapshot).get(key)
+    if exported is not None:
+        return exported
+    row = archive_walk.rows_from_store(snapshot).get(key)
     if row is None:
         raise ProductNotFound(sku)
-    exported = archive_walk.merged_export_rows_by_sku().get(str(sku).strip())
-    return exported if exported is not None else row
+    return row
 
 
 def _bucket_payload(bucket: Bucket) -> dict:
