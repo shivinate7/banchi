@@ -781,7 +781,38 @@ def check_sweep_band_aside_is_current(checks: Checks) -> None:
             thread.join(timeout=5)
 
 
+def _mark_tried(*keys: str) -> None:
+    cards = Store().read().inventory.cards
+    sweep.remember_tried({k: cards[k].capture_id for k in keys})
+
+
+def check_claims_correction_requeues(checks: Checks) -> None:
+    checks.note("")
+    checks.note("CLAIMS CORRECTION — a changed claim puts only that card back in the free queue; a no-op changes nothing")
+    with isolated_home():
+        a, b = _capture(box=5, game="pokemon", set_hint="sv9"), _capture(box=5, game="pokemon", set_hint="sv9")
+        d = _capture(box=5, game="pokemon", set_hint="sv8")
+        e, f = _capture(box=6, game="pokemon", set_hint="sv9"), _capture(box=6, game="pokemon", set_hint="sv9")
+        _mark_tried(a, b, d, e, f)
+        checks.ok(not {a, b, d, e, f} & set(_queue()), "(precondition) all five tried cards are out of the queue")
+        box5 = lambda payload: capture_server.do_put_box_claims(5, payload)  # noqa: E731
+        box5({"set_hint": "sv8"})  # changes a and b; d already says sv8
+        checks.ok(a in _queue() and b in _queue(), "1. box claims route: the corrected cards are queued for the free reader again")
+        checks.ok(a not in sweep.tried() and b not in sweep.tried(), "2. and no longer marked tried")
+        checks.ok(d not in _queue() and d in sweep.tried(), "3. a card the call did not change stays tried")
+        _mark_tried(a, b)
+        box5({"set_hint": "sv8"})
+        checks.ok(not {a, b, d} & set(_queue()), "4. a no-op claims call (same values) resets nothing")
+        i = int(e.split("/")[1])
+        capture_server.do_put_card(6, i, {"set_hint": "sv9"})
+        checks.ok(e not in _queue(), "5. card route: a restated claim resets nothing")
+        capture_server.do_put_card(6, i, {"set_hint": "sv8"})
+        checks.ok(e in _queue() and e not in sweep.tried(), "6. card route: a changed claim queues the card again")
+        checks.ok(f not in _queue() and f in sweep.tried(), "7. and leaves its neighbour in the box tried")
+
+
 CHECKS = (
+    check_claims_correction_requeues,
     check_sweep_queue,
     check_sweep_watcher,
     check_sweep_backoff,
