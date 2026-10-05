@@ -4026,7 +4026,8 @@ export function CaptureScreen() {
       key: 'halt',
       icon: 'alert',
       tone: 'warn',
-      text: 'Captures are paused. Resume them above.',
+      // A failed save has its own notice: one notice, not two.
+      text: halt.where === 'server' && photoHeld() && triggerMode !== 'manual' ? null : 'Captures are paused. Resume them above.',
       fix: null,
     })
   } else {
@@ -4223,6 +4224,21 @@ export function CaptureScreen() {
         : blockers.length > 0
           ? (blockerWord[blockers[0]?.key ?? ''] ?? 'Capture is blocked')
           : null
+  /* A halt is an overlay pinned over the page top, so it carries the not-saved notice INSIDE it:
+   * no second notice is ever laid where the overlay lands. */
+  const haltShown = halt !== null && !(halt.where === 'server' && heldView.length > 0 && triggerMode !== 'manual')
+  const unsavedPanel = heldView.length === 0 ? null : (
+        <section className="capture-unsaved" role="alert">
+          <Notice tone="warn" title={`${heldView[0]!.label} was not saved`}>
+            {heldView.length === 1
+              ? 'Nothing after it was sent. Press Retry saving.'
+              : `${heldView.length} photos were not saved in all. Nothing after it was sent. Press Retry saving.`}
+          </Notice>
+          <Button variant="primary" size="lg" onClick={() => void retrySaving()}>
+            Retry saving
+          </Button>
+        </section>
+  )
   const dealerIdle = dealer.state === 'connected' || dealer.state === 'stopped'
 
   /* WHILE THE DISPENSER DEALS THE RECENT RAIL SHOWS ONLY THE NEWEST `DEALING_RAIL_TILES` (D316):
@@ -4546,9 +4562,10 @@ export function CaptureScreen() {
             <p className="capture-halt-message capture-halt-server">{halt.text}</p>
             {halt.code === null ? null : <p className="capture-halt-code">{halt.code}</p>}
           </details>
+          {unsavedPanel}
         </section>
       ) : null}
-      {halt === null || halt.where === 'section' ? null : (
+      {halt === null || halt.where === 'section' || (halt.where === 'server' && heldView.length > 0 && triggerMode !== 'manual') ? null : (
         <section className="capture-halt" role="alert" ref={haltRef}>
           <div className="capture-halt-main">
             <span className="capture-halt-glyph" aria-hidden="true">
@@ -4624,6 +4641,7 @@ export function CaptureScreen() {
               )}
             </p>
           </details>
+          {unsavedPanel}
         </section>
       )}
 
@@ -4642,18 +4660,7 @@ export function CaptureScreen() {
         </section>
       )}
 
-      {heldView.length === 0 ? null : (
-        <section className="capture-unsaved" role="alert">
-          <Notice tone="warn" title={`${heldView[0]!.label} was not saved`}>
-            {heldView.length === 1
-              ? 'Nothing after it was sent. Press Retry saving.'
-              : `${heldView.length} photos were not saved in all. Nothing after it was sent. Press Retry saving.`}
-          </Notice>
-          <Button variant="primary" size="lg" onClick={() => void retrySaving()}>
-            Retry saving
-          </Button>
-        </section>
-      )}
+      {heldView.length === 0 || haltShown ? null : unsavedPanel}
 
       <div className="capture-shell">
         {/* ============ THE VIEWFINDER: the hero, on a dark stage in either theme ============ */}
@@ -5382,7 +5389,7 @@ export function CaptureScreen() {
               <div className="capture-block" role="group" aria-label="Setup">
                 <span className="bn-label capture-block-word">Setup</span>
                 <ul className="capture-block-list">
-                  {blockers.map((blocker) => (
+                  {blockers.filter((blocker) => blocker.text !== null || blocker.fix !== null).map((blocker) => (
                     <li key={blocker.key} className="capture-block-row" data-tone={blocker.tone}>
                       {/* One icon per row: the fix button carries it when there is no sentence. */}
                       {blocker.text === null ? null : (
