@@ -3675,6 +3675,8 @@ function PullStage({
     const nothingOwed = shows.length === 0 && statuses.length === 0 && !hideUnknown && base.length === 0
     return (
       <div className="orders-stage">
+        {/* Same child position as the full stage, so the search box never remounts (focus survives a key). */}
+        <WalkLinePublisher words={null} />
         {filterBar}
         <div className="bn-panel">
           {searched ? (
