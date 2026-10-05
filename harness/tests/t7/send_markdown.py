@@ -32,7 +32,7 @@ from harness.tests import Checks
 from cli import cmd_reprice, resolve, runs
 from pipeline import corpus, reprice, sendguard, tcgcsv
 from server import capture_server, pipeline_routes, send_routes, tcg_export, tcg_import
-from store import db, files, master, sendclaims
+from store import clock, db, files, master, sendclaims
 from store.session import Store
 from harness.tests.t7.common import (
     ARTICUNO_SKU,
@@ -2040,7 +2040,7 @@ def check_send_hazards(checks: Checks) -> None:
 
     # ---------------------------------------------------- S3: the same bytes, windowed
     with _case(checks, "S3: the same bytes, windowed"), isolated_home():
-        now = send_routes._now()
+        now = clock.now()
         # ROUND-1 STAMPS, WITHOUT THE RANDOM TAIL: the old shape still reads, and it is the
         # shape the round-1 build could see, so this case goes red on that build for the
         # right reason (it refused the 20-minute-old bytes) rather than by not seeing them.
@@ -2049,7 +2049,7 @@ def check_send_hazards(checks: Checks) -> None:
                 send_routes.sends_dir() / stamp,
                 {
                     "kind": "send", "digest": f"d{age}", "taken_back_at": None,
-                    "pushed": {"upload_id": "u", "pushed_at": send_routes._iso(now - timedelta(seconds=age))},
+                    "pushed": {"upload_id": "u", "pushed_at": clock.iso(now - timedelta(seconds=age))},
                 },
             )
         checks.equal(
@@ -2102,7 +2102,7 @@ def check_send_hazards(checks: Checks) -> None:
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
-        gap = send_routes._parse(sent["check_after"]) - send_routes._parse(sent["published_at"])
+        gap = clock.parse(sent["check_after"]) - clock.parse(sent["published_at"])
         checks.ok(
             gap.total_seconds() > cmd_reprice.PUBLISH_LAG_S,
             f"THE FIRST CHECK IS DUE PAST THE LAG, not at it: {gap.total_seconds()}s after the publish",
