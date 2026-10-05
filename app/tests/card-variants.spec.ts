@@ -530,7 +530,16 @@ for (const width of [1440, 820]) {
       await expect(page.locator('.browse-row')).toHaveCount(0)
       await expect(page.getByRole('heading', { name: 'Yungoos' })).toHaveCount(0)
       await expect(page.getByRole('heading', { name: 'Akshan' })).toHaveCount(0)
-      await expect(page.locator('.browse-variants:focus-within')).toHaveCount(1)
+      // The owner is still typing: an automatic picker never takes focus (only "change" does).
+      const search = page.getByPlaceholder('Search')
+      await expect(search).toBeFocused()
+      await expect(search).toHaveValue('109')
+      await expect(page.locator('.browse-variants:focus-within')).toHaveCount(0)
+      await page.keyboard.type('/1')
+      await expect(search).toBeFocused()
+      await expect(search).toHaveValue('109/1')
+      await search.fill('109')
+      await expect(tiles).toHaveCount(5)
 
       await tiles.filter({ hasText: 'Illaoi' }).click()
       await expect(page.locator('.browse-variants')).toHaveCount(0)
