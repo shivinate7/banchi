@@ -825,9 +825,10 @@ class Ledger:
         """`(order key, sku)` this copy is already recorded against, or None.
 
         The index behind `CopyAlreadyPulled`. Walked rather than cached: this ledger holds
-        one record per order rather than per card, so the walk is over open orders and not
-        over the store, and a cached reverse index is a second thing to keep true through
-        every write for no measured gain.
+        one record per order rather than per card, and a cached reverse index is a second
+        thing to keep true through every write. The walk covers every fulfilment row ever
+        written, closed orders included, since rows are never deleted. The first call loads
+        them all; later calls in one session walk memory.
         """
         wanted = str(capture_id).strip()
         for key, rows in self.fulfilment.items():

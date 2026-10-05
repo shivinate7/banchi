@@ -224,7 +224,7 @@ class Queue:
     def open_entries(self) -> List[QueueEntry]:
         """Everything still waiting, in the order it should be worked."""
         return sorted(
-            (e for e in self.entries.values() if not e.cleared_by_human),
+            self.entries.where(cleared_by_human=0),
             key=lambda e: e.sort_key,
         )
 

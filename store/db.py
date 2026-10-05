@@ -274,6 +274,10 @@ _INDEXES = (
     ("cards", "set_name"),
     ("queues", "box"),
     ("events", "position"),
+    # `events_named`'s `WHERE event = ?` and `_on_hand_by_run`'s `cards.select(run=...)`:
+    # created at connect with `IF NOT EXISTS`, so an existing store gets them with no migration.
+    ("events", "event"),
+    ("cards", "run"),
     ("boxes", "bid"),
     ("submissions", "state"),
     ("send_claims", "state"),
@@ -1891,6 +1895,15 @@ class SqliteSource:
         # Clamped at 0 like the walk's `highest = 0`: a box holding only idx <= 0 answers 1.
         return (0 if top is None else max(0, int(top))), bad is not None
 
+    def count_by(self, column: str) -> Dict[Any, int]:
+        """`{value: row count}` for one indexed column: one GROUP BY, no row read."""
+        if column not in self.columns:
+            raise KeyError(f"{self.table} has no indexed column {column!r}")
+        where, params = self._where({})
+        return {row[0]: int(row[1]) for row in self.conn.execute(
+            f"SELECT {column}, COUNT(*) FROM {self.table}{where} GROUP BY {column}", params
+        ).fetchall()}
+
     def distinct(self, column: str) -> Iterable[Any]:
         if column not in self.columns:
             raise KeyError(f"{self.table} has no indexed column {column!r}")
@@ -2123,11 +2136,9 @@ def events_named(conn: sqlite3.Connection, event: str) -> List[dict]:
     Inventory's Deleted boxes shelf wants only `buried` lines, not a full-table load and filter in Python —
     `history()` stays the reversal readers' full scan (`_state_before_sale` and its twin
     need the whole ordered sequence to find the line just before the one they are asked
-    about), and this is the read a screen makes instead. The `event` column already exists
-    for `append_events`' own denormalised copy of the payload's `event` key; no new column,
-    no new index — the events table has none of its own and this repo has no schema
-    migration to add one to a store already on disk, so a `WHERE event = ?` here is an
-    unindexed scan, the same shape `history()` already is over the whole table. Same
+    about), and this is the read a screen makes instead. The `event` column holds
+    `append_events`' own denormalised copy of the payload's `event` key, and `_INDEXES`
+    indexes it, so `WHERE event = ?` is an index search. Same
     one-bad-row refusal as `history()`, for the same reason.
     """
     out = []
@@ -2144,7 +2155,7 @@ def events_named(conn: sqlite3.Connection, event: str) -> List[dict]:
     return out
 
 
-def events_at(conn: sqlite3.Connection, key: str) -> List[dict]:
+def events_at(conn: sqlite3.Connection, key: str, exact: bool = False) -> List[dict]:
     """Every event that could bear on one position, oldest first. `history()`'s scoped
     sibling for the reversal readers (`_answer_before`, `_clearing_event`,
     `_state_before_sale`, `_state_before_retirement`), which today load the whole table and
@@ -2173,15 +2184,25 @@ def events_at(conn: sqlite3.Connection, key: str) -> List[dict]:
     falls back to the full, slow, correct read rather than silently returning an empty or
     wrong-scoped list to a caller whose answer feeds a refusal message.
 
+    `exact=True` reads only the lines filed under `key` itself, an equality search on the
+    same index. It is for a reader that skips every other position (`_state_before_sale`,
+    `_state_before_retirement`) and so has no use for the box's other lines or its
+    `renumbered` markers.
+
     Same one-bad-row refusal as `history()` and `events_named()`, for the identical reason.
     """
     box = str(key).split("/", 1)[0]
-    if not box.isdigit():
+    if exact:
+        rows = conn.execute(
+            "SELECT id, payload FROM events WHERE position = ? ORDER BY id", (str(key),)
+        ).fetchall()
+    elif not box.isdigit():
         return history(conn)
-    rows = conn.execute(
-        "SELECT id, payload FROM events WHERE position GLOB ? ORDER BY id",
-        (f"{box}/*",),
-    ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, payload FROM events WHERE position GLOB ? ORDER BY id",
+            (f"{box}/*",),
+        ).fetchall()
     out = []
     for row_id, text in rows:
         try:
