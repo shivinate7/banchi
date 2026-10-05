@@ -248,6 +248,7 @@ class CatalogProduct(NamedTuple):
     number: str
     printed_total: str
     url: str
+    rarity: str = ""  # the product's own `Rarity` cell; empty where the catalogue has none (Pokemon's vendored tree)
 
 
 class _ImageIndex(NamedTuple):
@@ -625,6 +626,7 @@ class StockImages:
                     number=str(number),
                     printed_total="",
                     url=str(product.get("imageUrl") or ""),
+                    rarity=str(extended(product, "Rarity") or ""),
                 )
             )
         return numbered, unnumbered

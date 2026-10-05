@@ -418,6 +418,7 @@ def sweep_worker(say) -> int:
                     requests.append(match.Request(
                         key=key, photo=path, game=game,
                         strategy=str(games.get(game)["prompt"]), set_hint=card.set_hint,
+                        rarity_claim=card.rarity_claim,
                     ))
                     meta[key] = (card, capture_id, photos.sha256_of(path), path)
                 results = match.read(requests, index) if requests else []
@@ -494,7 +495,7 @@ def _audit_locked(say, write: bool) -> int:
         if path is None or not card.read_name or not card.read_number:
             continue
         game = str(card.game or games.DEFAULT_GAME)
-        requests.append(match.Request(key=key, photo=path, game=game, strategy=str(games.get(game)["prompt"]), set_hint=card.set_hint))
+        requests.append(match.Request(key=key, photo=path, game=game, strategy=str(games.get(game)["prompt"]), set_hint=card.set_hint, rarity_claim=card.rarity_claim))
         meta[key] = (card, path)
     started = time.time()
     try:

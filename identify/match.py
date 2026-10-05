@@ -96,6 +96,9 @@ UNREAD_UNREADABLE = "photo_unreadable"
 UNREAD_LOOKALIKE = "lookalike_guard"
 UNREAD_MARGIN = "margin_too_small"
 UNREAD_FLOOR = "match_too_weak"
+# An ACCEPTED read's reason, not an unread one: the margin was thin between two printings of one
+# card and the card's own rarity claim fit exactly one of them (`_settled_by_claim`).
+ACCEPT_CLAIM = "printing_settled_by_claim"
 
 # ------------------------------------------------------------------------ the model file
 
@@ -324,6 +327,10 @@ class Pool:
     printed: List[str]
     blocked: Set[str]
     sets: Tuple[str, ...]
+    # Each printing's catalogue `Rarity`, parallel to `rows`. None until a thin margin needs it;
+    # `_pool_rarities` then reads it from `StockImages.catalog_products`, the one home, so the
+    # fingerprint index stays as it is and no re-prepare is forced.
+    rarities: Optional[List[str]] = None
 
 
 class Index:
@@ -479,6 +486,7 @@ class Request:
     game: str
     strategy: str
     set_hint: Optional[str] = None
+    rarity_claim: Optional[Sequence[str]] = None  # the card's own `rarity_claim` cells
 
 
 @dataclass
@@ -504,6 +512,49 @@ def _crop(photo: Path, aspect: float):
     if box is None:
         return None
     return geometry_crop.registered_card(image, box, aspect)
+
+
+def _base_number(number: str) -> str:
+    """A collector number without its alt-art letter or its denominator: `087a/219` and `087/219`
+    are one card's two printings. Falls back to the shared fold when no digit leads."""
+    from pipeline import join
+
+    found = re.match(r"\s*0*(\d+)", number or "")
+    return found.group(1) if found else join.number_index_key(number)
+
+
+def _pool_rarities(pool: Pool, game: str) -> List[str]:
+    """`pool.rarities`, filled once from the catalogue. A set the catalogue cannot answer leaves
+    its printings blank, and a blank rarity never matches a claim."""
+    if pool.rarities is None:
+        from cli.cmd_pricearchive import market_cache_dir
+        from pipeline import pricehistory
+        from pipeline.stockimages import StockImages
+
+        stock = StockImages(market=pricehistory.Market(cache_dir=market_cache_dir()))
+        found: Dict[Tuple[str, str], str] = {}
+        for set_name in pool.sets:
+            try:
+                listed = stock.catalog_products(game, set_name)
+            except Exception:  # a catalogue that cannot answer is a refusal, never a crash
+                listed = None
+            for product in (listed[0] if listed else ()):
+                found[(set_name, product.product_id)] = product.rarity
+        pool.rarities = [found.get((row[1], row[2]), "") for row in pool.rows]
+    return pool.rarities
+
+
+def _settled_by_claim(request: "Request", pool: Pool, order) -> Optional[int]:
+    """The pool index of the printing the claim picks, or None. Only when the top two are one
+    card (same name, same base number) and the claim fits exactly one of their rarities."""
+    if not request.rarity_claim or len(order) < 2:
+        return None
+    top = [int(order[0]), int(order[1])]
+    if len({(card_name(pool.names[i]), _base_number(pool.rows[i][3])) for i in top}) != 1:
+        return None
+    rarities = _pool_rarities(pool, request.game)
+    fits = [i for i in top if rarities[i] and rarities[i] in request.rarity_claim]
+    return fits[0] if len(fits) == 1 else None
 
 
 def _resolve_pool(
@@ -650,25 +701,31 @@ def _read_chunk(
                     margin=margin, floor=floor, candidates=candidates,
                 )
                 continue
+            pick, code = best, None
             if margin < MARGIN_MIN:
+                settled = _settled_by_claim(request, pool, order)
+                if settled is not None:
+                    pick, code = settled, ACCEPT_CLAIM
+            if margin < MARGIN_MIN and code is None:
                 out[request.key] = Result(request.key, False, code=UNREAD_MARGIN, detail=f"margin {margin:.4f} is under {MARGIN_MIN}", margin=margin, floor=floor, candidates=candidates)
                 continue
             if floor < FLOOR_MIN:
                 out[request.key] = Result(request.key, False, code=UNREAD_FLOOR, detail=f"best match {floor:.4f} is under {FLOOR_MIN}", margin=margin, floor=floor, candidates=candidates)
                 continue
             payload = _payload(
-                request.strategy, pool.rows[best], pool.names[best], pool.printed[best],
+                request.strategy, pool.rows[pick], pool.names[pick], pool.printed[pick],
                 {
                     "engine": ENGINE,
-                    "product_id": pool.rows[best][2],
-                    "set": pool.rows[best][1],
+                    "product_id": pool.rows[pick][2],
+                    "set": pool.rows[pick][1],
                     "margin": round(margin, 4),
                     "floor": round(floor, 4),
                     "candidates": candidates,
                     "model_sha256": MODEL_SHA256,
+                    **({"settled_by": "rarity_claim"} if code else {}),
                 },
             )
-            out[request.key] = Result(request.key, True, payload=payload, margin=margin, floor=floor, candidates=candidates)
+            out[request.key] = Result(request.key, True, payload=payload, code=code, margin=margin, floor=floor, candidates=candidates)
     return [out[r.key] for r in requests]
 
 

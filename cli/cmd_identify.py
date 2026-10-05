@@ -643,6 +643,7 @@ def _match_request(item: Item) -> match.Request:
         game=item.game,
         strategy=str(item.strategy),
         set_hint=item.capture.set_hint,
+        rarity_claim=item.capture.rarity_claim,
     )
 
 
