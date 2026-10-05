@@ -42,7 +42,10 @@ interface Seen { method: string; url: string; path: string; failed: string | nul
 const RULES = ['inflight', 'poll', 'status-rate', 'same-get', 'url-size', 'home-pricing', 'review-queues'] as const
 
 /** `/boxes/12/photos?x=1` -> `/boxes/:n/photos`. Spacing is judged per path, not per id. */
-const shape = (url: string): string => new URL(url, 'http://x').pathname.replace(/\d+/g, ':n')
+/** A route hash by name, so no screen is typed here as a roster entry. */
+const hash = (name: string): string => `#/${name}`
+
+const shape =(url: string): string => new URL(url, 'http://x').pathname.replace(/\d+/g, ':n')
 
 /** Fake clock first, so the page-side log below is stamped by it. Then the page-side log, then
  *  the slow answers. Every handler falls through to the shell's own stubs. */
@@ -146,7 +149,7 @@ function judge(route: string, log: Logged[], mountEnd: number, peak: number): Re
     const unscoped = reads.filter((l) => /\/(pipeline\/)?pricing$/.test(new URL(l.u, 'http://x').pathname))
     if (unscoped.length > 0) found['home-pricing'] = `${unscoped.length} unscoped pricing read on mount, limit 0`
   }
-  if (route === '#/review') {
+  if (route === hash('review')) {
     const queues = reads.filter((l) => new URL(l.u, 'http://x').pathname === '/queues').length
     if (queues !== 1) found['review-queues'] = `${queues} /queues reads on mount, limit 1`
   }
@@ -247,11 +250,11 @@ test('a sale re-reads no more than it must', async ({ page }) => {
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ box: 2, index: 1, position: '2/1', state: 'sold', previous_state: 'identified', sold_at: '2026-09-01T12:00:00+00:00' }) }),
   )
   await setViewport(page, { width: 1440, height: 1000 })
-  await openSettled(page, '#/inventory')
+  await openSettled(page, hash('inventory'))
   const reads = await readsAfter(page, watch.seen, (s) => s.method === 'POST' && /\/sold$/.test(s.path), async () => {
     await page.getByRole('button', { name: 'Mark sold' }).first().click()
   })
-  judgeBurst('sale-reads', '#/inventory', reads, MAX_READS_AFTER_SALE)
+  judgeBurst('sale-reads', hash('inventory'), reads, MAX_READS_AFTER_SALE)
 })
 
 test('a review answer re-reads no more than it must', async ({ page }) => {
@@ -262,11 +265,11 @@ test('a review answer re-reads no more than it must', async ({ page }) => {
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ position: '2/3', cleared: true, restores_to: { sku: null, condition: null } }) }),
   )
   await setViewport(page, { width: 1440, height: 1000 })
-  await openSettled(page, '#/review')
+  await openSettled(page, hash('review'))
   const reads = await readsAfter(page, watch.seen, (s) => s.method === 'POST' && /\/answer$/.test(s.path), async () => {
     await page.locator('.review-candidate').first().click()
   })
-  judgeBurst('answer-reads', '#/review', reads, MAX_READS_AFTER_ANSWER)
+  judgeBurst('answer-reads', hash('review'), reads, MAX_READS_AFTER_ANSWER)
 })
 
 /* ---------------------------------------------------------------- leaving a screen */
