@@ -443,26 +443,25 @@ test('1: COMPLETE and photo taken with the save still pending: START follows aft
   await dealer.stop()
 })
 
-test('1b: a photo taken before COMPLETE is the previous card, not this one: START waits for a photo after COMPLETE', async () => {
+test('1b: a photo after START and before COMPLETE counts: START needs both, then the gap', async () => {
   const dealer = await dealing()
   await advance(100)
-  dealer.photoTaken(ok) // a stray fire while the card is still moving (COMPLETE at 420 ms)
-  await advance(COMPLETE[1] - 100 + DEAL_GAP_MS + 100)
-  expect(starts()).toBe(1) // that photo did not count
-  dealer.photoTaken(ok) // the card's own photo, after COMPLETE
-  await advance(DEAL_GAP_MS + 1)
+  dealer.photoTaken(ok) // taken before COMPLETE at 420 ms
+  await advance(COMPLETE[1] - 100 + DEAL_GAP_MS - 1)
+  expect(starts()).toBe(1)
+  await advance(2)
   expect(starts()).toBe(2)
   await dealer.stop()
 })
 
-test('6: a stray repeat fire for card N-1 after card N START is not card N photo: no photo, the dealer stops', async () => {
+test('6: a fire between card N-1 photo and card N START does not count for card N: no photo, the dealer stops', async () => {
   const dealer = await dealing()
   await advance(500)
   dealer.photoTaken(ok) // card 1's photo
-  await advance(DEAL_GAP_MS + 10)
+  await advance(DEAL_GAP_MS - 20)
+  dealer.photoTaken(ok) // a repeat fire for card 1, inside the gap before START 2
+  await advance(30)
   expect(starts()).toBe(2)
-  await advance(100)
-  dealer.photoTaken(ok) // a repeat fire for card 1, while card 2 is still moving
   await advance(420 + 3_000 + 50) // card 2 COMPLETEs, and no photo of it ever comes
   expect(starts()).toBe(2)
   expect(read(dealer).state).toBe('stopped')
