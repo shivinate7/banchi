@@ -290,10 +290,11 @@ test('R3: while a photo is held, Capture sends no POST and the held frame surviv
   await page.waitForTimeout(800) // keep: a wrongly sent POST gets time to land
   expect(wire.posts()).toBe(posts)
   const resume = page.getByRole('button', { name: /^Resume captures/ })
-  if (await resume.isVisible()) await resume.click()
+  await resume.click() // always pressed: it may clear the halt, and must not release a held photo
   await captureButton(page).click({ force: true })
   const start = control(page, 'Start dispenser')
-  if (await start.isEnabled()) await start.click() // the dispenser may not deal while a photo is held
+  await expect(start).toBeDisabled() // and so is the dispenser
+  await start.click({ force: true })
   await page.waitForTimeout(1_200) // keep: a wrongly sent POST or START gets time to land
   expect(wire.posts()).toBe(posts)
   expect((await writes(page)).filter((w) => w === 'MOTOR:START')).toHaveLength(2)
@@ -311,4 +312,40 @@ test('R4: the not-saved notice says what was sent and what to press, with no mec
   await expect(notice).toContainText(/Nothing after it was sent/)
   await expect(notice).toContainText(/Retry saving/)
   await expect(notice).not.toContainText(/held here/i)
+})
+
+/** Counts `POST /boxes/5/sections` (an opened divider). Answers with the box row. */
+async function countSectionPosts(page: Page): Promise<() => number> {
+  let opened = 0
+  await page.route(/\/boxes\/5\/sections/, (route) => {
+    if (route.request().method() !== 'POST') return route.fallback()
+    opened += 1
+    return route.fulfill(json({ ...BOX, sections: [1, 2], sections_detail: [{ ...SPAN, end: 1 }, { ...SPAN, section: 2, start: 2, div: '2' }] }))
+  })
+  return () => opened
+}
+
+test('R5: while held, S and the Section button open no divider; after Retry both cards land in the original section and S works', async ({ page }) => {
+  const opened = await countSectionPosts(page)
+  const wire = await held(page, (n) => n <= 2)
+  await page.keyboard.press('s')
+  await page.getByRole('button', { name: 'Section', exact: true }).click({ force: true })
+  await page.waitForTimeout(800) // keep: a wrongly sent section POST gets time to land
+  expect(opened()).toBe(0)
+  await page.getByRole('button', { name: 'Retry saving' }).click()
+  await expect.poll(wire.answered, { timeout: 10_000 }).toBe(4)
+  expect(new Set(wire.sections()).size).toBe(1) // all four POSTs ask for the same section
+  await expect(unsaved(page)).toHaveCount(0)
+  await page.keyboard.press('s')
+  await expect.poll(opened, { timeout: 5_000 }).toBe(1) // S works again
+})
+
+test('R6: while held the Capture button is disabled; after a successful Retry Capture and Start are enabled again', async ({ page }) => {
+  const wire = await held(page, (n) => n <= 2)
+  await expect(captureButton(page)).toBeDisabled()
+  await page.getByRole('button', { name: 'Retry saving' }).click()
+  await expect.poll(wire.answered, { timeout: 10_000 }).toBe(4)
+  await expect(unsaved(page)).toHaveCount(0)
+  await expect(captureButton(page)).toBeEnabled()
+  await expect(control(page, 'Start dispenser')).toBeEnabled()
 })

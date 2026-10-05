@@ -92,11 +92,12 @@ export async function slowCapture(
   page: Page,
   ms: number | ((post: number) => number),
   failIf: (post: number) => boolean = () => false,
-): Promise<{ posts: () => number; answered: () => number; events: () => string[]; bodies: () => string[] }> {
+): Promise<{ posts: () => number; answered: () => number; events: () => string[]; bodies: () => string[]; sections: () => string[] }> {
   let posts = 0
   let answered = 0
   let saved = 0 // the slot a successful save takes: failed POSTs burn none
   const events: string[] = [] // `sent:N` when POST N arrives, `answered:N` when its reply goes out
+  const sections: string[] = [] // the `section` each POST asked for, '' for the box's last
   const bodies: string[] = [] // a short digest of each POST's body: the same frame resent matches itself
   await page.route(/\/capture$/, (route) => {
     posts += 1
@@ -106,6 +107,13 @@ export async function slowCapture(
     let digest = 0
     for (let i = 0; i < raw.length; i += 1) digest = (digest * 31 + raw.charCodeAt(i)) | 0
     bodies.push(`${raw.length}:${digest}`)
+    let claimed = ''
+    try {
+      claimed = String((JSON.parse(raw) as { section?: unknown }).section ?? '')
+    } catch {
+      claimed = '?'
+    }
+    sections.push(claimed)
     setTimeout(() => { // keep: the slow save held
       answered += 1
       events.push(`answered:${post}`)
@@ -130,7 +138,7 @@ export async function slowCapture(
       })
     }, typeof ms === 'number' ? ms : ms(post))
   })
-  return { posts: () => posts, answered: () => answered, events: () => events.slice(), bodies: () => bodies.slice() }
+  return { posts: () => posts, answered: () => answered, events: () => events.slice(), bodies: () => bodies.slice(), sections: () => sections.slice() }
 }
 
 export async function writes(page: Page): Promise<string[]> {
