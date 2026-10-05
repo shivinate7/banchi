@@ -2657,7 +2657,7 @@ export function BoxBrowse({
                     <VariantChooser
                       groups={searchGroups}
                       query={query}
-                      focusOnMount={pickerAsked === query || topTierIsTied(searchGroups)}
+                      focusOnMount={pickerAsked === query}
                       onPick={(index) => setChosenVariant({ query, index })}
                     />
                   ) : awaitingRows ? null /* THE SAME FALSE CLAIM, A SECOND PLACE (the review
