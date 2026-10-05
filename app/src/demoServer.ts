@@ -116,13 +116,14 @@ const chunks = import.meta.glob<{ responses?: Record<string, Recorded>; wire?: s
   { eager: true, import: 'default' },
 )
 
-/* The recording, as a MUTABLE map under canonical keys. Cloned on load so a write patches
- * this session's copy and a reload starts the demo over — which is the behaviour somebody
+/* The recording, as a MUTABLE map under canonical keys. Never cloned (a clone of the 75 MB
+ * recording cost the first screen a third of its wait): the module evaluates once per page load,
+ * so a write patches this session's objects and a reload starts the demo over — which is the behaviour somebody
  * clicking through a shared link wants, and the reason no attempt is made to persist it. */
 const responses: Record<string, Recorded> = {}
 let wire = ''
 for (const chunk of Object.values(chunks)) {
-  for (const [key, entry] of Object.entries(structuredClone(chunk.responses ?? {}))) {
+  for (const [key, entry] of Object.entries(chunk.responses ?? {})) {
     responses[canonical(key)] = entry
   }
   if (chunk.wire) wire = chunk.wire
