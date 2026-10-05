@@ -52,19 +52,24 @@ def _bytes():
 
 
 def _rows():
-    """Every row of every table, hashed. Unlike `_bytes` it ignores a WAL checkpoint that a
-    connection left open by an earlier T7 check may run at any moment: a checkpoint moves bytes, not rows."""
+    """Every row of every table, hashed, columns unnamed, so a write to any table moves it. Unlike
+    `_bytes` it ignores a WAL checkpoint a connection left open by an earlier check may run: a
+    checkpoint moves bytes, not rows. A table that cannot be read raises, naming it.
+    The one skip beyond `sqlite_*` is the FTS5 table `cards_fts`: it is external-content over
+    `cards` and lists a column (`note`) that `cards` lacks, so `select *` on it always raises. Its
+    shadow tables (`cards_fts_data`, `_idx`, `_docsize`, `_config`) are ordinary tables and are hashed."""
     import sqlite3
 
     conn = sqlite3.connect(f"file:{files.inventory_dir() / 'store.sqlite'}?mode=ro", uri=True)
     try:
-        tables = [r[0] for r in conn.execute("select name from sqlite_master where type = 'table' order by name")]
+        tables = [r[0] for r in conn.execute("select name from sqlite_master where type = 'table' and name not like 'sqlite_%' and sql not like 'CREATE VIRTUAL%' order by name")]
         dump = []
         for t in tables:
             try:
                 dump.append(sorted(repr(r) for r in conn.execute(f'select * from "{t}"')))
-            except sqlite3.OperationalError as exc:  # a table an earlier check left unreadable: its error is its row
-                dump.append([str(exc)])
+            except sqlite3.OperationalError as exc:
+                sql = [r[0] for r in conn.execute("select sql from sqlite_master where name = ? or tbl_name = ?", (t, t))]
+                raise AssertionError(f"table {t!r} cannot be read: {exc}; schema {sql}") from exc
         return hashlib.sha256(repr((tables, dump)).encode()).hexdigest()
     finally:
         conn.close()
