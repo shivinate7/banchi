@@ -132,7 +132,13 @@ function subscribe(key: string, tell: () => void): () => void {
   watching.add(tell)
   return () => {
     watching.delete(tell)
-    if (watching.size === 0) WATCH.delete(key)
+    if (watching.size === 0) {
+      WATCH.delete(key)
+      // Nobody is left to draw the answer: unqueue it, so leaving a screen stops its requests.
+      const queued = WANTED.indexOf(key)
+      if (queued >= 0) WANTED.splice(queued, 1)
+      if (urgent === key) urgent = null
+    }
   }
 }
 
