@@ -265,18 +265,10 @@ class Rows(MutableMapping):
         is what actually fixes that case, cheaply — bounded by what the source query itself
         returns, not by the table.
 
-        WHAT THIS STILL DOES NOT CATCH, NAMED RATHER THAN SILENTLY ASSUMED AWAY: a row whose
-        indexed column was mutated IN PLACE (not via `__setitem__`) so that it newly MATCHES
-        `equals`, while its own on-disk value still would not have — the source query never
-        offers it as a candidate, so it is missed. `_touched` (checked below) closes this for
-        every row reassigned through `__setitem__`, which is every WRITE this repo's own
-        allocator/mutator functions perform on a BRAND NEW row (`allocate_capture`) and is
-        the only source of a genuinely new key with no on-disk row at all. It does not close
-        it for a row that already existed, was loaded, and had an indexed column mutated in
-        place into a NEW match — no case in this codebase's own call graph does that within
-        one session today (verified: no handler queries a column immediately after mutating
-        that same column on an existing record without reassigning), and it is recorded here
-        so a future one does not silently reopen it.
+        EVERY LOADED KEY IS EVALUATED AGAINST ITS LIVE OBJECT, so a row mutated in place into a
+        new match is found too, whoever mutated it and with no `__setitem__`. The source's
+        index is trusted only for keys never loaded. The cost is one `columns` call per
+        loaded row per call.
         """
         if self.source is None:
             found = {
@@ -299,8 +291,11 @@ class Rows(MutableMapping):
                 keys.add(key)
             else:
                 self.dropped.append(key)
-        for key in self._touched:
-            if key in self._deleted or key not in self._loaded or key in keys:
+        # EVERY LOADED KEY IS EVALUATED LIVE, not only `_touched` ones: a caller may flip an
+        # attribute in place, and the source's index cannot see that. SQL is trusted only for
+        # keys never loaded.
+        for key in list(self._loaded):
+            if key in self._deleted or key in keys:
                 continue
             if self._matches(self._loaded[key], equals):
                 keys.add(key)
@@ -335,8 +330,8 @@ class Rows(MutableMapping):
                     out[key] = picked
                 continue
             out[key] = tuple(values)
-        for key in self._touched:
-            if key in self._deleted or key not in self._loaded or key in out:
+        for key in list(self._loaded):
+            if key in self._deleted or key in out:
                 continue
             picked = self._picked(self._loaded[key], equals, columns)
             if picked is not None:
