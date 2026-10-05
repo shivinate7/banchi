@@ -1,4 +1,4 @@
-// Protects: Sales sorts, filters, cross-filters, drills down and deep-links over the orders payload, on a fixed fake clock, and its Mix view (`#/revenue?view=mix`) keeps its state in the URL, fires no request on a press and shows its empty states.
+// Protects: Sales sorts, filters, cross-filters, drills down and deep-links over the orders payload, on a fixed fake clock, and its Mix view (`#/revenue?lens=mix`) keeps its state in the URL, fires no request on a press and shows its empty states.
 // Governs: D278, D201, D214, D217, D225, D196, D298
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { readFileSync, existsSync } from 'node:fs'
@@ -1133,7 +1133,7 @@ for (const width of [1440, 820]) {
  *     picks are allowed and not when a column split limits it to one.
  *   - Sort is a `SortControl` labelled `Sort`; its direction button is `.bn-sort-dir`.
  *   - the pivot is one `<table>`, header cells `th`, an `All` column last when columns split.
- *   - URL keys are the spec's: `view by across measure sort dir` and the dimension ids
+ *   - URL keys are the spec's, with `lens` for `view`: `lens by across measure sort dir` and the dimension ids
  *     `game set rarity finish state box capw salew band`.
  *   - empty states: the sentences in the spec, and for "no cards" a link to Capture.
  * ==================================================================================== */
@@ -1175,7 +1175,7 @@ async function stubMix(page: Page, cards: Wire[] = CARDS) {
   )
 }
 
-async function openMix(page: Page, query = '?view=mix') {
+async function openMix(page: Page, query = '?lens=mix') {
   await page.goto(`/#/revenue${query}`)
   await expect(page.getByRole('button', { name: 'Mix', exact: true }), 'Sales offers a Mix segment').toBeVisible()
   await expect(page.locator('table')).toBeVisible()
@@ -1291,14 +1291,14 @@ test('16. every control writes the URL with replaceState, and a reload restores 
   expect(await tableText(page), 'the reload draws the same table').toBe(drawn)
 })
 
-test('17. a rest view writes no query beyond view=mix', async ({ page }) => {
+test('17. a rest view writes no query beyond lens=mix', async ({ page }) => {
   await stubMix(page)
   await openMix(page)
-  expect(await hashOf(page)).toBe('#/revenue?view=mix')
+  expect(await hashOf(page)).toBe('#/revenue?lens=mix')
   await choose(page, 'Rows', 'Box')
   expect(await hashOf(page)).toContain('by=box')
   await choose(page, 'Rows', 'Set') // back to the rest value
-  expect(await hashOf(page), 'a key at rest is omitted again').toBe('#/revenue?view=mix')
+  expect(await hashOf(page), 'a key at rest is omitted again').toBe('#/revenue?lens=mix')
 })
 
 /* 18 ---------------------------------------------------------------------------------------- */
@@ -1342,7 +1342,7 @@ test('19. a press on any control fires no request', async ({ page }) => {
 /* 20 ---------------------------------------------------------------------------------------- */
 test('20. the empty store shows one sentence and one action', async ({ page }) => {
   await stubMix(page, [])
-  await page.goto('/#/revenue?view=mix')
+  await page.goto('/#/revenue?lens=mix')
   await expect(page.getByText('Nothing is captured yet. Capture a card and its mix shows here.')).toBeVisible()
   await expect(page.locator('table')).toHaveCount(0)
   const action = page.locator('main').getByRole('link', { name: /capture/i })
