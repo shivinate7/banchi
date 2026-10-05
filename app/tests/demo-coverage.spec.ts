@@ -380,6 +380,58 @@ test.describe('the published demo draws what reviewers grade', () => {
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
   })
 
+  test('a box-scoped value band answers rows, not the refusal', async ({ page }) => {
+    test.setTimeout(90_000)
+    await openRoot(page)
+    // NO SCREEN ASKS FOR A BOX'S OWN BAND TODAY (Inventory's value sort reads aggregates with no box), so this
+    // asks the page's own loaded demo module the read `getValuePage({ band, box })` would send.
+    const answer = await page.evaluate(async () => {
+      const chunk = performance.getEntriesByType('resource').map((e) => e.name).find((n) => /\/demoServer-[^/]*\.js$/.test(n))
+      if (chunk === undefined) return { error: 'demoServer chunk was never fetched' }
+      const demo = (await import(/* @vite-ignore */ chunk)) as { demoRequest: (path: string) => Promise<{ rows?: unknown[] }> }
+      try {
+        const page = await demo.demoRequest('/pipeline/value?band=bottom&box=1&limit=50')
+        return { rows: page.rows?.length ?? -1 }
+      } catch (exc) {
+        return { error: String((exc as Error).message ?? exc) }
+      }
+    })
+    expect(answer).toEqual({ rows: expect.any(Number) })
+    expect((answer as { rows: number }).rows).toBeGreaterThan(0)
+  })
+
+  // The first typed search used to fetch every `/search?` file the recording holds (935). A handful is the budget.
+  const SEARCH_DATA_FILES_AT_MOST = 5
+
+  test('the first typed search fetches a handful of data files', async ({ page }) => {
+    test.setTimeout(90_000)
+    // Cards to pull is the screen that asks the server's `/search` (Inventory matches in the page).
+    page = await visitFulfiller(page)
+    const files = new Set<string>()
+    page.on('request', (request) => {
+      if (request.url().includes('/demo-data/')) files.add(request.url())
+    })
+    await page.getByPlaceholder('Card name or number').pressSequentially('Crowd', { delay: 40 })
+    await expect(page.getByText('Crowd Favorite').first()).toBeVisible()
+    expect(files.size, `one search fetched ${files.size} data files`).toBeLessThanOrEqual(SEARCH_DATA_FILES_AT_MOST)
+  })
+
+  test('a failed index.json is asked again by the next read', async ({ page }) => {
+    test.setTimeout(90_000)
+    let asked = 0
+    await page.route(/\/demo-data\/index\.json$/, (route) => {
+      asked += 1
+      return asked === 1 ? route.fulfill({ status: 500, body: 'down' }) : route.continue()
+    })
+    const origin = await serveDemo(page)
+    await page.goto(origin)
+    await page.locator('main').first().waitFor()
+    await expect.poll(() => asked, { message: 'the first ask never reached index.json' }).toBeGreaterThanOrEqual(1)
+    await page.locator('.bn-side').getByRole('link', { name: /^Inventory/ }).first().click()
+    await expect(page.locator('button', { hasText: /\d+ stored/ }).first()).toBeVisible({ timeout: DEMO_CHUNK_BUDGET_MS })
+    expect(asked, 'index.json was never asked a second time').toBeGreaterThanOrEqual(2)
+  })
+
   test('a read with no recorded answer draws the not-recorded refusal', async ({ page }) => {
     // `demoServer`'s `notRecorded()`: a 404 `demo_not_recorded` whose message is `NOT_IN_DEMO`.
     // A product no recording holds is such a read, so the screen must say so and must not draw it.
