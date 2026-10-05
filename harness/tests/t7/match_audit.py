@@ -227,6 +227,8 @@ def check_match_audit_sku(checks: Checks) -> None:
         "lunari": ("Diana, Mount Targon", "079/219", ("Diana, Lunari", "079/219"), _pick("Diana, Lunari", "079/219"), False),
         "teemo": ("Teemo, Scout", "OGN • 197/298", ("Teemo, Scout", "197/298"), _pick("Teemo, Scout", "197/298", "298"), False),
         "pokemon": ("Garganacl ex", "99", ("Garganacl - 084/132", "084/132"), _pick("Garganacl", "84", "132"), False),
+        "total_differs": ("Pikachu", "84", ("Pikachu", "084/132"), _pick("Pikachu", "84", "198"), True),
+        "total_agrees": ("Pikachu", "84", ("Pikachu", "084/132"), _pick("Pikachu", "84", "132"), False),
         "vex_other": ("Death from Below", "186/219", ("Vex, Apathetic", "150/219"), _pick("Death from Below", "186/219"), True),
         "vex_alt": ("Vex, Mocking (Alternate Art)", "055a/219", ("Vex, Mocking", "055/219"), _pick("Vex, Mocking (Alternate Art)", "055a/219"), True),
         "norow_agree": ("Diana, Lunari", "079/219", None, _pick("Diana, Lunari", "079/219"), False),
