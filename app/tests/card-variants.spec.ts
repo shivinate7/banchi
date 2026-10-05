@@ -457,8 +457,9 @@ const TIE_SETS: Array<[string, string, string, string, string, number]> = [
   ['8104', 'Illaoi', '109/166', 'Origins Proving Grounds', 'riftbound', 1],
   ['8105', 'Yungoos', '109/163', 'Guardians Rising', 'pokemon', 2],
 ]
-const TIE_GROUPS = TIE_SETS.map(([sku, name, nd, set, , box], i) => ({
+const TIE_GROUPS = TIE_SETS.map(([sku, name, nd, set, game, box], i) => ({
   ...group({ sku, name, number: nd.split('/')[0]!, set, rarity: 'Common', condition: 'Near Mint', key: `${box}/${i + 1}`, box, index: i + 1 }),
+  game, // the new wire field on every search group; the tile reads it
   number_display: nd,
   rank: 0,
 }))
