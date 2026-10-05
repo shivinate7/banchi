@@ -1159,6 +1159,8 @@ async function expandAll(page: Page) {
      selection sits in. Pressing the folds themselves is the same act and does not depend on
      which word the summary is wearing. */
   const shut = page.locator('.browse-sectfold[aria-expanded="false"]')
+  // A fold must be drawn before "none shut" can mean "all open" (a reload lands with none yet).
+  await expect(page.locator('.browse-sectfold').first()).toBeVisible()
   for (let guard = 0; guard < 40; guard += 1) {
     if ((await shut.count()) === 0) break
     await shut.first().click()
@@ -2093,6 +2095,7 @@ test('the slot column is already as wide as the key the sale will write into it'
   const cards: Cards = { '12/133': wideKeyCard('identified') }
   const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
   await open(page, WIDE_KEY_BOXES, store)
+  await expandAll(page) // sections land shut; the row measured below is drawn once its section is open
   /* THIS CASE IS A RULER OVER TYPE, so it waits for the faces — `fontsReady.ts` has the whole
      argument, and the swap window is exactly the window in which the reservation and the label
      it reserves for would be measured in two different typefaces. */
@@ -2798,6 +2801,8 @@ test('UX-227 — the walk keeps the row it steps onto in view, down to the last 
      of the box scrolled the list to its end and left the row out of sight. */
   await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=7' })
   await expandAll(page)
+  // The header presses scroll the page to reach each fold; the case is about what End does next.
+  await page.evaluate(() => window.scrollTo(0, 0))
   await page.locator('.browse-list').focus()
   await page.keyboard.press('End')
   const current = page.locator('.browse-row[aria-current="true"]')
@@ -2858,9 +2863,7 @@ test('a search opens every section holding a match, and clearing it gives the wa
   page,
 }) => {
   await open(page)
-  /* Shut, so what the query opens is the query's doing and not the walk's own planted
-     selection. */
-  await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
+  /* Shut on landing, so what the query opens is the query's doing and nothing else. */
   await expect(page.locator('.browse-row')).toHaveCount(0)
 
   /* The owner's second ask, verbatim: "i want if i search for a card, all results of that card
@@ -2879,11 +2882,11 @@ test('a search opens every section holding a match, and clearing it gives the wa
 
   /* AND THE EXPANSION BELONGS TO THE QUERY. Cleared, the walk is back to the state it opens in
      rather than a half-open shape nobody chose — one resting state to learn instead of two.
-     That state is the planted selection's section and nothing else, which is the case above. */
+     The search moved the selection, so that state is the section holding it and nothing else. */
   await page.locator('.search-field-input').fill('')
-  await expect(page.locator('.browse-sectfold').nth(0)).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.locator('.browse-sectfold').nth(0)).toHaveAttribute('aria-expanded', 'true')
   await expect(page.locator('.browse-sectfold').nth(1)).toHaveAttribute('aria-expanded', 'false')
-  await expect(page.locator('.browse-row')).toHaveCount(0)
+  await expect(page.locator('.browse-row')).toHaveCount(5)
 })
 
 test('moving the selection opens the section it lands in, so the mark is never hidden', async ({
@@ -2895,7 +2898,6 @@ test('moving the selection opens the section it lands in, so the mark is never h
    * to open whatever it lands in — otherwise collapsed-by-default would let the walk put the
    * mark on a row nobody can see, which is the failure the old render-time override was
    * written to prevent and the one thing that must survive its removal. */
-  await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
   await expect(page.locator('.browse-row')).toHaveCount(0)
 
   await page.locator('.browse-list').focus()
@@ -5572,6 +5574,7 @@ test('the neighbour row marks this card with the Banchi card, and the row does n
   page,
 }) => {
   await open(page, BOXES, { cards: NEIGHBORLY, search: (query) => searchAnswer(query, NEIGHBORLY) })
+  await expandAll(page)
   const band = page.locator('.card-locations-row.is-current .nb')
   const slot = band.locator('.nb-here')
   /* The mark is decoration: aria-hidden, and the row's own `aria-label` already says where the
@@ -5645,6 +5648,7 @@ for (const [cutoff, plays, why] of [
     await gated(cutoff)(page)
     await expect(page.locator('.card-locations-row.is-current .nb-here svg')).toBeVisible()
     await expect(() => expect(page.evaluate(GLINTS)).resolves.toBe(0)).toPass({ timeout: 3000 })
+    await expandAll(page)
     await page.locator('.browse-row').nth(1).click()
     if (plays) {
       /* Applied on the change, then removed when it has played once. */
@@ -5672,6 +5676,7 @@ test('the glint reads the readings table and never the run snapshot', async ({ p
   /* The run's snapshot says 5.47 for 8937370 (the hero shows it); the readings hold nothing for it. */
   await gated('0.01', {})(page)
   await expect(page.locator('.card-locations-row.is-current .nb-here svg')).toBeVisible()
+  await expandAll(page)
   await page.locator('.browse-row').nth(1).click()
   await page.waitForTimeout(400) // keep: asserts no glint plays over 400ms
   expect(await page.evaluate(GLINTS)).toBe(0)
@@ -7741,6 +7746,7 @@ test('D213 — filtering by game narrows the walk, and the menu is built off the
   page,
 }) => {
   await open(page, facetBoxes, FACET_STORE, () => PRICING, SALE, { route: '/#/inventory?box=1' })
+  await expandAll(page)
 
   await expect(page.locator('.browse-row')).toHaveCount(2)
 
@@ -7760,6 +7766,7 @@ test('D213 — filtering by game narrows the walk, and the menu is built off the
 
 test('D213 — the unclassified bucket is reachable under a set filter, never dropped', async ({ page }) => {
   await open(page, facetBoxes, FACET_STORE, () => PRICING, SALE, { route: '/#/inventory?box=1' })
+  await expandAll(page)
 
   await pickFacet(page, 'Game', 'Riftbound')
   await pickFacet(page, 'Set', 'No set on file')
@@ -7772,6 +7779,7 @@ test('D213 — clearing the filter restores every card, and a fully-classified c
   page,
 }) => {
   await open(page, facetBoxes, FACET_STORE, () => PRICING, SALE, { route: '/#/inventory?box=1' })
+  await expandAll(page)
 
   await pickFacet(page, 'Game', 'Riftbound')
   await pickFacet(page, 'Rarity', 'Rare')
@@ -7788,6 +7796,7 @@ test('UX-176 — Set and Rarity work before Game, and a Game pick never wipes th
   page,
 }) => {
   await open(page, facetBoxes, FACET_STORE, () => PRICING, SALE, { route: '/#/inventory?box=1' })
+  await expandAll(page)
 
   /* RARITY FIRST, with no game picked. Its menu lists every rarity in the store, across both
      games, each with a count. */
@@ -9196,10 +9205,11 @@ for (const width of [1440, 820]) {
     test('a search opens only the sections holding a match', async ({ page }) => {
       await open(page)
       await page.locator('.search-field-input').fill('Inteleon') // card 2/6, section 2 only
+      // A search narrows the list to the sections holding a match, and every one shown is open.
       const folds = page.locator('.browse-sectfold')
-      await expect(folds.nth(1)).toHaveAttribute('aria-expanded', 'true')
       await expect(page.locator('.browse-row', { hasText: 'Inteleon' })).toBeVisible()
-      await expect(folds.nth(0)).toHaveAttribute('aria-expanded', 'false')
+      await expect(folds).not.toHaveCount(0)
+      for (const fold of await folds.all()) await expect(fold).toHaveAttribute('aria-expanded', 'true')
     })
 
     test('a header press opens and shuts its section, and Collapse shuts all', async ({ page }) => {
