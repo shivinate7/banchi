@@ -24,12 +24,12 @@ SAME_NAME = ("Vex, Gloomist", "Vex, Gloomist (Alternate Art)")
 OTHER_NAME = ("Vex, Gloomist", "Kai, Dawnblade")
 
 
-def _read(names, rarities, cosines, claim, numbers=("7", "7")):
+def _read(names, rarities, cosines, claim, numbers=("7", "7", "7"), sets=("Set", "Set", "Set")):
     """One `Result` for one card against a pool whose cosine to the photo is `cosines`."""
     dim = 4
     vectors = np.zeros((len(cosines), dim), np.float32)
     vectors[:, 0] = cosines
-    rows = [("riftbound", "Set", f"p{i}", numbers[i]) for i in range(len(cosines))]
+    rows = [("riftbound", sets[i], f"p{i}", numbers[i]) for i in range(len(cosines))]
     pool = match.Pool(vectors, rows, list(names), ["10"] * len(rows), set(), ("Set",))
     pool.rarities = list(rarities)
     index = mock.Mock()
@@ -74,4 +74,22 @@ def check_claim_never_guesses(checks: Checks) -> None:
     checks.ok(not weak.accepted and weak.code != None, "a claim never lifts a floor under FLOOR_MIN", f"{weak.code}")
 
 
-CHECKS = (check_claim_settles_printing, check_claim_never_guesses)
+def check_claim_round_two(checks: Checks) -> None:
+    """Four paths that accepted a wrong card (review of the first build)."""
+    tight = [0.90, 0.88]
+    blank = _read(SAME_NAME, (EPIC, ""), tight, [EPIC])
+    checks.ok(not blank.accepted, "a blank rarity on the other printing may fit, so refuse", f"{blank.code}")
+    missing = _read(SAME_NAME, (EPIC, None), tight, [EPIC])
+    checks.ok(not missing.accepted, "a missing rarity on the other printing may fit, so refuse", f"{missing.code}")
+    low = _read(SAME_NAME, (EPIC, SHOWCASE), [0.77, 0.74], [SHOWCASE])
+    checks.ok(not low.accepted, "the floor applies to the chosen printing's own score", f"{low.code}")
+    other3 = _read(SAME_NAME + ("Kai, Dawnblade",), (EPIC, SHOWCASE, EPIC), [0.90, 0.89, 0.88], [SHOWCASE],
+                   numbers=("7", "7", "9"))
+    checks.ok(not other3.accepted, "a different card within the margin of the pick refuses", f"{other3.code}")
+    third = _read(SAME_NAME + ("Vex, Gloomist (Overnumbered)",), (EPIC, SHOWCASE, SHOWCASE), [0.90, 0.89, 0.88], [SHOWCASE])
+    checks.ok(not third.accepted, "a third printing that also fits the claim refuses", f"{third.code}")
+    reprint = _read(SAME_NAME, (EPIC, SHOWCASE), tight, [SHOWCASE], sets=("Set A", "Set B", "Set A"))
+    checks.ok(not reprint.accepted, "a cross-set reprint is not the same card", f"{reprint.code}")
+
+
+CHECKS = (check_claim_settles_printing, check_claim_never_guesses, check_claim_round_two)
