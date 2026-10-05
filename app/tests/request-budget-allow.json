@@ -10,9 +10,5 @@
   "sale-reads:#/inventory": {
     "max": 4,
     "why": "a sale changes the review queue and the order claims, so both are re-read"
-  },
-  "leave:#/pricing": {
-    "max": 1,
-    "why": "Leaving Pricing aborts none of 1 path: the crop queue still sends POST /pipeline/crop-preview."
   }
 }
