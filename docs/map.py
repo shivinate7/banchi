@@ -1476,6 +1476,15 @@ COMPONENTS = [
                                     "206 SKUs.",
                             "governed_by": ["D7", "D9", "D86", "D59", "D87", "D99", "D115", "D156"],
                             "tested_by": ["T7"]},
+            "stockmix.py": {"does": "`GET /stock/mix`, the Mix lens of Sales: one row per card still "
+                                    "in stock (retired and moved cards are skipped), in ONE "
+                                    "statement over `cards` joined to `skus`, `readings` and "
+                                    "`boxes`. Card rows only: no order, no revenue (the refund "
+                                    "rule lives in `app/src/revenueMath.ts:salesOf`), no photograph "
+                                    "and no buyer. The browser pivots. Called by "
+                                    "`server/capture_server.py` alone.",
+                            "governed_by": ["D214", "D225", "D31", "D88"],
+                            "tested_by": ["T7"]},
             "stockimages.py": {"does": "`(game, set_name, number) -> a hotlinked stock photo "
                                        "URL, or None` (D301). Riftbound and One "
                                        "Piece resolve through `pricehistory.py:Market`'s own "

@@ -207,9 +207,9 @@ BUDGET = {
     '/pipeline/runs': {"status": 200, 'sql': 16, 'json_loads': 5, 'store_read': 1},
     '/pipeline/markdowns': {"status": 200},
     '/pipeline/sends': {"status": 200, 'sql': 44, 'store_read': 4},
-    # THE MIX ROW: one `cards` query joined to `skus`, one readings query (docs/specs/sales-screen.md,
-    # Mix, "Route"). `sql` 2 is the spec's count, not a measure: the builder sets the measured figure.
-    '/stock/mix': {"status": 200, 'sql': 2, 'store_read': 1},
+    # THE MIX ROW: one `cards` statement joined to `skus`, `readings` and `boxes` (docs/specs/sales-screen.md,
+    # Mix, "Route"). `sql` is the store open's own statements plus that one, equal at S and 2S.
+    '/stock/mix': {"status": 200, 'sql': 11, 'store_read': 1},
     '_MARKDOWN_TABLE_RE': {"status": 404},
     '_MARKDOWN_HISTORY_RE': {"status": 404},
     '_MARKDOWN_TRENDS_RE': {"status": 404},
