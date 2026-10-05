@@ -373,7 +373,7 @@ async function openDredge(page: Page): Promise<void> {
   await page.route(/\/search\?/, (r) => {
     const q = new URL(r.request().url()).searchParams.get('q') ?? ''
     const asked = q.trim().toLowerCase()
-    return r.fulfill(json({ query: q, groups: asked === 'dred' ? DREDGE : asked === 'dredg' ? DREDGE_MIXED : [] }))
+    return r.fulfill(json({ query: q, groups: asked === 'dred' ? DREDGE : asked === 'dredg' || asked === 'dredger' ? DREDGE_MIXED : [] }))
   })
   await page.route(/\/graveyard(\?.*)?$/, (r) => r.fulfill(json({ departed: [] })))
   await page.route(/\/queues$/, (r) => r.fulfill(json({ review: [], parked: [] })))
@@ -419,18 +419,25 @@ for (const width of [1440, 820]) {
   })
 }
 
-test('the printings chip is never drawn dead: groups that are not one card give no chooser, so no chip', async ({ page }) => {
-  // THE DEAD STATE (owner report): the chip draws on `searchGroups.length > 1`, but the chooser
-  // needs `groupsAreSamePrinting`. A prefix that names two cards leaves `chooserActive` false
-  // for good, so "N printings · change" sets `chosenVariant` null over a null and nothing moves.
+test('with several different cards matching, the chip says matches and opens the picker, exact name first', async ({ page }) => {
+  // OWNER'S RULING: more than one match means "change" opens the same picker as finishes and
+  // sets, listing every match, different cards included, the exact name first. The chip may
+  // not call different cards "printings". Today the chip is dead here (`groupsAreSamePrinting`
+  // keeps `chooserActive` false) and says "printings".
   await openDredge(page)
   const answered = page.waitForResponse(/\/search\?/)
-  await page.getByPlaceholder('Search').fill('dredg')
+  await page.getByPlaceholder('Search').fill('dredger')
   await answered
   await page.waitForTimeout(500) // keep: half second settle, no loading marker
-  console.log('CHIP', await page.getByText('printings').count())
-  await expect(page.getByText('filtered by', { exact: false })).toBeVisible()
+  const chip = page.getByRole('button', { name: /3 matches/ })
+  await expect(chip).toBeVisible()
+  await expect(page.getByText('printings', { exact: false })).toHaveCount(0)
+  await chip.click()
+  const tiles = page.locator('.browse-variants .browse-variant-tile')
+  await expect(tiles).toHaveCount(3)
+  await expect(tiles.first()).toContainText('Dredger')
+  await expect(page.locator('.browse-variants:focus-within')).toHaveCount(1)
+  await tiles.nth(1).click()
   await expect(page.locator('.browse-variants')).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Dredge Up' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /printings/ })).toHaveCount(0)
 })
