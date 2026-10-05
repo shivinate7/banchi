@@ -19,7 +19,7 @@
   "leave:#/": { "max": 4, "why": "Leaving Home aborts none of 4 open paths: /boxes, /pipeline/sends, /inventory/recent, /inventory/history." },
   "leave:#/capture": { "max": 3, "why": "Leaving Capture aborts none of 3 open paths: /pipeline/match/sweep, /games, /boxes." },
   "leave:#/review": { "max": 2, "why": "Leaving Review aborts none of 2 open paths: /capture/sitting, /pipeline/match." },
-  "leave:#/pricing": { "max": 3, "why": "Leaving Pricing aborts none of 3 paths: /pipeline/trends-saved, /pipeline/movers, and the crop queue still sends POST /pipeline/crop-preview." },
+  "leave:#/pricing": { "max": 2, "why": "Leaving Pricing aborts none of 2 paths: /pipeline/trends-saved and /pipeline/movers." },
   "leave:#/orders": { "max": 1, "why": "Leaving Orders aborts none of 1 open path: /boxes." },
   "leave:#/revenue": { "max": 2, "why": "Leaving Revenue aborts none of 2 open paths: /pipeline/holdings-value, /skus/photos." },
   "leave:#/inventory": { "max": 2, "why": "Leaving Inventory aborts none of 2 open paths: /graveyard, /boxes." },

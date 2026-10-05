@@ -440,3 +440,95 @@ test('a tile far down the rail carries its live Undo label when it scrolls in or
     Array.from({ length: RANK + 1 }, (_, i) => `DELETE /inventory/5/${28 - i}`),
   )
 })
+
+/* TILES DRAW FROM THE PHOTO JUST SENT. Ten captures in one sitting ask `/photo` for none, and each
+ * tile's image is the frame that capture uploaded (matched by capture_id), not a neighbour's. The
+ * camera repaints every 15 ms in a new colour, so two captures never share bytes. */
+test('10 captures in one sitting fetch no /photo, and each tile shows its own capture', async ({ page }) => {
+  await page.addInitScript(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 640
+    canvas.height = 360
+    const c = canvas.getContext('2d')
+    let n = 0
+    setInterval(() => {
+      n += 1
+      if (c === null) return
+      c.fillStyle = `hsl(${(n * 23) % 360},70%,50%)`
+      c.fillRect(0, 0, 640, 360)
+      c.fillStyle = '#fff'
+      c.fillText(String(n * 7919), 20 + (n % 500), 40 + (n % 300))
+    }, 15)
+    const media = navigator.mediaDevices as unknown as { enumerateDevices: () => Promise<unknown[]>; getUserMedia: () => Promise<MediaStream> }
+    const stream = canvas.captureStream(30)
+    media.enumerateDevices = async () => [{ deviceId: 'canvas', kind: 'videoinput', label: 'Canvas Cam Link', groupId: 'g' }]
+    media.getUserMedia = async () => stream
+  })
+  await stubWire(page, 1)
+  const photoGets: string[] = []
+  page.on('request', (r) => { if (/\/photo\//.test(r.url())) photoGets.push(r.url()) })
+  const sent = new Map<string, string>() // capture_id -> uploaded base64, in capture order
+  let next = 1
+  await page.route(/\/capture$/, (r) => {
+    const body = JSON.parse(r.request().postData() ?? '{}') as { image: string; capture_id: string }
+    const index = next++
+    sent.set(body.capture_id, body.image)
+    return r.fulfill(json({
+      box: 5, index, key: `5/${index}`, label: `Box 5, Card ${index}`, section: 1, card: index, section_div: '1',
+      new_box: false, created: true, photo: `/tmp/5-${index}.jpg`, capture_id: body.capture_id,
+      place: { box_total: index, located: true, label: `Box 5, Card ${index}` },
+    }, 201))
+  })
+  await pickCameraAndBox(page)
+  await expect(page.getByRole('button', { name: 'Capture', exact: true })).toBeEnabled()
+  for (let n = 1; n <= 10; n += 1) {
+    await page.keyboard.press('c')
+    await expect(tiles(page).first()).toHaveAttribute('aria-label', new RegExp(`Card ${n}$`), { timeout: 15_000 })
+  }
+  expect(sent.size, 'ten distinct uploads').toBe(10)
+  expect(new Set(sent.values()).size, 'the stub camera gave ten distinct frames').toBe(10)
+  expect(photoGets, 'GET /photo for tiles taken in this page').toEqual([])
+  const shown = await tiles(page).evaluateAll(async (rows) => Promise.all(rows.map(async (row) => {
+    const src = row.querySelector('img.capture-undo-thumb')?.getAttribute('src') ?? ''
+    const bytes = new Uint8Array(await (await fetch(src)).arrayBuffer())
+    let bin = ''
+    for (const b of bytes) bin += String.fromCharCode(b)
+    return { label: row.getAttribute('aria-label') ?? '', src, b64: btoa(bin) }
+  })))
+  const frames = [...sent.values()]
+  expect(shown.length, 'the rail holds the ten tiles').toBeGreaterThanOrEqual(10)
+  for (const t of shown) {
+    const n = Number(/Card (\d+)$/.exec(t.label)?.[1])
+    expect(t.src.startsWith('blob:'), `${t.label} draws a local blob`).toBe(true)
+    expect(t.b64 === frames[n - 1], `${t.label} shows the frame it uploaded`).toBe(true)
+  }
+})
+
+/* A REPLAYED capture_id SAVED NOTHING. After a reload the next capture can reuse a restored id; the
+ * server returns the card it already holds with `created: false` and drops the new bytes. The tile
+ * must then show the server's photo (a GET /photo), never the frame just sent. */
+test('a capture answered created:false shows the server photo, not the frame just sent', async ({ page }) => {
+  await handCamera(page)
+  await stubWire(page, 1)
+  const photoGets: string[] = []
+  page.on('request', (r) => { if (/\/photo\//.test(r.url())) photoGets.push(r.url()) })
+  let sentFrame = ''
+  await page.route(/\/capture$/, (r) => {
+    const body = JSON.parse(r.request().postData() ?? '{}') as { image: string; capture_id: string }
+    sentFrame = body.image
+    return r.fulfill(json({
+      box: 5, index: 1, key: '5/1', label: 'Box 5, Card 1', section: 1, card: 1, section_div: '1',
+      new_box: false, created: false, photo: '/tmp/5-1.jpg', capture_id: body.capture_id,
+      place: { box_total: 1, located: true, label: 'Box 5, Card 1' },
+    }, 201))
+  })
+  await pickCameraAndBox(page)
+  await expect(page.getByRole('button', { name: 'Capture', exact: true })).toBeEnabled()
+  await page.keyboard.press('c')
+  await expect(tiles(page).first()).toHaveAttribute('aria-label', /Card 1$/, { timeout: 15_000 })
+  expect(sentFrame, 'a frame was uploaded').not.toBe('')
+  const thumb = tiles(page).first().locator('img.capture-undo-thumb')
+  await expect(thumb).toHaveAttribute('src', /\/photo\//)
+  expect(await thumb.getAttribute('src'), 'the tile does not draw the unsaved frame').not.toMatch(/^blob:/)
+  expect(photoGets.length, 'the tile asked the server for its photo').toBeGreaterThan(0)
+})
