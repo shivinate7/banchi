@@ -34,12 +34,11 @@ type Excuse = { max: number; why: string }
 const EXCUSED = JSON.parse(readFileSync(resolve(HERE, 'request-budget-allow.json'), 'utf8')) as Record<string, Excuse>
 
 const STILL_FRAMES = 20
-const MINUTE_HOLD_MS = 300
+const MINUTE_HOLD_MS = 0
 const LEAVE_HOLD_MS = 1500
 const MIN_POLL_MS = 3000
 const MINUTE_MS = 60_000
-const STEP_MS = 3000
-const SAME_GET_MS = 1000
+const STEP_MS = 250
 const QUIET_TIMEOUT_MS = 30_000
 
 /** Per rule, the most a screen may measure with no allow entry. */
@@ -58,7 +57,8 @@ const LIMIT = {
 type Rule = keyof typeof LIMIT
 const SCREEN_RULES: Rule[] = ['inflight', 'poll', 'status-rate', 'same-get', 'url-size', 'home-pricing', 'review-queues']
 
-interface Logged { m: string; u: string; t: number }
+/** `t` starts a read and `e` ends it, both in FAKE time. A read with no `e` is still open. */
+interface Logged { m: string; u: string; t: number; e?: number }
 interface Seen { method: string; url: string; path: string; failed: string | null; done: boolean; order: number }
 interface Watch {
   seen: Seen[]
@@ -89,12 +89,18 @@ async function instrument(page: Page): Promise<Watch> {
     const realFetch = window.fetch
     window.fetch = function (this: unknown, input: RequestInfo | URL, init?: RequestInit) {
       const m = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
-      log.push({ m, u: input instanceof Request ? input.url : String(input), t: Date.now() })
-      return realFetch.call(window, input, init)
+      const entry: Logged = { m, u: input instanceof Request ? input.url : String(input), t: Date.now() }
+      log.push(entry)
+      const answer = realFetch.call(window, input, init)
+      const ended = () => { entry.e = Date.now() }
+      answer.then(ended).catch(ended)
+      return answer
     }
     const open = XMLHttpRequest.prototype.open
     XMLHttpRequest.prototype.open = function (this: XMLHttpRequest, method: string, url: string | URL, ...rest: unknown[]) {
-      log.push({ m: method.toUpperCase(), u: String(url), t: Date.now() })
+      const entry: Logged = { m: method.toUpperCase(), u: String(url), t: Date.now() }
+      log.push(entry)
+      this.addEventListener('loadend', () => { entry.e = Date.now() })
       return (open as (...a: unknown[]) => void).call(this, method, url, ...rest)
     } as typeof open
   })
@@ -174,9 +180,12 @@ async function stillFor(page: Page, watch: Watch): Promise<void> {
   }
 }
 
-/** The fake clock jumps in `STEP_MS` strides; each stride's reads are let finish before the next. */
-async function runMinute(page: Page, watch: Watch): Promise<void> {
-  for (let spent = 0; spent < MINUTE_MS; spent += STEP_MS) {
+/** A minute of FAKE time in `STEP_MS` strides, every answer instant and let land before the next
+ *  stride. `usePoll` asks again only after its last answer, so a stride longer than the answer's
+ *  trip would hide a fast poller behind the stride itself. The minute is read off the page's own
+ *  clock, which also runs a little between strides. */
+async function runMinute(page: Page, watch: Watch, from: number): Promise<void> {
+  while ((await pageNow(page)) - from < MINUTE_MS) {
     await page.clock.runFor(STEP_MS)
     await quiet(page, watch)
   }
@@ -197,14 +206,17 @@ function measure(route: string, log: Logged[], mountEnd: number, burst: number):
   const status = (byPath.get('/status') ?? []).length
   out['status-rate'] = { value: status, detail: `${status} /status in 60s` }
 
+  /* BY WHAT STARTED, NOT BY A GAP: an identical GET that starts while the same one is still open
+     is a duplicate, in fake time. A read asked again after the first was answered is a chain, and
+     how far apart a chain lands is the runner's stall, not the screen's. */
   const twice = new Set<string>()
-  const lastAt = new Map<string, number>()
+  const lastOf = new Map<string, Logged>()
   for (const l of reads) {
-    const before = lastAt.get(l.u)
-    if (before !== undefined && l.t - before < SAME_GET_MS) twice.add(shape(l.u))
-    lastAt.set(l.u, l.t)
+    const before = lastOf.get(l.u)
+    if (before !== undefined && (before.e === undefined || l.t < before.e)) twice.add(shape(l.u))
+    lastOf.set(l.u, l)
   }
-  out['same-get'] = { value: twice.size, detail: `paths asked twice within ${SAME_GET_MS}ms: ${[...twice].join(', ')}` }
+  out['same-get'] = { value: twice.size, detail: `paths asked again while the same read was still open: ${[...twice].join(', ')}` }
 
   const longest = Math.max(0, ...log.map((l) => l.u.length))
   out['url-size'] = { value: longest, detail: `longest URL ${longest} bytes` }
@@ -273,7 +285,7 @@ test('every screen stays inside its request budget for a minute', async ({ page 
     await openSettled(page, route)
     await quiet(page, watch)
     const mountEnd = await pageNow(page)
-    await runMinute(page, watch)
+    await runMinute(page, watch, mountEnd)
     const log = await pageLog(page)
     polled += log.filter((l) => l.t > mountEnd && shape(l.u) === '/status').length
     for (const [rule, got] of Object.entries(measure(route, log, mountEnd, burst)) as [Rule, Measure][]) judge(rule, route, got, bad, used)
