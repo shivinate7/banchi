@@ -210,4 +210,44 @@ def check_match_audit_edges(checks: Checks) -> None:
         checks.ok(retired not in entries and moved not in entries, "5. and never queued")
 
 
-CHECKS = (check_match_audit, check_match_audit_edges)
+def _pick(name, number, total="219"):
+    return {"name": name, "number": number, "printed_total": total, "finish": "unknown", "confidence": "high"}
+
+
+def check_match_audit_sku(checks: Checks) -> None:
+    """Incident: 416 false alarms. `_disagrees` compared the pick with the paid reader's raw words
+    (`read_name`, `read_number`), not with the filed SKU's catalog row. With a SKU row known the row
+    is the filed card: a pick that names it agrees, a pick that names another card disagrees."""
+    from store.skus import SkuRow
+
+    checks.note("")
+    checks.note("MATCH AUDIT SKU: a filed SKU's catalog row, not the raw read, is the card the pick must name")
+    # name -> (paid read name, paid read number, SKU row (name, number) or None, free pick, disagrees)
+    cases = {
+        "lunari": ("Diana, Mount Targon", "079/219", ("Diana, Lunari", "079/219"), _pick("Diana, Lunari", "079/219"), False),
+        "teemo": ("Teemo, Scout", "OGN • 197/298", ("Teemo, Scout", "197/298"), _pick("Teemo, Scout", "197/298", "298"), False),
+        "pokemon": ("Garganacl ex", "99", ("Garganacl - 084/132", "084/132"), _pick("Garganacl", "84", "132"), False),
+        "vex_other": ("Death from Below", "186/219", ("Vex, Apathetic", "150/219"), _pick("Death from Below", "186/219"), True),
+        "vex_alt": ("Vex, Mocking (Alternate Art)", "055a/219", ("Vex, Mocking", "055/219"), _pick("Vex, Mocking (Alternate Art)", "055a/219"), True),
+        "norow_agree": ("Diana, Lunari", "079/219", None, _pick("Diana, Lunari", "079/219"), False),
+        "norow_differ": ("Diana, Mount Targon", "079/219", None, _pick("Diana, Lunari", "079/219"), True),
+    }
+    with isolated_home():
+        keys = {name: fa._shoot(fa.ARTICUNO) for name in cases}
+        fa._seed_export()
+        fa._sweep(fa._results(list(keys.values()), {k: fa.ARTICUNO for k in keys.values()}))
+        with Store().write() as snap:
+            for name, (read_name, read_number, row, _p, _b) in cases.items():
+                card = snap.inventory.cards[keys[name]]
+                card.read_name, card.read_number, card.sku = read_name, read_number, f"sku-{name}"
+                if row:
+                    snap.skus.entries[f"sku-{name}"] = SkuRow(
+                        product_line="x", set_name="x", product_name=row[0], number=row[1], rarity="x", condition="Near Mint",
+                        grade=None, printing=None, first_seen=1, last_seen=1, source="harness", raw={})
+        code, lines, _paid = _audit([], {keys[n]: c[3] for n, c in cases.items()})
+        checks.equal(code, 0, "SKU. `match audit` runs and exits 0")
+        for name, case in cases.items():
+            checks.equal("disagree" in _line(lines, keys[name]), case[4], f"SKU. {name}: {'disagrees' if case[4] else 'agrees'}")
+
+
+CHECKS = (check_match_audit, check_match_audit_edges, check_match_audit_sku)
