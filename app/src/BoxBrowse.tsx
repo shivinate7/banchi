@@ -2423,6 +2423,11 @@ export function BoxBrowse({
                       >
                         <Icon name="chevronRight" size={14} className="browse-sectmark" />
                         <SectionTitle parts={section.parts} />
+                        {section.parts.count === null ? null : (
+                          <span className="browse-secttotal" aria-hidden="true">
+                            {section.parts.count}
+                          </span>
+                        )}
                       </button>
                     </div>
                     {!open ? null : (
