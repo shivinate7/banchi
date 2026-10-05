@@ -110,6 +110,10 @@ class Rows(MutableMapping):
         self._loaded: Dict[str, Any] = {}
         self._baseline: Dict[str, dict] = {}
         self._deleted: set = set()
+        # Keys the source said it does not hold. A read snapshot is one transaction and a
+        # write session holds the lock, so nothing but this mapping can add a row meanwhile;
+        # `__setitem__` is the one way in here and it clears the key.
+        self._absent: set = set()
         self._complete = source is None
         # Keys this SESSION has written via `__setitem__` — a brand-new record, or one
         # mutated after `_remember` loaded it from the source. Bounded by what this request
@@ -144,10 +148,11 @@ class Rows(MutableMapping):
         key = str(key)
         if key in self._loaded:
             return self._loaded[key]
-        if self._complete or key in self._deleted:
+        if self._complete or key in self._deleted or key in self._absent:
             raise KeyError(key)
         text = self.source.get(key)
         if text is None:
+            self._absent.add(key)
             raise KeyError(key)
         obj = self._remember(key, text)
         if obj is None:
@@ -158,14 +163,18 @@ class Rows(MutableMapping):
         key = str(key)
         if key in self._loaded:
             return True
-        if self._complete or key in self._deleted:
+        if self._complete or key in self._deleted or key in self._absent:
             return False
-        return bool(self.source.has(key))
+        if self.source.has(key):
+            return True
+        self._absent.add(key)
+        return False
 
     def __setitem__(self, key, obj) -> None:
         key = str(key)
         self._loaded[key] = obj
         self._deleted.discard(key)
+        self._absent.discard(key)
         self._touched.add(key)
 
     def __delitem__(self, key) -> None:
@@ -223,6 +232,14 @@ class Rows(MutableMapping):
         columns = self.spec.columns(obj)
         return all(columns.get(name) == value for name, value in equals.items())
 
+    def _picked(self, obj: Any, equals: Dict[str, Any], columns: Sequence[str]):
+        """The `columns` values of `obj` when it matches `equals`, else None. One
+        `spec.columns` call per row, where `_matches` then a second read took two."""
+        derived = self.spec.columns(obj)
+        if not all(derived.get(name) == value for name, value in equals.items()):
+            return None
+        return tuple(derived.get(name) for name in columns)
+
     def where(self, **equals) -> List[Any]:
         """Every record whose indexed columns equal `equals`, in key order.
 
@@ -248,18 +265,10 @@ class Rows(MutableMapping):
         is what actually fixes that case, cheaply — bounded by what the source query itself
         returns, not by the table.
 
-        WHAT THIS STILL DOES NOT CATCH, NAMED RATHER THAN SILENTLY ASSUMED AWAY: a row whose
-        indexed column was mutated IN PLACE (not via `__setitem__`) so that it newly MATCHES
-        `equals`, while its own on-disk value still would not have — the source query never
-        offers it as a candidate, so it is missed. `_touched` (checked below) closes this for
-        every row reassigned through `__setitem__`, which is every WRITE this repo's own
-        allocator/mutator functions perform on a BRAND NEW row (`allocate_capture`) and is
-        the only source of a genuinely new key with no on-disk row at all. It does not close
-        it for a row that already existed, was loaded, and had an indexed column mutated in
-        place into a NEW match — no case in this codebase's own call graph does that within
-        one session today (verified: no handler queries a column immediately after mutating
-        that same column on an existing record without reassigning), and it is recorded here
-        so a future one does not silently reopen it.
+        IN A WRITE SESSION (`track`) EVERY LOADED KEY IS EVALUATED AGAINST ITS LIVE OBJECT, so a
+        row mutated in place into a new match is found too, whoever mutated it and with no
+        `__setitem__`. A read snapshot changes nothing, so it trusts the source's index and
+        pays no per-row scan after a full load.
         """
         if self.source is None:
             found = {
@@ -282,8 +291,11 @@ class Rows(MutableMapping):
                 keys.add(key)
             else:
                 self.dropped.append(key)
-        for key in self._touched:
-            if key in self._deleted or key not in self._loaded or key in keys:
+        # A WRITE SESSION EVALUATES EVERY LOADED KEY LIVE, not only `_touched` ones: a caller
+        # may flip an attribute in place, and the source's index cannot see that. A read
+        # snapshot cannot be mutated, so it keeps to `_touched` (empty) and trusts SQL.
+        for key in list(self._loaded if self._track else self._touched):
+            if key in self._deleted or key in keys:
                 continue
             if self._matches(self._loaded[key], equals):
                 keys.add(key)
@@ -303,9 +315,9 @@ class Rows(MutableMapping):
         if self.source is None:
             out: Dict[str, Tuple[Any, ...]] = {}
             for key, obj in self._loaded.items():
-                if self._matches(obj, equals):
-                    derived = self.spec.columns(obj)
-                    out[key] = tuple(derived.get(name) for name in columns)
+                picked = self._picked(obj, equals, columns)
+                if picked is not None:
+                    out[key] = picked
             return [(key, out[key]) for key in sorted(out)]
         out = {}
         for key, values in self.source.select(columns, equals):
@@ -313,19 +325,17 @@ class Rows(MutableMapping):
             if key in self._deleted:
                 continue
             if key in self._loaded:
-                obj = self._loaded[key]
-                if self._matches(obj, equals):
-                    derived = self.spec.columns(obj)
-                    out[key] = tuple(derived.get(name) for name in columns)
+                picked = self._picked(self._loaded[key], equals, columns)
+                if picked is not None:
+                    out[key] = picked
                 continue
             out[key] = tuple(values)
-        for key in self._touched:
-            if key in self._deleted or key not in self._loaded or key in out:
+        for key in list(self._loaded if self._track else self._touched):
+            if key in self._deleted or key in out:
                 continue
-            obj = self._loaded[key]
-            if self._matches(obj, equals):
-                derived = self.spec.columns(obj)
-                out[key] = tuple(derived.get(name) for name in columns)
+            picked = self._picked(self._loaded[key], equals, columns)
+            if picked is not None:
+                out[key] = picked
             else:
                 out.pop(key, None)
         return [(key, out[key]) for key in sorted(out)]
@@ -343,6 +353,17 @@ class Rows(MutableMapping):
             return None
         top, bad = self.source.high_water(column, equals, tuple(unreadable))
         return None if bad else top
+
+    def count_by(self, column: str) -> Dict[Any, int]:
+        """`{value: rows}` for one indexed column. One GROUP BY in a read snapshot, which
+        changes nothing; anywhere else (memory, a write session, anything written or
+        deleted) it is `select`'s walk, so it always agrees with `select`."""
+        if self.source is None or self._track or self._touched or self._deleted:
+            counts: Dict[Any, int] = {}
+            for _key, (value,) in self.select((column,)):
+                counts[value] = counts.get(value, 0) + 1
+            return counts
+        return self.source.count_by(column)
 
     def distinct(self, column: str) -> set:
         """Every value one indexed column takes, across stored and loaded rows."""
@@ -404,6 +425,7 @@ class Rows(MutableMapping):
             self._baseline[key] = payload
         self._deleted = set()
         self._touched = set()
+        self._absent = set()
 
     def to_dict(self) -> Dict[str, Any]:
         """Every record, key-ordered, as a plain dict. Loads the whole table."""

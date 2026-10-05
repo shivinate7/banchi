@@ -9352,3 +9352,75 @@ for (const width of [1440, 820]) {
     })
   })
 }
+
+test('selling the claimed copy moves the held-for-order mark to its replacement without a reload', async ({ page }) => {
+  /* A sale no longer re-reads `/orders`, yet the server re-picks: the open order that held copy 1 now holds copy 3. */
+  const { store, sell } = sellableStore()
+  let sold = false
+  const pick = (index: number) => ({
+    box: 2, index, capture_id: null, source: 'card', run: null, card_name: 'Thievul', card_number: null,
+    condition: null, state: 'identified', held_by: null, place: {} as never,
+  })
+  await open(page, BOXES, store)
+  await page.route(/\/orders$/, async (route) => {
+    const orders = [{
+      key: 'tcgplayer:90201', number: '90201', complete: false, outstanding: 1,
+      lines: [{
+        order: '90201', order_key: 'tcgplayer:90201', sku: '8937370', reason: 'resolved', wanted: 1, owed: 1, fulfilled: 0,
+        outstanding: 1, on_hand: 2, sold: 0, retired: 0, pooled: 0, line: {} as never, picks: [pick(sold ? 3 : 1)],
+      }],
+    }]
+    await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ summary: '1 order', orders: [], resolution: { orders, counts: {} } }),
+    })
+  })
+  await page.reload()
+  const claims = page.locator('.card-locations-owner .card-locations-claim')
+  await expect(copyRow(page, CARD_1).locator('.card-locations-claim'), 'the fixture does not hold copy 1').toHaveCount(1)
+  await expect(claims).toHaveCount(1)
+
+  sold = true
+  sell('2/1')
+  await copyRow(page, CARD_1).getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.locator('.inventory-receipt').getByRole('button', { name: 'Undo' })).toBeVisible()
+
+  await expect(copyRow(page, 'Box 2, Section 1, Card 3').locator('.card-locations-claim'), 'the mark did not reach the replacement').toHaveCount(1)
+  await expect(copyRow(page, CARD_1).locator('.card-locations-claim'), 'the sold copy is still held for the order').toHaveCount(0)
+})
+
+test('a sold card loses its review badge and its pane question without a reload', async ({ page }) => {
+  /* A SALE NO LONGER RE-READS `/queues`, and the server's `owed_entries` drops a sold card from it. So the screen must
+     stop drawing the badge (`queuedKeys`) and the pane's question (`openQuestion`) for the copy it just sold. This
+     stub answers as the server does: the entry is there until the sale, gone after. */
+  const { store, sell } = sellableStore()
+  let sold = false
+  await open(page, BOXES, store)
+  await page.route(/\/queues$/, async (route) => {
+    const review = sold
+      ? []
+      : [
+          {
+            position: CARD_1, box: 2, index: 1, label: CARD_1, photo: null,
+            read: { name: 'Volcanion', number: '025', printed_total: '132', set_hint: 'ME01' },
+            confidence: null, reason: 'no_catalog_row', candidates: [],
+            first_seen: new Date(Date.now() - 2 * 86400000).toISOString(), market: null, cleared_by_human: false,
+          },
+        ]
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ review, parked: [] }) })
+  })
+  await page.reload()
+  await expandAll(page)
+  const badge = page.locator('.browse-row-badge[title="Waiting in a queue"]')
+  const question = page.locator('.browse-queued')
+  await expect(badge, 'the fixture has no badge to lose').toHaveCount(1)
+  await expect(question, 'the fixture has no question to lose').toBeVisible()
+
+  sold = true
+  sell('2/1')
+  await copyRow(page, CARD_1).getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.locator('.inventory-receipt').getByRole('button', { name: 'Undo' })).toBeVisible()
+
+  await expect(badge, 'a sold card still shows its review badge').toHaveCount(0)
+  await expect(question, 'a sold card still shows its open question').toHaveCount(0)
+})

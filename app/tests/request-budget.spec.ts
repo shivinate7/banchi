@@ -365,6 +365,36 @@ test('a review answer re-reads no more than it must', async ({ page }) => {
   judgeBurst('answer-reads', hash('review'), reads)
 })
 
+test('a write that changes pricing drops the kept price table, so the next ask reads it again', async ({ page }) => {
+  /* `getPricing` keeps each run's table for five minutes. A pricing write (`putPricingCorpus`) changes the answers
+     that table carries, so the ask after it must go to the server. Two asks with no write between share one read. */
+  let reads = 0
+  await page.route(/\/pipeline\/runs\/[^/]+\/pricing$/, (route) => {
+    reads += 1
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ run: 'run-1', skus: [], rows: [] }) })
+  })
+  await page.route(/\/pricing$/, (route) => {
+    if (route.request().method() !== 'PUT') return route.fallback()
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, written: 'x', answers: 0, revision: 'r2' }) })
+  })
+  await setViewport(page, { width: 1440, height: 1000 })
+  await page.goto('/#/gallery')
+  const ask = () =>
+    page.evaluate(async () => {
+      const mod = await import(('/src/server' + '.ts'))
+      await mod.getPricing('run-1')
+    })
+  await ask()
+  await ask()
+  expect(reads, 'the second ask did not share the kept table').toBe(1)
+  await page.evaluate(async () => {
+    const mod = await import(('/src/server' + '.ts'))
+    await mod.putPricingCorpus({ answers: {} })
+  })
+  await ask()
+  expect(reads, 'a pricing write left the kept table in place').toBe(2)
+})
+
 /* ---------------------------------------------------------------- leaving a screen */
 
 /** The shell's own reads, the ones every screen's mount makes. They outlive a screen on purpose. */

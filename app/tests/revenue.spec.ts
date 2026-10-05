@@ -951,6 +951,8 @@ test('the shelf range uses the page picker words (defect 3)', async ({ page }) =
 test('"gross" is said once: the eyebrow, not the subtitle or the sort (defect 4)', async ({ page }) => {
   await stub(page, generalOrders())
   await open(page, '?period=all')
+  // The summary renders only once the orders land; count after that, never before.
+  await expect(page.locator('.revenue-summary')).toBeVisible()
   const words = await page.locator('main.revenue').innerText()
   expect(words.match(/gross/gi) ?? []).toHaveLength(1)
   await expect(page.locator('.revenue-summary .bn-eyebrow').first()).toContainText(/^gross/i)

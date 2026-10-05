@@ -727,6 +727,8 @@ export function Notice({
   readonly children?: ReactNode
   readonly className?: string
 }) {
+  /* A read the app dropped itself (`describeFailure`'s `aborted`) has nothing to say: no Notice, for any caller. */
+  if (code === 'aborted') return null
   const icon: IconName = tone === 'danger' ? 'alert' : tone === 'warn' ? 'alert' : tone === 'ok' ? 'check' : 'info'
   const said = code || detail
   return (

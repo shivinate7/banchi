@@ -617,4 +617,173 @@ def _model_cases(c, Image, ImageDraw) -> Result:
         "labels.json and labels_new.json parse: 243 usable after 7 REJECT rows, four corners each",
         f"{len(old)}+{len(new)} -> {len(usable)}",
     )
+
+    # 7. THE FREE READER CUTS THE PREVIEW'S BOX. One card box (`locate_card`), never `detect_card`
+    # alone. Phone frame: a card half the frame, inside a dark box, in a lighter frame. `detect_card`
+    # takes the dark box. The model is stubbed with the true card, since a synthetic card is not
+    # the model's training world. Synthetic only: no owner photo is ever a fixture.
+    import numpy as np
+
+    from identify import match
+
+    fw, fh = 2160, 3840
+    scene = Image.new("RGB", (fw, fh), (176, 170, 160))
+    draw = ImageDraw.Draw(scene)
+    draw.rectangle([230, 500, fw - 230, fh - 500], fill=(22, 22, 26))
+    cw = 1100
+    ch = round(cw / 0.716)
+    x0, y0 = (fw - cw) // 2, (fh - ch) // 2
+    draw.rectangle([x0, y0, x0 + cw, y0 + ch], fill=(236, 208, 120))
+    draw.rectangle([x0 + 50, y0 + 60, x0 + cw - 50, y0 + int(ch * 0.52)], fill=(70, 120, 170))
+    for i in range(14):
+        top = y0 + int(ch * 0.62) + i * 38
+        draw.rectangle([x0 + 70, top, x0 + cw - 70, top + 16], fill=(40, 30, 20))
+    truth = geometry.CardBox(
+        angle=0.0, left=x0 / fw, top=y0 / fh, right=(x0 + cw) / fw, bottom=(y0 + ch) / fh,
+        fill=0.9, aspect=0.716, method="dfine",
+    )
+    wrong = geometry.detect_card(scene, aspect=0.716)
+    c.ok(
+        wrong is not None and (wrong.right - wrong.left) * fw > cw * 1.3,
+        "fixture: detect_card alone boxes the dark box, not the card",
+        str(wrong),
+    )
+    with _tf.TemporaryDirectory() as work, mock.patch.object(card_box, "model_card", lambda *_a, **_k: truth):
+        shot = Path(work) / "phone.jpg"
+        scene.save(shot, quality=95)
+        from geometry import crop as geometry_crop
+
+        frame = geometry.detect.open_image(shot)
+        want = geometry_crop.registered_card(frame, geometry.locate_card(frame, aspect=0.716), 0.716)
+        got = match._crop(shot, 0.716)
+        if c.ok(got is not None, "the free reader finds a card in the phone frame"):
+            gw, gh = got.size
+            c.ok(
+                abs(gw / gh - 0.716) <= 0.05,
+                "free reader's crop has card aspect, within 0.05 of 0.716",
+                f"{gw}x{gh} = {gw / gh:.3f}",
+            )
+            a = np.asarray(got.convert("L").resize((64, 90)), dtype=float)
+            b = np.asarray(want.convert("L").resize((64, 90)), dtype=float)
+            c.ok(
+                float(np.abs(a - b).mean()) < 8.0,
+                "free reader's crop is the preview's box (locate_card), pixel for pixel within a small tolerance",
+                f"mean abs diff {float(np.abs(a - b).mean()):.1f} of 255",
+            )
+
+    # 8. ONE GUARDED PATH. The preview cuts with `images.prepare_located`: the model's box, a
+    # refused box replaced by `detect_card`'s. The free reader (`match._crop`) and the paid crop
+    # retry (`cmd_identify._crop_attachments`) must cut the card out of THAT box, deskewed by it.
+    import base64
+    import io
+    from types import SimpleNamespace
+
+    from cli import cmd_identify
+    from identify import images as images_mod
+
+    def _same(img_a, img_b):
+        a = np.asarray(img_a.convert("L").resize((64, 90)), dtype=float)
+        b = np.asarray(img_b.convert("L").resize((64, 90)), dtype=float)
+        return float(np.abs(a - b).mean())
+
+    def _oracle(path):
+        box = images_mod.prepare_located(path)[0]
+        return geometry_crop.registered_card(geometry.detect.open_image(path), box, 0.716)
+
+    with _tf.TemporaryDirectory() as work:
+        work = Path(work)
+        # 8a. A model box over part of the card: crop_refusal refuses it, the preview falls back.
+        upright = work / "upright.jpg"
+        _scene(Image, ImageDraw, scale=0.9).save(upright, quality=95)
+        found = geometry.detect_card(upright)
+        part = geometry.CardBox(
+            angle=0.0, left=found.left, right=found.right,
+            top=found.top + (found.bottom - found.top) * 0.55, bottom=found.bottom,
+            fill=0.9, aspect=0.5, method="dfine",
+        )
+        with mock.patch.object(card_box, "model_card", lambda *_a, **_k: part):
+            refused = images_mod.crop_refusal(upright, part)
+            want = _oracle(upright)
+            got = match._crop(upright, 0.716)
+        c.ok(refused is not None, "fixture: crop_refusal refuses a model box over part of the card", str(refused))
+        diff = _same(got, want) if got is not None else 255.0
+        c.ok(diff < 8.0, "free reader falls back as the preview does when the model box is refused",
+             f"mean abs diff {diff:.1f} of 255")
+
+        # 8b. A tilted card, no model: the free reader's cut is deskewed as the preview's box says.
+        tilted = work / "tilted.jpg"
+        _scene(Image, ImageDraw, angle=9.0, scale=0.9).save(tilted, quality=95)
+        with mock.patch.object(card_box, "model_card", lambda *_a, **_k: None):
+            want = _oracle(tilted)
+            got = match._crop(tilted, 0.716)
+        diff = _same(got, want) if got is not None else 255.0
+        c.ok(diff < 8.0, "free reader deskews a tilted card as the preview does", f"mean abs diff {diff:.1f} of 255")
+
+        # 8c. The paid crop retry's registered card is the preview's cut for the same photo.
+        phone = work / "phone.jpg"
+        scene.save(phone, quality=95)
+        item = SimpleNamespace(
+            key="k", game="pokemon", detection=None,
+            capture=SimpleNamespace(photo=phone),
+            entry={"card_aspect": 0.716, "crop_bands": ()},
+        )
+        with mock.patch.object(card_box, "model_card", lambda *_a, **_k: truth):
+            want = _oracle(phone)
+            attachments = cmd_identify._crop_attachments(item, lambda *_a, **_k: None)
+        if c.ok(bool(attachments), "the paid crop retry cuts the phone frame"):
+            got = Image.open(io.BytesIO(base64.b64decode(attachments[0].data_b64)))
+            diff = _same(got, want)
+            c.ok(diff < 8.0, "paid crop retry's registered card is the preview's cut, not detect_card's",
+                 f"mean abs diff {diff:.1f} of 255")
+
+        # 8d. A LANDSCAPE card (Riftbound battlefield), aspect 1/0.716, in a phone frame. The one
+        # box home must keep it landscape and whole, for the free reader and for the preview cut.
+        lw = 1700
+        lh = round(lw * 0.716)
+        lx, ly = (fw - lw) // 2, (fh - lh) // 2
+        wide = Image.new("RGB", (fw, fh), (176, 170, 160))
+        wdraw = ImageDraw.Draw(wide)
+        wdraw.rectangle([150, ly - 500, fw - 150, ly + lh + 500], fill=(22, 22, 26))
+        wdraw.rectangle([lx, ly, lx + lw, ly + lh], fill=(200, 190, 150))
+        wdraw.rectangle([lx + 60, ly + 60, lx + lw // 2, ly + lh - 60], fill=(60, 110, 160))
+        for i in range(10):
+            top = ly + 90 + i * 70
+            wdraw.rectangle([lx + lw // 2 + 60, top, lx + lw - 60, top + 24], fill=(40, 30, 20))
+        flat = geometry.CardBox(
+            angle=0.0, left=lx / fw, top=ly / fh, right=(lx + lw) / fw, bottom=(ly + lh) / fh,
+            fill=0.9, aspect=0.716, method="dfine",
+        )
+        landscape = work / "landscape.jpg"
+        wide.save(landscape, quality=95)
+        truth_card = wide.crop((lx, ly, lx + lw, ly + lh))
+        with mock.patch.object(card_box, "model_card", lambda *_a, **_k: flat):
+            got = match._crop(landscape, 0.716)
+            prepared = images_mod.prepare_located(landscape)[1]
+        if c.ok(got is not None, "the free reader finds a landscape card"):
+            gw, gh = got.size
+            c.ok(
+                gw > gh and abs(gh / gw - 0.716) <= 0.05,
+                "free reader keeps a landscape card landscape, aspect 1/0.716",
+                f"{gw}x{gh}",
+            )
+            diff = _same(got, truth_card)
+            c.ok(diff < 12.0, "free reader's crop is the whole landscape card, no neighbour, no clip",
+                 f"mean abs diff {diff:.1f} of 255")
+        pw, ph = prepared.sent_size
+        c.ok(pw > ph, "the preview's cut keeps a landscape card landscape", f"{pw}x{ph}")
+
+        # 8e. A refused model box and a detect_card that finds nothing: there is NO box. The preview
+        # then sends the whole frame; the free reader must not cut the refused box.
+        with mock.patch.object(card_box, "model_card", lambda *_a, **_k: part), \
+                mock.patch.object(card_box, "detect_card", lambda *_a, **_k: None), \
+                mock.patch.object(geometry, "detect_card", lambda *_a, **_k: None):
+            boxed = images_mod.card_box_for(upright)
+            cut = match._crop(upright, 0.716)
+        c.ok(boxed is None, "card_box_for returns no box when the model box is refused and detect_card finds none",
+             str(boxed))
+        with Image.open(upright) as frame_img:
+            frame_size = frame_img.size
+        c.ok(cut is None or cut.size == frame_size,
+             "free reader does not cut a refused box: it sends the whole frame, as the preview does",
+             f"{cut.size if cut is not None else None} against frame {frame_size}")
     return c.result()

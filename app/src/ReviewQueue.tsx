@@ -23,6 +23,7 @@ import {
   describeFailure,
   getQueues,
   getRuns,
+  getRecentStatus,
   getStatus,
   startRun,
   waitingCards,
@@ -782,7 +783,8 @@ export function ReviewQueue() {
   const [rate, setRate] = useState<number | null>(null)
   useEffect(() => {
     let live = true
-    void getStatus()
+    /* The shell's last answer on a visit; a read after this screen's own write is fresh. */
+    void (reloads === 0 ? getRecentStatus() : getStatus())
       .then((answer) => {
         if (live) setStatus(answer)
       })

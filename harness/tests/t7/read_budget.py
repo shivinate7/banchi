@@ -139,7 +139,7 @@ STUBS = {
 BUDGET = {
     '/status': {"status": 200, 'sql': 25, 'json_loads': 3, 'store_read': 1},
     '/inventory': {"status": 200, 'sql': 46, 'json_loads': 161, 'records_in': 5, 'places': 1, 'store_read': 1},
-    '_INVENTORY_BOX_RE': {"status": 200, 'sql': 75, 'json_loads': 51, 'records_in': 2, 'places': 1, 'store_read': 1},
+    '_INVENTORY_BOX_RE': {"status": 200, 'sql': 29, 'json_loads': 51, 'records_in': 2, 'places': 1, 'store_read': 1},
     '/inventory/recent': {"status": 200, 'sql': 26, 'json_loads': 15, 'places': 1, 'store_read': 1},
     '/inventory/history': {"status": 200, 'sql': 12, 'store_read': 1},
     '/queues': {"status": 200, 'sql': 22, 'json_loads': 7, 'records_in': 1, 'places': 1, 'store_read': 1},
@@ -147,7 +147,7 @@ BUDGET = {
     '/boxes': {"status": 200, 'sql': 79, 'json_loads': 161, 'records_in': 5, 'places': 1, 'store_read': 1},
     '/graveyard': {"status": 200, 'sql': 20, 'store_read': 1},
     '/games': {"status": 200},
-    '/orders': {"status": 200, 'sql': 1524, 'json_loads': 300, 'store_read': 1},
+    '/orders': {"status": 200, 'sql': 186, 'json_loads': 300, 'store_read': 1},
     '/codes': {"status": 200},
     '/codes/lots': {"status": 200},
     '/search': {"status": 200, 'sql': 175, 'json_loads': 150, 'places': 1, 'store_read': 1},
@@ -160,7 +160,7 @@ BUDGET = {
     '_PHOTO_RE': {"status": 200, 'sql': 11, 'json_loads': 1, 'store_read': 1},
     '/pricing': {"status": 200},
     '/pipeline/pricing': {"status": 200, 'sql': 52, 'json_loads': 16, 'store_read': 2, 'read_export': 3},
-    '/pipeline/value': {"status": 200, 'sql': 356, 'json_loads': 170, 'store_read': 3},
+    '/pipeline/value': {"status": 200, 'sql': 218, 'json_loads': 170, 'store_read': 3},
     '/pipeline/sets': {"status": 200, 'sql': 11, 'store_read': 1},
     '/pipeline/price-now': {"status": 200, 'sql': 23, 'json_loads': 4, 'store_read': 2},
     '/pipeline/trends-saved': {"status": 200},
@@ -190,7 +190,7 @@ BUDGET = {
     'POST /inventory/copies': {"status": 200, 'sql': 53, 'json_loads': 28, 'places': 1, 'store_read': 1},
     'POST /pipeline/preflight': {"status": 200, 'sql': 21, 'store_read': 2, 'read_sidecar': 21},
     'POST /pipeline/preflight keys': {"status": 200, 'sql': 34, 'json_loads': 3, 'store_read': 3, 'read_sidecar': 2},
-    'POST /orders/walk-plan': {"status": 200, 'sql': 50, 'json_loads': 104, 'records_in': 2, 'places': 1, 'store_read': 1},
+    'POST /orders/walk-plan': {"status": 200, 'sql': 44, 'json_loads': 104, 'records_in': 2, 'places': 1, 'store_read': 1},
 }
 
 # Keyed routes: `read_sidecar` reads only the named cards' own sidecars, so it is constant too.
@@ -198,13 +198,12 @@ SIDECAR_FLAT = ("POST /pipeline/preflight keys",)
 
 # (route, counter) -> (value at S, value at 2S): a constant counter that still grows. Only shrinks.
 KNOWN_OVER = {
-    ('_INVENTORY_BOX_RE', 'sql'): (75, 125),
     ('/capture/sitting', 'sql'): (208, 364),
-    ('/orders', 'sql'): (1524, 3024),
+    ('/orders', 'sql'): (186, 336),
     ('/search', 'sql'): (175, 325),
     ('/pipeline/pricing', 'sql'): (52, 64),
     ('/pipeline/pricing', 'read_export'): (3, 6),
-    ('/pipeline/value', 'sql'): (356, 659),
+    ('/pipeline/value', 'sql'): (218, 371),
     ('POST /inventory/copies', 'sql'): (53, 77),
 }
 
@@ -213,7 +212,6 @@ KNOWN_OVER = {
 SCAN_ALLOWED = frozenset({
     'boxes',
     'cards',
-    'events.event',
     'identifications.json_extract',
     'listings',
     'orders',
