@@ -123,7 +123,10 @@ counts as neither held nor sold, so the route leaves it out.
   - Box is the box name, `Box <n>` for an unnamed one and `No box` for none (D20, a box is
     addressed by name).
 - **Price.** A sold card's price is **its SKU's average sale price**: gross over completed orders
-  (status not `Canceled`) divided by copies on those orders. Any other card's price is the SKU's
+  (status not `Canceled`, and no line closed `not_shipping`) divided by copies on those orders.
+  The refund rule is D225's: its home is `store.orders.CLOSE_NOT_SHIPPING` read through each
+  line's `progress`, and `salesOf` in `Revenue.tsx` applies it today. Mix never keeps a second
+  copy of it. Any other card's price is the SKU's
   market reading. A card with no reading has no price.
 - **Measures, eight.**
   1. Cards captured: the count of rows.
@@ -142,8 +145,9 @@ counts as neither held nor sold, so the route leaves it out.
 
 `GET /stock/mix` returns `{asOf, cards: [...]}`. It lives in one home, `pipeline/stockmix.py`.
 `server/capture_server.py` calls it and nothing else does. A second copy of the revenue-per-SKU
-sum is a defect. `stockmix` reads that figure from the order store's own helper, and extends the
-helper if it lacks one.
+sum is a defect. No server helper applies D225 yet, because `salesOf` runs in the browser. The
+builder adds one helper in `store/orders.py` that drops a line closed `CLOSE_NOT_SHIPPING`.
+`stockmix` calls it, and a check holds it equal to `salesOf` (check 23).
 
 - Each card carries small fields only: `game`, `set`, `rarity`, `finish`, `state`, `box`,
   `capturedWeek`, `soldWeek` (null if not sold), `price` (null if none), `revenue` and
@@ -263,6 +267,8 @@ Each is red before the build and green after. Server checks run on a synthetic s
     no hand-rolled select or pill row in the Mix view.
 22. Screens: light and dark at 1440 and 820 pass `app/tests/scaffold.spec.ts` and the stability
     check (D313), with no horizontal page scroll.
+23. For one fixture of orders with a refunded line, Mix's total Revenue equals Sales' gross for
+    all time. Red: a Mix that ignores the refund rule is higher.
 
 ### Where a change goes
 
