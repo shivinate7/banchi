@@ -892,11 +892,8 @@ LOOP_EXPENSIVE_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("pipeline/pricehistory.py", "readings_for_rows", "history"),   # one history read per range, and there are a fixed few ranges
     ("pipeline/setnames.py", "known_sets", "read_export"),   # one read per CSV in the export directory, bounded by the exports kept
     ("pipeline/skus.py", "fill", "read_export"),   # one read per export file in date order, bounded by the exports kept
-    ("server/capture_server.py", "_ledger_pull", "holder_of"),   # CANDIDATE: `holder_of` walks the open orders once per copy pulled
     ("server/capture_server.py", "_require_group_answers", "Store.read"),   # runs only on the duplicate-position refusal path, once, then raises
     ("server/capture_server.py", "do_boxes", "_layout_digest"),   # one layout read per box row, so the total is one pass over the cards
-    ("server/capture_server.py", "do_delete_box", "holder_of"),   # CANDIDATE: `holder_of` walks the open orders once per card in the box
-    ("server/capture_server.py", "do_graveyard", "holder_of"),   # CANDIDATE: `holder_of` walks the open orders once per card in the graveyard
     ("server/capture_server.py", "do_move_sections_batch", "_box_digest"),   # one records_in read per box the batch touched, a bounded box set
     ("server/capture_server.py", "do_move_sections_batch", "_box_state"),   # one records_in read per box the draft names, a bounded box set
     ("server/capture_server.py", "do_move_sections_batch", "_layout_digest"),   # one layout read per box in the draft, bounded by the boxes the draft names
@@ -923,7 +920,7 @@ LOOP_EXPENSIVE_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("store/master.py", "section_tail_key", "_respace"),   # the loop is `range(2)`, a fixed two passes
     ("store/orders.py", "record_pull", "holder_of"),   # CANDIDATE: `holder_of` walks the open orders once per capture id pulled
 })
-LOOP_EXPENSIVE_EXPECTED = 42
+LOOP_EXPENSIVE_EXPECTED = 39
 
 
 # ---------------------------------------------------------------- the package's shared state
