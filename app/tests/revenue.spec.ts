@@ -1,6 +1,9 @@
-// Protects: Sales sorts, filters, cross-filters, drills down and deep-links over the orders payload, on a fixed fake clock.
+// Protects: Sales sorts, filters, cross-filters, drills down and deep-links over the orders payload, on a fixed fake clock, and its Mix view (`#/revenue?view=mix`) keeps its state in the URL, fires no request on a press and shows its empty states.
 // Governs: D278, D201, D214, D217, D225, D196, D298
 import { test, expect, type Page, type Route } from '@playwright/test'
+import { readFileSync, existsSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { sealEveryTest } from './shell'
 
 import type { OrderLineProgress, OrderLineWire, OrderRow, OrdersPayload } from '../src/types'
@@ -1114,4 +1117,294 @@ for (const width of [1440, 820]) {
       expect((await said.boundingBox())!.height, 'the order line holds one line box').toBeLessThan(24)
     }
   })
+}
+
+/* ======================== MIX ========================================================
+   THE SCREEN HALF OF `docs/specs/sales-screen.md`'s MIX CHECKS 14 TO 22. Checks 8 to 13 and 23 are
+ * `the pivot cases at the foot of `revenue-math.spec.ts``; 1 to 7 are `harness/tests/t7/stock_mix.py`.
+ *
+ * BUILDER CONTRACT (what this file reads off the page; all of it is kit markup):
+ *   - `Sales | Mix` is a `Segmented`: a button named `Mix`, `aria-pressed` when on.
+ *   - the nine dimension filters are `FilterChips` facets, `.bn-fchip > .bn-pick`, labelled Game, Set,
+ *     Rarity, Finish, State, Box, Capture week, Sale week, Price band. `countOnly` draws
+ *     `.bn-pick-value` as the count of picks ("2"), or "Any" with none.
+ *   - Rows and Columns are `Select`s labelled `Rows` and `Columns` (Columns has an option `Nothing`).
+ *   - Measures is a `FilterFacet` labelled `Measures`. Its list is `aria-multiselectable` when several
+ *     picks are allowed and not when a column split limits it to one.
+ *   - Sort is a `SortControl` labelled `Sort`; its direction button is `.bn-sort-dir`.
+ *   - the pivot is one `<table>`, header cells `th`, an `All` column last when columns split.
+ *   - URL keys are the spec's: `view by across measure sort dir` and the dimension ids
+ *     `game set rarity finish state box capw salew band`.
+ *   - empty states: the sentences in the spec, and for "no cards" a link to Capture.
+ * ==================================================================================== */
+
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+
+const DIMENSIONS = ['Game', 'Set', 'Rarity', 'Finish', 'State', 'Box', 'Capture week', 'Sale week', 'Price band']
+
+type Wire = Record<string, unknown>
+const wire = (over: Wire = {}): Wire => ({
+  game: 'riftbound', set: 'Origins', rarity: 'Rare', finish: 'Near Mint', state: 'On hand', box: 'Alpha',
+  capturedWeek: '2026-09-14', soldWeek: null, sku: 'S1', price: 2.5, soldRecent: 0, ...over,
+})
+/** Riftbound has the most cards, so it is the Game filter's rest pick. */
+const CARDS: Wire[] = [
+  wire(), wire(), wire({ rarity: 'Epic', sku: 'S2', price: 6 }), wire({ rarity: 'Common', sku: 'S3', price: 0.4 }),
+  wire({ set: 'Spirit', rarity: 'Epic', sku: 'S4', price: 12 }), wire({ set: 'Spirit', box: 'Beta', sku: 'S5' }),
+  wire({ state: 'Sold', soldWeek: '2026-09-14', soldRecent: 1 }), wire({ state: 'Sold', soldWeek: '2026-08-31', rarity: 'Epic', sku: 'S2', price: 6 }),
+  wire({ state: 'Not listed yet', sku: null, price: null, rarity: 'Rare or Epic' }),
+  wire({ game: 'pokemon', set: 'Scarlet', rarity: 'Uncommon', sku: 'P1', price: 0.8, box: 'Beta' }),
+  wire({ game: 'pokemon', set: 'Scarlet', rarity: 'Rare', sku: 'P2', price: 22, box: 'Beta' }),
+]
+
+async function stubMix(page: Page, cards: Wire[] = CARDS) {
+  await page.route(/\/stock\/mix$/, (route) => json(route, { asOf: '2026-09-19T15:00:00+00:00', cards }))
+  await page.route(/\/orders$/, (route) =>
+    json(route, {
+      summary: '0 orders', orders: [],
+      resolution: { orders: [], counts: { resolved: 0, short: 0, no_copies_on_hand: 0, sku_unknown: 0, sku_unseen: 0, not_a_single: 0 } },
+    }),
+  )
+  await page.route(/\/skus\/photos\?/, (route) => json(route, { photos: {} }))
+  await page.route(/\/pipeline\/holdings-value\?/, (route) =>
+    json(route, {
+      range: 'month', width_days: 30, history_begins: null, at: '2026-09-19T00:00:00+00:00', on_hand_names: 0,
+      series: [], totals: [], unmarked: { names: 0 }, sealed_excluded: { names: 0, reason: 'x' },
+    }),
+  )
+}
+
+async function openMix(page: Page, query = '?view=mix') {
+  await page.goto(`/#/revenue${query}`)
+  await expect(page.getByRole('button', { name: 'Mix', exact: true }), 'Sales offers a Mix segment').toBeVisible()
+  await expect(page.locator('table')).toBeVisible()
+}
+
+const trigger = (page: Page, label: string) =>
+  page.locator('.bn-pick', { has: page.locator('.bn-pick-label', { hasText: new RegExp(`^${label}$`) }) })
+const valueOf = (page: Page, label: string) => trigger(page, label).locator('.bn-pick-value').innerText()
+const option = (page: Page, name: string) =>
+  page.getByRole('option', { name: new RegExp(`^${name.replace(/[$]/g, '\\$')}(\\s|\\d|$)`) })
+
+/** Pick one option from a single-pick control, which closes its own list. */
+async function choose(page: Page, label: string, name: string) {
+  await trigger(page, label).click()
+  await option(page, name).click()
+  await settleMotion(page)
+}
+/** Toggle one option of a multi-pick facet, then close its list. */
+async function toggleMulti(page: Page, label: string, name: string) {
+  await trigger(page, label).click()
+  await option(page, name).click()
+  await page.keyboard.press('Escape')
+  await settleMotion(page)
+}
+const queryOf = (page: Page) => page.evaluate(() => new URLSearchParams(location.hash.split('?')[1] ?? ''))
+const hashOf = (page: Page) => page.evaluate(() => location.hash)
+const tableText = (page: Page) => page.locator('table').innerText()
+
+/* 14 ---------------------------------------------------------------------------------------- */
+test('14. nine filter dropdowns draw, and a trigger with picks shows their count', async ({ page }) => {
+  await stubMix(page)
+  await openMix(page)
+  for (const label of DIMENSIONS) {
+    await expect(page.locator('.bn-fchip').locator(trigger(page, label)), `${label} is a kit facet`).toHaveCount(1)
+  }
+  expect(await valueOf(page, 'Rarity'), 'no pick reads Any').toBe('Any')
+  await toggleMulti(page, 'Rarity', 'Epic')
+  await toggleMulti(page, 'Rarity', 'Common')
+  expect(await valueOf(page, 'Rarity'), 'a countOnly trigger shows the count of picks').toBe('2')
+  await trigger(page, 'Rarity').click()
+  await expect(option(page, 'Rare'), 'every option stays offered').toBeVisible()
+})
+
+/* 15 ---------------------------------------------------------------------------------------- */
+test('15. a column split limits Measures to one pick, no split allows several', async ({ page }) => {
+  await stubMix(page)
+  await openMix(page)
+  const picked = (label: string) => page.getByRole('listbox', { name: label }).locator('[aria-selected="true"]')
+  // Rest view splits columns by Rarity.
+  await trigger(page, 'Measures').click()
+  await expect(page.getByRole('listbox', { name: 'Measures' })).not.toHaveAttribute('aria-multiselectable', 'true')
+  await option(page, 'Sold').click()
+  await trigger(page, 'Measures').click()
+  await expect(picked('Measures'), 'a pick replaces, never adds').toHaveCount(1)
+  await page.keyboard.press('Escape')
+
+  await choose(page, 'Columns', 'Nothing')
+  await trigger(page, 'Measures').click()
+  await expect(page.getByRole('listbox', { name: 'Measures' })).toHaveAttribute('aria-multiselectable', 'true')
+  await option(page, 'On hand').click()
+  await expect(picked('Measures'), 'two picks with no split').toHaveCount(2)
+  await page.keyboard.press('Escape')
+  // One column per measure, plus the row-name column.
+  await expect(page.locator('table thead th')).toHaveCount(3)
+
+  // Splitting again rewrites the picks to one and never leaves two.
+  await choose(page, 'Columns', 'Finish')
+  await trigger(page, 'Measures').click()
+  await expect(picked('Measures')).toHaveCount(1)
+})
+
+/* 16, 17 ------------------------------------------------------------------------------------ */
+async function countHistory(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __push: number; __replace: number }
+    w.__push = 0
+    w.__replace = 0
+    const push = history.pushState.bind(history)
+    const replace = history.replaceState.bind(history)
+    history.pushState = (...a) => ((w.__push += 1), push(...a))
+    history.replaceState = (...a) => ((w.__replace += 1), replace(...a))
+  })
+}
+const counts = (page: Page) =>
+  page.evaluate(() => ({ push: (window as never as { __push: number }).__push, replace: (window as never as { __replace: number }).__replace }))
+
+test('16. every control writes the URL with replaceState, and a reload restores the same table', async ({ page }) => {
+  await countHistory(page)
+  await stubMix(page)
+  await openMix(page)
+  const steps: Array<[string, () => Promise<void>, (q: URLSearchParams) => boolean]> = [
+    ['Rows', () => choose(page, 'Rows', 'Box'), (q) => q.get('by') === 'box'],
+    ['Columns', () => choose(page, 'Columns', 'Finish'), (q) => q.get('across') === 'finish'],
+    ['a filter', () => toggleMulti(page, 'Rarity', 'Epic'), (q) => q.getAll('rarity').map((v) => v.toLowerCase()).join() === 'epic'],
+    ['Measures', () => choose(page, 'Measures', 'Sold'), (q) => q.getAll('measure').join() === 'sold'],
+    ['Sort key', () => choose(page, 'Sort', 'Sold'), (q) => q.get('sort') === 'sold'],
+    ['Sort direction', () => page.locator('.bn-sort-dir').click(), (q) => q.has('dir')],
+  ]
+  for (const [name, press, expectQuery] of steps) {
+    const before = await counts(page)
+    await press()
+    await settleMotion(page)
+    expect(expectQuery(await queryOf(page)), `${name} writes its key: ${await hashOf(page)}`).toBe(true)
+    const after = await counts(page)
+    expect(after.push, `${name} never pushes a history entry`).toBe(before.push)
+    expect(after.replace, `${name} replaces the entry`).toBeGreaterThan(before.replace)
+  }
+  const drawn = await tableText(page)
+  const hash = await hashOf(page)
+  await page.reload()
+  await expect(page.locator('table')).toBeVisible()
+  expect(await hashOf(page), 'the reload keeps the URL').toBe(hash)
+  expect(await tableText(page), 'the reload draws the same table').toBe(drawn)
+})
+
+test('17. a rest view writes no query beyond view=mix', async ({ page }) => {
+  await stubMix(page)
+  await openMix(page)
+  expect(await hashOf(page)).toBe('#/revenue?view=mix')
+  await choose(page, 'Rows', 'Box')
+  expect(await hashOf(page)).toContain('by=box')
+  await choose(page, 'Rows', 'Set') // back to the rest value
+  expect(await hashOf(page), 'a key at rest is omitted again').toBe('#/revenue?view=mix')
+})
+
+/* 18 ---------------------------------------------------------------------------------------- */
+test('18. Sales | Mix adds no route: the nav and the path are as they were', async ({ page }) => {
+  await stubMix(page)
+  await page.goto('/#/revenue')
+  const nav = page.locator('.bn-side a.bn-nav-link')
+  await expect(nav.first()).toBeVisible()
+  const before = await nav.allInnerTexts()
+  const mix = page.getByRole('button', { name: 'Mix', exact: true })
+  await expect(mix, 'Sales offers a Mix segment').toBeVisible()
+  await mix.click()
+  await expect(page.locator('table')).toBeVisible()
+  expect(await page.evaluate(() => location.hash.split('?')[0])).toBe('#/revenue')
+  expect(await nav.allInnerTexts()).toEqual(before)
+  expect(before.join(' ')).not.toMatch(/\bMix\b/)
+  await page.goto('/#/mix')
+  await expect(page.getByRole('button', { name: 'Mix', exact: true }), '#/mix is not a screen').toHaveCount(0)
+})
+
+/* 19 ---------------------------------------------------------------------------------------- */
+test('19. a press on any control fires no request', async ({ page }) => {
+  await stubMix(page)
+  await openMix(page)
+  await settleMotion(page)
+  const sent: string[] = []
+  page.on('request', (req) => {
+    if (['fetch', 'xhr'].includes(req.resourceType())) sent.push(`${req.method()} ${req.url()}`)
+  })
+  await choose(page, 'Rows', 'Box')
+  await choose(page, 'Columns', 'Finish')
+  await toggleMulti(page, 'Rarity', 'Epic')
+  await toggleMulti(page, 'Set', 'Spirit')
+  await choose(page, 'Measures', 'Sold')
+  await choose(page, 'Sort', 'Sold')
+  await page.locator('.bn-sort-dir').click()
+  await page.waitForTimeout(400) // keep: asserts nothing is sent in the window after the last press
+  expect(sent).toEqual([])
+})
+
+/* 20 ---------------------------------------------------------------------------------------- */
+test('20. the empty store shows one sentence and one action', async ({ page }) => {
+  await stubMix(page, [])
+  await page.goto('/#/revenue?view=mix')
+  await expect(page.getByText('Nothing is captured yet. Capture a card and its mix shows here.')).toBeVisible()
+  await expect(page.locator('table')).toHaveCount(0)
+  const action = page.locator('main').getByRole('link', { name: /capture/i })
+  await expect(action).toHaveCount(1)
+  await expect(action).toHaveAttribute('href', /#\/capture/)
+})
+
+test('20. a filter that matches nothing shows one sentence and one action, Clear all', async ({ page }) => {
+  await stubMix(page)
+  await openMix(page)
+  await toggleMulti(page, 'Set', 'Scarlet') // riftbound (the Game rest pick) has no Scarlet cards
+  await expect(page.getByText('No cards match these filters.')).toBeVisible()
+  await expect(page.locator('table')).toHaveCount(0)
+  const clear = page.getByRole('button', { name: 'Clear all' })
+  await expect(clear, 'one action').toHaveCount(1)
+  await clear.click()
+  await expect(page.locator('table')).toBeVisible()
+  await expect(page.getByText('No cards match these filters.')).toHaveCount(0)
+})
+
+/* 21 ---------------------------------------------------------------------------------------- */
+test('21. the Mix bar is kit controls only: no hand-rolled select, no pill row', async ({ page }) => {
+  const file = resolve(HERE, '../src/MixView.tsx')
+  expect(existsSync(file), 'app/src/MixView.tsx exists').toBe(true)
+  const src = existsSync(file) ? readFileSync(file, 'utf8') : ''
+  expect(src).toMatch(/\bFilterChips\b/)
+  expect(src, 'no native select').not.toMatch(/<select\b/)
+  expect(src, 'no hand-rolled pill row').not.toMatch(/className=["'{`][^>]*\bbn-(pill|fchip|seg)\b/)
+  expect(readFileSync(resolve(HERE, '../src/kit/data.tsx'), 'utf8'), 'FilterFacet gains countOnly').toMatch(/countOnly/)
+  await stubMix(page)
+  await openMix(page)
+  const heights = await page.locator('.bn-filterchips .bn-pick').evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)))
+  expect(heights.length).toBeGreaterThanOrEqual(DIMENSIONS.length)
+  expect(Math.min(...heights), 'every facet is a 40px kit control').toBeGreaterThanOrEqual(40)
+})
+
+/* 22 ---------------------------------------------------------------------------------------- */
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [1440, 820]) {
+    test(`22. Mix at ${width} in ${theme}: one page, no sideways scroll, nothing moves on a press`, async ({ page }) => {
+      await watchShifts(page)
+      await setViewport(page, { width, height: 1000 })
+      await page.emulateMedia({ colorScheme: theme })
+      await stubMix(page)
+      await openMix(page)
+      await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), theme)
+      await settleMotion(page)
+      await expect(page.locator('[data-bn-page]')).toHaveCount(1)
+      await expect(page.locator('h1')).toHaveCount(1)
+      const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+      expect(sideways, 'no horizontal page scroll').toBeLessThanOrEqual(0)
+      const frame = await page.locator('table').evaluate((el) => {
+        const box = el.closest('[data-bn-page]')!.getBoundingClientRect()
+        const own = el.getBoundingClientRect()
+        return { pageRight: box.right, tableRight: own.right }
+      })
+      expect(frame.tableRight, 'the table scrolls inside its frame, never past the page').toBeLessThanOrEqual(frame.pageRight + 1)
+      const seen = (await readShifts(page)).shifts.length
+      await choose(page, 'Rows', 'Box')
+      await page.waitForTimeout(600) // keep: asserts no shift over the window after the press
+      const moved = (await readShifts(page)).shifts.slice(seen).filter((sh) => sh.moved.some((n) => /bn-filterchips|bn-pick|bn-sort|bn-seg/.test(n)))
+      expect(moved, `the press moved ${describeShifts(moved)}`).toEqual([])
+    })
+  }
 }
