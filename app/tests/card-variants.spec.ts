@@ -443,3 +443,108 @@ test('with several different cards matching, the chip says matches and opens the
   await expect(page.locator('.browse-variants')).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Dredge Up' })).toBeVisible()
 })
+
+/* A BARE NUMBER TIES FIVE DIFFERENT CARDS AT RANK 0 (owner's ruling). "109" is the exact
+ * number of four Riftbound cards (box 1) and one Pokemon card (box 2, the bigger pile, which
+ * the screen used to open by itself). More than one different card at the top rank opens the
+ * picker and no box until a pick; each tile names its set and its game. A top tier of one
+ * card still lands as it does today. */
+const TIE_SETS: Array<[string, string, string, string, string, number]> = [
+  // sku, name, number_display, set, game, box
+  ['8101', 'Akshan', '109/221', 'Origins', 'riftbound', 1],
+  ['8102', 'Blood Rose', '109/219', 'Spiritforged', 'riftbound', 1],
+  ['8103', 'Dr. Mundo', '109/298', 'Unleashed', 'riftbound', 1],
+  ['8104', 'Illaoi', '109/166', 'Origins Proving Grounds', 'riftbound', 1],
+  ['8105', 'Yungoos', '109/163', 'Guardians Rising', 'pokemon', 2],
+]
+const TIE_GROUPS = TIE_SETS.map(([sku, name, nd, set, , box], i) => ({
+  ...group({ sku, name, number: nd.split('/')[0]!, set, rarity: 'Common', condition: 'Near Mint', key: `${box}/${i + 1}`, box, index: i + 1 }),
+  number_display: nd,
+  rank: 0,
+}))
+// A control: one top-rank card, then a weaker tier.
+const LONE_TOP = [
+  { ...TIE_GROUPS[4]!, rank: 0 },
+  { ...TIE_GROUPS[0]!, rank: 3 },
+  { ...TIE_GROUPS[1]!, rank: 3 },
+]
+const TIE_CARDS = (box: number) =>
+  Object.fromEntries(
+    TIE_SETS.map(([sku, name, nd, , game, b], i) => [
+      `${b}/${i + 1}`,
+      { ...card({ box: b, index: i + 1, name, number: nd.split('/')[0]!, sku, condition: 'Near Mint' }), game, printed_total: nd.split('/')[1] },
+    ]).filter(([k]) => String(k).startsWith(`${box}/`)),
+  )
+
+async function openTie(page: Page): Promise<void> {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  await page.route(/\/photo\/\d+\/\d+/, (r) => r.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG }))
+  await page.route(/\/pipeline\/runs$/, (r) => r.fulfill(json({ runs: [] })))
+  await page.route(/\/boxes$/, (r) =>
+    r.fulfill(
+      json({
+        boxes: [1, 2].map((box) => ({
+          box, bid: box, name: null, sections: [], state: 'open', capacity: 100,
+          fill: box === 1 ? 4 : 5, next_index: 6, cards: box === 1 ? 4 : 5,
+          on_hand: box === 1 ? 4 : 5, sold: 0, retired: 0, moved: 0, listed: 0,
+          sections_detail: [{ section: 1, start: 1, end: 5, count: box === 1 ? 4 : 5 }],
+        })),
+      }),
+    ),
+  )
+  await page.route(/\/inventory\/(\d+)$/, (r) => {
+    const box = Number(/inventory\/(\d+)$/.exec(r.request().url())![1])
+    return r.fulfill(json({ version: 2, cards: TIE_CARDS(box), listings: {} }))
+  })
+  await page.route(/\/search\?/, (r) => {
+    const q = (new URL(r.request().url()).searchParams.get('q') ?? '').trim()
+    const bySku = TIE_GROUPS.filter((g) => g.sku === q)
+    return r.fulfill(json({ query: q, groups: q === '109' ? TIE_GROUPS : q === '109/163' ? LONE_TOP : bySku.slice(0, 1) }))
+  })
+  await page.route(/\/graveyard(\?.*)?$/, (r) => r.fulfill(json({ departed: [] })))
+  await page.route(/\/queues$/, (r) => r.fulfill(json({ review: [], parked: [] })))
+  await page.route(/\/orders$/, (r) => r.fulfill(json({ orders: [], updated_at: null })))
+  await page.goto('/#/inventory')
+  await settleFonts(page)
+  await expect(page.locator('main').first()).toBeVisible()
+}
+
+for (const width of [1440, 820]) {
+  test.describe(`a tie at the top rank opens the picker at ${width}`, () => {
+    test.use({ viewport: { width, height: 900 } })
+
+    test('five cards tie: picker lists all with set and game, no box or pane until a pick', async ({ page }) => {
+      await openTie(page)
+      await page.getByPlaceholder('Search').fill('109')
+
+      const tiles = page.locator('.browse-variants .browse-variant-tile')
+      await expect(tiles).toHaveCount(5)
+      for (const [, name, nd, set, game] of TIE_SETS) {
+        const tile = tiles.filter({ hasText: name })
+        await expect(tile).toContainText(nd)
+        await expect(tile).toContainText(set)
+        await expect(tile).toContainText(game === 'pokemon' ? 'Pokémon' : 'Riftbound')
+      }
+      // No box opened, no card pane drawn, focus inside the picker.
+      await expect(page.locator('.browse-row')).toHaveCount(0)
+      await expect(page.getByRole('heading', { name: 'Yungoos' })).toHaveCount(0)
+      await expect(page.getByRole('heading', { name: 'Akshan' })).toHaveCount(0)
+      await expect(page.locator('.browse-variants:focus-within')).toHaveCount(1)
+
+      await tiles.filter({ hasText: 'Illaoi' }).click()
+      await expect(page.locator('.browse-variants')).toHaveCount(0)
+      await expect(page.getByRole('heading', { name: 'Illaoi' })).toBeVisible()
+      await expect(page.locator('.browse-side')).toContainText('8104')
+      await expect(page.locator('.browse-row', { hasText: 'Illaoi' })).toBeVisible()
+    })
+
+    test('control: one top-rank card still opens its box directly', async ({ page }) => {
+      await openTie(page)
+      await page.getByPlaceholder('Search').fill('109/163')
+
+      await expect(page.locator('.browse-variants')).toHaveCount(0)
+      await expect(page.getByRole('heading', { name: 'Yungoos' })).toBeVisible()
+      await expect(page.locator('.browse-row', { hasText: 'Yungoos' })).toBeVisible()
+    })
+  })
+}
