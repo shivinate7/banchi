@@ -122,11 +122,10 @@ counts as neither held nor sold, so the route leaves it out.
     `Near Mint Foil`, `Near Mint` or `Unknown` from `metadata_finish`.
   - Box is the box name, `Box <n>` for an unnamed one and `No box` for none (D20, a box is
     addressed by name).
-- **Price.** A sold card's price is **its SKU's average sale price**: gross over completed orders
-  (status not `Canceled`, and no line closed `not_shipping`) divided by copies on those orders.
-  The refund rule is D225's: its home is `store.orders.CLOSE_NOT_SHIPPING` read through each
-  line's `progress`, and `salesOf` in `Revenue.tsx` applies it today. Mix never keeps a second
-  copy of it. Any other card's price is the SKU's
+- **Price.** A sold card's price is **its SKU's average sale price**: Sales' own refund-adjusted
+  gross for that SKU divided by its copies. The browser takes both from `salesOf` in `Revenue.tsx`
+  (D225, refunds subtract from Sales), over the orders Sales already loads, summed per SKU. Mix has
+  no second copy of the refund rule and no server sum. Any other card's price is the SKU's
   market reading. A card with no reading has no price.
 - **Measures, eight.**
   1. Cards captured: the count of rows.
@@ -144,20 +143,19 @@ counts as neither held nor sold, so the route leaves it out.
 ### Route
 
 `GET /stock/mix` returns `{asOf, cards: [...]}`. It lives in one home, `pipeline/stockmix.py`.
-`server/capture_server.py` calls it and nothing else does. A second copy of the revenue-per-SKU
-sum is a defect. No server helper applies D225 yet, because `salesOf` runs in the browser. The
-builder adds one helper in `store/orders.py` that drops a line closed `CLOSE_NOT_SHIPPING`.
-`stockmix` calls it, and a check holds it equal to `salesOf` (the last item of the checks list).
+`server/capture_server.py` calls it and nothing else does. It returns card rows only. It reads no
+order and carries no revenue, because the refund rule lives in `salesOf` (D225) and a server sum
+would be a second home for it.
 
 - Each card carries small fields only: `game`, `set`, `rarity`, `finish`, `state`, `box`,
-  `capturedWeek`, `soldWeek` (null if not sold), `price` (null if none), `revenue` and
-  `soldRecent` (0 or 1). No photograph, SKU or buyer is on the wire. The owner's store of about
+  `capturedWeek`, `soldWeek` (null if not sold), `sku` (null if unlisted, the join key to
+  `salesOf`'s lines), `price` (the market reading, null if none) and `soldRecent` (0 or 1). No
+  photograph and no buyer is on the wire. The owner's store of about
   4,300 cards is about 900 KB as JSON, about 100 KB gzipped.
 - The as-of time is the server clock at the read. The 14-day window and the week starts derive
   from it, and the response names it.
 - **One statement per source, no per-card Python walk and no store call in a loop.** One `cards`
-  query joined to `skus`, one readings query, one pass over the order ledger for per-SKU gross and
-  copies. The read budget (`docs/specs/efficiency.md`) gets a row in
+  query joined to `skus` and one readings query. The read budget (`docs/specs/efficiency.md`) gets a row in
   `harness/tests/t7/read_budget.py`: `'/stock/mix': {"status": 200, 'sql': <measured>, 'store_read': 1}`,
   with the same count at S and 2S. Its fixture holds sold, unlisted, retired and moved cards. That
   covers the hit path and not only the empty path (DEBT85).
@@ -242,13 +240,13 @@ Each is red before the build and green after. Server checks run on a synthetic s
 
 1. `GET /stock/mix` leaves out `retired` and `moved` cards. Red: a fixture with one of each shows
    in `cards`.
-2. A sold card's `price` equals its SKU's gross over copies from non-canceled orders. Red: a
-   canceled order changes it.
+2. The wire carries no `revenue` field, and a sold card's wire `price` is its market reading.
+   Red: a server that sums orders adds a `revenue` key.
 3. An unlisted card's `rarity` is its claim joined with ` or `. An empty claim gives `No claim`.
 4. A card with no SKU is `Not listed yet`. A sold card is `Sold`. Any other is `On hand`.
 5. `soldRecent` is 1 at 13 days and 0 at 14 days before the as-of time.
 6. The read budget row exists, and `sql` is equal at S and 2S. Red: a per-card query makes it grow.
-7. The wire carries no photograph, SKU or buyer field. Red: an added `sku` key fails the allowlist.
+7. The wire carries no photograph or buyer field. Red: an added `buyer` key fails the allowlist.
 8. `mixPivot`: Sold of captured counts unlisted cards in the divisor, over all time.
 9. `mixPivot`: Weeks of stock is a dash for a group with no sale in 14 days, never `0` or infinity.
 10. `mixPivot`: a median over no prices is a dash.
@@ -267,8 +265,8 @@ Each is red before the build and green after. Server checks run on a synthetic s
     no hand-rolled select or pill row in the Mix view.
 22. Screens: light and dark at 1440 and 820 pass `app/tests/scaffold.spec.ts` and the stability
     check (D313), with no horizontal page scroll.
-23. For one fixture with a refunded line and one sold card per ordered copy, Mix's total Revenue equals Sales' gross for
-    all time. Red: a Mix that ignores the refund rule is higher.
+23. Mix revenue for a SKU equals Sales' figure for that SKU, over a fixture with a refunded line.
+    Red: a Mix that ignores the refund rule is higher.
 
 ### Where a change goes
 
