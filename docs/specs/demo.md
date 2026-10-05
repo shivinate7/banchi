@@ -132,9 +132,9 @@ resolve against `import.meta.env.BASE_URL`, so `DEMO_BASE` moves them. A key the
 reads first. It also journals each card move, and the journal replays over any file that lands later,
 so a document fetched after a sale shows the sale.
 
-Measured, with the split: Home's first load is 6.6 MB decoded (it was 87.9 MB), of which the app shell
+Measured, with the split: Home's first load is 8.3 MB decoded (it was 87.9 MB), of which the app shell
 is about 1.6 MB, the index 0.44 MB, and Home's own reads (`/pipeline/pricing` 4.2 MB, `/orders` 1.5 MB)
-the rest. The daily mirror job and the recorder's on-disk format are unchanged.
+the rest (6.3 MB of data in all). The daily mirror job and the recorder's on-disk format are unchanged.
 
 ## 6. `VITE_DEMO` is a build-time constant, not a runtime flag
 
