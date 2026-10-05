@@ -544,17 +544,38 @@ def _pool_rarities(pool: Pool, game: str) -> List[str]:
     return pool.rarities
 
 
-def _settled_by_claim(request: "Request", pool: Pool, order) -> Optional[int]:
+def _settled_by_claim(request: "Request", pool: Pool, order, sims) -> Optional[int]:
     """The pool index of the printing the claim picks, or None. Only when the top two are one
-    card (same name, same base number) and the claim fits exactly one of their rarities."""
-    if not request.rarity_claim or len(order) < 2:
+    card (same name, base number and set), both rarities are known, and the claim fits exactly
+    one. A third candidate within `MARGIN_MIN` of the pick that is another card, or may also fit
+    the claim, refuses. The fit test is `variant.rarity_filter`, where a blank rarity may fit."""
+    from pipeline import tcgcsv, variant
+
+    claim = request.rarity_claim
+    if not claim or len(order) < 2:
         return None
     top = [int(order[0]), int(order[1])]
-    if len({(card_name(pool.names[i]), _base_number(pool.rows[i][3])) for i in top}) != 1:
+
+    def card(i: int):
+        return (card_name(pool.names[i]), _base_number(pool.rows[i][3]), pool.rows[i][1])
+
+    if card(top[0]) != card(top[1]):
         return None
     rarities = _pool_rarities(pool, request.game)
-    fits = [i for i in top if rarities[i] and rarities[i] in request.rarity_claim]
-    return fits[0] if len(fits) == 1 else None
+    if not all(rarities[i] for i in top):
+        return None
+    fits = [i for i in top if variant.rarity_filter([{tcgcsv.RARITY_COLUMN: rarities[i]}], claim)]
+    if len(fits) != 1:
+        return None
+    pick = fits[0]
+    if len(order) > 2:
+        third = int(order[2])
+        if float(sims[pick]) - float(sims[third]) < MARGIN_MIN and (
+            card(third) != card(pick)
+            or variant.rarity_filter([{tcgcsv.RARITY_COLUMN: rarities[third] or ""}], claim)
+        ):
+            return None
+    return pick
 
 
 def _resolve_pool(
@@ -703,9 +724,10 @@ def _read_chunk(
                 continue
             pick, code = best, None
             if margin < MARGIN_MIN:
-                settled = _settled_by_claim(request, pool, order)
+                settled = _settled_by_claim(request, pool, order, sims)
                 if settled is not None:
                     pick, code = settled, ACCEPT_CLAIM
+                    floor = float(sims[pick])  # the floor is the chosen printing's own score
             if margin < MARGIN_MIN and code is None:
                 out[request.key] = Result(request.key, False, code=UNREAD_MARGIN, detail=f"margin {margin:.4f} is under {MARGIN_MIN}", margin=margin, floor=floor, candidates=candidates)
                 continue
