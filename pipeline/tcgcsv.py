@@ -26,6 +26,8 @@ from __future__ import annotations
 import codecs
 import csv
 import io
+import threading
+from collections import OrderedDict
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
@@ -169,9 +171,36 @@ def parse(data: bytes, source: Optional[Path] = None) -> Export:
     return Export(header=header, rows=tuple(rows), source=source)
 
 
+# ponytail: 32 parsed exports, about 8x each file's size in memory (28 MB of exports on the
+# owner's disk is about 220 MB parsed). One entry per distinct path, so a store with more
+# than 32 exports re-parses the oldest on a scan; raise the bound or cache by bytes then.
+_CACHE_MAX = 32
+_cache: "OrderedDict[tuple, Export]" = OrderedDict()
+_cache_lock = threading.Lock()
+
+
 def read_export(path) -> Export:
+    """Parse the export at `path`, once per (path, inode, mtime_ns, size).
+
+    A file that changed has a new key, so the cache never serves stale bytes. The rows are
+    shared between callers: treat them as read-only.
+    """
     path = Path(path)
-    return parse(path.read_bytes(), source=path)
+    stat = path.stat()
+    key = (str(path), stat.st_ino, stat.st_mtime_ns, stat.st_size)
+    with _cache_lock:
+        hit = _cache.get(key)
+        if hit is not None:
+            _cache.move_to_end(key)
+            return hit
+    export = parse(path.read_bytes(), source=path)
+    with _cache_lock:
+        for old in [k for k in _cache if k[0] == key[0]]:
+            del _cache[old]
+        _cache[key] = export
+        while len(_cache) > _CACHE_MAX:
+            _cache.popitem(last=False)
+    return export
 
 
 def product_lines(export: Export) -> Tuple[str, ...]:

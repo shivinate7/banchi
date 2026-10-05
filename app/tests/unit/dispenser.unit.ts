@@ -3,6 +3,7 @@
 import { expect, test } from './unit'
 import { createDealer, DEAL_GAP_MS } from '../../src/dealer'
 import * as dealerModule from '../../src/dealer'
+import { MotionTrace } from '../../src/trace'
 
 /* THE DISPENSER'S LINK AND LOOP, driven with no React and no clock. `navigator.bluetooth` is a fake
  * that replays tcg-dealer's RECORDED sequences (fixtures/paced_loop_10_of_10.json and
@@ -181,8 +182,8 @@ type Dealer = { connect: () => Promise<void>; start: () => unknown; stop: () => 
 
 async function connected(pairs: Pair[], latency = 0, autoSave = true): Promise<Dealer> {
   reset(pairs, latency)
-  const dealer = createDealer() as unknown as Dealer & { noteSaved?: () => void }
-  if (autoSave) rig.saver = () => dealer.noteSaved?.()
+  const dealer = createDealer() as unknown as Dealer & { photoTaken?: (save: () => Promise<unknown>) => void }
+  if (autoSave) rig.saver = () => dealer.photoTaken?.(() => Promise.resolve())
   await dealer.connect()
   await flush()
   return dealer
@@ -195,8 +196,8 @@ test.afterEach(() => {
   expect(rig.rejected, 'a write was rejected by the fake dispenser').toEqual([])
 })
 
-test('the gap constant is the 200 ms the motion trigger was tuned on', () => {
-  expect(DEAL_GAP_MS).toBe(200)
+test('the gap constant is 50 ms: the next card is dealt as soon as the photo is taken', () => {
+  expect(DEAL_GAP_MS).toBe(50)
 })
 
 test('Connect asks the chooser first, with the name and service filters, and reaches connected', async () => {
@@ -326,7 +327,7 @@ test('SYNTHETIC: Stop while a START is pending sends STOP next, after the write,
 test('Stop during the gap sends STOP and ends dealing', async () => {
   const dealer = await connected(PACED_10)
   void dealer.start()
-  await advance(420 + 50)
+  await advance(420 + DEAL_GAP_MS - 30) // inside the gap, before START 2
   await dealer.stop()
   await advance(5_000)
   expect(rig.writes).toEqual(['MOTOR:START', 'MOTOR:STOP'])
@@ -395,12 +396,31 @@ test('SYNTHETIC: Stop, Start (pending), Stop again before the old COMPLETE: no S
   expect(read(dealer).state).toBe('stopped')
 })
 
-/* ---- the next card waits for the last card's photo (D316) ---- */
-type Saver = Dealer & { noteSaved: () => void }
+/* ---- the next card is dealt when the photo is TAKEN; saving finishes behind it (D316) ----
+ * CONTRACT these cases pin (the builder implements it):
+ *   dealer.photoTaken(save)  the capture fired and the frame is grabbed. `save` re-sends that frame
+ *                            from memory: it resolves when the save came back, rejects when it failed.
+ *                            The dealer calls it at once, and once more if it rejects.
+ *   createDealer({ onMark }) onMark(name, card) with name photo-taken, save-answered, start-sent.
+ *   A twice-failed save stops the dealer with a line that says "not saved". */
+type Saver = Dealer & { photoTaken: (save: () => Promise<unknown>) => void }
 const starts = () => rig.writes.filter((w) => w === 'MOTOR:START').length
 const SAVE_WAIT = () => (dealerModule as unknown as { SAVE_WAIT_MS?: number }).SAVE_WAIT_MS
-async function dealing(): Promise<Saver> {
-  const dealer = (await connected(PACED_10, 0, false)) as Saver
+const ok = () => Promise.resolve()
+/** A save the test answers by hand, one deferred per call. */
+function manual() {
+  const calls: Array<{ ok: () => void; fail: () => void }> = []
+  const save = () =>
+    new Promise<void>((resolve, reject) => {
+      calls.push({ ok: resolve, fail: () => reject(new Error('save failed')) })
+    })
+  return { save, calls }
+}
+async function dealing(options?: unknown): Promise<Saver> {
+  reset(PACED_10)
+  const dealer = (createDealer as unknown as (o?: unknown) => Saver)(options)
+  await dealer.connect()
+  await flush()
   void dealer.start()
   await advance(0)
   return dealer
@@ -410,30 +430,124 @@ test('SAVE_WAIT_MS is exported and is 3000', () => {
   expect(SAVE_WAIT()).toBe(3_000)
 })
 
-test('after COMPLETE no START goes out until noteSaved, then START follows after DEAL_GAP_MS', async () => {
+test('1: COMPLETE and photo taken with the save still pending: START follows after DEAL_GAP_MS', async () => {
   const dealer = await dealing()
-  await advance(420 + 2_000) // COMPLETE at 420 ms, well inside SAVE_WAIT_MS
-  expect(starts()).toBe(1)
-  dealer.noteSaved()
+  const m = manual()
+  await advance(500) // COMPLETE at 420 ms
+  dealer.photoTaken(m.save)
   await advance(DEAL_GAP_MS - 1)
+  expect(starts()).toBe(1)
+  await advance(2)
+  expect(starts()).toBe(2)
+  expect(m.calls).toHaveLength(1) // the save is still out, and nothing waited for it
+  await dealer.stop()
+})
+
+test('1b: a photo after START and before COMPLETE counts: START needs both, then the gap', async () => {
+  const dealer = await dealing()
+  await advance(100)
+  dealer.photoTaken(ok) // taken before COMPLETE at 420 ms
+  await advance(COMPLETE[1] - 100 + DEAL_GAP_MS - 1)
   expect(starts()).toBe(1)
   await advance(2)
   expect(starts()).toBe(2)
   await dealer.stop()
 })
 
-test('a save before COMPLETE counts: START needs COMPLETE and one save, in either order', async () => {
+test('6: a fire between card N-1 photo and card N START does not count for card N: no photo, the dealer stops', async () => {
   const dealer = await dealing()
-  await advance(100)
-  dealer.noteSaved() // the save lands first, COMPLETE at 420 ms
-  await advance(COMPLETE[1] - 100) // now at COMPLETE
-  expect(starts()).toBe(1) // COMPLETE only just landed: gap not yet over
-  await advance(DEAL_GAP_MS + 30)
+  await advance(500)
+  dealer.photoTaken(ok) // card 1's photo
+  await advance(DEAL_GAP_MS - 20)
+  dealer.photoTaken(ok) // a repeat fire for card 1, inside the gap before START 2
+  await advance(30)
+  expect(starts()).toBe(2)
+  await advance(420 + 3_000 + 50) // card 2 COMPLETEs, and no photo of it ever comes
+  expect(starts()).toBe(2)
+  expect(read(dealer).state).toBe('stopped')
+  expect(read(dealer).said).toMatch(/no photo/i)
+})
+
+test('2: a save from the previous card still pending: the next START waits until it comes back', async () => {
+  const dealer = await dealing()
+  const m = manual()
+  await advance(500)
+  dealer.photoTaken(m.save) // card 1, save 1 stays out
+  await advance(DEAL_GAP_MS + 10) // START 2 goes: one unsaved photo
+  expect(starts()).toBe(2)
+  await advance(420 + 100) // card 2 COMPLETEs
+  dealer.photoTaken(m.save) // card 2's photo is taken while save 1 is out
+  await advance(2_000)
+  expect(starts()).toBe(2) // never two unsaved: START 3 holds
+  m.calls[0]?.ok()
+  await advance(DEAL_GAP_MS - 1)
+  expect(starts()).toBe(2)
+  await advance(2)
+  expect(starts()).toBe(3)
+  await dealer.stop()
+})
+
+test('3a: a save that fails is retried once from memory and the dealer goes on', async () => {
+  const dealer = await dealing()
+  const m = manual()
+  await advance(500)
+  dealer.photoTaken(m.save)
+  m.calls[0]?.fail()
+  await advance(0)
+  expect(m.calls).toHaveLength(2) // the retry
+  m.calls[1]?.ok()
+  await advance(DEAL_GAP_MS + 10)
+  expect(starts()).toBe(2)
+  expect(read(dealer).state).toBe('dealing')
+  await dealer.stop()
+})
+
+test('3b: a save that fails twice stops the dealer with a plain line, and no START follows', async () => {
+  const dealer = await dealing()
+  const m = manual()
+  await advance(500)
+  dealer.photoTaken(m.save)
+  m.calls[0]?.fail()
+  await advance(0)
+  m.calls[1]?.fail()
+  await advance(0)
+  expect(m.calls).toHaveLength(2) // once, and once more: never a third
+  expect(read(dealer).state).toBe('stopped')
+  expect(read(dealer).said).toMatch(/not saved/i)
+  expect(read(dealer).said).not.toMatch(/save failed|retry|timeout|COMPLETE|MOTOR|reject/i)
+  expect(rig.writes.at(-1)).toBe('MOTOR:STOP')
+  await advance(10_000)
+  expect(starts()).toBe(1)
+})
+
+test('3c: a save that fails after its card already dealt the next one stops the dealer before START 3', async () => {
+  const dealer = await dealing()
+  const m = manual()
+  await advance(500)
+  dealer.photoTaken(m.save) // save 1 out, START 2 goes
+  await advance(DEAL_GAP_MS + 10)
+  expect(starts()).toBe(2)
+  m.calls[0]?.fail()
+  await advance(0)
+  m.calls[1]?.fail()
+  await advance(0)
+  await advance(420 + 5_000)
+  expect(starts()).toBe(2)
+  expect(read(dealer).state).toBe('stopped')
+  expect(read(dealer).said).toMatch(/not saved/i)
+})
+
+test('4: after COMPLETE no START goes out until the photo is taken (the save is not awaited)', async () => {
+  const dealer = await dealing()
+  await advance(420 + 2_000)
+  expect(starts()).toBe(1)
+  dealer.photoTaken(manual().save)
+  await advance(DEAL_GAP_MS + 1)
   expect(starts()).toBe(2)
   await dealer.stop()
 })
 
-test('no save within SAVE_WAIT_MS after COMPLETE stops the dealer with a line about the tray', async () => {
+test('4b: no photo taken within SAVE_WAIT_MS after COMPLETE stops the dealer with a line about the tray', async () => {
   const dealer = await dealing()
   await advance(420 + 3_000 + 50)
   expect(starts()).toBe(1)
@@ -444,37 +558,75 @@ test('no save within SAVE_WAIT_MS after COMPLETE stops the dealer with a line ab
   expect(read(dealer).said).not.toMatch(/save|timeout|COMPLETE|MOTOR/i)
 })
 
-test('two saves for one card let one START through', async () => {
+test('4c: two photos for one card let one START through', async () => {
   const dealer = await dealing()
   await advance(500)
-  dealer.noteSaved()
-  dealer.noteSaved() // a hand in view: a second save for the same card
-  await advance(DEAL_GAP_MS + 10) // START 2 out at ~620 ms
+  dealer.photoTaken(ok)
+  dealer.photoTaken(ok) // a hand in view: a second photo for the same card
+  await advance(DEAL_GAP_MS + 10)
   expect(starts()).toBe(2)
-  await advance(420 + DEAL_GAP_MS + 100) // card 2 COMPLETEs; no save for it
+  await advance(420 + DEAL_GAP_MS + 100) // card 2 COMPLETEs; no photo for it
   expect(starts()).toBe(2)
   await dealer.stop()
 })
 
-test('Stop while waiting for a save cancels the wait: a later noteSaved sends nothing', async () => {
+test('4d: Stop while waiting for a photo cancels the wait: a later photoTaken sends nothing', async () => {
   const dealer = await dealing()
-  await advance(1_000) // COMPLETE landed, waiting for the save
+  await advance(1_000) // COMPLETE landed, waiting for the photo
   await dealer.stop()
   const writes = rig.writes.length
-  dealer.noteSaved()
+  dealer.photoTaken(ok)
   await advance(5_000)
   expect(rig.writes.length).toBe(writes)
   expect(read(dealer).state).toBe('stopped')
   expect(read(dealer).said).not.toMatch(/no photo/i) // the wait is cancelled, so its alarm never fires
 })
 
-test('noteSaved while idle or not connected sends nothing and does not throw', async () => {
+test('4e: photoTaken while idle or not connected sends nothing and does not throw', async () => {
   reset(PACED_10)
   const idle = createDealer() as unknown as Saver
-  expect(() => idle.noteSaved()).not.toThrow()
+  expect(() => idle.photoTaken(ok)).not.toThrow()
   const ready = (await connected(PACED_10, 0, false)) as Saver
-  expect(() => ready.noteSaved()).not.toThrow()
+  expect(() => ready.photoTaken(ok)).not.toThrow()
   await advance(5_000)
   expect(rig.writes).toEqual([])
   expect(read(ready).state).toBe('connected')
+})
+
+test('5b: the motion trace JSON carries a mark per timing event, with card and time', () => {
+  const trace = new MotionTrace({}, 'motion') as unknown as {
+    mark: (name: string, card: number, tMs?: number) => void
+    toJSON: () => string
+  }
+  trace.mark('start-sent', 1, 1000)
+  trace.mark('photo-taken', 1, 1500)
+  trace.mark('start-sent', 2, 1560)
+  trace.mark('save-answered', 1, 1700)
+  const { marks } = JSON.parse(trace.toJSON()) as { marks?: Array<{ t: number; name: string; card: number }> }
+  expect(marks?.map((m) => `${m.name}:${m.card}`)).toEqual([
+    'start-sent:1',
+    'photo-taken:1',
+    'start-sent:2',
+    'save-answered:1',
+  ])
+  expect((marks?.[2]?.t ?? 0) - (marks?.[1]?.t ?? 0)).toBe(60) // the photo-to-START gap reads off the file
+})
+
+test('5: the dealer reports a mark for photo taken, save answered and START sent, per card', async () => {
+  const marks: Array<[string, number]> = []
+  const dealer = await dealing({ onMark: (name: string, card: number) => marks.push([name, card]) })
+  expect(marks).toEqual([['start-sent', 1]])
+  const m = manual()
+  await advance(500)
+  dealer.photoTaken(m.save)
+  await advance(DEAL_GAP_MS + 10)
+  m.calls[0]?.ok()
+  await advance(0)
+  expect(marks).toEqual([
+    ['start-sent', 1],
+    ['photo-taken', 1],
+    ['start-sent', 2],
+    ['save-answered', 1],
+  ])
+  await dealer.stop()
 })
