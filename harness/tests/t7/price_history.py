@@ -22,7 +22,7 @@ from decimal import Decimal
 from pathlib import Path
 from harness.tests import Checks
 from cli import cmd_reprice, runs
-from pipeline import pricehistory, tcgcsv
+from pipeline import games, pricehistory, tcgcsv
 from server import capture_server, pipeline_routes
 from store import files, master
 from store.session import Store
@@ -1542,7 +1542,7 @@ def check_product_sheet_unsent_sku(checks: Checks) -> None:
             _seed_sku_table(snapshot, [{
                 "sku": "7700001", "name": "Unsent Test Dragon", "set": "Test Set",
                 "number": "001", "condition": "Near Mint Foil",
-            }], product_line="Riftbound")
+            }], product_line=str(games.get("riftbound")["product_line"]))
             bucket = Bucket("7700001", 4242, "month", 1, "2026-09-10", "0.50", 5, 2, None, None, 0)
             snapshot.archive.upsert({"7700001:month:2026-09-10": bucket})
             checks.ok(all(not c.sku for c in snapshot.inventory.cards.values()),
