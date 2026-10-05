@@ -2539,7 +2539,26 @@ def _position_name(inventory: Optional[master.Inventory], box, index) -> dict:
     }
 
 
-def _relabel_positions(table) -> None:
+class _PricingReads:
+    """What one worklist request reads once and hands to every `do_pipeline_pricing` call in it:
+    the snapshot, the corpus (only when it parsed: a failed read is retried per run, so its
+    refusal path is unchanged) and the held-market pair, built on first use."""
+
+    def __init__(self, snapshot: Optional["Snapshot"], book: Optional["corpus.Corpus"]) -> None:
+        self.snapshot = snapshot
+        self.book = book
+        self._held: Optional[Tuple[Optional[str], Dict[str, Any]]] = None
+
+    def held(self) -> Tuple[Optional[str], Dict[str, Any]]:
+        if self._held is None:
+            assert self.snapshot is not None
+            entries = dict(self.snapshot.readings.entries)
+            cutoff = holdings.held_market_cutoff(self.snapshot.inventory, entries)
+            self._held = (None if cutoff is None else str(cutoff), entries)
+        return self._held
+
+
+def _relabel_positions(table, snapshot: Optional["Snapshot"] = None) -> None:
     """Re-render every position label in a parsed `pricing.json`, in place. The file is not touched.
 
     THE STORED LABEL IS NEVER SERVED (D58, on D56's rule), and this is the third surface to
@@ -2584,7 +2603,7 @@ def _relabel_positions(table) -> None:
     if not isinstance(table, dict):
         return
     try:
-        inventory = Store().read().inventory
+        inventory = (snapshot or Store().read()).inventory
     except (files.StoreError, OSError, ValueError, TypeError):
         # THE PRICING SCREEN DOES NOT GO DOWN WITH THE STORE, and that is a property this
         # route had for free until it started reading one. Its table comes off the run
@@ -2615,7 +2634,7 @@ def _relabel_positions(table) -> None:
             at.update(_position_name(inventory, at.get("box"), at.get("index")))
 
 
-def do_pipeline_pricing(name: str) -> dict:
+def do_pipeline_pricing(name: str, reads: Optional[_PricingReads] = None) -> dict:
     """`GET /pipeline/runs/<name>/pricing` — the per-SKU table and this run's answers.
 
     FREE, READ-ONLY, AND IT CREATES NOTHING. It opens files the run directory already holds
@@ -2666,7 +2685,7 @@ def do_pipeline_pricing(name: str) -> dict:
     # THE LABELS, RE-RENDERED BEFORE ANYTHING LEAVES (D58). In place on the document just
     # parsed, which nothing else holds — the file on disk is untouched, exactly as D58 left
     # `QueueEntry.label`.
-    _relabel_positions(pricing)
+    _relabel_positions(pricing, None if reads is None else reads.snapshot)
     # THE ANSWERS COME FROM THE CORPUS, SCOPED TO THIS RUN'S OWN SKUS (D86, amended). They
     # used to be `runs/<n>/decisions.json`, which is why the same card carried one answer per
     # drawer it had been photographed in. Narrowed to this run's rows so a screen drawing one
@@ -2678,13 +2697,14 @@ def do_pipeline_pricing(name: str) -> dict:
     # show you the file.
     answers = None
     try:
-        book = corpus.Corpus.read()
+        book = reads.book if reads is not None and reads.book is not None else corpus.Corpus.read()
         wanted = {str(row.get("sku")) for row in pricing.get("skus") or []}
         answers = book.scoped_to(wanted, run_name=directory.name).to_payload()
     except Exception:  # noqa: BLE001 - see above: a bad corpus must not blank the table
         answers = None
     held_cutoff, held_readings = _held_market(
-        str(row.get("sku")) for row in pricing.get("skus") or [] if row.get("sku")
+        (str(row.get("sku")) for row in pricing.get("skus") or [] if row.get("sku")),
+        reads if reads is not None and reads.snapshot is not None else None,
     )
     return {
         "run": directory.name,
@@ -2711,7 +2731,9 @@ def do_pipeline_pricing(name: str) -> dict:
     }
 
 
-def _held_market(skus: Iterable[str]) -> Tuple[Optional[str], Dict[str, str]]:
+def _held_market(
+    skus: Iterable[str], reads: Optional[_PricingReads] = None
+) -> Tuple[Optional[str], Dict[str, str]]:
     """`(held_market_cutoff, held_market_readings)` from ONE lock-free read of the store.
 
     The cutoff is `holdings.held_market_cutoff` as a string, or None. The readings are
@@ -2721,9 +2743,13 @@ def _held_market(skus: Iterable[str]) -> Tuple[Optional[str], Dict[str, str]]:
     table, the same posture as `_relabel_positions`. Figures are `str()` of what the table holds,
     exact like every price on this wire."""
     try:
-        snapshot = Store().read()
-        entries = dict(snapshot.readings.entries)
-        cutoff = holdings.held_market_cutoff(snapshot.inventory, entries)
+        if reads is not None:
+            cutoff, entries = reads.held()
+        else:
+            snapshot = Store().read()
+            entries = dict(snapshot.readings.entries)
+            raw = holdings.held_market_cutoff(snapshot.inventory, entries)
+            cutoff = None if raw is None else str(raw)
     except (files.StoreError, OSError, ValueError, TypeError):
         return None, {}
     found = {
@@ -2731,7 +2757,7 @@ def _held_market(skus: Iterable[str]) -> Tuple[Optional[str], Dict[str, str]]:
         for sku in skus
         if str(sku) in entries and entries[str(sku)].market not in (None, "")
     }
-    return (None if cutoff is None else str(cutoff)), found
+    return cutoff, found
 
 
 # ----------------------------------------------------------- the cross-run worklist (D86)
@@ -2885,8 +2911,10 @@ class UnsentLedger(NamedTuple):
     live_out: Dict[str, int]
 
 
-def _run_live_by_sku(run: "run_files.Run") -> Dict[str, "run_resolve.LiveReading"]:
-    """Each SKU's `Total Quantity` off the exports this run recorded, dated the way
+def _run_live_by_sku(
+    runs: Sequence["run_files.Run"],
+) -> List[Dict[str, "run_resolve.LiveReading"]]:
+    """One reading map per run, in order: each SKU's `Total Quantity` off the exports this run recorded, dated the way
     `cli/resolve.py:load` dates them — so the figure this route draws is the figure `emit`
     computes for the same leg, and not a second reading of the same file.
 
@@ -2897,13 +2925,23 @@ def _run_live_by_sku(run: "run_files.Run") -> Dict[str, "run_resolve.LiveReading
     """
     parsed: Dict[Path, tcgcsv.Export] = {}
     as_of: Dict[Path, str] = {}
-    for path in set(run.exports_by_game.values()):
+    for path in {p for run in runs for p in run.exports_by_game.values()}:
         try:
             parsed[path] = tcgcsv.read_export(path)
             as_of[path] = str(run_files.describe_source(path)["mtime"])
         except (OSError, ValueError, KeyError):
             continue
-    return run_resolve._live_by_sku(parsed, as_of)
+    # Runs over the same exports share one answer, so each distinct set is walked once.
+    answers: Dict[frozenset, Dict[str, "run_resolve.LiveReading"]] = {}
+    out: List[Dict[str, "run_resolve.LiveReading"]] = []
+    for run in runs:
+        mine = frozenset(p for p in run.exports_by_game.values() if p in parsed)
+        if mine not in answers:
+            answers[mine] = run_resolve._live_by_sku(
+                {p: parsed[p] for p in mine}, {p: as_of[p] for p in mine}
+            )
+        out.append(answers[mine])
+    return out
 
 
 def _catalog_rows(
@@ -2933,10 +2971,14 @@ def _catalog_rows(
     found: "Dict[str, Tuple[tcgcsv.Row, str]]" = {}
     if not wanted:
         return found
+    read: set = set()  # a path two runs share answers once: first file wins, so a second read adds nothing
     for run, _table in tables:
         if len(found) == len(wanted):
             break
         for game, path in run.exports_by_game.items():
+            if path in read:
+                continue
+            read.add(path)
             try:
                 export = tcgcsv.read_export(path)
             except (OSError, ValueError, KeyError):
@@ -3057,9 +3099,10 @@ def _unsent_ledger(
     # local because the orphan pass above may have added SKUs to this leg since the tables
     # were walked, and a reading this loop skipped would leave `_copies_out` answering off
     # the store alone for a SKU whose own export reports it.
-    for run, _table in tables:
+    live_by_run = _run_live_by_sku([run for run, _table in tables])
+    for (run, _table), live in zip(tables, live_by_run):
         mine = per_run.get(run.name) or {}
-        for sku, reading in _run_live_by_sku(run).items():
+        for sku, reading in live.items():
             if sku not in mine:
                 continue
             held = readings.get(sku)
@@ -3128,22 +3171,20 @@ def _on_hand_by_run(inventory: master.Inventory, runs: Iterable[str]) -> Dict[st
     `do_pipeline_worklist` builds anyway), so asking the whole `cards` table which runs
     exist and then counting each is strictly more work than counting the runs the caller
     was already going to look at. `cards.select(("state",), run=name)` reads one indexed
-    column per named run, per run, and builds no card objects (D88) — bounded by the run
-    list and the cards each one holds, never by the size of the store.
+    column once per held state, and builds no card objects (D88). `cards.run` has no
+    index, so one query per named run was one table scan per run.
     """
+    named = set(runs)
     counts: Dict[str, int] = {}
-    for name in runs:
-        n = 0
-        for _key, (state,) in inventory.cards.select(("state",), run=name):
-            if state in (master.SOLD, master.RETIRED, master.MOVED):
-                continue
-            n += 1
-        if n:
-            # A RUN HOLDING NOTHING IS ABSENT RATHER THAN ZERO (unchanged from before this
-            # item) — that is what lets a caller drop a false alarm without dropping a card:
-            # `counts.get(name)` returning `None` for a run with nothing on hand is a
-            # different signal than `0`, and callers rely on the distinction.
-            counts[name] = n
+    for state in master.STATES:  # two held states, two scoped reads, whatever the run count
+        if state in master.TERMINAL_STATES:
+            continue
+        for _key, (run,) in inventory.cards.select(("run",), state=state):
+            # A RUN HOLDING NOTHING IS ABSENT RATHER THAN ZERO: a caller drops a false alarm
+            # without dropping a card, and `counts.get(name)` returning `None` is a different
+            # signal than `0`.
+            if run in named:
+                counts[run] = counts.get(run, 0) + 1
     return counts
 
 
@@ -3274,8 +3315,9 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
     # the worklist's. The picker has to draw runs that are NOT loaded (that is what makes it a
     # picker), and it has to say which of them are worth loading. One pass, reusing the reads
     # the chooser below needs anyway.
+    read_book: Optional["corpus.Corpus"] = None
     try:
-        book = corpus.Corpus.read()
+        read_book = book = corpus.Corpus.read()
     except (decisions.MalformedDecisions, ValueError):
         # A CORPUS THAT CANNOT BE PARSED MUST NOT BLANK THE SCREEN — the operator has to be
         # able to SEE the file that is wrong. Every run then reads as owing an answer, which
@@ -3288,6 +3330,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
         snapshot: Optional[Snapshot] = Store().read()
     except (files.StoreError, OSError, ValueError, TypeError):
         snapshot = None
+    reads = _PricingReads(snapshot, read_book)
 
     # JOINED RUN NAMES, COLLECTED ONCE BEFORE THE MAIN LOOP. This is
     # the SAME `joined` filter the main loop below applies — reading each manifest once here
@@ -3449,7 +3492,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
             )
             continue
         try:
-            payload = do_pipeline_pricing(name)
+            payload = do_pipeline_pricing(name, reads)
         except PipelineRefusal as exc:
             skipped.append({"run": name, "code": exc.code, "message": str(exc)})
             continue

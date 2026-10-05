@@ -62,6 +62,7 @@ NOTHING HERE HAS EVER REACHED TCGPLAYER. Every path is proved against the loopba
 from __future__ import annotations
 
 import contextlib
+import functools
 import hashlib
 import json
 import os
@@ -75,7 +76,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from http import HTTPStatus
 from pathlib import Path
-from typing import Dict, Iterator, List, NoReturn, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterator, List, NoReturn, Optional, Sequence, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -1718,12 +1719,15 @@ def _baseline(record: dict) -> Dict[str, int]:
     return {str(sku): int(n) for sku, n in (before or {}).items()}
 
 
-def _sold_since(record: dict, sku: str, sold_now: Dict[str, int]) -> int:
+def _sold_since(
+    record: dict, sku: str, sold_now: Dict[str, int], read_inventory: Callable
+) -> int:
     """Copies of `sku` marked sold since this send, which the live figure no longer shows.
 
     `sold_before` when the receipt recorded it; otherwise the cards whose sale is dated after
     the send's own start (`Card.state_at`), which is the same answer for a press that died
-    before it wrote the figure.
+    before it wrote the figure. `read_inventory` is a memoized zero-argument read, so one
+    request reads the store once however many SKUs ask.
     """
     recorded = record.get("sold_before")
     if isinstance(recorded, dict) and sku in recorded:
@@ -1731,7 +1735,7 @@ def _sold_since(record: dict, sku: str, sold_now: Dict[str, int]) -> int:
     started = _parse(record.get("at"))
     if started is None:
         return 0
-    inventory = Store().read().inventory
+    inventory = read_inventory()
     return sum(
         1
         for card in inventory.positions_for_sku(sku)
@@ -1854,6 +1858,7 @@ def _credits(
     final = {stamp: _settled(record, now) for stamp, record in receipts}
     checked_at = {stamp: _parse(record.get("checked_at")) for stamp, record in receipts}
     skus = sorted({sku for stamp in due for sku in sent_by.get(stamp, {})})
+    read_inventory = functools.cache(lambda: Store().read().inventory)
     for sku in skus:
         members = [stamp for stamp in sent_by if sku in sent_by[stamp]]
         group = {stamp for stamp in members if stamp in due}
@@ -1876,7 +1881,7 @@ def _credits(
         anchor = min(group, key=lambda stamp: ranks[stamp])
         record = by_stamp[anchor]
         before = int(_baseline(record).get(sku, 0))
-        rise = live_now.get(sku, 0) - before + _sold_since(record, sku, sold_now)
+        rise = live_now.get(sku, 0) - before + _sold_since(record, sku, sold_now, read_inventory)
         left = rise - sum(
             _credited(by_stamp[stamp], sku, sent_by[stamp][sku])
             for stamp in group

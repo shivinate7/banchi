@@ -901,13 +901,11 @@ LOOP_EXPENSIVE_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("server/capture_server.py", "do_move_sections_batch", "_next_capture_line"),   # one layout read per box the last move touched, at most three
     ("server/capture_server.py", "do_undo_section_move", "_box_digest"),   # one records_in read per box the move recorded, at most three
     ("server/pipeline_routes.py", "_catalog_rows", "read_export"),   # one export read per game of one run, bounded by games
-    ("server/pipeline_routes.py", "_run_live_by_sku", "read_export"),   # one export read per distinct export path of one run, bounded by games
+    ("server/pipeline_routes.py", "_run_live_by_sku", "read_export"),   # one export read per distinct export path across the runs asked, bounded by the exports on disk
     ("server/pipeline_routes.py", "_scanned", "sidecar.scan"),   # one directory scan per capture root, bounded by the roots
     ("server/pipeline_routes.py", "_selection_captures", "sidecar.scan"),   # one directory scan per capture root, bounded by the roots
-    ("server/pipeline_routes.py", "_unsent_ledger", "_run_live_by_sku"),   # CANDIDATE: re-reads each run's exports once per run, so it grows with the run count
     ("server/pipeline_routes.py", "do_pipeline_export", "_export_report"),   # one previous-export read per game the answers cover, bounded by games
     ("server/send_routes.py", "_claim_refusal", "_markdown_blocks"),   # the loop returns on its first pass, so the Store().read() runs once
-    ("server/send_routes.py", "_credits", "_sold_since"),   # CANDIDATE: one Store().read() per SKU when the receipt has no `sold_before`; read once per request
     ("server/send_routes.py", "_live_check", "_held_stamps"),   # CANDIDATE: one Store().read() per due stamp; read once before the loop
     ("server/send_routes.py", "_live_check", "_release"),   # one store write per due stamp, bounded by pending sends; each write must be its own transaction
     ("server/send_routes.py", "_live_check", "_resolve_markdown"),   # one export read and one store write per pending markdown stamp, bounded by pending sends
@@ -919,7 +917,7 @@ LOOP_EXPENSIVE_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("store/master.py", "section_tail_key", "_respace"),   # the loop is `range(2)`, a fixed two passes
     ("store/orders.py", "record_pull", "holder_of"),   # CANDIDATE: `holder_of` walks the open orders once per capture id pulled
 })
-LOOP_EXPENSIVE_EXPECTED = 39
+LOOP_EXPENSIVE_EXPECTED = 37
 
 
 # ---------------------------------------------------------------- the package's shared state

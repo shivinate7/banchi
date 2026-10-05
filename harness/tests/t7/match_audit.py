@@ -47,13 +47,9 @@ def _audit(argv, pick, *, ready=True):
     return code, lines, paid
 
 
-def _bytes():
-    return hashlib.sha256((files.inventory_dir() / "store.sqlite").read_bytes()).hexdigest()
-
-
 def _rows():
     """Every row of every table, hashed, columns unnamed, so a write to any table moves it. Unlike
-    `_bytes` it ignores a WAL checkpoint a connection left open by an earlier check may run: a
+    the file bytes it ignores a WAL checkpoint a connection left open by an earlier check may run: a
     checkpoint moves bytes, not rows. A table that cannot be read raises, naming it.
     The one skip beyond `sqlite_*` is the FTS5 table `cards_fts`: it is external-content over
     `cards` and lists a column (`note`) that `cards` lacks, so `select *` on it always raises. Its
@@ -71,6 +67,18 @@ def _rows():
                 sql = [r[0] for r in conn.execute("select sql from sqlite_master where name = ? or tbl_name = ?", (t, t))]
                 raise AssertionError(f"table {t!r} cannot be read: {exc}; schema {sql}") from exc
         return hashlib.sha256(repr((tables, dump)).encode()).hexdigest()
+    finally:
+        conn.close()
+
+
+def _state():
+    """What a no-write verb must leave alone: every row of every table, plus `user_version`. Not
+    the file bytes: a WAL checkpoint, run when a connection closes, moves those without a row."""
+    import sqlite3
+
+    conn = sqlite3.connect(f"file:{files.inventory_dir() / 'store.sqlite'}?mode=ro", uri=True)
+    try:
+        return _rows(), conn.execute("pragma user_version").fetchone()[0]
     finally:
         conn.close()
 
@@ -104,10 +112,10 @@ def check_match_audit(checks: Checks) -> None:
         review0 = fa._review(keys)
 
         # 1. preview: nothing changes, and it says what it found
-        before_bytes, before_cards = _bytes(), _cards(keys)
+        before_state, before_cards = _state(), _cards(keys)
         code, lines, paid = _audit([], pick)
         checks.equal(code, 0, "1. `match audit` runs and exits 0")
-        checks.equal((_bytes(), _cards(keys)), (before_bytes, before_cards), "1. without --write the store bytes and every card row are unchanged")
+        checks.equal((_state(), _cards(keys)), (before_state, before_cards), "1. without --write every row of every table, `user_version` and every card row are unchanged")
         checks.ok(sku in _line(lines, stock) and "disagree" in _line(lines, stock), "1. an in-stock disagreement is listed with its filed SKU and the word disagree")
         checks.ok("disagree" in _line(lines, nosku), "1. an identified card with no SKU is listed, and disagrees")
         checks.ok("disagree" in _line(lines, sold), "1. a sold disagreement is listed too")
@@ -133,10 +141,10 @@ def check_match_audit(checks: Checks) -> None:
 
         # 3. never spends, refuses when not ready
         checks.equal(paid, [], "3. no paid call is made")
-        snap = _bytes()
+        snap = _state()
         code, lines, paid = _audit(["--write"], pick, ready=False)
         checks.ok(code not in (0, "usage") and "not ready" in " ".join(lines).lower(), "3. with no ready model or index it refuses and says not ready")
-        checks.equal(_bytes(), snap, "3. and changes nothing")
+        checks.equal(_state(), snap, "3. and changes nothing")
 
 
 def _reader(accepted, unread):
