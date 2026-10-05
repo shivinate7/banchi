@@ -7239,13 +7239,15 @@ def do_graveyard(buried_only: bool = False) -> dict:
     # is found, not a tombstone here.
     _DEPARTED_STATES = tuple(s for s in master.TERMINAL_STATES if s != master.MOVED)
 
-    holders = _holder_map(ledger)  # once, not one ledger walk per card (D88)
+    holders: Optional[Dict[str, Tuple[str, str]]] = None  # built on first use, once (D88)
     rows: List[dict] = []
     for state in () if buried_only else _DEPARTED_STATES:
         for card in inventory.cards.where(state=state):
             registered = inventory.box(card.box)
             order = None
             if card.capture_id:
+                if holders is None:
+                    holders = _holder_map(ledger)
                 held_by = holders.get(str(card.capture_id).strip())
                 if held_by is not None:
                     order = held_by[0]
