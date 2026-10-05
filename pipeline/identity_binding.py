@@ -122,7 +122,8 @@ def _read_number_key(strategy: str, read_number, read_printed_total) -> Optional
     if strategy == NUMBER_AND_PRINTED_TOTAL:
         if not read_number or not read_printed_total:
             return None
-        composed = join_key(read_number, read_printed_total)
+        # A number that already carries its own "/total" is composed; gluing the total on again would never match a row.
+        composed = str(read_number) if "/" in str(read_number) else join_key(read_number, read_printed_total)
     else:
         if not read_number:
             return None
