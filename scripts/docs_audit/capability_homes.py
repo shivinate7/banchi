@@ -27,39 +27,50 @@ CAPABILITY_HOMES = [{
 # One entry per (file, primitive), each with its reason. Only goes down.
 CAPABILITY_HOMES_ALLOWED = [
     {"file": "identify/images.py", "primitive": "locate_card",
-     "reason": "the preview cut asks the finder alone: a refused box shows the whole photograph, "
-               "no second finder (`_preview_compute`), and `prepare_located` with the crop off "
-               "reports the finder's raw answer"},
+     "reason": "`prepare_located` with the crop off reports the finder's raw answer, never cuts"},
     {"file": "harness/tests/t6_geometry.py", "primitive": "detect_card",
      "reason": "the test of geometry/ itself calls the detector it tests"},
     {"file": "harness/tests/t6_geometry.py", "primitive": "locate_card",
      "reason": "the test of geometry/ itself calls the finder it tests"},
+    {"file": "harness/tests/t7/preview_crop.py", "primitive": "locate_card",
+     "reason": "the preview test wraps the finders to count how often the cut calls them"},
+    {"file": "harness/tests/t7/preview_crop.py", "primitive": "detect_card",
+     "reason": "the preview test wraps the finders to count how often the cut calls them"},
     {"file": "scripts/score-detect.py", "primitive": "detect_card",
      "reason": "it measures the detector itself, so it cannot go through the guard"},
     {"file": "scripts/demo-photos.py", "primitive": "detect_card",
      "reason": "it pads the raw detector box to its own demo framing, with no model"},
 ]
-CAPABILITY_HOMES_EXPECTED = 5
+CAPABILITY_HOMES_EXPECTED = 7
 
 
-def _calls(source: str):
-    """(line, callee name, enclosing function name or None) for each call."""
+def _uses(source: str, prims):
+    """(line, primitive, top-level function name or None) for each way to reach a primitive:
+    a name, an attribute, an import (aliased too), or `getattr(x, "<name>")`. Only a
+    module-level `def` counts as a function; a method is not one."""
     try:
         tree = ast.parse(source)
     except SyntaxError:
         return []
     out = []
 
-    def visit(node, fn):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            fn = node.name
-        if isinstance(node, ast.Call):
-            f = node.func
-            name = f.id if isinstance(f, ast.Name) else f.attr if isinstance(f, ast.Attribute) else None
-            if name:
-                out.append((node.lineno, name, fn))
+    def visit(node, fn, line=0):
+        line = getattr(node, "lineno", line)
+        hit = None
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            hit = node.id
+        elif isinstance(node, ast.Attribute):
+            hit = node.attr
+        elif isinstance(node, ast.alias):
+            hit = node.name.split(".")[-1]
+        elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "getattr"
+              and len(node.args) >= 2 and isinstance(node.args[1], ast.Constant)):
+            hit = node.args[1].value
+        if hit in prims:
+            out.append((line, hit, fn))
         for child in ast.iter_child_nodes(node):
-            visit(child, fn)
+            visit(child, child.name if isinstance(node, ast.Module)
+                  and isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) else fn, line)
 
     visit(tree, None)
     return out
@@ -75,15 +86,15 @@ def home_findings(files: Dict[str, str], registry: Sequence[dict], allow: Sequen
         for path, text in sorted(files.items()):
             if path.startswith(tuple(reg.get("allowed_dirs", ()))):
                 continue
-            for line, name, fn in _calls(text):
-                if name not in prims or (path == home_path and fn in in_home):
+            for line, name, fn in _uses(text, prims):
+                if (path == home_path and fn in in_home):
                     continue
                 seen.add((path, name))
                 if any(a["file"] == path and a["primitive"] == name for a in allow):
                     continue
                 findings.append(Finding(
                     f"{path}:{line}",
-                    f"calls `{name}` outside the {reg['capability']} home. Call "
+                    f"reaches `{name}` outside the {reg['capability']} home. Call "
                     f"`{home_path}` `{home_fn}` instead, or extend it. A second path needs "
                     f"an entry in `CAPABILITY_HOMES_ALLOWED` with the reason."))
     for a in allow:
