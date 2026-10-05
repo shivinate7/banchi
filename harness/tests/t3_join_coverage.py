@@ -3642,6 +3642,10 @@ def _check_number_row_name_crosscheck(c: Checks) -> None:
     an identification). Incident: read `Death from Below`, number misread `150/219`, which is
     `Vex, Apathetic` in the export; it bound by number, listed and sold as the wrong card.
 
+    REGRESSION GUARD: card 4/178 of run 2026-09-11-box4-04 was identified before the
+    `name_disputed` routing landed (ae770c98), so the incident is not reproducible on main.
+    This case goes red when `join.name_disputes` is disabled.
+
     SYNTHETIC rows (the committed Riftbound export holds no Unleashed set), cloned off one
     real row. The read mirrors `cli/cmd_identify.py`: Riftbound's number is the whole
     printed code with no `printed_total`.
