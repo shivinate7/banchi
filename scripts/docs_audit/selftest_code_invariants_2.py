@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 from .core import ADVISORY, MECHANICAL, Report, module_globals
-from .code_invariants import _pipeline_imports, check_import_layering, check_unscoped_walk
+from .code_invariants import _pipeline_imports, check_import_layering, check_loop_expensive, check_unscoped_walk
 from .dispatch import check_dispatch
 from .strings import (
     APP_TS_COMPILER,
@@ -109,6 +109,64 @@ def run(ok) -> None:
         not by_label["unscoped walk"],
         "the real tree, scanned end to end, has zero findings on this row",
         str(by_label["unscoped walk"]),
+    )
+
+    # `loop expensive`: the pre-#711 `_card_summary` shape must be flagged, the fixed shape
+    # (the result built once and passed in) must not, and a stale entry fails the row.
+    print("\nloop expensive: a helper that builds a whole-store `_Places` per loop item")
+    with tempfile.TemporaryDirectory() as tmp:
+        fixture = Path(tmp) / "fixture_sitting.py"
+        fixture.write_text(
+            "def _card_summary(inventory, card):\n"
+            "    place = _Places(inventory).of(card.box, card.index)\n"
+            "    return {'place': place}\n"
+            "\n"
+            "def _fixed_summary(inventory, card, places):\n"
+            "    return {'place': places.of(card.box, card.index)}\n"
+            "\n"
+            "def do_capture_sitting():\n"
+            "    inventory = Store().read().inventory\n"
+            "    return [_card_summary(inventory, c) for c in inventory.cards.values()]\n"
+            "\n"
+            "def do_fixed_sitting():\n"
+            "    inventory = Store().read().inventory\n"
+            "    places = _Places(inventory)\n"
+            "    return [_fixed_summary(inventory, c, places) for c in range(3)]\n",
+            encoding="utf-8",
+        )
+        _g = module_globals()
+        _saved = {k: _g[k] for k in ("_LOOP_ROOTS", "LOOP_EXPENSIVE_ALLOWED", "LOOP_EXPENSIVE_EXPECTED")}
+        try:
+            _g["_LOOP_ROOTS"] = (Path(tmp),)
+            _g["LOOP_EXPENSIVE_ALLOWED"] = frozenset()
+            _g["LOOP_EXPENSIVE_EXPECTED"] = 0
+            report = Report()
+            check_loop_expensive(report)
+            fresh = [f.message for row in report.checks for f in row.findings]
+            _g["LOOP_EXPENSIVE_ALLOWED"] = frozenset({("gone.py", "gone", "records_in")})
+            _g["LOOP_EXPENSIVE_EXPECTED"] = 1
+            report = Report()
+            check_loop_expensive(report)
+            stale = [f.message for row in report.checks for f in row.findings]
+        finally:
+            _g.update(_saved)
+        ok(
+            any("`do_capture_sitting` calls `_card_summary`" in m for m in fresh)
+            and not any("do_fixed_sitting" in m for m in fresh),
+            "the `_card_summary` shape is flagged by name, the fixed shape is not",
+            str(fresh),
+        )
+        ok(
+            any("`gone`" in m and "finds no such call" in m for m in stale),
+            "an allowlist entry the scan does not find fails the row",
+            str(stale),
+        )
+
+    report = Report()
+    check_loop_expensive(report)
+    ok(
+        not [f for row in report.checks for f in row.findings],
+        "the real tree has zero findings on the loop expensive row",
     )
 
     # `import layering` (D63): a lazy `from pipeline import x` inside
