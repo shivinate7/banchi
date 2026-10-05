@@ -3045,7 +3045,13 @@ def do_capture(payload: dict) -> Tuple[HTTPStatus, dict]:
     return (HTTPStatus.CREATED if created else HTTPStatus.OK), body
 
 
-def _card_summary(inventory: master.Inventory, card: master.Card, *, created: bool) -> dict:
+def _card_summary(
+    inventory: master.Inventory,
+    card: master.Card,
+    *,
+    created: bool,
+    places: "Optional[_Places]" = None,
+) -> dict:
     """Where a card landed. `place` is the block; the three loose keys are compatibility.
 
     THE LOOSE `label`, `section` AND `card` ARE THE SAME VALUES AS THE ONES INSIDE `place`,
@@ -3063,7 +3069,7 @@ def _card_summary(inventory: master.Inventory, card: master.Card, *, created: bo
     card went, while the block's null stays the true answer to "which slot". Two
     consumers, two questions, one composer each.
     """
-    place = _Places(inventory).of(card.box, card.index)
+    place = (places or _Places(inventory)).of(card.box, card.index)
     return {
         "box": int(card.box),
         "index": int(card.index),
@@ -7345,8 +7351,9 @@ def do_capture_sitting() -> dict:
     inventory = snapshot.inventory
     keys = _open_sitting(inventory)
     rows = []
+    places = _Places(inventory)  # one per request: its per-box cache survives the loop
     for card in (inventory.cards[key] for key in keys):
-        row = _card_summary(inventory, card, created=False)
+        row = _card_summary(inventory, card, created=False, places=places)
         row.update(
             captured_at=card.captured_at,
             set_hint=card.set_hint,
