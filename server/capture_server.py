@@ -4135,7 +4135,17 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
         body = _card_summary(snapshot.inventory, card, created=False)
         body["sidecar"] = str(sidecar_path(photo)) if wrote_sidecar else None
 
+    if changed:
+        _requeue_free_read([key])
     return body
+
+
+def _requeue_free_read(keys: List[str]) -> None:
+    """After a claims write commits: the free background reader reads these cards again."""
+    if keys:
+        from identify import sweep
+
+        sweep.forget_tried(keys)
 
 
 def do_put_box_claims(box: int, payload: dict) -> dict:
@@ -4357,6 +4367,8 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
 
         for _at, key, changed in applied:
             _history(inventory, CORRECTED, key, changed=changed, bulk=len(applied))
+
+    _requeue_free_read([key for _at, key, _changed in applied])
 
     return {
         "box": int(box),

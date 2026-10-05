@@ -230,6 +230,17 @@ def remember_tried(additions: Dict[str, str]) -> None:
     _write_json(tried_path(), {"model": MODEL_SHA256, "stamp": stamp, "building": sorted(building), "keys": keys})
 
 
+def forget_tried(keys: Sequence[str]) -> None:
+    """Drop the tried marks of the named positions, so the free reader reads them again. Same atomic write as
+    `remember_tried`, over the record as it is now, with the stamp and building list kept. A set-aside card stays set aside."""
+    record = _read_json(tried_path())
+    if not isinstance(record, dict) or not isinstance(record.get("keys"), dict):
+        return
+    left = {k: v for k, v in record["keys"].items() if k not in set(keys)}
+    if len(left) != len(record["keys"]):
+        _write_json(tried_path(), {**record, "keys": left})
+
+
 _QUEUE_WHERE = (
     "c.state = 'captured' "
     "and coalesce(c.game, 'pokemon') in ({games}) "

@@ -438,6 +438,7 @@ A retry downloads the model from zero, because `match prepare` clears the partia
 A tried mark made while a Prepare runs never counts once the Prepare ends.
 `match.index_stamp` changes when the index gains a set or a fingerprint. `sweep.tried` counts a tried mark from an older stamp as empty,
 so cards tried before their set was read are tried again.
+A claims correction that changes a card's claim (`do_put_box_claims`, `do_put_card`) calls `sweep.forget_tried` for that card after the store write commits, so the free reader reads it again; a set-aside card stays set aside.
 
 **Weekly re-check.** A printing with no image is asked again at most once a week, in the background, with no press. Nothing spends.
 `pipeline_routes.recheck_stock_photos` runs once per look of `stock_setup_loop`, under the same guards as the free setup
