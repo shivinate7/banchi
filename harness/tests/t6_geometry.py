@@ -771,4 +771,19 @@ def _model_cases(c, Image, ImageDraw) -> Result:
                  f"mean abs diff {diff:.1f} of 255")
         pw, ph = prepared.sent_size
         c.ok(pw > ph, "the preview's cut keeps a landscape card landscape", f"{pw}x{ph}")
+
+        # 8e. A refused model box and a detect_card that finds nothing: there is NO box. The preview
+        # then sends the whole frame; the free reader must not cut the refused box.
+        with mock.patch.object(card_box, "model_card", lambda *_a, **_k: part), \
+                mock.patch.object(card_box, "detect_card", lambda *_a, **_k: None), \
+                mock.patch.object(geometry, "detect_card", lambda *_a, **_k: None):
+            boxed = images_mod.card_box_for(upright)
+            cut = match._crop(upright, 0.716)
+        c.ok(boxed is None, "card_box_for returns no box when the model box is refused and detect_card finds none",
+             str(boxed))
+        with Image.open(upright) as frame_img:
+            frame_size = frame_img.size
+        c.ok(cut is None or cut.size == frame_size,
+             "free reader does not cut a refused box: it sends the whole frame, as the preview does",
+             f"{cut.size if cut is not None else None} against frame {frame_size}")
     return c.result()
