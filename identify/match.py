@@ -568,11 +568,12 @@ def _settled_by_claim(request: "Request", pool: Pool, order, sims) -> Optional[i
     if len(fits) != 1:
         return None
     pick = fits[0]
-    if len(order) > 2:
-        third = int(order[2])
-        if float(sims[pick]) - float(sims[third]) < MARGIN_MIN and (
-            card(third) != card(pick)
-            or variant.rarity_filter([{tcgcsv.RARITY_COLUMN: rarities[third] or ""}], claim)
+    for k in order[2:]:
+        other = int(k)
+        if float(sims[pick]) - float(sims[other]) >= MARGIN_MIN:
+            break  # sorted: every later candidate is further away
+        if card(other) != card(pick) or variant.rarity_filter(
+            [{tcgcsv.RARITY_COLUMN: rarities[other] or ""}], claim
         ):
             return None
     return pick
