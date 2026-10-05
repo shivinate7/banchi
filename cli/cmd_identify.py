@@ -970,7 +970,7 @@ def run(args, say) -> int:
 
     if not captures:
         try:
-            selection_mod.refuse_empty(selection, scanned)
+            selection_mod.refuse_empty(selection, scanned, store_files.home())
         except selection_mod.SelectionError as exc:
             say(f"{exc}")
         return 1
