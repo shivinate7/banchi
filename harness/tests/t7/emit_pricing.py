@@ -4389,6 +4389,49 @@ def check_money_one_home(checks: Checks) -> None:
         checks.equal(send_routes._price(text), want, f"`send_routes._price` agrees with the home on {text!r}")
         checks.equal(number(text), want, f"`_number` agrees with the home on {text!r}")
 
+    for text in ("1,50", "1,5", "1,2,3", ",5", "$", "$$5", "-", "N/A"):
+        checks.equal(home(text), "raised InvalidOperation", f"the home refuses {text!r}, as main does")
+    for text, want in (("$1,234.50", Decimal("1234.50")), ("-3", Decimal("-3"))):
+        checks.equal(home(text), want, f"the home reads {text!r} as {want}")
+    checks.equal(home(""), None, "a blank cell is None")
+    checks.equal(send_routes._price("1,50"), None, "a named price of '1,50' is refused, never written as 150.00")
+
+
+def check_live_listing_per_sku(checks: Checks) -> None:
+    """A bad `Total Quantity` cell makes `live_now` unknown for that SKU only; two rows of one
+    SKU sum; `do_pipeline_movers` still counts the SKUs the bad row does not touch."""
+    checks.note("")
+    checks.note("LIVE LISTING — one bad row takes only its own SKU")
+
+    head = "TCGplayer Id,Product Line,Set Name,Product Name,Title,Number,Rarity,Condition,TCG Market Price,Total Quantity,TCG Marketplace Price"
+
+    def line(sku, qty):
+        return f'"{sku}","Pokemon","Set","Name","","","","Near Mint","1.00","{qty}","1.00"'
+
+    def read(rows):
+        with isolated_home():
+            live = files.inventory_dir() / pipeline_routes.LIVE_DIR
+            live.mkdir(parents=True, exist_ok=True)
+            (live / f"{pipeline_routes.LIVE_PREFIX}20260101-000000.csv").write_bytes(
+                ("\r\n".join([head, *rows]) + "\r\n").encode("utf-8")
+            )
+            pipeline_routes._NEWEST_LIVE.clear()
+            try:
+                _, listing = pipeline_routes._newest_live_listing()
+                pipeline_routes._NEWEST_LIVE.clear()
+                moved = pipeline_routes.do_pipeline_movers()
+            finally:
+                pipeline_routes._NEWEST_LIVE.clear()
+            return {k: v[1] for k, v in listing.items()}, moved
+
+        return None
+
+    counts, _ = read([line("501", 2), line("501", 3)])
+    checks.equal(counts, {"501": 5}, "two rows of one SKU sum")
+    counts, moved = read([line("501", 2), line("502", "two"), line("503", 4)])
+    checks.equal(counts, {"501": 2, "502": None, "503": 4}, "a bad cell is unknown for its own SKU only, every other SKU keeps its count")
+    checks.equal(moved["listed"], 2, "`do_pipeline_movers` still counts the live SKUs a bad row does not touch")
+
 
 CHECKS = (
     check_pipeline_routes,
@@ -4416,4 +4459,5 @@ CHECKS = (
     check_pricing_reach,
     check_live_listing_one_home,
     check_money_one_home,
+    check_live_listing_per_sku,
 )

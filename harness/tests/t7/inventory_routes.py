@@ -2925,6 +2925,7 @@ def check_card_decoration_one_home(checks: Checks) -> None:
     sku = "7000001"
     with isolated_home():
         capture_server.do_capture(capture_payload(1))
+        capture_server.do_capture(capture_payload(1))  # 1/2: no SKU, stays unlisted
         with Store().write() as snapshot:
             from store.skus import SkuRow as Row
             snapshot.skus.entries[sku] = Row(
@@ -2975,6 +2976,11 @@ def check_card_decoration_one_home(checks: Checks) -> None:
         checks.ok(
             base_full.get("listing") is not None and base_full.get("label"),
             "the reference card carries listing facts and a label", str(base),
+        )
+        bare = capture_server.do_inventory_box(1)["cards"]["1/2"]
+        checks.ok(
+            not any(f in bare for f in listing_keys),
+            "a card with no SKU carries no listing, listing_differs or reading_differs keys on the box route", str(sorted(bare)),
         )
         for name, record in got.items():
             checks.equal(trim(record, name), trim(base_full, name), f"{name} yields the same decoration as the box route")
