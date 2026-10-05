@@ -2,6 +2,7 @@
 // Governs: D10
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import type { GameRegistry, ResolvedOrder } from '../src/types'
+import { absoluteDate } from '../src/dates'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 import { afterPaint, settleMotion, settled, whatMoved } from './motionSettled'
@@ -6916,7 +6917,7 @@ test('Reload re-reads the price, because a join is what a reload is pressed afte
   at = Math.floor((Date.now() - 9 * 86400000) / 1000)
   await openCardOps(page)
   await page.getByRole('menuitem', { name: 'Reread' }).click()
-  await expect(market).toContainText('read 9 days ago')
+  await expect(market).toContainText(`read ${absoluteDate(at * 1000)}`)
   await expect(market.locator('.bn-tnum')).toHaveText('$5.47')
 })
 

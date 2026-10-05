@@ -2281,7 +2281,7 @@ test('a reuse seconds old reads as a sentence, not as a missing figure', async (
   await fetchButton(page).click()
 
   const receipt = page.locator('.run-receipt')
-  await expect(receipt).toContainText('taken moments ago')
+  await expect(receipt).toContainText('taken just now')
   await expect(receipt).not.toContainText('ago and already')
   await expect(receipt).not.toContainText('old —')
   await expect(receipt).not.toContainText('0 minutes')
@@ -2381,7 +2381,7 @@ test('a widened scope carries its measured width against the cap, before the pre
   await openRun(page)
 
   const says = page.locator('.run-scope-says')
-  await expect(says).toContainText('31 MB')
+  await expect(says).toContainText('32.6 MB')
   await expect(says).toContainText('97%')
   /* AND THE REMEDY, not just the alarm. A figure with nothing to do about it is a figure an
      operator learns to skip. */
