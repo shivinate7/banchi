@@ -1,4 +1,4 @@
-## DEBT-duplicate-homes — Capabilities written twice that have not drifted yet
+## DEBT86 — Capabilities written twice that have not drifted yet
 
 **A whole-repo sweep found capabilities with more than one implementation whose copies still agree.** The hard rule "one home per capability" covers them. The ten copies that had already drifted are fixed separately. These are next.
 
