@@ -1525,8 +1525,45 @@ def check_price_history(checks: Checks) -> None:
         checks.ok(False, "a 500 must not be reported as `Blocked`", "it was")
 
 
+def check_product_sheet_unsent_sku(checks: Checks) -> None:
+    """`GET /pipeline/products/<sku>/history` for a SKU the worklist shows but no card carries.
+
+    A card joined to a SKU has an empty `cards.sku` until emit or confirm stamps it. The
+    product row must then come from the `skus` table; a SKU in no table still refuses.
+    """
+    from harness.tests.t7.common import _seed_sku_table
+    from store.pricearchive import Bucket
+
+    checks.note("")
+    checks.note("PRODUCT SHEET — a SKU in the skus table that no card carries yet opens")
+    with isolated_home():
+        capture_server.do_capture(capture_payload(7, game="riftbound"))
+        with Store().write() as snapshot:
+            _seed_sku_table(snapshot, [{
+                "sku": "7700001", "name": "Unsent Test Dragon", "set": "Test Set",
+                "number": "001", "condition": "Near Mint Foil",
+            }], product_line="Riftbound")
+            bucket = Bucket("7700001", 4242, "month", 1, "2026-09-10", "0.50", 5, 2, None, None, 0)
+            snapshot.archive.upsert({"7700001:month:2026-09-10": bucket})
+            checks.ok(all(not c.sku for c in snapshot.inventory.cards.values()),
+                      "fixture: no card carries the SKU")
+        try:
+            got = pipeline_routes.do_product_history("7700001")
+        except pipeline_routes.PipelineRefusal as exc:
+            got = {"refused": exc.code}
+        checks.ok(got.get("name") == "Unsent Test Dragon" and "Foil" in str(got.get("condition")),
+                  f"a catalogued SKU no card carries answers with its catalog row, got {got.get('refused') or got.get('name')}")
+        try:
+            pipeline_routes.do_product_history("9999999")
+            code = None
+        except pipeline_routes.PipelineRefusal as exc:
+            code = exc.code
+        checks.ok(code == "sku_unknown", "a SKU in no table still refuses sku_unknown")
+
+
 CHECKS = (
     check_price_history,
     check_history_route,
     check_history_blocked_route,
+    check_product_sheet_unsent_sku,
 )
