@@ -51,6 +51,25 @@ def _bytes():
     return hashlib.sha256((files.inventory_dir() / "store.sqlite").read_bytes()).hexdigest()
 
 
+def _rows():
+    """Every row of every table, hashed. Unlike `_bytes` it ignores a WAL checkpoint that a
+    connection left open by an earlier T7 check may run at any moment: a checkpoint moves bytes, not rows."""
+    import sqlite3
+
+    conn = sqlite3.connect(f"file:{files.inventory_dir() / 'store.sqlite'}?mode=ro", uri=True)
+    try:
+        tables = [r[0] for r in conn.execute("select name from sqlite_master where type = 'table' order by name")]
+        dump = []
+        for t in tables:
+            try:
+                dump.append(sorted(repr(r) for r in conn.execute(f'select * from "{t}"')))
+            except sqlite3.OperationalError as exc:  # a table an earlier check left unreadable: its error is its row
+                dump.append([str(exc)])
+        return hashlib.sha256(repr((tables, dump)).encode()).hexdigest()
+    finally:
+        conn.close()
+
+
 def _cards(keys):
     return {k: repr(Store().read().inventory.cards[k]) for k in keys}
 
@@ -153,13 +172,13 @@ def check_match_audit_edges(checks: Checks) -> None:
         seeded = repr(Store().read().review.entries[inrev])
 
         # 3. the background reader holds its lock: refuse, plainly, write nothing
-        held, snap_bytes = sweep.acquire_lock(), _bytes()
+        held, snap_rows = sweep.acquire_lock(), _rows()
         try:
             code, lines, _paid = _audit(["--write"], pick)
         finally:
             held.close()
         checks.ok(code not in (0, "usage") and "background reader" in " ".join(lines).lower(), "3. with the background reader running the audit refuses, naming it, and exits non-zero")
-        checks.equal(_bytes(), snap_bytes, "3. and writes nothing")
+        checks.equal(_rows(), snap_rows, "3. and writes nothing (every row of every table unchanged)")
 
         code, lines, _paid = _audit(["--write"], pick)
         entries = Store().read().review.entries
