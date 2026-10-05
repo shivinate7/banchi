@@ -450,14 +450,20 @@ def sweep_worker(say) -> int:
     return 0
 
 
-def _disagrees(card, payload) -> bool:
+def _disagrees(card, payload, skus=None) -> bool:
     """The free pick names another card than the filed one: a different number, or a name that
-    matches nothing the filed name stands for (`join.name_disputes`, the join's own test)."""
-    from pipeline import tcgcsv
+    matches nothing the filed name stands for (`join.name_disputes`, the join's own test).
+    The filed card is the SKU's catalog row when `skus` has one, else the paid reader's words."""
+    from pipeline import games, tcgcsv
 
-    if join.number_index_key(payload.get("number")) != join.number_index_key(card.read_number):
+    row = (skus or {}).get(card.sku) if card.sku else None
+    name, numbers = card.read_name, [card.read_number]
+    if row:  # the row's `Number` cell whole, or split the way this game's join splits it (Pokemon "084/132" is 84 of 132)
+        name = row.product_name
+        numbers = [row.number, join.catalog_number_fields(str(card.game or games.DEFAULT_GAME), row.number)[0]]
+    if join.number_index_key(payload.get("number")) not in {join.number_index_key(n) for n in numbers}:
         return True
-    return join.name_disputes(payload.get("name"), [{tcgcsv.NAME_COLUMN: card.read_name}])
+    return join.name_disputes(payload.get("name"), [{tcgcsv.NAME_COLUMN: name}])
 
 
 def audit(say, *, write: bool = False) -> int:
@@ -512,7 +518,7 @@ def _audit_locked(say, write: bool) -> int:
             code = str(result.code or "unread")
             unchecked[code] = unchecked.get(code, 0) + 1
             continue
-        bad = _disagrees(card, result.payload)
+        bad = _disagrees(card, result.payload, snapshot.skus.entries)
         gone = card.state in master.TERMINAL_STATES
         held = result.key in in_review
         say(f"{result.key:<8} {'disagree' if bad else 'agree':<9} filed {card.sku or 'no SKU'} as {card.read_name} {card.read_number}"
