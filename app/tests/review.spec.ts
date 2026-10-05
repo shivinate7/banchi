@@ -2518,3 +2518,408 @@ for (const width of [820, 1440]) {
     expect(heights[1], 'chip height changes with its text').toBe(heights[0])
   })
 }
+
+/* ------------------------------------------------------------ the band sheets (identify-engine-pick.md section 10) */
+
+test.describe('the Review band sheets', () => {
+  /* THE BAND'S SHEETS, ASSERTED (`docs/specs/identify-engine-pick.md`, section 10; checks 9 to 14 and 16 to 19).
+   * These cases are written RED against the band as it stands (four plain `div` figures) and go green when the sheets are built.
+   *
+   * WHAT THE BUILDER MUST ADD, NAMED SO THE FIXTURE AND THE CODE AGREE (the spec fixes the behaviour, not the markup):
+   *   - the three counts (matched free, waiting for a paid look, not yet looked at) are each ONE real `button` inside
+   *     `.review-band-count`, named "<n> <label>". "Waiting for you" stays a `div`. The "N need a set named" part of
+   *     `.review-band-health` is a `button` of its own, shown only above 0.
+   *   - a press opens the kit's `Sheet`: `role="dialog"` named by the count's own words ("2 waiting for a paid look").
+   *   - inside it every group is `role="group"` named by its group title (the paid sheet: 10.3's titles; the matched sheet: the
+   *     set; the not-yet-looked-at and set-named sheets: the box name). A group holds a list, one `li` per card. A row's press
+   *     is a link or a button inside its `li`. A group's first 50 rows show, then a button "Show 50 more".
+   *   - "The count has moved" is text in the dialog, with a button "Show it again". "Back to Capture" is a button in the dialog
+   *     on an empty sheet.
+   *   - `GET /pipeline/match/sweep?keys=<csv>&detail=paid|unread|matched|unhinted` adds `cards`, one row per card of that count:
+   *     `{key, box_name, index, cid, code, candidates:[{name, set, number}]}`; a matched row adds `name, set, number, accept`.
+   *     The same shape the harness cases (`harness/tests/t7/engine_sweep.py`) assume.
+   *   Not asserted here, on purpose: the card panel opening on Inventory (the deep link's own specs hold it), and a claims write
+   *   moving a card out of a sheet (checks 15 and 21, proved over the real route in the harness). */
+
+
+  const SIZES = [
+    { width: 1440, height: 900 },
+    { width: 820, height: 1000 },
+  ] as const
+
+  type Fate = 'matched' | 'paid' | 'unread' | 'review' | 'done' | 'unhinted'
+  type Why = { code: string | null; candidates?: { name: string; set: string; number: string }[] }
+
+  const keyOf = (n: number): string => `3/${n}`
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+
+  const FATES: Record<string, Fate> = {
+    '3/1': 'matched', '3/2': 'matched', '3/3': 'matched',
+    '3/4': 'paid', '3/5': 'paid',
+    '3/6': 'unread', '3/7': 'unread',
+    '3/8': 'review', '3/9': 'review',
+    '3/10': 'done',
+  }
+  const WHY: Record<string, Why> = {
+    '3/4': { code: 'margin_too_small' },
+    '3/5': { code: 'lookalike_guard' },
+  }
+  const CANDIDATES = [
+    { name: 'Snorlax', set: 'Mega Evolution', number: '051' },
+    { name: 'Snorlax', set: 'Paldea Evolved', number: '143' },
+  ]
+
+  type Wire = {
+    fates: Record<string, Fate>
+    why: Record<string, Why>
+    /** the sitting's keys, in order */
+    sitting: string[]
+    /** box names by box number */
+    boxes: Record<number, string>
+    asked: string[][]
+    details: string[]
+    hold: Promise<void> | null
+  }
+
+  function reviewEntry(key: string) {
+    const [box, index] = key.split('/').map(Number) as [number, number]
+    return {
+      position: `Box ${box}, Section 1, Card ${index}`, box, index, label: `Box ${box}, Section 1, Card ${index}`,
+      photo: `photos/${box}/${index}.jpg`, read: { name: 'Snorlax', number: '051', printed_total: '132', set_hint: 'ME01' },
+      confidence: null, reason: 'no_catalog_row', candidates: [], first_seen: '2026-09-01T12:00:00+00:00', market: null, cleared_by_human: false,
+    }
+  }
+
+  function sittingCard(key: string) {
+    const [box, index] = key.split('/').map(Number) as [number, number]
+    return {
+      box, index, key, label: `Box ${box}, Section 1, Card ${index}`, section: 1, card: index, new_box: index === 1, created: true,
+      photo: `/tmp/${key.replace('/', '-')}.jpg`, capture_id: null, place: { box_total: index }, captured_at: '2026-09-25T12:00:00+00:00',
+      set_hint: null, metadata_finish: null, game: 'pokemon', state: 'captured',
+    }
+  }
+
+  async function seed(page: Page, over: Partial<Wire> = {}): Promise<Wire> {
+    const wire: Wire = { fates: { ...FATES }, why: { ...WHY }, sitting: Object.keys(FATES), boxes: { 3: 'Band box', 4: 'Starter' }, asked: [], details: [], hold: null, ...over }
+    const keysOf = (fate: Fate, keys: string[]) => keys.filter((key) => wire.fates[key] === fate)
+    const rowOf = (key: string, fate: Fate) => {
+      const [box, index] = key.split('/').map(Number) as [number, number]
+      const why = wire.why[key]
+      const base = { key, box_name: wire.boxes[box] ?? `Box ${box}`, index, cid: `cid-${box}-${index}` }
+      if (fate === 'paid') return { ...base, code: why?.code ?? null, candidates: why?.candidates ?? (why?.code ? CANDIDATES : []) }
+      if (fate === 'matched') return { ...base, name: 'Snorlax', set: 'Mega Evolution', number: '051', accept: 'baseline' }
+      return base
+    }
+    await page.route(/\/capture\/sitting$/, (route) =>
+      route.fulfill(json({ open: true, gap_minutes: 30, cards: wire.sitting.map(sittingCard) })),
+    )
+    await page.route(/\/boxes$/, (route) =>
+      route.fulfill(json({ boxes: [{ box: 3, bid: 13, name: 'Band box', sections: [1], state: 'open', capacity: null, fill: 14, next_index: 15, cards: 14, sold: 0, retired: 0, listed: 0, on_hand: 14, sections_detail: [{ section: 1, start: 1, end: null, count: 14, name: null, div: '1' }], layout_token: 't' }] })),
+    )
+    await page.route(/\/status$/, (route) =>
+      route.fulfill(json({ captures_root: 'captures', store: 'inventory/store.sqlite', store_exists: true, cards: 14, states: { captured: 8 }, queues: { review: 3, parked: 0 }, next_index: { '3': 15 } })),
+    )
+    await page.route(/\/pipeline\/match\/sweep(\?.*)?$/, async (route) => {
+      const params = new URL(route.request().url()).searchParams
+      const asked = params.get('keys')
+      if (asked === null) return route.fulfill(json({ on: true, running: false, blocked: null, aside: 0, matched: 500 }))
+      const keys = asked.match(/[^,]+/g) ?? []
+      const detail = params.get('detail')
+      if (detail === null) {
+        wire.asked.push(keys)
+        if (wire.hold !== null) await wire.hold
+      } else wire.details.push(detail)
+      const body: Record<string, unknown> = {
+        on: true, running: false, worker: false, blocked: null, aside: 0,
+        matched_here: keysOf('matched', keys).length, matched_keys: keysOf('matched', keys),
+        paid: keysOf('paid', keys).length, paid_keys: keysOf('paid', keys),
+        unread: keysOf('unread', keys).length, unhinted: keysOf('unhinted', keys).length,
+      }
+      if (detail !== null) {
+        const fate = detail as Fate
+        body.cards = keysOf(fate, keys).map((key) => rowOf(key, fate))
+      }
+      return route.fulfill(json(body))
+    })
+    await page.route(/\/queues$/, (route) =>
+      route.fulfill(json({ review: Object.keys(wire.fates).filter((key) => wire.fates[key] === 'review').map(reviewEntry), parked: [] })),
+    )
+    await page.route(/\/pipeline\/waiting$/, (route) => route.fulfill(json({ keys: [], claimed: 0 })))
+    await page.route(/\/pipeline\/runs$/, (route) => route.fulfill(json({ runs: [runRow({ counts: { cards_in: 10 }, usage: { cost_usd: 0.3 } })] })))
+    await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 200, contentType: 'image/gif', body: Buffer.from('R0lGODlhAQABAAAAACw=', 'base64') }))
+    return wire
+  }
+
+  const band = (page: Page): Locator => page.locator('.review-band')
+  const count = (page: Page, label: string): Locator => band(page).locator('.review-band-count').filter({ hasText: new RegExp(label, 'i') })
+  const countButton = (page: Page, name: RegExp): Locator => band(page).getByRole('button', { name })
+  /** Press a count, saying so as an assertion when it is not a button yet. */
+  async function openCount(page: Page, name: RegExp): Promise<void> {
+    const button = countButton(page, name)
+    await expect(button, ` is a button`).toBeVisible()
+    await button.click()
+  }
+  const sheet = (page: Page): Locator => page.getByRole('dialog')
+
+  async function openReview(page: Page): Promise<void> {
+    await page.goto('/#/review')
+    await expect(page.locator('main.review')).toBeVisible()
+    await settleFonts(page)
+  }
+
+  /** Every case starts from the band loaded: the counts have answered. */
+  async function loaded(page: Page): Promise<void> {
+    await expect(count(page, 'matched free')).toContainText(/\d/)
+    await expect(count(page, 'waiting for you')).toContainText(/\d/)
+  }
+
+  test.beforeEach(async ({ page }) => stubStore(page))
+
+  for (const size of SIZES) {
+    test.describe(`${size.width}`, () => {
+      test.beforeEach(async ({ page }) => setViewport(page, size))
+
+      test('10. matched free, waiting for a paid look and not yet looked at are each a button that names its count and holds its size', async ({ page }) => {
+        let release: () => void = () => undefined
+        await seed(page, { hold: new Promise<void>((done) => (release = done)) })
+        await openReview(page)
+        const names = [/^3 matched free$/, /^2 waiting for a paid look$/, /^2 not yet looked at$/]
+        const labels = ['matched free', 'waiting for a paid look', 'not yet looked at']
+        const before = await Promise.all(labels.map((label) => count(page, label).boundingBox()))
+        for (const label of labels) {
+          await expect(count(page, label).getByRole('button'), `${label} is a button while the band loads`).toBeDisabled()
+        }
+        release()
+        await loaded(page)
+        for (const [at, name] of names.entries()) {
+          const button = countButton(page, name)
+          await expect(button).toBeEnabled()
+          await expect(button).toHaveAttribute('aria-haspopup', 'dialog')
+          await expect(button).toHaveAttribute('aria-expanded', 'false')
+          const after = await count(page, labels[at]!).boundingBox()
+          expect(after, `${labels[at]} changed size when its figure arrived`).toEqual(before[at])
+          expect(after!.height, 'a thumb press is 40px or more').toBeGreaterThanOrEqual(40)
+          await button.focus()
+          await page.keyboard.press('Shift+Tab')
+          await page.keyboard.press('Tab')
+          const ring = await button.evaluate((el) => {
+            const style = getComputedStyle(el)
+            return { focusVisible: el.matches(':focus-visible'), outline: style.outlineStyle, shadow: style.boxShadow }
+          })
+          expect(ring.focusVisible, `${labels[at]} takes keyboard focus`).toBe(true)
+          expect(ring.outline !== 'none' || ring.shadow !== 'none', `${labels[at]} shows a focus ring`).toBe(true)
+        }
+      })
+
+      test('11. Enter and Space open the sheet, Escape closes it, and focus returns to the same count', async ({ page }) => {
+        await seed(page)
+        await openReview(page)
+        await loaded(page)
+        for (const key of ['Enter', 'Space']) {
+          const button = countButton(page, /waiting for a paid look$/)
+          await expect(button).toBeVisible()
+          await button.focus()
+          await page.keyboard.press(key)
+          await expect(sheet(page)).toBeVisible()
+          await expect(sheet(page)).toHaveAccessibleName(/^2 waiting for a paid look$/)
+          await expect(button).toHaveAttribute('aria-expanded', 'true')
+          await page.keyboard.press('Escape')
+          await expect(sheet(page)).toHaveCount(0)
+          await expect(button, `focus returns to the count after ${key}`).toBeFocused()
+        }
+      })
+
+      test('12. the paid sheet groups by reason, largest first, shows two candidates with the box and slot, and pages a group at 50', async ({ page }) => {
+        const fates: Record<string, Fate> = {}
+        const why: Record<string, Why> = {}
+        const sitting: string[] = []
+        for (let n = 1; n <= 64; n += 1) {
+          const key = keyOf(n)
+          sitting.push(key)
+          fates[key] = 'paid'
+          why[key] = n <= 60 ? { code: 'margin_too_small' } : n <= 63 ? { code: 'match_too_weak' } : { code: 'lookalike_guard' }
+        }
+        await seed(page, { fates, why, sitting })
+        await openReview(page)
+        await loaded(page)
+        await openCount(page, /waiting for a paid look$/)
+        await expect(sheet(page)).toHaveAccessibleName(/^64 waiting for a paid look$/)
+        const groups = sheet(page).getByRole('group')
+        await expect(groups).toHaveCount(3)
+        await expect(groups.nth(0)).toHaveAccessibleName('Two printings too close to call')
+        await expect(groups.nth(1)).toHaveAccessibleName('A weak match')
+        await expect(groups.nth(2)).toHaveAccessibleName('A look-alike with no photo of its own')
+        await expect(groups.nth(0).getByRole('listitem')).toHaveCount(50)
+        await groups.nth(0).getByRole('button', { name: 'Show 50 more' }).click()
+        await expect(groups.nth(0).getByRole('listitem')).toHaveCount(60)
+        await expect(groups.nth(0).getByRole('button', { name: /Show .* more/ })).toHaveCount(0)
+        const first = groups.nth(0).getByRole('listitem').first()
+        await expect(first).toContainText('Band box')
+        await expect(first).toContainText(/\b1\b/)
+        await expect(first).toContainText('Snorlax')
+        await expect(first).toContainText('Mega Evolution')
+        await expect(first).toContainText('Paldea Evolved')
+        await expect(first.locator('img')).toHaveCount(1)
+      })
+
+      test('13. a row press goes to the card on Inventory, and a group with no free fix shows no pointer line', async ({ page }) => {
+        await seed(page)
+        await openReview(page)
+        await loaded(page)
+        await openCount(page, /waiting for a paid look$/)
+        const lookalike = sheet(page).getByRole('group', { name: 'A look-alike with no photo of its own' })
+        await expect(lookalike).toBeVisible()
+        await expect(lookalike, 'no pointer line when there is no free fix').not.toContainText(/Name the|Shoot the card|Correct the set|Prepare matching/)
+        const margin = sheet(page).getByRole('group', { name: 'Two printings too close to call' })
+        await expect(margin).toContainText('Name the rarity on the card. A claim settles the printing.')
+        const row = margin.getByRole('listitem').first()
+        await row.getByRole('link').or(row.getByRole('button')).first().click()
+        await expect(page).toHaveURL(/#\/inventory\?box=3&card=cid-3-4/)
+      })
+
+      test('14. the sheet holds its rows while the count moves behind it, says so, and reads once on "Show it again"', async ({ page }) => {
+        const wire = await seed(page)
+        await openReview(page)
+        await loaded(page)
+        await openCount(page, /waiting for a paid look$/)
+        await expect(sheet(page).getByRole('listitem')).toHaveCount(2)
+        wire.fates['3/6'] = 'paid'
+        wire.why['3/6'] = { code: 'match_too_weak' }
+        await expect(sheet(page)).toContainText('The count has moved', { timeout: 8_000 }) // keep: waits one 3s poll tick
+        await expect(sheet(page).getByRole('listitem'), 'the rows did not move under the person').toHaveCount(2)
+        const reads = wire.details.length
+        await sheet(page).getByRole('button', { name: 'Show it again' }).click()
+        await expect(sheet(page).getByRole('listitem')).toHaveCount(3)
+        await expect(sheet(page)).not.toContainText('The count has moved')
+        expect(wire.details.length - reads, 'one read, no more').toBe(1)
+      })
+
+      test('16. waiting for you is a plain figure: not a button, no popup, opens nothing', async ({ page }) => {
+        await seed(page)
+        await openReview(page)
+        await loaded(page)
+        const you = count(page, 'waiting for you')
+        await expect(you).toHaveText(/2\s+waiting for you/i)
+        await expect(you.getByRole('button')).toHaveCount(0)
+        await expect(you.locator('[aria-haspopup], [role="button"], button, a')).toHaveCount(0)
+        await you.click()
+        await expect(sheet(page)).toHaveCount(0)
+      })
+
+      test('18. the set-named line is a button only above 0, opens its sheet, and returns focus to the line', async ({ page }) => {
+        const wire = await seed(page)
+        await openReview(page)
+        await loaded(page)
+        await expect(band(page).getByRole('button', { name: /need a set named|needs a set named/ }), 'no line at 0').toHaveCount(0)
+        wire.fates['3/10'] = 'unhinted'
+        wire.fates['3/9'] = 'unhinted'
+        const line = band(page).locator('.review-band-health').getByRole('button', { name: /^2 need a set named$/ })
+        await expect(line).toBeVisible({ timeout: 8_000 }) // keep: waits one 3s poll tick
+        await line.focus()
+        await page.keyboard.press('Enter')
+        await expect(sheet(page)).toHaveAccessibleName(/^2 need a set named$/)
+        await page.keyboard.press('Escape')
+        await expect(sheet(page)).toHaveCount(0)
+        await expect(line).toBeFocused()
+      })
+
+      test('19. the set-named sheet groups by box, shows photo, box and slot, points to the fix, and a row goes to the card', async ({ page }) => {
+        await seed(page, {
+          fates: { '3/1': 'unhinted', '3/2': 'unhinted', '4/1': 'unhinted', '3/3': 'matched' },
+          sitting: ['3/1', '3/2', '4/1', '3/3'],
+          why: {},
+        })
+        await openReview(page)
+        await loaded(page)
+        const named = band(page).locator('.review-band-health').getByRole('button', { name: /^3 need a set named$/ })
+        await expect(named).toBeVisible()
+        await named.click()
+        const groups = sheet(page).getByRole('group')
+        await expect(groups).toHaveCount(2)
+        await expect(groups.nth(0)).toHaveAccessibleName('Band box')
+        await expect(groups.nth(1)).toHaveAccessibleName('Starter')
+        await expect(groups.nth(0).getByRole('listitem')).toHaveCount(2)
+        await expect(sheet(page)).toContainText('Name the set on the card.')
+        const row = groups.nth(1).getByRole('listitem').first()
+        await expect(row).toContainText('Starter')
+        await expect(row.locator('img')).toHaveCount(1)
+        await row.getByRole('link').or(row.getByRole('button')).first().click()
+        await expect(page).toHaveURL(/#\/inventory\?box=4&card=cid-4-1/)
+      })
+    })
+  }
+
+  test.describe('9. reason titles', () => {
+    test.beforeEach(async ({ page }) => setViewport(page, SIZES[0]))
+
+    test('each code maps to its group title, an unknown code renders as itself, and no title names a mechanism or types a dot', async ({ page }) => {
+      const table: [string | null, string][] = [
+        ['margin_too_small', 'Two printings too close to call'],
+        ['match_too_weak', 'A weak match'],
+        ['lookalike_guard', 'A look-alike with no photo of its own'],
+        ['photo_unreadable', 'A photo problem'],
+        ['no_card_found', 'A photo problem'],
+        ['set_not_resolved', 'The set named matches no set, or more than one'],
+        ['promo_set', 'The set cannot be read free'],
+        ['promo_held', 'The set cannot be read free'],
+        ['set_not_indexed', 'The set cannot be read free'],
+        ['no_index', 'The set cannot be read free'],
+        ['game_not_served', 'This game is not read free'],
+        ['index_stale', "The free reader's data is out of date"],
+        [null, 'No reason kept'],
+        ['some_new_code', 'some_new_code'],
+      ]
+      const fates: Record<string, Fate> = {}
+      const why: Record<string, Why> = {}
+      const sitting: string[] = []
+      table.forEach(([code], at) => {
+        const key = keyOf(at + 1)
+        sitting.push(key)
+        fates[key] = 'paid'
+        why[key] = { code }
+      })
+      await seed(page, { fates, why, sitting })
+      await openReview(page)
+      await loaded(page)
+      await openCount(page, /waiting for a paid look$/)
+      for (const [code, title] of table) {
+        await expect(sheet(page).getByRole('group', { name: title }), `${code ?? 'no code'} reads as "${title}"`).toBeVisible()
+      }
+      const titles = await sheet(page).getByRole('group').evaluateAll((els) => els.map((el) => el.getAttribute('aria-label') ?? el.querySelector('h3, h4, [role="heading"]')?.textContent ?? ''))
+      for (const title of titles.filter((t) => t !== 'some_new_code')) {
+        expect(title, 'a typed dot').not.toMatch(/[·•]/)
+        expect(title, 'a mechanism word').not.toMatch(/\b(runs?|models?|sweep|marqo|haiku|engine|pipeline|index|fingerprint|cosine|margin)\b/i)
+      }
+    })
+  })
+
+  test.describe('17. empty sheets', () => {
+    for (const size of SIZES) {
+      for (const scheme of ['light', 'dark'] as const) {
+        test(`the three count sheets answer a zero count with a sentence and Back to Capture at ${size.width}, ${scheme}`, async ({ page }) => {
+          await page.emulateMedia({ colorScheme: scheme })
+          await setViewport(page, size)
+          await seed(page, { fates: { '3/1': 'done' }, sitting: ['3/1'] })
+          await openReview(page)
+          await loaded(page)
+          const cases: [RegExp, string][] = [
+            [/^0 waiting for a paid look$/, 'No card is waiting for a paid look.'],
+            [/^0 not yet looked at$/, 'The free reader has looked at every card.'],
+            [/^0 matched free$/, 'The free reader has not matched a card yet.'],
+          ]
+          for (const [name, sentence] of cases) {
+            await openCount(page, name)
+            await expect(sheet(page)).toContainText(sentence)
+            await expect(sheet(page).getByRole('button', { name: 'Back to Capture' })).toBeVisible()
+            const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+            expect(overflow, 'no horizontal scroll').toBeLessThanOrEqual(0)
+            const inside = await sheet(page).evaluate((el) => el.scrollWidth <= el.clientWidth + 1)
+            expect(inside, 'the sheet does not scroll sideways').toBe(true)
+            await page.keyboard.press('Escape')
+            await expect(sheet(page)).toHaveCount(0)
+          }
+        })
+      }
+    }
+  })
+})
