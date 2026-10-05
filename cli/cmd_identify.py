@@ -1238,8 +1238,9 @@ def run(args, say) -> int:
         for code, count in sorted(pre["unread"].items()):
             say(f"unread          {count} {code}")
     if args.crop and args.dry_run:
-        say(f"crop            to the detected card, not measured by a check "
-            f"({len(to_send)} being sent, priced at the largest cut)")
+        # No detected box is stored anywhere (the finder runs at identify time), so a crop
+        # cannot be priced without decoding: whole frames are the upper bound.
+        say("crop            priced as whole frames")
     elif args.crop:
         # NAMED IN THE PREFLIGHT because it changes the bytes, and the preflight's whole job
         # is to say what is about to be sent. A refusal count of anything but zero is worth
