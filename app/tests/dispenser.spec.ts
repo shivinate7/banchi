@@ -140,10 +140,34 @@ test('a fire while the previous save is still out is photographed, not swallowed
   await expect.poll(wire.posts, { timeout: 8_000 }).toBe(1)
   await scene(GAP_LUMA) // card 1 leaves, card 2 arrives while save 1 is still out
   await page.waitForTimeout(400) // keep: let the gap register before the next card
-  await scene(CARD)
-  await expect.poll(wire.posts, { timeout: 3_000 }).toBe(2) // fire 2 reached the wire
-  expect(wire.answered()).toBe(0) // while save 1 was still pending
+  await scene(CARD - 40) // a different picture: the same one would be suppressed as unchanged
+  await expect.poll(wire.posts, { timeout: 8_000 }).toBe(2) // fire 2 was kept and saved, not dropped
   await expect(page.locator('.capture-controls').getByText(/not photographed|Resume captures first/)).toHaveCount(0)
   await expect(control(page, 'Stop dispenser')).toBeVisible()
+  await control(page, 'Stop dispenser').click()
+})
+
+test('saves reach the server in capture order: card 2 is sent only after card 1 has answered', async ({ page }) => {
+  await ready(page, true)
+  const wire = await slowCapture(page, 2_000)
+  const start = control(page, 'Start dispenser')
+  await expect(start).toBeEnabled({ timeout: 5_000 })
+  await start.click()
+  const scene = (base: number) =>
+    page.evaluate((b) => {
+      ;(window as unknown as { __scene: { base: number } }).__scene.base = b
+    }, base)
+
+  await scene(CARD) // card 1: fire 1, its save is held 2 s
+  await expect.poll(wire.posts, { timeout: 8_000 }).toBe(1)
+  await scene(GAP_LUMA)
+  await page.waitForTimeout(400) // keep: let the gap register before the next card
+  await scene(CARD - 40) // card 2 is photographed while save 1 is still out
+  await expect.poll(wire.posts, { timeout: 8_000 }).toBe(2)
+  // two photos in flight at once may commit out of order: card 2 goes only after card 1 answered
+  expect(wire.events()).toEqual(['sent:1', 'answered:1', 'sent:2'])
+  await expect.poll(wire.answered, { timeout: 8_000 }).toBe(2)
+  // the slots came back 1 then 2: the second card's label follows the first
+  await expect(page.getByText('Box 5, Card 2').first()).toBeVisible()
   await control(page, 'Stop dispenser').click()
 })

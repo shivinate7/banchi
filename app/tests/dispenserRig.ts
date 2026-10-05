@@ -88,14 +88,20 @@ export async function fakeBluetooth(page: Page): Promise<void> {
 
 /** `POST /capture` answers a real capture, but only after `ms`: a slow save. `posts` counts every POST
  *  that reached the wire, answered or not. Nothing reaches the real store. */
-export async function slowCapture(page: Page, ms: number): Promise<{ posts: () => number; answered: () => number }> {
+export async function slowCapture(
+  page: Page,
+  ms: number,
+): Promise<{ posts: () => number; answered: () => number; events: () => string[] }> {
   let posts = 0
   let answered = 0
+  const events: string[] = [] // `sent:N` when POST N arrives, `answered:N` when its reply goes out
   await page.route(/\/capture$/, (route) => {
     posts += 1
     const index = posts
+    events.push(`sent:${index}`)
     setTimeout(() => { // keep: the slow save held
       answered += 1
+      events.push(`answered:${index}`)
       void route.fulfill({
         status: 201,
         contentType: 'application/json',
@@ -107,7 +113,7 @@ export async function slowCapture(page: Page, ms: number): Promise<{ posts: () =
       })
     }, ms)
   })
-  return { posts: () => posts, answered: () => answered }
+  return { posts: () => posts, answered: () => answered, events: () => events.slice() }
 }
 
 export async function writes(page: Page): Promise<string[]> {
