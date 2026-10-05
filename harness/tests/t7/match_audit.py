@@ -13,12 +13,14 @@ summary line holds "<n> not checked". The fake reader is the one the T7 sweep te
 from __future__ import annotations
 
 import hashlib
+import re
 from unittest import mock
 
 from harness.tests import Checks
 from harness.tests.t7 import free_adopt as fa
 from harness.tests.t7.common import ARTICUNO_SKU, isolated_home, quiet
-from identify import match
+from identify import match, sweep
+from store.queues import QueueEntry
 from store import files, master
 from store.session import Store
 
@@ -37,7 +39,7 @@ def _audit(argv, pick, *, ready=True):
         args = cli_entry.build_parser().parse_args(["match", "audit", *argv])
     except SystemExit:
         return "usage", lines, paid
-    with fa._fake_matcher(fa._results(None, pick)), \
+    with fa._fake_matcher(pick if callable(pick) else fa._results(None, pick)), \
             mock.patch.object(match, "status", lambda *_a, **_k: {"ready": ready}), \
             mock.patch.object(cmd_identify.batch, "run_batch", lambda *a, **k: paid.append(1)), \
             quiet():
@@ -113,4 +115,67 @@ def check_match_audit(checks: Checks) -> None:
         checks.equal(_bytes(), snap, "3. and changes nothing")
 
 
-CHECKS = (check_match_audit,)
+def _reader(accepted, unread):
+    """The fake reader: `accepted` key -> payload; `unread` key -> the code it was passed on with."""
+    def read(requests, _index=None, *_a, **_k):
+        return [
+            match.Result(r.key, True, dict(accepted[r.key], engine=fa.MATCHER), margin=0.2, floor=0.95)
+            if r.key in accepted
+            else match.Result(r.key, False, None, unread[r.key], margin=0.03, floor=0.9)
+            for r in requests
+        ]
+    return read
+
+
+def _counted(lines, code, n):
+    return bool(re.search(rf"{code}\D{{0,6}}{n}\b|\b{n}\D{{0,6}}{code}", " ".join(lines)))
+
+
+def check_match_audit_edges(checks: Checks) -> None:
+    checks.note("")
+    checks.note("MATCH AUDIT EDGES: already in review, candidate, lock, reasons, retired and moved")
+    with isolated_home():
+        keys = [fa._shoot(fa.ARTICUNO) for _ in range(6)]
+        inrev, fresh, retired, moved, nohint, weak = keys
+        fa._seed_export()
+        fa._sweep(fa._results(keys, {k: fa.ARTICUNO for k in keys}))
+        with Store().write() as snap:
+            card = snap.inventory.cards[inrev]
+            snap.review.upsert(QueueEntry(
+                position=inrev, box=card.box, index=card.index, label="seeded", photo=str(card.photo or "p.jpg"),
+                read={"name": "Seeded", "number": "1"}, confidence="low", reason="name_disputed", market="12.34",
+                candidates=[{"name": "Seeded candidate", "number": "7"}],
+            ))
+            snap.inventory.retire(retired, "lost")
+            snap.inventory.cards[moved].state = master.MOVED
+        pick = _reader({inrev: DEATH, fresh: DEATH, retired: DEATH, moved: DEATH},
+                       {nohint: match.UNREAD_NO_HINT, weak: match.UNREAD_MARGIN})
+        seeded = repr(Store().read().review.entries[inrev])
+
+        # 3. the background reader holds its lock: refuse, plainly, write nothing
+        held, snap_bytes = sweep.acquire_lock(), _bytes()
+        try:
+            code, lines, _paid = _audit(["--write"], pick)
+        finally:
+            held.close()
+        checks.ok(code not in (0, "usage") and "background reader" in " ".join(lines).lower(), "3. with the background reader running the audit refuses, naming it, and exits non-zero")
+        checks.equal(_bytes(), snap_bytes, "3. and writes nothing")
+
+        code, lines, _paid = _audit(["--write"], pick)
+        entries = Store().read().review.entries
+        text = " ".join(lines)
+        # 1. already in review
+        checks.equal(repr(entries.get(inrev)), seeded, "1. a card already in review for another reason is left exactly as it was (reason, market, candidates)")
+        checks.ok("already in review" in text and re.search(r"\b1\b\D{0,12}already in review|already in review\D{0,6}\b1\b", text) is not None, "1. and the summary counts it as skipped, already in review")
+        # 2. candidate
+        got = str(entries[fresh].candidates) if fresh in entries else ""
+        checks.ok("Death from Below" in got and "186" in got, "2. a newly queued disagreement carries the free reader's pick as a candidate")
+        # 4. reasons
+        checks.ok(_counted(lines, match.UNREAD_NO_HINT, 1) and _counted(lines, match.UNREAD_MARGIN, 1),
+                  f"4. not checked is broken down by reason with counts ({match.UNREAD_NO_HINT}, {match.UNREAD_MARGIN})")
+        # 5. retired and moved
+        checks.ok("retired" in _line(lines, retired) and "moved" in _line(lines, moved), "5. retired and moved cards are tagged in the listing")
+        checks.ok(retired not in entries and moved not in entries, "5. and never queued")
+
+
+CHECKS = (check_match_audit, check_match_audit_edges)
