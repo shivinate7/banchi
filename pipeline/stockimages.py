@@ -249,6 +249,7 @@ class CatalogProduct(NamedTuple):
     printed_total: str
     url: str
     rarity: str = ""  # the product's own `Rarity` cell; empty where the catalogue has none (Pokemon's vendored tree)
+    card_type: str = ""  # the product's own `Card Type` cell ("Battlefield", "Unit"); empty where the catalogue has none
 
 
 class _ImageIndex(NamedTuple):
@@ -627,6 +628,7 @@ class StockImages:
                     printed_total="",
                     url=str(product.get("imageUrl") or ""),
                     rarity=str(extended(product, "Rarity") or ""),
+                    card_type=str(extended(product, "Card Type") or ""),
                 )
             )
         return numbered, unnumbered
@@ -643,6 +645,19 @@ class StockImages:
         except (PriceHistoryError, KeyError):
             return []
         return [(str(row["name"]), int(row["groupId"])) for row in rows.values()]
+
+    def catalog_published(self, game: str) -> Dict[str, str]:
+        """`{set name: publishedOn}` for every tcgcsv group of a game that dates its release
+        (an ISO timestamp). Empty for Pokemon, and where the mirror cannot answer."""
+        if game == POKEMON_KEY:
+            return {}
+        try:
+            with self._market_lock:
+                category_id = self._market.category_id(str(game_registry.get(game)["product_line"]))
+                rows = self._market.groups(category_id)
+        except (PriceHistoryError, KeyError):
+            return {}
+        return {str(row["name"]): str(row["publishedOn"]) for row in rows.values() if row.get("publishedOn")}
 
     def display_name(self, game: str, set_name: str) -> Optional[str]:
         """The catalogue's own clean name for a set, when this resolver can name one.

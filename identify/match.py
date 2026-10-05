@@ -52,12 +52,13 @@ import re
 import sqlite3
 import threading
 import time
+from datetime import datetime, timezone
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 from store import files as store_files
 from identify.matchconst import MODEL_BYTES, MODEL_FILENAME, MODEL_SHA256, SERVED_GAMES  # noqa: F401
@@ -99,6 +100,23 @@ UNREAD_FLOOR = "match_too_weak"
 # An ACCEPTED read's reason, not an unread one: the margin was thin between two printings of one
 # card and the card's own rarity claim fit exactly one of them (`_settled_by_claim`).
 ACCEPT_CLAIM = "printing_settled_by_claim"
+# Three more accepts below the baseline rule, each measured on 2,953 paid-identified cards with 0
+# new errors (docs/specs/identify-engine-pick.md, section 3). `_verdict` tries them in a fixed
+# order: baseline, claim settles a printing, clear winner, battlefield. `_read_chunk` then tries
+# the claim narrowing the field.
+ACCEPT_CLEAR = "clear_winner"
+ACCEPT_BATTLEFIELD = "battlefield_margin"
+ACCEPT_NARROWED = "narrowed_by_claim"
+# Rule 4: the guard did not hold the card only because the same-name printing is unreleased.
+ACCEPT_UNRELEASED = "unreleased_twin"
+# Rule 3: any card with a wide gap and a middling floor.
+CLEAR_MARGIN_MIN = 0.08
+CLEAR_FLOOR_MIN = 0.70
+# Rule 2: a battlefield is printed sideways and scores low against its upright stock photo, so
+# its floor is lower and its margin higher.
+BATTLEFIELD_MARGIN_MIN = 0.10
+BATTLEFIELD_FLOOR_MIN = 0.45
+BATTLEFIELD_TYPE = "Battlefield"  # tcgcsv's `Card Type` cell
 
 # ------------------------------------------------------------------------ the model file
 
@@ -331,6 +349,12 @@ class Pool:
     # `_pool_rarities` then reads it from `StockImages.catalog_products`, the one home, so the
     # fingerprint index stays as it is and no re-prepare is forced.
     rarities: Optional[List[str]] = None
+    # Each printing's catalogue `Card Type`, parallel to `rows`, filled with `rarities` by the one read.
+    card_types: Optional[List[str]] = None
+    # Every no-photo printing the guard holds, `(set_name, product_id, name)`. `blocked` holds its names.
+    blocked_rows: List[Tuple[str, str, str]] = field(default_factory=list)
+    unreleased_names: Set[str] = field(default_factory=set)  # names of no-photo printings in unreleased sets
+    cells: Optional[Dict[Tuple[str, str], Tuple[str, str]]] = None  # `{(set, product id): (rarity, card type)}`, read once
 
 
 class Index:
@@ -370,6 +394,9 @@ class Index:
         names: List[str] = []
         printed: List[str] = []
         blocked: Set[str] = set()
+        blocked_rows: List[Tuple[str, str, str]] = []
+        unreleased_names: Set[str] = set()
+        unreleased: Optional[Set[str]] = None  # read once, and only when a no-photo row needs it
         for set_name in set_names:
             for pid, number, name, status, blob in self.db.execute(
                 "select product_id, number, name, status, vec from vec where game=? and set_name=?",
@@ -381,9 +408,16 @@ class Index:
                     names.append(name)
                     printed.append(self._printed(game, set_name))
                 elif status in NO_IMAGE:
-                    blocked.add(card_name(name))
+                    if unreleased is None:
+                        unreleased = unreleased_sets(game)
+                    if set_name in unreleased:  # an unreleased set has no photo yet, which is no look-alike
+                        unreleased_names.add(card_name(name))
+                    else:
+                        blocked.add(card_name(name))
+                        blocked_rows.append((set_name, pid, name))
         matrix = np.stack(vectors).astype(np.float32) if vectors else np.zeros((0, DIM), np.float32)
-        return Pool(matrix, rows, names, printed, blocked, tuple(set_names))
+        return Pool(matrix, rows, names, printed, blocked, tuple(set_names),
+                    blocked_rows=blocked_rows, unreleased_names=unreleased_names)
 
     _printed_cache: Dict[Tuple[str, str], str] = {}
 
@@ -524,25 +558,72 @@ def _base_number(number: str) -> str:
     return found.group(1) if found else join.number_index_key(number)
 
 
-def _pool_rarities(pool: Pool, game: str) -> List[str]:
-    """`pool.rarities`, filled once from the catalogue. A set the catalogue cannot answer leaves
-    its printings blank, and a blank rarity never matches a claim."""
-    if pool.rarities is None:
-        from cli.cmd_pricearchive import market_cache_dir
-        from pipeline import pricehistory
-        from pipeline.stockimages import StockImages
+def _stock_images():
+    from cli.cmd_pricearchive import market_cache_dir
+    from pipeline import pricehistory
+    from pipeline.stockimages import StockImages
 
-        stock = StockImages(market=pricehistory.Market(cache_dir=market_cache_dir()))
-        found: Dict[Tuple[str, str], str] = {}
+    return StockImages(market=pricehistory.Market(cache_dir=market_cache_dir()))
+
+
+def unreleased_sets(game: str) -> Set[str]:
+    """The sets whose printings have no stock photo YET, so a no-photo row in one is no look-alike.
+    The ONE home of "unreleased". The catalogue's release date decides when it has one: a set
+    dated after today. Without dates (Pokemon, or a catalogue that cannot answer), a set is
+    unreleased when it holds no photographed row and no row that failed to fetch (a transient failure never skips the guard). Any failure answers the
+    empty set, and the guard then stays on."""
+    try:
+        dated = _stock_images().catalog_published(game)
+        if dated:
+            today = datetime.now(timezone.utc).date().isoformat()
+            return {name for name, published in dated.items() if published[:10] > today}
+        if not index_path().exists():
+            return set()
+        db = sqlite3.connect(f"file:{index_path()}?mode=ro", uri=True)
+        try:
+            return {
+                r[0] for r in db.execute(
+                    "select set_name from vec where game=? group by set_name having sum(status in (?,?,?))=0",
+                    (game, S_OK, S_UNREADABLE, S_NO_URL)
+                )
+            }
+        finally:
+            db.close()
+    except Exception:
+        return set()
+
+
+def _pool_cells(pool: Pool, game: str) -> Dict[Tuple[str, str], Tuple[str, str]]:
+    """`{(set, product id): (rarity, card type)}` for the pool's sets, read once from
+    `StockImages.catalog_products`, the one catalogue reader. A set the catalogue cannot answer
+    leaves its printings out, and they read as blank."""
+    if pool.cells is None:
+        stock = _stock_images()
+        pool.cells = {}
         for set_name in pool.sets:
             try:
                 listed = stock.catalog_products(game, set_name)
             except Exception:  # a catalogue that cannot answer is a refusal, never a crash
                 listed = None
             for product in (listed[0] if listed else ()):
-                found[(set_name, product.product_id)] = product.rarity
-        pool.rarities = [found.get((row[1], row[2]), "") for row in pool.rows]
+                pool.cells[(set_name, product.product_id)] = (product.rarity, product.card_type)
+    return pool.cells
+
+
+def _pool_rarities(pool: Pool, game: str) -> List[str]:
+    """`pool.rarities`, filled once. A blank rarity never matches a claim."""
+    if pool.rarities is None:
+        cells = _pool_cells(pool, game)
+        pool.rarities = [cells.get((row[1], row[2]), ("", ""))[0] for row in pool.rows]
     return pool.rarities
+
+
+def _pool_card_types(pool: Pool, game: str) -> List[str]:
+    """`pool.card_types`, filled once from the same read."""
+    if pool.card_types is None:
+        cells = _pool_cells(pool, game)
+        pool.card_types = [cells.get((row[1], row[2]), ("", ""))[1] for row in pool.rows]
+    return pool.card_types
 
 
 def _settled_by_claim(request: "Request", pool: Pool, order, sims) -> Optional[int]:
@@ -578,6 +659,71 @@ def _settled_by_claim(request: "Request", pool: Pool, order, sims) -> Optional[i
         ):
             return None
     return pick
+
+
+class _Verdict(NamedTuple):
+    pick: int
+    code: Optional[str]  # an accept's own reason; None for the baseline accept
+    refusal: Optional[str]  # an UNREAD_* code, or None when accepted
+    detail: str
+    margin: float
+    floor: float
+
+
+def _verdict(request: "Request", pool: Pool, sims, order, blocked: Set[str]) -> _Verdict:
+    """The accept rule over one ordered field. The order is fixed: look-alike guard, baseline
+    margin (a thin one may be settled by the claim), baseline floor, then the two rules below it,
+    clear winner and battlefield. The first that holds names the accept."""
+    best = int(order[0])
+    floor = float(sims[best])
+    margin = floor - float(sims[int(order[1])]) if len(order) > 1 else floor
+    if card_name(pool.names[best]) in blocked:
+        detail = f"{pool.names[best]} shares its name with a printing that has no stock photo"
+        return _Verdict(best, None, UNREAD_LOOKALIKE, detail, margin, floor)
+    pick, code = best, None
+    if margin < MARGIN_MIN:
+        settled = _settled_by_claim(request, pool, order, sims)
+        if settled is None:
+            return _Verdict(best, None, UNREAD_MARGIN, f"margin {margin:.4f} is under {MARGIN_MIN}", margin, floor)
+        pick, code = settled, ACCEPT_CLAIM
+        floor = float(sims[pick])  # the floor is the chosen printing's own score
+    if floor >= FLOOR_MIN:
+        if code is None and card_name(pool.names[best]) in pool.unreleased_names:
+            code = ACCEPT_UNRELEASED
+        return _Verdict(pick, code, None, "", margin, floor)
+    if code is None and margin >= CLEAR_MARGIN_MIN and floor >= CLEAR_FLOOR_MIN:
+        return _Verdict(pick, ACCEPT_CLEAR, None, "", margin, floor)
+    if (code is None and margin >= BATTLEFIELD_MARGIN_MIN and floor >= BATTLEFIELD_FLOOR_MIN
+            and _pool_card_types(pool, request.game)[pick] == BATTLEFIELD_TYPE):
+        return _Verdict(pick, ACCEPT_BATTLEFIELD, None, "", margin, floor)
+    return _Verdict(pick, None, UNREAD_FLOOR, f"best match {floor:.4f} is under {FLOOR_MIN}", margin, floor)
+
+
+def _narrowed(request: "Request", pool: Pool, sims, order) -> Optional[_Verdict]:
+    """Rule 1. The card's rarity claim only REMOVES competitors from the pool's own field (every
+    set of an unhinted game, the hinted set otherwise). The answer is the narrowed field's
+    verdict, taken only when its winner is the unnarrowed top-1, whose own rarity is known and
+    fits. A printing of unknown rarity may fit, so it stays a competitor (and its no-photo twin
+    stays in the guard). Returns None when the claim cannot narrow."""
+    from pipeline import tcgcsv, variant
+
+    claim = request.rarity_claim
+    if not claim:
+        return None
+    rarities = _pool_rarities(pool, request.game)
+
+    def fits(rarity: str) -> bool:
+        return bool(variant.rarity_filter([{tcgcsv.RARITY_COLUMN: rarity or ""}], claim))
+
+    best = int(order[0])
+    if not rarities[best] or not fits(rarities[best]):
+        return None
+    cells = _pool_cells(pool, request.game)
+    blocked = {card_name(name) for set_name, pid, name in pool.blocked_rows if fits(cells.get((set_name, pid), ("", ""))[0])}
+    verdict = _verdict(request, pool, sims, [int(i) for i in order if fits(rarities[int(i)])], blocked)
+    if verdict.refusal is not None or verdict.pick != best:
+        return None
+    return verdict._replace(code=ACCEPT_NARROWED)
 
 
 def _resolve_pool(
@@ -671,6 +817,8 @@ def _read_chunk(
     current = index.meta("model_sha256") == MODEL_SHA256
     pending: List[Tuple[Request, Tuple[str, ...], "object"]] = []
     for request in requests:
+        if isinstance(request.rarity_claim, str):  # the one entry: a bare string is one cell, never a substring pool
+            request = replace(request, rarity_claim=[request.rarity_claim])
         if request.game not in SERVED_GAMES:
             out[request.key] = Result(request.key, False, code=UNREAD_GAME, detail=f"the matcher serves {', '.join(SERVED_GAMES)}")
             continue
@@ -704,9 +852,6 @@ def _read_chunk(
                 continue
             sims = pool.vectors @ vector
             order = np.argsort(-sims)
-            best = int(order[0])
-            floor = float(sims[best])
-            margin = floor - float(sims[int(order[1])]) if len(order) > 1 else floor
             candidates = [
                 {
                     "product_id": pool.rows[int(i)][2],
@@ -717,25 +862,18 @@ def _read_chunk(
                 }
                 for i in order[:TOP_N]
             ]
-            if card_name(pool.names[best]) in pool.blocked:
+            verdict = _verdict(request, pool, sims, order, pool.blocked)
+            if verdict.refusal is not None:
+                narrowed = _narrowed(request, pool, sims, order)
+                if narrowed is not None:
+                    verdict = narrowed
+            if verdict.refusal is not None:
                 out[request.key] = Result(
-                    request.key, False, code=UNREAD_LOOKALIKE,
-                    detail=f"{pool.names[best]} shares its name with a printing that has no stock photo",
-                    margin=margin, floor=floor, candidates=candidates,
+                    request.key, False, code=verdict.refusal, detail=verdict.detail,
+                    margin=verdict.margin, floor=verdict.floor, candidates=candidates,
                 )
                 continue
-            pick, code = best, None
-            if margin < MARGIN_MIN:
-                settled = _settled_by_claim(request, pool, order, sims)
-                if settled is not None:
-                    pick, code = settled, ACCEPT_CLAIM
-                    floor = float(sims[pick])  # the floor is the chosen printing's own score
-            if margin < MARGIN_MIN and code is None:
-                out[request.key] = Result(request.key, False, code=UNREAD_MARGIN, detail=f"margin {margin:.4f} is under {MARGIN_MIN}", margin=margin, floor=floor, candidates=candidates)
-                continue
-            if floor < FLOOR_MIN:
-                out[request.key] = Result(request.key, False, code=UNREAD_FLOOR, detail=f"best match {floor:.4f} is under {FLOOR_MIN}", margin=margin, floor=floor, candidates=candidates)
-                continue
+            pick, code, margin, floor = verdict.pick, verdict.code, verdict.margin, verdict.floor
             payload = _payload(
                 request.strategy, pool.rows[pick], pool.names[pick], pool.printed[pick],
                 {
@@ -746,7 +884,8 @@ def _read_chunk(
                     "floor": round(floor, 4),
                     "candidates": candidates,
                     "model_sha256": MODEL_SHA256,
-                    **({"settled_by": "rarity_claim"} if code else {}),
+                    **({"settled_by": "rarity_claim"} if code in (ACCEPT_CLAIM, ACCEPT_NARROWED) else {}),
+                    **({"accept_rule": code} if code else {}),
                 },
             )
             out[request.key] = Result(request.key, True, payload=payload, code=code, margin=margin, floor=floor, candidates=candidates)
