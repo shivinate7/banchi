@@ -265,10 +265,10 @@ class Rows(MutableMapping):
         is what actually fixes that case, cheaply — bounded by what the source query itself
         returns, not by the table.
 
-        EVERY LOADED KEY IS EVALUATED AGAINST ITS LIVE OBJECT, so a row mutated in place into a
-        new match is found too, whoever mutated it and with no `__setitem__`. The source's
-        index is trusted only for keys never loaded. The cost is one `columns` call per
-        loaded row per call.
+        IN A WRITE SESSION (`track`) EVERY LOADED KEY IS EVALUATED AGAINST ITS LIVE OBJECT, so a
+        row mutated in place into a new match is found too, whoever mutated it and with no
+        `__setitem__`. A read snapshot changes nothing, so it trusts the source's index and
+        pays no per-row scan after a full load.
         """
         if self.source is None:
             found = {
@@ -291,10 +291,10 @@ class Rows(MutableMapping):
                 keys.add(key)
             else:
                 self.dropped.append(key)
-        # EVERY LOADED KEY IS EVALUATED LIVE, not only `_touched` ones: a caller may flip an
-        # attribute in place, and the source's index cannot see that. SQL is trusted only for
-        # keys never loaded.
-        for key in list(self._loaded):
+        # A WRITE SESSION EVALUATES EVERY LOADED KEY LIVE, not only `_touched` ones: a caller
+        # may flip an attribute in place, and the source's index cannot see that. A read
+        # snapshot cannot be mutated, so it keeps to `_touched` (empty) and trusts SQL.
+        for key in list(self._loaded if self._track else self._touched):
             if key in self._deleted or key in keys:
                 continue
             if self._matches(self._loaded[key], equals):
@@ -330,7 +330,7 @@ class Rows(MutableMapping):
                     out[key] = picked
                 continue
             out[key] = tuple(values)
-        for key in list(self._loaded):
+        for key in list(self._loaded if self._track else self._touched):
             if key in self._deleted or key in out:
                 continue
             picked = self._picked(self._loaded[key], equals, columns)
