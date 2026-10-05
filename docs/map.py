@@ -3903,6 +3903,13 @@ COMPONENTS = [
             "docs_audit/selftest_strings.py": {
                 "does": "Self-test cases for the strings rows, called by `selftest.self_test`.",
                 "governed_by": ["D280"]},
+            "docs_audit/capability_homes.py": {
+                "does": "The capability homes row: each named capability has one home, and a call to its primitives "
+                        "outside it is a finding, past an allow list that only shrinks.",
+                "governed_by": ["D173"]},
+            "docs_audit/selftest_capability_homes.py": {
+                "does": "Self-test cases for the capability homes row, called by `selftest.self_test`.",
+                "governed_by": ["D173"]},
             "docs_audit/selftest_sleeps.py": {
                 "does": "Self-test cases for the fixed sleeps row, called by `selftest.self_test`.",
                 "governed_by": ["D280"]},

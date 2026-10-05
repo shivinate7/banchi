@@ -415,7 +415,7 @@ def prepare_located(path, max_edge: int = MAX_EDGE, crop: bool = True, find: Opt
 
 # ---------------------------------------------------------------- THE CARD PREVIEW CUT
 #
-# ONE HOME FOR THE PREVIEW CUT: `locate_card` (`detect_card` behind it), guarded by
+# ONE HOME FOR THE PREVIEW CUT: `card_box_for` (`locate_card`, `detect_card` behind it), guarded by
 # `crop_refusal` over `crop_rect`'s padded rectangle. No threshold of its own.
 # `CROP_RULE_VERSION` rides in the crop's ETag: change the finder or the guard, bump it, and
 # every stored crop URL revalidates.
@@ -465,11 +465,11 @@ def _preview_compute(path):
     except Exception:
         return None, None, False
     try:
-        box = geometry.locate_card(image)
+        box = card_box_for(path)
     except Exception:
         return None, None, False
     final = not geometry.card_box.model_failed()
-    # A refused box shows the whole photograph: no second finder after the guard.
+    # The run's cut (`card_box_for`), so the preview and the run cut one photograph one way.
     if box is None or crop_refusal(image, box) is not None:
         return None, None, final
     rect = crop_rect(image.size, box)
