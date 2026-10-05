@@ -33,10 +33,11 @@
  * only a published build can get wrong.
  */
 import { test, expect, type Page } from '@playwright/test'
-import { existsSync, readFileSync, statSync } from 'node:fs'
-import { dirname, join, normalize } from 'node:path'
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { dirname, extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DEV_URL } from '../devPort'
 import { isOutside, sealEveryTest } from './shell'
 import { afterPaint, settleMotion } from './motionSettled'
 
@@ -67,7 +68,8 @@ const REFUSAL = 'Not in this demo.'
 // would weaken the seal for every OTHER spec that imports it — and lets the real request land.
 // `the seal still refuses a host not on the allow list` below proves every other outside host
 // is refused exactly as before (example.com stays the probe).
-sealEveryTest({ allowOutside: ['tcgplayer-cdn.tcgplayer.com', 'images.pokemontcg.io'] })
+// Loopback is allowed for this file's own HTTP server over dist-demo (`serveDemo`).
+sealEveryTest({ allowOutside: ['tcgplayer-cdn.tcgplayer.com', 'images.pokemontcg.io', '127.0.0.1', 'localhost'] })
 
 test.skip(!BUILT && !REQUIRED, 'no dist-demo/ in this checkout: run `make demo-static` first')
 
@@ -89,35 +91,49 @@ test('the seal still refuses a host that is not on the allow list', () => {
   expect(isOutside(other, ['tcgplayer-cdn.tcgplayer.com'])).toBe(true)
 })
 
-/** Serve the built demo on this checkout's own origin, the way a static host would. On the
- *  CONTEXT, so a window the demo opens (the Fulfiller's screen) is served too. */
-async function serveDemo(page: Page): Promise<string> {
+const TYPES: Record<string, string> = {
+  '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css',
+  '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg',
+  '.webp': 'image/webp', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.ico': 'image/x-icon',
+}
+
+/** One real loopback HTTP server over `dist-demo`, shared by this worker's tests. A body goes over a
+ *  socket and never through Playwright's `route.fulfill`: that base64-encodes the whole body into one
+ *  DevTools pipe message, which headless Chromium caps at 100 MiB, and the 86 MB `demoServer` chunk is
+ *  about 115 MB encoded, so the browser connection dies. Any window the demo opens is served too. */
+let server: Server | null = null
+let serverOrigin = ''
+async function listen(): Promise<string> {
+  if (server !== null) return serverOrigin
   const base = basePath()
-  await page.context().route(`${DEV_URL}${base}**`, async (route) => {
-    const url = new URL(route.request().url())
+  const made = createServer(async (req, res) => {
+    const pathname = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname)
+    let file = normalize(join(DIST, pathname.slice(base.length)))
+    if (!pathname.startsWith(base) || !file.startsWith(DIST)) return void res.writeHead(403).end()
+    if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html')
+    if (!existsSync(file)) return void res.writeHead(404).end()
     // DEMO_CHUNK_DELAY_MS=<ms> holds back the 75 MB `demoServer` chunk the way a cold host or a loaded
     // runner does (run 36807030451). Deterministic where a CPU throttle is not: the first photograph
     // of every screen is requested only after that chunk has arrived and parsed.
-    if (/\/demoServer-[^/]*\.js$/.test(url.pathname) && process.env.DEMO_CHUNK_DELAY_MS)
+    if (/\/demoServer-[^/]*\.js$/.test(pathname) && process.env.DEMO_CHUNK_DELAY_MS)
       await new Promise((done) => setTimeout(done, Number(process.env.DEMO_CHUNK_DELAY_MS))) // keep: chunk delay from DEMO_CHUNK_DELAY_MS, a latency fixture on purpose
-    if (PREVIEW !== null) {
-      const response = await route.fetch({ url: `${PREVIEW}${url.pathname}` })
-      await route.fulfill({ response })
-      return
-    }
-    let file = normalize(join(DIST, decodeURIComponent(url.pathname.slice(base.length))))
-    if (!file.startsWith(DIST)) {
-      await route.fulfill({ status: 403, body: '' })
-      return
-    }
-    if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html')
-    if (!existsSync(file)) {
-      await route.fulfill({ status: 404, body: '' })
-      return
-    }
-    await route.fulfill({ path: file })
+    res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream' })
+    createReadStream(file).pipe(res)
   })
-  return `${DEV_URL}${base}`
+  await new Promise<void>((done) => made.listen(0, '127.0.0.1', done))
+  server = made
+  serverOrigin = `http://127.0.0.1:${(made.address() as AddressInfo).port}`
+  return serverOrigin
+}
+test.afterAll(async () => {
+  const stop = server
+  server = null
+  if (stop !== null) await new Promise((done) => stop.close(done))
+})
+
+/** The URL the demo opens at: `DEMO_PREVIEW_URL` as given, else this worker's own HTTP server. */
+async function serveDemo(_page: Page): Promise<string> {
+  return `${PREVIEW ?? (await listen())}${basePath()}`
 }
 
 /** Budget for anything that waits on the public demo's ~75 MB `demoServer` chunk to arrive and evaluate
