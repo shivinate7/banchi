@@ -639,14 +639,6 @@ def _call(
     )
 
 
-def __getattr__(name):
-    # `_open` is the old name of `_call`, kept because the T7 shipping case reaches it by name.
-    # Re-point that case at `_call` and delete this.
-    if name == "_open":
-        return _call
-    raise AttributeError(name)
-
-
 def _check_status(status: int, headers: dict, body: bytes) -> None:
     """Turn a status into a refusal, or return so the body can be read. One code per problem.
 

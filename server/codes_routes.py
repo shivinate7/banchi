@@ -31,7 +31,7 @@ from typing import List, Optional, Tuple
 
 from codes import ledger, lots, products, qr
 from codes import scan as codescan
-from server.refusal import require_box as _box_of
+from server.refusal import require_box
 from store.session import Store
 
 # The two lanes C11 settles. A lane is not a channel — it is which of the two POPULATIONS a
@@ -127,7 +127,7 @@ def do_codes_scan(payload: dict, captures_root) -> Tuple[HTTPStatus, dict]:
     hole in a server that otherwise only ever touches paths it composed itself, and the box
     is what the operator is actually thinking in.
     """
-    box = _box_of(payload)
+    box = require_box(payload)
     preview = bool(payload.get("preview"))
     directory = Path(captures_root) / f"box{box}"
     if not directory.is_dir():

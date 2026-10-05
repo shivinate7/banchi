@@ -330,7 +330,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from codes import products  # noqa: E402
 from pipeline import games, join, setnames, stockimages, tcgcsv  # noqa: E402
-from pipeline.identity_binding import _read_number_key as _number_compare_key  # noqa: E402
+from pipeline.identity_binding import _read_number_key  # noqa: E402
 from pipeline import orders as order_engine  # noqa: E402
 from pipeline import routing  # noqa: E402
 from pipeline import skus as sku_fill  # noqa: E402
@@ -365,7 +365,7 @@ from store import orders as order_store  # noqa: E402
 # module as `harness/tests/t7_store_and_seams.py` imports it. Only the package form works
 # under both, and the sys.path line above is what makes it work under the first.
 from server import codes_routes  # noqa: E402
-from server.refusal import BadRequest, require_box as _require_box  # noqa: E402
+from server.refusal import BadRequest, require_box  # noqa: E402
 from server import pipeline_routes  # noqa: E402
 # The one press that sends to TCGplayer and makes copies live, and the live check after it
 # (`D273`). Its own module for `tcg_import.py`'s reason: it can
@@ -2933,7 +2933,7 @@ def do_capture(payload: dict) -> Tuple[HTTPStatus, dict]:
     raises, the exception leaves the block and the session commits nothing, so there is no
     record pointing at a file that was never written.
     """
-    box = _require_box(payload)
+    box = require_box(payload)
     capture_id = _optional_text(payload, "capture_id")
     # THE SECTION TO FILE INTO, by its divider key (`docs/specs/subbox-capture.md` 1.2). The
     # store picks the position, so this body still carries no index (capture-app.md 5.6).
@@ -5413,7 +5413,7 @@ def do_move_card(box: int, index: int, payload: dict) -> dict:
             "replayed request from moving the card that now sits at this position.",
         )
     aimed_at = _optional_text(payload, "capture_id")
-    to_box = _require_box(payload, "to_box", "Send a destination box number.")
+    to_box = require_box(payload, "to_box", "Send a destination box number.")
     aim = _require_section(payload)
 
     key = master.position_key(box, index)
@@ -5467,7 +5467,7 @@ def do_move_cards(box: int, payload: dict) -> dict:
     exactly the case that refusal exists for.
     """
     _reject_unknown(payload, MOVE_CARDS_FIELDS)
-    to_box = _require_box(payload, "to_box", "Send a destination box number.")
+    to_box = require_box(payload, "to_box", "Send a destination box number.")
     aim = _require_section(payload)
     raw_indices = payload.get("indices")
     if raw_indices is not None:
@@ -5872,7 +5872,7 @@ def _destination(inventory: master.Inventory, payload: dict, box: int) -> Tuple[
         to_box = inventory.next_box_number()
         inventory.ensure_box(to_box)
         return to_box, to_box
-    to_box = _require_box(payload, "to_box", "Send a destination box number.")
+    to_box = require_box(payload, "to_box", "Send a destination box number.")
     dst = inventory.box(to_box)
     # A BOX THE REGISTRY DOES NOT HOLD IS REFUSED, NEVER MADE (the R3 review): a move must not
     # create a box silently, and a receipt must never name a box the store does not have
@@ -8273,13 +8273,13 @@ def _listing_decoration(card, skus: "Skus") -> Dict[str, object]:  # noqa: F821 
         "name": listing_name, "number": listing_number, "printed_total": listing_printed_total,
     }
 
-    shown_key = _number_compare_key(strategy, card.number, card.printed_total)
-    listing_key = _number_compare_key(strategy, listing_number, listing_printed_total)
+    shown_key = _read_number_key(strategy, card.number, card.printed_total)
+    listing_key = _read_number_key(strategy, listing_number, listing_printed_total)
     listing_differs = _name_differs(card.name, listing_name) or (
         shown_key is not None and listing_key is not None and shown_key != listing_key
     )
 
-    read_key = _number_compare_key(strategy, card.read_number, card.read_printed_total)
+    read_key = _read_number_key(strategy, card.read_number, card.read_printed_total)
     reading_differs = _name_differs(card.read_name, card.name) or (
         read_key is not None and shown_key is not None and read_key != shown_key
     )
@@ -13131,7 +13131,7 @@ def do_create_box(payload: dict) -> Tuple[HTTPStatus, dict]:
         # the cards, and a number chosen outside the write would be a number another request
         # could take between the read and the write — the same race `allocate_capture` holds
         # this lock to prevent one scale down.
-        box = _require_box(payload) if payload.get("box") is not None else inventory.next_box_number()
+        box = require_box(payload) if payload.get("box") is not None else inventory.next_box_number()
         if inventory.box(box) is not None:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
