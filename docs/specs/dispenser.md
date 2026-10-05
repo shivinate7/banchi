@@ -34,9 +34,16 @@ card's photo is taken.
   then `DEAL_GAP_MS`. `dealer.photoTaken(save)` is the photo: Capture calls it where the frame is grabbed,
   with a closure that posts the already-encoded frame. It calls `save` at once. Extra photos for one card
   let one card through. A photo while not dealing runs `save` once and counts for nothing.
-- At most one photo is unsaved: a START waits while an earlier card's save is out.
+- Two photos may be unsaved for a moment: card 1 saving while card 2 is photographed. Both are held in
+  memory and saved in order, one POST at a time, so the store never commits card 2 before card 1. A START
+  waits while an earlier card's save is out. Capture frees the shutter at the grab, and each save carries its
+  own capture id. The session key holds every unsaved id, oldest first, and a reload reports each one.
+- A photo counts for a card only if it fires after that card's START.
 - A save that rejects is retried once with the same bytes. A second failure stops the dealer, sends STOP
-  and says "Stopped: a photo was not saved." No card is lost silently.
+  and says "Stopped: a photo was not saved." The screen names the card that failed ("Box 5, Card 1 was not
+  saved") and offers Retry saving. Saves queued behind a failure never send. Retry saving re-sends the held
+  frames in capture order. No card is lost silently.
+- A press that would undo while a save is out says so and does nothing.
 - No photo within `SAVE_WAIT_MS` (3000, exported) after COMPLETE: stop, send STOP, and say "Stopped: no
   photo came after the last card. Check the tray." Stop cancels the wait.
 - `createDealer({ onMark })` reports `photo-taken`, `save-answered` and `start-sent` with the card number.

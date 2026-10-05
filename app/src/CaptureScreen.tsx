@@ -594,10 +594,17 @@ function writeSession(key: string, value: string | null): void {
 
 const CAPTURE_ID_SHAPE = /^[A-Za-z0-9-]{8,64}$/
 
-function readSessionCaptureId(): string | null {
+/** Every unsaved capture's id, oldest first, space-joined in the one session key. */
+function readSessionCaptureIds(): string[] {
   const stored = readSession(SESSION_KEYS.captureId)
-  return stored !== null && CAPTURE_ID_SHAPE.test(stored) ? stored : null
+  if (stored === null) return []
+  const ids = stored.split(' ')
+  return ids.every((id) => CAPTURE_ID_SHAPE.test(id)) ? ids : []
 }
+
+/** A save refused to send because an earlier save failed: that card is held, in order, for Retry saving. */
+class SaveHeld extends Error {}
+type HeldSave = { id: string; label: string; run: () => Promise<void> }
 
 function describe(err: unknown): Note {
   // The server's own message, unchanged. docs/DESIGN.md's copy rules already reach these
@@ -1596,38 +1603,52 @@ export function CaptureScreen() {
   const busyRef = useRef(false)
 
   
-  const captureIdRef = useRef<string | null>(readSessionCaptureId())
+  const restoredIds = useRef<string[] | null>(null)
+  restoredIds.current ??= readSessionCaptureIds()
+  const captureIdRef = useRef<string | null>(restoredIds.current[0] ?? null)
   /* Saves out: captures whose frame is grabbed and whose answer has not come. `busyRef` covers only
    * the grab, so with the dispenser dealing one photo may be unsaved while the next is taken.
    * `unsavedIds` holds each such capture's id in capture order; `captureIdRef` (and the stored key)
    * is the OLDEST of them, the one a reload could still need to resend. `applyTail` makes answers
    * land in capture order even when saves return out of order. */
   const savesOut = useRef(0)
-  const unsavedIds = useRef<string[]>([])
-  const applyTail = useRef<Promise<void>>(Promise.resolve())
+  const unsavedIds = useRef<string[]>(restoredIds.current.slice())
+  const heldSaves = useRef<HeldSave[]>([])
+  const [heldView, setHeldView] = useState<Array<{ id: string; label: string }>>([])
+  const retryingRef = useRef(false)
+  const applyTail = useRef<Promise<boolean>>(Promise.resolve(true))
   const dealingRef = useRef(false)
 
   
-  const [heldAcrossReload, setHeldAcrossReload] = useState(() => captureIdRef.current !== null)
+  const [carried, setCarried] = useState(() => restoredIds.current?.length ?? 0)
 
-  /** The one writer of the in-flight capture id: ref first, store second, never one without
-   *  the other. `useCallback` with no dependencies so `doCapture`'s identity does not change
-   *  per render — the trigger seam re-arms on that identity. */
-  const rememberCaptureId = useCallback((id: string | null) => {
-    captureIdRef.current = id
-    writeSession(SESSION_KEYS.captureId, id)
-    // Whatever this id's history, it is this session's business from here: either it has
-    // just been answered, or a fresh one has been minted for a photograph taken now.
-    if (id === null) setHeldAcrossReload(false)
+  /** The one writer of the unsaved capture ids: ref first, store second, never one without the
+   *  other. The key holds every unsaved id, oldest first; the ref holds the oldest, the one the
+   *  next capture resends when no save is out. `useCallback` with no dependencies so `doCapture`'s
+   *  identity does not change per render. */
+  const syncCaptureIds = useCallback(() => {
+    const ids = unsavedIds.current
+    captureIdRef.current = ids[0] ?? null
+    writeSession(SESSION_KEYS.captureId, ids.length === 0 ? null : ids.join(' '))
+    // What came from before the reload shrinks as those ids are answered.
+    setCarried((count) => Math.min(count, ids.length))
   }, [])
-  /** This capture's answer came: drop its id, and let the next oldest unsaved one take the key. */
+  /** This capture's answer came: drop its id and any held frame, and let the next oldest take the key. */
   const settleCaptureId = useCallback(
     (id: string) => {
       unsavedIds.current = unsavedIds.current.filter((held) => held !== id)
-      if (captureIdRef.current === id) rememberCaptureId(unsavedIds.current[0] ?? null)
+      heldSaves.current = heldSaves.current.filter((held) => held.id !== id)
+      setHeldView(heldSaves.current.map(({ id: held, label }) => ({ id: held, label })))
+      syncCaptureIds()
     },
-    [rememberCaptureId],
+    [syncCaptureIds],
   )
+  /** A save that did not go out stays in memory, in capture order, until Retry saving. */
+  const holdUnsaved = useCallback((held: HeldSave) => {
+    if (heldSaves.current.some((entry) => entry.id === held.id)) return
+    heldSaves.current = [...heldSaves.current, held]
+    setHeldView(heldSaves.current.map(({ id, label }) => ({ id, label })))
+  }, [])
 
   
   /* THE SETUP, WRITTEN WHOLE ON EVERY CHANGE TO ANY OF IT (D142). One
@@ -3058,6 +3079,9 @@ export function CaptureScreen() {
   /* The dispenser's `photoTaken`, set once `useDealer` runs below `doCapture`. It runs the save
    * at once and, while dealing, retries it once from the same bytes. */
   const photoTakenRef = useRef<(save: () => Promise<unknown>) => Promise<unknown>>((save) => save())
+  /* Where the next card will land, for naming a card whose save has not come back. */
+  const nextCardRef = useRef({ n: 1 })
+  nextCardRef.current = { n: newCardNumber ?? nextForBox ?? 1 }
   const doCapture = useCallback(async () => {
     if (busyRef.current || (savesOut.current > 0 && !dealingRef.current)) return
     // A halted run ignores the trigger entirely. Not "queues it": spec 5.5 rejected
@@ -3096,7 +3120,8 @@ export function CaptureScreen() {
     busyRef.current = true
     setBusy(true)
     let saving = false // the frame is grabbed and the save is out
-    let answered!: () => void
+    let sent = false // this save was answered and applied
+    let answered!: (ok: boolean) => void
     const prior = applyTail.current
     try {
       let frame: string
@@ -3116,16 +3141,18 @@ export function CaptureScreen() {
       // A held id is a lost response to resend: only when no save is out. Else this photo's own id.
       const captureId = (savesOut.current === 0 ? captureIdRef.current : null) ?? newCaptureId()
       if (!unsavedIds.current.includes(captureId)) unsavedIds.current.push(captureId)
-      if (captureIdRef.current === null) rememberCaptureId(captureId)
+      syncCaptureIds()
+      // The slot this card is to take, said before the store has answered: the next number, plus
+      // every unsaved card ahead of it.
+      const heldLabel = `${boxTitle(null, box)}, Card ${nextCardRef.current.n + unsavedIds.current.length - 1}`
       // The photo is taken: the shutter is free again, the save carries on behind it.
       saving = true
       savesOut.current += 1
-      applyTail.current = new Promise<void>((resolve) => (answered = resolve))
+      applyTail.current = new Promise<boolean>((resolve) => (answered = resolve))
       busyRef.current = false
 
-      try {
-        // The store never commits card 2 before card 1: this frame waits in memory for the earlier answer.
-        const card = (await photoTakenRef.current(async () => capture(await prior.then(() => ({
+      const sendFrame = () =>
+        capture({
           box,
           imageBase64: frame,
           // ALWAYS SENT, never omitted, unlike the two claims below it — D21 makes the game
@@ -3154,7 +3181,8 @@ export function CaptureScreen() {
           // REQUIRED ALONGSIDE `section` (the Opus review's own guard against a stale key
           // surviving a re-space) — omitted along with it.
           layoutToken: selectedDiv === null ? undefined : layoutToken,
-        }))))) as Awaited<ReturnType<typeof capture>>
+        })
+      const applyAnswer = (card: Awaited<ReturnType<typeof capture>>) => {
         // Answered, so the next photograph gets its own id. Cleared on a replay too: the
         // ambiguity that id existed to resolve is now resolved. Through `rememberCaptureId`,
         // so the stored copy goes with it — an id left in the store after the server has
@@ -3243,6 +3271,17 @@ export function CaptureScreen() {
         if (pendingDividerRef.current !== null && pendingDividerRef.current.box === card.box) {
           pendingDividerRef.current = null
         }
+      }
+      try {
+        // The store never commits card 2 before card 1: this frame waits in memory for the earlier
+        // answer, and a failed earlier save holds it (never sends) until Retry saving.
+        const card = (await photoTakenRef.current(async () => {
+          // Only the oldest held card's own recapture may pass a failed save: it IS that card's retry.
+          if (!(await prior) && heldSaves.current[0]?.id !== captureId) throw new SaveHeld()
+          return sendFrame()
+        })) as Awaited<ReturnType<typeof capture>>
+        applyAnswer(card)
+        sent = true
       } catch (err) {
         // 409 `section_gone` or 400 `layout_token_required` (subbox-capture.md 1.2): the
         // picked section is not there any more, or a re-space moved on since the token was
@@ -3251,9 +3290,15 @@ export function CaptureScreen() {
         // to `{ where: 'server' }`'s generic copy — this one case is a certainty, not the usual
         // "check whether it was recorded" (finding 2), and its own halt is the only one raised.
         if (err instanceof ServerError && (err.code === 'section_gone' || err.code === 'layout_token_required')) {
+          // Nothing was written and the section's own halt answers it: no held frame, no block on the next.
+          sent = true
           void handleSectionMismatch(err.code, describe(err).text)
           return
         }
+        // This frame stays in memory, in capture order, for Retry saving. A save held behind an
+        // earlier failure raises no halt of its own: the earlier one already did.
+        holdUnsaved({ id: captureId, label: heldLabel, run: async () => applyAnswer(await sendFrame()) })
+        if (err instanceof SaveHeld) return
         // The id stays in the ref. This is the case it exists for: the request may have
         // committed, and only resending the same id can tell the difference without costing
         // a position.
@@ -3262,7 +3307,7 @@ export function CaptureScreen() {
     } finally {
       if (saving) {
         savesOut.current -= 1
-        answered()
+        answered(sent && heldSaves.current.length === 0) // a failure never releases the saves queued behind it
       } else busyRef.current = false
       if (!busyRef.current && savesOut.current === 0) setBusy(false)
     }
@@ -3298,8 +3343,9 @@ export function CaptureScreen() {
     pickVerdict,
     product,
     rarityClaim,
-    rememberCaptureId,
+    syncCaptureIds,
     settleCaptureId,
+    holdUnsaved,
     sectionPickKey,
     sectionsDetail,
     selectedDiv,
@@ -3309,9 +3355,43 @@ export function CaptureScreen() {
   ])
 
   
+  /* A press that would write while a photo is still saving says so, and does nothing. */
+  const refuseWhileSaving = useCallback(() => {
+    if (busyRef.current) return true
+    if (savesOut.current === 0) return false
+    setUndoNote({ done: false, text: 'A photo is still saving. Wait a moment, then press again.', code: null, position: null, did: 0, want: 1 })
+    return true
+  }, [])
+
+  /* RETRY SAVING: the held frames go again, oldest first, one at a time. The first failure stops it. */
+  const retrySaving = useCallback(async () => {
+    const queue = heldSaves.current.slice()
+    if (retryingRef.current || queue.length === 0) return
+    retryingRef.current = true
+    savesOut.current += 1
+    setBusy(true)
+    let release!: (ok: boolean) => void
+    applyTail.current = new Promise<boolean>((resolve) => (release = resolve))
+    let ok = true
+    for (const held of queue) {
+      try {
+        await held.run()
+      } catch (err) {
+        setHalt({ where: 'server', ...describe(err) })
+        ok = false
+        break
+      }
+    }
+    release(ok) // a failed retry still holds every save behind it
+    savesOut.current -= 1
+    retryingRef.current = false
+    if (!busyRef.current && savesOut.current === 0) setBusy(false)
+    if (ok) setHalt((prev) => (prev?.where === 'server' ? null : prev))
+  }, [])
+
   const undoBack = useCallback(
     async (depth: number) => {
-      if (busyRef.current || savesOut.current > 0) return
+      if (refuseWhileSaving()) return
       const plan = undoStack.slice(0, Math.max(0, depth))
       if (plan.length === 0) return
       busyRef.current = true
@@ -3399,7 +3479,7 @@ export function CaptureScreen() {
         setBusy(false)
       }
     },
-    [patchOnHand, patchSectionCount, stampSlot, undoStack],
+    [patchOnHand, patchSectionCount, refuseWhileSaving, stampSlot, undoStack],
   )
   /* STABLE HANDLES FOR THE FILMSTRIP'S MEMOIZED TILES: the ref is re-pointed each render, the
    * callbacks never change identity, so a tile re-renders only when its own props move. */
@@ -3434,7 +3514,7 @@ export function CaptureScreen() {
    *  above — one strip, reporting on itself either way. */
   const undoDivider = useCallback(
     async (target: { box: number; div: string; priorDiv: string | null }) => {
-      if (busyRef.current || savesOut.current > 0) return
+      if (refuseWhileSaving()) return
       busyRef.current = true
       setBusy(true)
       setUndoNote(null)
@@ -3470,7 +3550,7 @@ export function CaptureScreen() {
         setBusy(false)
       }
     },
-    [box, boxBid, sectionPickKey],
+    [box, boxBid, refuseWhileSaving, sectionPickKey],
   )
 
   /** One card, which is what `U` and the trigger seam mean by undo. Kept as its own
@@ -3502,7 +3582,7 @@ export function CaptureScreen() {
    *  exists for. */
   const doRemoveOne = useCallback(
     async (target: UndoTarget) => {
-      if (busyRef.current || savesOut.current > 0) return
+      if (refuseWhileSaving()) return
       busyRef.current = true
       setBusy(true)
       setRemoveBusy(true)
@@ -3575,7 +3655,7 @@ export function CaptureScreen() {
         setRemoveBusy(false)
       }
     },
-    [patchOnHand, patchSectionCount],
+    [patchOnHand, patchSectionCount, refuseWhileSaving],
   )
 
 
@@ -4505,11 +4585,29 @@ export function CaptureScreen() {
 
       {/* A capture that outlived the page (D27). Not rendered under a halt, which says it
           louder. */}
-      {halt !== null || !heldAcrossReload ? null : (
+      {halt !== null || carried === 0 ? null : (
         <section className="capture-carried" role="status">
-          <Notice tone="warn" title="Unconfirmed capture from before reload">
-            Capture the same card again, not the next one.
+          <Notice
+            tone="warn"
+            title={carried === 1 ? 'Unconfirmed capture from before reload' : `${carried} unconfirmed captures from before reload`}
+          >
+            {carried === 1
+              ? 'Capture the same card again, not the next one.'
+              : `Capture the same ${carried} cards again, in the order they were taken, not the next one.`}
           </Notice>
+        </section>
+      )}
+
+      {heldView.length === 0 ? null : (
+        <section className="capture-unsaved" role="alert">
+          <Notice tone="warn" title={`${heldView[0]!.label} was not saved`}>
+            {heldView.length === 1
+              ? 'The photo is held here and nothing after it was sent. Retry saving to send it.'
+              : `${heldView.length} photos are held here, in the order they were taken. Retry saving sends them in order.`}
+          </Notice>
+          <Button variant="primary" size="lg" onClick={() => void retrySaving()}>
+            Retry saving
+          </Button>
         </section>
       )}
 

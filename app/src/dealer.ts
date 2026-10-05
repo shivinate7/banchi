@@ -56,7 +56,7 @@ const SAID_FAULT = 'The dispenser reported a fault. Check it, then connect again
 export const SAID_OFF = 'Bluetooth is off. Turn it on, then connect again.'
 const SAID_FAILED = 'Could not connect. Check it is on, then try again.'
 export const SAID_NO_PHOTO = 'Stopped: no photo came after the last card. Check the tray.'
-export const SAID_NOT_SAVED = 'Stopped: a photo was not saved. Check the last card, then start again.'
+export const SAID_NOT_SAVED = 'Stopped: a photo was not saved.'
 export const SAID_DROPPED = 'Stopped: a card was not photographed. Resume captures first.'
 
 export type DealerState = 'idle' | 'connecting' | 'connected' | 'dealing' | 'stopped' | 'error'
