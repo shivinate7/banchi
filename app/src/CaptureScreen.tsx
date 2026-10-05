@@ -929,6 +929,7 @@ function Opt({
   sfx,
   trail,
   trailWord = false,
+  disabled = false,
   onPick,
 }: {
   k?: string
@@ -939,10 +940,11 @@ function Opt({
   trail?: string
   /** The trail is a word (`Premium`) rather than a key (`pokemon`, `next 12`). */
   trailWord?: boolean
+  disabled?: boolean
   onPick: () => void
 }) {
   return (
-    <button type="button" className="capture-opt" aria-pressed={on} onClick={onPick}>
+    <button type="button" className="capture-opt" aria-pressed={on} disabled={disabled} onClick={onPick}>
       {k === undefined ? (
         <span className="capture-k capture-k-blank" aria-hidden="true" />
       ) : (
@@ -1616,6 +1618,22 @@ export function CaptureScreen() {
   const heldSaves = useRef<HeldSave[]>([])
   /** The one answer to "is a photo held unsaved?": Capture, Start, Resume and Section all ask it. */
   const photoHeld = useCallback(() => heldSaves.current.length > 0, [])
+  /* A press that would move a card or the place cards go, while a photo is held unsaved or (for a
+   * write) still saving, says so and does nothing. `writes` false asks only about a held photo. */
+  const refuseWhileSaving = useCallback(
+    (writes = true) => {
+      const refuse = (text: string) => {
+        setUndoNote({ done: false, text, code: null, position: null, did: 0, want: 1 })
+        return true
+      }
+      if (photoHeld()) return refuse('Retry saving first.')
+      if (!writes) return false
+      if (busyRef.current) return true
+      if (savesOut.current === 0) return false
+      return refuse('A photo is still saving. Wait a moment, then press again.')
+    },
+    [photoHeld],
+  )
   const [heldView, setHeldView] = useState<Array<{ id: string; label: string }>>([])
   const retryingRef = useRef(false)
   const applyTail = useRef<Promise<boolean>>(Promise.resolve(true))
@@ -2082,6 +2100,7 @@ export function CaptureScreen() {
 
   const pickSection = useCallback(
     (div: string | null) => {
+      if (refuseWhileSaving(false)) return
       setSelectedDiv(div)
       setSectionPickNote(null)
       if (box === null) return
@@ -2097,7 +2116,7 @@ export function CaptureScreen() {
       // coincidence, to a different section after a re-space".
       rememberSectionPick(sectionPickKey(box, boxBid), { div, at: Date.now(), token: layoutToken ?? null })
     },
-    [box, boxBid, layoutToken, sectionPickKey],
+    [box, boxBid, layoutToken, refuseWhileSaving, sectionPickKey],
   )
 
   /** REFRESH THE PICK'S CLOCK ON EVERY CAPTURE INTO IT (finding 5, "until the sitting ends" —
@@ -2132,9 +2151,14 @@ export function CaptureScreen() {
 
   const closeField = useCallback(() => setOpenField(null), [])
 
-  const toggleField = useCallback((id: FieldId) => {
-    setOpenField((prev) => (prev === id ? null : id))
-  }, [])
+  const toggleField = useCallback(
+    (id: FieldId) => {
+      // The pickers that move where cards go stay shut while a photo is held unsaved.
+      if ((id === 'box' || id === 'section') && refuseWhileSaving(false)) return
+      setOpenField((prev) => (prev === id ? null : id))
+    },
+    [refuseWhileSaving],
+  )
 
   // An entry belongs to one opening. Cleared on every change of `openField` — including to
   // null — so no field ever reopens pre-narrowed by a search the operator cannot see the
@@ -2318,6 +2342,7 @@ export function CaptureScreen() {
    *  and the two would be indistinguishable one sitting later. */
   const chooseBox = useCallback(
     (value: number, bid: number | null) => {
+      if (refuseWhileSaving(false)) return
       setBox(value)
       setBoxBid(bid)
       setRecency(touchBox(value))
@@ -2326,7 +2351,7 @@ export function CaptureScreen() {
       closeField()
       blurActive()
     },
-    [closeField],
+    [closeField, refuseWhileSaving],
   )
 
   
@@ -3369,14 +3394,6 @@ export function CaptureScreen() {
   ])
 
   
-  /* A press that would write while a photo is still saving says so, and does nothing. */
-  const refuseWhileSaving = useCallback(() => {
-    if (busyRef.current) return true
-    if (savesOut.current === 0) return false
-    setUndoNote({ done: false, text: 'A photo is still saving. Wait a moment, then press again.', code: null, position: null, did: 0, want: 1 })
-    return true
-  }, [])
-
   /* RETRY SAVING: the held frames go again, oldest first, one at a time. The first failure stops it. */
   const retrySaving = useCallback(async () => {
     const queue = heldSaves.current.slice()
@@ -4277,7 +4294,7 @@ export function CaptureScreen() {
    * it scrolls in or takes focus, before it can be read or pressed. Same text and attributes the
    * tiles carried when React drew them. */
   const busyNow = useRef(busy)
-  busyNow.current = busy
+  busyNow.current = busy || held
   const railVisible = useRef(new Set<Element>())
   const railSeen = useRef(new WeakSet<Element>())
   const railObserver = useRef<{ root: Element; observer: IntersectionObserver } | null>(null)
@@ -4332,7 +4349,7 @@ export function CaptureScreen() {
         writeTile(item, rank)
       } else if (rank < DEALING_RAIL_TILES || railVisible.current.has(item)) writeTile(item, rank)
     }
-  }, [railList, busy, writeTile])
+  }, [railList, busy, held, writeTile])
   useEffect(() => () => railObserver.current?.observer.disconnect(), [])
   /* A tile out of view that takes focus is written first, so what a screen reader reads is current. */
   const onRailFocus = useCallback(
@@ -5157,6 +5174,7 @@ export function CaptureScreen() {
                        the exact cross-screen confusion that reservation exists to prevent.
                        "next 43" keeps the cut without the collision. */
                     trail={`next ${option.next ?? '?'}`}
+                    disabled={held}
                     onPick={() => chooseBox(option.box, option.bid)}
                   />
                 ))}
@@ -5275,6 +5293,7 @@ export function CaptureScreen() {
                               : `${span.count} ${span.count === 1 ? 'card' : 'cards'}`
                       }
                       trailWord={isFirst || isLast}
+                      disabled={held}
                       onPick={() => {
                         pickSection(isLast ? null : (span.div ?? null))
                         closeField()
