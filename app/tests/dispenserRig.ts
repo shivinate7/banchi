@@ -92,18 +92,24 @@ export async function slowCapture(
   page: Page,
   ms: number | ((post: number) => number),
   failIf: (post: number) => boolean = () => false,
-): Promise<{ posts: () => number; answered: () => number; events: () => string[] }> {
+): Promise<{ posts: () => number; answered: () => number; events: () => string[]; bodies: () => string[] }> {
   let posts = 0
   let answered = 0
+  let saved = 0 // the slot a successful save takes: failed POSTs burn none
   const events: string[] = [] // `sent:N` when POST N arrives, `answered:N` when its reply goes out
+  const bodies: string[] = [] // a short digest of each POST's body: the same frame resent matches itself
   await page.route(/\/capture$/, (route) => {
     posts += 1
-    const index = posts
-    events.push(`sent:${index}`)
+    const post = posts
+    events.push(`sent:${post}`)
+    const raw = route.request().postData() ?? ''
+    let digest = 0
+    for (let i = 0; i < raw.length; i += 1) digest = (digest * 31 + raw.charCodeAt(i)) | 0
+    bodies.push(`${raw.length}:${digest}`)
     setTimeout(() => { // keep: the slow save held
       answered += 1
-      events.push(`answered:${index}`)
-      if (failIf(index)) {
+      events.push(`answered:${post}`)
+      if (failIf(post)) {
         void route.fulfill({
           status: 500,
           contentType: 'application/json',
@@ -111,6 +117,8 @@ export async function slowCapture(
         })
         return
       }
+      saved += 1
+      const index = saved
       void route.fulfill({
         status: 201,
         contentType: 'application/json',
@@ -120,9 +128,9 @@ export async function slowCapture(
           place: { box_total: index, located: true, label: `Box 5, Card ${index}` },
         }),
       })
-    }, typeof ms === 'number' ? ms : ms(index))
+    }, typeof ms === 'number' ? ms : ms(post))
   })
-  return { posts: () => posts, answered: () => answered, events: () => events.slice() }
+  return { posts: () => posts, answered: () => answered, events: () => events.slice(), bodies: () => bodies.slice() }
 }
 
 export async function writes(page: Page): Promise<string[]> {

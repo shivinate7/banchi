@@ -240,3 +240,75 @@ test('Undo pressed while a save is out says so, plainly, and deletes nothing', a
   await page.keyboard.press('u')
   await expect(page.locator('.capture-undo-note')).toContainText(/saving|saved|wait/i, { timeout: 3_000 })
 })
+
+/* ---- Retry saving, and a held photo is never dropped ---- */
+const slowThenQuick = (n: number) => (n <= 2 ? 1_500 : 150) // posts 1 and 2 are the failing pair
+const unsaved = (page: Page) => page.locator('.capture-unsaved')
+const captureButton = (page: Page) => page.getByRole('button', { name: 'Capture', exact: true })
+
+/** Card 1's save fails twice, so card 2 is held behind it, and the dealer has stopped. */
+async function held(page: Page, failIf: (post: number) => boolean) {
+  await ready(page, true)
+  const wire = await slowCapture(page, slowThenQuick, failIf)
+  await twoCards(page, wire)
+  await expect.poll(wire.answered, { timeout: 10_000 }).toBe(2)
+  await expect(unsaved(page)).toBeVisible()
+  await expect(control(page, 'Start dispenser')).toBeVisible()
+  return wire
+}
+
+test('R1: Retry saving sends card 1 then card 2, in order, each once, and the notice clears', async ({ page }) => {
+  const wire = await held(page, (n) => n <= 2)
+  await page.getByRole('button', { name: 'Retry saving' }).click()
+  await expect.poll(wire.answered, { timeout: 10_000 }).toBe(4)
+  await page.waitForTimeout(1_500) // keep: a stray extra POST gets time to show
+  expect(wire.events()).toEqual([
+    'sent:1', 'answered:1', 'sent:2', 'answered:2', 'sent:3', 'answered:3', 'sent:4', 'answered:4',
+  ])
+  const bodies = wire.bodies()
+  expect(bodies[2]).toBe(bodies[0]) // card 1's own frame goes first
+  expect(bodies[3]).not.toBe(bodies[2]) // card 2's own, different frame second
+  await expect(unsaved(page)).toHaveCount(0)
+})
+
+test('R2: on retry card 1 saves and card 2 fails: card 2 stays held, the dealer stays stopped, the notice names card 2', async ({ page }) => {
+  const wire = await held(page, (n) => n <= 2 || n === 4)
+  await page.getByRole('button', { name: 'Retry saving' }).click()
+  await expect.poll(wire.answered, { timeout: 10_000 }).toBe(4)
+  await expect(unsaved(page)).toBeVisible()
+  await expect(unsaved(page)).toContainText(/Box 5, Card 2\b.*not saved|not saved.*Box 5, Card 2\b/i)
+  await expect(unsaved(page)).not.toContainText(/Card 1\b/)
+  await expect(control(page, 'Start dispenser')).toBeVisible()
+  await page.waitForTimeout(1_500) // keep: the dealer gets time to wrongly restart
+  expect((await writes(page)).filter((w) => w === 'MOTOR:START')).toHaveLength(2)
+})
+
+test('R3: while a photo is held, Capture sends no POST and the held frame survives, before and after Resume', async ({ page }) => {
+  const wire = await held(page, (n) => n <= 2)
+  const posts = wire.posts()
+  await captureButton(page).click({ force: true })
+  await page.waitForTimeout(800) // keep: a wrongly sent POST gets time to land
+  expect(wire.posts()).toBe(posts)
+  const resume = page.getByRole('button', { name: /^Resume captures/ })
+  if (await resume.isVisible()) await resume.click()
+  await captureButton(page).click({ force: true })
+  const start = control(page, 'Start dispenser')
+  if (await start.isEnabled()) await start.click() // the dispenser may not deal while a photo is held
+  await page.waitForTimeout(1_200) // keep: a wrongly sent POST or START gets time to land
+  expect(wire.posts()).toBe(posts)
+  expect((await writes(page)).filter((w) => w === 'MOTOR:START')).toHaveLength(2)
+  // both frames are still there, and Retry saving sends them in order
+  await expect(unsaved(page)).toBeVisible()
+  await page.getByRole('button', { name: 'Retry saving' }).click()
+  await expect.poll(wire.answered, { timeout: 10_000 }).toBe(4)
+  expect(wire.events().slice(4)).toEqual(['sent:3', 'answered:3', 'sent:4', 'answered:4'])
+})
+
+test('R4: the not-saved notice says what was sent and what to press, with no mechanism word', async ({ page }) => {
+  await held(page, (n) => n <= 2)
+  const notice = unsaved(page)
+  await expect(notice).toContainText(/Box 5, Card 1 was not saved/)
+  await expect(notice).toContainText(/Nothing after it was sent/)
+  await expect(notice).toContainText(/Retry saving/)
+  await expect(notice).not.toContainText(/held here/i)
+})
