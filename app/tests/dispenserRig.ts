@@ -86,6 +86,30 @@ export async function fakeBluetooth(page: Page): Promise<void> {
   }, SERVICE)
 }
 
+/** `POST /capture` answers a real capture, but only after `ms`: a slow save. `posts` counts every POST
+ *  that reached the wire, answered or not. Nothing reaches the real store. */
+export async function slowCapture(page: Page, ms: number): Promise<{ posts: () => number; answered: () => number }> {
+  let posts = 0
+  let answered = 0
+  await page.route(/\/capture$/, (route) => {
+    posts += 1
+    const index = posts
+    setTimeout(() => { // keep: the slow save held
+      answered += 1
+      void route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          box: 5, index, key: `5/${index}`, label: `Box 5, Card ${index}`, section: 1, card: index, section_div: '1',
+          new_box: false, created: true, photo: `/tmp/5-${index}.jpg`, capture_id: null,
+          place: { box_total: index, located: true, label: `Box 5, Card ${index}` },
+        }),
+      })
+    }, ms)
+  })
+  return { posts: () => posts, answered: () => answered }
+}
+
 export async function writes(page: Page): Promise<string[]> {
   return page.evaluate(() => (window as unknown as { __writes: string[] }).__writes)
 }

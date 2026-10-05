@@ -327,7 +327,7 @@ test('SYNTHETIC: Stop while a START is pending sends STOP next, after the write,
 test('Stop during the gap sends STOP and ends dealing', async () => {
   const dealer = await connected(PACED_10)
   void dealer.start()
-  await advance(420 + 50)
+  await advance(420 + DEAL_GAP_MS - 30) // inside the gap, before START 2
   await dealer.stop()
   await advance(5_000)
   expect(rig.writes).toEqual(['MOTOR:START', 'MOTOR:STOP'])

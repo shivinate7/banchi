@@ -3,7 +3,7 @@
 import { expect, test } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import type { Page } from '@playwright/test'
-import { CARD, armMotion, control, fakeBluetooth, injectScene, writes } from './dispenserRig'
+import { CARD, GAP_LUMA, armMotion, control, fakeBluetooth, injectScene, slowCapture, writes } from './dispenserRig'
 
 /* THE DISPENSER'S BROWSER HALF, in a real browser against the real capture screen. The unit tier
  * (`unit/dispenser.unit.ts`) holds the loop against tcg-dealer's recorded sequences; this file
@@ -122,4 +122,28 @@ test('with a box picked, a capture that fails stops dealing and the last write i
   await page.waitForTimeout(1_500) // keep: a quiet 1.5 s after STOP
   expect(await writes(page)).toEqual(sent)
   for (const w of sent) expect(['MOTOR:START', 'MOTOR:STOP']).toContain(w)
+})
+
+test('a fire while the previous save is still out is photographed, not swallowed, and dealing goes on', async ({ page }) => {
+  await ready(page, true)
+  // Registered after `stubWire`, so it answers first: every save takes 4 s, far past a card's 0.42 s.
+  const wire = await slowCapture(page, 4_000)
+  const start = control(page, 'Start dispenser')
+  await expect(start).toBeEnabled({ timeout: 5_000 })
+  await start.click()
+  const scene = (base: number) =>
+    page.evaluate((b) => {
+      ;(window as unknown as { __scene: { base: number } }).__scene.base = b
+    }, base)
+
+  await scene(CARD) // card 1 lands: fire 1, its save is held
+  await expect.poll(wire.posts, { timeout: 8_000 }).toBe(1)
+  await scene(GAP_LUMA) // card 1 leaves, card 2 arrives while save 1 is still out
+  await page.waitForTimeout(400) // keep: let the gap register before the next card
+  await scene(CARD)
+  await expect.poll(wire.posts, { timeout: 3_000 }).toBe(2) // fire 2 reached the wire
+  expect(wire.answered()).toBe(0) // while save 1 was still pending
+  await expect(page.locator('.capture-controls').getByText(/not photographed|Resume captures first/)).toHaveCount(0)
+  await expect(control(page, 'Stop dispenser')).toBeVisible()
+  await control(page, 'Stop dispenser').click()
 })
