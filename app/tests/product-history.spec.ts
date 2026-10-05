@@ -239,6 +239,38 @@ test.describe('#/product — the per-product view', () => {
     expect(errors.filter((text) => text.includes('The app failed before the server could answer')), 'an aborted read logged a console error').toEqual([])
   })
 
+  test('a sheet that switches SKU and is then left mid-read shows no notice of any kind', async ({ page }) => {
+    /* The read a state change starts is aborted by the route change. That is the app's doing: it draws nothing, not even an
+       empty Notice (code `aborted`). The first SKU answers; the second is held until after the route change. */
+    let release: () => void = () => {}
+    const held = new Promise<void>((done) => {
+      release = done
+    })
+    await page.route(/\/pipeline\/products\/555999\/(history|realized)$/, async (route) => {
+      await held
+      await route.abort().catch(() => {})
+    })
+    await page.goto('/#/gallery')
+    await expect(page.locator('.bn-page').first()).toBeVisible()
+    await page.evaluate(async () => {
+      const mod = await import(('/src/kit/sheets' + '.ts'))
+      mod.openSheet('product', { sku: '555123', name: 'Vilemaw' })
+    })
+    await expect(page.locator('[role="dialog"] .producthistory-chart').first()).toBeVisible()
+    await page.evaluate(async () => {
+      const mod = await import(('/src/kit/sheets' + '.ts'))
+      mod.openSheet('product', { sku: '555999', name: 'Vilemaw' })
+    })
+    await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))))
+    await page.evaluate(() => {
+      window.location.hash = '#/shipping'
+    })
+    await expect(page).toHaveURL(/#\/shipping$/)
+    release()
+    await page.waitForTimeout(500) // keep: the aborted reads settle in the page after the route change
+    await expect(page.locator('[role="dialog"] .bn-notice'), 'an aborted read drew a Notice').toHaveCount(0)
+  })
+
   test('registerSheet wires the product sheet, and its fallback route is #/product?sku= (D278)', async ({ page }) => {
     await page.goto('/#/gallery')
     const [registered, href] = await page.evaluate(async () => {
