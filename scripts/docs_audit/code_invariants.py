@@ -454,7 +454,7 @@ def loop_expensive_sites(paths: Sequence[Path]) -> List[Tuple[str, int, str, str
             if hits:
                 costly[key] = hits
 
-        def resolve(cls: Optional[str], name: str) -> Optional[Tuple[Optional[str], str]]:
+        def resolve(cls: Optional[str], name: str, defs=defs, bases=bases) -> Optional[Tuple[Optional[str], str]]:
             seen: Set[str] = set()
             todo = [cls]
             while todo:
