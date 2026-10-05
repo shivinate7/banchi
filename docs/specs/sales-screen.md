@@ -147,7 +147,7 @@ counts as neither held nor sold, so the route leaves it out.
 `server/capture_server.py` calls it and nothing else does. A second copy of the revenue-per-SKU
 sum is a defect. No server helper applies D225 yet, because `salesOf` runs in the browser. The
 builder adds one helper in `store/orders.py` that drops a line closed `CLOSE_NOT_SHIPPING`.
-`stockmix` calls it, and a check holds it equal to `salesOf` (check 23).
+`stockmix` calls it, and a check holds it equal to `salesOf` (the last item of the checks list).
 
 - Each card carries small fields only: `game`, `set`, `rarity`, `finish`, `state`, `box`,
   `capturedWeek`, `soldWeek` (null if not sold), `price` (null if none), `revenue` and
@@ -267,7 +267,7 @@ Each is red before the build and green after. Server checks run on a synthetic s
     no hand-rolled select or pill row in the Mix view.
 22. Screens: light and dark at 1440 and 820 pass `app/tests/scaffold.spec.ts` and the stability
     check (D313), with no horizontal page scroll.
-23. For one fixture of orders with a refunded line, Mix's total Revenue equals Sales' gross for
+23. For one fixture with a refunded line and one sold card per ordered copy, Mix's total Revenue equals Sales' gross for
     all time. Red: a Mix that ignores the refund rule is higher.
 
 ### Where a change goes
