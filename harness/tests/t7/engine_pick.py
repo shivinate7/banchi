@@ -100,7 +100,7 @@ def check_matcher_accept_rule(checks: Checks) -> None:
 
     # A NON-ACCEPTED RESULT KEEPS WHAT THE READER THOUGHT: the second look and the review screen
     # show the top pick beside the paid answer, so every unread code keeps the top candidates.
-    weak = _read_one([0.7, 0.5, 0.4], names)
+    weak = _read_one([0.69, 0.5, 0.4], names)
     for label, result, code in (
         ("margin", under, match.UNREAD_MARGIN),
         ("floor", weak, match.UNREAD_FLOOR),
