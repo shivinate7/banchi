@@ -24,7 +24,7 @@ SAME_NAME = ("Vex, Gloomist", "Vex, Gloomist (Alternate Art)")
 OTHER_NAME = ("Vex, Gloomist", "Kai, Dawnblade")
 
 
-def _read(names, rarities, cosines, claim, numbers=("7", "7", "7"), sets=("Set", "Set", "Set")):
+def _read(names, rarities, cosines, claim, numbers=("7", "7", "7", "7"), sets=("Set", "Set", "Set", "Set")):
     """One `Result` for one card against a pool whose cosine to the photo is `cosines`."""
     dim = 4
     vectors = np.zeros((len(cosines), dim), np.float32)
@@ -92,4 +92,14 @@ def check_claim_round_two(checks: Checks) -> None:
     checks.ok(not reprint.accepted, "a cross-set reprint is not the same card", f"{reprint.code}")
 
 
-CHECKS = (check_claim_settles_printing, check_claim_never_guesses, check_claim_round_two)
+def check_claim_four_candidates(checks: Checks) -> None:
+    """A rival past the third candidate still refuses: the third is the same card and does not fit."""
+    names = SAME_NAME + ("Vex, Gloomist (Showcase)", "Kai, Dawnblade")
+    cos = [0.90, 0.89, 0.88, 0.87]
+    other = _read(names, (EPIC, SHOWCASE, "Rare", EPIC), cos, [SHOWCASE], numbers=("7", "7", "7", "9"))
+    checks.ok(not other.accepted, "a fourth candidate that is another card, within the margin, refuses", f"{other.code}")
+    fits = _read(names, (EPIC, SHOWCASE, "Rare", SHOWCASE), cos, [SHOWCASE], numbers=("7", "7", "7", "7"))
+    checks.ok(not fits.accepted, "a fourth printing that also fits the claim, within the margin, refuses", f"{fits.code}")
+
+
+CHECKS = (check_claim_settles_printing, check_claim_never_guesses, check_claim_round_two, check_claim_four_candidates)
