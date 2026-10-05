@@ -54,7 +54,7 @@ def _cards(keys):
 
 
 def _line(lines, key):
-    return " ".join(l for l in lines if key in l)
+    return " ".join(line for line in lines if key in line)
 
 
 def check_match_audit(checks: Checks) -> None:
@@ -93,7 +93,7 @@ def check_match_audit(checks: Checks) -> None:
         code, lines, paid = _audit(["--write"], pick)
         entries = Store().read().review.entries
         checks.equal(code, 0, "2. `match audit --write` exits 0")
-        checks.equal(sorted(k for k in keys if k in entries), [stock], "2. only the in-stock disagreement is queued")
+        checks.equal(sorted(k for k in keys if k in entries), sorted([stock, nosku]), "2. only the in-stock disagreements are queued, with or without a SKU")
         checks.equal(entries[stock].reason if stock in entries else None, REASON, f"2. with the reason `{REASON}`")
         checks.ok(all(k in entries and entries[k].reason == REASON and bool(entries[k].photo) for k in (stock, nosku)), "2. each with the reason and its photo")
         checks.ok(Store().read().inventory.cards[sold].state == master.SOLD and sold not in entries, "2. a sold card is only listed, never queued or changed")
