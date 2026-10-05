@@ -44,7 +44,7 @@ from harness.tests.t7.common import (
 )
 from identify import sidecar
 from pipeline import tcgcsv
-from server import capture_server
+from server import capture_server, pipeline_routes
 from store import db, files, master, orders as order_store, rows
 from store.session import Store
 
@@ -61,7 +61,6 @@ CONSTANT = ("sql", "records_in", "layout_of", "places", "store_read", "store_wri
 # here is named, never silent; "no budget row" for any other route fails.
 EXEMPT = {
     "/tcg/sets": "opens a socket to TCGplayer",
-    "POST /pipeline/preflight": "shells out; its in-process half is not a route of its own",
 }
 
 # One concrete URL per route key. A key is a literal path, or the name of the module's regex.
@@ -122,73 +121,85 @@ ROUTE_URLS = {
 POST_READS = {
     "POST /pipeline/waiting": ("/pipeline/waiting", {"selection": {"all": True}}),
     "POST /inventory/copies": ("/inventory/copies", {"skus": ["SKU1", "SKU2"]}),
+    "POST /pipeline/preflight": ("/pipeline/preflight", {"selection": {"all": True}}),
     "POST /orders/walk-plan": ("/orders/walk-plan", {"keys": ["tcgplayer:o-1", "tcgplayer:o-2"]}),
 }
 
-# route -> {counter: value at size S}. A counter at 0 is omitted.
+# Routes that would shell out: the child is replaced by a fake that exits 0, so the in-process half
+# is what is counted. route -> (module, name, replacement).
+STUBS = {
+    "POST /pipeline/preflight": (pipeline_routes, "_run_sync", lambda argv, timeout: (0, "")),
+}
+
+# route -> {"status": the HTTP status the fixture must get, counter: value at size S}. A counter
+# at 0 is omitted. A route whose status changes fails, so a hit path never turns into a 404 unseen.
 BUDGET = {
-    '/status': {'sql': 25, 'json_loads': 3, 'store_read': 1},
-    '/inventory': {'sql': 46, 'json_loads': 159, 'records_in': 5, 'places': 1, 'store_read': 1},
-    '_INVENTORY_BOX_RE': {'sql': 75, 'json_loads': 51, 'records_in': 2, 'places': 1, 'store_read': 1},
-    '/inventory/recent': {'sql': 26, 'json_loads': 15, 'places': 1, 'store_read': 1},
-    '/inventory/history': {'sql': 12, 'store_read': 1},
-    '/queues': {'sql': 22, 'json_loads': 7, 'records_in': 1, 'places': 1, 'store_read': 1},
-    '/capture/sitting': {'sql': 204, 'json_loads': 159, 'records_in': 5, 'places': 1, 'store_read': 1},
-    '/boxes': {'sql': 233, 'json_loads': 159, 'records_in': 5, 'places': 1, 'store_read': 1},
-    '/graveyard': {'sql': 20, 'store_read': 1},
-    '/games': {},
-    '/orders': {'sql': 1824, 'json_loads': 300, 'store_read': 1},
-    '/codes': {},
-    '/codes/lots': {},
-    '/search': {'sql': 175, 'json_loads': 150, 'places': 1, 'store_read': 1},
-    '/skus/photos': {'sql': 13, 'json_loads': 163, 'store_read': 1},
-    '_REVIEW_CATALOG_RE': {'sql': 12, 'json_loads': 2, 'store_read': 1},
-    '_BOX_LISTINGS_RE': {'sql': 20, 'json_loads': 1, 'store_read': 1},
-    '_BOX_PHOTOS_RE': {'sql': 19, 'json_loads': 51, 'records_in': 2, 'store_read': 1},
-    '_BOXES_ITEM_RE': {},
-    '_PHOTO_BY_CARD_RE': {},
-    '_PHOTO_RE': {'sql': 11, 'json_loads': 1, 'store_read': 1},
-    '/pricing': {},
-    '/pipeline/pricing': {'sql': 65, 'json_loads': 16, 'store_read': 4, 'read_export': 1},
-    '/pipeline/value': {'sql': 354, 'json_loads': 166, 'store_read': 3},
-    '/pipeline/sets': {'sql': 11, 'store_read': 1},
-    '/pipeline/price-now': {'sql': 23, 'json_loads': 2, 'store_read': 2},
-    '/pipeline/trends-saved': {},
-    '/pipeline/movers': {'sql': 11, 'json_loads': 1, 'store_read': 1},
-    '/pipeline/holdings-value': {'sql': 26, 'json_loads': 150, 'store_read': 1},
-    '/pipeline/submissions': {'sql': 11, 'store_read': 1},
-    '/pipeline/match': {'sql': 2},
-    '/pipeline/match/sweep': {'sql': 10},
-    '/pipeline/runs': {'sql': 16, 'json_loads': 5, 'store_read': 1},
-    '/pipeline/markdowns': {},
-    '/pipeline/sends': {'sql': 44, 'store_read': 4},
-    '_MARKDOWN_TABLE_RE': {},
-    '_MARKDOWN_HISTORY_RE': {},
-    '_MARKDOWN_TRENDS_RE': {},
-    '_SEND_FILE_RE': {},
-    '_MARKDOWN_FILE_RE': {},
-    '_RUN_FILE_RE': {},
-    '_RUN_PRICING_RE': {'sql': 27, 'json_loads': 3, 'store_read': 2},
-    '_RUN_HISTORY_RE': {},
-    '_RUN_TRENDS_RE': {'sql': 10, 'store_read': 1},
-    '_PRODUCT_REALIZED_RE': {},
-    '_PRODUCT_HISTORY_RE': {'sql': 24, 'json_loads': 153, 'store_read': 2},
-    '_RUN_SCOPE_RE': {},
-    '_RUN_ITEM_RE': {'sql': 16, 'json_loads': 5, 'store_read': 1},
-    '_SHIPPING_FILE_RE': {},
-    'POST /pipeline/waiting': {'sql': 11, 'store_read': 1, 'read_sidecar': 4},
-    'POST /inventory/copies': {'sql': 53, 'json_loads': 28, 'places': 1, 'store_read': 1},
-    'POST /orders/walk-plan': {'sql': 50, 'json_loads': 104, 'records_in': 2, 'places': 1, 'store_read': 1},
+    '/status': {"status": 200, 'sql': 25, 'json_loads': 3, 'store_read': 1},
+    '/inventory': {"status": 200, 'sql': 46, 'json_loads': 161, 'records_in': 5, 'places': 1, 'store_read': 1},
+    '_INVENTORY_BOX_RE': {"status": 200, 'sql': 75, 'json_loads': 51, 'records_in': 2, 'places': 1, 'store_read': 1},
+    '/inventory/recent': {"status": 200, 'sql': 26, 'json_loads': 15, 'places': 1, 'store_read': 1},
+    '/inventory/history': {"status": 200, 'sql': 12, 'store_read': 1},
+    '/queues': {"status": 200, 'sql': 22, 'json_loads': 7, 'records_in': 1, 'places': 1, 'store_read': 1},
+    '/capture/sitting': {"status": 200, 'sql': 208, 'json_loads': 161, 'records_in': 5, 'places': 1, 'store_read': 1},
+    '/boxes': {"status": 200, 'sql': 233, 'json_loads': 161, 'records_in': 5, 'places': 1, 'store_read': 1},
+    '/graveyard': {"status": 200, 'sql': 20, 'store_read': 1},
+    '/games': {"status": 200},
+    '/orders': {"status": 200, 'sql': 1824, 'json_loads': 300, 'store_read': 1},
+    '/codes': {"status": 200},
+    '/codes/lots': {"status": 200},
+    '/search': {"status": 200, 'sql': 175, 'json_loads': 150, 'places': 1, 'store_read': 1},
+    '/skus/photos': {"status": 200, 'sql': 13, 'json_loads': 163, 'store_read': 1},
+    '_REVIEW_CATALOG_RE': {"status": 409, 'sql': 12, 'json_loads': 2, 'store_read': 1},
+    '_BOX_LISTINGS_RE': {"status": 200, 'sql': 20, 'json_loads': 1, 'store_read': 1},
+    '_BOX_PHOTOS_RE': {"status": 200, 'sql': 19, 'json_loads': 51, 'records_in': 2, 'store_read': 1},
+    '_BOXES_ITEM_RE': {"status": 404},
+    '_PHOTO_BY_CARD_RE': {"status": 200},
+    '_PHOTO_RE': {"status": 200, 'sql': 11, 'json_loads': 1, 'store_read': 1},
+    '/pricing': {"status": 200},
+    '/pipeline/pricing': {"status": 200, 'sql': 123, 'json_loads': 24, 'store_read': 8, 'read_export': 3},
+    '/pipeline/value': {"status": 200, 'sql': 356, 'json_loads': 170, 'store_read': 3},
+    '/pipeline/sets': {"status": 200, 'sql': 11, 'store_read': 1},
+    '/pipeline/price-now': {"status": 200, 'sql': 23, 'json_loads': 4, 'store_read': 2},
+    '/pipeline/trends-saved': {"status": 200},
+    '/pipeline/movers': {"status": 200, 'sql': 11, 'json_loads': 1, 'store_read': 1},
+    '/pipeline/holdings-value': {"status": 200, 'sql': 26, 'json_loads': 150, 'store_read': 1},
+    '/pipeline/submissions': {"status": 200, 'sql': 11, 'store_read': 1},
+    '/pipeline/match': {"status": 200, 'sql': 2},
+    '/pipeline/match/sweep': {"status": 200, 'sql': 10},
+    '/pipeline/runs': {"status": 200, 'sql': 16, 'json_loads': 5, 'store_read': 1},
+    '/pipeline/markdowns': {"status": 200},
+    '/pipeline/sends': {"status": 200, 'sql': 44, 'store_read': 4},
+    '_MARKDOWN_TABLE_RE': {"status": 404},
+    '_MARKDOWN_HISTORY_RE': {"status": 404},
+    '_MARKDOWN_TRENDS_RE': {"status": 404},
+    '_SEND_FILE_RE': {"status": 404},
+    '_MARKDOWN_FILE_RE': {"status": 404},
+    '_RUN_FILE_RE': {"status": 200},
+    '_RUN_PRICING_RE': {"status": 200, 'sql': 27, 'json_loads': 3, 'store_read': 2},
+    '_RUN_HISTORY_RE': {"status": 404},
+    '_RUN_TRENDS_RE': {"status": 200, 'sql': 10, 'store_read': 1},
+    '_PRODUCT_REALIZED_RE': {"status": 200},
+    '_PRODUCT_HISTORY_RE': {"status": 409, 'sql': 24, 'json_loads': 153, 'store_read': 2},
+    '_RUN_SCOPE_RE': {"status": 200},
+    '_RUN_ITEM_RE': {"status": 200, 'sql': 16, 'json_loads': 5, 'store_read': 1},
+    '_SHIPPING_FILE_RE': {"status": 400},
+    'POST /pipeline/waiting': {"status": 200, 'sql': 11, 'store_read': 1, 'read_sidecar': 6},
+    'POST /inventory/copies': {"status": 200, 'sql': 53, 'json_loads': 28, 'places': 1, 'store_read': 1},
+    'POST /pipeline/preflight': {"status": 200, 'sql': 21, 'store_read': 2, 'read_sidecar': 6},
+    'POST /orders/walk-plan': {"status": 200, 'sql': 50, 'json_loads': 104, 'records_in': 2, 'places': 1, 'store_read': 1},
 }
 
 # (route, counter) -> (value at S, value at 2S): a constant counter that still grows. Only shrinks.
 KNOWN_OVER = {
     ('_INVENTORY_BOX_RE', 'sql'): (75, 125),
-    ('/capture/sitting', 'sql'): (204, 354),
+    ('/capture/sitting', 'sql'): (208, 364),
     ('/boxes', 'sql'): (233, 383),
     ('/orders', 'sql'): (1824, 3624),
     ('/search', 'sql'): (175, 325),
-    ('/pipeline/value', 'sql'): (354, 654),
+    ('/pipeline/pricing', 'sql'): (123, 210),
+    ('/pipeline/pricing', 'store_read'): (8, 14),
+    ('/pipeline/pricing', 'read_export'): (3, 6),
+    ('/pipeline/value', 'sql'): (356, 659),
     ('POST /inventory/copies', 'sql'): (53, 77),
 }
 
@@ -210,14 +221,14 @@ SCAN_ALLOWED = frozenset({
 
 # --------------------------------------------------------------------------- the routes
 
-def get_routes() -> list:
-    """The GET route keys `do_GET` serves: a `path == "..."` literal, or a `_NAME_RE.match(path)`."""
+def get_routes(method: str = "do_GET") -> list:
+    """The route keys `method` (`do_GET` or `do_POST`) serves: a `path == "..."` literal, or a `_NAME_RE.match(path)`."""
     source = Path(capture_server.__file__).read_text("utf-8")
     tree = ast.parse(source)
     handler = next(
         n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "CaptureHandler"
     )
-    do_get = next(n for n in handler.body if isinstance(n, ast.FunctionDef) and n.name == "do_GET")
+    do_get = next(n for n in handler.body if isinstance(n, ast.FunctionDef) and n.name == method)
     keys: list = []
     for node in ast.walk(do_get):
         if (
@@ -287,9 +298,8 @@ class _Meter:
             conn.set_trace_callback(trace)
             return conn
 
-        db_sqlite = db.sqlite3
-        db.sqlite3 = _Proxy(db_sqlite, connect=connect)
-        self._undo.append(lambda: setattr(db, "sqlite3", db_sqlite))
+        sqlite3.connect = connect  # every module's connection, not only `store/db.connect`
+        self._undo.append(lambda: setattr(sqlite3, "connect", real_connect))
 
         real_json = rows.json
 
@@ -328,7 +338,10 @@ def _build(checks: Checks, size: int) -> dict:
     """The store at one size. Box count is fixed; cards, orders and queue entries scale."""
     from datetime import datetime, timedelta, timezone
 
-    run, _ = seam_run(checks, [(9, 1, "Articuno", "161", None)])
+    runs_made = [
+        seam_run(checks, [(9, k, "Articuno", "161", None)])[0] for k in range(1, size // 50 + 1)
+    ]
+    run = runs_made[0]
     for _ in range(3):  # three real photographs in box 4, for the photo routes
         capture_server.do_capture(capture_payload(4))
     stale = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
@@ -344,7 +357,7 @@ def _build(checks: Checks, size: int) -> dict:
         snapshot.ledger.ingest([
         order_store.OrderRecord(
             source="TCGplayer", number=f"O-{n}",
-            placed_at=f"2026-08-{1 + n % 28:02d}T10:00:00+00:00",
+            placed_at=(datetime.now(timezone.utc) - timedelta(days=n % 28)).isoformat(),
             lines=[order_store.OrderLine(sku=f"SKU{n % 12}", quantity=1)],
         )
         for n in range(size)
@@ -369,8 +382,16 @@ def measure(checks: Checks, size: int) -> tuple:
             calls.update({key: ("POST", url, body) for key, (url, body) in POST_READS.items()})
             origin = capture_server.DEFAULT_ALLOWED_ORIGINS[0]
             for key, (method, url, body) in calls.items():
-                with _Meter() as meter:
-                    status, _, _ = request(port, method, url, origin=origin, payload=body)
+                stub = STUBS.get(key)
+                real = getattr(stub[0], stub[1]) if stub else None
+                if stub:
+                    setattr(stub[0], stub[1], stub[2])
+                try:
+                    with _Meter() as meter:
+                        status, _, _ = request(port, method, url, origin=origin, payload=body)
+                finally:
+                    if stub:
+                        setattr(stub[0], stub[1], real)
                 out[key] = dict(meter.counts)
                 selects[key] = set(meter.selects)
                 statuses[key] = status
@@ -378,11 +399,11 @@ def measure(checks: Checks, size: int) -> tuple:
             httpd.shutdown()
             httpd.server_close()
             thread.join(timeout=5)
-        found = scans(selects)
+        found = scans(selects, checks)
     return out, found, statuses
 
 
-def scans(selects: dict) -> dict:
+def scans(selects: dict, checks: Checks) -> dict:
     """`{key: {routes}}` for every non-covering `SCAN <table>` in an EXPLAIN QUERY PLAN of a counted
     SELECT. The key is `table.column` for the statement's first WHERE column, else `table`."""
     found: dict = {}
@@ -392,8 +413,9 @@ def scans(selects: dict) -> dict:
             for statement in statements:
                 try:
                     plan = conn.execute("EXPLAIN QUERY PLAN " + statement).fetchall()
-                except sqlite3.Error:
-                    continue  # ponytail: a statement that needs a temp table is skipped, not guessed
+                except sqlite3.Error as exc:
+                    checks.note(f"  EXPLAIN failed for {route}: {exc}: {' '.join(statement.split())[:120]}")
+                    continue
                 where = re.search(r"\bWHERE\s+\(?(\w+)", statement, re.IGNORECASE)
                 for *_, detail in plan:
                     match = re.match(r"SCAN (\w+)(?!.*COVERING)", detail)
@@ -416,11 +438,20 @@ def check_server_read_budget(checks: Checks) -> None:
             problems.append(f"route {route!r} has no ROUTE_URLS row and no EXEMPT reason")
     for route in sorted(k for k in known - set(served) if not k.startswith("POST ")):
         problems.append(f"stale row {route!r}: do_GET no longer serves it")
+    posted = {f"POST {key}" for key in get_routes("do_POST") if isinstance(key, str) and key.startswith("/")}
+    for route, (url, _) in POST_READS.items():
+        if f"POST {url}" not in posted:
+            problems.append(f"stale row {route!r}: do_POST no longer serves {url}")
+    for route in sorted(k for k in set(BUDGET) | set(EXEMPT) if k.startswith("POST ")):
+        if route not in POST_READS and route not in EXEMPT:
+            problems.append(f"stale row {route!r}: no POST_READS entry")
     small, found, statuses = measure(checks, SIZES[0])
     big, _, _ = measure(checks, SIZES[1])
     for route, status in statuses.items():
         if status >= 500:
             problems.append(f"{route} failed with a server error ({status})")
+        elif route in BUDGET and BUDGET[route].get("status") != status:
+            problems.append(f"{route} status {status}, budget says {BUDGET[route].get('status')}")
 
     for route in small:
         want = BUDGET.get(route)
@@ -443,8 +474,12 @@ def check_server_read_budget(checks: Checks) -> None:
                 problems.append(f"{route} {counter} grows with the store: {now[0]} at S, {now[1]} at 2S")
             elif now != over:
                 problems.append(
-                    f"{route} {counter} KNOWN_OVER {over} measured {now}"
-                    + (f", lower to {now}" if now < over else ", over")
+                    f"{route} {counter} KNOWN_OVER {over} measured {now}: "
+                    + ", ".join(
+                        f"{label} {got} " + (f"over {had}" if got > had else f"under {had}, lower to {got}")
+                        for label, got, had in zip(("S", "2S"), now, over)
+                        if got != had
+                    )
                 )
     for route, _counter in sorted(KNOWN_OVER):
         if route not in small:
