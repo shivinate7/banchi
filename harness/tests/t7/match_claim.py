@@ -71,7 +71,7 @@ def check_claim_never_guesses(checks: Checks) -> None:
     none = _read(SAME_NAME, (EPIC, SHOWCASE), tight, None)
     checks.ok(not none.accepted, "no claim stays refused", f"{none.code}")
     weak = _read(SAME_NAME, (EPIC, SHOWCASE), [0.70, 0.68], [SHOWCASE])
-    checks.ok(not weak.accepted and weak.code != None, "a claim never lifts a floor under FLOOR_MIN", f"{weak.code}")
+    checks.ok(not weak.accepted and weak.code is not None, "a claim never lifts a floor under FLOOR_MIN", f"{weak.code}")
 
 
 def check_claim_round_two(checks: Checks) -> None:
