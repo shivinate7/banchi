@@ -44,6 +44,7 @@ card's photo is taken.
   saved") and offers Retry saving. Saves queued behind a failure never send. Retry saving re-sends the held
   frames in capture order. No card is lost silently.
 - A press that would undo while a save is out says so and does nothing.
+- While any photo is unsaved, every control that adds, moves or re-claims cards (Capture, Start, Resume, Section, undo, box and section pick) waits until Retry saving succeeds. A failed save shows one notice that names the card.
 - No photo within `SAVE_WAIT_MS` (3000, exported) after COMPLETE: stop, send STOP, and say "Stopped: no
   photo came after the last card. Check the tray." Stop cancels the wait.
 - `createDealer({ onMark })` reports `photo-taken`, `save-answered` and `start-sent` with the card number.

@@ -1179,19 +1179,15 @@ def check_rows_scoped_after_full_load(checks: Checks) -> None:
                 "the source's own candidates against the live object, not by trusting either "
                 "side blindly",
             )
-            # THE NAMED, DOCUMENTED GAP, PINNED RATHER THAN LEFT TO BE REDISCOVERED:
-            # `where()`'s own docstring says a row mutated in place INTO a new match is not
-            # found unless the source's own (stale, uncommitted) row already offered it as a
-            # candidate. `state=SOLD` was never true on disk, so the source query for it
-            # never sees "1/1" at all, and nothing here can pull it in. Pinned as a `not`
-            # rather than an `ok` so a future change that fixes this GOES RED here rather
-            # than being an invisible improvement — see that same docstring before removing
-            # this assertion.
+            # A ROW MUTATED IN PLACE INTO A NEW MATCH IS FOUND. `where` evaluates every
+            # loaded row live, so `state=SOLD` answers for "1/1" although the source's own
+            # index never held that value on disk. Pinned so a regression to trusting the
+            # source's candidates alone goes red here.
             now_sold = snapshot.inventory.cards.where(state=master.SOLD)
             checks.ok(
-                "1/1" not in {c.key for c in now_sold},
-                "and it does NOT yet answer for its new state — the documented gap for a "
-                "row mutated in place into a match the source's own index cannot see",
+                "1/1" in {c.key for c in now_sold},
+                "and it DOES answer for its new state: a row mutated in place into a match "
+                "the source's own index cannot see is still found",
             )
 
 

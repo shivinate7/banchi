@@ -208,10 +208,14 @@ function ResendPrices({
  *  own words; more than one is listed here, card by card, the way the guard's trims are listed
  *  after a press. */
 function MovesList({ moves }: { readonly moves: readonly LiveMove[] }) {
+  const [open, setOpen] = useState(false)
   if (new Set(moves.map((move) => Number(move.price))).size < 2) return null
   return (
     <Notice tone="info" compact className="send-moves" title="Live copies this press moves to their new price.">
-      <ul className="send-names">
+      <Button variant="quiet" icon={open ? 'chevronUp' : 'chevronDown'} onClick={() => setOpen((on) => !on)} aria-expanded={open} words="word-only-control">
+        {`${open ? 'Hide' : 'Show'} ${plural(moves.reduce((sum, move) => sum + move.copies, 0), 'live copy', 'live copies')}`}
+      </Button>
+      <ul className="send-names" hidden={!open}>
         {moves.map((move) => (
           <li key={move.sku}>
             <span className="send-name">{move.name || move.sku}</span>

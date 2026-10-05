@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
 import { Button, IconButton, useLeave } from './index'
 import { usePageRoute } from './Page'
+import { setSheetOpen } from '../server'
 import { closeSheet, useOpenSheet, type OpenSheet } from './sheets'
 import './dialog.css'
 
@@ -794,6 +795,15 @@ export function SheetHost() {
   // one beat longer than the kit's leave (`useLeave`'s 140ms), so the sheet finishes its own
   const { mounted } = useLeave(current !== null, 180)
   const shown = current ?? (mounted ? last.current : null)
+  /* A SHEET'S READS LIVE AS LONG AS THE SHEET. While one is hosted, every read the app starts is the shell's (`setSheetOpen`,
+     read at call time in `request`), so leaving the screen it was opened over aborts none of them. Named in render, so the
+     sheet's mount effects already see it. */
+  const hosting = shown !== null
+  setSheetOpen(hosting)
+  useEffect(() => {
+    setSheetOpen(hosting)
+    return () => setSheetOpen(false)
+  }, [hosting])
   if (shown === null) return null
   const { Component, props, kind } = shown as unknown as {
     readonly kind: string

@@ -372,30 +372,44 @@ def card_crop(image, box, pad: Optional[float] = None, aspect: float = geometry.
     return image.crop(crop_rect(image.size, box, pad, aspect))
 
 
+def _guarded_box(path, aspect):
+    """`(box, refused)`: `box` is the one guarded card box or None; `refused` is a model box
+    that `crop_refusal` refused and `detect_card` could not replace (None otherwise)."""
+    box = geometry.locate_card(path, aspect=aspect)
+    if box is None or box.method != "dfine" or crop_refusal(path, box, aspect=aspect) is None:
+        return box, None
+    fallback = geometry.detect_card(path, aspect=aspect)
+    return (fallback, None) if fallback is not None else (None, box)
+
+
+def card_box_for(path, aspect: Optional[float] = geometry.CARD_ASPECT):
+    """The one guarded card box: `locate_card`'s, or `detect_card`'s when `crop_refusal` refuses
+    a model box. None when no card is found, or the model box is refused and `detect_card`
+    finds nothing. `geometry.GeometryError` propagates."""
+    return _guarded_box(path, aspect)[0]
+
+
 def prepare_located(path, max_edge: int = MAX_EDGE, crop: bool = True, find: Optional[bool] = None):
     """`(box, Prepared)`: the one cut a run and the crop preview both make (D125).
 
     The finder is `geometry.locate_card` (the model, `detect_card` behind it). A model box that
-    `crop_refusal` refuses falls back to `detect_card`'s box, and the guard lives here because
-    `geometry` may not import `identify`. A finder that raises sends the whole frame.
+    `crop_refusal` refuses falls back to `detect_card`'s box (`card_box_for`, the one home; `geometry`
+    may not import `identify`). A finder that raises sends the whole frame.
     `box` is what the finder answered, cut with only when `crop` is set. `find` defaults to
     `crop`: the preview finds with the crop off too, to report the finder's answer.
     """
     box = None
     if crop if find is None else find:
         try:
-            box = geometry.locate_card(path)
+            if crop:
+                # a refused model box rides on, so `prepare` refuses it and reports why
+                box, refused = _guarded_box(path, geometry.CARD_ASPECT)
+                box = box or refused
+            else:
+                box = geometry.locate_card(path)
         except Exception:
             box = None
     prepared = prepare(path, max_edge=max_edge, crop_box=box if crop else None)
-    if crop and prepared.crop_refused and box is not None and box.method == "dfine":
-        try:
-            fallback = geometry.detect_card(path)
-        except Exception:
-            fallback = None
-        if fallback is not None:
-            box = fallback
-            prepared = prepare(path, max_edge=max_edge, crop_box=box)
     return box, prepared
 
 

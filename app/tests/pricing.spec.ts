@@ -1403,6 +1403,76 @@ test('r8: moves to more than one price are listed card by card before the press'
   })
 })
 
+/* THE SEND PANEL STAYS COMPACT (owner ruling; D313, nothing moves unless the person moved it). With
+   240 live reprice rows the per-card list used to push the worklist out of view. It is one summary
+   line by default, a disclosure opens the list, and the open list scrolls in a bounded box. The
+   worklist keeps its place at 1440 and 820 whatever the list length. */
+async function openManyMoves(page: Page) {
+  const many = Array.from({ length: 240 }, (_, i) => String(9000000 + i))
+  await open(page, {
+    skus: many.map((id, i) =>
+      sku({
+        sku: id,
+        name: `Card ${i}`,
+        add_to_quantity: 1,
+        copies: 1,
+        live_before: 1,
+        listing: { pushed: 1, staged: 0, live: 1 },
+        live_now: { export: 'live-tcgplayer-20260924-120000.csv', copies: 1, price: '5.00' },
+      }),
+    ),
+    decisions: {
+      rule: 'match',
+      basis: 'market',
+      sub_threshold: null,
+      overrides: Object.fromEntries(many.map((id, i) => [id, i % 2 === 0 ? '6.00' : '7.00'])),
+    },
+  })
+  await expect(page.locator('.send-moves')).toBeVisible()
+}
+
+for (const width of [1440, 820]) {
+  test(`send panel: 240 moves leave the worklist's first row in view and the panel capped (${width})`, async ({ page }) => {
+    await setViewport(page, { width, height: 900 })
+    await openManyMoves(page)
+    const row = await page.locator('.pricing-row').first().boundingBox()
+    const panel = await page.locator('.send-moves').boundingBox()
+    expect(row).not.toBeNull()
+    expect(panel).not.toBeNull()
+    expect(row!.y + row!.height).toBeLessThanOrEqual(900)
+    expect(row!.y).toBeGreaterThanOrEqual(0)
+    expect(panel!.height).toBeLessThan(900 / 2)
+  })
+}
+
+test('send panel: the full list is collapsed behind a disclosure by default', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await openManyMoves(page)
+  const panel = page.locator('.send-moves')
+  await expect(panel).toContainText('240 live copies')
+  const toggle = panel.getByRole('button')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(panel.locator('.send-name').first()).toBeHidden()
+})
+
+for (const width of [1440, 820]) {
+  test(`send panel: an opened list scrolls in its own box and the worklist stays put (${width})`, async ({ page }) => {
+    await setViewport(page, { width, height: 900 })
+    await openManyMoves(page)
+    const panel = page.locator('.send-moves')
+    const before = await page.locator('.pricing-row').first().boundingBox()
+    await panel.getByRole('button').click()
+    await expect(panel.locator('.send-name').first()).toBeVisible()
+    await afterPaint(page)
+    const box = await panel.boundingBox()
+    expect(box!.height).toBeLessThan(900 / 2)
+    const scroller = panel.locator('ul.send-names')
+    expect(await scroller.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
+    const after = await page.locator('.pricing-row').first().boundingBox()
+    expect(after!.y).toBe(before!.y)
+  })
+}
+
 /* ROUND 8, R7-4: A LIVE ROW WITH COPIES AND NO PRICE IS A MOVE. Whether TCGplayer can hold one is
    not known, so the button names it: the safe side. */
 test('r8: live copies with no price are named as a move', async ({ page }) => {

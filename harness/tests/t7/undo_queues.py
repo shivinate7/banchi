@@ -4772,12 +4772,83 @@ def check_reshoot(checks: Checks) -> None:
     )
 
 
+def check_reopen_same_session_counts(checks: Checks) -> None:
+    """`reopen` flips `cleared_by_human` in place, so every count over `open_entries` must see it.
+
+    A read that remembers a miss by column value (`entries.where(cleared_by_human=0)`) is
+    stale inside the write session that reopens: `reopen` never goes through
+    `Rows.__setitem__`. Two entries, one cleared and stored; reopen it; count in the SAME
+    session.
+    """
+    with isolated_home():
+        with Store().write() as snapshot:
+            snapshot.review.upsert(entry(1, 1, market="12.00"))
+            snapshot.review.upsert(entry(1, 2, market="0.75"))
+        with Store().write() as snapshot:
+            snapshot.review.entries["1/2"].cleared_by_human = True
+        with Store().write() as snapshot:
+            review = snapshot.review
+            checks.equal(len(review.open_entries), 1, "before reopen, one entry is open")
+            checks.ok(review.reopen("1/2"), "the cleared entry reopens")
+            checks.equal(
+                len(review.open_entries), 2,
+                "same session: open_entries sees the reopened entry (stale where() index)",
+            )
+            checks.equal(len(review), 2, "same session: Queue.__len__ counts the reopened entry")
+            checks.ok(
+                review.summary.startswith("2 cards in"),
+                f"same session: summary counts the reopened entry, got {review.summary!r}",
+            )
+
+
+def check_store_indexes_reach_existing_store(checks: Checks) -> None:
+    """A store already at `SCHEMA_VERSION` must still gain `cards_run` and `events_event`.
+
+    Built with the real fresh-store path, then the two indexes dropped, which is what a store
+    created before they existed looks like. Reconnecting must recreate them, and the two
+    lookups they serve must plan as SEARCH.
+    """
+    from store import db
+
+    with isolated_home():
+        directory = Store().directory
+        conn = db.connect(directory)
+        for name in ("cards_run", "events_event"):
+            conn.execute(f"DROP INDEX IF EXISTS {name}")
+        conn.commit()
+        conn.close()
+
+        conn = db.connect(directory)
+        try:
+            have = {
+                row[0]
+                for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'index'")
+            }
+            for name in ("cards_run", "events_event"):
+                checks.ok(name in have, f"an existing store gains index {name} on connect")
+            for label, sql in (
+                ("events_named", "SELECT id, payload FROM events WHERE event = ? ORDER BY id DESC"),
+                ("cards.run", "SELECT * FROM cards WHERE run = ?"),
+            ):
+                plan = " ".join(
+                    str(r[-1]) for r in conn.execute("EXPLAIN QUERY PLAN " + sql, ("x",))
+                )
+                checks.ok(
+                    "SEARCH" in plan and "SCAN" not in plan,
+                    f"{label} is an index search on an existing store, plan: {plan}",
+                )
+        finally:
+            conn.close()
+
+
 CHECKS = (
     check_undo,
     check_remove_and_box_delete,
     check_graveyard,
     check_queues,
     check_queue_starvation,
+    check_reopen_same_session_counts,
+    check_store_indexes_reach_existing_store,
     check_listing_release,
     check_queue_supersede,
     check_queue_refresh,

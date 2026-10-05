@@ -1,27 +1,14 @@
 {
-  "inflight:#/": { "max": 8, "why": "Cold mount holds 8 reads open at once, limit 4." },
-  "inflight:#/capture": { "max": 5, "why": "Cold mount holds 5 reads open at once, limit 4." },
-  "inflight:#/review": { "max": 5, "why": "Cold mount holds 5 reads open at once, limit 4." },
-  "inflight:#/pricing": { "max": 5, "why": "Cold mount holds 5 reads open at once, limit 4." },
-  "same-get:#/": { "max": 1, "why": "1 path asked again while the same read was open: /status." },
-  "same-get:#/capture": { "max": 1, "why": "1 path asked again while the same read was open: /status." },
-  "same-get:#/review": { "max": 1, "why": "1 path asked again while the same read was open: /status." },
-  "same-get:#/pricing": { "max": 1, "why": "1 path asked again while the same read was open: /status." },
-  "same-get:#/orders": { "max": 1, "why": "1 path asked again while the same read was open: /status." },
-  "same-get:#/shipping": { "max": 1, "why": "1 path asked again while the same read was open: /status." },
-  "same-get:#/revenue": { "max": 1, "why": "1 path asked again while the same read was open: /status." },
-  "same-get:#/inventory": { "max": 1, "why": "1 path asked again while the same read was open: /status." },
-  "same-get:#/codes": { "max": 1, "why": "1 path asked again while the same read was open: /status." },
-  "same-get:#/product?sku=9191486": { "max": 1, "why": "1 path asked again while the same read was open: /status." },
-  "home-pricing:#/": { "max": 2, "why": "Home reads /pipeline/pricing and /pricing unscoped on mount, 2 reads, limit 0." },
-  "review-queues:#/review": { "max": 2, "why": "Review reads /queues 2 times on mount, limit 1." },
-  "sale-reads:#/inventory": { "max": 5, "why": "One Mark sold starts 5 reads: /graveyard, /inventory/:n, /boxes, /queues, /orders. Limit 3." },
-  "leave:#/": { "max": 4, "why": "Leaving Home aborts none of 4 open paths: /boxes, /pipeline/sends, /inventory/recent, /inventory/history." },
-  "leave:#/capture": { "max": 3, "why": "Leaving Capture aborts none of 3 open paths: /pipeline/match/sweep, /games, /boxes." },
-  "leave:#/review": { "max": 2, "why": "Leaving Review aborts none of 2 open paths: /capture/sitting, /pipeline/match." },
-  "leave:#/pricing": { "max": 2, "why": "Leaving Pricing aborts none of 2 paths: /pipeline/trends-saved and /pipeline/movers." },
-  "leave:#/orders": { "max": 1, "why": "Leaving Orders aborts none of 1 open path: /boxes." },
-  "leave:#/revenue": { "max": 2, "why": "Leaving Revenue aborts none of 2 open paths: /pipeline/holdings-value, /skus/photos." },
-  "leave:#/inventory": { "max": 2, "why": "Leaving Inventory aborts none of 2 open paths: /graveyard, /boxes." },
-  "leave:#/codes": { "max": 1, "why": "Leaving Codes aborts none of 1 open path: /boxes." }
+  "inflight:#/": {
+    "max": 6,
+    "why": "Cold mount holds 6 reads open at once, limit 4."
+  },
+  "home-pricing:#/": {
+    "max": 2,
+    "why": "Home reads /pipeline/pricing and /pricing unscoped on mount, 2 reads, limit 0."
+  },
+  "sale-reads:#/inventory": {
+    "max": 4,
+    "why": "a sale changes the review queue and the order claims, so both are re-read"
+  }
 }
