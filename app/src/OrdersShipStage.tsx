@@ -1,3 +1,4 @@
+import { byteSize, count } from './kit/dataRules'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from 'react'
 
 import { readUpload } from './csvUpload'
@@ -131,7 +132,7 @@ function figuresOf(row: ShippingRow): string[] {
   if (row.weight_per_item_oz !== null && (row.reason === 'non_card_signal' || row.reason === 'sub_single_weight')) {
     parts.push(`${Number(row.weight_per_item_oz).toFixed(2)} oz each`)
   }
-  if (row.item_count !== null) parts.push(`${row.item_count} item${row.item_count === 1 ? '' : 's'}`)
+  if (row.item_count !== null) parts.push(`${count(row.item_count, 'item')}`)
   return parts
 }
 
@@ -201,7 +202,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
         title: 'Export read',
         // D218: `toast.body` is a plain string, so this is a sentence rather than two elements
         // joined by a typed dot.
-        body: `Read ${answer.shipments} order${answer.shipments === 1 ? '' : 's'} from ${answer.name}.`,
+        body: `Read ${count(answer.shipments, 'order')} from ${answer.name}.`,
       })
     } catch (err) {
       setFailure(describeFailure(err))
@@ -478,7 +479,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
             </span>
             <span className="shipping-file-meta">
               <span>
-                {batch.shipments} order{batch.shipments === 1 ? '' : 's'}
+                {count(batch.shipments, 'order')}
               </span>
               <span>{keptOf(batch.expires_in)}</span>
             </span>
@@ -514,7 +515,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                 <span className="shipping-file-name" title={batch.file.name}>
                   {batch.file.name}
                 </span>
-                <span className="shipping-file-size">{(batch.file.bytes / 1000).toFixed(1)} kB</span>
+                <span className="shipping-file-size">{byteSize(batch.file.bytes)}</span>
               </span>
               {/* THE COUNT IS SAID ONCE, ON THE DOWNLOAD BUTTON BELOW (TXT-05): a second count
                   here duplicated it in the same breath as the lede above and the tab beside it.
@@ -552,7 +553,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                 <Icon name="download" size={16} />
                 <span>Download</span>
                 <span className="shipping-download-count">
-                  {batch.parcel_count} order{batch.parcel_count === 1 ? '' : 's'}
+                  {count(batch.parcel_count, 'order')}
                 </span>
               </a>
             </div>

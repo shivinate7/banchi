@@ -1,3 +1,4 @@
+import { count } from './kit/dataRules'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { BoxRecord, SearchCopy, SearchGroup, SectionDetail } from './types'
@@ -81,10 +82,6 @@ function saidState(state: string): string {
   if (state === SOLD) return 'Sold.'
   if (state === RETIRED) return 'No longer in the boxes.'
   return 'In the boxes.'
-}
-
-function count(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`
 }
 
 /** ONE LINE, EVERY FACT ONCE (the owner's ruling, 2026-09-25, Direction B): the box's name, the

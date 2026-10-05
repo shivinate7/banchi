@@ -67,6 +67,30 @@ export function relativeDate(at: Date | string | number | null | undefined, now:
   return days === 1 ? 'yesterday' : `${days} days ago`
 }
 
+/** `YYYY-MM-DD` in the runtime's zone: the shape `<input type="date">` and a day key use. THE one
+ *  local day key; `toISOString().slice(0, 10)` is the UTC day and is wrong after dusk west of Greenwich. */
+export function localDay(at: Date = new Date()): string {
+  const p = (n: number): string => String(n).padStart(2, '0')
+  return `${at.getFullYear()}-${p(at.getMonth() + 1)}-${p(at.getDate())}`
+}
+
+/** `YYYY-MM-DD` in UTC: for a stamp the server keys in UTC (`placed_at`, a cutoff). */
+export function utcDay(at: Date = new Date()): string {
+  return at.toISOString().slice(0, 10)
+}
+
+/** `just now`, `5m ago`, `5h ago`, `2d ago`, `—` where there is no date: `relativeDate` cut to a
+ *  narrow cell. Never a date. */
+export function relativeDateShort(at: Date | string | number | null | undefined, now: Date = new Date()): string {
+  const when = toDate(at)
+  if (when === null) return '—'
+  const elapsed = Math.max(0, now.getTime() - when.getTime())
+  if (elapsed < MINUTE) return 'just now'
+  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)}m ago`
+  if (elapsed < DAY) return `${Math.floor(elapsed / HOUR)}h ago`
+  return `${Math.floor(elapsed / DAY)}d ago`
+}
+
 /** `Thursday, September 25`, or `—` where there is no date. For a screen naming today, not a
  *  stamp on a record — the year is redundant there. */
 export function weekdayDate(at: Date | string | number | null | undefined): string {

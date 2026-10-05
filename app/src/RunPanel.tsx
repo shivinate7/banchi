@@ -1,3 +1,4 @@
+import { byteSize } from './kit/dataRules'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
 import {
@@ -25,6 +26,7 @@ import { COMMANDS, StageBar, StagePill, matchProblemTitle, runningFor, stageOf, 
 import { boxOf, runBoxLabel } from './runScope'
 import { roundsToNothing } from './money'
 import { matchWaiting } from './autoMatch'
+import { relativeDate } from './dates'
 import './RunPanel.css'
 
 export { runningFor }
@@ -89,17 +91,6 @@ function count(value: number | null | undefined): string {
   return typeof value === 'number' ? String(value) : '—'
 }
 
-/** Bytes as the operator reads them. SENTENCES, NOT MACHINE STRINGS — the register rule.
- *
- *  MB AND NOT MiB, and it is the honest unit here: the figure it is compared against is
- *  `tcg_export.MAX_BYTES`, which is 32 * 1024 * 1024, so both sides go through this one
- *  function and the percentage beside them is computed on the server off the raw bytes. A
- *  reader comparing "31 MB" with "32 MB" is reading the same arithmetic the refusal uses. */
-function mb(bytes: number): string {
-  const mib = bytes / 1024 / 1024
-  return `${mib >= 10 ? Math.round(mib) : mib.toFixed(1)} MB`
-}
-
 /** A fraction as a whole percent. */
 function pct(fraction: number): string {
   return `${Math.round(fraction * 100)}%`
@@ -114,15 +105,6 @@ function pct(fraction: number): string {
  *  spec, because the specs were written against a four-minute fixture and neither reads
  *  the branch. Caught by looking at the screen, which is the one thing a typecheck cannot
  *  do for you. */
-function ageWords(seconds: number): string {
-  if (seconds < 60) return 'taken moments ago'
-  if (seconds < 5400) {
-    const mins = Math.max(1, Math.round(seconds / 60))
-    return `taken ${mins} minute${mins === 1 ? '' : 's'} ago`
-  }
-  const hours = Math.round(seconds / 3600)
-  return `taken ${hours} hour${hours === 1 ? '' : 's'} ago`
-}
 
 function scopeWords(asked: ExportAsked): string {
   if (asked.scope === 'category') return 'whole category'
@@ -999,9 +981,9 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                       {scopeInfo.width != null && scopeInfo.width.widened ? (
                         <>
                           {' '}
-                          About <strong>{mb(scopeInfo.width.bytes)}</strong>
+                          About <strong>{byteSize(scopeInfo.width.bytes)}</strong>
                           {scopeInfo.width.near_cap
-                            ? ` — ${pct(scopeInfo.width.of_max)} of the ${mb(
+                            ? ` — ${pct(scopeInfo.width.of_max)} of the ${byteSize(
                                 scopeInfo.width.max_bytes,
                               )} this download is refused past. Hint the cards, or tick the sets, to narrow it.`
                             : '.'}
@@ -1014,7 +996,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                       {scopeInfo.reusable != null ? (
                         <>
                           {' '}
-                          Already have this one, {ageWords(scopeInfo.reusable.age_s)} — the press reuses it
+                          Already have this one, taken {relativeDate(Date.now() - scopeInfo.reusable.age_s * 1000)} — the press reuses it
                           rather than asking again.
                         </>
                       ) : null}
@@ -1222,13 +1204,13 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                       </p>
                       {fetched.reused === true ? (
                         <p className="run-receipt-fine">
-                          Already on this machine, {ageWords(fetched.age_s)} — nothing was downloaded.
+                          Already on this machine, taken {relativeDate(Date.now() - fetched.age_s * 1000)} — nothing was downloaded.
                           Press again with a refresh to take a new reading.
                         </p>
                       ) : null}
                       {fetched.width != null && fetched.width.near_cap ? (
                         <p className="run-receipt-fine">
-                          {mb(fetched.width.bytes)} of the {mb(fetched.width.max_bytes)} this download is refused
+                          {byteSize(fetched.width.bytes)} of the {byteSize(fetched.width.max_bytes)} this download is refused
                           past — {pct(fetched.width.of_max)}. Narrowing the scope is what buys that back.
                         </p>
                       ) : null}

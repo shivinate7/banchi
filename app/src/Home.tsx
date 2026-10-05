@@ -1,3 +1,4 @@
+import { count } from './kit/dataRules'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   getBoxes,
@@ -191,10 +192,6 @@ function greeting(): string {
   if (hour < 12) return 'Good morning'
   if (hour < 18) return 'Good afternoon'
   return 'Good evening'
-}
-
-function plural(n: number, one: string, many = `${one}s`): string {
-  return `${n.toLocaleString()} ${n === 1 ? one : many}`
 }
 
 /** A BOX IS SHOWN BY ITS NAME, EVERYWHERE (the owner's ruling, 2026-09-23) — never a bare
@@ -639,7 +636,7 @@ export function Home() {
             ? `${review} waiting, ${parked} parked`
             : 'waiting'
           : captured !== null && captured > 0
-            ? `${plural(captured, 'card')} to identify`
+            ? `${count(captured, 'card')} to identify`
             : reviewTotal === 0
               ? 'nothing waiting'
               : '',

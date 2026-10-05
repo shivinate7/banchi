@@ -1,3 +1,4 @@
+import { count } from './kit/dataRules'
 import { useEffect, useMemo, useState } from 'react'
 
 import { describeFailure, getInventorySets, getSoldPrices, type Failure, type SoldPricesLookup, failureTone } from './server'
@@ -28,10 +29,6 @@ import './InventorySets.css'
  * inventory view of the card", which the tap above already does and this rebuild does not
  * touch.
  */
-
-function plural(n: number, one: string, many = `${one}s`): string {
-  return `${n} ${n === 1 ? one : many}`
-}
 
 function gameLabel(game: string | null): string | null {
   if (game === null || game.trim() === '') return null
@@ -91,7 +88,7 @@ function SetCardTile({ card, market }: { readonly card: SetGroupCard; readonly m
             mid-build) — this is what still tells the two rows apart. `null` for a plain Near
             Mint print with no finish suffix to name, and for a `sku_unknown` row. */}
         {card.printing === null ? null : <Pill tone="default">{card.printing}</Pill>}
-        <Pill tone="default">{plural(card.qty, 'copy', 'copies')}</Pill>
+        <Pill tone="default">{count(card.qty, 'copy', 'copies')}</Pill>
       </span>
       <Money value={market === null ? null : Number(market)} className="sets-tile-price" />
     </button>
@@ -221,7 +218,7 @@ export function InventorySets({ reloadToken = 0 }: { readonly reloadToken?: numb
           <div className="sets-header bn-dotline">
             {gameLabel(current.game) ? <span>{gameLabel(current.game)}</span> : null}
             <span>{current.label}</span>
-            <span>{plural(current.count, 'card')}</span>
+            <span>{count(current.count, 'card')}</span>
           </div>
           <div className="sets-grid">
             {current.cards.map((card) => (

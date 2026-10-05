@@ -2,6 +2,7 @@
 // Governs: D10
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import type { GameRegistry, ResolvedOrder } from '../src/types'
+import { absoluteDate } from '../src/dates'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 import { afterPaint, settleMotion, settled, whatMoved } from './motionSettled'
@@ -4261,10 +4262,10 @@ test('the reclaim names the count and the bytes, sends confirm, and both presses
   await page.getByRole('button', { name: /Reclaim the photographs of 1 sold card in ME01 commons/ }).click()
 
   const panel = page.locator('.boxops-confirm')
-  /* THE NUMBER AND THE SIZE, BEFORE THE PRESS. `3_612_000` bytes is `3.6 MB`; the sentence
+  /* THE NUMBER AND THE SIZE, BEFORE THE PRESS. `3_612_000` bytes is `3.4 MB` (1024 units); the sentence
      also says what stays — the on-hand photographs and every retired card's — because the
      failure this panel guards against is an operator reading "reclaim" as "everything". */
-  await expect(panel).toContainText('2 photographs, 3.6 MB, would go')
+  await expect(panel).toContainText('2 photographs, 3.4 MB, would go')
   await expect(panel).toContainText('the 3 photographs of cards still on hand')
   await expect(panel).toContainText("every retired card's")
 
@@ -6916,7 +6917,7 @@ test('Reload re-reads the price, because a join is what a reload is pressed afte
   at = Math.floor((Date.now() - 9 * 86400000) / 1000)
   await openCardOps(page)
   await page.getByRole('menuitem', { name: 'Reread' }).click()
-  await expect(market).toContainText('read 9 days ago')
+  await expect(market).toContainText(`read ${absoluteDate(at * 1000)}`)
   await expect(market.locator('.bn-tnum')).toHaveText('$5.47')
 })
 

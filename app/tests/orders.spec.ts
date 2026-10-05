@@ -5006,6 +5006,21 @@ for (const [days, cls] of [
   })
 }
 
+/* THE AGE CHIP IS SHORT: it sits in a 128px nowrap cell, and the card-detail spec says "2d ago". */
+for (const [ms, chip] of [
+  [2 * 86_400_000 + 60_000, '2d ago'],
+  [5 * 3_600_000 + 60_000, '5h ago'],
+] as const) {
+  test(`a listing read ${chip} draws the short age chip`, async ({ page }) => {
+    const at = new Date(Date.now() - ms).toISOString()
+    const plan = walkPlanOf([
+      walkPlanStop({ takes: [walkPlanTake({ listed: { pushed: 0, staged: 0, live: 1 }, live_as_of: at })] }),
+    ])
+    await open(page, { orders: oneOpenOrder(), walkPlan: plan })
+    await expect(page.locator('.browse-card .browse-hero-age')).toHaveText(chip)
+  })
+}
+
 /* THE WALK PLAN'S PLACES CARRY NO NEIGHBOURS; the rows borrow them from the inventory read, and
    draw no neighbour line where that read has no card for the place. */
 test('a copy row draws its neighbours from the inventory read', async ({ page }) => {

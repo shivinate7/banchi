@@ -41,11 +41,11 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { ReadingAge } from './CardLocations'
 import { collectorNumber } from './cardNumber'
-import { forSale, IDENTIFIED, readingAgo, readingAgoShort, readingExact, stateLabel, stateTone, staleReading } from './cardState'
+import { forSale, IDENTIFIED, readingAgo, readingExact, stateLabel, stateTone, staleReading } from './cardState'
 import { Button, Icon, IconButton, Meter, Money, Pill, ProductLink, Skeleton } from './kit'
 import { toast } from './kit/toast'
 import { money } from './money'
-import { relativeDate, toDate } from './dates'
+import { relativeDate, relativeDateShort, toDate } from './dates'
 import { sayPlace } from './position'
 // D77's own picker, reused rather than forked — this file's own header rule: "added to
 // inventory and both screens get it, not a fork" (D252).
@@ -394,7 +394,7 @@ function HeroLead({ figures, market }: { readonly figures: HeroFigures; readonly
     : staleReading(listedAt)
       ? 'bn-dot bn-dot-warn'
       : 'bn-dot bn-dot-live bn-dot-still'
-  const ago = readingAgoShort(listedAt)
+  const ago = relativeDateShort(listedAt)
   const over = cap === null ? 0 : live - cap
   return (
     <div className="browse-hero-lead">

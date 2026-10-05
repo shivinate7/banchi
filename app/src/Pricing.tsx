@@ -77,7 +77,7 @@ import {
 import { forSale, soldSince } from './cardState'
 import { useCardCropWhenSeen } from './cardCrop'
 import { readUpload } from './csvUpload'
-import { absoluteDate, clockTime } from './dates'
+import { absoluteDate, clockTime, relativeDate } from './dates'
 import { moneyField } from './money'
 import {
   Button,
@@ -290,21 +290,6 @@ function bucketAt(sku: PricingSku, cut: string): PricingSku['bucket'] {
   const line = cents(cut)
   if (market === null || line === null) return sku.bucket
   return market >= line ? 'listable' : 'sub_threshold'
-}
-
-/** How old a reading is, in words. A live figure is never drawn without one. */
-function ageWords(at: number | null | undefined): string | null {
-  if (typeof at !== 'number' || !Number.isFinite(at) || at <= 0) return null
-  const seconds = Math.max(0, Date.now() / 1000 - at)
-  if (seconds < 90) return 'just now'
-  const minutes = Math.round(seconds / 60)
-  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
-  const days = Math.max(1, Math.round(hours / 24))
-  if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`
-  const months = Math.round(days / 30)
-  return `${months} month${months === 1 ? '' : 's'} ago`
 }
 
 function runOverride(book: PricingCorpus | null, run: string | null): SubAnswer | undefined {
@@ -2951,7 +2936,7 @@ export function Pricing() {
                     suggestion={suggestionFor(sku)}
                     asking={liveTab ? (askingOf.get(sku.sku) ?? null) : undefined}
                     note={note !== null && note.sku === sku.sku ? note.text : null}
-                    readAge={ageWords(source.readAtOf(sku))}
+                    readAge={(() => { const at = source.readAtOf(sku); return typeof at === 'number' && Number.isFinite(at) && at > 0 ? relativeDate(at * 1000) : null })()}
                     trend={trends[sku.sku] ?? (liveTab ? undefined : savedRead(saved, sku.sku))}
                     kept={liveTab ? undefined : keptStrip(saved, sku.sku)}
                     asked={sendQty[sku.sku] ?? ''}

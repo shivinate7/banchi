@@ -2281,7 +2281,7 @@ test('a reuse seconds old reads as a sentence, not as a missing figure', async (
   await fetchButton(page).click()
 
   const receipt = page.locator('.run-receipt')
-  await expect(receipt).toContainText('taken moments ago')
+  await expect(receipt).toContainText('taken just now')
   await expect(receipt).not.toContainText('ago and already')
   await expect(receipt).not.toContainText('old —')
   await expect(receipt).not.toContainText('0 minutes')
@@ -2381,7 +2381,9 @@ test('a widened scope carries its measured width against the cap, before the pre
   await openRun(page)
 
   const says = page.locator('.run-scope-says')
-  await expect(says).toContainText('31 MB')
+  /* 32,629,598 B in 1024 units, as the server counts its cap (33,554,432 B is "32 MB"). */
+  await expect(says).toContainText('31.1 MB')
+  await expect(says).toContainText(/of the 32(\.0)? MB/)
   await expect(says).toContainText('97%')
   /* AND THE REMEDY, not just the alarm. A figure with nothing to do about it is a figure an
      operator learns to skip. */
@@ -3250,7 +3252,7 @@ test('not prepared: the sheet says so, offers Prepare, and the quote waits', asy
   await toReading(page, 'free')
 
   await expect(page.locator('.runs-composer .bn-notice')).toContainText('Matching needs a one-time setup')
-  await expect(page.locator('.runs-composer .bn-notice')).toContainText('372 MB download')
+  await expect(page.locator('.runs-composer .bn-notice')).toContainText('354.5 MB download')
   await expect(page.getByRole('button', { name: 'Prepare matching' })).toBeEnabled()
   /* THE PRESS THAT WOULD READ IS DISABLED, AND NO QUOTE WAS ASKED FOR: a free quote over an
      unprepared reader would be a guess. */

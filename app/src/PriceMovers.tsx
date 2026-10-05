@@ -10,6 +10,7 @@
  * presses, so nothing under it moves on its own.
  */
 
+import { count } from './kit/dataRules'
 import { useEffect, useState } from 'react'
 import { Button, Icon, Money, ProductLink } from './kit'
 import { getPriceMovers } from './server'
@@ -33,7 +34,7 @@ function summary(read: PriceMoversPayload | null | 'failed'): string {
       ? 'No live listings have been read yet.'
       : `No live price has moved more than ${cut}% since it was first seen.`
   }
-  return `${gone} live ${gone === 1 ? 'item' : 'items'} moved more than ${cut}% since ${gone === 1 ? 'it was' : 'they were'} first seen.`
+  return `${count(gone, 'live item')} moved more than ${cut}% since ${gone === 1 ? 'it was' : 'they were'} first seen.`
 }
 
 /** ONE LINE, always: the unchecked count comes before the free-form message so a clamp never
@@ -61,12 +62,12 @@ function trendsLine(note: TrendsPreloadNote | null, loading: boolean): { text: s
   const partial = !note.ok || note.unreadable > 0
   const counts = [
     note.unreadable > 0 ? `${note.unreadable} could not be read.` : '',
-    note.no_history > 0 ? `${note.no_history} ${note.no_history === 1 ? 'has' : 'have'} no history.` : '',
+    note.no_history > 0 ? `${count(note.no_history, 'has', 'have')} no history.` : '',
   ].filter(Boolean).join(' ')
   if (!partial) {
-    return { text: `Trends were read ${when} for ${note.read} ${note.read === 1 ? 'card' : 'cards'}. ${counts} Press Trends to refresh.`.replace('  ', ' '), failed: false }
+    return { text: `Trends were read ${when} for ${count(note.read, 'card')}. ${counts} Press Trends to refresh.`.replace('  ', ' '), failed: false }
   }
-  const failure = note.failed > 0 ? ` ${note.failed} ${note.failed === 1 ? 'step' : 'steps'} failed: ${note.message}` : ''
+  const failure = note.failed > 0 ? ` ${count(note.failed, 'step')} failed: ${note.message}` : ''
   return { text: `Trends were read ${when} for ${note.read} of ${note.asked} cards. ${counts}${failure}`, failed: true }
 }
 

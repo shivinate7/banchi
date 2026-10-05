@@ -12,10 +12,8 @@ import { describeFailure, failureTone, type Failure } from '../server'
  * it wants run, and keeps its own nouns. Screens import these from `./kit`, and the
  * `R2-class` row of `make kit-adoption` refuses a `bn-set-*` class outside the kit. */
 
-/** `1 card`, `2 cards`. */
-export function count(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`
-}
+import { count } from './dataRules'
+export { count }
 
 /** One write at a time, with its refusal handling and its re-read in one place. `write` runs the
  *  call and returns the answer, or null for a refusal, so a caller can close its own editor on
