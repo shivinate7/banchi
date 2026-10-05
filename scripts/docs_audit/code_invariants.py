@@ -401,19 +401,29 @@ def _repeated_parts(node: ast.AST) -> List[ast.AST]:
     return []
 
 
+# The one parameter name that means "the caller already built this result". Exact match on a
+# whole parameter name. A callee not listed here has no exempting parameter at all.
+_RESULT_PARAM = {"_Places": "places", "layout_of": "layout", "records_in": "records"}
+
+
 def _takes_result(fn: ast.AST, callee: str) -> bool:
-    """A helper that takes the expensive result as a parameter (`places` for `_Places`)
-    is the fixed shape. Heuristic: a parameter name contains the callee's first word."""
-    word = callee.split(".")[-1].lstrip("_").split("_")[0].lower()
+    """Does this helper take the callee's result as a parameter (`places` for `_Places`)?"""
+    want = _RESULT_PARAM.get(callee)
     args = fn.args  # type: ignore[attr-defined]
-    names = [a.arg.lower() for a in args.posonlyargs + args.args + args.kwonlyargs]
-    return any(word in n for n in names)
+    return want is not None and want in [a.arg for a in args.posonlyargs + args.args + args.kwonlyargs]
 
 
 def loop_expensive_sites(paths: Sequence[Path]) -> List[Tuple[str, int, str, str]]:
     """(path, line, enclosing function, callee) for each expensive call made per loop item,
     directly or one same-module helper level down (the pre-#711 `_card_summary` shape).
-    Pure, so the self-test hands it a fixture."""
+    Pure, so the self-test hands it a fixture.
+
+    KNOWN MISSES, each one a way past this row:
+      - a helper two levels down (loop -> helper -> helper -> expensive call);
+      - a method called on an object other than `self`/`cls`;
+      - a callee defined in another module;
+      - a callable handed to `map(...)` or `filter(...)`, a lambda included.
+    """
     sites: Set[Tuple[str, int, str, str]] = set()
     for path in paths:
         if not exists(path):
@@ -424,15 +434,39 @@ def loop_expensive_sites(paths: Sequence[Path]) -> List[Tuple[str, int, str, str
             continue
         owner = _enclosing_functions(tree)
         where = rel(path)
-        defs = {n.name: n for n in ast.walk(tree)
-                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
-        costly = {}
-        for name, fn in defs.items():
+        cls_at: Dict[int, str] = {}
+        bases: Dict[str, List[str]] = {}
+        for cls in ast.walk(tree):  # outer classes first, so an inner class overwrites
+            if isinstance(cls, ast.ClassDef):
+                bases[cls.name] = [b.id for b in cls.bases if isinstance(b, ast.Name)]
+                for inner in ast.walk(cls):
+                    if getattr(inner, "lineno", None) is not None:
+                        cls_at[inner.lineno] = cls.name
+        defs: Dict[Tuple[Optional[str], str], ast.AST] = {}
+        for n in ast.walk(tree):
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                defs[(cls_at.get(n.lineno), n.name)] = n
+        costly: Dict[Tuple[Optional[str], str], Set[str]] = {}
+        for key, fn in defs.items():
             hits = {c for n in ast.walk(fn) if isinstance(n, ast.Call)
                     for c in [_expensive_callee(n)] if c}
             hits = {c for c in hits if not _takes_result(fn, c)}
             if hits:
-                costly[name] = hits
+                costly[key] = hits
+
+        def resolve(cls: Optional[str], name: str) -> Optional[Tuple[Optional[str], str]]:
+            seen: Set[str] = set()
+            todo = [cls]
+            while todo:
+                c = todo.pop(0)
+                if c in seen:
+                    continue
+                seen.add(c)  # type: ignore[arg-type]
+                if (c, name) in defs:
+                    return (c, name)
+                todo += bases.get(c, []) if c else []
+            return None
+
         for loop in ast.walk(tree):
             for part in _repeated_parts(loop):
                 for node in ast.walk(part):
@@ -444,12 +478,15 @@ def loop_expensive_sites(paths: Sequence[Path]) -> List[Tuple[str, int, str, str
                         sites.add((where, node.lineno, fname, direct))
                         continue
                     f = node.func
-                    helper = f.id if isinstance(f, ast.Name) else (
-                        f.attr if isinstance(f, ast.Attribute)
-                        and isinstance(f.value, ast.Name) and f.value.id in ("self", "cls")
-                        else None)
-                    if helper in costly and helper != fname:
-                        sites.add((where, node.lineno, fname, helper))
+                    if isinstance(f, ast.Name):
+                        target, name = resolve(None, f.id), f.id
+                    elif isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) \
+                            and f.value.id in ("self", "cls"):
+                        target, name = resolve(cls_at.get(node.lineno), f.attr), f.attr
+                    else:
+                        continue
+                    if target in costly and name != fname:
+                        sites.add((where, node.lineno, fname, name))
     return sorted(sites)
 
 
@@ -494,7 +531,10 @@ def check_loop_expensive(report: Report) -> None:
         findings.append(Finding(
             "scripts/docs_audit/core.py -> LOOP_EXPENSIVE_ALLOWED",
             f"has {len(LOOP_EXPENSIVE_ALLOWED)} entries where {LOOP_EXPENSIVE_EXPECTED} "
-            f"are pinned. Lower the pin with each deleted entry. Never raise it.",
+            f"are pinned. "
+            + (f"Lower the pin to {len(LOOP_EXPENSIVE_ALLOWED)}."
+               if len(LOOP_EXPENSIVE_ALLOWED) < LOOP_EXPENSIVE_EXPECTED
+               else "Remove the new entry or fix the loop. The pin never goes up."),
         ))
     report.add(
         "loop expensive",
