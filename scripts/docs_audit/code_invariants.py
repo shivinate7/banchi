@@ -15,6 +15,8 @@ from .core import (
     ROOT,
     Report,
     Row,
+    LOOP_EXPENSIVE_ALLOWED,
+    LOOP_EXPENSIVE_EXPECTED,
     UNSCOPED_WALK_ALLOWED,
     UNSCOPED_WALK_EXPECTED,
     _NUMBER_WORDS,
@@ -161,6 +163,7 @@ def _history_readers() -> List[str]:
 # `.values()`/`.items()` as their OWN implementation, which is not a call site at all.
 _UNSCOPED_WALK_ROOTS: Tuple[Path, ...] = (
     ROOT / "server",
+    ROOT / "pipeline",
 )
 _UNSCOPED_WALK_SINGLE_FILES: Tuple[Path, ...] = (
     ROOT / "store" / "master.py",
@@ -291,7 +294,7 @@ def check_unscoped_walk(report: Report) -> None:
     which item 2 is what actually removes. This row reads Python source shapes, never
     request traces.
     """
-    server_files = _walk(_UNSCOPED_WALK_ROOTS[0], (".py",))
+    server_files = [f for root in _UNSCOPED_WALK_ROOTS for f in _walk(root, (".py",))]
     found = set(unscoped_walk_sites(server_files + list(_UNSCOPED_WALK_SINGLE_FILES)))
     allowed = UNSCOPED_WALK_ALLOWED
     findings: List[Finding] = []
@@ -342,6 +345,203 @@ def check_unscoped_walk(report: Report) -> None:
         findings,
         f"{len(found)} full-table reads of inventory.cards found, "
         f"{len(allowed)} allowed (pinned at {UNSCOPED_WALK_EXPECTED})",
+        scanned=len(found),
+    )
+
+
+# ---------------------------------------------------------------- expensive calls in loops
+
+_LOOP_ROOTS: Tuple[Path, ...] = tuple(
+    ROOT / d for d in ("server", "store", "pipeline", "cli", "identify")
+)
+
+# Callee names that cost a store read or a whole-box walk per call. `Store().read/write`
+# and `sidecar.scan` are matched by receiver; `select`/`distinct`/`values`/`items` only on
+# a `.cards` receiver (an unfiltered select has no keyword).
+_EXPENSIVE_NAMES = frozenset({
+    "_Places", "records_in", "layout_of", "in_state", "history_at", "history",
+    "to_payload", "unfulfilled", "open_entries", "holder_of", "read_export",
+})
+
+
+def _expensive_callee(node: ast.Call) -> Optional[str]:
+    """The expensive API this call names, or None."""
+    f = node.func
+    if isinstance(f, ast.Name):
+        return f.id if f.id in _EXPENSIVE_NAMES and f.id != "to_payload" else None
+    if not isinstance(f, ast.Attribute):
+        return None
+    v = f.value
+    if f.attr == "to_payload":
+        return f.attr if _inventory_like(v) else None
+    if f.attr in _EXPENSIVE_NAMES:
+        return f.attr
+    if f.attr in ("read", "write") and isinstance(v, ast.Call) \
+            and isinstance(v.func, ast.Name) and v.func.id == "Store":
+        return f"Store.{f.attr}"
+    if f.attr == "scan" and isinstance(v, ast.Name) and v.id == "sidecar":
+        return "sidecar.scan"
+    if _cards_chain(v) and (f.attr in _UNSCOPED_METHODS
+                            or (f.attr == "select" and not node.keywords)):
+        return f"cards.{f.attr}"
+    return None
+
+
+def _repeated_parts(node: ast.AST) -> List[ast.AST]:
+    """The sub-trees a loop or comprehension runs once per item (never its first iterable)."""
+    if isinstance(node, (ast.For, ast.AsyncFor)):
+        return list(node.body) + list(node.orelse)
+    if isinstance(node, ast.While):
+        return [node.test] + list(node.body) + list(node.orelse)
+    if isinstance(node, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+        parts: List[ast.AST] = [node.value, node.key] if isinstance(node, ast.DictComp) else [node.elt]
+        for i, gen in enumerate(node.generators):
+            parts += list(gen.ifs) + ([gen.iter] if i else [])
+        return parts
+    return []
+
+
+# The one parameter name that means "the caller already built this result". Exact match on a
+# whole parameter name. A callee not listed here has no exempting parameter at all.
+_RESULT_PARAM = {"_Places": "places", "layout_of": "layout", "records_in": "records"}
+
+
+def _takes_result(fn: ast.AST, callee: str) -> bool:
+    """Does this helper take the callee's result as a parameter (`places` for `_Places`)?"""
+    want = _RESULT_PARAM.get(callee)
+    args = fn.args  # type: ignore[attr-defined]
+    return want is not None and want in [a.arg for a in args.posonlyargs + args.args + args.kwonlyargs]
+
+
+def loop_expensive_sites(paths: Sequence[Path]) -> List[Tuple[str, int, str, str]]:
+    """(path, line, enclosing function, callee) for each expensive call made per loop item,
+    directly or one same-module helper level down (the pre-#711 `_card_summary` shape).
+    Pure, so the self-test hands it a fixture.
+
+    KNOWN MISSES, each one a way past this row:
+      - a helper two levels down (loop -> helper -> helper -> expensive call);
+      - a method called on an object other than `self`/`cls`;
+      - a callee defined in another module;
+      - a callable handed to `map(...)` or `filter(...)`, a lambda included.
+    """
+    sites: Set[Tuple[str, int, str, str]] = set()
+    for path in paths:
+        if not exists(path):
+            continue
+        try:
+            tree = ast.parse(read(path))
+        except SyntaxError:
+            continue
+        owner = _enclosing_functions(tree)
+        where = rel(path)
+        cls_at: Dict[int, str] = {}
+        bases: Dict[str, List[str]] = {}
+        for cls in ast.walk(tree):  # outer classes first, so an inner class overwrites
+            if isinstance(cls, ast.ClassDef):
+                bases[cls.name] = [b.id for b in cls.bases if isinstance(b, ast.Name)]
+                for inner in ast.walk(cls):
+                    if getattr(inner, "lineno", None) is not None:
+                        cls_at[inner.lineno] = cls.name
+        defs: Dict[Tuple[Optional[str], str], ast.AST] = {}
+        for n in ast.walk(tree):
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                defs[(cls_at.get(n.lineno), n.name)] = n
+        costly: Dict[Tuple[Optional[str], str], Set[str]] = {}
+        for key, fn in defs.items():
+            hits = {c for n in ast.walk(fn) if isinstance(n, ast.Call)
+                    for c in [_expensive_callee(n)] if c}
+            hits = {c for c in hits if not _takes_result(fn, c)}
+            if hits:
+                costly[key] = hits
+
+        def resolve(cls: Optional[str], name: str, defs=defs, bases=bases) -> Optional[Tuple[Optional[str], str]]:
+            seen: Set[str] = set()
+            todo = [cls]
+            while todo:
+                c = todo.pop(0)
+                if c in seen:
+                    continue
+                seen.add(c)  # type: ignore[arg-type]
+                if (c, name) in defs:
+                    return (c, name)
+                todo += bases.get(c, []) if c else []
+            return None
+
+        for loop in ast.walk(tree):
+            for part in _repeated_parts(loop):
+                for node in ast.walk(part):
+                    if not isinstance(node, ast.Call):
+                        continue
+                    fname = owner.get(node.lineno, "<module>")
+                    direct = _expensive_callee(node)
+                    if direct:
+                        sites.add((where, node.lineno, fname, direct))
+                        continue
+                    f = node.func
+                    if isinstance(f, ast.Name):
+                        target, name = resolve(None, f.id), f.id
+                    elif isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) \
+                            and f.value.id in ("self", "cls"):
+                        target, name = resolve(cls_at.get(node.lineno), f.attr), f.attr
+                    else:
+                        continue
+                    if target in costly and name != fname:
+                        sites.add((where, node.lineno, fname, name))
+    return sorted(sites)
+
+
+def check_loop_expensive(report: Report) -> None:
+    """An expensive store call made once per loop item, against an allowlist that may only
+    shrink (`UNSCOPED_WALK_ALLOWED`'s own idiom).
+
+    INCIDENT: GET /capture/sitting took up to 71.6 s on the owner's store. A loop called
+    `_card_summary` per card and each call built a whole-store `_Places`. PR #711 fixed it
+    by building one per request (D173, a rule that can be enforced is).
+
+    Flags the APIs in `_EXPENSIVE_NAMES`, `Store().read/write`, `sidecar.scan` and an
+    unfiltered `.cards` walk, called in a loop or comprehension body, or inside a
+    same-module helper that the loop calls and that does not take the result as a
+    parameter. Keyed (path, function, callee). A site that is genuinely cheap (a tiny fixed
+    loop, or a once-per-request pass) goes on `LOOP_EXPENSIVE_ALLOWED` with a one-line
+    reason; the pinned count only goes down, and a stale entry fails.
+    """
+    files = [f for root in _LOOP_ROOTS for f in _walk(root, (".py",))]
+    found = loop_expensive_sites(files)
+    keys = {(p, fn, c) for p, _, fn, c in found}
+    findings: List[Finding] = []
+    for path, line, fname, callee in found:
+        if (path, fname, callee) not in LOOP_EXPENSIVE_ALLOWED:
+            findings.append(Finding(
+                f"{path}:{line}",
+                f"`{fname}` calls `{callee}` once per loop item. Each call costs a store "
+                f"read or a whole-box walk, so the loop is O(n) times that. Build the "
+                f"result once before the loop and pass it in. If the loop is genuinely "
+                f"tiny or fixed, add (\"{path}\", \"{fname}\", \"{callee}\") to "
+                f"`LOOP_EXPENSIVE_ALLOWED` with the reason.",
+            ))
+    for path, fname, callee in sorted(LOOP_EXPENSIVE_ALLOWED):
+        if (path, fname, callee) not in keys:
+            findings.append(Finding(
+                path,
+                f"`LOOP_EXPENSIVE_ALLOWED` names `{fname}` -> `{callee}` and this scan "
+                f"finds no such call. Delete the entry and lower "
+                f"`LOOP_EXPENSIVE_EXPECTED` in the same commit.",
+            ))
+    if len(LOOP_EXPENSIVE_ALLOWED) != LOOP_EXPENSIVE_EXPECTED:
+        findings.append(Finding(
+            "scripts/docs_audit/core.py -> LOOP_EXPENSIVE_ALLOWED",
+            f"has {len(LOOP_EXPENSIVE_ALLOWED)} entries where {LOOP_EXPENSIVE_EXPECTED} "
+            f"are pinned. "
+            + (f"Lower the pin to {len(LOOP_EXPENSIVE_ALLOWED)}."
+               if len(LOOP_EXPENSIVE_ALLOWED) < LOOP_EXPENSIVE_EXPECTED
+               else "Remove the new entry or fix the loop. The pin never goes up."),
+        ))
+    report.add(
+        "loop expensive",
+        MECHANICAL,
+        findings,
+        f"{len(keys)} expensive calls in loops found, {len(LOOP_EXPENSIVE_ALLOWED)} "
+        f"allowed (pinned at {LOOP_EXPENSIVE_EXPECTED})",
         scanned=len(found),
     )
 
