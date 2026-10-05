@@ -1,6 +1,6 @@
 // Protects: The product history draws market prices and the owner's own sales as two different shapes, and leaves the deep link cleanly.
 // Governs: D278, D227
-import { test, expect, type Route } from '@playwright/test'
+import { test, expect, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 
 import type { OrderRow, OrdersPayload, ProductHistoryPayload, SearchGroup, SearchResult } from '../src/types'
@@ -239,36 +239,51 @@ test.describe('#/product — the per-product view', () => {
     expect(errors.filter((text) => text.includes('The app failed before the server could answer')), 'an aborted read logged a console error').toEqual([])
   })
 
-  test('a sheet that switches SKU and is then left mid-read shows no notice of any kind', async ({ page }) => {
-    /* The read a state change starts is aborted by the route change. That is the app's doing: it draws nothing, not even an
-       empty Notice (code `aborted`). The first SKU answers; the second is held until after the route change. */
+  const neverSold = (sku: string): ProductHistoryPayload => ({
+    sku, product_id: 43, name: 'Vilemaw', set_name: 'Twilight Masquerade', condition: 'Holo',
+    source: 'archive', history_begins: null, never_sold: true, ranges: [],
+  })
+  const openSheetFor = (page: Page, sku: string) =>
+    page.evaluate(async (which) => {
+      const mod = await import(('/src/kit/sheets' + '.ts'))
+      mod.openSheet('product', { sku: which, name: 'Vilemaw' })
+    }, sku)
+
+  test('a sheet that switches SKU, is held mid-read across a route change, then answered shows the new data and no notice', async ({ page }) => {
+    /* A sheet's reads live as long as the sheet, not the screen it was opened over. */
     let release: () => void = () => {}
     const held = new Promise<void>((done) => {
       release = done
     })
-    await page.route(/\/pipeline\/products\/555999\/(history|realized)$/, async (route) => {
+    await page.route(/\/pipeline\/products\/555999\/history$/, async (route) => {
       await held
-      await route.abort().catch(() => {})
+      await json(route, neverSold('555999')).catch(() => {})
+    })
+    await page.route(/\/pipeline\/products\/555999\/realized$/, async (route) => {
+      await held
+      await json(route, { sku: '555999', configured: false }).catch(() => {})
     })
     await page.goto('/#/gallery')
     await expect(page.locator('.bn-page').first()).toBeVisible()
-    await page.evaluate(async () => {
-      const mod = await import(('/src/kit/sheets' + '.ts'))
-      mod.openSheet('product', { sku: '555123', name: 'Vilemaw' })
-    })
+    await openSheetFor(page, '555123')
     await expect(page.locator('[role="dialog"] .producthistory-chart').first()).toBeVisible()
-    await page.evaluate(async () => {
-      const mod = await import(('/src/kit/sheets' + '.ts'))
-      mod.openSheet('product', { sku: '555999', name: 'Vilemaw' })
-    })
+    await openSheetFor(page, '555999')
     await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))))
     await page.evaluate(() => {
       window.location.hash = '#/shipping'
     })
     await expect(page).toHaveURL(/#\/shipping$/)
     release()
-    await page.waitForTimeout(500) // keep: the aborted reads settle in the page after the route change
-    await expect(page.locator('[role="dialog"] .bn-notice'), 'an aborted read drew a Notice').toHaveCount(0)
+    await expect(page.locator('[role="dialog"]').getByText('This product has never been recorded to sell', { exact: false }), 'the sheet did not draw the new SKU').toBeVisible()
+    await expect(page.locator('[role="dialog"] .bn-notice'), 'the sheet drew a Notice').toHaveCount(0)
+  })
+
+  test('a real server failure on a sheet still shows the failure notice', async ({ page }) => {
+    await page.route(/\/pipeline\/products\/555999\/history$/, (route) => route.abort())
+    await page.goto('/#/gallery')
+    await expect(page.locator('.bn-page').first()).toBeVisible()
+    await openSheetFor(page, '555999')
+    await expect(page.locator('[role="dialog"] .bn-notice')).toBeVisible()
   })
 
   test('registerSheet wires the product sheet, and its fallback route is #/product?sku= (D278)', async ({ page }) => {
