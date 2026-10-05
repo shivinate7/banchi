@@ -3124,7 +3124,8 @@ export function CaptureScreen() {
       busyRef.current = false
 
       try {
-        const card = (await photoTakenRef.current(() => capture({
+        // The store never commits card 2 before card 1: this frame waits in memory for the earlier answer.
+        const card = (await photoTakenRef.current(async () => capture(await prior.then(() => ({
           box,
           imageBase64: frame,
           // ALWAYS SENT, never omitted, unlike the two claims below it — D21 makes the game
@@ -3153,8 +3154,7 @@ export function CaptureScreen() {
           // REQUIRED ALONGSIDE `section` (the Opus review's own guard against a stale key
           // surviving a re-space) — omitted along with it.
           layoutToken: selectedDiv === null ? undefined : layoutToken,
-        }))) as Awaited<ReturnType<typeof capture>>
-        await prior // rail order and slot numbers follow capture order, whatever order the saves return in
+        }))))) as Awaited<ReturnType<typeof capture>>
         // Answered, so the next photograph gets its own id. Cleared on a replay too: the
         // ambiguity that id existed to resolve is now resolved. Through `rememberCaptureId`,
         // so the stored copy goes with it — an id left in the store after the server has

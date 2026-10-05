@@ -309,6 +309,7 @@ export function createDealer({ onMark }: { onMark?: (name: DealerMark, card: num
       out.add(ticket)
       onMark?.('photo-taken', ticket.card)
       taken = true
+      clearTimeout(saveWait) // the photo is here; an earlier save may still hold the next START
       const done = (async () => {
         try {
           const v = await save().catch(() => save())
