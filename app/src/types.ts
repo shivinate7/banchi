@@ -2419,6 +2419,9 @@ export type PricingSku = {
    *  reflowing under a commit (D28). */
   bucket: 'listable' | 'sub_threshold' | 'no_market_data'
   copies: number
+  /** Copies still in a box (not sold, not departed). Absent when the store could not be read:
+   *  the screen then states no on-hand figure and never invents one. */
+  on_hand?: number
   add_to_quantity: number
   backstock: number
   /** The export's `Total Quantity` cell for this SKU — what TCGplayer reports LIVE, and

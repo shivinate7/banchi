@@ -2902,6 +2902,8 @@ class UnsentLedger(NamedTuple):
     by_run: Dict[str, int]
     held_out: Dict[str, int]
     live_out: Dict[str, int]
+    # sku -> copies still in a box store-wide (`Inventory.copies_on_hand`'s test), on screen or not.
+    on_hand: Dict[str, int]
 
 
 def _run_live_by_sku(
@@ -3113,6 +3115,7 @@ def _unsent_ledger(
     held_out, live_out = run_resolve._copies_out(inventory, readings, by_sku=by_sku)
     committed = run_resolve._committed_keys(inventory, held_out, by_sku=by_sku)
     unsent: Dict[str, List[str]] = {}
+    unstamped_on_hand: Dict[str, int] = {}
     # `by_sku` already holds every SKU-bearing card's state, so the per-key `cards.get` below is
     # kept only for a card `by_sku` cannot describe (no SKU, or no such card).
     by_key = {row.key: (owner, row.state) for owner, rows in by_sku.items() for row in rows}
@@ -3134,6 +3137,8 @@ def _unsent_ledger(
             # review answer or a later emit stamped it with the card it actually is.
             if card_sku and card_sku != sku:
                 continue
+            if not card_sku:
+                unstamped_on_hand[sku] = unstamped_on_hand.get(sku, 0) + 1
             if key in committed:
                 continue
             free.append(key)
@@ -3142,7 +3147,18 @@ def _unsent_ledger(
         name: sum(len(keys & set(unsent.get(sku, ()))) for sku, keys in mine.items())
         for name, mine in per_run.items()
     }
-    return UnsentLedger(unsent=unsent, by_run=by_run, held_out=held_out, live_out=live_out)
+    # THE STAMPED COPIES store-wide (`by_sku` holds only cards with a SKU), PLUS every unstamped
+    # copy a table resolved to the SKU, counted in the loop above under the same resolution
+    # `unsent` uses. A card is on hand under one SKU only: stamped, or unstamped and drawn.
+    on_hand = {
+        sku: sum(1 for row in rows if row.state not in master.TERMINAL_STATES)
+        for sku, rows in by_sku.items()
+    }
+    for sku, n in unstamped_on_hand.items():
+        on_hand[sku] = on_hand.get(sku, 0) + n
+    return UnsentLedger(
+        unsent=unsent, by_run=by_run, held_out=held_out, live_out=live_out, on_hand=on_hand
+    )
 
 
 def _on_hand_by_run(inventory: master.Inventory, runs: Iterable[str]) -> Dict[str, int]:
@@ -3683,6 +3699,9 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
             free = [key for key in ledger.unsent.get(sku, []) if key in drawn]
             held = len(row.get("positions") or [])
             row["add_to_quantity"] = len(free)
+            # COPIES STILL IN A BOX, STORE-WIDE (what `Inventory.copies_on_hand` counts): the
+            # screen's first number. `add_to_quantity` is the second.
+            row["on_hand"] = ledger.on_hand.get(sku, 0)
             row["copies"] = held
             row["committed"] = held - len(free)
             row["backstock"] = 0

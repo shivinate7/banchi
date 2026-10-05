@@ -1674,6 +1674,66 @@ def check_unsent_copies_worklist(checks: Checks) -> None:
             thread.join(timeout=5)
 
 
+def check_worklist_on_hand(checks: Checks) -> None:
+    """A worklist row says how many copies are ON HAND (still in a box: not sold, not departed)
+    as `on_hand`, apart from `add_to_quantity`, the copies that can still be sent.
+
+    Five positions drawn, one already live (a capped emit), two since sold: three are on
+    hand and two can be sent. `copies` is every position the run drew (five) and is not the
+    on-hand figure; the screen's first number is `on_hand`.
+    """
+    checks.note("")
+    checks.note("ON HAND — a worklist row counts the copies still in a box")
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, [(3, i, "Articuno", "161", None) for i in range(1, 6)])
+        book = corpus.Corpus.read()
+        book.sub_threshold = "floor"
+        book.write()
+        command(checks, "emit", str(run_dir.directory), "--cap", "1")
+        capture_server.do_mark_sold(3, 4, {})
+        capture_server.do_mark_sold(3, 5, {})
+
+        row = next(r for r in pipeline_routes.do_pipeline_worklist([])["skus"] if r["sku"] == ARTICUNO_SKU)
+        checks.equal(
+            (row.get("on_hand"), row["add_to_quantity"]),
+            (3, 2),
+            "five drawn, two sold, one live: three on hand, two can be sent",
+        )
+
+
+def check_worklist_on_hand_unstamped(checks: Checks) -> None:
+    """On hand counts copies a join drew for a SKU that no emit has stamped yet.
+
+    Three Articuno positions joined and NOT emitted: `cards.sku` is empty on all three. One
+    is sold. Two are on hand and two can be sent. A fourth position the table drew for
+    Articuno but since re-stamped as Dunsparce is not Articuno's copy and does not count.
+    """
+    checks.note("")
+    checks.note("ON HAND — unstamped joined copies count, a re-stamped one does not")
+
+    with isolated_home():
+        cards = [(3, i, "Articuno", "161", None) for i in range(1, 5)]
+        run_dir, _ = seam_run(checks, cards)
+        book = corpus.Corpus.read()
+        book.sub_threshold = "floor"
+        book.write()
+
+        capture_server.do_mark_sold(3, 3, {})
+        with Store().write() as snap:
+            for card in snap.inventory.cards.values():
+                if (card.box, card.index) == (3, 4):
+                    card.sku = DUNSPARCE_SKU
+
+        row = next(r for r in pipeline_routes.do_pipeline_worklist([])["skus"] if r["sku"] == ARTICUNO_SKU)
+        checks.equal(
+            (row.get("on_hand"), row["add_to_quantity"]),
+            (2, 2),
+            "four drawn, none stamped by emit: one sold, one re-stamped as another card; "
+            "two on hand and two can be sent",
+        )
+
+
 def check_cap_flag_refusals(checks: Checks) -> None:
     """`--cap 0` is a sentence, not a traceback — and it is parsed before any work.
 
@@ -4275,6 +4335,8 @@ CHECKS = (
     check_merged_emit_cap,
     check_merged_emit_uncapped,
     check_unsent_copies_worklist,
+    check_worklist_on_hand,
+    check_worklist_on_hand_unstamped,
     check_cap_flag_refusals,
     check_emit_send_quantity,
     check_merged_cap_is_the_tightest,

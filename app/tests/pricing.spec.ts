@@ -210,6 +210,8 @@ async function open(
         in: { run: string; add_to_quantity?: number }[]
         claimed_add?: number
         over_cap?: boolean
+        /** Copies still in a box (not sold, not departed). The first number of a row's copy line. */
+        on_hand?: number
       })[]
     }
     /** Copies each run still holds that TCGplayer does not, by run name
@@ -3060,6 +3062,7 @@ const SPAN = {
           { box: 4, index: 2, label: 'Box 4, Section 1, Card 2' },
         ],
       }),
+      on_hand: 3,
       in: [
         { run: '2026-08-31-box3-01', add_to_quantity: 2 },
         { run: '2026-09-01-box4-01', add_to_quantity: 2 },
@@ -3111,8 +3114,8 @@ test('the over-cap warning is visible with Compare off, and the toggle does not 
      copy count and one the cap allows, never the disagreement between two counts of copies. */
   const copiesFact = page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-copies')
   await expect(copiesFact).toBeVisible()
-  await expect(copiesFact).toHaveText('3 copies, 3 sendable')
-  await expect(copiesFact).toHaveAttribute('title', 'The runs claim 4. 3 sendable.')
+  await expect(copiesFact).toHaveText('3 on hand, 3 can be sent')
+  await expect(copiesFact).toHaveAttribute('title', 'The runs claim 4. 3 can be sent.')
 
   /* AND IT STAYS AFTER THE TOGGLE, TOO — Compare only ever ADDS context, it never removes a
      warning. */
@@ -3154,7 +3157,7 @@ test('the cap is what can go, and the row says the runs disagree with it', async
      2026-09-26). */
   const qty = page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-qty')
   await expect(qty.locator('.pricing-qty-input')).toHaveAttribute('placeholder', '3')
-  await expect(page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-copies')).toHaveText('3 copies, 3 sendable')
+  await expect(page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-copies')).toHaveText('3 on hand, 3 can be sent')
 })
 
 test('a send of several runs is one press over every run, with nothing beside it', async ({
@@ -4602,6 +4605,7 @@ for (const width of [390, 820]) {
               add_to_quantity: 1,
               listing: { pushed: 3, staged: 0, live: 3, sold_here: 1 },
             }),
+            on_hand: 2,
             in: [{ run: RUN, add_to_quantity: 2 }],
             claimed_add: 2,
             over_cap: true,
@@ -4610,7 +4614,7 @@ for (const width of [390, 820]) {
       },
     })
     const where = page.locator('.pricing-where').first()
-    await expect(where.locator('.pricing-copies')).toHaveText('2 copies, 1 sendable')
+    await expect(where.locator('.pricing-copies')).toHaveText('2 on hand, 1 can be sent')
     await expect(where.locator('.pricing-live')).toHaveText('2 listed')
     const outside = await where.evaluate((el) => {
       const column = (el.closest('.pricing-id') as HTMLElement).getBoundingClientRect()
@@ -4785,4 +4789,34 @@ test('every pricing row waits min(i, cap) * the one shared stagger', async ({ pa
   await open(page, { skus })
   await expect(page.locator('.pricing-row')).toHaveCount(15)
   await expectOneStagger(page, '.pricing-row', 15)
+})
+
+/* THE OWNER'S RULING: the first number is copies ON HAND (in a box: not sold, not departed), the
+ * second is how many MORE can be sent (on hand and not at TCGplayer). Both show on every row
+ * with a copy on hand, a single copy included, and nothing sendable says "0 can be sent".
+ * The server's `copies` still counts every position drawn (5 here); the screen reads `on_hand`. */
+test('a row reads copies on hand and copies that can be sent, on every row', async ({ page }) => {
+  const row = (name: string, skuId: string, over: Partial<PricingSku>, onHand: number) => ({
+    ...sku({ sku: skuId, name, ...over }),
+    on_hand: onHand,
+    in: [{ run: RUN, add_to_quantity: over.add_to_quantity ?? 0 }],
+    claimed_add: over.add_to_quantity ?? 0,
+    over_cap: false,
+  })
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, {
+    worklist: {
+      runs: [{ run: RUN, box: 7, box_name: 'Box 7', skus: 3 }],
+      skus: [
+        /* five drawn, two sold, one live: three on hand, two can go */
+        row('Mixed', '1001', { copies: 5, add_to_quantity: 2, committed: 1 }, 3),
+        row('Single', '1002', { copies: 1, add_to_quantity: 1, positions: [{ box: 7, index: 9, label: 'Box 7, Section 1, Card 9' }] }, 1),
+        row('Allout', '1003', { copies: 2, add_to_quantity: 0, committed: 2, at_cap: true, nothing_to_add: 'every copy is already at TCGplayer or has left the box' }, 2),
+      ],
+    },
+  })
+  const copies = (name: string) => page.locator('.pricing-row', { hasText: name }).locator('.pricing-copies')
+  await expect(copies('Mixed')).toHaveText('3 on hand, 2 can be sent')
+  await expect(copies('Single')).toHaveText('1 on hand, 1 can be sent')
+  await expect(copies('Allout')).toHaveText('2 on hand, 0 can be sent')
 })

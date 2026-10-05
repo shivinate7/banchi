@@ -3171,9 +3171,13 @@ function PricingRow({
      contradiction when the two are really different questions (what is on hand, and what a
      cap still lets go out). */
   const copiesLine =
-    [sku.copies > 1 ? `${sku.copies} copies` : null, sku.over_cap ? `${sku.add_to_quantity} sendable` : null]
-      .filter((part): part is string => part !== null)
-      .join(', ') || null
+    sku.on_hand === undefined
+      ? [sku.copies > 1 ? `${sku.copies} copies` : null, sku.over_cap ? `${sku.add_to_quantity} can be sent` : null]
+          .filter((part): part is string => part !== null)
+          .join(', ') || null
+      : sku.on_hand > 0
+        ? `${sku.on_hand} on hand, ${sku.add_to_quantity} can be sent`
+        : null
   return (
     <div
       className="pricing-row bn-stagger-item"
@@ -3237,7 +3241,7 @@ function PricingRow({
               /* F5 verbiage cut (row 97): the visible span below already says "sendable" —
                  this tooltip said "can go" for the same fact and would read as a second word
                  for one idea. */
-              title={sku.over_cap ? `The runs claim ${sku.claimed_add}. ${sku.add_to_quantity} sendable.` : undefined}
+              title={sku.over_cap ? `The runs claim ${sku.claimed_add}. ${sku.add_to_quantity} can be sent.` : undefined}
             >
               {copiesLine}
             </span>
