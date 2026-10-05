@@ -494,16 +494,17 @@ class Result:
 
 
 def _crop(photo: Path, aspect: float):
-    """The card alone, upright, cut by the preview's one card box: `locate_card` (the model's box,
-    else `detect_card`'s) then `registered_card`. None when no card is found."""
+    """The card alone, in the box's own orientation, cut by `images.card_box_for`, the one guarded
+    box the preview uses, then `registered_card`. None when no card is found."""
     import geometry
     from geometry import crop as geometry_crop
+    from identify import images
 
     image = geometry.detect.open_image(photo)
-    box = geometry.locate_card(image, aspect=aspect)
+    box = images.card_box_for(photo, aspect=aspect)
     if box is None:
         return None
-    return geometry_crop.registered_card(image, box, aspect)
+    return geometry_crop.registered_card(image, box, aspect, keep_orientation=True)
 
 
 def _resolve_pool(

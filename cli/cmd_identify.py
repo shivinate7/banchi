@@ -536,7 +536,7 @@ def _crop_attachments(item: Item, say) -> List[batch.Attachment]:
 
     bands = tuple(item.entry["crop_bands"])
     try:
-        box = geometry.detect_card(item.capture.photo, aspect=item.entry["card_aspect"])
+        box = images.card_box_for(item.capture.photo, aspect=item.entry["card_aspect"])
     except geometry.GeometryError as exc:
         item.detection = NOT_DETECTED
         say(f"  {item.key}: detection unavailable — {exc}")
