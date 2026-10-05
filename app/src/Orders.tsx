@@ -3713,7 +3713,7 @@ function PullStage({
             <EmptyState
               icon="sparkles"
               title={shows.length === 1 && shows[0] === 'done' ? 'Nothing done yet' : 'No buyer in this view'}
-              body="Clear the filters to see every open buyer."
+              body="Clear the filters to see every buyer, open and done."
               actions={
                 <Button
                   icon="list"
@@ -3722,7 +3722,7 @@ function PullStage({
                     setHideUnpullable(false)
                   }}
                 >
-                  Show every open buyer
+                  Show every buyer
                 </Button>
               }
             />
