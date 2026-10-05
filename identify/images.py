@@ -129,17 +129,21 @@ def encode(image, quality: int = JPEG_QUALITY) -> bytes:
     return buffer.getvalue()
 
 
+def downscale_size(size, max_edge: int = MAX_EDGE) -> tuple:
+    """The size `downscale` makes of an image of `size`, with no image needed."""
+    longest = max(size)
+    if longest <= max_edge:
+        return tuple(size)
+    scale = max_edge / float(longest)
+    return (max(1, int(round(size[0] * scale))), max(1, int(round(size[1] * scale))))
+
+
 def downscale(image, max_edge: int = MAX_EDGE):
     """Fit the longest edge, preserving aspect. Never upscales."""
     _require()
-    longest = max(image.size)
-    if longest <= max_edge:
+    size = downscale_size(image.size, max_edge)
+    if size == tuple(image.size):
         return image, False
-    scale = max_edge / float(longest)
-    size = (
-        max(1, int(round(image.size[0] * scale))),
-        max(1, int(round(image.size[1] * scale))),
-    )
     return image.resize(size, Image.LANCZOS), True
 
 
