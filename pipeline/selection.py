@@ -702,7 +702,11 @@ def resolve(
     if captures is None:
         captures = []
         for root in roots:
-            captures += sidecar.scan(root, box=assume_box, variant_default=variant_default)
+            try:
+                captures += sidecar.scan(root, box=assume_box, variant_default=variant_default)
+            except OSError:
+                if selection.paths:  # a named root that fails refuses; a default one is skipped
+                    raise
     scanned = len(captures)
     inventory = inventory_once() if selection.needs_store else None
     return narrow(selection, captures, inventory=inventory, run_keys=run_keys), scanned
@@ -811,16 +815,22 @@ def scope_block(
     }
 
 
-def refuse_empty(selection: Selection, scanned: int) -> None:
+def refuse_empty(selection: Selection, scanned: int, home: Optional[Path] = None) -> None:
     """The one refusal a well-formed selection can earn: it names no card.
 
     IT NAMES THE TERMS AND THE COUNT IT STARTED FROM, because those separate the three things
     an empty answer can mean — a mistyped box, a drawer whose cards are all identified already,
     and a capture root that is not there. `box_has_no_captures` could only ever say the first.
     """
+    missing = None if home is None or selection.paths else home.joinpath(*CAPTURES)
+    why = (
+        f" No photos found. The capture folder {missing} does not exist."
+        if missing is not None and not missing.is_dir() and not scanned
+        else ""
+    )
     raise SelectionError(
         "selection_is_empty",
         f"Nothing to identify: {selection.sentence()} names no photograph, out of "
-        f"{scanned} scanned.",
+        f"{scanned} scanned.{why}",
         empty=True,
     )

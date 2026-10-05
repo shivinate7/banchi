@@ -554,7 +554,7 @@ def _resolved(selection: selection_mod.Selection) -> Tuple[List["sidecar.Capture
     """`(captures, scanned)` from `selection_mod.resolve`, the one resolver the CLI child uses.
 
     A keyed press reads only its own cards' sidecars. `scanned` is what was read, for the
-    empty refusal. A missing capture root answers `([], 0)`, as before.
+    empty refusal. A named root that is missing or unreadable refuses, naming it.
     """
 
     def read_inventory():
@@ -571,8 +571,13 @@ def _resolved(selection: selection_mod.Selection) -> Tuple[List["sidecar.Capture
         return selection_mod.resolve(
             selection, files.home(), read_inventory=read_inventory, run_keys=_run_keys
         )
-    except (FileNotFoundError, OSError):
-        return [], 0
+    except OSError as failure:
+        folder = failure.filename
+        raise PipelineRefusal(
+            HTTPStatus.NOT_FOUND,
+            "capture_root_missing",
+            f"The capture folder {folder} cannot be read.",
+        ) from None
     except selection_mod.SelectionError as exc:
         raise PipelineRefusal(
             HTTPStatus.NOT_FOUND if exc.empty else HTTPStatus.BAD_REQUEST, exc.code, str(exc)
@@ -1677,7 +1682,7 @@ def _preflight(send: Send) -> dict:
     captures, scanned = _resolved(send.selection)
     if not captures:
         try:
-            selection_mod.refuse_empty(send.selection, scanned)
+            selection_mod.refuse_empty(send.selection, scanned, files.home())
         except selection_mod.SelectionError as exc:
             raise PipelineRefusal(HTTPStatus.NOT_FOUND, exc.code, str(exc)) from None
     argv = [str(PKMNSCAN), "identify", *send.selection.flags(), "--dry-run"] + send.flags
@@ -2184,7 +2189,7 @@ def do_pipeline_identify(payload: dict) -> Tuple[HTTPStatus, dict]:
     captures, scanned = _resolved(send.selection)
     if not captures:
         try:
-            selection_mod.refuse_empty(send.selection, scanned)
+            selection_mod.refuse_empty(send.selection, scanned, files.home())
         except selection_mod.SelectionError as exc:
             raise PipelineRefusal(HTTPStatus.NOT_FOUND, exc.code, str(exc)) from None
     # THE CARD-LEVEL REFUSAL, BEFORE THE CHILD STARTS (D174). IT IS NOT THE BINDING GUARD AND
