@@ -454,16 +454,17 @@ def _disagrees(card, payload, skus=None) -> bool:
     """The free pick names another card than the filed one: a different number, or a name that
     matches nothing the filed name stands for (`join.name_disputes`, the join's own test).
     The filed card is the SKU's catalog row when `skus` has one, else the paid reader's words."""
-    from pipeline import games, tcgcsv
+    from pipeline import games, identity_binding, tcgcsv
 
     row = (skus or {}).get(card.sku) if card.sku else None
-    name, numbers = card.read_name, [card.read_number]
-    if row:  # the row's `Number` cell whole, or split the way this game's join splits it (Pokemon "084/132" is 84 of 132)
-        name = row.product_name
-        numbers = [row.number, join.catalog_number_fields(str(card.game or games.DEFAULT_GAME), row.number)[0]]
-    if join.number_index_key(payload.get("number")) not in {join.number_index_key(n) for n in numbers}:
+    if row:  # the filed card is the SKU's row; `number_agrees` is the one test of a read against a row's number
+        strategy = games.get(str(card.game or games.DEFAULT_GAME))["join_key"]
+        if not identity_binding.number_agrees(strategy, payload.get("number"), payload.get("printed_total"), row.number):
+            return True
+        return join.name_disputes(payload.get("name"), [{tcgcsv.NAME_COLUMN: row.product_name}])
+    if join.number_index_key(payload.get("number")) != join.number_index_key(card.read_number):
         return True
-    return join.name_disputes(payload.get("name"), [{tcgcsv.NAME_COLUMN: name}])
+    return join.name_disputes(payload.get("name"), [{tcgcsv.NAME_COLUMN: card.read_name}])
 
 
 def audit(say, *, write: bool = False) -> int:
