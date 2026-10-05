@@ -20,6 +20,7 @@ Four rules:
    counter that is now constant, or lower, fails with "remove" or "lower to".
 3. ROUTES. A route `do_GET` serves with no `ROUTE_URLS` or `EXEMPT` row fails by name. So does a
    row for a route that is gone.
+   Some routes are budgeted on their miss path only: DEBT-read-budget-miss-paths.
 4. INDEX. EXPLAIN QUERY PLAN runs on every SELECT a route made. A `SCAN <table>` not in
    `SCAN_ALLOWED` fails. A stale `SCAN_ALLOWED` entry fails. The list only shrinks.
 """
