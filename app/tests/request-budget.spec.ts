@@ -19,37 +19,69 @@ import { setViewport } from './phoneSwitch'
  * same walk: the browser's own `request` events (in flight, aborts, URL size) and a page-side
  * log stamped by the FAKE clock (spacing), because a poll is only slow or fast in page time.
  *
- * A NEW SCREEN IS COVERED BY ITS ROUTES ENTRY, `routesFromNav`, with no edit here. An overage
- * is an entry in `request-budget-allow.json`, keyed `<rule>:<route>`, with the measurement as
- * its reason. The list only shrinks: an entry whose rule now passes fails the run. */
+ * NOTHING HERE WAITS ON A WALL-CLOCK GUESS. A step is over when no read is open and none has
+ * started across two frames (`quiet`), so a loaded runner takes longer and measures the same.
+ *
+ * A NEW SCREEN IS COVERED BY ITS ROUTES ENTRY, `routesFromNav`, with no edit here. An overage is
+ * an entry in `request-budget-allow.json`, keyed `<rule>:<route>`, as `{ max, why }`. `max` is
+ * the measured count today, never a time: above it fails, below it fails as stale ("lower to
+ * N"), so the list only shrinks. A spacing rule pins how many paths offend, not how many
+ * milliseconds. */
 sealEveryTest({ store: true, cards: 122 })
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const EXCUSED = JSON.parse(readFileSync(resolve(HERE, 'request-budget-allow.json'), 'utf8')) as Record<string, string>
+type Excuse = { max: number; why: string }
+const EXCUSED = JSON.parse(readFileSync(resolve(HERE, 'request-budget-allow.json'), 'utf8')) as Record<string, Excuse>
 
-const SLOW_MS = 300
-const MAX_IN_FLIGHT = 4
+const STILL_FRAMES = 20
+const MINUTE_HOLD_MS = 300
+const LEAVE_HOLD_MS = 1500
 const MIN_POLL_MS = 3000
-const MAX_STATUS_PER_MINUTE = 5
 const MINUTE_MS = 60_000
 const STEP_MS = 3000
 const SAME_GET_MS = 1000
-const MAX_URL_BYTES = 8 * 1024
+const QUIET_TIMEOUT_MS = 30_000
+
+/** Per rule, the most a screen may measure with no allow entry. */
+const LIMIT = {
+  inflight: 4,
+  poll: 0,
+  'status-rate': 5,
+  'same-get': 0,
+  'url-size': 8 * 1024,
+  'home-pricing': 0,
+  'review-queues': 1,
+  'sale-reads': 3,
+  'answer-reads': 2,
+  leave: 0,
+} as const
+type Rule = keyof typeof LIMIT
+const SCREEN_RULES: Rule[] = ['inflight', 'poll', 'status-rate', 'same-get', 'url-size', 'home-pricing', 'review-queues']
 
 interface Logged { m: string; u: string; t: number }
 interface Seen { method: string; url: string; path: string; failed: string | null; done: boolean; order: number }
+interface Watch {
+  seen: Seen[]
+  reset: () => void
+  openCount: () => number
+  openPaths: () => string[]
+  hold: { ms: number }
+  close: () => void
+  release: () => void
+}
+interface Measure { value: number; detail: string }
 
-const RULES = ['inflight', 'poll', 'status-rate', 'same-get', 'url-size', 'home-pricing', 'review-queues'] as const
-
-/** `/boxes/12/photos?x=1` -> `/boxes/:n/photos`. Spacing is judged per path, not per id. */
 /** A route hash by name, so no screen is typed here as a roster entry. */
 const hash = (name: string): string => `#/${name}`
 
-const shape =(url: string): string => new URL(url, 'http://x').pathname.replace(/\d+/g, ':n')
+/** `/boxes/12/photos?x=1` -> `/boxes/:n/photos`. Spacing is judged per path, not per id. */
+const shape = (url: string): string => new URL(url, 'http://x').pathname.replace(/\d+/g, ':n')
+
+const named = (s: Seen): string => `${s.method} ${s.path}`
 
 /** Fake clock first, so the page-side log below is stamped by it. Then the page-side log, then
  *  the slow answers. Every handler falls through to the shell's own stubs. */
-async function instrument(page: Page): Promise<{ seen: Seen[]; peak: () => number; reset: () => void }> {
+async function instrument(page: Page): Promise<Watch> {
   await page.clock.install()
   await page.addInitScript(() => {
     const log: Logged[] = []
@@ -66,11 +98,17 @@ async function instrument(page: Page): Promise<{ seen: Seen[]; peak: () => numbe
       return (open as (...a: unknown[]) => void).call(this, method, url, ...rest)
     } as typeof open
   })
+  const hold = { ms: MINUTE_HOLD_MS }
+  let gate: Promise<void> = Promise.resolve()
+  let open_: () => void = () => {}
   await page.route(
     () => true,
     async (route) => {
       const type = route.request().resourceType()
-      if (type === 'fetch' || type === 'xhr') await new Promise((r) => setTimeout(r, SLOW_MS)) // keep: stubbed answer held SLOW_MS on purpose, a latency fixture
+      if (type === 'fetch' || type === 'xhr') {
+        await gate // a closed gate holds every answer until the burst has been counted
+        await new Promise((r) => setTimeout(r, hold.ms)) // keep: stubbed answer held on purpose, a latency fixture
+      }
       await route.fallback()
     },
   )
@@ -88,132 +126,174 @@ async function instrument(page: Page): Promise<{ seen: Seen[]; peak: () => numbe
   })
   const seen: Seen[] = []
   const open = new Map<Request, Seen>()
-  let peak = 0
   const isRead = (r: Request) => r.resourceType() === 'fetch' || r.resourceType() === 'xhr'
   page.on('request', (r) => {
     if (!isRead(r)) return
     const one: Seen = { method: r.method(), url: r.url(), path: shape(r.url()), failed: null, done: false, order: seen.length }
     seen.push(one)
     open.set(r, one)
-    peak = Math.max(peak, open.size)
   })
   page.on('requestfinished', (r) => { const one = open.get(r); if (one) one.done = true; open.delete(r) })
   page.on('requestfailed', (r) => { const one = open.get(r); if (one) one.failed = r.failure()?.errorText ?? 'failed'; open.delete(r) })
-  return { seen, peak: () => peak, reset: () => { peak = open.size } }
+  return {
+    seen,
+    hold,
+    close: () => { gate = new Promise<void>((r) => { open_ = r }) },
+    release: () => open_(),
+    /* a new page starts from nothing: what the last page left open is not this page's */
+    reset: () => { open.clear() },
+    openCount: () => open.size,
+    openPaths: () => [...open.values()].map(named).sort(),
+  }
 }
 
 const pageLog = (page: Page): Promise<Logged[]> => page.evaluate(() => (window as unknown as { __reqs: Logged[] }).__reqs.slice())
 const pageNow = (page: Page): Promise<number> => page.evaluate(() => Date.now())
 
-/** The fake clock jumps in `STEP_MS` strides, with a beat of real time between so the slow stub
- *  can answer and the next tick has something to schedule from. */
-async function runMinute(page: Page): Promise<void> {
-  for (let spent = 0; spent < MINUTE_MS; spent += STEP_MS) {
-    await page.clock.runFor(STEP_MS)
-    await page.waitForTimeout(SLOW_MS + 100) // keep: real time for the slow stub to answer between fake-clock strides
+/** Holds until no read is open and none has started across two frames. Slow runners take longer
+ *  and measure the same. */
+async function quiet(page: Page, watch: Watch): Promise<void> {
+  const deadline = Date.now() + QUIET_TIMEOUT_MS
+  for (;;) {
+    const before = watch.seen.length
+    await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))))
+    if (watch.openCount() === 0 && watch.seen.length === before) return
+    if (Date.now() > deadline) throw new Error(`request-budget: reads never went quiet, ${watch.openCount()} still open`)
   }
 }
 
-function judge(route: string, log: Logged[], mountEnd: number, peak: number): Record<string, string> {
-  const found: Record<string, string> = {}
+/** Holds until no read has started for `STILL_FRAMES` frames in a row. */
+async function stillFor(page: Page, watch: Watch): Promise<void> {
+  const deadline = Date.now() + QUIET_TIMEOUT_MS
+  let still = 0
+  while (still < STILL_FRAMES) {
+    const before = watch.seen.length
+    await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => done())))
+    still = watch.seen.length === before ? still + 1 : 0
+    if (Date.now() > deadline) throw new Error('request-budget: reads kept starting')
+  }
+}
+
+/** The fake clock jumps in `STEP_MS` strides; each stride's reads are let finish before the next. */
+async function runMinute(page: Page, watch: Watch): Promise<void> {
+  for (let spent = 0; spent < MINUTE_MS; spent += STEP_MS) {
+    await page.clock.runFor(STEP_MS)
+    await quiet(page, watch)
+  }
+}
+
+function measure(route: string, log: Logged[], mountEnd: number, burst: number): Partial<Record<Rule, Measure>> {
+  const out: Partial<Record<Rule, Measure>> = {}
   const reads = log.filter((l) => l.m === 'GET')
   const after = reads.filter((l) => l.t > mountEnd)
 
-  if (peak > MAX_IN_FLIGHT) found.inflight = `${peak} in flight, limit ${MAX_IN_FLIGHT}`
+  out.inflight = { value: burst, detail: `${burst} reads held open at once by the mount` }
 
   const byPath = new Map<string, number[]>()
   for (const l of after) byPath.set(shape(l.u), [...(byPath.get(shape(l.u)) ?? []), l.t])
-  const fast: string[] = []
-  for (const [path, ts] of byPath) {
-    const gap = Math.min(...ts.slice(1).map((t, i) => t - (ts[i] as number)))
-    if (ts.length > 1 && gap < MIN_POLL_MS) fast.push(`${path} every ${gap}ms`)
-  }
-  if (fast.length > 0) found.poll = `${fast.join(', ')}, limit ${MIN_POLL_MS}ms`
+  const fast = [...byPath].filter(([, ts]) => ts.slice(1).some((t, i) => t - (ts[i] as number) < MIN_POLL_MS)).map(([path]) => path)
+  out.poll = { value: fast.length, detail: `paths polled faster than ${MIN_POLL_MS}ms: ${fast.join(', ')}` }
 
   const status = (byPath.get('/status') ?? []).length
-  if (status > MAX_STATUS_PER_MINUTE) found['status-rate'] = `${status} /status in 60s, limit ${MAX_STATUS_PER_MINUTE}`
+  out['status-rate'] = { value: status, detail: `${status} /status in 60s` }
 
-  const twice: string[] = []
+  const twice = new Set<string>()
   const lastAt = new Map<string, number>()
   for (const l of reads) {
     const before = lastAt.get(l.u)
-    if (before !== undefined && l.t - before < SAME_GET_MS) twice.push(`${shape(l.u)} ${l.t - before}ms apart`)
+    if (before !== undefined && l.t - before < SAME_GET_MS) twice.add(shape(l.u))
     lastAt.set(l.u, l.t)
   }
-  if (twice.length > 0) found['same-get'] = `${[...new Set(twice)].join(', ')}, limit ${SAME_GET_MS}ms`
+  out['same-get'] = { value: twice.size, detail: `paths asked twice within ${SAME_GET_MS}ms: ${[...twice].join(', ')}` }
 
-  const big = log.filter((l) => l.u.length > MAX_URL_BYTES)
-  if (big.length > 0) found['url-size'] = `${shape(big[0]!.u)} ${big[0]!.u.length} bytes, limit ${MAX_URL_BYTES}`
+  const longest = Math.max(0, ...log.map((l) => l.u.length))
+  out['url-size'] = { value: longest, detail: `longest URL ${longest} bytes` }
 
   if (route === '#/') {
-    const unscoped = reads.filter((l) => /\/(pipeline\/)?pricing$/.test(new URL(l.u, 'http://x').pathname))
-    if (unscoped.length > 0) found['home-pricing'] = `${unscoped.length} unscoped pricing read on mount, limit 0`
+    const unscoped = reads.filter((l) => /\/(pipeline\/)?pricing$/.test(new URL(l.u, 'http://x').pathname)).length
+    out['home-pricing'] = { value: unscoped, detail: `${unscoped} unscoped pricing reads on mount` }
   }
   if (route === hash('review')) {
     const queues = reads.filter((l) => new URL(l.u, 'http://x').pathname === '/queues').length
-    if (queues !== 1) found['review-queues'] = `${queues} /queues reads on mount, limit 1`
+    out['review-queues'] = { value: queues, detail: `${queues} /queues reads on mount` }
   }
-  return found
+  return out
+}
+
+/** One measurement against the limit and the allow file. Pushes what is wrong; marks the entry
+ *  used. Over the limit with no entry, over its `max`, or under its `max` all fail. */
+function judge(rule: Rule, route: string, got: Measure, bad: string[], used: Set<string>): void {
+  const key = `${rule}:${route}`
+  const limit = LIMIT[rule]
+  const entry = EXCUSED[key]
+  const exactlyOnce = rule === 'review-queues' && got.value === 0
+  if (entry === undefined) {
+    if (got.value > limit || exactlyOnce) bad.push(`${key}: ${got.detail}, limit ${limit}`)
+    return
+  }
+  used.add(key)
+  if (got.value > entry.max) bad.push(`${key}: ${got.detail}, allowed up to ${entry.max}`)
+  else if (got.value < entry.max) bad.push(`${key}: stale exception, ${got.detail}. lower to ${got.value > limit ? got.value : `nothing: delete the entry (limit ${limit})`}`)
+}
+
+/** An entry for a rule in `rules` that nothing measured is stale. */
+function unused(rules: readonly Rule[], used: Set<string>): string[] {
+  return Object.keys(EXCUSED).filter((k) => rules.some((r) => k.startsWith(`${r}:`)) && !used.has(k)).map((k) => `${k}: stale exception, the rule now passes. delete the entry`)
+}
+
+function badAllowFile(): string[] {
+  return Object.entries(EXCUSED)
+    .filter(([, e]) => typeof e?.why !== 'string' || e.why.trim() === '' || !Number.isInteger(e.max) || e.max < 0)
+    .map(([key]) => `${key}: needs { "max": <whole number>, "why": <what and how much> }`)
 }
 
 test('every screen stays inside its request budget for a minute', async ({ page }) => {
   test.setTimeout(900_000)
-  const blank = Object.entries(EXCUSED).filter(([, why]) => why.trim() === '').map(([key]) => key)
-  expect(blank, 'an exception with no reason: write why, or delete it').toEqual([])
+  expect(badAllowFile(), 'an exception with no max or no reason').toEqual([])
   const watch = await instrument(page)
   for (const seed of Object.values(POPULATED_ROUTE_SEEDS)) await seed(page)
   await setViewport(page, { width: 1440, height: 1000 })
   const routes = (await routesFromNav(page)).filter((r) => !EXCLUDED_FROM_SWEEP.test(r))
   routes.push(PRODUCT_ROUTE)
 
-  const over: string[] = []
-  const table: string[] = []
+  const bad: string[] = []
   const used = new Set<string>()
   let polled = 0
   for (const route of routes) {
     await page.goto('about:blank')
     watch.reset()
+    /* THE BURST IS COUNTED WITH EVERY ANSWER HELD: the gate stays shut until no new read has
+       started for `STILL_FRAMES` frames, so what is open then is exactly what the mount asked
+       for at once, and a chained read cannot slip in or out with the timing. */
+    watch.close()
+    await page.goto(`/${route}`)
+    await stillFor(page, watch)
+    const burst = watch.openCount()
+    watch.release()
     await openSettled(page, route)
+    await quiet(page, watch)
     const mountEnd = await pageNow(page)
-    await runMinute(page)
+    await runMinute(page, watch)
     const log = await pageLog(page)
     polled += log.filter((l) => l.t > mountEnd && shape(l.u) === '/status').length
-    const found = judge(route, log, mountEnd, watch.peak())
-    for (const rule of RULES) {
-      const key = `${rule}:${route}`
-      const what = found[rule]
-      if (what === undefined) continue
-      table.push(`${route} ${rule}: ${what}`)
-      if (key in EXCUSED) used.add(key)
-      else over.push(`${key} ${what}`)
-    }
+    for (const [rule, got] of Object.entries(measure(route, log, mountEnd, burst)) as [Rule, Measure][]) judge(rule, route, got, bad, used)
   }
-  console.log('BUDGET\n' + table.join('\n'))
   expect(polled, 'the fake clock drove no /status poll: the spacing rules would pass over nothing').toBeGreaterThan(0)
-  expect(over, 'screens over their request budget').toEqual([])
-  const stale = Object.keys(EXCUSED).filter((k) => RULES.some((r) => k.startsWith(`${r}:`)) && !used.has(k))
-  expect(stale, 'a stale exception: the rule now passes, delete its entry in request-budget-allow.json').toEqual([])
+  bad.push(...unused(SCREEN_RULES, used))
+  expect(bad, 'screens off their request budget').toEqual([])
 })
 
 /* ---------------------------------------------------------------- reads after a write */
 
-const MAX_READS_AFTER_SALE = 3
-const MAX_READS_AFTER_ANSWER = 2
-const QUIET_REAL_MS = 1500
-
-/** Presses `act` and counts the GETs the page starts from the write on, until it has been quiet
- *  for `QUIET_REAL_MS`. `/status` is the shell's own poll and is never a consequence of a write. */
-async function readsAfter(page: Page, seen: Seen[], isWrite: (s: Seen) => boolean, act: () => Promise<void>): Promise<string[]> {
-  const from = seen.length
+/** Presses `act` and counts the GETs the page starts from the write on, until nothing is open and
+ *  nothing new starts. `/status` is the shell's own poll and is never a consequence of a write. */
+async function readsAfter(page: Page, watch: Watch, isWrite: (s: Seen) => boolean, act: () => Promise<void>): Promise<string[]> {
+  const from = watch.seen.length
   await act()
-  await expect.poll(() => seen.slice(from).some(isWrite), { message: 'the write never went out' }).toBe(true)
-  let count = -1
-  while (count !== seen.length) {
-    count = seen.length
-    await page.waitForTimeout(QUIET_REAL_MS) // keep: real quiet time, the burst is judged over what follows the write
-  }
-  const write = seen.slice(from).find(isWrite)!
-  return seen.filter((s) => s.order > write.order && s.method === 'GET' && s.path !== '/status').map((s) => s.path)
+  await expect.poll(() => watch.seen.slice(from).some(isWrite), { message: 'the write never went out' }).toBe(true)
+  await quiet(page, watch)
+  const write = watch.seen.slice(from).find(isWrite)!
+  return watch.seen.filter((s) => s.order > write.order && s.method === 'GET' && s.path !== '/status').map((s) => s.path)
 }
 
 function twoCards(): unknown[] {
@@ -234,13 +314,12 @@ function twoCards(): unknown[] {
   }))
 }
 
-/** One write, then the reads it starts. A rule with an allow entry must still be over, or the
- *  entry is stale. */
-function judgeBurst(rule: string, route: string, reads: string[], limit: number): void {
-  const key = `${rule}:${route}`
-  console.log(`BURST ${key} ${reads.length}: ${reads.join(' ')}`)
-  if (key in EXCUSED) expect(reads.length, `a stale exception: ${key} now passes, delete its entry in request-budget-allow.json`).toBeGreaterThan(limit)
-  else expect(reads, `${key}: more than ${limit} reads after one write`).toHaveLength(Math.min(reads.length, limit))
+function judgeBurst(rule: 'sale-reads' | 'answer-reads', route: string, reads: string[]): void {
+  const bad: string[] = []
+  const used = new Set<string>()
+  judge(rule, route, { value: reads.length, detail: `${reads.length} reads after one write (${reads.join(' ')})` }, bad, used)
+  expect(bad, 'reads after a write off budget').toEqual([])
+  expect(unused([rule], used).filter((k) => k.startsWith(`${rule}:${route}`)), 'stale exception').toEqual([])
 }
 
 test('a sale re-reads no more than it must', async ({ page }) => {
@@ -251,10 +330,11 @@ test('a sale re-reads no more than it must', async ({ page }) => {
   )
   await setViewport(page, { width: 1440, height: 1000 })
   await openSettled(page, hash('inventory'))
-  const reads = await readsAfter(page, watch.seen, (s) => s.method === 'POST' && /\/sold$/.test(s.path), async () => {
+  await quiet(page, watch)
+  const reads = await readsAfter(page, watch, (s) => s.method === 'POST' && /\/sold$/.test(s.path), async () => {
     await page.getByRole('button', { name: 'Mark sold' }).first().click()
   })
-  judgeBurst('sale-reads', hash('inventory'), reads, MAX_READS_AFTER_SALE)
+  judgeBurst('sale-reads', hash('inventory'), reads)
 })
 
 test('a review answer re-reads no more than it must', async ({ page }) => {
@@ -266,33 +346,22 @@ test('a review answer re-reads no more than it must', async ({ page }) => {
   )
   await setViewport(page, { width: 1440, height: 1000 })
   await openSettled(page, hash('review'))
-  const reads = await readsAfter(page, watch.seen, (s) => s.method === 'POST' && /\/answer$/.test(s.path), async () => {
+  await quiet(page, watch)
+  const reads = await readsAfter(page, watch, (s) => s.method === 'POST' && /\/answer$/.test(s.path), async () => {
     await page.locator('.review-candidate').first().click()
   })
-  judgeBurst('answer-reads', hash('review'), reads, MAX_READS_AFTER_ANSWER)
+  judgeBurst('answer-reads', hash('review'), reads)
 })
 
 /* ---------------------------------------------------------------- leaving a screen */
 
-const HOLD_MS = 1500
-const MOUNT_LOOK_MS = 400
-const AFTER_SWITCH_MS = 2500
 /** The shell's own reads, the ones every screen's mount makes. They outlive a screen on purpose. */
 const SHELL = new Set(['GET /status'])
-
-const named = (s: Seen): string => `${s.method} ${s.path}`
 
 test('a screen that is left stops asking, and what it had open is aborted', async ({ page }) => {
   test.setTimeout(300_000)
   const watch = await instrument(page)
-  await page.route(
-    () => true,
-    async (route) => {
-      const type = route.request().resourceType()
-      if (type === 'fetch' || type === 'xhr') await new Promise((r) => setTimeout(r, HOLD_MS - SLOW_MS)) // keep: a read held HOLD_MS so it is still open when the screen is left
-      await route.fallback()
-    },
-  )
+  watch.hold.ms = LEAVE_HOLD_MS
   for (const seed of Object.values(POPULATED_ROUTE_SEEDS)) await seed(page)
   await setViewport(page, { width: 1440, height: 1000 })
   const routes = (await routesFromNav(page)).filter((r) => !EXCLUDED_FROM_SWEEP.test(r))
@@ -302,39 +371,42 @@ test('a screen that is left stops asking, and what it had open is aborted', asyn
   const mounts = new Map<string, Set<string>>()
   for (const route of routes) {
     await page.goto('about:blank')
+    watch.reset()
     const from = watch.seen.length
     await page.goto(`/${route}`)
-    await page.waitForTimeout(HOLD_MS * 2) // keep: real time for the held reads and the reads they start
+    await quiet(page, watch)
     mounts.set(route, new Set(watch.seen.slice(from).map(named)))
   }
-  const shell = new Set([...SHELL, ...[...mounts.get(routes[0]!)!].filter((one) => routes.every((r) => mounts.get(r)!.has(one)))])
+  const first = mounts.get(routes[0]!)!
+  const shell = new Set([...SHELL, ...[...first].filter((one) => routes.every((r) => mounts.get(r)!.has(one)))])
 
-  const found = new Map<string, string[]>()
-  const note = (route: string, what: string) => found.set(route, [...(found.get(route) ?? []), what])
+  const bad: string[] = []
+  const used = new Set<string>()
   for (let at = 0; at + 1 < routes.length; at++) {
     const from = routes[at]!
     const to = routes[at + 1]!
     await page.goto('about:blank')
+    watch.reset()
+    const before = watch.seen.length
     await page.goto(`/${from}`)
-    await page.waitForTimeout(MOUNT_LOOK_MS) // keep: the screen has asked, and the held reads are still open
+    const own = (s: Seen) => !s.done && s.failed === null && !shell.has(named(s)) && s.method === 'GET'
+    /* a screen may ask nothing on arrival (`#/shipping`): the wait is for an open read OR for the
+       screen to be quiet with none, whichever is first, so it never runs out a clock */
+    await expect.poll(async () => {
+      if (watch.seen.slice(before).some(own)) return true
+      await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))))
+      return watch.seen.length > before && watch.openCount() === 0
+    }, { message: `${from}: neither an open read nor a quiet page` }).toBe(true)
     const mark = watch.seen.length
-    const open = watch.seen.filter((s) => !s.done && s.failed === null && !shell.has(named(s)) && s.method === 'GET')
-    await page.evaluate((hash) => { window.location.hash = hash }, to.slice(1))
-    await page.waitForTimeout(AFTER_SWITCH_MS) // keep: real time for an abort to land, or a stale ask to start
-    const kept = open.filter((s) => s.failed === null)
-    if (kept.length > 0) note(from, `abort: ${kept.length} of ${open.length} open reads not aborted on leaving (${[...new Set(kept.map(named))].join(', ')})`)
+    const open = watch.seen.slice(before).filter(own)
+    await page.evaluate((next) => { window.location.hash = next }, to.slice(1))
+    await expect.poll(() => open.every((s) => s.done || s.failed !== null), { message: `${from}: reads neither finished nor failed`, timeout: 15_000 }).toBe(true)
+    await quiet(page, watch)
+    const kept = open.filter((s) => s.failed === null).map(named)
     const stale = [...new Set(watch.seen.slice(mark).map(named))].filter((one) => mounts.get(from)!.has(one) && !mounts.get(to)!.has(one) && !shell.has(one))
-    if (stale.length > 0) note(from, `after: ${stale.join(', ')} started after leaving`)
+    const offenders = [...new Set([...kept, ...stale])]
+    judge('leave', from, { value: offenders.length, detail: `${offenders.length} paths keep asking after leaving (${offenders.join(', ')})` }, bad, used)
   }
-  const over: string[] = []
-  const used = new Set<string>()
-  for (const [route, what] of found) {
-    const key = `leave:${route}`
-    console.log(`LEAVE ${route} ${what.join('; ')}`)
-    if (key in EXCUSED) used.add(key)
-    else over.push(`${key} ${what.join('; ')}`)
-  }
-  expect(over, 'screens that keep asking after they are left').toEqual([])
-  const stale = Object.keys(EXCUSED).filter((k) => k.startsWith('leave:') && !used.has(k))
-  expect(stale, 'a stale exception: the rule now passes, delete its entry in request-budget-allow.json').toEqual([])
+  bad.push(...unused(['leave'], used))
+  expect(bad, 'screens that keep asking after they are left').toEqual([])
 })
