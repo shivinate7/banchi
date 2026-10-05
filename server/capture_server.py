@@ -4425,6 +4425,39 @@ def _listing_hold(
     return _stages_held(entry)
 
 
+def _holder_map(ledger) -> Dict[str, Tuple[str, str]]:
+    """`Ledger.holder_of` for every copy at once: capture id -> `(order key, sku)`, the first
+    holder winning exactly as the walk does. One pass over the open orders, for a loop that
+    would otherwise make that pass once per card."""
+    held: Dict[str, Tuple[str, str]] = {}
+    for key, rows in ledger.fulfilment.items():
+        for sku, row in rows.items():
+            for copy in row.copies:
+                held.setdefault(copy, (key, sku))
+    return held
+
+
+def _held_skus(inventory: master.Inventory) -> Set[str]:
+    """Every SKU whose listing holds a stage, in one columns read (D88). `_stages_held`'s rule
+    over the indexed counts: `int_or_none` is NULL where a count will not read, and an
+    unreadable count counts as held there too."""
+    return {
+        sku
+        for sku, counts in inventory.listings.select(master.LISTING_STAGES)
+        if any(count is None or count > 0 for count in counts)
+    }
+
+
+def _sku_held(inventory: master.Inventory, sku: Optional[str], held: Optional[Set[str]]) -> bool:
+    """`_listing_hold`'s verdict for one SKU: from `held` when a caller built it, else one get."""
+    if not sku:
+        return False
+    if held is not None:
+        return sku in held
+    entry = inventory.listings.get(sku)
+    return entry is not None and bool(_stages_held(entry))
+
+
 def _stages_held(entry: master.Listing) -> List[Tuple[str, int]]:
     """Every non-zero stage on one listing record, or an empty list.
 
@@ -6993,6 +7026,7 @@ def do_delete_box(box: int) -> dict:
         cache_dropped = 0
         buried = 0
         box_name = registered.name if registered is not None else None
+        holders = _holder_map(snapshot.ledger)  # once, not one ledger walk per card (D88)
         for at, card_key, card in holds:
             photo = photo_for(inventory, card)
             if card.state in master.TERMINAL_STATES:
@@ -7011,7 +7045,7 @@ def do_delete_box(box: int) -> dict:
                         digest = None
                 order = None
                 if card.capture_id:
-                    held_by = snapshot.ledger.holder_of(card.capture_id)
+                    held_by = holders.get(str(card.capture_id).strip())
                     if held_by is not None:
                         order = held_by[0]
                 _history(
@@ -7205,13 +7239,14 @@ def do_graveyard(buried_only: bool = False) -> dict:
     # is found, not a tombstone here.
     _DEPARTED_STATES = tuple(s for s in master.TERMINAL_STATES if s != master.MOVED)
 
+    holders = _holder_map(ledger)  # once, not one ledger walk per card (D88)
     rows: List[dict] = []
     for state in () if buried_only else _DEPARTED_STATES:
         for card in inventory.cards.where(state=state):
             registered = inventory.box(card.box)
             order = None
             if card.capture_id:
-                held_by = ledger.holder_of(card.capture_id)
+                held_by = holders.get(str(card.capture_id).strip())
                 if held_by is not None:
                     order = held_by[0]
             rows.append(
@@ -12707,13 +12742,21 @@ def _card_matches_filters(card: master.Card, filters: Dict[str, Optional[str]]) 
     """Does this card pass every ACTIVE facet in `filters`? A facet absent from the dict is
     not being filtered on at all — see `_FACET_UNSET` above — so this only ever compares
     keys the caller put there."""
-    if "game" in filters and _facet_norm(card.game) != _facet_norm(filters["game"]):
+    return _values_match_filters(card.game, card.set_name, card.rarity, filters)
+
+
+def _values_match_filters(
+    game: Optional[str],
+    set_name: Optional[str],
+    rarity: Optional[str],
+    filters: Dict[str, Optional[str]],
+) -> bool:
+    """`_card_matches_filters` over the three column values, for a caller holding no `Card`."""
+    if "game" in filters and _facet_norm(game) != _facet_norm(filters["game"]):
         return False
-    if "set_name" in filters and _facet_norm(card.set_name) != _facet_norm(filters["set_name"]):
+    if "set_name" in filters and _facet_norm(set_name) != _facet_norm(filters["set_name"]):
         return False
-    return not (
-        "rarity" in filters and _facet_norm(card.rarity) != _facet_norm(filters["rarity"])
-    )
+    return not ("rarity" in filters and _facet_norm(rarity) != _facet_norm(filters["rarity"]))
 
 
 def _card_facets(
@@ -12856,6 +12899,7 @@ def _box_row(
     places: "Optional[_Places]" = None,
     filters: Optional[Dict[str, Optional[str]]] = None,
     hide_sold: bool = False,
+    held: Optional[Set[str]] = None,
 ) -> dict:
     """One box, as `GET /boxes` renders it and as both write routes answer with it.
 
@@ -12909,7 +12953,8 @@ def _box_row(
     cards under the current filter — measured by the owner: 9 against 7.
     """
     entry = inventory.box(box)
-    view = (places or _Places(inventory)).view(box)
+    places = places or _Places(inventory)
+    view = places.view(box)
     occupied = view[3]
 
     cards = 0
@@ -12920,44 +12965,32 @@ def _box_row(
     listed = 0
     # `(cid, name)` by index, for the box map's landmarks and aim (D264).
     about: Dict[int, Tuple[Optional[str], Optional[str]]] = {}
-    for card in inventory.cards.where(box=int(box)):
-        try:
-            if int(card.box) != int(box):
-                continue
-        except (TypeError, ValueError):
-            # Skipped rather than refused, unlike `next_index`, and the difference is the
-            # question being asked. That method refuses because it is about to hand out an
-            # index and a skipped record hides the collision it would cause; this one is
-            # counting what names box 3, and a record nobody can place names no box.
-            continue
+    # COLUMNS, NOT CARDS (D88): the eight values below are indexed columns of `cards`, so no
+    # `Card` is built per row. `box` is matched by the query itself.
+    for _key, (idx, state, sku, cid, name, game, set_name, rarity) in inventory.cards.select(
+        ("idx", "state", "sku", "cid", "name", "game", "set_name", "rarity"),
+        box=int(box),
+    ):
         cards += 1
         with contextlib.suppress(TypeError, ValueError):
-            about[int(card.index)] = (
-                card.cid, card.name if isinstance(card.name, str) and card.name else None
-            )
-        if card.state == master.SOLD:
+            about[int(idx)] = (cid, name if isinstance(name, str) and name else None)
+        if state == master.SOLD:
             sold += 1
-        elif card.state == master.RETIRED:
+        elif state == master.RETIRED:
             retired += 1
-        elif card.state == master.MOVED:
-            # D83's third door. Reported for the same reason `sold`/`retired` are: once a
-            # move can be one of `box_not_empty_of_commitments`'s grounds (a merged-away box
-            # is left holding only tombstones), the delete panel needs to say so before the
-            # operator presses anything, not discover it from a refusal.
+        elif state == master.MOVED:
+            # D83's third door, reported for the same reason `sold`/`retired` are: the delete
+            # panel must say a merged-away box holds only tombstones before any press.
             moved += 1
-        # `elif` on the states and a SEPARATE `if` here, because they answer different
-        # questions: the states are exclusive of each other, and a listing hold is a
-        # fact about the SKU that a sold copy has as much as an identified one.
-        if _listing_hold(inventory, card):
+        # A listing hold is a fact about the SKU, so a sold copy has it too: a separate `if`.
+        if _sku_held(inventory, sku, held):
             listed += 1
         if (
             filters is not None
-            # S3, THE OPUS REVIEW, 2026-09-25: the same D132 correction as `_card_facets`
-            # above — Hide sold drops every DEPARTED card off the walk, not sold alone, so
-            # `matches` must follow `master.TERMINAL_STATES` or a retired/moved card would
-            # still count here while never drawing a row.
-            and not (hide_sold and card.state in master.TERMINAL_STATES)
-            and _card_matches_filters(card, filters)
+            # D132: Hide sold drops every DEPARTED card off the walk, so `matches` follows
+            # `master.TERMINAL_STATES`, not sold alone.
+            and not (hide_sold and state in master.TERMINAL_STATES)
+            and _values_match_filters(game, set_name, rarity, filters)
         ):
             matches += 1
 
@@ -12979,7 +13012,7 @@ def _box_row(
     detail = (
         _section_spans(
             int(box), layout, len(occupied), occupied, inventory.section_names_for(box),
-            inventory.box_order(box), about, inventory.departed_indices(box),
+            places._order(box), about, places._departed(box),
         )
         if layout is not None and occupied is not None
         else []
@@ -13134,8 +13167,9 @@ def do_boxes(
 
     places = _Places(inventory)
     cells = _facet_cells(inventory)
+    held = _held_skus(inventory)
     rows = [
-        _box_row(inventory, box, places, filters=filters, hide_sold=hide_sold)
+        _box_row(inventory, box, places, filters=filters, hide_sold=hide_sold, held=held)
         for box in sorted(numbers)
     ]
     if with_digest:
@@ -14021,9 +14055,10 @@ def do_orders() -> dict:
     # (`order_store.is_terminal_status`) never draws as open, regardless of `unfulfilled`.
     # An unrecognised status changes nothing: `is_terminal_status` answers `False` for it,
     # so the order stays exactly as open as `unfulfilled` alone would have made it.
+    unfulfilled = ledger.unfulfilled()  # once per request (D88: one snapshot, reused)
     open_keys = {
         record.key
-        for record in ledger.unfulfilled()
+        for record in unfulfilled
         if not order_store.is_terminal_status(record.status)
     }
     # WHAT IS RESOLVED IS A DIFFERENT, WIDER SET AS OF 2026-09-16, AND THE OLD TERMINAL
@@ -14038,7 +14073,7 @@ def do_orders() -> dict:
     # `open: false` off `open_keys` above — resolving a terminal order gives its own picker
     # (the stamps route, a re-opened dispute) real picks instead of an empty resolution, and
     # costs nothing else on screen because `open` is what `#/orders` branches on.
-    resolve_keys = {record.key for record in ledger.unfulfilled()}
+    resolve_keys = {record.key for record in unfulfilled}
     open_records = [record for record in sequence if record.key in resolve_keys]
 
     answered, resolution = _resolve_records(
@@ -15171,8 +15206,9 @@ def _ledger_pull(
     screen holding a stale order key cannot reverse the wrong one."""
     if undo:
         holders = []
+        by_copy = _holder_map(snapshot.ledger)
         for copy in copies:
-            holder = snapshot.ledger.holder_of(copy)
+            holder = by_copy.get(str(copy).strip())
             if holder is None:
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
