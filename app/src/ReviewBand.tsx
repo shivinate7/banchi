@@ -100,25 +100,32 @@ export function ReviewBand({
     restartKey: keys === null ? null : keys.join(','),
   })
 
-  /* Open review rows in scope; with no named scope every open row counts. A card with one counts here and nowhere else. */
-  /* The queues are read again whenever the matched set moves or the screen's own rows do, so a card that a reader
-     just matched while it waits on a row is never counted twice. */
-  const [openKeys, setOpenKeys] = useState<readonly string[] | null>(null)
+  /* Open review rows in scope; with no named scope every open row counts. A card with one counts here and nowhere else.
+     The parent's own queue read is the answer (`reviewKeys`), so a visit and an answered card cost no read here. Only the
+     matched set moving AFTER its first answer asks the queues again, so a card a reader just matched while it waits on
+     a row is never counted twice; that read is good for the rows it was made against and no longer. */
+  const [reread, setReread] = useState<{ sig: string; keys: readonly string[] } | null>(null)
   const matchedSig = (sweep?.matched_keys ?? []).join(',')
   const reviewSig = reviewKeys === null ? null : reviewKeys.join(',')
+  const baseline = useRef<string | null>(null)
   useEffect(() => {
-    if (reviewSig === null) return
+    if (sweep === null) return
+    const first = baseline.current === null
+    const moved = baseline.current !== matchedSig
+    baseline.current = matchedSig
+    if (first || !moved || reviewSig === null) return
     let live = true
     void getQueues()
       .then((snapshot) => {
-        if (live) setOpenKeys(snapshot.review.filter((entry) => !entry.cleared_by_human).map((entry) => `${entry.box}/${entry.index}`))
+        if (live) setReread({ sig: reviewSig, keys: snapshot.review.filter((entry) => !entry.cleared_by_human).map((entry) => `${entry.box}/${entry.index}`) })
       })
-      .catch(() => live && setOpenKeys(reviewKeys))
+      .catch(() => undefined)
     return () => {
       live = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the signatures are WHEN to read; reviewKeys is the fallback
-  }, [matchedSig, reviewSig])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the matched signature is WHEN to read; the rest is read as it stands
+  }, [matchedSig])
+  const openKeys = reread !== null && reread.sig === reviewSig ? reread.keys : null
   const reviewing = useMemo(() => {
     const open = openKeys ?? reviewKeys
     if (open === null) return null

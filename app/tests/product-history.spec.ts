@@ -1,6 +1,6 @@
 // Protects: The product history draws market prices and the owner's own sales as two different shapes, and leaves the deep link cleanly.
 // Governs: D278, D227
-import { test, expect, type Route } from '@playwright/test'
+import { test, expect, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 
 import type { OrderRow, OrdersPayload, ProductHistoryPayload, SearchGroup, SearchResult } from '../src/types'
@@ -31,6 +31,9 @@ import type { OrderRow, OrdersPayload, ProductHistoryPayload, SearchGroup, Searc
 function json(route: Route, body: unknown) {
   return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
 }
+
+/* A route's hash from its name, so a case names one screen to go to and none of them is a pinned list. */
+const hash = (name: string) => `#/${name}`
 
 const VIEW_ROUTE = '/#/product?sku=555123'
 const SKU = '555123'
@@ -191,17 +194,108 @@ test.describe('#/product — the per-product view', () => {
        screen. BEFORE THE FIX, `ProductHistory`'s own `hashchange` listener read this new
        hash, found no `sku` on it, set `sku` to `''`, and the `writeSkuToHash` effect rewrote
        the hash back to an empty `#/product` — the trap `D278` fixed. */
-    await page.evaluate(() => {
-      window.location.hash = '#/gallery'
-    })
+    await page.evaluate((next) => {
+      window.location.hash = next
+    }, hash('gallery'))
     await expect(page).toHaveURL(/#\/gallery$/)
     // A beat for the OLD defect's own effect to have fired, if it still could.
     await page.waitForTimeout(300) // keep: asserts the old effect never rewrites the hash
     await expect(page).toHaveURL(/#\/gallery$/)
   })
 
+  test('a product sheet open across a route change shows no failure and logs no console error', async ({ page }) => {
+    /* The sheet outlives the screen it was opened over. Its reads are aborted when that screen is left, and an aborted read
+       is the app's own doing, never a fault: no red "Reload the page" notice, and no `console.error` from `describeFailure`. */
+    const errors: string[] = []
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') errors.push(msg.text())
+    })
+    let release: () => void = () => {}
+    const held = new Promise<void>((done) => {
+      release = done
+    })
+    const slow = (body: unknown) => async (route: Route) => {
+      await held.catch(() => {})
+      await json(route, body).catch(() => {})
+    }
+    // Held reads: registered after the beforeEach stubs, so they win.
+    await page.route(/\/pipeline\/products\/[^/]+\/history$/, slow(historyPayload()))
+    await page.route(/\/pipeline\/products\/[^/]+\/realized$/, slow({ sku: '0', configured: false }))
+    await page.route(/\/orders$/, slow(ordersPayload()))
+
+    await page.goto(`/${hash('gallery')}`)
+    await expect(page.locator('.bn-page').first()).toBeVisible()
+    await page.evaluate(async () => {
+      const mod = await import(('/src/kit/sheets' + '.ts'))
+      mod.openSheet('product', { sku: '555123', name: 'Vilemaw' })
+    })
+    await expect(page.locator('[role="dialog"]')).toBeVisible()
+
+    await page.evaluate((next) => {
+      window.location.hash = next
+    }, hash('shipping'))
+    await expect(page).toHaveURL(/#\/shipping$/)
+    release()
+    await page.waitForTimeout(500) // keep: the aborted reads settle in the page after the route change
+
+    await expect(page.getByText('Reload the page', { exact: false }), 'an aborted read drew a failure notice').toHaveCount(0)
+    expect(errors.filter((text) => text.includes('The app failed before the server could answer')), 'an aborted read logged a console error').toEqual([])
+  })
+
+  const neverSold = (sku: string): ProductHistoryPayload => ({
+    sku, product_id: 43, name: 'Vilemaw', set_name: 'Twilight Masquerade', condition: 'Holo',
+    source: 'archive', history_begins: null, never_sold: true, ranges: [],
+  })
+  const openSheetFor = (page: Page, sku: string) =>
+    page.evaluate(async (which) => {
+      const mod = await import(('/src/kit/sheets' + '.ts'))
+      mod.openSheet('product', { sku: which, name: 'Vilemaw' })
+    }, sku)
+
+  test('a sheet that switches SKU, is held mid-read across a route change, then answered shows the new data and no notice', async ({ page }) => {
+    /* A sheet's reads live as long as the sheet, not the screen it was opened over. */
+    let release: () => void = () => {}
+    const held = new Promise<void>((done) => {
+      release = done
+    })
+    await page.route(/\/pipeline\/products\/555999\/history$/, async (route) => {
+      await held
+      await json(route, neverSold('555999')).catch(() => {})
+    })
+    await page.route(/\/pipeline\/products\/555999\/realized$/, async (route) => {
+      await held
+      await json(route, { sku: '555999', configured: false }).catch(() => {})
+    })
+    await page.goto(`/${hash('gallery')}`)
+    await expect(page.locator('.bn-page').first()).toBeVisible()
+    await openSheetFor(page, '555123')
+    await expect(page.locator('[role="dialog"] .producthistory-chart').first()).toBeVisible()
+    await openSheetFor(page, '555999')
+    await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))))
+    await page.evaluate((next) => {
+      window.location.hash = next
+    }, hash('shipping'))
+    await expect(page).toHaveURL(/#\/shipping$/)
+    release()
+    await expect(page.locator('[role="dialog"]').getByText('This product has never been recorded to sell', { exact: false }), 'the sheet did not draw the new SKU').toBeVisible()
+    /* The fixture's own sentence draws in an info Notice, so the check is for a FAILURE notice: not danger or warn tone,
+       no "Reload the page", and no empty Notice (code `aborted`). */
+    const sheet = page.locator('[role="dialog"]')
+    await expect(sheet.locator('.bn-notice-danger, .bn-notice-warn'), 'the sheet drew a failure Notice').toHaveCount(0)
+    await expect(sheet.getByText('Reload the page', { exact: false })).toHaveCount(0)
+    await expect(sheet.locator('.bn-notice').filter({ hasNotText: /\S/ }), 'the sheet drew an empty Notice').toHaveCount(0)
+  })
+
+  test('a real server failure on a sheet still shows the failure notice', async ({ page }) => {
+    await page.route(/\/pipeline\/products\/555999\/history$/, (route) => route.abort())
+    await page.goto(`/${hash('gallery')}`)
+    await expect(page.locator('.bn-page').first()).toBeVisible()
+    await openSheetFor(page, '555999')
+    await expect(page.locator('[role="dialog"] .bn-notice')).toBeVisible()
+  })
+
   test('registerSheet wires the product sheet, and its fallback route is #/product?sku= (D278)', async ({ page }) => {
-    await page.goto('/#/gallery')
+    await page.goto(`/${hash('gallery')}`)
     const [registered, href] = await page.evaluate(async () => {
       const mod = await import(('/src/kit/sheets' + '.ts'))
       return [mod.hasSheet('product'), mod.sheetHref('product', { sku: '555123' })]
