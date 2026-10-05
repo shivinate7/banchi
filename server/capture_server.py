@@ -3716,13 +3716,10 @@ def do_inventory() -> dict:
     inventory = snapshot.inventory
     payload = inventory.to_payload()
     places = _Places(inventory)
-    # ONE READ OF THE SKU TABLE, NOT ONE PER CARD: the listing facts need each card's SKU row,
-    # and a lookup per card is a query per card on the route the app polls. Bounded by the
-    # table, never by the cards, and skipped when no card carries a SKU.
-    if any(record.get("sku") for record in (payload.get("cards") or {}).values()):
-        snapshot.skus.entries._load_all()
+    # NO LISTING FACTS HERE: a SKU row per card is read cost on the route the app polls, and the
+    # read budget holds. `do_inventory_box` and `_card_row` carry them.
     for record in (payload.get("cards") or {}).values():
-        _decorate_card(record, places, snapshot.skus)
+        _decorate_card(record, places)
     return payload
 
 
@@ -3815,7 +3812,7 @@ def do_inventory_recent(limit: int) -> dict:
             continue
         if not card.name or card.photo is None:
             continue
-        cards[key] = _decorate_card(asdict(card), places, snapshot.skus)
+        cards[key] = _decorate_card(asdict(card), places)  # no listing facts: read budget
     return {"cards": cards}
 
 
@@ -3919,7 +3916,7 @@ def do_inventory_copies(payload: dict) -> dict:
         card = inventory.cards.get(key)
         if card is None:
             continue
-        cards[key] = _decorate_card(asdict(card), places, snapshot.skus)
+        cards[key] = _decorate_card(asdict(card), places)  # no listing facts: read budget
 
     # `listings` RIDES ALONG THE SAME WAY `do_inventory_box`'s DOES: narrowed to the SKUs the
     # scan above actually matched, never to `wanted` (the request), so a SKU asked about but
