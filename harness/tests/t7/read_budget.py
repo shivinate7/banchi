@@ -157,7 +157,7 @@ BUDGET = {
     '_PHOTO_BY_CARD_RE': {"status": 200},
     '_PHOTO_RE': {"status": 200, 'sql': 11, 'json_loads': 1, 'store_read': 1},
     '/pricing': {"status": 200},
-    '/pipeline/pricing': {"status": 200, 'sql': 123, 'json_loads': 24, 'store_read': 8, 'read_export': 3},
+    '/pipeline/pricing': {"status": 200, 'sql': 52, 'json_loads': 16, 'store_read': 2, 'read_export': 3},
     '/pipeline/value': {"status": 200, 'sql': 356, 'json_loads': 170, 'store_read': 3},
     '/pipeline/sets': {"status": 200, 'sql': 11, 'store_read': 1},
     '/pipeline/price-now': {"status": 200, 'sql': 23, 'json_loads': 4, 'store_read': 2},
@@ -197,19 +197,17 @@ KNOWN_OVER = {
     ('/boxes', 'sql'): (233, 383),
     ('/orders', 'sql'): (1824, 3624),
     ('/search', 'sql'): (175, 325),
-    ('/pipeline/pricing', 'sql'): (123, 210),
-    ('/pipeline/pricing', 'store_read'): (8, 14),
+    ('/pipeline/pricing', 'sql'): (52, 64),
     ('/pipeline/pricing', 'read_export'): (3, 6),
     ('/pipeline/value', 'sql'): (356, 659),
     ('POST /inventory/copies', 'sql'): (53, 77),
 }
 
 # EXPLAIN QUERY PLAN `SCAN` allowed today, as `table` (no WHERE) or `table.column` (the WHERE
-# column has no index, so the statement walks the table). `cards.run` is the known gap. Only shrinks.
+# column has no index, so the statement walks the table). Only shrinks.
 SCAN_ALLOWED = frozenset({
     'boxes',
     'cards',
-    'cards.run',
     'events.event',
     'identifications.json_extract',
     'listings',
