@@ -120,10 +120,16 @@ def _read_number_key(strategy: str, read_number, read_printed_total) -> Optional
     `number_agrees` and the review-candidate builder derive it, so the two can never fold
     the read two different ways."""
     if strategy == NUMBER_AND_PRINTED_TOTAL:
-        if not read_number or not read_printed_total:
+        if not read_number:
             return None
         # A number that already carries its own "/total" is composed; gluing the total on again would never match a row.
-        composed = str(read_number) if "/" in str(read_number) else join_key(read_number, read_printed_total)
+        # It is judged on that total even when `read_printed_total` is None.
+        if "/" in str(read_number):
+            composed = str(read_number)
+        elif not read_printed_total:
+            return None
+        else:
+            composed = join_key(read_number, read_printed_total)
     else:
         if not read_number:
             return None
