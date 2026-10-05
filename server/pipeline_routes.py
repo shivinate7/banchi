@@ -1262,20 +1262,6 @@ def do_pipeline_match_sweep(keys: Optional[str] = None) -> dict:
     return _sweep_state() if keys is None else _sweep_poll_state(keys)
 
 
-def do_pipeline_match_sweep_poll(payload: dict) -> dict:
-    """`POST /pipeline/match/sweep` with `{"keys": "a,b" | ["a", "b"]}` — the same polled read as
-    `GET ...?keys=`, with the keys in the body so a long sitting does not grow the request line.
-    Free, read-only, answers exactly what the GET answers for the same keys."""
-    keys = payload.get("keys") if isinstance(payload, dict) else None
-    if isinstance(keys, (list, tuple)):
-        keys = ",".join(str(key) for key in keys)
-    if not isinstance(keys, str):
-        raise PipelineRefusal(
-            HTTPStatus.BAD_REQUEST, "keys_required", 'Send {"keys": [...]} with the positions to count.'
-        )
-    return _sweep_poll_state(keys)
-
-
 def _spawn_sweep_watcher() -> Optional[int]:
     """Start a detached watcher unless one runs. It outlives this server, like a run does."""
     if sweep.running():

@@ -180,14 +180,14 @@ _cache_lock = threading.Lock()
 
 
 def read_export(path) -> Export:
-    """Parse the export at `path`, once per (path, mtime_ns, size).
+    """Parse the export at `path`, once per (path, inode, mtime_ns, size).
 
     A file that changed has a new key, so the cache never serves stale bytes. The rows are
     shared between callers: treat them as read-only.
     """
     path = Path(path)
     stat = path.stat()
-    key = (str(path), stat.st_mtime_ns, stat.st_size)
+    key = (str(path), stat.st_ino, stat.st_mtime_ns, stat.st_size)
     with _cache_lock:
         hit = _cache.get(key)
         if hit is not None:
