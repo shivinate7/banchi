@@ -152,7 +152,7 @@ def check_exif_verbatim_bytes_upright(checks: Checks) -> None:
 
 
 def check_exif_crop_refusal_and_qr(checks: Checks) -> None:
-    """Coverage: `crop_refusal` given a path and `codes.qr.decode` both read an EXIF-rotated file upright."""
+    """`crop_refusal` given a path reads an EXIF-rotated file upright (red-capable). `codes.qr.decode` is a smoke check only."""
     import numpy as np
     import zxingcpp
     from PIL import Image
@@ -162,9 +162,12 @@ def check_exif_crop_refusal_and_qr(checks: Checks) -> None:
 
     with tempfile.TemporaryDirectory() as tmp:
         path, _upright = _exif6_jpeg(tmp)
-        box = detect.CardBox(angle=0.0, left=0.1, top=0.1, right=0.9, bottom=0.9, fill=0.9, aspect=0.67)
-        checks.equal(images.crop_refusal(path, box), images.crop_refusal(detect.open_image(path), box),
-                     "crop_refusal on a path judges the upright frame")
+        # A small box over the red patch (upright top-left). The upright frame keeps the patch's detail;
+        # the raw sideways frame puts the same box on flat pixels and refuses. Only one frame refuses.
+        box = detect.CardBox(angle=0.0, left=0.0, top=0.0, right=0.2, bottom=0.15, fill=0.9, aspect=0.67)
+        sideways = Image.open(path).convert("RGB")  # no exif_transpose
+        checks.ok(images.crop_refusal(sideways, box) is not None, "fixture: the raw sideways frame refuses this box")
+        checks.equal(images.crop_refusal(path, box), None, "crop_refusal on a path judges the upright frame")
 
         payload = "https://example.com/exif-qr"
         symbol = Image.fromarray(np.array(zxingcpp.write_barcode(zxingcpp.BarcodeFormat.QRCode, payload))).convert("RGB")
@@ -176,7 +179,7 @@ def check_exif_crop_refusal_and_qr(checks: Checks) -> None:
         qr_path = str(Path(tmp) / "qr.jpg")
         upright.rotate(90, expand=True).save(qr_path, "JPEG", quality=95, exif=exif)
         read = qr.decode(qr_path)
-        checks.equal(read.payload if read else None, payload, "codes.qr.decode reads an EXIF-rotated file")
+        checks.equal(read.payload if read else None, payload, "smoke: codes.qr.decode reads an EXIF-rotated file (a QR decodes at any rotation, so this cannot go red on orientation)")
 
 
 CHECKS = (check_name_fold_one_home, check_terminal_states_from_store, check_exif_one_pixel_space,
