@@ -8,8 +8,9 @@ THE NAMES THE BUILDER FOLLOWS (this file is their spec):
     `crop=True` the bytes are the card's region, else the stored bytes. The route spells it
     `GET /photo/by-card/<cid>?crop=card`. A refusal or no box answers the stored bytes.
   * `identify.images.preview_rect(path) -> Optional[(l, t, r, b)]`: the ONE home of the preview
-    cut. It finds with `geometry.locate_card` (falling back to `geometry.detect_card`, as
-    `prepare_located` does) and guards with `crop_refusal`. Cached per photograph.
+    cut. It finds with `images.card_box_for`, the one guarded box the run also cuts with
+    (the model's box, else `detect_card`'s when `crop_refusal` refuses it), and guards the answer
+    with `crop_refusal`. Cached per photograph.
   * No new threshold and no second crop rule: `images.SMALL_CROP_AREA`/`MIN_CROP_DETAIL` only.
 """
 
@@ -72,25 +73,23 @@ def _store_photo(blob: bytes) -> str:
 
 @contextmanager
 def _counting_finders():
-    """Count every call of the two finders through the names `prepare_located` reads."""
-    import geometry
+    """Count every call of `images.card_box_for`, the one home of the card box that the preview
+    and the run both read. The finders behind it are its business, so the cache is asserted by
+    how often the home is asked."""
+    from identify import images
 
-    calls = {"locate": 0, "detect": 0}
-    real_locate, real_detect = geometry.locate_card, geometry.detect_card
+    calls = {"home": 0}
+    real = images.card_box_for
 
-    def locate(*a, **k):
-        calls["locate"] += 1
-        return real_locate(*a, **k)
+    def counted(*a, **k):
+        calls["home"] += 1
+        return real(*a, **k)
 
-    def detect(*a, **k):
-        calls["detect"] += 1
-        return real_detect(*a, **k)
-
-    geometry.locate_card, geometry.detect_card = locate, detect
+    images.card_box_for = counted
     try:
         yield calls
     finally:
-        geometry.locate_card, geometry.detect_card = real_locate, real_detect
+        images.card_box_for = real
 
 
 def _cropped(cid):
@@ -134,25 +133,48 @@ def check_preview_crop_yields_card(checks: Checks) -> None:
 
 
 def check_preview_crop_refused_sends_whole_photo(checks: Checks) -> None:
-    """A tiny box (the 'zoomed 30x' case) or no box answers the stored bytes, never a crop."""
+    """A refused model box gets `card_box_for`'s answer, the same cut the run makes: the
+    `detect_card` box when it finds the card, the stored bytes when it finds nothing too."""
     import geometry
     from PIL import Image
 
     checks.note("")
-    checks.note("PREVIEW CROP — A REFUSED OR ABSENT BOX SENDS THE WHOLE PHOTO")
+    checks.note("PREVIEW CROP: A REFUSED MODEL BOX GETS THE RUN'S CUT (`card_box_for`)")
     with isolated_home():
-        tiny = _jpeg(_noisy_frame_with_tiny_card())
-        cid = _store_photo(tiny)
-        # Force the finder onto the card-shaped patch of texture the guard exists to refuse.
-        wrong = geometry.CardBox(0.0, 0.11, 0.06, 0.33, 0.24, 0.9, CARD_ASPECT, "dfine")
+        # A model box over the lower part of a clear card: the guard refuses it, `detect_card`
+        # finds the whole card.
+        original = _jpeg(_clear_card_frame())
+        cid = _store_photo(original)
+        found = geometry.detect_card(Image.open(io.BytesIO(original)))
+        part = geometry.CardBox(
+            angle=0.0, left=found.left, right=found.right,
+            top=found.top + (found.bottom - found.top) * 0.55, bottom=found.bottom,
+            fill=0.9, aspect=0.5, method="dfine",
+        )
         real = geometry.locate_card
-        geometry.locate_card = lambda *a, **k: wrong
+        geometry.locate_card = lambda *a, **k: part
         try:
             blob = _cropped(cid)
         finally:
             geometry.locate_card = real
         checks.ok(blob is not None, "do_photo_by_card accepts crop=True (the builder's seam)")
-        checks.ok(blob == tiny, "a box the guard refuses answers the whole stored photo")
+        checks.ok(blob != original, "a refused model box with a `detect_card` box answers that crop, not the whole photo")
+        if blob is not None and blob != original:
+            w, h = Image.open(io.BytesIO(blob)).size
+            checks.ok(h > w and w < FRAME[0] and h < FRAME[1], f"and the crop is the card ({w}x{h})")
+
+        # Refused model box and `detect_card` finds nothing: no box, the whole stored photo.
+        tiny = _jpeg(_noisy_frame_with_tiny_card())
+        cid = _store_photo(tiny)
+        wrong = geometry.CardBox(0.0, 0.11, 0.06, 0.33, 0.24, 0.9, CARD_ASPECT, "dfine")
+        real, real_detect = geometry.locate_card, geometry.detect_card
+        geometry.locate_card = lambda *a, **k: wrong
+        geometry.detect_card = lambda *a, **k: None
+        try:
+            blob = _cropped(cid)
+        finally:
+            geometry.locate_card, geometry.detect_card = real, real_detect
+        checks.ok(blob == tiny, "a refused model box and a `detect_card` that finds nothing answer the whole stored photo")
 
         blank = _jpeg(Image.new("RGB", FRAME, (40, 40, 40)))
         cid = _store_photo(blank)
@@ -160,23 +182,20 @@ def check_preview_crop_refused_sends_whole_photo(checks: Checks) -> None:
 
 
 def check_preview_finder_runs_once_per_photo(checks: Checks) -> None:
-    """Listing does not run the finder; N crop reads of one photo run it at most once."""
+    """Listing does not ask `card_box_for`; N crop reads of one photo ask it at most once."""
     checks.note("")
-    checks.note("PREVIEW CROP — THE FINDER IS NOT IN THE LISTING PATH AND RUNS ONCE PER PHOTO")
+    checks.note("PREVIEW CROP: `card_box_for` IS NOT IN THE LISTING PATH AND RUNS ONCE PER PHOTO")
     with isolated_home():
         cids = [_store_photo(_jpeg(_clear_card_frame(tilt=0.2 * n))) for n in range(3)]
         with _counting_finders() as calls:
             capture_server.do_inventory()
             capture_server.do_boxes()
-            checks.equal(
-                (calls["locate"], calls["detect"]), (0, 0),
-                "listing a box of cards runs no card finder",
-            )
+            checks.equal(calls["home"], 0, "listing a box of cards runs no card box")
             for _ in range(3):
                 _cropped(cids[0])
             checks.ok(
-                calls["locate"] == 1,
-                f"three crop reads of one photo run the finder exactly once ({calls['locate']})",
+                calls["home"] == 1,
+                f"three crop reads of one photo run `card_box_for` exactly once ({calls['home']})",
             )
 
 
@@ -217,14 +236,14 @@ def check_preview_busy_finder_answers_whole_photo(checks: Checks) -> None:
             checks.ok(blob == original, "a busy finder answers the whole stored photo")
             checks.ok(etag.endswith('p"'), f"its ETag ends in p ({etag})")
             checks.ok(final is False, "the answer is not final, so the route sends no long cache")
-            checks.equal(calls["locate"], 0, "a busy finder runs no second finder")
+            checks.equal(calls["home"], 0, "a busy finder runs no `card_box_for`")
             blob, etag, final = _ex(cid)
             checks.ok(blob is not None and blob != original, "the next read, finder free, is the crop")
             checks.ok(final is True and not etag.endswith('p"'), "the crop is final and its ETag is not a p ETag")
 
 
 def check_preview_failures_are_never_cached(checks: Checks) -> None:
-    """A raising finder or a failed model load is served whole but runs the finder again next time."""
+    """A raising finder or a failed model load is served whole but runs `card_box_for` again next time."""
     import geometry
 
     checks.note("")
@@ -246,7 +265,7 @@ def check_preview_failures_are_never_cached(checks: Checks) -> None:
         finally:
             geometry.locate_card = real
         checks.ok(first[0] == original and first[2] is False, "a raising finder answers the whole photo, not final")
-        checks.equal(runs["n"], 2, "a raising finder runs again on the next request")
+        checks.equal(runs["n"], 2, "a raising finder is asked again on the next request")
         checks.ok(second[1].endswith('p"'), "and its ETag still ends in p")
 
         cid = _store_photo(_jpeg(_clear_card_frame(tilt=0.5)))
@@ -259,11 +278,11 @@ def check_preview_failures_are_never_cached(checks: Checks) -> None:
         finally:
             geometry.card_box.model_failed = real_failed
         checks.ok(a[2] is False and b[2] is False, "a failed model load is never final")
-        checks.equal(calls["locate"], 2, "a failed model load runs the finder again on the next request")
+        checks.equal(calls["home"], 2, "a failed model load runs `card_box_for` again on the next request")
         with _counting_finders() as calls:
             ok = _ex(cid)
             _ex(cid)
-        checks.ok(ok[2] is True and calls["locate"] == 1, "once the model loads, the answer is final and cached")
+        checks.ok(ok[2] is True and calls["home"] == 1, "once the model loads, the answer is final and cached")
 
 
 def check_preview_cache_is_byte_bounded(checks: Checks) -> None:
@@ -279,11 +298,11 @@ def check_preview_cache_is_byte_bounded(checks: Checks) -> None:
         with _counting_finders() as calls:
             for cid in cids:
                 _cropped(cid)
-            checks.equal(calls["locate"], 3, "three photos run the finder three times")
+            checks.equal(calls["home"], 3, "three photos run `card_box_for` three times")
             _cropped(cids[2])
-            checks.equal(calls["locate"], 3, "the newest crop is still cached")
+            checks.equal(calls["home"], 3, "the newest crop is still cached")
             _cropped(cids[0])
-            checks.equal(calls["locate"], 4, "the oldest crop was evicted, so its finder runs again")
+            checks.equal(calls["home"], 4, "the oldest crop was evicted, so `card_box_for` runs again")
         checks.ok(
             images._preview_cache_bytes <= images.PREVIEW_CACHE_BYTES * 1.5 and len(images._preview_cache) <= 2,
             f"the cache holds at most what the cap allows ({images._preview_cache_bytes} bytes)",
