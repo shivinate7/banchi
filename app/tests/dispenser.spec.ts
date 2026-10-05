@@ -247,8 +247,9 @@ const unsaved = (page: Page) => page.locator('.capture-unsaved')
 const captureButton = (page: Page) => page.getByRole('button', { name: 'Capture', exact: true })
 
 /** Card 1's save fails twice, so card 2 is held behind it, and the dealer has stopped. */
-async function held(page: Page, failIf: (post: number) => boolean) {
+async function held(page: Page, failIf: (post: number) => boolean, setup?: () => Promise<void>) {
   await ready(page, true)
+  await setup?.()
   const wire = await slowCapture(page, slowThenQuick, failIf)
   await twoCards(page, wire)
   await expect.poll(wire.answered, { timeout: 10_000 }).toBe(2)
@@ -314,30 +315,110 @@ test('R4: the not-saved notice says what was sent and what to press, with no mec
   await expect(notice).not.toContainText(/held here/i)
 })
 
-/** Counts `POST /boxes/5/sections` (an opened divider). Answers with the box row. */
-async function countSectionPosts(page: Page): Promise<() => number> {
+const SPANS_AFTER_S = [{ ...SPAN, end: 1 }, { ...SPAN, section: 2, start: 2, div: '2' }]
+
+/** Counts the requests a divider or an undo would send: `POST` and `DELETE /boxes/5/sections`, and
+ *  any write to `/inventory/5/<n>`. Answers a POST with the box row after S (two sections). */
+async function countWrites(page: Page): Promise<{ opened: () => number; closed: () => number; removed: () => number }> {
   let opened = 0
+  let closed = 0
+  let removed = 0
   await page.route(/\/boxes\/5\/sections/, (route) => {
-    if (route.request().method() !== 'POST') return route.fallback()
-    opened += 1
-    return route.fulfill(json({ ...BOX, sections: [1, 2], sections_detail: [{ ...SPAN, end: 1 }, { ...SPAN, section: 2, start: 2, div: '2' }] }))
+    const method = route.request().method()
+    if (method === 'POST') {
+      opened += 1
+      return route.fulfill(json({ ...BOX, sections: [1, 2], sections_detail: SPANS_AFTER_S }))
+    }
+    if (method === 'DELETE') {
+      closed += 1
+      return route.fulfill(json(BOX))
+    }
+    return route.fallback()
   })
-  return () => opened
+  await page.route(/\/inventory\/5\/\d+/, (route) => {
+    removed += 1
+    return route.fulfill(json({ error: { code: 'refused', message: 'not under test' } }, 409))
+  })
+  return { opened: () => opened, closed: () => closed, removed: () => removed }
 }
 
-test('R5: while held, S and the Section button open no divider; after Retry both cards land in the original section and S works', async ({ page }) => {
-  const opened = await countSectionPosts(page)
-  const wire = await held(page, (n) => n <= 2)
+test('R5: while held, S and the Section button open no divider; after Retry both cards land in the divider section and S works', async ({ page }) => {
+  let w!: Awaited<ReturnType<typeof countWrites>>
+  const wire = await held(page, (n) => n <= 2, async () => {
+    w = await countWrites(page)
+    await page.keyboard.press('s') // the divider first: the held frames claim its section
+    await expect.poll(w.opened, { timeout: 5_000 }).toBe(1)
+  })
   await page.keyboard.press('s')
   await page.getByRole('button', { name: 'Section', exact: true }).click({ force: true })
   await page.waitForTimeout(800) // keep: a wrongly sent section POST gets time to land
-  expect(opened()).toBe(0)
+  expect(w.opened()).toBe(1)
   await page.getByRole('button', { name: 'Retry saving' }).click()
   await expect.poll(wire.answered, { timeout: 10_000 }).toBe(4)
-  expect(new Set(wire.sections()).size).toBe(1) // all four POSTs ask for the same section
+  expect(wire.sections()).toEqual(['2', '2', '2', '2']) // every POST claims the divider's section, so the check can fail
   await expect(unsaved(page)).toHaveCount(0)
   await page.keyboard.press('s')
-  await expect.poll(opened, { timeout: 5_000 }).toBe(1) // S works again
+  await expect.poll(w.opened, { timeout: 5_000 }).toBe(2) // S works again
+})
+
+test('R7: while held, undo (divider and back) sends no request and the divider stays; after Retry the cards land in its section and undo works', async ({ page }) => {
+  const w = await countWrites(page)
+  await ready(page, true)
+  // post 1 saves (card 0, a committed shot), posts 2 and 3 fail, later posts save
+  const wire = await slowCapture(page, (n) => (n === 1 ? 100 : n <= 3 ? 1_500 : 150), (n) => n === 2 || n === 3)
+  const start = control(page, 'Start dispenser')
+  await expect(start).toBeEnabled({ timeout: 5_000 })
+  await start.click()
+  await sceneTo(page, CARD)
+  await expect.poll(wire.answered, { timeout: 8_000 }).toBe(1) // card 0 is a committed shot
+  await sceneTo(page, GAP_LUMA)
+  await page.keyboard.press('s') // a divider after it
+  await expect.poll(w.opened, { timeout: 5_000 }).toBe(1)
+  await page.waitForTimeout(400) // keep: let the gap register before the next card
+  await sceneTo(page, CARD - 40)
+  await expect.poll(wire.posts, { timeout: 8_000 }).toBe(2) // card 1 after the divider, its save held
+  await sceneTo(page, GAP_LUMA)
+  await page.waitForTimeout(400) // keep: let the gap register before the next card
+  await sceneTo(page, CARD)
+  await expect.poll(wire.answered, { timeout: 10_000 }).toBe(3)
+  await expect(unsaved(page)).toBeVisible()
+
+  await page.keyboard.press('u') // undo the divider
+  await page.locator('footer.capture-undo .capture-undo-row').first().click({ force: true }) // undo back
+  await page.waitForTimeout(800) // keep: a wrongly sent undo gets time to land
+  expect(w.closed() + w.removed()).toBe(0)
+  await expect(page.locator('.capture-undo-note')).toContainText(/Retry saving first/)
+
+  await page.getByRole('button', { name: 'Retry saving' }).click()
+  await expect.poll(wire.answered, { timeout: 10_000 }).toBe(5)
+  expect(wire.sections().slice(3)).toEqual(['2', '2']) // both held cards claim the divider's section
+  await expect(unsaved(page)).toHaveCount(0)
+  await page.keyboard.press('u')
+  await expect.poll(() => w.closed() + w.removed(), { timeout: 5_000 }).toBeGreaterThan(0) // undo works again
+})
+
+test('R8: while held, another box and another section are refused and the claim stays put', async ({ page }) => {
+  let w!: Awaited<ReturnType<typeof countWrites>>
+  await held(page, (n) => n <= 2, async () => {
+    w = await countWrites(page)
+    await page.route(/\/boxes$/, (r) => r.fulfill(json({ boxes: [{ ...BOX, sections_detail: SPANS_AFTER_S }, { ...BOX, box: 6, bid: 16, name: 'Other box' }] })))
+    await page.keyboard.press('s')
+    await expect.poll(w.opened, { timeout: 5_000 }).toBe(1)
+  })
+  const slot = page.locator('.capture-section-slot .capture-row').first()
+  await expect(slot).toContainText(/Section \d of 2/)
+  const claim = await slot.innerText()
+  await page.keyboard.press('[') // another section, either way
+  await page.keyboard.press(']')
+  await page.keyboard.press('[')
+  await page.keyboard.press('b') // another box
+  const other = page.locator('.capture-opt').filter({ hasText: /Other box/ })
+  if (await other.isVisible()) await other.click({ force: true })
+  await page.waitForTimeout(600) // keep: a wrongly accepted pick gets time to show
+  expect(await slot.innerText()).toBe(claim) // one `]` and two `[`: any accepted step would show
+  await expect(page.locator('.capture-row').filter({ hasText: /Dispenser box/ }).first()).toBeVisible()
+  await expect(page.locator('.capture-row').filter({ hasText: /Other box/ })).toHaveCount(0)
+  await expect(page.getByText('Retry saving first').first()).toBeVisible()
 })
 
 test('R6: while held the Capture button is disabled; after a successful Retry Capture and Start are enabled again', async ({ page }) => {
