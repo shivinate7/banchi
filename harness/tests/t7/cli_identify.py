@@ -5444,6 +5444,142 @@ def check_cli_refusals(checks: Checks) -> None:
         )
 
 
+def check_identify_dry_run_is_cheap_and_never_under(checks: Checks) -> None:
+    """Check cost (`identify --dry-run`) decodes nothing, never quotes under the real send,
+    and a keyed selection reads only its own sidecars.
+
+    THE MONEY GATE. The preflight is the quote the operator confirms a paid press against, so
+    the estimate may be cheaper to make than the real send but never smaller than it. Measured:
+    a dry run decodes and crops every photograph just to quote a cost (15.6 to 19.8 s).
+    Three claims, one fixture: 4 large photographs in box 5, 26 small ones in box 6.
+    """
+    import base64
+    import io
+    import random
+    from decimal import Decimal
+
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+    from identify import images as identify_images
+
+    checks.note("")
+    checks.note("IDENTIFY DRY RUN: decodes nothing, never under the real send, reads its own sidecars")
+
+    minted = iter(range(10_000))
+
+    def jpeg(size):
+        rng = random.Random(next(minted))
+        block = [(rng.randrange(256), rng.randrange(256), rng.randrange(256)) for _ in range(size[0] * size[1] // 16)]
+        image = identify_images.Image.new("RGB", size)
+        image.putdata((block * 16)[: size[0] * size[1]])
+        out = io.BytesIO()
+        image.save(out, "JPEG", quality=90)
+        return base64.b64encode(out.getvalue()).decode("ascii")
+
+    def line(lines, prefix):
+        return next((x for x in lines if x.startswith(prefix)), "")
+
+    with isolated_home():
+        for _ in range(4):
+            capture_server.do_capture({"box": 5, "image": jpeg((1900, 2600))})
+        for _ in range(26):
+            capture_server.do_capture({"box": 6, "image": jpeg((120, 168))})
+
+        # The legacy root exists on every real store; `Selection.roots` lists it first and the
+        # command refuses a root that is missing, so the fixture makes it.
+        files.home().joinpath("captures", "cards").mkdir(parents=True, exist_ok=True)
+
+        decoded: list = []
+        real_prepare = cmd_identify.images.prepare
+        real_located = cmd_identify.images.prepare_located
+
+        def counting_prepare(path, **kwargs):
+            decoded.append(str(path))
+            return real_prepare(path, **kwargs)
+
+        def counting_located(path, **kwargs):
+            decoded.append(str(path))
+            return real_located(path, **kwargs)
+
+        reads: list = []
+        real_read = sidecar.read_sidecar
+
+        def counting_read(path):
+            reads.append(str(path))
+            return real_read(path)
+
+        sent_bytes: list = []
+
+        def fake_run_batch(requests, log=None, on_submit=None):
+            sent_bytes.extend(len(base64.b64decode(r.data_b64)) for r in requests)
+            return batch.BatchRun(outcomes={})
+
+        real_run_batch = cmd_identify.batch.run_batch
+        cmd_identify.images.prepare = counting_prepare
+        cmd_identify.images.prepare_located = counting_located
+        sidecar.read_sidecar = counting_read
+        cmd_identify.batch.run_batch = fake_run_batch
+        try:
+
+            def press(*extra):
+                lines: list = []
+                with quiet():
+                    cmd_identify.run(
+                        cli_entry.build_parser().parse_args(
+                            ["identify", "--engine", "haiku", "--crop", *extra]
+                        ),
+                        lines.append,
+                    )
+                return lines
+
+            # 1. a dry run decodes nothing
+            dry = press("--box", "5", "--dry-run")
+            checks.equal(
+                len(decoded),
+                0,
+                "A DRY RUN DECODES NOTHING: it quotes from a payload size estimated off the "
+                "file, not from a decode-and-crop pass over every photograph",
+            )
+            checks.ok("to send         4" in dry, "and the dry run still counts 4 to send", f"{dry}")
+
+            # 2. the quote is never under what a real send builds
+            real = press("--box", "5")
+            real_bytes = sum(sent_bytes)
+            checks.ok(
+                len(sent_bytes) == 4 and real_bytes > 0,
+                "the real send builds 4 requests",
+                f"{sent_bytes}",
+            )
+            quoted = Decimal(line(dry, "estimated cost").split("$")[-1] or "0")
+            truth = Decimal(line(real, "estimated cost").split("$")[-1] or "0")
+            checks.ok(
+                quoted >= truth,
+                "THE DRY-RUN COST IS NEVER UNDER THE REAL SEND'S COST",
+                f"dry ${quoted} < real ${truth}",
+            )
+            mb = float(line(dry, "payload").split()[1])
+            checks.ok(
+                mb >= round(real_bytes / 1_000_000, 1),
+                "and the dry-run payload is never under the bytes the real send builds",
+                f"dry {mb} MB < real {real_bytes} bytes",
+            )
+
+            # 3. a keyed selection reads only its own sidecars
+            reads.clear()
+            keys = ["6/1", "6/2"]
+            press(*[a for k in keys for a in ("--keys", k)], "--dry-run")
+            checks.ok(
+                0 < len(reads) <= len(keys) + 2,
+                "A KEYED SELECTION READS ABOUT k SIDECARS, NEVER N",
+                f"read {len(reads)} sidecars for {len(keys)} keys in a store of 30",
+            )
+        finally:
+            cmd_identify.images.prepare = real_prepare
+            cmd_identify.images.prepare_located = real_located
+            sidecar.read_sidecar = real_read
+            cmd_identify.batch.run_batch = real_run_batch
+
+
 def check_run_and_preview_share_locate_card(checks: Checks) -> None:
     """D125: a paid run and the crop preview cut with `identify.images.prepare_located`.
 
@@ -5576,6 +5712,7 @@ CHECKS = (
     check_cli_seams,
     check_code_ledger,
     check_identify_preflight_stage,
+    check_identify_dry_run_is_cheap_and_never_under,
     check_run_and_preview_share_locate_card,
     check_review_stand_down,
     check_review_catalog,
