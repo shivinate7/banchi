@@ -67,7 +67,6 @@ from __future__ import annotations
 import bisect
 import math
 import re
-import unicodedata
 from collections import OrderedDict
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
@@ -77,6 +76,7 @@ from typing import (
 )
 
 from pipeline import games, pricing, routing, setnames, tcgcsv, variant
+from pipeline.namefold import fold_name_typography
 # THE COMPOSITION/SCREEN/STRIP TRIO LIVES IN `store/numbers.py` NOW, RE-EXPORTED HERE UNDER
 # THE SAME NAMES (fixing a `store/` -> `pipeline/` cycle a reviewer
 # caught). `store/` may not import `pipeline/` (D63: "store/ imports nothing from
@@ -1027,8 +1027,7 @@ NAME_DISPUTE_SIMILARITY = 0.8
 
 def _name_compare_key(text, catalog_side: bool = False) -> str:
     """`name_index_key` plus the two folds a COMPARISON may make and an index may not."""
-    text = unicodedata.normalize("NFKD", str(text or ""))
-    text = "".join(c for c in text if not unicodedata.combining(c))
+    text = fold_name_typography(text)
     if catalog_side:
         text = _NAME_QUALIFIER_SUFFIX.sub("", text.strip())
     return name_index_key(text)
@@ -1728,21 +1727,7 @@ def normalize_set(name: str) -> str:
     and `sv9` fold to one string. pokemontcg.io uses the unpadded form and TCGplayer the
     padded one; without this they never compare equal.
     """
-    text = str(name or "").strip().lower()
-    out: List[str] = []
-    digits: List[str] = []
-    for char in text:
-        if char.isdigit():
-            digits.append(char)
-            continue
-        if digits:
-            out.append(str(int("".join(digits))))
-            digits = []
-        if char.isalnum():
-            out.append(char)
-    if digits:
-        out.append(str(int("".join(digits))))
-    return "".join(out)
+    return setnames.fold(name)
 
 
 def set_matches(hint: Optional[str], set_name: str) -> bool:

@@ -331,9 +331,7 @@ def crop_refusal(
     _require()
     if not isinstance(image, Image.Image):
         try:
-            with Image.open(image) as opened:
-                opened.load()
-                return crop_refusal(opened, box, pad, aspect)
+            return crop_refusal(geometry.detect.open_image(image), box, pad, aspect)
         except Exception as exc:
             raise ImageError(f"{image}: {exc}") from exc
     width, height = image.size
@@ -459,9 +457,7 @@ def _preview_compute(path):
     """`(rect, jpeg, final)`. `final` is False when the answer came from a failure (an
     unreadable frame, a finder that raised, the model not loaded): serve it, never keep it."""
     try:
-        with Image.open(path) as opened:
-            opened.load()
-            image = opened.copy()
+        image = geometry.detect.open_image(path)
     except Exception:
         return None, None, False
     try:
@@ -525,8 +521,7 @@ def prepare(path, max_edge: int = MAX_EDGE, crop_box=None) -> Prepared:
     digest = sha256_of(path)
 
     try:
-        with Image.open(path) as opened:
-            opened.load()
+        with geometry.detect.open_image(path) as opened:
             original_size = opened.size
             refused = None
             if crop_box is not None:

@@ -106,6 +106,8 @@ from typing import Iterator, Optional, Tuple
 
 from PIL import Image, ImageFilter
 
+from geometry.detect import open_image
+
 
 class QrUnavailable(RuntimeError):
     """The decoder itself is missing — not a card that would not read.
@@ -275,6 +277,4 @@ def decode_image(image: "Image.Image") -> Optional[QrRead]:
 
 def decode(path) -> Optional[QrRead]:
     """Read one photograph off disk. None means no QR was found."""
-    with Image.open(Path(path)) as handle:
-        handle.load()
-        return decode_image(handle)
+    return decode_image(open_image(Path(path)))

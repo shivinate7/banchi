@@ -973,6 +973,10 @@ COMPONENTS = [
             # D22 because the alias table it consults is still hand-authored — what the
             # abbreviation rule removed is the need to author a row per set code, not the
             # table itself.
+            "namefold.py": {"does": "the one name fold: apostrophe and dash look-alikes to ASCII, "
+                                    "then accents off. The join, the prompt and the identity binding "
+                                    "all call it; stdlib only, so none of them can cycle.",
+                            "governed_by": ["D35"], "tested_by": ["T7"]},
             "setnames.py": {"does": "does this hint name this set — the one ladder the export fetch "
                                     "and the join both read. Label, colon side, guarded prefix, then "
                                     "a <=4-character abbreviation; ambiguity answers None and both "

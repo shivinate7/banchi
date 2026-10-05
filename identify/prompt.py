@@ -48,11 +48,13 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import unicodedata
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence, Tuple
 
 from pipeline import games, variant
+from pipeline.namefold import APOSTROPHES as _APOSTROPHES  # noqa: F401 - T1's scorer fingerprint reads it
+from pipeline.namefold import DASHES as _DASHES  # noqa: F401
+from pipeline.namefold import fold_name_typography
 
 # CLAUDE.md pins the model. Batch API only — see identify/batch.py.
 MODEL = "claude-haiku-4-5-20251001"
@@ -1474,8 +1476,6 @@ def parse(payload: Any, strategy: str = DEFAULT_PROFILE) -> Identification:
     return reader(payload)
 
 
-_APOSTROPHES = "‘’ʼ´`"
-_DASHES = "‐‑‒–—―−"
 _NAME_NOISE = re.compile(r"\s+")
 
 
@@ -1486,13 +1486,7 @@ def normalize_name(name: str) -> str:
     runs of whitespace. Everything else is left alone: "Iron Valiant ex" and "Iron
     Valiant" are different cards and must not compare equal.
     """
-    text = unicodedata.normalize("NFKD", str(name))
-    text = "".join(ch for ch in text if not unicodedata.combining(ch))
-    for ch in _APOSTROPHES:
-        text = text.replace(ch, "'")
-    for ch in _DASHES:
-        text = text.replace(ch, "-")
-    return _NAME_NOISE.sub(" ", text).strip().lower()
+    return _NAME_NOISE.sub(" ", fold_name_typography(name)).strip().lower()
 
 
 def normalize_number(number: Any) -> str:
