@@ -24,16 +24,24 @@ card as today. Nothing about the trigger changes.
 ## The loop
 
 One START ejects one card, then `MOTOR:COMPLETE` arrives after about 0.42 s. A burst of STARTs drops
-cards. So the loop is: START, wait for COMPLETE and for the card's photo to save, pause `DEAL_GAP_MS`, repeat.
-The next card waits for the photo. The dealer never deals on a timer alone.
+cards. So the loop is: START, wait for COMPLETE and for the card's photo to be taken, pause `DEAL_GAP_MS`,
+repeat. The next card is dealt when the photo is taken (frame grabbed), not when the save returns. Saving
+finishes in the background. The dealer never deals on a timer alone, and never before the last dealt
+card's photo is taken.
 
-- `DEAL_GAP_MS = 200` (about 0.6 s per card, the pace motion was tuned on). The owner tests a shorter
-  pause on the first real run. It is one exported constant.
-- COMPLETE: count one card. The next START needs COMPLETE and one save since the last START, in either
-  order, then `DEAL_GAP_MS`. `dealer.noteSaved()` is the save; Capture calls it where a capture's save
-  succeeds. Extra saves for one card let one card through. A save while not dealing counts for nothing.
-- No save within `SAVE_WAIT_MS` (3000, exported) after COMPLETE: stop, send STOP, and say "Stopped: no
+- `DEAL_GAP_MS = 50`. It is one exported constant.
+- COMPLETE: count one card. The next START needs COMPLETE and the card's photo taken, in either order,
+  then `DEAL_GAP_MS`. `dealer.photoTaken(save)` is the photo: Capture calls it where the frame is grabbed,
+  with a closure that posts the already-encoded frame. It calls `save` at once. Extra photos for one card
+  let one card through. A photo while not dealing runs `save` once and counts for nothing.
+- At most one photo is unsaved: a START waits while an earlier card's save is out.
+- A save that rejects is retried once with the same bytes. A second failure stops the dealer, sends STOP
+  and says "Stopped: a photo was not saved." No card is lost silently.
+- No photo within `SAVE_WAIT_MS` (3000, exported) after COMPLETE: stop, send STOP, and say "Stopped: no
   photo came after the last card. Check the tray." Stop cancels the wait.
+- `createDealer({ onMark })` reports `photo-taken`, `save-answered` and `start-sent` with the card number.
+  Capture feeds them to `MotionTrace.mark`, so a downloaded trace carries `marks` and the photo-to-START
+  gap reads off the file.
 - `MOTOR:END`: the hopper is empty. Stop, not an error.
 - `MOTOR:ERROR`, `MOTOR:CLEARED`, `MOTOR:CARDLEN_SET`, any other reply, 5 s with no reply, or a lost
   link: stop. One `finish(reason)` ends every path.
