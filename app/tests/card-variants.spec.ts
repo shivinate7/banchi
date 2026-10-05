@@ -373,7 +373,9 @@ async function openDredge(page: Page): Promise<void> {
   await page.route(/\/search\?/, (r) => {
     const q = new URL(r.request().url()).searchParams.get('q') ?? ''
     const asked = q.trim().toLowerCase()
-    return r.fulfill(json({ query: q, groups: asked === 'dred' ? DREDGE : asked === 'dredg' || asked === 'dredger' ? DREDGE_MIXED : [] }))
+    // The copies panel re-searches by the picked SKU; answer with that printing's group.
+    const bySku = [...DREDGE, ...DREDGE_MIXED].filter((g) => g?.sku === q.trim())
+    return r.fulfill(json({ query: q, groups: asked === 'dred' ? DREDGE : asked === 'dredg' || asked === 'dredger' ? DREDGE_MIXED : bySku.slice(0, 1) }))
   })
   await page.route(/\/graveyard(\?.*)?$/, (r) => r.fulfill(json({ departed: [] })))
   await page.route(/\/queues$/, (r) => r.fulfill(json({ review: [], parked: [] })))
@@ -402,7 +404,7 @@ for (const width of [1440, 820]) {
       await page.locator('.browse-variant-tile').nth(2).click()
       await expect(page.locator('.browse-variants')).toHaveCount(0)
       await expect(page.getByRole('heading', { name: 'Dredge Up' })).toBeVisible()
-      await expect(page.locator('.browse-side')).toContainText('Gamma Set')
+      await expect(page.locator('.browse-side')).toContainText('7003') // the pane draws the SKU, not the set
     }
 
     test('no row selected by hand: change shows the chooser', async ({ page }) => {
