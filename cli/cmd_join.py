@@ -695,19 +695,9 @@ def run(args, say) -> int:
             full_exports[path] = tcgcsv.read_export(path)
             path_source[path] = game_join.source
 
-    # THE CHANGED ROWS ARE WORKED OUT ON A READ SNAPSHOT, OUTSIDE THE LOCK, as the background
-    # reader does (`cli/cmd_match.py`): a re-read export is almost all UNCHANGED, and folding ten
-    # thousand rows under the lock held it 0.33 s for nothing. An UNCHANGED row therefore no
-    # longer advances its `last_seen`.
-    skus_snap = store.read().skus
-    fold_rows = {
-        p: skus_walk.changed_rows(e.rows, at=_skus_stamp(path_source[p])[0],
-                                  source=_skus_stamp(path_source[p])[1], skus=skus_snap)
-        for p, e in full_exports.items()
-    }
     with store.write() as writable:
         added_main, added_parked, released, moved_live, kept_live = apply_join(
-            writable, resolved, fold_rows, path_source
+            writable, resolved, {p: e.rows for p, e in full_exports.items()}, path_source
         )
         queue_line = writable.queue_summary
         counts = writable.inventory.counts()
