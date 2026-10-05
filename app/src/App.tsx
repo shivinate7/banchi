@@ -4,7 +4,7 @@ import type { ComponentType, ErrorInfo, ReactNode } from 'react'
 import { isEditableTarget } from './keys'
 import { tabTitle } from './tabTitle'
 import { nextTheme, rememberRail, storedRail, storedTheme, themeLabel } from './deviceMemory'
-import { enterReadScope, getStatus, onServerBoot, onServerReachable, ServerError } from './server'
+import { enterReadScope, getStatus, leaveReadScope, onServerBoot, onServerReachable, ServerError } from './server'
 import { useSearch } from './useSearch'
 import { matchQuery } from './kit/match'
 import { usePoll } from './usePoll'
@@ -556,12 +556,17 @@ const CHROME_FOCUS = '.bn-side, .bn-topbar, .bn-tabbar, .bn-skip, [data-bn-overl
 
 /* ---- reads belong to the screen ------------------------------------------------------- */
 /** Marks a screen's mount for `server.ts`: the GETs it has open when it unmounts are aborted, so a
- *  slow answer nobody wants stops holding one of the server's four slots. A layout effect, so the
- *  scope is set before the screen's own effects start their reads. The screen's `key` is the
- *  path, so a navigation is an unmount. */
+ *  slow answer nobody wants stops holding one of the server's four slots. The scope is named in
+ *  render, which runs before any effect of the screen below it, layout effects included, so no
+ *  read of the screen's goes out unmarked. Naming it twice is the same write. The screen's `key`
+ *  is the path, so a navigation is an unmount. */
 function ReadScope({ children }: { readonly children: ReactNode }) {
   const id = useId()
-  useLayoutEffect(() => enterReadScope(id), [id])
+  enterReadScope(id)
+  useLayoutEffect(() => {
+    enterReadScope(id) // again, for the remount StrictMode simulates
+    return () => leaveReadScope(id)
+  }, [id])
   return children
 }
 

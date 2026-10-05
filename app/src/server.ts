@@ -755,28 +755,29 @@ async function serverAnswersReads(): Promise<boolean> {
  * write is never given a signal (see NO CLIENT-SIDE TIMEOUT above).
  *
  * A WRITE ENDS EVERY SHARING WINDOW, at its start and at its end, so a read asked after a write
- * can never join one that began before it and answer with the old store. */
+ * can never join one that began before it and answer with the old store. Such a read leaves
+ * `openReads` (what a new ask may join) and stays in `allReads` (what a leaving screen aborts). */
 interface OpenRead {
   readonly controller: AbortController
   readonly scopes: Set<string>
   promise: Promise<unknown>
 }
 const openReads = new Map<string, OpenRead>()
+const allReads = new Set<OpenRead>()
 const SHELL_SCOPE = 'shell'
 let readScope = SHELL_SCOPE
 
-/** The screen that is mounted asks here; the returned release is its unmount. */
-export function enterReadScope(id: string): () => void {
+/** A screen's mount names itself here, before its own effects start any read. */
+export function enterReadScope(id: string): void {
   readScope = id
-  return () => {
-    if (readScope === id) readScope = SHELL_SCOPE
-    for (const [path, open] of [...openReads]) {
-      open.scopes.delete(id)
-      if (open.scopes.size === 0) {
-        openReads.delete(path)
-        open.controller.abort()
-      }
-    }
+}
+
+/** A screen's unmount: its open reads are aborted, unless another screen still waits on them. */
+export function leaveReadScope(id: string): void {
+  if (readScope === id) readScope = SHELL_SCOPE
+  for (const open of [...allReads]) {
+    open.scopes.delete(id)
+    if (open.scopes.size === 0) open.controller.abort()
   }
 }
 
@@ -794,9 +795,11 @@ function request(path: string, init?: RequestInit): Promise<unknown> {
   }
   const open: OpenRead = { controller: new AbortController(), scopes: new Set([path === '/status' ? SHELL_SCOPE : readScope]), promise: Promise.resolve() }
   open.promise = send(path, { ...init, signal: open.controller.signal }).finally(() => {
+    allReads.delete(open)
     if (openReads.get(path) === open) openReads.delete(path)
   })
   openReads.set(path, open)
+  allReads.add(open)
   return open.promise
 }
 
