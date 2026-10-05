@@ -1198,14 +1198,62 @@ def _sweep_state() -> dict:
     return {"on": on, "running": sweep.running(), "blocked": None if matchconst.runtime_importable() else "runtime_missing", "matched": _swept_count(), "aside": len(sweep.aside())}
 
 
-def _sweep_poll_state(keys: str) -> dict:
+_SHEETS = ("paid", "unread", "matched", "unhinted")
+
+
+def _sweep_rows(conn, keys: list, detail: str, why: dict, games_of: dict) -> list:
+    """The rows of ONE band count, for its sheet (`docs/specs/identify-engine-pick.md`, 10.2): one `cards` select per 500 keys,
+    one `boxes` select, and for matched one `identifications` select per 500. Position order (box, then slot). The box name and
+    the slot only: no layout walk. A paid card's code is its stored reason, `game_not_served` for a game the reader does not
+    serve, and None for a mark made before reasons were kept."""
+    found: dict = {}
+    said: dict = {}
+    for at in range(0, len(keys), 500):
+        chunk = keys[at : at + 500]
+        marks = ",".join("?" * len(chunk))
+        for key, box, idx, cid, hint, claim in conn.execute(
+            "select key, box, idx, cid, coalesce(set_hint, ''), json_extract(payload, '$.rarity_claim') "
+            f"from cards where key in ({marks})", chunk
+        ):
+            found[str(key)] = (int(box), int(idx), str(cid or ""), str(hint), claim)
+        if detail == "matched":
+            for key, name, number, set_, rule, set_name in conn.execute(
+                "select i.key, json_extract(i.payload, '$.name'), json_extract(i.payload, '$.number'), "
+                "json_extract(i.payload, '$.set'), json_extract(i.payload, '$.accept_rule'), c.set_name "
+                f"from identifications i join cards c on c.key = i.key where i.key in ({marks})", chunk
+            ):
+                said[str(key)] = {"name": name or "", "set": set_name or set_ or "", "number": number or "", "accept": rule or "baseline"}
+    boxes = sorted({v[0] for v in found.values()})
+    names = (
+        {int(b): str(n or "") for b, n in conn.execute(f"select box, name from boxes where box in ({','.join('?' * len(boxes))})", boxes)}
+        if boxes else {}
+    )
+    rows = []
+    for key, (box, idx, cid, hint, claim) in sorted(found.items(), key=lambda kv: (kv[1][0], kv[1][1])):
+        row = {"key": key, "box": box, "box_name": names.get(box) or f"Box {box}", "index": idx, "cid": cid, "set_hint": hint,
+               "rarity_claim": json.loads(claim) if isinstance(claim, str) else None}
+        if detail == "paid":
+            if games_of.get(key) not in matchconst.SERVED_GAMES:
+                row.update(code=matcher.UNREAD_GAME, candidates=[])
+            else:
+                reason = why.get(key) or {}
+                row.update(code=reason.get("code"), candidates=list(reason.get("candidates") or []))
+        elif detail == "matched":
+            row.update(said.get(key, {"name": "", "set": "", "number": "", "accept": "baseline"}))
+        rows.append(row)
+    return rows
+
+
+def _sweep_poll_state(keys: str, detail: Optional[str] = None) -> dict:
     """The Capture head's polled read: NO lock probe (`sweep.running` and `sweep.acquire_lock` would
     hold the flock a starting watcher needs), one read-only connection, no table-wide count (so no `matched`), `paid` and `unread` from the tried marks, the worker from the state file.
     `running` here is `worker`: the watcher's own file says a worker is reading right now."""
     named = [key for key in keys.split(",") if key]
     record = sweep._read_json(sweep.state_path())
     worker = isinstance(record, dict) and bool(record.get("worker"))
-    on, matched_keys, paid_keys, unread, unhinted, aside = False, [], [], 0, 0, 0
+    on, matched_keys, paid_keys, unread_keys, unhinted_keys, aside = False, [], [], [], [], 0
+    games_of: dict = {}
+    cards: Optional[list] = None
     try:
         conn = store_db.open_read_only(store_db.path(files.inventory_dir()))
     except FileNotFoundError:
@@ -1244,14 +1292,22 @@ def _sweep_poll_state(keys: str) -> dict:
                         if seen.get(key) == capture_id:
                             paid_keys.append(key)
                         else:
-                            unread += 1
+                            unread_keys.append(key)
                     elif game not in matchconst.SERVED_GAMES:
                         paid_keys.append(key)
+                        games_of[key] = game
                     else:
-                        unhinted += 1
+                        unhinted_keys.append(key)
+                    games_of.setdefault(key, game)
+            if detail in _SHEETS:  # the sheet's one read, when it opens. The poll never sends `detail`.
+                cards = _sweep_rows(
+                    conn, {"paid": paid_keys, "unread": unread_keys, "matched": matched_keys, "unhinted": unhinted_keys}[detail],
+                    detail, sweep.why() if detail == "paid" else {}, games_of,
+                )
         finally:
             conn.close()
     return {
+        **({"cards": cards if cards is not None else []} if detail in _SHEETS else {}),
         "on": on,
         "running": worker,
         "worker": worker,
@@ -1261,16 +1317,16 @@ def _sweep_poll_state(keys: str) -> dict:
         "matched_keys": matched_keys,
         "paid": len(paid_keys),
         "paid_keys": paid_keys,
-        "unread": unread,
-        "unhinted": unhinted,
+        "unread": len(unread_keys),
+        "unhinted": len(unhinted_keys),
     }
 
 
-def do_pipeline_match_sweep(keys: Optional[str] = None) -> dict:
+def do_pipeline_match_sweep(keys: Optional[str] = None, detail: Optional[str] = None) -> dict:
     """`GET /pipeline/match/sweep` — is the background reader switched on, is its watcher alive,
     and how many cards has it matched. FREE: a meta row, a pid check and one count. With `keys`
     (the sitting's position keys, comma separated) it is the polled read: see `_sweep_poll_state`."""
-    return _sweep_state() if keys is None else _sweep_poll_state(keys)
+    return _sweep_state() if keys is None else _sweep_poll_state(keys, detail)
 
 
 def _spawn_sweep_watcher() -> Optional[int]:

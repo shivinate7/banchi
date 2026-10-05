@@ -812,7 +812,7 @@ function read(path: string): unknown {
   /* The background reader is off in the demo: the answer the real server gives when it is not swept. */
   if (route === '/pipeline/match/sweep') {
     return params.has('keys')
-      ? { on: false, running: false, worker: false, blocked: null, aside: 0, matched_here: 0, matched_keys: [], paid: 0, paid_keys: [], unread: 0, unhinted: 0 }
+      ? { on: false, running: false, worker: false, blocked: null, aside: 0, matched_here: 0, matched_keys: [], paid: 0, paid_keys: [], unread: 0, unhinted: 0, ...(params.has('detail') ? { cards: [] } : {}) }
       : { on: false, running: false, matched: 0 }
   }
   /* No capture sitting is open on a published page: the answer the real server gives when nothing was captured lately. */

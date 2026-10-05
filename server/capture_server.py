@@ -16707,9 +16707,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if path == "/pipeline/match/sweep":
                 # THE BACKGROUND READER'S SWITCH AND ITS COUNT, for the Capture screen's Setup.
                 # Free: a meta row, a pid check and one count.
-                keys = parse_qs(parsed.query, keep_blank_values=True).get("keys")
+                query = parse_qs(parsed.query, keep_blank_values=True)
+                keys, detail = query.get("keys"), query.get("detail")
                 return self._json(
-                    HTTPStatus.OK, pipeline_routes.do_pipeline_match_sweep(None if keys is None else keys[0])
+                    HTTPStatus.OK,
+                    pipeline_routes.do_pipeline_match_sweep(None if keys is None else keys[0], None if detail is None else detail[0]),
                 )
             if path == "/pipeline/runs":
                 return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_runs())
