@@ -120,11 +120,15 @@ async function serveDemo(page: Page): Promise<string> {
   return `${DEV_URL}${base}`
 }
 
+/** Budget for anything that waits on the public demo's ~75 MB `demoServer` chunk to arrive and evaluate
+ *  (about 15 s on the CI runner, so the 15 s expect default flakes). See DEBT-demo-chunk-size. */
+const DEMO_CHUNK_BUDGET_MS = 30_000
+
 /** The demo's reads have landed and drawn: the screen holds content, no skeleton or busy mark stands,
  *  nothing still moves. Content first, so a skeleton that has not mounted yet cannot pass. */
 async function drawn(page: Page): Promise<void> {
   await page.waitForFunction(() => (document.querySelector('main')?.innerText.trim().length ?? 0) > 20)
-  await expect(page.locator('.bn-skeleton, [aria-busy="true"]')).toHaveCount(0)
+  await expect(page.locator('.bn-skeleton, [aria-busy="true"]')).toHaveCount(0, { timeout: DEMO_CHUNK_BUDGET_MS })
   await settleMotion(page)
   await afterPaint(page)
 }
@@ -289,7 +293,7 @@ test.describe('the published demo draws what reviewers grade', () => {
       }
       // THE FIRST PHOTOGRAPH WAITS ON THE 75 MB `demoServer` CHUNK, so the budget is the chunk's, not the
       // default 15 s: 3 s unthrottled, and the case passes with the chunk held back 13 s (DEMO_CHUNK_DELAY_MS).
-      await expect.poll(() => photos.length, { message: `${screen} asked for no photograph`, timeout: 30_000 }).toBeGreaterThan(0)
+      await expect.poll(() => photos.length, { message: `${screen} asked for no photograph`, timeout: DEMO_CHUNK_BUDGET_MS }).toBeGreaterThan(0)
       expect(photos.filter((photo) => photo.status !== 200)).toEqual([])
       const broken = await page.evaluate(
         () => [...document.images].filter((img) => img.src.includes('/demo/photos/') && img.complete && img.naturalWidth === 0).length,
