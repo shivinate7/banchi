@@ -676,11 +676,30 @@ function useMediaQuery(query: string): boolean {
  *  this list too. */
 function VariantChooser({
   groups,
+  query,
+  focusOnMount,
   onPick,
 }: {
   groups: readonly SearchGroup[]
+  query: string
+  focusOnMount: boolean
   onPick: (index: number) => void
 }) {
+  /* EXACT NAME FIRST (owner's ruling), the server's own order after that. `index` stays the
+     position in `groups`, which is what `onPick` and `chosenVariant` mean. */
+  const asked = query.trim().toLowerCase()
+  const listed = groups
+    .map((group, index) => ({ group, index }))
+    .sort(
+      (a, b) =>
+        Number(b.group.names.some((n) => n.trim().toLowerCase() === asked)) -
+        Number(a.group.names.some((n) => n.trim().toLowerCase() === asked)),
+    )
+  const boxRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (focusOnMount) boxRef.current?.focus()
+  }, [focusOnMount])
+
   /* RARITY DRAWN ONLY WHERE THE PRINTINGS ON SCREEN ACTUALLY DIFFER IN IT. The Runes all
      read `Showcase`, and a word every tile repeats is not what tells two tiles apart — it
      is `number_display`/set/condition doing that work, exactly as they already do below.
@@ -690,10 +709,10 @@ function VariantChooser({
   const showRarity = rarities.size > 1
 
   return (
-    <div className="browse-variants">
-      <p className="browse-variants-lede">{groups.length} printings match.</p>
+    <div className="browse-variants" ref={boxRef} tabIndex={-1}>
+      <p className="browse-variants-lede">{groups.length} {groupsAreSamePrinting(groups) ? 'printings match.' : 'matches.'}</p>
       <ul className="browse-variants-list" role="list">
-        {groups.map((group, index) => {
+        {listed.map(({ group, index }) => {
           const photoCopy = group.copies.find((copy) => copy.has_photo)
           const name = group.names[0] ?? 'Not identified yet'
           // THE CATALOGUE'S OWN SET FIRST, `set_hint` ONLY WHEN THERE IS NO OTHER ANSWER
@@ -923,7 +942,14 @@ export function BoxBrowse({
       ? chosenVariant.index
       : null
   /* THE CHOOSER IS SHOWING, AND NOTHING BELOW MAY ACT AS IF A PRINTING WERE PICKED. */
-  const chooserActive = multiGroup && resolvedVariant === null
+  /* THE CHIP ASKS FOR THE PICKER ON A MIXED MATCH, where the search alone would not show it.
+     Tied to the query like `chosenVariant`, so a new question drops it. */
+  const [pickerAsked, setPickerAsked] = useState<string | null>(null)
+  const chooserActive =
+    resolvedVariant === null &&
+    searchGroups !== null &&
+    searchGroups.length > 1 &&
+    (multiGroup || pickerAsked === query)
 
   /* THE GROUPS EVERY BOX-WALK COMPUTATION BELOW READS, IN PLACE OF `results.groups` DIRECTLY.
    * Empty while the chooser is showing — which is what makes clicking a box a no-op then: the
@@ -2196,7 +2222,7 @@ export function BoxBrowse({
                         string, or this dollar sign sits in the wrong face). */}
                     {!reachable
                       ? pending !== undefined
-                        ? `${pending} ${pending === 1 ? 'match' : 'matches'}, pick a printing`
+                        ? `${pending} ${pending === 1 ? 'match' : 'matches'}, ${multiGroup ? 'pick a printing' : 'pick one'}`
                         : 'No match'
                       : matches !== undefined
                       ? `${matches} ${matches === 1 ? 'match' : 'matches'}`
@@ -2617,6 +2643,8 @@ export function BoxBrowse({
                   {chooserActive && searchGroups !== null ? (
                     <VariantChooser
                       groups={searchGroups}
+                      query={query}
+                      focusOnMount={pickerAsked === query}
                       onPick={(index) => setChosenVariant({ query, index })}
                     />
                   ) : awaitingRows ? null /* THE SAME FALSE CLAIM, A SECOND PLACE (the review
@@ -2690,9 +2718,17 @@ export function BoxBrowse({
                           what gets an operator back to the chooser after the walk has
                           carried them away from it. */
                       searchGroups !== null && searchGroups.length > 1 ? (
-                        <Chip icon="layers" onClick={() => setChosenVariant(null)}>
+                        <Chip
+                          icon="layers"
+                          onClick={() => {
+                            setChosenVariant(null)
+                            setPickerAsked(query)
+                          }}
+                        >
                           <span className="bn-facts">
-                            <span>{searchGroups.length} printings</span> <span>change</span>
+                            <span>
+                              {searchGroups.length} {multiGroup ? 'printings' : 'matches'}
+                            </span> <span>change</span>
                           </span>
                         </Chip>
                       ) : undefined
