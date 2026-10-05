@@ -180,7 +180,7 @@ BUDGET = {
     '_RUN_HISTORY_RE': {"status": 404},
     '_RUN_TRENDS_RE': {"status": 200, 'sql': 10, 'store_read': 1},
     '_PRODUCT_REALIZED_RE': {"status": 200},
-    '_PRODUCT_HISTORY_RE': {"status": 409, 'sql': 24, 'json_loads': 153, 'store_read': 2},
+    '_PRODUCT_HISTORY_RE': {"status": 409, 'sql': 14, 'json_loads': 153, 'store_read': 1},
     '_RUN_SCOPE_RE': {"status": 200},
     '_RUN_ITEM_RE': {"status": 200, 'sql': 16, 'json_loads': 5, 'store_read': 1},
     '_SHIPPING_FILE_RE': {"status": 400},
