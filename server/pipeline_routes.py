@@ -2909,6 +2909,8 @@ class UnsentLedger(NamedTuple):
     by_run: Dict[str, int]
     held_out: Dict[str, int]
     live_out: Dict[str, int]
+    # sku -> copies still in a box store-wide (`Inventory.copies_on_hand`'s test), on screen or not.
+    on_hand: Dict[str, int]
 
 
 def _run_live_by_sku(
@@ -3149,7 +3151,13 @@ def _unsent_ledger(
         name: sum(len(keys & set(unsent.get(sku, ()))) for sku, keys in mine.items())
         for name, mine in per_run.items()
     }
-    return UnsentLedger(unsent=unsent, by_run=by_run, held_out=held_out, live_out=live_out)
+    on_hand = {
+        sku: sum(1 for row in rows if row.state not in master.TERMINAL_STATES)
+        for sku, rows in by_sku.items()
+    }
+    return UnsentLedger(
+        unsent=unsent, by_run=by_run, held_out=held_out, live_out=live_out, on_hand=on_hand
+    )
 
 
 def _on_hand_by_run(inventory: master.Inventory, runs: Iterable[str]) -> Dict[str, int]:
@@ -3690,16 +3698,9 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
             free = [key for key in ledger.unsent.get(sku, []) if key in drawn]
             held = len(row.get("positions") or [])
             row["add_to_quantity"] = len(free)
-            # COPIES STILL IN A BOX (not sold, not departed), of the ones drawn: the screen's
-            # first number. `add_to_quantity` is the second, and the two differ by what is
-            # already at TCGplayer.
-            row["on_hand"] = sum(
-                1
-                for p in row.get("positions") or []
-                if p.get("box") is not None
-                and p.get("index") is not None
-                and snapshot.inventory._on_hand(p["box"], p["index"])
-            )
+            # COPIES STILL IN A BOX, STORE-WIDE (what `Inventory.copies_on_hand` counts): the
+            # screen's first number. `add_to_quantity` is the second.
+            row["on_hand"] = ledger.on_hand.get(sku, 0)
             row["copies"] = held
             row["committed"] = held - len(free)
             row["backstock"] = 0
