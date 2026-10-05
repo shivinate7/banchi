@@ -9352,3 +9352,39 @@ for (const width of [1440, 820]) {
     })
   })
 }
+
+test('a sold card loses its review badge and its pane question without a reload', async ({ page }) => {
+  /* A SALE NO LONGER RE-READS `/queues`, and the server's `owed_entries` drops a sold card from it. So the screen must
+     stop drawing the badge (`queuedKeys`) and the pane's question (`openQuestion`) for the copy it just sold. This
+     stub answers as the server does: the entry is there until the sale, gone after. */
+  const { store, sell } = sellableStore()
+  let sold = false
+  await open(page, BOXES, store)
+  await page.route(/\/queues$/, async (route) => {
+    const review = sold
+      ? []
+      : [
+          {
+            position: CARD_1, box: 2, index: 1, label: CARD_1, photo: null,
+            read: { name: 'Volcanion', number: '025', printed_total: '132', set_hint: 'ME01' },
+            confidence: null, reason: 'no_catalog_row', candidates: [],
+            first_seen: new Date(Date.now() - 2 * 86400000).toISOString(), market: null, cleared_by_human: false,
+          },
+        ]
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ review, parked: [] }) })
+  })
+  await page.reload()
+  await expandAll(page)
+  const badge = page.locator('.browse-row-badge[title="Waiting in a queue"]')
+  const question = page.locator('.browse-queued')
+  await expect(badge, 'the fixture has no badge to lose').toHaveCount(1)
+  await expect(question, 'the fixture has no question to lose').toBeVisible()
+
+  sold = true
+  sell('2/1')
+  await copyRow(page, CARD_1).getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.locator('.inventory-receipt').getByRole('button', { name: 'Undo' })).toBeVisible()
+
+  await expect(badge, 'a sold card still shows its review badge').toHaveCount(0)
+  await expect(question, 'a sold card still shows its open question').toHaveCount(0)
+})

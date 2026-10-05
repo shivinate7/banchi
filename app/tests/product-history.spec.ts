@@ -200,6 +200,45 @@ test.describe('#/product — the per-product view', () => {
     await expect(page).toHaveURL(/#\/gallery$/)
   })
 
+  test('a product sheet open across a route change shows no failure and logs no console error', async ({ page }) => {
+    /* The sheet outlives the screen it was opened over. Its reads are aborted when that screen is left, and an aborted read
+       is the app's own doing, never a fault: no red "Reload the page" notice, and no `console.error` from `describeFailure`. */
+    const errors: string[] = []
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') errors.push(msg.text())
+    })
+    let release: () => void = () => {}
+    const held = new Promise<void>((done) => {
+      release = done
+    })
+    const slow = (body: unknown) => async (route: Route) => {
+      await held.catch(() => {})
+      await json(route, body).catch(() => {})
+    }
+    // Held reads: registered after the beforeEach stubs, so they win.
+    await page.route(/\/pipeline\/products\/[^/]+\/history$/, slow(historyPayload()))
+    await page.route(/\/pipeline\/products\/[^/]+\/realized$/, slow({ sku: '0', configured: false }))
+    await page.route(/\/orders$/, slow(ordersPayload()))
+
+    await page.goto('/#/gallery')
+    await expect(page.locator('.bn-page').first()).toBeVisible()
+    await page.evaluate(async () => {
+      const mod = await import(('/src/kit/sheets' + '.ts'))
+      mod.openSheet('product', { sku: '555123', name: 'Vilemaw' })
+    })
+    await expect(page.locator('[role="dialog"]')).toBeVisible()
+
+    await page.evaluate(() => {
+      window.location.hash = '#/shipping'
+    })
+    await expect(page).toHaveURL(/#\/shipping$/)
+    release()
+    await page.waitForTimeout(500) // keep: the aborted reads settle in the page after the route change
+
+    await expect(page.getByText('Reload the page', { exact: false }), 'an aborted read drew a failure notice').toHaveCount(0)
+    expect(errors.filter((text) => text.includes('The app failed before the server could answer')), 'an aborted read logged a console error').toEqual([])
+  })
+
   test('registerSheet wires the product sheet, and its fallback route is #/product?sku= (D278)', async ({ page }) => {
     await page.goto('/#/gallery')
     const [registered, href] = await page.evaluate(async () => {
