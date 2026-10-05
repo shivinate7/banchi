@@ -4321,6 +4321,75 @@ def check_send_matrix(checks: Checks) -> None:
     checks.note(f"send matrix: {len(cases)} cases")
 
 
+def check_live_listing_one_home(checks: Checks) -> None:
+    """The worklist reads the newest live export by `sendguard.live_by_sku`'s rule (one home).
+
+    A `Total Quantity` cell that is not a whole number must not take the worklist down (it
+    was an uncaught ValueError, a 500), and an export with no `Total Quantity` column must
+    not read as every SKU at 0 live: `live_by_sku` refuses both, and the worklist's reading of
+    "live now" is then UNKNOWN (`live_now` None), never a confident zero.
+    """
+    checks.note("")
+    checks.note("LIVE LISTING — the worklist and the send guard read one rule")
+
+    head = "TCGplayer Id,Product Line,Set Name,Product Name,Title,Number,Rarity,Condition,TCG Market Price,TCG Marketplace Price"
+    cases = {
+        "a non-integer Total Quantity cell": (
+            head.replace("TCG Market Price,", "TCG Market Price,Total Quantity,"),
+            f'"{ARTICUNO_SKU}","Pokemon","Set","Articuno","","","","Near Mint","1.00","two","1.00"',
+        ),
+        "no Total Quantity column": (head, f'"{ARTICUNO_SKU}","Pokemon","Set","Articuno","","","","Near Mint","1.00","1.00"'),
+    }
+    for label, (header, row) in cases.items():
+        with isolated_home():
+            run_dir, _ = seam_run(checks, [(3, 1, "Articuno", "161", None)])
+            live = files.inventory_dir() / pipeline_routes.LIVE_DIR
+            live.mkdir(parents=True, exist_ok=True)
+            (live / f"{pipeline_routes.LIVE_PREFIX}20260101-000000.csv").write_bytes(
+                ("\r\n".join([header, row]) + "\r\n").encode("utf-8")
+            )
+            pipeline_routes._NEWEST_LIVE.clear()
+            try:
+                work = pipeline_routes.do_pipeline_worklist([run_dir.directory.name])
+            except Exception as caught:  # noqa: BLE001 - any raise is the defect
+                checks.ok(False, f"{label}: the worklist still answers", f"raised {type(caught).__name__}: {caught}")
+                continue
+            finally:
+                pipeline_routes._NEWEST_LIVE.clear()
+            row_out = next((r for r in work["skus"] if r["sku"] == ARTICUNO_SKU), {})
+            checks.equal(
+                row_out.get("live_now"), None,
+                f"{label}: `live_by_sku` refuses it, so the worklist says live-now is unknown, never 0 copies",
+            )
+
+
+def check_money_one_home(checks: Checks) -> None:
+    """One money rule: `tcgcsv.parse_price` is the home, and every caller agrees with it.
+
+    `$1.50`, `1.50` and `1,234.50` parse the same everywhere a price cell is read.
+    """
+    checks.note("")
+    checks.note("MONEY — parse_price's rule, read the same by every caller")
+
+    def home(text):
+        try:
+            return tcgcsv.parse_price(text)
+        except Exception as caught:  # noqa: BLE001
+            return f"raised {type(caught).__name__}"
+
+    def number(text):
+        try:
+            return pipeline_routes._number(text, "price")
+        except pipeline_routes.PipelineRefusal:
+            return None
+
+    for text, want in (("$1.50", Decimal("1.50")), ("1.50", Decimal("1.50")), ("1,234.50", Decimal("1234.50"))):
+        checks.equal(home(text), want, f"the home reads {text!r} as {want}")
+        checks.equal(pipeline_routes._market_of(text), want, f"`_market_of` agrees with the home on {text!r}")
+        checks.equal(send_routes._price(text), want, f"`send_routes._price` agrees with the home on {text!r}")
+        checks.equal(number(text), want, f"`_number` agrees with the home on {text!r}")
+
+
 CHECKS = (
     check_pipeline_routes,
     check_emit_claim_decides,
@@ -4345,4 +4414,6 @@ CHECKS = (
     check_phantom_worklist,
     check_unsent_listing_sells_out,
     check_pricing_reach,
+    check_live_listing_one_home,
+    check_money_one_home,
 )
