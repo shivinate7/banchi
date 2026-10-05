@@ -494,13 +494,13 @@ class Result:
 
 
 def _crop(photo: Path, aspect: float):
-    """The card alone, upright, cut by the repo's own finder: `detect_card` then
-    `registered_card`, the path the spike measured. None when no card is found."""
+    """The card alone, upright, cut by the preview's one card box: `locate_card` (the model's box,
+    else `detect_card`'s) then `registered_card`. None when no card is found."""
     import geometry
     from geometry import crop as geometry_crop
 
     image = geometry.detect.open_image(photo)
-    box = geometry.detect_card(image, aspect=aspect)
+    box = geometry.locate_card(image, aspect=aspect)
     if box is None:
         return None
     return geometry_crop.registered_card(image, box, aspect)
