@@ -31,6 +31,7 @@ from typing import List, Optional, Tuple
 
 from codes import ledger, lots, products, qr
 from codes import scan as codescan
+from server.refusal import require_box as _box_of
 from store.session import Store
 
 # The two lanes C11 settles. A lane is not a channel — it is which of the two POPULATIONS a
@@ -117,18 +118,6 @@ def do_codes() -> dict:
             for p in products.PRODUCTS
         ],
     }
-
-
-def _box_of(payload: dict) -> int:
-    raw = payload.get("box")
-    try:
-        box = int(raw)
-    except (TypeError, ValueError):
-        _refuse(HTTPStatus.BAD_REQUEST, "box_required",
-                f"The box {raw!r} is not a box number. Send the number of the box to scan.")
-    if box < 1:
-        _refuse(HTTPStatus.BAD_REQUEST, "box_required", "A box number is 1 or higher.")
-    return box
 
 
 def do_codes_scan(payload: dict, captures_root) -> Tuple[HTTPStatus, dict]:

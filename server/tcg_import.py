@@ -228,7 +228,7 @@ def _post(path: str, fields: Dict[str, object]) -> dict:
     url = _url(path)
     status, headers, body = tcg_export._open(
         url,
-        cookie=tcg_export._cookie(),
+        cookie=tcg_export._session(),
         data=_form(fields),
         content_type="application/x-www-form-urlencoded; charset=UTF-8",
     )

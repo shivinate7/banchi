@@ -162,7 +162,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 import envfile  # noqa: E402
-from server import tcg_export  # noqa: E402
+from server import portal_http  # noqa: E402
 
 # The order host, as a constant rather than as something a request can name. The reasoning is
 # `tcg_export`'s and is not weaker here: a route that fetched whatever URL a client sent, while
@@ -177,11 +177,11 @@ API_VERSION = "2.0"
 # THE COOKIE NAME IS TAKEN FROM THE MODULE THAT ALREADY OWNS IT rather than retyped, so the two
 # hosts cannot drift into two half-configured credentials. See the docstring for why one
 # session legitimately serves both.
-COOKIE_ENV = tcg_export.COOKIE_ENV
+COOKIE_ENV = portal_http.COOKIE_ENV
 
 # The same User-Agent knob, for the same reason: it is a remedy a refusal names, and an
 # operator who set it for one host meant it for this client.
-AGENT_ENV = tcg_export.AGENT_ENV
+AGENT_ENV = portal_http.AGENT_ENV
 
 # THE SELLER KEY IS NOT A SECRET AND IS STILL NOT A CONSTANT. It is the lowercased prefix of
 # every order number this account has, so it identifies the account and would be wrong in
@@ -243,10 +243,6 @@ TIMEOUT_S = 30
 # An order page is tens of kilobytes. Eight megabytes is a backstop against a body that never
 # ends, not a judgement about how large an order may be.
 MAX_BYTES = 8 * 1024 * 1024
-
-# An expired session behind the same edge can still be answered as a redirect to the portal's
-# login page, which is why redirects are read rather than followed.
-_LOGON_MARKER = "account/logon"
 
 # An order number is `A2FFC195-...`: hex, dashes, and on some channels a trailing suffix. The
 # characters this will put in a path are restricted to that alphabet — not because TCGplayer
@@ -573,30 +569,20 @@ def base_url() -> str:
     )
 
 
-def _cookie() -> str:
+def _session() -> str:
     """The `Cookie:` header value, or the refusal that says where to put one.
 
-    READ THROUGH `envfile.get_live` AND NOT `envfile.get`, WHICH IS NOT A DETAIL. The session
-    EXPIRES; `order_session_expired` tells the operator to sign in again and replace the value
-    in `.env`; and `get` caches per process and cannot replace a value it already lifted out of
-    the file. Under D138's supervisor, which runs for days and does not watch `.env`, that
-    printed remedy would not have worked and the refusal would have repeated forever over a
-    cookie the operator had already fixed.
-
-    THE WHOLE HEADER, NOT ONE TICKET, for `tcg_export._cookie`'s reason: `TCGAuthTicket_Production`
-    is the ticket the session hangs on, and it is not established that it is the only cookie
-    either host requires. Copying the whole `Cookie:` header out of the browser is one action
-    and cannot be wrong about which cookies matter.
+    READ THROUGH `envfile.get_live` AND NOT `envfile.get`: the session EXPIRES, `order_session_expired`
+    tells the operator to replace the value, and `get` caches per process. Under D138's supervisor,
+    which runs for days, that printed remedy would not have worked.
     """
-    value = envfile.get_live(COOKIE_ENV)
-    if not value:
-        print(f"orders: set {COOKIE_ENV} in the settings file", file=sys.stderr, flush=True)
+    value, problem = portal_http.read_cookie("orders")
+    if problem == "missing":
         raise FetchRefusal(
             "order_cookie_missing",
             "TCGplayer is not signed in on this Mac. Sign in at tcgplayer.com in your browser, open the Orders page, and copy the Cookie header of any request in the browser's network tab. Paste it into the Mac's settings file (the .env file in the app's folder), keeping it private, then try again.",
         )
-    if "=" not in value:
-        print(f"orders: {COOKIE_ENV} holds no name=value pair", file=sys.stderr, flush=True)
+    if problem == "malformed":
         raise FetchRefusal(
             "order_cookie_malformed",
             "The saved TCGplayer session in the Mac's settings file (the .env file in the app's folder) is not a valid cookie. Copy the whole Cookie header value from your browser, not just part of it.",
@@ -614,28 +600,15 @@ def _seller_key() -> str:
     return (envfile.get_live(SELLER_KEY_ENV) or "").strip()
 
 
-def _agent() -> str:
-    return (envfile.get_live(AGENT_ENV) or "").strip() or tcg_export.DEFAULT_AGENT
-
-
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Hand a 3xx back to the caller instead of following it.
-
-    NOT ONE HOP, UNLIKE `tcg_export.fetch`. That module follows a single redirect because the
-    portal genuinely serves its download off a second URL. This is a JSON API and a redirect
-    off it is not a destination anybody meant: it is the edge sending an unauthenticated
-    request to a login page. Following it would return a 200 full of HTML, which is the
-    failure `_check_status` exists to name instead.
-    """
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D102
-        return None
-
-
-def _open(
+def _call(
     url: str, *, cookie: str, data: Optional[bytes] = None
 ) -> Tuple[int, dict, bytes]:
-    """One request. Returns (status, headers, body) and raises only for a dead socket."""
+    """One request. Returns (status, headers, body) and raises only for a dead socket.
+
+    A REDIRECT IS NOT FOLLOWED, NOT EVEN ONE HOP, UNLIKE `tcg_export.fetch`. This is a JSON API and
+    a redirect off it is the edge sending an unauthenticated request to a login page. Following it
+    would return a 200 full of HTML, which is the failure `_check_status` exists to name instead.
+    """
     request = urllib.request.Request(url, data=data, method="POST" if data is not None else "GET")
     if data is not None:
         # A PLAIN JSON DOCUMENT. See the module docstring: carrying D65's `model=<json>`
@@ -643,30 +616,35 @@ def _open(
         # "fix" this into.
         request.add_header("Content-Type", "application/json")
     request.add_header("Accept", "application/json")
-    request.add_header("User-Agent", _agent())
+    request.add_header("User-Agent", portal_http.agent())
     request.add_header("Origin", ORIGIN)
     request.add_header("Referer", REFERER)
     request.add_header("Cookie", cookie)
-    opener = urllib.request.build_opener(_NoRedirect)
-    try:
-        response = opener.open(request, timeout=TIMEOUT_S)
-        return response.status, dict(response.headers), response.read(MAX_BYTES + 1)
-    except urllib.error.HTTPError as caught:
-        # A 3xx reaches here BECAUSE of `_NoRedirect`, which is the point: a non-followed
-        # redirect is delivered as an HTTPError, and its headers carry the Location.
-        return caught.code, dict(caught.headers), caught.read(MAX_BYTES + 1)
-    except urllib.error.URLError as caught:
-        raise FetchRefusal(
+    host = urlparse(url).netloc
+    return portal_http.send(
+        request,
+        timeout=TIMEOUT_S,
+        max_bytes=MAX_BYTES,
+        unreachable=lambda caught: FetchRefusal(
             "order_unreachable",
-            f"Could not reach {urlparse(url).netloc}: {caught.reason}. Nothing was read and "
+            f"Could not reach {host}: {caught.reason}. Nothing was read and "
             f"nothing was written.",
-        ) from None
-    except TimeoutError:
-        raise FetchRefusal(
+        ),
+        dropped=lambda: FetchRefusal(
             "order_unreachable",
-            f"{urlparse(url).netloc} did not answer within {TIMEOUT_S}s. Nothing was read and "
+            f"{host} did not answer within {TIMEOUT_S}s. Nothing was read and "
             f"nothing was written.",
-        ) from None
+        ),
+        dropped_on=(TimeoutError,),
+    )
+
+
+def __getattr__(name):
+    # `_open` is the old name of `_call`, kept because the T7 shipping case reaches it by name.
+    # Re-point that case at `_call` and delete this.
+    if name == "_open":
+        return _call
+    raise AttributeError(name)
 
 
 def _check_status(status: int, headers: dict, body: bytes) -> None:
@@ -679,9 +657,9 @@ def _check_status(status: int, headers: dict, body: bytes) -> None:
     D65 recorded on the other host and fixed there.
     """
     note = problem_note(headers, body)
-    if status in (301, 302, 303, 307, 308):
-        location = str(headers.get("Location") or "")
-        if _LOGON_MARKER in location.lower():
+    kind = portal_http.classify(status, headers)
+    if kind in ("logon", "redirect"):
+        if kind == "logon":
             print(f"orders: {COOKIE_ENV} has expired", file=sys.stderr, flush=True)
             raise FetchRefusal(
                 "order_session_expired",
@@ -692,14 +670,14 @@ def _check_status(status: int, headers: dict, body: bytes) -> None:
             "order_unexpected_response",
             f"The order service sent a redirect, which this app does not follow. Nothing was read.{note}",
         )
-    if status == 401:
+    if kind == "unauthorized":
         print(f"orders: {COOKIE_ENV} was refused", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "order_session_expired",
             "TCGplayer refused the saved session as not authorised. Sign in again and replace the saved session in "
             "the Mac's settings file (the .env file in the app's folder). The price export will have stopped working too. Nothing was read." + note,
         )
-    if status == 403:
+    if kind == "forbidden":
         print(f"orders: check {SELLER_KEY_ENV} in the settings file", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "order_seller_key_rejected",
@@ -707,31 +685,31 @@ def _check_status(status: int, headers: dict, body: bytes) -> None:
             "session. Check the seller key in the Mac's settings file (the .env file in the app's folder). Only if that is right has the account lost "
             "its seller permissions. Nothing was read." + note,
         )
-    if status == 404:
+    if kind == "not_found":
         raise FetchRefusal(
             "order_not_found",
             f"The order API has no such order. It may have been cancelled, or it may belong to "
             f"another account. Nothing was read.{note}",
         )
-    if status == 405:
+    if kind == "bad_route":
         raise FetchRefusal(
             "order_route_missing",
             "The order service does not recognise the request. That is a fault in Banchi, not something to "
             f"fix at TCGplayer. Nothing was read.{note}",
         )
-    if status == 429:
+    if kind == "rate_limited":
         raise FetchRefusal(
             "order_rate_limited",
             "The order service is asking for a slower pace. Try a narrower date range, or wait a minute and "
             f"try again. Nothing was read.{note}",
         )
-    if status >= 500:
+    if kind == "unavailable":
         raise FetchRefusal(
             "order_unavailable",
             f"The order API answered {status}. That is their end, not this one — try again "
             f"later. Nothing was read.{note}",
         )
-    if status != 200:
+    if kind != "ok":
         raise FetchRefusal(
             "order_unexpected_response",
             f"The order API answered {status} rather than sending orders. Nothing was "
@@ -799,7 +777,7 @@ def _search_page(
     """One page of search results: (totalOrders, projected summaries)."""
     body = search_body(range_, page_size, frm, _seller_key())
     url = f"{base_url()}/orders/search?api-version={API_VERSION}"
-    status, headers, raw = _open(url, cookie=cookie, data=json.dumps(body).encode("utf-8"))
+    status, headers, raw = _call(url, cookie=cookie, data=json.dumps(body).encode("utf-8"))
     _check_status(status, headers, raw)
     parsed = _parse(raw, headers)
     if not isinstance(parsed, dict) or not isinstance(parsed.get("orders"), list):
@@ -828,7 +806,7 @@ def search(
     request each. Projected, so everything but the display name stays out — see
     `project_summary`.
     """
-    return _search_page(range_, page_size, frm, _cookie())[1]
+    return _search_page(range_, page_size, frm, _session())[1]
 
 
 def _detail(
@@ -845,7 +823,7 @@ def _detail(
     """
     path = _order_path(order_number)
     url = f"{base_url()}/orders/{path}?api-version={API_VERSION}"
-    status, headers, raw = _open(url, cookie=cookie)
+    status, headers, raw = _call(url, cookie=cookie)
     _check_status(status, headers, raw)
     answer = project_order(_parse(raw, headers), summary)
     if answer["orderNumber"].casefold() != str(order_number).strip().casefold():
@@ -864,7 +842,7 @@ def detail(order_number: str) -> Dict[str, Any]:
     is `store/master.py:Card.sku`, and it appears on no other endpoint — which is why a fetch
     is two calls and not one.
     """
-    return _detail(order_number, _cookie())
+    return _detail(order_number, _session())
 
 
 @dataclass(frozen=True)
@@ -946,7 +924,7 @@ def summaries(
     — see `project_summary`. This is also the whole of a names-only backfill's cost: a caller
     that wants buyers for orders it will not detail reads `buyer` off exactly these rows.
     """
-    return _summaries(range_, page_size, _cookie())[1]
+    return _summaries(range_, page_size, _session())[1]
 
 
 def fetch_open_orders(
@@ -1000,7 +978,7 @@ def fetch_open_orders(
     NOTHING IS WRITTEN. This is a read: no card state, no listing count, no run directory. D63
     makes a replay a no-op by construction rather than by a guard.
     """
-    cookie = _cookie()
+    cookie = _session()
     try:
         ceiling = int(limit)
     except (TypeError, ValueError):

@@ -176,6 +176,17 @@ STATES = (CAPTURED, IDENTIFIED, SOLD, RETIRED, MOVED)
 # gap over a moved card for free, the same way it already closes over a sold or retired one.
 TERMINAL_STATES = (SOLD, RETIRED, MOVED)
 
+
+def state_is_on_hand(state) -> bool:
+    """True when a record in this state is still physically here: it has left by no door."""
+    return state not in TERMINAL_STATES
+
+
+def is_on_hand(card) -> bool:
+    """True when `card` is still physically here. The one home of the on-hand test. A missing
+    card or a card with no state reads as on hand, as the open-queue walk always has."""
+    return state_is_on_hand(getattr(card, "state", None))
+
 # Why a retired card left (D26). Required of every retirement and never inferred: it is the
 # one fact about the departure the record cannot re-derive later, and the four are a closed
 # vocabulary so the history stays greppable — free text would be a second `note`.
@@ -2112,7 +2123,7 @@ class Inventory:
 
     def _on_hand(self, box, index) -> bool:
         card = self.cards.get(position_key(box, index))
-        return card is not None and card.state not in TERMINAL_STATES
+        return card is not None and is_on_hand(card)
 
     def layout_of(self, box, exclude: Sequence[int] = ()) -> List[Dict[str, object]]:
         """The box as sections: `{"div": key, "name": str|None, "slots": [index...]}`, in
@@ -3877,7 +3888,7 @@ class Inventory:
         inventory exactly as a sold one has, just by the other door, and counting it here
         would put a card that is no longer in the box back into D7's refill arithmetic.
         """
-        return [c for c in self.positions_for_sku(sku) if c.state not in TERMINAL_STATES]
+        return [c for c in self.positions_for_sku(sku) if is_on_hand(c)]
 
     def copies_not_sold(self, sku: str) -> List[Card]:
         """Every copy carrying this SKU that has not SOLD — the sent-copy bound (D59).

@@ -89,7 +89,7 @@ def live_by_sku(
         absent = [column for column in REQUIRED_COLUMNS if column not in row]
         if absent:
             raise ValueError(f"a live export row has no {', '.join(absent)} column")
-        sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+        sku = tcgcsv.sku_cell(row)
         if not sku:
             continue
         held = tcgcsv.parse_quantity(str(row.get(tcgcsv.LIVE_QUANTITY_COLUMN) or ""))
@@ -116,7 +116,7 @@ def on_hand(
     keys = {
         master.position_key(card.box, card.index)
         for card in carrying
-        if getattr(card, "state", None) not in master.TERMINAL_STATES
+        if master.is_on_hand(card)
     }
     for key in matched:
         card = cards.get(key)
@@ -208,7 +208,7 @@ def live_prices(rows: Iterable[Mapping[str, str]]) -> Dict[str, Optional[str]]:
     """
     out: Dict[str, Optional[str]] = {}
     for row in rows:
-        sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+        sku = tcgcsv.sku_cell(row)
         if not sku:
             continue
         text = str(row.get(tcgcsv.PRICE_COLUMN) or "").strip()

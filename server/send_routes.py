@@ -87,6 +87,8 @@ from server import tcg_export  # noqa: E402
 from server import tcg_import  # noqa: E402
 from server.pipeline_routes import PipelineRefusal  # noqa: E402
 from store import Store, files, master, sendclaims  # noqa: E402
+from store import clock as store_clock  # noqa: E402
+from store.clock import iso as _iso, now as _now, parse as _parse  # noqa: E402
 from store.submissions import proc_start  # noqa: E402
 
 #: Where every send's receipt lives. Named once, in `cli/cmd_reprice.py`, because the lag guard
@@ -271,24 +273,6 @@ def _write(directory: Path, record: dict) -> None:
     staged = directory / f".{RECEIPT}.{os.getpid()}"
     staged.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     os.replace(staged, target)
-
-
-def _now() -> datetime:
-    return datetime.now(timezone.utc).replace(microsecond=0)
-
-
-def _iso(moment: datetime) -> str:
-    return moment.isoformat()
-
-
-def _parse(stamp: Optional[str]) -> Optional[datetime]:
-    if not stamp:
-        return None
-    try:
-        moment = datetime.fromisoformat(str(stamp))
-    except ValueError:
-        return None
-    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
 
 
 def _lag() -> timedelta:
@@ -634,7 +618,7 @@ def _live_quantities(path: Path, step: str) -> Dict[str, int]:
 def _live_prices(path: Path) -> Dict[str, str]:
     """SKU -> the marketplace price a live export carries. Read for a mark-down's check."""
     return {
-        str(row.get(tcgcsv.SKU_COLUMN) or "").strip(): str(row.get(tcgcsv.PRICE_COLUMN) or "")
+        tcgcsv.sku_cell(row): str(row.get(tcgcsv.PRICE_COLUMN) or "")
         for row in tcgcsv.read_export(path).rows
     }
 
@@ -667,7 +651,7 @@ def _copies(path: Path) -> Dict[str, int]:
     """SKU -> Add to Quantity, off the file that was written. The file is the record."""
     out: Dict[str, int] = {}
     for row in tcgcsv.read_export(path).rows:
-        sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+        sku = tcgcsv.sku_cell(row)
         if sku:
             out[sku] = out.get(sku, 0) + tcgcsv.parse_quantity(row.get(tcgcsv.QUANTITY_COLUMN, ""))
     return out
@@ -677,7 +661,7 @@ def _price_rows(path: Path) -> Dict[str, str]:
     """SKU -> price, for the file's PRICE-ONLY rows (Add to Quantity 0). The file is the record,
     so the receipt names the price changes the file carries, never what `emit` said about it."""
     return {
-        str(row.get(tcgcsv.SKU_COLUMN) or "").strip(): str(row.get(tcgcsv.PRICE_COLUMN) or "")
+        tcgcsv.sku_cell(row): str(row.get(tcgcsv.PRICE_COLUMN) or "")
         for row in tcgcsv.read_export(path).rows
         if tcgcsv.parse_quantity(row.get(tcgcsv.QUANTITY_COLUMN, "")) == 0
     }
@@ -685,7 +669,7 @@ def _price_rows(path: Path) -> Dict[str, str]:
 
 def _names(path: Path) -> Dict[str, str]:
     return {
-        str(row.get(tcgcsv.SKU_COLUMN) or "").strip(): str(row.get(tcgcsv.NAME_COLUMN) or "")
+        tcgcsv.sku_cell(row): str(row.get(tcgcsv.NAME_COLUMN) or "")
         for row in tcgcsv.read_export(path).rows
     }
 
@@ -2024,7 +2008,7 @@ def _live_check(force: bool) -> dict:
 def _markdown_skus(directory: Path) -> List[str]:
     return sorted(
         {
-            str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+            tcgcsv.sku_cell(row)
             for row in tcgcsv.read_export(directory / cmd_reprice.IMPORT).rows
         }
         - {""}
@@ -2151,7 +2135,7 @@ def _markdown_send(stamp: str, directory: Path, progress: Dict[str, bool]) -> di
             tcgcsv.write_csv(
                 directory / cmd_reprice.IMPORT,
                 current.header,
-                [row for row in current.rows if str(row.get(tcgcsv.SKU_COLUMN) or "").strip() in keep],
+                [row for row in current.rows if tcgcsv.sku_cell(row) in keep],
             )
         rows = tcg_import.rows_from_csv(
             (directory / cmd_reprice.IMPORT).read_text(encoding="utf-8")
@@ -2185,7 +2169,7 @@ def _markdown_send(stamp: str, directory: Path, progress: Dict[str, bool]) -> di
                 _markdown_rolled_back(directory, upload_id, refusal.code, refusal.message)
             _markdown_hold(directory, record, "rollback", False, refusal.message)
         _markdown_hold(directory, record, "publish", _try_rollback(upload_id), refusal.message)
-    record["published_at"] = pipeline_routes._now_iso()
+    record["published_at"] = store_clock.now_iso()
     record["result"] = answer
     pipeline_routes._write_push(directory, record)
     _release(claim, "published")
@@ -2231,7 +2215,7 @@ def _markdown_judge(directory: Path, live_path: Path) -> Tuple[set, List[dict]]:
     named: Dict[str, tuple] = {}
     candidates: Dict[str, tuple] = {}
     for row in tcgcsv.read_export(directory / cmd_reprice.IMPORT).rows:
-        sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+        sku = tcgcsv.sku_cell(row)
         if not sku:
             continue
         price = str(row.get(tcgcsv.PRICE_COLUMN) or "")
@@ -2408,7 +2392,7 @@ def _resolve_markdown(stamp: str, live_path: Path, now: datetime) -> None:
         return
     try:
         wanted = {
-            str(row.get(tcgcsv.SKU_COLUMN) or "").strip(): _price(row.get(tcgcsv.PRICE_COLUMN) or "")
+            tcgcsv.sku_cell(row): _price(row.get(tcgcsv.PRICE_COLUMN) or "")
             for row in tcgcsv.read_export(directory / cmd_reprice.IMPORT).rows
         }
     except (OSError, ValueError, tcgcsv.MalformedCsv):

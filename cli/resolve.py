@@ -560,7 +560,7 @@ def box_views(
                         continue
                 except games.UnknownGame:
                     pass
-                rows.append((index, state not in master.TERMINAL_STATES))
+                rows.append((index, master.state_is_on_hand(state)))
             if broken or not found_any:
                 continue
             grouped[n] = rows
@@ -582,7 +582,7 @@ def box_views(
             except games.UnknownGame:
                 pass  # unregistered reads as located, exactly as `join.is_located` answers
             grouped.setdefault(at[0], []).append(
-                (at[1], state not in master.TERMINAL_STATES)
+                (at[1], master.state_is_on_hand(state))
             )
 
     views: Dict[int, join.BoxView] = {}
@@ -994,7 +994,7 @@ def _committed_keys(
     by_sku = _cards_by_sku(inventory) if by_sku is None else by_sku
     keys = set()
     for sku, out in copies_out.items():
-        on_hand = [row for row in by_sku.get(sku, ()) if row.state not in master.TERMINAL_STATES]
+        on_hand = [row for row in by_sku.get(sku, ()) if master.is_on_hand(row)]
         for row in _oldest_first(on_hand)[:out]:
             keys.add(row.key)
     return keys

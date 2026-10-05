@@ -72,6 +72,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from pipeline import tcgcsv
 from pipeline.join import _name_compare_key, name_disputes
+from store import master
 
 
 @dataclass(frozen=True)
@@ -165,7 +166,7 @@ class Catalog:
         self._by_sku: Dict[str, tcgcsv.Row] = {}
         self._by_name: Dict[str, List[tcgcsv.Row]] = {}
         for row in export.rows:
-            sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+            sku = tcgcsv.sku_cell(row)
             if sku:
                 self._by_sku.setdefault(sku, row)
             # `catalog_side=True` — the exact fold `name_disputes` itself reads the export
@@ -303,7 +304,7 @@ def find_contradictions(
             continue
         checked += 1
         if dispute is not None:
-            if card.state == "sold":
+            if card.state == master.SOLD:
                 sold.append(dispute)
             else:
                 identified.append(dispute)

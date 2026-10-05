@@ -1295,7 +1295,7 @@ class Market:
         `row` is then read only for its SKU, never its name or number. Trusted as given: this
         function does not re-verify a productId it was handed.
         """
-        sku = str(row.get(tcgcsv.SKU_COLUMN, "")).strip()
+        sku = tcgcsv.sku_cell(row)
         if not sku:
             raise NotResolvable(
                 f"The row carries no {tcgcsv.SKU_COLUMN!r}, so there is nothing to pick out "
@@ -1338,7 +1338,7 @@ class Market:
         by_product: Dict[int, List[str]] = {}
         known = product_ids or {}
         for row in rows:
-            sku = str(row.get(tcgcsv.SKU_COLUMN, "")).strip()
+            sku = tcgcsv.sku_cell(row)
             if not sku:
                 continue
             verified = known.get(sku)

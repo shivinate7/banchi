@@ -119,7 +119,7 @@ def row_from_csv(row: tcgcsv.Row, *, at: int, source: str) -> Optional[Tuple[str
     """One export row turned into `(sku, SkuRow)`, or `None` for a row with no SKU cell —
     the blank-`TCGplayer Id` lines a Filtered Export sometimes carries for a heading or a
     note, `pipeline/join.py:Catalog`'s own reason for skipping them."""
-    sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+    sku = tcgcsv.sku_cell(row)
     if not sku:
         return None
     condition = str(row.get(tcgcsv.CONDITION_COLUMN) or "").strip()
