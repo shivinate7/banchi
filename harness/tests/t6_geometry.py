@@ -786,4 +786,17 @@ def _model_cases(c, Image, ImageDraw) -> Result:
         c.ok(cut is None or cut.size == frame_size,
              "free reader does not cut a refused box: it sends the whole frame, as the preview does",
              f"{cut.size if cut is not None else None} against frame {frame_size}")
+
+        # 8f. ONE CUT PER PHOTOGRAPH. The model box is refused but detect_card finds the card: the run
+        # cuts detect_card's box (`card_box_for`), so the preview must show the same cut, never the
+        # whole frame.
+        with mock.patch.object(card_box, "model_card", lambda *_a, **_k: part):
+            run_box = images_mod.card_box_for(upright)
+            prev_rect, _prev_jpeg, _final = images_mod._preview_compute(upright)
+            with Image.open(upright) as frame_img:
+                want_rect = images_mod.crop_rect(frame_img.size, run_box) if run_box is not None else None
+        c.ok(run_box is not None, "fixture: card_box_for finds the card by detect_card after the model box is refused")
+        c.ok(prev_rect == want_rect,
+             "the preview's cut equals the run's cut when the model box is refused and detect_card finds the card",
+             f"preview {prev_rect} against run {want_rect}")
     return c.result()

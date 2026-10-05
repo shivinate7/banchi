@@ -70,3 +70,18 @@ def run(ok) -> None:
     arm("a comment, a docstring and a string naming `detect_card` pass",
         {"identify/images.py": _HOME,
          "cli/x.py": '"""Why `detect_card` is slow."""\n# detect_card(p) refuses\nmsg = "call detect_card(p)"\n'})
+
+    # round 2: a call that hides its name, and a method that borrows the home's name
+    arm("an aliased import `detect_card as d` called as `d(p)` outside the home is flagged",
+        {"identify/images.py": _HOME, "cli/x.py": "from geometry import detect_card as d\nbox = d(p)\n"},
+        want_fail=True, want_text="card_box_for")
+    arm("an attribute binding `f = geometry.detect_card; f(p)` outside the home is flagged",
+        {"identify/images.py": _HOME, "cli/x.py": "import geometry\nf = geometry.detect_card\nbox = f(p)\n"},
+        want_fail=True, want_text="card_box_for")
+    arm("`getattr(geometry, \"detect_card\")(p)` outside the home is flagged",
+        {"identify/images.py": _HOME, "cli/x.py": "import geometry\nbox = getattr(geometry, \"detect_card\")(p)\n"},
+        want_fail=True, want_text="card_box_for")
+    arm("a class method named `card_box_for` is not the home",
+        {"identify/images.py": "import geometry\n\nclass Q:\n    def card_box_for(self, p):\n"
+                               "        return geometry.detect_card(p)\n"},
+        want_fail=True, want_text="card_box_for")
