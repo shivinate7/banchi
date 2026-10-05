@@ -1,6 +1,6 @@
 # Efficiency: reads cost what they return
 
-Governed by D173 (a rule that can be enforced is) and D88 (SQLite and one transaction per write). Built: no. Each check below lands in its own lane.
+Governed by D173 (a rule that can be enforced is) and D88 (SQLite and one transaction per write). Built: yes.
 
 A read must cost what it returns, not what the store holds. The owner's store once made `GET /capture/sitting` take up to 71.6 s, because each card rebuilt the box layout (PR 711). This spec holds the checks that stop that class of cost, and the rule for changing them.
 
@@ -17,7 +17,7 @@ A read must cost what it returns, not what the store holds. The owner's store on
 
 ## Known gaps
 
-- Some routes are budgeted on their miss path only.
+- DEBT85, the read budget proves some routes on their miss path only.
 - The loop check misses a helper two levels down, a method on another object and a callee from another module. It also misses `map(lambda)` and a nested function inside a method.
 - The read budget does not growth-check `read_sidecar`.
 
