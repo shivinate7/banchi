@@ -9203,6 +9203,22 @@ COMPONENTS = [
                 "governed_by": ["D280", "D296", "D313"],
                 "note": "Proved red first on main: Home, Graveyard, Revenue and Review shifted.",
             },
+            "tests/request-budget.spec.ts": {
+                "does": ("the client request budget per screen. Opens every nav screen, read from "
+                    "`ROUTES`, cold against the populated stubs on a fake clock for a minute, and "
+                    "fails a screen that bursts reads, asks the same path twice, leaves requests "
+                    "running after the person leaves, or holds too many in flight. "
+                    "`request-budget-allow.json` is the shrinking exception list, and an entry "
+                    "that now passes fails. Not a harness test; `make design-check` runs it."),
+                "governed_by": ["D207"],
+                "note": "Proved red first on main: sale burst, double `/queues` on Review, no aborts on leave, 10-19 in flight.",
+            },
+            "tests/request-budget-allow.json": {
+                "does": ("the shrinking list `request-budget.spec.ts` reads, `<rule>:<route>` -> "
+                    "measurement. A screen on it is measured and not failed. An entry whose rule "
+                    "now passes fails the spec, so the list only shrinks."),
+                "governed_by": ["D207"],
+            },
             "tests/layoutShift.ts": {
                 "does": ("the one reader of the browser's `layout-shift` entries: "
                     "`watchShifts` (an init script), `readShifts`, `sumOf`, `describeShifts` "

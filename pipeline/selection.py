@@ -28,10 +28,9 @@ box 3 today, while the path says 1 and 6. So `--box 3` filters on what each capt
 and never on where the file sits, and pointing at a path is how you say "these photographs",
 not "this drawer".
 
-NOTHING HERE READS THE STORE OR THE DISK. `needs_store` and `needs_run` say what a caller has
-to fetch, and `narrow` takes it as an argument — so the CLI pays for one snapshot it was going
-to take anyway, a selection naming only sidecar-backed terms pays for none, and the harness can
-drive every branch without a store at all.
+`narrow` READS NOTHING: `needs_store` and `needs_run` say what a caller has to fetch, and it
+takes them as arguments, so the harness can drive every branch without a store. `resolve` is the
+reader, and a `keys` selection reads only its own sidecars.
 """
 
 from __future__ import annotations
@@ -633,21 +632,25 @@ def narrow(
     if selection.state is not None or selection.since is not None:
         if inventory is None:  # pragma: no cover — a caller that ignored `needs_store`
             raise SelectionError("selection_invalid", "`state` needs the store to resolve.")
-        # ONE PASS OVER THE CARD ROWS FOR BOTH TERMS. `Inventory.in_state` is a full-table
-        # `Rows.where` — about a second on this store — so asking it once and reading
-        # `captured_at` off the same objects is the difference between one pass and two.
-        records = (
-            inventory.in_state(selection.state)
-            if selection.state is not None
-            else list(inventory.cards.values())
+        # ONE COLUMN READ FOR BOTH TERMS. `cards.select` builds no card objects, where
+        # `Inventory.in_state` builds one per row, so asking once for the three columns is the
+        # difference between a column read and an object per card.
+        if selection.state is not None:
+            master.check_state(selection.state)
+        rows = inventory.cards.select(
+            ("box", "idx", "captured_at"),
+            **({"state": selection.state} if selection.state is not None else {}),
         )
-        if selection.since is not None:
-            records = [
-                card
-                for card in records
-                if isinstance(card.captured_at, str) and card.captured_at >= selection.since
-            ]
-        wanted = {f"{card.box}/{card.index}" for card in records}
+        wanted = {
+            f"{box}/{idx}"
+            for _, (box, idx, captured_at) in rows
+            if box is not None
+            and idx is not None
+            and (
+                selection.since is None
+                or (isinstance(captured_at, str) and captured_at >= selection.since)
+            )
+        }
         # A PHOTOGRAPH THE STORE HAS NO RECORD OF IS DROPPED BY THESE TWO TERMS AND NOTHING
         # ELSE. Both ask a question only a card record can answer, so a capture with no record
         # has no answer — and the honest reading of "the cards in state `captured`" is the ones
@@ -655,6 +658,86 @@ def narrow(
         out = [c for c in out if c.has_position and c.key in wanted]
 
     return out
+
+
+def resolve(
+    selection: Selection,
+    home: Path,
+    *,
+    read_inventory: Callable[[], master.Inventory],
+    assume_box: Optional[int] = None,
+    variant_default: Optional[str] = None,
+    run_keys: Optional[Callable[[str], Sequence[str]]] = None,
+) -> Tuple[List[Any], int]:
+    """`(captures, scanned)`: the cards this selection is over, reading only what it needs.
+
+    THE ONE RESOLVER. A selection that names `keys` and no path is answered from the store: each
+    key is a card, a card knows its photograph, and only those sidecars are read, so a press over
+    k cards reads about k sidecars and not every one in the store (4,286 on the owner's, 0.69 s).
+    THE SET IS THE SAME AS THE SCAN'S, and `narrow` still runs over it, so every other term and
+    the key test itself judge what each sidecar RECORDED. The fast path is taken only when every
+    key resolves to a card with a photograph on disk; any other key falls back to the full scan,
+    so a photograph the store has no record of is still found. `scanned` is what was read.
+
+    RAISES `FileNotFoundError` (`.filename` is the root) for a root that is not a directory, as
+    `sidecar.scan` does.
+    """
+    from identify import sidecar  # lazy: `identify` imports `pipeline`
+
+    roots = selection.roots(home)
+    for root in roots:
+        if not root.is_dir():
+            raise FileNotFoundError(2, "capture directory not found", str(root))
+    held: List[master.Inventory] = []
+
+    def inventory_once() -> master.Inventory:
+        if not held:
+            held.append(read_inventory())
+        return held[0]
+
+    captures = _keyed(selection, roots, inventory_once, assume_box, variant_default)
+    if captures is None:
+        captures = []
+        for root in roots:
+            captures += sidecar.scan(root, box=assume_box, variant_default=variant_default)
+    scanned = len(captures)
+    inventory = inventory_once() if selection.needs_store else None
+    return narrow(selection, captures, inventory=inventory, run_keys=run_keys), scanned
+
+
+def _keyed(selection, roots, read_inventory, assume_box, variant_default) -> Optional[List[Any]]:
+    """The captures for a `keys` selection read straight from each card's own photograph, or
+    None where the scan has to answer (no keys, a named path, or a key the store cannot place)."""
+    if not selection.keys or selection.paths:
+        return None
+    from identify import sidecar
+
+    inventory = read_inventory()
+    found: List[Tuple[int, Path, Path]] = []
+    for key in selection.keys:
+        box, index = (int(part) for part in key.split("/"))
+        card = inventory.cards.get(master.position_key(box, index))
+        photo = (
+            None
+            if card is None
+            else photos.find(
+                card.cid, card.box, card.index, relocated=bool(inventory.photos_relocated)
+            )
+        )
+        if photo is None:
+            return None
+        for number, root in enumerate(roots):
+            if root in photo.parents:
+                found.append((number, root, photo))
+                break
+        else:
+            return None
+    # ROOT ORDER THEN PATH ORDER, the order `sidecar.scan` returns.
+    found.sort(key=lambda hit: (hit[0], hit[2]))
+    return [
+        sidecar.load(photo, root=root, box=assume_box, variant_default=variant_default)
+        for _, root, photo in found
+    ]
 
 
 def scope_block(

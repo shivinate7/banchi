@@ -69,6 +69,7 @@ export type TraceTrigger = 'motion'
 
 type TraceEvent = { t: number; event: string; frame: string }
 type TraceKeyframe = { t: number; frame: string }
+type TraceMark = { t: number; name: string; card: number }
 
 export class MotionTrace {
   private readonly params: Record<string, unknown>
@@ -76,6 +77,7 @@ export class MotionTrace {
   private frames: Array<[number, number, number, number]> = []
   private events: TraceEvent[] = []
   private keyframes: TraceKeyframe[] = []
+  private marks: TraceMark[] = []
   private firstAt: number | null = null
   private lastKeyframeAt = -Infinity
   private truncated = false
@@ -121,6 +123,12 @@ export class MotionTrace {
     }
   }
 
+  /** A named moment outside the frame loop (the dispenser's photo taken, save answered, START
+   *  sent), on the frame clock; `toJSON` writes it relative to the first frame (or first mark). */
+  mark(name: string, card: number, tMs: number = performance.now()): void {
+    this.marks.push({ t: tMs, name, card })
+  }
+
   /** The file, self-describing: the thresholds that produced these events travel with
    *  the evidence, so a trace can never be scored against the wrong parameters. */
   toJSON(): string {
@@ -141,6 +149,10 @@ export class MotionTrace {
       frames: this.frames,
       events: this.events,
       keyframes: this.keyframes,
+      marks: this.marks.map((m) => ({
+        ...m,
+        t: Math.round((m.t - (this.firstAt ?? this.marks[0]?.t ?? 0)) * 10) / 10,
+      })),
     })
   }
 
