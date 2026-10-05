@@ -546,27 +546,33 @@ def _selection_captures(selection: selection_mod.Selection) -> List["sidecar.Cap
     same roots for the same reason, so the fix belongs where both read it. See
     `Selection.roots()`.
     """
-    captures: List["sidecar.Capture"] = []
-    for root in selection.roots(files.home()):
+    captures, _ = _resolved(selection)
+    return captures
+
+
+def _resolved(selection: selection_mod.Selection) -> Tuple[List["sidecar.Capture"], int]:
+    """`(captures, scanned)` from `selection_mod.resolve`, the one resolver the CLI child uses.
+
+    A keyed press reads only its own cards' sidecars. `scanned` is what was read, for the
+    empty refusal. A missing capture root answers `([], 0)`, as before.
+    """
+
+    def read_inventory():
         try:
-            captures += sidecar.scan(root)
-        except (FileNotFoundError, OSError):
-            continue
-    inventory = None
-    if selection.needs_store:
-        try:
-            inventory = Store().read().inventory
+            return Store().read().inventory
         except Exception:  # noqa: BLE001 — a store that will not open is not an empty store
             raise PipelineRefusal(
                 HTTPStatus.SERVICE_UNAVAILABLE,
                 "store_unavailable",
-                "This selection names a state, a section, a drawer id or a capture time, and "
-                "all four are answered by the store — which will not open right now.",
+                "This selection is answered by the store, which will not open right now.",
             ) from None
+
     try:
-        return selection_mod.narrow(
-            selection, captures, inventory=inventory, run_keys=_run_keys
+        return selection_mod.resolve(
+            selection, files.home(), read_inventory=read_inventory, run_keys=_run_keys
         )
+    except (FileNotFoundError, OSError):
+        return [], 0
     except selection_mod.SelectionError as exc:
         raise PipelineRefusal(
             HTTPStatus.NOT_FOUND if exc.empty else HTTPStatus.BAD_REQUEST, exc.code, str(exc)
@@ -1668,10 +1674,10 @@ def _preflight(send: Send) -> dict:
     the run would record all need the same list, and the child re-derives it for itself because
     it is a separate process — but nothing on THIS side walks the disk twice for one press.
     """
-    captures = _selection_captures(send.selection)
+    captures, scanned = _resolved(send.selection)
     if not captures:
         try:
-            selection_mod.refuse_empty(send.selection, _scanned(send.selection))
+            selection_mod.refuse_empty(send.selection, scanned)
         except selection_mod.SelectionError as exc:
             raise PipelineRefusal(HTTPStatus.NOT_FOUND, exc.code, str(exc)) from None
     argv = [str(PKMNSCAN), "identify", *send.selection.flags(), "--dry-run"] + send.flags
@@ -1690,24 +1696,6 @@ def _preflight(send: Send) -> dict:
         "claimed": _claim_conflict(captures),
         "total": _total(text, captures),
     }
-
-
-def _scanned(selection: selection_mod.Selection) -> int:
-    """How many photographs were in view before the terms narrowed them. For the refusal only.
-
-    IT IS THE HALF THAT MAKES AN EMPTY ANSWER READABLE. `box_has_no_captures` could say one
-    thing — this drawer has no directory — and an empty selection has three causes: a mistyped
-    term, a drawer whose cards are all in a state the selection excluded, and a capture root
-    that is not there. The count separates the last from the first two at no cost, because the
-    scan has already happened.
-    """
-    total = 0
-    for root in selection.roots(files.home()):
-        try:
-            total += len(sidecar.scan(root))
-        except (FileNotFoundError, OSError):
-            continue
-    return total
 
 
 def _scope_for_send(captures: Sequence["sidecar.Capture"]) -> Optional[dict]:
@@ -2193,10 +2181,10 @@ def do_pipeline_identify(payload: dict) -> Tuple[HTTPStatus, dict]:
             "This step spends money, so it needs your confirmation. Check the card count and estimate first.",
         )
     send = _resolve_send(payload)
-    captures = _selection_captures(send.selection)
+    captures, scanned = _resolved(send.selection)
     if not captures:
         try:
-            selection_mod.refuse_empty(send.selection, _scanned(send.selection))
+            selection_mod.refuse_empty(send.selection, scanned)
         except selection_mod.SelectionError as exc:
             raise PipelineRefusal(HTTPStatus.NOT_FOUND, exc.code, str(exc)) from None
     # THE CARD-LEVEL REFUSAL, BEFORE THE CHILD STARTS (D174). IT IS NOT THE BINDING GUARD AND
