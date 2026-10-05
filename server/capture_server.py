@@ -3132,6 +3132,39 @@ def _flat_place(place: dict) -> dict:
     return flat
 
 
+def _decorate_card(
+    record: dict, places: "_Places", skus: Optional["Skus"] = None,  # noqa: F821
+    *, box=None, index=None,
+) -> dict:
+    """THE ONE HOME of a card record's display fields: `number_display`, the listing facts, and
+    the place block with its flat `label`/`section`/`card`. `do_inventory`, `do_inventory_box`,
+    `do_inventory_recent`, `do_inventory_copies` and `_card_row` all call it, so five routes
+    cannot answer one card five ways.
+
+    `record` is the card as a dict (`asdict` or the payload's own); it is changed in place and
+    returned. `box`/`index` default to the record's own, and `_card_row` passes the integers it
+    found the card under. `skus=None` draws no listing facts, `_card_row`'s rule for a caller
+    with no snapshot open.
+
+    A POSITION THAT WILL NOT COERCE LEAVES THE CARD UNDECORATED BY PLACE AND RAISES NOTHING:
+    the number and the listing facts are about the card, not where it is, and they stay.
+    """
+    from types import SimpleNamespace
+
+    record["number_display"] = join.display_number(record.get("number"), record.get("printed_total"))
+    if skus is not None:
+        record.update(_listing_decoration(SimpleNamespace(**record), skus))
+    try:
+        place = places.of(record["box"] if box is None else box, record["index"] if index is None else index)
+    except (KeyError, TypeError, ValueError, master.BadSections):
+        return record
+    # A pooled card gets the block and not the flat decoration (`positionLabel` answers null).
+    if place["located"]:
+        record.update(_flat_place(place))
+    record["place"] = place
+    return record
+
+
 def _card_row(
     inventory: master.Inventory, box: int, index: int, card: master.Card,
     skus: Optional["Skus"] = None,  # noqa: F821 - store.skus.Skus, duck-typed
@@ -3170,22 +3203,7 @@ def _card_row(
     and passes it. `None` is the one safe default for a caller with no snapshot open, and
     draws none of the three: `Optional[...]` on the wire, not a wrong answer.
     """
-    place = _Places(inventory).of(box, index)
-    row = asdict(card)
-    # A pooled card gets the block and not the flat decoration, matching `do_inventory`
-    # row for row — the flat `label` is what `server.ts:positionLabel` reads, and a pooled
-    # card must answer null there exactly as an inventory row does. The pooled fact rides
-    # inside `place` (`game_display`), where the screens that may show it go looking.
-    if place["located"]:
-        row.update(_flat_place(place))
-    row["place"] = place
-    # D67's decoration, wire-only like the four above it and unconditional unlike them: a
-    # number is a fact about the card rather than about where it is, so a pooled record and
-    # one whose position will not coerce both still get theirs.
-    row["number_display"] = _number_display(card)
-    if skus is not None:
-        row.update(_listing_decoration(card, skus))
-    return row
+    return _decorate_card(asdict(card), _Places(inventory), skus, box=box, index=index)
 
 
 def _queue_depth(queue: queues.Queue) -> Tuple[Optional[int], Optional[str]]:
@@ -3694,32 +3712,17 @@ def do_inventory() -> dict:
     needs a box's name and capacity to render a place block it did not ask the server for,
     and a second route to fetch them would be a second thing to keep in step.
     """
-    inventory = Store().read().inventory
+    snapshot = Store().read()
+    inventory = snapshot.inventory
     payload = inventory.to_payload()
     places = _Places(inventory)
+    # ONE READ OF THE SKU TABLE, NOT ONE PER CARD: the listing facts need each card's SKU row,
+    # and a lookup per card is a query per card on the route the app polls. Bounded by the
+    # table, never by the cards, and skipped when no card carries a SKU.
+    if any(record.get("sku") for record in (payload.get("cards") or {}).values()):
+        snapshot.skus.entries._load_all()
     for record in (payload.get("cards") or {}).values():
-        # BEFORE THE POSITION, AND BEFORE THE `continue` BELOW (D67). A number is a fact about
-        # the card and not about where it is, so a row whose box or index will not coerce keeps
-        # its number row even though it can carry no label. Composed off the payload's own two
-        # fields rather than off a `master.Card` — `to_payload` writes both verbatim, and this
-        # loop has the dict in hand where `_card_row` has the record.
-        record["number_display"] = join.display_number(
-            record.get("number"), record.get("printed_total")
-        )
-        try:
-            place = places.of(record["box"], record["index"])
-        except (KeyError, TypeError, ValueError, master.BadSections):
-            # `BadPosition` is a `ValueError` and is caught by that clause; `BadSections` is
-            # too, and is named anyway so this reads as the two failures it is.
-            continue
-        # A pooled card is served UNDECORATED BUT NOT BARE: no flat `label`/`section`/
-        # `card` — `positionLabel` answers null, which is the ruling that the label is
-        # never rendered for one — while `place` still arrives carrying `located: false`
-        # and the game's display name, so a screen can tell the design fact from the
-        # coerce-failure above, which leaves a row with no `place` at all.
-        if place["located"]:
-            record.update(_flat_place(place))
-        record["place"] = place
+        _decorate_card(record, places, snapshot.skus)
     return payload
 
 
@@ -3769,20 +3772,7 @@ def do_inventory_box(box: int) -> dict:
     cards: dict = {}
     skus: set = set()
     for _index, key, card in rows:
-        record = asdict(card)
-        record["number_display"] = join.display_number(
-            record.get("number"), record.get("printed_total")
-        )
-        if card.sku:
-            record.update(_listing_decoration(card, snapshot.skus))
-        try:
-            place = places.of(record["box"], record["index"])
-        except (KeyError, TypeError, ValueError, master.BadSections):
-            cards[key] = record
-            continue
-        if place["located"]:
-            record.update(_flat_place(place))
-        record["place"] = place
+        record = _decorate_card(asdict(card), places, snapshot.skus)
         cards[key] = record
         if card.sku:
             skus.add(str(card.sku).strip())
@@ -3812,7 +3802,8 @@ def do_inventory_recent(limit: int) -> dict:
     `photo` absence is exactly what `Inventory.newest_captured`'s docstring names as the
     reason to over-fetch.
     """
-    inventory = Store().read().inventory
+    snapshot = Store().read()
+    inventory = snapshot.inventory
     candidates = inventory.newest_captured(max(limit * 3, limit + 12))
     places = _Places(inventory)
     cards: dict = {}
@@ -3824,19 +3815,7 @@ def do_inventory_recent(limit: int) -> dict:
             continue
         if not card.name or card.photo is None:
             continue
-        record = asdict(card)
-        record["number_display"] = join.display_number(
-            record.get("number"), record.get("printed_total")
-        )
-        try:
-            place = places.of(record["box"], record["index"])
-        except (KeyError, TypeError, ValueError, master.BadSections):
-            cards[key] = record
-            continue
-        if place["located"]:
-            record.update(_flat_place(place))
-        record["place"] = place
-        cards[key] = record
+        cards[key] = _decorate_card(asdict(card), places, snapshot.skus)
     return {"cards": cards}
 
 
@@ -3912,7 +3891,8 @@ def do_inventory_copies(payload: dict) -> dict:
         )
     wanted = {sku.strip() for sku in raw if sku.strip()}
 
-    inventory = Store().read().inventory
+    snapshot = Store().read()
+    inventory = snapshot.inventory
 
     # ONE UNFILTERED PASS, `_cards_by_sku`'s own shape — no `Card` object built here, and
     # nothing written into `Rows._loaded`.
@@ -3939,19 +3919,7 @@ def do_inventory_copies(payload: dict) -> dict:
         card = inventory.cards.get(key)
         if card is None:
             continue
-        record = asdict(card)
-        record["number_display"] = join.display_number(
-            record.get("number"), record.get("printed_total")
-        )
-        try:
-            place = places.of(record["box"], record["index"])
-        except (KeyError, TypeError, ValueError, master.BadSections):
-            cards[key] = record
-            continue
-        if place["located"]:
-            record.update(_flat_place(place))
-        record["place"] = place
-        cards[key] = record
+        cards[key] = _decorate_card(asdict(card), places, snapshot.skus)
 
     # `listings` RIDES ALONG THE SAME WAY `do_inventory_box`'s DOES: narrowed to the SKUs the
     # scan above actually matched, never to `wanted` (the request), so a SKU asked about but
@@ -12876,7 +12844,7 @@ def _facet_cells(inventory: master.Inventory) -> List[dict]:
 
     The null bucket is kept, never dropped (D213): a card with no set is a cell with `set` None.
     """
-    gone_states = {master.SOLD, master.RETIRED, master.MOVED}
+    gone_states = set(master.TERMINAL_STATES)
     cells: Dict[Tuple[Optional[int], Optional[str], Optional[str], Optional[str], bool], int] = {}
     for _, (box, game, set_name, rarity, state) in inventory.cards.select(
         ("box", "game", "set_name", "rarity", "state")

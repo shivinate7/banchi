@@ -323,7 +323,9 @@ def format_price(value) -> str:
 
 
 def parse_price(value: str) -> Optional[Decimal]:
-    value = (value or "").strip()
+    """THE money rule: a leading "$" and thousands commas are read, a blank is `None`, anything
+    else that is not a number raises `decimal.InvalidOperation`."""
+    value = (value or "").strip().lstrip("$").replace(",", "").strip()
     if not value:
         return None
     return Decimal(value)
