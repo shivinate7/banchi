@@ -56,7 +56,7 @@ from datetime import datetime, timezone
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
 
@@ -570,7 +570,7 @@ def unreleased_sets(game: str) -> Set[str]:
     """The sets whose printings have no stock photo YET, so a no-photo row in one is no look-alike.
     The ONE home of "unreleased". The catalogue's release date decides when it has one: a set
     dated after today. Without dates (Pokemon, or a catalogue that cannot answer), a set is
-    unreleased when the index holds no photographed row of it at all. Any failure answers the
+    unreleased when it holds no photographed row and no row that failed to fetch (a transient failure never skips the guard). Any failure answers the
     empty set, and the guard then stays on."""
     try:
         dated = _stock_images().catalog_published(game)
@@ -583,7 +583,8 @@ def unreleased_sets(game: str) -> Set[str]:
         try:
             return {
                 r[0] for r in db.execute(
-                    "select set_name from vec where game=? group by set_name having sum(status=?)=0", (game, S_OK)
+                    "select set_name from vec where game=? group by set_name having sum(status in (?,?,?))=0",
+                    (game, S_OK, S_UNREADABLE, S_NO_URL)
                 )
             }
         finally:
@@ -816,6 +817,8 @@ def _read_chunk(
     current = index.meta("model_sha256") == MODEL_SHA256
     pending: List[Tuple[Request, Tuple[str, ...], "object"]] = []
     for request in requests:
+        if isinstance(request.rarity_claim, str):  # the one entry: a bare string is one cell, never a substring pool
+            request = replace(request, rarity_claim=[request.rarity_claim])
         if request.game not in SERVED_GAMES:
             out[request.key] = Result(request.key, False, code=UNREAD_GAME, detail=f"the matcher serves {', '.join(SERVED_GAMES)}")
             continue
