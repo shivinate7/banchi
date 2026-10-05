@@ -594,10 +594,17 @@ function writeSession(key: string, value: string | null): void {
 
 const CAPTURE_ID_SHAPE = /^[A-Za-z0-9-]{8,64}$/
 
-function readSessionCaptureId(): string | null {
+/** Every unsaved capture's id, oldest first, space-joined in the one session key. */
+function readSessionCaptureIds(): string[] {
   const stored = readSession(SESSION_KEYS.captureId)
-  return stored !== null && CAPTURE_ID_SHAPE.test(stored) ? stored : null
+  if (stored === null) return []
+  const ids = stored.split(' ')
+  return ids.every((id) => CAPTURE_ID_SHAPE.test(id)) ? ids : []
 }
+
+/** A save refused to send because an earlier save failed: that card is held, in order, for Retry saving. */
+class SaveHeld extends Error {}
+type HeldSave = { id: string; label: string; run: () => Promise<void> }
 
 function describe(err: unknown): Note {
   // The server's own message, unchanged. docs/DESIGN.md's copy rules already reach these
@@ -922,6 +929,7 @@ function Opt({
   sfx,
   trail,
   trailWord = false,
+  disabled = false,
   onPick,
 }: {
   k?: string
@@ -932,10 +940,11 @@ function Opt({
   trail?: string
   /** The trail is a word (`Premium`) rather than a key (`pokemon`, `next 12`). */
   trailWord?: boolean
+  disabled?: boolean
   onPick: () => void
 }) {
   return (
-    <button type="button" className="capture-opt" aria-pressed={on} onClick={onPick}>
+    <button type="button" className="capture-opt" aria-pressed={on} disabled={disabled} onClick={onPick}>
       {k === undefined ? (
         <span className="capture-k capture-k-blank" aria-hidden="true" />
       ) : (
@@ -1596,20 +1605,69 @@ export function CaptureScreen() {
   const busyRef = useRef(false)
 
   
-  const captureIdRef = useRef<string | null>(readSessionCaptureId())
+  const restoredIds = useRef<string[] | null>(null)
+  restoredIds.current ??= readSessionCaptureIds()
+  const captureIdRef = useRef<string | null>(restoredIds.current[0] ?? null)
+  /* Saves out: captures whose frame is grabbed and whose answer has not come. `busyRef` covers only
+   * the grab, so with the dispenser dealing one photo may be unsaved while the next is taken.
+   * `unsavedIds` holds each such capture's id in capture order; `captureIdRef` (and the stored key)
+   * is the OLDEST of them, the one a reload could still need to resend. `applyTail` makes answers
+   * land in capture order even when saves return out of order. */
+  const savesOut = useRef(0)
+  const unsavedIds = useRef<string[]>(restoredIds.current.slice())
+  const heldSaves = useRef<HeldSave[]>([])
+  /** The one answer to "is a photo held unsaved?": Capture, Start, Resume and Section all ask it. */
+  const photoHeld = useCallback(() => heldSaves.current.length > 0, [])
+  /* A press that would move a card or the place cards go, while a photo is held unsaved or (for a
+   * write) still saving, says so and does nothing. `writes` false asks only about a held photo. */
+  const refuseWhileSaving = useCallback(
+    (writes = true) => {
+      const refuse = (text: string) => {
+        setUndoNote({ done: false, text, code: null, position: null, did: 0, want: 1 })
+        return true
+      }
+      if (photoHeld()) return refuse('Retry saving first.')
+      if (!writes) return false
+      if (busyRef.current) return true
+      if (savesOut.current === 0) return false
+      return refuse('A photo is still saving. Wait a moment, then press again.')
+    },
+    [photoHeld],
+  )
+  const [heldView, setHeldView] = useState<Array<{ id: string; label: string }>>([])
+  const retryingRef = useRef(false)
+  const applyTail = useRef<Promise<boolean>>(Promise.resolve(true))
+  const dealingRef = useRef(false)
 
   
-  const [heldAcrossReload, setHeldAcrossReload] = useState(() => captureIdRef.current !== null)
+  const [carried, setCarried] = useState(() => restoredIds.current?.length ?? 0)
 
-  /** The one writer of the in-flight capture id: ref first, store second, never one without
-   *  the other. `useCallback` with no dependencies so `doCapture`'s identity does not change
-   *  per render — the trigger seam re-arms on that identity. */
-  const rememberCaptureId = useCallback((id: string | null) => {
-    captureIdRef.current = id
-    writeSession(SESSION_KEYS.captureId, id)
-    // Whatever this id's history, it is this session's business from here: either it has
-    // just been answered, or a fresh one has been minted for a photograph taken now.
-    if (id === null) setHeldAcrossReload(false)
+  /** The one writer of the unsaved capture ids: ref first, store second, never one without the
+   *  other. The key holds every unsaved id, oldest first; the ref holds the oldest, the one the
+   *  next capture resends when no save is out. `useCallback` with no dependencies so `doCapture`'s
+   *  identity does not change per render. */
+  const syncCaptureIds = useCallback(() => {
+    const ids = unsavedIds.current
+    captureIdRef.current = ids[0] ?? null
+    writeSession(SESSION_KEYS.captureId, ids.length === 0 ? null : ids.join(' '))
+    // What came from before the reload shrinks as those ids are answered.
+    setCarried((count) => Math.min(count, ids.length))
+  }, [])
+  /** This capture's answer came: drop its id and any held frame, and let the next oldest take the key. */
+  const settleCaptureId = useCallback(
+    (id: string) => {
+      unsavedIds.current = unsavedIds.current.filter((held) => held !== id)
+      heldSaves.current = heldSaves.current.filter((held) => held.id !== id)
+      setHeldView(heldSaves.current.map(({ id: held, label }) => ({ id: held, label })))
+      syncCaptureIds()
+    },
+    [syncCaptureIds],
+  )
+  /** A save that did not go out stays in memory, in capture order, until Retry saving. */
+  const holdUnsaved = useCallback((held: HeldSave) => {
+    if (heldSaves.current.some((entry) => entry.id === held.id)) return
+    heldSaves.current = [...heldSaves.current, held]
+    setHeldView(heldSaves.current.map(({ id, label }) => ({ id, label })))
   }, [])
 
   
@@ -2042,6 +2100,7 @@ export function CaptureScreen() {
 
   const pickSection = useCallback(
     (div: string | null, token?: string | null) => {
+      if (refuseWhileSaving(false)) return
       setSelectedDiv(div)
       setSectionPickNote(null)
       if (box === null) return
@@ -2057,7 +2116,7 @@ export function CaptureScreen() {
       // coincidence, to a different section after a re-space".
       rememberSectionPick(sectionPickKey(box, boxBid), { div, at: Date.now(), token: token ?? layoutToken ?? null })
     },
-    [box, boxBid, layoutToken, sectionPickKey],
+    [box, boxBid, layoutToken, refuseWhileSaving, sectionPickKey],
   )
 
   /** REFRESH THE PICK'S CLOCK ON EVERY CAPTURE INTO IT (finding 5, "until the sitting ends" —
@@ -2092,9 +2151,14 @@ export function CaptureScreen() {
 
   const closeField = useCallback(() => setOpenField(null), [])
 
-  const toggleField = useCallback((id: FieldId) => {
-    setOpenField((prev) => (prev === id ? null : id))
-  }, [])
+  const toggleField = useCallback(
+    (id: FieldId) => {
+      // The pickers that move where cards go stay shut while a photo is held unsaved.
+      if ((id === 'box' || id === 'section') && refuseWhileSaving(false)) return
+      setOpenField((prev) => (prev === id ? null : id))
+    },
+    [refuseWhileSaving],
+  )
 
   // An entry belongs to one opening. Cleared on every change of `openField` — including to
   // null — so no field ever reopens pre-narrowed by a search the operator cannot see the
@@ -2278,6 +2342,7 @@ export function CaptureScreen() {
    *  and the two would be indistinguishable one sitting later. */
   const chooseBox = useCallback(
     (value: number, bid: number | null) => {
+      if (refuseWhileSaving(false)) return
       setBox(value)
       setBoxBid(bid)
       setRecency(touchBox(value))
@@ -2286,7 +2351,7 @@ export function CaptureScreen() {
       closeField()
       blurActive()
     },
-    [closeField],
+    [closeField, refuseWhileSaving],
   )
 
   
@@ -3038,10 +3103,22 @@ export function CaptureScreen() {
     [box, boxBid, pickedSection, sectionPickKey],
   )
 
-  /* The dispenser's `noteSaved`, set once `useDealer` runs below `doCapture`. */
-  const savedRef = useRef<() => void>(() => {})
+  /* The dispenser's `photoTaken`, set once `useDealer` runs below `doCapture`. It runs the save
+   * at once and, while dealing, retries it once from the same bytes. */
+  const photoTakenRef = useRef<(save: () => Promise<unknown>) => Promise<unknown>>((save) => save())
+  /* Where the next card will land, for naming a card whose save has not come back. */
+  const nextCardRef = useRef<{ box: number | null; n: number }>({ box: null, n: 1 })
+  nextCardRef.current = { box, n: newCardNumber ?? nextForBox ?? 1 }
+  /* The last number given to a card whose answer has not yet reached a render: the next card is one
+   * past it. Dropped as soon as the screen's own next number moves. */
+  const assignedRef = useRef<{ box: number | null; n: number } | null>(null)
+  useEffect(() => {
+    assignedRef.current = null
+  }, [newCardNumber, nextForBox, box])
   const doCapture = useCallback(async () => {
-    if (busyRef.current) return
+    // While any photo is held unsaved nothing new is captured: Retry saving comes first.
+    if (photoHeld()) return
+    if (busyRef.current || (savesOut.current > 0 && !dealingRef.current)) return
     // A halted run ignores the trigger entirely. Not "queues it": spec 5.5 rejected
     // queue-and-continue outright, because photos held in the browser and not yet on the Mac
     // are a second place inventory lives, and D13 has exactly one.
@@ -3077,6 +3154,10 @@ export function CaptureScreen() {
 
     busyRef.current = true
     setBusy(true)
+    let saving = false // the frame is grabbed and the save is out
+    let sent = false // this save was answered and applied
+    let answered!: (ok: boolean) => void
+    const prior = applyTail.current
     try {
       let frame: string
       try {
@@ -3092,11 +3173,25 @@ export function CaptureScreen() {
       const hint = setHint.trim() === '' ? undefined : setHint.trim()
 
       
-      const captureId = captureIdRef.current ?? newCaptureId()
-      rememberCaptureId(captureId)
+      // A held id is a lost response to resend: only when no save is out. Else this photo's own id.
+      const captureId = (savesOut.current === 0 ? captureIdRef.current : null) ?? newCaptureId()
+      if (!unsavedIds.current.includes(captureId)) unsavedIds.current.push(captureId)
+      syncCaptureIds()
+      // The slot this card is to take, said before the store has answered: the next number, plus
+      // every unsaved card ahead of it.
+      const slot = nextCardRef.current
+      const given = assignedRef.current
+      const slotNumber = given !== null && given.box === slot.box ? given.n + 1 : slot.n
+      assignedRef.current = { box: slot.box, n: slotNumber }
+      const heldLabel = slot.box === null ? 'A photo' : `${boxTitle(null, slot.box)}, Card ${slotNumber}`
+      // The photo is taken: the shutter is free again, the save carries on behind it.
+      saving = true
+      savesOut.current += 1
+      applyTail.current = new Promise<boolean>((resolve) => (answered = resolve))
+      busyRef.current = false
 
-      try {
-        const card = await capture({
+      const sendFrame = () =>
+        capture({
           box,
           imageBase64: frame,
           // ALWAYS SENT, never omitted, unlike the two claims below it — D21 makes the game
@@ -3126,11 +3221,12 @@ export function CaptureScreen() {
           // surviving a re-space) — omitted along with it.
           layoutToken: selectedDiv === null ? undefined : layoutToken,
         })
+      const applyAnswer = (card: Awaited<ReturnType<typeof capture>>) => {
         // Answered, so the next photograph gets its own id. Cleared on a replay too: the
         // ambiguity that id existed to resolve is now resolved. Through `rememberCaptureId`,
         // so the stored copy goes with it — an id left in the store after the server has
         // answered would be resent by the next capture and would answer for the wrong card.
-        rememberCaptureId(null)
+        settleCaptureId(captureId)
         /* `created: false` means this id had already been committed — the halt before it
          * lost a response, not a card. The server returned the original position and burned
          * no index, which is only true because the id was held across the halt.
@@ -3208,13 +3304,22 @@ export function CaptureScreen() {
         }
         stampSlot(card.box, card.index)
         setFlash((prev) => prev + 1)
-        savedRef.current() // D316: the dispenser may deal the next card
         setUndoNote(null)
         // UN-15: a card behind the divider is "built on" (undo.md 11.1) — this capture is in
         // the SAME box as the pending divider, so its own undo takes over.
         if (pendingDividerRef.current !== null && pendingDividerRef.current.box === card.box) {
           pendingDividerRef.current = null
         }
+      }
+      try {
+        // The store never commits card 2 before card 1: this frame waits in memory for the earlier
+        // answer, and a failed earlier save holds it (never sends) until Retry saving.
+        const card = (await photoTakenRef.current(async () => {
+          if (!(await prior)) throw new SaveHeld()
+          return sendFrame()
+        })) as Awaited<ReturnType<typeof capture>>
+        applyAnswer(card)
+        sent = true
       } catch (err) {
         // 409 `section_gone` or 400 `layout_token_required` (subbox-capture.md 1.2): the
         // picked section is not there any more, or a re-space moved on since the token was
@@ -3223,17 +3328,26 @@ export function CaptureScreen() {
         // to `{ where: 'server' }`'s generic copy — this one case is a certainty, not the usual
         // "check whether it was recorded" (finding 2), and its own halt is the only one raised.
         if (err instanceof ServerError && (err.code === 'section_gone' || err.code === 'layout_token_required')) {
+          // Nothing was written and the section's own halt answers it: no held frame, no block on the next.
+          sent = true
           void handleSectionMismatch(err.code, describe(err).text)
           return
         }
+        // This frame stays in memory, in capture order, for Retry saving. A save held behind an
+        // earlier failure raises no halt of its own: the earlier one already did.
+        holdUnsaved({ id: captureId, label: heldLabel, run: async () => applyAnswer(await sendFrame()) })
+        if (err instanceof SaveHeld) return
         // The id stays in the ref. This is the case it exists for: the request may have
         // committed, and only resending the same id can tell the difference without costing
         // a position.
         setHalt({ where: 'server', ...describe(err) })
       }
     } finally {
-      busyRef.current = false
-      setBusy(false)
+      if (saving) {
+        savesOut.current -= 1
+        answered(sent && heldSaves.current.length === 0) // a failure never releases the saves queued behind it
+      } else busyRef.current = false
+      if (!busyRef.current && savesOut.current === 0) setBusy(false)
     }
     // `rememberCaptureId` is stable (no dependencies of its own), so it is listed for
     // honesty rather than because it can change: an identity that moved per render would
@@ -3256,6 +3370,7 @@ export function CaptureScreen() {
   }, [
     box,
     boxBid,
+    photoHeld,
     camera,
     finish,
     gameEntry,
@@ -3267,7 +3382,9 @@ export function CaptureScreen() {
     pickVerdict,
     product,
     rarityClaim,
-    rememberCaptureId,
+    syncCaptureIds,
+    settleCaptureId,
+    holdUnsaved,
     sectionPickKey,
     sectionsDetail,
     selectedDiv,
@@ -3277,9 +3394,35 @@ export function CaptureScreen() {
   ])
 
   
+  /* RETRY SAVING: the held frames go again, oldest first, one at a time. The first failure stops it. */
+  const retrySaving = useCallback(async () => {
+    const queue = heldSaves.current.slice()
+    if (retryingRef.current || queue.length === 0) return
+    retryingRef.current = true
+    savesOut.current += 1
+    setBusy(true)
+    let release!: (ok: boolean) => void
+    applyTail.current = new Promise<boolean>((resolve) => (release = resolve))
+    let ok = true
+    for (const held of queue) {
+      try {
+        await held.run()
+      } catch (err) {
+        setHalt({ where: 'server', ...describe(err) })
+        ok = false
+        break
+      }
+    }
+    release(ok) // a failed retry still holds every save behind it
+    savesOut.current -= 1
+    retryingRef.current = false
+    if (!busyRef.current && savesOut.current === 0) setBusy(false)
+    if (ok) setHalt((prev) => (prev?.where === 'server' ? null : prev))
+  }, [])
+
   const undoBack = useCallback(
     async (depth: number) => {
-      if (busyRef.current) return
+      if (refuseWhileSaving()) return
       const plan = undoStack.slice(0, Math.max(0, depth))
       if (plan.length === 0) return
       busyRef.current = true
@@ -3367,7 +3510,7 @@ export function CaptureScreen() {
         setBusy(false)
       }
     },
-    [patchOnHand, patchSectionCount, stampSlot, undoStack],
+    [patchOnHand, patchSectionCount, refuseWhileSaving, stampSlot, undoStack],
   )
   /* STABLE HANDLES FOR THE FILMSTRIP'S MEMOIZED TILES: the ref is re-pointed each render, the
    * callbacks never change identity, so a tile re-renders only when its own props move. */
@@ -3402,7 +3545,7 @@ export function CaptureScreen() {
    *  above — one strip, reporting on itself either way. */
   const undoDivider = useCallback(
     async (target: { box: number; div: string; priorDiv: string | null }) => {
-      if (busyRef.current) return
+      if (refuseWhileSaving()) return
       busyRef.current = true
       setBusy(true)
       setUndoNote(null)
@@ -3438,7 +3581,7 @@ export function CaptureScreen() {
         setBusy(false)
       }
     },
-    [box, boxBid, sectionPickKey],
+    [box, boxBid, refuseWhileSaving, sectionPickKey],
   )
 
   /** One card, which is what `U` and the trigger seam mean by undo. Kept as its own
@@ -3470,7 +3613,7 @@ export function CaptureScreen() {
    *  exists for. */
   const doRemoveOne = useCallback(
     async (target: UndoTarget) => {
-      if (busyRef.current) return
+      if (refuseWhileSaving()) return
       busyRef.current = true
       setBusy(true)
       setRemoveBusy(true)
@@ -3543,7 +3686,7 @@ export function CaptureScreen() {
         setRemoveBusy(false)
       }
     },
-    [patchOnHand, patchSectionCount],
+    [patchOnHand, patchSectionCount, refuseWhileSaving],
   )
 
 
@@ -3581,7 +3724,7 @@ export function CaptureScreen() {
 
   const sectionBusyRef = useRef(false)
   const doSection = useCallback(async () => {
-    if (box === null || sectionBusyRef.current) return
+    if (box === null || sectionBusyRef.current || photoHeld()) return // Retry saving first
     sectionBusyRef.current = true
     setSectionBusy(true)
     setSectionNote(null)
@@ -3701,7 +3844,7 @@ export function CaptureScreen() {
     })()
     sectionInFlightRef.current = run
     await run
-  }, [box, lastSection, layoutToken, pickSection, pickedSection, refreshShotLabels, selectedDiv])
+  }, [box, lastSection, layoutToken, photoHeld, pickSection, pickedSection, refreshShotLabels, selectedDiv])
 
   /* The seam, with both implementations behind it now. The key trigger is Gate B's; the
    * motion trigger is Gate C's, and the screen still does not know which one is armed —
@@ -3761,11 +3904,11 @@ export function CaptureScreen() {
        * no record — spec 5.5's failure — and the halt banner below renders the `halted`
        * count as exactly that sentence. */
       if (triggerMode !== 'manual') {
-        const reason = busyRef.current
+        const reason = busyRef.current || (savesOut.current > 0 && !dealingRef.current)
           ? ('busy' as const)
           : halt !== null
             ? ('halted' as const)
-            : captureIdRef.current !== null
+            : captureIdRef.current !== null && savesOut.current === 0
               ? ('held' as const)
               : box === null
                 ? ('noBox' as const)
@@ -3844,6 +3987,7 @@ export function CaptureScreen() {
   const canCapture =
     halt === null &&
     !busy &&
+    !photoHeld() &&
     box !== null &&
     camera.ready &&
     gameEntry !== null &&
@@ -3883,7 +4027,8 @@ export function CaptureScreen() {
       key: 'halt',
       icon: 'alert',
       tone: 'warn',
-      text: 'Captures are paused. Resume them above.',
+      // A failed save has its own notice: one notice, not two.
+      text: halt.where === 'server' && photoHeld() && triggerMode !== 'manual' ? null : 'Captures are paused. Resume them above.',
       fix: null,
     })
   } else {
@@ -4042,14 +4187,28 @@ export function CaptureScreen() {
    * baseline, camera ready, capture not halted. Any fire the screen declines stops it. */
   const motionArmed = triggerMode === 'motion' && motionDiag?.hasBaseline === true
   const dealer = useDealer({
+    onMark: (name, card) => traceRef.current?.mark(name, card),
     halted: halt !== null,
     dropped: swallowedTotal + swallowed.halted,
     ready: blockers.length === 0,
     armed: motionArmed,
   })
-  savedRef.current = dealer.noteSaved
+  photoTakenRef.current = dealer.photoTaken
+  dealingRef.current = dealer.state === 'dealing'
+  /* Last in the list: a halt's own line stays the first reason. */
+  const held = photoHeld()
+  if (held) {
+    blockers.push({
+      key: 'unsaved',
+      icon: 'alert',
+      tone: 'warn',
+      text: 'A photo is not saved. Press Retry saving.',
+      fix: null,
+    })
+  }
   /* One reason per blocker the Capture button already answers to: the same `blockers` list, never a copy. */
   const blockerWord: Record<string, string> = {
+    unsaved: 'Retry saving first',
     halt: 'Resume captures first',
     camera: 'Open the camera first',
     'camera-fault': 'The camera is sending no frames',
@@ -4064,8 +4223,26 @@ export function CaptureScreen() {
       : !motionArmed
         ? 'Waiting for motion to settle'
         : blockers.length > 0
-          ? (blockerWord[blockers[0]?.key ?? ''] ?? 'Capture is blocked')
+          ? // A failed save with no Resume button on screen: Retry saving is the way out.
+            halt?.where === 'server' && photoHeld()
+            ? blockerWord.unsaved
+            : (blockerWord[blockers[0]?.key ?? ''] ?? 'Capture is blocked')
           : null
+  /* A halt is an overlay pinned over the page top, so it carries the not-saved notice INSIDE it:
+   * no second notice is ever laid where the overlay lands. */
+  const haltShown = halt !== null && !(halt.where === 'server' && heldView.length > 0 && triggerMode !== 'manual')
+  const unsavedPanel = heldView.length === 0 ? null : (
+        <section className="capture-unsaved" role="alert">
+          <Notice tone="warn" title={`${heldView[0]!.label} was not saved`}>
+            {heldView.length === 1
+              ? 'Nothing after it was sent. Press Retry saving.'
+              : `${heldView.length} photos were not saved in all. Nothing after it was sent. Press Retry saving.`}
+          </Notice>
+          <Button variant="primary" size="lg" onClick={() => void retrySaving()}>
+            Retry saving
+          </Button>
+        </section>
+  )
   const dealerIdle = dealer.state === 'connected' || dealer.state === 'stopped'
 
   /* WHILE THE DISPENSER DEALS THE RECENT RAIL SHOWS ONLY THE NEWEST `DEALING_RAIL_TILES` (D316):
@@ -4137,7 +4314,7 @@ export function CaptureScreen() {
    * it scrolls in or takes focus, before it can be read or pressed. Same text and attributes the
    * tiles carried when React drew them. */
   const busyNow = useRef(busy)
-  busyNow.current = busy
+  busyNow.current = busy || held
   const railVisible = useRef(new Set<Element>())
   const railSeen = useRef(new WeakSet<Element>())
   const railObserver = useRef<{ root: Element; observer: IntersectionObserver } | null>(null)
@@ -4192,7 +4369,7 @@ export function CaptureScreen() {
         writeTile(item, rank)
       } else if (rank < DEALING_RAIL_TILES || railVisible.current.has(item)) writeTile(item, rank)
     }
-  }, [railList, busy, writeTile])
+  }, [railList, busy, held, writeTile])
   useEffect(() => () => railObserver.current?.observer.disconnect(), [])
   /* A tile out of view that takes focus is written first, so what a screen reader reads is current. */
   const onRailFocus = useCallback(
@@ -4389,9 +4566,10 @@ export function CaptureScreen() {
             <p className="capture-halt-message capture-halt-server">{halt.text}</p>
             {halt.code === null ? null : <p className="capture-halt-code">{halt.code}</p>}
           </details>
+          {unsavedPanel}
         </section>
       ) : null}
-      {halt === null || halt.where === 'section' ? null : (
+      {halt === null || halt.where === 'section' || (halt.where === 'server' && heldView.length > 0 && triggerMode !== 'manual') ? null : (
         <section className="capture-halt" role="alert" ref={haltRef}>
           <div className="capture-halt-main">
             <span className="capture-halt-glyph" aria-hidden="true">
@@ -4467,18 +4645,26 @@ export function CaptureScreen() {
               )}
             </p>
           </details>
+          {unsavedPanel}
         </section>
       )}
 
       {/* A capture that outlived the page (D27). Not rendered under a halt, which says it
           louder. */}
-      {halt !== null || !heldAcrossReload ? null : (
+      {halt !== null || carried === 0 ? null : (
         <section className="capture-carried" role="status">
-          <Notice tone="warn" title="Unconfirmed capture from before reload">
-            Capture the same card again, not the next one.
+          <Notice
+            tone="warn"
+            title={carried === 1 ? 'Unconfirmed capture from before reload' : `${carried} unconfirmed captures from before reload`}
+          >
+            {carried === 1
+              ? 'Capture the same card again, not the next one.'
+              : `Capture the same ${carried} cards again, in the order they were taken, not the next one.`}
           </Notice>
         </section>
       )}
+
+      {heldView.length === 0 || haltShown ? null : unsavedPanel}
 
       <div className="capture-shell">
         {/* ============ THE VIEWFINDER: the hero, on a dark stage in either theme ============ */}
@@ -4999,6 +5185,7 @@ export function CaptureScreen() {
                        the exact cross-screen confusion that reservation exists to prevent.
                        "next 43" keeps the cut without the collision. */
                     trail={`next ${option.next ?? '?'}`}
+                    disabled={held}
                     onPick={() => chooseBox(option.box, option.bid)}
                   />
                 ))}
@@ -5117,6 +5304,7 @@ export function CaptureScreen() {
                               : `${span.count} ${span.count === 1 ? 'card' : 'cards'}`
                       }
                       trailWord={isFirst || isLast}
+                      disabled={held}
                       onPick={() => {
                         pickSection(isLast ? null : (span.div ?? null))
                         closeField()
@@ -5205,7 +5393,7 @@ export function CaptureScreen() {
               <div className="capture-block" role="group" aria-label="Setup">
                 <span className="bn-label capture-block-word">Setup</span>
                 <ul className="capture-block-list">
-                  {blockers.map((blocker) => (
+                  {blockers.filter((blocker) => blocker.text !== null || blocker.fix !== null).map((blocker) => (
                     <li key={blocker.key} className="capture-block-row" data-tone={blocker.tone}>
                       {/* One icon per row: the fix button carries it when there is no sentence. */}
                       {blocker.text === null ? null : (
@@ -5248,11 +5436,12 @@ export function CaptureScreen() {
               kbd={SECTION_KEY_LABEL}
               block
               onClick={() => void doSection()}
-              disabled={box === null || sectionBusy}
+              disabled={box === null || sectionBusy || held}
               busy={sectionBusy}
             >
               Section
             </Button>
+            {held ? <p className="capture-quiet">{blockerWord.unsaved}</p> : null}
             {sectionNote === null ? null : (
               <p className={sectionNote.done ? 'capture-quiet capture-note-ok' : sectionNote.quiet ? 'capture-quiet' : 'capture-refused'}>
                 {sectionNote.done ? <Icon name="check" size={13} /> : sectionNote.quiet ? null : <Icon name="alert" size={13} />}

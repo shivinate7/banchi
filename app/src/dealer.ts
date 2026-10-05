@@ -42,8 +42,9 @@ type Command = (typeof ALLOWED)[number]
 /** The newest tiles the Recent rail draws while the dispenser deals: three rows of its five columns. */
 export const DEALING_RAIL_TILES = 15
 
-export const DEAL_GAP_MS = 200
-/** After COMPLETE, how long the card's photo may take to save before the dealer stops. */
+/** After the photo is taken (and COMPLETE came), how long before the next START. */
+export const DEAL_GAP_MS = 50
+/** After COMPLETE, how long the photo may take to be taken before the dealer stops. */
 export const SAVE_WAIT_MS = 3_000
 const SILENCE_MS = 5_000
 /** After Stop, how long a START still in the air may take to answer before its card is written off. */
@@ -55,6 +56,7 @@ const SAID_FAULT = 'The dispenser reported a fault. Check it, then connect again
 export const SAID_OFF = 'Bluetooth is off. Turn it on, then connect again.'
 const SAID_FAILED = 'Could not connect. Check it is on, then try again.'
 export const SAID_NO_PHOTO = 'Stopped: no photo came after the last card. Check the tray.'
+export const SAID_NOT_SAVED = 'Stopped: a photo was not saved.'
 export const SAID_DROPPED = 'Stopped: a card was not photographed. Resume captures first.'
 
 export type DealerState = 'idle' | 'connecting' | 'connected' | 'dealing' | 'stopped' | 'error'
@@ -69,7 +71,10 @@ const cardsWord = (n: number) => `${n} ${n === 1 ? 'card' : 'cards'}`
 // The chosen device lives in module memory, so a second Connect in the same page load skips the chooser.
 let remembered: BtDevice | null = null
 
-export function createDealer() {
+/** A timing event the dealer reports: the owner's trace carries it (`MotionTrace.mark`). */
+export type DealerMark = 'photo-taken' | 'save-answered' | 'start-sent'
+
+export function createDealer({ onMark }: { onMark?: (name: DealerMark, card: number) => void } = {}) {
   let state: DealerState = 'idle'
   let cards = 0
   let note: string | null = null // a said line that outlives later replies, until the next Start
@@ -86,7 +91,9 @@ export function createDealer() {
   let settle: ReturnType<typeof setTimeout> | undefined
   let saveWait: ReturnType<typeof setTimeout> | undefined
   let completed = false // this card's COMPLETE came
-  let saved = false // this card's photo saved
+  let taken = false // this card's photo was taken
+  let sent = 0 // STARTs sent this run: the card number
+  let out = new Set<{ card: number }>() // saves not yet answered
 
   const derive = (): string => {
     if (note !== null) return note
@@ -139,9 +146,12 @@ export function createDealer() {
     if (state !== 'dealing') return
     awaiting = true
     completed = false
-    saved = false
+    taken = false
+    sent += 1
+    const card = sent
     write('MOTOR:START')
       .then(() => {
+        onMark?.('start-sent', card)
         if (state !== 'dealing') return
         clearTimeout(silence)
         silence = setTimeout(() => {
@@ -153,9 +163,12 @@ export function createDealer() {
         if (state === 'dealing') lost()
       })
   }
-  /* The next START needs this card's COMPLETE and its saved photo, in either order. */
+  /* The next START needs this card's COMPLETE and its photo TAKEN, in either order, and no
+   * earlier card's save still out: at most one photo is ever unsaved. */
   const next = () => {
-    completed = false // extra saves for one card let one card through
+    if (state !== 'dealing' || !completed || !taken) return
+    for (const t of out) if (t.card !== sent) return
+    completed = false // extra photos for one card let one card through
     clearTimeout(saveWait)
     gap = setTimeout(deal, DEAL_GAP_MS)
   }
@@ -168,7 +181,7 @@ export function createDealer() {
       cards += 1
       if (state === 'dealing') {
         completed = true
-        if (saved) next()
+        if (taken) next()
         else saveWait = setTimeout(() => finish('stopped', SAID_NO_PHOTO, true), SAVE_WAIT_MS)
       }
       publish() // a card already moving when Stop was pressed still counts
@@ -247,6 +260,8 @@ export function createDealer() {
   }
   function begin(): void {
     cards = 0
+    sent = 0
+    out = new Set()
     note = null
     ended = false
     state = 'dealing'
@@ -285,11 +300,32 @@ export function createDealer() {
       subs.add(fn)
       return () => void subs.delete(fn)
     },
-    /** A capture's photo saved. Counts only while dealing. */
-    noteSaved() {
-      if (state !== 'dealing') return
-      saved = true
-      if (completed) next()
+    /** The photo is taken (frame grabbed). Runs `save` at once and returns its outcome. While
+     *  dealing it retries once, and a second failure stops the dealer: the card is never lost
+     *  silently. The next START does not wait for the save, only for an earlier one. */
+    photoTaken(save: () => Promise<unknown>): Promise<unknown> {
+      if (state !== 'dealing') return save()
+      const ticket = { card: sent }
+      out.add(ticket)
+      onMark?.('photo-taken', ticket.card)
+      taken = true
+      clearTimeout(saveWait) // the photo is here; an earlier save may still hold the next START
+      const done = (async () => {
+        try {
+          const v = await save().catch(() => save())
+          onMark?.('save-answered', ticket.card)
+          return v
+        } catch (e) {
+          void stop(SAID_NOT_SAVED)
+          throw e
+        } finally {
+          out.delete(ticket)
+          next()
+        }
+      })()
+      done.catch(() => {}) // the caller reads the failure; this keeps it from going unhandled
+      next()
+      return done
     },
     /** Stop dealing and drop the listeners. For unmount. */
     dispose() {
@@ -308,18 +344,20 @@ export type Dealer = ReturnType<typeof createDealer>
 export const dealerSupported = () => bluetooth() !== undefined
 
 export function useDealer({
+  onMark,
   halted,
   dropped,
   ready,
   armed,
 }: {
+  readonly onMark?: (name: DealerMark, card: number) => void
   readonly halted: boolean
   readonly dropped: number
   readonly ready: boolean
   readonly armed: boolean
 }) {
   const ref = useRef<Dealer | null>(null)
-  ref.current ??= createDealer()
+  ref.current ??= createDealer({ onMark })
   const dealer = ref.current
   const snap = useSyncExternalStore(dealer.subscribe, dealer.getSnapshot)
   const droppedAtStart = useRef(dropped)
@@ -343,5 +381,5 @@ export function useDealer({
     if (dropped > droppedAtStart.current) void dealer.stop(SAID_DROPPED)
   }, [dealer, dropped])
 
-  return { ...snap, connect: dealer.connect, noteSaved: dealer.noteSaved, start, stop: () => dealer.stop() }
+  return { ...snap, connect: dealer.connect, photoTaken: dealer.photoTaken, start, stop: () => dealer.stop() }
 }
