@@ -166,6 +166,7 @@ at least 0.755. An accepted card gets `confidence` of `high` in the identificati
 The margin floor of 0.05 is the owner's ruling: *"maybe those under .05 get a haiku auto pass"*.
 **Every other card gets the second look** (section 2). Haiku's answer for it is held for review.
 The join marks such a card as a second-look card, and the router sends it to review at any confidence setting.
+- **A rarity claim settles one card's printing.** When M is under 0.05, the top two are one card (same name once a bracketed suffix goes, same collector number once an alt-art letter goes) and the card's `rarity_claim` equals the catalog `Rarity` of exactly one of the two, the matcher accepts that printing if S holds. Different cards, a claim that fits neither or both, and no claim stay refused. The rarity is read at read time from `StockImages.catalog_products`. Pokemon has none there, so it never settles. The result's code is `printing_settled_by_claim`. This is the same pick `variant.resolve` makes from a finish claim.
 
 Measured on the 500 photographs, Marqo-B:
 
