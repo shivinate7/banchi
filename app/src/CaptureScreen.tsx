@@ -664,6 +664,14 @@ function rememberTaken(captureId: string, frameBase64: string): void {
     // No local copy: the tile asks `/photo`, as it always did.
   }
 }
+/** Revoke every kept frame except those of `keep`: a new sitting, and the screen's unmount (keep nothing). */
+function pruneTaken(keep: ReadonlySet<string>): void {
+  for (const [id, url] of TAKEN) {
+    if (keep.has(id)) continue
+    URL.revokeObjectURL(url)
+    TAKEN.delete(id)
+  }
+}
 function photoOrTaken(box: number, index: number, ref: PhotoRef, nonce: string): string | undefined {
   return (ref.capture_id != null ? TAKEN.get(ref.capture_id) : undefined) ?? photoSrc(box, index, ref, nonce)
 }
@@ -3257,7 +3265,7 @@ export function CaptureScreen() {
         // so the stored copy goes with it — an id left in the store after the server has
         // answered would be resent by the next capture and would answer for the wrong card.
         settleCaptureId(captureId)
-        if (card.capture_id === captureId) rememberTaken(captureId, frame)
+        if (card.created && card.capture_id === captureId) rememberTaken(captureId, frame)
         /* `created: false` means this id had already been committed — the halt before it
          * lost a response, not a card. The server returned the original position and burned
          * no index, which is only true because the id was held across the halt.
@@ -4285,6 +4293,12 @@ export function CaptureScreen() {
   /* ponytail: a cache written inside `useMemo`, the one impure step. It only holds elements the last
    * run built, so a dropped memo costs one full rebuild and is never wrong. */
   const railCache = useRef(new Map<string, RailEntry>())
+  const sittingFirst = sitting[0]?.card.capture_id
+  useEffect(() => {
+    pruneTaken(new Set(sitting.map((shot) => shot.card.capture_id).filter((id): id is string => id !== null)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a new sitting starts when its first shot changes
+  }, [sittingFirst])
+  useEffect(() => () => pruneTaken(new Set()), [])
   const railListRef = useRef<HTMLUListElement>(null)
   const railList = useMemo(() => {
     const shown = dealing ? undoStack.slice(0, DEALING_RAIL_TILES) : undoStack
@@ -4302,7 +4316,10 @@ export function CaptureScreen() {
       <ul className="capture-undo-list" ref={railListRef}>
         {shown.map((target, at) => {
           const key = `${target.box}/${target.index}`
-          const nonce = nonceOf(slotStamps, revision, target.box, target.index)
+          // A tile whose kept frame is gone gets a new nonce, so its element rebuilds and asks `/photo`.
+          const nonce =
+            nonceOf(slotStamps, revision, target.box, target.index) +
+            (target.captureId !== null && TAKEN.has(target.captureId) ? 't' : '')
           const had = railCache.current.get(key)
           /* THE SAME ELEMENT OBJECT FOR A TILE NOTHING ABOUT WHICH CHANGED: React skips it without
              rendering it or diffing its props, so a capture creates one element, not one per card. */
