@@ -533,7 +533,14 @@ def corrected_bounds(size, box: CardBox, aspect: Optional[float] = CARD_ASPECT):
     right, bottom = box.right * width, box.bottom * height
     box_w, box_h = right - left, bottom - top
 
-    if aspect and box_h > 0 and (box_w / box_h) > aspect:
+    if aspect and box_w > box_h > 0:
+        # A landscape card (a Riftbound battlefield): its long edge is the width, so the
+        # correction grows the width, never the height.
+        if box_h / box_w > aspect:
+            grow = (box_h / aspect - box_w) / 2.0
+            left -= grow
+            right += grow
+    elif aspect and box_h > 0 and (box_w / box_h) > aspect:
         want_h = box_w / aspect
         grow = (want_h - box_h) / 2.0
         top -= grow

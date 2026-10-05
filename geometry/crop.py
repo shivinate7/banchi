@@ -102,7 +102,7 @@ def _upscale(image):
     return image.resize(size, Image.LANCZOS)
 
 
-def registered_card(source, box: CardBox, aspect: float = CARD_ASPECT):
+def registered_card(source, box: CardBox, aspect: float = CARD_ASPECT, keep_orientation: bool = False):
     """The card alone: rotated upright, corrected to a card's shape, mat cut away, portrait.
 
     THE CORRECTION IS THE SAME ONE THE PRIMARY IMAGE GETS, and it was missing here until
@@ -141,7 +141,8 @@ def registered_card(source, box: CardBox, aspect: float = CARD_ASPECT):
     )
     # A card lying on its side passes the aspect gate — the gate compares short to long
     # edge — so straighten it here rather than cutting a "title band" across the artwork.
-    if card.size[0] > card.size[1]:
+    # `keep_orientation`: a landscape card (a Riftbound battlefield) stays landscape.
+    if card.size[0] > card.size[1] and not keep_orientation:
         card = card.rotate(90, expand=True)
     return card
 

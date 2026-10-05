@@ -192,7 +192,7 @@ const NON_MUTATING_CLAIM = /writes nothing|creates no run directory|creates noth
  * them in. */
 const RECORDED = {
   reads: [
-    'getStatus', 'getInventory', 'getQueues', 'reviewCatalog', 'search', 'getGames', 'getBoxes',
+    'getStatus', 'getRecentStatus', 'getInventory', 'getQueues', 'reviewCatalog', 'search', 'getGames', 'getBoxes',
     'getBoxListings', 'getPricing', 'getPriceHistory', 'getRuns', 'getRun', 'getTcgSets',
     'getOrders', 'getPriceTrends', 'getExportScope', 'getPricingWorklist', 'getPricingCorpus',
     'getBoxPhotos', 'getMarkdowns',
@@ -321,6 +321,8 @@ const RECORDED = {
     // D207: listener-shaped exactly like `onServerBoot` above — it registers a
     // callback and returns an unsubscribe function, and makes no request of its own.
     'onServerReachable',
+    // Read scoping (lane E1): who owns a read, and the client's kept price tables. State in this module, no request.
+    'enterReadScope', 'leaveReadScope', 'setSheetOpen', 'forgetPricing',
     // LOC-28: the words for one side of a card's neighbours ("an unread card"), a pure
     // string helper beside `placeParts`, which makes no request.
     'neighborWords',

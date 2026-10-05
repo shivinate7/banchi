@@ -310,9 +310,11 @@ class PriceArchive:
         (`pipeline/pricearchive.py:sweep`) builds that key so this method stays a pure
         write, with no argument-order convention of its own to get wrong.
 
-        `Rows`'s diff is baseline-based, so a bucket whose reading is byte-identical to what
-        is already stored costs nothing in the transaction — only a new key or one whose
-        reading actually changed reaches disk.
+        EVERY BUCKET GIVEN IS WRITTEN. A key never loaded has no baseline, and a bucket
+        read again carries a new `at`, which `pipeline/pricearchive.py:freshness_index`
+        reads to decide what the next resume skips. So a reading unchanged in price is
+        still a changed row, and loading existing rows first would save nothing. The
+        caller bounds the cost: one chunk of SKUs per `Store.write()`.
         """
         for key, bucket in buckets.items():
             self.entries[key] = bucket

@@ -320,6 +320,9 @@ function InventoryWalk({
 
   /* Bumped after every write, and read by the walk and the copies panel as a re-read trigger. */
   const [reloads, setReloads] = useState(0)
+  /* A SALE'S OWN COUNTER. A sale changes this box, the box counts, the
+     review queues and the order claims on copies: the buried boxes and the pricing tables stay as read, so they follow `reloads` and not this. Every other write bumps `reloads`, which re-reads all. */
+  const [sales, setSales] = useState(0)
 
   /* The copy waiting on a retire panel, or null. A retirement without a reason is refused, so
    * the four reason buttons ARE the confirm. */
@@ -403,7 +406,7 @@ function InventoryWalk({
     return () => {
       live = false
     }
-  }, [reloads])
+  }, [reloads, sales])
 
   /* Escape closes the retire panel. */
   useEffect(() => {
@@ -459,7 +462,7 @@ function InventoryWalk({
           canUndo: reversible,
           note: [renumberNote(copy.place), reversible ? null : NO_UNDO].filter(Boolean).join(' ') || null,
         })
-        setReloads((n) => n + 1)
+        setSales((n) => n + 1)
       } catch (err) {
         clearFreshSale(copy.key)
         if (refusalCode(err) === ALREADY_SOLD) {
@@ -475,7 +478,7 @@ function InventoryWalk({
             canUndo: false,
             note: 'Another device sold this copy first, so nothing was written here.',
           })
-          setReloads((n) => n + 1)
+          setSales((n) => n + 1)
           return
         }
         report(describeFailure(err))
@@ -768,7 +771,7 @@ function InventoryWalk({
           layouts={layouts}
           listings={listings}
           wanted={wanted}
-          reloadToken={reloads}
+          reloadToken={reloads + sales}
           busyKey={busyKey}
           soldKeys={soldKeys}
           onSell={sell}
@@ -813,7 +816,7 @@ function InventoryWalk({
       className="inventory"
     >
       {view === 'sets' ? (
-        <InventorySets reloadToken={reloads} />
+        <InventorySets reloadToken={reloads + sales} />
       ) : (
       <BoxBrowse
         detail={detail}
@@ -823,7 +826,8 @@ function InventoryWalk({
         onBoxes={setBoxRecords}
         onListings={setListings}
         goTo={goTo}
-        reloadToken={reloads}
+        reloadToken={reloads + sales}
+        heavyToken={reloads}
         hideSold={hideSold}
         onHideSold={toggleHideSold}
         frozen={frozen}
