@@ -685,6 +685,9 @@ def resolve(
     from identify import sidecar  # lazy: `identify` imports `pipeline`
 
     roots = selection.roots(home)
+    if not selection.paths:
+        # A missing DEFAULT root is skipped, as the scan did. A named path must still exist.
+        roots = [root for root in roots if root.is_dir()]
     for root in roots:
         if not root.is_dir():
             raise FileNotFoundError(2, "capture directory not found", str(root))
