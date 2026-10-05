@@ -189,3 +189,27 @@
     text-align: center;
   }
 }
+
+/* THE MOVES LIST FOLDS AWAY (D313): closed it is one button and the panel holds that size. Open,
+   the list floats over the worklist in its own scroll box under half a viewport, so nothing
+   below it moves. */
+.send-moves {
+  position: relative;
+}
+.send-moves .send-names {
+  position: absolute;
+  inset: 100% 0 auto 0;
+  z-index: 5;
+  margin: var(--bn-1) 0 0;
+  padding: var(--bn-2) var(--bn-3);
+  max-height: min(40vh, 360px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bn-surface);
+  border: 1px solid var(--bn-line);
+  border-radius: var(--bn-r-lg);
+  box-shadow: var(--bn-shadow-2);
+}
+.send-moves .send-names[hidden] {
+  display: none;
+}
