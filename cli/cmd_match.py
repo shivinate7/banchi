@@ -449,6 +449,82 @@ def sweep_worker(say) -> int:
     return 0
 
 
+def _disagrees(card, payload) -> bool:
+    """The free pick names another card than the filed one: a different number, or a name that
+    matches nothing the filed name stands for (`join.name_disputes`, the join's own test)."""
+    from pipeline import tcgcsv
+
+    if join.number_index_key(payload.get("number")) != join.number_index_key(card.read_number):
+        return True
+    return join.name_disputes(payload.get("name"), [{tcgcsv.NAME_COLUMN: card.read_name}])
+
+
+def audit(say, *, write: bool = False) -> int:
+    """`match audit [--write]`: the free reader over every card with a photo and an identity,
+    with or without a SKU. Never spends. READS FIRST, NO LOCK (D88); the lock is taken once, for
+    the write only, and re-checks each card is still the one that was read. A card the reader
+    cannot accept is counted "not checked", never a disagreement. In stock goes to Review as
+    `free_reader_disagrees` with its photo; sold is only listed."""
+    from pipeline import games
+    from pipeline.routing import FREE_READER_DISAGREES
+    from store import master
+    from store.queues import QueueEntry
+
+    if not match.status()["ready"]:
+        say("match audit    not ready: the model file or the fingerprints are missing. Run `match prepare`.")
+        return sweep.EXIT_NOT_READY
+    inventory = Store().read().inventory
+    requests, meta = [], {}
+    for key, card in sorted(inventory.cards.items()):
+        path = photos.find(card.cid) if card.cid else None
+        if path is None or not card.read_name or not card.read_number:
+            continue
+        game = str(card.game or games.DEFAULT_GAME)
+        requests.append(match.Request(key=key, photo=path, game=game, strategy=str(games.get(game)["prompt"]), set_hint=card.set_hint))
+        meta[key] = (card, path)
+    started = time.time()
+    try:
+        with match.Index() as index:
+            results = match.read(requests, index) if requests else []
+    except ImportError as exc:
+        say(f"match audit    not ready: the reader's runtime is not installed ({exc.name or exc})")
+        return sweep.EXIT_NOT_READY
+    per_card = (time.time() - started) / len(requests) if requests else 0.0
+    unchecked, found = 0, []
+    for result in results:
+        card, path = meta[result.key]
+        if not (result.accepted and result.payload is not None):
+            unchecked += 1
+            continue
+        bad = _disagrees(card, result.payload)
+        sold = card.state == master.SOLD
+        say(f"{result.key:<8} {'disagree' if bad else 'agree':<9} filed {card.sku or 'no SKU'} as {card.read_name} {card.read_number}"
+            + (f"; free read {result.payload.get('name')} {result.payload.get('number')}" if bad else "")
+            + ("; sold" if sold else ""))
+        if bad and card.state not in master.TERMINAL_STATES:
+            found.append((result, card, path))
+    queued = 0
+    if write and found:
+        with Store().write() as writable:  # the only lock, held for the write alone
+            for result, card, path in found:
+                now = writable.inventory.cards.get(result.key)
+                if now is None or now.state in master.TERMINAL_STATES or now.cid != card.cid:
+                    continue  # moved since the read: the answer is about another photograph
+                payload = result.payload
+                queued += writable.review.upsert(QueueEntry(
+                    position=result.key, box=now.box, index=now.index,
+                    label=join.place_text(now.game or games.DEFAULT_GAME, join.Position(box=now.box, index=now.index)),
+                    photo=now.photo or str(path),
+                    read={"name": payload.get("name"), "number": payload.get("number"),
+                          "printed_total": payload.get("printed_total"), "set_hint": now.set_hint},
+                    confidence=now.confidence, reason=FREE_READER_DISAGREES, market=None,
+                ))
+    say(f"match audit    {len(requests)} read, {unchecked} not checked, {len(found)} in stock disagree, "
+        f"{queued} queued for Review ({per_card:.2f} s per card)"
+        + ("" if write else "; nothing written, add --write to queue them"))
+    return 0
+
+
 def run(args, say) -> int:
     if getattr(args, "sweep_worker", False):
         return sweep_worker(say)
@@ -463,5 +539,7 @@ def run(args, say) -> int:
             model_only=bool(getattr(args, "model_only", False)),
             fingerprints_only=bool(getattr(args, "fingerprints_only", False)),
         )
-    say("usage: pkmnscan match status | prepare [--model-only | --fingerprints-only] | --sweep")
+    if action == "audit":
+        return audit(say, write=bool(getattr(args, "write", False)))
+    say("usage: pkmnscan match status | prepare [--model-only | --fingerprints-only] | audit [--write] | --sweep")
     return 64

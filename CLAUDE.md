@@ -102,6 +102,8 @@ make catalog-mirror # dry run only. ARGS=--dry-run samples over HTTP HEAD.
                                    #   import-listed.csv and import-subthreshold.csv. --split-games writes one file per game.
                                    #   --live-guard FILE trims rows so TCGplayer never holds more copies than
                                    #   are here. --reprice-live F adds a price-only row per live card F names.
+./pkmnscan match    audit [--write]  # the free reader over every filed card with a photo. Free. Lists disagreements;
+                                   # --write queues the in-stock ones for Review (`free_reader_disagrees`), sold ones only listed.
 ./pkmnscan match    status | prepare [--model-only | --fingerprints-only]  # the free reader's setup. Prepare
                                    # downloads the pinned model file and reads each stock photo once (D301, stock photos
                                    # are hotlinked, never mirrored; this is its one exception). It starts by itself at

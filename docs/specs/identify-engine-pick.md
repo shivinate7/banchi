@@ -585,6 +585,8 @@ Turning the toggle on never downloads. With no model or no index, the toggle rea
 
 **What a paid press does over matched cards.** Section 6 gives the rule. It asks every time, and the default is skip.
 
+**The audit over filed cards.** A paid read once misread a card's number and the card was filed and sold as another card. The name-dispute guard now stops that at the join, but cards filed before it stay as they were. `./pkmnscan match audit [--write]` runs the free reader over every card that has a photo and a name and number, with or without a SKU. It uses the sweep's request and `match.read`, so section 3's accept rule decides which reads count. A card the reader cannot accept is counted "not checked" and is never a disagreement. Without `--write` it changes nothing. With `--write`, each in-stock card whose free pick disagrees goes back to Review with its photo under the reason `free_reader_disagrees`, and a second `--write` queues nothing new. A sold card is only listed. It never spends, and it refuses with "not ready" when there is no model file or index. The owner's ruling: in-stock disagreements go back to Review with their photos, and sold ones are listed only.
+
 ## 9. The owner's rulings
 
 - The margin floor is 0.05. The S floor of 0.755 stays (section 3). The owner's word: *"maybe those under .05 get a haiku auto pass"*.

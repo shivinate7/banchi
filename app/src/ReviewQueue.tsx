@@ -344,6 +344,8 @@ const QUESTIONS: Readonly<Record<string, string>> = {
    * card from `cards identity --write` — the read disputes the SKU it is bound to, and
    * nobody has looked. `reasons.ts` carries the shorter sub-label under this headline. */
   listing_disputed: 'Is the listing the right card?',
+  /* `pipeline/routing.py:FREE_READER_DISAGREES`: `match audit --write` found a confident free read of the photograph that names another card than the one it is filed as. */
+  free_reader_disagrees: 'Is this the card it is filed as?',
 }
 
 const RETIRED_HEADLINE = 'This question was retired.'

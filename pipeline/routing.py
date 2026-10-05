@@ -101,6 +101,11 @@ NAME_DISPUTED = "name_disputed"
 # identity_binding.py:held_review_entry`, which loads this name to build the entry.
 LISTING_DISPUTED = "listing_disputed"
 
+# `./pkmnscan match audit --write` opens it directly (`cli/cmd_match.py:audit`), never `route()`,
+# for an in-stock card whose confident free pick disagrees with the card it is filed as. Same
+# shape as `LISTING_DISPUTED`: in `ROUTING_REASONS` as a destination this module owns.
+FREE_READER_DISAGREES = "free_reader_disagrees"
+
 # ROUTING'S OWN REVIEW REASONS, PUBLISHED AS A SET. The ladder's six live in
 # `pipeline/variant.py:LADDER_REASONS`; together the two tuples are the whole vocabulary, and
 # the split is the same one docs/DESIGN.md credits each reason by.
@@ -120,6 +125,7 @@ ROUTING_REASONS = (
     NAME_DISPUTED,
     NO_MARKET_DATA,
     LISTING_DISPUTED,
+    FREE_READER_DISAGREES,
 )
 
 # Hard failures: no usable answer at all, so no price can be reasoned about. Always main,
