@@ -1,4 +1,5 @@
-import { count as nounCount } from './kit/dataRules'
+import { byteSize, count as nounCount } from './kit/dataRules'
+import { localDay } from './dates'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 
 import {
@@ -182,14 +183,6 @@ export function sinceOnTheWire(local: string): string | null {
   const when = new Date(local)
   if (Number.isNaN(when.getTime())) return null
   return when.toISOString().slice(0, 19)
-}
-
-/** Local midnight, in the shape a `datetime-local` input holds. The one-press "today" — a
- *  sitting is reduced to a `since` bound, because the server has no `sitting` term and a second
- *  clustering in Python would be a second answer to Home's question. */
-export function todayLocal(at: Date = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T00:00`
 }
 
 /**
@@ -407,7 +400,7 @@ function MatchPrepare({
   }
   const running = state.running || preparing
   const progress = state.progress
-  const megabytes = Math.round(state.model_bytes / 1_000_000)
+  const download = byteSize(state.model_bytes)
   const line =
     progress !== null && running
       ? progress.phase === 'model'
@@ -442,7 +435,7 @@ function MatchPrepare({
         ? (line ?? 'Starting')
         : progress?.state === 'failed'
           ? progress.message
-          : `A ${megabytes} MB download, then a read of the stock photos for the sets you hold and every Riftbound set. It costs nothing and keeps going if you close this sheet.`}
+          : `A ${download} download, then a read of the stock photos for the sets you hold and every Riftbound set. It costs nothing and keeps going if you close this sheet.`}
       {trouble !== null ? <span> {trouble}</span> : null}
     </Notice>
   )
@@ -1226,7 +1219,7 @@ export function RunsComposer({
                     onChange={(event) => onDraft({ since: event.target.value === '' ? null : event.target.value })}
                   />
                 </label>
-                <Chip icon="clock" onClick={() => onDraft({ since: todayLocal() })}>
+                <Chip icon="clock" onClick={() => onDraft({ since: `${localDay()}T00:00` })}>
                   Today
                 </Chip>
                 {draft.since === null ? null : (

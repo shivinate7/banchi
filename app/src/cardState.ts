@@ -23,6 +23,18 @@ export function readingAgo(at: string | null | undefined): string | null {
   return toDate(at) === null ? null : relativeDate(at)
 }
 
+/** `Recent`, or `Recent, 5 hours`: a reading's age said as a bound, never a date. Null where unread. */
+export function readingBound(at: string | null | undefined): string | null {
+  const when = toDate(at)
+  if (when === null) return null
+  const elapsed = Math.max(0, Date.now() - when.getTime())
+  const unit = (n: number, one: string): string => `Recent, ${n} ${one}${n === 1 ? '' : 's'}`
+  if (elapsed < 2 * 60_000) return 'Recent'
+  if (elapsed < 3_600_000) return unit(Math.floor(elapsed / 60_000), 'minute')
+  if (elapsed < 86_400_000) return unit(Math.floor(elapsed / 3_600_000), 'hour')
+  return unit(Math.floor(elapsed / 86_400_000), 'day')
+}
+
 /** Whole days since a reading, or null when it has no usable stamp. */
 export function readingDays(at: string | null | undefined): number | null {
   if (typeof at !== 'string' || at.trim() === '') return null

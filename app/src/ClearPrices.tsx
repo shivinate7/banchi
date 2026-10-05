@@ -29,6 +29,7 @@
  * clearable` written a second time against the one file in this product that holds money —
  * D86 refused that across two languages and D103 found it happening across two Python modules.
  */
+import { count as nounCount } from './kit/dataRules'
 import { useEffect, useMemo, useState } from 'react'
 
 import { Button, Notice, Segmented, Sheet } from './kit'
@@ -174,7 +175,7 @@ export function ClearPrices({
           >
             {going === 0
               ? 'Nothing to clear'
-              : `Clear ${going} typed price${going === 1 ? '' : 's'}${scope === 'store' ? ' everywhere' : ''}`}
+              : `Clear ${nounCount(going, 'typed price')}${scope === 'store' ? ' everywhere' : ''}`}
           </Button>
           <Button onClick={onClose} disabled={busy}>
             Cancel

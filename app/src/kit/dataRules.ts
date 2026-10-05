@@ -81,9 +81,10 @@ export function count(n: number, one: string, many: string = `${one}s`): string 
   return `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
 }
 
-/** `999 B`, `1.2 kB`, `31.5 MB`: decimal units, one place. THE one byte size. */
+/** `999 B`, `1.2 kB`, `32.0 MB`: 1024-byte units, one place, so a screen agrees with the server's
+ *  own "32 MB" (`tcg_export.MAX_BYTES // (1024 * 1024)`). THE one byte size. */
 export function byteSize(bytes: number): string {
-  if (bytes < 1000) return `${bytes} B`
-  if (bytes < 1_000_000) return `${(bytes / 1000).toFixed(1)} kB`
-  return `${(bytes / 1_000_000).toFixed(1)} MB`
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} kB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }

@@ -1,3 +1,5 @@
+import { relativeDate } from './dates'
+import { count } from './kit/dataRules'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 
@@ -611,21 +613,9 @@ function openQuestion(
   return inParked === undefined ? null : { entry: inParked, queue: 'parked' }
 }
 
-/** How long ago a moment was, coarsely — `3 days`, `4 hours`, `today`. The compact form this
- *  used to carry is gone with its one caller: the Market row draws `ReadingAge` now, like the
- *  Listed row beside it. */
-function sinceText(at: number): string {
-  const elapsed = Date.now() - at
-  const days = Math.floor(elapsed / 86400000)
-  if (days >= 1) return `${days} day${days === 1 ? '' : 's'}`
-  const hours = Math.floor(elapsed / 3600000)
-  if (hours < 1) return 'today'
-  return `${hours} hour${hours === 1 ? '' : 's'}`
-}
-
 function waitingFor(firstSeen: string): string {
   const at = Date.parse(firstSeen)
-  return Number.isNaN(at) ? 'unknown age' : sinceText(at)
+  return Number.isNaN(at) ? 'unknown age' : relativeDate(at)
 }
 
 /** The box named on the hash — `#/inventory?box=3`, the way the home screen links here. */
@@ -768,7 +758,7 @@ function VariantChooser({
                   )}
                 </span>
                 <span className="browse-variant-count">
-                  {group.on_hand.toLocaleString()} {group.on_hand === 1 ? 'copy' : 'copies'}
+                  {count(group.on_hand, 'copy', 'copies')}
                 </span>
               </button>
             </li>
@@ -2145,7 +2135,7 @@ export function BoxBrowse({
              the rail's own narrow column at 720 and 820 — a raw clip, no ellipsis, off the
              native `placeholder` attribute. Shorter here, where the column is narrowest. It carries the
              box count, so the count line stays quiet until a search or pick narrows the list. */
-          placeholder: `Search ${boxRecords.length.toLocaleString('en-US')} ${boxRecords.length === 1 ? 'box' : 'boxes'}`,
+          placeholder: `Search ${count(boxRecords.length, 'box', 'boxes')}`,
         }}
         count={{
           /* While the chooser is pending, `reachableCount` reads `activeGroups` — which is
@@ -2187,7 +2177,7 @@ export function BoxBrowse({
           tone="warn"
           compact
           className="browse-topsold"
-          title={`${topTierLabel}: ${topTierCopyCount} ${topTierCopyCount === 1 ? 'copy' : 'copies'}, all sold`}
+          title={`${topTierLabel}: ${count(topTierCopyCount, 'copy', 'copies')}, all sold`}
           action={
             !hideSold || onHideSold === undefined ? undefined : (
               <Button size="sm" onClick={onHideSold}>
@@ -2257,10 +2247,10 @@ export function BoxBrowse({
                         string, or this dollar sign sits in the wrong face). */}
                     {!reachable
                       ? pending !== undefined
-                        ? `${pending} ${pending === 1 ? 'match' : 'matches'}, ${multiGroup ? 'pick a printing' : 'pick one'}`
+                        ? `${count(pending, 'match', 'matches')}, ${multiGroup ? 'pick a printing' : 'pick one'}`
                         : 'No match'
                       : matches !== undefined
-                      ? `${matches} ${matches === 1 ? 'match' : 'matches'}`
+                      ? `${count(matches, 'match', 'matches')}`
                       : record && sort.key === 'value' && typeof cell === 'number'
                         ? valueByBox?.has(cell) ? <Money value={valueByBox.get(cell)} /> : 'no reading'
                         : record
@@ -2333,7 +2323,7 @@ export function BoxBrowse({
               /* Under a search the match sentence carries the local count; a second one is noise. */
               searching ? null : (
                 <span className="browse-status-text">
-                  {visible.length.toLocaleString()} {visible.length === 1 ? 'card' : 'cards'}
+                  {count(visible.length, 'card')}
                 </span>
               )
             ) : (
@@ -2787,7 +2777,7 @@ export function BoxBrowse({
                           <Notice tone="warn" title={`Waiting in the ${open.queue} queue — ${reasonLabel(open.entry.reason)}.`} code={`${open.entry.reason}, ${open.queue}, ${open.entry.candidates.length} candidates`}>
                             {waitingFor(open.entry.first_seen)}.{' '}
                             {open.entry.candidates.length > 0
-                              ? `${open.entry.candidates.length} candidate row${open.entry.candidates.length === 1 ? '' : 's'} on Review.`
+                              ? `${count(open.entry.candidates.length, 'candidate row')} on Review.`
                               : 'No candidate rows — cannot be answered as it stands. Re-shoot it, or stand it down on Review.'}{' '}
                             <a href="#/review">Open the review queue</a>
                           </Notice>

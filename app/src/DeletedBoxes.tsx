@@ -1,3 +1,4 @@
+import { count } from './kit/dataRules'
 import { useEffect, useMemo, useState } from 'react'
 
 import { describeFailure, getGraveyard, type Failure } from './server'
@@ -134,7 +135,7 @@ export function DeletedWalk({
       </div>
       <div className="browse-status">
         <span className="browse-status-text">
-          {rows.length.toLocaleString()} {rows.length === 1 ? 'record' : 'records'}
+          {count(rows.length, 'record')}
         </span>
       </div>
       <ul

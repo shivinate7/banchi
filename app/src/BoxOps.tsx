@@ -32,7 +32,7 @@ import {
 } from './server'
 import { nonEmptySections, spansOf } from './position'
 import { ReadingAge } from './CardLocations'
-import { readingAgo } from './cardState'
+import { readingAgo, readingBound } from './cardState'
 import {
   Button, CardPicker, type PickOption, Icon, IconButton, Notice, Pill, Select, SectionPicker, SettingsCensus, SettingsEditor, SettingsFigures, SettingsGroup, SettingsOp,
   SettingsTrouble, Stat, boxesMostRecentFirst, count, useSheetWrite, type PickGroup,
@@ -91,14 +91,6 @@ function oldestReading(listings: Readonly<Record<string, Listing>>): string | nu
     oldest = at
   }
   return oldest
-}
-
-/** `read within 4 days` — the bound above, said as a bound. Null when nothing has been read. */
-function readingBound(at: string | null): string | null {
-  const ago = readingAgo(at)
-  if (ago === null) return null
-  if (ago === 'just now') return 'Recent'
-  return `Recent, ${ago.replace(/ ago$/, '')}`
 }
 
 /** A number off the wire, or null for anything that is not one. Null is not zero. */
@@ -262,7 +254,7 @@ export function BoxIdentity({
         <div
           className="boxops-track"
           role="img"
-          aria-label={`${record.name ?? UNNAMED_BOX}, ${spans.length} ${spans.length === 1 ? 'section' : 'sections'}`}
+          aria-label={`${record.name ?? UNNAMED_BOX}, ${count(spans.length, 'section')}`}
         >
           {spans.map((span, i) => (
             <span
@@ -949,7 +941,7 @@ function Relabel({
           No card moves. Cards from #{from} on get a new section only.{' '}
           {hit === null || hit.sections.length === 0
             ? 'How many cards that reaches could not be read from this box.'
-            : `That reaches ${hit.sections.length === 1 ? 'section' : 'sections'} ${hit.sections.join(', ')} — ${count(hit.cards, 'card', 'cards')}, counted by whole section.`}
+            : `That reaches ${count(hit.sections.length, 'section')} (${hit.sections.join(', ')}) — ${count(hit.cards, 'card', 'cards')}, counted by whole section.`}
         </Notice>
       )}
 

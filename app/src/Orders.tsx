@@ -38,7 +38,7 @@ import {
   type SortOption,
   type SortValue,
 } from './kit'
-import { absoluteDate, localDay, relativeDate } from './dates'
+import { absoluteDate, relativeDate, utcDay } from './dates'
 import { count as countOf } from './kit/dataRules'
 import { toast } from './kit/toast'
 import { boxTitle } from './kit/data'
@@ -2492,7 +2492,7 @@ function ReconcileBacklogPanel({
   readonly busy: string | null
   readonly onPress: (cutoff: string) => void
 }) {
-  const today = useMemo(() => localDay(), [])
+  const today = useMemo(() => utcDay(), [])
   /* EVERY ORDER THE RULE COULD REACH AT ANY CUTOFF: open, nothing recorded, a placed date. There
      is NO cut at today here. The review found that one: the preview dropped orders placed today,
      while a date typed past the field's max was still sent, and the server takes any cutoff. So

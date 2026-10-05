@@ -1,3 +1,4 @@
+import { count } from './kit/dataRules'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 
@@ -3699,7 +3700,7 @@ export function CaptureScreen() {
           text:
             result.shifted === 0
               ? 'Removed. It was the last card in its box, so nothing else moved.'
-              : `Removed. ${result.shifted} ${result.shifted === 1 ? 'card' : 'cards'} behind it moved down one place — every one of those labels just changed.`,
+              : `Removed. ${count(result.shifted, 'card')} behind it moved down one place — every one of those labels just changed.`,
           position: positionText(target),
           code: null,
           did: 1,
@@ -4647,8 +4648,7 @@ export function CaptureScreen() {
               </p>
               {triggerMode !== 'manual' && swallowed.halted > 0 ? (
                 <p className="capture-halt-message capture-halt-count">
-                  <span className="capture-inline-count">{swallowed.halted}</span>{' '}
-                  {swallowed.halted === 1 ? 'card' : 'cards'} may have passed the lens unrecorded
+                  <span className="capture-inline-count">{count(swallowed.halted, 'card')}</span> may have passed the lens unrecorded
                   while captures were paused. Set them aside and re-feed them after you resume.
                 </p>
               ) : null}
@@ -4892,8 +4892,7 @@ export function CaptureScreen() {
               <div className="capture-stage-warn" role="alert">
                 <Icon name="alert" size={16} />
                 <p className="capture-refused">
-                  {(motionDiag?.stalled ?? 0) - stallsSpent} card
-                  {(motionDiag?.stalled ?? 0) - stallsSpent === 1 ? '' : 's'} never settled at
+                  {count((motionDiag?.stalled ?? 0) - stallsSpent, 'card')} never settled at
                   the lens and {(motionDiag?.stalled ?? 0) - stallsSpent === 1 ? 'was' : 'were'}{' '}
                   not photographed. Set {(motionDiag?.stalled ?? 0) - stallsSpent === 1 ? 'it' : 'them'}{' '}
                   aside and feed {(motionDiag?.stalled ?? 0) - stallsSpent === 1 ? 'it' : 'them'} again.
@@ -5349,7 +5348,7 @@ export function CaptureScreen() {
                             ? 'back'
                             : isLast
                               ? 'front'
-                              : `${span.count} ${span.count === 1 ? 'card' : 'cards'}`
+                              : `${count(span.count, 'card')}`
                       }
                       trailWord={isFirst || isLast}
                       disabled={held}
