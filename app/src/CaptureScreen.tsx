@@ -4222,7 +4222,10 @@ export function CaptureScreen() {
       : !motionArmed
         ? 'Waiting for motion to settle'
         : blockers.length > 0
-          ? (blockerWord[blockers[0]?.key ?? ''] ?? 'Capture is blocked')
+          ? // A failed save with no Resume button on screen: Retry saving is the way out.
+            halt?.where === 'server' && photoHeld()
+            ? blockerWord.unsaved
+            : (blockerWord[blockers[0]?.key ?? ''] ?? 'Capture is blocked')
           : null
   /* A halt is an overlay pinned over the page top, so it carries the not-saved notice INSIDE it:
    * no second notice is ever laid where the overlay lands. */
