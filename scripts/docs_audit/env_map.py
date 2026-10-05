@@ -36,6 +36,7 @@ from .core import (
     rel,
 )
 from .paths_commands import PROPOSED_SIGIL, ignored_paths, marked_proposed
+from .registry_scopes import _tracked_paths
 from .records import (
     _DECISION_RE,
     _ENV_RE,
@@ -107,7 +108,11 @@ def _env_vars(docs: List[Path], allowed: Dict[str, str]) -> Row:
 # roster is the one place this repo keeps growing extensionless files, and `PKMNSCAN_SIGIL` —
 # printed in every refusal the sigil check makes — lives in exactly such a file.
 def _env_sites() -> Dict[str, List[str]]:
-    """`PKMNSCAN_*` and friends named outside markdown, mapped to where they are named."""
+    """`PKMNSCAN_*` and friends named outside markdown, mapped to where they are named.
+
+    Only tracked files are read: an ignored file (`.claude/settings.local.json`) is one
+    machine's override, so a variable named only there is not the repo's vocabulary.
+    """
     sites: Dict[str, List[str]] = {}
     sources: List[Path] = list(python_files())
     for name in ("Makefile", ".env.example"):
@@ -121,7 +126,10 @@ def _env_sites() -> Dict[str, List[str]]:
         candidate = hooks / hook
         if exists(candidate):
             sources.append(candidate)
+    tracked = _tracked_paths()  # empty without a repo (a no-git copy): read everything
     for path in sources:
+        if tracked and rel(path) not in tracked:
+            continue
         for number, line in enumerate(read(path).splitlines(), start=1):
             for found in _ENV_RE.findall(line):
                 sites.setdefault(found, []).append(f"{rel(path)}:{number}")

@@ -366,6 +366,46 @@ def run(ok) -> None:
         leave_staged_mode()
     ok(core._INDEX_PATHS is None and exists(ROOT / "Makefile"), "and the worktree comes back")
 
+    # THE ENV VOCABULARY ROW READS ONLY FILES GIT TRACKS. A gitignored `.claude/settings.local.json`
+    # is copied into every worktree and names variables no markdown documents, so the row failed
+    # locally and passed in CI. Arm 1 is the ignored file (red before the fix), arms 2 and 3 guard
+    # against over-correcting: a tracked settings file and a tracked script still count.
+    print("\nenv vocabulary: an ignored file names no variable, a tracked one still does")
+    import subprocess
+    from .env_map import check_env_vocabulary
+
+    def vocab_findings(tracked: dict, ignored: dict) -> list:
+        here = module_globals()
+        saved_root, saved_index = here["ROOT"], here["_INDEX_PATHS"]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".gitignore").write_text(".claude/settings.local.json\n", encoding="utf-8")
+            for name, text in {**tracked, **ignored}.items():
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_text(text, encoding="utf-8")
+            for cmd in (["init", "-q"], ["add", ".gitignore", *tracked]):
+                subprocess.run(["git", *cmd], cwd=root, check=True, stdout=subprocess.DEVNULL)
+            here["ROOT"], here["_INDEX_PATHS"] = root, None
+            try:
+                fixture_report = Report()
+                check_env_vocabulary(fixture_report, [], {})
+            finally:
+                here["ROOT"], here["_INDEX_PATHS"] = saved_root, saved_index
+        return [f.message for row in fixture_report.checks for f in row.findings]
+
+    # Built at runtime: a literal here would be a variable this file names, and the row would flag it.
+    undoc = "PKMNSCAN_" + "FIXTURE_UNDOC"
+    named = '{"env": {"%s": "1"}}\n' % undoc
+    found = vocab_findings({}, {".claude/settings.local.json": named})
+    ok(not any(undoc in m for m in found),
+       "an ignored .claude/settings.local.json names no variable", str(found))
+    found = vocab_findings({".claude/settings.json": named}, {})
+    ok(any(undoc in m for m in found),
+       "a tracked .claude/settings.json still names it", str(found))
+    found = vocab_findings({"scripts/x.sh": "echo $%s\n" % undoc}, {})
+    ok(any(undoc in m for m in found),
+       "a tracked script still names it", str(found))
+
     # Argparse's own exit for a bad flag is 2 — this script's advisory code, which the
     # pre-commit hook prints and allows. A caller that grew a stale flag would switch the
     # gate off and look routine doing it.
