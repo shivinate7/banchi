@@ -504,6 +504,10 @@ type BoxBrowseProps = {
 
   /** Bumped by the caller after it writes a card, to force the same re-read the Reload does. */
   reloadToken?: number
+  /** The part of `reloadToken` that is not a sale: a write that can move the review queues, the buried
+   *  boxes or a price. Defaults to `reloadToken`, so a caller that does not tell sales apart re-reads
+   *  all of it. */
+  heavyToken?: number
 
   /** Walk to one card, by store key. `at` is the request; a request already answered is
    *  ignored. `box` (D192, item 2) is the target's box, when known — `rows` is
@@ -784,6 +788,7 @@ export function BoxBrowse({
   onListings,
   goTo,
   reloadToken = 0,
+  heavyToken = reloadToken,
   hideSold = false,
   onHideSold,
   frozen = RANK_IS_CURRENT,
@@ -1180,7 +1185,7 @@ export function BoxBrowse({
   /* THE DELETED BOXES SHELF CLOSES THE LIST, AND ONLY WHEN NOTHING NARROWS IT. A search and a
    * facet pick name live cards, which a buried record is not, so under either the shelf is not
    * offered and a walk standing on it moves on like any shelf the answer leaves out. */
-  const { buried, failure: buriedFailure, retry: retryBuried } = useBuried(reloads + reloadToken)
+  const { buried, failure: buriedFailure, retry: retryBuried } = useBuried(reloads + heavyToken)
   const [deletedKey, setDeletedKey] = useState<string | null>(null)
   /* THE WALK AND THE PANE READ ONE ANSWER: the record picked, else the first. The arrow keys step it
    * as they step a box's walk, and the row in view is kept in view within the rail. */
@@ -1453,13 +1458,7 @@ export function BoxBrowse({
     return () => {
       live = false
     }
-  }, [reloads, reloadToken])
-
-  /* A reload drops every cached price table. */
-  useEffect(() => {
-    asked.current = new Set()
-    setPriced({})
-  }, [reloads, reloadToken])
+  }, [reloads, heavyToken])
 
   /* The shelf follows the filter; the hash's box is honoured once, on the first pick. The ref
      is read and cleared in the effect body and never inside the updater: React runs an updater
@@ -2056,7 +2055,8 @@ export function BoxBrowse({
     onSelect?.(selectedRow)
   }, [selectedRow, onSelect])
 
-  /* The selected card's run, read once and then not again — and re-asked after a reload. */
+  /* The selected card's run, read once per visit. `getPricing` keeps the table for every screen that draws off it, and
+   * a sale or a re-shoot changes no reading; a join drops it there. */
   const pricedRun = selectedRow?.card.run ?? null
   useEffect(() => {
     if (pricedRun === null) return
@@ -2077,7 +2077,7 @@ export function BoxBrowse({
     return () => {
       live = false
     }
-  }, [pricedRun, reloads, reloadToken])
+  }, [pricedRun])
 
   /* The phone's sheet closes once a card is chosen; the box picker keeps it open. */
   const pickRow = (key: string) => {

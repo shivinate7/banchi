@@ -745,7 +745,62 @@ async function serverAnswersReads(): Promise<boolean> {
   }
 }
 
-async function request(path: string, init?: RequestInit): Promise<unknown> {
+/* READS ARE SHARED AND DROPPABLE, WRITES ARE NEITHER.
+ *
+ * A GET asked while the same URL is still open joins that read, so a screen and the shell
+ * asking for `/status` in one tick cost one request. Each read remembers which screen asked
+ * (`readScope`); when a screen unmounts (`enterReadScope`'s release) its reads are aborted
+ * unless another screen still waits on them, so a long answer nobody wants stops holding one of
+ * the server's four slots. `/status` is the shell's own and is never aborted. Only GETs: a
+ * write is never given a signal (see NO CLIENT-SIDE TIMEOUT above).
+ *
+ * A WRITE ENDS EVERY SHARING WINDOW, at its start and at its end, so a read asked after a write
+ * can never join one that began before it and answer with the old store. */
+interface OpenRead {
+  readonly controller: AbortController
+  readonly scopes: Set<string>
+  promise: Promise<unknown>
+}
+const openReads = new Map<string, OpenRead>()
+const SHELL_SCOPE = 'shell'
+let readScope = SHELL_SCOPE
+
+/** The screen that is mounted asks here; the returned release is its unmount. */
+export function enterReadScope(id: string): () => void {
+  readScope = id
+  return () => {
+    if (readScope === id) readScope = SHELL_SCOPE
+    for (const [path, open] of [...openReads]) {
+      open.scopes.delete(id)
+      if (open.scopes.size === 0) {
+        openReads.delete(path)
+        open.controller.abort()
+      }
+    }
+  }
+}
+
+function request(path: string, init?: RequestInit): Promise<unknown> {
+  if (DEMO) return send(path, init)
+  const method = init?.method?.toUpperCase() ?? 'GET'
+  if (method !== 'GET') {
+    openReads.clear()
+    return send(path, init).finally(() => openReads.clear())
+  }
+  const held = openReads.get(path)
+  if (held !== undefined) {
+    held.scopes.add(readScope)
+    return held.promise
+  }
+  const open: OpenRead = { controller: new AbortController(), scopes: new Set([path === '/status' ? SHELL_SCOPE : readScope]), promise: Promise.resolve() }
+  open.promise = send(path, { ...init, signal: open.controller.signal }).finally(() => {
+    if (openReads.get(path) === open) openReads.delete(path)
+  })
+  openReads.set(path, open)
+  return open.promise
+}
+
+async function send(path: string, init?: RequestInit): Promise<unknown> {
   /* THE ONE SEAM. Every client function in this module funnels through here, so this branch
    * is the whole of what makes a published demo possible — no screen, no hook and no kit
    * component knows which of the two it is talking to. Folded away entirely when DEMO is
@@ -774,6 +829,9 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
     noteBoot(response)
     noteReachable(true)
   } catch {
+    /* A READ THE APP ITSELF ABORTED (the screen was left) IS NOT A SERVER FAULT: no probe, no
+     * reachability verdict, no ServerError for a screen to draw. */
+    if (init?.signal?.aborted === true) throw new DOMException('The read was dropped.', 'AbortError')
     /* INVENTED MESSAGE #1. `fetch` rejects without detail for a dead server, a wrong
      * address and a CORS refusal alike — the browser withholds which on purpose — so this
      * used to name the likeliest cause and the command that fixes it. The comment that stood
@@ -821,6 +879,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
   try {
     text = await response.text()
   } catch {
+    if (init?.signal?.aborted === true) throw new DOMException('The read was dropped.', 'AbortError')
     /* The same code, because the remedy is the same one: the exchange did not complete and
      * the request should be repeated. For a capture, repeat it with the SAME capture_id —
      * this is precisely the lost-response case the retry guard exists for. */
@@ -876,7 +935,20 @@ const NO_CACHE: RequestInit = { cache: 'no-store' }
 
 /** Counts, store health, and the boxes already in use. */
 export async function getStatus(): Promise<ServerStatus> {
-  return (await request('/status', NO_CACHE)) as ServerStatus
+  const status = (await request('/status', NO_CACHE)) as ServerStatus
+  lastStatus = { at: Date.now(), status }
+  return status
+}
+
+/* THE SHELL'S LAST `/status`. The shell polls it every 15s and every `getStatus` lands here, so a
+ * screen that opens a moment after one asks for no read of its own. */
+let lastStatus: { at: number; status: ServerStatus } | null = null
+
+/** The last `/status` if it is younger than `maxAgeMs`, else a read. For a screen's mount; a
+ *  screen re-reading after its own write calls `getStatus`. */
+export async function getRecentStatus(maxAgeMs = 5000): Promise<ServerStatus> {
+  if (lastStatus !== null && Date.now() - lastStatus.at < maxAgeMs) return lastStatus.status
+  return getStatus()
 }
 
 /** The whole card map. Keyed `"<box>/<index>"`. */
@@ -2570,11 +2642,20 @@ export async function startRun(send: RunSend): Promise<RunStarted> {
  * been joined — the remedy is a re-join and the message says so) and `no_such_run`.
  */
 export async function getPricing(name: string): Promise<PricingPayload> {
-  return (await request(
-    `/pipeline/runs/${encodeURIComponent(name)}/pricing`,
-    NO_CACHE,
-  )) as PricingPayload
+  const held = pricingTables.get(name)
+  if (held !== undefined && Date.now() - held.at < PRICING_TABLE_TTL_MS) return held.table
+  /* ONLY AN ANSWER IS KEPT (never an open read, which a screen leaving would abort under a
+   * second screen). Reads open at once still share through `request`. */
+  const table = (await request(`/pipeline/runs/${encodeURIComponent(name)}/pricing`, NO_CACHE)) as PricingPayload
+  pricingTables.set(name, { at: Date.now(), table })
+  return table
 }
+
+/* ONE CLIENT COPY OF EACH RUN'S PRICING TABLE, for every screen that draws a figure off it (the
+ * card hero, the box walk). A sale changes no reading, so a write does not drop it; a join does
+ * (`runStep`), and the age bound is the backstop for a reading refreshed behind this page. */
+const PRICING_TABLE_TTL_MS = 5 * 60_000
+const pricingTables = new Map<string, { at: number; table: PricingPayload }>()
 
 /**
  * The whole store against one live TCGplayer export — the fourth command, unscoped (D87).
@@ -3634,7 +3715,8 @@ export async function runStep(
     quantities?: Record<string, number>
   } = {},
 ): Promise<RunStepResult> {
-  return (await request(`/pipeline/runs/${encodeURIComponent(name)}/${step}`, {
+  if (step === 'join') pricingTables.delete(name)
+  const done = (await request(`/pipeline/runs/${encodeURIComponent(name)}/${step}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -3655,6 +3737,9 @@ export async function runStep(
       ...quantitiesClaim(options.quantities),
     }),
   })) as RunStepResult
+  /* AGAIN AFTER THE ANSWER: a table read while the join ran is the old join's. */
+  if (step === 'join') pricingTables.delete(name)
+  return done
 }
 
 /**

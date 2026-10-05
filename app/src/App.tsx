@@ -1,10 +1,10 @@
 import { flushSync } from 'react-dom'
-import { Component, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { Component, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentType, ErrorInfo, ReactNode } from 'react'
 import { isEditableTarget } from './keys'
 import { tabTitle } from './tabTitle'
 import { nextTheme, rememberRail, storedRail, storedTheme, themeLabel } from './deviceMemory'
-import { getStatus, onServerBoot, onServerReachable, ServerError } from './server'
+import { enterReadScope, getStatus, onServerBoot, onServerReachable, ServerError } from './server'
 import { useSearch } from './useSearch'
 import { matchQuery } from './kit/match'
 import { usePoll } from './usePoll'
@@ -553,6 +553,17 @@ function focusScreen(): void {
 /* Focus that sits in the chrome, on nothing, or in a layer that is closing. After a navigation
    it is focus nobody put in the new screen. */
 const CHROME_FOCUS = '.bn-side, .bn-topbar, .bn-tabbar, .bn-skip, [data-bn-overlay]'
+
+/* ---- reads belong to the screen ------------------------------------------------------- */
+/** Marks a screen's mount for `server.ts`: the GETs it has open when it unmounts are aborted, so a
+ *  slow answer nobody wants stops holding one of the server's four slots. A layout effect, so the
+ *  scope is set before the screen's own effects start their reads. The screen's `key` is the
+ *  path, so a navigation is an unmount. */
+function ReadScope({ children }: { readonly children: ReactNode }) {
+  const id = useId()
+  useLayoutEffect(() => enterReadScope(id), [id])
+  return children
+}
 
 /* ---- error boundary ------------------------------------------------------------------ */
 class RouteBoundary extends Component<
@@ -1445,7 +1456,9 @@ export function App() {
           {/* THE SCAFFOLD READS ITS ROUTE FROM HERE: a view that returns `<Page>` takes its h1
               from the route's `title ?? label` with no prop (D275). */}
           <PageRouteContext.Provider value={route ?? null}>
-            <RouteBoundary path={path}>{route === undefined ? <NoSuchView path={path} /> : <route.view />}</RouteBoundary>
+            <ReadScope>
+              <RouteBoundary path={path}>{route === undefined ? <NoSuchView path={path} /> : <route.view />}</RouteBoundary>
+            </ReadScope>
           </PageRouteContext.Provider>
         </div>
       </div>

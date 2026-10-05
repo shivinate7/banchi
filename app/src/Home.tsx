@@ -7,7 +7,7 @@ import {
   getCaptureHistory,
   getRecentCards,
   getRuns,
-  getStatus,
+  getRecentStatus,
   photoUrl,
 } from './server'
 import type {
@@ -46,9 +46,10 @@ import './Home.css'
 
 type Loaded<T> = { state: 'loading' } | { state: 'ready'; value: T } | { state: 'failed' }
 
-function useLoad<T>(load: () => Promise<T>, again = 0): Loaded<T> {
+function useLoad<T>(load: () => Promise<T>, again = 0, ready = true): Loaded<T> {
   const [result, setResult] = useState<Loaded<T>>({ state: 'loading' })
   useEffect(() => {
+    if (!ready) return
     let alive = true
     load()
       .then((value) => {
@@ -61,8 +62,9 @@ function useLoad<T>(load: () => Promise<T>, again = 0): Loaded<T> {
       alive = false
     }
     // `again` is the one reason to read twice: a write this screen made (the automatic match).
+    // `ready` is the one reason to wait: the read starts when it turns true and not before.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [again])
+  }, [again, ready])
   return result
 }
 
@@ -468,7 +470,7 @@ function Ribbon({ plot, live }: { readonly plot: Ribbon; readonly live: boolean 
 export function Home() {
   const [restDeck] = useState(deckPlayed)
   useEffect(markDeckPlayed, [])
-  const status = useLoad<ServerStatus>(getStatus)
+  const status = useLoad<ServerStatus>(getRecentStatus)
   const boxes = useLoad<BoxRecord[]>(async () => (await getBoxes()).boxes)
   /* BOXES LIST MOST RECENT FIRST (the owner's ruling, 2026-09-23), off the SAME store
      `BoxBrowse`'s own rail sorts by (D142): the box this browser last reached for, then the
@@ -497,8 +499,12 @@ export function Home() {
   const [runsRead, setRunsRead] = useState(0)
   const runs = useLoad<RunSummary[]>(getRuns, runsRead)
   const orders = useLoad<OrdersPayload>(getOrders)
-  const pricing = useLoad<PricingWorklist>(() => getPricingWorklist())
-  const book = useLoad(async () => (await getPricingCorpus()).corpus)
+  /* THE TWO WHOLE-STORE READS START AFTER FIRST PAINT: once the cheap reads that draw the tiles have
+     answered. They feed one figure and the standing line, and the standing line is held until they
+     answer anyway (`settled`), so waiting changes nothing on screen and keeps four slots for the rest. */
+  const tilesRead = [status, boxes, orders, runs].every((r) => r.state !== 'loading')
+  const pricing = useLoad<PricingWorklist>(() => getPricingWorklist(), 0, tilesRead)
+  const book = useLoad(async () => (await getPricingCorpus()).corpus, 0, tilesRead)
   /* A VISIT TO HOME RUNS A DUE LIVE CHECK (the owner's Q3 ruling): a send whose wait ended
      while the app was closed is checked here, by itself. */
   const liveCheck = useLiveCheck()
