@@ -123,6 +123,7 @@ POST_READS = {
     "POST /pipeline/waiting": ("/pipeline/waiting", {"selection": {"all": True}}),
     "POST /inventory/copies": ("/inventory/copies", {"skus": ["SKU1", "SKU2"]}),
     "POST /pipeline/preflight": ("/pipeline/preflight", {"selection": {"all": True}}),
+    "POST /pipeline/preflight keys": ("/pipeline/preflight", {"keys": ["4/1", "4/2"]}),
     "POST /orders/walk-plan": ("/orders/walk-plan", {"keys": ["tcgplayer:o-1", "tcgplayer:o-2"]}),
 }
 
@@ -130,6 +131,7 @@ POST_READS = {
 # is what is counted. route -> (module, name, replacement).
 STUBS = {
     "POST /pipeline/preflight": (pipeline_routes, "_run_sync", lambda argv, timeout: (0, "")),
+    "POST /pipeline/preflight keys": (pipeline_routes, "_run_sync", lambda argv, timeout: (0, "")),
 }
 
 # route -> {"status": the HTTP status the fixture must get, counter: value at size S}. A counter
@@ -184,11 +186,15 @@ BUDGET = {
     '_RUN_SCOPE_RE': {"status": 200},
     '_RUN_ITEM_RE': {"status": 200, 'sql': 16, 'json_loads': 5, 'store_read': 1},
     '_SHIPPING_FILE_RE': {"status": 400},
-    'POST /pipeline/waiting': {"status": 200, 'sql': 11, 'store_read': 1, 'read_sidecar': 6},
+    'POST /pipeline/waiting': {"status": 200, 'sql': 11, 'store_read': 1, 'read_sidecar': 21},
     'POST /inventory/copies': {"status": 200, 'sql': 53, 'json_loads': 28, 'places': 1, 'store_read': 1},
-    'POST /pipeline/preflight': {"status": 200, 'sql': 21, 'store_read': 2, 'read_sidecar': 6},
+    'POST /pipeline/preflight': {"status": 200, 'sql': 21, 'store_read': 2, 'read_sidecar': 21},
+    'POST /pipeline/preflight keys': {"status": 200, 'sql': 34, 'json_loads': 3, 'store_read': 3, 'read_sidecar': 2},
     'POST /orders/walk-plan': {"status": 200, 'sql': 50, 'json_loads': 104, 'records_in': 2, 'places': 1, 'store_read': 1},
 }
+
+# Keyed routes: `read_sidecar` reads only the named cards' own sidecars, so it is constant too.
+SIDECAR_FLAT = ("POST /pipeline/preflight keys",)
 
 # (route, counter) -> (value at S, value at 2S): a constant counter that still grows. Only shrinks.
 KNOWN_OVER = {
@@ -342,6 +348,11 @@ def _build(checks: Checks, size: int) -> dict:
     run = runs_made[0]
     for _ in range(3):  # three real photographs in box 4, for the photo routes
         capture_server.do_capture(capture_payload(4))
+    shelf = files.home().joinpath("captures", "cards", "box6")  # unfiled photographs that scale the full scan
+    shelf.mkdir(parents=True, exist_ok=True)
+    for n in range(size // 10):
+        (shelf / f"p{n}.jpg").write_bytes(b"x")
+        (shelf / f"p{n}.json").write_text('{"box": 6, "index": %d}' % (n + 1))
     stale = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
     with Store().write() as snapshot:
         inv = snapshot.inventory
@@ -462,7 +473,7 @@ def check_server_read_budget(checks: Checks) -> None:
                 problems.append(f"{route} {counter}: {got} over budget {budget}")
             elif got < budget:
                 problems.append(f"{route} {counter}: {got} under budget {budget}, lower to {got}")
-        for counter in CONSTANT:
+        for counter in CONSTANT + (('read_sidecar',) if route in SIDECAR_FLAT else ()):
             now = (small[route][counter], big[route][counter])
             over = KNOWN_OVER.get((route, counter))
             if now[0] == now[1]:
