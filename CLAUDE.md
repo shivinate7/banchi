@@ -288,6 +288,10 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   (D173, a rule that can be enforced is).
   The `rule enforcement` row of `make docs-audit` parses every rule here.
   `HARD_RULE_FLOOR` and `PROSE_ONLY_EXPECTED` pin its count.
+- **One home per capability, called from everywhere.** Find the home before you build (`make map ARGS=<path>`,
+  `scripts/decision-context.py`). Extend it before you build a second. A second needs a written reason.
+  The `capability homes` row of `make docs-audit` holds each named capability's home and refuses a call to its
+  primitives outside it. **NOT MECHANIZED:** a machine cannot tell that two differently named functions do the same job.
 - **A route is not a feature. Nothing is built until a screen reaches it.** Done is the route, a client function in
   `app/src/server.ts` and a control a human would look for. Where it writes, done also needs a receipt and a way back.
   **NOT MECHANIZED:** a machine cannot know which screen a human would look for a capability on.

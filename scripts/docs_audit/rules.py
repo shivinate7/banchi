@@ -64,8 +64,8 @@ HARD_RULES_HEADING = "## Hard rules"
 # deleted for free, which is the precise accounting this row exists to prevent. So both
 # directions fail: build a mechanism and you lower the pin in the same commit; add a rule with
 # no enforcement and you raise it and say why.
-HARD_RULE_FLOOR = 12
-PROSE_ONLY_EXPECTED = 5
+HARD_RULE_FLOOR = 13
+PROSE_ONLY_EXPECTED = 6
 
 # BOLD, AND THAT IS NOT COSMETIC. The sentinel has to be a DECLARATION, so it is matched as
 # the bold run a rule writes it in — otherwise the rule immediately above, which explains the

@@ -107,6 +107,7 @@ from .rules import check_identifier_spelling, check_rule_enforcement
 from .screens import check_logo, check_storage_keys
 from .spelling import check_shell_substitution
 from .sleeps import check_fixed_sleeps
+from .capability_homes import check_capability_homes
 from .stability import check_font_stability, check_layout_transitions, check_scrollbar_gutter, check_state_layout
 from .status_reach import check_closed_vocabularies, check_status_sources, check_tested_by_reach
 from .strings import check_no_mechanism_on_screen, check_typed_interpunct, check_views_opsec
@@ -260,6 +261,7 @@ ROWS: Tuple[AuditRow, ...] = (
     AuditRow("shell substitution", 1, check_shell_substitution, ()),
     AuditRow("unscoped walk", 1, check_unscoped_walk, ()),
     AuditRow("loop expensive", 1, check_loop_expensive, ()),
+    AuditRow("capability homes", 1, check_capability_homes, ()),
     AuditRow("import layering", 1, check_import_layering, ()),
     AuditRow("error words", 1, check_error_words, ()),
     AuditRow("identity writers", 1, check_identity_writers, ()),
