@@ -103,6 +103,18 @@ function baseCardName(name: string): string {
   return name.replace(/\s*\([^()]*\)\s*$/, '').trim()
 }
 
+/** MORE THAN ONE DIFFERENT CARD AT THE BEST RANK (owner's ruling): a bare number ties every
+ *  game's card of that number, and no one of them is the one asked for. Printings of one card
+ *  share a base name, so they never count as a tie by themselves. */
+function topTierIsTied(groups: readonly SearchGroup[]): boolean {
+  const top = tiersOf(groups)[0]
+  /* ONLY AN EXACT-NUMBER TIE (server `_RANK_EXACT_NUMBER`, 0): a set hint or a name prefix
+   * ties many cards on purpose and keeps landing on the walk. */
+  if (top === undefined || top[0]?.rank !== 0) return false
+  const cards = new Set(top.map((group, i) => (group.names[0] === undefined ? `#${i}` : baseCardName(group.names[0]))))
+  return cards.size > 1
+}
+
 /** THE "SAME CARD" TEST (2026-09-17 regression fix). `results.groups` is several SKUs
  *  whenever a search's matched cards span more than one SKU — and that shape means two very
  *  different things depending on what those SKUs ARE:
@@ -721,6 +733,7 @@ function VariantChooser({
           const subParts = [
             group.number_display,
             group.set ?? group.set_hint,
+            group.game ? gameLabel(group.game) : null,
             group.condition,
             showRarity ? group.rarity : null,
           ].filter((part): part is string => typeof part === 'string' && part !== '')
@@ -949,7 +962,7 @@ export function BoxBrowse({
     resolvedVariant === null &&
     searchGroups !== null &&
     searchGroups.length > 1 &&
-    (multiGroup || pickerAsked === query)
+    (multiGroup || pickerAsked === query || topTierIsTied(searchGroups))
 
   /* THE GROUPS EVERY BOX-WALK COMPUTATION BELOW READS, IN PLACE OF `results.groups` DIRECTLY.
    * Empty while the chooser is showing — which is what makes clicking a box a no-op then: the
@@ -2644,7 +2657,7 @@ export function BoxBrowse({
                     <VariantChooser
                       groups={searchGroups}
                       query={query}
-                      focusOnMount={pickerAsked === query}
+                      focusOnMount={pickerAsked === query || topTierIsTied(searchGroups)}
                       onPick={(index) => setChosenVariant({ query, index })}
                     />
                   ) : awaitingRows ? null /* THE SAME FALSE CLAIM, A SECOND PLACE (the review

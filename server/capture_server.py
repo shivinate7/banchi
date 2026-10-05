@@ -12429,6 +12429,8 @@ def do_search(query: str) -> dict:
                 "names": _distinct(card.name for card in copies),
                 "number": _agreed(card.number for card in copies),
                 "printed_total": _agreed(card.printed_total for card in copies),
+                # THE GAME'S REGISTRY KEY, for the picker's tile (the client words it).
+                "game": _agreed(card.game for card in copies),
                 # AGREED ON WHAT THE SCREEN DRAWS, NOT ON WHAT THE MODEL TYPED (D67). The two
                 # raw fields above stay exactly as they were and go on disagreeing: five
                 # copies of Moonfall store `198/219` twice and `UNL • 198/219` and
@@ -12501,6 +12503,7 @@ def do_search(query: str) -> dict:
                 "names": _distinct(card.name for card in loose),
                 "number": _agreed(card.number for card in loose),
                 "printed_total": _agreed(card.printed_total for card in loose),
+                "game": _agreed(card.game for card in loose),
                 # The same fold on the SKU-less bag, where `_agreed`'s None matters most: these
                 # cards have nothing in common but the query, so a number here is only ever the
                 # one every one of them carries.
