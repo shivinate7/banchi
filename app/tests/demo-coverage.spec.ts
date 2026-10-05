@@ -38,6 +38,7 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { dirname, extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { CAPTURE_PORT, DEV_PORT } from '../devPort'
 import { isOutside, sealEveryTest } from './shell'
 import { afterPaint, settleMotion } from './motionSettled'
 
@@ -98,7 +99,7 @@ test('the seal refuses a loopback port that is not the demo server', () => {
   const list = [...ALLOWED, own.host]
   expect(isOutside(new URL(`${own.origin}/x`), list)).toBe(false)
   expect(isOutside(new URL('http://127.0.0.1:9999/x'), list)).toBe(true)
-  expect(isOutside(new URL('http://localhost:5173/x'), list)).toBe(true)
+  expect(isOutside(new URL(`http://localhost:${Math.max(DEV_PORT, CAPTURE_PORT) + 1}/x`), list)).toBe(true)
 })
 
 const TYPES: Record<string, string> = {
