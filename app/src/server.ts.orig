@@ -770,30 +770,21 @@ let readScope = SHELL_SCOPE
 /** A screen's mount names itself here, before its own effects start any read. */
 export function enterReadScope(id: string): void {
   readScope = id
-  /* A remount that follows its unmount at once (StrictMode's simulated one) is not a departure. */
-  const leaving = departing.get(id)
-  if (leaving !== undefined) {
-    window.clearTimeout(leaving)
-    departing.delete(id)
-  }
 }
 
-/** A screen's unmount: its open reads are aborted, unless another screen still waits on them. The abort
- *  waits one task, so a mount that follows at once can take the screen back (`enterReadScope`). */
+/** A screen's unmount: its open reads are aborted, unless another screen still waits on them. */
 export function leaveReadScope(id: string): void {
   if (readScope === id) readScope = SHELL_SCOPE
-  departing.set(
-    id,
-    window.setTimeout(() => {
-      departing.delete(id)
-      for (const open of [...allReads]) {
-        open.scopes.delete(id)
-        if (open.scopes.size === 0) open.controller.abort()
-      }
-    }, 0),
-  )
+  for (const open of [...allReads]) {
+    open.scopes.delete(id)
+    if (open.scopes.size === 0) {
+      /* NOT JOINABLE ANY MORE, AT ONCE: a remount in the same tick (StrictMode) asks again and
+         must start its own read, not join one that is dying. */
+      for (const [path, joinable] of openReads) if (joinable === open) openReads.delete(path)
+      open.controller.abort()
+    }
+  }
 }
-const departing = new Map<string, number>()
 
 function request(path: string, init?: RequestInit): Promise<unknown> {
   if (DEMO) return send(path, init)
