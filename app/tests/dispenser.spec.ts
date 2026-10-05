@@ -69,7 +69,7 @@ async function stubWire(page: Page): Promise<void> {
 }
 
 /** Camera picked, optionally a box picked, motion armed, scene injected, dispenser connected. */
-async function ready(page: Page, withBox: boolean): Promise<void> {
+async function ready(page: Page, withBox: boolean, manual = false): Promise<void> {
   await fakeBluetooth(page)
   await stubWire(page)
   await page.goto('/#/capture')
@@ -86,6 +86,7 @@ async function ready(page: Page, withBox: boolean): Promise<void> {
     await page.keyboard.type('5')
     await page.keyboard.press('Enter')
   }
+  if (manual) return // Manual trigger: no motion, no scene, no dispenser
   await armMotion(page)
   await injectScene(page)
   await expect(page.locator('.capture-motion-hud')).toBeAttached({ timeout: 5_000 })
@@ -284,7 +285,7 @@ test('R2: on retry card 1 saves and card 2 fails: card 2 stays held, the dealer 
   expect((await writes(page)).filter((w) => w === 'MOTOR:START')).toHaveLength(2)
 })
 
-test('R3: while a photo is held, Capture sends no POST and the held frame survives, before and after Resume', async ({ page }) => {
+test('R3: while a photo is held, Capture and the dispenser do nothing, there is no Resume, and the held frame survives', async ({ page }) => {
   const wire = await held(page, (n) => n <= 2)
   const posts = wire.posts()
   await captureButton(page).click({ force: true })
@@ -303,6 +304,40 @@ test('R3: while a photo is held, Capture sends no POST and the held frame surviv
   await page.getByRole('button', { name: 'Retry saving' }).click()
   await expect.poll(wire.answered, { timeout: 10_000 }).toBe(4)
   expect(wire.events().slice(4)).toEqual(['sent:3', 'answered:3', 'sent:4', 'answered:4'])
+})
+
+/* MANUAL MODE keeps the generic halt: the banner and its Resume stay, and Resume never releases a held photo. */
+test('R10: manual mode, a server halt with a held photo keeps its banner and Resume; Resume releases nothing and Retry saving sends it', async ({ page }) => {
+  await ready(page, true, true)
+  const wire = await slowCapture(page, 300, (n) => n === 1) // the first save fails, later ones succeed
+  await captureButton(page).click()
+  await expect.poll(wire.answered, { timeout: 8_000 }).toBe(1)
+  await expect(page.getByText(/Captures are paused/i).first()).toBeVisible()
+  const resume = page.getByRole('button', { name: /^Resume captures/ })
+  await expect(resume).toBeVisible()
+  await expect(unsaved(page).first()).toContainText(/Box 5, Card 1 was not saved/)
+  await resume.click()
+  await captureButton(page).click({ force: true })
+  await page.waitForTimeout(800) // keep: a wrongly sent POST gets time to land
+  expect(wire.posts()).toBe(1) // Resume and Capture released nothing
+  await expect(unsaved(page).first()).toContainText(/Box 5, Card 1 was not saved/)
+  await page.getByRole('button', { name: 'Retry saving' }).first().click()
+  await expect.poll(wire.answered, { timeout: 8_000 }).toBe(2)
+  await expect(unsaved(page)).toHaveCount(0)
+})
+
+test('R11: a camera halt keeps its banner and Resume', async ({ page }) => {
+  await ready(page, true, true)
+  await slowCapture(page, 100)
+  // the camera dies under the screen: the next capture has no frame to take
+  await page.evaluate(() => {
+    const video = document.querySelector<HTMLVideoElement>('.capture-media')
+    const stream = video?.srcObject as MediaStream | null
+    for (const track of stream?.getTracks() ?? []) track.stop()
+  })
+  await captureButton(page).click({ force: true })
+  await expect(page.getByText(/Captures are paused/i).first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.getByRole('button', { name: /^Resume captures/ })).toBeVisible()
 })
 
 test('R4: the not-saved notice says what was sent and what to press, with no mechanism word', async ({ page }) => {
