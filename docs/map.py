@@ -7777,7 +7777,7 @@ COMPONENTS = [
                                          "doors on one line that wraps as a unit, the download "
                                          "door, and the card lists under a notice. On a phone "
                                          "the press takes the whole first line (UX-007).",
-                                 "governed_by": ["D117", "D118", "D273", "D277"]},
+                                 "governed_by": ["D117", "D118", "D273", "D277", "D313"]},
             "src/liveCheck.ts": {"does": "WHEN THE LIVE CHECK AFTER A SEND RUNS (the owner's Q3 "
                                          "ruling). A visit to Pricing or Home reads the send "
                                          "status and runs a due check at once; otherwise one "
