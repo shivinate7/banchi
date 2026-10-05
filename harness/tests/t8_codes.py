@@ -138,6 +138,19 @@ def run() -> Result:
     c.equal(qr.decode_image(_frame("", blank=True)), None,
             "a frame with no QR REFUSES rather than guessing (the fork's hard rule)")
 
+    # Smoke: `qr.decode` (path form) reads an EXIF-orientation-6 file. A QR decodes at any rotation,
+    # so this cannot go red on orientation; it only proves the path form opens such a file.
+    with tempfile.TemporaryDirectory() as tmp:
+        from PIL import Image
+
+        exif = Image.Exif()
+        exif[274] = 6
+        rotated = str(Path(tmp) / "exif6.jpg")
+        _frame(_BASE_QUERY + codes[0]).rotate(90, expand=True).save(rotated, "JPEG", quality=95, exif=exif)
+        read = qr.decode(rotated)
+        c.ok(read is not None and read.code == codes[0], "smoke: qr.decode reads an EXIF-rotated file",
+             f"read {read!r}")
+
     # Both payload shapes, because cards printed against either are in circulation.
     c.equal(qr.code_from_payload(_BASE_QUERY + "ABC-DEFG-HIJ-KLM"), "ABC-DEFG-HIJ-KLM",
             "the live query-string payload yields its code")

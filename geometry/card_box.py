@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from geometry.detect import CARD_ASPECT, CardBox, detect_card
+from geometry.detect import CARD_ASPECT, CardBox, detect_card, open_image
 
 MODEL = Path(__file__).resolve().parent / "model" / "dfine_card_640.onnx"
 SIZE = 640
@@ -90,16 +90,11 @@ def model_card(source) -> Optional[CardBox]:
     """The model's box, or None when it is unavailable or not sure. Never raises."""
     try:
         import numpy as np
-        from PIL import Image
 
         session = _load()
         if session is None:
             return None
-        if isinstance(source, Image.Image):
-            image = source.convert("RGB")  # an open frame: the preview decodes once per cut
-        else:
-            with Image.open(source) as opened:
-                image = opened.convert("RGB")
+        image = open_image(source)  # upright, like the detector; an open frame passes through
         width, height = image.size
         pixels = resize_linear(np.asarray(image), SIZE, SIZE)
         inputs = {

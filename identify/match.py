@@ -208,7 +208,7 @@ def held_promo_games() -> Set[str]:
     an unhinted card of that game is not accepted. A store that does not exist holds nothing. A
     store that cannot be read is treated as holding a promo in every game (`ALL_GAMES`), never as
     holding none. A card whose `set_name` was never filled in cannot be seen by this query."""
-    from store import db
+    from store import db, master
 
     try:
         conn = db.open_read_only(db.path(store_files.inventory_dir()))
@@ -217,9 +217,11 @@ def held_promo_games() -> Set[str]:
     except Exception:  # noqa: BLE001 - an unreadable store must not read as a clean one
         return {ALL_GAMES}
     try:
+        gone = tuple(master.TERMINAL_STATES)
         rows = conn.execute(
             "select distinct coalesce(game, 'pokemon') from cards "
-            "where lower(set_name) like '%promo%' and state not in ('sold', 'retired', 'moved')"
+            f"where lower(set_name) like '%promo%' and state not in ({','.join('?' * len(gone))})",
+            gone,
         ).fetchall()
         return {str(r[0]) for r in rows}
     except Exception:  # noqa: BLE001

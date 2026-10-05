@@ -71,8 +71,7 @@ CODE_MIN = 3
 def fold(name: str) -> str:
     """Lowercase, drop everything that is not a letter or digit, unpad each digit run.
 
-    Lifted verbatim from `pipeline/join.py:normalize_set`, which stays as the join's own
-    spelling of it. `sv09` and `sv9` fold together because pokemontcg.io writes the unpadded
+    The one home: `pipeline/join.py:normalize_set` calls it. `sv09` and `sv9` fold together because pokemontcg.io writes the unpadded
     form and TCGplayer the padded one; without that they never compare equal.
     """
     text = str(name or "").strip().lower()

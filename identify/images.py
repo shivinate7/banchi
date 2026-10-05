@@ -331,9 +331,7 @@ def crop_refusal(
     _require()
     if not isinstance(image, Image.Image):
         try:
-            with Image.open(image) as opened:
-                opened.load()
-                return crop_refusal(opened, box, pad, aspect)
+            return crop_refusal(geometry.detect.open_image(image), box, pad, aspect)
         except Exception as exc:
             raise ImageError(f"{image}: {exc}") from exc
     width, height = image.size
@@ -459,9 +457,7 @@ def _preview_compute(path):
     """`(rect, jpeg, final)`. `final` is False when the answer came from a failure (an
     unreadable frame, a finder that raised, the model not loaded): serve it, never keep it."""
     try:
-        with Image.open(path) as opened:
-            opened.load()
-            image = opened.copy()
+        image = geometry.detect.open_image(path)
     except Exception:
         return None, None, False
     try:
@@ -507,6 +503,15 @@ def preview_rect(path):
     return None if cut is None else cut[0]
 
 
+def _exif_tagged(path) -> bool:
+    """Does the file carry an EXIF orientation other than upright? Its bytes are then not the frame we report."""
+    try:
+        with Image.open(path) as raw:
+            return raw.getexif().get(274, 1) not in (0, 1)
+    except Exception:
+        return False
+
+
 def prepare(path, max_edge: int = MAX_EDGE, crop_box=None) -> Prepared:
     """Read a photo from disk and return exactly what should be sent for it.
 
@@ -525,8 +530,7 @@ def prepare(path, max_edge: int = MAX_EDGE, crop_box=None) -> Prepared:
     digest = sha256_of(path)
 
     try:
-        with Image.open(path) as opened:
-            opened.load()
+        with geometry.detect.open_image(path) as opened:
             original_size = opened.size
             refused = None
             if crop_box is not None:
@@ -548,8 +552,8 @@ def prepare(path, max_edge: int = MAX_EDGE, crop_box=None) -> Prepared:
                     sent_size=scaled.size,
                     resized=True,
                 )
-            if not resized and suffix in MEDIA_TYPES:
-                # Already inside the cap and in a format the API takes: send it verbatim.
+            if not resized and suffix in MEDIA_TYPES and not _exif_tagged(path):
+                # Already inside the cap, in a format the API takes, and upright on disk: send it verbatim.
                 return Prepared(
                     data=path.read_bytes(),
                     media_type=MEDIA_TYPES[suffix],
@@ -566,7 +570,7 @@ def prepare(path, max_edge: int = MAX_EDGE, crop_box=None) -> Prepared:
                 sha256=digest,
                 original_size=original_size,
                 sent_size=scaled.size,
-                resized=resized,
+                resized=resized or _exif_tagged(path),
                 crop_refused=refused,
             )
     except ImageError:

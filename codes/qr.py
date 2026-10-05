@@ -104,7 +104,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, Optional, Tuple
 
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageOps
 
 
 class QrUnavailable(RuntimeError):
@@ -275,6 +275,8 @@ def decode_image(image: "Image.Image") -> Optional[QrRead]:
 
 def decode(path) -> Optional[QrRead]:
     """Read one photograph off disk. None means no QR was found."""
+    # Not geometry.detect.open_image: the pre-commit hook imports this under system python with
+    # PIL only, so it cannot reach geometry/. Same transpose, written here for that reason.
     with Image.open(Path(path)) as handle:
         handle.load()
-        return decode_image(handle)
+        return decode_image(ImageOps.exif_transpose(handle).convert("RGB"))
