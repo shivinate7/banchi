@@ -3690,6 +3690,16 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
             free = [key for key in ledger.unsent.get(sku, []) if key in drawn]
             held = len(row.get("positions") or [])
             row["add_to_quantity"] = len(free)
+            # COPIES STILL IN A BOX (not sold, not departed), of the ones drawn: the screen's
+            # first number. `add_to_quantity` is the second, and the two differ by what is
+            # already at TCGplayer.
+            row["on_hand"] = sum(
+                1
+                for p in row.get("positions") or []
+                if p.get("box") is not None
+                and p.get("index") is not None
+                and snapshot.inventory._on_hand(p["box"], p["index"])
+            )
             row["copies"] = held
             row["committed"] = held - len(free)
             row["backstock"] = 0
