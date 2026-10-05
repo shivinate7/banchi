@@ -449,18 +449,15 @@ test.describe('the published demo draws what reviewers grade', () => {
   })
 
   test('Inventory: the value sort draws its cards', async ({ page }) => {
-    // STALE, REWRITTEN 2026-09-27 (D277: "the value list is an Inventory sort now" — Pricing
-    // no longer has a "Rank inventory by value" button or a "worth pulling" heading; both
-    // retired when the value band moved to Inventory's own Sort facet). Same behavior
-    // proved on its new home: picking Sort=Value re-ranks the cards and draws with no
-    // refusal.
+    // The value sort re-ranks the boxes in the rail and draws each box's value figure as its
+    // meta (D277: the value list is an Inventory sort). Card rows are not its claim: sections
+    // land collapsed, so no row is on screen until one opens.
     await visit(page, 'Inventory')
     await page.locator('.browse-filterbar .bn-filterbar-trigger:visible').click()
     await page.locator('.bn-filterbar-popover .bn-pick', { hasText: /^Sort/ }).click()
     await page.locator('.bn-pick-opt', { hasText: 'Value' }).click()
     await page.keyboard.press('Escape')
-    const rows = page.getByRole('button', { name: /^#\d+/ })
-    await expect(rows.first()).toBeVisible()
+    await expect(page.locator('.browse-boxcell-meta', { hasText: /\$\d/ }).first()).toBeVisible()
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
   })
 
