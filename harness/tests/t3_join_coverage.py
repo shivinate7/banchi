@@ -3236,6 +3236,7 @@ def run() -> Result:
     _check_name_alternatives_ranks_before_cut(c)
     _check_widen_scoped_to_named_reasons(c)
     _check_near_mint_candidates(c)
+    _check_number_row_name_crosscheck(c)
 
     return c.result()
 
@@ -3634,3 +3635,52 @@ def _check_near_mint_candidates(c: Checks) -> None:
         "an entry whose every candidate is off-grade keeps them all, unchanged and in "
         "order — an unanswerable entry is worse than a wide one",
     )
+
+
+def _check_number_row_name_crosscheck(c: Checks) -> None:
+    """A number's row whose NAME the read contradicts is never bound (CLAUDE.md: never guess
+    an identification). Incident: read `Death from Below`, number misread `150/219`, which is
+    `Vex, Apathetic` in the export; it bound by number, listed and sold as the wrong card.
+
+    REGRESSION GUARD: card 4/178 of run 2026-09-11-box4-04 was identified before the
+    `name_disputed` routing landed (ae770c98), so the incident is not reproducible on main.
+    This case goes red when `join.name_disputes` is disabled.
+
+    SYNTHETIC rows (the committed Riftbound export holds no Unleashed set), cloned off one
+    real row. The read mirrors `cli/cmd_identify.py`: Riftbound's number is the whole
+    printed code with no `printed_total`.
+    """
+    export = tcgcsv.read_export(REPO_ROOT / RIFTBOUND_FIXTURE)
+    base = next(
+        r for r in export.rows
+        if r[tcgcsv.NUMBER_COLUMN] == RIFTBOUND_DEFY_NUMBER
+        and r[tcgcsv.CONDITION_COLUMN] == "Near Mint"
+    )
+    vex = dict(base, **{
+        tcgcsv.SKU_COLUMN: "9199579", tcgcsv.NAME_COLUMN: "Vex, Apathetic",
+        tcgcsv.NUMBER_COLUMN: "150/219", tcgcsv.SET_COLUMN: "Unleashed",
+    })
+    catalog = join.Catalog.from_export(
+        tcgcsv.Export(header=export.header, rows=(vex,)), "riftbound"
+    )
+
+    def joined(name):
+        card = join.IdentifiedCard(
+            position=join.Position(box=4, index=178), name=name, number="150/219",
+            photo="captures/box4/0178.jpg", confidence="high", game="riftbound",
+        )
+        return join.join_batch([card], catalog, router=join.default_router())
+
+    wrong = joined("Death from Below")
+    c.equal(list(wrong.matches), [], "name contradicts the number's row: nothing bound, priced or emitted")
+    queued = wrong.queued[0] if wrong.queued else None
+    if c.ok(queued is not None, "and the card is queued, never dropped"):
+        c.equal(queued.resolution_reason, routing.NAME_DISPUTED, "under the reason `name_disputed`")
+        c.equal(queued.card.photo, "captures/box4/0178.jpg", "with its photo")
+
+    c.equal(
+        list(joined("VEX,  Apathetic").matches) + list(joined("Véx Apathetic").matches),
+        ["9199579", "9199579"],
+        "a name equal up to case, punctuation, accents and whitespace still binds by number",
+    )
+    c.equal(list(joined("").matches), ["9199579"], "a blank read name still binds by number, as before")
