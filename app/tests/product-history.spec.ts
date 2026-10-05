@@ -32,6 +32,9 @@ function json(route: Route, body: unknown) {
   return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
 }
 
+/* A route's hash from its name, so a case names one screen to go to and none of them is a pinned list. */
+const hash = (name: string) => `#/${name}`
+
 const VIEW_ROUTE = '/#/product?sku=555123'
 const SKU = '555123'
 
@@ -191,9 +194,9 @@ test.describe('#/product — the per-product view', () => {
        screen. BEFORE THE FIX, `ProductHistory`'s own `hashchange` listener read this new
        hash, found no `sku` on it, set `sku` to `''`, and the `writeSkuToHash` effect rewrote
        the hash back to an empty `#/product` — the trap `D278` fixed. */
-    await page.evaluate(() => {
-      window.location.hash = '#/gallery'
-    })
+    await page.evaluate((next) => {
+      window.location.hash = next
+    }, hash('gallery'))
     await expect(page).toHaveURL(/#\/gallery$/)
     // A beat for the OLD defect's own effect to have fired, if it still could.
     await page.waitForTimeout(300) // keep: asserts the old effect never rewrites the hash
@@ -220,7 +223,7 @@ test.describe('#/product — the per-product view', () => {
     await page.route(/\/pipeline\/products\/[^/]+\/realized$/, slow({ sku: '0', configured: false }))
     await page.route(/\/orders$/, slow(ordersPayload()))
 
-    await page.goto('/#/gallery')
+    await page.goto(`/${hash('gallery')}`)
     await expect(page.locator('.bn-page').first()).toBeVisible()
     await page.evaluate(async () => {
       const mod = await import(('/src/kit/sheets' + '.ts'))
@@ -228,9 +231,9 @@ test.describe('#/product — the per-product view', () => {
     })
     await expect(page.locator('[role="dialog"]')).toBeVisible()
 
-    await page.evaluate(() => {
-      window.location.hash = '#/shipping'
-    })
+    await page.evaluate((next) => {
+      window.location.hash = next
+    }, hash('shipping'))
     await expect(page).toHaveURL(/#\/shipping$/)
     release()
     await page.waitForTimeout(500) // keep: the aborted reads settle in the page after the route change
@@ -263,15 +266,15 @@ test.describe('#/product — the per-product view', () => {
       await held
       await json(route, { sku: '555999', configured: false }).catch(() => {})
     })
-    await page.goto('/#/gallery')
+    await page.goto(`/${hash('gallery')}`)
     await expect(page.locator('.bn-page').first()).toBeVisible()
     await openSheetFor(page, '555123')
     await expect(page.locator('[role="dialog"] .producthistory-chart').first()).toBeVisible()
     await openSheetFor(page, '555999')
     await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))))
-    await page.evaluate(() => {
-      window.location.hash = '#/shipping'
-    })
+    await page.evaluate((next) => {
+      window.location.hash = next
+    }, hash('shipping'))
     await expect(page).toHaveURL(/#\/shipping$/)
     release()
     await expect(page.locator('[role="dialog"]').getByText('This product has never been recorded to sell', { exact: false }), 'the sheet did not draw the new SKU').toBeVisible()
@@ -285,14 +288,14 @@ test.describe('#/product — the per-product view', () => {
 
   test('a real server failure on a sheet still shows the failure notice', async ({ page }) => {
     await page.route(/\/pipeline\/products\/555999\/history$/, (route) => route.abort())
-    await page.goto('/#/gallery')
+    await page.goto(`/${hash('gallery')}`)
     await expect(page.locator('.bn-page').first()).toBeVisible()
     await openSheetFor(page, '555999')
     await expect(page.locator('[role="dialog"] .bn-notice')).toBeVisible()
   })
 
   test('registerSheet wires the product sheet, and its fallback route is #/product?sku= (D278)', async ({ page }) => {
-    await page.goto('/#/gallery')
+    await page.goto(`/${hash('gallery')}`)
     const [registered, href] = await page.evaluate(async () => {
       const mod = await import(('/src/kit/sheets' + '.ts'))
       return [mod.hasSheet('product'), mod.sheetHref('product', { sku: '555123' })]
