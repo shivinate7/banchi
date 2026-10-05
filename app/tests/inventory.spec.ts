@@ -3556,7 +3556,7 @@ const SECTION_TWO = Array.from({ length: 59 }, (_, n) => 31 + n)
 for (const width of [1440, 820]) {
   test.describe(`claims by section at ${width}`, () => {
     test.beforeEach(async ({ page }) => {
-      await page.setViewportSize({ width, height: 900 })
+      await setViewport(page, { width, height: 900 })
     })
 
     async function openClaims(page: Page) {
