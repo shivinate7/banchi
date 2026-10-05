@@ -397,6 +397,38 @@ test('R7: while held, undo (divider and back) sends no request and the divider s
   await expect.poll(() => w.closed() + w.removed(), { timeout: 5_000 }).toBeGreaterThan(0) // undo works again
 })
 
+for (const [width, height] of [[1440, 900], [820, 1100]] as const) {
+  test(`R9: after a second save failure the one notice is uncovered and Retry saving is clickable at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    const wire = await held(page, (n) => n <= 2)
+    const notice = unsaved(page)
+    const title = notice.getByText('Box 5, Card 1 was not saved')
+    await expect(title).toBeVisible()
+    const retry = page.getByRole('button', { name: 'Retry saving' })
+    await expect(retry).toBeVisible()
+    await retry.scrollIntoViewIfNeeded()
+    // the topmost element at the centre of each is the thing itself, not a banner over it
+    const covered = (locator: typeof title, within: string) =>
+      locator.evaluate((el, sel) => {
+        const box = el.getBoundingClientRect()
+        const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+        return top === null || top.closest(sel) === null
+      }, within)
+    expect(await covered(title, '.capture-unsaved'), 'the title is covered').toBe(false)
+    expect(await covered(retry, 'button'), 'Retry saving is covered').toBe(false)
+    const fits = await retry.evaluate((el) => {
+      const b = el.getBoundingClientRect()
+      return b.top >= 0 && b.left >= 0 && b.bottom <= innerHeight && b.right <= innerWidth
+    })
+    expect(fits, 'Retry saving is clipped by the viewport').toBe(true)
+    await expect(page.getByText(/check whether that card was recorded/i)).toHaveCount(0)
+    await expect(page.getByText(/Captures are paused/i)).toHaveCount(0)
+    await expect(notice).toContainText(/Nothing after it was sent\. Press Retry saving\./)
+    await retry.click() // no force: nothing sits over it
+    await expect.poll(wire.answered, { timeout: 10_000 }).toBe(4)
+  })
+}
+
 test('R8: while held, another box and another section are refused and the claim stays put', async ({ page }) => {
   let w!: Awaited<ReturnType<typeof countWrites>>
   await held(page, (n) => n <= 2, async () => {
