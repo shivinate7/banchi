@@ -503,6 +503,15 @@ def preview_rect(path):
     return None if cut is None else cut[0]
 
 
+def _exif_tagged(path) -> bool:
+    """Does the file carry an EXIF orientation other than upright? Its bytes are then not the frame we report."""
+    try:
+        with Image.open(path) as raw:
+            return raw.getexif().get(274, 1) not in (0, 1)
+    except Exception:
+        return False
+
+
 def prepare(path, max_edge: int = MAX_EDGE, crop_box=None) -> Prepared:
     """Read a photo from disk and return exactly what should be sent for it.
 
@@ -543,8 +552,8 @@ def prepare(path, max_edge: int = MAX_EDGE, crop_box=None) -> Prepared:
                     sent_size=scaled.size,
                     resized=True,
                 )
-            if not resized and suffix in MEDIA_TYPES:
-                # Already inside the cap and in a format the API takes: send it verbatim.
+            if not resized and suffix in MEDIA_TYPES and not _exif_tagged(path):
+                # Already inside the cap, in a format the API takes, and upright on disk: send it verbatim.
                 return Prepared(
                     data=path.read_bytes(),
                     media_type=MEDIA_TYPES[suffix],
@@ -561,7 +570,7 @@ def prepare(path, max_edge: int = MAX_EDGE, crop_box=None) -> Prepared:
                 sha256=digest,
                 original_size=original_size,
                 sent_size=scaled.size,
-                resized=resized,
+                resized=resized or _exif_tagged(path),
                 crop_refused=refused,
             )
     except ImageError:
