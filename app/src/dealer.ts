@@ -2,6 +2,7 @@
  * link to the tcg-dealer dispenser, its command allow list and the paced deal loop. No other file
  * talks to the dispenser. `createDealer` is plain TypeScript with no React; `useDealer` is the
  * screen's hook over it. Nothing here is stored, and dealing never resumes on its own (D19). */
+import { count } from './kit/dataRules'
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 
 /* ---- the little of Web Bluetooth this file uses, typed locally (no @types package) ---- */
@@ -66,7 +67,6 @@ export interface DealerSnapshot {
   readonly said: string
 }
 
-const cardsWord = (n: number) => `${n} ${n === 1 ? 'card' : 'cards'}`
 
 // The chosen device lives in module memory, so a second Connect in the same page load skips the chooser.
 let remembered: BtDevice | null = null
@@ -101,8 +101,8 @@ export function createDealer({ onMark }: { onMark?: (name: DealerMark, card: num
       case 'idle': return 'Not connected'
       case 'connecting': return 'Connecting'
       case 'connected': return 'Connected'
-      case 'dealing': return `Dealing, ${cardsWord(cards)}`
-      case 'stopped': return ended ? `Out of cards after ${cards}` : `Stopped after ${cardsWord(cards)}`
+      case 'dealing': return `Dealing, ${count(cards, 'card')}`
+      case 'stopped': return ended ? `Out of cards after ${cards}` : `Stopped after ${count(cards, 'card')}`
       default: return SAID_FAULT
     }
   }

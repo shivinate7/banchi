@@ -1,3 +1,4 @@
+import { count as nounCount } from './kit/dataRules'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 
 import {
@@ -305,7 +306,7 @@ export function selectionLine(
   } else if (draft.start === 'ticked') {
     if (carried === null || carried.keys.length === 0) return 'No cards were handed over.'
     const legs = carriedByBox(carried)
-    parts.push(`${plural(carried.keys.length, 'ticked card')} in ${boxesLabel(legs) ?? ''}`)
+    parts.push(`${nounCount(carried.keys.length, 'ticked card')} in ${boxesLabel(legs) ?? ''}`)
   } else {
     if (draft.run === null) return 'Pick a run to read again.'
     parts.push(`the cards of ${draft.run}`)
@@ -336,14 +337,10 @@ function count(value: number | null | undefined): string {
   return typeof value === 'number' ? String(value) : '—'
 }
 
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? '' : 's'}`
-}
-
 /** A card the free reader's pool rules leave unread, in a sentence. The codes are the reader's own
  *  and never drawn. An unknown code is still counted, in words that do not guess at its cause. */
 function unreadLine(code: string, n: number): string {
-  const cards = plural(n, 'card')
+  const cards = nounCount(n, 'card')
   switch (code) {
     case 'set_not_resolved':
       return `${cards} have a set hint that does not name one set`
@@ -423,7 +420,7 @@ function MatchPrepare({
         <p className="run-step-fine">
           Ready. {count(state.fingerprints)} stock photos read
           {(state.no_image ?? 0) > 0 ? `, ${state.no_image} printings have none` : ''}.
-          {typeof state.matched === 'number' ? ` ${plural(state.matched, 'card')} matched for free so far.` : ''}
+          {typeof state.matched === 'number' ? ` ${nounCount(state.matched, 'card')} matched for free so far.` : ''}
         </p>
         <Button size="sm" variant="quiet" onClick={onPrepare}>
           Refresh stock photos
@@ -908,7 +905,7 @@ export function RunsComposer({
         toast({
           kind: 'ok',
           title: `${runLabel(first, boxes) ?? line} started`,
-          body: `${money(quote?.total.estimate_usd)} (${plural(quote?.total.to_send ?? 0, 'card')})`,
+          body: `${money(quote?.total.estimate_usd)} (${nounCount(quote?.total.to_send ?? 0, 'card')})`,
         })
       }
     })
@@ -1085,7 +1082,7 @@ export function RunsComposer({
                               <span className="runs-box-name" title={boxLabel(record.box, record.name)}>
                                 {boxLabel(record.box, record.name)}
                               </span>
-                              <span className="runs-box-cards">{plural(record.cards, 'card')}</span>
+                              <span className="runs-box-cards">{nounCount(record.cards, 'card')}</span>
                             </span>
                             <span className="runs-box-check" aria-hidden="true">
                               <Icon name="check" size={12} />
@@ -1126,7 +1123,7 @@ export function RunsComposer({
                       return (
                         <div className="runs-pick-said">
                           <p className="runs-pick-lede">
-                            {plural(carried.keys.length, 'card')} ticked in {boxesLabel(legs) ?? ''}. Only those
+                            {nounCount(carried.keys.length, 'card')} ticked in {boxesLabel(legs) ?? ''}. Only those
                             cards are sent.
                           </p>
                           <div className="runs-handoff">
@@ -1209,7 +1206,7 @@ export function RunsComposer({
                     { value: '', label: 'Whole box' },
                     ...(sectionsOf?.sections_detail ?? []).map((row) => ({
                       value: String(row.section),
-                      label: `Section ${row.section}${row.name === null ? '' : ` (${row.name})`} with ${plural(row.count, 'card')}`,
+                      label: `Section ${row.section}${row.name === null ? '' : ` (${row.name})`} with ${nounCount(row.count, 'card')}`,
                     })),
                   ]}
                   onChange={(next) => onDraft({ section: next === '' ? null : Number(next) })}
@@ -1500,7 +1497,7 @@ export function RunsComposer({
                 <span className="runs-quote-money">{money(quote.total.estimate_usd)}</span>
                 <span className="runs-quote-line">
                   <span>
-                    <strong>{plural(quote.total.to_send ?? 0, 'card')}</strong> {free ? 'to match' : 'to send'}
+                    <strong>{nounCount(quote.total.to_send ?? 0, 'card')}</strong> {free ? 'to match' : 'to send'}
                   </span>
                   <span>{count(quote.total.cache_hits)} already answered</span>
                   <span>{count(quote.total.photographs)} photographs</span>
@@ -1534,7 +1531,7 @@ export function RunsComposer({
                       the exception. D33's rule is that the total is the number the operator
                       agrees to spend, and the old `boxes` figure was the least useful true number
                       available about a press over 2,535 cards in five drawers. */}
-                  {plural(quote.total.cards, 'card')} in the selection
+                  {nounCount(quote.total.cards, 'card')} in the selection
                 </span>
               </div>
 
@@ -1575,7 +1572,7 @@ export function RunsComposer({
                         setRereadMatcher(event.target.checked)
                       }}
                     />
-                    Also read again the {plural(quote.total.matcher_read ?? 0, 'card')} that matching decided
+                    Also read again the {nounCount(quote.total.matcher_read ?? 0, 'card')} that matching decided
                   </label>
                   <p className="run-step-fine">{askCostLine(quote.total, rereadMatcher)}</p>
                 </div>
@@ -1590,7 +1587,7 @@ export function RunsComposer({
                 /* THE MACHINE'S CODES GO BEHIND "What the server said" (D269), never in plain view. */
                 <Notice
                   tone="danger"
-                  title={`${plural(partial.length, 'run')} did not start`}
+                  title={`${nounCount(partial.length, 'run')} did not start`}
                   code={partial.map((row) => row.code).join(', ')}
                 >
                   Nothing in this send was paid for. Press again.
@@ -1613,7 +1610,7 @@ export function RunsComposer({
                   tone="warn"
                   /* The count is on the line (D174): two cards is a double-click, four hundred is a
                      different mistake. */
-                  title={`${plural(quote.claimed.cards, 'card')} already being paid for`}
+                  title={`${nounCount(quote.claimed.cards, 'card')} already being paid for`}
                   /* Which runs or receipts hold them are machine names (D196), so they sit
                      behind "What the server said" (D269). */
                   detail={quote.claimed.runs.length > 0 ? quote.claimed.runs.join(', ') : quote.claimed.receipts.join(', ')}
@@ -1622,7 +1619,7 @@ export function RunsComposer({
                 </Notice>
               ) : quote.total.to_send === 0 ? (
                 <Notice tone="ok" title="Nothing to send">
-                  All {plural(quote.total.cards, 'card')} in this selection are already answered — nothing to spend.
+                  All {nounCount(quote.total.cards, 'card')} in this selection are already answered — nothing to spend.
                 </Notice>
               ) : (
                 <>
@@ -1749,7 +1746,7 @@ export function RunsComposer({
                 {started.runs.length === 1 ? 'The run has started' : `${started.runs.length} runs have started`}
               </h3>
               <p className="runs-receipt-line">
-                {plural(started.cards ?? 0, 'card')} sent to be read (<strong>{money(started.estimate)}</strong>)
+                {nounCount(started.cards ?? 0, 'card')} sent to be read (<strong>{money(started.estimate)}</strong>)
               </p>
               <ul className="runs-receipt-runs">
                 {started.runs.map((row) => (
@@ -1760,7 +1757,7 @@ export function RunsComposer({
                         selection's own words stand in where there is no box to label. */}
                     {/* The run's directory name rides a tooltip only (D196), as the run list's does. */}
                     <span className="runs-receipt-box" title={row.run}>
-                      {runLabel(row, boxes) ?? `${plural(row.cards, 'card')}`}
+                      {runLabel(row, boxes) ?? `${nounCount(row.cards, 'card')}`}
                     </span>
                   </li>
                 ))}
@@ -1769,7 +1766,7 @@ export function RunsComposer({
                 /* THE MACHINE'S CODES GO BEHIND "What the server said" (D269), never in plain view. */
                 <Notice
                   tone="danger"
-                  title={`${plural(partial.length, 'run')} did not start`}
+                  title={`${nounCount(partial.length, 'run')} did not start`}
                   code={partial.map((row) => row.code).join(', ')}
                 >
                   Nothing in that send was paid for. Check the cost again to start it.

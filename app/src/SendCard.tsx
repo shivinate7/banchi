@@ -23,6 +23,7 @@
  *
  * NO PIPELINE WORD REACHES THE SCREEN (D196): not emit, not staged, not reconcile. */
 
+import { count } from './kit/dataRules'
 import { useEffect, useState } from 'react'
 import { Button, Icon, IconButton, Money, Notice, Refusal, Retry } from './kit'
 import { clockTime } from './dates'
@@ -33,14 +34,13 @@ import { emptySendTitle } from './standing'
 import { current as liveState, refresh as refreshLive, useLiveCheck } from './liveCheck'
 import './SendCard.css'
 
-const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`
 
 /** What a press carries, in owner words: "3 copies", "2 price changes", or both joined. A price
  *  change is a card already live whose typed price moves; it adds no copy. */
 function carried(copies: number, prices: number): string {
   const parts = [
-    copies > 0 || prices === 0 ? plural(copies, 'copy', 'copies') : null,
-    prices > 0 ? plural(prices, 'price change', 'price changes') : null,
+    copies > 0 || prices === 0 ? count(copies, 'copy', 'copies') : null,
+    prices > 0 ? count(prices, 'price change', 'price changes') : null,
   ].filter((part): part is string => part !== null)
   return parts.join(' and ')
 }
@@ -49,7 +49,7 @@ function carried(copies: number, prices: number): string {
 function pressCarries(skus: number, copies: number, prices: number): string {
   const parts = [
     copies > 0 || prices === 0 ? (skus === 1 ? '1 SKU' : `all ${skus} SKUs`) : null,
-    prices > 0 ? plural(prices, 'price change', 'price changes') : null,
+    prices > 0 ? count(prices, 'price change', 'price changes') : null,
   ].filter((part): part is string => part !== null)
   return parts.join(' and ')
 }
@@ -111,7 +111,7 @@ function TrimList({ trimmed }: { readonly trimmed: readonly SendTrim[] }) {
   if (trimmed.length === 0) return null
   const held = trimmed.reduce((total, trim) => total + (trim.would - trim.goes), 0)
   return (
-    <Notice tone="info" compact className="send-trimmed" title={`${plural(held, 'copy', 'copies')} held back: TCGplayer already had them.`}>
+    <Notice tone="info" compact className="send-trimmed" title={`${count(held, 'copy', 'copies')} held back: TCGplayer already had them.`}>
       <ul className="send-names">
         {trimmed.slice(0, 6).map((trim) => (
           <li key={trim.sku}>
@@ -132,7 +132,7 @@ function TrimList({ trimmed }: { readonly trimmed: readonly SendTrim[] }) {
 function MovesPhrase({ moves }: { readonly moves: readonly { copies: number; price: string }[] }) {
   const copies = moves.reduce((total, move) => total + move.copies, 0)
   const prices = new Set(moves.map((move) => Number(move.price)))
-  const head = `${plural(copies, 'live copy moves', 'live copies move')} to `
+  const head = `${count(copies, 'live copy moves', 'live copies move')} to `
   return prices.size === 1 ? (
     <>
       {head}
@@ -190,7 +190,7 @@ function ResendPrices({
           <li key={`${row.sku}-${row.why}`}>
             <span className="send-name">{row.name || row.sku}</span>
             <span className="send-figure">
-              {row.why === 'live_moved' ? 'TCGplayer shows ' : `${plural(row.copies, 'live copy', 'live copies')} at `}
+              {row.why === 'live_moved' ? 'TCGplayer shows ' : `${count(row.copies, 'live copy', 'live copies')} at `}
               {row.live === null ? 'no price' : <Money value={Number(row.live)} />}
               {row.why === 'live_moved' ? ' now. Send ' : ' move to '}
               {row.price === null ? 'this price' : <Money value={Number(row.price)} />}
@@ -213,14 +213,14 @@ function MovesList({ moves }: { readonly moves: readonly LiveMove[] }) {
   return (
     <Notice tone="info" compact className="send-moves" title="Live copies this press moves to their new price.">
       <Button variant="quiet" icon={open ? 'chevronUp' : 'chevronDown'} onClick={() => setOpen((on) => !on)} aria-expanded={open} words="word-only-control">
-        {`${open ? 'Hide' : 'Show'} ${plural(moves.reduce((sum, move) => sum + move.copies, 0), 'live copy', 'live copies')}`}
+        {`${open ? 'Hide' : 'Show'} ${count(moves.reduce((sum, move) => sum + move.copies, 0), 'live copy', 'live copies')}`}
       </Button>
       <ul className="send-names" hidden={!open}>
         {moves.map((move) => (
           <li key={move.sku}>
             <span className="send-name">{move.name || move.sku}</span>
             <span className="send-figure">
-              {`${plural(move.copies, 'live copy', 'live copies')}, `}
+              {`${count(move.copies, 'live copy', 'live copies')}, `}
               {move.was === null ? 'no price' : <Money value={Number(move.was)} />}
               {' to '}
               <Money value={Number(move.price)} />
@@ -244,7 +244,7 @@ const LEFT_WHY: Record<string, string> = {
 function PricesLeft({ send }: { readonly send: SendSummary }) {
   if (send.prices_left.length === 0) return null
   return (
-    <Notice tone="info" compact className="send-prices-left" title={`${plural(send.prices_left.length, 'price change', 'price changes')} left out.`}>
+    <Notice tone="info" compact className="send-prices-left" title={`${count(send.prices_left.length, 'price change', 'price changes')} left out.`}>
       <ul className="send-names">
         {send.prices_left.slice(0, 6).map((note) => (
           <li key={note.sku}>
@@ -298,10 +298,10 @@ function foundLine(send: SendSummary): string {
   if (send.check !== null && send.prices === 0) return `${send.check.found} of ${send.check.expected} found`
   const parts: string[] = []
   if (send.check !== null && send.check.expected > 0) {
-    parts.push(`${send.check.found} of ${plural(send.check.expected, 'copy', 'copies')} found`)
+    parts.push(`${send.check.found} of ${count(send.check.expected, 'copy', 'copies')} found`)
   }
   if (send.prices > 0 && send.price_check !== null) {
-    parts.push(`${send.price_check.matched} of ${plural(send.price_check.expected, 'price change', 'price changes')} live`)
+    parts.push(`${send.price_check.matched} of ${count(send.price_check.expected, 'price change', 'price changes')} live`)
   }
   return parts.join(', ')
 }
@@ -389,7 +389,7 @@ function SendStanding({
   const action =
     send.takeable > 0 ? (
       <Button size="sm" busy={takingBack} disabled={takingBack} onClick={() => takeBack(send.stamp)}>
-        {`Take ${plural(send.takeable, 'copy', 'copies')} back`}
+        {`Take ${count(send.takeable, 'copy', 'copies')} back`}
       </Button>
     ) : undefined
   switch (send.state) {
@@ -424,7 +424,7 @@ function SendStanding({
     case 'waiting':
       if (send.turned_away > 0 && send.accepted !== null) {
         return (
-          <Notice tone="warn" compact className="send-standing send-turned-away" title={`TCGplayer took ${send.accepted} of ${plural(send.rows, 'card', 'cards')}.`}>
+          <Notice tone="warn" compact className="send-standing send-turned-away" title={`TCGplayer took ${send.accepted} of ${count(send.rows, 'card', 'cards')}.`}>
             Banchi names the rest after {clockTime(send.check_after)}, and they can come back to the list then.
           </Notice>
         )

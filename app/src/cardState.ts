@@ -14,38 +14,13 @@
  */
 
 import type { RetireReason } from './types'
-import { absoluteDate, clockTime, toDate } from './dates'
+import { absoluteDate, clockTime, relativeDate, toDate } from './dates'
 
-const MINUTE = 60_000
-const HOUR = 3_600_000
 const DAY = 86_400_000
 
-/** `3 days`, `4 hours`, `just now` — coarse on purpose; the exact moment is in the title. */
+/** The ago phrase for a reading's stamp, or null where it has none. `dates.relativeDate` is the home. */
 export function readingAgo(at: string | null | undefined): string | null {
-  if (typeof at !== 'string' || at.trim() === '') return null
-  const when = Date.parse(at)
-  if (Number.isNaN(when)) return null
-  const elapsed = Math.max(0, Date.now() - when)
-  if (elapsed < 2 * MINUTE) return 'just now'
-  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)} minutes ago`
-  if (elapsed < DAY) {
-    const hours = Math.floor(elapsed / HOUR)
-    return `${hours} hour${hours === 1 ? '' : 's'} ago`
-  }
-  const days = Math.floor(elapsed / DAY)
-  return `${days} day${days === 1 ? '' : 's'} ago`
-}
-
-/** `2d ago`, `5h ago`, `just now`: the same reading as `readingAgo`, cut to the band's width. */
-export function readingAgoShort(at: string | null | undefined): string | null {
-  if (typeof at !== 'string' || at.trim() === '') return null
-  const when = Date.parse(at)
-  if (Number.isNaN(when)) return null
-  const elapsed = Math.max(0, Date.now() - when)
-  if (elapsed < 2 * MINUTE) return 'just now'
-  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)}m ago`
-  if (elapsed < DAY) return `${Math.floor(elapsed / HOUR)}h ago`
-  return `${Math.floor(elapsed / DAY)}d ago`
+  return toDate(at) === null ? null : relativeDate(at)
 }
 
 /** Whole days since a reading, or null when it has no usable stamp. */

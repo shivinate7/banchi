@@ -1,3 +1,4 @@
+import { count } from './kit/dataRules'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
 import { boxTitle } from './kit/data'
@@ -26,7 +27,7 @@ import type {
 import { Button, EmptyState, FilterBar, Icon, IconButton, Loading, Notice, Page, Pill, ReloadButton, Segmented, Select, Sheet, Stat, type FilterFacet, type FilterValue, type IconName } from './kit'
 import { didYouMean, matchQuery } from './kit/match'
 import { toast } from './kit/toast'
-import { absoluteDate } from './dates'
+import { absoluteDate, localDay } from './dates'
 import './Codes.css'
 
 /* CODES — the code-card track on a route of its own (D14, D70).
@@ -86,10 +87,6 @@ function deliveryLabel(delivery: string): string {
   return delivery
 }
 
-function plural(n: number, one: string, many = `${one}s`): string {
-  return `${n.toLocaleString()} ${n === 1 ? one : many}`
-}
-
 /** The code with every letter and digit replaced, its 3-4-3-3 shape kept. */
 function mask(code: string): string {
   return code.replace(/[A-Za-z0-9]/g, '•')
@@ -136,7 +133,7 @@ function boxName(box: number, boxes: BoxRecord[] | null): string {
    carry the seam, so this is a real sentence (a comma list) rather than a typed dot. */
 function boxLabel(box: BoxRecord): string {
   const held = box.on_hand ?? box.cards
-  return `${boxTitle(box.name, box.box)}, ${plural(held, 'card')}`
+  return `${boxTitle(box.name, box.box)}, ${count(held, 'card')}`
 }
 
 /* ---- sheet -----------------------------------------------------------------------------------
@@ -200,7 +197,7 @@ function CodeBlock({ codes, name }: { readonly codes: readonly string[]; readonl
   return (
     <div className="codes-block">
       <div className="codes-block-bar">
-        <span className="bn-label">{plural(codes.length, 'code')}</span>
+        <span className="bn-label">{count(codes.length, 'code')}</span>
         <span className="bn-spacer" />
         <IconButton
           size="sm"
@@ -443,7 +440,7 @@ export function Codes() {
         const stepped =
           claimed.skipped_terminal === 0
             ? ''
-            : ` ${plural(claimed.skipped_terminal, 'sold or retired record')} left alone.`
+            : ` ${count(claimed.skipped_terminal, 'sold or retired record')} left alone.`
         toast(
           claimed.applied === 0
             ? {
@@ -453,8 +450,8 @@ export function Codes() {
               }
             : {
                 kind: 'ok',
-                title: `${plural(claimed.applied, 'card')} now ${named}`,
-                body: `${boxName(box, boxes)} read again — ${plural(reread.decoded, 'code')} decoded.${stepped}`,
+                title: `${count(claimed.applied, 'card')} now ${named}`,
+                body: `${boxName(box, boxes)} read again — ${count(reread.decoded, 'code')} decoded.${stepped}`,
               },
         )
         await load()
@@ -501,7 +498,7 @@ export function Codes() {
       setFailure(null)
       toast({
         kind: 'ok',
-        title: `${plural(done.count, 'code')} reserved to ${done.order_id ?? 'the order'}`,
+        title: `${count(done.count, 'code')} reserved to ${done.order_id ?? 'the order'}`,
         body: 'Copy them to the buyer from the sheet. They will never be offered again.',
       })
       await load()
@@ -567,7 +564,7 @@ export function Codes() {
       toast({
         kind: 'ok',
         title: `Lot ${done.lot_id ?? ''} built`.replace(/\s+/g, ' ').trim(),
-        body: `${plural(done.count, 'code')} reserved. The listing, packing slip and manifest are in the sheet.`,
+        body: `${count(done.count, 'code')} reserved. The listing, packing slip and manifest are in the sheet.`,
       })
       await load()
     } catch (err) {
@@ -892,7 +889,7 @@ export function Codes() {
                 <div className="codes-banner is-danger" role="status">
                   <Icon name="alert" size={18} />
                   <div className="codes-banner-text">
-                    <strong>{plural(ledger.duplicates.length, 'duplicate code')}</strong> — one code read at two positions. Either one
+                    <strong>{count(ledger.duplicates.length, 'duplicate code')}</strong> — one code read at two positions. Either one
                     card was photographed twice, or two cards bear one code and one of them is worth nothing. Look at both photographs
                     before selling either.
                   </div>
@@ -964,7 +961,7 @@ export function Codes() {
                 <div className="codes-banner is-warn" role="status">
                   <Icon name="alert" size={18} />
                   <div className="codes-banner-text">
-                    <strong>{plural(ledger.lanes.unclaimed, 'held code')}</strong>{' '}
+                    <strong>{count(ledger.lanes.unclaimed, 'held code')}</strong>{' '}
                     {ledger.lanes.unclaimed === 1 ? 'carries' : 'carry'} no product claim, so neither lane will take{' '}
                     {ledger.lanes.unclaimed === 1 ? 'it' : 'them'}. Treating one as a booster would be right most of the time — and
                     the time it is wrong, a premium code leaves in a penny lot.
@@ -1005,10 +1002,10 @@ export function Codes() {
                           <li key={row.box} className="codes-fix-row">
                             <div className="codes-fix-where">
                               <span className="codes-fix-box">{boxName(row.box, boxes)}</span>
-                              <span className="codes-fix-n">{plural(row.indices.length, 'unclaimed code')}</span>
+                              <span className="codes-fix-n">{count(row.indices.length, 'unclaimed code')}</span>
                               {row.company === null ? null : (
                                 <span className="codes-fix-company">
-                                  the other {plural(row.company.count, 'code')} in this box say {row.company.display}
+                                  the other {count(row.company.count, 'code')} in this box say {row.company.display}
                                 </span>
                               )}
                             </div>
@@ -1043,7 +1040,7 @@ export function Codes() {
                                 disabled={busy || chosen === ''}
                                 onClick={() => void fixProduct(row.box, row.indices, chosen, entry?.display ?? chosen)}
                               >
-                                Apply to {plural(row.indices.length, 'code')}
+                                Apply to {count(row.indices.length, 'code')}
                               </Button>
                             </div>
                           </li>
@@ -1053,7 +1050,7 @@ export function Codes() {
                   )}
                   {unclaimedFix.adrift === 0 ? null : (
                     <p className="codes-fix-adrift">
-                      {plural(unclaimedFix.adrift, 'code')} {unclaimedFix.adrift === 1 ? 'carries' : 'carry'} no position, so there is
+                      {count(unclaimedFix.adrift, 'code')} {unclaimedFix.adrift === 1 ? 'carries' : 'carry'} no position, so there is
                       no card record to write a claim onto. Read {unclaimedFix.adrift === 1 ? 'its' : 'their'}{' '}
                       box again, or hand {unclaimedFix.adrift === 1 ? 'it' : 'them'} over by product below.
                     </p>
@@ -1072,7 +1069,7 @@ export function Codes() {
                 </span>
                 <span className="codes-pile-sum">
                   <span>
-                    <strong>{plural(held, 'code')}</strong> on hand
+                    <strong>{count(held, 'code')}</strong> on hand
                   </span>
                   <span>{ledger.total.toLocaleString()} on file</span>
                 </span>
@@ -1125,7 +1122,7 @@ export function Codes() {
                 <span className="bn-section-title">
                   <Icon name="tag" size={16} /> By product
                 </span>
-                <span className="bn-muted">{plural(ledger.by_product.length, 'kind')}</span>
+                <span className="bn-muted">{count(ledger.by_product.length, 'kind')}</span>
               </div>
               {ledger.by_product.length === 0 ? (
                 <p className="codes-products-empty">No product claims yet.</p>
@@ -1152,7 +1149,7 @@ export function Codes() {
                     aria-expanded={allProducts}
                     onClick={() => setAllProducts((a) => !a)}
                   >
-                    {allProducts ? 'Show fewer' : `Show all ${plural(ledger.by_product.length, 'kind')}`}
+                    {allProducts ? 'Show fewer' : `Show all ${count(ledger.by_product.length, 'kind')}`}
                   </Button>
                 </div>
               ) : null}
@@ -1188,7 +1185,7 @@ export function Codes() {
               icon="package"
               title="Build a lot"
               body="A whole box, shipped, with its listing, packing slip and manifest."
-              meta={lots.length === 0 ? 'No lots built yet' : `${plural(lots.length, 'lot')} built`}
+              meta={lots.length === 0 ? 'No lots built yet' : `${count(lots.length, 'lot')} built`}
               tone="ok"
               at={2}
               onOpen={() => openSheet('lot')}
@@ -1347,8 +1344,8 @@ export function Codes() {
                         {rows.length > visible.length
                           ? `Showing ${visible.length.toLocaleString()} of ${rows.length.toLocaleString()}`
                           : filtered
-                            ? `${plural(rows.length, 'code')} match`
-                            : `${plural(rows.length, 'code')} on file`}
+                            ? `${count(rows.length, 'code')} match`
+                            : `${count(rows.length, 'code')} on file`}
                       </span>
                       {rows.length > visible.length ? (
                         <Button size="sm" variant="ghost" onClick={() => setShowAll(true)}>
@@ -1406,11 +1403,11 @@ export function Codes() {
               </div>
               {scan.photographs !== scan.code_cards ? (
                 <p className="codes-result-note">
-                  {plural(scan.photographs - scan.code_cards, 'photograph')} of other games left alone.
+                  {count(scan.photographs - scan.code_cards, 'photograph')} of other games left alone.
                 </p>
               ) : null}
               {scan.unread.length === 0 ? null : (
-                <Notice tone="warn" title={`${plural(scan.unread.length, 'card')} did not read`}>
+                <Notice tone="warn" title={`${count(scan.unread.length, 'card')} did not read`}>
                   None is lost — each keeps its photograph and its position. The next reader is the paid vision transcription, then a
                   human.
                   <ul className="codes-mono-list">
@@ -1421,7 +1418,7 @@ export function Codes() {
                 </Notice>
               )}
               {scan.malformed.length === 0 ? null : (
-                <Notice tone="info" title={`${plural(scan.malformed.length, 'code')} decoded but not in the printed 3-4-3-3 shape`}>
+                <Notice tone="info" title={`${count(scan.malformed.length, 'code')} decoded but not in the printed 3-4-3-3 shape`}>
                   Kept and marked, never refused: a payload that survived the QR's own error correction is likelier to be an
                   unfamiliar print run than a misread.
                   <ul className="codes-mono-list">
@@ -1517,7 +1514,7 @@ export function Codes() {
                     disabled={busy || !orderId.trim()}
                     onClick={() => void runCommit()}
                   >
-                    Reserve {plural(preview.available, 'code')} — cannot be undone
+                    Reserve {count(preview.available, 'code')} — cannot be undone
                   </Button>
                 </div>
               )}
@@ -1526,7 +1523,7 @@ export function Codes() {
 
           {committed === null ? null : (
             <div className="codes-result is-done bn-anim-in">
-              <Notice tone="ok" title={`${plural(committed.count, 'code')} reserved${committed.order_id ? ` to ${committed.order_id}` : ''}`}>
+              <Notice tone="ok" title={`${count(committed.count, 'code')} reserved${committed.order_id ? ` to ${committed.order_id}` : ''}`}>
                 {committed.note}
               </Notice>
               <CodeBlock codes={committed.codes ?? []} name={committed.order_id ?? 'codes'} />
@@ -1615,7 +1612,7 @@ export function Codes() {
               </div>
               <p className="codes-result-note">{lotPlan.note}</p>
               {lotPlan.premium_in_lot > 0 ? (
-                <Notice tone="danger" title={`${plural(lotPlan.premium_in_lot, 'premium code')} in this lot`}>
+                <Notice tone="danger" title={`${count(lotPlan.premium_in_lot, 'premium code')} in this lot`}>
                   A premium code lists at roughly 46× a booster. Selling one inside a bulk lot is the most expensive mistake on this
                   track — make sure this is deliberate.
                 </Notice>
@@ -1638,7 +1635,7 @@ export function Codes() {
                     className="bn-input"
                     value={lotId}
                     onChange={(e) => setLotId(e.target.value)}
-                    placeholder={`${lotVenue}-${new Date().toISOString().slice(0, 10)}${lotPlan.box === null ? '' : `-box${lotPlan.box}`}`}
+                    placeholder={`${lotVenue}-${localDay()}${lotPlan.box === null ? '' : `-box${lotPlan.box}`}`}
                   />
                   <span className="bn-field-hint">
                     For matching to a settlement statement later. Blank generates one.
@@ -1653,7 +1650,7 @@ export function Codes() {
                   disabled={busy}
                   onClick={() => void commitLot()}
                 >
-                  Reserve {plural(lotPlan.count, 'code')} — cannot be undone
+                  Reserve {count(lotPlan.count, 'code')} — cannot be undone
                 </Button>
               </div>
             </div>
@@ -1661,7 +1658,7 @@ export function Codes() {
 
           {lotBuilt === null ? null : (
             <div className="codes-result is-done bn-anim-in">
-              <Notice tone="ok" title={`Lot ${lotBuilt.lot_id ?? ''} built — ${plural(lotBuilt.count, 'code')} reserved`}>
+              <Notice tone="ok" title={`Lot ${lotBuilt.lot_id ?? ''} built — ${count(lotBuilt.count, 'code')} reserved`}>
                 {lotBuilt.note}
               </Notice>
               <div className="bn-tabs codes-tabs" role="tablist" aria-label="Lot files">

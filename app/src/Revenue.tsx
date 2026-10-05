@@ -11,7 +11,7 @@ import {
 } from './kit'
 import { moneyGrouped } from './money'
 import { salesOf, sum, type Sale } from './revenueMath'
-import { absoluteDate, monthOf, saleDate, weekOf } from './dates'
+import { absoluteDate, localDay, monthOf, saleDate, weekOf } from './dates'
 import { useCardCropWhenSeen } from './cardCrop'
 import { didYouMean, matchQuery } from './kit/match'
 import { SearchField } from './SearchField'
@@ -180,12 +180,6 @@ function pad2(n: number): string {
   return String(n).padStart(2, '0')
 }
 
-/** `YYYY-MM-DD` in local time — the one shape both `<input type="date">` and this screen's
- *  own URL state use, so a value round-trips through either without a timezone shift. */
-function isoDate(d: Date): string {
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
-}
-
 /** `null` for anything that is not exactly that shape — a malformed or hand-edited URL reads
  *  as "no date" rather than as a wrong one. */
 function parseIsoDate(s: string): Date | null {
@@ -299,7 +293,7 @@ function bucketRangeOf(at: Date, granularity: Granularity): { readonly key: stri
   }
   const start = weekStart(at)
   const end = dayAfter(new Date(start.getTime() + 6 * 86_400_000))
-  return { key: isoDate(start), start, end, label: weekOf(start, end) }
+  return { key: localDay(start), start, end, label: weekOf(start, end) }
 }
 
 /** ONLY THE BUCKETS THAT HAVE A SALE, same as the screen this replaces always drew — a
@@ -884,8 +878,8 @@ export function Revenue() {
   const handlePeriod = (next: Period) => {
     setPeriod(next)
     if (next === 'custom') {
-      setCustomFrom((prev) => prev ?? isoDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30)))
-      setCustomTo((prev) => prev ?? isoDate(now))
+      setCustomFrom((prev) => prev ?? localDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30)))
+      setCustomTo((prev) => prev ?? localDay(now))
     }
   }
 
@@ -1123,8 +1117,8 @@ export function Revenue() {
                   id={fromId}
                   type="date"
                   value={customFrom ?? ''}
-                  max={customTo ?? isoDate(now)}
-                  min={earliestSale !== null ? isoDate(earliestSale) : undefined}
+                  max={customTo ?? localDay(now)}
+                  min={earliestSale !== null ? localDay(earliestSale) : undefined}
                   onChange={(event) => setCustomFrom(event.target.value === '' ? null : event.target.value)}
                 />
               </div>
@@ -1138,7 +1132,7 @@ export function Revenue() {
                   type="date"
                   value={customTo ?? ''}
                   min={customFrom ?? undefined}
-                  max={isoDate(now)}
+                  max={localDay(now)}
                   onChange={(event) => setCustomTo(event.target.value === '' ? null : event.target.value)}
                 />
               </div>

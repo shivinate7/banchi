@@ -1,3 +1,4 @@
+import { byteSize } from './kit/dataRules'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from 'react'
 
 import { readUpload } from './csvUpload'
@@ -514,7 +515,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                 <span className="shipping-file-name" title={batch.file.name}>
                   {batch.file.name}
                 </span>
-                <span className="shipping-file-size">{(batch.file.bytes / 1000).toFixed(1)} kB</span>
+                <span className="shipping-file-size">{byteSize(batch.file.bytes)}</span>
               </span>
               {/* THE COUNT IS SAID ONCE, ON THE DOWNLOAD BUTTON BELOW (TXT-05): a second count
                   here duplicated it in the same breath as the lede above and the tab beside it.

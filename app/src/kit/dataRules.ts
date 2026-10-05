@@ -75,3 +75,15 @@ export function boxesMostRecentFirst<T extends { readonly box: number; readonly 
   })
 }
 
+
+/** `1,234 cards`, `1 card`: a count with its noun, thousands grouped. THE one count word. */
+export function count(n: number, one: string, many: string = `${one}s`): string {
+  return `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
+}
+
+/** `999 B`, `1.2 kB`, `31.5 MB`: decimal units, one place. THE one byte size. */
+export function byteSize(bytes: number): string {
+  if (bytes < 1000) return `${bytes} B`
+  if (bytes < 1_000_000) return `${(bytes / 1000).toFixed(1)} kB`
+  return `${(bytes / 1_000_000).toFixed(1)} MB`
+}

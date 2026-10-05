@@ -1,3 +1,4 @@
+import { byteSize } from './kit/dataRules'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 
 import type {
@@ -1648,7 +1649,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
       <div className="boxops-receipt">
         <Notice
           tone="ok"
-          title={`Reclaimed ${count(receipt.reclaimed, 'photograph', 'photographs')} from ${record.name ?? UNNAMED_BOX}, ${megabytes(receipt.bytes)}.`}
+          title={`Reclaimed ${count(receipt.reclaimed, 'photograph', 'photographs')} from ${record.name ?? UNNAMED_BOX}, ${byteSize(receipt.bytes)}.`}
           code={receipt.keys.join(', ')}
         >
           Records stay sold; each keeps its photograph's digest. No undo.
@@ -1698,7 +1699,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
                 <>
                   <strong>
                     {count(plan.reclaimable.cards, 'photograph', 'photographs')},{' '}
-                    {megabytes(plan.reclaimable.bytes)}, would go
+                    {byteSize(plan.reclaimable.bytes)}, would go
                   </strong>
                   {plan.reclaimed.cards > 0
                     ? ` (${count(plan.reclaimed.cards, 'card', 'cards')} reclaimed already)`
@@ -1733,12 +1734,6 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
       )}
     </>
   )
-}
-
-/** Bytes as the unit a person compares a disk against. */
-function megabytes(bytes: number): string {
-  const mb = bytes / 1_000_000
-  return `${mb < 10 ? mb.toFixed(1) : Math.round(mb).toLocaleString()} MB`
 }
 
 /* THE WHOLE-BOX DELETE — the most destructive action in the product, and the one place that

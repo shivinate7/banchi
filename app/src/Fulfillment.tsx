@@ -1,3 +1,4 @@
+import { count } from './kit/dataRules'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
 import type {
@@ -422,10 +423,6 @@ function byBox(cards: Sellable[]): BoxGroup[] {
     }
   }
   return [...groups.values()].sort((a, b) => a.box - b.box)
-}
-
-function count(n: number, one: string, many: string): string {
-  return `${n.toLocaleString()} ${n === 1 ? one : many}`
 }
 
 /** A sort comparator over a number that may be null, WITHOUT the `Infinity - Infinity = NaN`

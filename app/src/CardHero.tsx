@@ -41,7 +41,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { ReadingAge } from './CardLocations'
 import { collectorNumber } from './cardNumber'
-import { forSale, IDENTIFIED, readingAgo, readingAgoShort, readingExact, stateLabel, stateTone, staleReading } from './cardState'
+import { forSale, IDENTIFIED, readingAgo, readingExact, stateLabel, stateTone, staleReading } from './cardState'
 import { Button, Icon, IconButton, Meter, Money, Pill, ProductLink, Skeleton } from './kit'
 import { toast } from './kit/toast'
 import { money } from './money'
@@ -394,7 +394,7 @@ function HeroLead({ figures, market }: { readonly figures: HeroFigures; readonly
     : staleReading(listedAt)
       ? 'bn-dot bn-dot-warn'
       : 'bn-dot bn-dot-live bn-dot-still'
-  const ago = readingAgoShort(listedAt)
+  const ago = readingAgo(listedAt)
   const over = cap === null ? 0 : live - cap
   return (
     <div className="browse-hero-lead">

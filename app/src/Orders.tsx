@@ -38,7 +38,8 @@ import {
   type SortOption,
   type SortValue,
 } from './kit'
-import { absoluteDate, relativeDate } from './dates'
+import { absoluteDate, localDay, relativeDate } from './dates'
+import { count as countOf } from './kit/dataRules'
 import { toast } from './kit/toast'
 import { boxTitle } from './kit/data'
 import { CardPane, gameWord, photoSrc, type HeroFigures, type Row } from './CardHero'
@@ -297,10 +298,6 @@ function whenWord(at: number, now: number): string {
   return relativeDate(at, new Date(now))
 }
 
-function plural(n: number, one: string, many: string): string {
-  return n === 1 ? one : many
-}
-
 /** One figure in a receipt line: the number, then the words for it. */
 function Fig({ n, of }: { readonly n: number; readonly of: string }) {
   return (
@@ -389,7 +386,7 @@ function FetchReceipt({
     )
   }
   if (receipt.named !== null && receipt.named > 0) {
-    took.push(<Fig key="named" n={receipt.named} of={plural(receipt.named, 'buyer named', 'buyers named')} />)
+    took.push(<Fig key="named" n={receipt.named} of={receipt.named === 1 ? 'buyer named' : 'buyers named'} />)
   }
   if (receipt.batches !== null && receipt.batches > 1) {
     took.push(<Fig key="batches" n={receipt.batches} of="batches" />)
@@ -441,7 +438,7 @@ function FetchReceipt({
               clause below with the rest of the outcome. */}
           {receipt.fetched === 0 && (receipt.detailed ?? 0) === 0
             ? 'Nothing new to fetch'
-            : `Fetched ${(receipt.detailed ?? receipt.fetched).toLocaleString()} ${plural(receipt.detailed ?? receipt.fetched, 'order', 'orders')}`}
+            : `Fetched ${countOf(receipt.detailed ?? receipt.fetched, 'order')}`}
         </p>
         {took.length === 0 ? null : <p className="orders-receipt-line">{took}</p>}
         {/* THE LOOP PACES ITSELF, and a batch on its way says so rather than reading as
@@ -569,7 +566,7 @@ function StatusPicker({
               {/* The two figures are the whole point of the panel: what the press will take, out
                   of what is there. Drawn from the preview, which spent nothing to get them. */}
               Taking <b>{picked.toLocaleString()}</b> of <b>{total.toLocaleString()}</b>{' '}
-              {plural(total, 'order', 'orders')} in this window.
+              {total === 1 ? 'order' : 'orders'} in this window.
             </p>
             <Button
               size="sm"
@@ -635,7 +632,7 @@ function StatusPicker({
               <Button variant="primary" icon="refresh" onClick={onConfirm} busy={busy} disabled={busy || picked === 0}>
                 {picked === 0
                   ? 'Tick at least one'
-                  : `Fetch these ${picked.toLocaleString()} ${plural(picked, 'order', 'orders')}`}
+                  : `Fetch these ${countOf(picked, 'order')}`}
               </Button>
             </div>
           )}
@@ -1792,7 +1789,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       : filter.statuses.length === 0
         ? 'No statuses'
         : vocab === null
-          ? `${filter.statuses.length} ${plural(filter.statuses.length, 'status', 'statuses')}`
+          ? `${countOf(filter.statuses.length, 'status', 'statuses')}`
           : `${filter.statuses.filter((one) => vocab.by_status.some((row) => row.status === one)).length} of ${
               vocab.by_status.length
             } statuses`
@@ -1958,7 +1955,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         toast({
           kind: 'receipt',
           icon: 'hand',
-          title: `Closed ${plural(done.moved, 'copy', 'copies')} of ${name}`,
+          title: `Closed ${countOf(done.moved, 'copy', 'copies')} of ${name}`,
           body: `by hand: ${reason === 'sealed' ? 'not a single' : 'not photographed here'}, order ${order.number}`,
           ttlMs: UNDO_WINDOW_MS,
           /* The reversal names a COUNT and not a copy, because the fill never held one. It
@@ -2031,7 +2028,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         toast({
           kind: 'receipt',
           icon: 'check',
-          title: `Stood down ${done.moved} ${plural(done.moved, 'order', 'orders')}`,
+          title: `Stood down ${countOf(done.moved, 'order')}`,
           body: `${done.still_open} still open. Nothing was marked sold.`,
           ttlMs: UNDO_WINDOW_MS,
           action: {
@@ -2130,7 +2127,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         toast({
           kind: 'receipt',
           icon: 'check',
-          title: `Stood down ${done.moved} ${plural(done.moved, 'order', 'orders')}`,
+          title: `Stood down ${countOf(done.moved, 'order')}`,
           body: `${done.still_open} still open. Nothing was marked sold.`,
           ttlMs: UNDO_WINDOW_MS,
           action: {
@@ -2458,7 +2455,7 @@ function BacklogPrompt({
   return (
     <section className="orders-backlog">
       <h3 className="bn-section-title">
-        {candidates.length} open {plural(candidates.length, 'order is', 'orders are')} already shipped
+        {countOf(candidates.length, 'open order is', 'open orders are')} already shipped
       </h3>
       <p>
         TCGplayer says {joinPhrases(statuses.map((status) => `“${status}”`))}, and here they still owe copies. Standing down
@@ -2466,7 +2463,7 @@ function BacklogPrompt({
       </p>
       <div className="orders-standdown-row">
         <Button busy={busyHere} disabled={busy !== null} onClick={() => onStandDown(candidates, 'shipped_elsewhere')}>
-          Stand down {candidates.length} shipped {plural(candidates.length, 'order', 'orders')}
+          Stand down {countOf(candidates.length, 'shipped order')}
         </Button>
       </div>
     </section>
@@ -2495,7 +2492,7 @@ function ReconcileBacklogPanel({
   readonly busy: string | null
   readonly onPress: (cutoff: string) => void
 }) {
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const today = useMemo(() => localDay(), [])
   /* EVERY ORDER THE RULE COULD REACH AT ANY CUTOFF: open, nothing recorded, a placed date. There
      is NO cut at today here. The review found that one: the preview dropped orders placed today,
      while a date typed past the field's max was still sent, and the server takes any cutoff. So
@@ -2568,7 +2565,7 @@ function ReconcileBacklogPanel({
             <Notice
               className="orders-reconcile-live"
               tone="danger"
-              title={`${live.length} of ${plural(live.length, 'them is', 'them are')} still Ready to ship at TCGplayer`}
+              title={`${live.length} of ${live.length === 1 ? 'them is' : 'them are'} still Ready to ship at TCGplayer`}
             >
               <ul>
                 {live.map((row) => (
@@ -2590,7 +2587,7 @@ function ReconcileBacklogPanel({
             if (valid) onPress(cutoff)
           }}
         >
-          Stand down {candidates.length} {plural(candidates.length, 'order', 'orders')}
+          Stand down {countOf(candidates.length, 'order')}
         </Button>
       </div>
     </section>
@@ -3415,7 +3412,7 @@ function PullStage({
       for (const key of prev) if (tickableKeys.has(key)) next.add(key)
       if (next.size === prev.size) return prev
       const gone = prev.size - next.size
-      setWalkNote(`${gone} ${plural(gone, 'buyer', 'buyers')} left the walk: the filter hides ${gone === 1 ? 'that row' : 'those rows'}.`)
+      setWalkNote(`${countOf(gone, 'buyer')} left the walk: the filter hides ${gone === 1 ? 'that row' : 'those rows'}.`)
       return next
     })
   }, [tickableKeys])
@@ -3815,7 +3812,7 @@ function PullStage({
       <div className="orders-walk-crowd">
         <h2 className="orders-walk-title">{walkedGroups.length} buyers</h2>
         <p className="orders-walk-sub">
-          {cardsToPull} {plural(cardsToPull, 'card', 'cards')} to pick
+          {countOf(cardsToPull, 'card')} to pick
         </p>
       </div>
     ) : shownGroup === null ? null : (
@@ -3847,7 +3844,7 @@ function PullStage({
         <>
           <div className="orders-walk-tools">
             <span className="orders-walk-count">
-              {walk.sections.length} {plural(walk.sections.length, 'section', 'sections')}
+              {countOf(walk.sections.length, 'section')}
             </span>
             <span className="bn-spacer" />
             <HideToggle checked={hideSold} onChange={setHideSold} count={walk.soldKeys.size}>
@@ -3873,7 +3870,7 @@ function PullStage({
 
   const chipWords = [
     walkedGroups.length > 1 ? `${walkedGroups.length} buyers` : shownGroup === null ? 'Choose a buyer' : buyerLabel(shownGroup),
-    `${cardsToPull} ${plural(cardsToPull, 'card', 'cards')} to pick`,
+    `${countOf(cardsToPull, 'card')} to pick`,
     ...(nextRow === null || nextRow.copy.place.label === null ? [] : [`next: ${sayPlace(nextRow.copy.place.label)}`]),
   ]
 
@@ -4129,7 +4126,7 @@ function ManagePanel({
               key={one.key}
               icon="package"
               label={one.number}
-              detail={one.open ? `${word}, ${owes} ${plural(owes, 'card', 'cards')} owed` : word}
+              detail={one.open ? `${word}, ${countOf(owes, 'card')} owed` : word}
               busy={false}
               onClick={() => setEditing(one.key)}
             />
@@ -4197,7 +4194,7 @@ function lookWords(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder
   const only = entries.length === 1 ? entries[0] : undefined
   if (only !== undefined) {
     const [word, count] = only
-    return word === 'short' || word === 'flagged' ? `${count} ${word}` : `${count} ${plural(count, 'card', 'cards')} ${word}`
+    return word === 'short' || word === 'flagged' ? `${count} ${word}` : `${countOf(count, 'card')} ${word}`
   }
   return `${total} review`
 }
@@ -4574,7 +4571,7 @@ function LineStandDown({
       <div className="orders-standdown">
         {progress !== null && progress.by_hand > 0 ? (
           <p className="orders-standdown-said">
-            {plural(progress.by_hand, 'copy', 'copies')} already closed by hand.
+            {countOf(progress.by_hand, 'copy', 'copies')} already closed by hand.
           </p>
         ) : null}
         <div className="orders-standdown-row">
@@ -4610,7 +4607,7 @@ function LineStandDown({
           only thing that can stop a double press is the operator seeing the first one. */}
       {progress !== null && progress.by_hand > 0 ? (
         <p className="orders-standdown-said">
-          {plural(progress.by_hand, 'copy', 'copies')} already closed by hand
+          {countOf(progress.by_hand, 'copy', 'copies')} already closed by hand
           {progress.reason === 'sealed' ? ' as a sealed product' : progress.reason === 'off_system' ? ', shipped from outside this store' : ''}.
         </p>
       ) : null}

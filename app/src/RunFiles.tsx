@@ -1,3 +1,4 @@
+import { byteSize } from './kit/dataRules'
 import type { CSSProperties } from 'react'
 import { Icon, type IconName } from './kit'
 import { runFileUrl } from './server'
@@ -17,12 +18,6 @@ function kindOf(file: RunFile): { readonly icon: IconName; readonly label: strin
   if (name.endsWith('.log')) return { icon: 'history', label: 'Console log' }
   if (name.endsWith('.json')) return { icon: 'layers', label: 'JSON' }
   return { icon: 'download', label: 'File' }
-}
-
-function sizeOf(bytes: number): string {
-  if (bytes < 1000) return `${bytes} B`
-  if (bytes < 1_000_000) return `${(bytes / 1000).toFixed(1)} kB`
-  return `${(bytes / 1_000_000).toFixed(1)} MB`
 }
 
 export function RunFiles({
@@ -64,7 +59,7 @@ export function RunFiles({
                 </span>
                 <span className="run-file-meta">
                   <span>{kind.label}</span>
-                  <span className="run-file-size">{sizeOf(file.bytes)}</span>
+                  <span className="run-file-size">{byteSize(file.bytes)}</span>
                 </span>
               </span>
               <Icon name="download" size={16} className="run-file-arrow" />
