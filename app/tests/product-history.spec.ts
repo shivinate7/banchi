@@ -275,7 +275,12 @@ test.describe('#/product — the per-product view', () => {
     await expect(page).toHaveURL(/#\/shipping$/)
     release()
     await expect(page.locator('[role="dialog"]').getByText('This product has never been recorded to sell', { exact: false }), 'the sheet did not draw the new SKU').toBeVisible()
-    await expect(page.locator('[role="dialog"] .bn-notice'), 'the sheet drew a Notice').toHaveCount(0)
+    /* The fixture's own sentence draws in an info Notice, so the check is for a FAILURE notice: not danger or warn tone,
+       no "Reload the page", and no empty Notice (code `aborted`). */
+    const sheet = page.locator('[role="dialog"]')
+    await expect(sheet.locator('.bn-notice-danger, .bn-notice-warn'), 'the sheet drew a failure Notice').toHaveCount(0)
+    await expect(sheet.getByText('Reload the page', { exact: false })).toHaveCount(0)
+    await expect(sheet.locator('.bn-notice').filter({ hasNotText: /\S/ }), 'the sheet drew an empty Notice').toHaveCount(0)
   })
 
   test('a real server failure on a sheet still shows the failure notice', async ({ page }) => {
