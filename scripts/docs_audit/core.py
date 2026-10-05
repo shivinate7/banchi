@@ -850,7 +850,6 @@ UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("pipeline/holdings.py", "on_hand_names", "select"),   # a store-wide on-hand name lookup, one pass per call
     ("pipeline/holdings.py", "sealed_excluded_count", "select"),   # a store-wide count of excluded sealed cards, one pass per call
     ("pipeline/pricearchive.py", "rows_from_store", "select"),   # the price-history archive sweep reads every card once, by design
-    ("pipeline/selection.py", "narrow", "values"),   # narrowing a run's scope walks every card once; the selection grammar has no index to ask
 })
 # STORE-SCALING ITEM 8 REMOVED `do_search`'s ROW: the O(cards) walk over
 # `inventory.cards.values()` is deleted, replaced by an FTS5 `MATCH` query
@@ -876,11 +875,11 @@ UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
 # list already: the question it answers ("what game/set/rarity values exist, and how many
 # of each") is a store-wide aggregate by definition, over the same `GET /boxes` route that
 # already pays `_box_row`'s O(cards) cost once per box. Named as a cost paid, not hidden.
-UNSCOPED_WALK_EXPECTED = 16
+UNSCOPED_WALK_EXPECTED = 15
 
 # Expensive store calls made once per loop item: (path, function, callee). The count only goes down; see `check_loop_expensive`.
 LOOP_EXPENSIVE_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
-    ("cli/cmd_identify.py", "run", "sidecar.scan"),   # one directory scan per capture root, bounded by the roots the person named
+    ("pipeline/selection.py", "resolve", "sidecar.scan"),   # one directory scan per capture root, bounded by the roots the person named
     ("cli/cmd_join.py", "run", "read_export"),   # one export read per game join, bounded by the games
     ("cli/cmd_match.py", "_write_chunk", "read_export"),   # one re-read per export path on purpose, so the lock re-checks the file as it stands; bounded by games
     ("cli/cmd_match.py", "sweep_worker", "_write_chunk"),   # one call per chunk of results, and each call re-reads the exports by design (the entry above); chunk count grows with the sweep
@@ -892,11 +891,8 @@ LOOP_EXPENSIVE_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("pipeline/pricehistory.py", "readings_for_rows", "history"),   # one history read per range, and there are a fixed few ranges
     ("pipeline/setnames.py", "known_sets", "read_export"),   # one read per CSV in the export directory, bounded by the exports kept
     ("pipeline/skus.py", "fill", "read_export"),   # one read per export file in date order, bounded by the exports kept
-    ("server/capture_server.py", "_ledger_pull", "holder_of"),   # CANDIDATE: `holder_of` walks the open orders once per copy pulled
     ("server/capture_server.py", "_require_group_answers", "Store.read"),   # runs only on the duplicate-position refusal path, once, then raises
     ("server/capture_server.py", "do_boxes", "_layout_digest"),   # one layout read per box row, so the total is one pass over the cards
-    ("server/capture_server.py", "do_delete_box", "holder_of"),   # CANDIDATE: `holder_of` walks the open orders once per card in the box
-    ("server/capture_server.py", "do_graveyard", "holder_of"),   # CANDIDATE: `holder_of` walks the open orders once per card in the graveyard
     ("server/capture_server.py", "do_move_sections_batch", "_box_digest"),   # one records_in read per box the batch touched, a bounded box set
     ("server/capture_server.py", "do_move_sections_batch", "_box_state"),   # one records_in read per box the draft names, a bounded box set
     ("server/capture_server.py", "do_move_sections_batch", "_layout_digest"),   # one layout read per box in the draft, bounded by the boxes the draft names
@@ -921,7 +917,7 @@ LOOP_EXPENSIVE_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("store/master.py", "section_tail_key", "_respace"),   # the loop is `range(2)`, a fixed two passes
     ("store/orders.py", "record_pull", "holder_of"),   # CANDIDATE: `holder_of` walks the open orders once per capture id pulled
 })
-LOOP_EXPENSIVE_EXPECTED = 40
+LOOP_EXPENSIVE_EXPECTED = 37
 
 
 # ---------------------------------------------------------------- the package's shared state
