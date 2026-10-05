@@ -2911,6 +2911,128 @@ def check_open_section(checks: Checks) -> None:
             thread.join(timeout=5)
 
 
+def check_card_decoration_one_home(checks: Checks) -> None:
+    """One card, one decoration: every route that serves a card record yields the same
+    number display, listing facts and place label, and a `places.of` failure behaves the same
+    in all five (the card still arrives, undecorated by place, and nothing raises).
+    """
+    from dataclasses import asdict  # noqa: F401 - parity with the routes under test
+    from pipeline.skus import SkuRow  # noqa: F401
+
+    checks.note("")
+    checks.note("CARD DECORATION — five routes, one answer")
+
+    sku = "7000001"
+    with isolated_home():
+        capture_server.do_capture(capture_payload(1))
+        capture_server.do_capture(capture_payload(1))  # 1/2: no SKU, stays unlisted
+        with Store().write() as snapshot:
+            from store.skus import SkuRow as Row
+            snapshot.skus.entries[sku] = Row(
+                product_line="Riftbound League of Legends Trading Card Game", set_name="Origins",
+                product_name="Master Yi, Wuju Master", number="191/219", rarity="Rare",
+                condition="Near Mint", grade="Near Mint", printing=None,
+                first_seen=1_700_000_000, last_seen=1_700_000_000, source="t7-fixture", raw={},
+            )
+            snapshot.inventory.set_state("1/1", master.IDENTIFIED)
+            snapshot.inventory.hold_sku("1/1", sku, skus=snapshot.skus, read_disputes=True)
+            card = snapshot.inventory.cards["1/1"]
+            card.game, card.name, card.number, card.printed_total = "riftbound", "Yi, Ionia", "7", "219"
+
+        def routes():
+            snap = Store().read()
+            card = snap.inventory.cards["1/1"]
+            return {
+                "inventory": lambda: capture_server.do_inventory()["cards"]["1/1"],
+                "box": lambda: capture_server.do_inventory_box(1)["cards"]["1/1"],
+                "recent": lambda: capture_server.do_inventory_recent(5)["cards"]["1/1"],
+                "copies": lambda: capture_server.do_inventory_copies({"skus": [sku]})["cards"]["1/1"],
+                "card_row": lambda: capture_server._card_row(snap.inventory, 1, 1, card, snap.skus),
+            }
+
+        def outcome(fn):
+            try:
+                return fn()
+            except Exception as caught:  # noqa: BLE001 - any raise is the finding
+                return {"raised": type(caught).__name__}
+
+        # Listing facts ride only the routes that carried them before this home existed: the
+        # box route and `_card_row`. The other three keep their read budgets (efficiency.md,
+        # "The ratchet"), so they must match on the shared fields and carry no listing facts.
+        # `/inventory/copies` also leaves `neighbors` and `section_gaps` null on purpose.
+        listing_keys = ("listing", "listing_differs", "reading_differs")
+        listing_routes = ("box", "card_row")
+        shared = ("number_display", "label", "section", "place")
+
+        def trim(record, name):
+            view = {f: record.get(f) for f in shared}
+            if name == "copies" and isinstance(view["place"], dict):
+                view["place"] = {k: v for k, v in view["place"].items() if k not in ("neighbors", "section_gaps")}
+            return view
+
+        got = {name: outcome(fn) for name, fn in routes().items()}
+        base_full = got["box"]
+        base = trim(base_full, "box")
+        checks.ok(
+            base_full.get("listing") is not None and base_full.get("label"),
+            "the reference card carries listing facts and a label", str(base),
+        )
+        bare = capture_server.do_inventory_box(1)["cards"]["1/2"]
+        checks.ok(
+            not any(f in bare for f in listing_keys),
+            "a card with no SKU carries no listing, listing_differs or reading_differs keys on the box route", str(sorted(bare)),
+        )
+        for name, record in got.items():
+            checks.equal(trim(record, name), trim(base_full, name), f"{name} yields the same decoration as the box route")
+            if name in listing_routes:
+                checks.equal(
+                    {f: record.get(f) for f in listing_keys}, {f: base_full.get(f) for f in listing_keys},
+                    f"{name} carries the same listing facts as the box route",
+                )
+            else:
+                checks.ok(
+                    not any(f in record for f in listing_keys),
+                    f"{name} carries no listing facts, so its read budget does not rise", str(sorted(record)),
+                )
+
+        real = capture_server._Places.of
+        def broken(self, box, index):
+            raise ValueError("bad position")
+        capture_server._Places.of = broken
+        try:
+            failed = {name: outcome(fn) for name, fn in routes().items()}
+        finally:
+            capture_server._Places.of = real
+        for name, record in failed.items():
+            checks.ok(
+                "raised" not in record and "place" not in record and record.get("number_display") == base["number_display"],
+                f"{name}: a `places.of` failure leaves the card undecorated by place and raises nothing",
+                str(record.get("raised") or sorted(record)),
+            )
+
+
+def check_terminal_states_one_home(checks: Checks) -> None:
+    """`_facet_cells` marks a card gone by `master.TERMINAL_STATES`, never a copy of it: a
+    terminal state added to that tuple is honoured."""
+    checks.note("")
+    checks.note("TERMINAL STATES — facet cells follow master.TERMINAL_STATES")
+
+    real = master.TERMINAL_STATES
+    with isolated_home():
+        capture_server.do_capture(capture_payload(1))
+        master.TERMINAL_STATES = (*real, "lost")
+        try:
+            with Store().write() as snapshot:
+                snapshot.inventory.cards["1/1"].state = "lost"
+            cells = capture_server.do_boxes()["facet_cells"]
+        finally:
+            master.TERMINAL_STATES = real
+    checks.equal(
+        [(c["box"], c["gone"], c["count"]) for c in cells], [(1, True, 1)],
+        "a card in a state added to TERMINAL_STATES counts as gone in the facet cells",
+    )
+
+
 CHECKS = (
     check_inventory_filter_facets,
     check_inventory_facet_cells,
@@ -2928,4 +3050,6 @@ CHECKS = (
     check_section_names,
     check_consolidated_numbering,
     check_box_names_and_place_labels,
+    check_card_decoration_one_home,
+    check_terminal_states_one_home,
 )

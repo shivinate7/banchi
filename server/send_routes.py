@@ -2387,7 +2387,7 @@ def _markdown_due(now: datetime) -> bool:
 
 def _price(text: str) -> Optional[Decimal]:
     try:
-        return Decimal(str(text).strip().lstrip("$"))
+        return tcgcsv.parse_price(str(text))
     except (InvalidOperation, ValueError):
         return None
 

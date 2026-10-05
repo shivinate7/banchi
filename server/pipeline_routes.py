@@ -3764,7 +3764,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
         held = live_now.get(str(row.get("sku")))
         row["live_now"] = (
             None
-            if live_name is None
+            if live_name is None or (held is not None and held[1] is None)  # unknown, never 0
             else {"export": live_name, "copies": held[1] if held else 0, "price": held[0] if held else None}
         )
 
@@ -4326,7 +4326,7 @@ def do_pipeline_movers() -> dict:
     # the first export that held the SKU, NOT the day it was listed. A subject with no such date
     # is counted unchecked, never dropped. Nothing here writes a `Listing` (D87, D104).
     _, live_listing = _newest_live_listing()
-    live_skus = [sku for sku, (_, held) in live_listing.items() if held > 0]
+    live_skus = [sku for sku, (_, held) in live_listing.items() if held and held > 0]
     listed = {}
     for sku in live_skus:
         entry = snapshot.inventory.listings.get(sku)
@@ -5114,7 +5114,10 @@ def _markdown_flags(payload: dict) -> List[str]:
 
 def _number(value, field: str) -> Decimal:
     try:
-        return Decimal(str(value))
+        parsed = tcgcsv.parse_price(str(value))
+        if parsed is None:
+            raise ValueError("blank")
+        return parsed
     except (ArithmeticError, ValueError):
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
@@ -5161,10 +5164,19 @@ def _newest_live_listing() -> Tuple[Optional[str], Dict[str, Tuple[Optional[str]
     newest = fetched[-1]
     if _NEWEST_LIVE.get("name") != str(newest):
         try:
-            rows = tcgcsv.read_export(newest).rows
+            export = tcgcsv.read_export(newest)
+            rows = export.rows
         except (tcgcsv.MalformedCsv, OSError):
             return None, {}
-        listing: Dict[str, Tuple[Optional[str], int]] = {}
+        from pipeline import sendguard
+
+        # PER SKU: `live_by_sku` refuses a bad or missing quantity, and the SKU it refused is
+        # unknown (None), never 0. A bad row takes only its own SKU.
+        try:
+            header_ok = bool(sendguard.live_by_sku([], export.header) == {})
+        except ValueError:
+            header_ok = False
+        listing: Dict[str, Tuple[Optional[str], Optional[int]]] = {}
         for row in rows:
             sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
             if not sku:
@@ -5173,11 +5185,17 @@ def _newest_live_listing() -> Tuple[Optional[str], Dict[str, Tuple[Optional[str]
                 price = tcgcsv.parse_price(str(row.get(tcgcsv.PRICE_COLUMN) or ""))
             except ArithmeticError:
                 price = None
-            held = tcgcsv.parse_quantity(str(row.get(tcgcsv.LIVE_QUANTITY_COLUMN) or ""))
             before = listing.get(sku, (None, 0))
+            try:
+                if not header_ok:
+                    raise ValueError("no live quantity column")
+                got = sendguard.live_by_sku([row], export.header)[sku]
+                copies = None if before[1] is None else before[1] + got
+            except ValueError:
+                copies = None
             listing[sku] = (
                 tcgcsv.format_price(price) if price is not None else before[0],
-                before[1] + max(0, held),
+                copies,
             )
         _NEWEST_LIVE.clear()
         _NEWEST_LIVE.update({"name": str(newest), "listing": listing})
