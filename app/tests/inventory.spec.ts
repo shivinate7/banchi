@@ -3510,6 +3510,124 @@ test('every card picked in the Claims sheet is the whole box and sends no indice
   expect(put?.body).toEqual({ note: 'all' })
 })
 
+/* CLAIMS BY SECTION. A box of 30 + 60 cards, so the picker's own list has to scroll: section 1
+   holds indices 1-30 (30 sold), section 2 holds 31-90 (90 retired). The owner corrected 60
+   cards of one section by scrolling to them; the Section control below replaces that. Contract
+   for the builder: a kit `Select` named "Section" in the Claims sheet, options "Whole box, N
+   cards" and "Section S, N cards" (N counts on-hand cards only). */
+function longBox() {
+  const cards: Cards = {}
+  for (let index = 1; index <= 90; index++) {
+    const first = index <= 30
+    const state = index === 30 ? 'sold' : index === 90 ? 'retired' : 'identified'
+    cards[`2/${index}`] = card({
+      index,
+      state,
+      name: `Card ${index}`,
+      sku: `9${String(index).padStart(6, '0')}`,
+      section: first ? 1 : 2,
+      sectionStart: first ? 1 : 31,
+      sectionEnd: first ? 30 : 90,
+    })
+  }
+  const boxes = {
+    boxes: [
+      {
+        ...BOXES.boxes[0],
+        sections: [1, 31],
+        fill: 90,
+        next_index: 91,
+        cards: 90,
+        on_hand: 88,
+        sold: 1,
+        retired: 1,
+        sections_detail: [
+          { section: 1, start: 1, end: 30, count: 30 },
+          { section: 2, start: 31, end: 90, count: 60 },
+        ],
+      },
+    ],
+  }
+  return { boxes, store: { cards, search: (query: string) => searchAnswer(query, cards) } as Store }
+}
+
+const SECTION_TWO = Array.from({ length: 59 }, (_, n) => 31 + n)
+
+for (const width of [1440, 820]) {
+  test.describe(`claims by section at ${width}`, () => {
+    test.beforeEach(async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+    })
+
+    async function openClaims(page: Page) {
+      const { boxes, store } = longBox()
+      const wire = await open(page, boxes, store)
+      await openBoxOps(page)
+      await page.getByRole('button', { name: /^Claims/ }).click()
+      return wire
+    }
+    const sectionControl = (page: Page) => page.locator('.boxops-sheet').getByRole('button', { name: /^Section/ })
+    const choose = async (page: Page, name: RegExp) => {
+      await sectionControl(page).click()
+      await page.locator('.bn-pick-opt', { hasText: name }).click()
+    }
+
+    test('picking a section selects exactly its on-hand cards and scrolls them into view', async ({ page }) => {
+      await openClaims(page)
+      await choose(page, /Section 2.*59 cards/)
+      const picker = page.locator('.bn-set-picker')
+      await expect(picker.locator('.bn-set-picker-count')).toHaveText('59 of 88 picked')
+      const boxes = picker.locator('.bn-set-picker-card input')
+      await expect(picker.locator('.bn-set-picker-card input:checked')).toHaveCount(59)
+      // Sold and retired never ride along: Card 30 (sold) is not on hand, so Card 31 is the 30th box.
+      await expect(boxes.nth(29)).toBeChecked()
+      await expect(boxes.nth(28)).not.toBeChecked()
+      await expect(picker.locator('.bn-set-picker-group', { hasText: 'Section 2' }).locator('.bn-set-picker-card').first()).toBeInViewport()
+      expect(await page.locator('.bn-set-picker-list').evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
+    })
+
+    test("applying with a section picked writes only that section's positions", async ({ page }) => {
+      const wire = await openClaims(page)
+      await choose(page, /Section 2.*59 cards/)
+      await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
+      await page.getByRole('textbox', { name: 'Note' }).fill('wb1 r1')
+      await page.getByRole('button', { name: /^Apply to/ }).click()
+      const put = wire.find((sent) => sent.method === 'PUT')
+      expect(put?.body).toEqual({ note: 'wb1 r1', indices: SECTION_TWO })
+    })
+
+    test("whole box keeps today's behavior: no indices key", async ({ page }) => {
+      const wire = await openClaims(page)
+      await choose(page, /Section 2.*59 cards/)
+      await choose(page, /^Whole box/)
+      await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
+      await page.getByRole('textbox', { name: 'Note' }).fill('all')
+      await page.getByRole('button', { name: /^Apply to/ }).click()
+      const put = wire.find((sent) => sent.method === 'PUT')
+      expect(put?.body).toEqual({ note: 'all' })
+    })
+
+    test('picking a section moves nothing but the deliberate scroll', async ({ page }) => {
+      await openClaims(page)
+      const control = sectionControl(page)
+      await expect(control).toBeVisible()
+      const sheet = page.locator('.boxops-sheet')
+      const before = {
+        control: await control.boundingBox(),
+        scroll: await sheet.evaluate((el) => el.scrollTop),
+      }
+      await choose(page, /Section 2.*59 cards/)
+      await expect(page.locator('.bn-set-picker-count')).toHaveText('59 of 88 picked')
+      const after = {
+        control: await control.boundingBox(),
+        scroll: await sheet.evaluate((el) => el.scrollTop),
+      }
+      expect(after.control).toEqual(before.control)
+      expect(after.scroll).toBe(before.scroll)
+    })
+  })
+}
+
 test('Move on two cards picked in the sheet sends exactly those indices', async ({ page }) => {
   await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
   const sent: { path: string; body: unknown }[] = []
