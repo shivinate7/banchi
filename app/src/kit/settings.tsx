@@ -267,7 +267,7 @@ export function CardPicker({
               const indices = section.cards.map((card) => card.index)
               const n = indices.filter((index) => held.has(index)).length
               return (
-                <li key={section.key} className="bn-set-picker-group">
+                <li key={section.key} className="bn-set-picker-group" data-group={section.key}>
                   <label className="bn-check bn-set-picker-head">
                     <input
                       type="checkbox"

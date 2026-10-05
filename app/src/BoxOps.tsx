@@ -33,7 +33,7 @@ import { nonEmptySections, spansOf } from './position'
 import { ReadingAge } from './CardLocations'
 import { readingAgo } from './cardState'
 import {
-  Button, CardPicker, Icon, IconButton, Notice, Pill, Select, SectionPicker, SettingsCensus, SettingsEditor, SettingsFigures, SettingsGroup, SettingsOp,
+  Button, CardPicker, type PickOption, Icon, IconButton, Notice, Pill, Select, SectionPicker, SettingsCensus, SettingsEditor, SettingsFigures, SettingsGroup, SettingsOp,
   SettingsTrouble, Stat, boxesMostRecentFirst, count, useSheetWrite, type PickGroup,
 } from './kit'
 import { UNNAMED_BOX } from './kit/data'
@@ -334,6 +334,9 @@ export function BoxOps({
   const [editing, setEditing] = useState<Editing>(null)
   /* The narrowing: `null` is the whole box, a list is those card positions only. */
   const [narrowed, setNarrowed] = useState<readonly number[] | null>(null)
+  /* A section picked in Claims reaches on-hand cards only, so the picker drops the departed group
+   * until the pick returns to the whole box. */
+  const [bySection, setBySection] = useState(false)
   const [draft, setDraft] = useState('')
   const [refused, setRefused] = useState<string | null>(null)
   const [claimed, setClaimed] = useState<BoxClaimResult | null>(null)
@@ -385,7 +388,7 @@ export function BoxOps({
     const live = cards
       .map((section) => ({ ...section, cards: section.cards.filter((card) => card.departed !== true) }))
       .filter((section) => section.cards.length > 0)
-    if (editing !== 'claims') return live
+    if (editing !== 'claims' || bySection) return live
     const gone = cards.flatMap((section) => section.cards.filter((card) => card.departed === true))
     return gone.length === 0 ? live : [...live, { key: 'departed', title: 'Sold or moved out', cards: gone }]
   })()
@@ -394,7 +397,50 @@ export function BoxOps({
   const selection = narrowed === null || narrowed.length === everyIndex.length ? [] : narrowed
   const emptyPick = narrowed !== null && narrowed.length === 0
   const picker =
-    pool.length === 0 ? null : <CardPicker whole="Whole box" sections={pool} picked={narrowed} onChange={setNarrowed} />
+    pool.length === 0 ? null : <CardPicker
+        whole="Whole box"
+        sections={pool}
+        picked={narrowed}
+        onChange={(next) => {
+          if (next === null) setBySection(false)
+          setNarrowed(next)
+        }}
+      />
+  /* CLAIMS BY SECTION: one Select over the picker's own selection. Its value is read off
+   * `narrowed`, so a hand pick in the list and the Select cannot disagree. */
+  const sectionPools = pool.filter((section) => section.key !== 'departed')
+  const sameIndices = (a: readonly number[], b: readonly number[]) =>
+    a.length === b.length && a.every((n, i) => n === b[i])
+  const sectionValue =
+    narrowed === null
+      ? 'whole'
+      : (sectionPools.find((section) => sameIndices(narrowed, section.cards.map((card) => card.index)))?.key ?? null)
+  const sectionOptions: PickOption<string>[] = [
+    { value: 'whole', label: `Whole box, ${count(everyIndex.length, 'card', 'cards')}` },
+    ...sectionPools.map((section) => ({
+      value: section.key,
+      label: `${section.title}, ${count(section.cards.length, 'card', 'cards')}`,
+    })),
+  ]
+  /* The one deliberate scroll: the picker's own list, never the sheet (D313). */
+  const [scrollTo, setScrollTo] = useState<string | null>(null)
+  useEffect(() => {
+    if (scrollTo === null) return
+    const list = document.querySelector<HTMLElement>('.boxops-sheet .bn-set-picker-list')
+    const group = Array.from(list?.querySelectorAll<HTMLElement>('.bn-set-picker-group') ?? []).find(
+      (node) => node.dataset.group === scrollTo,
+    )
+    if (list !== null && group !== undefined) {
+      list.scrollTop += group.getBoundingClientRect().top - list.getBoundingClientRect().top
+    }
+    setScrollTo(null)
+  }, [scrollTo])
+  const pickSection = (key: string) => {
+    const section = sectionPools.find((candidate) => candidate.key === key)
+    setBySection(section !== undefined)
+    setNarrowed(section === undefined ? null : section.cards.map((card) => card.index))
+    setScrollTo(section === undefined ? null : key)
+  }
   const scope =
     selection.length > 0
       ? `the ${count(selection.length, 'selected card', 'selected cards')}`
@@ -498,6 +544,7 @@ export function BoxOps({
     setClaimed(null)
     setMoved(null)
     setNarrowed(null)
+    setBySection(false)
     setMoveTo('')
     setSectionDiv(null)
     setEditing(which)
@@ -675,6 +722,15 @@ export function BoxOps({
           </>
         ) : editing === 'claims' ? (
           <SettingsEditor title="Set claims" onBack={closeEdit}>
+            {sectionPools.length > 1 ? (
+              <Select
+                label="Section"
+                value={sectionValue}
+                options={sectionOptions}
+                onChange={pickSection}
+                placeholder="Some cards"
+              />
+            ) : null}
             {picker}
             {refused === null ? null : <Notice tone="warn" title={refused} />}
             <ClaimEditor

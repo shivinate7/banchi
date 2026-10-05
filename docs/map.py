@@ -7290,7 +7290,7 @@ COMPONENTS = [
                 "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33",
                                 "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115",
                                 "D118", "D132", "D134", "D181", "D196", "D218", "D259", "D299",
-                                "D300", "D314"],
+                                "D300", "D313", "D314"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
