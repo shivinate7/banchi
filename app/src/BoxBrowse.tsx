@@ -1585,6 +1585,7 @@ export function BoxBrowse({
   /* One step, in the walk's own order. Both ends stop. */
   const stepSelection = useCallback(
     (delta: 1 | -1) => {
+      moved.current = true
       setSelected((prev) => {
         const at = visible.findIndex((row) => row.key === prev)
         if (at === -1) {
@@ -1646,6 +1647,7 @@ export function BoxBrowse({
     if (edge === undefined && jumpTo === undefined) return
 
     event.preventDefault()
+    moved.current = true
 
     if (edge !== undefined) {
       const landing = edge.last ? visible[visible.length - 1] : visible[0]
@@ -1684,6 +1686,7 @@ export function BoxBrowse({
     /* N3: the row named here is a row the operator is already looking at (they just pressed
        it), so the rail's own scroll-into-view effect skips this one run. */
     skipRailScroll.current = true
+    moved.current = true
     setShelf(next)
     if (typeof next === 'number') touchBox(next)
     let landingKey: string | undefined
@@ -1889,8 +1892,14 @@ export function BoxBrowse({
    * first one, so the walk never arrives with its selection hidden. A fold the operator asked
    * for is not undone on a re-read, because a re-read does not move the selection. */
   const openedFor = useRef<string | null>(null)
+  /* ONLY A MOVE THE OPERATOR MADE OPENS A SECTION. The landing's own pick (the first card, a
+   * reload re-point) shows in the pane but leaves its row folded, so the list lands shut. A
+   * named card (`jump`) opens its own section where it lands. */
+  const moved = useRef(false)
   useEffect(() => {
-    if (selected === null || selected === openedFor.current) return
+    const deliberate = moved.current
+    moved.current = false
+    if (!deliberate || selected === null || selected === openedFor.current) return
     const holding = sections.find((section) => section.rows.some((row) => row.key === selected))
     if (holding === undefined) return
     openedFor.current = selected
@@ -2072,6 +2081,7 @@ export function BoxBrowse({
 
   /* The phone's sheet closes once a card is chosen; the box picker keeps it open. */
   const pickRow = (key: string) => {
+    moved.current = true
     setSelected(key)
     if (phone) setRailOpen(false)
   }
@@ -2426,6 +2436,11 @@ export function BoxBrowse({
                       >
                         <Icon name="chevronRight" size={14} className="browse-sectmark" />
                         <SectionTitle parts={section.parts} />
+                        {section.parts.count === null ? null : (
+                          <span className="browse-secttotal" aria-hidden="true">
+                            {section.parts.count}
+                          </span>
+                        )}
                       </button>
                     </div>
                     {!open ? null : (
