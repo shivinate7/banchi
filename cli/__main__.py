@@ -320,6 +320,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     match_prepare.add_argument("--model-only", action="store_true", help="the model file only")
     match_prepare.add_argument("--fingerprints-only", action="store_true", help="the fingerprints only")
+    match_audit = match_sub.add_parser(
+        "audit",
+        help="re-read every filed card's photo with the free reader; list disagreements. Free. "
+        "--write sends in-stock disagreements back to Review.",
+    )
+    match_audit.add_argument("--write", action="store_true", help="queue each in-stock disagreement for Review (sold cards are only listed)")
 
     # ---------------------------------------------------------------------------- cards
     # THE CARD'S STABLE NAME (D172). Two of the three subcommands write nothing EVER, and

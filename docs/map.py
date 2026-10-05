@@ -444,7 +444,7 @@ COMPONENTS = [
                                         "the table and writes nothing.",
                                 "governed_by": ["D189", "D86"],
                                 "tested_by": ["T7"]},
-            "cmd_match.py": {"does": "`pkmnscan match status | prepare | --sweep-worker` — the free reader's "
+            "cmd_match.py": {"does": "`pkmnscan match status | prepare | audit | --sweep-worker` — the free reader's "
                                      "setup and the background reader's worker (D2): it reads the "
                                      "queue and exits, writing only `marqo-b` identifications rows. "
                                      "`status` is free. `prepare` downloads the pinned model "
@@ -452,8 +452,8 @@ COMPONENTS = [
                                      "store holds plus every Riftbound set once and keeps the "
                                      "fingerprint (D301's one exception). Resumable, never spends, "
                                      "never touches card state, and nothing starts it but the owner's "
-                                     "press. Progress is `inventory/match-prepare.json`.",
-                             "governed_by": ["D2", "D33", "D65", "D166", "D170", "D301"]},
+                                     "press. `audit [--write]` re-reads filed cards free and queues in-stock disagreements. Progress is `inventory/match-prepare.json`.",
+                             "governed_by": ["D2", "D33", "D65", "D88", "D166", "D170", "D301"]},
             "cmd_boxes.py": {"does": "`pkmnscan boxes names` — the one-time backfill that "
                                      "gives every unnamed box the stored name `Box <number>` "
                                      "(`store/master.py:Inventory.box_name_plan`). Previews by "
