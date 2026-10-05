@@ -57,11 +57,14 @@ def check_transport_one_home(checks: Checks) -> None:
     both = _top_names("server/tcg_export.py") & _top_names("server/order_transport.py")
     twice = sorted(both & {"_cookie", "_agent", "_open", "_check_status", "_NoRedirect"})
     checks.equal(twice, [], "transport helpers are defined in one module only")
+    checks.ok("__getattr__" not in _top_names("server/order_transport.py"),
+              "order_transport keeps no alias for its old `_open` name")
 
 
 def check_box_parse_one_home(checks: Checks) -> None:
-    """`codes_routes._box_of` refuses box 0 under another code than `capture_server._require_box`."""
-    from server import capture_server, codes_routes
+    """The codes route refuses a bad box under the code `refusal.require_box` names."""
+    from server import codes_routes
+    from server.refusal import require_box
 
     def code_of(fn, payload):
         try:
@@ -70,26 +73,32 @@ def check_box_parse_one_home(checks: Checks) -> None:
             return getattr(caught, "code", type(caught).__name__)
         return "accepted"
 
-    for label, payload in (("box 0", {"box": 0}), ("box -1", {"box": -1}), ("box 'x'", {"box": "x"}), ("no box", {})):
-        checks.equal(code_of(codes_routes._box_of, payload), code_of(capture_server._require_box, payload),
-                     f"{label}: the two box parsers refuse under one code")
-    checks.equal(code_of(codes_routes._box_of, {"box": 3}), "accepted", "box 3 is accepted")
+    def scan(payload):
+        return codes_routes.do_codes_scan(payload, "/nonexistent-captures-root")
+
+    for label, payload, want in (("box 0", {"box": 0}, "box_invalid"), ("box -1", {"box": -1}, "box_invalid"),
+                                 ("box 'x'", {"box": "x"}, "box_invalid"), ("no box", {}, "box_required")):
+        checks.equal(code_of(require_box, payload), want, f"{label}: the home refuses as {want}")
+        checks.equal(code_of(scan, payload), want, f"{label}: the codes route refuses as the home does")
+    checks.equal(code_of(require_box, {"box": 3}), "accepted", "box 3 is accepted")
     both = {"_require_box", "_require_to_box"} & _top_names("server/capture_server.py")
     checks.ok(len(both) < 2, "`_require_box` and `_require_to_box` are one parser with a field name",
               "both are defined in server/capture_server.py")
-    checks.ok("_box_of" not in _top_names("server/codes_routes.py"), "codes_routes has no box parser of its own")
+    checks.ok("_box_of" not in ast.unparse(_tree("server/codes_routes.py")),
+              "codes_routes has no box parser of its own, not even an alias")
 
 
 def check_clock_one_home(checks: Checks) -> None:
     """`send_routes._now/_iso/_parse` beside `pipeline_routes._now_iso`: one stamp, one home."""
     from datetime import datetime, timezone
-    from server import send_routes
+    from store import clock
 
-    stamp = send_routes._iso(datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc))
+    stamp = clock.iso(datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc))
     checks.equal(stamp, "2026-01-02T03:04:05+00:00", "fixture: the two clocks write one stamp shape")
-    twin = {"_now", "_iso", "_parse"} & _top_names("server/send_routes.py")
-    checks.ok(not ("_now_iso" in _top_names("server/pipeline_routes.py") and twin),
-              "UTC-second stamp has one home: send_routes keeps no `_now/_iso/_parse` beside `pipeline_routes._now_iso`",
+    names = {n.id for n in ast.walk(_tree("server/send_routes.py")) if isinstance(n, ast.Name)}
+    twin = {"_now", "_iso", "_parse"} & (_top_names("server/send_routes.py") | names)
+    checks.ok(not twin,
+              "UTC-second stamp has one home: send_routes keeps no `_now/_iso/_parse`, not even an alias of `store/clock.py`",
               f"send_routes defines {sorted(twin)}")
 
 
@@ -106,19 +115,18 @@ def check_number_key_one_home(checks: Checks) -> None:
     """`capture_server._number_compare_key` and `identity_binding._read_number_key` fold a read pair
     two ways when the number already carries its own total; a hand `zfill(3)` sits beside `join_key`."""
     from pipeline import identity_binding
-    from server import capture_server
     from store import numbers
 
     strategy = numbers.NUMBER_AND_PRINTED_TOTAL
-    for number, total in (("54", "132"), ("054", "132"), ("54/132", "132"), ("161", "159"), ("", "132"), ("54", "")):
-        a = capture_server._number_compare_key(strategy, number, total)
-        b = identity_binding._read_number_key(strategy, number, total)
-        checks.equal(a, b, f"Pokemon pair {number!r}/{total!r}: both number keys agree")
+    for number, total, want in (("54", "132", "54/132"), ("054", "132", "54/132"), ("54/132", "132", "54/132"),
+                                ("161", "159", "161/159"), ("", "132", None), ("54", "", None)):
+        checks.equal(identity_binding._read_number_key(strategy, number, total), want,
+                     f"Pokemon pair {number!r}/{total!r}: the home folds it to {want!r}")
     for number in ("54", "SV-054"):
-        checks.equal(capture_server._number_compare_key("other", number, None),
-                     identity_binding._read_number_key("other", number, None), f"other-game {number!r}: both agree")
-    checks.ok("_number_compare_key" not in _top_names("server/capture_server.py"),
-              "capture_server keeps no number key of its own")
+        checks.equal(identity_binding._read_number_key("other", number, None), "54",
+                     f"other-game {number!r}: the home folds it to its digits")
+    checks.ok("_number_compare_key" not in ast.unparse(_tree("server/capture_server.py")),
+              "capture_server keeps no number key of its own, not even an alias")
     zfills = _hits(lambda rel, n: isinstance(n, ast.Attribute) and n.attr == "zfill" and rel != "store/numbers.py")
     checks.equal(zfills, [], "no hand `zfill` outside `store/numbers.py`")
 
