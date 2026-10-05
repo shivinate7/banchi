@@ -162,6 +162,10 @@ MATCH_SWEEP = "match_sweep"
 # `price_history_summary` and BUILDS it once from `price_history`, under the lock, inside the
 # upgrade transaction. It is a derived table, so unlike the additive steps above it has rows
 # to backfill: an archive with no summary would read as empty to Holdings.
+# NO VERSION FOR `cards_run` AND `events_event`. `_add_run_event_indexes` creates them
+# (`cards.select(run=...)`, `events_named`) in `_upgrade` on every upgrade and in
+# `_ensure_run_event_indexes` on every open at the current version, so a store stamped 14
+# gains them without a bump, which `harness/tests/t7/send_markdown.py` pins at 14.
 SCHEMA_VERSION = 14
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
@@ -346,18 +350,26 @@ def _ddl(table: str, columns: Sequence[str]) -> str:
     return f"CREATE TABLE IF NOT EXISTS {table} ({body}payload TEXT NOT NULL)"
 
 
-def _stored_version(conn: sqlite3.Connection) -> Optional[int]:
+def _stored_version(conn: sqlite3.Connection, seen: Optional[set] = None) -> Optional[int]:
     """The schema version this file was last stamped with, or None for an empty file.
 
     None and 0 are different answers: None is "no tables here yet, create them", and any
     integer is "these tables exist and may need an upgrade". An unreadable stamp reads as
     version 0, which routes it through every upgrade step — the safe direction, since each
     step below is written to be a no-op against a file that already has its column.
+
+    `seen`, when given, is filled with which of `meta`, `cards_run` and `events_event` exist:
+    the one catalogue read answers all three, so the open pays no extra statement for them.
     """
-    row = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'meta'"
-    ).fetchone()
-    if row is None:
+    names = {
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE name IN ('meta', 'cards_run', 'events_event')"
+        )
+    }
+    if seen is not None:
+        seen |= names
+    if "meta" not in names:
         return None
     stored = conn.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()
     if stored is None:
@@ -387,7 +399,8 @@ def _ensure_schema(
     `git pull` is the ordinary case — and two processes discovering the same pending upgrade
     at once must not both run it. `locked=True` says the caller already holds it.
     """
-    stored = _stored_version(conn)
+    seen: set = set()
+    stored = _stored_version(conn, seen)
     if stored is not None and stored > SCHEMA_VERSION:
         # A NEWER BUILD WROTE THIS FILE, AND WITHOUT THIS THE OLDER BUILD WINS SILENTLY.
         # Measured on a copy stamped 3 and opened with a build that knew 2: the read
@@ -414,6 +427,7 @@ def _ensure_schema(
         )
         )
     if stored == SCHEMA_VERSION:
+        _ensure_run_event_indexes(conn, seen, directory=directory, locked=locked)
         _repair(conn, directory=directory, locked=locked)
         return
     if stored is not None:
@@ -540,6 +554,7 @@ def _upgrade(
                 _open_every_box(conn)        # D299
             if stored < 14:
                 _add_price_history_summary(conn)  # D219, amended 2026-09-28
+            _add_run_event_indexes(conn)
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -1050,6 +1065,25 @@ def _add_captured_at_index(conn: sqlite3.Connection) -> None:
     makes a re-run of this step (a crash between it and the stamp) a no-op.
     """
     conn.execute("CREATE INDEX IF NOT EXISTS cards_captured_at ON cards(captured_at)")
+
+
+def _add_run_event_indexes(conn: sqlite3.Connection) -> None:
+    """Schema 15: `cards_run` and `events_event`. `_INDEXES` alone only reaches a new store,
+    for `_add_captured_at_index`'s reason. `IF NOT EXISTS` makes a re-run a no-op."""
+    conn.execute("CREATE INDEX IF NOT EXISTS cards_run ON cards(run)")
+    conn.execute("CREATE INDEX IF NOT EXISTS events_event ON events(event)")
+
+
+def _ensure_run_event_indexes(
+    conn: sqlite3.Connection, seen: set, *, directory: Optional[Path], locked: bool
+) -> None:
+    """At the current version, create either index if `_stored_version` did not see it. The
+    DDL runs under the store lock, and only on the open that finds one missing."""
+    if {"cards_run", "events_event"} <= seen:
+        return
+    guard = _already_locked() if (locked or directory is None) else files.exclusive(directory)
+    with guard:
+        _add_run_event_indexes(conn)
 
 
 _FTS_TOKENIZE = "unicode61 remove_diacritics 2 tokenchars '/-'"

@@ -303,6 +303,9 @@ class Queue:
         if entry is None or not entry.cleared_by_human:
             return False
         entry.cleared_by_human = False
+        # Assigned back so `Rows` knows the row changed: `open_entries` asks the index for
+        # `cleared_by_human=0`, which cannot see an in-place flip.
+        self.entries[position] = entry
         return True
 
     def release(self, positions) -> List[str]:
