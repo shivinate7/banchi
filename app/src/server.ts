@@ -337,6 +337,8 @@ function failureKind(code: string, status: number): 'refusal' | 'retry' {
  */
 export function describeFailure(err: unknown): Failure {
   if (err instanceof ServerError) return { code: err.code, message: err.message, kind: failureKind(err.code, err.status), status: err.status, data: err.data }
+  /* A READ THE APP DROPPED ITSELF (`leaveReadScope`) HAS NO OUTCOME: nothing to say, nothing to log. */
+  if (err instanceof DOMException && err.name === 'AbortError') return { code: 'aborted', message: '', kind: 'refusal' }
   console.error('The app failed before the server could answer.', err) // the detail belongs in the console, never on screen
   return {
     kind: 'refusal',
@@ -795,12 +797,34 @@ export function leaveReadScope(id: string): void {
 }
 const departing = new Map<string, number>()
 
+/** The sheet host brackets a hosted sheet's effects with these two: reads it starts belong to the shell, so leaving
+ *  the screen it was opened over does not abort them. */
+let savedScope: string | null = null
+export function readsAsShell(): void {
+  savedScope = readScope
+  readScope = SHELL_SCOPE
+}
+export function readsAsScreen(): void {
+  if (savedScope === null) return
+  readScope = savedScope
+  savedScope = null
+}
+
+/* A COUNTER OF WRITES. A read that began before a write must not be kept after it: what it carries is the old store. */
+let writeGen = 0
+
 function request(path: string, init?: RequestInit): Promise<unknown> {
   if (DEMO) return send(path, init)
   const method = init?.method?.toUpperCase() ?? 'GET'
   if (method !== 'GET') {
-    openReads.clear()
-    return send(path, init).finally(() => openReads.clear())
+    const ended = () => {
+      writeGen += 1
+      openReads.clear()
+      pricingTables.clear()
+      lastStatus = null
+    }
+    ended()
+    return send(path, init).finally(ended)
   }
   const held = openReads.get(path)
   /* A READ EVERY ASKER OF WHICH IS LEAVING IS ABOUT TO BE ABORTED, so it is not joined. */
@@ -953,8 +977,9 @@ const NO_CACHE: RequestInit = { cache: 'no-store' }
 
 /** Counts, store health, and the boxes already in use. */
 export async function getStatus(): Promise<ServerStatus> {
+  const gen = writeGen
   const status = (await request('/status', NO_CACHE)) as ServerStatus
-  lastStatus = { at: Date.now(), status }
+  if (gen === writeGen) lastStatus = { at: Date.now(), status }
   return status
 }
 
@@ -2664,8 +2689,9 @@ export async function getPricing(name: string): Promise<PricingPayload> {
   if (held !== undefined && Date.now() - held.at < PRICING_TABLE_TTL_MS) return held.table
   /* ONLY AN ANSWER IS KEPT (never an open read, which a screen leaving would abort under a
    * second screen). Reads open at once still share through `request`. */
+  const gen = writeGen
   const table = (await request(`/pipeline/runs/${encodeURIComponent(name)}/pricing`, NO_CACHE)) as PricingPayload
-  pricingTables.set(name, { at: Date.now(), table })
+  if (gen === writeGen) pricingTables.set(name, { at: Date.now(), table })
   return table
 }
 

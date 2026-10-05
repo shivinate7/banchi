@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
 import { Button, IconButton, useLeave } from './index'
 import { usePageRoute } from './Page'
+import { readsAsScreen, readsAsShell } from '../server'
 import { closeSheet, useOpenSheet, type OpenSheet } from './sheets'
 import './dialog.css'
 
@@ -787,6 +788,14 @@ export function Popover({
    `openSheet` sends it to its own page instead. */
 type HostedComponent = ComponentType<{ readonly open: boolean; readonly onClose: () => void }>
 
+function ShellReads({ on }: { readonly on: boolean }) {
+  useEffect(() => {
+    if (on) readsAsShell()
+    else readsAsScreen()
+  })
+  return null
+}
+
 export function SheetHost() {
   const current = useOpenSheet()
   const last = useRef<OpenSheet | null>(null)
@@ -802,7 +811,11 @@ export function SheetHost() {
   }
   return (
     <div data-bn-sheet-host={kind}>
+      {/* Effects of siblings run in order: the first marks the reads the sheet starts as the shell's, the last hands
+          them back to the screen. No dependency list, so every commit of the host brackets again. */}
+      <ShellReads on />
       <Component {...props} open={current !== null} onClose={closeSheet} />
+      <ShellReads on={false} />
     </div>
   )
 }

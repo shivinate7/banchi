@@ -1459,7 +1459,7 @@ export function BoxBrowse({
     return () => {
       live = false
     }
-  }, [reloads, heavyToken])
+  }, [reloads, reloadToken])
 
   /* A reread of this screen's own (the card menu's Reread, a re-shoot, a box op) drops the price tables: it is
      pressed after something changed downstream. A sale, from the parent's token, changes no reading and keeps them. */
