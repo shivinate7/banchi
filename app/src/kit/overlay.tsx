@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
 import { Button, IconButton, useLeave } from './index'
 import { usePageRoute } from './Page'
-import { readsAsScreen, readsAsShell } from '../server'
+import { setSheetOpen } from '../server'
 import { closeSheet, useOpenSheet, type OpenSheet } from './sheets'
 import './dialog.css'
 
@@ -788,14 +788,6 @@ export function Popover({
    `openSheet` sends it to its own page instead. */
 type HostedComponent = ComponentType<{ readonly open: boolean; readonly onClose: () => void }>
 
-function ShellReads({ on }: { readonly on: boolean }) {
-  useEffect(() => {
-    if (on) readsAsShell()
-    else readsAsScreen()
-  })
-  return null
-}
-
 export function SheetHost() {
   const current = useOpenSheet()
   const last = useRef<OpenSheet | null>(null)
@@ -803,6 +795,13 @@ export function SheetHost() {
   // one beat longer than the kit's leave (`useLeave`'s 140ms), so the sheet finishes its own
   const { mounted } = useLeave(current !== null, 180)
   const shown = current ?? (mounted ? last.current : null)
+  /* THE SHEET'S READS ON ITS OWN COMMIT ARE THE SHELL'S: named in render, so its mount effects already see it, and
+     handed back by this host's own effect, which runs after the sheet's. A read the sheet starts later, from a state
+     change, belongs to the screen it sits over and is dropped with it, silently (`aborted` draws nothing). */
+  setSheetOpen(shown !== null)
+  useEffect(() => {
+    setSheetOpen(false)
+  })
   if (shown === null) return null
   const { Component, props, kind } = shown as unknown as {
     readonly kind: string
@@ -811,11 +810,7 @@ export function SheetHost() {
   }
   return (
     <div data-bn-sheet-host={kind}>
-      {/* Effects of siblings run in order: the first marks the reads the sheet starts as the shell's, the last hands
-          them back to the screen. No dependency list, so every commit of the host brackets again. */}
-      <ShellReads on />
       <Component {...props} open={current !== null} onClose={closeSheet} />
-      <ShellReads on={false} />
     </div>
   )
 }

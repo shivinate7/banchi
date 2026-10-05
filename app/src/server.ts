@@ -797,18 +797,13 @@ export function leaveReadScope(id: string): void {
 }
 const departing = new Map<string, number>()
 
-/** The sheet host brackets a hosted sheet's effects with these two: reads it starts belong to the shell, so leaving
- *  the screen it was opened over does not abort them. */
-let savedScope: string | null = null
-export function readsAsShell(): void {
-  savedScope = readScope
-  readScope = SHELL_SCOPE
+/** The sheet host says its commit is under way. A read started in it belongs to the shell, so leaving the screen the
+ *  sheet was opened over does not abort the sheet's mount reads. */
+let sheetOpen = false
+export function setSheetOpen(open: boolean): void {
+  sheetOpen = open
 }
-export function readsAsScreen(): void {
-  if (savedScope === null) return
-  readScope = savedScope
-  savedScope = null
-}
+const owner = (): string => (sheetOpen ? SHELL_SCOPE : readScope)
 
 /* A COUNTER OF WRITES. A read that began before a write must not be kept after it: what it carries is the old store. */
 let writeGen = 0
@@ -829,10 +824,10 @@ function request(path: string, init?: RequestInit): Promise<unknown> {
   const held = openReads.get(path)
   /* A READ EVERY ASKER OF WHICH IS LEAVING IS ABOUT TO BE ABORTED, so it is not joined. */
   if (held !== undefined && [...held.scopes].some((id) => !departing.has(id))) {
-    held.scopes.add(readScope)
+    held.scopes.add(owner())
     return held.promise
   }
-  const open: OpenRead = { controller: new AbortController(), scopes: new Set([path === '/status' ? SHELL_SCOPE : readScope]), promise: Promise.resolve() }
+  const open: OpenRead = { controller: new AbortController(), scopes: new Set([path === '/status' ? SHELL_SCOPE : owner()]), promise: Promise.resolve() }
   open.promise = send(path, { ...init, signal: open.controller.signal }).finally(() => {
     allReads.delete(open)
     if (openReads.get(path) === open) openReads.delete(path)

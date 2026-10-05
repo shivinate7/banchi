@@ -320,9 +320,8 @@ function InventoryWalk({
 
   /* Bumped after every write, and read by the walk and the copies panel as a re-read trigger. */
   const [reloads, setReloads] = useState(0)
-  /* A SALE'S OWN COUNTER. A sale changes this box, the box counts and
-     the review queues: the buried boxes, the pricing tables and the order ledger (a sale writes
-     none of them) stay as read, so they follow `reloads` and not this. Every other write bumps `reloads`, which re-reads all. */
+  /* A SALE'S OWN COUNTER. A sale changes this box, the box counts, the
+     review queues and the order claims on copies: the buried boxes and the pricing tables stay as read, so they follow `reloads` and not this. Every other write bumps `reloads`, which re-reads all. */
   const [sales, setSales] = useState(0)
 
   /* The copy waiting on a retire panel, or null. A retirement without a reason is refused, so
@@ -407,7 +406,7 @@ function InventoryWalk({
     return () => {
       live = false
     }
-  }, [reloads])
+  }, [reloads, sales])
 
   /* Escape closes the retire panel. */
   useEffect(() => {
