@@ -961,6 +961,9 @@ export type FilterFacet<T extends string = string> = {
   /** Several at once (the default), or one. */
   readonly multiple?: boolean
   readonly icon?: IconName
+  /** What the facet has picked at rest, drawn selected in the bar. A URL with no key for the
+   *  facet reads as these picks, so the rest view needs no query string. */
+  readonly defaultPicks?: readonly string[]
 }
 
 /** What every facet has picked, by facet key. A facet with nothing picked may be absent. */

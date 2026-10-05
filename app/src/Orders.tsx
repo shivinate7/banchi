@@ -896,12 +896,12 @@ const SORT_AT_REST: SortValue<OrderSortKey> = { key: 'waited', dir: 'asc' }
 /** The "Show" facet's choices: a buyer's one state, worst first (UX-171, UX-199), after
  *  Flagged, Short and Partly picked, the three ways a buyer owes a copy the store cannot fill
  *  (`orderBuyers.ts:UNFILLABLE_FACETS`). Home's "Cannot be filled" press opens all three. */
-type ShowValue = Status | typeof FLAGGED_FACET | typeof NONE_LEFT_FACET
-const SHOW_ORDER: readonly ShowValue[] = [FLAGGED_FACET, NONE_LEFT_FACET, 'look', 'short', 'ready', 'unresolved', 'done']
+type ShowValue = Status | typeof FLAGGED_FACET | typeof NONE_LEFT_FACET | 'open'
+const SHOW_ORDER: readonly ShowValue[] = [FLAGGED_FACET, NONE_LEFT_FACET, 'look', 'short', 'ready', 'unresolved', 'open', 'done']
 const NO_SHOWS: readonly ShowValue[] = []
 /** ONE STATE, ONE NAME: the facet and the row's pill read the same `STATUS_PILL` words. */
 const showLabel = (value: ShowValue): string =>
-  value === FLAGGED_FACET ? 'Flagged' : value === NONE_LEFT_FACET ? 'Short' : STATUS_PILL[value].label
+  value === FLAGGED_FACET ? 'Flagged' : value === NONE_LEFT_FACET ? 'Short' : value === 'open' ? 'Open' : STATUS_PILL[value].label
 
 const LANE_TONE: Record<ShippingLane, PillTone> = { envelope: 'ok', parcel: 'default', unjudged: 'warn' }
 const LANE_ICON: Record<ShippingLane, IconName> = { envelope: 'mail', parcel: 'package', unjudged: 'alert' }
@@ -2976,7 +2976,8 @@ function PullStage({
     const old = viewQuery.getAll('show')
     if (old.includes('missing')) patchViewQuery({ show: old.map((value) => (value === 'missing' ? FLAGGED_FACET : value)) })
   }, [viewQuery])
-  const [pullableAtRest] = useState(() => !IS_DEMO && !['show', 'status', 'buyer', 'order', 'q', 'unknown'].some((key) => viewQuery.has(key)))
+  const [restAtMount] = useState(() => !['show', 'status', 'buyer', 'order', 'q', 'unknown'].some((key) => viewQuery.has(key)))
+  const pullableAtRest = restAtMount && !IS_DEMO
   const [hideUnpullable, setHideUnpullable] = useViewFlag('pullable', pullableAtRest)
 
   /* THE SECOND TIER'S CACHE: real picks and places, fetched on demand for exactly the orders
@@ -3151,10 +3152,16 @@ function PullStage({
   const feedStatuses = useMemo(() => statusVocabulary(payload?.orders ?? []), [payload])
   const facetShape: readonly FilterFacet[] = useMemo(
     () => [
-      { key: 'show', label: 'Show', options: SHOW_ORDER.map((value) => ({ value, label: showLabel(value) })) },
+      {
+        key: 'show',
+        label: 'Show',
+        options: SHOW_ORDER.map((value) => ({ value, label: showLabel(value) })),
+        /* THE LANDING VIEW IS A VISIBLE PICK, never a hidden base: Open is selected at rest. */
+        defaultPicks: restAtMount ? ['open'] : [],
+      },
       { key: 'status', label: 'Status', options: feedStatuses.map((one) => ({ value: one.status, label: one.status })) },
     ],
-    [feedStatuses],
+    [feedStatuses, restAtMount],
   )
   const [picked, setPicked] = useFacetParams(facetShape)
   const shows = (picked.show ?? NO_SHOWS) as readonly ShowValue[]
@@ -3184,12 +3191,12 @@ function PullStage({
   const matchesShow = (group: BuyerGroup, value: ShowValue) =>
     value === 'done'
       ? inDoneBase(group)
-      : inOpenBase(group) &&
+      : value === 'open'
+        ? inOpenBase(group)
+        : inOpenBase(group) &&
         (value === FLAGGED_FACET || value === NONE_LEFT_FACET
           ? groupFacetCopies(group, answers, value).copies > 0
           : statusByGroup.get(group.key) === value)
-  const inBase = (group: BuyerGroup) =>
-    shows.length === 0 ? inOpenBase(group) : shows.some((value) => (value === 'done' ? inDoneBase(group) : inOpenBase(group)))
   const passesShow = (group: BuyerGroup) => shows.length === 0 || shows.some((value) => matchesShow(group, value))
 
   /* THE DRAWERS SORT REUSES THE WALK PLANNER'S OWN SOLVE (`D296`), never a second
@@ -3251,7 +3258,7 @@ function PullStage({
     setPinSig(basisSig)
     setPinned(new Set([...pinsNow, ...toPin.map((group) => group.key)]))
   }
-  const base = allGroups.filter(inBase)
+  const base = allGroups
   const freshShownGroups = sortGroups(
     base.filter((group) => passesFeed(group) && passesSearch(group) && passesHide(group) && passesShow(group)),
     sort,
@@ -3672,7 +3679,7 @@ function PullStage({
   /* ONE EMPTY STATE, AND NOTHING UNDER IT (UX-234): no buyer panel, no walk, until a row shows. */
   if (shownGroups.length === 0) {
     const searched = query.trim() !== ''
-    const nothingOwed = shows.length === 0 && statuses.length === 0 && !hideUnknown && base.length === 0
+    const nothingOwed = shows.every((value) => value === 'open') && statuses.length === 0 && !hideUnknown && !allGroups.some(inOpenBase)
     return (
       <div className="orders-stage">
         {/* Same child position as the full stage, so the search box never remounts (focus survives a key). */}

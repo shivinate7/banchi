@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { Icon } from './Icon'
 import { FailureNotice, IconButton } from './index'
 import { Popover, Sheet } from './overlay'
+import { atRest, restPicks } from './viewState'
 import { FilterChips, FilterCount, SortControl, type FilterFacet, type FilterValue, type SortOption, type SortValue } from './data'
 import { SearchField } from '../SearchField'
 import './filters.css'
@@ -130,7 +131,7 @@ function facetWords(facets: readonly FilterFacet[], value: FilterValue): string[
 }
 
 function activeFacetCount(facets: readonly FilterFacet[], value: FilterValue): number {
-  return facets.filter((facet) => (value[facet.key] ?? []).some((picked) => facet.options.some((one) => one.value === picked))).length
+  return facets.filter((facet) => !atRest(facet, value[facet.key])).length
 }
 
 function sortAtRest<K extends string>(sort: FilterBarSort<K>): SortValue<K> | null {
@@ -206,7 +207,7 @@ export function FilterBar<K extends string = string>({
   ]
   const clearable = active > 0 || typed !== '' || hideMoved
   const clearAll = () => {
-    onChange({})
+    onChange(Object.fromEntries(facets.map((facet) => [facet.key, restPicks(facet)])))
     if (typed !== '') search?.onChange('')
     for (const one of hidesMoved) one.onChange(one.defaultChecked ?? false)
   }

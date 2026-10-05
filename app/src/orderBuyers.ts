@@ -180,13 +180,14 @@ export function groupForOrderKey(
   groups: { recent: readonly BuyerGroup[]; earlier: readonly BuyerGroup[] },
   orderKey: string,
 ): BuyerGroup | null {
-  for (const group of groups.recent) {
-    if (group.orders.some((order) => order.key === orderKey)) return group
-  }
-  for (const group of groups.earlier) {
-    if (group.orders.some((order) => order.key === orderKey)) return group
-  }
-  return null
+  const all = [...groups.recent, ...groups.earlier]
+  /* The store key first; a bare order number second, so a link written with the number the
+     buyer sees still opens its buyer. */
+  return (
+    all.find((group) => group.orders.some((order) => order.key === orderKey)) ??
+    all.find((group) => group.orders.some((order) => order.number === orderKey)) ??
+    null
+  )
 }
 
 /* ---- a buyer's status: one state per order, the worst per buyer (UX-199). Pure, so Home's
