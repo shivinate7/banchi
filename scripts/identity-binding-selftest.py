@@ -124,6 +124,12 @@ def main() -> int:
        "Pokemon: a read carrying its own /total, none stored, agrees when the total matches")
     ok(ib.number_agrees("number_and_printed_total", "84", None, "084/132"),
        "Pokemon: a bare number with no total stays blank — agrees (documented)")
+    ok(ib.number_agrees("number_and_printed_total", "SVI 084/132", None, "084/132"),
+       "Pokemon: a glued set code strips before the own-total fold, none stored — agrees")
+    ok(ib.number_agrees("number_and_printed_total", "84/", None, "084/132"),
+       "Pokemon: a one-sided slash (84/) carries no total — blank, agrees")
+    ok(ib.number_agrees("number_and_printed_total", "/132", None, "084/132"),
+       "Pokemon: a one-sided slash (/132) carries no number — blank, agrees")
     wrong = ib.classify_card(
         sku="700", game="pokemon", row=sku_row("700", "Pikachu", "084/132"),
         read_name="Pikachu", read_number="84/198", read_printed_total=None, human_sku=None,
