@@ -1597,6 +1597,15 @@ export function CaptureScreen() {
 
   
   const captureIdRef = useRef<string | null>(readSessionCaptureId())
+  /* Saves out: captures whose frame is grabbed and whose answer has not come. `busyRef` covers only
+   * the grab, so with the dispenser dealing one photo may be unsaved while the next is taken.
+   * `unsavedIds` holds each such capture's id in capture order; `captureIdRef` (and the stored key)
+   * is the OLDEST of them, the one a reload could still need to resend. `applyTail` makes answers
+   * land in capture order even when saves return out of order. */
+  const savesOut = useRef(0)
+  const unsavedIds = useRef<string[]>([])
+  const applyTail = useRef<Promise<void>>(Promise.resolve())
+  const dealingRef = useRef(false)
 
   
   const [heldAcrossReload, setHeldAcrossReload] = useState(() => captureIdRef.current !== null)
@@ -1611,6 +1620,14 @@ export function CaptureScreen() {
     // just been answered, or a fresh one has been minted for a photograph taken now.
     if (id === null) setHeldAcrossReload(false)
   }, [])
+  /** This capture's answer came: drop its id, and let the next oldest unsaved one take the key. */
+  const settleCaptureId = useCallback(
+    (id: string) => {
+      unsavedIds.current = unsavedIds.current.filter((held) => held !== id)
+      if (captureIdRef.current === id) rememberCaptureId(unsavedIds.current[0] ?? null)
+    },
+    [rememberCaptureId],
+  )
 
   
   /* THE SETUP, WRITTEN WHOLE ON EVERY CHANGE TO ANY OF IT (D142). One
@@ -3042,7 +3059,7 @@ export function CaptureScreen() {
    * at once and, while dealing, retries it once from the same bytes. */
   const photoTakenRef = useRef<(save: () => Promise<unknown>) => Promise<unknown>>((save) => save())
   const doCapture = useCallback(async () => {
-    if (busyRef.current) return
+    if (busyRef.current || (savesOut.current > 0 && !dealingRef.current)) return
     // A halted run ignores the trigger entirely. Not "queues it": spec 5.5 rejected
     // queue-and-continue outright, because photos held in the browser and not yet on the Mac
     // are a second place inventory lives, and D13 has exactly one.
@@ -3078,6 +3095,9 @@ export function CaptureScreen() {
 
     busyRef.current = true
     setBusy(true)
+    let saving = false // the frame is grabbed and the save is out
+    let answered!: () => void
+    const prior = applyTail.current
     try {
       let frame: string
       try {
@@ -3093,8 +3113,15 @@ export function CaptureScreen() {
       const hint = setHint.trim() === '' ? undefined : setHint.trim()
 
       
-      const captureId = captureIdRef.current ?? newCaptureId()
-      rememberCaptureId(captureId)
+      // A held id is a lost response to resend: only when no save is out. Else this photo's own id.
+      const captureId = (savesOut.current === 0 ? captureIdRef.current : null) ?? newCaptureId()
+      if (!unsavedIds.current.includes(captureId)) unsavedIds.current.push(captureId)
+      if (captureIdRef.current === null) rememberCaptureId(captureId)
+      // The photo is taken: the shutter is free again, the save carries on behind it.
+      saving = true
+      savesOut.current += 1
+      applyTail.current = new Promise<void>((resolve) => (answered = resolve))
+      busyRef.current = false
 
       try {
         const card = (await photoTakenRef.current(() => capture({
@@ -3127,11 +3154,12 @@ export function CaptureScreen() {
           // surviving a re-space) — omitted along with it.
           layoutToken: selectedDiv === null ? undefined : layoutToken,
         }))) as Awaited<ReturnType<typeof capture>>
+        await prior // rail order and slot numbers follow capture order, whatever order the saves return in
         // Answered, so the next photograph gets its own id. Cleared on a replay too: the
         // ambiguity that id existed to resolve is now resolved. Through `rememberCaptureId`,
         // so the stored copy goes with it — an id left in the store after the server has
         // answered would be resent by the next capture and would answer for the wrong card.
-        rememberCaptureId(null)
+        settleCaptureId(captureId)
         /* `created: false` means this id had already been committed — the halt before it
          * lost a response, not a card. The server returned the original position and burned
          * no index, which is only true because the id was held across the halt.
@@ -3232,8 +3260,11 @@ export function CaptureScreen() {
         setHalt({ where: 'server', ...describe(err) })
       }
     } finally {
-      busyRef.current = false
-      setBusy(false)
+      if (saving) {
+        savesOut.current -= 1
+        answered()
+      } else busyRef.current = false
+      if (!busyRef.current && savesOut.current === 0) setBusy(false)
     }
     // `rememberCaptureId` is stable (no dependencies of its own), so it is listed for
     // honesty rather than because it can change: an identity that moved per render would
@@ -3268,6 +3299,7 @@ export function CaptureScreen() {
     product,
     rarityClaim,
     rememberCaptureId,
+    settleCaptureId,
     sectionPickKey,
     sectionsDetail,
     selectedDiv,
@@ -3279,7 +3311,7 @@ export function CaptureScreen() {
   
   const undoBack = useCallback(
     async (depth: number) => {
-      if (busyRef.current) return
+      if (busyRef.current || savesOut.current > 0) return
       const plan = undoStack.slice(0, Math.max(0, depth))
       if (plan.length === 0) return
       busyRef.current = true
@@ -3402,7 +3434,7 @@ export function CaptureScreen() {
    *  above — one strip, reporting on itself either way. */
   const undoDivider = useCallback(
     async (target: { box: number; div: string; priorDiv: string | null }) => {
-      if (busyRef.current) return
+      if (busyRef.current || savesOut.current > 0) return
       busyRef.current = true
       setBusy(true)
       setUndoNote(null)
@@ -3470,7 +3502,7 @@ export function CaptureScreen() {
    *  exists for. */
   const doRemoveOne = useCallback(
     async (target: UndoTarget) => {
-      if (busyRef.current) return
+      if (busyRef.current || savesOut.current > 0) return
       busyRef.current = true
       setBusy(true)
       setRemoveBusy(true)
@@ -3760,11 +3792,11 @@ export function CaptureScreen() {
        * no record — spec 5.5's failure — and the halt banner below renders the `halted`
        * count as exactly that sentence. */
       if (triggerMode !== 'manual') {
-        const reason = busyRef.current
+        const reason = busyRef.current || (savesOut.current > 0 && !dealingRef.current)
           ? ('busy' as const)
           : halt !== null
             ? ('halted' as const)
-            : captureIdRef.current !== null
+            : captureIdRef.current !== null && savesOut.current === 0
               ? ('held' as const)
               : box === null
                 ? ('noBox' as const)
@@ -4048,6 +4080,7 @@ export function CaptureScreen() {
     armed: motionArmed,
   })
   photoTakenRef.current = dealer.photoTaken
+  dealingRef.current = dealer.state === 'dealing'
   /* One reason per blocker the Capture button already answers to: the same `blockers` list, never a copy. */
   const blockerWord: Record<string, string> = {
     halt: 'Resume captures first',
