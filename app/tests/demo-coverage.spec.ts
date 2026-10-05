@@ -337,6 +337,57 @@ test.describe('the published demo draws what reviewers grade', () => {
     })
   }
 
+  // THE FIRST-LOAD BUDGET (DEBT84). Home's own recorded answers are about 12.4 MB raw, so 2.5 MB
+  // leaves room for the app shell and Home's reads only, never the whole recording.
+  const HOME_FIRST_LOAD_BUDGET_BYTES = 2.5 * 1024 * 1024
+
+  test('Home draws within its first-load byte budget', async ({ page }) => {
+    test.setTimeout(90_000)
+    await openRoot(page)
+    // Script, style and data bytes (decoded) of every non-image resource from page start until Home is drawn.
+    const fetched = await page.evaluate(() =>
+      performance
+        .getEntriesByType('resource')
+        .filter((e) => (e as PerformanceResourceTiming).initiatorType !== 'img')
+        .map((e) => ({ name: e.name, bytes: (e as PerformanceResourceTiming).decodedBodySize })),
+    )
+    const total = fetched.reduce((sum, e) => sum + e.bytes, 0)
+    const biggest = [...fetched].sort((a, b) => b.bytes - a.bytes)[0]
+    expect(total, `Home fetched ${total} bytes before it drew (largest: ${biggest?.name} at ${biggest?.bytes})`).toBeLessThanOrEqual(
+      HOME_FIRST_LOAD_BUDGET_BYTES,
+    )
+  })
+
+  test('Inventory fetches its own data on first open, after Home', async ({ page }) => {
+    test.setTimeout(90_000)
+    // A recorded card name only Inventory's data holds: a body carrying it is that data.
+    const NEEDLE = 'Crowd Favorite'
+    await openRoot(page)
+    let carried = false
+    const reads: Array<Promise<void>> = []
+    page.on('response', (response) => {
+      if (response.request().resourceType() === 'image') return
+      reads.push(
+        response.text().then((text) => {
+          if (text.includes(NEEDLE)) carried = true
+        }, () => undefined),
+      )
+    })
+    await page.locator('.bn-side').getByRole('link', { name: /^Inventory/ }).first().click()
+    await drawn(page)
+    await Promise.all(reads)
+    expect(carried, 'opening Inventory fetched nothing that carries its cards').toBe(true)
+    await expect(page.getByRole('button', { name: /\d+ stored/ }).first()).toBeVisible()
+    await expect(page.getByText(REFUSAL)).toHaveCount(0)
+  })
+
+  test('a read with no recorded answer draws the not-recorded refusal', async ({ page }) => {
+    // `demoServer`'s `notRecorded()`: a 404 `demo_not_recorded` whose message is `NOT_IN_DEMO`.
+    // A product no recording holds is such a read, so the screen must say so and must not draw it.
+    await openLink(page, '#/product?sku=0000000')
+    await expect(page.getByText(REFUSAL).first()).toBeVisible()
+  })
+
   test('Capture draws its recent strip once a box is picked, and every photograph answers 200', async ({ page }) => {
     // STALE, REWRITTEN 2026-09-27 (D295, full mirror): "Pick a box" / "RB Origins" pinned
     // the 60-card sample's own box picker shape and box name. The box Row (`.capture-box-slot
