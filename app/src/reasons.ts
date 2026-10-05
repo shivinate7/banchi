@@ -91,6 +91,8 @@ export const REASON_LABELS: Readonly<Record<string, string>> = {
    * ("Is the listing the right card?", `ReviewQueue.tsx`'s `QUESTIONS` map); this is the
    * short sub-label the shared `reasonLabel()` draws beside the machine string. */
   listing_disputed: 'The listing may be the wrong card',
+  /* `pipeline/routing.py:FREE_READER_DISAGREES`, opened by `./pkmnscan match audit --write`. */
+  free_reader_disagrees: 'The free reader sees another card',
 }
 
 /* CODES THE PIPELINE NO LONGER EMITS AND THE STORE STILL HOLDS. A separate map on purpose:
