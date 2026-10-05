@@ -88,7 +88,6 @@ from server import tcg_import  # noqa: E402
 from server.pipeline_routes import PipelineRefusal  # noqa: E402
 from store import Store, files, master, sendclaims  # noqa: E402
 from store import clock as store_clock  # noqa: E402
-from store.clock import iso as _iso, now as _now, parse as _parse  # noqa: E402
 from store.submissions import proc_start  # noqa: E402
 
 #: Where every send's receipt lives. Named once, in `cli/cmd_reprice.py`, because the lag guard
@@ -166,7 +165,7 @@ def _press(kind: str) -> Iterator[None]:
         )
     try:
         _RUNNING.clear()
-        _RUNNING.update({"kind": kind, "at": _iso(_now())})
+        _RUNNING.update({"kind": kind, "at": store_clock.iso(store_clock.now())})
         yield
     finally:
         _RUNNING.clear()
@@ -287,19 +286,19 @@ def _wait_until(record: dict) -> Optional[datetime]:
     has happened by T plus the transport's own timeout if it happened at all, and the lag runs
     from there. A press that died before it published is given the same wait from its start.
     """
-    written = _parse(record.get("check_after"))
+    written = store_clock.parse(record.get("check_after"))
     if written is not None:
         return written
-    started = _parse(record.get("publish_started_at"))
+    started = store_clock.parse(record.get("publish_started_at"))
     if started is not None:
         return started + timedelta(seconds=tcg_export.TIMEOUT_S) + _lag()
-    at = _parse(record.get("at"))
+    at = store_clock.parse(record.get("at"))
     return at + _lag() if at is not None else None
 
 
 def _checked_past_wait(record: dict) -> bool:
     """Has a live check run for this receipt AFTER its wait? The take-back ruling's test."""
-    checked = _parse(record.get("checked_at"))
+    checked = store_clock.parse(record.get("checked_at"))
     wait = _wait_until(record)
     return checked is not None and record.get("check") is not None and (
         wait is None or checked >= wait
@@ -328,8 +327,8 @@ def _take_back_ready(record: dict) -> bool:
         return False
     if not _second_check(record):
         return True
-    first = _parse(record.get("first_checked_at"))
-    last = _parse(record.get("checked_at"))
+    first = store_clock.parse(record.get("first_checked_at"))
+    last = store_clock.parse(record.get("checked_at"))
     return first is not None and last is not None and last >= first + _lag()
 
 
@@ -338,7 +337,7 @@ def _take_back_after(record: dict) -> Optional[datetime]:
     wait = _wait_until(record)
     if not _second_check(record):
         return wait
-    first = _parse(record.get("first_checked_at"))
+    first = store_clock.parse(record.get("first_checked_at"))
     if first is not None:
         return first + _lag()
     return wait + _lag() if wait is not None else None
@@ -411,7 +410,7 @@ def _next_check(record: dict, now: Optional[datetime] = None) -> Optional[dateti
         # A DOWNLOADED FILE IS READ AT MOST ONCE PER LAG. The owner may not have uploaded it
         # yet, and a check on every visit would open a socket to TCGplayer each time. The
         # second read, one wait after the first, is the one that can offer the copies back.
-        last = _parse(record.get("checked_at"))
+        last = store_clock.parse(record.get("checked_at"))
         if last is not None:
             return last + _lag()
     return _wait_until(record)
@@ -504,7 +503,7 @@ def _summary(stamp: str, record: dict, now: datetime, held: frozenset = frozense
         "price_check": record.get("price_check"),
         "rows": int(rows or 0),
         "published_at": record.get("published_at"),
-        "check_after": _iso(wait) if wait is not None else None,
+        "check_after": store_clock.iso(wait) if wait is not None else None,
         "checked_at": record.get("checked_at"),
         "check": record.get("check"),
         "trimmed": (record.get("guard") or {}).get("trimmed") or [],
@@ -523,7 +522,7 @@ def _summary(stamp: str, record: dict, now: datetime, held: frozenset = frozense
         "moves": record.get("moves") or [],
         "held": stamp in held,
         "takeable": sum(offer.values()),
-        "take_back_after": _iso(take_after) if waiting_to_take and take_after is not None else None,
+        "take_back_after": store_clock.iso(take_after) if waiting_to_take and take_after is not None else None,
         "files": record.get("files") or [],
         "taken_back_at": record.get("taken_back_at"),
         "warning": _warning(record),
@@ -726,14 +725,14 @@ def _already_pushed(digest: str, now: Optional[datetime] = None) -> Optional[str
     double-send guard can see it, and the same rows sent again a day later are a legitimate send
     (the round-1 rule refused them forever — the 2026-09-24 review, S3).
     """
-    moment = now or _now()
+    moment = now or store_clock.now()
     for stamp, record in _receipts():
         if record.get("digest") != digest or record.get("kind") != KIND_SEND:
             continue
         pushed = record.get("pushed")
         if not pushed or record.get("taken_back_at"):
             continue
-        when = _parse(pushed.get("pushed_at")) or _parse(record.get("at"))
+        when = store_clock.parse(pushed.get("pushed_at")) or store_clock.parse(record.get("at"))
         if when is None or (moment - when).total_seconds() <= UPLOAD_WINDOW_S:
             return stamp
     return None
@@ -786,7 +785,7 @@ def _markdown_blocks(conflict: dict, step: str) -> PipelineRefusal:
     """The listing send's refusal when a mark-down's claim holds some of its cards."""
     stamp = str(conflict.get("stamp") or "")
     count = len(conflict.get("skus") or [])
-    started = _parse(conflict.get("started_at"))
+    started = store_clock.parse(conflict.get("started_at"))
     pressed = clock(started) if started is not None else "earlier"
     claim = Store().read().send_claims.get(stamp)
     if claim is not None and claim.live and _claim_running(claim):
@@ -1115,7 +1114,7 @@ def _send(payload: dict, directories: Sequence[Path], download: bool) -> dict:
     record = {
         "stamp": stamp,
         "kind": KIND_DOWNLOAD if download else KIND_SEND,
-        "at": _iso(_now()),
+        "at": store_clock.iso(store_clock.now()),
         # THE PRESS'S OWN MOMENT TO THE NANOSECOND, the tiebreak for two presses in one second
         # (`_press_order`). This server runs one press at a time (`_press`), so it only rises.
         "pressed_ns": time.time_ns(),
@@ -1239,10 +1238,10 @@ def _write_and_send(
         # check past the wait is what confirms it. The claim goes; `pushed` keeps the copies
         # off the next file until the check or a take-back says otherwise.
         record["phase"] = PHASE_DONE
-        record["check_after"] = _iso(_now() + _lag())
+        record["check_after"] = store_clock.iso(store_clock.now() + _lag())
         _write(directory, record)
         _release(stamp, "written")
-        return {"send": _summary(stamp, record, _now()), "console": console}
+        return {"send": _summary(stamp, record, store_clock.now()), "console": console}
 
     record["phase"] = PHASE_SENDING
     _write(directory, record)
@@ -1333,13 +1332,13 @@ def _push_and_publish(directory: Path, record: dict, console: str) -> dict:
         # `_check`'s refusals: the file was turned away before a transaction existed.
         _fail(directory, record, refusal.code,
               f"{refusal.message} The copies are back on the list.")
-    record["pushed"] = dict(upload.as_dict(), pushed_at=_iso(_now()))
+    record["pushed"] = dict(upload.as_dict(), pushed_at=store_clock.iso(store_clock.now()))
     if int(upload.accepted or 0) <= 0:
         # TCGPLAYER TOOK NONE OF THE ROWS. There is nothing to publish; clear the upload.
         _rollback_then(directory, record, str(upload.upload_id), "tcg_nothing_accepted",
                        "TCGplayer took none of the rows in this send.")
     record["phase"] = PHASE_PUBLISHING
-    record["publish_started_at"] = _iso(_now())
+    record["publish_started_at"] = store_clock.iso(store_clock.now())
     _write(directory, record)
     try:
         answer = tcg_import.move_to_live(str(upload.upload_id))
@@ -1354,14 +1353,14 @@ def _push_and_publish(directory: Path, record: dict, console: str) -> dict:
     if isinstance(answer, dict) and answer.get("Success") is False:
         _rollback_then(directory, record, str(upload.upload_id), "tcg_publish_refused",
                        "TCGplayer answered that it did not make the upload live.")
-    published = _now()
-    record["published_at"] = _iso(published)
+    published = store_clock.now()
+    record["published_at"] = store_clock.iso(published)
     record["publish_result"] = answer
-    record["check_after"] = _iso(published + _lag())
+    record["check_after"] = store_clock.iso(published + _lag())
     record["phase"] = PHASE_DONE
     _write(directory, record)
     _release(stamp, "published")
-    return {"send": _summary(stamp, record, _now()), "console": console}
+    return {"send": _summary(stamp, record, store_clock.now()), "console": console}
 
 
 def _try_rollback(upload_id: str) -> bool:
@@ -1406,7 +1405,7 @@ def _fail(
     """
     _take_back(record.get("copies") or {}, str(record.get("stamp")), "failed")
     if rolled is not None:
-        record["rolled_back"] = {"upload_id": rolled, "at": _iso(_now()), "cause": code}
+        record["rolled_back"] = {"upload_id": rolled, "at": store_clock.iso(store_clock.now()), "cause": code}
         code, status = ROLLED_BACK, HTTPStatus.CONFLICT
         message = (
             f"{message} Banchi asked TCGplayer to roll the upload back, and it said it did. "
@@ -1414,7 +1413,7 @@ def _fail(
             f"upload there. Nothing is live; the copies are back on the list."
         )
     record["failure"] = {"code": code, "message": message}
-    record["taken_back_at"] = _iso(_now())
+    record["taken_back_at"] = store_clock.iso(store_clock.now())
     record["phase"] = PHASE_DONE
     _write(directory, record)
     raise PipelineRefusal(status, code, message)
@@ -1435,7 +1434,7 @@ def _unknown(
     in Staged where a person can publish them by hand. The wait runs from NOW, because whatever
     TCGplayer did, it did before now. The live check past the wait is what resolves it.
     """
-    now = _now()
+    now = store_clock.now()
     # THE UPLOAD MAY STILL WAIT IN STAGED whenever one was opened and its rollback was not
     # answered — after an unclear publish too, if the publish did not in fact happen.
     waits = (bool(upload_id) and not rolled_back) if staged is None else bool(staged)
@@ -1446,9 +1445,9 @@ def _unknown(
         "staged": waits,
         "file": (record.get("files") or [None])[0],
         "cause": cause,
-        "at": _iso(now),
+        "at": store_clock.iso(now),
     }
-    record["check_after"] = _iso(now + _lag())
+    record["check_after"] = store_clock.iso(now + _lag())
     record["phase"] = PHASE_DONE
     _write(directory, record)
     wait = clock(now + _lag())
@@ -1485,7 +1484,7 @@ def do_sends() -> dict:
     `due` is the one bit the screen's timer and its visit check both read: true when a
     receipt is waiting and its wait has passed. `check_at` is the earliest moment one will be.
     """
-    now = _now()
+    now = store_clock.now()
     receipts = _receipts()
     held = _held_stamps()
     # A RECEIPT STILL CARRYING A WARNING IS LISTED WHATEVER ITS AGE: the warning goes when the
@@ -1514,8 +1513,8 @@ def do_sends() -> dict:
             "stamps": [stamp for stamp, _ in unconfirmed],
         },
         "due": any(_due(record, now) for _, record in receipts) or _markdown_due(now),
-        "check_at": _iso(check_at) if check_at else None,
-        "now": _iso(now),
+        "check_at": store_clock.iso(check_at) if check_at else None,
+        "now": store_clock.iso(now),
         # A live claim that will not parse is skipped above and flagged here (DEBT59). The
         # count is what the screen says; the keys are for the log.
         "unreadable_claims": len(unreadable),
@@ -1638,7 +1637,7 @@ def do_take_back(stamp: str, payload: dict) -> dict:
         if offer:
             moved = _bump_back(writable, offer)
             writable.send_claims.release(stamp, "taken_back")
-            record["taken_back_at"] = _iso(_now())
+            record["taken_back_at"] = store_clock.iso(store_clock.now())
             record["taken_back"] = offer
             # WRITTEN BEFORE THE STORE COMMITS. A crash between the two leaves a receipt that
             # says "taken back" over copies still counted out: the safe side, since nothing is
@@ -1650,7 +1649,7 @@ def do_take_back(stamp: str, payload: dict) -> dict:
             "not_takeable",
             "These copies were already taken back. Nothing changed.",
         )
-    return {"send": _summary(stamp, record, _now(), _held_stamps()), "moved": moved}
+    return {"send": _summary(stamp, record, store_clock.now(), _held_stamps()), "moved": moved}
 
 
 def do_dismiss(stamp: str, payload: dict) -> dict:
@@ -1670,9 +1669,9 @@ def do_dismiss(stamp: str, payload: dict) -> dict:
             "nothing_to_dismiss",
             "This send carries no warning to dismiss. Nothing changed.",
         )
-    record["dismissed_at"] = _iso(_now())
+    record["dismissed_at"] = store_clock.iso(store_clock.now())
     _write(directory, record)
-    return {"send": _summary(stamp, record, _now(), _held_stamps())}
+    return {"send": _summary(stamp, record, store_clock.now(), _held_stamps())}
 
 
 # ----------------------------------------------------------------------- the live check
@@ -1716,7 +1715,7 @@ def _sold_since(
     recorded = record.get("sold_before")
     if isinstance(recorded, dict) and sku in recorded:
         return max(0, sold_now.get(sku, 0) - int(recorded[sku]))
-    started = _parse(record.get("at"))
+    started = store_clock.parse(record.get("at"))
     if started is None:
         return 0
     inventory = read_inventory()
@@ -1724,7 +1723,7 @@ def _sold_since(
         1
         for card in inventory.positions_for_sku(sku)
         if card.state == master.SOLD
-        and (_parse(card.state_at) or started) >= started
+        and (store_clock.parse(card.state_at) or started) >= started
     )
 
 
@@ -1775,7 +1774,7 @@ def _press_order(stamp: str, record: dict) -> Tuple[datetime, int, str]:
 
 def _pressed_at(stamp: str, record: dict) -> datetime:
     """When the press read its baseline: the receipt's `at`, or the time its stamp names."""
-    at = _parse(record.get("at"))
+    at = store_clock.parse(record.get("at"))
     if at is not None:
         return at
     try:
@@ -1840,7 +1839,7 @@ def _credits(
     pressed = {stamp: _pressed_at(stamp, record) for stamp, record in receipts}
     ranks = {stamp: _press_order(stamp, record) for stamp, record in receipts}
     final = {stamp: _settled(record, now) for stamp, record in receipts}
-    checked_at = {stamp: _parse(record.get("checked_at")) for stamp, record in receipts}
+    checked_at = {stamp: store_clock.parse(record.get("checked_at")) for stamp, record in receipts}
     skus = sorted({sku for stamp in due for sku in sent_by.get(stamp, {})})
     read_inventory = functools.cache(lambda: Store().read().inventory)
     for sku in skus:
@@ -1929,7 +1928,7 @@ def _price_check(record: dict, live_prices: Dict[str, str], live_now: Dict[str, 
 
 
 def _live_check(force: bool) -> dict:
-    now = _now()
+    now = store_clock.now()
     receipts = _receipts()
     due = [(stamp, record) for stamp, record in receipts if _due(record, now)]
     due.reverse()  # OLDEST FIRST — `_receipts` is newest first.
@@ -1984,11 +1983,11 @@ def _live_check(force: bool) -> dict:
             record["price_check"] = _price_check(record, live_prices, live_now)
         record.setdefault("copies", copies)
         record["copies_total"] = record.get("copies_total") or sum(copies.values())
-        record["checked_at"] = _iso(now)
+        record["checked_at"] = store_clock.iso(now)
         if _checked_past_wait(record) and not record.get("first_checked_at"):
             # THE FIRST CHECK PAST THE WAIT, KEPT: a downloaded file's copies come back only
             # after a second one, one wait later (`_second_check`).
-            record["first_checked_at"] = _iso(now)
+            record["first_checked_at"] = store_clock.iso(now)
         _write(sends_dir() / stamp, record)
         # A CHECK PAST THE WAIT RESOLVES A HOLD: what is live is now known, and what is not can
         # be taken back. The claim goes whether the copies were found or not.
@@ -2249,7 +2248,7 @@ def markdown_rolled_back_note(directory: Path, upload_id: str, cause: str) -> st
     screen named does (round 6, B1). `ROLLED_BACK_RECORD` is the receipt of the rollback."""
     files.write_json(
         directory / ROLLED_BACK_RECORD,
-        {"upload_id": upload_id, "at": _iso(_now()), "cause": cause, "live": False,
+        {"upload_id": upload_id, "at": store_clock.iso(store_clock.now()), "cause": cause, "live": False,
          "check_staged": True},
     )
     return (
@@ -2299,7 +2298,7 @@ def _markdown_hold(
     directory: Path, record: dict, stage: str, rolled_back: Optional[bool], cause: str
 ) -> NoReturn:
     """A mark-down whose outcome is unknown: keep its receipt, hold its SKUs, and raise."""
-    now = _now()
+    now = store_clock.now()
     record = dict(record)
     record.setdefault("published_at", None)
     record["unknown"] = {
@@ -2307,9 +2306,9 @@ def _markdown_hold(
         "upload_id": record.get("upload_id"),
         "rolled_back": rolled_back,
         "cause": cause,
-        "at": _iso(now),
+        "at": store_clock.iso(now),
     }
-    record["check_after"] = _iso(now + _lag())
+    record["check_after"] = store_clock.iso(now + _lag())
     pipeline_routes._write_push(directory, record)
     raise PipelineRefusal(
         HTTPStatus.CONFLICT,
@@ -2324,10 +2323,10 @@ def _markdown_wait(claim: Optional["sendclaims.SendClaim"], stamp: str) -> Optio
     for a press that died with no receipt saying so — its claim's start, plus the transport's
     timeout, plus the lag (`_wait_until`'s rule for a listing press that died)."""
     record = pipeline_routes._read_push(pipeline_routes._markdowns_dir() / stamp) or {}
-    written = _parse(record.get("check_after")) if _markdown_unknown(record) else None
+    written = store_clock.parse(record.get("check_after")) if _markdown_unknown(record) else None
     if written is not None:
         return written
-    started = _parse(claim.started_at) if claim is not None else None
+    started = store_clock.parse(claim.started_at) if claim is not None else None
     if started is None:
         return None
     return started + timedelta(seconds=tcg_export.TIMEOUT_S) + _lag()
@@ -2345,7 +2344,7 @@ def _markdown_records() -> List[Tuple[str, Optional[datetime]]]:
     for stamp in pipeline_routes._stamps():
         record = pipeline_routes._read_push(pipeline_routes._markdowns_dir() / stamp)
         if _markdown_unknown(record):
-            out.append((stamp, _parse((record or {}).get("check_after"))))
+            out.append((stamp, store_clock.parse((record or {}).get("check_after"))))
             seen.add(stamp)
     for claim in Store().read().send_claims.live(strict=False):
         if claim.kind != sendclaims.KIND_MARKDOWN or not claim.stamp.startswith(MARKDOWN_CLAIM):
@@ -2402,11 +2401,11 @@ def _resolve_markdown(stamp: str, live_path: Path, now: datetime) -> None:
         _price(live.get(sku, "")) == price for sku, price in wanted.items() if sku
     )
     if matched:
-        record["published_at"] = _iso(now)
+        record["published_at"] = store_clock.iso(now)
     if record or matched:
         unknown = dict(record.get("unknown") or {})
         unknown["resolved"] = "live" if matched else "not_live"
-        unknown["checked_at"] = _iso(now)
+        unknown["checked_at"] = store_clock.iso(now)
         record["unknown"] = unknown
         pipeline_routes._write_push(directory, record)
     _release(claim, "checked")
