@@ -735,4 +735,40 @@ def _model_cases(c, Image, ImageDraw) -> Result:
             diff = _same(got, want)
             c.ok(diff < 8.0, "paid crop retry's registered card is the preview's cut, not detect_card's",
                  f"mean abs diff {diff:.1f} of 255")
+
+        # 8d. A LANDSCAPE card (Riftbound battlefield), aspect 1/0.716, in a phone frame. The one
+        # box home must keep it landscape and whole, for the free reader and for the preview cut.
+        lw = 1700
+        lh = round(lw * 0.716)
+        lx, ly = (fw - lw) // 2, (fh - lh) // 2
+        wide = Image.new("RGB", (fw, fh), (176, 170, 160))
+        wdraw = ImageDraw.Draw(wide)
+        wdraw.rectangle([150, ly - 500, fw - 150, ly + lh + 500], fill=(22, 22, 26))
+        wdraw.rectangle([lx, ly, lx + lw, ly + lh], fill=(200, 190, 150))
+        wdraw.rectangle([lx + 60, ly + 60, lx + lw // 2, ly + lh - 60], fill=(60, 110, 160))
+        for i in range(10):
+            top = ly + 90 + i * 70
+            wdraw.rectangle([lx + lw // 2 + 60, top, lx + lw - 60, top + 24], fill=(40, 30, 20))
+        flat = geometry.CardBox(
+            angle=0.0, left=lx / fw, top=ly / fh, right=(lx + lw) / fw, bottom=(ly + lh) / fh,
+            fill=0.9, aspect=0.716, method="dfine",
+        )
+        landscape = work / "landscape.jpg"
+        wide.save(landscape, quality=95)
+        truth_card = wide.crop((lx, ly, lx + lw, ly + lh))
+        with mock.patch.object(card_box, "model_card", lambda *_a, **_k: flat):
+            got = match._crop(landscape, 0.716)
+            prepared = images_mod.prepare_located(landscape)[1]
+        if c.ok(got is not None, "the free reader finds a landscape card"):
+            gw, gh = got.size
+            c.ok(
+                gw > gh and abs(gh / gw - 0.716) <= 0.05,
+                "free reader keeps a landscape card landscape, aspect 1/0.716",
+                f"{gw}x{gh}",
+            )
+            diff = _same(got, truth_card)
+            c.ok(diff < 12.0, "free reader's crop is the whole landscape card, no neighbour, no clip",
+                 f"mean abs diff {diff:.1f} of 255")
+        pw, ph = prepared.sent_size
+        c.ok(pw > ph, "the preview's cut keeps a landscape card landscape", f"{pw}x{ph}")
     return c.result()
