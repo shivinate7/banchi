@@ -3080,9 +3080,17 @@ export function CaptureScreen() {
    * at once and, while dealing, retries it once from the same bytes. */
   const photoTakenRef = useRef<(save: () => Promise<unknown>) => Promise<unknown>>((save) => save())
   /* Where the next card will land, for naming a card whose save has not come back. */
-  const nextCardRef = useRef({ n: 1 })
-  nextCardRef.current = { n: newCardNumber ?? nextForBox ?? 1 }
+  const nextCardRef = useRef<{ box: number | null; n: number }>({ box: null, n: 1 })
+  nextCardRef.current = { box, n: newCardNumber ?? nextForBox ?? 1 }
+  /* The last number given to a card whose answer has not yet reached a render: the next card is one
+   * past it. Dropped as soon as the screen's own next number moves. */
+  const assignedRef = useRef<{ box: number | null; n: number } | null>(null)
+  useEffect(() => {
+    assignedRef.current = null
+  }, [newCardNumber, nextForBox, box])
   const doCapture = useCallback(async () => {
+    // While any photo is held unsaved nothing new is captured: Retry saving comes first.
+    if (heldSaves.current.length > 0) return
     if (busyRef.current || (savesOut.current > 0 && !dealingRef.current)) return
     // A halted run ignores the trigger entirely. Not "queues it": spec 5.5 rejected
     // queue-and-continue outright, because photos held in the browser and not yet on the Mac
@@ -3144,7 +3152,11 @@ export function CaptureScreen() {
       syncCaptureIds()
       // The slot this card is to take, said before the store has answered: the next number, plus
       // every unsaved card ahead of it.
-      const heldLabel = `${boxTitle(null, box)}, Card ${nextCardRef.current.n + unsavedIds.current.length - 1}`
+      const slot = nextCardRef.current
+      const given = assignedRef.current
+      const slotNumber = given !== null && given.box === slot.box ? given.n + 1 : slot.n
+      assignedRef.current = { box: slot.box, n: slotNumber }
+      const heldLabel = slot.box === null ? 'A photo' : `${boxTitle(null, slot.box)}, Card ${slotNumber}`
       // The photo is taken: the shutter is free again, the save carries on behind it.
       saving = true
       savesOut.current += 1
@@ -3276,8 +3288,7 @@ export function CaptureScreen() {
         // The store never commits card 2 before card 1: this frame waits in memory for the earlier
         // answer, and a failed earlier save holds it (never sends) until Retry saving.
         const card = (await photoTakenRef.current(async () => {
-          // Only the oldest held card's own recapture may pass a failed save: it IS that card's retry.
-          if (!(await prior) && heldSaves.current[0]?.id !== captureId) throw new SaveHeld()
+          if (!(await prior)) throw new SaveHeld()
           return sendFrame()
         })) as Awaited<ReturnType<typeof capture>>
         applyAnswer(card)
@@ -4161,8 +4172,19 @@ export function CaptureScreen() {
   })
   photoTakenRef.current = dealer.photoTaken
   dealingRef.current = dealer.state === 'dealing'
+  /* Last in the list: a halt's own line stays the first reason. */
+  if (heldView.length > 0) {
+    blockers.push({
+      key: 'unsaved',
+      icon: 'alert',
+      tone: 'warn',
+      text: 'A photo is not saved. Press Retry saving.',
+      fix: null,
+    })
+  }
   /* One reason per blocker the Capture button already answers to: the same `blockers` list, never a copy. */
   const blockerWord: Record<string, string> = {
+    unsaved: 'Retry saving first',
     halt: 'Resume captures first',
     camera: 'Open the camera first',
     'camera-fault': 'The camera is sending no frames',
@@ -4602,8 +4624,8 @@ export function CaptureScreen() {
         <section className="capture-unsaved" role="alert">
           <Notice tone="warn" title={`${heldView[0]!.label} was not saved`}>
             {heldView.length === 1
-              ? 'The photo is held here and nothing after it was sent. Retry saving to send it.'
-              : `${heldView.length} photos are held here, in the order they were taken. Retry saving sends them in order.`}
+              ? 'Nothing after it was sent. Press Retry saving.'
+              : `${heldView.length} photos were not saved in all. Nothing after it was sent. Press Retry saving.`}
           </Notice>
           <Button variant="primary" size="lg" onClick={() => void retrySaving()}>
             Retry saving
