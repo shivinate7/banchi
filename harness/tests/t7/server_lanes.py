@@ -30,6 +30,59 @@ from harness.tests.t7.common import (
 )
 
 
+def check_sitting_read_walks_each_box_once(checks: Checks) -> None:
+    """`GET /capture/sitting` re-hydrated the whole box once PER CARD (72 s on a 490-card
+    sitting in a 1,100-card box). One read walks a box at most once, and the rows are the
+    ones a per-card `_card_summary` gives, which is the oracle."""
+    checks.note("")
+    checks.note("SITTING READ: ONE BOX WALK PER BOX, NOT PER CARD")
+    from datetime import datetime, timedelta, timezone
+
+    from store import master
+    from harness.tests.t7.common import fake_cid
+
+    with isolated_home():
+        stale = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
+        with Store().write() as snapshot:
+            inv = snapshot.inventory
+            for n in range(1100):
+                card, _ = inv.allocate_capture(1, cid=fake_cid(f"sit-{n}"))
+                if n < 600:
+                    card.captured_at = stale
+        calls: list = []
+        real = master.Inventory.records_in
+
+        def counting(self, box):
+            calls.append(int(box))
+            return real(self, box)
+
+        master.Inventory.records_in = counting
+        try:
+            started = time.monotonic()
+            body = capture_server.do_capture_sitting()
+            elapsed = time.monotonic() - started
+        finally:
+            master.Inventory.records_in = real
+        checks.equal(len(body["cards"]), 500, "the open sitting is the 500 fresh cards")
+        checks.ok(
+            calls.count(1) <= 1,
+            f"box 1 is walked at most once for the whole read, not once per card: {calls.count(1)} walks",
+        )
+        inventory = Store().read().inventory
+        wants = [
+            capture_server._card_summary(  # noqa: SLF001 — the per-card oracle
+                inventory, inventory.cards[row["key"]], created=False
+            )
+            for row in body["cards"]
+        ]
+        checks.equal(
+            [{k: row[k] for k in want} for row, want in zip(body["cards"], wants)],
+            wants,
+            "every row's places are the per-card summary's, unchanged",
+        )
+        checks.ok(elapsed < 10, f"and the read is not minutes: {elapsed:.1f}s")
+
+
 def check_connection_close(checks: Checks) -> None:
     """Every response closes its connection, INCLUDING the 304 — the pool's whole premise.
 
@@ -1047,4 +1100,5 @@ CHECKS = (
     check_slow_request_line,
     check_photo_lane_threads_and_faults,
     check_connection_close,
+    check_sitting_read_walks_each_box_once,
 )

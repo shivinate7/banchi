@@ -1159,6 +1159,8 @@ async function expandAll(page: Page) {
      selection sits in. Pressing the folds themselves is the same act and does not depend on
      which word the summary is wearing. */
   const shut = page.locator('.browse-sectfold[aria-expanded="false"]')
+  // A fold must be drawn before "none shut" can mean "all open" (a reload lands with none yet).
+  await expect(page.locator('.browse-sectfold').first()).toBeVisible()
   for (let guard = 0; guard < 40; guard += 1) {
     if ((await shut.count()) === 0) break
     await shut.first().click()
@@ -2093,6 +2095,7 @@ test('the slot column is already as wide as the key the sale will write into it'
   const cards: Cards = { '12/133': wideKeyCard('identified') }
   const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
   await open(page, WIDE_KEY_BOXES, store)
+  await expandAll(page) // sections land shut; the row measured below is drawn once its section is open
   /* THIS CASE IS A RULER OVER TYPE, so it waits for the faces — `fontsReady.ts` has the whole
      argument, and the swap window is exactly the window in which the reservation and the label
      it reserves for would be measured in two different typefaces. */
@@ -2756,17 +2759,17 @@ test('the walk arrives with only the planted selection\'s section open, and the 
    * SO THE CONTROL IS WHAT IS PINNED HERE, and that is the stronger half of the old assertion:
    * it names the press it is about to perform. One section open, every other shut, and a control
    * that says `Collapse` because collapsing is what pressing it does. */
-  await expect(folds.nth(0)).toHaveAttribute('aria-expanded', 'true')
+  /* RE-POINTED (owner's ask: the section list lands collapsed): every section is shut on
+     arrival, so the control offers `Expand`, and one press opens all seven rows. */
+  await expect(folds.nth(0)).toHaveAttribute('aria-expanded', 'false')
   await expect(folds.nth(1)).toHaveAttribute('aria-expanded', 'false')
-  // Section 1 holds five of the seven records, and section 2's two are folded away.
-  await expect(page.locator('.browse-row')).toHaveCount(5)
-  await expect(page.locator('.browse-row[aria-current="true"]')).toBeVisible()
-
-  const fold = page.locator('.browse-quiet').getByText(/^collapse$/i)
-  await expect(fold).toBeVisible()
-  await fold.click()
   await expect(page.locator('.browse-row')).toHaveCount(0)
+
   await expect(page.locator('.browse-quiet').getByText(/^expand$/i)).toBeVisible()
+  await page.locator('.browse-quiet').getByText(/^expand$/i).click()
+  await expect(page.locator('.browse-row')).toHaveCount(7)
+  await page.locator('.browse-quiet').getByText(/^collapse$/i).click()
+  await expect(page.locator('.browse-row')).toHaveCount(0)
 
   /* And nothing is lost by shutting it: the selected card's copies, its photograph and its two
      doors out of inventory are all still drawn beside the list. Only its ROW is folded. */
@@ -2798,6 +2801,8 @@ test('UX-227 — the walk keeps the row it steps onto in view, down to the last 
      of the box scrolled the list to its end and left the row out of sight. */
   await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=7' })
   await expandAll(page)
+  // The header presses scroll the page to reach each fold; the case is about what End does next.
+  await page.evaluate(() => window.scrollTo(0, 0))
   await page.locator('.browse-list').focus()
   await page.keyboard.press('End')
   const current = page.locator('.browse-row[aria-current="true"]')
@@ -2811,7 +2816,6 @@ test('Expand opens every section and Collapse shuts them', async ({ page }) => {
   /* THE WALK ARRIVES WITH ONE SECTION OPEN — the planted selection's — so the roster begins by
      shutting it. The control names that press rather than offering `Expand` over a screen
      that is already partly expanded, which is the owner's own report and the case above. */
-  await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
   await expect(page.locator('.browse-row')).toHaveCount(0)
 
   await page.locator('.browse-quiet').getByText('Expand', { exact: true }).click()
@@ -2859,9 +2863,7 @@ test('a search opens every section holding a match, and clearing it gives the wa
   page,
 }) => {
   await open(page)
-  /* Shut, so what the query opens is the query's doing and not the walk's own planted
-     selection. */
-  await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
+  /* Shut on landing, so what the query opens is the query's doing and nothing else. */
   await expect(page.locator('.browse-row')).toHaveCount(0)
 
   /* The owner's second ask, verbatim: "i want if i search for a card, all results of that card
@@ -2880,7 +2882,7 @@ test('a search opens every section holding a match, and clearing it gives the wa
 
   /* AND THE EXPANSION BELONGS TO THE QUERY. Cleared, the walk is back to the state it opens in
      rather than a half-open shape nobody chose — one resting state to learn instead of two.
-     That state is the planted selection's section and nothing else, which is the case above. */
+     The search moved the selection, so that state is the section holding it and nothing else. */
   await page.locator('.search-field-input').fill('')
   await expect(page.locator('.browse-sectfold').nth(0)).toHaveAttribute('aria-expanded', 'true')
   await expect(page.locator('.browse-sectfold').nth(1)).toHaveAttribute('aria-expanded', 'false')
@@ -2896,7 +2898,6 @@ test('moving the selection opens the section it lands in, so the mark is never h
    * to open whatever it lands in — otherwise collapsed-by-default would let the walk put the
    * mark on a row nobody can see, which is the failure the old render-time override was
    * written to prevent and the one thing that must survive its removal. */
-  await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
   await expect(page.locator('.browse-row')).toHaveCount(0)
 
   await page.locator('.browse-list').focus()
@@ -3509,6 +3510,124 @@ test('every card picked in the Claims sheet is the whole box and sends no indice
   const put = wire.find((sent) => sent.method === 'PUT')
   expect(put?.body).toEqual({ note: 'all' })
 })
+
+/* CLAIMS BY SECTION. A box of 30 + 60 cards, so the picker's own list has to scroll: section 1
+   holds indices 1-30 (30 sold), section 2 holds 31-90 (90 retired). The owner corrected 60
+   cards of one section by scrolling to them; the Section control below replaces that. Contract
+   for the builder: a kit `Select` named "Section" in the Claims sheet, options "Whole box, N
+   cards" and "Section S, N cards" (N counts on-hand cards only). */
+function longBox() {
+  const cards: Cards = {}
+  for (let index = 1; index <= 90; index++) {
+    const first = index <= 30
+    const state = index === 30 ? 'sold' : index === 90 ? 'retired' : 'identified'
+    cards[`2/${index}`] = card({
+      index,
+      state,
+      name: `Card ${index}`,
+      sku: `9${String(index).padStart(6, '0')}`,
+      section: first ? 1 : 2,
+      sectionStart: first ? 1 : 31,
+      sectionEnd: first ? 30 : 90,
+    })
+  }
+  const boxes = {
+    boxes: [
+      {
+        ...BOXES.boxes[0],
+        sections: [1, 31],
+        fill: 90,
+        next_index: 91,
+        cards: 90,
+        on_hand: 88,
+        sold: 1,
+        retired: 1,
+        sections_detail: [
+          { section: 1, start: 1, end: 30, count: 30 },
+          { section: 2, start: 31, end: 90, count: 60 },
+        ],
+      },
+    ],
+  }
+  return { boxes, store: { cards, search: (query: string) => searchAnswer(query, cards) } as Store }
+}
+
+const SECTION_TWO = Array.from({ length: 59 }, (_, n) => 31 + n)
+
+for (const width of [1440, 820]) {
+  test.describe(`claims by section at ${width}`, () => {
+    test.beforeEach(async ({ page }) => {
+      await setViewport(page, { width, height: 900 })
+    })
+
+    async function openClaims(page: Page) {
+      const { boxes, store } = longBox()
+      const wire = await open(page, boxes, store)
+      await openBoxOps(page)
+      await page.getByRole('button', { name: /^Claims/ }).click()
+      return wire
+    }
+    const sectionControl = (page: Page) => page.locator('.boxops-sheet').getByRole('button', { name: /^Section/ })
+    const choose = async (page: Page, name: RegExp) => {
+      await sectionControl(page).click()
+      await page.locator('.bn-pick-opt', { hasText: name }).click()
+    }
+
+    test('picking a section selects exactly its on-hand cards and scrolls them into view', async ({ page }) => {
+      await openClaims(page)
+      await choose(page, /Section 2.*59 cards/)
+      const picker = page.locator('.bn-set-picker')
+      await expect(picker.locator('.bn-set-picker-count')).toHaveText('59 of 88 picked')
+      const boxes = picker.locator('.bn-set-picker-card input')
+      await expect(picker.locator('.bn-set-picker-card input:checked')).toHaveCount(59)
+      // Sold and retired never ride along: Card 30 (sold) is not on hand, so Card 31 is the 30th box.
+      await expect(boxes.nth(29)).toBeChecked()
+      await expect(boxes.nth(28)).not.toBeChecked()
+      await expect(picker.locator('.bn-set-picker-group', { hasText: 'Section 2' }).locator('.bn-set-picker-card').first()).toBeInViewport()
+      expect(await page.locator('.bn-set-picker-list').evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
+    })
+
+    test("applying with a section picked writes only that section's positions", async ({ page }) => {
+      const wire = await openClaims(page)
+      await choose(page, /Section 2.*59 cards/)
+      await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
+      await page.getByRole('textbox', { name: 'Note' }).fill('wb1 r1')
+      await page.getByRole('button', { name: /^Apply to/ }).click()
+      const put = wire.find((sent) => sent.method === 'PUT')
+      expect(put?.body).toEqual({ note: 'wb1 r1', indices: SECTION_TWO })
+    })
+
+    test("whole box keeps today's behavior: no indices key", async ({ page }) => {
+      const wire = await openClaims(page)
+      await choose(page, /Section 2.*59 cards/)
+      await choose(page, /^Whole box/)
+      await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
+      await page.getByRole('textbox', { name: 'Note' }).fill('all')
+      await page.getByRole('button', { name: /^Apply to/ }).click()
+      const put = wire.find((sent) => sent.method === 'PUT')
+      expect(put?.body).toEqual({ note: 'all' })
+    })
+
+    test('picking a section moves nothing but the deliberate scroll', async ({ page }) => {
+      await openClaims(page)
+      const control = sectionControl(page)
+      await expect(control).toBeVisible()
+      const sheet = page.locator('.boxops-sheet')
+      const before = {
+        control: await control.boundingBox(),
+        scroll: await sheet.evaluate((el) => el.scrollTop),
+      }
+      await choose(page, /Section 2.*59 cards/)
+      await expect(page.locator('.bn-set-picker-count')).toHaveText('59 of 88 picked')
+      const after = {
+        control: await control.boundingBox(),
+        scroll: await sheet.evaluate((el) => el.scrollTop),
+      }
+      expect(after.control).toEqual(before.control)
+      expect(after.scroll).toBe(before.scroll)
+    })
+  })
+}
 
 test('Move on two cards picked in the sheet sends exactly those indices', async ({ page }) => {
   await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
@@ -5573,6 +5692,7 @@ test('the neighbour row marks this card with the Banchi card, and the row does n
   page,
 }) => {
   await open(page, BOXES, { cards: NEIGHBORLY, search: (query) => searchAnswer(query, NEIGHBORLY) })
+  await expandAll(page)
   const band = page.locator('.card-locations-row.is-current .nb')
   const slot = band.locator('.nb-here')
   /* The mark is decoration: aria-hidden, and the row's own `aria-label` already says where the
@@ -5646,6 +5766,7 @@ for (const [cutoff, plays, why] of [
     await gated(cutoff)(page)
     await expect(page.locator('.card-locations-row.is-current .nb-here svg')).toBeVisible()
     await expect(() => expect(page.evaluate(GLINTS)).resolves.toBe(0)).toPass({ timeout: 3000 })
+    await expandAll(page)
     await page.locator('.browse-row').nth(1).click()
     if (plays) {
       /* Applied on the change, then removed when it has played once. */
@@ -5673,6 +5794,7 @@ test('the glint reads the readings table and never the run snapshot', async ({ p
   /* The run's snapshot says 5.47 for 8937370 (the hero shows it); the readings hold nothing for it. */
   await gated('0.01', {})(page)
   await expect(page.locator('.card-locations-row.is-current .nb-here svg')).toBeVisible()
+  await expandAll(page)
   await page.locator('.browse-row').nth(1).click()
   await page.waitForTimeout(400) // keep: asserts no glint plays over 400ms
   expect(await page.evaluate(GLINTS)).toBe(0)
@@ -7742,6 +7864,7 @@ test('D213 — filtering by game narrows the walk, and the menu is built off the
   page,
 }) => {
   await open(page, facetBoxes, FACET_STORE, () => PRICING, SALE, { route: '/#/inventory?box=1' })
+  await expandAll(page)
 
   await expect(page.locator('.browse-row')).toHaveCount(2)
 
@@ -7761,6 +7884,7 @@ test('D213 — filtering by game narrows the walk, and the menu is built off the
 
 test('D213 — the unclassified bucket is reachable under a set filter, never dropped', async ({ page }) => {
   await open(page, facetBoxes, FACET_STORE, () => PRICING, SALE, { route: '/#/inventory?box=1' })
+  await expandAll(page)
 
   await pickFacet(page, 'Game', 'Riftbound')
   await pickFacet(page, 'Set', 'No set on file')
@@ -7773,6 +7897,7 @@ test('D213 — clearing the filter restores every card, and a fully-classified c
   page,
 }) => {
   await open(page, facetBoxes, FACET_STORE, () => PRICING, SALE, { route: '/#/inventory?box=1' })
+  await expandAll(page)
 
   await pickFacet(page, 'Game', 'Riftbound')
   await pickFacet(page, 'Rarity', 'Rare')
@@ -7789,6 +7914,7 @@ test('UX-176 — Set and Rarity work before Game, and a Game pick never wipes th
   page,
 }) => {
   await open(page, facetBoxes, FACET_STORE, () => PRICING, SALE, { route: '/#/inventory?box=1' })
+  await expandAll(page)
 
   /* RARITY FIRST, with no game picked. Its menu lists every rarity in the store, across both
      games, each with a count. */
@@ -9153,5 +9279,76 @@ for (const [width, scheme] of [[1440, 'light'], [1440, 'dark'], [820, 'light'], 
     expect(new Set(seen.map((one) => one.end)), 'the cap text must stay on one line').toHaveProperty('size', 1)
     expect(seen.filter((one) => !one.endFits), 'the cap text must stay inside the figure').toEqual([])
     await page.locator('.browse-hero-head').screenshot({ path: test.info().outputPath(`lead-${width}-${scheme}.png`) })
+  })
+}
+
+/* THE BOX'S SECTION LIST LANDS COLLAPSED (owner's ask). No search: every section is a header with
+   its count and no card rows, and the page does not move as the data arrives (D313). The selected
+   card is still shown in the pane beside the list; only its ROW is folded until the walk moves. */
+for (const width of [1440, 820]) {
+  test.describe(`section list lands collapsed at ${width}`, () => {
+    test.beforeEach(async ({ page }) => {
+      await setViewport(page, { width, height: 900 })
+    })
+
+    test('no search: every section is shut with its count showing, and nothing moves as data lands', async ({ page }) => {
+      await watchShifts(page)
+      await open(page)
+      const folds = page.locator('.browse-sectfold')
+      await expect(folds).toHaveCount(2)
+      for (const fold of await folds.all()) {
+        await expect(fold).toHaveAttribute('aria-expanded', 'false')
+        await expect(fold).toContainText(/\d+\s+cards?/i)
+      }
+      await expect(page.locator('.browse-row')).toHaveCount(0)
+      await expect(page.locator('.card-locations-owner')).toBeVisible()
+      await settleMotion(page)
+      const from = await markNow(page)
+      await page.waitForTimeout(600) // keep: the shifts are read over a half second after landing
+      const late = (await readShifts(page)).shifts.filter((s) => s.at >= from)
+      expect(sumOf(late), `the list moved after landing: ${describeShifts(late)}`).toBeLessThan(0.0005)
+    })
+
+    test('a deep link to a card opens the section holding it and no other, row visible', async ({ page }) => {
+      const cards: Cards = { ...STORE.cards, '2/7': card({ index: 7, at: 5, state: 'identified', name: 'Pyroar', sku: '8937374', section: 2, sectionStart: 4, sectionEnd: 5, cid: 'pyroar-cid' }) }
+      const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+      await open(page, BOXES, store, () => PRICING, SALE, { route: '/#/inventory?box=2&card=pyroar-cid' })
+      const folds = page.locator('.browse-sectfold')
+      await expect(folds.nth(1)).toHaveAttribute('aria-expanded', 'true')
+      await expect(folds.nth(0)).toHaveAttribute('aria-expanded', 'false')
+      await expect(page.locator('.browse-row[aria-current="true"]')).toBeVisible()
+      await expect(page.locator('.browse-row[aria-current="true"]')).toContainText('Pyroar')
+    })
+
+    test('a search opens only the sections holding a match', async ({ page }) => {
+      await open(page)
+      await page.locator('.search-field-input').fill('Inteleon') // card 2/6, section 2 only
+      // A search narrows the list to the sections holding a match, and every one shown is open.
+      const folds = page.locator('.browse-sectfold')
+      await expect(page.locator('.browse-row', { hasText: 'Inteleon' })).toBeVisible()
+      await expect(folds).not.toHaveCount(0)
+      for (const fold of await folds.all()) await expect(fold).toHaveAttribute('aria-expanded', 'true')
+    })
+
+    test('a header press opens and shuts its section, and Collapse shuts all', async ({ page }) => {
+      await open(page)
+      const folds = page.locator('.browse-sectfold')
+      /* START FROM ALL SHUT WHATEVER THE LANDING IS: this case is about the presses, and the
+         landing has its own case above. */
+      const collapse = page.locator('.browse-quiet').getByText('Collapse', { exact: true })
+      if (await collapse.isVisible()) await collapse.click()
+      await expect(page.locator('.browse-row')).toHaveCount(0)
+      await folds.nth(1).click()
+      await expect(folds.nth(1)).toHaveAttribute('aria-expanded', 'true')
+      await expect(page.locator('.browse-row')).toHaveCount(2)
+      await folds.nth(0).click()
+      await expect(page.locator('.browse-row')).toHaveCount(7)
+      await folds.nth(1).click()
+      await expect(folds.nth(1)).toHaveAttribute('aria-expanded', 'false')
+      await expect(page.locator('.browse-row')).toHaveCount(5)
+      await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
+      await expect(page.locator('.browse-row')).toHaveCount(0)
+      await expect(folds.nth(0)).toHaveAttribute('aria-expanded', 'false')
+    })
   })
 }

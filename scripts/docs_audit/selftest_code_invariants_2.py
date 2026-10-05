@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 from .core import ADVISORY, MECHANICAL, Report, module_globals
-from .code_invariants import _pipeline_imports, check_import_layering, check_unscoped_walk
+from .code_invariants import _pipeline_imports, check_import_layering, check_loop_expensive, check_unscoped_walk, loop_expensive_sites
 from .dispatch import check_dispatch
 from .strings import (
     APP_TS_COMPILER,
@@ -109,6 +109,123 @@ def run(ok) -> None:
         not by_label["unscoped walk"],
         "the real tree, scanned end to end, has zero findings on this row",
         str(by_label["unscoped walk"]),
+    )
+
+    # `loop expensive`: the pre-#711 `_card_summary` shape must be flagged, the fixed shape
+    # (the result built once and passed in) must not, and a stale entry fails the row.
+    print("\nloop expensive: a helper that builds a whole-store `_Places` per loop item")
+    with tempfile.TemporaryDirectory() as tmp:
+        fixture = Path(tmp) / "fixture_sitting.py"
+        fixture.write_text(
+            "def _card_summary(inventory, card):\n"
+            "    place = _Places(inventory).of(card.box, card.index)\n"
+            "    return {'place': place}\n"
+            "\n"
+            "def _fixed_summary(inventory, card, places):\n"
+            "    return {'place': places.of(card.box, card.index)}\n"
+            "\n"
+            "def do_capture_sitting():\n"
+            "    inventory = Store().read().inventory\n"
+            "    return [_card_summary(inventory, c) for c in inventory.cards.values()]\n"
+            "\n"
+            "def do_fixed_sitting():\n"
+            "    inventory = Store().read().inventory\n"
+            "    places = _Places(inventory)\n"
+            "    return [_fixed_summary(inventory, c, places) for c in range(3)]\n",
+            encoding="utf-8",
+        )
+        _g = module_globals()
+        _saved = {k: _g[k] for k in ("_LOOP_ROOTS", "LOOP_EXPENSIVE_ALLOWED", "LOOP_EXPENSIVE_EXPECTED")}
+        try:
+            _g["_LOOP_ROOTS"] = (Path(tmp),)
+            _g["LOOP_EXPENSIVE_ALLOWED"] = frozenset()
+            _g["LOOP_EXPENSIVE_EXPECTED"] = 0
+            report = Report()
+            check_loop_expensive(report)
+            fresh = [f.message for row in report.checks for f in row.findings]
+            _g["LOOP_EXPENSIVE_ALLOWED"] = frozenset({("gone.py", "gone", "records_in")})
+            _g["LOOP_EXPENSIVE_EXPECTED"] = 1
+            report = Report()
+            check_loop_expensive(report)
+            stale = [f.message for row in report.checks for f in row.findings]
+        finally:
+            _g.update(_saved)
+        ok(
+            any("`do_capture_sitting` calls `_card_summary`" in m for m in fresh)
+            and not any("do_fixed_sitting" in m for m in fresh),
+            "the `_card_summary` shape is flagged by name, the fixed shape is not",
+            str(fresh),
+        )
+        ok(
+            any("`gone`" in m and "finds no such call" in m for m in stale),
+            "an allowlist entry the scan does not find fails the row",
+            str(stale),
+        )
+
+    # A parameter whose name merely CONTAINS a word of the callee does not exempt the helper.
+    # Each helper below is called from a loop and must be flagged (reviewer round 1, item 1).
+    print("\nloop expensive: only an exact result parameter exempts a helper")
+    loose = {
+        "in_state": "def h(inventory, c):\n    return inventory.in_state(c)\n",
+        "Store.read": "def h(already, c):\n    return Store().read()\n",
+        "cards.select": "def h(selection, c):\n    return inventory.cards.select()\n",
+        "to_payload": "def h(store, c):\n    return inventory.to_payload()\n",
+        "_Places": "def h(places_count, c):\n    return _Places(c)\n",
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        for callee, helper in loose.items():
+            fixture = Path(tmp) / "fixture_loose.py"
+            fixture.write_text(helper + "\ndef run(rows):\n    return [h(1, c) for c in rows]\n", encoding="utf-8")
+            ok(
+                any(site[2:] == ("run", "h") for site in loop_expensive_sites([fixture])),
+                f"a helper calling `{callee}` is flagged although a parameter name contains its word",
+            )
+        fixture = Path(tmp) / "fixture_exact.py"
+        fixture.write_text(
+            "def h(places, c):\n    return _Places(c)\n"
+            "\ndef run(rows):\n    return [h(1, c) for c in rows]\n",
+            encoding="utf-8",
+        )
+        ok(not loop_expensive_sites([fixture]), "a helper that takes `places` itself is not flagged")
+
+        # Same method name in two classes: the cheap one must not hide the costly one, and a
+        # subclass resolves `self.m` through its base (reviewer round 1, item 2).
+        fixture = Path(tmp) / "fixture_classes.py"
+        fixture.write_text(
+            "class A:\n    def m(self):\n        return _Places(1)\n"
+            "class B:\n    def m(self):\n        return 1\n"
+            "class C(A):\n    def run(self, rows):\n        return [self.m() for _ in rows]\n"
+            "class D(B):\n    def run(self, rows):\n        return [self.m() for _ in rows]\n",
+            encoding="utf-8",
+        )
+        ok(
+            [site[2:] for site in loop_expensive_sites([fixture])] == [("run", "m")]
+            and [site[1] for site in loop_expensive_sites([fixture])] == [9],
+            "A.m builds `_Places`, B.m is cheap: C(A).run is flagged and D(B).run is not",
+            str(loop_expensive_sites([fixture])),
+        )
+
+    # The pin disagreeing with the list says which way to fix it (reviewer round 1, item 5).
+    _g = module_globals()
+    _saved_expected = _g["LOOP_EXPENSIVE_EXPECTED"]
+    _count = len(_g["LOOP_EXPENSIVE_ALLOWED"])
+    messages = {}
+    try:
+        for label, pin in (("under", _count + 1), ("over", _count - 1)):
+            _g["LOOP_EXPENSIVE_EXPECTED"] = pin
+            report = Report()
+            check_loop_expensive(report)
+            messages[label] = " ".join(f.message for row in report.checks for f in row.findings)
+    finally:
+        _g["LOOP_EXPENSIVE_EXPECTED"] = _saved_expected
+    ok(f"Lower the pin to {_count}" in messages["under"], "a pin above the count says to lower the pin", messages["under"])
+    ok("Remove the new entry or fix the loop" in messages["over"], "a pin below the count says to remove the entry or fix the loop", messages["over"])
+
+    report = Report()
+    check_loop_expensive(report)
+    ok(
+        not [f for row in report.checks for f in row.findings],
+        "the real tree has zero findings on the loop expensive row",
     )
 
     # `import layering` (D63): a lazy `from pipeline import x` inside

@@ -312,6 +312,15 @@
   overflow-wrap: anywhere;
 }
 
+.browse-secttotal {
+  flex: none;
+  margin-left: auto;
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .browse-rowline { display: flex; align-items: center; gap: var(--bn-2); padding-left: var(--bn-3); }
 
 /* one line per card */

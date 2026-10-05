@@ -1677,6 +1677,8 @@ export type SearchGroup = {
   names: string[]
   number: string | null
   printed_total: string | null
+  /** The game's registry key, agreed across the copies, or null. Absent in an older recording. */
+  game?: string | null
 
   /** The whole collector number as a screen draws it, agreed across the copies, or null.
    *

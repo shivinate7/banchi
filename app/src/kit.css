@@ -1810,7 +1810,7 @@ img.bn-crop[data-cropped='true'] {
 .bn-set-op-danger:hover:not(:disabled) { background: var(--bn-danger-tint); }
 .bn-set-op-danger .bn-set-op-detail { color: var(--bn-danger); opacity: 0.8; }
 
-.bn-set-editor { display: flex; flex-direction: column; gap: var(--bn-4); animation: bn-page-in var(--bn-t) var(--bn-ease-out) both; }
+.bn-set-editor { display: flex; flex-direction: column; gap: var(--bn-4); animation: bn-fade var(--bn-t) var(--bn-ease-out) both; }
 .bn-set-back {
   align-self: flex-start;
   display: inline-flex;

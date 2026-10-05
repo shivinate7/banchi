@@ -190,6 +190,7 @@ from harness.tests.t7 import (  # noqa: E402
     photo_recheck,
     engine_sweep,
     free_adopt,
+    match_audit,
     orders,
     server_lanes,
     pipeline_fetch,
@@ -201,6 +202,7 @@ from harness.tests.t7 import (  # noqa: E402
     sets_stock,
     realized_prices,
     preview_crop,
+    read_budget,
 )
 # `t7_box_map.py` imports these names from this module, so they stay reachable here (D264).
 from cli import resolve  # noqa: E402, F401
@@ -244,6 +246,7 @@ CHECK_ORDER = (
     *engine_pick.CHECKS,
     *engine_sweep.CHECKS,
     *free_adopt.CHECKS,
+    *match_audit.CHECKS,
     *auto_setup.CHECKS,
     *photo_recheck.CHECKS,
     *orders.CHECKS,
@@ -257,6 +260,7 @@ CHECK_ORDER = (
     *sets_stock.CHECKS,
     *realized_prices.CHECKS,
     *preview_crop.CHECKS,
+    *read_budget.CHECKS,
 )
 
 

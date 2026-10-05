@@ -54,6 +54,7 @@
     "077-phone-specs-off.md",
     "082-fulfiller-pick-list-slide.md",
     "083-rail-offscreen-tiles.md",
-    "084-demo-chunk-size.md"
+    "084-demo-chunk-size.md",
+    "085-read-budget-miss-paths.md"
   ]
 }

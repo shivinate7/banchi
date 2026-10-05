@@ -309,6 +309,9 @@ class Item:
 
     capture: sidecar.Capture
     prepared: Optional[images.Prepared] = None
+    # A DRY RUN'S STAND-IN FOR `prepared`: `(sent_size, payload_bytes)`, an UPPER BOUND read off
+    # the file header, never a decode. See `_quote_bound`.
+    quoted: Optional[tuple] = None
     # WHERE THIS PHOTOGRAPH STOPPED IN THE PREFLIGHT — see the STAGE_* constants above for
     # why this exists and what `prepared is None` used to be asked to mean on its own.
     stage: str = STAGE_PENDING
@@ -379,12 +382,47 @@ class Item:
         return self.confidence == WEAK_CONFIDENCE
 
 
+def _quote_bound(path, max_edge: int, crop: bool) -> tuple:
+    """`(sent_size, payload_bytes)` that the real send can never exceed, from the header alone.
+
+    THE MONEY GATE: the quote may be cheaper to make than the send, never smaller. The cost
+    reads `sent_size`. A crop is clamped to the frame (`images.card_crop`) and `downscale`
+    never upscales, so each sent edge is at most `min(frame edge, max_edge)`. Without a crop the
+    size is exact (the same `images.downscale_size`). With a crop the box is unknown, so the
+    bound is the product of the per-edge caps, which is at least any crop's scaled size.
+    Bytes: a verbatim send is the file itself. Anything re-encoded is bounded at 3 bytes a pixel
+    (raw RGB; a JPEG at quality 90 is far below it), and a crop keeps the file size in the
+    max too, because a refused or missing box sends the file verbatim."""
+    images._require()
+    try:
+        with images.Image.open(path) as opened:
+            size = opened.size
+    except Exception as exc:
+        raise images.ImageError(f"{path}: {exc}") from exc
+    capped = (min(size[0], max_edge), min(size[1], max_edge))
+    file_bytes = Path(path).stat().st_size
+    if crop:
+        raw = max(file_bytes, capped[0] * capped[1] * 3)
+    else:
+        capped = images.downscale_size(size, max_edge)
+        verbatim = capped == tuple(size) and Path(path).suffix.lower() in images.MEDIA_TYPES
+        raw = file_bytes if verbatim else capped[0] * capped[1] * 3
+    return capped, (raw + 2) // 3 * 4
+
+
+def _sized(item: Item) -> Optional[tuple]:
+    if item.prepared is not None:
+        return item.prepared.sent_size, item.prepared.payload_bytes
+    return item.quoted
+
+
 def _estimate(items: List[Item]) -> Decimal:
     total_input = 0
     for item in items:
-        if item.prepared is None:
+        sized = _sized(item)
+        if sized is None:
             continue
-        width, height = item.prepared.sent_size
+        width, height = sized[0]
         total_input += int(Decimal(width * height) / PIXELS_PER_TOKEN) + SYSTEM_TOKENS
     # QUANTIZED HERE AND NOT IN `cost.usd`, so the printed line is unchanged to the byte:
     # `server/pipeline_routes.py:_ESTIMATE` is a regex over `^estimated cost\s+\$([0-9.]+)$`
@@ -912,34 +950,20 @@ def run(args, say) -> int:
         return 1
 
     roots = selection.roots(store_files.home())
-    captures = []
-    for root in roots:
-        try:
-            captures += sidecar.scan(
-                root,
-                box=getattr(args, "assume_box", None),
-                variant_default=getattr(args, "variant", None),
-            )
-        except FileNotFoundError:
-            say(f"no capture directory at {root}")
-            return 1
-    scanned = len(captures)
-
-    inventory = None
-    if selection.needs_store:
-        # ONE SNAPSHOT FOR THE FILTER, and a second one is taken after the hash pass for the
-        # cache — deliberately, rather than reusing this. The cache consult must see the store
-        # as it is when the send list is decided, and `Inventory.in_state` here is a full-table
-        # pass that a drawer press never pays at all (`needs_store` is four terms, and `box`,
-        # `game` and `keys` are none of them).
-        inventory = store.read().inventory
+    # ONE SNAPSHOT FOR THE FILTER, and a second after the hash pass for the cache, deliberately:
+    # the cache consult must see the store as it is when the send list is decided.
     try:
-        captures = selection_mod.narrow(
+        captures, scanned = selection_mod.resolve(
             selection,
-            captures,
-            inventory=inventory,
+            store_files.home(),
+            read_inventory=lambda: store.read().inventory,
+            assume_box=getattr(args, "assume_box", None),
+            variant_default=getattr(args, "variant", None),
             run_keys=lambda name: _run_keys_of(name, say),
         )
+    except FileNotFoundError as exc:
+        say(f"no capture directory at {exc.filename}")
+        return 1
     except selection_mod.SelectionError as exc:
         say(f"refused: {exc}")
         return 1
@@ -1101,6 +1125,15 @@ def run(args, say) -> int:
         # saves the restructure that would prepare only the unaccepted ones.
         if item.stage != STAGE_PENDING:
             continue
+        if args.dry_run:
+            # NO DECODE: a quote needs the size bound, not the bytes (115 ms a photograph).
+            try:
+                item.quoted = _quote_bound(item.capture.photo, args.max_edge, args.crop)
+            except images.ImageError as exc:
+                item.error = str(exc)
+                item.status = "unreadable"
+                item.stage = STAGE_UNREADABLE
+            continue
         try:
             # CROP TO THE DETECTED CARD BEFORE THE DOWNSCALE, when asked for. Local and free:
             # `images.prepare_located` asks `geometry.locate_card`, the model with `detect_card`
@@ -1139,7 +1172,7 @@ def run(args, say) -> int:
     no_position = [i for i in items if not i.capture.has_position]
 
     # ------------------------------------------------------------------------ preflight
-    payload_bytes = sum(i.prepared.payload_bytes for i in to_send if i.prepared)
+    payload_bytes = sum(_sized(i)[1] for i in to_send if _sized(i))
     chunks = max(1, -(-len(to_send) // batch.MAX_REQUESTS_PER_BATCH))
     say("")
     # WHAT THIS PRESS IS OVER, IN THE SENTENCE EVERY OTHER SITE USES. It said `capture dir` and
@@ -1204,7 +1237,11 @@ def run(args, say) -> int:
         say(f"can read        {pre['can_read']} of {len(to_send)} by the pool rules")
         for code, count in sorted(pre["unread"].items()):
             say(f"unread          {count} {code}")
-    if args.crop:
+    if args.crop and args.dry_run:
+        # No detected box is stored anywhere (the finder runs at identify time), so a crop
+        # cannot be priced without decoding: whole frames are the upper bound.
+        say("crop            priced as whole frames")
+    elif args.crop:
         # NAMED IN THE PREFLIGHT because it changes the bytes, and the preflight's whole job
         # is to say what is about to be sent. A refusal count of anything but zero is worth
         # seeing before spending: it means some cards are going as whole frames at whole-frame
