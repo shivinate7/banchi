@@ -321,3 +321,125 @@ test.describe('the name -> variant chooser draws real collisions distinctly', ()
     await expect(page.locator('.browse-boxcell', { hasText: 'pick a printing' })).toBeVisible()
   })
 })
+
+/* THE "N printings · change" CHIP (owner report). Three printings of Dredge Up over two
+ * boxes. The chip in the card pane must lead back to the chooser, whether the operator
+ * walked away by picking a box-list card or by nothing at all. */
+const ALPHA = group({ sku: '7001', name: 'Dredge Up', number: '044', set: 'Alpha Set', rarity: 'Rare', condition: 'Near Mint', key: '1/1', box: 1, index: 1 })
+ALPHA.copies.push(group({ sku: '7001', name: 'Dredge Up', number: '044', set: 'Alpha Set', rarity: 'Rare', condition: 'Near Mint', key: '2/2', box: 2, index: 2 }).copies[0]!)
+const DREDGE = [
+  ALPHA,
+  group({ sku: '7002', name: 'Dredge Up', number: '044', set: 'Beta Set', rarity: 'Rare', condition: 'Near Mint', key: '1/2', box: 1, index: 2 }),
+  group({ sku: '7003', name: 'Dredge Up', number: '044', set: 'Gamma Set', rarity: 'Rare', condition: 'Near Mint', key: '2/1', box: 2, index: 1 }),
+]
+const DREDGE_CARDS = {
+  1: {
+    '1/1': card({ box: 1, index: 1, name: 'Dredge Up', number: '044', sku: '7001', condition: 'Near Mint' }),
+    '1/2': card({ box: 1, index: 2, name: 'Dredge Up', number: '044', sku: '7002', condition: 'Near Mint' }),
+  },
+  2: {
+    '2/1': card({ box: 2, index: 1, name: 'Dredge Up', number: '044', sku: '7003', condition: 'Near Mint' }),
+    '2/2': card({ box: 2, index: 2, name: 'Dredge Up', number: '044', sku: '7001', condition: 'Near Mint' }),
+  },
+} as Record<number, Record<string, unknown>>
+
+/* Same query, two cards: a prefix that names Dredge Up twice and Dredger once. */
+const DREDGE_MIXED = [
+  DREDGE[0],
+  DREDGE[1],
+  group({ sku: '7100', name: 'Dredger', number: '051', set: 'Alpha Set', rarity: 'Common', condition: 'Near Mint', key: '2/1', box: 2, index: 1 }),
+]
+
+async function openDredge(page: Page): Promise<void> {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  await page.route(/\/photo\/\d+\/\d+/, (r) => r.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG }))
+  await page.route(/\/pipeline\/runs$/, (r) => r.fulfill(json({ runs: [] })))
+  await page.route(/\/boxes$/, (r) =>
+    r.fulfill(
+      json({
+        boxes: [1, 2].map((box) => ({
+          box, bid: box, name: null, sections: [], state: 'open', capacity: 100,
+          fill: 2, next_index: 3, cards: 2,
+          on_hand: 2, sold: 0, retired: 0, moved: 0, listed: 0,
+          sections_detail: [{ section: 1, start: 1, end: 2, count: 2 }],
+        })),
+      }),
+    ),
+  )
+  await page.route(/\/inventory\/(\d+)$/, (r) => {
+    const box = Number(/inventory\/(\d+)$/.exec(r.request().url())![1])
+    return r.fulfill(json({ version: 2, cards: DREDGE_CARDS[box] ?? {}, listings: {} }))
+  })
+  await page.route(/\/search\?/, (r) => {
+    const q = new URL(r.request().url()).searchParams.get('q') ?? ''
+    const asked = q.trim().toLowerCase()
+    // The copies panel re-searches by the picked SKU; answer with that printing's group.
+    const bySku = [...DREDGE, ...DREDGE_MIXED].filter((g) => g?.sku === q.trim())
+    return r.fulfill(json({ query: q, groups: asked === 'dred' ? DREDGE : asked === 'dredg' || asked === 'dredger' ? DREDGE_MIXED : bySku.slice(0, 1) }))
+  })
+  await page.route(/\/graveyard(\?.*)?$/, (r) => r.fulfill(json({ departed: [] })))
+  await page.route(/\/queues$/, (r) => r.fulfill(json({ review: [], parked: [] })))
+  await page.route(/\/orders$/, (r) => r.fulfill(json({ orders: [], updated_at: null })))
+  await page.goto('/#/inventory')
+  await settleFonts(page)
+  await expect(page.locator('main').first()).toBeVisible()
+}
+
+for (const width of [1440, 820]) {
+  test.describe(`the printings chip leads back to the chooser at ${width}`, () => {
+    test.use({ viewport: { width, height: 900 } })
+
+    async function pickAndWalk(page: Page): Promise<void> {
+      await openDredge(page)
+      await page.getByPlaceholder('Search').fill('dred')
+      await expect(page.locator('.browse-variants-lede')).toHaveText('3 printings match.')
+      await page.locator('.browse-variant-tile').first().click()
+      await expect(page.getByRole('heading', { name: 'Dredge Up' })).toBeVisible()
+    }
+    async function pressChange(page: Page): Promise<void> {
+      await page.getByRole('button', { name: /3 printings/ }).click()
+      await expect(page.locator('.browse-variants-lede')).toHaveText('3 printings match.')
+      await expect(page.locator('.browse-variant-tile')).toHaveCount(3)
+      await expect(page.locator('.browse-variants').locator(':focus').or(page.locator('.browse-variants:focus-within'))).toHaveCount(1)
+      await page.locator('.browse-variant-tile').nth(2).click()
+      await expect(page.locator('.browse-variants')).toHaveCount(0)
+      await expect(page.getByRole('heading', { name: 'Dredge Up' })).toBeVisible()
+      await expect(page.locator('.browse-side')).toContainText('7003') // the pane draws the SKU, not the set
+    }
+
+    test('no row selected by hand: change shows the chooser', async ({ page }) => {
+      await pickAndWalk(page)
+      await pressChange(page)
+    })
+
+    test('a box-list card selected by hand: change still shows the chooser', async ({ page }) => {
+      await pickAndWalk(page)
+      await page.locator('.browse-boxcell', { hasText: 'Box 2' }).click()
+      await page.locator('.browse-row', { hasText: 'Dredge Up' }).last().click()
+      await pressChange(page)
+    })
+  })
+}
+
+test('with several different cards matching, the chip says matches and opens the picker, exact name first', async ({ page }) => {
+  // OWNER'S RULING: more than one match means "change" opens the same picker as finishes and
+  // sets, listing every match, different cards included, the exact name first. The chip may
+  // not call different cards "printings". Today the chip is dead here (`groupsAreSamePrinting`
+  // keeps `chooserActive` false) and says "printings".
+  await openDredge(page)
+  const answered = page.waitForResponse(/\/search\?/)
+  await page.getByPlaceholder('Search').fill('dredger')
+  await answered
+  await page.waitForTimeout(500) // keep: half second settle, no loading marker
+  const chip = page.getByRole('button', { name: /3 matches/ })
+  await expect(chip).toBeVisible()
+  await expect(page.getByText('printings', { exact: false })).toHaveCount(0)
+  await chip.click()
+  const tiles = page.locator('.browse-variants .browse-variant-tile')
+  await expect(tiles).toHaveCount(3)
+  await expect(tiles.first()).toContainText('Dredger')
+  await expect(page.locator('.browse-variants:focus-within')).toHaveCount(1)
+  await tiles.nth(1).click()
+  await expect(page.locator('.browse-variants')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Dredge Up' })).toBeVisible()
+})
