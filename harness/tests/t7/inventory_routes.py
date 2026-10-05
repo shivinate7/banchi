@@ -2955,12 +2955,39 @@ def check_card_decoration_one_home(checks: Checks) -> None:
             except Exception as caught:  # noqa: BLE001 - any raise is the finding
                 return {"raised": type(caught).__name__}
 
-        fields = ("number_display", "listing", "listing_differs", "reading_differs", "label", "section", "place")
+        # Listing facts ride only the routes that carried them before this home existed: the
+        # box route and `_card_row`. The other three keep their read budgets (efficiency.md,
+        # "The ratchet"), so they must match on the shared fields and carry no listing facts.
+        # `/inventory/copies` also leaves `neighbors` and `section_gaps` null on purpose.
+        listing_keys = ("listing", "listing_differs", "reading_differs")
+        listing_routes = ("box", "card_row")
+        shared = ("number_display", "label", "section", "place")
+
+        def trim(record, name):
+            view = {f: record.get(f) for f in shared}
+            if name == "copies" and isinstance(view["place"], dict):
+                view["place"] = {k: v for k, v in view["place"].items() if k not in ("neighbors", "section_gaps")}
+            return view
+
         got = {name: outcome(fn) for name, fn in routes().items()}
-        base = {f: got["box"].get(f) for f in fields}
-        checks.ok(base["listing"] is not None and base["label"], "the reference card carries listing facts and a label", str(base))
+        base_full = got["box"]
+        base = trim(base_full, "box")
+        checks.ok(
+            base_full.get("listing") is not None and base_full.get("label"),
+            "the reference card carries listing facts and a label", str(base),
+        )
         for name, record in got.items():
-            checks.equal({f: record.get(f) for f in fields}, base, f"{name} yields the same decoration as the box route")
+            checks.equal(trim(record, name), trim(base_full, name), f"{name} yields the same decoration as the box route")
+            if name in listing_routes:
+                checks.equal(
+                    {f: record.get(f) for f in listing_keys}, {f: base_full.get(f) for f in listing_keys},
+                    f"{name} carries the same listing facts as the box route",
+                )
+            else:
+                checks.ok(
+                    not any(f in record for f in listing_keys),
+                    f"{name} carries no listing facts, so its read budget does not rise", str(sorted(record)),
+                )
 
         real = capture_server._Places.of
         def broken(self, box, index):
