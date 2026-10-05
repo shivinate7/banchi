@@ -465,15 +465,29 @@ def audit(say, *, write: bool = False) -> int:
     the write only, and re-checks each card is still the one that was read. A card the reader
     cannot accept is counted "not checked", never a disagreement. In stock goes to Review as
     `free_reader_disagrees` with its photo; sold is only listed."""
+
+    if not match.status()["ready"]:
+        say("match audit    not ready: the model file or the fingerprints are missing. Run `match prepare`.")
+        return sweep.EXIT_NOT_READY
+    lock = sweep.acquire_lock()  # the sweep's own lock: the two never load the model together
+    if lock is None:
+        say("match audit    the background reader is running and holds the model. Turn the Rig switch off, or wait, then run it again.")
+        return 1
+    try:
+        return _audit_locked(say, write)
+    finally:
+        lock.close()
+
+
+def _audit_locked(say, write: bool) -> int:
     from pipeline import games
     from pipeline.routing import FREE_READER_DISAGREES
     from store import master
     from store.queues import QueueEntry
 
-    if not match.status()["ready"]:
-        say("match audit    not ready: the model file or the fingerprints are missing. Run `match prepare`.")
-        return sweep.EXIT_NOT_READY
-    inventory = Store().read().inventory
+    os.nice(10)  # the sweep's own level: the capture server and the feeder come first
+    snapshot = Store().read()
+    inventory, in_review = snapshot.inventory, set(snapshot.review.entries)
     requests, meta = [], {}
     for key, card in sorted(inventory.cards.items()):
         path = photos.find(card.cid) if card.cid else None
@@ -490,26 +504,33 @@ def audit(say, *, write: bool = False) -> int:
         say(f"match audit    not ready: the reader's runtime is not installed ({exc.name or exc})")
         return sweep.EXIT_NOT_READY
     per_card = (time.time() - started) / len(requests) if requests else 0.0
-    unchecked, found = 0, []
+    unchecked, found, skipped = {}, [], 0
     for result in results:
         card, path = meta[result.key]
         if not (result.accepted and result.payload is not None):
-            unchecked += 1
+            code = str(result.code or "unread")
+            unchecked[code] = unchecked.get(code, 0) + 1
             continue
         bad = _disagrees(card, result.payload)
-        sold = card.state == master.SOLD
+        gone = card.state in master.TERMINAL_STATES
+        held = result.key in in_review
         say(f"{result.key:<8} {'disagree' if bad else 'agree':<9} filed {card.sku or 'no SKU'} as {card.read_name} {card.read_number}"
             + (f"; free read {result.payload.get('name')} {result.payload.get('number')}" if bad else "")
-            + ("; sold" if sold else ""))
-        if bad and card.state not in master.TERMINAL_STATES:
-            found.append((result, card, path))
+            + (f"; {card.state}" if gone else "") + ("; already in review" if bad and not gone and held else ""))
+        if bad and not gone:
+            if held:
+                skipped += 1  # a card already in review keeps its entry, whatever the reason
+            else:
+                found.append((result, card, path))
     queued = 0
     if write and found:
         with Store().write() as writable:  # the only lock, held for the write alone
             for result, card, path in found:
                 now = writable.inventory.cards.get(result.key)
-                if now is None or now.state in master.TERMINAL_STATES or now.cid != card.cid:
-                    continue  # moved since the read: the answer is about another photograph
+                if (now is None or now.state in master.TERMINAL_STATES or now.cid != card.cid
+                        or (now.read_name, now.read_number) != (card.read_name, card.read_number)
+                        or result.key in writable.review.entries):
+                    continue  # changed since the read: the answer is about another card or photograph
                 payload = result.payload
                 queued += writable.review.upsert(QueueEntry(
                     position=result.key, box=now.box, index=now.index,
@@ -518,8 +539,12 @@ def audit(say, *, write: bool = False) -> int:
                     read={"name": payload.get("name"), "number": payload.get("number"),
                           "printed_total": payload.get("printed_total"), "set_hint": now.set_hint},
                     confidence=now.confidence, reason=FREE_READER_DISAGREES, market=None,
+                    candidates=[{"name": payload.get("name"), "number": payload.get("number"),
+                                 "printed_total": payload.get("printed_total"), "found_by": "free_reader"}],
                 ))
-    say(f"match audit    {len(requests)} read, {unchecked} not checked, {len(found)} in stock disagree, "
+    why = ", ".join(f"{code} {n}" for code, n in sorted(unchecked.items()))
+    say(f"match audit    {len(requests)} read, {sum(unchecked.values())} not checked" + (f" ({why})" if why else "")
+        + f", {len(found)} in stock disagree, {skipped} already in review, "
         f"{queued} queued for Review ({per_card:.2f} s per card)"
         + ("" if write else "; nothing written, add --write to queue them"))
     return 0
