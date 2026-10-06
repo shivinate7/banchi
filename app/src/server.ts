@@ -3024,6 +3024,8 @@ export async function fetchLiveExport(): Promise<LiveExportFetched> {
     await new Promise((resolve) => setTimeout(resolve, LIVE_READ_POLL_MS))
     const now = await getPricesRefresh()
     if (now.state === 'running') continue
+    /* A RUN THAT WAS SKIPPED (another refresh held the lock) OR FAILED NEVER HANDS BACK THE PREVIOUS RUN'S FILE. */
+    if (now.state !== 'done') throw new Error(now.note?.skipped?.message || now.note?.message || 'The live listings could not be read.')
     const listings = now.note?.steps?.['listings'] as { ok: boolean; fetched?: string; message?: string } | undefined
     if (listings?.ok === true && typeof listings.fetched === 'string') return { ok: true, fetched: listings.fetched } as LiveExportFetched
     throw new Error(listings?.message || 'The live listings could not be read.')

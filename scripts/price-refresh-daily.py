@@ -48,7 +48,8 @@ def run():
 
     answer = pipeline_routes.do_prices_refresh()
     if answer.get("running"):
-        log("skipped: a refresh is already running")
+        pricerefresh.note_skip("Skipped: another refresh is running.")
+        log("skipped: another refresh is running")
         return 0
     for name, step in (pricerefresh.read_status() or {}).get("steps", {}).items():
         extra = {key: value for key, value in step.items() if key not in ("at", "ok")}

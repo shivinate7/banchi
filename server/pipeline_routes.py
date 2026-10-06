@@ -7497,7 +7497,9 @@ def _game_catalog(group: List[str], game: str) -> Tuple[Optional[str], str]:
             payload = {"scope": "category"}
         else:
             payload = {"set_ids": sorted({i for ids in sets for i in ids})}
-        return do_pipeline_export(group[0], {**payload, "game": game, "refresh": True, "partial": True})["file"], ""
+        # `partial` ONLY FOR A RUN THAT HOLDS MORE THAN ONE GAME: a single-game run is checked in full.
+        many = len(_run_games(group[0])) > 1
+        return do_pipeline_export(group[0], {**payload, "game": game, "refresh": True, **({"partial": True} if many else {})})["file"], ""
     except PipelineRefusal as refusal:
         return None, str(refusal)
     except tcg_export.FetchRefusal as refusal:
@@ -7636,22 +7638,30 @@ def do_live_export_rejoined() -> Tuple[HTTPStatus, dict]:
     return do_prices_refresh_start({"force": True}, history=None)
 
 
+#: What the status file says when another refresh holds the lock. The screen draws this sentence.
+SKIPPED_SENTENCE = "Skipped: another refresh is running."
+
+
 def _refresh_worker(history: Optional[str]) -> None:
     def progress(step: str, done: int, total: int) -> None:
         with _REFRESH_LOCK:
             _REFRESH.update(step=step, done=done, total=total)
 
     state = "failed"
+    skipped = False
     try:
         answer = do_prices_refresh(progress, history=history)
-        state = "idle" if answer.get("running") else "done" if answer["ok"] else "failed"
+        skipped = bool(answer.get("running"))
+        if answer.get("running"):
+            pricerefresh.note_skip(SKIPPED_SENTENCE)
+        state = "failed" if answer.get("running") or not answer["ok"] else "done"
     except Exception as caught:  # noqa: BLE001 - named in the note, never silent
         files.log_cause("prices refresh", caught)
         pricerefresh.note_step("refresh", False, message=files.plain_cause(caught))
     finally:
         with _REFRESH_LOCK:
-            # ONLY "Refresh now" ARMS THE REUSE WINDOW; the Live tab's press is its own.
-            _REFRESH.update(state=state, step=None, **({"finished_at": time.time()} if history is not None else {}))
+            # ONLY A "Refresh now" THAT RAN ARMS THE REUSE WINDOW; the Live tab's press is its own, and a skip fetched nothing.
+            _REFRESH.update(state=state, step=None, **({"finished_at": time.time()} if history is not None and not skipped else {}))
 
 
 def do_prices_refresh_start(payload: dict, history: Optional[str] = "stale") -> Tuple[HTTPStatus, dict]:
@@ -8937,7 +8947,12 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
                 f"{caught}",
             ) from None
 
-    answers_for = [asked["game"]] if plan is None else [game for game in plan.by_game if plan.by_game[game] == target]
+    # A PARTIAL FETCH STILL ANSWERS FOR THE ASKED GAME ONLY IF THE FILE'S OWN PRODUCT LINE SAYS IT IS THAT GAME.
+    answers_for = (
+        ([asked["game"]] if asked["game"] in claimed else [])
+        if plan is None
+        else [game for game in plan.by_game if plan.by_game[game] == target]
+    )
     if not answers_for:
         # NOT THE PRICING TAB. Since D65 `_scope_for_run` names `CategoryId` from the run's
         # own game, so the portal's saved filter is not consulted and cannot be what is

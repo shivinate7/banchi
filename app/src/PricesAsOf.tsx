@@ -97,6 +97,7 @@ function percent(state: PricesRefreshState): number {
 /** The sentence of the failed step, or the note's own. */
 function failureOf(state: PricesRefreshState): string {
   const note = state.note
+  if (note?.skipped?.message) return note.skipped.message
   if (note?.ok === false && note.message) return note.message
   for (const step of Object.values(note?.steps ?? {})) if (step !== undefined && !step.ok && step.message) return step.message
   return 'The refresh did not finish.'

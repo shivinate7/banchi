@@ -4801,7 +4801,7 @@ export type PricesRefreshState = {
   step: 'listings' | 'catalog' | 'join' | 'history' | null
   done: number
   total: number
-  note: { at?: number; ok?: boolean; message?: string; steps?: Record<string, RefreshStep | undefined> } | null
+  note: { at?: number; ok?: boolean; message?: string; skipped?: { at: number; message: string }; steps?: Record<string, RefreshStep | undefined> } | null
 }
 
 /** `GET /pipeline/price-facts?sku=`: everything the product sheet says about one card's prices and

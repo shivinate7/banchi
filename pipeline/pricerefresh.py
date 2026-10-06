@@ -144,6 +144,13 @@ def note_step(name: str, ok: bool, at: Optional[int] = None, **info) -> dict:
     return note
 
 
+def note_skip(message: str) -> None:
+    """Record that a refresh was skipped because another holds the lock. The next run that finishes
+    drops it (`run` keeps only the trends and steps notes)."""
+    with _locked(status_path()):
+        _write(status_path(), {**(read_status() or {}), "skipped": {"at": int(time.time()), "message": message}})
+
+
 def run(fetch: Callable[[], dict], now: Optional[int] = None) -> dict:
     """Fetch once; write the note either way; return it. Never raises on a refused fetch."""
     at = int(time.time()) if now is None else int(now)
