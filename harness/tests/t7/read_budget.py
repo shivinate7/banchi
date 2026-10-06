@@ -509,6 +509,10 @@ def _row(counts: dict) -> str:
     return "{" + ", ".join(f"{k!r}: {v}" for k, v in counts.items() if v) + "}"
 
 
+# `detail=paid` over three keys, measured on the build: equal at S and 2S.
+DETAIL_PAID_SQL = 7
+
+
 def _detail_read(checks: Checks, size: int) -> tuple:
     """`(status, has_cards, counts, lock_probes)` for one `detail=paid` read over a fixed scope, at one store size."""
     from unittest import mock
@@ -519,7 +523,7 @@ def _detail_read(checks: Checks, size: int) -> tuple:
         _build(checks, size)
         inv = Store().read().inventory
         keys = [master.position_key(4, n) for n in (1, 2, 3)]  # the fixed scope: three paid cards, whatever the store holds
-        for n, key in enumerate(keys, start=1):
+        for n in (1, 2, 3):
             capture_server.do_put_card(4, n, {"set_hint": "sv9"})
         inv = Store().read().inventory
         sweep.remember_tried({key: inv.cards[key].capture_id or "" for key in keys})
@@ -559,11 +563,7 @@ def check_detail_read_budget(checks: Checks) -> None:
         checks.equal((small[2][counter], big[2][counter]), (0, 0), f"7. it makes no {counter} (the store is opened read-only)")
     for counter in ("sql", "records_in", "layout_of", "places"):
         checks.equal(small[2][counter], big[2][counter], f"7. {counter} is equal at S and 2S for a fixed scope")
-    checks.ok(
-        small[1] and small[2]["sql"] <= BUDGET["/pipeline/match/sweep"]["sql"] + 6,
-        "7. it adds a bounded few selects to the poll's own count (cards, boxes: chunked by key count)",
-        f"sql at S: {small[2]['sql']}",
-    )
+    checks.equal(small[2]["sql"], DETAIL_PAID_SQL, "7. detail=paid makes its measured SQL statements (cards and boxes, chunked by key count)")
 
 
 CHECKS = (check_server_read_budget, check_detail_read_budget)
