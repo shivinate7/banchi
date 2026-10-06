@@ -7785,8 +7785,22 @@ def do_price_facts(sku: str) -> dict:
         if tables:
             ledger = _unsent_ledger(snapshot.inventory, tables)
     at = None if reading is None else int(reading.at)
-    if reading is not None and reading.kind == store_readings.KIND_RUN and row is not None and row.get("snap_at"):
+    prices = None if reading is None else {
+        "market": reading.market,
+        "low": reading.low,
+        "low_with_shipping": reading.low_with_shipping,
+        "direct_low": reading.direct_low,
+    }
+    # THE ROW'S OWN READ WINS WHENEVER IT IS AS NEW AS THE TABLE'S: one source, one second, so the row
+    # and the sheet never show two times (or two figures) for one card, even on a tie with a live read.
+    if row is not None and row.get("snap_at") and (reading is None or int(row["snap_at"]) >= int(reading.at) or reading.kind == store_readings.KIND_RUN):
         at = int(row["snap_at"])
+        snap = row.get("snap") or {}
+        if snap.get("market"):
+            prices = {
+                "market": snap["market"], "low": snap.get("low"),
+                "low_with_shipping": snap.get("low_with_shipping"), "direct_low": snap.get("direct_low"),
+            }
     listed = None
     if row is not None:
         listed = (row.get("row") or {}).get(tcgcsv.LIVE_QUANTITY_COLUMN)
@@ -7795,12 +7809,7 @@ def do_price_facts(sku: str) -> dict:
         "name": (reading.name if reading is not None else None) or (row or {}).get("name"),
         "at": at,
         "through": saved.get("through"),
-        "prices": None if reading is None else {
-            "market": reading.market,
-            "low": reading.low,
-            "low_with_shipping": reading.low_with_shipping,
-            "direct_low": reading.direct_low,
-        },
+        "prices": prices,
         "shelf": None if row is None else {
             "on_hand": None if ledger is None else ledger.on_hand.get(sku, 0),
             "can_be_sent": None if ledger is None else len(ledger.unsent.get(sku, [])),
