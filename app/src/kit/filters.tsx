@@ -390,7 +390,10 @@ export function SortHeader<K extends string>({
       data-active={active ? 'true' : undefined}
       onClick={press}
     >
-      <span className="bn-sortth-label">{children}</span>
+      <span className="bn-sortth-label">
+        {children}
+        {grid ? <span className="bn-sortth-box" aria-hidden="true" /> : null}
+      </span>
       {grid ? (
         <span className="bn-sortth-mark">{active ? <Icon name={dir === 'asc' ? 'chevronUp' : 'chevronDown'} size={12} /> : null}</span>
       ) : (

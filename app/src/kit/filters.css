@@ -122,7 +122,25 @@
   text-transform: inherit;
   white-space: nowrap;
   color: inherit;
+  gap: var(--bn-2); /* the chevron sits clear of the hover box, which reaches one --bn-2 past the label */
 }
+/* THE HOVER BOX HUGS THE LABEL: it is its own element, centred on the label and reaching past it by
+   the same padding on both sides, so the label never moves. The chevron is outside it. Hover paints
+   `background-color`, the one property it animates. */
+.bn-sortth-grid .bn-sortth-label { position: relative; isolation: isolate; }
+.bn-sortth-box {
+  position: absolute;
+  z-index: -1;
+  inset-inline: calc(var(--bn-2) * -1);
+  top: 50%;
+  height: var(--bn-control-h-lg);
+  translate: 0 -50%;
+  border-radius: var(--bn-r-sm);
+  pointer-events: none;
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-sortth-grid:hover { background: none; }
+.bn-sortth-grid:hover .bn-sortth-box { background: var(--bn-hover); }
 .bn-sortth-grid[data-active='true'] { color: var(--bn-ink); }
 .bn-sortth-mark { display: inline-flex; flex: none; width: var(--bn-3); color: var(--bn-accent); }
 /* THE ACTIVE COLUMN IS MARKED IN TWO CHANNELS, not only the chevron a squint could miss
