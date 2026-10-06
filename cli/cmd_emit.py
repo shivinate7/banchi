@@ -411,7 +411,7 @@ def _out(run_dir, name, args):
     return Path(own) / name if own else run_dir.path(name)
 
 
-def _claim_or_refuse(writable, going, basis, args, priced=()) -> None:
+def _claim_or_refuse(writable, going, basis, args, priced=(), takes=()) -> None:
     """Check every live send claim and the plan's basis, then claim. One transaction.
 
     `going` is SKU -> the copies this press's file adds. Called at the top of the store write
@@ -424,9 +424,12 @@ def _claim_or_refuse(writable, going, basis, args, priced=()) -> None:
     from store import sendclaims
 
     own = getattr(args, "send_claim", None)
+    # A TAKE-OFF IS CLAIMED AT 0 COPIES, as a price-only row is, and its SKU's counts are
+    # checked for a move since the plan was read.
+    priced = list(priced) + list(takes)
     conflicts = writable.send_claims.overlap(set(going) | set(priced), excluding=own)
     stale = []
-    for sku in sorted(going):
+    for sku in sorted(set(going) | set(takes)):
         entry = writable.inventory.listings.get(sku)
         now = (int(entry.pushed), int(entry.staged)) if entry is not None else (0, 0)
         if now != basis.get(sku, (0, 0)):
@@ -690,6 +693,106 @@ def _record_prices(writable, changes, run) -> None:
 def _price_row(match, price):
     """One price-only row: the catalogue's own row, Add to Quantity 0, the plan's price."""
     return tcgcsv.set_writable(match.row, add_to_quantity=0, marketplace_price=price)
+
+
+class _Take:
+    """One held SKU's take-off row: shaped like `merge.MergedSku`, so `merge.import_rows` and the
+    merged path's file split carry it with no second writer. `match` is itself, a bare row and a
+    negative `add_to_quantity` (D100, the owner's ruling: a hold takes live copies off)."""
+
+    sub_threshold = False
+
+    def __init__(self, sku, name, game, price, count, row, live_after):
+        self.sku, self.name, self.game, self.price = sku, name, game, price
+        self.count, self.row, self.add_to_quantity = count, row, -count
+        self.live_after = live_after
+
+    @property
+    def match(self):
+        return self
+
+
+def _takeoffs(resolved_list, withheld, inventory, args):
+    """`(takes, blocked)`: the held SKUs whose live copies this press takes off TCGplayer.
+
+    THE OWNER'S RULING (D100's open question): a SKU the owner holds (`bullish`, `keeping`,
+    `next_batch`) with copies Banchi sent gets ONE row, `Add to Quantity` minus those copies,
+    never more than the newest live read says TCGplayer holds. THE NEWEST READ IS THE PRESS'S
+    OWN LIVE EXPORT (`--live-guard`), else the store's own reading. `blocked` names a held SKU
+    with sent copies and no read at all: that row is refused, never guessed. (A live export
+    taken just after a publish can only read LOW, which takes fewer copies, never more.)
+    """
+    guard = _live_guard(args)
+    read = guard[1] if guard else {}
+    live_price = {}
+    if getattr(args, "live_guard", None):
+        live_price = sendguard.live_prices(tcgcsv.read_export(Path(args.live_guard)).rows)
+    takes: Dict[str, _Take] = {}
+    blocked: List[Tuple[str, str]] = []
+    for resolved in resolved_list:
+        for game_join in resolved.joins.values():
+            for sku, match in game_join.report.matches.items():
+                hold = withheld.get(sku)
+                listing = inventory.listings.get(sku)
+                if hold is None or hold.reason not in decisions.WITHHOLD_REASONS:
+                    continue
+                if sku in takes or listing is None or int(listing.pushed) <= 0:
+                    continue
+                if sku in read:
+                    live = read[sku]
+                elif listing.live_as_of is not None:
+                    live = match.live_out if match.live_out is not None else listing.live
+                else:
+                    blocked.append((sku, match.name))
+                    continue
+                live = max(0, int(live))
+                count = min(int(listing.pushed), live)
+                if count <= 0:
+                    continue
+                # THE PRICE IS THE ONE TCGPLAYER ALREADY SHOWS, so the row moves nothing but the
+                # quantity: the live export's, else the catalogue row's own, else the join's.
+                price = live_price.get(sku) or match.row.get(tcgcsv.PRICE_COLUMN) or match.list_price
+                if not price:
+                    blocked.append((sku, match.name))
+                    continue
+                takes[sku] = _Take(
+                    sku, match.name, game_join.game, price, count, match.row, live - count
+                )
+    return takes, blocked
+
+
+def _refuse_no_read(blocked, say) -> int:
+    for sku, name in blocked[:8]:
+        say(f"{name} ({sku}) is held and has copies on TCGplayer, and there is no live read "
+            "to say how many. Read live first.")
+    say("REFUSING to write. Nothing was written.")
+    return 1
+
+
+def _say_takeoffs(takes, say) -> None:
+    """Name the copies coming off, then print the one JSON line the route reads."""
+    if not takes:
+        return
+    import json
+
+    total = sum(t.count for t in takes.values())
+    say("")
+    say(f"{'taken off':<16} {total} {'copy' if total == 1 else 'copies'} came off TCGplayer "
+        "(held cards, Add to Quantity below 0)")
+    for take in list(takes.values())[:8]:
+        say(f"{'':<16} {take.sku} {take.name} — minus {take.count}")
+    say(json.dumps({"send_takeoff": {t.sku: t.count for t in takes.values()}}, sort_keys=True))
+
+
+def _apply_takeoffs(writable, takes) -> None:
+    """Inside the press's store write: the taken copies are unsent again and not live.
+
+    `pushed` falls by the copies taken and `live` by the same, so `cli/resolve.py:_copies_out`
+    no longer holds them and an unhold sends them again. The cards never leave their box."""
+    for take in takes.values():
+        listing = writable.inventory.listings[take.sku]
+        listing.bump(master.PUSHED, -take.count)
+        listing.set(master.LIVE, take.live_after)
 
 
 def _keep_listed(changes, sub_skus, args, say):
@@ -1258,6 +1361,11 @@ def run(args, say) -> int:
     # SKU is TCGplayer-global — and unlike `dispositions` they are never scoped
     # per game, because nothing refuses on an unknown one.
     withheld = set(choice.withheld())
+    # A HOLD TAKES ITS LIVE COPIES OFF (D100, the owner's ruling). Refused before any file when
+    # a held card has sent copies and no live read.
+    takes, blocked = _takeoffs([resolved], choice.withheld(), snapshot.inventory, args)
+    if blocked:
+        return _refuse_no_read(blocked, say)
     say("")
     try:
         unknown = set(choice.dispositions()) - set(resolved.matches)
@@ -1331,6 +1439,8 @@ def run(args, say) -> int:
             say,
         )
         zero, changes = _zero_rows_single(resolved, priced, changes, args, say)
+        for take in takes.values():
+            zero[take.game]["listed"] += merge.import_rows([take])
         # NOTHING LEFT TO SEND, SAID TRULY AND AS THE MERGED PATH SAYS IT (R3-3, R4 F4). A card
         # with no price stays back, and so does a priced card under the cut-off when
         # `--listed-only` is set. The flag is obeyed here as the merged plan obeys it.
@@ -1351,7 +1461,7 @@ def run(args, say) -> int:
             if args.listed_only and sku in below
         ]
         sendable = len(adding) > len(cut_back)
-        if (no_price or cut_back) and not sendable and not changes:
+        if (no_price or cut_back) and not sendable and not changes and not takes:
             # EVERY LEFT-OUT CARD IS NAMED, as the merged path names it (R6-5).
             unpriced = {sku for sku, _ in no_price}
             under = {sku for sku, _ in cut_back}
@@ -1443,6 +1553,7 @@ def run(args, say) -> int:
             say(f"{'':<16} {match.sku} — {_adds_nothing(match.sku, match, trimmed_out)}")
     _say_quantities(_quantities_for(args), resolved.matches, say)
     _say_prices(changes, left, moves, args, say)
+    _say_takeoffs(takes, say)
 
     # ---------------------------------------------------------- pushed, and the audit trail
     #
@@ -1476,7 +1587,8 @@ def run(args, say) -> int:
     }
     try:
         with store.write() as writable:
-            _claim_or_refuse(writable, going, basis, args, [c.sku for c in changes])
+            _claim_or_refuse(writable, going, basis, args, [c.sku for c in changes], list(takes))
+            _apply_takeoffs(writable, takes)
             pushed, pushed_skus, unstamped = _stamp_single(
                 writable, resolved, emitted, priced_flat, run_dir, sku_game, sku_source
             )
@@ -1488,7 +1600,7 @@ def run(args, say) -> int:
         return 1
     return _after_single(
         args, say, resolved, run_dir, listed_skus, sub_skus, pushed, pushed_skus,
-        queue_line, stages, len(changes), disputed_positions, unstamped,
+        queue_line, stages, len(changes), disputed_positions, unstamped, bool(takes),
     )
 
 
@@ -1662,7 +1774,7 @@ def _stamp_single(writable, resolved, emitted, priced_flat, run_dir, sku_game, s
 
 def _after_single(
     args, say, resolved, run_dir, listed_skus, sub_skus, pushed, pushed_skus, queue_line, stages,
-    repriced=0, disputed_positions=(), unstamped=(),
+    repriced=0, disputed_positions=(), unstamped=(), took=False,
 ) -> int:
     """What the single-run path says once its write has committed."""
     # ONLY WHEN SOMETHING REACHED A FILE. D54: the record is created by the first emit that
@@ -1704,6 +1816,9 @@ def _after_single(
         # A FILE OF PRICE CHANGES ONLY: every row carries Add to Quantity 0, so no copy was
         # counted, and the file above is the one to send.
         say(f"price changes only — {repriced} card(s) already live, no copy added.")
+        return 0
+    if not wrote_any and took:
+        say("copies taken off only — the file above is the one to send.")
         return 0
     if not wrote_any:
         # NOTHING NEW WENT ANYWHERE, AND SAYING SO IS THE POINT OF THIS BRANCH. Every copy
@@ -1990,6 +2105,14 @@ def _run_merged(args, say) -> int:
     )
     changed = {change.sku for change in changes}
     rows = rows + [row for row in merged_plan.skus if row.sku in changed]
+    # A HOLD TAKES ITS LIVE COPIES OFF (D100, the owner's ruling), one row per held SKU, filed
+    # with the plan's rows by `_Take`'s own shape.
+    takes, blocked = _takeoffs(
+        resolved_by_run.values(), choice.withheld(), snapshot.inventory, args
+    )
+    if blocked:
+        return _refuse_no_read(blocked, say)
+    rows = rows + list(takes.values())
     cut_back = (
         [(row.sku, row.match.name) for row in merged_plan.rows() if row.sub_threshold]
         if args.listed_only
@@ -2057,6 +2180,7 @@ def _run_merged(args, say) -> int:
         _quantities_for(args), {row.sku: row.match for row in merged_plan.skus}, say
     )
     _say_prices(changes, left, moves, args, say)
+    _say_takeoffs(takes, say)
 
     by_game = {None: rows}
     if args.split_games:
@@ -2115,7 +2239,7 @@ def _run_merged(args, say) -> int:
             except join.OutputSuppressed as refusal:
                 say(f"REFUSING: {refusal}. Nothing more was written.")
                 return 1
-            copies = sum(row.match.add_to_quantity for row in bucket)
+            copies = sum(max(0, row.match.add_to_quantity) for row in bucket)
             say(f"import           {len(csv_rows)} row(s), {copies} card(s) -> {target}")
             written.append((target, bucket))
 
@@ -2138,7 +2262,8 @@ def _run_merged(args, say) -> int:
     }
     try:
         with store.write() as writable:
-            _claim_or_refuse(writable, going, basis, args, sorted(changed))
+            _claim_or_refuse(writable, going, basis, args, sorted(changed), list(takes))
+            _apply_takeoffs(writable, takes)
             pushed, pushed_skus, unstamped = _stamp_merged(
                 writable, merged_plan, shipped, resolved_by_run
             )
@@ -2149,7 +2274,7 @@ def _run_merged(args, say) -> int:
         _say_claim_refusal(refusal, args, say)
         return 1
     # THE RUN'S EMIT RECORD NAMES THE SKUS THAT ADDED A COPY (D54), never a price-only row.
-    copied = [(target, [row for row in group if row.sku not in changed]) for target, group in written]
+    copied = [(target, [row for row in group if row.sku not in changed and row.sku not in takes]) for target, group in written]
     return _after_merged(
         dirs, copied, pushed, pushed_skus, queue_line, stages, say, disputed_positions, unstamped
     )

@@ -110,11 +110,11 @@ edit that lowers the price and is exactly an answer the corpus held before the r
 (`earlier_lower`), per row. A price written after the read is stamped later and goes. The read's
 own rule price always goes. Proof: T7 `check_live_markdown_guards`.
 
-### 2026-09-29 amendment: a negative `Add to Quantity` lowers a live quantity, measured
+### Amendment: a negative `Add to Quantity` lowers a live quantity, measured
 
 **This replaced the earlier "no CSV route to lowering a quantity" clause above, in place.** Measured through `server/tcg_import.push_to_staged` and `move_to_live`, with `_check` bypassed once on the owner's word. One row first: Eclipse 9198194, `Add to Quantity` -1, price unchanged. TCGplayer accepted 1 of 1, publish answered 1 Update, and the live export went from 1 to 0 within about 2 minutes (`live-tcgplayer-20260929-024030.csv`). Then 63 rows with negative adds: accepted 63, 63 Updates, no errors, all 63 reached target (live copies 2740 to 2645, `live-tcgplayer-20260929-024057.csv`). `Add to Quantity` is a signed delta. A third push on the owner's word, the same day: 21 SKUs, -34 copies, writing live down to the store's identified count wherever live was higher (upload 17334855, 21 accepted, 21 Updates). The export after it (`live-tcgplayer-20260929-024900.csv`, 2611 live copies) shows 0 store SKUs above their held count. Cause, unmeasured per SKU: cards marked sold or retired in the app never lower TCGplayer, plus likely a double upload (the case above).
 
-**`_check` still refuses a negative, and that stays.** Whether the pipeline may write one is a separate owner decision. The reprice path's `Add to Quantity` 0 rule is untouched. `pkmnscan reconcile --phantoms` remains a worklist tool.
+**The owner decided it: a hold takes live copies off.** When a SKU has copies Banchi put live and the owner holds it (`bullish`, `keeping`, `next_batch`), the next send writes one row for that SKU with `Add to Quantity` minus those copies, capped at what the newest live read says TCGplayer holds. With no live read, that row is refused with a sentence naming the card, and nothing for it is written. The cards stay in their box and go back to unsent and held; unhold sends them again. The receipt and the CLI say "N copies came off TCGplayer". `server/tcg_import._check` allows a negative only for the SKUs `emit` names as a take-off; every other path still refuses one, and only the two writable columns are written. The reprice path's `Add to Quantity` 0 rule is untouched. `pkmnscan reconcile --phantoms` remains a worklist tool.
 
 ### 2026-09-28 amendment: a sale or retirement in the app never lowers TCGplayer
 

@@ -120,6 +120,12 @@ function NotSent({ gone }: { readonly gone?: readonly string[] }) {
   )
 }
 
+/** A HOLD TAKES ITS LIVE COPIES OFF: how many came off TCGplayer, said once and only when some did. */
+function TookOff({ taken }: { readonly taken?: number }) {
+  if (taken === undefined || taken <= 0) return null
+  return <Notice tone="info" compact className="send-took-off" title={`${count(taken, 'copy', 'copies')} came off TCGplayer.`}>They are back on your list, held.</Notice>
+}
+
 function TrimList({ trimmed }: { readonly trimmed: readonly SendTrim[] }) {
   if (trimmed.length === 0) return null
   const held = trimmed.reduce((total, trim) => total + (trim.would - trim.goes), 0)
@@ -877,6 +883,7 @@ export function SendCard({
               right after this visit's own send; a later visit does not carry it in the bar. */}
           {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TrimList trimmed={standing.trimmed} /> : null}
           {sent !== null && sent.stamp === standing.stamp ? <NotSent gone={standing.gone} /> : null}
+          {sent !== null && sent.stamp === standing.stamp ? <TookOff taken={standing.taken_off} /> : null}
           {sent !== null && sent.stamp === standing.stamp ? <PricesLeft send={standing} /> : null}
         </>
       )}

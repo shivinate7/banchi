@@ -287,7 +287,7 @@ def rows_from_csv(text: str) -> List[dict]:
     return rows
 
 
-def _check(rows: Sequence[dict], *, listing: bool = False) -> None:
+def _check(rows: Sequence[dict], *, listing: bool = False, take_off: Sequence[str] = ()) -> None:
     """Refuse a file their validator would refuse, before a transaction exists.
 
     THE CHECKS ARE THEIRS, NOT THIS REPO'S OPINION. `MyPrice` between 0.01 and 200000 and
@@ -337,6 +337,8 @@ def _check(rows: Sequence[dict], *, listing: bool = False) -> None:
                 f"SKU {sku} carries an Add to Quantity that is not an integer. Nothing was sent.",
             ) from None
         if listing:
+            if quantity < 0 and sku in take_off:
+                continue
             if quantity < 0:
                 # A LISTING ROW ADDS COPIES OR CHANGES A PRICE, AND NEVER TAKES ONE AWAY. A
                 # negative figure is a file this repo did not write.
@@ -362,7 +364,11 @@ def _check(rows: Sequence[dict], *, listing: bool = False) -> None:
 
 
 def push_to_staged(
-    rows: Sequence[dict], filename: str = "import.csv", *, listing: bool = False
+    rows: Sequence[dict],
+    filename: str = "import.csv",
+    *,
+    listing: bool = False,
+    take_off: Sequence[str] = (),
 ) -> StagedUpload:
     """Initialize, upload every chunk, finalize. Rolls back if any chunk or the finalize fails.
 
@@ -371,7 +377,7 @@ def push_to_staged(
     `move_to_live`, a second call. Since `D273` one PRESS makes
     both calls, and they stay two calls so a failed publish can still roll this upload back.
     """
-    _check(rows, listing=listing)
+    _check(rows, listing=listing, take_off=take_off)
 
     try:
         opened = _post(INITIALIZE, {"filename": filename, "type": TYPE_PRICING})

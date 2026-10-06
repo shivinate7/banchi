@@ -684,8 +684,8 @@ COMPONENTS = [
                                     "CSV row was written. Not match.positions — every terminal "
                                     "copy is committed, and set_state has no terminal guard, so "
                                     "iterating those would resurrect a sold card (D10, D26).",
-                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D86", "D54", "D58",
-                                            "D59", "D88", "D99", "D172", "D174", "D213",
+                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D54", "D58", "D59",
+                                            "D86", "D88", "D99", "D100", "D172", "D174", "D213",
                                             "D243", "D253", "D277"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged; --phantoms lists live copies beyond what is really on hand", "governed_by": ["D7", "D8", "D11", "D86", "D54", "D87", "D273", "D115", "D59", "D100"], "tested_by": ["T7"]},
             "cmd_queue.py": {"does": "`pkmnscan queue refresh` — re-resolve every OPEN queue "

@@ -522,6 +522,8 @@ def _summary(stamp: str, record: dict, now: datetime, held: frozenset = frozense
         "prices_left": record.get("prices_left") or [],
         "moves": record.get("moves") or [],
         "held": stamp in held,
+        # THE COPIES THIS PRESS TOOK OFF TCGPLAYER for held cards (D100, the owner's ruling).
+        "taken_off": sum((record.get("taken_off") or {}).values()),
         "takeable": sum(offer.values()),
         "take_back_after": store_clock.iso(take_after) if waiting_to_take and take_after is not None else None,
         "files": record.get("files") or [],
@@ -688,10 +690,20 @@ def _sold_by_sku(skus) -> Dict[str, int]:
     }
 
 
-def _take_back(copies: Dict[str, int], stamp: str, by: str) -> int:
-    """Put these copies back on the list and release the send's claim. One store write."""
+def _take_back(
+    copies: Dict[str, int], stamp: str, by: str, taken_off: Optional[Dict[str, int]] = None
+) -> int:
+    """Put these copies back on the list and release the send's claim. One store write.
+
+    `taken_off` is the press's own take-offs: a press that failed took nothing off TCGplayer,
+    so each one's `pushed` and `live` rise again by what `emit` lowered."""
     with Store().write() as writable:
         moved = _bump_back(writable, copies)
+        for sku, count in (taken_off or {}).items():
+            listing = writable.inventory.listings.get(sku)
+            if listing is not None:
+                listing.bump(master.PUSHED, int(count))
+                listing.set(master.LIVE, int(listing.live) + int(count))
         writable.send_claims.release(stamp, by)
     return moved
 
@@ -727,11 +739,23 @@ def _already_pushed(digest: str, now: Optional[datetime] = None) -> Optional[str
     (the round-1 rule refused them forever — the 2026-09-24 review, S3).
     """
     moment = now or store_clock.now()
-    for stamp, record in _receipts():
+    receipts = _receipts()
+    for stamp, record in receipts:
         if record.get("digest") != digest or record.get("kind") != KIND_SEND:
             continue
         pushed = record.get("pushed")
         if not pushed or record.get("taken_back_at"):
+            continue
+        # A SEND WHOSE COPIES A LATER SEND TOOK OFF IS NO PENDING DOUBLE: the owner held the
+        # cards and let them go again, and the same rows are a legitimate send (D100).
+        sent = set(record.get("copies") or {})
+        if any(
+            later > stamp
+            and later_record.get("pushed")
+            and not later_record.get("taken_back_at")
+            and sent <= set(later_record.get("taken_off") or {})
+            for later, later_record in receipts
+        ):
             continue
         when = store_clock.parse(pushed.get("pushed_at")) or store_clock.parse(record.get("at"))
         if when is None or (moment - when).total_seconds() <= UPLOAD_WINDOW_S:
@@ -1207,6 +1231,7 @@ def _write_and_send(
     claim = Store().read().send_claims.get(stamp)
     written = sorted(directory.glob("import*.csv"))
     said_prices = _json_line(console, "send_prices") or {}
+    said_off = _json_line(console, "send_takeoff") or {}
     changes = list(said_prices.get("rows") or [])
 
     if claim is None:
@@ -1227,6 +1252,7 @@ def _write_and_send(
     kept = [path.name for path in written]
     was = {str(row.get("sku")): row.get("was") for row in changes}
     copies: Dict[str, int] = {}
+    taken_off: Dict[str, int] = {}
     names: Dict[str, str] = {}
     for path in written:
         for sku, count in _copies(path).items():
@@ -1234,12 +1260,17 @@ def _write_and_send(
             # Take back and every count of what went live never see it.
             if count > 0:
                 copies[sku] = copies.get(sku, 0) + count
+            # A NEGATIVE ROW COUNTS ONLY WHERE `emit` SAID IT TOOK THE COPIES OFF; any other
+            # negative stays out and the push door refuses it.
+            elif count < 0 and sku in said_off:
+                taken_off[sku] = -count
         names.update(_names(path))
     record.update(
         {
             "files": kept,
             "copies": copies,
             "copies_total": sum(copies.values()),
+            "taken_off": taken_off,
             # THE PRICE-ONLY ROWS, SKU -> the price the file carries and the live price it
             # replaces. The check past the wait compares TCGplayer's price with `price`, the
             # mark-down's own test (`_resolve_markdown`), and never offers one back.
@@ -1355,7 +1386,12 @@ def _push_and_publish(directory: Path, record: dict, console: str) -> dict:
         )
     rows = tcg_import.rows_from_csv(pushed_file.read_text(encoding="utf-8"))
     try:
-        upload = tcg_import.push_to_staged(rows, filename=record["files"][0], listing=True)
+        upload = tcg_import.push_to_staged(
+            rows,
+            filename=record["files"][0],
+            listing=True,
+            take_off=list(record.get("taken_off") or {}),
+        )
     except tcg_import.PushFailed as failed:
         if failed.upload_id is None:
             _fail(directory, record, failed.code,
@@ -1438,7 +1474,9 @@ def _fail(
     account. So the receipt keeps the `rolled_back` warning until the owner dismisses it, and
     the refusal is `send_rolled_back`, which the card never offers to retry.
     """
-    _take_back(record.get("copies") or {}, str(record.get("stamp")), "failed")
+    _take_back(
+        record.get("copies") or {}, str(record.get("stamp")), "failed", record.get("taken_off")
+    )
     if rolled is not None:
         record["rolled_back"] = {"upload_id": rolled, "at": store_clock.iso(store_clock.now()), "cause": code}
         code, status = ROLLED_BACK, HTTPStatus.CONFLICT
