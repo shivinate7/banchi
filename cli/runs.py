@@ -336,7 +336,7 @@ class Run:
             from cli import resolve
             from store.session import Store
 
-            return resolve.store_payload(keys, Store().read().inventory)
+            return resolve.store_backed_payload(self, Store().read().inventory)
         if payload is None:
             raise RunError(
                 f"{self.path(IDENTIFICATIONS)} does not exist — run `pkmnscan identify` first"

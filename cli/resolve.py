@@ -2226,6 +2226,37 @@ def store_payload(keys: Sequence[str], inventory: master.Inventory) -> Dict[str,
     return {"cards": cards}
 
 
+def store_backed_payload(run: runs.Run, inventory: master.Inventory) -> Dict[str, Any]:
+    """A store-backed run's cards, read FROM THE STORE and FOLLOWING EACH CARD, not its slot.
+
+    The run's cards are the store cards stamped `card.run == run.name` (D65); a removal below
+    the run slides slots, so `selection.keys` names positions that may hold other cards now.
+    The keys only say HOW MANY cards the run held: fewer stamped cards than keys means a card
+    is gone, and the run refuses by NAME (read off `pricing.json`'s product names) rather than
+    send in its place. A card the run never held is never read.
+    """
+    keys = list((run.manifest.get("selection") or {}).get("keys") or [])
+    held = {master.position_key(c.box, c.index): c for c in inventory.cards.where(run=run.name)}
+    if len(held) < len(keys):
+        left = [
+            (row.get("name") or "").strip()
+            for row in (files.read_json(run.path(runs.PRICING)) or {}).get("skus") or []
+            for _ in range(int(row.get("copies") or 1))
+        ]
+        for card in held.values():
+            number = str(card_reading(card).number or "")
+            for i, name in enumerate(left):
+                if name.rsplit(" - ", 1)[-1].split("/")[0] == number:
+                    del left[i]
+                    break
+        names = ", ".join(left) or f"{len(keys) - len(held)} card(s)"
+        raise runs.RunError(
+            f"Run {run.name} held a card that is no longer in the store: {names}. "
+            "Nothing was sent."
+        )
+    return store_payload(sorted(held, key=lambda k: (held[k].box, held[k].index)), inventory)
+
+
 def load_from_store(
     run: runs.Run,
     keys: Sequence[str],
