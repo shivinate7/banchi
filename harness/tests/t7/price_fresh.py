@@ -1018,6 +1018,10 @@ def check_refresh_reaches_store_backed_runs(checks: Checks) -> None:
     checks.note("PRICES REFRESH — an open store-backed run")
     with world(checks) as w:
         run = _store_backed_run(checks, w.home, [(5, 1, "Dunsparce", "120/159", "normal")])
+        from store.session import Store
+        with Store().write() as snapshot:  # a Pokemon run names its sets (D170), as `world()` does
+            for key in run.manifest["selection"]["keys"]:
+                snapshot.inventory.cards[key].set_hint = "SV09"
         checks.equal(
             (run.manifest.get("selection") or {}).get("keys") and not (run.directory / "identifications.json").exists(),
             True, "fixture: the run has selection.keys and no identifications.json",
