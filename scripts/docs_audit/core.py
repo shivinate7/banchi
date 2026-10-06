@@ -901,7 +901,6 @@ LOOP_EXPENSIVE_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("server/capture_server.py", "do_undo_section_move", "_box_digest"),   # one records_in read per box the move recorded, at most three
     ("server/pipeline_routes.py", "_catalog_rows", "read_export"),   # one export read per game of one run, bounded by games
     ("server/pipeline_routes.py", "_run_live_by_sku", "read_export"),   # one export read per distinct export path across the runs asked, bounded by the exports on disk
-    ("server/pipeline_routes.py", "do_prices_refresh", "do_pipeline_export"),   # one catalog call per open run: the first of a game opens one socket and the rest reuse its file, so the cost is a local read per run
     ("server/pipeline_routes.py", "do_pipeline_export", "_export_report"),   # one previous-export read per game the answers cover, bounded by games
     ("server/send_routes.py", "_claim_refusal", "_markdown_blocks"),   # the loop returns on its first pass, so the Store().read() runs once
     ("server/send_routes.py", "_live_check", "_held_stamps"),   # CANDIDATE: one Store().read() per due stamp; read once before the loop
@@ -915,7 +914,7 @@ LOOP_EXPENSIVE_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("store/master.py", "section_tail_key", "_respace"),   # the loop is `range(2)`, a fixed two passes
     ("store/orders.py", "record_pull", "holder_of"),   # CANDIDATE: `holder_of` walks the open orders once per capture id pulled
 })
-LOOP_EXPENSIVE_EXPECTED = 36
+LOOP_EXPENSIVE_EXPECTED = 35
 
 
 # ---------------------------------------------------------------- the package's shared state

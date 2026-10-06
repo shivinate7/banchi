@@ -7466,6 +7466,22 @@ def _stale_history(work: dict) -> Set[str]:
     }
 
 
+def _run_games(name: str) -> Tuple[str, ...]:
+    """The games a run was joined against, or the default game for a run that will not open."""
+    try:
+        return tuple(sorted(run_files.open_run(_open_run(name)).exports_by_game)) or (game_registry.DEFAULT_GAME,)
+    except Exception:  # noqa: BLE001 - a run that will not open costs itself only
+        return (game_registry.DEFAULT_GAME,)
+
+
+def _game_catalog(name: str) -> Tuple[Optional[str], str]:
+    """A fresh catalog export through one run's scope: `(file, "")`, or `(None, the refusal's sentence)`."""
+    try:
+        return do_pipeline_export(name, {"refresh": True})["file"], ""
+    except PipelineRefusal as refusal:
+        return None, str(refusal)
+
+
 def do_prices_refresh(
     progress: Optional[Callable[[str, int, int], None]] = None,
     *,
@@ -7522,25 +7538,18 @@ def do_prices_refresh(
         runs = []
         unreadable = f"The open runs could not be read because {files.plain_cause(exc)}."
     fetched: Dict[str, str] = {}
-    refused: Dict[Tuple[str, ...], str] = {}
-    asked_games: Set[Tuple[str, ...]] = set()
     problems: List[str] = []
+    by_game: Dict[Tuple[str, ...], List[str]] = {}
     for name in runs:
-        try:
-            games_of = tuple(sorted(run_files.open_run(_open_run(name)).exports_by_game)) or (game_registry.DEFAULT_GAME,)
-        except Exception:  # noqa: BLE001 - a run that will not open costs itself only
-            games_of = (game_registry.DEFAULT_GAME,)
-        if games_of in refused:
-            problems.append(f"{name}: {refused[games_of]}")
-            continue
-        try:
-            answer = do_pipeline_export(name, {} if games_of in asked_games else {"refresh": True})
-        except PipelineRefusal as refusal:
-            refused[games_of] = str(refusal)
-            problems.append(f"{name}: {refusal}")
-            continue
-        asked_games.add(games_of)
-        fetched[name] = answer["file"]
+        by_game.setdefault(_run_games(name), []).append(name)
+    # ONE CATALOG REQUEST PER GAME, outside the per-run walk: the first run of a game asks, and
+    # every run of that game is joined against the file that came back.
+    for group in by_game.values():
+        file, problem = _game_catalog(group[0])
+        if file is None:
+            problems.extend(f"{name}: {problem}" for name in group)
+        else:
+            fetched.update({name: file for name in group})
     pricerefresh.note_step(
         "catalog", not problems and not unreadable, runs=len(runs), fetched=len(fetched),
         message=unreadable or (problems[0] if problems else ""),
