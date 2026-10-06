@@ -1159,6 +1159,7 @@ def run(args, say) -> int:
         say(str(refusal))
         return 1
 
+    _say_gone(resolved, say)
     store = Store()
     snapshot = store.read()
 
@@ -1794,6 +1795,20 @@ def _resolve_one(run_dir, book, say, args):
         return None
 
 
+def _say_gone(resolved, say) -> None:
+    """SEND THE REST: name each card the run held that the store no longer has, by its
+    last-known name. The sentence is for the person; the JSON line is what the send's receipt
+    reads (`server/send_routes.py:_summary`'s `gone`)."""
+    import json
+
+    gone = list(resolved.gone)
+    if not gone:
+        return
+    names = [g["name"] for g in gone]
+    say(resolve.gone_sentence(names))
+    say(json.dumps({"send_gone": {"names": names, "cids": [g["cid"] for g in gone]}}))
+
+
 def _bucket_files(game, group, split_threshold):
     """[(filename, rows)] for one game's slice of a merged plan.
 
@@ -1877,6 +1892,7 @@ def _run_merged(args, say) -> int:
         if resolved is None:
             say("REFUSING to write. Nothing was written.")
             return 1
+        _say_gone(resolved, say)
         disputed_positions.extend(_withhold_disputed(resolved, snapshot))
         unheld = _unheld_positions(resolved, snapshot)
         if unheld:

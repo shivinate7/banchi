@@ -181,6 +181,9 @@ class Resolved:
     # no longer: the card was deleted mid-box or retired after the run. Named in the report,
     # never dropped in silence.
     departed: List[str] = field(default_factory=list)
+    # Store-backed run: last-known names of cards the run held that are no longer in the store.
+    # Skipped, and named in the send's output and receipt, never dropped in silence.
+    gone: List[Dict[str, str]] = field(default_factory=list)  # [{"cid", "name"}]
     # D36 — boxes whose photographs are not on disk, so their slots could not be checked at
     # all. Their records pass through as the run recorded them; the report says so rather
     # than letting an unchecked box read as a verified one.
@@ -2241,47 +2244,44 @@ def record_cards(run: runs.Run, keys: Sequence[str], inventory: master.Inventory
     run.manifest["cards"] = cards
 
 
+def gone_sentence(names: Sequence[str]) -> str:
+    """The one sentence for cards a store-backed run held that the store no longer has."""
+    return (f"Not sent: {', '.join(names)}. "
+            + ("It is" if len(names) == 1 else "They are") + " no longer in the store.")
+
+
 def store_backed_payload(run: runs.Run, inventory: master.Inventory) -> Dict[str, Any]:
     """A store-backed run's cards, read FROM THE STORE and FOLLOWING EACH CARD by its `cid`.
 
     The manifest's `cards` records `{key: {cid, name}}` when the run is made (`record_cards`).
     Each cid is followed to where its card is NOW; the `run` stamp is never read once the map
-    exists, because a later sweep re-stamps a card. A recorded cid that is gone refuses, naming
-    only that card by its last-known name. A card not recorded is never sent. An older
-    keys-only manifest backfills the map once, at first read, from the cards stamped with this
-    run, and only when they number exactly the keys (else it cannot tell which cards it held).
+    exists, because a later sweep re-stamps a card. SEND THE REST: a recorded cid that is gone
+    is skipped, and its `{cid, name}` (last-known name) rides out in the payload's `gone`. A run whose every
+    card is gone refuses. A card not recorded is never sent. A manifest with no `cards` map
+    (keys only, no identities) refuses: it cannot tell which cards it held.
     """
     if "cards" not in run.manifest:
-        keys = list((run.manifest.get("selection") or {}).get("keys") or [])
-        stamped = inventory.cards.where(run=run.name)
-        if len(stamped) != len(keys):
-            raise runs.RunError(
-                f"Run {run.name} records no card identities, and the store holds "
-                f"{len(stamped)} cards stamped with it against {len(keys)} it selected, so it "
-                "cannot tell which cards it held. Nothing was sent."
-            )
-        run.manifest["cards"] = {
-            master.position_key(c.box, c.index): {
-                "cid": c.cid, "name": card_reading(c).name or c.name or "a card",
-            }
-            for c in stamped
-            if c.cid
-        }
-        run.save()
+        raise runs.RunError(
+            f"Run {run.name} records no card identities, so it cannot tell which cards it "
+            "held. Nothing was sent."
+        )
     held, gone = [], []
     for entry in run.manifest["cards"].values():
         found = inventory.cards.where(cid=entry["cid"])
         if found:
             held.append(found[0])
         else:
-            gone.append(str(entry.get("name") or entry["cid"]))
-    if gone:
+            gone.append({"cid": entry["cid"], "name": str(entry.get("name") or entry["cid"])})
+    if gone and not held:
         raise runs.RunError(
-            f"Run {run.name} held a card that is no longer in the store: {', '.join(gone)}. "
+            f"Run {run.name} held no card that is still in the store: "
+            f"{', '.join(g['name'] for g in gone)}. "
             "Nothing was sent."
         )
     held.sort(key=lambda c: (c.box, c.index))
-    return store_payload([master.position_key(c.box, c.index) for c in held], inventory)
+    payload = store_payload([master.position_key(c.box, c.index) for c in held], inventory)
+    payload["gone"] = gone
+    return payload
 
 
 def load_from_store(
@@ -2640,6 +2640,7 @@ def _resolve(
         photos=photos,
         realigned=realigned,
         departed=departed,
+        gone=list(payload.get("gone") or []),
         unverified_boxes=unverified,
     )
 

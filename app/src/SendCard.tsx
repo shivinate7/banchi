@@ -107,6 +107,19 @@ function refusalTitle(code: string, data?: unknown): string {
   }
 }
 
+/** SEND THE REST: the cards the run held that the store no longer has, by last-known name. */
+function NotSent({ gone }: { readonly gone?: readonly string[] }) {
+  if (gone === undefined || gone.length === 0) return null
+  return (
+    <Notice
+      tone="info"
+      compact
+      className="send-not-sent"
+      title={`Not sent: ${gone.join(', ')}. ${gone.length === 1 ? 'It is' : 'They are'} no longer in the store.`}
+    />
+  )
+}
+
 function TrimList({ trimmed }: { readonly trimmed: readonly SendTrim[] }) {
   if (trimmed.length === 0) return null
   const held = trimmed.reduce((total, trim) => total + (trim.would - trim.goes), 0)
@@ -863,6 +876,7 @@ export function SendCard({
           {/* WHAT THE GUARD HELD BACK, ANSWERED TO THE PRESS THAT MADE IT. It is read once,
               right after this visit's own send; a later visit does not carry it in the bar. */}
           {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TrimList trimmed={standing.trimmed} /> : null}
+          {sent !== null && sent.stamp === standing.stamp ? <NotSent gone={standing.gone} /> : null}
           {sent !== null && sent.stamp === standing.stamp ? <PricesLeft send={standing} /> : null}
         </>
       )}

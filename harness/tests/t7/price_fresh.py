@@ -1004,7 +1004,60 @@ def check_single_game_wrong_rows_keep_no_file(checks: Checks) -> None:
         checks.equal((w.runs[0].directory / "pricing.json").read_bytes() == before, True, "and no run table moved")
 
 
+def check_refresh_reaches_store_backed_runs(checks: Checks) -> None:
+    """A store-backed run (`selection.keys`, a cards map, NO `identifications.json`) is scoped and
+    priced like any other: refresh, the scope preview and the export press count its cards from
+    the store. Red on main: `_scope_counts` reads the file itself and refuses `export_refused`,
+    "Nothing has been identified for this run yet". Caller chain: `do_prices_refresh` ->
+    `_run_games` (swallows it) -> `_game_catalog` -> `do_pipeline_export` -> `_scope_for_run` ->
+    `_scope_counts`. `_record_written`, the other direct file check, only gates a child's liveness
+    (`_live_pid`) and a store-backed run has no child, so it needs no case."""
+    from harness.tests.t7.send_markdown import _store_backed_run
+
+    checks.note("")
+    checks.note("PRICES REFRESH — an open store-backed run")
+    with world(checks) as w:
+        run = _store_backed_run(checks, w.home, [(5, 1, "Dunsparce", "120/159", "normal")])
+        from store.session import Store
+        with Store().write() as snapshot:  # a Pokemon run names its sets (D170), as `world()` does
+            for key in run.manifest["selection"]["keys"]:
+                snapshot.inventory.cards[key].set_hint = "SV09"
+        checks.equal(
+            (run.manifest.get("selection") or {}).get("keys") and not (run.directory / "identifications.json").exists(),
+            True, "fixture: the run has selection.keys and no identifications.json",
+        )
+
+        # 2. the scope preview and the export press
+        try:
+            scope = pipeline_routes.do_pipeline_scope(run.name, {})
+            counted = [g["cards"] for g in scope["games"]]
+            seen = f"counted {counted}"
+        except pipeline_routes.PipelineRefusal as refused:
+            counted, seen = None, f"refused {refused.code}: {refused}"
+        checks.equal(counted, [1], "2. GET scope counts the store-backed run's 1 card from the store: " + seen)
+        try:
+            pipeline_routes.do_pipeline_export(run.name, {"scope": "category"})
+            pressed = "ok"
+        except pipeline_routes.PipelineRefusal as refused:
+            pressed = f"refused {refused.code}: {refused}"
+        checks.equal(pressed, "ok", "2. the export press for the store-backed run does not refuse")
+
+        # 1. the refresh
+        asked, undo = refuse_history()
+        try:
+            answer = attempt(checks, "1. the refresh runs over a store-backed run", lambda: pipeline_routes.do_prices_refresh())
+        finally:
+            undo()
+        catalog = ((pricerefresh.read_status() or {}).get("steps") or {}).get("catalog") or {}
+        checks.equal((answer or {}).get("ok"), True, "1. the refresh reaches done: " + json.dumps(catalog)[:200])
+        checks.equal(
+            table_row(run, DUNSPARCE_SKU)["snap"].get("market"), NOW,
+            "1. the store-backed run's card is priced at the new Market, like any other run's",
+        )
+
+
 CHECKS = (
+    check_refresh_reaches_store_backed_runs,
     check_held_lock_is_a_recorded_skip,
     check_single_game_wrong_rows_keep_no_file,
     check_live_press_returns_at_once,
