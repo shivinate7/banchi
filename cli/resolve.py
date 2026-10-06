@@ -1108,7 +1108,8 @@ def _games_needed(run: runs.Run) -> "OrderedDict[str, List[str]]":
     # box whose number was deleted and reused since this run is somebody else's drawer, and
     # the `held.game` fallback below would read a foreign card's game as this card's — which
     # is how the first refusal to fire named 53 riftbound cards in a Pokemon run.
-    refuse_reallocated(payload, inventory, run)
+    if not run.store_backed:  # a store-read payload is at today's slots by construction
+        refuse_reallocated(payload, inventory, run)
     return _needed_games(payload.get("cards") or {}, inventory)
 
 
@@ -2022,7 +2023,7 @@ def paperwork_for(run: runs.Run) -> List[orders.PaperworkEntry]:
         # every consumer re-checks the card it lands on anyway.
         moved, gone = {}, set()
     else:
-        _, moved, departed, _ = realign(payload)
+        _, moved, departed, _ = realign(payload) if not run.store_backed else (0, {}, [], 0)
         gone = set(departed)
 
     found: List[orders.PaperworkEntry] = []
@@ -2086,13 +2087,17 @@ def load(
     # D36 — BEFORE anything reads a position out of this payload. A run directory is immutable
     # and the store is not, so the slot a card was identified at may not be the slot it is in
     # now. Matched by photograph, refused when uncertain, untouched when nothing has moved.
-    payload, realigned, departed, unverified = realign(payload)
+    if run.store_backed:  # read from the store just now: nothing frozen to realign or disown
+        realigned, departed, unverified = {}, [], []
+    else:
+        payload, realigned, departed, unverified = realign(payload)
 
     snapshot = Store().read()
     # D36 (amended) — the same refusal `_games_needed` raises on the `exports_for` path, as
     # the backstop for a caller handing a mapping straight in. Before `held_cards` is read:
     # every read below at this run's keys assumes the box is this run's drawer.
-    refuse_reallocated(payload, snapshot.inventory, run)
+    if not run.store_backed:
+        refuse_reallocated(payload, snapshot.inventory, run)
     return _resolve(
         run,
         payload,

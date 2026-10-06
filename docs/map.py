@@ -753,7 +753,7 @@ COMPONENTS = [
                                            "D56", "D58", "D59", "D65", "D87", "D89", "D115", "D137",
                                            "D145", "D147", "D150", "D156", "D166", "D180",
                                            "D183", "D188", "D253", "D259", "D262"], "tested_by": ["T7"]},
-            "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D86", "D54"], "tested_by": ["T7"]},
+            "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D86", "D54", "D65"], "tested_by": ["T7"]},
         },
     },
     {
