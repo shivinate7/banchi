@@ -54,6 +54,13 @@ CANONICAL_HEADER: Tuple[str, ...] = (
 )
 
 SKU_COLUMN = "TCGplayer Id"
+
+
+def sku_cell(row) -> str:
+    """One row's SKU, stripped. The one home of the read: an absent or empty cell is ''."""
+    return str(row.get(SKU_COLUMN) or "").strip()
+
+
 QUANTITY_COLUMN = "Add to Quantity"
 PRICE_COLUMN = "TCG Marketplace Price"
 MARKET_PRICE_COLUMN = "TCG Market Price"

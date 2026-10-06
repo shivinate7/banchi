@@ -44,7 +44,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
-from store.master import TERMINAL_STATES
+from store.master import is_on_hand
 from store.rows import Rows, TableSpec, int_or_none
 
 MAIN = "review"
@@ -239,7 +239,7 @@ class Queue:
         return [
             entry
             for entry in self.open_entries
-            if getattr(cards.get(entry.position), "state", None) not in TERMINAL_STATES
+            if is_on_hand(cards.get(entry.position))
         ]
 
     @property

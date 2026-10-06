@@ -151,13 +151,18 @@ export async function armMotion(page: Page): Promise<void> {
   // picking a box folds the Rig group, a moment after the pick; open it again whenever it is shut
   const rig = page.getByRole('region', { name: 'Rig' }).getByRole('button', { name: /^Rig/ })
   const trigger = page.getByRole('button', { name: /Trigger/ })
+  const motion = page.getByRole('button', { name: 'motion', exact: true })
+  /* THE WHOLE SEQUENCE RETRIES AS ONE: the fold lands a render after the pick, so a Trigger seen
+     visible can be folded before the press reaches it (a 15 s hang on a slow runner). A hand-opened
+     Rig stays open, so the second pass holds. */
   await expect(async () => {
-    if (!(await trigger.isVisible())) await rig.click()
-    await expect(trigger).toBeVisible({ timeout: 1_000 })
+    if (!(await motion.isVisible())) {
+      if (!(await trigger.isVisible())) await rig.click({ timeout: 1_000 })
+      await trigger.click({ timeout: 1_000 })
+    }
+    await motion.click({ timeout: 1_000 })
+    await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'motion', { timeout: 1_000 })
   }).toPass({ timeout: 15_000 })
-  await trigger.click()
-  await page.getByRole('button', { name: 'motion', exact: true }).click()
-  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'motion')
 }
 
 export async function injectScene(page: Page): Promise<void> {

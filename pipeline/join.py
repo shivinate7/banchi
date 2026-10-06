@@ -741,6 +741,21 @@ def place_text(game: str, position: Position) -> str:
     return f"{pooled_label(game)} · {position.box}/{position.index}"
 
 
+def position_label(game: str, view: Optional["BoxView"], box: int, index: int) -> Optional[str]:
+    """The `place_text` of one position under its box's `view`, pooled first.
+
+    A POOLED CARD BORROWS NOTHING FROM THE BOX, so its line is answered before the view is
+    asked about: a box holding only code cards has no view at all, and asking first would
+    answer None for a card whose place is known to be no place. A located card in a box with
+    no view answers None, never an index-space label (D58).
+    """
+    if not is_located(game):
+        return place_text(game, BoxView().at(box, index))
+    if view is None:
+        return None
+    return place_text(game, view.at(box, index))
+
+
 def where_phrase(game: str, position: Position) -> str:
     """`place_text` with its preposition, for a sentence mid-report.
 
