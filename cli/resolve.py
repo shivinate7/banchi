@@ -2244,6 +2244,12 @@ def record_cards(run: runs.Run, keys: Sequence[str], inventory: master.Inventory
     run.manifest["cards"] = cards
 
 
+def gone_sentence(names: Sequence[str]) -> str:
+    """The one sentence for cards a store-backed run held that the store no longer has."""
+    return (f"Not sent: {', '.join(names)}. "
+            + ("It is" if len(names) == 1 else "They are") + " no longer in the store.")
+
+
 def store_backed_payload(run: runs.Run, inventory: master.Inventory) -> Dict[str, Any]:
     """A store-backed run's cards, read FROM THE STORE and FOLLOWING EACH CARD by its `cid`.
 

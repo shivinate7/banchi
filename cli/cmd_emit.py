@@ -1804,8 +1804,7 @@ def _say_gone(resolved, say) -> None:
     gone = list(resolved.gone)
     if not gone:
         return
-    say(f"Not sent: {', '.join(gone)}. "
-        + ("It is" if len(gone) == 1 else "They are") + " no longer in the store.")
+    say(resolve.gone_sentence(gone))
     say(json.dumps({"send_gone": {"names": gone}}))
 
 

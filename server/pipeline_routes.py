@@ -8228,7 +8228,7 @@ def _scope_counts(directory: Path) -> Tuple[Dict[str, dict], Dict[str, dict]]:
     except run_files.RunError as caught:
         if not (run.manifest.get("selection") or {}).get("keys"):
             cards = {}  # no file and no keys: nothing identified, the refusal below
-        else:  # a store-backed run the store cannot fill (a gone card): its own sentence
+        else:  # keys only, or every card gone: the run's own refusal sentence
             raise PipelineRefusal(HTTPStatus.CONFLICT, "export_refused", str(caught)) from caught
     if not cards:
         raise PipelineRefusal(

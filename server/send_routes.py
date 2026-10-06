@@ -80,7 +80,7 @@ from typing import Callable, Dict, Iterator, List, NoReturn, Optional, Sequence,
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from cli import cmd_reprice  # noqa: E402
+from cli import cmd_reprice, resolve  # noqa: E402
 from pipeline import merge, reprice, sendguard, tcgcsv  # noqa: E402
 from server import pipeline_routes  # noqa: E402
 from server import tcg_export  # noqa: E402
@@ -873,7 +873,31 @@ def _empty_reasons(empty: dict, trimmed: list, step: str) -> "PipelineRefusal":
     return PipelineRefusal(HTTPStatus.CONFLICT, code, " ".join(said), data)
 
 
+def _gone_names(console: str) -> List[str]:
+    """Every run's `send_gone` names, in order, each once (`_json_line` reads only the last)."""
+    names: List[str] = []
+    for line in console.splitlines():
+        line = line.strip()
+        if '"send_gone"' not in line:
+            continue
+        try:
+            said = json.loads(line).get("send_gone") or {}
+        except (ValueError, AttributeError):
+            continue
+        names += [n for n in said.get("names") or [] if n not in names]
+    return names
+
+
 def _empty_send_refusal(console: str, trimmed: list, step: str, code: int = 1) -> "PipelineRefusal":
+    """`_empty_refusal`, with the cards a store-backed run could not send named beside it."""
+    refusal = _empty_refusal(console, trimmed, step, code)
+    gone = _gone_names(console)
+    if gone:
+        refusal.args = (f"{refusal.args[0]} {resolve.gone_sentence(gone)}",)
+    return refusal
+
+
+def _empty_refusal(console: str, trimmed: list, step: str, code: int = 1) -> "PipelineRefusal":
     """Why a press that counted nothing sent nothing, in the owner's words.
 
     Its own function so the harness can read the mapping without a press (the delta review,
@@ -1226,7 +1250,7 @@ def _write_and_send(
             "guard": guard,
             # THE CARDS A STORE-BACKED RUN HELD THAT THE STORE NO LONGER HAS, by last-known
             # name: skipped, and named on the receipt.
-            "gone": list((_json_line(console, "send_gone") or {}).get("names") or []),
+            "gone": _gone_names(console),
             "pushed": None,
             "published_at": None,
             "check_after": None,
