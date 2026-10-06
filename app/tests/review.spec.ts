@@ -2579,6 +2579,9 @@ test.describe('the Review band sheets', () => {
     asked: string[][]
     details: string[]
     hold: Promise<void> | null
+    on: boolean
+    running: boolean
+    blocked: null | 'runtime_missing'
   }
 
   function reviewEntry(key: string) {
@@ -2600,7 +2603,7 @@ test.describe('the Review band sheets', () => {
   }
 
   async function seed(page: Page, over: Partial<Wire> = {}): Promise<Wire> {
-    const wire: Wire = { fates: { ...FATES }, why: { ...WHY }, sitting: Object.keys(FATES), boxes: { 3: 'Band box', 4: 'Starter' }, asked: [], details: [], hold: null, ...over }
+    const wire: Wire = { fates: { ...FATES }, why: { ...WHY }, sitting: Object.keys(FATES), boxes: { 3: 'Band box', 4: 'Starter' }, asked: [], details: [], hold: null, on: true, running: false, blocked: null, ...over }
     const keysOf = (fate: Fate, keys: string[]) => keys.filter((key) => wire.fates[key] === fate)
     const rowOf = (key: string, fate: Fate) => {
       const [box, index] = key.split('/').map(Number) as [number, number]
@@ -2622,7 +2625,7 @@ test.describe('the Review band sheets', () => {
     await page.route(/\/pipeline\/match\/sweep(\?.*)?$/, async (route) => {
       const params = new URL(route.request().url()).searchParams
       const asked = params.get('keys')
-      if (asked === null) return route.fulfill(json({ on: true, running: false, blocked: null, aside: 0, matched: 500 }))
+      if (asked === null) return route.fulfill(json({ on: wire.on, running: wire.running, blocked: wire.blocked, aside: 0, matched: 500 }))
       const keys = asked.match(/[^,]+/g) ?? []
       const detail = params.get('detail')
       if (detail === null) {
@@ -2630,7 +2633,7 @@ test.describe('the Review band sheets', () => {
         if (wire.hold !== null) await wire.hold
       } else wire.details.push(detail)
       const body: Record<string, unknown> = {
-        on: true, running: false, worker: false, blocked: null, aside: 0,
+        on: wire.on, running: wire.on && wire.running, worker: wire.running, blocked: wire.blocked, aside: 0,
         matched_here: keysOf('matched', keys).length, matched_keys: keysOf('matched', keys),
         paid: keysOf('paid', keys).length, paid_keys: keysOf('paid', keys),
         unread: keysOf('unread', keys).length, unhinted: keysOf('unhinted', keys).length,
@@ -2852,7 +2855,7 @@ test.describe('the Review band sheets', () => {
   test.describe('9. reason titles', () => {
     test.beforeEach(async ({ page }) => setViewport(page, SIZES[0]))
 
-    test('each code maps to its group title, an unknown code renders as itself, and no title names a mechanism or types a dot', async ({ page }) => {
+    test('each code maps to its group title, an unknown code reads Another reason, and no title names a mechanism or types a dot', async ({ page }) => {
       const table: [string | null, string][] = [
         ['margin_too_small', 'Two printings too close to call'],
         ['match_too_weak', 'A weak match'],
@@ -2867,7 +2870,7 @@ test.describe('the Review band sheets', () => {
         ['game_not_served', 'This game is not read free'],
         ['index_stale', "The free reader's data is out of date"],
         [null, 'No reason kept'],
-        ['some_new_code', 'some_new_code'],
+        ['some_new_code', 'Another reason'],
       ]
       const fates: Record<string, Fate> = {}
       const why: Record<string, Why> = {}
@@ -2886,10 +2889,43 @@ test.describe('the Review band sheets', () => {
         await expect(sheet(page).getByRole('group', { name: title }), `${code ?? 'no code'} reads as "${title}"`).toBeVisible()
       }
       const titles = await sheet(page).getByRole('group').evaluateAll((els) => els.map((el) => el.getAttribute('aria-label') ?? el.querySelector('h3, h4, [role="heading"]')?.textContent ?? ''))
-      for (const title of titles.filter((t) => t !== 'some_new_code')) {
+      for (const title of titles) {
+        expect(title, 'a raw reason code').not.toMatch(/[a-z]+_[a-z_]+/)
         expect(title, 'a typed dot').not.toMatch(/[·•]/)
         expect(title, 'a mechanism word').not.toMatch(/\b(runs?|models?|sweep|marqo|haiku|engine|pipeline|index|fingerprint|cosine|margin)\b/i)
       }
+      const hovers = await sheet(page).locator('.rbs-group-title, [role="group"] h3').evaluateAll((els) => els.map((el) => el.getAttribute('title') ?? ''))
+      for (const hover of hovers) expect(hover, 'a group hover shows a raw reason code (no screen string names a mechanism)').not.toMatch(/[a-z]+_[a-z_]+/)
+    })
+
+    test('3. the no-reason pointer says a free read fills it in only while the reader is on', async ({ page }) => {
+      for (const [on, sentence] of [[true, 'A free read will fill it in.'], [false, 'Turn on the reader to fill it in.']] as const) {
+        await page.unrouteAll({ behavior: 'ignoreErrors' })
+        await seed(page, { on, fates: { '3/1': 'paid' }, sitting: ['3/1'], why: { '3/1': { code: null } } })
+        await openReview(page)
+        await loaded(page)
+        await openCount(page, /waiting for a paid look$/)
+        const group = sheet(page).getByRole('group', { name: 'No reason kept' })
+        await expect(group, `reader ${on ? 'on' : 'off'}`).toContainText(sentence)
+        await page.keyboard.press('Escape')
+      }
+    })
+
+    test('1. needs setup with unread cards polls at the slow pace, not every 3 s', async ({ page }) => {
+      await page.clock.install()
+      const wire = await seed(page, { on: true, running: false, blocked: null })
+      await page.route(/\/pipeline\/match$/, (route) =>
+        route.fulfill(json({ model_present: false, model_ok: false, model_bytes: 0, index_present: false, ready: false })),
+      )
+      await openReview(page)
+      await expect(count(page, 'not yet looked at')).toHaveText(/2\s+not yet looked at/i)
+      await expect(band(page).locator('.review-band-health')).toHaveText(/needs setup/i)
+      const before = wire.asked.length
+      for (let step = 0; step < 10; step += 1) {
+        await page.clock.runFor(3_000) // a faked 30 s in 3 s steps; each answer needs a real moment to land before the next timer is set
+        await new Promise((done) => setTimeout(done, 150)) // keep: real time for the stubbed answer, not a wait on the app
+      }
+      expect(wire.asked.length - before, 'polls in a faked 30 s').toBeLessThanOrEqual(2)
     })
   })
 
