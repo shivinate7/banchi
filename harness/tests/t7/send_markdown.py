@@ -3615,7 +3615,7 @@ def check_send_review_r7(checks: Checks) -> None:
         )
 
 
-def _store_backed_run(checks: Checks, home: Path, cards) -> "runs.Run":
+def _store_backed_run(checks: Checks, home: Path, cards, only=None) -> "runs.Run":
     """A run made the way the sweep makes one: cards identified IN THE STORE, then
     `pkmnscan join --keys` (the store-backed join `cli/cmd_match.py` calls through
     `resolve.load_from_store`). Its directory holds `manifest.json` with `selection.keys` and
@@ -3636,11 +3636,15 @@ def _store_backed_run(checks: Checks, home: Path, cards) -> "runs.Run":
     before = {d.name for d in files.runs_dir().iterdir()}
     export = write_export(home / "sweep-export.csv")
     with quiet():
+        keys = [k for k in keys if only is None or k in only]
         code = entry.main(["join", "--keys", ",".join(keys), "--export", str(export)])
     checks.equal(code, 0, "fixture: the store-backed join writes the sweep-shaped run")
     made = [d for d in files.runs_dir().iterdir() if d.name not in before]
     checks.equal(len(made), 1, "fixture: exactly one run directory")
     run = runs.open_run(made[0])
+    with Store().write() as snapshot:  # the sweep stamps each card it adopts with its run's name
+        for key in keys:
+            snapshot.inventory.cards[key].run = run.name
     checks.ok(
         not run.path(runs.IDENTIFICATIONS).exists() and (run.manifest.get("selection") or {}).get("keys") == keys,
         "fixture: the run holds selection.keys and no identifications.json",
@@ -3734,6 +3738,85 @@ def check_send_store_backed_runs(checks: Checks) -> None:
                 {ARTICUNO_SKU: want, DUNSPARCE_SKU: want},
                 f"{label}: TCGplayer receives both SKUs, one row each, aggregated by SKU",
             )
+
+
+def check_send_store_backed_follows_cards(checks: Checks) -> None:
+    """A store-backed run follows each CARD, not its slot (owner's ruling on PR #751).
+    `do_remove_card` slides higher cards down one index, so a stored position can come to name
+    a card the run never held. A moved card is found where it is now; a gone card is refused
+    by name; a card the run never held is never sent."""
+    from cli import __main__ as entry
+
+    checks.note("")
+    checks.note("STORE-BACKED RUNS FOLLOW CARDS — a removal below the run slides its slots")
+    art, dun, rev = (5, 0, "Articuno", "161", None), (5, 0, "Dunsparce", "120", "normal"), (
+        5, 0, "Dunsparce", "120", "reverse_holo")
+
+    def cards_at(*specs):
+        return [(5, i + 1, *spec[2:]) for i, spec in enumerate(specs)]
+
+    def remove(index):
+        card = Store().read().inventory.cards[master.position_key(5, index)]
+        capture_server.do_remove_card(5, index, {"capture_id": card.capture_id})
+
+    def emitted(run):
+        raised = ""
+        with quiet() as said:
+            try:
+                code = entry.main(["emit", str(run.directory)])
+            except Exception as caught:  # noqa: BLE001
+                code, raised = None, str(caught)
+        rows = {}
+        if run.path(runs.IMPORT_MERGED).exists():
+            rows = {
+                r[tcgcsv.SKU_COLUMN]: r[tcgcsv.QUANTITY_COLUMN]
+                for r in tcgcsv.read_export(run.path(runs.IMPORT_MERGED)).rows
+            }
+        return code, rows, said.getvalue() + raised
+
+    def old_manifest(run):  # what the owner's runs hold: positions only, no per-card identity
+        keep = ("basis", "counts", "created_at", "exports", "joined", "review_below_confidence",
+                "rule", "selection", "updated_at")
+        run.manifest = {k: v for k, v in run.manifest.items() if k in keep}
+        run.manifest["selection"] = {"keys": list(run.manifest["selection"]["keys"])}
+        run.save()
+
+    wanted = {ARTICUNO_SKU: "1", DUNSPARCE_SKU: "1"}
+    # (a) a junk card at 5/1 is removed; the run holds 5/2 and 5/3; a never-held reverse is at 5/4
+    for label, old in (("(a)", False), ("(c) older manifest", True)):
+        with isolated_home() as home:
+            run = _store_backed_run(
+                checks, home, cards_at(dun, art, dun, rev),
+                only=[master.position_key(5, 2), master.position_key(5, 3)],
+            )
+            if old:
+                old_manifest(run)
+            remove(1)
+            code, rows, text = emitted(run)
+            checks.equal(
+                (code, rows), (0, wanted),
+                f"{label}: after a removal below it the run sends exactly its own two cards, "
+                f"found at their new keys; the never-held reverse card is not sent. {text[-200:]}",
+            )
+
+    with isolated_home() as home:  # (c) nothing moved: an older manifest sends as it always did
+        run = _store_backed_run(
+            checks, home, cards_at(art, dun), only=[master.position_key(5, 1), master.position_key(5, 2)]
+        )
+        old_manifest(run)
+        code, rows, _ = emitted(run)
+        checks.equal((code, rows), (0, wanted), "(c) an older manifest, nothing moved, sends its two cards")
+
+    # (b) a card the run held is removed: refused by name, nothing else sent in its place
+    with isolated_home() as home:
+        run = _store_backed_run(
+            checks, home, cards_at(art, dun, rev),
+            only=[master.position_key(5, 1), master.position_key(5, 2)],
+        )
+        remove(1)
+        code, rows, text = emitted(run)
+        checks.ok(code not in (0, None) and not rows, f"(b) a run card since removed refuses the emit and sends nothing: exit {code}, rows {rows}")
+        checks.ok("Articuno" in text, f"(b) and the refusal names the card: {text[-300:]!r}")
 
 
 def check_schema_eleven_then_twelve(checks: Checks) -> None:
@@ -5390,6 +5473,7 @@ def check_withholding(checks: Checks) -> None:
 CHECKS = (
     check_markdown,
     check_send_store_backed_runs,
+    check_send_store_backed_follows_cards,
     check_markdown_floor,
     check_markdown_lens,
     check_markdown_push,
