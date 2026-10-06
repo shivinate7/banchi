@@ -4419,6 +4419,9 @@ export type MarkdownSku = {
   held_here: boolean
   last_sold: string | null
   priced_at: string | null
+  /** Copies still in a box, `Inventory.copies_on_hand`'s count. Absent when the store could not be
+   *  read, which sinks nothing. 0 puts the row below the rest in the default order (spec 7b-29). */
+  on_hand?: number
   /** The export row, verbatim, all sixteen cells. What an upload's bytes are built from and
    *  what a price history's five identity cells are read out of. */
   row: Record<string, string>

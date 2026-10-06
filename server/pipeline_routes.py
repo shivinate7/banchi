@@ -5694,6 +5694,15 @@ def do_markdown_table(stamp: str) -> dict:
     # act on, so it runs first and this read cannot be the one that fails.
     rows = list(_survey(directory).values())
     payload = json.loads((directory / cmd_reprice.SURVEY).read_text("utf-8"))
+    # COPIES STILL IN A BOX, per row, from the store's one count (`Inventory.copies_on_hand`), so the
+    # Live tab can sink a row whose copies have all left (spec 7b-29). A store that cannot be read
+    # sends no figure rather than a zero, which would sink every row.
+    try:
+        inventory: Optional[master.Inventory] = Store().read().inventory
+    except (files.StoreError, OSError, ValueError, TypeError):
+        inventory = None
+    if inventory is not None:
+        rows = [{**row, "on_hand": len(inventory.copies_on_hand(row["sku"]))} for row in rows]
     return {
         "stamp": stamp,
         "asked": payload.get("asked") or {},

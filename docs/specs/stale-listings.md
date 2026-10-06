@@ -659,6 +659,9 @@ lowest first, then the default order.
   (`askingAtSort`), so a typed price does not re-rank rows (D181, the order is taken once).
 - **Order.** A sort orders within each group. Rows that need the owner stay on top (D277). A row
   with no value for the column goes last in both directions.
+- **Left-box rows sit lower (7b-29).** In the default order, a row whose copies have all left the box
+  (`on_hand` 0) sorts below the rows with a copy on hand, inside each group. The Live tab's `on_hand`
+  is `Inventory.copies_on_hand`'s count. A header sort ignores this.
 - **One column at a time.** The sort lives in the URL and survives a reload (D285, filter sort and
   search live in the URL).
 - **One control.** The header is the kit's `SortHeader` in `app/src/kit/filters.tsx`, extended.
