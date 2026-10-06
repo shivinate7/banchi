@@ -964,6 +964,10 @@ export type FilterFacet<T extends string = string> = {
   /** What the facet has picked at rest, drawn selected in the bar. A URL with no key for the
    *  facet reads as these picks, so the rest view needs no query string. */
   readonly defaultPicks?: readonly string[]
+  /** A dense bar: with one pick the trigger reads its name (`Riftbound`), with two or more the
+   *  COUNT of picks (`3`), never `Name +2`. With none picked it reads `Any`. A long name
+   *  ellipsizes at the trigger's cap. */
+  readonly countOnly?: boolean
 }
 
 /** What every facet has picked, by facet key. A facet with nothing picked may be absent. */
@@ -988,6 +992,7 @@ function MoreWords({ head, more }: { readonly head: ReactNode; readonly more: nu
 /** What a facet's trigger may ever show: `Any`, every label, and for a multiple facet every
  *  label with the widest `+N` it can carry. */
 function facetSizer(facet: FilterFacet): ReactNode[] {
+  if (facet.countOnly === true) return [ANY, String(facet.options.length), ...facet.options.map((option) => option.label)]
   const more = facet.options.length - 1
   const labels = facet.options.map((option) => option.label)
   if (facet.multiple === false || more < 1) return [ANY, ...labels]
@@ -1018,7 +1023,9 @@ function FacetChip({
         triggerRef={pick.trigger}
         open={pick.open}
         label={facet.label}
-        value={active ? pickedWords(facet, picked) : <span className="bn-pick-placeholder">{ANY}</span>}
+        value={
+          active ? (facet.countOnly === true && picked.length > 1 ? String(picked.length) : pickedWords(facet, picked)) : <span className="bn-pick-placeholder">{ANY}</span>
+        }
         sizer={sizer}
         icon={facet.icon}
         active={active}
@@ -1078,12 +1085,15 @@ export function FilterChips({
   onChange,
   label = 'Filters',
   className,
+  clear,
 }: {
   readonly facets: readonly FilterFacet[]
   readonly value: FilterValue
   readonly onChange: (next: FilterValue) => void
   readonly label?: string
   readonly className?: string
+  /** `false` leaves out the bar's own Clear all; the screen draws `ClearAll` itself. */
+  readonly clear?: boolean
 }) {
   const activeCount = facets.filter((facet) => (value[facet.key] ?? []).length > 0).length
   const group = useRef<HTMLDivElement | null>(null)
@@ -1100,20 +1110,34 @@ export function FilterChips({
       {/* Always drawn, so its arrival never wraps the bar (D118); hidden, and out of the tab
           order, until two facets are on. The press hides itself, so focus goes back to the
           first facet's trigger before it does. */}
-      <button
-        type="button"
-        className="bn-filterchips-clear"
-        data-off={activeCount < 2 ? 'true' : undefined}
-        tabIndex={activeCount < 2 ? -1 : undefined}
-        aria-hidden={activeCount < 2 ? true : undefined}
-        onClick={() => {
-          group.current?.querySelector<HTMLButtonElement>('.bn-pick')?.focus()
-          onChange({})
-        }}
-      >
-        Clear all
-      </button>
+      {clear === false ? null : (
+        <ClearAll
+          on={activeCount >= 2}
+          onClick={() => {
+            group.current?.querySelector<HTMLButtonElement>('.bn-pick')?.focus()
+            onChange({})
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+/** The filter bar's "Clear all", for a screen that draws it elsewhere (`FilterChips` with
+ *  `clear={false}`, then this in its own heading). Always drawn: hidden and out of the tab order
+ *  while `on` is false, so its arrival moves nothing (D118). */
+export function ClearAll({ on, onClick }: { readonly on: boolean; readonly onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="bn-filterchips-clear"
+      data-off={on ? undefined : 'true'}
+      tabIndex={on ? undefined : -1}
+      aria-hidden={on ? undefined : true}
+      onClick={onClick}
+    >
+      Clear all
+    </button>
   )
 }
 

@@ -16,6 +16,8 @@ import { useCardCropWhenSeen } from './cardCrop'
 import { didYouMean, matchQuery } from './kit/match'
 import { SearchField } from './SearchField'
 import { ReadingAge } from './CardLocations'
+import { LensSwitch, MixView } from './MixView'
+import { useViewQuery } from './kit/viewState'
 import './Revenue.css'
 
 /* SALES (`#/revenue`) — the owner's gross-revenue retrospective.
@@ -621,7 +623,7 @@ const scrollToEnd = (el: HTMLDivElement | null) => {
   if (el !== null) el.scrollLeft = el.scrollWidth
 }
 
-export function Revenue() {
+function SalesView() {
   const [orders, setOrders] = useState<OrderRow[] | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
 
@@ -1024,6 +1026,8 @@ export function Revenue() {
         title="Sales"
         icon="dollar"
         className="revenue"
+        toolbar={<LensSwitch lens="sales" />}
+        toolbarLabel="View"
         status={
           <Notice tone="danger" title="Could not read your orders">
             {failure.message}
@@ -1043,6 +1047,8 @@ export function Revenue() {
         title="Sales"
         icon="dollar"
         className="revenue"
+        toolbar={<LensSwitch lens="sales" />}
+        toolbarLabel="View"
         loading
         actions={
           <div className="revenue-period" data-held="true" inert>
@@ -1055,7 +1061,7 @@ export function Revenue() {
 
   if (sales.length === 0) {
     return (
-      <Page title="Sales" icon="dollar" className="revenue">
+      <Page title="Sales" icon="dollar" className="revenue" toolbar={<LensSwitch lens="sales" />} toolbarLabel="View">
         <EmptyState
           icon="dollar"
           title="Nothing has sold yet."
@@ -1103,6 +1109,8 @@ export function Revenue() {
       title="Sales"
       icon="dollar"
       className="revenue"
+      toolbar={<LensSwitch lens="sales" />}
+      toolbarLabel="View"
       actions={
         <div className="revenue-period">
           <Segmented label="Period" value={period} options={PERIOD_TABS} onChange={handlePeriod} />
@@ -1474,4 +1482,14 @@ export function Revenue() {
       )}
     </Page>
   )
+}
+
+/** Sales, or its Mix lens (`?lens=mix`). One route, two views of the same retrospective. */
+export function Revenue() {
+  const lens = useViewQuery().get('lens')
+  /* A hash change to another screen reaches this subscription before the shell unmounts the
+     screen. Reading no lens there would mount Sales for a frame, and Sales' own URL writer would
+     put `#/revenue` back over the address the person just went to. */
+  if (!window.location.hash.startsWith('#/revenue')) return null
+  return lens === 'mix' ? <MixView /> : <SalesView />
 }

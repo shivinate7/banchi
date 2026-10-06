@@ -9,11 +9,13 @@ from __future__ import annotations
 import json
 import tempfile
 import time
+from datetime import datetime, timedelta, timezone
 
 from pathlib import Path
 from typing import List
 from harness.tests import Checks
 from pipeline import games, pricehistory, stockimages
+from store.readings import Reading
 from store.skus import SkuRow
 from server import capture_server, pipeline_routes
 from store import master
@@ -23,6 +25,9 @@ from store import master
 from store import orders as order_store
 from store.session import Store
 from harness.tests.t7.common import (
+    QuietHandler,
+    _spawn_server,
+    request,
     answers,
     capture_payload,
     fake_cid,
@@ -835,10 +840,233 @@ def check_skus_photos_pending(checks: Checks) -> None:
         checks.equal(warm["stock_photos"].get("sealed-sku"), "https://img/etb.jpg", "and answers the URL")
 
 
+
+# STOCK MIX, `GET /stock/mix` (docs/specs/sales-screen.md, Mix, checks 1 to 7). One home, `pipeline/stockmix.py`.
+# BUILDER CONTRACT, wire names read here: top level `asOf`, `cards`; per card `game set rarity finish state box
+# capturedWeek soldWeek sku price soldRecent`; `state` is `Sold`, `On hand` or `Not listed yet`; `price` is the
+# SKU's market reading (number or numeric string, null if none); `soldRecent` is 1 under 14 days after `state_at`.
+# Each check goes red on a server with no such route, by a failed status assertion first.
+
+MIX_ROUTE = "/stock/mix"
+MIX_CARD_KEYS = {
+    "game", "set", "rarity", "finish", "state", "box", "capturedWeek", "soldWeek", "sku", "price", "soldRecent",
+}
+
+
+def _mix_sku(set_name="Origins", rarity="Rare") -> SkuRow:
+    return SkuRow(
+        product_line="Riftbound League of Legends Trading Card Game", set_name=set_name,
+        product_name="Ahri", number="001", rarity=rarity, condition="Near Mint", grade=None,
+        printing=None, first_seen=1_700_000_000, last_seen=1_700_000_000, source="t7-fixture", raw={},
+    )
+
+
+def _mix_iso(delta: timedelta) -> str:
+    return (datetime.now(timezone.utc) - delta).isoformat()
+
+
+def _mix_fixture() -> None:
+    """Five cards that count (listed on hand, two sold at 13 and 14 days, two unlisted) and two
+    that never do (retired, moved). An order for S1 at a price far from its reading sits beside
+    them, so a server that sums orders into the wire shows it."""
+    with Store().write() as snapshot:
+        inv = snapshot.inventory
+        inv.ensure_box(1, name="Alpha")
+        snapshot.skus.entries["S1"] = _mix_sku()
+        snapshot.readings.entries["S1"] = Reading(market="2.50", at=1_700_000_000, source="t7", kind="run")
+
+        def put(seed, **fields):
+            card, _ = inv.allocate_capture(1, cid=fake_cid(f"mix-{seed}"))
+            card.game = "riftbound"
+            card.captured_at = "2026-09-16T12:00:00+00:00"
+            for name, value in fields.items():
+                setattr(card, name, value)
+            return card
+
+        put("hand", sku="S1", state=master.IDENTIFIED)
+        put("sold13", sku="S1", state=master.SOLD, state_at=_mix_iso(timedelta(days=13)))
+        put("sold14", sku="S1", state=master.SOLD, state_at=_mix_iso(timedelta(days=14)))
+        put("claim", sku=None, state=master.CAPTURED, rarity_claim=["Rare", "Epic"], set_hint="Origins")
+        put("noclaim", sku=None, state=master.CAPTURED, rarity_claim=[], metadata_finish=None)
+        put("retired", sku="S1", state=master.RETIRED)
+        put("moved", sku="S1", state=master.MOVED)
+        snapshot.ledger.ingest([
+            order_store.OrderRecord(
+                source="TCGplayer", number="O-1", placed_at=_mix_iso(timedelta(days=2)),
+                lines=[order_store.OrderLine(sku="S1", quantity=1, unit_price="9.99")],
+            )
+        ])
+
+
+def _mix_get():
+    """`(status, payload or None)` for one read of the route over a real in-process server."""
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    thread = _spawn_server(httpd)
+    try:
+        status, body, _ = request(
+            httpd.server_address[1], "GET", MIX_ROUTE, origin=capture_server.DEFAULT_ALLOWED_ORIGINS[0]
+        )
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+    try:
+        return status, json.loads(body)
+    except (ValueError, TypeError):
+        return status, None
+
+
+def _mix_payload(checks: Checks):
+    """The wire payload over the fixture, or `None` after a failed status or shape check."""
+    with isolated_home():
+        _mix_fixture()
+        status, payload = _mix_get()
+    if not checks.equal(status, 200, f"GET {MIX_ROUTE} answers 200"):
+        return None
+    if not checks.ok(isinstance(payload, dict) and isinstance(payload.get("cards"), list), "payload is {asOf, cards: [...]}"):
+        return None
+    return payload
+
+
+def check_mix_leaves_out_retired_and_moved(checks: Checks) -> None:
+    checks.note("")
+    checks.note("STOCK MIX 1 — retired and moved cards are not on the wire")
+    payload = _mix_payload(checks)
+    if payload is None:
+        return
+    cards = payload["cards"]
+    checks.equal(len(cards), 5, "five of seven cards count: retired and moved are left out")
+    checks.equal(
+        sorted(card["state"] for card in cards),
+        ["Not listed yet", "Not listed yet", "On hand", "Sold", "Sold"],
+        "states: one on hand, two sold, two not listed yet",
+    )
+
+
+def check_mix_wire_has_no_revenue_and_price_is_the_reading(checks: Checks) -> None:
+    checks.note("")
+    checks.note("STOCK MIX 2 — no revenue on the wire, a sold card's price is its market reading")
+    payload = _mix_payload(checks)
+    if payload is None:
+        return
+    checks.ok("revenue" not in payload, "no top-level revenue key")
+    checks.ok(all("revenue" not in card for card in payload["cards"]), "no per-card revenue key")
+    sold = [card for card in payload["cards"] if card.get("state") == "Sold"]
+    checks.equal(len(sold), 2, "two sold cards")
+    checks.ok(
+        bool(sold) and all(card["price"] is not None and abs(float(card["price"]) - 2.5) < 1e-9 for card in sold),
+        "a sold card's price is the 2.50 reading, never the 9.99 an order paid",
+    )
+
+
+def check_mix_unlisted_card_reads_its_claim(checks: Checks) -> None:
+    checks.note("")
+    checks.note("STOCK MIX 3 — an unlisted card counts by its claimed rarity")
+    payload = _mix_payload(checks)
+    if payload is None:
+        return
+    unlisted = [card for card in payload["cards"] if card["sku"] is None]
+    checks.equal(
+        sorted(card["rarity"] for card in unlisted), ["No claim", "Rare or Epic"],
+        "claim joined with ' or ', an empty claim is 'No claim'",
+    )
+    claimed = [card for card in unlisted if card["rarity"] == "Rare or Epic"]
+    checks.ok(bool(claimed) and claimed[0]["set"] == "Origins", "its set is the set hint")
+    blank = [card for card in unlisted if card["rarity"] == "No claim"]
+    checks.ok(bool(blank) and blank[0]["finish"] == "Unknown", "no metadata_finish reads 'Unknown'")
+
+
+def check_mix_state_labels(checks: Checks) -> None:
+    checks.note("")
+    checks.note("STOCK MIX 4 — no SKU is 'Not listed yet', sold is 'Sold', the rest 'On hand'")
+    payload = _mix_payload(checks)
+    if payload is None:
+        return
+    cards = payload["cards"]
+    unsold = [card for card in cards if card["state"] != "Sold"]
+    checks.equal(sum(card["state"] == "Sold" for card in cards), 2, "state sold reads Sold")
+    checks.ok(
+        bool(unsold) and all((card["state"] == "Not listed yet") == (card["sku"] is None) for card in unsold),
+        "a card with no SKU is Not listed yet",
+    )
+    checks.ok(
+        any(card["state"] == "On hand" and card["sku"] == "S1" for card in cards),
+        "a listed unsold card is On hand",
+    )
+
+
+def check_mix_sold_recent_edge(checks: Checks) -> None:
+    checks.note("")
+    checks.note("STOCK MIX 5 — soldRecent is 1 at 13 days and 0 at 14 days")
+    payload = _mix_payload(checks)
+    if payload is None:
+        return
+    cards = payload["cards"]
+    checks.equal(
+        sorted(card["soldRecent"] for card in cards if card["state"] == "Sold"), [0, 1],
+        "13 days is recent, 14 is not",
+    )
+    checks.ok(all(card["soldRecent"] == 0 for card in cards if card["state"] != "Sold"), "a card that did not sell is never recent")
+
+
+def check_mix_wire_allowlist(checks: Checks) -> None:
+    checks.note("")
+    checks.note("STOCK MIX 7 — no photograph or buyer field, only the allowed keys")
+    payload = _mix_payload(checks)
+    if payload is None:
+        return
+    checks.equal(set(payload), {"asOf", "cards"}, "top level is asOf and cards")
+    extra = {key for card in payload["cards"] for key in set(card) - MIX_CARD_KEYS}
+    checks.ok(not extra, "every card key is on the allowlist", f"extra: {sorted(extra)}")
+    checks.ok(all(set(card) == MIX_CARD_KEYS for card in payload["cards"]), "every card carries all eleven keys")
+
+
+def check_budget_row(checks: Checks) -> None:
+    checks.note("")
+    checks.note("STOCK MIX 6 — the read budget has a row, and its sql is constant at S and 2S")
+    from harness.tests.t7 import read_budget
+
+    checks.ok(MIX_ROUTE in read_budget.get_routes(), "do_GET serves '/stock/mix', so its budget row is measured")
+    row = read_budget.BUDGET.get(MIX_ROUTE)
+    checks.ok(row is not None, "BUDGET has a '/stock/mix' row")
+    checks.ok(MIX_ROUTE in read_budget.ROUTE_URLS, "ROUTE_URLS names '/stock/mix'")
+    if row is not None:
+        checks.equal(row.get("status"), 200, "the row's fixture hits the 200 path")
+        checks.equal(row.get("store_read"), 1, "one store read")
+    checks.ok((MIX_ROUTE, "sql") not in read_budget.KNOWN_OVER, "sql is equal at S and 2S: no KNOWN_OVER entry")
+
+
+def check_mix_listed_card_with_no_rarity_reads_unread(checks: Checks) -> None:
+    checks.note("")
+    checks.note("STOCK MIX 3b — a listed card whose SKU has no rarity or set reads Unread / No set yet, never its claim")
+    with isolated_home():
+        with Store().write() as snapshot:
+            inv = snapshot.inventory
+            inv.ensure_box(1, name="Alpha")
+            snapshot.skus.entries["S9"] = _mix_sku(set_name="", rarity="")
+            card, _ = inv.allocate_capture(1, cid=fake_cid("mix-unread"))
+            card.game, card.sku, card.state = "riftbound", "S9", master.IDENTIFIED
+            card.rarity_claim, card.set_hint = ["Epic"], "Origins"
+        status, payload = _mix_get()
+    if not checks.equal(status, 200, f"GET {MIX_ROUTE} answers 200") or not isinstance(payload, dict):
+        return
+    cards = payload.get("cards", [])
+    checks.equal([c.get("rarity") for c in cards], ["Unread"], "a listed card with no SKU rarity reads Unread, not its claim")
+    checks.equal([c.get("set") for c in cards], ["No set yet"], "a listed card with no SKU set reads No set yet, not its hint")
+
+
 CHECKS = (
     check_pipeline_sets,
     check_stock_images,
     check_sales_stock_photo_fallback,
     check_stock_images_pokemon_warm_refusal,
     check_skus_photos_pending,
+    check_mix_leaves_out_retired_and_moved,
+    check_mix_wire_has_no_revenue_and_price_is_the_reading,
+    check_mix_unlisted_card_reads_its_claim,
+    check_mix_listed_card_with_no_rarity_reads_unread,
+    check_mix_state_labels,
+    check_mix_sold_recent_edge,
+    check_mix_wire_allowlist,
+    check_budget_row,
 )

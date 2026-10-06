@@ -4858,6 +4858,26 @@ export type TrendsPreloadNote = {
 /** `GET /pipeline/trends-saved`: a local read, no market request. */
 export type SavedTrendsPayload = { skus: Record<string, SavedTrend>; note: TrendsPreloadNote | null }
 
+/** One card in `GET /stock/mix`: small fields only, no photograph and no buyer. `price` is the
+ *  SKU's market reading (null if none), `soldRecent` is 1 for a card sold under 14 days before
+ *  `asOf`. No revenue rides this wire: Sales' own refund rule is the one home for that. */
+export type MixCard = {
+  game: string
+  set: string
+  rarity: string
+  finish: string
+  state: 'Sold' | 'On hand' | 'Not listed yet'
+  box: string
+  capturedWeek: string | null
+  soldWeek: string | null
+  sku: string | null
+  price: number | null
+  soldRecent: 0 | 1
+}
+
+/** `GET /stock/mix`. */
+export type StockMixPayload = { asOf: string; cards: MixCard[] }
+
 /** `GET /pipeline/movers`. `unmeasured` counts listed SKUs with no baseline or no reading. */
 export type PriceMoversPayload = {
   threshold: string
