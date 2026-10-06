@@ -53,8 +53,8 @@ function pressCarries(skus: number, copies: number, prices: number): string {
   ].filter((part): part is string => part !== null)
   return parts.join(' and ')
 }
-/** A checked send stays on the card this long, its day named (`atClockTime`); past a week it goes. */
-const STANDS_MS = 7 * 24 * 60 * 60 * 1000
+/** A checked send stays on the card this long; its day is named when the check was not today (`atClockTime`). */
+const STANDS_MS = 24 * 60 * 60 * 1000
 
 /** The failures a second press can fix. Everything else is a refusal: pressing again gets the
  *  same answer, so the card offers no retry for it. */
