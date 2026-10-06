@@ -3783,14 +3783,12 @@ def check_send_store_backed_follows_cards(checks: Checks) -> None:
 
     wanted = {ARTICUNO_SKU: "1", DUNSPARCE_SKU: "1"}
     # (a) a junk card at 5/1 is removed; the run holds 5/2 and 5/3; a never-held reverse is at 5/4
-    for label, old in (("(a)", False), ("(c) older manifest", True)):
+    for label in ("(a)",):
         with isolated_home() as home:
             run = _store_backed_run(
                 checks, home, cards_at(dun, art, dun, rev),
                 only=[master.position_key(5, 2), master.position_key(5, 3)],
             )
-            if old:
-                old_manifest(run)
             remove(1)
             code, rows, text = emitted(run)
             checks.equal(
@@ -3799,15 +3797,8 @@ def check_send_store_backed_follows_cards(checks: Checks) -> None:
                 f"found at their new keys; the never-held reverse card is not sent. {text[-200:]}",
             )
 
-    with isolated_home() as home:  # (c) nothing moved: an older manifest sends as it always did
-        run = _store_backed_run(
-            checks, home, cards_at(art, dun), only=[master.position_key(5, 1), master.position_key(5, 2)]
-        )
-        old_manifest(run)
-        code, rows, _ = emitted(run)
-        checks.equal((code, rows), (0, wanted), "(c) an older manifest, nothing moved, sends its two cards")
-
-    # (b) a card the run held is removed: refused by name, nothing else sent in its place
+    # (b) SEND THE REST (owner's ruling on #751): a card the run held is removed; the other
+    # card still goes, and the output names the gone card by its last-known name.
     with isolated_home() as home:
         run = _store_backed_run(
             checks, home, cards_at(art, dun, rev),
@@ -3815,9 +3806,17 @@ def check_send_store_backed_follows_cards(checks: Checks) -> None:
         )
         remove(1)
         code, rows, text = emitted(run)
-        checks.ok(code not in (0, None) and not rows, f"(b) a run card since removed refuses the emit and sends nothing: exit {code}, rows {rows}")
-        checks.ok("Articuno" in text, f"(b) and the refusal names the card: {text[-300:]!r}")
-        checks.ok("Dunsparce" not in text, f"(d) and names only that card, no other of the run: {text[-300:]!r}")
+        checks.equal((code, rows), (0, {DUNSPARCE_SKU: "1"}), f"(b) a run card since removed does not refuse: the rest goes, the gone card's SKU does not: {text[-300:]!r}")
+        checks.ok("Articuno" in text, f"(b) and the CLI output names the gone card: {text[-300:]!r}")
+    with isolated_home() as home:  # every card gone: nothing to send, so it still refuses
+        run = _store_backed_run(
+            checks, home, cards_at(art, dun, rev),
+            only=[master.position_key(5, 1), master.position_key(5, 2)],
+        )
+        remove(2)
+        remove(1)
+        code, rows, text = emitted(run)
+        checks.ok(code not in (0, None) and not rows, f"(b) a run whose every card is gone refuses and sends nothing: exit {code}, rows {rows}")
 
     # (a) a later sweep re-reads and re-stamps one card of sweep-01: both runs still follow cards
     with isolated_home() as home:
@@ -3836,31 +3835,52 @@ def check_send_store_backed_follows_cards(checks: Checks) -> None:
         code, rows, text = emitted(run)
         checks.equal((code, rows), (0, wanted), "(b) a join --keys run, stamped on no card, sends its cards: " + text[-200:])
 
-    # (e) an old keys-only manifest backfills at first read; a second read uses the recorded map
+    # (e) the keys-only backfill is deleted (owner's ruling on #751): a manifest with
+    # selection.keys and no `cards` map refuses in a plain sentence that names the run and
+    # says it cannot tell which cards it held, even when every card is stamped with the run.
     with isolated_home() as home:
         run = _store_backed_run(checks, home, cards_at(art, dun))
         old_manifest(run)
-        def names():
-            try:
-                cards = runs.open_run(run.directory).read_identifications()["cards"]
-            except runs.RunError as caught:
-                return f"refused: {caught}"
-            return sorted((c.get("identification") or {}).get("name") for c in cards.values())
+        code, rows, text = emitted(runs.open_run(run.directory))
+        checks.ok(code not in (0, None) and not rows, f"(e) a keys-only manifest refuses and sends nothing: exit {code}, rows {rows}")
+        checks.ok(run.name in text and "cannot tell which cards it held" in text, f"(e) and names the run and says it cannot tell which cards it held: {text[-300:]!r}")
+        checks.ok("cards" not in runs.open_run(run.directory).manifest, "(e) and writes no `cards` map back into the manifest")
 
-        checks.equal(names(), ["Articuno", "Dunsparce"], "(e) an old manifest, every card stamped, backfills at first read")
-        with Store().write() as snapshot:
-            for key in run.manifest["selection"]["keys"]:
-                snapshot.inventory.cards[key].run = "a-later-sweep"
-        checks.equal(names(), ["Articuno", "Dunsparce"], "(e) a second read uses the recorded map, not the stamp")
-        code, rows, text = emitted(runs.open_run(run.directory))
-        checks.equal((code, rows), (0, wanted), "(e) and the backfilled run sends: " + text[-200:])
-    with isolated_home() as home:  # backfill only when EVERY key's card is stamped with that run
-        run = _store_backed_run(checks, home, cards_at(art, dun))
-        old_manifest(run)
-        with Store().write() as snapshot:
-            snapshot.inventory.cards[master.position_key(5, 2)].run = "a-later-sweep"
-        code, rows, text = emitted(runs.open_run(run.directory))
-        checks.ok(code not in (0, None) and not rows, f"(e) an old manifest with one card stamped elsewhere refuses, sends nothing: exit {code}, rows {rows}")
+
+def check_send_skips_gone_card(checks: Checks) -> None:
+    """SEND THE REST over the wire (owner's ruling on #751). A sweep run holds a card since
+    removed: POST /pipeline/send answers 200, TCGplayer receives the card still in the store,
+    and the send's own summary (what the screen draws as the receipt, never the raw `console`)
+    names the gone card by its last-known name. A run whose every card is gone refuses."""
+    checks.note("")
+    checks.note("STORE-BACKED SEND SKIPS A GONE CARD — the receipt names it")
+    for every in (False, True):
+        label = "SEND, every card gone" if every else "SEND, one card gone"
+        with send_portal() as portal, isolated_home() as home:
+            run = _store_backed_run(checks, home, [(6, 1, "Articuno", "161", None), (6, 2, "Dunsparce", "120", "normal")])
+            for index in ((2, 1) if every else (1,)):
+                card = Store().read().inventory.cards[master.position_key(6, index)]
+                capture_server.do_remove_card(6, index, {"capture_id": card.capture_id})
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+            httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+            port = httpd.server_address[1]
+            thread = _spawn_server(httpd)
+            try:
+                status, body, _ = request(port, "POST", "/pipeline/send", payload={"runs": [run.name], "confirm": True})
+            finally:
+                httpd.shutdown()
+                thread.join(timeout=5)
+            answer = json.loads(body or b"{}")
+            if every:
+                checks.ok(status != 200 and not portal.get("rows"), f"{label}: refuses and sends nothing: {status}")
+                continue
+            checks.equal(status, 200, f"{label}: POST /pipeline/send answers 200: {body[-300:]!r}")
+            checks.equal(
+                {row["ProductConditionId"]: row["AddToQuantity"] for row in portal.get("rows") or []},
+                {DUNSPARCE_SKU: "1"},
+                f"{label}: TCGplayer receives only the card still in the store",
+            )
+            checks.ok("Articuno" in json.dumps(answer.get("send") or {}), f"{label}: the send summary names the gone card, not only the console: {answer.get('send')!r}")
 
 
 def check_schema_eleven_then_twelve(checks: Checks) -> None:
@@ -5518,6 +5538,7 @@ CHECKS = (
     check_markdown,
     check_send_store_backed_runs,
     check_send_store_backed_follows_cards,
+    check_send_skips_gone_card,
     check_markdown_floor,
     check_markdown_lens,
     check_markdown_push,
