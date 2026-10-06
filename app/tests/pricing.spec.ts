@@ -5445,6 +5445,94 @@ test('7b-24: a sort and a filter work together', async ({ page }) => {
   expectSorted(await shownBySection(page, 'Market'), 'desc')
 })
 
+/* THE OWNER'S RULING, LEFT-BOX ROWS SIT LOWER: in the default order a row whose copies have ALL left the
+ * box (`on_hand` is 0: every copy sold, which orders say for sure) sorts below every row that still has
+ * a copy in a box. Inside each half the old order holds (market high to low, ties by name), and the
+ * groups that put rows needing the owner on top (D277) keep their place. A header sort is the owner's
+ * explicit order and ignores the rule. The expected order is DERIVED from the fixture below, never typed. */
+const LEFT_BOX_ROWS = [
+  { sku: '951', name: 'Zeta', market: '50.00', low: '1.00', on_hand: 0 },
+  { sku: '952', name: 'Yankee', market: '40.00', low: '2.00', on_hand: 2 },
+  { sku: '953', name: 'Rone', market: '4.80', low: '4.00', on_hand: 0 },
+  { sku: '954', name: 'Rtwo', market: '4.10', low: '1.50', on_hand: 2 },
+  { sku: '955', name: 'Rthree', market: '3.30', low: '3.10', on_hand: 0 },
+  { sku: '956', name: 'Rfour', market: '2.20', low: '0.80', on_hand: 1 },
+  { sku: '957', name: 'Rfive', market: '1.70', low: '1.60', on_hand: 0 },
+  { sku: '958', name: 'Rsix', market: '0.90', low: '0.70', on_hand: 3 },
+]
+const handOf = (name: string) => LEFT_BOX_ROWS.find((row) => row.name === name)!.on_hand
+/** What the default order draws, from the fixture: market high to low, then left-box rows after the rest,
+ *  inside each of the two groups ($5 and over needs the owner). */
+function leftBoxExpected(): [string, string[]][] {
+  const byMarket = [...LEFT_BOX_ROWS].sort((a, b) => Number(b.market) - Number(a.market))
+  const group = (needs: boolean) => {
+    const rows = byMarket.filter((row) => (Number(row.market) >= 5) === needs)
+    return [...rows.filter((row) => row.on_hand > 0), ...rows.filter((row) => row.on_hand === 0)].map((row) => row.name)
+  }
+  return [['Needs you', group(true)], ['Ready', group(false)]]
+}
+async function openLeftBox(page: Page): Promise<void> {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, {
+    worklist: {
+      runs: [{ run: RUN, box: 7, box_name: 'Box 7', skus: LEFT_BOX_ROWS.length }],
+      skus: LEFT_BOX_ROWS.map((row) => ({
+        ...sku({
+          sku: row.sku,
+          name: row.name,
+          copies: Math.max(row.on_hand, 1),
+          add_to_quantity: row.on_hand,
+          snap: { market: row.market, direct_low: null, low: row.low, low_with_shipping: null, now: null },
+        }),
+        on_hand: row.on_hand,
+        in: [{ run: RUN, add_to_quantity: row.on_hand }],
+        claimed_add: row.on_hand,
+        over_cap: false,
+      })),
+    },
+  })
+  await expect(page.locator('.pricing-row')).toHaveCount(LEFT_BOX_ROWS.length)
+}
+const drawnGroups = async (page: Page) => namesBySection(await shownBySection(page, 'Market'))
+
+test('7b-29: in the default order a row with every copy gone sorts below every row with a copy on hand, in each group', async ({ page }) => {
+  await openLeftBox(page)
+  for (const { head, names } of await shownBySection(page, 'Market')) {
+    const firstGone = names.findIndex((name) => handOf(name) === 0)
+    if (firstGone >= 0) expect(names.slice(firstGone).every((name) => handOf(name) === 0), `${head}: a left-box row is above a row with a copy on hand`).toBe(true)
+  }
+})
+
+test('7b-29: inside each half the order is unchanged, and the Needs you group keeps its place on top', async ({ page }) => {
+  await openLeftBox(page)
+  expect(await drawnGroups(page)).toEqual(leftBoxExpected())
+})
+
+for (const column of ['Market', 'Lowest'] as const) {
+  test(`7b-29: the ${column} header sort ignores the left-box rule`, async ({ page }) => {
+    await openLeftBox(page)
+    await sortHead(page, column).click()
+    await expect(columnHead(page, column)).toHaveAttribute('aria-sort', 'descending')
+    const sections = await shownBySection(page, column)
+    expectSorted(sections, 'desc')
+    /* the fixture's Lowest order differs from its Market order, so under a plain sort a left-box row sits above a row with a copy */
+    const hands = sections.flatMap((section) => section.names.map(handOf))
+    expect(hands.some((value, at) => value === 0 && hands.slice(at + 1).some((later) => later > 0)), 'the sort was reordered by the rule').toBe(true)
+  })
+}
+
+test('7b-29: the default order, back from a sort and after a reload, keeps the rule', async ({ page }) => {
+  await openLeftBox(page)
+  const before = page.url()
+  for (let press = 0; press < 3; press += 1) await sortHead(page, 'Market').click()
+  await expect(columnHead(page, 'Market')).toHaveAttribute('aria-sort', 'none')
+  expect(page.url()).toBe(before)
+  expect(await drawnGroups(page)).toEqual(leftBoxExpected())
+  await page.reload()
+  await expect(page.locator('.pricing-row')).toHaveCount(LEFT_BOX_ROWS.length)
+  expect(await drawnGroups(page)).toEqual(leftBoxExpected())
+})
+
 test('7b-21: the age lines under Market and Range overlap no other cell and no neighboring row', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   await open(page, {

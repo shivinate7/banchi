@@ -1012,3 +1012,73 @@ test('an earlier stored price rides only when it is above the live price, and is
     { sku: '8608000', price: '3.50' },
   ])
 })
+
+/* THE OWNER'S RULING, LEFT-BOX ROWS SIT LOWER (spec 7b-29; the Send tab's cases are in pricing.spec.ts).
+ * On the Live tab, lens All, a row whose copies have ALL left the box (`on_hand` 0, from orders) sorts below
+ * every row that still has a copy in a box, in the default order. Inside each half the old order holds
+ * (market high to low, ties by name) and the No market price group stays on top. A header sort ignores the
+ * rule. `on_hand` is the field the Send tab's worklist row already carries; a live row has none today.
+ * The expected order is derived from the fixture, never typed. */
+const LEFT_BOX_LIVE = [
+  { sku: '961', name: 'Zeta', market: null, on_hand: 0 },
+  { sku: '962', name: 'Yankee', market: null, on_hand: 2 },
+  { sku: '963', name: 'Rone', market: '48.00', on_hand: 0 },
+  { sku: '964', name: 'Rtwo', market: '41.00', on_hand: 2 },
+  { sku: '965', name: 'Rthree', market: '33.00', on_hand: 0 },
+  { sku: '966', name: 'Rfour', market: '22.00', on_hand: 1 },
+  { sku: '967', name: 'Rfive', market: '17.00', on_hand: 0 },
+  { sku: '968', name: 'Rsix', market: '9.00', on_hand: 3 },
+]
+const liveHandOf = (name: string) => LEFT_BOX_LIVE.find((row) => row.name === name)!.on_hand
+function liveLeftBoxExpected(): [string, string[]][] {
+  const byMarket = [...LEFT_BOX_LIVE].sort((a, b) => Number(b.market ?? 1e9) - Number(a.market ?? 1e9) || a.name.localeCompare(b.name))
+  const group = (needs: boolean) => {
+    const rows = byMarket.filter((row) => (row.market === null) === needs)
+    return [...rows.filter((row) => row.on_hand > 0), ...rows.filter((row) => row.on_hand === 0)].map((row) => row.name)
+  }
+  return [['No market price', group(true)], ['With a market price', group(false)]]
+}
+async function openLiveLeftBox(page: Page): Promise<void> {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, {
+    skus: LEFT_BOX_LIVE.map((row) =>
+      // `on_hand` is not on `MarkdownSku` yet: the cast is the fixture stating the wire the rule needs.
+      ({ ...live({ sku: row.sku, name: row.name, market: row.market, row: { 'TCG Market Price': row.market ?? '' } as Record<string, string> }), on_hand: row.on_hand }) as MarkdownSku,
+    ),
+  })
+  await expect(page.locator('.pricing-row')).toHaveCount(LEFT_BOX_LIVE.length)
+}
+const liveGroups = (page: Page) =>
+  page.locator('.pricing-group').evaluateAll((groups) =>
+    groups.map((group) => [group.getAttribute('aria-label') ?? '', [...group.querySelectorAll('.pricing-row .pricing-name')].map((cell) => cell.textContent ?? '')] as [string, string[]]),
+  )
+const liveHead = (page: Page) => page.locator('.pricing-caption').getByRole('button', { name: /^Market/i })
+
+test('7b-29: Live tab, All lens: a row with every copy gone sorts below every row with a copy on hand, and the order inside each half holds', async ({ page }) => {
+  await openLiveLeftBox(page)
+  const groups = await liveGroups(page)
+  for (const [head, names] of groups) {
+    const firstGone = names.findIndex((name) => liveHandOf(name) === 0)
+    if (firstGone >= 0) expect(names.slice(firstGone).every((name) => liveHandOf(name) === 0), `${head}: a left-box row is above a row with a copy on hand`).toBe(true)
+  }
+  expect(groups).toEqual(liveLeftBoxExpected())
+})
+
+test('7b-29: Live tab: the Market header sort ignores the left-box rule', async ({ page }) => {
+  await openLiveLeftBox(page)
+  await liveHead(page).click()
+  const [, names] = (await liveGroups(page)).find(([head]) => head === 'With a market price')!
+  const market = (name: string) => Number(LEFT_BOX_LIVE.find((row) => row.name === name)!.market)
+  expect(names.map(market)).toEqual([...names.map(market)].sort((a, b) => b - a))
+  const hands = names.map(liveHandOf)
+  expect(hands.some((value, at) => value === 0 && hands.slice(at + 1).some((later) => later > 0)), 'the sort was reordered by the rule').toBe(true)
+})
+
+test('7b-29: Live tab: the default order, back from a sort and after a reload, keeps the rule', async ({ page }) => {
+  await openLiveLeftBox(page)
+  for (let press = 0; press < 3; press += 1) await liveHead(page).click()
+  expect(await liveGroups(page)).toEqual(liveLeftBoxExpected())
+  await page.reload()
+  await expect(page.locator('.pricing-row')).toHaveCount(LEFT_BOX_LIVE.length)
+  expect(await liveGroups(page)).toEqual(liveLeftBoxExpected())
+})
