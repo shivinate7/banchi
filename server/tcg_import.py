@@ -55,7 +55,7 @@ import json
 import os
 import sys
 import urllib.parse
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -287,7 +287,9 @@ def rows_from_csv(text: str) -> List[dict]:
     return rows
 
 
-def _check(rows: Sequence[dict], *, listing: bool = False, take_off: Sequence[str] = ()) -> None:
+def _check(
+    rows: Sequence[dict], *, listing: bool = False, take_off: Optional[Mapping[str, int]] = None
+) -> None:
     """Refuse a file their validator would refuse, before a transaction exists.
 
     THE CHECKS ARE THEIRS, NOT THIS REPO'S OPINION. `MyPrice` between 0.01 and 200000 and
@@ -304,6 +306,10 @@ def _check(rows: Sequence[dict], *, listing: bool = False, take_off: Sequence[st
     mixed"). Every guard on the rows that add copies stays whole, and the check past the wait
     compares a price-only row's price with TCGplayer's. Nothing sends through this door before
     the owner's first test.
+
+    `take_off` MAPS EACH SKU WHOSE ROW MAY BE NEGATIVE TO THE SIZE `emit` COMPUTED (D100, the
+    owner's ruling: a hold takes its live copies off). A negative passes only when its size
+    equals that figure, so a row edited after `emit` wrote it is still refused.
     """
     if not rows:
         raise FetchRefusal("tcg_import_empty", "That file has no rows, so there is nothing to push.")
@@ -337,7 +343,7 @@ def _check(rows: Sequence[dict], *, listing: bool = False, take_off: Sequence[st
                 f"SKU {sku} carries an Add to Quantity that is not an integer. Nothing was sent.",
             ) from None
         if listing:
-            if quantity < 0 and sku in take_off:
+            if quantity < 0 and (take_off or {}).get(sku) == -quantity:
                 continue
             if quantity < 0:
                 # A LISTING ROW ADDS COPIES OR CHANGES A PRICE, AND NEVER TAKES ONE AWAY. A
@@ -368,7 +374,7 @@ def push_to_staged(
     filename: str = "import.csv",
     *,
     listing: bool = False,
-    take_off: Sequence[str] = (),
+    take_off: Optional[Mapping[str, int]] = None,
 ) -> StagedUpload:
     """Initialize, upload every chunk, finalize. Rolls back if any chunk or the finalize fails.
 

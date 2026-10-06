@@ -73,7 +73,7 @@ from datetime import datetime
 from typing import Dict, List, Tuple
 
 from cli import resolve, runs
-from pipeline import corpus, decisions, games, join, merge, pricing, routing, sendguard, tcgcsv
+from pipeline import corpus, decisions, games, join, merge, pricing, reprice, routing, sendguard, tcgcsv
 from pipeline import skus as skus_walk
 from pathlib import Path
 
@@ -702,30 +702,44 @@ class _Take:
 
     sub_threshold = False
 
-    def __init__(self, sku, name, game, price, count, row, live_after):
+    def __init__(self, sku, name, game, price, count, row):
         self.sku, self.name, self.game, self.price = sku, name, game, price
         self.count, self.row, self.add_to_quantity = count, row, -count
-        self.live_after = live_after
 
     @property
     def match(self):
         return self
 
 
+def _sold_since(inventory, sku, as_of) -> int:
+    """Copies of `sku` marked sold after `as_of`: the read still shows them live."""
+    return sum(
+        1
+        for card in inventory.positions_for_sku(sku)
+        if card.state == master.SOLD and master.newer_stamp(card.state_at, as_of) is True
+    )
+
+
 def _takeoffs(resolved_list, withheld, inventory, args):
     """`(takes, blocked)`: the held SKUs whose live copies this press takes off TCGplayer.
 
-    THE OWNER'S RULING (D100's open question): a SKU the owner holds (`bullish`, `keeping`,
-    `next_batch`) with copies Banchi sent gets ONE row, `Add to Quantity` minus those copies,
-    never more than the newest live read says TCGplayer holds. THE NEWEST READ IS THE PRESS'S
-    OWN LIVE EXPORT (`--live-guard`), else the store's own reading. `blocked` names a held SKU
-    with sent copies and no read at all: that row is refused, never guessed. (A live export
-    taken just after a publish can only read LOW, which takes fewer copies, never more.)
+    THE OWNER'S RULING (D100's open question), AS REVIEWED: a SKU the owner holds (`bullish`,
+    `keeping`, `next_batch`) gets ONE row, `Add to Quantity` minus the live quantity a FRESH
+    live read (`--live-guard`, within `reprice.READ_FRESH_S`) shows for it, less the copies sold
+    since that read. The store's `pushed` and `live` never size it, and nothing in the store
+    moves at write time (the live check lowers them once the copies are gone), so a take that
+    never landed is taken again from the next read, and the same copies never twice. A held SKU
+    the read does not name takes off 0. `blocked` names a held SKU Banchi sent copies of when
+    there is no fresh read: refused, nothing written.
     """
     guard = _live_guard(args)
     read = guard[1] if guard else {}
+    as_of = None
+    if guard:
+        as_of = str(runs.describe_source(Path(args.live_guard))["mtime"])
+    fresh = as_of is not None and reprice.read_is_fresh(as_of)
     live_price = {}
-    if getattr(args, "live_guard", None):
+    if fresh:
         live_price = sendguard.live_prices(tcgcsv.read_export(Path(args.live_guard)).rows)
     takes: Dict[str, _Take] = {}
     blocked: List[Tuple[str, str]] = []
@@ -733,20 +747,14 @@ def _takeoffs(resolved_list, withheld, inventory, args):
         for game_join in resolved.joins.values():
             for sku, match in game_join.report.matches.items():
                 hold = withheld.get(sku)
-                listing = inventory.listings.get(sku)
-                if hold is None or hold.reason not in decisions.WITHHOLD_REASONS:
+                if hold is None or hold.reason not in decisions.WITHHOLD_REASONS or sku in takes:
                     continue
-                if sku in takes or listing is None or int(listing.pushed) <= 0:
+                if not fresh:
+                    listing = inventory.listings.get(sku)
+                    if listing is not None and int(listing.pushed) > 0:
+                        blocked.append((sku, match.name))
                     continue
-                if sku in read:
-                    live = read[sku]
-                elif listing.live_as_of is not None:
-                    live = match.live_out if match.live_out is not None else listing.live
-                else:
-                    blocked.append((sku, match.name))
-                    continue
-                live = max(0, int(live))
-                count = min(int(listing.pushed), live)
+                count = max(0, int(read.get(sku, 0))) - _sold_since(inventory, sku, as_of)
                 if count <= 0:
                     continue
                 # THE PRICE IS THE ONE TCGPLAYER ALREADY SHOWS, so the row moves nothing but the
@@ -755,16 +763,14 @@ def _takeoffs(resolved_list, withheld, inventory, args):
                 if not price:
                     blocked.append((sku, match.name))
                     continue
-                takes[sku] = _Take(
-                    sku, match.name, game_join.game, price, count, match.row, live - count
-                )
+                takes[sku] = _Take(sku, match.name, game_join.game, price, count, match.row)
     return takes, blocked
 
 
 def _refuse_no_read(blocked, say) -> int:
     for sku, name in blocked[:8]:
-        say(f"{name} ({sku}) is held and has copies on TCGplayer, and there is no live read "
-            "to say how many. Read live first.")
+        say(f"{name} ({sku}) has copies sent and is held, and there is no fresh live read "
+            "to say how many are live. Read live first.")
     say("REFUSING to write. Nothing was written.")
     return 1
 
@@ -777,22 +783,11 @@ def _say_takeoffs(takes, say) -> None:
 
     total = sum(t.count for t in takes.values())
     say("")
-    say(f"{'taken off':<16} {total} {'copy' if total == 1 else 'copies'} came off TCGplayer "
+    say(f"{'take off':<16} the file takes {total} {'copy' if total == 1 else 'copies'} off TCGplayer "
         "(held cards, Add to Quantity below 0)")
     for take in list(takes.values())[:8]:
         say(f"{'':<16} {take.sku} {take.name} — minus {take.count}")
     say(json.dumps({"send_takeoff": {t.sku: t.count for t in takes.values()}}, sort_keys=True))
-
-
-def _apply_takeoffs(writable, takes) -> None:
-    """Inside the press's store write: the taken copies are unsent again and not live.
-
-    `pushed` falls by the copies taken and `live` by the same, so `cli/resolve.py:_copies_out`
-    no longer holds them and an unhold sends them again. The cards never leave their box."""
-    for take in takes.values():
-        listing = writable.inventory.listings[take.sku]
-        listing.bump(master.PUSHED, -take.count)
-        listing.set(master.LIVE, take.live_after)
 
 
 def _keep_listed(changes, sub_skus, args, say):
@@ -1588,7 +1583,6 @@ def run(args, say) -> int:
     try:
         with store.write() as writable:
             _claim_or_refuse(writable, going, basis, args, [c.sku for c in changes], list(takes))
-            _apply_takeoffs(writable, takes)
             pushed, pushed_skus, unstamped = _stamp_single(
                 writable, resolved, emitted, priced_flat, run_dir, sku_game, sku_source
             )
@@ -2263,7 +2257,6 @@ def _run_merged(args, say) -> int:
     try:
         with store.write() as writable:
             _claim_or_refuse(writable, going, basis, args, sorted(changed), list(takes))
-            _apply_takeoffs(writable, takes)
             pushed, pushed_skus, unstamped = _stamp_merged(
                 writable, merged_plan, shipped, resolved_by_run
             )

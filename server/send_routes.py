@@ -690,20 +690,10 @@ def _sold_by_sku(skus) -> Dict[str, int]:
     }
 
 
-def _take_back(
-    copies: Dict[str, int], stamp: str, by: str, taken_off: Optional[Dict[str, int]] = None
-) -> int:
-    """Put these copies back on the list and release the send's claim. One store write.
-
-    `taken_off` is the press's own take-offs: a press that failed took nothing off TCGplayer,
-    so each one's `pushed` and `live` rise again by what `emit` lowered."""
+def _take_back(copies: Dict[str, int], stamp: str, by: str) -> int:
+    """Put these copies back on the list and release the send's claim. One store write."""
     with Store().write() as writable:
         moved = _bump_back(writable, copies)
-        for sku, count in (taken_off or {}).items():
-            listing = writable.inventory.listings.get(sku)
-            if listing is not None:
-                listing.bump(master.PUSHED, int(count))
-                listing.set(master.LIVE, int(listing.live) + int(count))
         writable.send_claims.release(stamp, by)
     return moved
 
@@ -748,12 +738,15 @@ def _already_pushed(digest: str, now: Optional[datetime] = None) -> Optional[str
             continue
         # A SEND WHOSE COPIES A LATER SEND TOOK OFF IS NO PENDING DOUBLE: the owner held the
         # cards and let them go again, and the same rows are a legitimate send (D100).
-        sent = set(record.get("copies") or {})
-        if any(
+        sent = record.get("copies") or {}
+        if sent and any(
             later > stamp
             and later_record.get("pushed")
             and not later_record.get("taken_back_at")
-            and sent <= set(later_record.get("taken_off") or {})
+            and all(
+                int((later_record.get("taken_off") or {}).get(sku, 0)) >= int(n)
+                for sku, n in sent.items()
+            )
             for later, later_record in receipts
         ):
             continue
@@ -1260,9 +1253,10 @@ def _write_and_send(
             # Take back and every count of what went live never see it.
             if count > 0:
                 copies[sku] = copies.get(sku, 0) + count
-            # A NEGATIVE ROW COUNTS ONLY WHERE `emit` SAID IT TOOK THE COPIES OFF; any other
-            # negative stays out and the push door refuses it.
-            elif count < 0 and sku in said_off:
+            # A NEGATIVE ROW COUNTS ONLY AT THE SIZE `emit` SAID; any other negative stays out
+            # and the push door refuses it. THE STORE IS NOT TOUCHED HERE: the live check
+            # lowers `pushed` and `live` once the copies are gone (`_settle_takes`).
+            elif count < 0 and said_off.get(sku) == -count:
                 taken_off[sku] = -count
         names.update(_names(path))
     record.update(
@@ -1390,7 +1384,7 @@ def _push_and_publish(directory: Path, record: dict, console: str) -> dict:
             rows,
             filename=record["files"][0],
             listing=True,
-            take_off=list(record.get("taken_off") or {}),
+            take_off=record.get("taken_off") or {},
         )
     except tcg_import.PushFailed as failed:
         if failed.upload_id is None:
@@ -1474,9 +1468,7 @@ def _fail(
     account. So the receipt keeps the `rolled_back` warning until the owner dismisses it, and
     the refusal is `send_rolled_back`, which the card never offers to retry.
     """
-    _take_back(
-        record.get("copies") or {}, str(record.get("stamp")), "failed", record.get("taken_off")
-    )
+    _take_back(record.get("copies") or {}, str(record.get("stamp")), "failed")
     if rolled is not None:
         record["rolled_back"] = {"upload_id": rolled, "at": store_clock.iso(store_clock.now()), "cause": code}
         code, status = ROLLED_BACK, HTTPStatus.CONFLICT
@@ -2000,6 +1992,37 @@ def _price_check(record: dict, live_prices: Dict[str, str], live_now: Dict[str, 
     }
 
 
+def _settle_takes(record: dict, live_now: Dict[str, int]) -> Dict[str, int]:
+    """A check past the wait that finds a take-off's copies gone lowers `pushed` and sets `live`.
+
+    GONE MEANS TCGPLAYER NOW SHOWS NO MORE THAN IT SHOWED AT THE PRESS LESS THE TAKE (`live_seen`
+    is the press's own baseline). Each SKU settles once (`take_settled`); a take that never
+    landed stays unsettled and the next send re-reads live and takes it again, so the same
+    copies are never counted off twice."""
+    done = list(record.get("take_settled") or [])
+    gone = {
+        sku: int(n)
+        for sku, n in (record.get("taken_off") or {}).items()
+        if sku not in done
+        and live_now.get(sku, 0) <= max(0, int((record.get("live_seen") or {}).get(sku, 0)) - int(n))
+    }
+    record["take_settled"] = sorted(done + list(gone))
+    return gone
+
+
+def _lower_takes(gone: Dict[str, int], live_now: Dict[str, int]) -> None:
+    """One store write for every take-off a check settled: `pushed` falls, `live` is the read."""
+    if not gone:
+        return
+    with Store().write() as writable:
+        for sku, n in gone.items():
+            listing = writable.inventory.listings.get(sku)
+            if listing is None:
+                continue
+            listing.bump(master.PUSHED, -n)
+            listing.set(master.LIVE, live_now.get(sku, 0))
+
+
 def _live_check(force: bool) -> dict:
     now = store_clock.now()
     receipts = _receipts()
@@ -2028,6 +2051,7 @@ def _live_check(force: bool) -> dict:
     credits = _credits(receipts, due_stamps, sent_by, live_now, sold_now, now)
 
     checked = []
+    lowered: Dict[str, int] = {}
     for stamp, record in due:
         copies = sent_by.get(stamp, {})
         missing = []
@@ -2061,6 +2085,9 @@ def _live_check(force: bool) -> dict:
             # THE FIRST CHECK PAST THE WAIT, KEPT: a downloaded file's copies come back only
             # after a second one, one wait later (`_second_check`).
             record["first_checked_at"] = store_clock.iso(now)
+        if _checked_past_wait(record):
+            for sku, n in _settle_takes(record, live_now).items():
+                lowered[sku] = lowered.get(sku, 0) + n
         _write(sends_dir() / stamp, record)
         # A CHECK PAST THE WAIT RESOLVES A HOLD: what is live is now known, and what is not can
         # be taken back. The claim goes whether the copies were found or not.
@@ -2068,6 +2095,7 @@ def _live_check(force: bool) -> dict:
             _release(stamp, "checked")
         checked.append(_summary(stamp, record, now, _held_stamps()))
 
+    _lower_takes(lowered, live_now)
     for stamp in markdowns:
         _resolve_markdown(stamp, path, now)
 
