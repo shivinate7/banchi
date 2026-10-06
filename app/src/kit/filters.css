@@ -110,6 +110,21 @@
 }
 .bn-sortth:hover { color: var(--bn-ink); background: var(--bn-hover); }
 .bn-sortth-end { flex-direction: row-reverse; }
+/* GRID-CAPTION MODE: the caption's own type, the cell's full width, the thumb floor, no shift. */
+.bn-sortth-grid {
+  width: 100%;
+  min-height: var(--bn-control-h-lg);
+  padding: 0;
+  margin: 0;
+  justify-content: flex-start;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  white-space: nowrap;
+  color: inherit;
+}
+.bn-sortth-grid[data-active='true'] { color: var(--bn-ink); }
+.bn-sortth-mark { display: inline-flex; flex: none; width: var(--bn-3); color: var(--bn-accent); }
 /* THE ACTIVE COLUMN IS MARKED IN TWO CHANNELS, not only the chevron a squint could miss
    (FLT-19's own complaint about a chevron on every header): the label goes to full ink weight
    and the chevron itself only draws once a column is active — an inactive header shows its

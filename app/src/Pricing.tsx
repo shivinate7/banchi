@@ -104,6 +104,7 @@ import {
   SettingsGroup,
   SettingsOp,
   Sheet,
+  SortHeader,
   countFacets,
   filterRows,
   matchQuery,
@@ -536,10 +537,13 @@ function bandOf(row: PricingSku): string {
   return BANDS.find((band) => band.within(c))?.value ?? 'none'
 }
 
-type PricingSortKey = 'arranged' | 'price' | 'name'
+type PricingSortKey = 'arranged' | 'price' | 'low' | 'range' | 'asking' | 'name'
 const SORT_OPTIONS: readonly SortOption<PricingSortKey>[] = [
   { key: 'arranged', label: 'Suggested', asc: 'Needs you first', desc: 'Needs you first', first: 'desc' },
   { key: 'price', label: 'Market price', desc: 'High to low', asc: 'Low to high', first: 'desc' },
+  { key: 'low', label: 'Lowest price', desc: 'High to low', asc: 'Low to high', first: 'desc' },
+  { key: 'range', label: 'Range 7d', desc: 'High to low', asc: 'Low to high', first: 'desc' },
+  { key: 'asking', label: 'Asking price', desc: 'High to low', asc: 'Low to high', first: 'desc' },
   { key: 'name', label: 'Name', desc: 'Z to A', asc: 'A to Z', first: 'asc' },
 ]
 const SORT_AT_REST: SortValue<PricingSortKey> = { key: 'arranged', dir: 'desc' }
@@ -1460,7 +1464,9 @@ export function Pricing() {
   /* F3: THE VIEW'S OWN FILTERS. Search, sort and the facets live in the URL (`?q=`, `?sort=`, `?game=`),
      narrow what is DRAWN and touch nothing else: Send, the presets and the counts read every row. */
   const [query, setQuery] = useViewParam('q')
-  const [sort, setSort] = useSortParam<PricingSortKey>(SORT_AT_REST, { options: SORT_OPTIONS })
+  /* NO RANGE SORT WHERE THE COLUMN IS NOT DRAWN: it is not offered, and one carried in the URL reads as the default order. */
+  const sortOptions = useMemo(() => (rangeOn ? SORT_OPTIONS : SORT_OPTIONS.filter((option) => option.key !== 'range')), [rangeOn])
+  const [sort, setSort] = useSortParam<PricingSortKey>(SORT_AT_REST, { options: sortOptions })
   const facetShape = useMemo<readonly FilterFacet[]>(() => {
     const games = [...new Set(rows.map((row) => row.game))].filter((game) => game !== '').sort()
     const sets = [...new Set(rows.map((row) => row.set_name))].filter((name) => name !== '').sort((a, b) => a.localeCompare(b))
@@ -1589,6 +1595,26 @@ export function Pricing() {
     return out
   }, [rows, answerFor, askedFor, suggestionFor, source.kind])
 
+  /* THE ASKING PRICE EACH ROW SHOWS, TAKEN WHEN THE SORT IS CHOSEN: typing a price never re-ranks the
+     row under the cursor (D181). Withheld and locked rows show none. */
+  const askingAtSort = useMemo(() => {
+    const by = new Map<string, number | null>()
+    if (sort.key !== 'asking') return by
+    for (const row of rows) {
+      const standing = answerFor(row)
+      by.set(
+        row.sku,
+        source.locked(row.sku) !== null || isWithheld(standing)
+          ? null
+          : typeof standing === 'string'
+            ? centsOf(standing)
+            : centsOf(source.proposes ? suggestionFor(row) : (row.snap.now ?? suggestionFor(row))),
+      )
+    }
+    return by
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- frozen on purpose: only the sort and the rows re-take it
+  }, [sort.key, sort.dir, rows])
+
   /* THE LIST AS DRAWN: arrival order, needs-you on top. A row the arrival did not see (a later
      re-partition cannot add one, but a reload race could) goes last rather than vanishing. */
   const drawn = useMemo(() => {
@@ -1597,9 +1623,18 @@ export function Pricing() {
     const place = (row: MergedSku) => order.get(row.sku) ?? Number.MAX_SAFE_INTEGER
     /* A SORT ORDERS WITHIN EACH GROUP, never across them: the rows that need the owner stay on top
        (D277). A row with no market price goes last in both directions; ties keep arrival order. */
+    const sortCents = (row: MergedSku): number | null => {
+      if (sort.key === 'low') return cents(row.snap.low)
+      if (sort.key === 'asking') return askingAtSort.get(row.sku) ?? null
+      if (sort.key === 'range') {
+        const range = rangeOf(saved, row.sku, null)
+        return typeof range === 'object' && range !== null ? Math.round(range.high * 100) : null
+      }
+      return cents(row.snap.market)
+    }
     const by = (a: MergedSku, b: MergedSku): number => {
       if (sort.key === 'name') return a.name.localeCompare(b.name) * (sort.dir === 'asc' ? 1 : -1)
-      const [ca, cb] = [cents(a.snap.market), cents(b.snap.market)]
+      const [ca, cb] = [sortCents(a), sortCents(b)]
       if (ca === null || cb === null) return ca === cb ? 0 : ca === null ? 1 : -1
       return (ca - cb) * (sort.dir === 'asc' ? 1 : -1)
     }
@@ -1627,7 +1662,7 @@ export function Pricing() {
     /* THE SERVER'S SENTENCE, VERBATIM (D59): the client never composes a reason. */
     for (const [why, group] of closed) groups.push({ head: why, rows: group })
     return groups
-  }, [arrival, rows, facetShape, facetPicks, keepRow, sort, stamp])
+  }, [arrival, rows, facetShape, facetPicks, keepRow, sort, stamp, saved, askingAtSort])
 
   const order = useMemo(() => drawn.flatMap((group) => group.rows.map((row) => row.sku)), [drawn])
 
@@ -2887,24 +2922,26 @@ export function Pricing() {
               onChange={setFacetPicks}
               count={{ shown: drawn.reduce((sum, group) => sum + group.rows.length, 0), total: rows.length, noun: { one: 'item', many: 'items' } }}
               search={{ query, onChange: setQuery, placeholder: 'Name, set, number or SKU', label: 'Search this list' }}
-              sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
+              sort={{ options: sortOptions, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
             />
           )}
           {filtering && drawn.length === 0 ? (
             <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." didYouMean={{ name: nearName, onPick: setQuery }} />
           ) : null}
           <div className="pricing-list" ref={measureList} data-copies={source.copies ? 'some' : 'none'} data-range={rangeOn ? 'some' : undefined}>
-            <div className="pricing-caption" aria-hidden="true">
+            <div className="pricing-caption" role="row">
               {source.copies ? <span /> : null}
               {/* "ITEM", NOT "CARD" (the owner's add-on, 2026-09-26): the rows include sealed
                   product too, which is not a card. */}
-              <span>Item</span>
-              <span className="pricing-col-market">Market</span>
-              <span className="pricing-col-low">Lowest</span>
-              {rangeOn ? <span className="pricing-col-range">Range 7d</span> : null}
-              <span className="pricing-col-trend">Trend</span>
-              {source.copies ? <span className="pricing-col-qty">Qty</span> : null}
-              <span className="pricing-col-price">{liveTab ? 'New price' : 'Price'}</span>
+              <span role="columnheader">Item</span>
+              <SortHeader grid className="pricing-col-market" sortKey="price" value={sort} onChange={setSort} rest={SORT_AT_REST} align="end">Market</SortHeader>
+              <SortHeader grid className="pricing-col-low" sortKey="low" value={sort} onChange={setSort} rest={SORT_AT_REST} align="end">Lowest</SortHeader>
+              {rangeOn ? (
+                <SortHeader grid className="pricing-col-range" sortKey="range" value={sort} onChange={setSort} rest={SORT_AT_REST} align="end">Range 7d</SortHeader>
+              ) : null}
+              <span className="pricing-col-trend" role="columnheader">Trend</span>
+              {source.copies ? <span className="pricing-col-qty" role="columnheader">Qty</span> : null}
+              <SortHeader grid className="pricing-col-price" sortKey="asking" value={sort} onChange={setSort} rest={SORT_AT_REST} align="start">{liveTab ? 'New price' : 'Price'}</SortHeader>
               <span />
             </div>
             {drawn.map((group) => (

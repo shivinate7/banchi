@@ -6350,7 +6350,7 @@ COMPONENTS = [
                                             "`aria-sort` and marks itself active, FLT-19, with a "
                                             "per-column first direction, re-sorting at once, "
                                             "FLT-01).",
-                                    "governed_by": ["D118", "D132", "D296", "D270"]},
+                                    "governed_by": ["D118", "D132", "D270", "D296", "D313"]},
             "src/kit/filters.css": {"does": "the filter bar's styles. One line at every width "
                                             "(amending D270, 2026-09-24): no "
                                             "container query decides the layout any more — the "

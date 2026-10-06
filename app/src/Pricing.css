@@ -233,13 +233,13 @@
 .pricing-live[data-none='true'] { color: var(--bn-ink-3); }
 .pricing-why { font-style: italic; color: var(--bn-ink-2); max-width: 24ch; overflow: hidden; text-overflow: ellipsis; }
 
-.pricing-ref { text-align: right; font-size: var(--bn-fs-md); color: var(--bn-ink); white-space: nowrap; }
+.pricing-ref { position: relative; text-align: right; font-size: var(--bn-fs-md); color: var(--bn-ink); white-space: nowrap; }
 .pricing-ref[data-empty='true'] { color: var(--bn-ink-3); }
 .pricing-ref-label { display: none; }
 /* THE AGE OF A FIGURE, UNDER IT, IN THE WARN TONE. Its line is always there, drawn or not (D313). */
-.pricing-ref-age { display: block; min-height: 1.25em; font-size: var(--bn-fs-xs); line-height: var(--bn-lh-snug); color: var(--bn-warn); }
+.pricing-ref-age { position: absolute; inset-inline: 0; top: 100%; white-space: nowrap; font-size: var(--bn-fs-xs); line-height: var(--bn-lh-snug); color: var(--bn-warn); }
 /* THE RANGE'S TWO FIGURES, one over the other: the lowest sale, then the highest. */
-.pricing-col-range { font-size: var(--bn-fs-sm); line-height: var(--bn-lh-snug); }
+.pricing-row .pricing-col-range { font-size: var(--bn-fs-sm); line-height: var(--bn-lh-snug); }
 .pricing-range-line { display: block; white-space: nowrap; }
 .pricing-col-trend { min-width: 0; overflow: hidden; }
 
@@ -475,6 +475,7 @@
   .pricing-col-market { grid-area: market; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
   .pricing-col-qty { grid-area: qty; }
   .pricing-ref-label { display: inline; }
+  .pricing-ref-age { position: static; min-height: 1.25em; }
   .pricing-qty .pricing-qty-input { width: 40px; padding: 0 var(--bn-1); }
   .pricing-rarity { display: none; }
 }

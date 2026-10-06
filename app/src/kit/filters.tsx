@@ -346,6 +346,8 @@ export function SortHeader<K extends string>({
   onChange,
   first = 'desc',
   align = 'start',
+  rest,
+  grid = false,
   children,
   className,
 }: {
@@ -359,28 +361,50 @@ export function SortHeader<K extends string>({
    *  price or a date the largest first (`desc`, the default) — `SortOption.first`'s rule. */
   readonly first?: 'asc' | 'desc'
   readonly align?: 'start' | 'end'
+  /** A THREE-STATE CYCLE: given, a press on the active column's second direction returns to this
+   *  value (the list's default order) instead of flipping back, so the cycle is first direction,
+   *  the other direction, then `rest`. Omitted, a press flips the direction (the two-state cycle). */
+  readonly rest?: SortValue<K>
+  /** GRID-CAPTION MODE, for a `display: grid` caption row (give that row `role="row"`): the cell is a
+   *  `columnheader` span, not a `<th>`, it carries `aria-sort` always (`none` when inactive), the
+   *  press is the caption's own type at the thumb floor, and the direction mark has its slot at all
+   *  times and draws only while active, so a press moves and resizes nothing (D313). */
+  readonly grid?: boolean
   readonly children: ReactNode
   readonly className?: string
 }) {
   const active = value.key === sortKey
   const dir = active ? value.dir : undefined
-  /* Already the active column: flip its direction. Any other column: its own first direction. */
-  const nextDir: 'asc' | 'desc' = active ? (value.dir === 'desc' ? 'asc' : 'desc') : first
-  return (
-    <th
-      scope="col"
-      className={['bn-sortth-cell', align === 'end' ? 'bn-sortth-cell-end' : '', className].filter(Boolean).join(' ')}
-      aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : undefined}
+  /* Already the active column: flip its direction, or leave the cycle at `rest`. Any other column: its own first direction. */
+  const press = (): void => {
+    if (!active) onChange({ key: sortKey, dir: first })
+    else if (rest !== undefined && value.dir !== first) onChange(rest)
+    else onChange({ key: sortKey, dir: value.dir === 'desc' ? 'asc' : 'desc' })
+  }
+  const sorted = dir === undefined ? (grid ? 'none' : undefined) : dir === 'asc' ? 'ascending' : 'descending'
+  const classes = ['bn-sortth-cell', align === 'end' ? 'bn-sortth-cell-end' : '', className].filter(Boolean).join(' ')
+  const button = (
+    <button
+      type="button"
+      className={['bn-sortth', align === 'end' ? 'bn-sortth-end' : '', grid ? 'bn-sortth-grid' : ''].filter(Boolean).join(' ')}
+      data-active={active ? 'true' : undefined}
+      onClick={press}
     >
-      <button
-        type="button"
-        className={['bn-sortth', align === 'end' ? 'bn-sortth-end' : ''].filter(Boolean).join(' ')}
-        data-active={active ? 'true' : undefined}
-        onClick={() => onChange({ key: sortKey, dir: nextDir })}
-      >
-        <span className="bn-sortth-label">{children}</span>
+      <span className="bn-sortth-label">{children}</span>
+      {grid ? (
+        <span className="bn-sortth-mark">{active ? <Icon name={dir === 'asc' ? 'chevronUp' : 'chevronDown'} size={12} /> : null}</span>
+      ) : (
         <Icon name={dir === 'asc' ? 'chevronUp' : 'chevronDown'} size={12} className="bn-sortth-icon" />
-      </button>
+      )}
+    </button>
+  )
+  return grid ? (
+    <span role="columnheader" className={classes} aria-sort={sorted}>
+      {button}
+    </span>
+  ) : (
+    <th scope="col" className={classes} aria-sort={sorted}>
+      {button}
     </th>
   )
 }
