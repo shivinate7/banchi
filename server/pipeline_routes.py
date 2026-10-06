@@ -7474,11 +7474,26 @@ def _run_games(name: str) -> Tuple[str, ...]:
         return (game_registry.DEFAULT_GAME,)
 
 
-def _game_catalog(name: str) -> Tuple[Optional[str], str]:
-    """A fresh catalog export through one run's scope: `(file, "")`, or `(None, the refusal's sentence)`."""
+def _game_catalog(group: List[str]) -> Tuple[Optional[str], str]:
+    """ONE fresh catalog export for every open run of a game: `(file, "")`, or `(None, sentence)`.
+
+    THE REQUEST COVERS THE UNION OF THE RUNS' OWN SCOPES, so no run is joined against a file that
+    lacks its cards. Each run's scope is the one `_scope_for_run` already decides from its claims
+    (D65, D76, D170): equal scopes ask as the first run would; a run that needs the whole category
+    makes the request the category (a width its own claims already earned); otherwise the request
+    names the union of the set ids. Nothing here widens past what a run's own scope asked for."""
     try:
-        return do_pipeline_export(name, {"refresh": True})["file"], ""
+        sets = {tuple(_scope_for_run(_open_run(name), {})[0].set_ids) for name in group}  # type: ignore[attr-defined]
+        if len(sets) == 1:
+            payload: dict = {}
+        elif () in sets:
+            payload = {"scope": "category"}
+        else:
+            payload = {"set_ids": sorted({i for ids in sets for i in ids})}
+        return do_pipeline_export(group[0], {**payload, "refresh": True})["file"], ""
     except PipelineRefusal as refusal:
+        return None, str(refusal)
+    except tcg_export.FetchRefusal as refusal:
         return None, str(refusal)
 
 
@@ -7545,7 +7560,7 @@ def do_prices_refresh(
     # ONE CATALOG REQUEST PER GAME, outside the per-run walk: the first run of a game asks, and
     # every run of that game is joined against the file that came back.
     for group in by_game.values():
-        file, problem = _game_catalog(group[0])
+        file, problem = _game_catalog(group)
         if file is None:
             problems.extend(f"{name}: {problem}" for name in group)
         else:
