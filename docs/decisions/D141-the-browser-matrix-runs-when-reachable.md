@@ -58,3 +58,7 @@ files a running matrix actually loads, derived the same way and failing open the
 The scope this entry settled — `SCOPE`, the classifier, the wiring — is unchanged.
 
 ---
+
+---
+
+**AMENDED on the owner's word: one gated spec.** `scripts/browser-scope.py`'s `GATED_SPECS` names `app/tests/capture-freeze.spec.ts`. On a pull request it is left out of the spec list unless a changed path is inside its own derived closure (`spec_reach`: the Capture screen, the dealer, what they import, and the spec itself). Any doubt runs it: a path with whitespace, an unmapped `app/` file, a top-level `SCOPE` path, an empty diff, and `PKMNSCAN_BROWSER_SCOPE=all` (which every non-pull-request event sets). A shared surface the closure does not reach leaves it out. The `spec map` row of `make docs-audit` checks that each gated name is a real spec whose closure reaches `app/src/`.

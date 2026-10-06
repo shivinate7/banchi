@@ -68,6 +68,7 @@ make design-check   # DESIGN.md's Fulfillment floors in a browser. Machine-wide 
                     #   PW_ARGS=<flags> reaches Playwright. After the run, read `.serve/design-check.json`
                     #   once. Never poll it, never pipe it through `tail`. Not in `make check`.
 make design-check-quiet  # the same run, no progress stream, same lock.
+make long-sitting   # the 300-capture case alone, about 16 min (PKMNSCAN_LONG_SITTING=1). CI: monthly and on dispatch.
 make text-density   # on-demand cut table of screen prose, never a gate. Not in `make check`.
 make demo           # seed a demo store and record the wire. Read `docs/specs/demo.md` first.
 make demo-seed      # the store alone. Refuses with PKMNSCAN_HOME unset.
