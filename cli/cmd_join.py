@@ -473,8 +473,9 @@ def run(args, say) -> int:
             else runs.create(args.label or "store")
         )
         run_dir.manifest["selection"] = {"keys": list(keys)}
+        resolve.record_cards(run_dir, keys, Store().read().inventory)
         if not args.dry_run:
-            run_dir.set(selection=run_dir.manifest["selection"])
+            run_dir.set(selection=run_dir.manifest["selection"], cards=run_dir.manifest["cards"])
 
     # ------------------------------------------------- the corpus, BEFORE the ladder walks
     #

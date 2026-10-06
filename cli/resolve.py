@@ -2226,35 +2226,62 @@ def store_payload(keys: Sequence[str], inventory: master.Inventory) -> Dict[str,
     return {"cards": cards}
 
 
-def store_backed_payload(run: runs.Run, inventory: master.Inventory) -> Dict[str, Any]:
-    """A store-backed run's cards, read FROM THE STORE and FOLLOWING EACH CARD, not its slot.
+def record_cards(run: runs.Run, keys: Sequence[str], inventory: master.Inventory) -> None:
+    """Record the manifest's `cards`, `{key: {"cid", "name"}}`, for each key not yet recorded.
 
-    The run's cards are the store cards stamped `card.run == run.name` (D65); a removal below
-    the run slides slots, so `selection.keys` names positions that may hold other cards now.
-    The keys only say HOW MANY cards the run held: fewer stamped cards than keys means a card
-    is gone, and the run refuses by NAME (read off `pricing.json`'s product names) rather than
-    send in its place. A card the run never held is never read.
+    The card's `cid` is its identity wherever it later slides to; `name` is its last-known name,
+    which a refusal prints if the card is gone. Writes into the manifest in memory only: the
+    caller's next `run.set` / `save` flushes it.
     """
-    keys = list((run.manifest.get("selection") or {}).get("keys") or [])
-    held = {master.position_key(c.box, c.index): c for c in inventory.cards.where(run=run.name)}
-    if len(held) < len(keys):
-        left = [
-            (row.get("name") or "").strip()
-            for row in (files.read_json(run.path(runs.PRICING)) or {}).get("skus") or []
-            for _ in range(int(row.get("copies") or 1))
-        ]
-        for card in held.values():
-            number = str(card_reading(card).number or "")
-            for i, name in enumerate(left):
-                if name.rsplit(" - ", 1)[-1].split("/")[0] == number:
-                    del left[i]
-                    break
-        names = ", ".join(left) or f"{len(keys) - len(held)} card(s)"
+    cards = dict(run.manifest.get("cards") or {})
+    for key in keys:
+        card = inventory.cards.get(key)
+        if key not in cards and card is not None and card.cid:
+            cards[key] = {"cid": card.cid, "name": card_reading(card).name or card.name or key}
+    run.manifest["cards"] = cards
+
+
+def store_backed_payload(run: runs.Run, inventory: master.Inventory) -> Dict[str, Any]:
+    """A store-backed run's cards, read FROM THE STORE and FOLLOWING EACH CARD by its `cid`.
+
+    The manifest's `cards` records `{key: {cid, name}}` when the run is made (`record_cards`).
+    Each cid is followed to where its card is NOW; the `run` stamp is never read once the map
+    exists, because a later sweep re-stamps a card. A recorded cid that is gone refuses, naming
+    only that card by its last-known name. A card not recorded is never sent. An older
+    keys-only manifest backfills the map once, at first read, from the cards stamped with this
+    run, and only when they number exactly the keys (else it cannot tell which cards it held).
+    """
+    if "cards" not in run.manifest:
+        keys = list((run.manifest.get("selection") or {}).get("keys") or [])
+        stamped = inventory.cards.where(run=run.name)
+        if len(stamped) != len(keys):
+            raise runs.RunError(
+                f"Run {run.name} records no card identities, and the store holds "
+                f"{len(stamped)} cards stamped with it against {len(keys)} it selected, so it "
+                "cannot tell which cards it held. Nothing was sent."
+            )
+        run.manifest["cards"] = {
+            master.position_key(c.box, c.index): {
+                "cid": c.cid, "name": card_reading(c).name or c.name or "a card",
+            }
+            for c in stamped
+            if c.cid
+        }
+        run.save()
+    held, gone = [], []
+    for entry in run.manifest["cards"].values():
+        found = inventory.cards.where(cid=entry["cid"])
+        if found:
+            held.append(found[0])
+        else:
+            gone.append(str(entry.get("name") or entry["cid"]))
+    if gone:
         raise runs.RunError(
-            f"Run {run.name} held a card that is no longer in the store: {names}. "
+            f"Run {run.name} held a card that is no longer in the store: {', '.join(gone)}. "
             "Nothing was sent."
         )
-    return store_payload(sorted(held, key=lambda k: (held[k].box, held[k].index)), inventory)
+    held.sort(key=lambda c: (c.box, c.index))
+    return store_payload([master.position_key(c.box, c.index) for c in held], inventory)
 
 
 def load_from_store(

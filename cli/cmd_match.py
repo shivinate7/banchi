@@ -358,7 +358,8 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session
         # is missing, and the join over the same keys writes the same files.
         cmd_join.seed_corpus(run, resolved)
         cmd_join.write_pricing_table(run, table, at)
-        run.set(selection={"keys": list(session.keys)})
+        resolve.record_cards(run, session.keys, store.read().inventory)
+        run.set(selection={"keys": list(session.keys)}, cards=run.manifest["cards"])
         cmd_join.record_join(run, resolved, routing.CONFIDENCE_LOW)
         session.recover = False
     session.drop_empty_run()
