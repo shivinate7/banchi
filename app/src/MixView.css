@@ -11,13 +11,36 @@
   width: 100%;
 }
 .mix-controls[data-held] { opacity: 0.6; }
-.mix-layout {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+
+/* ONE GRID OF EQUAL CELLS FOR BOTH BLOCKS, so every row's edges line up and a control never
+   resizes with its value: a label and a value truncate inside the cell (D195, D313). The filters
+   and the layout controls use the same column width, so the two blocks align edge to edge. */
+.mix-controls .mix-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
   gap: var(--bn-2);
+  width: 100%;
   min-width: 0;
 }
+.mix-controls .mix-grid > .bn-fchip,
+.mix-controls .mix-grid > .bn-pick,
+.mix-controls .mix-grid > .bn-sort { width: 100%; max-width: none; min-width: 0; }
+.mix-controls .mix-grid .bn-fchip > .bn-pick,
+.mix-controls .mix-grid > .bn-pick { width: 100%; max-width: none; min-width: 0; }
+.mix-controls .mix-grid .bn-sort { display: flex; }
+.mix-controls .mix-layout > .bn-filterchips { display: contents; }
+.mix-controls .mix-layout > .bn-filterchips > .bn-fchip { width: 100%; min-width: 0; }
+.mix-controls .mix-layout .bn-filterchips-clear { display: none; }
+.mix-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: var(--bn-control-h-sm);
+  margin-top: var(--bn-1);
+}
+.mix-group-head .bn-eyebrow { margin: 0; }
+.mix-group-head .bn-filterchips-clear { height: var(--bn-control-h-sm); }
 
 /* The table scrolls inside its own frame and never past the page. The first column sticks. */
 .mix-frame {
@@ -67,3 +90,8 @@
   font-size: var(--bn-fs-sm);
   color: var(--bn-ink-3);
 }
+
+/* The kit's own Clear all is drawn in the layout row instead (MixView.tsx): kept in the filter row it
+   wrapped onto a line of its own and reserved an empty band. It is still always drawn, so its
+   arrival moves nothing (D313). */
+.mix-controls .bn-filterchips > .bn-filterchips-clear { display: none; }

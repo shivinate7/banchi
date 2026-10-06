@@ -8347,7 +8347,7 @@ COMPONENTS = [
                                         "table's scroll frame with a sticky first column and the "
                                         "heat tint (the accent at a share of its strength), "
                                         "`--bn-*` only.",
-                                "governed_by": ["D214", "D313"]},
+                                "governed_by": ["D195", "D214", "D313"]},
             "src/mixPivot.ts": {"does": "the Mix pivot's pure math: nine dimensions, eight measures, "
                                         "`pivot`, `optionCounts`, `priceBand` and `soldShare` "
                                         "(a SKU's refund-adjusted gross over its copies, from "

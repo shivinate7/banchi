@@ -183,12 +183,29 @@ export function MixView() {
   const dimOptions: PickOption<DimId>[] = DIMENSIONS.map((dim) => ({ value: dim.id, label: dim.label }))
   const acrossOptions: PickOption<string>[] = [{ value: NONE, label: 'Nothing' }, ...dimOptions]
 
+  const barClears = Object.values(picks).filter((one) => one.length > 0).length >= 2
   const loading = loaded === null && failure === null
   const bar = (
     <div className="mix-controls" data-held={loading ? 'true' : undefined} inert={loading ? true : undefined}>
       <LensSwitch lens="mix" />
-      <FilterChips facets={facets} value={picks} onChange={setPicks} label="Filters" />
-      <div className="mix-layout">
+      <div className="mix-group-head">
+        <p className="bn-eyebrow">Show only</p>
+        <button
+          type="button"
+          className="bn-filterchips-clear"
+          data-off={barClears ? undefined : 'true'}
+          tabIndex={barClears ? undefined : -1}
+          aria-hidden={barClears ? undefined : true}
+          onClick={() => setPicks({})}
+        >
+          Clear all
+        </button>
+      </div>
+      <FilterChips className="mix-grid" facets={facets} value={picks} onChange={setPicks} label="Filters" />
+      <div className="mix-group-head">
+        <p className="bn-eyebrow">Layout</p>
+      </div>
+      <div className="mix-grid mix-layout">
         <Select label="Rows" value={by} options={dimOptions} onChange={(next) => setBy(next)} />
         <Select label="Columns" value={across ?? NONE} options={acrossOptions} onChange={changeAcross} />
         <FilterChips facets={[measureFacet]} value={{ measure: measures }} onChange={changeMeasures} label="Measures" />
@@ -217,7 +234,6 @@ export function MixView() {
       </Page>
     )
   }
-  const barClears = Object.values(picks).filter((one) => one.length > 0).length >= 2
   if (table.matched === 0) {
     return (
       <Page title="Sales" icon="dollar" className="revenue mix" toolbar={bar} toolbarLabel="Mix controls">
