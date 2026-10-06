@@ -2841,18 +2841,16 @@ def default_router(
             # THE SECOND LOOK IS HELD UNLESS BOTH READERS NAMED THE SAME PRINTING and the paid
             # read is high (measured: the owner took the agreed card 12 of 12, the free pick
             # 0 of 10 on disagreement). A card the ladder already sent to review keeps its reason.
-            if resolved:
-                if card.confidence == routing.CONFIDENCE_HIGH and _picks_same_printing(
-                    card, second_look, resolution.row
-                ):
-                    pass
-                else:
-                    confidence, gate = routing.CONFIDENCE_LOW, routing.CONFIDENCE_LOW
-                    held_reason = (
-                        routing.READERS_DISAGREE
-                        if card.confidence == routing.CONFIDENCE_HIGH and second_look.name
-                        else routing.SECOND_LOOK_UNSURE
-                    )
+            agreed = card.confidence == routing.CONFIDENCE_HIGH and _picks_same_printing(
+                card, second_look, resolution.row
+            )
+            if resolved and not agreed:
+                confidence, gate = routing.CONFIDENCE_LOW, routing.CONFIDENCE_LOW
+                held_reason = (
+                    routing.READERS_DISAGREE
+                    if card.confidence == routing.CONFIDENCE_HIGH and second_look.name
+                    else routing.SECOND_LOOK_UNSURE
+                )
         destination = routing.route(
             resolved=resolved,
             reason=resolution.reason,
