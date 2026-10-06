@@ -5145,3 +5145,309 @@ test('7b-20: a second failure shows a sentence, never an empty strip with no wor
   await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 3600), savedFailures: 99 })
   await expect(page.locator(VIEW)).toContainText(/(could not|couldn.t|cannot|can.t) read[^.]*(strip|trend)/i, { timeout: 20_000 })
 })
+
+/* THE ROW'S CELLS SHARE ONE CENTER, AND THE HEADERS ONE TYPE (the owner's report after #749).
+ * NO LITERAL IS ASSERTED but the 1 px tolerance: each cell is compared with the row's OWN
+ * computed content-box center, and each header with the other headers. */
+const CENTER_TOLERANCE_PX = 1
+const NOTED_ROW = {
+  rule: 'match',
+  basis: 'market',
+  overrides: { '8608859': { withheld: 'bullish', note: 'waiting on rotation' } },
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`7b-21: a row with a hold note centers Market, Lowest, Range 7d and Qty on the row's own center in ${theme}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: theme })
+    await setViewport(page, { width: 1440, height: 900 })
+    await open(page, { decisions: NOTED_ROW, saved: savedWithFacts(AGO(3600), ['8608859']) })
+    const row = page.locator('.pricing-row').first()
+    await expect(row.locator('.pricing-why')).toBeVisible()
+    await expect(row.locator('.pricing-col-range')).toBeVisible()
+    await expect(row.locator('.pricing-qty-input')).toBeVisible()
+    const offsets = await row.evaluate((node) => {
+      const centre = (el: Element) => {
+        const box = el.getBoundingClientRect()
+        const css = getComputedStyle(el)
+        const top = box.top + parseFloat(css.borderTopWidth) + parseFloat(css.paddingTop)
+        const bottom = box.bottom - parseFloat(css.borderBottomWidth) - parseFloat(css.paddingBottom)
+        return (top + bottom) / 2
+      }
+      const rowCentre = centre(node)
+      /* WHAT A PERSON READS: the cell's value, not its reserved age line below it. The input is its own box. */
+      const shown = (selector: string) => {
+        const cell = node.querySelector(selector)!
+        if (cell instanceof HTMLInputElement) return centre(cell)
+        const span = document.createRange()
+        const edges: number[] = []
+        for (const child of cell.childNodes) {
+          if (child instanceof Element && (child.classList.contains('pricing-ref-age') || getComputedStyle(child).display === 'none')) continue
+          span.selectNodeContents(child)
+          const box = span.getBoundingClientRect()
+          if (box.height > 0) edges.push(box.top, box.bottom)
+        }
+        return (Math.min(...edges) + Math.max(...edges)) / 2
+      }
+      const cells: Record<string, string> = {
+        market: '.pricing-col-market',
+        lowest: '.pricing-col-low',
+        range: '.pricing-col-range',
+        qty: '.pricing-qty-input',
+      }
+      return Object.fromEntries(
+        Object.entries(cells).map(([name, selector]) => [name, shown(selector) - rowCentre]),
+      )
+    })
+    for (const [name, offset] of Object.entries(offsets)) {
+      expect.soft(Math.abs(offset), `${name} is ${offset.toFixed(2)}px off the row's center`).toBeLessThanOrEqual(CENTER_TOLERANCE_PX)
+    }
+  })
+}
+
+test('7b-22: every Pricing column header has the same font-size, weight, tracking and case', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { saved: savedWithFacts(AGO(3600), ['8608859']) })
+  const heads = page.locator('.pricing-caption > *:not(:empty)')
+  await expect(page.locator('.pricing-caption .pricing-col-range')).toBeVisible()
+  const styles = await heads.evaluateAll((nodes) =>
+    nodes.map((cell) => {
+      /* A sortable header is a native button inside (or as) the cell: its own type is what shows. */
+      const node = cell.tagName === 'BUTTON' ? cell : (cell.querySelector('button') ?? cell)
+      const css = getComputedStyle(node)
+      return {
+        head: node.textContent,
+        fontSize: css.fontSize,
+        fontWeight: css.fontWeight,
+        letterSpacing: css.letterSpacing,
+        textTransform: css.textTransform,
+      }
+    }),
+  )
+  expect(styles.length).toBeGreaterThan(5)
+  for (const key of ['fontSize', 'fontWeight', 'letterSpacing', 'textTransform'] as const) {
+    const [first, ...rest] = styles
+    for (const other of rest) expect(other[key], `${other.head} vs ${first!.head}: ${key}`).toBe(first![key])
+  }
+})
+
+/* THE DOLLAR HEADERS SORT (the owner's request, same lane). Market, Lowest, Range 7d and Price are
+ * pressable header text: highest first, lowest first, then the default order. NO ROW POSITION AND NO
+ * PRICE IS ASSERTED AS A LITERAL: every case reads the values the rows SHOW and checks their order. */
+const SORT_COLUMNS = ['Market', 'Lowest', 'Range 7d', 'Price'] as const
+type SortColumn = (typeof SORT_COLUMNS)[number]
+
+const sortRows = () => [
+  sku({ sku: '901', name: 'Alpha', snap: { market: '30.00', direct_low: null, low: '12.00', low_with_shipping: null, now: null } }),
+  sku({ sku: '902', name: 'Bravo', snap: { market: '10.00', direct_low: null, low: '28.00', low_with_shipping: null, now: null } }),
+  sku({ sku: '903', name: 'Charlie', snap: { market: '20.00', direct_low: null, low: '5.00', low_with_shipping: null, now: null } }),
+  sku({ sku: '904', name: 'Delta', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: '40.00', low_with_shipping: null, now: null } }),
+  sku({ sku: '905', name: 'Echo', snap: { market: '40.00', direct_low: null, low: null, low_with_shipping: null, now: null } }),
+  sku({ sku: '906', name: 'Foxtrot', snap: { market: '25.00', direct_low: null, low: '15.00', low_with_shipping: null, now: null } }),
+]
+/* Range highs differ per card; Delta and Echo's neighbour Foxtrot carry no saved history at all. */
+const sortSaved = (at: number) => ({
+  skus: Object.fromEntries(
+    (['901', '902', '903', '905'] as const).map((id, at_) => [
+      id,
+      {
+        at,
+        ranges: trends([id]).skus[id]!.ranges,
+        through: '2026-09-30',
+        facts: { ...FACTS, low_7d: String(1 + at_), high_7d: String([11, 25, 14, 9][at_]) },
+      },
+    ]),
+  ),
+  note: { at, ok: true, asked: 4, read: 4, no_history: 0, unreadable: 0, failed: 0, message: '' },
+})
+const SORT_DECISIONS = { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '901': '5.00', '902': '50.00', '905': '7.50' } }
+
+async function openSortable(page: Page, extra = ''): Promise<void> {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { skus: sortRows(), decisions: SORT_DECISIONS, saved: sortSaved(AGO(3600)) })
+  if (extra !== '') {
+    await page.evaluate((query) => { window.location.hash = `${window.location.hash}&${query}` }, extra)
+  }
+  await expect(page.locator('.pricing-caption .pricing-col-range')).toBeVisible()
+}
+
+const sortHead = (page: Page, column: SortColumn): Locator =>
+  page.locator('.pricing-caption').getByRole('button', { name: new RegExp(`^${column}`, 'i') })
+
+/** Each section's displayed values for a column, in drawn order; `null` where the cell shows no value. */
+async function shownBySection(page: Page, column: SortColumn): Promise<{ head: string; values: (number | null)[]; names: string[] }[]> {
+  return page.locator('.pricing-group').evaluateAll((groups, col) => {
+    const money = (text: string | null | undefined) => {
+      const found = [...(text ?? '').matchAll(/\$([\d,]+(?:\.\d+)?)/g)].map((m) => Number(m[1]!.replace(/,/g, '')))
+      return found
+    }
+    return groups.map((group) => {
+      const rows = [...group.querySelectorAll('.pricing-row')]
+      const values = rows.map((row) => {
+        if (col === 'Price') {
+          const input = row.querySelector<HTMLInputElement>('.pricing-input')
+          const found = money(`$${(input?.value ?? '').replace(/^\$/, '')}`)
+          return input === null || (input.value ?? '') === '' ? null : (found[0] ?? null)
+        }
+        const cell = row.querySelector(
+          col === 'Market' ? '.pricing-col-market' : col === 'Lowest' ? '.pricing-col-low' : '.pricing-col-range .pricing-range-line',
+        )
+        const found = money(cell?.childNodes ? [...cell.childNodes].filter((n) => !(n as Element).classList?.contains('pricing-ref-age')).map((n) => n.textContent).join('') : '')
+        return found.length === 0 ? null : Math.max(...found)
+      })
+      return {
+        head: group.getAttribute('aria-label') ?? '',
+        values,
+        names: rows.map((row) => row.querySelector('.pricing-name')?.textContent ?? ''),
+      }
+    })
+  }, column)
+}
+
+/** Within every section the shown values run in `dir`, and a row with no value is after every row with one. */
+function expectSorted(sections: { head: string; values: (number | null)[] }[], dir: 'desc' | 'asc'): void {
+  for (const { head, values } of sections) {
+    const firstNone = values.findIndex((value) => value === null)
+    if (firstNone >= 0) expect(values.slice(firstNone).every((value) => value === null), `${head}: a blank is not last`).toBe(true)
+    const have = values.filter((value): value is number => value !== null)
+    const want = [...have].sort((a, b) => (dir === 'desc' ? b - a : a - b))
+    expect(have, `${head}: ${dir}`).toEqual(want)
+  }
+}
+
+const namesBySection = (sections: { head: string; names: string[] }[]) => sections.map((section) => [section.head, section.names])
+
+for (const column of SORT_COLUMNS) {
+  test(`7b-24: ${column} header cycles highest first, lowest first, then the default order`, async ({ page }) => {
+    await openSortable(page)
+    const start = namesBySection(await shownBySection(page, column))
+    const head = sortHead(page, column)
+    await expect(head).toHaveAttribute('aria-sort', 'none')
+    await head.click()
+    await expect(head).toHaveAttribute('aria-sort', 'descending')
+    const down = await shownBySection(page, column)
+    expectSorted(down, 'desc')
+    expect(down.length, 'sections keep their order and count').toBe(start.length)
+    expect(down.map((section) => section.head)).toEqual(start.map(([head_]) => head_))
+    await head.click()
+    await expect(head).toHaveAttribute('aria-sort', 'ascending')
+    expectSorted(await shownBySection(page, column), 'asc')
+    await head.click()
+    await expect(head).toHaveAttribute('aria-sort', 'none')
+    expect(namesBySection(await shownBySection(page, column))).toEqual(start)
+  })
+}
+
+test('7b-24: one column sorts at a time, and a new column starts at highest first', async ({ page }) => {
+  await openSortable(page)
+  await sortHead(page, 'Market').click()
+  await sortHead(page, 'Market').click()
+  await expect(sortHead(page, 'Market')).toHaveAttribute('aria-sort', 'ascending')
+  await sortHead(page, 'Lowest').click()
+  await expect(sortHead(page, 'Lowest')).toHaveAttribute('aria-sort', 'descending')
+  await expect(sortHead(page, 'Market')).toHaveAttribute('aria-sort', 'none')
+  expectSorted(await shownBySection(page, 'Lowest'), 'desc')
+})
+
+test('7b-24: the sort header is a native button with a direction arrow only while active, at the thumb floor', async ({ page }) => {
+  await openSortable(page)
+  for (const column of SORT_COLUMNS) {
+    const head = sortHead(page, column)
+    expect(await head.evaluate((node) => node.tagName)).toBe('BUTTON')
+    await expect(head.locator('svg')).toHaveCount(0)
+    const floor = await page.evaluate(() => {
+      const probe = document.createElement('i')
+      probe.style.height = 'var(--bn-control-h-lg)'
+      document.body.append(probe)
+      const height = probe.getBoundingClientRect().height
+      probe.remove()
+      return height
+    })
+    expect((await head.boundingBox())!.height).toBeGreaterThanOrEqual(floor)
+    await head.click()
+    await expect(head.locator('svg')).toBeVisible()
+    await head.click()
+    await head.click()
+  }
+})
+
+test('7b-24: the sort header answers Enter and Space from the keyboard', async ({ page }) => {
+  await openSortable(page)
+  const head = sortHead(page, 'Market')
+  await head.focus()
+  await page.keyboard.press('Enter')
+  await expect(head).toHaveAttribute('aria-sort', 'descending')
+  await page.keyboard.press('Space')
+  await expect(head).toHaveAttribute('aria-sort', 'ascending')
+})
+
+test('7b-24: the sort is in the URL, and a reload keeps it', async ({ page }) => {
+  await openSortable(page)
+  const before = page.url()
+  await sortHead(page, 'Lowest').click()
+  await expect(sortHead(page, 'Lowest')).toHaveAttribute('aria-sort', 'descending')
+  expect(page.url()).not.toBe(before)
+  await page.reload()
+  await expect(sortHead(page, 'Lowest')).toHaveAttribute('aria-sort', 'descending')
+  expectSorted(await shownBySection(page, 'Lowest'), 'desc')
+})
+
+test('7b-24: a sort moves no header, and no header changes width in any state', async ({ page }) => {
+  await openSortable(page)
+  const frame = () => page.locator('.pricing-caption > span, .pricing-caption button').evaluateAll(
+    (nodes) => nodes.map((node) => { const box = node.getBoundingClientRect(); return [box.left, box.top, box.width] }),
+  )
+  const widths = async (column: SortColumn) => (await sortHead(page, column).boundingBox())!.width
+  for (const column of SORT_COLUMNS) {
+    const rest = await widths(column)
+    const start = await frame()
+    await sortHead(page, column).click()
+    expect(await widths(column)).toBe(rest)
+    expect(await frame()).toEqual(start)
+    await sortHead(page, column).click()
+    expect(await widths(column)).toBe(rest)
+    await sortHead(page, column).click()
+  }
+})
+
+test('7b-24: a sort and a filter work together', async ({ page }) => {
+  await openSortable(page)
+  await sortHead(page, 'Market').click()
+  await expect(sortHead(page, 'Market')).toHaveAttribute('aria-sort', 'descending')
+  const search = page.getByRole('searchbox', { name: 'Search this list' })
+  await search.fill('a')
+  await expect(sortHead(page, 'Market')).toHaveAttribute('aria-sort', 'descending')
+  const rowsShown = await page.locator('.pricing-row .pricing-name').allTextContents()
+  expect(rowsShown.length).toBeGreaterThan(0)
+  for (const name of rowsShown) expect(name.toLowerCase()).toContain('a')
+  expectSorted(await shownBySection(page, 'Market'), 'desc')
+})
+
+test('7b-23: Pricing.css holds no literal that a design token already names', async () => {
+  /* `make token-literal-check` is a per-file ceiling and a Python script a browser spec may not
+   * depend on (`make browser-scope` would then owe it a SCOPE entry), so this reads the same two
+   * files itself: the token set from `tokens.css` at test time, the literals from `Pricing.css`.
+   * A literal in type or spacing that EQUALS a token's value is a finding, so no list is copied. */
+  const { readFileSync } = await import('node:fs')
+  const { resolve } = await import('node:path')
+  const read = (name: string) => readFileSync(resolve(process.cwd(), 'src', name), 'utf8')
+  const families: [RegExp, RegExp][] = [
+    [/^(?:font-size)$/, /^--bn-fs-[a-z0-9]+$/],
+    [/^(?:line-height)$/, /^--bn-lh-[a-z]+$/],
+    [/^(?:letter-spacing)$/, /^--bn-tracking-[a-z]+$/],
+    [/^(?:padding|margin|gap|row-gap|column-gap|padding-(?:block|inline)(?:-\w+)?|margin-(?:block|inline)(?:-\w+)?|padding-(?:top|bottom|left|right)|margin-(?:top|bottom|left|right))$/, /^--bn-(?:[1-9]|10|0-5|0-75|1-5)$/],
+  ]
+  const tokens = [...read('tokens.css').matchAll(/^\s*(--bn-[\w-]+):\s*([^;]+);/gm)].map((m) => [m[1]!, m[2]!.trim()] as const)
+  const literal = /(?<![\w.#-])-?\d*\.?\d+(?:px|rem|em)?(?![\w%-])/g
+  const found: string[] = []
+  const sheet = read('Pricing.css').replace(/\/\*[\s\S]*?\*\//g, '')
+  for (const [, prop, value] of sheet.matchAll(/([a-z-]+)\s*:\s*([^;{}]+);/g)) {
+    const family = families.find(([props]) => props.test(prop!))
+    if (family === undefined) continue
+    const named = tokens.filter(([name]) => family[1].test(name)).map(([, v]) => v)
+    for (const lit of value!.replace(/var\([^)]*\)/g, '').match(literal) ?? []) {
+      if (/^-?0*\.?0+(?:px|rem|em)?$/.test(lit)) continue
+      if (named.includes(lit)) found.push(`${prop}: ${value!.trim()}`)
+    }
+  }
+  expect(found).toEqual([])
+})
