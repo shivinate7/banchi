@@ -473,10 +473,10 @@ test.describe('the published demo draws what reviewers grade', () => {
     const placed = /^Mark sold: (.+), Section \d+, Card \d+$/.exec((await sell.getAttribute('aria-label')) ?? '')
     expect(placed, 'a Mark sold button names its card\'s box').not.toBeNull()
     const meta = page
-      .locator('.browse-boxcell', { has: page.locator('.browse-boxcell-name', { hasText: new RegExp(`^${placed![1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) }) })
+      .locator('.browse-boxcell', { has: page.locator('.browse-boxcell-name', { hasText: new RegExp(`^${(placed![1] ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) }) })
       .locator('.browse-boxcell-meta')
     await expect(meta).toHaveText(/^\d+ stored$/)
-    const startCount = Number(/^(\d+) stored$/.exec((await meta.textContent()) ?? '')![1])
+    const startCount = Number(/^(\d+) stored$/.exec((await meta.textContent()) ?? '')?.[1])
     await sell.click()
     await expect(meta).toHaveText(`${startCount - 1} stored`)
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
