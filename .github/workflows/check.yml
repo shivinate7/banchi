@@ -425,7 +425,8 @@ jobs:
     # this line, a failed `already-passed` skipped the matrix; now it runs it.
     if: ${{ !cancelled() && needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # the long sitting (monthly, or a dispatch that asks) puts a 16-minute case on one shard
+    timeout-minutes: ${{ (github.event.schedule == '47 4 1 * *' || inputs.long_sitting) && 40 || 20 }}
     # The official image, by tag and digest. Chromium is preinstalled at the version the pin
     # needs (the "Image matches" step enforces it). `--ipc=host` is Playwright's own advice for
     # Chromium in a container.

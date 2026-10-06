@@ -75,7 +75,8 @@ regardless — D136's pass record is the only thing that skips the matrix on mai
     scripts/browser-scope.py shard-refresh FILE ... [--write]
         Re-time from `.serve/design-check.json` files (`fileSeconds`); a spec's time is the median
         over the files that list it, so pass several runs' files for a median. Every full-suite run uploads
-        each shard's as `design-check-times-N`; download them and run this. Previews.
+        each shard's as `design-check-times-N`; download them and run this. Previews. Never feed it a long-sitting run's artifact: the
+        300-capture case skews the freeze file's time.
     scripts/browser-scope.py list
     scripts/browser-scope.py selftest
 
