@@ -622,7 +622,7 @@ Turning the toggle on never downloads. With no model or no index, the toggle rea
 **Open for the owner.** The two gates are measurements with no pass mark. The build lane brings the numbers before ship.
 The held-out check (section 3) also tests the look-alike guard, with photographs of cards whose same-name twin has no stock image.
 
-## 10. The band's sheets (design, not built)
+## 10. The band's sheets
 
 **The outcome.** The owner sees "N waiting for a paid look" and cannot tell why. A wrong rarity claim or a missing set hint is a free fix. A paid read costs money.
 Three counts and one line in the band open a sheet that shows what they are made of. The paid-look sheet is the one that matters. It groups the cards by why the free reader stopped.
@@ -694,7 +694,8 @@ Nothing recomputes it for free, because a re-read loads the model.
   A record that carries a `why` field is never cleared again. So the clearing runs once, and a card with no photo is not cleared in a loop.
   The clearing spends nothing, because the free reader never spends. While it runs, a card with no reason sits under "No reason kept". No owner press is needed.
 - **Answer it from the read that already sorts the cards.** `_sweep_poll_state` in `server/pipeline_routes.py` is the one place that sorts a card into paid, unread or matched.
-  It gains one query value, `detail=paid|unread|matched`, beside `keys=`. With it the answer adds `cards`: the rows of that one count, in the shape in the table.
+  It gains one query value, `detail=paid|unread|matched|unhinted`, beside `keys=`. With it the answer adds `cards`: the rows of that one count, in position order, in the shape in the table.
+  A row is `{key, box, box_name, index, cid, set_hint, rarity_claim}`. A paid row adds `code` and `candidates`. A matched row adds `name`, `set`, `number` and `accept`.
   There is no new route. The poll never sends `detail`, so its payload and its cost do not change. The sheet sends it once, when it opens.
 
 **Read budget (`docs/specs/efficiency.md`).** The detail read stays in the photo lane, because the path still starts with `/pipeline/match/sweep?keys=`.
@@ -720,16 +721,16 @@ An unknown code shows as itself and not as a blank.
 | --- | --- | --- |
 | `margin_too_small` | Two printings too close to call | "Name the rarity on the card. A claim settles the printing." Card panel. Many in one box: the box |
 | `match_too_weak` | A weak match | "Name the set on the card. A narrower set gives a better match." Card panel |
-| `lookalike_guard` | A look-alike with no photo of its own | none. "Only a paid look can tell these apart." |
+| `lookalike_guard` | A look-alike with no photo of its own | none. It shows the plain line "Only a paid look can tell these apart." under its title: an explanation, not a fix pointer |
 | `photo_unreadable`, `no_card_found` | A photo problem | "Shoot the card again." Card panel, re-shoot |
 | `set_not_resolved` | The set named matches no set, or more than one | "Correct the set." Card panel |
-| `promo_set`, `promo_held`, `set_not_indexed`, `no_index` | The set cannot be read free | none. "Only a paid look reads this set." |
+| `promo_set`, `promo_held`, `set_not_indexed`, `no_index` | The set cannot be read free | none |
 | `game_not_served` (from the card's game, not stored) | This game is not read free | none |
 | no stored reason | No reason kept | "A free read will fill it in." Shown only while the one-time clearing runs (10.2) |
 | `index_stale` | The free reader's data is out of date | "Prepare matching on the runs sheet." |
 
 A group with a free fix shows it once, as one line under the group title, with the count it covers.
-A group with no free fix shows no pointer line and no empty promise.
+A group with no free fix shows no pointer line and no empty promise. The one exception is the look-alike group, which shows its plain explanation (10.6, item 7).
 The pointer is a sentence, never a second control. The press is the row's own.
 The pattern is read from the rows and never guessed. Say most rows in a group sit in one box and carry no rarity claim.
 Then the pointer line says so ("9 of 12 are in Box Starter and name no rarity"). The box name links to that box on Inventory (10.6, settled).
@@ -797,5 +798,7 @@ Front end.
 4. Cards tried before the `why` map ships are re-read once, free, by the sweep itself (10.2). No owner press is needed.
 5. The box name and the slot are enough for a position.
 6. A link to the box on Inventory is enough for many cards in one box. No deep link to Manage box is built.
+
+7. The look-alike group shows the plain line "Only a paid look can tell these apart." under its title. It explains, and points to no fix. Every other group with no free fix shows no line.
 
 Open: none.
