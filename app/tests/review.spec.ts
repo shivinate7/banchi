@@ -1249,6 +1249,46 @@ test('the queue never says "Low confidence read" over a High confidence read', a
   await expect(page.locator('body')).not.toContainText('Low confidence read')
 })
 
+/* WHEN THE READERS DISAGREE the entry's candidates hold BOTH printings, so one numbered press
+   answers "which reader is right". The free pick's row is the second choice here. */
+const DISAGREE_ENTRY: Entry = {
+  ...entry(62, 'readers_disagree', '1.20', [
+    { ...candidate(0, '1.20'), name: 'Dunsparce', set: 'SV09', number: '120/159', sku: '8608459' },
+    { ...candidate(1, '0.65'), name: 'Dudunsparce ex', set: 'SV09', number: '121/159', sku: '8608469' },
+  ]),
+  read: {
+    name: 'Dunsparce', number: '120/159', set: 'SV09',
+    matcher_pick: { name: 'Dudunsparce ex', number: '121', set: 'SV09: Journey Together', reason: 'margin_too_small' },
+  },
+}
+
+test('a disagree card shows both readers as numbered choices, and 2 answers with the free pick', async ({ page }) => {
+  const sent = await open(page, [DISAGREE_ENTRY])
+  const rows = page.locator('.review-candidates .review-candidate')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(0).locator('.review-key')).toHaveText('1')
+  await expect(rows.nth(1).locator('.review-key')).toHaveText('2')
+  await expect(rows.nth(1)).toContainText('Dudunsparce ex')
+  const family = (selector: string) => rows.nth(1).locator(selector).first().evaluate((el) => getComputedStyle(el).fontFamily)
+  expect(await family('.review-candidate-name')).not.toContain('JetBrains')
+  expect(await family('.review-candidate-meta span:last-child')).toContain('JetBrains')
+
+  await page.keyboard.press('2')
+  await expect.poll(() => sent.filter((s) => s.method === 'POST').length).toBe(1)
+  expect((sent.find((s) => s.method === 'POST')!.body as { sku: string }).sku).toBe('8608469')
+})
+
+test('a free pick that resolves to no catalog row is said so, and Search stays', async ({ page }) => {
+  const gone: Entry = {
+    ...DISAGREE_ENTRY,
+    candidates: [DISAGREE_ENTRY.candidates[0]!],
+    read: { ...DISAGREE_ENTRY.read, matcher_pick: { name: 'Raichu', number: '999', set: 'Nowhere', reason: 'margin_too_small' } },
+  }
+  await open(page, [gone])
+  await expect(page.locator('.review-sentence')).toContainText(/not in the catalog|no catalog row|could not find/i)
+  await expect(page.getByRole('button', { name: /^Search/ }).first()).toBeVisible()
+})
+
 test('a card the free reader never saw draws no Free reader fact', async ({ page }) => {
   await open(page, NAMED_CONTRADICTION)
   await page.locator('.review-details-summary').click()

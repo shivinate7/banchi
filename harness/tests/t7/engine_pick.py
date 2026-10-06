@@ -639,6 +639,39 @@ def check_second_look_agreement(checks: Checks) -> None:
         )
 
 
+def check_disagree_candidates_hold_both(checks: Checks) -> None:
+    """A `readers_disagree` entry offers BOTH printings, so one numbered press answers it: the
+    free pick resolves to its catalog row(s) through the same lookup the candidates use."""
+    from cli import resolve
+
+    checks.note("")
+    checks.note("READERS DISAGREE — the entry's candidates hold the paid card and the free pick")
+    catalog = join.Catalog(tcgcsv.read_export(REPO_ROOT / "fixtures/sv09_export_untouched.csv"))
+    router = join.default_router()
+
+    def queued(number):
+        pick = join.MatcherPick(code=match.UNREAD_MARGIN, name="Dudunsparce ex", number=number, set=SV09_SET)
+        card = join.IdentifiedCard(
+            position=join.Position(box=3, index=1), name="Dunsparce", number="120",
+            printed_total="159", metadata_finish="normal", photo="captures/box3/0001.jpg",
+            confidence="high", second_look=pick,
+        )
+        report = join.join_batch([card], catalog, router=router)
+        return resolve.queue_entry(report.queued[0]) if report.queued else None
+
+    found = queued("121")
+    skus = [c["sku"] for c in found.candidates] if found else []
+    checks.ok(DUNSPARCE_SKU in skus, f"the paid read's own row is a candidate, got {skus}")
+    checks.ok("8608469" in skus, f"the free pick's row (Dudunsparce ex 121/159) is a candidate too, got {skus}")
+
+    gone = queued("999")
+    checks.ok(gone is not None and gone.reason == routing.READERS_DISAGREE, "a pick with no catalog row still holds the card as readers_disagree")
+    checks.ok(
+        gone is not None and [c["sku"] for c in gone.candidates].count("8608469") == 0 and gone.read.get("matcher_pick", {}).get("number") == "999",
+        "and offers no invented row: the pick stays on the entry, the candidates stay the paid read's alone",
+    )
+
+
 # ------------------------------------------------------------------------ the cache
 
 
@@ -920,6 +953,7 @@ CHECKS = (
     check_identify_free_first,
     check_second_look_routing,
     check_second_look_agreement,
+    check_disagree_candidates_hold_both,
     check_cache_engines,
     check_model_ready_hashes_once,
     check_promo_census,
