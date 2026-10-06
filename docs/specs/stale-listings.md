@@ -379,6 +379,271 @@ asking before.
 pushed back with another markdown, but a sale at the lower price is done. The one thing that
 cannot go wrong this way is the quantity, because no file on this path can move one.
 
+## 7b. Pricing opens on fresh prices, with more on T
+
+**STATUS: SPECIFIED, NOT BUILT.** Nothing in this section is in code yet. It starts from four
+rulings by the owner. The daily job also refreshes Market and Lowest for every card waiting to be
+sent. The screen opens with the morning's data already in it. A press brings everything current.
+The row grows by two columns, and the rest waits behind T.
+
+### The defect, measured
+
+A waiting card draws `snap` from its run's `pricing.json`. The join wrote that table from the
+catalog export it read that day, and nothing writes it again. The daily job (D104, live fetch is
+its own guarded constant) reads the live listings and the Trends strips. Neither reaches `snap`.
+
+One waiting card showed Market $10.37 and Lowest $9.06 from its batch. Its saved strip says
+$16.25 for the same SKU on the day of the read. Six waiting cards were compared with the newest
+point of their strips. The batch Market was off by 7% to 64% of the current figure. Five of the
+six were off by more than 10%.
+
+The join derives more from that cell, and all of it is stale too. That covers the bucket
+(`listable` or `sub_threshold`, D9, cut-off is also the price floor), the preset figures and
+`rule_price`. It also covers the price `emit` writes for a card with no typed answer. A fix that
+only repaints the two cells leaves the screen proposing one price and the send writing another.
+
+### Decision: refresh the run tables, never overlay them
+
+**The cause is that a run table is a copy that nothing refreshes.** So the job refreshes the
+copy, through the path that already makes it. It does not add a second figure beside `snap`.
+
+The unit is the existing pair `do_pipeline_export`, then `do_pipeline_step(name, "join", ...)`.
+`do_run_match` already composes it for one run. A new `pipeline_routes.do_prices_refresh`
+composes it for every open run (the roster of `do_pipeline_worklist`), in this order:
+
+| step | what it does | reads | writes |
+|---|---|---|---|
+| 1. listings | `do_live_export`, unchanged | one portal request | `inventory/.live/`, the readings table |
+| 2. catalog prices | per game with a waiting card: `do_pipeline_export` with `refresh: true` once. `_reusable` then serves every later run of that game for `EXPORT_REUSE_S` | one portal request per game | `inventory/.exports/<game>/` |
+| 3. join | per open run: `do_pipeline_step(name, "join", {"fetched": [file]})` | local | each run's `pricing.json`, and the readings table (`reading_from_table`) |
+| 4. sales history | `do_price_trends_preload`, now saving per-day facts (below) | market history host, at its courtesy pace | `inventory/price-trends.json` |
+
+Steps 1 to 3 set the page's "Prices as of". Step 4 is the slow one and runs last. So prices are
+fresh long before history is. Each step records its own outcome in `inventory/price-refresh.json`
+(`steps.<name>`: `at`, `ok`, counts). A failed step keeps the last good data and says so, as
+`pricerefresh.run` does today. Nothing is silent.
+
+**The join is free and re-runnable** (the Commands block). A typed answer lives in
+`inventory/prices.json` (D86, one pricing file for the store) and never in `pricing.json`. So a
+re-join cannot lose one. The "typed answer survives" and "re-join is idempotent" items in the
+list below pin that.
+
+**What this changes in D104.** D104 says the daily job "changes no price". That stays true at
+TCGplayer, because nothing here writes there. But the job now rewrites run tables. So what the
+screen proposes can move overnight.
+
+**PROPOSED D104 amendment.** It waits for the owner's word. The new text is: "The daily job also
+fetches the catalog export per game. It then re-joins every open run. It writes no price at
+TCGplayer. It changes `snap`, the bucket and the proposed price of a waiting card. A typed answer
+never moves." This spec does not edit D104.
+
+### The one home for the current Market and Lowest of a SKU
+
+`pipeline/readings.py` (D189, the market reading is a table) is the home. It already answers "the
+newest Market this machine has read for a SKU". It reads run tables and the live export, and the
+clock decides. It gains the rest of the price row.
+
+- `Reading` adds `low`, `low_with_shipping` and `direct_low`. Each is optional. The row payload
+  carries them, so the `readings` table needs no migration. `_parse_reading` defaults a missing
+  field to none.
+- `reading_from_table` and `reading_from_export` copy all four cells. One reading keeps all four
+  from one source and one second. So Market and Lowest never come from different moments.
+
+Two readers draw from it. Neither holds a second copy:
+
+- The T panel reads it through `GET /pipeline/price-facts?sku=`, a local read.
+- The row keeps drawing `snap`, which step 3 made fresh. Its age is `snap_at`, a new field on each
+  worklist row. It is the fetch time of the export the run was last joined against. That is the
+  file's mtime, which is its fetch time by D104's own rule.
+
+**Known limit.** A Live tab "read again" writes a reading newer than the last join. Until the
+next refresh, the row shows its join's time and the T panel shows the newer reading's time. Both
+are labeled, so nothing contradicts silently. Open question 3 asks whether that press should
+also re-join.
+
+### Where the sales facts come from
+
+TCGplayer's history gives these fields for each day: `quantitySold`, `transactionCount`,
+`lowSalePrice`, `highSalePrice` and `marketPrice`. `pricehistory.Series` and
+`pricehistory.Bucket` already parse all of them. The month range is daily, and the preload
+already fetches it for the strip. So the new facts cost no extra request.
+
+- `pricehistory.Series` gains one pure method, `window(days)`. It returns units sold, sales, the
+  volume-weighted average sale price, and the low and high, over the newest `days` buckets. It is
+  the one home for those figures. The browser computes nothing (`app/src/types.ts` is the only
+  wire shape).
+- The preload saves, for each SKU, `facts` (the row's figures) and `days` beside `ranges`. `days`
+  is 30 tuples of date, units, sales, low, high and market. `through` is the date of the newest
+  bucket.
+- `GET /pipeline/trends-saved` serves `ranges` and `facts` and leaves out `days`, so first paint
+  stays small. `GET /pipeline/price-facts?sku=` serves `days` for one SKU.
+- Size: the saved file is 289 KB for 366 SKUs today. The `days` add an estimated 0.4 MB. This is
+  unmeasured. The build measures it. If the file passes 1 MB, the days move to their own file.
+
+### The read budget
+
+| read | cost today | cost after |
+|---|---|---|
+| live listings | 1 request a day | unchanged |
+| catalog prices | none in the job | 1 request per game with a waiting card. Today all 902 waiting rows are one game. |
+| sales history | 2 ranges per product at the market reader's pace (measured: 0.82 s a request, 876 requests in 361 s) | unchanged. The job already asks the month range. |
+| a visit to `#/pricing` | 0 requests at any market host | unchanged |
+| a press of T | 0 | 0. It reads two local files. |
+
+**The history step is slow, and that is measured.** The daily log shows about two hours from the
+live read to the end of the trends read for 366 SKUs. The measured request time is 361 s. The gap
+is unmeasured. It is why the job runs prices first. It is also why Refresh now never repeats a
+full history read.
+
+### Refresh now
+
+One button in the page header, beside "Prices as of 5:18 AM". It replaces the Trends press. The
+screen already reads saved strips at first paint (D278, one product view, two frames, and the
+`getSavedTrends` read in `Pricing`). So the Trends press only ever asked for a newer read. This
+button asks for that, and for everything else.
+
+- **Route.** New: `POST /pipeline/prices/refresh` starts the work and answers 202.
+  `GET /pipeline/prices/refresh` answers `{state, step, done, total, note}`. The work runs in a
+  worker thread, as the match setup does. Steps 2 and 3 can outlast the 120 s that a request slot
+  may hold (DEBT11, a parked writer still holds a request slot). `server/capture_server.py`
+  dispatches both. `app/src/server.ts` is the only client.
+- **Guard (D104).** The press is free. It fetches the owner's listings and the catalog and writes
+  nothing at TCGplayer. It reads the stored session secret, so the route follows
+  `/pipeline/live-export`'s posture. One run goes at a time: a second press while one runs
+  answers `running` and starts nothing. Only a press calls it. No render, route load or timer
+  calls it. A second press inside `EXPORT_REUSE_S` of a finished run is refused unless the body
+  says `force`. The screen sends `force` only from an explicit "Try again" after a failed run.
+- **What it runs.** Steps 1 to 3 always. Step 4 runs only for a SKU whose saved history ends
+  before the newest finished day. So a press after the morning job asks the market host for
+  nothing. The step works in chunks. Closing the page does not stop it.
+- **States.** Resting: "Prices as of 5:18 AM" and a line of counts. In progress: the same line
+  stays, the button is busy, one line shows the steps (Listings, Catalog prices, Sales history
+  118 of 366), and a thin bar fills. Done: "Prices as of 6:11 PM". Failed: the refusal's own
+  sentence, the last good time, and "Try again". A failed step never blanks a figure.
+- **Time is a sentence.** "Prices as of" is the catalog step's finish time. Sales history has its
+  own "through" date and never claims the page's time.
+
+### The row as it opens
+
+Two new columns sit between Lowest and the trend. **Recommended pair, A: "Sold/week" and
+"Avg 7d".**
+
+- **Sold/week** is units sold a week over the last 30 days. It says whether a price is a fact or
+  a hope.
+- **Avg 7d** is the volume-weighted average sale price over the last 7 days. It is what buyers
+  paid. It shows a move that Market and Lowest hide.
+- Both come from the month history already read.
+
+**Alternative pair, B: "Sales/week" and "Range 7d".** Sales a week counts separate buyers. So one
+order of twelve does not read as demand. Range is the lowest and highest sale in 7 days. It is the
+safe read for a price floor, but it puts two numbers in one cell. Pick B if the owner prices to
+the lowest recent sale.
+
+Direct Low is not a candidate. Every waiting card's export row carries it blank (measured: none
+of 902). Total Quantity is the owner's own listed copies and never market supply. So it stays
+where it is (`LiveCount`) and on T.
+
+- **Age of each price.** A cell prints its age only when it is older than the page's "Prices as
+  of" by more than an hour. That is the `STALE_AFTER_S` rule that `keptStrip` already applies to
+  strips. The age draws as a date, in the warn tone, under the figure. A fresh figure draws no
+  age, so a normal morning adds no noise. The sales columns draw their `through` date by the same
+  rule.
+- **Width.** The new columns need a page 1100 wide or more, so the name column keeps about 300.
+  Under 1100 the row is today's row. Under 900, Lowest and the trend leave as they do now. T
+  keeps every figure at every width. Whether the 1440 desk with the sidebar open clears 1100 is
+  unmeasured. The build measures it before it picks the breakpoint.
+- **Empty states.** No saved history: both cells draw "—" with a title that says so. Nothing sold
+  in 7 days: Avg draws "—" and Sold/week still draws.
+
+### T, and the panel behind it
+
+**`T` is already bound on this screen.** `PRICING_KEYS` in `app/src/App.tsx` lists it as "Open
+the product page for this card". `Pricing.tsx` handles it in two places: the window handler and
+the price field's `onKey`. Both call `openSheet('product', ...)`. So the key stays and the sheet
+gains a block. The `SHORTCUTS` row changes its sentence to "Open this card's prices and sales".
+No new key is added. T on any other screen is untouched.
+
+The block sits at the top of `ProductHistoryView` (D278), so the sheet and the routed page both
+get it. It reads only `GET /pipeline/price-facts?sku=`, which reads two local files. So it opens
+at once and fires no market request. It keeps D278's rule: a press, never follow-focus, and no
+request per arrow key.
+
+Content, compact, in four-column grids:
+
+- **Prices now**, with the read time: Market, Lowest, Lowest with shipping, Direct low ("not
+  carried" when blank). Each has its age by the row's rule.
+- **Sales, last 30 days**, with "Sales through" and a date. A small bar chart of units sold a day
+  (30 bars, three tick labels) with Market as a thin line over it. Then these figures: Sold, Per
+  sale, Avg sale 30d and 7d, Sale range 30d and 7d, Best day, and Market change over 30 days.
+- **On your shelf**: On hand, Can be sent, Listed now (Total Quantity), Your asking price.
+- A card with no saved history draws its strip and one sentence, never an empty grid.
+
+The chart follows `docs/DESIGN.md` and the kit. It uses `--bn-*` tokens only, in light and dark.
+Bars use reduced opacity and the line uses ink. A text alternative names what it shows.
+
+### The job after this change
+
+`scripts/price-refresh-daily.py` calls `pipeline_routes.do_prices_refresh` (steps 1 to 4) and logs
+one line per step. `pricerefresh` gains the step notes. Today's two notes (`run`, `trends`) stay
+readable, because `PriceMovers` reads them.
+
+### Checks that can go red
+
+Each is one claim. A build makes each one red first.
+
+1. **The job refreshes the row.** Seed a run table with a stale `snap.market`. Run
+   `do_prices_refresh` against a stub portal that serves a new Market. The run's `pricing.json`
+   carries the new Market, the new `bucket` and the new `rule_price`.
+2. **The send agrees with the screen.** After the first item, `emit` writes the same price that the
+   worklist row proposes. Red on any build that repaints the display only.
+3. **A typed answer survives.** Type a price, run the refresh, read `prices.json`: byte-equal.
+   The row still shows the typed price.
+4. **A re-join is idempotent.** Join twice against one export. `pricing.json` is identical.
+5. **Order.** Steps run listings, catalog, join, history. A history step that throws leaves steps
+   1 to 3 recorded and the header time set.
+6. **Failure keeps the last good figures.** A refused catalog fetch changes no run table. It
+   records its sentence in `price-refresh.json`.
+7. **One request per game.** Three open runs of one game cause one catalog request. The stub
+   counts, as `harness/tests/t7/pipeline_fetch.py` counts for the reuse arm.
+8. **Nothing is written at TCGplayer.** The refresh path calls no write at the portal. The
+   existing test for the daily job reads its calls. Extend it to the new function.
+9. **No request on a visit.** First paint of `#/pricing` and a press of T cause zero requests at
+   any market host. The stub counts.
+10. **One home.** `Reading` carries all four cells from one source and one second. A test feeds a
+    run table and a newer live row. It gets one whole row back, never a mix.
+11. **The route.** `POST /pipeline/prices/refresh` answers 202, and a second press answers
+    `running`. A press inside `EXPORT_REUSE_S` of a finished run is refused without `force`.
+12. **Facts are one function.** `Series.window` gives the units, sales, average and range for a
+    fixture history. A window with no sales gives an average of none, never zero.
+13. **The saved file.** The preload writes `facts`, `days` and `through`. `trends-saved` omits
+    `days`. `price-facts?sku=` serves them.
+14. **The key.** `SHORTCUTS` lists T with the new sentence. A test proves T opens the sheet from a
+    row and from the price field. It also proves T does nothing inside a text field.
+15. **The columns.** `app/tests/pricing.spec.ts` asserts the two new headers at 1440 and their
+    absence at 820. It also asserts the age line in the warn tone on a figure older than an hour.
+16. **Nothing moves.** `app/tests/stability.spec.ts` stays green. The age line has a reserved
+    line, so a refresh moves no row.
+17. **The header.** "Prices as of" shows the catalog step's time. Running shows the steps and the
+    count. Failed shows the sentence and keeps the last good time.
+18. **Both themes.** The header states, the columns and the panel are looked at in light and dark
+    at 1440 and 820, with a verdict per screen (`make screenshot`, `make design-check`).
+
+### Open questions for the owner
+
+1. **Ruling 2 looks half met already.** `Pricing` reads the saved strips at first paint from
+   `GET /pipeline/trends-saved`, with no press. The strips draw. What is not fresh is Market,
+   Lowest and the proposed price. This section fixes that half and removes the Trends press. Was
+   there a case where strips did not draw?
+2. **The D104 amendment above.** The job now re-joins runs. Agree?
+3. **Should the Live tab's "read again" also re-join?** Without it, the row and T can show two
+   labeled times for one SKU until the next refresh.
+4. **Columns: A or B?** A is recommended.
+5. **The trend column's annual strip.** Dropping it frees 64 px and lets the new columns fit
+   sooner. It is not proposed here, because it removes a figure the owner reads today.
+6. **A card with no history** (18 of 366 today) stays "—". No fix is proposed.
+7. **The trends read takes about two hours.** The gap against measured request time is
+   unmeasured. It is worth its own look, but not in this change.
+
 ## 8. Where things are
 
 | | |
@@ -386,6 +651,7 @@ cannot go wrong this way is the quantity, because no file on this path can move 
 | decision | `pipeline/reprice.py`: pure, no I/O, no `store` import, no network |
 | command | `cli/cmd_reprice.py`, wired in `cli/__main__.py` |
 | routes | `GET` and `POST /pipeline/markdowns`. `POST /pipeline/markdowns/<stamp>/apply` takes a `worklist` upload or `edits`, and an optional `revision`. Also `.../push`, `.../rollback`, `.../publish`, `.../send`, `GET .../file`, and D103's `GET .../table`, `GET .../history?sku=` and `GET .../trends?sku=`. |
+| refresh (7b) | `pipeline_routes.do_prices_refresh`, `POST` and `GET /pipeline/prices/refresh`, `GET /pipeline/price-facts?sku=`, `pipeline/readings.py`, `pipeline/pricerefresh.py`, `scripts/price-refresh-daily.py` |
 | lens | `app/src/pricingSource.ts`, the source seam and the adapter. The screen is `app/src/Pricing.tsx`, opened at `#/pricing?markdown=<stamp>`. |
 | output | `inventory/markdowns/<stamp>/`: `worklist.csv`, `report.txt`, `manifest.json`, `survey.json`, then `import.csv` and `receipt.txt` |
 | answers | `inventory/prices.json`, through `pipeline/corpus.py` |
