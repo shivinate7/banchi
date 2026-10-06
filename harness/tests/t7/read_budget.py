@@ -216,7 +216,7 @@ BUDGET = {
     # Mix, "Route"). `sql` is the store open's own statements plus that one, equal at S and 2S.
     '/stock/mix': {"status": 200, 'sql': 11, 'store_read': 1},
     # One store open (11 statements) and one `Store.read`, equal at S and 2S: the on_hand count must come from that one read, never a query per row.
-    '_MARKDOWN_TABLE_RE': {"status": 200, 'sql': 11, 'json_loads': 150, 'store_read': 1},
+    '_MARKDOWN_TABLE_RE': {"status": 200, 'sql': 11, 'json_loads': 0, 'store_read': 1},
     '_MARKDOWN_HISTORY_RE': {"status": 404},
     '_MARKDOWN_TRENDS_RE': {"status": 404},
     '_SEND_FILE_RE': {"status": 404},
