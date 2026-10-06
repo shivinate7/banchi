@@ -3880,7 +3880,7 @@ def check_send_skips_gone_card(checks: Checks) -> None:
                 {DUNSPARCE_SKU: "1"},
                 f"{label}: TCGplayer receives only the card still in the store",
             )
-            checks.ok("Articuno" in json.dumps(answer.get("send") or {}), f"{label}: the send summary names the gone card, not only the console: {answer.get('send')!r}")
+            checks.equal((answer.get("send") or {}).get("gone"), ["Articuno"], f"{label}: the send summary's `gone` names the gone card by its last-known name")
 
 
 def check_schema_eleven_then_twelve(checks: Checks) -> None:
