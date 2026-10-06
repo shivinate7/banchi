@@ -167,6 +167,44 @@ function sku(over: Partial<PricingSku> = {}): PricingSku {
   return { ...base, ...over }
 }
 
+/* SPEC 7B FIXTURES (`docs/specs/stale-listings.md`, section 7b). THE WIRE SHAPES BELOW ARE THE
+ * SPEC'S WORDS AND NOTHING MORE, each in one helper so a build that names a field differently
+ * edits one place:
+ *   - `GET /pipeline/prices/refresh` answers `{state, step, done, total, note}`; `note` is
+ *     `price-refresh.json`, whose `steps.<name>` hold `at` and `ok`. The catalog step's `at` is
+ *     "Prices as of".
+ *   - `GET /pipeline/trends-saved` entries carry `facts` beside `ranges`; the 7 day low and high
+ *     are in `facts`.
+ *   - `GET /pipeline/price-facts?sku=` answers the prices with the read time, the 30 `days`
+ *     (date, units, sales, low, high, market) and the shelf figures. */
+const AGO = (seconds: number) => Math.floor(Date.now() / 1000) - seconds
+const CATALOG_AT = () => AGO(3 * 3600)
+
+function refreshNote(at: number, over: Record<string, unknown> = {}) {
+  const step = (when: number, extra: Record<string, unknown> = {}) => ({ at: when, ok: true, ...extra })
+  return {
+    at,
+    ok: true,
+    steps: { listings: step(at - 60), catalog: step(at), join: step(at + 30), history: step(at + 600) },
+    ...over,
+  }
+}
+
+function refreshState(state: string, over: Record<string, unknown> = {}) {
+  return { state, step: null, done: 0, total: 0, note: refreshNote(CATALOG_AT()), ...over }
+}
+
+const PRICE_FACTS = {
+  sku: '8608859',
+  name: 'Articuno - 161/159',
+  at: CATALOG_AT(),
+  through: '2026-09-30',
+  prices: { market: '16.25', low: '15.50', low_with_shipping: '17.98', direct_low: null },
+  shelf: { on_hand: 3, can_be_sent: 3, listed_now: 0, asking: null },
+  days: Array.from({ length: 30 }, (_, at) => [`2026-09-${String(at + 1).padStart(2, '0')}`, at % 4, at % 4, '14.00', '17.00', '16.00']),
+  facts: { sold_30d: 40, sold_7d: 9, low_7d: '14.00', high_7d: '17.00' },
+}
+
 async function open(
   page: Page,
   options: {
@@ -260,6 +298,12 @@ async function open(
     sends?: (wire: Wire[]) => unknown
     /** What `POST /pipeline/live-check` answers. Default: ran, nothing to confirm. */
     liveCheck?: (body: Record<string, unknown>) => unknown
+    /** SPEC 7B. What `GET /pipeline/price-facts?sku=` answers: the T panel's one local read. */
+    facts?: Record<string, unknown>
+    /** SPEC 7B. What `GET /pipeline/prices/refresh` answers. Default: resting, with the note. */
+    refresh?: Record<string, unknown>
+    /** SPEC 7B. The first N reads of `trends-saved` fail with a 500, as a restarted server would. */
+    savedFailures?: number
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -402,7 +446,14 @@ async function open(
   )
   if (options.saved !== undefined) {
     const saved = options.saved
+    let savedReads = 0
     await page.route(/\/pipeline\/trends-saved$/, async (route) => {
+      savedReads += 1
+      wire.push({ method: 'GET', path: '/pipeline/trends-saved', body: null })
+      if (savedReads <= (options.savedFailures ?? 0)) {
+        await route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":{"code":"busy","message":"The server was busy."}}' })
+        return
+      }
       if (saved.hold) await saved.hold
       await route.fulfill({
         status: 200,
@@ -755,6 +806,23 @@ async function open(
           crop_refused: null,
         },
       }),
+    })
+  })
+
+  /* SPEC 7B'S TWO NEW LOCAL ROUTES. Stubbed for every case, so a build that reads them on a
+     visit is counted in `wire` rather than leaking to the capture port. */
+  await page.route(/\/pipeline\/price-facts/, async (route) => {
+    const url = new URL(route.request().url())
+    wire.push({ method: 'GET', path: `${url.pathname}${url.search}`, body: null })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(options.facts ?? PRICE_FACTS) })
+  })
+  await page.route(/\/pipeline\/prices\/refresh$/, async (route) => {
+    const post = route.request().method() === 'POST'
+    wire.push({ method: post ? 'POST' : 'GET', path: '/pipeline/prices/refresh', body: post ? route.request().postDataJSON() : null })
+    await route.fulfill({
+      status: post ? 202 : 200,
+      contentType: 'application/json',
+      body: JSON.stringify(post ? { state: 'running' } : (options.refresh ?? refreshState('idle'))),
     })
   })
 
@@ -4559,7 +4627,7 @@ test('the keyboard sheet lists the keys the rows answer, and nothing the screen 
   await expect(sheet).toBeVisible()
   /* THE SNAP KEYS ARE THE COLUMNS THE ROW DRAWS (m, l, and n on the Live tab), and T OPENS THE
      PRODUCT VIEW WITH ONE PRESS (the delta review, R3-4). */
-  await expect(sheet).toContainText('Open the product page for this card')
+  await expect(sheet).toContainText("Open this card's prices and sales") /* spec 7b, check 14: T opens the card's prices and sales */
   await expect(sheet).toContainText('Put the lowest price in this card')
   await expect(sheet.getByText('Save this price and go to the next card')).toHaveCount(1)
   await expect(sheet).not.toContainText('Low with shipping')
@@ -4819,4 +4887,268 @@ test('a row reads copies on hand and copies that can be sent, on every row', asy
   await expect(copies('Mixed')).toHaveText('3 on hand, 2 can be sent')
   await expect(copies('Single')).toHaveText('1 on hand, 1 can be sent')
   await expect(copies('Allout')).toHaveText('2 on hand, 0 can be sent')
+})
+
+// ------------------------------------------------------------------ 7b: pricing opens on fresh prices
+/* SPEC 7B, CHECKS 14 TO 20 (`docs/specs/stale-listings.md`). The server half is T7's `price_fresh`.
+ * Checks 14 to 17 and 19 to 20 are here; 21 is T7's alone, because the screen half of it would
+ * only restate a stub; 18 is the both-themes pass below, with a verdict per screen read off
+ * `make screenshot` by a person. */
+
+/** A worklist of rows with a given age of the figure, in the worklist's own envelope. `snap_at`
+ *  is the fetch time of the export the run was last joined against (spec 7b, "The one home"). */
+function agedWorklist(rows: { sku: string; name: string; market: string; ageSeconds: number }[]) {
+  return {
+    runs: [{ run: RUN, box: 7, box_name: 'Riftbound epics', skus: rows.length }],
+    skus: rows.map((one) => ({
+      ...sku({
+        sku: one.sku,
+        name: one.name,
+        snap: { market: one.market, low: '15.50', low_with_shipping: '17.98', direct_low: null, now: null },
+        presets: { market_match: one.market, market_undercut_5: one.market, low_undercut_1: one.market },
+        rule_price: one.market,
+      }),
+      snap_at: AGO(one.ageSeconds),
+      in: [{ run: RUN, add_to_quantity: 3 }],
+      claimed_add: 3,
+      over_cap: false,
+    })),
+  } as unknown as NonNullable<Parameters<typeof open>[1]>['worklist']
+}
+
+/** Saved strips whose entries also carry the facts the Range 7d cell reads. */
+const savedWithFacts = (at: number, skus = ['111', '222']) => ({
+  skus: Object.fromEntries(
+    skus.map((id) => [
+      id,
+      { at, ranges: trends([id]).skus[id]!.ranges, through: '2026-09-30', facts: { sold_7d: 9, low_7d: '9.00', high_7d: '14.00' } },
+    ]),
+  ),
+  note: { at, ok: true, asked: 2, read: 2, no_history: 0, unreadable: 0, failed: 0, message: '' },
+})
+
+/** The colour a token resolves to in the page's current theme. */
+const tokenColor = (page: Page, token: string) =>
+  page.evaluate((name) => {
+    const probe = document.createElement('i')
+    probe.style.color = `var(${name})`
+    document.body.append(probe)
+    const colour = getComputedStyle(probe).color
+    probe.remove()
+    return colour
+  }, token)
+
+/** The colour of the first leaf under `cell` that draws a number and no price: the age line. */
+const ageLineColor = (cell: Locator) =>
+  cell.evaluate((el) => {
+    const line = [...el.querySelectorAll('*')].find(
+      (node) => node.children.length === 0 && /\d/.test(node.textContent ?? '') && !/\$/.test(node.textContent ?? ''),
+    )
+    return line === undefined ? null : getComputedStyle(line).color
+  })
+
+const AS_OF = /Prices as of \d{1,2}:\d{2}\s?[AP]M/
+const FRESH_MARKET = /^\s*Market\s*\$16\.25\s*$/
+const factsReads = (wire: Wire[]) => wire.filter((call) => call.path.startsWith('/pipeline/price-facts'))
+/** Reads at a market host's mirror: the Trends press's route, never the saved read. */
+const marketReads = (wire: Wire[]) => wire.filter((call) => /\/trends(\?|$)/.test(call.path))
+
+/** What the product sheet reads when it opens, so a T press does not leak to the capture port. */
+async function stubProductSheet(page: Page): Promise<void> {
+  await page.route(/\/pipeline\/products\/[^/]+\/history$/, async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ sku: '8608859', name: 'Articuno - 161/159', set_name: 'SV: Prismatic Evolutions', condition: 'Near Mint Holofoil', source: 'archive', history_begins: null, never_sold: true, ranges: [] }),
+    }),
+  )
+  await page.route(/\/pipeline\/products\/[^/]+\/realized$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sku: '8608859', configured: false }) }),
+  )
+  await page.route(/\/orders$/, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"orders":[]}' }))
+  await page.route(/\/search\?/, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"query":"","groups":[]}' }))
+}
+const STALE_AND_FRESH = () =>
+  agedWorklist([
+    { sku: '111', name: 'Stale card', market: '16.25', ageSeconds: 3 * 3600 + 26 * 3600 },
+    { sku: '222', name: 'Fresh card', market: '16.25', ageSeconds: 3 * 3600 },
+  ])
+
+test('7b-14: the keyboard sheet row for T says what the key opens now', async ({ page }) => {
+  await open(page)
+  await page.locator(`${VIEW} h1`).click()
+  await page.keyboard.press('?')
+  const sheet = page.getByRole('dialog', { name: 'Shortcuts' })
+  await expect(sheet).toContainText("Open this card's prices and sales")
+  await expect(sheet).not.toContainText('Open the product page for this card')
+})
+
+test('7b-14: T opens the sheet with every other figure, from a row and from the price field, with one local read', async ({ page }) => {
+  await stubProductSheet(page)
+  const wire = await open(page)
+  const sheet = page.getByRole('dialog', { name: 'Articuno - 161/159' })
+  /* A PRESS, NEVER FOLLOW-FOCUS (D278): nothing is read until the key. */
+  expect(factsReads(wire)).toHaveLength(0)
+
+  await page.locator('.pricing-row').first().hover()
+  await page.keyboard.press('t')
+  await expect(sheet).toBeVisible()
+  await expect(sheet.getByRole('heading', { name: /Prices now/ })).toBeVisible()
+  await expect(sheet.getByRole('heading', { name: /Sales, last 30 days/ })).toBeVisible()
+  await expect(sheet.getByRole('heading', { name: /On your shelf/ })).toBeVisible()
+  await expect(sheet.getByRole('img', { name: /sold|sales/i }).first()).toBeVisible()
+  await expect.poll(() => factsReads(wire).length).toBe(1)
+  expect(marketReads(wire)).toHaveLength(0)
+
+  await page.keyboard.press('Escape')
+  await expect(sheet).toHaveCount(0)
+  await field(page).focus()
+  await page.keyboard.press('t')
+  await expect(sheet.getByRole('heading', { name: /Sales, last 30 days/ })).toBeVisible()
+})
+
+test('7b-14: T does nothing inside a text field', async ({ page }) => {
+  await stubProductSheet(page)
+  const wire = await open(page)
+  await page.locator('.pricing-hold').first().click()
+  const note = page.getByLabel('Note')
+  await note.focus()
+  await page.keyboard.press('t')
+  await expect(note).toHaveValue('t')
+  await expect(page.getByRole('dialog', { name: 'Articuno - 161/159' })).toHaveCount(0)
+  expect(factsReads(wire)).toHaveLength(0)
+})
+
+test('7b-15: the row grows one column, Range 7d, after Lowest, at 1440 and not at 820', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { skus: SAVED_ROWS(), saved: savedWithFacts(AGO(3600)) })
+  const caption = page.locator('.pricing-caption').first()
+  await expect(caption.getByText('Range 7d', { exact: true })).toHaveCount(1)
+  const text = await caption.innerText()
+  expect(text.indexOf('Lowest')).toBeGreaterThanOrEqual(0)
+  expect(text.indexOf('Lowest')).toBeLessThan(text.indexOf('Range 7d'))
+  /* THE LOW AND THE HIGH THE SALES HIT OVER 7 DAYS, from the saved facts, with no request. */
+  await expect(page.locator('.pricing-row').first()).toContainText('$9.00')
+  await expect(page.locator('.pricing-row').first()).toContainText('$14.00')
+
+  await setViewport(page, { width: 820, height: 900 })
+  await expect(page.locator('.pricing-caption').first().getByText('Range 7d', { exact: true })).toHaveCount(0)
+})
+
+test('7b-15: a card with no saved history draws a dash that says why', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { skus: SAVED_ROWS(), saved: { skus: {}, note: null } })
+  const dash = page.locator('.pricing-row').first().locator('[title]', { hasText: '—' })
+  await expect(dash.first()).toHaveAttribute('title', /history/i)
+})
+
+test('7b-15: a figure over an hour older than the page time draws its date in the warn tone, and a fresh one draws none', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { worklist: STALE_AND_FRESH() })
+  const stale = page.locator('.pricing-row', { hasText: 'Stale card' }).locator('.pricing-col-market')
+  const fresh = page.locator('.pricing-row', { hasText: 'Fresh card' }).locator('.pricing-col-market')
+  await expect(stale).toContainText('$16.25')
+  await expect(fresh).toHaveText(FRESH_MARKET)
+  await expect(stale).not.toHaveText(FRESH_MARKET)
+  expect(await ageLineColor(stale)).toBe(await tokenColor(page, '--bn-warn'))
+})
+
+test('7b-15: the real-world card, $10.37 in its batch and $16.25 after the morning job, shows $16.25 and the read time', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { worklist: agedWorklist([{ sku: '111', name: 'Waiting card', market: '16.25', ageSeconds: 3 * 3600 }]) })
+  const cell = page.locator('.pricing-row .pricing-col-market').first()
+  await expect(cell).toContainText('$16.25')
+  await expect(cell).not.toContainText('$10.37')
+  /* A FIGURE THE JOB JUST READ IS AS OLD AS THE PAGE, and spec 7b draws an age line only past an
+     hour. So the page's own time is what carries it. */
+  await expect(page.getByText(AS_OF)).toBeVisible()
+})
+
+test('7b-16: the age line has a reserved line, so a fresh row and a stale row are one height', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { worklist: STALE_AND_FRESH() })
+  await expect(page.locator('.pricing-row', { hasText: 'Stale card' }).locator('.pricing-col-market')).not.toHaveText(FRESH_MARKET)
+  const heights = await page.locator('.pricing-row').evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().height))
+  expect(heights).toHaveLength(2)
+  expect(Math.abs(heights[0]! - heights[1]!)).toBeLessThan(0.5)
+})
+
+test('7b-17: the header says Prices as of the catalog time, at rest, beside Refresh now', async ({ page }) => {
+  await open(page)
+  await expect(page.getByText(AS_OF)).toBeVisible()
+  await expect(page.getByRole('button', { name: /Refresh now/ })).toBeVisible()
+})
+
+test('7b-17: a press asks for a refresh, and a running one shows its steps, the count and a bar', async ({ page }) => {
+  const wire = await open(page, { refresh: refreshState('running', { step: 'history', done: 118, total: 366 }) })
+  await page.getByRole('button', { name: /Refresh now/ }).click()
+  expect(wire.some((call) => call.method === 'POST' && call.path === '/pipeline/prices/refresh')).toBe(true)
+  await expect(page.getByText(/Sales history\s+118 of 366/)).toBeVisible()
+  await expect(page.getByRole('progressbar')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Refresh now/ })).toHaveAttribute('data-busy', 'true')
+  await expect(page.getByText(AS_OF)).toBeVisible()
+})
+
+test('7b-17: a failed refresh says why, keeps the last good time, and Try again presses with force', async ({ page }) => {
+  const sentence = 'TCGplayer refused the catalog request.'
+  const wire = await open(page, {
+    refresh: refreshState('failed', { note: refreshNote(CATALOG_AT(), { ok: false, message: sentence }) }),
+  })
+  await expect(page.getByText(sentence)).toBeVisible()
+  await expect(page.getByText(AS_OF)).toBeVisible()
+  await page.getByRole('button', { name: /Try again/ }).click()
+  await expect.poll(() => wire.filter((call) => call.method === 'POST' && call.path === '/pipeline/prices/refresh').length).toBe(1)
+  expect(wire.find((call) => call.method === 'POST')?.body).toEqual({ force: true })
+})
+
+test('7b-17: a visit presses nothing: no refresh POST at first paint', async ({ page }) => {
+  const wire = await open(page)
+  expect(wire.filter((call) => call.method === 'POST' && call.path === '/pipeline/prices/refresh')).toHaveLength(0)
+})
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [1440, 820]) {
+    test(`7b-18: the header states, the age tone and the panel hold together in ${theme} at ${width}`, async ({ page }) => {
+      await stubProductSheet(page)
+      await page.emulateMedia({ colorScheme: theme })
+      await setViewport(page, { width, height: 900 })
+      await open(page, { worklist: STALE_AND_FRESH(), saved: savedWithFacts(AGO(3600), ['111', '222']) })
+      await expect(page.getByText(/Prices as of/)).toBeVisible()
+      /* THE AGE TONE IS THE THEME'S OWN WARN TOKEN, never a literal that one theme would lose. */
+      const cell = page.locator('.pricing-row', { hasText: 'Stale card' }).locator('.pricing-col-market')
+      expect(await ageLineColor(cell)).toBe(await tokenColor(page, '--bn-warn'))
+      await page.locator('.pricing-row').first().hover()
+      await page.keyboard.press('t')
+      const sheet = page.getByRole('dialog').last()
+      await expect(sheet.getByRole('heading', { name: /Sales, last 30 days/ })).toBeVisible()
+      /* THE CHART DRAWS FROM TOKENS ONLY (docs/DESIGN.md): no inline hex on a mark. */
+      const literals = await sheet.locator('svg [fill], svg [stroke]').evaluateAll(
+        (marks) => marks.filter((mark) => /#[0-9a-f]{3,8}\b/i.test(`${mark.getAttribute('fill') ?? ''} ${mark.getAttribute('stroke') ?? ''}`)).length,
+      )
+      expect(literals).toBe(0)
+    })
+  }
+}
+
+test('7b-19: trends draw at first paint on the run tab with no press, and no request at the market host', async ({ page }) => {
+  const wire = await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 3600) })
+  for (const at of [0, 1]) await expect(strip(page).nth(at).locator('svg')).toHaveCount(2)
+  expect(marketReads(wire)).toHaveLength(0)
+})
+
+test('7b-19: a page too narrow for the trend column says that T holds the strip', async ({ page }) => {
+  await setViewport(page, { width: 820, height: 900 })
+  await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 3600) })
+  await expect(page.locator(VIEW)).toContainText(/\bT\b[^.]*\b(strip|trend)/i)
+})
+
+test('7b-20: a failed first read of the saved strips is retried, and the strips draw', async ({ page }) => {
+  const wire = await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 3600), savedFailures: 1 })
+  await expect(strip(page).first().locator('svg')).toHaveCount(2, { timeout: 15_000 })
+  expect(wire.filter((call) => call.path === '/pipeline/trends-saved').length).toBeGreaterThanOrEqual(2)
+})
+
+test('7b-20: a second failure shows a sentence, never an empty strip with no word', async ({ page }) => {
+  await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 3600), savedFailures: 99 })
+  await expect(page.locator(VIEW)).toContainText(/(could not|couldn.t|cannot|can.t) read[^.]*(strip|trend)/i, { timeout: 20_000 })
 })

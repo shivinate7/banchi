@@ -106,6 +106,8 @@ async function open(
     route?: string
     /** The answers `prices.json` already holds, SKU -> answer. Default: none. */
     answers?: Record<string, { value: string; at?: string }>
+    /** What `GET /pipeline/trends-saved` answers: the strips the daily job saved (spec 7b, check 19). */
+    saved?: { skus: Record<string, unknown>; note: unknown }
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -157,6 +159,17 @@ async function open(
       body: JSON.stringify({ markdown: STAMP, asked: 0, skipped: 0, skus: {}, refused: {} }),
     })
   })
+
+  await page.route(/\/pipeline\/trends-saved$/, async (route) => {
+    wire.push({ method: 'GET', path: '/pipeline/trends-saved', body: null })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(options.saved ?? { skus: {}, note: null }) })
+  })
+  for (const local of [/\/pipeline\/price-facts/, /\/pipeline\/prices\/refresh$/, /\/pipeline\/movers$/]) {
+    await page.route(local, async (route) => {
+      wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body: null })
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ threshold: '0.10', listed: 0, unmeasured: 0, movers: [], refresh: null, state: 'idle', step: null, done: 0, total: 0, note: null }) })
+    })
+  }
 
   await page.route(/\/pipeline\/markdowns\/[^/]+\/table$/, async (route) => {
     wire.push({ method: 'GET', path: new URL(route.request().url()).pathname, body: null })
@@ -769,6 +782,28 @@ test('the Live tab opens the newest read, and its line says how the read was tak
   /* THE TAB WITH NO STAMP LANDS ON THE NEWEST READ, which is the only one `open` lists. */
   await expect(page).toHaveURL(new RegExp(`markdown=${STAMP}`))
   await expect(page.locator('.pricing-rule-line')).toContainText('Not sold in 7 days, 10% under your asking price')
+})
+
+/* SPEC 7B, CHECK 19 (the Live tab half). The saved strips draw at first paint here too, with no
+ * press and no request at the market host. `Pricing.tsx` reads `savedRead` on the run tab only
+ * (`trend={trends[sku] ?? (liveTab ? undefined : ...)}`), so a Live tab shows no strip until the
+ * Trends press is made. */
+test('7b-19: the Live tab draws the saved strips of its own SKUs at first paint, with no press', async ({ page }) => {
+  const at = Math.floor(Date.now() / 1000) - 3600
+  const range = (name: string, points: string[]) => ({ range: name, from: '2026-08-01', to: '2026-08-30', fraction: '0.1', points })
+  const strips = (sku: string) => ({ at, ranges: [range('month', ['13.5', '15.2', '18.4']), range('annual', ['29.1', '24.0', '19.2'])], sku })
+  const wire = await open(page, {
+    skus: [live(), live({ sku: '8608464', name: 'Dunsparce' })],
+    counts: { considered: 2, offered: 2, deferred: 0, refused: 0 },
+    saved: {
+      skus: { '8608859': strips('8608859'), '8608464': strips('8608464') },
+      note: { at, ok: true, asked: 2, read: 2, no_history: 0, unreadable: 0, failed: 0, message: '' },
+    },
+  })
+  for (const row of [0, 1]) {
+    await expect(page.locator('.pricing-row').nth(row).locator('.pricetrend svg')).toHaveCount(2)
+  }
+  expect(wire.filter((call) => call.path.includes('/trends') && !call.path.includes('trends-saved'))).toHaveLength(0)
 })
 
 test('Read again keeps its words and its place while it reads', async ({ page }) => {
