@@ -2780,6 +2780,30 @@ def _picks_same_printing(card: "IdentifiedCard", pick: "MatcherPick", row) -> bo
     )
 
 
+def _pick_rows(catalog: "Catalog", card: "IdentifiedCard", have) -> Tuple[tcgcsv.Row, ...]:
+    """The catalog rows of the free reader's pick, through the same lookup the card's own
+    candidates use, for a `readers_disagree` card: both printings become choices. Rows already
+    offered are skipped. A pick that finds no row in its set adds none (nothing is invented)."""
+    pick = card.second_look
+    if pick is None or not pick.number:
+        return ()
+    rows = catalog.candidates(
+        replace(card, name=pick.name or card.name, number=pick.number, set_hint=pick.set or card.set_hint)
+    ).rows
+    from pipeline import identity_binding  # it imports this module
+
+    strategy = games.get(card.game or games.DEFAULT_GAME)["join_key"]
+    seen = {row[tcgcsv.SKU_COLUMN] for row in have}
+    wanted = set(setnames.sides(pick.set)) if pick.set else None
+    return tuple(
+        row for row in rows
+        if row[tcgcsv.SKU_COLUMN] not in seen
+        # a row the name fallback found for an unmatched number is not the pick's printing
+        and identity_binding.number_agrees(strategy, pick.number, card.printed_total, row[tcgcsv.NUMBER_COLUMN])
+        and (wanted is None or wanted & set(setnames.sides(row[tcgcsv.SET_COLUMN])))
+    )
+
+
 def default_router(
     threshold: Decimal = pricing.THRESHOLD,
     review_below: str = routing.CONFIDENCE_LOW,
@@ -3243,13 +3267,16 @@ def join_batch(
         if router is not None:
             destination = router(card, found, resolution)
             if destination.queue in (routing.MAIN, routing.PARKED):
+                offered = found.rows
+                if destination.reason == routing.READERS_DISAGREE:
+                    offered = offered + _pick_rows(catalog, card, offered)
                 report.queued.append(
                     QueuedCard(
                         card=card,
                         destination=destination,
                         lookup=found.lookup,
                         resolution_reason=resolution.reason,
-                        candidates=found.rows,
+                        candidates=offered,
                         name_matched_skus=name_matched_skus,
                     )
                 )

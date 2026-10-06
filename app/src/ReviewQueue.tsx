@@ -254,13 +254,25 @@ function sentence(entry: QueueEntryWire): Segment[] {
 
     case 'readers_disagree': {
       const pick = entry.read.matcher_pick
-      const said = pick ? [text(pick.name), text(pick.number)].filter((part) => part !== null).join(' ') : ''
-      return [
-        say('The paid read and the free reader name different cards. The paid read says '),
+      const pickName = pick ? text(pick.name) : null
+      const pickNumber = pick ? text(pick.number) : null
+      const key = (n: string | null | undefined) => (n ?? '').split('/')[0]!.trim().replace(/^0+(?=\d)/, '')
+      const resolved = pickNumber !== null && entry.candidates.some((c) => key(c.number) === key(pickNumber))
+      const paid: Segment[] = [
+        say('The paid read says '),
         ...(name === null ? [say('a card it could not name')] : [cardName(name)]),
         ...(number === null ? [] : [say(' '), value(number)]),
-        say(said === '' ? ', and the free reader names no other card.' : ', and the free reader says '),
-        ...(said === '' ? [] : [value(said), say('.')]),
+      ]
+      if (pickName === null && pickNumber === null) return [...paid, say(', and the free reader names no other card.')]
+      const free: Segment[] = [
+        say(', and the free reader says '),
+        ...(pickName === null ? [] : [cardName(pickName)]),
+        ...(pickNumber === null ? [] : [say(pickName === null ? '' : ' '), value(pickNumber)]),
+      ]
+      return [
+        ...paid,
+        ...free,
+        say(resolved ? '. Pick the card that is right.' : '. The free reader\'s card is not in the catalog, so only the paid read is offered. Search to pick another.'),
       ]
     }
 
@@ -2372,7 +2384,7 @@ export function CandidateButton({
             <span className="review-candidate-meta">
               <span className="review-candidate-condition">{candidate.condition}</span>
               <span>{candidate.set}</span>
-              <span>{candidate.number}</span>
+              <span className="review-candidate-number">{candidate.number}</span>
             </span>
           </>
         )}
