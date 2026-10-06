@@ -50,6 +50,7 @@ from harness.tests.t7.common import (
     quiet,
     request,
     seam_run,
+    write_export,
 )
 
 
@@ -3614,6 +3615,127 @@ def check_send_review_r7(checks: Checks) -> None:
         )
 
 
+def _store_backed_run(checks: Checks, home: Path, cards) -> "runs.Run":
+    """A run made the way the sweep makes one: cards identified IN THE STORE, then
+    `pkmnscan join --keys` (the store-backed join `cli/cmd_match.py` calls through
+    `resolve.load_from_store`). Its directory holds `manifest.json` with `selection.keys` and
+    `pricing.json`, and NEVER `identifications.json` (D65, a sweep card reads as a press card)."""
+    from cli import __main__ as entry
+
+    keys = []
+    for box, index, name, number, _finish in cards:
+        while Store().read().inventory.next_index(box) <= index:
+            capture_server.do_capture(capture_payload(box))
+        keys.append(master.position_key(box, index))
+        with Store().write() as snapshot:
+            snapshot.inventory.record_identification(
+                keys[-1], name=name, number=number, printed_total="159", confidence="high",
+                run="t7-sweep",
+            )
+    files.runs_dir().mkdir(parents=True, exist_ok=True)
+    before = {d.name for d in files.runs_dir().iterdir()}
+    export = write_export(home / "sweep-export.csv")
+    with quiet():
+        code = entry.main(["join", "--keys", ",".join(keys), "--export", str(export)])
+    checks.equal(code, 0, "fixture: the store-backed join writes the sweep-shaped run")
+    made = [d for d in files.runs_dir().iterdir() if d.name not in before]
+    checks.equal(len(made), 1, "fixture: exactly one run directory")
+    run = runs.open_run(made[0])
+    checks.ok(
+        not run.path(runs.IDENTIFICATIONS).exists() and (run.manifest.get("selection") or {}).get("keys") == keys,
+        "fixture: the run holds selection.keys and no identifications.json",
+    )
+    return run
+
+
+def check_send_store_backed_runs(checks: Checks) -> None:
+    """A run with no `identifications.json` reads the store's CURRENT cards for its
+    `selection.keys`, never a frozen copy (owner's ruling; D65). Each case red on main with
+    `RunError: ... does not exist — run pkmnscan identify first`."""
+    from cli import __main__ as entry
+    from cli import cmd_identify
+
+    checks.note("")
+    checks.note("STORE-BACKED RUNS — emit, send and the run readers over a sweep-shaped run")
+    one = [(3, 1, "Articuno", "161", None), (3, 2, "Dunsparce", "120", "normal")]
+
+    def written(run_dir):
+        rows = tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED)).rows
+        return {r[tcgcsv.SKU_COLUMN]: r[tcgcsv.QUANTITY_COLUMN] for r in rows}
+
+    # 1. EMIT
+    with isolated_home() as home:
+        run = _store_backed_run(checks, home, one)
+        raised = ""
+        with quiet() as said:
+            try:
+                code = entry.main(["emit", str(run.directory)])
+            except runs.RunError as caught:
+                code, raised = None, str(caught)
+        checks.equal(code, 0, "EMIT: `emit` over a sweep run exits 0, no RunError: " + (raised or said.getvalue()[-300:]))
+        got = written(run) if run.path(runs.IMPORT_MERGED).exists() else {}
+        checks.equal(got, {ARTICUNO_SKU: "1", DUNSPARCE_SKU: "1"}, "EMIT: import.csv holds both cards' SKUs")
+
+        # 4. THE OTHER READERS, on the same run
+        def reads(fn):
+            try:
+                return fn()
+            except Exception as caught:  # noqa: BLE001
+                return f"raised {type(caught).__name__}: {caught}"
+
+        keys = run.manifest["selection"]["keys"]
+        checks.equal(
+            reads(lambda: pipeline_routes._run_keys(run.name)), keys,
+            "READERS: the route's `_run_keys` names the sweep run's selection keys, never []",
+        )
+        checks.equal(
+            reads(lambda: cmd_identify._run_keys_of(run.name, lambda _line: None)), sorted(keys),
+            "READERS: `identify --run <sweep run>` selects the run's selection keys, never []",
+        )
+        run.set(joined=False)
+        counts = reads(lambda: {
+            row["run"]: row["cards"]
+            for row in pipeline_routes._unreachable(Store().read().inventory, 0, files.runs_dir())["unjoined"]
+        })
+        checks.equal(
+            counts.get(run.name) if isinstance(counts, dict) else counts, 2,
+            "READERS: the unjoined count over a sweep run is the store's 2, not 0",
+        )
+
+    # 2. SEND over the wire, 3. MIXED SEND with a classic run
+    for mixed in (False, True):
+        label = "MIXED SEND" if mixed else "SEND"
+        with send_portal() as portal, isolated_home() as home:
+            names = []
+            if mixed:
+                classic, _ = seam_run(checks, one)
+                names.append(classic.name)
+            run = _store_backed_run(
+                checks, home,
+                [(3, 3, "Articuno", "161", None), (3, 4, "Dunsparce", "120", "normal")] if mixed else one,
+            )
+            names.append(run.name)
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+            httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+            port = httpd.server_address[1]
+            thread = _spawn_server(httpd)
+            try:
+                status, body, _ = request(
+                    port, "POST", "/pipeline/send", payload={"runs": names, "confirm": True}
+                )
+            finally:
+                httpd.shutdown()
+                thread.join(timeout=5)
+            error = (json.loads(body or b"{}").get("error") or {}).get("code")
+            checks.equal((status, error), (200, None), f"{label}: POST /pipeline/send answers 200, not 409 write_refused")
+            want = "2" if mixed else "1"
+            checks.equal(
+                {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]},
+                {ARTICUNO_SKU: want, DUNSPARCE_SKU: want},
+                f"{label}: TCGplayer receives both SKUs, one row each, aggregated by SKU",
+            )
+
+
 def check_schema_eleven_then_twelve(checks: Checks) -> None:
     """Two branches each took schema 11. Main's identity lane took it for `skus` and
     `cards.identity_source`. The send lane took it for `send_claims`, which is now 12.
@@ -5267,6 +5389,7 @@ def check_withholding(checks: Checks) -> None:
 
 CHECKS = (
     check_markdown,
+    check_send_store_backed_runs,
     check_markdown_floor,
     check_markdown_lens,
     check_markdown_push,
