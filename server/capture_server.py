@@ -329,7 +329,7 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from codes import products  # noqa: E402
-from pipeline import games, join, setnames, stockimages, tcgcsv  # noqa: E402
+from pipeline import games, join, setnames, stockimages, stockmix, tcgcsv  # noqa: E402
 from pipeline.identity_binding import _read_number_key  # noqa: E402
 from pipeline import orders as order_engine  # noqa: E402
 from pipeline import routing  # noqa: E402
@@ -16444,6 +16444,9 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_graveyard(buried_only=params.get("buried") == ["1"]))
             if path == "/games":
                 return self._json(HTTPStatus.OK, do_games())
+            # THE MIX LENS OF SALES: card rows only, one read, pivoted in the browser.
+            if path == "/stock/mix":
+                return self._json(HTTPStatus.OK, stockmix.read())
             # D69's order screen. An exact string and therefore no ordering hazard, and a
             # read: it takes no lock, writes nothing, and resolves the open orders in one
             # pass so no two of them are offered the same physical card.

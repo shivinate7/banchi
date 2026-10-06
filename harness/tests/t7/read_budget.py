@@ -47,7 +47,9 @@ from identify import sidecar
 from pipeline import tcgcsv
 from server import capture_server, pipeline_routes
 from store import db, files, master, orders as order_store, rows
+from store.readings import Reading
 from store.session import Store
+from store.skus import SkuRow
 
 SIZES = (150, 300)  # S and 2S: cards, orders and queue entries
 BOXES = (1, 2, 3)
@@ -116,6 +118,7 @@ ROUTE_URLS = {
     "_RUN_SCOPE_RE": "/pipeline/runs/{run}/scope",
     "_RUN_ITEM_RE": "/pipeline/runs/{run}",
     "_SHIPPING_FILE_RE": "/shipping/batches/abc/file",
+    "/stock/mix": "/stock/mix",
 }
 
 # Read-only POSTs, named by hand: `do_GET` cannot list them.
@@ -126,6 +129,38 @@ POST_READS = {
     "POST /pipeline/preflight keys": ("/pipeline/preflight", {"keys": ["4/1", "4/2"]}),
     "POST /orders/walk-plan": ("/orders/walk-plan", {"keys": ["tcgplayer:o-1", "tcgplayer:o-2"]}),
 }
+
+# The one route whose fixture adds cards of its own, after every other route has been measured, so
+# their counts do not move: sold, unlisted, retired and moved cards, which is the hit path of
+# `GET /stock/mix` and not only its empty path (DEBT85). Cards scale with the size, SKUs do not.
+MIX_ROUTE = "/stock/mix"
+
+
+def _mix_prep(size: int) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    stamp = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+    with Store().write() as snapshot:
+        inv = snapshot.inventory
+        for k in range(12):
+            snapshot.skus.entries[f"SKU{k}"] = SkuRow(
+                product_line="Riftbound League of Legends Trading Card Game", set_name="Origins",
+                product_name=f"Card {k}", number=str(k), rarity="Rare", condition="Near Mint", grade=None,
+                printing=None, first_seen=1_700_000_000, last_seen=1_700_000_000, source="t7-fixture", raw={},
+            )
+            snapshot.readings.entries[f"SKU{k}"] = Reading(market="1.25", at=1_700_000_000, source="t7", kind="run")
+        for n in range(size // 3):
+            card, _ = inv.allocate_capture(BOXES[n % len(BOXES)], cid=fake_cid(f"mix-{n}"))
+            kind = n % 4
+            if kind == 0:
+                card.sku, card.state, card.state_at = f"SKU{n % 12}", master.SOLD, stamp
+            elif kind == 1:
+                card.sku, card.state, card.rarity_claim, card.set_hint = None, master.CAPTURED, ["Rare"], "Origins"
+            elif kind == 2:
+                card.sku, card.state = f"SKU{n % 12}", master.RETIRED
+            else:
+                card.sku, card.state = f"SKU{n % 12}", master.MOVED
+
 
 # Routes that would shell out: the child is replaced by a fake that exits 0, so the in-process half
 # is what is counted. route -> (module, name, replacement).
@@ -172,6 +207,9 @@ BUDGET = {
     '/pipeline/runs': {"status": 200, 'sql': 16, 'json_loads': 5, 'store_read': 1},
     '/pipeline/markdowns': {"status": 200},
     '/pipeline/sends': {"status": 200, 'sql': 44, 'store_read': 4},
+    # THE MIX ROW: one `cards` statement joined to `skus`, `readings` and `boxes` (docs/specs/sales-screen.md,
+    # Mix, "Route"). `sql` is the store open's own statements plus that one, equal at S and 2S.
+    '/stock/mix': {"status": 200, 'sql': 11, 'store_read': 1},
     '_MARKDOWN_TABLE_RE': {"status": 404},
     '_MARKDOWN_HISTORY_RE': {"status": 404},
     '_MARKDOWN_TRENDS_RE': {"status": 404},
@@ -385,10 +423,14 @@ def measure(checks: Checks, size: int) -> tuple:
         port = httpd.server_address[1]
         thread = _spawn_server(httpd)
         try:
-            calls = {key: ("GET", url.format(**names), None) for key, url in ROUTE_URLS.items()}
+            calls = {key: ("GET", url.format(**names), None) for key, url in ROUTE_URLS.items() if key != MIX_ROUTE}
             calls.update({key: ("POST", url, body) for key, (url, body) in POST_READS.items()})
+            if MIX_ROUTE in ROUTE_URLS:
+                calls[MIX_ROUTE] = ("GET", ROUTE_URLS[MIX_ROUTE], None)  # last: its fixture adds cards
             origin = capture_server.DEFAULT_ALLOWED_ORIGINS[0]
             for key, (method, url, body) in calls.items():
+                if key == MIX_ROUTE:
+                    _mix_prep(size)
                 stub = STUBS.get(key)
                 real = getattr(stub[0], stub[1]) if stub else None
                 if stub:

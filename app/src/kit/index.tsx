@@ -1387,7 +1387,7 @@ export type { OverlayLayerOptions } from './overlay'
 /* ---- the data primitives and the sheet registry (kit-data) ---------------------------------
    Screens import these from here, never from `./data` or `./sheets` directly. */
 export {
-  Money, Count, FilterCount, Select, FilterChips, SortControl, StatusBadge, STATUS_TONES, CardLine, CardThumb, BoxLabel, Sep,
+  Money, Count, FilterCount, Select, FilterChips, ClearAll, SortControl, StatusBadge, STATUS_TONES, CardLine, CardThumb, BoxLabel, Sep,
   ProductLink, OrderLink, Location, boxesMostRecentFirst,
 } from './data'
 export type {

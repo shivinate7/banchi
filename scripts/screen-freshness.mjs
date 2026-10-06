@@ -198,7 +198,8 @@ const RECORDED = {
     'getBoxPhotos', 'getMarkdowns',
     // The graveyard's one read (D134). Its own line, for the reason the writes below give.
     'getGraveyard',
-    'getProductRealized',                     // the product page's realized-price read
+    'getStockMix',                            // Sales' Mix lens: one read of the stock's card rows
+    'getProductRealized',                    // the product page's realized-price read
     'getPriceMovers', 'getSavedTrends',       // #/pricing's movers and the saved overnight trends
     'getSkuPhotosSettled',                    // the stock-photo read that waits out a cold group
     'getMatchState',                          // the free reader's readiness (model, fingerprints)
