@@ -720,51 +720,105 @@ def _sold_since(inventory, sku, as_of) -> int:
     )
 
 
+#: HOW OLD A LIVE READ MAY BE AND STILL SIZE A TAKE-OFF. A size is a count of copies live right
+#: now, so the read is seconds-to-minutes old, never the day a mark-down's prices may rest on.
+TAKE_READ_FRESH_S = 60 * 60
+#: SLACK FOR THE FILE'S STAMP, so a read taken an hour ago to the minute still sizes.
+TAKE_READ_SLACK_S = 120
+
+
+def _read_is_fresh(path) -> bool:
+    import time
+
+    try:
+        return time.time() - Path(path).stat().st_mtime <= TAKE_READ_FRESH_S + TAKE_READ_SLACK_S
+    except OSError:
+        return False
+
+
 def _takeoffs(resolved_list, withheld, inventory, args):
-    """`(takes, blocked)`: the held SKUs whose live copies this press takes off TCGplayer.
+    """`(takes, blocked, notes)`: the held SKUs whose live copies this press takes off TCGplayer.
 
     THE OWNER'S RULING (D100's open question), AS REVIEWED: a SKU the owner holds (`bullish`,
     `keeping`, `next_batch`) gets ONE row, `Add to Quantity` minus the live quantity a FRESH
-    live read (`--live-guard`, within `reprice.READ_FRESH_S`) shows for it, less the copies sold
-    since that read. The store's `pushed` and `live` never size it, and nothing in the store
-    moves at write time (the live check lowers them once the copies are gone), so a take that
-    never landed is taken again from the next read, and the same copies never twice. A held SKU
-    the read does not name takes off 0. `blocked` names a held SKU Banchi sent copies of when
-    there is no fresh read: refused, nothing written.
+    live read (`--live-guard`, at most `TAKE_READ_FRESH_S` old) shows for it, less the copies
+    sold since that read. The store's `pushed` and `live` never size it, and nothing in the
+    store moves at write time. A held SKU the read does not name takes off 0. A held SKU in
+    none of this send's runs is taken off too, on the live read's own row.
+
+    AT MOST ONE TAKE-OFF IS OUTSTANDING PER SKU (`--take-outstanding`, the press's list): such a
+    SKU gets no row and `notes` names it. `blocked` names a held SKU Banchi sent copies of when
+    there is no fresh read: refused, nothing written. `notes` also names a held SKU in this
+    send with no fresh read and nothing sent, so it is never skipped in silence.
     """
     guard = _live_guard(args)
     read = guard[1] if guard else {}
     as_of = None
+    fresh = False
+    rows_by_sku = {}
+    live_price = {}
     if guard:
         as_of = str(runs.describe_source(Path(args.live_guard))["mtime"])
-    fresh = as_of is not None and reprice.read_is_fresh(as_of)
-    live_price = {}
+        fresh = _read_is_fresh(args.live_guard)
     if fresh:
-        live_price = sendguard.live_prices(tcgcsv.read_export(Path(args.live_guard)).rows)
-    takes: Dict[str, _Take] = {}
-    blocked: List[Tuple[str, str]] = []
+        export = tcgcsv.read_export(Path(args.live_guard))
+        rows_by_sku = {tcgcsv.sku_cell(row): row for row in export.rows}
+        live_price = sendguard.live_prices(export.rows)
+    outstanding = {sku for sku in (getattr(args, "take_outstanding", None) or "").split(",") if sku}
+    found = {}
+    first_game = None
     for resolved in resolved_list:
         for game_join in resolved.joins.values():
+            first_game = first_game or game_join.game
             for sku, match in game_join.report.matches.items():
-                hold = withheld.get(sku)
-                if hold is None or hold.reason not in decisions.WITHHOLD_REASONS or sku in takes:
-                    continue
-                if not fresh:
-                    listing = inventory.listings.get(sku)
-                    if listing is not None and int(listing.pushed) > 0:
-                        blocked.append((sku, match.name))
-                    continue
-                count = max(0, int(read.get(sku, 0))) - _sold_since(inventory, sku, as_of)
-                if count <= 0:
-                    continue
-                # THE PRICE IS THE ONE TCGPLAYER ALREADY SHOWS, so the row moves nothing but the
-                # quantity: the live export's, else the catalogue row's own, else the join's.
-                price = live_price.get(sku) or match.row.get(tcgcsv.PRICE_COLUMN) or match.list_price
-                if not price:
-                    blocked.append((sku, match.name))
-                    continue
-                takes[sku] = _Take(sku, match.name, game_join.game, price, count, match.row)
-    return takes, blocked
+                found.setdefault(sku, (game_join.game, match))
+    takes: Dict[str, _Take] = {}
+    blocked: List[Tuple[str, str]] = []
+    notes: List[Tuple[str, str, str]] = []
+    for sku in sorted(withheld):
+        hold = withheld[sku]
+        if hold.reason not in decisions.WITHHOLD_REASONS:
+            continue
+        game, match = found.get(sku, (first_game, None))
+        name = match.name if match is not None else sku
+        if sku in outstanding:
+            notes.append(("outstanding", sku, name))
+            continue
+        if not fresh:
+            listing = inventory.listings.get(sku)
+            if listing is not None and int(listing.pushed) > 0:
+                blocked.append((sku, name))
+            elif match is not None:
+                notes.append(("unread", sku, name))
+            continue
+        count = max(0, int(read.get(sku, 0))) - _sold_since(inventory, sku, as_of)
+        if count <= 0:
+            continue
+        row = match.row if match is not None else rows_by_sku.get(sku)
+        if row is None or game is None:
+            continue
+        # THE PRICE IS THE ONE TCGPLAYER ALREADY SHOWS, so the row moves nothing but the
+        # quantity: the live export's, else the catalogue row's own, else the join's.
+        price = live_price.get(sku) or row.get(tcgcsv.PRICE_COLUMN) or (match.list_price if match else None)
+        if not price:
+            blocked.append((sku, name))
+            continue
+        takes[sku] = _Take(sku, name, game, price, count, row)
+    return takes, blocked, notes
+
+
+def _say_take_notes(notes, say) -> None:
+    """Name every held SKU left without a take-off row, and print the JSON line the route reads."""
+    if not notes:
+        return
+    import json
+
+    for kind, sku, name in notes[:8]:
+        if kind == "outstanding":
+            say(f"{name} ({sku}) already has a take-off outstanding, so no second one is written.")
+        else:
+            say(f"{name} ({sku}) is held and there is no fresh live read, so nothing is taken off it.")
+    say(json.dumps({"send_outstanding": {s: n for k, s, n in notes if k == "outstanding"}}, sort_keys=True))
 
 
 def _refuse_no_read(blocked, say) -> int:
@@ -1358,9 +1412,12 @@ def run(args, say) -> int:
     withheld = set(choice.withheld())
     # A HOLD TAKES ITS LIVE COPIES OFF (D100, the owner's ruling). Refused before any file when
     # a held card has sent copies and no live read.
-    takes, blocked = _takeoffs([resolved], choice.withheld(), snapshot.inventory, args)
+    takes, blocked, notes = _takeoffs(
+        [resolved], book.for_run(run_dir.name).withheld(), snapshot.inventory, args
+    )
     if blocked:
         return _refuse_no_read(blocked, say)
+    _say_take_notes(notes, say)
     say("")
     try:
         unknown = set(choice.dispositions()) - set(resolved.matches)
@@ -2101,11 +2158,12 @@ def _run_merged(args, say) -> int:
     rows = rows + [row for row in merged_plan.skus if row.sku in changed]
     # A HOLD TAKES ITS LIVE COPIES OFF (D100, the owner's ruling), one row per held SKU, filed
     # with the plan's rows by `_Take`'s own shape.
-    takes, blocked = _takeoffs(
-        resolved_by_run.values(), choice.withheld(), snapshot.inventory, args
+    takes, blocked, notes = _takeoffs(
+        list(resolved_by_run.values()), book.for_run(dirs[-1].name).withheld(), snapshot.inventory, args
     )
     if blocked:
         return _refuse_no_read(blocked, say)
+    _say_take_notes(notes, say)
     rows = rows + list(takes.values())
     cut_back = (
         [(row.sku, row.match.name) for row in merged_plan.rows() if row.sub_threshold]

@@ -544,6 +544,7 @@ def build_parser() -> argparse.ArgumentParser:
     emit.add_argument("--send-dir", metavar="DIR", help=argparse.SUPPRESS)
     emit.add_argument("--send-claim", metavar="STAMP", help=argparse.SUPPRESS)
     emit.add_argument("--claim-holder", type=int, metavar="PID", help=argparse.SUPPRESS)
+    emit.add_argument("--take-outstanding", metavar="SKUS", help=argparse.SUPPRESS)
     _pricing_arguments(emit)
 
     # ------------------------------------------------------------------------ reconcile

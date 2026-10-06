@@ -915,6 +915,12 @@ def _gone_names(console: str) -> List[str]:
 def _empty_send_refusal(console: str, trimmed: list, step: str, code: int = 1) -> "PipelineRefusal":
     """`_empty_refusal`, with the cards a store-backed run could not send named beside it."""
     refusal = _empty_refusal(console, trimmed, step, code)
+    waiting = (_json_line(console, "send_outstanding") or {}).values()
+    if waiting:
+        refusal.args = (
+            f"{refusal.args[0]} {', '.join(sorted(map(str, waiting)))}: a take-off is already "
+            "outstanding, so no second one was written.",
+        )
     gone = _gone_names(console)
     if gone:
         refusal.args = (f"{refusal.args[0]} {resolve.gone_sentence(gone)}",)
@@ -1216,6 +1222,10 @@ def _write_and_send(
         encoding="utf-8",
     )
     argv += ["--reprice-live", str(named)]
+    # A TAKE-OFF STILL OUTSTANDING IS NOT SIZED AGAIN (D100): `emit` writes no second row for these.
+    outstanding = _outstanding_takes()
+    if outstanding:
+        argv += ["--take-outstanding", ",".join(sorted(outstanding))]
     if download and payload.get("split_threshold"):
         argv.append("--split-threshold")
     argv += pipeline_routes._quantity_flags(payload)
@@ -1992,6 +2002,19 @@ def _price_check(record: dict, live_prices: Dict[str, str], live_now: Dict[str, 
     }
 
 
+def _outstanding_takes() -> set:
+    """The SKUs with a take-off outstanding: written (a press or a download) and neither settled
+    by a live read nor lapsed as never landed. A failed press wrote nothing that can land."""
+    out: set = set()
+    for _stamp, record in _receipts():
+        if record.get("failure") or record.get("taken_back_at"):
+            continue
+        for sku in record.get("taken_off") or {}:
+            if sku not in (record.get("take_settled") or []) and sku not in (record.get("take_lapsed") or []):
+                out.add(sku)
+    return out
+
+
 def _settle_takes(record: dict, live_now: Dict[str, int]) -> Dict[str, int]:
     """A check past the wait that finds a take-off's copies gone lowers `pushed` and sets `live`.
 
@@ -2000,13 +2023,18 @@ def _settle_takes(record: dict, live_now: Dict[str, int]) -> Dict[str, int]:
     landed stays unsettled and the next send re-reads live and takes it again, so the same
     copies are never counted off twice."""
     done = list(record.get("take_settled") or [])
-    gone = {
-        sku: int(n)
-        for sku, n in (record.get("taken_off") or {}).items()
-        if sku not in done
-        and live_now.get(sku, 0) <= max(0, int((record.get("live_seen") or {}).get(sku, 0)) - int(n))
-    }
+    lapsed = list(record.get("take_lapsed") or [])
+    gone = {}
+    for sku, n in (record.get("taken_off") or {}).items():
+        if sku in done or sku in lapsed:
+            continue
+        if live_now.get(sku, 0) <= max(0, int((record.get("live_seen") or {}).get(sku, 0)) - int(n)):
+            gone[sku] = int(n)
+        else:
+            # STILL LIVE PAST THE WINDOW: it never landed, and only now may a new one be sized.
+            lapsed.append(sku)
     record["take_settled"] = sorted(done + list(gone))
+    record["take_lapsed"] = sorted(lapsed)
     return gone
 
 
@@ -2087,7 +2115,7 @@ def _live_check(force: bool) -> dict:
             record["first_checked_at"] = store_clock.iso(now)
         if _checked_past_wait(record):
             for sku, n in _settle_takes(record, live_now).items():
-                lowered[sku] = lowered.get(sku, 0) + n
+                lowered.setdefault(sku, n)
         _write(sends_dir() / stamp, record)
         # A CHECK PAST THE WAIT RESOLVES A HOLD: what is live is now known, and what is not can
         # be taken back. The claim goes whether the copies were found or not.
