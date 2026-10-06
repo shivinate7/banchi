@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { MatchSweepCard, MatchSweepDetail } from './types'
 import { previewUrl } from './server'
-import { unreadGroup } from './reasons'
+import { NO_REASON, NO_REASON_OFF, unreadGroup } from './reasons'
 import { Button, EmptyState, Loading, Sheet, Slot } from './kit'
 import './ReviewBandSheet.css'
 
@@ -135,17 +135,16 @@ function Row({ card, kind }: { readonly card: MatchSweepCard; readonly kind: Mat
   )
 }
 
-function GroupView({ group, kind }: { readonly group: Group; readonly kind: MatchSweepDetail }) {
+function GroupView({ group, kind, readerOn }: { readonly group: Group; readonly kind: MatchSweepDetail; readonly readerOn: boolean }) {
   const [shown, setShown] = useState(PAGE)
   const seen = group.cards.slice(0, shown)
   const found = pattern(group)
-  const line = group.fix ?? group.note
+  /* "A free read will fill it in" is true only while the reader is on. */
+  const line = group.title === NO_REASON.title && !readerOn ? NO_REASON_OFF : (group.fix ?? group.note)
   return (
     <section className="rbs-group" role="group" aria-label={group.title}>
       <div className="rbs-group-head">
-        <h3 className="rbs-group-title" title={group.codes.filter(Boolean).join(', ') || undefined}>
-          {group.title}
-        </h3>
+        <h3 className="rbs-group-title">{group.title}</h3>
         <span className="rbs-group-count bn-mono">{group.cards.length}</span>
       </div>
       {line === null ? null : (
@@ -180,6 +179,7 @@ export function BandSheet({
   figure,
   moved,
   busy,
+  readerOn,
   onAgain,
 }: {
   readonly open: boolean
@@ -192,6 +192,8 @@ export function BandSheet({
   readonly moved: boolean
   /** "Show it again" is reading. */
   readonly busy: boolean
+  /** The background reader is switched on. */
+  readonly readerOn: boolean
   readonly onAgain: () => void
 }) {
   const kind = data?.kind ?? 'paid'
@@ -231,7 +233,7 @@ export function BandSheet({
         <>
           {kind === 'unhinted' ? <p className="rbs-pointer">Name the set on the card.</p> : null}
           {groups.map((group) => (
-            <GroupView key={group.key} group={group} kind={kind} />
+            <GroupView key={group.key} group={group} kind={kind} readerOn={readerOn} />
           ))}
         </>
       )}

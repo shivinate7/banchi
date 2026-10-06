@@ -128,8 +128,7 @@ export function reasonLabel(reason: string): string {
  * paid-look sheet. A code is one group; codes that read alike share a title, so they share a group. `fix` is the one free
  * way out, said once under the group's title as a sentence and never a control (the row's own press goes to the card).
  * `note` is an explanation where no free fix exists, only for the look-alike group. Every other group with no free fix shows
- * no line. An unknown code is its own group, titled by itself (`unreadGroup`), never a blank. The code rides in the title's
- * hover. Every `UNREAD_*` code `identify.match` can emit is a key here (`harness/tests/t7/engine_sweep.py`). */
+ * no line. An unknown code groups under "Another reason" (`unreadGroup`), never a blank and never the raw code. No title or hover shows a code. Every `UNREAD_*` code `identify.match` can emit is a key here (`harness/tests/t7/engine_sweep.py`). */
 export type UnreadGroup = { readonly title: string; readonly fix: string | null; readonly note?: string }
 
 const RARITY_FIX = 'Name the rarity on the card. A claim settles the printing.'
@@ -155,7 +154,12 @@ export const UNREAD_GROUPS: Readonly<Record<string, UnreadGroup>> = {
 /* A card whose mark predates stored reasons: the free reader reads it again and fills the reason in. */
 export const NO_REASON: UnreadGroup = { title: 'No reason kept', fix: 'A free read will fill it in.' }
 
+/* A code this file has no words for: one group, never the raw code on screen. */
+export const OTHER_REASON: UnreadGroup = { title: 'Another reason', fix: null }
+
+export const NO_REASON_OFF = 'Turn on the reader to fill it in.'
+
 export function unreadGroup(code: string | null): UnreadGroup {
   if (code === null || code === '') return NO_REASON
-  return UNREAD_GROUPS[code] ?? { title: code, fix: null }
+  return UNREAD_GROUPS[code] ?? OTHER_REASON
 }

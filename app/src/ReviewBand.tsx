@@ -92,8 +92,8 @@ export function ReviewBand({
     idleMs: 20_000,
     isLive: (answer) => {
       const left = (answer.paid ?? 0) + (answer.unread ?? 0)
-      /* A reader that is switched on, able to run and has cards it has not looked at is about to move the counts: keep the live pace. */
-      if (answer.running || (answer.on && answer.blocked == null && (answer.unread ?? 0) > 0) || (pressed.current && runLive.current)) {
+      /* A reader that is switched on, set up, able to run and has cards it has not looked at is about to move the counts: keep the live pace. */
+      if (answer.running || (answer.on && answer.blocked == null && !needsSetup && (answer.unread ?? 0) > 0) || (pressed.current && runLive.current)) {
         last.current = { left, alike: 0 }
         return true
       }
@@ -164,7 +164,7 @@ export function ReviewBand({
 
   /* THE SHEETS. One read when a count is pressed, one more on "Show it again", and none when the poll ticks (D313). Matched rows
      leave out a card that also waits on a review row, as the figure does. */
-  const [sheet, setSheet] = useState<(BandSheetData & { sig: string }) | null>(null)
+  const [sheet, setSheet] = useState<(BandSheetData & { sig: string; on: boolean }) | null>(null)
   const [shown, setShown] = useState(false)
   const [again, setAgain] = useState(false)
   const inReview = useMemo(() => new Set(reviewing ?? []), [reviewing])
@@ -177,16 +177,16 @@ export function ReviewBand({
   const openSheet = async (kind: MatchSweepDetail) => {
     setShown(true)
     setAgain(true)
-    if (sheet === null || sheet.kind !== kind) setSheet({ kind, cards: null, failed: false, sig: '' })
+    if (sheet === null || sheet.kind !== kind) setSheet({ kind, cards: null, failed: false, sig: '', on: false })
     try {
       const answer = await getMatchSweep([...(keys ?? [])], kind)
       /* The box number is the key's own first part: the wire need not repeat it. */
       const cards = (answer.cards ?? [])
         .filter((card) => kind !== 'matched' || !inReview.has(card.key))
         .map((card) => ({ ...card, box: Number(card.key.split('/')[0]) }))
-      setSheet({ kind, cards, failed: false, sig: sigOf(kind, answer) })
+      setSheet({ kind, cards, failed: false, sig: sigOf(kind, answer), on: answer.on })
     } catch {
-      setSheet((now) => (now !== null && now.kind === kind && now.cards !== null ? now : { kind, cards: null, failed: true, sig: '' }))
+      setSheet((now) => (now !== null && now.kind === kind && now.cards !== null ? now : { kind, cards: null, failed: true, sig: '', on: false }))
     } finally {
       setAgain(false)
     }
@@ -265,6 +265,7 @@ export function ReviewBand({
         figure={sheet === null ? 0 : sheet.kind === 'unhinted' ? unhinted : figures[sheet.kind]}
         moved={moved}
         busy={again}
+        readerOn={sheet?.on === true}
         onAgain={() => sheet !== null && void openSheet(sheet.kind)}
       />
     </section>

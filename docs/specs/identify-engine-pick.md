@@ -713,9 +713,9 @@ That label walks the box layout, and that walk once made `GET /capture/sitting` 
 ### 10.3 Reason codes in plain words
 
 D196 (no screen string names a mechanism) and the reason-code rule in `docs/DESIGN.md` both apply.
-The group title is plain. The code rides in the group title's hover, in mono, as `Notice`'s `code` prop does.
+The group title is plain. No title or hover shows a raw code.
 The words below are for the owner to rule on. They are one table in `app/src/reasons.ts`, next to the review reasons.
-An unknown code shows as itself and not as a blank.
+An unknown code groups under "Another reason", never as a blank and never as the raw code.
 
 | Code | Group title | Free fix it points to |
 | --- | --- | --- |
@@ -726,7 +726,7 @@ An unknown code shows as itself and not as a blank.
 | `set_not_resolved` | The set named matches no set, or more than one | "Correct the set." Card panel |
 | `promo_set`, `promo_held`, `set_not_indexed`, `no_index` | The set cannot be read free | none |
 | `game_not_served` (from the card's game, not stored) | This game is not read free | none |
-| no stored reason | No reason kept | "A free read will fill it in." Shown only while the one-time clearing runs (10.2) |
+| no stored reason | No reason kept | "A free read will fill it in." while the reader is on, "Turn on the reader to fill it in." while it is off. Shown only while the one-time clearing runs (10.2) |
 | `index_stale` | The free reader's data is out of date | "Prepare matching on the runs sheet." |
 
 A group with a free fix shows it once, as one line under the group title, with the count it covers.
