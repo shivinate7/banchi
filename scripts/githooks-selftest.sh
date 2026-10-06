@@ -350,12 +350,15 @@ PKMNSCAN_MAIN=off git -C "$rlrepo" commit -qm seed
 git -C "$rlrepo" config core.hooksPath "$HOOKS_DIR"
 echo two > "$rlrepo/a.txt"
 git -C "$rlrepo" add a.txt
+# The refusal prints the short hash of the refused commit, so both commits share one fixed date: same hash, same output.
+export GIT_AUTHOR_DATE="2026-01-01T00:00:00Z" GIT_COMMITTER_DATE="2026-01-01T00:00:00Z"
 rl_out="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$rl" git commit -qm "straight onto main" 2>&1)"; rl_status=$?
 [ $rl_status -ne 0 ] && ok "a refused commit on main still refuses" || bad "the logged refusal let the commit through"
 why="$(refusal_line_ok "$rl" "reference-transaction:main-move")" && ok "…and writes one well-formed line" || bad "the refusal log line: $why"
 rl_bad="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" git commit -qm "straight onto main" 2>&1)"; rl_bad_status=$?
 if [ $rl_bad_status -ne 0 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
 else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
+unset GIT_AUTHOR_DATE GIT_COMMITTER_DATE
 
 # pre-commit (a staged secrets file) and pre-push (a push to main): same three assertions.
 git -C "$rlrepo" switch -q -c rlb
