@@ -16676,6 +16676,14 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_price_now(asked)
                 )
+            if path == "/pipeline/prices/refresh":
+                # "Refresh now"'s progress: `{state, step, done, total, note}`. A local read.
+                return self._json(HTTPStatus.OK, pipeline_routes.do_prices_refresh_state())
+            if path == "/pipeline/price-facts":
+                # EVERYTHING THE PRODUCT SHEET SAYS ABOUT ONE CARD'S PRICES AND SALES. Two local
+                # files and the worklist: a press of T opens no request at any market host.
+                asked = parse_qs(parsed.query, keep_blank_values=True).get("sku") or [""]
+                return self._json(HTTPStatus.OK, pipeline_routes.do_price_facts(asked[0]))
             if path == "/pipeline/trends-saved":
                 # THE STRIPS THE DAILY JOB SAVED (DEBT69, D278): a local read, no market request.
                 return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_saved_trends())
@@ -17122,7 +17130,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # second document, not a second scope: that route fetches the CATALOGUE at
                 # `MyInventory: False`, and this fetches the opposite. `POST /pipeline/identify`
                 # is still the only route in this server that can spend money.
-                return self._json(HTTPStatus.OK, pipeline_routes.do_live_export())
+                # AND THEN THE OPEN RUNS ARE RE-JOINED (docs/specs/stale-listings.md, 7b), so
+                # the row and the product sheet agree on one read time.
+                return self._json(HTTPStatus.OK, pipeline_routes.do_live_export_rejoined())
+            if path == "/pipeline/prices/refresh":
+                # "Refresh now": starts one worker and answers 202. Free, and only a press calls it.
+                status, body = pipeline_routes.do_prices_refresh_start(self._body())
+                return self._json(status, body)
             if path == "/pipeline/reconcile-live":
                 # THE FOURTH COMMAND, OVER THE WHOLE STORE (D87). Free, and it writes only
                 # when asked — the preview is the default. Not run-scoped: this is the one

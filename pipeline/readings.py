@@ -76,6 +76,13 @@ def live_export_at(name: str) -> Optional[int]:
     return int(moment.timestamp())
 
 
+def _cell(value) -> Optional[str]:
+    """One price cell as text, or `None` when it is blank. A blank stays blank: a reading never
+    borrows a cell from an older source (one source, one second)."""
+    text = str(value).strip() if value is not None else ""
+    return text or None
+
+
 def reading_from_table(parsed: dict, *, at: int, source: str) -> Tuple[Dict[str, Reading], Optional[Source]]:
     """One run's ALREADY-PARSED `pricing.json` (or an equivalent in-memory dict of the same
     shape, `cli/cmd_join.py`'s `_pricing_table`'s own return value), at a caller-supplied
@@ -98,6 +105,7 @@ def reading_from_table(parsed: dict, *, at: int, source: str) -> Tuple[Dict[str,
         if not sku or not market:
             continue
         priced += 1
+        snap = row.get("snap") or {}
         found[sku] = Reading(
             market=str(market),
             at=at,
@@ -106,6 +114,9 @@ def reading_from_table(parsed: dict, *, at: int, source: str) -> Tuple[Dict[str,
             name=row.get("name"),
             set_name=row.get("set_name"),
             condition=row.get("condition"),
+            low=_cell(snap.get("low")),
+            low_with_shipping=_cell(snap.get("low_with_shipping")),
+            direct_low=_cell(snap.get("direct_low")),
         )
     source_row = Source(kind=KIND_RUN, name=source, at=at, skus=priced) if priced else None
     return found, source_row
@@ -160,6 +171,9 @@ def reading_from_export(export, *, at: int, source: str) -> Tuple[Dict[str, Read
             name=row.get(tcgcsv.NAME_COLUMN),
             set_name=row.get(tcgcsv.SET_COLUMN),
             condition=row.get(tcgcsv.CONDITION_COLUMN),
+            low=_cell(row.get(tcgcsv.LOW_PRICE_COLUMN)),
+            low_with_shipping=_cell(row.get(tcgcsv.LOW_WITH_SHIPPING_COLUMN)),
+            direct_low=_cell(row.get(tcgcsv.DIRECT_LOW_COLUMN)),
         )
     source_row = Source(kind=KIND_LIVE, name=source, at=at, skus=priced) if priced else None
     return found, source_row

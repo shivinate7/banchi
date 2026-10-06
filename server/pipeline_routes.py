@@ -112,6 +112,7 @@ import os
 import re
 import subprocess
 import sys
+import contextvars
 import threading
 import time
 from collections import OrderedDict
@@ -119,8 +120,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from http import HTTPStatus
 from pathlib import Path
-from datetime import datetime, timezone
-from typing import Any, Dict, FrozenSet, Iterable, List, NamedTuple, Optional, Sequence, Tuple
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, FrozenSet, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -2679,6 +2680,12 @@ def do_pipeline_pricing(name: str, reads: Optional[_PricingReads] = None) -> dic
     # parsed, which nothing else holds — the file on disk is untouched, exactly as D58 left
     # `QueueEntry.label`.
     _relabel_positions(pricing, None if reads is None else reads.snapshot)
+    # WHEN EACH ROW'S FIGURES WERE READ: the fetch time of the export this run was last joined
+    # against (its mtime, D104's own rule). Added to the answer and never written back.
+    fetched_at = _export_seconds(directory)
+    for entry in pricing.get("skus") or []:
+        if isinstance(entry, dict):
+            entry["snap_at"] = _row_snap_at(fetched_at, entry)
     # THE ANSWERS COME FROM THE CORPUS, SCOPED TO THIS RUN'S OWN SKUS (D86, amended). They
     # used to be `runs/<n>/decisions.json`, which is why the same card carried one answer per
     # drawer it had been photographed in. Narrowed to this run's rows so a screen drawing one
@@ -2722,6 +2729,30 @@ def do_pipeline_pricing(name: str, reads: Optional[_PricingReads] = None) -> dic
         # copied, which resets it; nothing in this repo copies one.
         "written_at": int(table.stat().st_mtime),
     }
+
+
+def _export_seconds(directory: Path) -> Dict[str, int]:
+    """`{game: the second the export this run was last joined against was fetched}`. A file that
+    is gone is left out: an unknown age is never drawn as a guess."""
+    found: Dict[str, int] = {}
+    try:
+        recorded = run_files.open_run(directory).exports_by_game
+    except (OSError, ValueError, run_files.RunError):
+        return found
+    for game, path in recorded.items():
+        try:
+            found[str(game)] = int(Path(path).stat().st_mtime)
+        except OSError:
+            continue
+    return found
+
+
+def _row_snap_at(fetched_at: Dict[str, int], row: dict) -> Optional[int]:
+    """The export second for one row's game; a run with one export answers for every row."""
+    game = str(row.get("game") or "")
+    if game in fetched_at:
+        return fetched_at[game]
+    return next(iter(fetched_at.values())) if len(fetched_at) == 1 else None
 
 
 def _held_market(
@@ -7318,8 +7349,14 @@ def _trends_for_entries(
     }
     # THE PRESS WRITES THROUGH THE SAME SAVE AS THE OVERNIGHT READ, so a reload keeps it. Only strips
     # that were READ are saved: a refused SKU never replaces a good saved strip.
+    extras: Dict[str, dict] = {}
+    for sku, reading in readings.items():
+        try:
+            extras[sku] = pricerefresh.entry_facts(reading.series[pricehistory.DEFAULT_RANGES[0]])
+        except Exception as exc:  # noqa: BLE001 - facts are extra: the strip is saved without them, never lost for them
+            files.log_cause('trends facts', exc)
     try:
-        pricerefresh.save_strips(strips)
+        pricerefresh.save_strips(strips, extras=extras)
     except OSError as exc:
         files.log_cause('trends save', exc)
     return {
@@ -7345,6 +7382,15 @@ def _trends_for_entries(
 TREND_PRELOAD_CHUNK = 8
 
 
+#: What `do_prices_refresh` narrows the overnight walk to, ambient so the walk keeps its one
+#: signature (T7's `price_moves` plants a helper by that exact line). `only`: the SKUs to ask
+#: about (`None` is every row); `progress`: told `(done, total)` before each chunk.
+_PRELOAD_ONLY: "contextvars.ContextVar[Optional[Set[str]]]" = contextvars.ContextVar("preload_only", default=None)
+_PRELOAD_PROGRESS: "contextvars.ContextVar[Optional[Callable[[int, int], None]]]" = contextvars.ContextVar(
+    "preload_progress", default=None
+)
+
+
 def do_price_trends_preload() -> dict:
     """The daily job's overnight Trends read: the strip for every row `#/pricing`'s Trends press
     would read, through the SAME route that press calls (`do_pipeline_trends`), by the owner's word.
@@ -7361,18 +7407,22 @@ def do_price_trends_preload() -> dict:
     A failed step is named, never dropped: a refused run lands in `failed` and its rows in
     `refused`, and the caller's note says how many of how many were read.
     """
+    only, progress = _PRELOAD_ONLY.get(), _PRELOAD_PROGRESS.get()
     work = do_pipeline_worklist([])
     by_door: Dict[str, List[str]] = {}
     for row in work["skus"]:
         legs = row.get("in") or []
         door = legs[-1].get("run") if legs else None
-        if door and not row.get("at_cap"):
+        if door and not row.get("at_cap") and (only is None or str(row["sku"]) in only):
             by_door.setdefault(str(door), []).append(str(row["sku"]))
     read: Dict[str, list] = {}
     refused: Dict[str, str] = {}
     failed: List[str] = []
+    total = sum(len(skus) for skus in by_door.values())
     for door, skus in by_door.items():
         for at in range(0, len(skus), TREND_PRELOAD_CHUNK):
+            if progress is not None:
+                progress(len(read) + len(refused), total)
             chunk = skus[at:at + TREND_PRELOAD_CHUNK]
             try:
                 answer = do_pipeline_trends(door, chunk)
@@ -7391,6 +7441,193 @@ def do_price_trends_preload() -> dict:
     }
 
 
+# ------------------------------------------------------------------ the price refresh (spec 7b)
+
+#: `GET /pipeline/prices/refresh`'s own state, one per process. A press starts one worker; a second
+#: press while it runs starts nothing. `finished_at` holds the next press off for `EXPORT_REUSE_S`.
+_REFRESH_LOCK = threading.Lock()
+_REFRESH: Dict[str, Any] = {"state": "idle", "step": None, "done": 0, "total": 0, "finished_at": None}
+
+
+def _open_runs() -> Tuple[dict, List[str]]:
+    """The worklist and the names of the runs it holds open: the roster `do_pipeline_worklist`
+    answers, never a second definition of "open"."""
+    work = do_pipeline_worklist([])
+    return work, [str(row["run"]) for row in work["roster"] if row.get("open")]
+
+
+def _stale_history(work: dict) -> Set[str]:
+    """The SKUs whose saved history ends before the newest finished day (yesterday), or has none."""
+    newest = (datetime.now().date() - timedelta(days=1)).isoformat()
+    saved = pricerefresh.read_trends()
+    return {
+        str(row["sku"]) for row in work["skus"]
+        if (saved.get(str(row["sku"])) or {}).get("through", "") < newest
+    }
+
+
+def do_prices_refresh(
+    progress: Optional[Callable[[str, int, int], None]] = None,
+    *,
+    history: Optional[str] = "all",
+    live_refusal: bool = False,
+) -> dict:
+    """THE MORNING JOB AND THE "Refresh now" PRESS (`docs/specs/stale-listings.md`, 7b). It brings
+    every waiting card's Market and Lowest current by refreshing the run tables, never by drawing
+    a second figure over them: the unit is the pair `do_pipeline_export`, then the join, which is
+    also what makes the bucket, the preset figures and the price `emit` writes agree with the
+    screen.
+
+    ORDER: 1 the live listings, 2 the catalog (one request per game, `_reusable` serves the later
+    runs), 3 the join of every open run, 4 the sales history (`history`: "all" asks for every
+    row, "stale" only for rows whose history ends before yesterday, `None` skips it). Each step
+    records itself in `inventory/price-refresh.json`. A failed step keeps the last good data and
+    names itself; it never raises out of here, except the live listings when `live_refusal` (the
+    Live tab's press shows that refusal as it always did).
+
+    FREE, AND IT WRITES NOTHING AT TCGPLAYER: it reads the operator's listings and the catalog,
+    writes run tables and local files, and a typed answer (`prices.json`) is never touched. It
+    calls no paid read, no send and no sweep."""
+    def tell(step: str, done: int = 0, total: int = 0) -> None:
+        if progress is not None:
+            progress(step, done, total)
+
+    caught: List[Exception] = []
+    live_answer: Dict[str, Any] = {}
+
+    def fetch_live() -> dict:
+        try:
+            live_answer.update(do_live_export())
+            return live_answer
+        except Exception as exc:  # noqa: BLE001 - recorded by `pricerefresh.run`, re-raised below for a press
+            caught.append(exc)
+            raise
+
+    tell("listings")
+    note = pricerefresh.run(fetch_live)
+    pricerefresh.note_step(
+        "listings", note["ok"], at=note["at"],
+        **({"live_rows": note["live_rows"]} if note["ok"] else {"message": note["message"], "code": note["code"]}),
+    )
+    if live_refusal and caught:
+        raise caught[0]
+
+    # 2. catalog prices: the first run of each game forces one request; later runs reuse it.
+    tell("catalog")
+    _work, runs = _open_runs()
+    fetched: Dict[str, str] = {}
+    refused: Dict[Tuple[str, ...], str] = {}
+    asked_games: Set[Tuple[str, ...]] = set()
+    problems: List[str] = []
+    for name in runs:
+        try:
+            games_of = tuple(sorted(run_files.open_run(_open_run(name)).exports_by_game)) or (game_registry.DEFAULT_GAME,)
+        except Exception:  # noqa: BLE001 - a run that will not open costs itself only
+            games_of = (game_registry.DEFAULT_GAME,)
+        if games_of in refused:
+            problems.append(f"{name}: {refused[games_of]}")
+            continue
+        try:
+            answer = do_pipeline_export(name, {} if games_of in asked_games else {"refresh": True})
+        except PipelineRefusal as refusal:
+            refused[games_of] = str(refusal)
+            problems.append(f"{name}: {refusal}")
+            continue
+        asked_games.add(games_of)
+        fetched[name] = answer["file"]
+    pricerefresh.note_step(
+        "catalog", not problems, runs=len(runs), fetched=len(fetched), message=problems[0] if problems else "",
+    )
+
+    # 3. join every run whose catalog arrived. A re-join is free and re-runnable, and a typed
+    # answer lives in `prices.json`, so it cannot lose one.
+    tell("join")
+    joined = 0
+    trouble: List[str] = []
+    for name, file in fetched.items():
+        result = do_pipeline_step(name, "join", {"fetched": [file]})
+        if result["ok"]:
+            joined += 1
+        else:
+            trouble.append(f"{name}: " + ((result["console"].strip().splitlines() or [""])[-1]))
+    pricerefresh.note_step("join", not trouble, runs=len(fetched), joined=joined, message=trouble[0] if trouble else "")
+
+    # 4. the sales history, last, because it is the slow one.
+    if history is not None:
+        only = _stale_history(do_pipeline_worklist([])) if history == "stale" else None
+        if only is not None and not only:
+            pricerefresh.note_step("history", True, read=0, asked=0, message="")
+        else:
+            tell("history")
+            scope = _PRELOAD_ONLY.set(only), _PRELOAD_PROGRESS.set(lambda d, t: tell("history", d, t))
+            try:
+                done = pricerefresh.preload(do_price_trends_preload)
+            finally:
+                _PRELOAD_ONLY.reset(scope[0])
+                _PRELOAD_PROGRESS.reset(scope[1])
+            pricerefresh.note_step(
+                "history", done["ok"], at=done["at"], read=done["read"], asked=done["asked"], message=done["message"],
+            )
+    steps = (pricerefresh.read_status() or {}).get("steps") or {}
+    return {
+        "ok": all((steps.get(name) or {}).get("ok") for name in ("listings", "catalog", "join")),
+        "steps": steps,
+        "live": dict(live_answer),
+    }
+
+
+def do_live_export_rejoined() -> dict:
+    """`POST /pipeline/live-export` — the Live tab's "read again". The live listings, and then the
+    same steps 2 and 3 as a refresh, so the row and the sheet never show two times for one card.
+    The answer is the listings' own."""
+    return do_prices_refresh(history=None, live_refusal=True)["live"]
+
+
+def _refresh_worker() -> None:
+    def progress(step: str, done: int, total: int) -> None:
+        with _REFRESH_LOCK:
+            _REFRESH.update(step=step, done=done, total=total)
+
+    state = "failed"
+    try:
+        state = "done" if do_prices_refresh(progress, history="stale")["ok"] else "failed"
+    except Exception as caught:  # noqa: BLE001 - named in the note, never silent
+        files.log_cause("prices refresh", caught)
+        pricerefresh.note_step("refresh", False, message=files.plain_cause(caught))
+    finally:
+        with _REFRESH_LOCK:
+            _REFRESH.update(state=state, step=None, finished_at=time.time())
+
+
+def do_prices_refresh_start(payload: dict) -> Tuple[HTTPStatus, dict]:
+    """`POST /pipeline/prices/refresh` — "Refresh now". It starts the work in a worker thread and
+    answers 202 at once; steps 2 and 3 can outlast a request slot (DEBT11). One run goes at a
+    time: a press while one runs answers `running` and starts nothing. A press inside
+    `EXPORT_REUSE_S` of a finished run is refused unless the body says `force`, which the screen
+    sends only from "Try again". FREE, and only a press calls it."""
+    force = bool(payload.get("force"))
+    with _REFRESH_LOCK:
+        if _REFRESH["state"] == "running":
+            return HTTPStatus.ACCEPTED, {"state": "running", "started": False}
+        finished = _REFRESH["finished_at"]
+        if not force and finished is not None and time.time() - finished <= EXPORT_REUSE_S:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT,
+                "refresh_too_soon",
+                "Prices were refreshed a moment ago. Wait a few minutes before pressing again.",
+            )
+        _REFRESH.update(state="running", step="listings", done=0, total=0)
+    threading.Thread(target=_refresh_worker, name="prices-refresh", daemon=True).start()
+    return HTTPStatus.ACCEPTED, {"state": "running", "started": True}
+
+
+def do_prices_refresh_state() -> dict:
+    """`GET /pipeline/prices/refresh` — `{state, step, done, total, note}`. A local read."""
+    with _REFRESH_LOCK:
+        state = {key: _REFRESH[key] for key in ("state", "step", "done", "total")}
+    return {**state, "note": pricerefresh.read_status()}
+
+
 def do_pipeline_saved_trends() -> dict:
     """`GET /pipeline/trends-saved` — the strips the daily job saved, and how that read ended.
 
@@ -7399,8 +7636,55 @@ def do_pipeline_saved_trends() -> dict:
     own note, or null if no overnight read has ever run.
     """
     return {
-        "skus": pricerefresh.read_trends(),
+        # `days` stay out of the first paint: `GET /pipeline/price-facts?sku=` serves them.
+        "skus": {
+            sku: {key: value for key, value in entry.items() if key != "days"}
+            for sku, entry in pricerefresh.read_trends().items()
+        },
         "note": (pricerefresh.read_status() or {}).get("trends"),
+    }
+
+
+def do_price_facts(sku: str) -> dict:
+    """`GET /pipeline/price-facts?sku=` — everything the product sheet says about one card's
+    prices and sales. A LOCAL READ: the readings table, the saved history and the worklist. It
+    opens no socket and asks no market host, so a press of T costs nothing.
+
+    The prices are the SKU's one reading (D189), all four cells from one source and one second.
+    `at` is the row's own read time (`snap_at`) when the reading came from a run table, so the
+    row and the sheet never show two times for one card."""
+    sku = str(sku or "").strip()
+    if not sku:
+        raise PipelineRefusal(HTTPStatus.BAD_REQUEST, "sku_required", "Name a card to read its prices.")
+    found, _sources = _readings()
+    reading = found.get(sku)
+    saved = pricerefresh.read_trends().get(sku) or {}
+    row = next((r for r in do_pipeline_worklist([])["skus"] if str(r.get("sku")) == sku), None)
+    at = None if reading is None else int(reading.at)
+    if reading is not None and reading.kind == store_readings.KIND_RUN and row is not None and row.get("snap_at"):
+        at = int(row["snap_at"])
+    listed = None
+    if row is not None:
+        listed = (row.get("row") or {}).get(tcgcsv.LIVE_QUANTITY_COLUMN)
+    return {
+        "sku": sku,
+        "name": (reading.name if reading is not None else None) or (row or {}).get("name"),
+        "at": at,
+        "through": saved.get("through"),
+        "prices": None if reading is None else {
+            "market": reading.market,
+            "low": reading.low,
+            "low_with_shipping": reading.low_with_shipping,
+            "direct_low": reading.direct_low,
+        },
+        "shelf": None if row is None else {
+            "on_hand": row.get("on_hand"),
+            "can_be_sent": row.get("add_to_quantity"),
+            "listed_now": listed,
+            "asking": (row.get("snap") or {}).get("now"),
+        },
+        "days": saved.get("days") or [],
+        "facts": saved.get("facts") or {},
     }
 
 

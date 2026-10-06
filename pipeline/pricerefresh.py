@@ -20,6 +20,7 @@ import json
 import time
 from typing import Callable, Optional
 
+from pipeline import pricehistory
 from store import files
 
 #: THE ONE SPELLING of "this row has no product to read a history for". `server/pipeline_routes.py`
@@ -64,6 +65,48 @@ def read_trends() -> dict:
     return skus if isinstance(skus, dict) else {}
 
 
+def entry_facts(series: "pricehistory.Series") -> dict:
+    """What a saved SKU carries beside its strip: `facts` (the row's and the sheet's figures, all
+    from `Series.window`), `days` (the newest 30 buckets: date, units, sales, low, high, market)
+    and `through` (the date of the newest bucket). Money is text, exact like every price here."""
+    def money(value):
+        return None if value is None else str(value)
+
+    week, month = series.window(7), series.window(30)
+    newest = series.buckets[-30:]
+    best = max((b for b in newest if b.sold), key=lambda b: b.quantity, default=None)
+    priced = [b.market for b in newest if b.market is not None]
+    change = None
+    if len(priced) > 1 and priced[0]:
+        change = str(((priced[-1] - priced[0]) / priced[0]).quantize(pricehistory.RATIO))
+    facts = {
+        "sold_7d": week.units, "sales_7d": week.sales, "avg_7d": money(week.average),
+        "low_7d": money(week.low), "high_7d": money(week.high),
+        "sold_30d": month.units, "sales_30d": month.sales, "avg_30d": money(month.average),
+        "low_30d": money(month.low), "high_30d": money(month.high),
+        "best_day": None if best is None or best.start is None else [best.start.isoformat(), best.quantity],
+        "change_30d": change,
+    }
+    days = [
+        [b.start.isoformat() if b.start else None, b.quantity, b.transactions, money(b.low), money(b.high), money(b.market)]
+        for b in newest
+    ]
+    dated = [b.start for b in series.buckets if b.start is not None]
+    return {"facts": facts, "days": days, "through": dated[-1].isoformat() if dated else None}
+
+
+def note_step(name: str, ok: bool, at: Optional[int] = None, **info) -> dict:
+    """Record how one step of the refresh ended in `steps.<name>`: `at`, `ok` and its own counts or
+    sentence. A failed step names itself here and never blanks a figure."""
+    status = read_status() or {}
+    when = int(time.time()) if at is None else int(at)
+    # `last_ok_at` is what "Prices as of" keeps drawing while a later try fails.
+    last_ok = when if ok else ((status.get("steps") or {}).get(name) or {}).get("last_ok_at")
+    note = {"at": when, "ok": bool(ok), **({"last_ok_at": last_ok} if last_ok else {}), **info}
+    _write(status_path(), {**status, "steps": {**(status.get("steps") or {}), name: note}})
+    return note
+
+
 def run(fetch: Callable[[], dict], now: Optional[int] = None) -> dict:
     """Fetch once; write the note either way; return it. Never raises on a refused fetch."""
     at = int(time.time()) if now is None else int(now)
@@ -77,22 +120,24 @@ def run(fetch: Callable[[], dict], now: Optional[int] = None) -> dict:
             "code": str(getattr(caught, "code", type(caught).__name__)),
             "message": str(caught),
         }
-    kept = (read_status() or {}).get("trends")
-    _write(status_path(), {**note, **({"trends": kept} if kept else {})})
+    status = read_status() or {}
+    kept = {key: status[key] for key in ("trends", "steps") if status.get(key)}
+    _write(status_path(), {**note, **kept})
     return note
 
 
-def save_strips(strips: dict, at: Optional[int] = None, keep: Optional[set] = None) -> None:
+def save_strips(strips: dict, at: Optional[int] = None, keep: Optional[set] = None, extras: Optional[dict] = None) -> None:
     """THE ONE SAVE for a strip, used by the overnight preload and by the Trends press alike.
 
     `strips` is `{sku: ranges}` for strips that were READ. A SKU not named keeps its saved entry
     and its old date, so a refused read never replaces a good strip. `keep`, when given, prunes
-    every saved SKU not in it (the overnight job passes the current worklist).
+    every saved SKU not in it (the overnight job passes the current worklist). `extras` is
+    `{sku: entry_facts(...)}`; a SKU saved again without it keeps the facts it had.
     """
     when = int(time.time()) if at is None else int(at)
     saved = read_trends()
     for sku, ranges in strips.items():
-        saved[sku] = {"at": when, "ranges": ranges}
+        saved[sku] = {**saved.get(sku, {}), "at": when, "ranges": ranges, **((extras or {}).get(sku) or {})}
     if keep is not None:
         saved = {sku: entry for sku, entry in saved.items() if sku in keep}
     _write(trends_path(), {"skus": saved})
