@@ -91,14 +91,14 @@ entry.
   the empty store every worktree starts with (D43).
 - Text shape is three checks and none is a count (D284), run in one sweep by `app/tests/text-checks.spec.ts`.
 
-## Mix: a view inside Sales (`#/revenue?view=mix`)
+## Mix: a view inside Sales (`#/revenue?lens=mix`)
 
-**Status: SPEC, NOT BUILT.** The owner approved a Mix view inside Sales, not a new route. D214
+**Status: BUILT.** The owner approved a Mix view inside Sales, not a new route. D214
 (sales shows gross, never profit) keeps its rules: Mix is a lens on the same retrospective job, and
 it adds no profit, fee or cost figure. D31 (one owner-side view of stored cards) stays whole: Mix
 draws counts and sums and never a card walk. `ROUTES` gains no row, so the route census and
 README's route table do not move. A `Segmented` control, `Sales | Mix`, sits under the page
-heading and writes `view`.
+heading and writes `lens` (Sales keeps `view` for singles, sealed and all).
 
 **The job.** A pivot over what the owner captured, holds and sold, to decide what to capture next.
 Filters on any dimension. Rows and columns split by any dimension. A choice of measures.
@@ -154,9 +154,11 @@ would be a second home for it.
   4,300 cards is about 900 KB as JSON, about 100 KB gzipped.
 - The as-of time is the server clock at the read. The 14-day window and the week starts derive
   from it, and the response names it.
-- **One statement per source, no per-card Python walk and no store call in a loop.** One `cards`
-  query joined to `skus` and one readings query. The read budget (`docs/specs/efficiency.md`) gets a row in
-  `harness/tests/t7/read_budget.py`: `'/stock/mix': {"status": 200, 'sql': <measured>, 'store_read': 1}`,
+- **One statement, no per-card Python walk and no store call in a loop.** `cards` joined to `skus`,
+  `readings` and `boxes`. The retired and moved cards are skipped after it, so the query has no
+  WHERE and no alias (`read_budget.scans` reads both). The read budget (`docs/specs/efficiency.md`)
+  gets a row in `harness/tests/t7/read_budget.py`: `'/stock/mix': {"status": 200, 'sql': 11, 'store_read': 1}`,
+  11 is the store open's own statements plus this one,
   with the same count at S and 2S. Its fixture holds sold, unlisted, retired and moved cards. That
   covers the hit path and not only the empty path (DEBT85).
 - `app/src/server.ts` gets one client function, `getStockMix`. `app/src/types.ts` gets its type.
@@ -193,14 +195,14 @@ pills.
 
 All view state is in the hash query. `patchViewQuery` writes it with `history.replaceState`, and a
 reload reads it back. A repeated key carries a multi-value, never a joined string.
-`?view=mix&game=riftbound&rarity=rare&rarity=epic&by=set&across=rarity&measure=pct&sort=pct&dir=desc`
+`?lens=mix&game=riftbound&rarity=rare&rarity=epic&by=set&across=rarity&measure=pct&sort=pct&dir=desc`
 
 - Filter keys are the dimension ids: `game`, `set`, `rarity`, `finish`, `state`, `box`, `capw`,
   `salew`, `band`. Layout keys are `by`, `across`, `measure` (repeated), `sort`, `dir`.
-- A key at its rest value is omitted, so the rest view reads as `?view=mix`. Rest is rows by Set
+- A key at its rest value is omitted, so the rest view reads as `?lens=mix`. Rest is rows by Set
   and columns by Rarity. The measure is Sold of captured, sorted by row name, ascending. The Game
   filter sits on the game with the most cards.
-- Writing `view=mix` drops Sales' own keys (`period`, `q`, `month`, `from`, `to`). Going back to
+- Writing `lens=mix` drops Sales' own keys (`period`, `q`, `month`, `from`, `to`, `view`, `sort`, `dir`). Going back to
   Sales drops Mix's keys. The view ignores a key it does not know. It also ignores a value that
   names nothing in the payload, and never errors.
 - No `localStorage` key is added, so the storage roster stays as it is.
@@ -257,7 +259,7 @@ Each is red before the build and green after. Server checks run on a synthetic s
 15. UI: a column split limits the Measures facet to one pick. Without a split it allows several.
 16. UI: every control writes the URL with `replaceState`, and a reload restores the same table.
     Red: a control that keeps state only in React.
-17. UI: a rest view writes no query beyond `view=mix`.
+17. UI: a rest view writes no query beyond `lens=mix`.
 18. UI: `Sales | Mix` leaves `ROUTES` as it is (`route rosters` row).
 19. UI: a press on any control fires no request (`app/tests/request-budget.spec.ts`).
 20. UI: the empty store and the no-match state each show one sentence and one action.

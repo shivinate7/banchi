@@ -1,4 +1,5 @@
 import type {
+  StockMixPayload,
   AnswerResult,
   LiveMove,
   PriceChange,
@@ -3955,6 +3956,12 @@ export async function buildLot(input: {
  */
 export async function getOrders(): Promise<OrdersPayload> {
   return (await request('/orders', NO_CACHE)) as OrdersPayload
+}
+
+/** `GET /stock/mix`: one small row per card still in stock, for Sales' Mix view to pivot in the
+ *  browser. A read: no order, no revenue, no photograph. */
+export async function getStockMix(): Promise<StockMixPayload> {
+  return (await request('/stock/mix', NO_CACHE)) as StockMixPayload
 }
 
 /**

@@ -8332,6 +8332,29 @@ COMPONENTS = [
                                                 "D217", "D219", "D225", "D236", "D277", "D278",
                                                 "D284", "D285", "D298", "D301",
                                                 "D313"]},
+            "src/MixView.tsx": {"does": "Sales' Mix lens (`#/revenue?lens=mix`, no route of its own): "
+                                        "a pivot over the stock the owner captured, holds and sold. "
+                                        "Nine dimension filters (`FilterChips` with `countOnly`), "
+                                        "Rows, Columns, Measures and Sort selects, every one a kit "
+                                        "control, every press a local recompute that fetches "
+                                        "nothing. State lives in the URL (`replaceState`), a key at "
+                                        "rest is omitted. Cards from `GET /stock/mix`, revenue per "
+                                        "SKU from `salesOf`'s refund-adjusted lines. Gross, never "
+                                        "profit. `LensSwitch` is the `Sales | Mix` control "
+                                        "`Revenue.tsx` draws in both views.",
+                                "governed_by": ["D214", "D225", "D285", "D313", "D311"]},
+            "src/MixView.css": {"does": "the Mix view's control bar at the large control height, the "
+                                        "table's scroll frame with a sticky first column and the "
+                                        "heat tint (the accent at a share of its strength), "
+                                        "`--bn-*` only.",
+                                "governed_by": ["D214", "D313"]},
+            "src/mixPivot.ts": {"does": "the Mix pivot's pure math: nine dimensions, eight measures, "
+                                        "`pivot`, `optionCounts`, `priceBand` and `avgSalePrice` "
+                                        "(a SKU's refund-adjusted gross over its copies, from "
+                                        "`salesOf`). A ratio over nothing, weeks of stock with no "
+                                        "sale in 14 days and a median over no prices are `null`, "
+                                        "a dash on screen, never `0`.",
+                                "governed_by": ["D214", "D225"]},
             "src/Revenue.css": {"does": "the summary band, podium, mix tile, board rows and "
                                         "product table's own layout, `--bn-*` only "
                                         "(D298's Direction B). The month bars "

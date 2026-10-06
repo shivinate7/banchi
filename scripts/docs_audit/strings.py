@@ -925,7 +925,8 @@ def check_views_opsec(report: Report) -> None:
             continue
         if routes is None:
             continue
-        route = (parts.fragment or "/").rstrip("/") or "/"
+        # A query on the hash is a view's state (`#/revenue?lens=mix`), never part of the route.
+        route = (parts.fragment or "/").split("?")[0].rstrip("/") or "/"
         if route not in routes:
             blocking.append(
                 Finding(

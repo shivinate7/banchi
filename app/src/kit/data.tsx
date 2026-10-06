@@ -964,6 +964,9 @@ export type FilterFacet<T extends string = string> = {
   /** What the facet has picked at rest, drawn selected in the bar. A URL with no key for the
    *  facet reads as these picks, so the rest view needs no query string. */
   readonly defaultPicks?: readonly string[]
+  /** The trigger reads the COUNT of picks (`3`) after its label, never their names, so a dense
+   *  bar of many facets stays one width each. With none picked it reads `Any`. */
+  readonly countOnly?: boolean
 }
 
 /** What every facet has picked, by facet key. A facet with nothing picked may be absent. */
@@ -988,6 +991,7 @@ function MoreWords({ head, more }: { readonly head: ReactNode; readonly more: nu
 /** What a facet's trigger may ever show: `Any`, every label, and for a multiple facet every
  *  label with the widest `+N` it can carry. */
 function facetSizer(facet: FilterFacet): ReactNode[] {
+  if (facet.countOnly === true) return [ANY, String(facet.options.length)]
   const more = facet.options.length - 1
   const labels = facet.options.map((option) => option.label)
   if (facet.multiple === false || more < 1) return [ANY, ...labels]
@@ -1018,7 +1022,9 @@ function FacetChip({
         triggerRef={pick.trigger}
         open={pick.open}
         label={facet.label}
-        value={active ? pickedWords(facet, picked) : <span className="bn-pick-placeholder">{ANY}</span>}
+        value={
+          active ? (facet.countOnly === true ? String(picked.length) : pickedWords(facet, picked)) : <span className="bn-pick-placeholder">{ANY}</span>
+        }
         sizer={sizer}
         icon={facet.icon}
         active={active}
