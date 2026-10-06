@@ -466,17 +466,22 @@ test.describe('the published demo draws what reviewers grade', () => {
     // Fulfiller's search placeholder is "Card name or number", and Sales' shelf line is
     // "N of M priced, K not yet". Same behaviour asserted, new words.
     await visit(page, 'Inventory')
-    const box = page.locator('button', { hasText: /\d+ stored/ }).first()
-    await expect(box).toBeVisible()
-    const before = await box.textContent()
-    const match = /(\d+)\s*stored/.exec(before ?? '')
-    expect(match, 'a box button carries an "N stored" count').not.toBeNull()
-    const startCount = Number(match![1])
-    await page.getByRole('button', { name: 'Mark sold' }).first().click()
-    await expect(box).toContainText(`${startCount - 1} stored`)
+    // The card pressed names its own box: its button reads "Mark sold: <box>, Section n, Card m".
+    // The box's count is read from the cell's own meta element, never the joined button text.
+    const sell = page.getByRole('button', { name: /^Mark sold/ }).first()
+    await expect(sell).toBeVisible()
+    const placed = /^Mark sold: (.+), Section \d+, Card \d+$/.exec((await sell.getAttribute('aria-label')) ?? '')
+    expect(placed, 'a Mark sold button names its card\'s box').not.toBeNull()
+    const meta = page
+      .locator('.browse-boxcell', { has: page.locator('.browse-boxcell-name', { hasText: new RegExp(`^${(placed![1] ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) }) })
+      .locator('.browse-boxcell-meta')
+    await expect(meta).toHaveText(/^\d+ stored$/)
+    const startCount = Number(/^(\d+) stored$/.exec((await meta.textContent()) ?? '')?.[1])
+    await sell.click()
+    await expect(meta).toHaveText(`${startCount - 1} stored`)
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
     await page.getByRole('button', { name: /^Undo/ }).first().click()
-    await expect(box).toContainText(`${startCount} stored`)
+    await expect(meta).toHaveText(`${startCount} stored`)
     await expect(page.getByRole('button', { name: 'Mark sold' }).first()).toBeVisible()
   })
 
