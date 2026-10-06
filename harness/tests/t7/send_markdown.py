@@ -3615,7 +3615,7 @@ def check_send_review_r7(checks: Checks) -> None:
         )
 
 
-def _store_backed_run(checks: Checks, home: Path, cards, only=None) -> "runs.Run":
+def _store_backed_run(checks: Checks, home: Path, cards, only=None, stamp=True) -> "runs.Run":
     """A run made the way the sweep makes one: cards identified IN THE STORE, then
     `pkmnscan join --keys` (the store-backed join `cli/cmd_match.py` calls through
     `resolve.load_from_store`). Its directory holds `manifest.json` with `selection.keys` and
@@ -3643,7 +3643,7 @@ def _store_backed_run(checks: Checks, home: Path, cards, only=None) -> "runs.Run
     checks.equal(len(made), 1, "fixture: exactly one run directory")
     run = runs.open_run(made[0])
     with Store().write() as snapshot:  # the sweep stamps each card it adopts with its run's name
-        for key in keys:
+        for key in keys if stamp else ():
             snapshot.inventory.cards[key].run = run.name
     checks.ok(
         not run.path(runs.IDENTIFICATIONS).exists() and (run.manifest.get("selection") or {}).get("keys") == keys,
@@ -3817,6 +3817,50 @@ def check_send_store_backed_follows_cards(checks: Checks) -> None:
         code, rows, text = emitted(run)
         checks.ok(code not in (0, None) and not rows, f"(b) a run card since removed refuses the emit and sends nothing: exit {code}, rows {rows}")
         checks.ok("Articuno" in text, f"(b) and the refusal names the card: {text[-300:]!r}")
+        checks.ok("Dunsparce" not in text, f"(d) and names only that card, no other of the run: {text[-300:]!r}")
+
+    # (a) a later sweep re-reads and re-stamps one card of sweep-01: both runs still follow cards
+    with isolated_home() as home:
+        spec = cards_at(art, dun)
+        first = _store_backed_run(checks, home, spec)
+        _store_backed_run(checks, home, spec, only=[master.position_key(5, 2)])  # re-stamps 5/2
+        code, rows, text = emitted(first)
+        checks.equal((code, rows), (0, wanted), "(a) sweep-01 still sends its cards after a later sweep re-stamped one: " + text[-200:])
+        second = runs.open_run(sorted(d for d in files.runs_dir().iterdir())[-1])
+        code, rows, text = emitted(second)
+        checks.ok(DUNSPARCE_SKU not in rows, f"(a) and the re-read card goes out once across both runs: {rows}")
+
+    # (b) a `join --keys` run stamps no card, and sends its cards
+    with isolated_home() as home:
+        run = _store_backed_run(checks, home, cards_at(art, dun), stamp=False)
+        code, rows, text = emitted(run)
+        checks.equal((code, rows), (0, wanted), "(b) a join --keys run, stamped on no card, sends its cards: " + text[-200:])
+
+    # (e) an old keys-only manifest backfills at first read; a second read uses the recorded map
+    with isolated_home() as home:
+        run = _store_backed_run(checks, home, cards_at(art, dun))
+        old_manifest(run)
+        def names():
+            try:
+                cards = runs.open_run(run.directory).read_identifications()["cards"]
+            except runs.RunError as caught:
+                return f"refused: {caught}"
+            return sorted((c.get("identification") or {}).get("name") for c in cards.values())
+
+        checks.equal(names(), ["Articuno", "Dunsparce"], "(e) an old manifest, every card stamped, backfills at first read")
+        with Store().write() as snapshot:
+            for key in run.manifest["selection"]["keys"]:
+                snapshot.inventory.cards[key].run = "a-later-sweep"
+        checks.equal(names(), ["Articuno", "Dunsparce"], "(e) a second read uses the recorded map, not the stamp")
+        code, rows, text = emitted(runs.open_run(run.directory))
+        checks.equal((code, rows), (0, wanted), "(e) and the backfilled run sends: " + text[-200:])
+    with isolated_home() as home:  # backfill only when EVERY key's card is stamped with that run
+        run = _store_backed_run(checks, home, cards_at(art, dun))
+        old_manifest(run)
+        with Store().write() as snapshot:
+            snapshot.inventory.cards[master.position_key(5, 2)].run = "a-later-sweep"
+        code, rows, text = emitted(runs.open_run(run.directory))
+        checks.ok(code not in (0, None) and not rows, f"(e) an old manifest with one card stamped elsewhere refuses, sends nothing: exit {code}, rows {rows}")
 
 
 def check_schema_eleven_then_twelve(checks: Checks) -> None:
