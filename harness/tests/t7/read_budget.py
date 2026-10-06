@@ -167,7 +167,7 @@ BUDGET = {
     '/pipeline/price-now': {"status": 200, 'sql': 23, 'json_loads': 4, 'store_read': 2},
     '/pipeline/trends-saved': {"status": 200},
     '/pipeline/movers': {"status": 200, 'sql': 11, 'json_loads': 1, 'store_read': 1},
-    '/pipeline/price-facts': {"status": 200, 'sql': 64, 'json_loads': 20, 'store_read': 3, 'read_export': 3},
+    '/pipeline/price-facts': {"status": 200, 'sql': 12, 'json_loads': 13, 'store_read': 1},
     '/pipeline/prices/refresh': {"status": 200},
     '/pipeline/holdings-value': {"status": 200, 'sql': 26, 'json_loads': 150, 'store_read': 1},
     '/pipeline/submissions': {"status": 200, 'sql': 11, 'store_read': 1},

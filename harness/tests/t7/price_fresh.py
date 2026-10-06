@@ -724,7 +724,16 @@ def check_live_read_rejoins(checks: Checks) -> None:
     with world(checks) as w:
         before = table_row(w.runs[0], DUNSPARCE_SKU)["snap"]["market"]
         status, raw, _ = request(w.port, "POST", "/pipeline/live-export", payload={})
-        checks.equal(status, 200, "21. the live fetch the Live tab's press makes answers")
+        checks.equal(status, 202, "21. the live press answers 202 and the work runs in the background worker")
+        ended = {}
+        deadline = time.time() + 60
+        while time.time() < deadline:
+            state, body, _ = request(w.port, "GET", "/pipeline/prices/refresh")
+            ended = json.loads(body or b"{}") if state == 200 else {}
+            if ended.get("state") not in ("running", "starting"):
+                break
+            time.sleep(0.1)
+        checks.equal(ended.get("state"), "done", "21. `GET /pipeline/prices/refresh` reaches done")
         checks.equal(
             (before, table_row(w.runs[0], DUNSPARCE_SKU)["snap"]["market"]), (THEN, NOW),
             "21. and it ends with the open runs re-joined: $10.37 became $16.25",
