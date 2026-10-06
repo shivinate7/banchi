@@ -167,6 +167,61 @@ function sku(over: Partial<PricingSku> = {}): PricingSku {
   return { ...base, ...over }
 }
 
+/* SPEC 7B FIXTURES (`docs/specs/stale-listings.md`, section 7b). THE WIRE SHAPES BELOW ARE THE
+ * SPEC'S WORDS AND NOTHING MORE, each in one helper so a build that names a field differently
+ * edits one place:
+ *   - `GET /pipeline/prices/refresh` answers `{state, step, done, total, note}`; `note` is
+ *     `price-refresh.json`, whose `steps.<name>` hold `at` and `ok`. The catalog step's `at` is
+ *     "Prices as of".
+ *   - `GET /pipeline/trends-saved` entries carry `facts` beside `ranges`; the 7 day low and high
+ *     are in `facts`.
+ *   - `GET /pipeline/price-facts?sku=` answers the prices with the read time, the 30 `days`
+ *     (date, units, sales, low, high, market) and the shelf figures. */
+const AGO = (seconds: number) => Math.floor(Date.now() / 1000) - seconds
+const CATALOG_AT = () => AGO(3 * 3600)
+
+function refreshNote(at: number, over: Record<string, unknown> = {}) {
+  const step = (when: number, extra: Record<string, unknown> = {}) => ({ at: when, ok: true, ...extra })
+  return {
+    at,
+    ok: true,
+    steps: { listings: step(at - 60), catalog: step(at), join: step(at + 30), history: step(at + 600) },
+    ...over,
+  }
+}
+
+function refreshState(state: string, over: Record<string, unknown> = {}) {
+  return { state, step: null, done: 0, total: 0, note: refreshNote(CATALOG_AT()), ...over }
+}
+
+/** ONE CARD, ONE SET OF FACTS: the saved file's entry and the sheet's read carry this same object,
+ *  as the real file does. Every field is set, so no case reads a dash by accident. */
+const FACTS = {
+  sold_7d: 9,
+  sales_7d: 6,
+  avg_7d: '11.40',
+  low_7d: '9.00',
+  high_7d: '14.00',
+  sold_30d: 40,
+  sales_30d: 28,
+  avg_30d: '12.10',
+  low_30d: '8.50',
+  high_30d: '17.00',
+  best_day: ['2026-09-18', 6] as [string, number],
+  change_30d: '0.12',
+}
+
+const PRICE_FACTS = {
+  sku: '8608859',
+  name: 'Articuno - 161/159',
+  at: CATALOG_AT(),
+  through: '2026-09-30',
+  prices: { market: '16.25', low: '15.50', low_with_shipping: '17.98', direct_low: null },
+  shelf: { on_hand: 3, can_be_sent: 3, listed_now: 0, asking: null },
+  days: Array.from({ length: 30 }, (_, at) => [`2026-09-${String(at + 1).padStart(2, '0')}`, at % 4, at % 4, '14.00', '17.00', '16.00']),
+  facts: FACTS,
+}
+
 async function open(
   page: Page,
   options: {
@@ -260,6 +315,12 @@ async function open(
     sends?: (wire: Wire[]) => unknown
     /** What `POST /pipeline/live-check` answers. Default: ran, nothing to confirm. */
     liveCheck?: (body: Record<string, unknown>) => unknown
+    /** SPEC 7B. What `GET /pipeline/price-facts?sku=` answers: the T panel's one local read. */
+    facts?: Record<string, unknown>
+    /** SPEC 7B. What `GET /pipeline/prices/refresh` answers. Default: resting, with the note. */
+    refresh?: Record<string, unknown>
+    /** SPEC 7B. The first N reads of `trends-saved` fail with a 500, as a restarted server would. */
+    savedFailures?: number
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -402,7 +463,14 @@ async function open(
   )
   if (options.saved !== undefined) {
     const saved = options.saved
+    let savedReads = 0
     await page.route(/\/pipeline\/trends-saved$/, async (route) => {
+      savedReads += 1
+      wire.push({ method: 'GET', path: '/pipeline/trends-saved', body: null })
+      if (savedReads <= (options.savedFailures ?? 0)) {
+        await route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":{"code":"busy","message":"The server was busy."}}' })
+        return
+      }
       if (saved.hold) await saved.hold
       await route.fulfill({
         status: 200,
@@ -758,6 +826,23 @@ async function open(
     })
   })
 
+  /* SPEC 7B'S TWO NEW LOCAL ROUTES. Stubbed for every case, so a build that reads them on a
+     visit is counted in `wire` rather than leaking to the capture port. */
+  await page.route(/\/pipeline\/price-facts/, async (route) => {
+    const url = new URL(route.request().url())
+    wire.push({ method: 'GET', path: `${url.pathname}${url.search}`, body: null })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(options.facts ?? PRICE_FACTS) })
+  })
+  await page.route(/\/pipeline\/prices\/refresh$/, async (route) => {
+    const post = route.request().method() === 'POST'
+    wire.push({ method: post ? 'POST' : 'GET', path: '/pipeline/prices/refresh', body: post ? route.request().postDataJSON() : null })
+    await route.fulfill({
+      status: post ? 202 : 200,
+      contentType: 'application/json',
+      body: JSON.stringify(post ? { state: 'running' } : (options.refresh ?? refreshState('idle'))),
+    })
+  })
+
   await page.goto(options.noRun === true ? '/#/pricing' : VIEW_ROUTE)
   await settleFonts(page)
   await expect(page.locator(VIEW)).toBeVisible()
@@ -868,7 +953,6 @@ function trends(asked: string[]): TrendsPayload {
 }
 
 const strip = (page: Page) => page.locator('.pricing-row .pricetrend')
-const loadTrends = (page: Page) => page.getByRole('button', { name: /Trends|Read again/ })
 
 const field = (page: Page) => page.getByRole('textbox', { name: /^Price for / })
 
@@ -1777,7 +1861,7 @@ test('Download writes the file, and its copies are named until they are found', 
   await expect(page.getByRole('button', { name: /^Take .* back$/ })).toHaveCount(0)
 
   checked = true
-  await page.getByRole('button', { name: 'Refresh' }).click()
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click()
   const back = page.locator('.send-short-check')
   await expect(back).toContainText('0 of 4 found at TCGplayer')
   await back.getByRole('button', { name: 'Take 4 copies back' }).click()
@@ -1929,7 +2013,7 @@ test('a send that stopped partway is held, says so, and leaves every press on', 
   await expect(held).toContainText('Banchi stopped partway through this send.')
   await expect(held).toContainText('stay out of every send')
   await expect(sendPress(page)).toBeEnabled()
-  await expect(page.getByRole('button', { name: 'Refresh' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled()
 })
 
 test('a press over cards a price change holds is refused by name, with no retry', async ({ page }) => {
@@ -2009,7 +2093,7 @@ test('the wait ends while the page is open, and the check runs with no refresh',
 
 test('Refresh is a manual press that always runs', async ({ page }) => {
   const wire = await open(page)
-  await page.getByRole('button', { name: 'Refresh' }).click()
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click()
   await expect.poll(() => wire.filter((r) => r.path === '/pipeline/live-check').length).toBe(1)
   expect(wire.find((r) => r.path === '/pipeline/live-check')?.body).toEqual({ force: true })
 })
@@ -2839,23 +2923,16 @@ test('a hand-typed rule lights no chip rather than a stale one', async ({ page }
 
 // ------------------------------------------------------------------ the trend strip (D277)
 
-test('the strip draws nothing until it is asked for, and the press is what asks', async ({
+test('with nothing saved the strip is empty at first paint, and a visit asks no market host', async ({
   page,
 }) => {
-  /* D278 MADE THE READ A PRESS AND D277 KEPT IT ONE. The batch is ~92 requests at two free
-     public mirrors, 37.7s cold — batching makes that one decision instead of fifty, not
-     cheap. A screen that read it on arrival would spend the walk on every visit for readings
-     nobody asked for, which is the rudeness D278 closed structurally. THE ASSERTION THAT
-     MATTERS IS THE WIRE ONE: an empty cell could equally be a request that answered nothing,
-     and this is a case about no request being made. */
+  /* D278 MADE THE READ A PRESS; THE TRENDS PRESS IS GONE (spec 7b). What is left of the rule is
+     the wire one: a visit reads the saved file and nothing at a market host. An empty cell could
+     equally be a request that answered nothing, so this asserts no request was made. */
   const wire = await open(page)
   await expect(page.locator(VIEW)).toBeVisible()
-  expect(wire.filter((call) => call.path.includes('/trends'))).toHaveLength(0)
+  expect(marketReads(wire)).toHaveLength(0)
   await expect(strip(page).first()).toBeEmpty()
-
-  await loadTrends(page).click()
-  await expect(strip(page).first().locator('svg')).toHaveCount(2)
-  expect(wire.filter((call) => call.path.includes('/trends')).length).toBeGreaterThan(0)
 })
 
 // ------------------------------------------------------------------ saved strips (DEBT69, D278, D313)
@@ -2872,7 +2949,7 @@ const savedTrends = (at: number, note: Record<string, unknown> = {}) => ({
 test('saved strips draw at first paint without one request at the market host', async ({ page }) => {
   const wire = await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 7 * 3600) })
   await expect(strip(page).first().locator('svg')).toHaveCount(2)
-  expect(wire.filter((call) => call.path.includes('/trends'))).toHaveLength(0)
+  expect(marketReads(wire)).toHaveLength(0)
   await expect(strip(page).first()).toHaveAttribute('title', /Read 7 hours ago/)
   await expect(page.locator('.pricemovers-read-text').last()).toContainText('Trends were read 7 hours ago for 2 cards')
 })
@@ -2900,17 +2977,14 @@ test('a partial overnight read says how many could not be read, and which had no
   await expect(line).toContainText('1 step failed')
 })
 
-test('a refused press keeps the saved strip and shows the refusal beside it', async ({ page }) => {
+test('a failed refresh keeps the saved strip and says so beside it', async ({ page }) => {
   await open(page, {
     skus: SAVED_ROWS(),
     saved: savedTrends(NOW_S() - 3600),
-    trends: (asked) => ({ ...trends([]), asked: asked.length, refused: Object.fromEntries(asked.map((sku) => [sku, 'the mirror refused the request'])) }),
+    refresh: refreshState('failed', { note: refreshNote(CATALOG_AT(), { ok: false, message: 'the mirror refused the request' }) }),
   })
   await expect(strip(page).first().locator('svg')).toHaveCount(2)
-  await loadTrends(page).click()
-  await expect(strip(page).first()).toHaveAttribute('data-kept-refused', 'true')
-  await expect(strip(page).first().locator('svg')).toHaveCount(2)
-  await expect(strip(page).first()).toHaveAttribute('title', /the mirror refused the request/)
+  await expect(page.getByText('the mirror refused the request')).toBeVisible()
 })
 
 test('D313: the panel holds its three lines whether the saved read has arrived or not', async ({ page }) => {
@@ -2931,17 +3005,8 @@ test('D313: the panel holds its three lines whether the saved read has arrived o
   expect(sumOf(shifts.filter((s) => s.moved.some((m) => m.includes('pricemovers'))))).toBeLessThan(0.001)
 })
 
-test('D313: a row keeps its size from saved strip to reading to read', async ({ page }) => {
-  await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 3600) })
-  let release = () => {}
-  const held = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  await page.route(/\/pipeline\/runs\/[^/]+\/trends/, async (route) => {
-    await held
-    const asked = new URL(route.request().url()).searchParams.getAll('sku')
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(trends(asked)) })
-  })
+test('D313: a row keeps its size when Refresh now runs over a drawn strip', async ({ page }) => {
+  const wire = await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 3600) })
   const row = page.locator('.pricing-row').first()
   const size = async () => {
     const cell = await strip(page).first().boundingBox()
@@ -2950,12 +3015,10 @@ test('D313: a row keeps its size from saved strip to reading to read', async ({ 
   }
   await expect(strip(page).first().locator('svg')).toHaveCount(2)
   const saved = await size()
-  await loadTrends(page).click()
-  await expect(strip(page).first()).toHaveClass(/pricetrend-reading/)
+  await page.getByRole('button', { name: /Refresh now/ }).click()
+  await expect.poll(() => wire.filter((call) => call.method === 'POST' && call.path === '/pipeline/prices/refresh').length).toBe(1)
   expect(await size()).toEqual(saved)
-  release()
   await expect(strip(page).first().locator('svg')).toHaveCount(2)
-  await expect(strip(page).first()).not.toHaveClass(/pricetrend-reading/)
   expect(await size()).toEqual(saved)
 })
 
@@ -2966,8 +3029,7 @@ test('the strip carries a shape and a sign, and no money at all', async ({ page 
      from becoming a price — the reopening D278 refused by name. The vwap, its bound, the
      liquidity and the spread all stay on the panel; a later session widening the strip's
      payload to carry one of them fails here. */
-  await open(page)
-  await loadTrends(page).click()
+  await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 3600) })
   await expect(strip(page).first().locator('svg')).toHaveCount(2)
 
   const text = (await strip(page).allTextContents()).join(' ')
@@ -2976,14 +3038,13 @@ test('the strip carries a shape and a sign, and no money at all', async ({ page 
   expect(text).toMatch(/−33\.9%|-33\.9%/)
 })
 
-test('a row this run can add nothing for is never asked about, and is not drawn as a failure', async ({
+test('a row this run can add nothing for has no saved strip drawn, and no market host is asked', async ({
   page,
 }) => {
   /* THE OWNER'S INSTRUCTION OF 2026-08-31 — "I don't need the prices for the rows that have
-     none left" — and `at_cap` is the field the join writes, so the filter and the list's own
-     grouping of those rows read ONE fact rather than two rules kept in step. Asserted on the
-     WIRE and not only on the screen: an empty cell is what a refusal would draw too, and the
-     saving being claimed is the request not made. */
+     none left" — and `at_cap` is the field the join writes. The daily read skips those rows, so
+     the saved file holds only the open one and the closed row draws no strip. */
+  const at = NOW_S() - 3600
   const wire = await open(page, {
     skus: [
       sku({ sku: '111', name: 'Open card' }),
@@ -2994,39 +3055,22 @@ test('a row this run can add nothing for is never asked about, and is not drawn 
         nothing_to_add: 'every copy in this run is already listed or has left the box',
       }),
     ],
+    saved: { skus: { '111': { at, ranges: trends(['111']).skus['111']!.ranges } }, note: null },
   })
-  await loadTrends(page).click()
   await expect(strip(page).first().locator('svg')).toHaveCount(2)
-
-  const asked = wire
-    .filter((call) => call.path.includes('/trends'))
-    .flatMap((call) => new URL(call.path, 'http://x').searchParams.getAll('sku'))
-  expect(asked).toContain('111')
-  expect(asked).not.toContain('222')
-
-  /* AND THE COUNT IS ON SCREEN. Without it a strip over one of two rows reads as one
-     failure; `1 not asked` is what says the row was never a question. */
-  await expect(page.locator('.pricing-trend-says')).toHaveText('Trends for 1 card.')
   await expect(strip(page).nth(1)).toBeEmpty()
+  expect(marketReads(wire)).toHaveLength(0)
 })
 
-test('a SKU the batch answers for neither way is refused on the row, never left reading', async ({
-  page,
-}) => {
-  /* CLAUDE.md's HARD RULE, SPENT ON THE CLIENT. The route promises both directions; this is
-     the case where it breaks that promise anyway — a SKU in neither `skus` nor `refused`. It
-     must land as a refusal rather than sit on `reading…` for the rest of the session, which
-     is the silent drop that rule forbids wearing a spinner. */
+test('a SKU with no saved strip never sits on a reading state', async ({ page }) => {
+  /* The Trends press and its `reading` state are gone (spec 7b); what stays is that a row the
+     saved file does not hold never claims a read is under way. */
+  const at = NOW_S() - 3600
   await open(page, {
     skus: [sku({ sku: '111', name: 'Answered' }), sku({ sku: '222', name: 'Dropped' })],
-    trends: (asked) => {
-      const full = trends(asked.filter((s) => s !== '222'))
-      return { ...full, asked: asked.length }
-    },
+    saved: { skus: { '111': { at, ranges: trends(['111']).skus['111']!.ranges } }, note: null },
   })
-  await loadTrends(page).click()
   await expect(strip(page).first().locator('svg')).toHaveCount(2)
-  await expect(strip(page).nth(1)).toContainText('—')
   await expect(strip(page).nth(1)).not.toContainText('reading')
 })
 
@@ -3997,9 +4041,8 @@ test('the "Lists at" field reads a long price in full at 1440, data-direct=none'
   await expect(page.locator('.pricing-caption')).toBeVisible() // table tier, or this case proves nothing
   await typeAndCheck(page)
 
-  /* LOADING TRENDS LAYS NOTHING OUT AGAIN (UX-070): the column is always reserved. */
-  await loadTrends(page).click()
-  await expect(strip(page).first().locator('svg')).toHaveCount(2)
+  /* A STRIP ARRIVING LAYS NOTHING OUT AGAIN (UX-070): the column is always reserved. */
+  await expect(strip(page).first()).toBeVisible()
   await typeAndCheck(page)
 })
 
@@ -4559,7 +4602,7 @@ test('the keyboard sheet lists the keys the rows answer, and nothing the screen 
   await expect(sheet).toBeVisible()
   /* THE SNAP KEYS ARE THE COLUMNS THE ROW DRAWS (m, l, and n on the Live tab), and T OPENS THE
      PRODUCT VIEW WITH ONE PRESS (the delta review, R3-4). */
-  await expect(sheet).toContainText('Open the product page for this card')
+  await expect(sheet).toContainText("Open this card's prices and sales") /* spec 7b, Item 14: T opens the card's prices and sales */
   await expect(sheet).toContainText('Put the lowest price in this card')
   await expect(sheet.getByText('Save this price and go to the next card')).toHaveCount(1)
   await expect(sheet).not.toContainText('Low with shipping')
@@ -4819,4 +4862,286 @@ test('a row reads copies on hand and copies that can be sent, on every row', asy
   await expect(copies('Mixed')).toHaveText('3 on hand, 2 can be sent')
   await expect(copies('Single')).toHaveText('1 on hand, 1 can be sent')
   await expect(copies('Allout')).toHaveText('2 on hand, 0 can be sent')
+})
+
+// ------------------------------------------------------------------ 7b: pricing opens on fresh prices
+/* SPEC 7B, CHECKS 14 TO 20 (`docs/specs/stale-listings.md`). The server half is T7's `price_fresh`.
+ * Item 14 to 17 and 19 to 20 are here; 21 is T7's alone, because the screen half of it would
+ * only restate a stub; 18 is the both-themes pass below, with a verdict per screen read off
+ * `make screenshot` by a person. */
+
+/** A worklist of rows with a given age of the figure, in the worklist's own envelope. `snap_at`
+ *  is the fetch time of the export the run was last joined against (spec 7b, "The one home"). */
+function agedWorklist(rows: { sku: string; name: string; market: string; ageSeconds: number }[]) {
+  return {
+    runs: [{ run: RUN, box: 7, box_name: 'Riftbound epics', skus: rows.length }],
+    skus: rows.map((one) => ({
+      ...sku({
+        sku: one.sku,
+        name: one.name,
+        snap: { market: one.market, low: '15.50', low_with_shipping: '17.98', direct_low: null, now: null },
+        presets: { market_match: one.market, market_undercut_5: one.market, low_undercut_1: one.market },
+        rule_price: one.market,
+      }),
+      snap_at: AGO(one.ageSeconds),
+      in: [{ run: RUN, add_to_quantity: 3 }],
+      claimed_add: 3,
+      over_cap: false,
+    })),
+  } as unknown as NonNullable<Parameters<typeof open>[1]>['worklist']
+}
+
+/** Saved strips whose entries also carry the facts the Range 7d cell reads. */
+const savedWithFacts = (at: number, skus = ['111', '222']) => ({
+  skus: Object.fromEntries(
+    skus.map((id) => [
+      id,
+      { at, ranges: trends([id]).skus[id]!.ranges, through: '2026-09-30', facts: FACTS },
+    ]),
+  ),
+  note: { at, ok: true, asked: 2, read: 2, no_history: 0, unreadable: 0, failed: 0, message: '' },
+})
+
+/** The color a token resolves to in the page's current theme. */
+const tokenColor = (page: Page, token: string) =>
+  page.evaluate((name) => {
+    const probe = document.createElement('i')
+    probe.style.color = `var(${name})`
+    document.body.append(probe)
+    const color = getComputedStyle(probe).color
+    probe.remove()
+    return color
+  }, token)
+
+/** The color of the first leaf under `cell` that draws a number and no price: the age line. */
+const ageLineColor = (cell: Locator) =>
+  cell.evaluate((el) => {
+    const line = [...el.querySelectorAll('*')].find(
+      (node) => node.children.length === 0 && /\d/.test(node.textContent ?? '') && !/\$/.test(node.textContent ?? ''),
+    )
+    return line === undefined ? null : getComputedStyle(line).color
+  })
+
+const AS_OF = /Prices as of \d{1,2}:\d{2}\s?[AP]M/
+const FRESH_MARKET = /^\s*Market\s*\$16\.25\s*$/
+const factsReads = (wire: Wire[]) => wire.filter((call) => call.path.startsWith('/pipeline/price-facts'))
+/** Reads at a market host's mirror: the Trends press's route, never the saved read. */
+const marketReads = (wire: Wire[]) => wire.filter((call) => /\/trends(\?|$)/.test(call.path))
+
+/** What the product sheet reads when it opens, so a T press does not leak to the capture port. */
+async function stubProductSheet(page: Page): Promise<void> {
+  await page.route(/\/pipeline\/products\/[^/]+\/history$/, async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ sku: '8608859', name: 'Articuno - 161/159', set_name: 'SV: Prismatic Evolutions', condition: 'Near Mint Holofoil', source: 'archive', history_begins: null, never_sold: true, ranges: [] }),
+    }),
+  )
+  await page.route(/\/pipeline\/products\/[^/]+\/realized$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sku: '8608859', configured: false }) }),
+  )
+  await page.route(/\/orders$/, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"orders":[]}' }))
+  await page.route(/\/search\?/, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"query":"","groups":[]}' }))
+}
+const STALE_AND_FRESH = () =>
+  agedWorklist([
+    { sku: '111', name: 'Stale card', market: '16.25', ageSeconds: 3 * 3600 + 26 * 3600 },
+    { sku: '222', name: 'Fresh card', market: '16.25', ageSeconds: 3 * 3600 },
+    { sku: '333', name: 'Last card', market: '16.25', ageSeconds: 3 * 3600 },
+  ])
+
+test('7b-14: the keyboard sheet row for T says what the key opens now', async ({ page }) => {
+  await open(page)
+  await page.locator(`${VIEW} h1`).click()
+  await page.keyboard.press('?')
+  const sheet = page.getByRole('dialog', { name: 'Shortcuts' })
+  await expect(sheet).toContainText("Open this card's prices and sales")
+  await expect(sheet).not.toContainText('Open the product page for this card')
+})
+
+test('7b-14: T opens the sheet with every other figure, from a row and from the price field, with one local read', async ({ page }) => {
+  await stubProductSheet(page)
+  const wire = await open(page)
+  const sheet = page.getByRole('dialog', { name: 'Articuno - 161/159', exact: true })
+  /* A PRESS, NEVER FOLLOW-FOCUS (D278): nothing is read until the key. */
+  expect(factsReads(wire)).toHaveLength(0)
+
+  await page.locator('.pricing-row').first().hover()
+  await page.keyboard.press('t')
+  await expect(sheet).toBeVisible()
+  await expect(sheet.getByRole('heading', { name: /Prices now/ })).toBeVisible()
+  await expect(sheet.getByRole('heading', { name: /Sales, last 30 days/ })).toBeVisible()
+  await expect(sheet.getByRole('heading', { name: /On your shelf/ })).toBeVisible()
+  await expect(sheet.getByRole('img', { name: /sold|sales/i }).first()).toBeVisible()
+  await expect.poll(() => factsReads(wire).length).toBe(1)
+  expect(marketReads(wire)).toHaveLength(0)
+
+  await page.keyboard.press('Escape')
+  await expect(sheet).toHaveCount(0)
+  await field(page).focus()
+  await page.keyboard.press('t')
+  await expect(sheet.getByRole('heading', { name: /Sales, last 30 days/ })).toBeVisible()
+})
+
+test('7b-14: T does nothing inside a text field', async ({ page }) => {
+  await stubProductSheet(page)
+  const wire = await open(page)
+  await page.locator('.pricing-hold').first().click()
+  const note = page.getByLabel('Note')
+  await note.focus()
+  await page.keyboard.press('t')
+  await expect(note).toHaveValue('t')
+  await expect(page.getByRole('dialog', { name: 'Articuno - 161/159', exact: true })).toHaveCount(0)
+  expect(factsReads(wire)).toHaveLength(0)
+})
+
+test('7b-15: the row grows one column, Range 7d, after Lowest, at 1440 and not at 820', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { skus: SAVED_ROWS(), saved: savedWithFacts(AGO(3600)) })
+  const caption = page.locator('.pricing-caption').first()
+  await expect(caption.getByText('Range 7d', { exact: true })).toHaveCount(1)
+  const text = (await caption.textContent()) ?? ''
+  expect(text.indexOf('Lowest')).toBeGreaterThanOrEqual(0)
+  expect(text.indexOf('Lowest')).toBeLessThan(text.indexOf('Range 7d'))
+  /* THE LOW AND THE HIGH THE SALES HIT OVER 7 DAYS, from the saved facts, with no request. */
+  await expect(page.locator('.pricing-row').first()).toContainText('$9.00')
+  await expect(page.locator('.pricing-row').first()).toContainText('$14.00')
+
+  await setViewport(page, { width: 820, height: 900 })
+  await expect(page.locator('.pricing-caption').first().getByText('Range 7d', { exact: true })).toHaveCount(0)
+})
+
+test('7b-15: the row Range 7d equals the sheet Sale range 7d for the same card', async ({ page }) => {
+  await stubProductSheet(page)
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { saved: savedWithFacts(AGO(3600), ['8608859']) })
+  const row = page.locator('.pricing-row').first()
+  await expect(row.locator('.pricing-col-range')).toContainText('$9.00')
+  const onRow = ((await row.locator('.pricing-col-range').textContent()) ?? '').match(/\$[\d,.]+/g)
+  expect(onRow).toEqual(['$9.00', '$14.00'])
+  await row.hover()
+  await page.keyboard.press('t')
+  const cell = page.getByRole('dialog').last().locator('.pricefacts-cell', { hasText: 'Sale range 7d' })
+  await expect(cell.locator('dd')).toContainText('$9.00')
+  const onSheet = ((await cell.locator('dd').textContent()) ?? '').match(/\$[\d,.]+/g)
+  expect(onSheet).toEqual(onRow)
+})
+
+test('7b-15: a card with no saved history draws a dash that says why', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { skus: SAVED_ROWS(), saved: { skus: {}, note: null } })
+  const dash = page.locator('.pricing-row').first().locator('[title]', { hasText: '—' })
+  await expect(dash.first()).toHaveAttribute('title', /history/i)
+})
+
+test('7b-15: a figure over an hour older than the page time draws its date in the warn tone, and a fresh one draws none', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { worklist: STALE_AND_FRESH() })
+  const stale = page.locator('.pricing-row', { hasText: 'Stale card' }).locator('.pricing-col-market')
+  const fresh = page.locator('.pricing-row', { hasText: 'Fresh card' }).locator('.pricing-col-market')
+  await expect(stale).toContainText('$16.25')
+  await expect(fresh).toHaveText(FRESH_MARKET)
+  await expect(stale).not.toHaveText(FRESH_MARKET)
+  expect(await ageLineColor(stale)).toBe(await tokenColor(page, '--bn-warn'))
+})
+
+test('7b-15: the real-world card, $10.37 in its batch and $16.25 after the morning job, shows $16.25 and the read time', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { worklist: agedWorklist([{ sku: '111', name: 'Waiting card', market: '16.25', ageSeconds: 3 * 3600 }]) })
+  const cell = page.locator('.pricing-row .pricing-col-market').first()
+  await expect(cell).toContainText('$16.25')
+  await expect(cell).not.toContainText('$10.37')
+  /* A FIGURE THE JOB JUST READ IS AS OLD AS THE PAGE, and spec 7b draws an age line only past an
+     hour. So the page's own time is what carries it. */
+  await expect(page.getByText(AS_OF)).toBeVisible()
+})
+
+test('7b-16: the age line has a reserved line, so a fresh row and a stale row are one height', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { worklist: STALE_AND_FRESH() })
+  await expect(page.locator('.pricing-row', { hasText: 'Stale card' }).locator('.pricing-col-market')).not.toHaveText(FRESH_MARKET)
+  const heights = await page.locator('.pricing-row').evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().height))
+  /* THE LAST ROW IS LEFT OUT: it has no row below it to be spaced from. */
+  expect(heights).toHaveLength(3)
+  expect(Math.abs(heights[0]! - heights[1]!)).toBeLessThan(0.5)
+})
+
+test('7b-17: the header says Prices as of the catalog time, at rest, beside Refresh now', async ({ page }) => {
+  await open(page)
+  await expect(page.getByText(AS_OF)).toBeVisible()
+  await expect(page.getByRole('button', { name: /Refresh now/ })).toBeVisible()
+})
+
+test('7b-17: a press asks for a refresh, and a running one shows its steps, the count and a bar', async ({ page }) => {
+  const wire = await open(page, { refresh: refreshState('running', { step: 'history', done: 118, total: 366 }) })
+  await page.getByRole('button', { name: /Refresh now/ }).click()
+  expect(wire.some((call) => call.method === 'POST' && call.path === '/pipeline/prices/refresh')).toBe(true)
+  await expect(page.getByText(/Sales history\s+118 of 366/)).toBeVisible()
+  await expect(page.getByRole('progressbar')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Refresh now/ })).toHaveAttribute('data-busy', 'true')
+  await expect(page.getByText(AS_OF)).toBeVisible()
+})
+
+test('7b-17: a failed refresh says why, keeps the last good time, and Try again presses with force', async ({ page }) => {
+  const sentence = 'TCGplayer refused the catalog request.'
+  const wire = await open(page, {
+    refresh: refreshState('failed', { note: refreshNote(CATALOG_AT(), { ok: false, message: sentence }) }),
+  })
+  await expect(page.getByText(sentence)).toBeVisible()
+  await expect(page.getByText(AS_OF)).toBeVisible()
+  await page.getByRole('button', { name: /Try again/ }).click()
+  await expect.poll(() => wire.filter((call) => call.method === 'POST' && call.path === '/pipeline/prices/refresh').length).toBe(1)
+  expect(wire.find((call) => call.method === 'POST')?.body).toEqual({ force: true })
+})
+
+test('7b-17: a visit presses nothing: no refresh POST at first paint', async ({ page }) => {
+  const wire = await open(page)
+  expect(wire.filter((call) => call.method === 'POST' && call.path === '/pipeline/prices/refresh')).toHaveLength(0)
+})
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [1440, 820]) {
+    test(`7b-18: the header states, the age tone and the panel hold together in ${theme} at ${width}`, async ({ page }) => {
+      await stubProductSheet(page)
+      await page.emulateMedia({ colorScheme: theme })
+      await setViewport(page, { width, height: 900 })
+      await open(page, { worklist: STALE_AND_FRESH(), saved: savedWithFacts(AGO(3600), ['111', '222']) })
+      await expect(page.getByText(/Prices as of/)).toBeVisible()
+      /* THE AGE TONE IS THE THEME'S OWN WARN TOKEN, never a literal that one theme would lose. */
+      const cell = page.locator('.pricing-row', { hasText: 'Stale card' }).locator('.pricing-col-market')
+      expect(await ageLineColor(cell)).toBe(await tokenColor(page, '--bn-warn'))
+      await page.locator('.pricing-row').first().hover()
+      await page.keyboard.press('t')
+      const sheet = page.getByRole('dialog').last()
+      await expect(sheet.getByRole('heading', { name: /Sales, last 30 days/ })).toBeVisible()
+      /* THE CHART DRAWS FROM TOKENS ONLY (docs/DESIGN.md): no inline hex on a mark. */
+      const literals = await sheet.locator('svg [fill], svg [stroke]').evaluateAll(
+        (marks) => marks.filter((mark) => /#[0-9a-f]{3,8}\b/i.test(`${mark.getAttribute('fill') ?? ''} ${mark.getAttribute('stroke') ?? ''}`)).length,
+      )
+      expect(literals).toBe(0)
+    })
+  }
+}
+
+test('7b-19: trends draw at first paint on the run tab with no press, and no request at the market host', async ({ page }) => {
+  const wire = await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 3600) })
+  for (const at of [0, 1]) await expect(strip(page).nth(at).locator('svg')).toHaveCount(2)
+  expect(marketReads(wire)).toHaveLength(0)
+})
+
+test('7b-19: a page too narrow for the trend column says that T holds the strip', async ({ page }) => {
+  await setViewport(page, { width: 820, height: 900 })
+  await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 3600) })
+  await expect(page.locator(VIEW)).toContainText(/\bT\b[^.]*\b(strip|trend)/i)
+})
+
+test('7b-20: a failed first read of the saved strips is retried, and the strips draw', async ({ page }) => {
+  const wire = await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 3600), savedFailures: 1 })
+  await expect(strip(page).first().locator('svg')).toHaveCount(2, { timeout: 15_000 })
+  expect(wire.filter((call) => call.path === '/pipeline/trends-saved').length).toBeGreaterThanOrEqual(2)
+})
+
+test('7b-20: a second failure shows a sentence, never an empty strip with no word', async ({ page }) => {
+  await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 3600), savedFailures: 99 })
+  await expect(page.locator(VIEW)).toContainText(/(could not|couldn.t|cannot|can.t) read[^.]*(strip|trend)/i, { timeout: 20_000 })
 })

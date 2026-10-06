@@ -141,11 +141,11 @@ def check_price_refresh_note(checks: Checks) -> None:
             os.environ["TCGPLAYER_STORE_COOKIE"] = saved
 
     checks.equal(
-        daily_path_reaches(SCRIPT.read_text()), (True, {"do_live_export", "do_price_trends_preload"}), FENCE_LABEL,
+        daily_path_reaches(SCRIPT.read_text()), (True, {"do_prices_refresh"}), FENCE_LABEL,
     )
     checks.equal(
-        daily_path_reaches(SCRIPT.read_text().replace("pipeline_routes.do_live_export", "pipeline_routes.do_pipeline_export")),
-        (True, {"do_pipeline_export", "do_price_trends_preload"}),
+        daily_path_reaches(SCRIPT.read_text().replace("pipeline_routes.do_prices_refresh", "pipeline_routes.do_pipeline_export")),
+        (True, {"do_pipeline_export"}),
         "the callee check reads the callee: a swapped-in paid export is seen",
     )
     checks.equal(
@@ -202,8 +202,8 @@ def planted_helper_source() -> str:
 
 
 FENCE_LABEL = (
-    "the daily job passes `do_live_export` to the note writer and reaches nothing else of "
-    "`server/`, `cli/` or `identify/`: no paid read, no sweep"
+    "the daily job calls `do_prices_refresh` (the live listings, the catalog, the join, the sales history) "
+    "and reaches nothing else of `server/`, `cli/` or `identify/`: no paid read, no sweep"
 )
 
 

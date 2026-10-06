@@ -243,6 +243,7 @@ const RECORDED = {
     // The owner's "by set" view (D293): every on-hand card, grouped by set,
     // aggregated server-side. A plain read, same shape as every other entry here.
     'getInventorySets',
+    'getPriceFacts', 'getPricesRefresh',        // spec 7b: the product sheet's prices and sales, and where Refresh now is
   ],
   writes: [
     'prepareMatch',                           // the free reader's one-time setup press
@@ -297,6 +298,7 @@ const RECORDED = {
     'moveRange',                              // D264, one card or a range, the next slice
     'closeSection',                           // UN-15, S's own undo
     'releaseUnreadableClaim', 'restoreUnreadableClaim', // DEBT59, a stuck live claim's way out and back
+    'startPricesRefresh',                     // spec 7b: Refresh now; the screen re-reads rows and strips when it ends
     'moveSectionsBatch',                      // D264, the Map's edit-mode Confirm: a whole
                                                // draft — sections and ranges — in one write
   ],

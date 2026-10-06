@@ -346,9 +346,15 @@ def seed_corpus(run_dir, resolved, *, write: bool = True):
         # `report.txt` prints it, and a record of what happened is not the answer to what should
         # happen. `--rule` seeds an EMPTY corpus and nothing else, because a document that cannot
         # answer its own question is not a document.
+        reseeded = bool(added)
         if not book.answers and book.rule == "match" and book.basis == "market":
             book.rule, book.basis = str(resolved.rule), resolved.basis
-        written = book.write() if write else None
+            reseeded = True
+        # WRITTEN ONLY WHEN THIS JOIN CHANGED SOMETHING, or when there is no file yet. A re-join
+        # (the morning refresh joins every open run) must leave a typed answer's file as it is: a
+        # rewrite changes no answer and still races a `PUT /pricing` for nothing.
+        target = files.prices_path()
+        written = (book.write() if reseeded or not target.exists() else target) if write else None
     choice = book.scoped_to(
         set(resolved.matches),
         run_name=run_dir.name,

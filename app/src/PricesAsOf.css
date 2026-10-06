@@ -1,0 +1,45 @@
+/* "Prices as of" and Refresh now, on #/pricing. `--bn-*` only. Two lines and a bar slot are always
+   drawn, so a refresh starting, running or ending moves nothing under it (D313). */
+
+.pricesasof {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-1);
+  padding: var(--bn-2) var(--bn-3);
+  border: 1px solid var(--bn-line);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  min-width: 0;
+}
+.pricesasof-head {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  min-height: 2.5rem;
+}
+.pricesasof-says {
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+  color: var(--bn-ink);
+  font-weight: 600;
+}
+.pricesasof-read {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bn-1);
+  min-height: 1.25rem;
+  margin: 0;
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+}
+.pricesasof-read[data-failed='true'] { color: var(--bn-warn); }
+.pricesasof-read svg { flex: none; margin-top: 0.15em; }
+/* ONE CLAMPED LINE FROM FIRST PAINT: a long refusal sentence never grows the panel. */
+.pricesasof-read-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* THE BAR HAS ITS OWN SLOT, drawn or not. */
+.pricesasof-bar { height: 5px; }
+
+/* A SECOND PRESS WHILE ONE RUNS IS SAFE: the server answers running and starts nothing. So the busy
+   button stays pressable, and the kit's pointer-events none on a busy button does not apply. */
+.pricesasof .bn-btn[data-busy='true'] { pointer-events: auto; }

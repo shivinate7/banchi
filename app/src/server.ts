@@ -117,7 +117,9 @@ import type {
   ClaimRelease,
   HoldingsRange,
   HoldingsValuePayload,
+  PriceFacts,
   PriceMoversPayload,
+  PricesRefreshState,
   SavedTrendsPayload,
   RunMatchAnswer,
 } from './types'
@@ -3013,12 +3015,29 @@ export function sendFileUrl(stamp: string, file: string): string {
  * sentence saying whether the credential, the request or the host is the problem.
  */
 export async function fetchLiveExport(): Promise<LiveExportFetched> {
-  return (await request('/pipeline/live-export', {
+  const started = (await request('/pipeline/live-export', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: '{}',
-  })) as LiveExportFetched
+  })) as Partial<LiveExportFetched>
+  if (typeof started.fetched === 'string') return started as LiveExportFetched
+  /* THE READ RUNS IN THE BACKGROUND, through the same worker as Refresh now: the press answers at
+     once, and this waits for the run to end, then takes the listings' file name from its note. */
+  for (let waited = 0; waited < LIVE_READ_WAIT_MS; waited += LIVE_READ_POLL_MS) {
+    await new Promise((resolve) => setTimeout(resolve, LIVE_READ_POLL_MS))
+    const now = await getPricesRefresh()
+    if (now.state === 'running') continue
+    /* A RUN THAT WAS SKIPPED (another refresh held the lock) OR FAILED NEVER HANDS BACK THE PREVIOUS RUN'S FILE. */
+    if (now.state !== 'done') throw new Error(now.note?.skipped?.message || now.note?.message || 'The live listings could not be read.')
+    const listings = now.note?.steps?.['listings'] as { ok: boolean; fetched?: string; message?: string } | undefined
+    if (listings?.ok === true && typeof listings.fetched === 'string') return { ok: true, fetched: listings.fetched } as LiveExportFetched
+    throw new Error(listings?.message || 'The live listings could not be read.')
+  }
+  throw new Error('The live listings are still being read. Try again in a minute.')
 }
+
+const LIVE_READ_POLL_MS = 1000
+const LIVE_READ_WAIT_MS = 600_000
 
 /**
  * Every live listing one markdown's survey saw, refused rows included (D103).
@@ -3539,6 +3558,27 @@ export async function getPriceMovers(): Promise<PriceMoversPayload> {
  */
 export async function getSavedTrends(): Promise<SavedTrendsPayload> {
   return (await request('/pipeline/trends-saved', NO_CACHE)) as SavedTrendsPayload
+}
+
+/** Everything the product sheet says about one card's prices and sales (`GET /pipeline/price-facts`).
+ *  A local read: it opens no request at a market host, so a press of T costs nothing. */
+export async function getPriceFacts(sku: string): Promise<PriceFacts> {
+  return (await request(`/pipeline/price-facts?sku=${encodeURIComponent(sku)}`, NO_CACHE)) as PriceFacts
+}
+
+/** Where "Refresh now" is (`GET /pipeline/prices/refresh`). A local read. */
+export async function getPricesRefresh(): Promise<PricesRefreshState> {
+  return (await request('/pipeline/prices/refresh', NO_CACHE)) as PricesRefreshState
+}
+
+/** "Refresh now" (`POST /pipeline/prices/refresh`): starts the work and answers at once. Free, and
+ *  only a press calls it. `force` presses again inside the reuse window, from "Try again" alone. */
+export async function startPricesRefresh(force = false): Promise<void> {
+  await request('/pipeline/prices/refresh', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(force ? { force: true } : {}),
+  })
 }
 
 /** One SKU's answer from `getSkuPhotos` — the first on-hand copy of that SKU that still

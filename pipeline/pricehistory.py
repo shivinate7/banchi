@@ -414,6 +414,19 @@ class Bucket:
 
 
 @dataclass(frozen=True)
+class Window:
+    """What sold over the newest few buckets (`Series.window`). `average` is `None` when nothing
+    sold, never zero (D9: a missing price is an unknown price)."""
+
+    days: int
+    units: int
+    sales: int
+    average: Optional[Decimal]
+    low: Optional[Decimal]
+    high: Optional[Decimal]
+
+
+@dataclass(frozen=True)
 class Bound:
     """The interval every possible true VWAP lies inside. NEVER A RESULT — see the header.
 
@@ -546,6 +559,24 @@ class Series:
         if denominator == 0:
             return None
         return pricing.round_money(numerator / denominator)
+
+    def window(self, days: int) -> Window:
+        """THE ONE HOME FOR "WHAT SOLD IN THE LAST N DAYS" (`docs/specs/stale-listings.md`, 7b).
+        The row's Range 7d and the product sheet's figures both read it, so the browser computes
+        nothing. Over the newest `days` buckets of a daily range: copies sold, orders, the
+        volume-weighted average and the lowest and highest sale."""
+        newest = self.buckets[-days:] if days > 0 else ()
+        sold = [bucket for bucket in newest if bucket.sold]
+        lows = [bucket.low for bucket in sold if bucket.low is not None]
+        highs = [bucket.high for bucket in sold if bucket.high is not None]
+        return Window(
+            days=days,
+            units=sum(bucket.quantity for bucket in sold),
+            sales=sum(bucket.transactions for bucket in sold),
+            average=_weighted_market(sold),
+            low=min(lows) if lows else None,
+            high=max(highs) if highs else None,
+        )
 
     @property
     def bound(self) -> Optional[Bound]:

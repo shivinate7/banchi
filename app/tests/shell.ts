@@ -308,6 +308,13 @@ async function stubShell(page: Page, cards: number): Promise<void> {
     json(route, { threshold: '0.10', listed: 0, unmeasured: 0, movers: [], refresh: null }),
   )
   await page.route(/\/pipeline\/trends-saved$/, (route) => json(route, { skus: {}, note: null }))
+  /* SPEC 7B'S TWO LOCAL ROUTES. `Refresh now` rests on the first, and the product sheet reads the second. */
+  await page.route(/\/pipeline\/prices\/refresh$/, (route) =>
+    json(route, { state: 'idle', step: null, done: 0, total: 0, note: null }),
+  )
+  await page.route(/\/pipeline\/price-facts/, (route) =>
+    json(route, { sku: '', name: '', at: null, through: null, prices: {}, shelf: {}, days: [], facts: null }),
+  )
   /* THE BACKGROUND READER'S SWITCH: the Capture screen's Rig panel reads it when it is first shown.
    *  Off, nothing running. A spec about the switch registers its own handler after this one. */
   await page.route(/\/pipeline\/match\/sweep(\?.*)?$/, (route) =>

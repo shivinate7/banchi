@@ -63,6 +63,12 @@ class Reading(NamedTuple):
     name: Optional[str] = None
     set_name: Optional[str] = None
     condition: Optional[str] = None
+    # THE REST OF THE PRICE ROW, FROM THE SAME SOURCE AND THE SAME SECOND AS `market`
+    # (`docs/specs/stale-listings.md`, 7b). Each is optional and rides in the row payload, so the
+    # table needs no migration: a row written before them reads back with none.
+    low: Optional[str] = None
+    low_with_shipping: Optional[str] = None
+    direct_low: Optional[str] = None
 
 
 def _parse_reading(key: str, record: dict) -> Optional[Reading]:
@@ -89,6 +95,9 @@ def _parse_reading(key: str, record: dict) -> Optional[Reading]:
         name=record.get("name"),
         set_name=record.get("set_name"),
         condition=record.get("condition"),
+        low=record.get("low"),
+        low_with_shipping=record.get("low_with_shipping"),
+        direct_low=record.get("direct_low"),
     )
 
 
