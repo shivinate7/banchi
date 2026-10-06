@@ -2765,6 +2765,55 @@ class JoinReport:
 Router = Callable[[IdentifiedCard, Candidates, variant.Resolution], routing.Destination]
 
 
+def _pick_number_is(pick: "MatcherPick", card: "IdentifiedCard", row, *, need_total: bool) -> bool:
+    """Does the free pick's number name this row's number? The number part must be present and
+    equal. The printed total, from the pick's own "/total" or else the paid read's, must equal
+    the row's when `need_total`; a missing total is then no agreement (a bare number is not a
+    printing). Never `number_agrees`: its blank key means "agrees"."""
+    if not pick.number:
+        return False
+    number, _, total = pick.number.partition("/")
+    row_number, _, row_total = str(row[tcgcsv.NUMBER_COLUMN]).partition("/")
+    if not number.strip() or number_index_key(number) != number_index_key(row_number):
+        return False
+    total = total or card.printed_total or ""
+    if row_total and (total or need_total):
+        return bool(total) and number_index_key(total) == number_index_key(row_total)
+    return True
+
+
+def _picks_same_printing(card: "IdentifiedCard", pick: "MatcherPick", row) -> bool:
+    """Did the free reader's pick name the resolved row's printing? The WHOLE set label folds
+    equal (`setnames.fold`: `Origins` is not `Origins: Proving Grounds`) and the number agrees
+    with its total. A blank set or number on the pick is no evidence: a name alone never counts."""
+    if row is None or not pick.set or not pick.number:
+        return False
+    return setnames.fold(pick.set) == setnames.fold(row[tcgcsv.SET_COLUMN]) and _pick_number_is(
+        pick, card, row, need_total=True
+    )
+
+
+def _pick_rows(catalog: "Catalog", card: "IdentifiedCard", have) -> Tuple[tcgcsv.Row, ...]:
+    """The catalog rows of the free reader's pick, through the same lookup the card's own
+    candidates use, for a `readers_disagree` card: both printings become choices. Rows already
+    offered are skipped. A pick that finds no row in its set adds none (nothing is invented)."""
+    pick = card.second_look
+    if pick is None or not pick.number:
+        return ()
+    rows = catalog.candidates(
+        replace(card, name=pick.name or card.name, number=pick.number, set_hint=pick.set or card.set_hint)
+    ).rows
+    seen = {row[tcgcsv.SKU_COLUMN] for row in have}
+    wanted = setnames.fold(pick.set) if pick.set else None
+    return tuple(
+        row for row in rows
+        if row[tcgcsv.SKU_COLUMN] not in seen
+        # a row the name fallback found for an unmatched number is not the pick's printing
+        and _pick_number_is(pick, card, row, need_total=False)
+        and (wanted is None or wanted == setnames.fold(row[tcgcsv.SET_COLUMN]))
+    )
+
+
 def default_router(
     threshold: Decimal = pricing.THRESHOLD,
     review_below: str = routing.CONFIDENCE_LOW,
@@ -2786,10 +2835,23 @@ def default_router(
             None if resolution.stage == variant.HUMAN_ANSWERED else card.confidence
         )
         gate = review_below
-        if card.second_look is not None and resolution.stage != variant.HUMAN_ANSWERED:
-            # THE SECOND LOOK IS NEVER AUTO-SAVED: a low reading under a low gate is review.
-            confidence, gate = routing.CONFIDENCE_LOW, routing.CONFIDENCE_LOW
-        return routing.route(
+        second_look = card.second_look
+        held_reason = None
+        if second_look is not None and resolution.stage != variant.HUMAN_ANSWERED:
+            # THE SECOND LOOK IS HELD UNLESS BOTH READERS NAMED THE SAME PRINTING and the paid
+            # read is high (measured: the owner took the agreed card 12 of 12, the free pick
+            # 0 of 10 on disagreement). A card the ladder already sent to review keeps its reason.
+            agreed = card.confidence == routing.CONFIDENCE_HIGH and _picks_same_printing(
+                card, second_look, resolution.row
+            )
+            if resolved and not agreed:
+                confidence, gate = routing.CONFIDENCE_LOW, routing.CONFIDENCE_LOW
+                held_reason = (
+                    routing.READERS_DISAGREE
+                    if card.confidence == routing.CONFIDENCE_HIGH and second_look.name
+                    else routing.SECOND_LOOK_UNSURE
+                )
+        destination = routing.route(
             resolved=resolved,
             reason=resolution.reason,
             confidence=confidence,
@@ -2798,6 +2860,9 @@ def default_router(
             threshold=threshold,
             review_below=gate,
         )
+        if held_reason and destination.reason == routing.LOW_CONFIDENCE:
+            destination = replace(destination, reason=held_reason)
+        return destination
 
     return route
 
@@ -3210,13 +3275,16 @@ def join_batch(
         if router is not None:
             destination = router(card, found, resolution)
             if destination.queue in (routing.MAIN, routing.PARKED):
+                offered = found.rows
+                if destination.reason == routing.READERS_DISAGREE:
+                    offered = offered + _pick_rows(catalog, card, offered)
                 report.queued.append(
                     QueuedCard(
                         card=card,
                         destination=destination,
                         lookup=found.lookup,
                         resolution_reason=resolution.reason,
-                        candidates=found.rows,
+                        candidates=offered,
                         name_matched_skus=name_matched_skus,
                     )
                 )

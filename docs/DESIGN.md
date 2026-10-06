@@ -1149,7 +1149,7 @@ named strings, and the screen labels every live one. Six come from the variant l
 `rarity_claim_mismatch`). D23's reason is the stack claim contradicting every candidate row.
 The rest come from routing in `pipeline/routing.py` (`low_confidence`, `no_position`,
 `identification_failed`, `set_ambiguous`, `card_not_detected`, `no_market_data`,
-`name_disputed`, D35's `number_unread_name_matched`, `listing_disputed` and `free_reader_disagrees`).
+`name_disputed`, D35's `number_unread_name_matched`, `listing_disputed`, `free_reader_disagrees`, `readers_disagree` and `second_look_unsure`).
 `name_disputed` is the name read off the photograph matching none of the rows its number
 found. It is D23's cross-check run backwards. It is the only signal that catches a
 confidently misread number. `number_unread_name_matched` is the only reason the JOIN writes

@@ -445,7 +445,7 @@ def check_identify_free_first(checks: Checks) -> None:
             joined = join.join_batch([card], catalog, router=join.default_router(review_below=routing.CONFIDENCE_NONE))
             checks.equal(
                 ([q.destination.reason for q in joined.queued], list(joined.matches)),
-                ([routing.LOW_CONFIDENCE], []),
+                ([routing.READERS_DISAGREE], []),
                 "and the join routes that cached card to review under review_below=none",
             )
 
@@ -526,8 +526,8 @@ def check_second_look_routing(checks: Checks) -> None:
     checks.equal(list(looked.matches), [], "a card with second_look lists nothing even under review_below=none")
     checks.equal(
         [q.destination.reason for q in looked.queued],
-        [routing.LOW_CONFIDENCE],
-        "it routes to review, as low_confidence",
+        [routing.READERS_DISAGREE],
+        "it routes to review, as readers_disagree",
     )
     if looked.queued:
         read = resolve.queue_entry(looked.queued[0]).read
@@ -553,7 +553,166 @@ def check_second_look_routing(checks: Checks) -> None:
     )
 
 
+SV09_SET = "SV09: Journey Together"  # the set cell of the fixture export's Dunsparce 120/159 row
+DUNSPARCE_SKU = "8608459"
+
+
+def check_second_look_agreement(checks: Checks) -> None:
+    """The owner's ruling: the free reader refused but named a pick, and a HIGH paid read names
+    the SAME printing (set and number through `identity_binding.number_agrees`; name alone
+    never counts), so the card is not held. Disagreement, or a paid read below high, still is,
+    and the reason says which, never `low_confidence` over a high read."""
+    import re
+
+    from cli import requeue
+    from harness.tests.t7.common import capture_payload, entry, write_export
+    from server import capture_server
+    from store import master
+    from store.session import Store
+
+    checks.note("")
+    checks.note("SECOND LOOK AGREEMENT — agree + high resolves; every other pairing is held, for its own reason")
+    catalog = join.Catalog(tcgcsv.read_export(REPO_ROOT / "fixtures/sv09_export_untouched.csv"))
+    router = join.default_router()
+
+    def pick(name="Dunsparce", number="120", set=SV09_SET):
+        return join.MatcherPick(code=match.UNREAD_MARGIN, name=name, number=number, set=set, floor=0.91, margin=0.03)
+
+    def card(index, second_look, confidence):
+        return join.IdentifiedCard(
+            position=join.Position(box=3, index=index), name="Dunsparce", number="120",
+            printed_total="159", metadata_finish="normal", photo=f"captures/box3/{index:04d}.jpg",
+            confidence=confidence, second_look=second_look,
+        )
+
+    agreed = join.join_batch([card(1, pick(), "high")], catalog, router=router)
+    checks.equal(list(agreed.matches), [DUNSPARCE_SKU], "agree + high: the card lists as the card both readers named")
+    checks.equal([q.destination.reason for q in agreed.queued], [], "agree + high: nothing is queued")
+
+    unsure = join.join_batch([card(2, pick(), "medium")], catalog, router=router)
+    checks.equal(len(unsure.queued), 1, "agree + medium: held for review")
+    why = [q.destination.reason for q in unsure.queued]
+    checks.ok(
+        bool(why) and why[0] != routing.LOW_CONFIDENCE and re.search(r"disagree|unsure", why[0]) is not None,
+        f"agree + medium: the reason says the paid read was unsure, got {why}",
+    )
+
+    disagreed = join.join_batch([card(3, pick("Raichu", "026", "Base Set"), "high")], catalog, router=router)
+    checks.equal(len(disagreed.queued), 1, "disagree + high: held for review")
+    why = [q.destination.reason for q in disagreed.queued]
+    checks.ok(
+        bool(why) and why[0] != routing.LOW_CONFIDENCE and "disagree" in why[0],
+        f"disagree + high: the reason says the readers disagreed, never low_confidence, got {why}",
+    )
+
+    # Same name, other printing: a name never counts as agreement.
+    other = join.join_batch([card(4, pick("Dunsparce", "199", SV09_SET), "high")], catalog, router=router)
+    checks.equal(len(other.queued), 1, "same name, other number + high: held, name alone never agrees")
+
+    # An OPEN entry that already meets the rule leaves on the next re-resolve, unanswered.
+    with isolated_home() as home:
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(1))
+        export = write_export(home / "agree-export.csv")
+        catalogs, _, _ = requeue.catalogs_from([export])
+        with Store().write() as snapshot:
+            for index in (1, 2):
+                snapshot.inventory.record_identification(
+                    master.position_key(1, index), name="Dunsparce", number="120", printed_total="159", confidence="high",
+                )
+                # The capture's finish claim settles the two Dunsparce condition rows, as `card()` above does.
+                snapshot.inventory.cards[master.position_key(1, index)].metadata_finish = ["normal"]
+            for index, said in ((1, pick()), (2, pick("Raichu", "026", "Base Set"))):
+                snapshot.review.upsert(entry(
+                    1, index, reason=routing.LOW_CONFIDENCE, confidence="high",
+                    read={"name": "Dunsparce", "number": "120", "matcher_pick": {
+                        "name": said.name, "number": said.number, "set": said.set, "reason": said.code}},
+                ))
+        snap = Store().read()
+        plan = requeue.plan(snap.inventory, snap.review, snap.parked, catalogs)
+        checks.equal([c.position for c in plan.resolved], ["1/1"], "re-resolve: the open agree + high entry leaves the queue with no answer")
+        held = [c for c in plan.refreshed if c.position == "1/2"]
+        checks.ok(
+            len(held) == 1 and held[0].after is not None
+            and held[0].after.reason != routing.LOW_CONFIDENCE and "disagree" in held[0].after.reason,
+            "re-resolve: the open disagree + high entry stays, with the readers-disagreed reason",
+        )
+
+
+def check_disagree_candidates_hold_both(checks: Checks) -> None:
+    """A `readers_disagree` entry offers BOTH printings, so one numbered press answers it: the
+    free pick resolves to its catalog row(s) through the same lookup the candidates use."""
+    from cli import resolve
+
+    checks.note("")
+    checks.note("READERS DISAGREE — the entry's candidates hold the paid card and the free pick")
+    catalog = join.Catalog(tcgcsv.read_export(REPO_ROOT / "fixtures/sv09_export_untouched.csv"))
+    router = join.default_router()
+
+    def queued(number):
+        pick = join.MatcherPick(code=match.UNREAD_MARGIN, name="Dudunsparce ex", number=number, set=SV09_SET)
+        card = join.IdentifiedCard(
+            position=join.Position(box=3, index=1), name="Dunsparce", number="120",
+            printed_total="159", metadata_finish="normal", photo="captures/box3/0001.jpg",
+            confidence="high", second_look=pick,
+        )
+        report = join.join_batch([card], catalog, router=router)
+        return resolve.queue_entry(report.queued[0]) if report.queued else None
+
+    found = queued("121")
+    skus = [c["sku"] for c in found.candidates] if found else []
+    checks.ok(DUNSPARCE_SKU in skus, f"the paid read's own row is a candidate, got {skus}")
+    checks.ok("8608469" in skus, f"the free pick's row (Dudunsparce ex 121/159) is a candidate too, got {skus}")
+
+    gone = queued("999")
+    checks.ok(gone is not None and gone.reason == routing.READERS_DISAGREE, "a pick with no catalog row still holds the card as readers_disagree")
+    checks.ok(
+        gone is not None and [c["sku"] for c in gone.candidates].count("8608469") == 0 and gone.read.get("matcher_pick", {}).get("number") == "999",
+        "and offers no invented row: the pick stays on the entry, the candidates stay the paid read's alone",
+    )
+
+
 # ------------------------------------------------------------------------ the cache
+
+
+def check_agreement_is_the_same_printing(checks: Checks) -> None:
+    """False accepts: a set that merely contains the other's name, and a blank total, are no
+    agreement. The pick must name the same set and the same number the paid read resolved to."""
+    checks.note("")
+    checks.note("AGREEMENT IS THE SAME PRINTING — set fold, blank total")
+    router = join.default_router()
+
+    def run(catalog, pick, **card):
+        read = dict(position=join.Position(box=3, index=1), photo="captures/box3/0001.jpg",
+                    metadata_finish=("normal",), confidence="high", second_look=pick)
+        read.update(card)
+        return join.join_batch([join.IdentifiedCard(**read)], catalog, router=router)
+
+    # 1: `Origins` is not `Origins: Proving Grounds`, though both hold 279/298.
+    rift = join.Catalog(tcgcsv.read_export(REPO_ROOT / "fixtures/riftbound_export_untouched.csv"))
+    pick = join.MatcherPick(code=match.UNREAD_MARGIN, name="Fortified Position", number="279/298", set="Origins")
+    report = run(rift, pick, name="Fortified Position (Oversized)", number="279/298", game="riftbound",
+                 set_hint="Origins: Proving Grounds")
+    checks.equal(list(report.matches), [], "Origins vs Origins: Proving Grounds, same number: not an agreement, nothing lists")
+    checks.equal([q.destination.reason for q in report.queued], [routing.READERS_DISAGREE], "it is held as readers_disagree")
+
+    # 2: a blank paid total is no evidence of agreement with a different number.
+    catalog = join.Catalog(tcgcsv.read_export(REPO_ROOT / "fixtures/sv09_export_untouched.csv"))
+    far = join.MatcherPick(code=match.UNREAD_MARGIN, name="Dudunsparce ex", number="999", set=SV09_SET)
+    blank = run(catalog, far, name="Dunsparce", number="120", printed_total=None)
+    checks.equal(list(blank.matches), [], "paid 120 with no total vs free 999: not an agreement, nothing lists")
+    checks.equal([q.destination.reason for q in blank.queued], [routing.READERS_DISAGREE], "it is held as readers_disagree")
+    guard = run(catalog, far, name="Dunsparce", number="120", printed_total="159")
+    checks.equal([q.destination.reason for q in guard.queued], [routing.READERS_DISAGREE], "guard: with the total present it is held too")
+
+    # 3: with no total, the pick's own rows are those whose number is the pick's, never its name-mates.
+    near = join.MatcherPick(code=match.UNREAD_MARGIN, name="Dudunsparce ex", number="121", set=SV09_SET)
+    card = join.IdentifiedCard(
+        position=join.Position(box=3, index=1), name="Dunsparce", number="120", printed_total=None,
+        confidence="high", second_look=near, photo="captures/box3/0001.jpg",
+    )
+    numbers = sorted(r[tcgcsv.NUMBER_COLUMN] for r in join._pick_rows(catalog, card, ()))
+    checks.equal(set(numbers) - {"121/159"}, set(), f"_pick_rows with no total offers only the pick's number, got {numbers}")
 
 
 def check_cache_engines(checks: Checks) -> None:
@@ -833,6 +992,9 @@ CHECKS = (
     check_model_download,
     check_identify_free_first,
     check_second_look_routing,
+    check_second_look_agreement,
+    check_disagree_candidates_hold_both,
+    check_agreement_is_the_same_printing,
     check_cache_engines,
     check_model_ready_hashes_once,
     check_promo_census,

@@ -597,6 +597,7 @@
 .review-candidate-main { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
 .review-candidate-name { font-size: var(--bn-fs-lg); font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
 .review-candidate-meta { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-candidate-number { font-family: var(--bn-font-mono); }
 .review-candidate-meta > span + span::before { content: '·'; margin: 0 var(--bn-1); color: var(--bn-ink-4); }
 .review-candidate-tags { display: flex; gap: var(--bn-1); }
 .review-tag {

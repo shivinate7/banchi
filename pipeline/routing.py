@@ -106,6 +106,13 @@ LISTING_DISPUTED = "listing_disputed"
 # shape as `LISTING_DISPUTED`: in `ROUTING_REASONS` as a destination this module owns.
 FREE_READER_DISAGREES = "free_reader_disagrees"
 
+# A card the free reader refused (it still named a top pick) and the paid second look was held
+# for review (`pipeline/join.py:default_router`, the engine-pick spec). Two reasons, never
+# `LOW_CONFIDENCE` over a high read: the readers named different printings, or the paid read
+# was below high.
+READERS_DISAGREE = "readers_disagree"
+SECOND_LOOK_UNSURE = "second_look_unsure"
+
 # ROUTING'S OWN REVIEW REASONS, PUBLISHED AS A SET. The ladder's six live in
 # `pipeline/variant.py:LADDER_REASONS`; together the two tuples are the whole vocabulary, and
 # the split is the same one docs/DESIGN.md credits each reason by.
@@ -126,6 +133,8 @@ ROUTING_REASONS = (
     NO_MARKET_DATA,
     LISTING_DISPUTED,
     FREE_READER_DISAGREES,
+    READERS_DISAGREE,
+    SECOND_LOOK_UNSURE,
 )
 
 # Hard failures: no usable answer at all, so no price can be reasoned about. Always main,
@@ -144,6 +153,7 @@ assert set(UNPRICEABLE_REASONS) <= set(ROUTING_REASONS), (
 CONFIDENCE_NONE = "none"
 CONFIDENCE_LOW = "low"
 CONFIDENCE_MEDIUM = "medium"
+CONFIDENCE_HIGH = "high"
 REVIEW_BELOW_CHOICES = (CONFIDENCE_NONE, CONFIDENCE_LOW, CONFIDENCE_MEDIUM)
 
 # Weakest first. A card routes when its confidence is at or below the configured level.

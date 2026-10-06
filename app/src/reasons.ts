@@ -93,6 +93,10 @@ export const REASON_LABELS: Readonly<Record<string, string>> = {
   listing_disputed: 'The listing may be the wrong card',
   /* `pipeline/routing.py:FREE_READER_DISAGREES`, opened by `./pkmnscan match audit --write`. */
   free_reader_disagrees: 'The free reader sees another card',
+  /* `pipeline/routing.py:READERS_DISAGREE` and `SECOND_LOOK_UNSURE`: a card the free reader
+   * refused, held after the paid second look. */
+  readers_disagree: 'The two readers name different cards',
+  second_look_unsure: 'The second look is not sure',
 }
 
 /* CODES THE PIPELINE NO LONGER EMITS AND THE STORE STILL HOLDS. A separate map on purpose:
