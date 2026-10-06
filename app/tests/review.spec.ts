@@ -1240,6 +1240,15 @@ test('a second-look card shows the free reader pick in its details, and not its 
   await expect(page.locator('.review-card')).not.toContainText('margin_too_small')
 })
 
+test('the queue never says "Low confidence read" over a High confidence read', async ({ page }) => {
+  await open(page, SECOND_LOOK)
+  const card = page.locator('.review-card')
+  await expect(card.locator('.review-chip', { hasText: 'Confidence' })).toContainText('High')
+  await expect(card).not.toContainText('Low confidence read')
+  await expect(page.locator('.review-sentence')).not.toContainText('with high confidence, which is not enough')
+  await expect(page.locator('body')).not.toContainText('Low confidence read')
+})
+
 test('a card the free reader never saw draws no Free reader fact', async ({ page }) => {
   await open(page, NAMED_CONTRADICTION)
   await page.locator('.review-details-summary').click()

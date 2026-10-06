@@ -553,6 +553,92 @@ def check_second_look_routing(checks: Checks) -> None:
     )
 
 
+SV09_SET = "SV09: Journey Together"  # the set cell of the fixture export's Dunsparce 120/159 row
+DUNSPARCE_SKU = "8608459"
+
+
+def check_second_look_agreement(checks: Checks) -> None:
+    """The owner's ruling: the free reader refused but named a pick, and a HIGH paid read names
+    the SAME printing (set and number through `identity_binding.number_agrees`; name alone
+    never counts), so the card is not held. Disagreement, or a paid read below high, still is,
+    and the reason says which, never `low_confidence` over a high read."""
+    import re
+
+    from cli import requeue
+    from harness.tests.t7.common import capture_payload, entry, write_export
+    from server import capture_server
+    from store import master
+    from store.session import Store
+
+    checks.note("")
+    checks.note("SECOND LOOK AGREEMENT — agree + high resolves; every other pairing is held, for its own reason")
+    catalog = join.Catalog(tcgcsv.read_export(REPO_ROOT / "fixtures/sv09_export_untouched.csv"))
+    router = join.default_router()
+
+    def pick(name="Dunsparce", number="120", set=SV09_SET):
+        return join.MatcherPick(code=match.UNREAD_MARGIN, name=name, number=number, set=set, floor=0.91, margin=0.03)
+
+    def card(index, second_look, confidence):
+        return join.IdentifiedCard(
+            position=join.Position(box=3, index=index), name="Dunsparce", number="120",
+            printed_total="159", metadata_finish="normal", photo=f"captures/box3/{index:04d}.jpg",
+            confidence=confidence, second_look=second_look,
+        )
+
+    agreed = join.join_batch([card(1, pick(), "high")], catalog, router=router)
+    checks.equal(list(agreed.matches), [DUNSPARCE_SKU], "agree + high: the card lists as the card both readers named")
+    checks.equal([q.destination.reason for q in agreed.queued], [], "agree + high: nothing is queued")
+
+    unsure = join.join_batch([card(2, pick(), "medium")], catalog, router=router)
+    checks.equal(len(unsure.queued), 1, "agree + medium: held for review")
+    why = [q.destination.reason for q in unsure.queued]
+    checks.ok(
+        bool(why) and why[0] != routing.LOW_CONFIDENCE and re.search(r"disagree|unsure", why[0]) is not None,
+        f"agree + medium: the reason says the paid read was unsure, got {why}",
+    )
+
+    disagreed = join.join_batch([card(3, pick("Raichu", "026", "Base Set"), "high")], catalog, router=router)
+    checks.equal(len(disagreed.queued), 1, "disagree + high: held for review")
+    why = [q.destination.reason for q in disagreed.queued]
+    checks.ok(
+        bool(why) and why[0] != routing.LOW_CONFIDENCE and "disagree" in why[0],
+        f"disagree + high: the reason says the readers disagreed, never low_confidence, got {why}",
+    )
+
+    # Same name, other printing: a name never counts as agreement.
+    other = join.join_batch([card(4, pick("Dunsparce", "199", SV09_SET), "high")], catalog, router=router)
+    checks.equal(len(other.queued), 1, "same name, other number + high: held, name alone never agrees")
+
+    # An OPEN entry that already meets the rule leaves on the next re-resolve, unanswered.
+    with isolated_home() as home:
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(1))
+        export = write_export(home / "agree-export.csv")
+        catalogs, _, _ = requeue.catalogs_from([export])
+        with Store().write() as snapshot:
+            for index in (1, 2):
+                snapshot.inventory.record_identification(
+                    master.position_key(1, index), name="Dunsparce", number="120", printed_total="159", confidence="high",
+                )
+                # The capture's finish claim settles the two Dunsparce condition rows, as `card()` above does.
+                snapshot.inventory.cards[master.position_key(1, index)].metadata_finish = ["normal"]
+            for index, said in ((1, pick()), (2, pick("Raichu", "026", "Base Set"))):
+                snapshot.review.upsert(entry(
+                    1, index, reason=routing.LOW_CONFIDENCE, confidence="high",
+                    read={"name": "Dunsparce", "number": "120", "matcher_pick": {
+                        "name": said.name, "number": said.number, "set": said.set, "reason": said.code}},
+                ))
+        snap = Store().read()
+        plan = requeue.plan(snap.inventory, snap.review, snap.parked, catalogs)
+        checks.equal([c.position for c in plan.resolved], ["1/1"], "re-resolve: the open agree + high entry leaves the queue with no answer")
+        held = [c for c in plan.refreshed if c.position == "1/2"]
+        checks.ok(
+            len(held) == 1 and held[0].after is not None
+            and held[0].after.reason != routing.LOW_CONFIDENCE and "disagree" in held[0].after.reason,
+            "re-resolve: the open disagree + high entry stays, with the readers-disagreed reason",
+        )
+
+
 # ------------------------------------------------------------------------ the cache
 
 
@@ -833,6 +919,7 @@ CHECKS = (
     check_model_download,
     check_identify_free_first,
     check_second_look_routing,
+    check_second_look_agreement,
     check_cache_engines,
     check_model_ready_hashes_once,
     check_promo_census,
