@@ -1799,6 +1799,8 @@ def _say_gone(resolved, say) -> None:
     """SEND THE REST: name each card the run held that the store no longer has, by its
     last-known name. The sentence is for the person; the JSON line is what the send's receipt
     reads (`server/send_routes.py:_summary`'s `gone`)."""
+    import json
+
     gone = list(resolved.gone)
     if not gone:
         return
