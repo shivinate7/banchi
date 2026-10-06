@@ -55,9 +55,14 @@ function readLine(read: PriceMoversPayload | null | 'failed'): { text: string; f
 /** How the overnight Trends read ended, in one clamped line. A partial read says how many of how
  *  many, a failed one carries its sentence, and the date is relative. Empty while loading and on
  *  the live lens, so the line holds its height in every state. */
-function trendsLine(note: TrendsPreloadNote | null, loading: boolean): { text: string; failed: boolean } {
+function trendsLine(note: TrendsPreloadNote | null, loading: boolean, failed: boolean, narrow: boolean): { text: string; failed: boolean } {
+  if (failed) return { text: 'Could not read the saved trend strips. Reload the page to try again.', failed: true }
   if (loading) return { text: '\u00a0', failed: false }
-  if (note === null) return { text: 'No overnight trends read has run yet. Press Trends to read them now.', failed: false }
+  /* A PAGE TOO NARROW FOR THE TREND COLUMN SAYS WHERE THE STRIP IS NOW, unless the read itself failed. */
+  if (narrow && (note === null || (note.ok && note.unreadable === 0))) {
+    return { text: "Press T on a card to see its trend strip.", failed: false }
+  }
+  if (note === null) return { text: 'No overnight trends read has run yet. Press Refresh now to read them.', failed: false }
   const when = relativeDate(note.at * 1000)
   const partial = !note.ok || note.unreadable > 0
   const counts = [
@@ -65,7 +70,7 @@ function trendsLine(note: TrendsPreloadNote | null, loading: boolean): { text: s
     note.no_history > 0 ? `${count(note.no_history, 'has', 'have')} no history.` : '',
   ].filter(Boolean).join(' ')
   if (!partial) {
-    return { text: `Trends were read ${when} for ${count(note.read, 'card')}. ${counts} Press Trends to refresh.`.replace('  ', ' '), failed: false }
+    return { text: `Trends were read ${when} for ${count(note.read, 'card')}. ${counts}`.trim(), failed: false }
   }
   const failure = note.failed > 0 ? ` ${count(note.failed, 'step')} failed: ${note.message}` : ''
   return { text: `Trends were read ${when} for ${note.read} of ${note.asked} cards. ${counts}${failure}`, failed: true }
@@ -98,9 +103,13 @@ function MoverRow({ row }: { row: PriceMover }) {
 export function PriceMovers({
   trendsNote,
   trendsLoading,
+  trendsFailed,
+  narrow,
 }: {
   readonly trendsNote: TrendsPreloadNote | null
   readonly trendsLoading: boolean
+  readonly trendsFailed: boolean
+  readonly narrow: boolean
 }) {
   const [read, setRead] = useState<PriceMoversPayload | null | 'failed'>(null)
   const [open, setOpen] = useState(false)
@@ -121,7 +130,7 @@ export function PriceMovers({
 
   const moved = read !== null && read !== 'failed' ? read.movers : []
   const line = readLine(read)
-  const trends = trendsLine(trendsNote, trendsLoading)
+  const trends = trendsLine(trendsNote, trendsLoading, trendsFailed, narrow)
   return (
     <section className="pricemovers" aria-label="Price moves since first seen">
       <div className="pricemovers-head">

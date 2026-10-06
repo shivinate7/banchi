@@ -115,7 +115,9 @@ import type {
   ClaimRelease,
   HoldingsRange,
   HoldingsValuePayload,
+  PriceFacts,
   PriceMoversPayload,
+  PricesRefreshState,
   SavedTrendsPayload,
   RunMatchAnswer,
 } from './types'
@@ -3536,6 +3538,27 @@ export async function getPriceMovers(): Promise<PriceMoversPayload> {
  */
 export async function getSavedTrends(): Promise<SavedTrendsPayload> {
   return (await request('/pipeline/trends-saved', NO_CACHE)) as SavedTrendsPayload
+}
+
+/** Everything the product sheet says about one card's prices and sales (`GET /pipeline/price-facts`).
+ *  A local read: it opens no request at a market host, so a press of T costs nothing. */
+export async function getPriceFacts(sku: string): Promise<PriceFacts> {
+  return (await request(`/pipeline/price-facts?sku=${encodeURIComponent(sku)}`, NO_CACHE)) as PriceFacts
+}
+
+/** Where "Refresh now" is (`GET /pipeline/prices/refresh`). A local read. */
+export async function getPricesRefresh(): Promise<PricesRefreshState> {
+  return (await request('/pipeline/prices/refresh', NO_CACHE)) as PricesRefreshState
+}
+
+/** "Refresh now" (`POST /pipeline/prices/refresh`): starts the work and answers at once. Free, and
+ *  only a press calls it. `force` presses again inside the reuse window, from "Try again" alone. */
+export async function startPricesRefresh(force = false): Promise<void> {
+  await request('/pipeline/prices/refresh', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(force ? { force: true } : {}),
+  })
 }
 
 /** One SKU's answer from `getSkuPhotos` — the first on-hand copy of that SKU that still

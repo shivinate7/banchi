@@ -136,7 +136,7 @@ const PRICING_KEYS: ScreenKeys = {
   where: '',
   rows: [
     { keys: ['R'], does: 'Reload the worklist' },
-    { keys: ['T'], does: 'Open the product page for this card' },
+    { keys: ['T'], does: "Open this card's prices and sales" },
     { keys: ['M'], does: 'Put the market price in this card' },
     { keys: ['L'], does: 'Put the lowest price in this card' },
     { keys: ['N'], does: 'Put the current listing price in this card' },

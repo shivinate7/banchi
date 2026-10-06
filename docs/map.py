@@ -5017,10 +5017,10 @@ COMPONENTS = [
                 "governed_by": ["D295"],
             },
             "price-refresh-daily.py": {
-                "does": "the daily market read on the owner's Mac: one free live fetch "
-                        "(`do_live_export`), then the overnight Trends preload "
-                        "(`do_price_trends_preload`), each leaving a note `#/pricing` shows. Calls no paid "
-                        "read and no archive sweep, and changes no price. `--agent` installs "
+                "does": "the daily market read on the owner's Mac: one call to "
+                        "`do_prices_refresh` (the live listings, the catalog per game, a re-join of "
+                        "every open run, then the Trends preload), each step leaving a note `#/pricing` "
+                        "shows. Calls no paid read and no archive sweep, and changes no price at TCGplayer. `--agent` installs "
                         "the daily launchd job (main tree only), `--agent --remove` removes it. "
                         "The installer is `launchagent.py`'s; `demo-mirror-daily.py` keeps its own copy (D295 fence).",
                 "note": "PROVED BY T7's `price_moves` group: the note is written on success and "
@@ -7962,6 +7962,27 @@ COMPONENTS = [
                                            "against are a card that had not been printed yet, "
                                            "and joining through them draws a year-long slope "
                                            "that never happened."},
+            # THE FRESH-PRICES SCREEN HALF (docs/specs/stale-listings.md, 7b). The server half is
+            # `do_prices_refresh` and T7's `price_fresh` group proves it; the specs are
+            # `app/tests/pricing.spec.ts` and `pricing-markdown.spec.ts`.
+            "src/PricesAsOf.tsx": {"does": "the header line above #/pricing's list: \"Prices as of\" "
+                                           "the catalog step's finish, and the one press, Refresh now, "
+                                           "with its running, done and failed states. The state is read "
+                                           "once at first paint and polled only while a run goes; a "
+                                           "visit presses nothing, and only Try again sends `force`.",
+                                   "governed_by": ["D104", "D189", "D278", "D313"]},
+            "src/PricesAsOf.css": {"does": "that header at `--bn-*` tokens only. Two lines and a bar "
+                                           "slot are always drawn, so a refresh moves nothing under it.",
+                                   "governed_by": ["D313"]},
+            "src/PriceFacts.tsx": {"does": "the block at the top of the product sheet and page: prices "
+                                           "now, sales over 30 days with a sold-per-day chart, and the "
+                                           "shelf. One local read (`getPriceFacts`), so it asks no market "
+                                           "host; every figure is the server's (`Series.window`).",
+                                   "governed_by": ["D189", "D278", "D313"]},
+            "src/PriceFacts.css": {"does": "that block, `--bn-*` only: bars at reduced opacity, the "
+                                           "Market a thin ink line, and every body holding its size "
+                                           "while it reads.",
+                                   "governed_by": ["D278", "D313"]},
             "src/PriceMovers.tsx": {"does": "the panel above #/pricing's list: which listed "
                                             "items moved more than a tenth since listing, with "
                                             "direction and amount, and how the last daily price "

@@ -63,7 +63,6 @@
   font-size: var(--bn-fs-sm);
   color: var(--bn-ink-3);
 }
-.pricing-trend-says { margin: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 
 /* ---- the list ------------------------------------------------------------------------------ */
 .pricing-list {
@@ -108,6 +107,16 @@
 .pricing-list[data-copies='none'] .pricing-row {
   grid-template-columns: minmax(0, 1fr) 76px 76px 128px 136px 40px;
 }
+/* THE RANGE 7D COLUMN IS DRAWN ONLY WHERE THE LIST HAS ROOM FOR IT (`RANGE_ROOM_PX` in Pricing.tsx), so
+   its template is its own and the narrow rules below never meet it. */
+.pricing-list[data-range='some'] .pricing-caption,
+.pricing-list[data-range='some'] .pricing-row {
+  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 80px 128px 60px 136px 40px;
+}
+.pricing-list[data-range='some'][data-copies='none'] .pricing-caption,
+.pricing-list[data-range='some'][data-copies='none'] .pricing-row {
+  grid-template-columns: minmax(0, 1fr) 76px 76px 80px 128px 136px 40px;
+}
 .pricing-caption {
   min-height: var(--bn-8);
   font-size: var(--bn-fs-xs);
@@ -120,6 +129,7 @@
 }
 .pricing-caption .pricing-col-market,
 .pricing-caption .pricing-col-low,
+.pricing-caption .pricing-col-range,
 .pricing-caption .pricing-col-qty { text-align: right; }
 
 .pricing-group { display: flex; flex-direction: column; }
@@ -226,6 +236,11 @@
 .pricing-ref { text-align: right; font-size: var(--bn-fs-md); color: var(--bn-ink); white-space: nowrap; }
 .pricing-ref[data-empty='true'] { color: var(--bn-ink-3); }
 .pricing-ref-label { display: none; }
+/* THE AGE OF A FIGURE, UNDER IT, IN THE WARN TONE. Its line is always there, drawn or not (D313). */
+.pricing-ref-age { display: block; min-height: 1.25em; font-size: var(--bn-fs-xs); line-height: 1.25; color: var(--bn-warn); }
+/* THE RANGE'S TWO FIGURES, one over the other: the lowest sale, then the highest. */
+.pricing-col-range { font-size: var(--bn-fs-sm); line-height: 1.25; }
+.pricing-col-range .bn-money { display: block; }
 .pricing-col-trend { min-width: 0; overflow: hidden; }
 
 .pricing-qty { display: flex; justify-content: flex-end; }
@@ -431,8 +446,7 @@
   .pricing-list[data-copies='none'] .pricing-caption,
   .pricing-list[data-copies='none'] .pricing-row { grid-template-columns: minmax(0, 1fr) 76px 128px 40px; }
   .pricing-col-low,
-  .pricing-col-trend,
-  .pricing-trends-press { display: none; }
+  .pricing-col-trend { display: none; }
 }
 
 /* ---- a phone column: two lines a row, the field on the right with Market under it ---------- */

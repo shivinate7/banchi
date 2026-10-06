@@ -63,6 +63,7 @@ import { isEditableTarget } from './keys'
 import { FLAT_KEY, subThresholdSkus } from './readiness'
 import { isWithheld, rowShare, runChip } from './standing'
 import { TrendCell, type KeptTrend, type TrendRead } from './PriceTrend'
+import { PricesAsOf, asOfOf, usePricesRefresh } from './PricesAsOf'
 import { ClearPrices } from './ClearPrices'
 import { runBoxLabel } from './runScope'
 import {
@@ -133,9 +134,6 @@ import { ABSENT_SENTENCE, AbsentPhotoNote, gameLabel, noPhotoSentence } from './
 
 /** How deep the undo stack goes. */
 const UNDO_DEPTH = 10
-
-/** How many SKUs one batched trend request asks about — a latency number, not a courtesy one. */
-const TREND_CHUNK = 8
 
 /** A row worth this much or more needs the owner (D277, Q2), in cents. */
 const WORTH_A_LOOK = 500
@@ -464,6 +462,10 @@ function usePhone(): boolean {
 /** A strip older than this, against the newest overnight read, is drawn dimmed with its date. */
 const STALE_AFTER_S = 3600
 
+/** The saved read is tried again this many times, this long after a failure, before it says so. */
+const SAVED_RETRIES = 1
+const SAVED_RETRY_MS = 2000
+
 /** A saved strip with its date, and whether it is older than the newest overnight read. */
 function keptStrip(saved: SavedTrendsPayload | null, sku: string): KeptTrend | undefined {
   const found = saved?.skus[sku]
@@ -476,6 +478,33 @@ function keptStrip(saved: SavedTrendsPayload | null, sku: string): KeptTrend | u
 function savedRead(saved: SavedTrendsPayload | null, sku: string): TrendRead | undefined {
   const kept = keptStrip(saved, sku)
   return kept === undefined ? undefined : { kind: 'read', ranges: kept.ranges, at: kept.at, stale: kept.stale }
+}
+
+/** The page column is this wide or wider before it has room for the Range 7d column: the name
+ *  column keeps about 220px beside it. Measured, not guessed (docs/specs/stale-listings.md, 7b). */
+const RANGE_ROOM_PX = 1000
+/** Under this the Lowest and trend columns leave the row (`Pricing.css`, 899px). */
+const NARROW_PX = 900
+
+/** THE LOWEST AND HIGHEST SALE OVER 7 DAYS for one row. `undefined`: no history is saved for this
+ *  card. `null`: it is saved, and nothing sold in 7 days. Never a guess: both draw a dash. */
+type RangeRead = { low: number; high: number; through: string | null; stale: boolean }
+function rangeOf(saved: SavedTrendsPayload | null, sku: string, asOf: number | null): RangeRead | null | undefined {
+  const found = saved?.skus[sku]
+  const facts = found?.facts
+  if (found === undefined || facts === undefined) return undefined
+  if (facts.low_7d == null || facts.high_7d == null) return null
+  /* THE SAME RULE AS A FIGURE'S AGE, in days: history through yesterday is a normal morning. */
+  const newest = asOf === null ? null : new Date((asOf - 86_400) * 1000).toISOString().slice(0, 10)
+  const through = found.through ?? null
+  return { low: Number(facts.low_7d), high: Number(facts.high_7d), through, stale: through !== null && newest !== null && through < newest }
+}
+
+/** A figure's age, drawn only when it is older than the page's "Prices as of" by more than an hour
+ *  (`STALE_AFTER_S`), as a date. A fresh figure draws nothing, so a normal morning adds no noise. */
+function ageOf(readAt: number | null | undefined, asOf: number | null): string | null {
+  if (readAt === null || readAt === undefined || asOf === null) return null
+  return readAt < asOf - STALE_AFTER_S ? absoluteDate(readAt * 1000) : null
 }
 
 function numberSuffix(number: string): RegExp | null {
@@ -884,27 +913,37 @@ export function Pricing() {
   const holdButtons = useRef(new Map<string, HTMLButtonElement>())
   const [photoFor, setPhotoFor] = useState<{ sku: string; at: number } | null>(null)
 
-  /* The trend strip (D277), cleared when the loaded set changes. */
-  const [trends, setTrends] = useState<Record<string, TrendRead>>({})
-  const [trendRun, setTrendRun] = useState<{ total: number; done: number; reading: boolean } | null>(null)
-  /* THE STRIPS THE DAILY JOB SAVED OVERNIGHT, read once from a local file at first paint. It fires
-     no request at the market host, so a visit still costs the mirror nothing (D278). The Trends
-     press below overwrites a row's strip with a fresh read. */
+  /* THE STRIPS AND SALES FIGURES THE DAILY JOB SAVED, read from a local file at first paint. It
+     fires no request at the market host, so a visit still costs the mirror nothing (D278). THE
+     READ RETRIES: one failed or slow read (a server restart, a busy slot) used to leave every
+     strip empty for the whole visit, with only the Trends press to fill them. A second failure
+     is said in words, and "Refresh now" reads it again once it ends. */
   const [saved, setSaved] = useState<SavedTrendsPayload | null>(null)
-  useEffect(() => {
-    let alive = true
+  const [savedFailed, setSavedFailed] = useState(false)
+  const savedAlive = useRef(true)
+  const savedTimer = useRef<number | undefined>(undefined)
+  const readSaved = useCallback((attempt = 0) => {
+    window.clearTimeout(savedTimer.current)
     getSavedTrends()
       .then((payload) => {
-        if (alive) setSaved(payload)
+        if (!savedAlive.current) return
+        setSaved(payload)
+        setSavedFailed(false)
       })
       .catch(() => {
-        /* No saved strips is not a failure of this screen; the Trends press still reads. */
+        if (!savedAlive.current) return
+        if (attempt < SAVED_RETRIES) savedTimer.current = window.setTimeout(() => readSaved(attempt + 1), SAVED_RETRY_MS)
+        else setSavedFailed(true)
       })
-    return () => {
-      alive = false
-    }
   }, [])
-  const trendWalk = useRef(0)
+  useEffect(() => {
+    savedAlive.current = true
+    readSaved()
+    return () => {
+      savedAlive.current = false
+      window.clearTimeout(savedTimer.current)
+    }
+  }, [readSaved])
   const [note, setNote] = useState<{ sku: string; text: string } | null>(null)
   /** Holding: the held rows alone (UX-212). */
   const [filterHeld, setFilterHeld] = useState(false)
@@ -987,9 +1026,6 @@ export function Pricing() {
 
   /** Fetch the rows and the corpus together. One read whatever the tab (D103). */
   const load = useCallback(async (wanted: ReadonlySet<string>, markdown: string | null, live: boolean) => {
-    trendWalk.current += 1
-    setTrends({})
-    setTrendRun(null)
     loadWalk.current += 1
     const mine = loadWalk.current
     if (live && markdown === null) {
@@ -1041,6 +1077,29 @@ export function Pricing() {
   }, [])
 
   const reload = useCallback(() => void load(picked, stamp, liveTab), [load, picked, stamp, liveTab])
+
+  /* "Refresh now" brings the rows and the saved strips current; when a run ends both are read again.
+     A visit only reads where it is, and presses nothing. */
+  const refresh = usePricesRefresh(() => {
+    reload()
+    readSaved()
+  }, !liveTab)
+  const asOf = asOfOf(refresh.state)
+
+  /* THE LIST'S OWN WIDTH, measured: the Range 7d column needs room the name column would lose. */
+  const [listWidth, setListWidth] = useState(0)
+  const listObserver = useRef<ResizeObserver | null>(null)
+  const measureList = useCallback((node: HTMLElement | null) => {
+    listObserver.current?.disconnect()
+    listObserver.current = null
+    if (node === null) return
+    const publish = () => setListWidth(node.clientWidth)
+    publish()
+    listObserver.current = new ResizeObserver(publish)
+    listObserver.current.observe(node)
+  }, [])
+  const rangeOn = listWidth >= RANGE_ROOM_PX
+  const narrow = listWidth > 0 && listWidth < NARROW_PX
 
   useEffect(() => {
     void load(picked, stamp, liveTab)
@@ -2062,71 +2121,6 @@ export function Pricing() {
     [write, book],
   )
 
-  /** Read the shape of every row still waiting — one press, chunked, sequential. EACH ROW ASKS
-   *  ITS OWN RUN, so the whole worklist can be read and not only a single run (the old per-run
-   *  address left the default landing with no trends at all). */
-  const loadTrends = useCallback(() => {
-    const open = rows.filter((row) => !row.at_cap)
-    const walk = (trendWalk.current += 1)
-    setTrends(Object.fromEntries(open.map((row) => [row.sku, { kind: 'reading' } as TrendRead])))
-    setTrendRun({ total: open.length, done: 0, reading: true })
-    const byDoor = new Map<string, string[]>()
-    for (const row of open) {
-      const door = stamp ?? row.in[row.in.length - 1]?.run ?? run
-      if (door === null || door === undefined) continue
-      const list = byDoor.get(door)
-      if (list === undefined) byDoor.set(door, [row.sku])
-      else list.push(row.sku)
-    }
-    const chunks: { door: string; skus: string[] }[] = []
-    for (const [door, skus] of byDoor) {
-      for (let at = 0; at < skus.length; at += TREND_CHUNK) chunks.push({ door, skus: skus.slice(at, at + TREND_CHUNK) })
-    }
-    const ask = (door: string, skus: string[]) => (stamp !== null ? markdownTrends(door, skus) : getPriceTrends(door, skus))
-    const read = async () => {
-      for (const chunk of chunks) {
-        if (trendWalk.current !== walk) return
-        try {
-          const payload = await ask(chunk.door, chunk.skus)
-          if (trendWalk.current !== walk) return
-          setTrends((current) => {
-            const next = { ...current }
-            for (const sku of chunk.skus) {
-              const found = payload.skus[sku]
-              next[sku] =
-                found !== undefined
-                  ? { kind: 'read', ranges: found.ranges, at: Math.floor(Date.now() / 1000) }
-                  : { kind: 'refused', why: payload.refused[sku] ?? 'No answer for this card.' }
-            }
-            return next
-          })
-        } catch (error) {
-          if (trendWalk.current !== walk) return
-          const why = describeFailure(error).message
-          setTrends((current) => {
-            const next = { ...current }
-            for (const sku of chunk.skus) next[sku] = { kind: 'refused', why }
-            return next
-          })
-        }
-        setTrendRun((current) => (current === null ? current : { ...current, done: current.done + chunk.skus.length }))
-      }
-      if (trendWalk.current === walk) setTrendRun((current) => (current === null ? current : { ...current, reading: false }))
-    }
-    void read()
-  }, [rows, stamp, run])
-
-  const trendTally = useMemo(() => {
-    let read = 0
-    let none = 0
-    for (const value of Object.values(trends)) {
-      if (value.kind !== 'read') continue
-      read += 1
-      if (value.ranges.length === 0) none += 1
-    }
-    return { read, none }
-  }, [trends])
-
   /* Which row the pointer is over. A ref: nothing draws it. */
   const hovered = useRef<string | null>(null)
   const focusedSku = useCallback(() => {
@@ -2538,20 +2532,8 @@ export function Pricing() {
           {`Held ${held.length}`}
         </Button>
       )}
-      {table === null || table.length === 0 ? null : (
-        <Button size="sm" icon="trendUp" className="pricing-trends-press" onClick={loadTrends} busy={trendRun?.reading === true} disabled={trendRun?.reading === true}>
-          Trends
-        </Button>
-      )}
     </div>
   )
-
-  const trendSays =
-    trendRun === null
-      ? ''
-      : trendRun.reading
-        ? `Reading trends, ${trendRun.done} of ${trendRun.total}…`
-        : `Trends for ${trendTally.read} ${trendTally.read === 1 ? 'card' : 'cards'}.${trendTally.none === 0 ? '' : ` ${trendTally.none} ${trendTally.none === 1 ? 'has' : 'have'} no sales.`}`
 
   /* THE RULE LINE (D277, Q5): what the rule does and the cut-off, once, with "Change". */
   const readAgain = () =>
@@ -2595,9 +2577,6 @@ export function Pricing() {
       <span className="bn-sr" role="status">
         {liveBusy ? 'Reading what is live at TCGplayer…' : ''}
       </span>
-      <span className="pricing-trend-says" aria-live="polite">
-        {trendSays}
-      </span>
     </p>
   ) : (
     <p className="pricing-rule-line">
@@ -2610,9 +2589,6 @@ export function Pricing() {
       <Button size="sm" variant="quiet" onClick={() => setRuleOpen(true)}>
         Change
       </Button>
-      <span className="pricing-trend-says" aria-live="polite">
-        {trendSays}
-      </span>
     </p>
   )
 
@@ -2862,7 +2838,13 @@ export function Pricing() {
     >
       <div className="pricing-body" data-live={liveTab ? 'true' : undefined}>
         {bar}
-        <PriceMovers trendsNote={liveTab || saved === null ? null : saved.note} trendsLoading={liveTab || saved === null} />
+        {liveTab ? null : <PricesAsOf state={refresh.state} refused={refresh.refused} onPress={refresh.press} />}
+        <PriceMovers
+          trendsNote={liveTab || saved === null ? null : saved.note}
+          trendsLoading={liveTab || (saved === null && !savedFailed)}
+          trendsFailed={savedFailed}
+          narrow={narrow}
+        />
         {ruleLine}
         {/* UN-11: outlives the toast, and a reload. Gone once a send has carried a cleared
             SKU (`clear_built_on`) — the next read finds no `last_clear`. */}
@@ -2904,7 +2886,7 @@ export function Pricing() {
           {filtering && drawn.length === 0 ? (
             <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." didYouMean={{ name: nearName, onPick: setQuery }} />
           ) : null}
-          <div className="pricing-list" data-copies={source.copies ? 'some' : 'none'}>
+          <div className="pricing-list" ref={measureList} data-copies={source.copies ? 'some' : 'none'} data-range={rangeOn ? 'some' : undefined}>
             <div className="pricing-caption" aria-hidden="true">
               {source.copies ? <span /> : null}
               {/* "ITEM", NOT "CARD" (the owner's add-on, 2026-09-26): the rows include sealed
@@ -2912,6 +2894,7 @@ export function Pricing() {
               <span>Item</span>
               <span className="pricing-col-market">Market</span>
               <span className="pricing-col-low">Lowest</span>
+              {rangeOn ? <span className="pricing-col-range">Range 7d</span> : null}
               <span className="pricing-col-trend">Trend</span>
               {source.copies ? <span className="pricing-col-qty">Qty</span> : null}
               <span className="pricing-col-price">{liveTab ? 'New price' : 'Price'}</span>
@@ -2937,8 +2920,10 @@ export function Pricing() {
                     asking={liveTab ? (askingOf.get(sku.sku) ?? null) : undefined}
                     note={note !== null && note.sku === sku.sku ? note.text : null}
                     readAge={(() => { const at = source.readAtOf(sku); return typeof at === 'number' && Number.isFinite(at) && at > 0 ? relativeDate(at * 1000) : null })()}
-                    trend={trends[sku.sku] ?? (liveTab ? undefined : savedRead(saved, sku.sku))}
-                    kept={liveTab ? undefined : keptStrip(saved, sku.sku)}
+                    trend={savedRead(saved, sku.sku)}
+                    kept={keptStrip(saved, sku.sku)}
+                    age={ageOf(sku.snap_at, asOf)}
+                    range={rangeOn ? rangeOf(saved, sku.sku, asOf) : false}
                     asked={sendQty[sku.sku] ?? ''}
                     onAsked={(text) => setAsked(sku.sku, text)}
                     holding={holdFor === sku.sku}
@@ -3107,6 +3092,8 @@ function PricingRow({
   readAge,
   trend,
   kept,
+  age,
+  range,
   asked,
   onAsked,
   holding,
@@ -3130,6 +3117,10 @@ function PricingRow({
   readAge: string | null
   trend: TrendRead | undefined
   kept?: KeptTrend
+  /** When this row's figures were read, as a date, only when older than the page's time by an hour. */
+  age: string | null
+  /** The Range 7d cell: `false` where the column is not drawn. */
+  range: RangeRead | null | undefined | false
   asked: string
   onAsked: (text: string) => void
   holding: boolean
@@ -3242,11 +3233,30 @@ function PricingRow({
         <span className="pricing-ref-label">Market </span>
         {/* The exact string `m` writes into the field; `Money` draws it to the same two places. */}
         {sku.snap.market === null ? '—' : <Money value={Number(sku.snap.market)} />}
+        {/* THE AGE HAS ITS LINE ON EVERY ROW, drawn or not, so a refresh moves no row (D313). */}
+        <span className="pricing-ref-age">{age}</span>
       </span>
       <span className="pricing-ref pricing-col-low" data-empty={sku.snap.low === null ? 'true' : undefined}>
         <span className="pricing-ref-label">Lowest </span>
         {sku.snap.low === null ? '—' : <Money value={Number(sku.snap.low)} />}
       </span>
+      {range === false ? null : (
+        <span className="pricing-ref pricing-col-range" data-empty={typeof range === 'object' && range !== null ? undefined : 'true'}>
+          {range === undefined ? (
+            <span title="No sales history is saved for this card yet.">—</span>
+          ) : range === null ? (
+            <span title="Nothing sold in the last 7 days.">—</span>
+          ) : (
+            <>
+              <Money value={range.low} />
+              <Money value={range.high} />
+            </>
+          )}
+          <span className="pricing-ref-age" data-stale={typeof range === 'object' && range !== null && range.stale ? 'true' : undefined}>
+            {typeof range === 'object' && range !== null && range.stale && range.through !== null ? absoluteDate(`${range.through}T12:00:00`) : null}
+          </span>
+        </span>
+      )}
       <span className="pricing-col-trend">
         <TrendCell read={trend} kept={kept} />
       </span>

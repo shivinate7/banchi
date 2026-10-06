@@ -381,7 +381,8 @@ cannot go wrong this way is the quantity, because no file on this path can move 
 
 ## 7b. Pricing opens on fresh prices, with more on T
 
-**STATUS: SPECIFIED, NOT BUILT.** Nothing in this section is in code yet. It starts from four
+**STATUS: BUILT.** `server/pipeline_routes.py:do_prices_refresh` is the one home, T7's
+`price_fresh` group proves the server half and the Pricing specs the screen half. It started from four
 rulings by the owner. The daily job also refreshes Market and Lowest for every card waiting to be
 sent. The screen opens with the morning's data already in it. A press brings everything current.
 The row grows by two columns, and the rest waits behind T.

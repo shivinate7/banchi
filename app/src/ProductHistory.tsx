@@ -58,6 +58,7 @@ import { useSearch, type SearchState } from './useSearch'
 import { money } from './money'
 import { saleDate } from './dates'
 import { sparkSegments } from './PriceHistory'
+import { PriceFactsBlock } from './PriceFacts'
 import './ProductHistory.css'
 
 const RANGE_LABEL: Record<string, string> = {
@@ -395,7 +396,18 @@ function useProductHistory(sku: string): {
 /** THE SHARED BODY (`D278`). Everything the page and the sheet both draw:
  *  the market chart per range, the legend, which printing this is, and the owner's own fills
  *  split at `history_begins`. Neither frame around it fetches or computes anything twice. */
-export function ProductHistoryView({ sku, onSwitchSku }: { readonly sku: string; readonly onSwitchSku: (sku: string) => void }) {
+/** THE PRICES AND SALES BLOCK SITS ABOVE THE HISTORY (spec 7b), so the sheet and the routed page both
+ *  get it, and it opens at once: it reads local files only. */
+export function ProductHistoryView(props: { readonly sku: string; readonly onSwitchSku: (sku: string) => void }) {
+  return (
+    <div className="producthistory-body">
+      <PriceFactsBlock sku={props.sku} />
+      <HistoryBody {...props} />
+    </div>
+  )
+}
+
+function HistoryBody({ sku, onSwitchSku }: { readonly sku: string; readonly onSwitchSku: (sku: string) => void }) {
   const { payload, orders, failure, loading } = useProductHistory(sku)
   const printings = usePrintings(payload?.name ?? null)
 

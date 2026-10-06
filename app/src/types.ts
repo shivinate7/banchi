@@ -2439,6 +2439,9 @@ export type PricingSku = {
    *  (D59). */
   copies_out: number
   at_cap: boolean
+  /** WHEN this row's figures were read: the fetch time of the export its run was last joined
+   *  against, in epoch seconds. Absent or null where the file is gone. */
+  snap_at?: number | null
   /** WHY this run adds no row for a SKU it matched, composed by `pipeline/join.py:
    *  SkuMatch.nothing_to_add` — or `null` when it adds one, which is the ordinary case.
    *
@@ -4769,7 +4772,50 @@ export type PriceRefreshNote =
   | { at: number; ok: false; code: string; message: string }
 
 /** One SKU's strip as the daily job saved it, with the second it was read. */
-export type SavedTrend = { at: number; ranges: TrendRange[] }
+export type SavedTrend = { at: number; ranges: TrendRange[]; through?: string; facts?: SalesFacts }
+
+/** What `Series.window` says about sales, for one SKU: the row's Range 7d and the sheet's figures.
+ *  Money is text. The server computes every one; the browser draws them. */
+export type SalesFacts = {
+  sold_7d?: number
+  sales_7d?: number
+  avg_7d?: string | null
+  low_7d?: string | null
+  high_7d?: string | null
+  sold_30d?: number
+  sales_30d?: number
+  avg_30d?: string | null
+  low_30d?: string | null
+  high_30d?: string | null
+  best_day?: [string, number] | null
+  change_30d?: string | null
+}
+
+/** One step of the price refresh, as `inventory/price-refresh.json` records it. `last_ok_at` is the
+ *  time "Prices as of" keeps drawing while a later try fails. */
+export type RefreshStep = { at: number; ok: boolean; last_ok_at?: number; message?: string }
+
+/** `GET /pipeline/prices/refresh`: where "Refresh now" is, and the note of how the last one ended. */
+export type PricesRefreshState = {
+  state: 'idle' | 'running' | 'done' | 'failed'
+  step: 'listings' | 'catalog' | 'join' | 'history' | null
+  done: number
+  total: number
+  note: { at?: number; ok?: boolean; message?: string; steps?: Record<string, RefreshStep | undefined> } | null
+}
+
+/** `GET /pipeline/price-facts?sku=`: everything the product sheet says about one card's prices and
+ *  sales, from local files. `days` are the newest 30: date, units, sales, low, high, market. */
+export type PriceFacts = {
+  sku: string
+  name: string | null
+  at: number | null
+  through: string | null
+  prices: { market: string; low: string | null; low_with_shipping: string | null; direct_low: string | null } | null
+  shelf: { on_hand: number | null; can_be_sent: number | null; listed_now: string | null; asking: string | null } | null
+  days: [string, number, number, string | null, string | null, string | null][]
+  facts: SalesFacts
+}
 
 /** How the overnight Trends read ended. `read`, `no_history` and `unreadable` add up to `asked`:
  *  only `no_history` means the card has none, `unreadable` is a read the mirror or network
