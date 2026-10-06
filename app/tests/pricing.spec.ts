@@ -2044,6 +2044,24 @@ test('TCGplayer took fewer rows than were sent, and the card never says more wen
   await expect(page.locator('.send-card')).not.toContainText('3 copies went live')
 })
 
+test('a send that took held cards off TCGplayer says how many copies came off, and says nothing when none', async ({ page }) => {
+  for (const [taken, sentence] of [
+    [3, '3 copies came off TCGplayer.'],
+    [1, '1 copy came off TCGplayer.'],
+    [0, null],
+  ] as const) {
+    const sent = sendSummary({ taken_off: taken })
+    await open(page, {
+      send: () => ({ status: 200, body: { send: sent, console: '' } }),
+      sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [sent] } : SENDS_NONE),
+    })
+    await sendPress(page).click()
+    await expect(page.locator('.send-card')).toContainText('TCGplayer')
+    if (sentence) await expect(page.locator('.send-card')).toContainText(sentence)
+    else await expect(page.locator('.send-card')).not.toContainText('came off')
+  }
+})
+
 test('a send that skipped cards no longer in the store says so in one sentence, and says nothing when none', async ({ page }) => {
   for (const [gone, sentence] of [
     [['Articuno'], 'Not sent: Articuno. It is no longer in the store.'],

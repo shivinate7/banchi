@@ -1621,6 +1621,89 @@ def check_send_press(checks: Checks) -> None:
     )
 
 
+def check_send_hold_takes_off(checks: Checks) -> None:
+    """The press takes a held SKU's live copies off: one negative row, a receipt that says so.
+
+    THE OWNER'S RULING (D100's open question, "a negative `Add to Quantity` lowers a live
+    quantity"): the row reaches TCGplayer through the listing door, `Add to Quantity` minus
+    what Banchi put live and never more than the live read shows, and `_summary` carries the
+    count as `taken_off` for `SendCard`. No other press carries a negative.
+    """
+    checks.note("")
+    checks.note("SEND PRESS — a held SKU's live copies come off")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+
+    def hold(sku, reason):
+        book = corpus.Corpus.read()
+        if reason is None:
+            book.answers.pop(sku, None)
+        else:
+            book.answers[sku] = corpus.Answer(value={"withheld": reason})
+        book.write()
+
+    def pushed(sku):
+        listing = Store().read().inventory.listings.get(sku)
+        return 0 if listing is None else listing.pushed
+
+    def press(run_dir):
+        """The press's answer, or None with the refusal's sentence on the failure line."""
+        try:
+            return send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+        except pipeline_routes.PipelineRefusal as caught:
+            checks.ok(False, f"the press was refused: {caught.code}", str(caught))
+            return None
+
+    with send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        press(run_dir)
+        checks.equal(pushed(ARTICUNO_SKU), 3, "three copies went out and are pushed")
+
+        # THE OWNER HOLDS IT, with TCGplayer showing all three live.
+        hold(ARTICUNO_SKU, "bullish")
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        portal["rows"].clear()
+        answer = press(run_dir) or {"send": {}}
+        checks.equal(
+            {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]},
+            {ARTICUNO_SKU: "-3"},
+            "THE PORTAL RECEIVED ONE NEGATIVE ROW, minus the copies live, through the listing door",
+        )
+        checks.equal(
+            answer["send"].get("taken_off"),
+            3,
+            "and the receipt names how many copies came off (`taken_off`, read by SendCard)",
+        )
+        checks.equal(
+            pushed(ARTICUNO_SKU),
+            0,
+            "THE CARDS ARE UNSENT AGAIN: pushed is back to zero",
+        )
+
+        # UNHOLD: the three go out again, an ordinary positive row.
+        hold(ARTICUNO_SKU, None)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        portal["rows"].clear()
+        press(run_dir)
+        checks.equal(
+            {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]},
+            {ARTICUNO_SKU: "3"},
+            "UNHOLD AFTER, AND THE THREE GO OUT AGAIN as a positive row",
+        )
+
+        # TCGPLAYER HOLDS ONLY TWO (one sold): the row never takes more than the live read.
+        hold(ARTICUNO_SKU, "keeping")
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
+        portal["rows"].clear()
+        press(run_dir)
+        checks.equal(
+            {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]},
+            {ARTICUNO_SKU: "-2"},
+            "A NEGATIVE NEVER EXCEEDS WHAT TCGPLAYER HOLDS: three sent, two live, minus two",
+        )
+
+
 def _press_thread(fn, answers, index):
     """Run one press on its own thread and keep what it answered, or the code it refused."""
 
@@ -5632,6 +5715,7 @@ CHECKS = (
     check_markdown_push,
     check_send_guard,
     check_send_press,
+    check_send_hold_takes_off,
     check_send_sold_since,
     check_send_hazards,
     check_send_review_r3,

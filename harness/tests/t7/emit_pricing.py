@@ -4433,6 +4433,176 @@ def check_live_listing_per_sku(checks: Checks) -> None:
     checks.equal(moved["listed"], 2, "`do_pipeline_movers` still counts the live SKUs a bad row does not touch")
 
 
+def check_hold_takes_live_off(checks: Checks) -> None:
+    """A SKU held on `#/pricing` with copies live comes off TCGplayer on the next send.
+
+    THE OWNER'S RULING (decides D100's open question, "never delete to lower a price", its
+    amendment "a negative `Add to Quantity` lowers a live quantity, measured"): hold a SKU
+    that has copies live, any withhold reason, and the next send writes ONE row for it with
+    `Add to Quantity` = minus the copies Banchi put live, never below what TCGplayer holds.
+    No live read means that row is refused with a sentence. The cards stay in their box and
+    go back to unsent, so an unhold sends them again. Every other path still refuses a
+    negative.
+
+    THE WORDING THESE ASSERTS IS THE CONTRACT: "N copies came off TCGplayer" for the report
+    (the receipt's `taken_off` carries the same figure), and "live read" in the refusal.
+    """
+    checks.note("")
+    checks.note("HOLD TAKES LIVE COPIES OFF — a negative row, held SKUs only")
+
+    from cli import __main__ as entry
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+
+    written = {}
+
+    def emit(run_dir):
+        """Run `emit`; the rows THIS press wrote, `{}` when the import file did not change
+        (the file of an earlier press stays on disk when a press writes nothing)."""
+        path = run_dir.path(runs.IMPORT_MERGED)
+        before = path.read_bytes() if path.exists() else None
+        with quiet() as said:
+            code = entry.main(["emit", str(run_dir.directory)])
+        after = path.read_bytes() if path.exists() else None
+        rows = {}
+        if after is not None and after != before:
+            rows = {
+                row[tcgcsv.SKU_COLUMN]: row[tcgcsv.QUANTITY_COLUMN]
+                for row in tcgcsv.read_export(path).rows
+            }
+        written["rows"] = rows
+        return code, said.getvalue()
+
+    def rows_of(run_dir):
+        return written["rows"]
+
+    def hold(sku, reason="keeping"):
+        book = corpus.Corpus.read()
+        if reason is None:
+            book.answers.pop(sku, None)
+        else:
+            book.answers[sku] = corpus.Answer(value={"withheld": reason})
+        book.write()
+
+    def settle_live(run_dir, quantities):
+        path = run_dir.path("live-read.csv")
+        path.write_bytes(_live_export_bytes(quantities))
+        command(checks, "reconcile", "--live", str(path), "--write")
+
+    def pushed(sku):
+        listing = Store().read().inventory.listings.get(sku)
+        return 0 if listing is None else listing.pushed
+
+    # ------------------------------------------ held with copies live: a negative, then unheld
+    for reason in ("bullish", "keeping", "next_batch"):
+        with isolated_home():
+            run_dir, _ = seam_run(checks, cards)
+            command(checks, "emit", str(run_dir.directory))
+            settle_live(run_dir, {ARTICUNO_SKU: 3, DUNSPARCE_SKU: 1})
+            hold(ARTICUNO_SKU, reason)
+            code, said = emit(run_dir)
+            checks.equal(
+                rows_of(run_dir),
+                {ARTICUNO_SKU: "-3"},
+                f"A HELD SKU ({reason}) WITH THREE LIVE WRITES ONE ROW, Add to Quantity -3, "
+                "and the card still live and not held writes none",
+            )
+            checks.ok(
+                code == 0 and re.search(r"3 copies came off TCGplayer", said) is not None,
+                f"the report says in a sentence how many came off. Got: {said[-300:]!r}",
+            )
+            checks.equal(
+                pushed(ARTICUNO_SKU),
+                0,
+                "THE CARDS ARE UNSENT AGAIN: `pushed` is lowered by the copies taken off",
+            )
+            checks.equal(
+                len(Store().read().inventory.positions_for_sku(ARTICUNO_SKU)),
+                3,
+                "and they stay in their box, still carrying the SKU",
+            )
+            if reason != "keeping":
+                continue
+            hold(ARTICUNO_SKU, None)
+            code, said = emit(run_dir)
+            checks.equal(
+                rows_of(run_dir),
+                {ARTICUNO_SKU: "3"},
+                "UNHOLD AFTER, AND THE THREE GO OUT AGAIN as an ordinary positive row",
+            )
+
+    # ------------------------------------------ never below what TCGplayer holds
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        command(checks, "emit", str(run_dir.directory))
+        settle_live(run_dir, {ARTICUNO_SKU: 2, DUNSPARCE_SKU: 1})
+        hold(ARTICUNO_SKU)
+        code, said = emit(run_dir)
+        checks.equal(
+            rows_of(run_dir),
+            {ARTICUNO_SKU: "-2"},
+            "THREE WERE SENT AND TCGPLAYER HOLDS TWO (one sold): the row takes two, never "
+            "three, so a negative cannot exceed the live count",
+        )
+
+    # ------------------------------------------ held, nothing live: no row
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        hold(DUNSPARCE_SKU, "bullish")
+        code, said = emit(run_dir)
+        checks.equal(
+            rows_of(run_dir),
+            {ARTICUNO_SKU: "3"},
+            "A HELD SKU THAT WAS NEVER SENT WRITES NO ROW, negative or otherwise",
+        )
+
+    # ------------------------------------------ held, copies pushed, no live read: refused
+    with isolated_home():
+        run_dir, _ = seam_run(checks, [(3, i, "Articuno", "161", None) for i in (1, 2)])
+        command(checks, "emit", str(run_dir.directory))
+        file = run_dir.path(runs.IMPORT_MERGED)
+        before = file.read_bytes()
+        hold(ARTICUNO_SKU)
+        code, said = emit(run_dir)
+        checks.ok(
+            code != 0 and ARTICUNO_SKU in said and "live read" in said,
+            f"NO LIVE READ, NO GUESS: the row is refused with a sentence that names the "
+            f"card and says there is no live read. Got: {said[-300:]!r}",
+        )
+        checks.ok(
+            file.read_bytes() == before and pushed(ARTICUNO_SKU) == 2,
+            "and nothing was written: the file and the pushed count are as they were",
+        )
+
+    # ------------------------------------------ every other path still refuses a negative
+    from server import tcg_import
+
+    def row(quantity):
+        return {"ProductConditionId": ARTICUNO_SKU, "MyPrice": "5.00", "AddToQuantity": quantity}
+
+    for listing in (False, True):
+        caught = None
+        try:
+            tcg_import._check([row("-1")], listing=listing)
+        except Exception as refusal:  # noqa: BLE001
+            caught = refusal
+        checks.ok(
+            getattr(caught, "code", None) == "tcg_import_moves_quantity",
+            f"A NEGATIVE ON THE {'LISTING' if listing else 'PRICE'} DOOR IS STILL REFUSED "
+            "unless the send is a hold's take-off",
+        )
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        command(checks, "emit", str(run_dir.directory))
+        settle_live(run_dir, {ARTICUNO_SKU: 3, DUNSPARCE_SKU: 1})
+        code, said = emit(run_dir)
+        checks.ok(
+            not any(int(q) < 0 for q in rows_of(run_dir).values()),
+            "A SKU NOT HELD NEVER GETS A NEGATIVE, however many copies are live",
+        )
+
+
 CHECKS = (
     check_pipeline_routes,
     check_emit_claim_decides,
@@ -4451,6 +4621,7 @@ CHECKS = (
     check_worklist_on_hand_unstamped,
     check_cap_flag_refusals,
     check_emit_send_quantity,
+    check_hold_takes_live_off,
     check_merged_cap_is_the_tightest,
     check_threshold_and_file_shape,
     check_live_reconcile,
