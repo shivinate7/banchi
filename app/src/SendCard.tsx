@@ -108,8 +108,8 @@ function refusalTitle(code: string, data?: unknown): string {
 }
 
 /** SEND THE REST: the cards the run held that the store no longer has, by last-known name. */
-function NotSent({ gone }: { readonly gone: readonly string[] }) {
-  if (gone.length === 0) return null
+function NotSent({ gone }: { readonly gone?: readonly string[] }) {
+  if (gone === undefined || gone.length === 0) return null
   return (
     <Notice
       tone="info"
