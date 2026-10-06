@@ -9,7 +9,7 @@ import { DEALING_RAIL_TILES, SAVE_WAIT_MS } from '../src/dealer'
 
 /* A LONG SITTING MUST NOT FREEZE THE MAIN THREAD. A `longtask` observer reports only tasks of
  * 50 ms or more, so "no entry" is the bar. Three cases:
- *  1. DEALING, 50 captures, every PR: the rail (`footer.capture-undo`) stays live but draws only
+ *  1. DEALING, 50 captures, on PRs that change Capture code, and nightly: the rail (`footer.capture-undo`) stays live but draws only
  *     the newest DEALING_RAIL_TILES tiles, first tile the latest card, the Last capture panel
  *     (`aside.capture-last`) shows each new photo, no task over 50 ms in the last 10 captures, and
  *     after Stop the rail catches up to all of them. That one catch-up render may be long and is
