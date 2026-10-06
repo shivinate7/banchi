@@ -9,7 +9,7 @@ import {
 import { patchViewQuery, useFacetParams, useSortParam, useViewParam } from './kit/viewState'
 import { absoluteDate } from './dates'
 import {
-  ALL, DIMENSIONS, MEASURES, avgSalePrice, dimValue, optionCounts, orderValues, pivot,
+  ALL, DIMENSIONS, MEASURES, soldShare, dimValue, optionCounts, orderValues, pivot,
   type DimId, type MeasureId, type MixFilters, type PivotRow, type SalePrice,
 } from './mixPivot'
 import { salesOf } from './revenueMath'
@@ -69,7 +69,7 @@ function useMix() {
     let alive = true
     Promise.all([getStockMix(), getOrders()])
       .then(([mix, orders]) => {
-        if (alive) setLoaded({ mix, salePrice: avgSalePrice(salesOf(orders.orders).sales) })
+        if (alive) setLoaded({ mix, salePrice: soldShare(mix.cards, salesOf(orders.orders).sales) })
       })
       .catch((err) => {
         if (alive) setFailure(describeFailure(err))
@@ -211,7 +211,7 @@ export function MixView() {
       <Page title="Sales" icon="dollar" className="revenue mix" toolbar={bar} toolbarLabel="Mix controls">
         <EmptyState
           icon="camera"
-          title="Nothing is captured yet. Capture a card and its mix shows here."
+          title="No cards captured yet. Capture a card and its mix shows here."
           actions={<a className="bn-btn bn-btn-primary" href="#/capture">Capture a card</a>}
         />
       </Page>

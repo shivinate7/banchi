@@ -35,8 +35,10 @@ _JOINED = (
 # `retired` and `moved` cards are skipped in `read`, after the one statement.
 _SQL = f"""
 SELECT cards.game,
-       COALESCE(NULLIF(skus.set_name, ''), NULLIF(cards.set_name, ''), NULLIF(cards.set_hint, '')),
-       COALESCE(NULLIF(skus.rarity, ''), NULLIF(cards.rarity, ''), NULLIF({_JOINED.format(f='rarity_claim')}, '')),
+       CASE WHEN NULLIF(cards.sku, '') IS NOT NULL THEN NULLIF(skus.set_name, '')
+            ELSE COALESCE(NULLIF(cards.set_name, ''), NULLIF(cards.set_hint, '')) END,
+       CASE WHEN NULLIF(cards.sku, '') IS NOT NULL THEN NULLIF(skus.rarity, '')
+            ELSE COALESCE(NULLIF(cards.rarity, ''), NULLIF({_JOINED.format(f='rarity_claim')}, '')) END,
        COALESCE(NULLIF(skus.condition, ''), NULLIF({_JOINED.format(f='metadata_finish')}, '')),
        cards.state, cards.sku, boxes.name, cards.box,
        {_WEEK.format(col='cards.captured_at')},

@@ -8349,7 +8349,7 @@ COMPONENTS = [
                                         "`--bn-*` only.",
                                 "governed_by": ["D214", "D313"]},
             "src/mixPivot.ts": {"does": "the Mix pivot's pure math: nine dimensions, eight measures, "
-                                        "`pivot`, `optionCounts`, `priceBand` and `avgSalePrice` "
+                                        "`pivot`, `optionCounts`, `priceBand` and `soldShare` "
                                         "(a SKU's refund-adjusted gross over its copies, from "
                                         "`salesOf`). A ratio over nothing, weeks of stock with no "
                                         "sale in 14 days and a median over no prices are `null`, "

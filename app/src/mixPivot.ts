@@ -6,7 +6,7 @@ import type { Sale } from './revenueMath'
  * so a press on any control is a local recompute and fetches nothing.
  *
  * REVENUE IS NOT A SERVER SUM. A sold card's price is its SKU's average sale price off
- * `salesOf`'s refund-adjusted lines (`avgSalePrice`), so Mix cannot disagree with Sales (D225).
+ * `salesOf`'s refund-adjusted lines (`soldShare`), so Mix cannot disagree with Sales (D225).
  * Gross only, never profit (D214). */
 
 export type DimId = 'game' | 'set' | 'rarity' | 'finish' | 'state' | 'box' | 'capw' | 'salew' | 'band'
@@ -57,18 +57,18 @@ export function priceBand(price: number | null): string {
   return BANDS[4]
 }
 
-/** Each SKU's refund-adjusted gross over its copies, from `salesOf`'s own lines. A line with no
- *  usable price adds neither a dollar nor a copy, and a SKU with no priced copy is absent. */
-export function avgSalePrice(sales: readonly Sale[]): Record<string, number> {
+
+/** Each SKU's Sales gross (`salesOf`'s refund-adjusted, priced lines, summed) split equally across
+ *  the sold cards `cards` holds for it. So a SKU's Mix revenue is exactly Sales' figure for it: an
+ *  unpriced line adds nothing, and a line Sales dropped adds no card. A SKU with sold cards and no
+ *  sale gets 0. Pass every card, never a filtered slice, so a slice carries only its own share. */
+export function soldShare(cards: readonly MixCard[], sales: readonly Sale[]): Record<string, number> {
   const gross: Record<string, number> = {}
-  const copies: Record<string, number> = {}
-  for (const sale of sales) {
-    if (!sale.priceKnown || sale.quantity <= 0) continue
-    gross[sale.sku] = (gross[sale.sku] ?? 0) + sale.gross
-    copies[sale.sku] = (copies[sale.sku] ?? 0) + sale.quantity
-  }
+  for (const sale of sales) gross[sale.sku] = (gross[sale.sku] ?? 0) + sale.gross
+  const count: Record<string, number> = {}
+  for (const card of cards) if (card.state === 'Sold' && card.sku !== null) count[card.sku] = (count[card.sku] ?? 0) + 1
   const out: Record<string, number> = {}
-  for (const sku of Object.keys(gross)) out[sku] = gross[sku]! / copies[sku]!
+  for (const sku of Object.keys(count)) out[sku] = (gross[sku] ?? 0) / count[sku]!
   return out
 }
 
