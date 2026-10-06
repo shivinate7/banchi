@@ -809,6 +809,12 @@ function read(path: string): unknown {
    * gives with no sales export, for any SKU. The screen words it as a sentence. */
   const realized = /^\/pipeline\/products\/([^/]+)\/realized$/.exec(route)
   if (realized !== null) return { sku: decodeURIComponent(realized[1] ?? ''), configured: false }
+  /* No price read has run on a published page: the answers the real server gives before the first
+   * refresh, so the header says so and the product sheet draws one sentence for each block. */
+  if (route === '/pipeline/prices/refresh') return { state: 'idle', step: null, done: 0, total: 0, note: null }
+  if (route === '/pipeline/price-facts') {
+    return { sku: params.get('sku') ?? '', name: null, at: null, through: null, prices: null, shelf: null, days: [], facts: {} }
+  }
   /* The background reader is off in the demo: the answer the real server gives when it is not swept. */
   if (route === '/pipeline/match/sweep') {
     return params.has('keys')
