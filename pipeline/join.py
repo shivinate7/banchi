@@ -2765,6 +2765,21 @@ class JoinReport:
 Router = Callable[[IdentifiedCard, Candidates, variant.Resolution], routing.Destination]
 
 
+def _picks_same_printing(card: "IdentifiedCard", pick: "MatcherPick", row) -> bool:
+    """Did the free reader's pick name the resolved row's printing? Set by `setnames.sides`
+    (the fold), number by `identity_binding.number_agrees`. A blank set or number on the pick is
+    no evidence and never agrees: a name alone never counts."""
+    from pipeline import identity_binding  # it imports this module
+
+    if row is None or not pick.set or not pick.number:
+        return False
+    if not set(setnames.sides(pick.set)) & set(setnames.sides(row[tcgcsv.SET_COLUMN])):
+        return False
+    return identity_binding.number_agrees(
+        games.get(card.game or games.DEFAULT_GAME)["join_key"], pick.number, card.printed_total, row[tcgcsv.NUMBER_COLUMN]
+    )
+
+
 def default_router(
     threshold: Decimal = pricing.THRESHOLD,
     review_below: str = routing.CONFIDENCE_LOW,
@@ -2786,10 +2801,25 @@ def default_router(
             None if resolution.stage == variant.HUMAN_ANSWERED else card.confidence
         )
         gate = review_below
-        if card.second_look is not None and resolution.stage != variant.HUMAN_ANSWERED:
-            # THE SECOND LOOK IS NEVER AUTO-SAVED: a low reading under a low gate is review.
-            confidence, gate = routing.CONFIDENCE_LOW, routing.CONFIDENCE_LOW
-        return routing.route(
+        second_look = card.second_look
+        held_reason = None
+        if second_look is not None and resolution.stage != variant.HUMAN_ANSWERED:
+            # THE SECOND LOOK IS HELD UNLESS BOTH READERS NAMED THE SAME PRINTING and the paid
+            # read is high (measured: the owner took the agreed card 12 of 12, the free pick
+            # 0 of 10 on disagreement). A card the ladder already sent to review keeps its reason.
+            if resolved:
+                if card.confidence == routing.CONFIDENCE_HIGH and _picks_same_printing(
+                    card, second_look, resolution.row
+                ):
+                    pass
+                else:
+                    confidence, gate = routing.CONFIDENCE_LOW, routing.CONFIDENCE_LOW
+                    held_reason = (
+                        routing.READERS_DISAGREE
+                        if card.confidence == routing.CONFIDENCE_HIGH and second_look.name
+                        else routing.SECOND_LOOK_UNSURE
+                    )
+        destination = routing.route(
             resolved=resolved,
             reason=resolution.reason,
             confidence=confidence,
@@ -2798,6 +2828,9 @@ def default_router(
             threshold=threshold,
             review_below=gate,
         )
+        if held_reason and destination.reason == routing.LOW_CONFIDENCE:
+            destination = replace(destination, reason=held_reason)
+        return destination
 
     return route
 

@@ -70,7 +70,7 @@ released in ignorance of each other (its own docstring carries that history).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -462,6 +462,12 @@ def plan(
         if built is None:
             out.skipped.append(Skipped(position, queue_name, NO_READING, game))
             continue
+        # THE ONE FIELD READ OFF THE ENTRY: the free reader's pick lives nowhere else (the store
+        # card never carries it). Dropping it cleared a held, disagreeing entry on refresh.
+        said = entry.read.get("matcher_pick")
+        pick = run_resolve._second_look({**said, "code": said.get("reason")}) if isinstance(said, dict) else None
+        if pick is not None:
+            built = replace(built, second_look=pick)
         # THE QUESTION IS RE-BOUND TO THE CARD THAT IS THERE, and this counts the times that
         # is a different card than the entry was written about. A mid-box delete slides every
         # higher card down one (D10 ruling 1) and the entry left behind goes on describing its

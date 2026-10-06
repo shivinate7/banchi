@@ -166,6 +166,15 @@ function duplicatedCondition(candidates: CandidateRow[]): string | null {
   return null
 }
 
+/* THE REASON THE SCREEN SHOWS. An entry written before the two second-look reasons existed
+ * says `low_confidence` over a high read plus the free reader's pick, which is the readers
+ * disagreeing. Said so rather than "Low confidence read" over a High chip. */
+function shownReason(entry: QueueEntryWire): string {
+  return entry.reason === 'low_confidence' && text(entry.confidence) === 'high' && entry.read.matcher_pick
+    ? 'readers_disagree'
+    : entry.reason
+}
+
 /* One sentence per reason. A claim is drawn as a word; its pipeline spelling is kept on the
  * segment so the title still greps against the run report. */
 function sentence(entry: QueueEntryWire): Segment[] {
@@ -188,7 +197,7 @@ function sentence(entry: QueueEntryWire): Segment[] {
   const claimed = claimMembers(entry.read.rarity_claim)
   const only = soleCondition(entry.candidates)
 
-  switch (entry.reason) {
+  switch (shownReason(entry)) {
     case 'no_catalog_row':
       return number === null
         ? [say('TCGplayer has no listing for this card.')]
@@ -242,6 +251,21 @@ function sentence(entry: QueueEntryWire): Segment[] {
       const confidence = text(entry.confidence) ?? 'low'
       return [...head, ...middle, say(', with '), claim(confidence, confidence.replace(/[_-]+/g, ' ')), say(' confidence, which is not enough to list it on.')]
     }
+
+    case 'readers_disagree': {
+      const pick = entry.read.matcher_pick
+      const said = pick ? [text(pick.name), text(pick.number)].filter((part) => part !== null).join(' ') : ''
+      return [
+        say('The paid read and the free reader name different cards. The paid read says '),
+        ...(name === null ? [say('a card it could not name')] : [cardName(name)]),
+        ...(number === null ? [] : [say(' '), value(number)]),
+        say(said === '' ? ', and the free reader names no other card.' : ', and the free reader says '),
+        ...(said === '' ? [] : [value(said), say('.')]),
+      ]
+    }
+
+    case 'second_look_unsure':
+      return [say('The free reader could not settle this card, and the paid read is '), claim(text(entry.confidence) ?? 'low', humanize(text(entry.confidence) ?? 'low')), say(' confidence, so it is held for you.')]
 
     case 'no_position':
       return [say('This card has no box or index recorded — this screen can\'t say where it is.')]
@@ -347,6 +371,9 @@ const QUESTIONS: Readonly<Record<string, string>> = {
   listing_disputed: 'Is the listing the right card?',
   /* `pipeline/routing.py:FREE_READER_DISAGREES`: `match audit --write` found a confident free read of the photograph that names another card than the one it is filed as. */
   free_reader_disagrees: 'Is this the card it is filed as?',
+  /* `pipeline/routing.py:READERS_DISAGREE` and `SECOND_LOOK_UNSURE`. */
+  readers_disagree: 'Which reader is right?',
+  second_look_unsure: 'Is this the card?',
 }
 
 const RETIRED_HEADLINE = 'This question was retired.'
@@ -2110,7 +2137,7 @@ function Card({
         <div className="review-question">
           <h2 className="review-question-title" data-retired={retired ? 'true' : undefined}>
             {retired ? <Icon name="history" size={20} className="review-question-mark" /> : null}
-            {questionFor(entry.reason)}
+            {questionFor(shownReason(entry))}
           </h2>
           {/* F5 verbiage cut: `name_disputed` shares its headline with `rarity_claim_mismatch`
               ("Mismatch?"), and its own reason label ("The read name matches no listing") only
@@ -2120,7 +2147,7 @@ function Card({
               disagree. Every other reason keeps its label here. */}
           {entry.reason === 'name_disputed' && row.shadow === undefined ? null : (
             <p className="review-question-sub">
-              {entry.reason === 'name_disputed' ? null : reasonLabel(entry.reason)}
+              {entry.reason === 'name_disputed' ? null : reasonLabel(shownReason(entry))}
               {row.shadow === undefined ? null : <Pill tone="warn">also {row.shadow}</Pill>}
             </p>
           )}
@@ -2250,7 +2277,7 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
       </span>,
     )
   }
-  if (entry.reason === 'low_confidence') {
+  if (['low_confidence', 'readers_disagree', 'second_look_unsure'].includes(entry.reason)) {
     const confidence = text(entry.confidence) ?? 'low'
     chips.push(
       <span key="conf" className="review-chip review-chip-warn" title={`Confidence: ${confidence}`}>
@@ -2878,7 +2905,7 @@ function Waiting({
                   <PositionLabel label={row.entry.label} flow="run" />
                 </span>
                 <span className="review-row-reason" title={row.entry.reason}>
-                  {reasonLabel(row.entry.reason)}
+                  {reasonLabel(shownReason(row.entry))}
                 </span>
                 {/* No `parked` pill: every row under the rule below is parked, and the rule
                     says so once rather than on each of them. */}
