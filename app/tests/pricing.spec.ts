@@ -5166,18 +5166,18 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(row.locator('.pricing-col-range')).toBeVisible()
     await expect(row.locator('.pricing-qty-input')).toBeVisible()
     const offsets = await row.evaluate((node) => {
-      const centre = (el: Element) => {
+      const center = (el: Element) => {
         const box = el.getBoundingClientRect()
         const css = getComputedStyle(el)
         const top = box.top + parseFloat(css.borderTopWidth) + parseFloat(css.paddingTop)
         const bottom = box.bottom - parseFloat(css.borderBottomWidth) - parseFloat(css.paddingBottom)
         return (top + bottom) / 2
       }
-      const rowCentre = centre(node)
+      const rowCenter = center(node)
       /* WHAT A PERSON READS: the cell's value, not its reserved age line below it. The input is its own box. */
       const shown = (selector: string) => {
         const cell = node.querySelector(selector)!
-        if (cell instanceof HTMLInputElement) return centre(cell)
+        if (cell instanceof HTMLInputElement) return center(cell)
         const span = document.createRange()
         const edges: number[] = []
         for (const child of cell.childNodes) {
@@ -5195,7 +5195,7 @@ for (const theme of ['light', 'dark'] as const) {
         qty: '.pricing-qty-input',
       }
       return Object.fromEntries(
-        Object.entries(cells).map(([name, selector]) => [name, shown(selector) - rowCentre]),
+        Object.entries(cells).map(([name, selector]) => [name, shown(selector) - rowCenter]),
       )
     })
     for (const [name, offset] of Object.entries(offsets)) {
@@ -5414,12 +5414,58 @@ test('7b-24: a sort and a filter work together', async ({ page }) => {
   await sortHead(page, 'Market').click()
   await expect(sortHead(page, 'Market')).toHaveAttribute('aria-sort', 'descending')
   const search = page.getByRole('searchbox', { name: 'Search this list' })
-  await search.fill('a')
+  /* The search also reads set and condition, so the token is one no fixture set or condition holds. */
+  const token = 'ha'
+  const byName = sortRows().filter((row) => row.name.toLowerCase().includes(token)).map((row) => row.name)
+  for (const row of sortRows()) {
+    expect(`${row.set_name} ${row.condition}`.toLowerCase()).not.toContain(token)
+  }
+  await search.fill(token)
   await expect(sortHead(page, 'Market')).toHaveAttribute('aria-sort', 'descending')
-  const rowsShown = await page.locator('.pricing-row .pricing-name').allTextContents()
-  expect(rowsShown.length).toBeGreaterThan(0)
-  for (const name of rowsShown) expect(name.toLowerCase()).toContain('a')
+  await expect(page.locator('.pricing-row .pricing-name')).toHaveCount(byName.length)
+  expect([...(await page.locator('.pricing-row .pricing-name').allTextContents())].sort()).toEqual([...byName].sort())
   expectSorted(await shownBySection(page, 'Market'), 'desc')
+})
+
+test('7b-21: the age lines under Market and Range overlap no other cell and no neighboring row', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, {
+    worklist: STALE_AND_FRESH(),
+    decisions: { rule: 'match', basis: 'market', overrides: { '111': { withheld: 'bullish', note: 'waiting on rotation' } } },
+    saved: savedWithFacts(AGO(3600), ['111', '222', '333']),
+  })
+  const rows = page.locator('.pricing-row')
+  const first = rows.filter({ hasText: 'Stale card' })
+  await expect(first.locator('.pricing-why')).toBeVisible()
+  const age = first.locator('.pricing-col-market .pricing-ref-age')
+  await expect(age).not.toBeEmpty()
+  const boxes = await rows.evaluateAll((all) =>
+    all.map((row) => {
+      const rect = (el: Element) => { const b = el.getBoundingClientRect(); return { top: b.top, bottom: b.bottom, left: b.left, right: b.right } }
+      return {
+        row: rect(row),
+        ages: [...row.querySelectorAll('.pricing-col-market .pricing-ref-age, .pricing-col-range .pricing-ref-age')]
+          .filter((el) => (el.textContent ?? '').trim() !== '')
+          .map((el) => ({ own: rect(el), cell: el.parentElement!.className })),
+        cells: [...row.querySelectorAll('.pricing-id, .pricing-col-low, .pricing-col-trend, .pricing-col-qty, .pricing-price, .pricing-col-market, .pricing-col-range')]
+          .map((el) => ({ cell: el.className, ...rect(el) })),
+      }
+    }),
+  )
+  const apart = (a: { top: number; bottom: number; left: number; right: number }, b: typeof a) =>
+    a.bottom <= b.top + 0.5 || b.bottom <= a.top + 0.5 || a.right <= b.left + 0.5 || b.right <= a.left + 0.5
+  boxes.forEach((one, at) => {
+    for (const mark of one.ages) {
+      expect(mark.own.top, 'inside its row, top').toBeGreaterThanOrEqual(one.row.top - 0.5)
+      expect(mark.own.bottom, 'inside its row, bottom').toBeLessThanOrEqual(one.row.bottom + 0.5)
+      for (const other of one.cells) {
+        if (mark.cell.split(' ').some((name) => other.cell.split(' ').includes(name))) continue
+        expect(apart(mark.own, other), `an age line meets ${other.cell}`).toBe(true)
+      }
+      const next = boxes[at + 1]
+      if (next !== undefined) expect(mark.own.bottom, 'above the next row').toBeLessThanOrEqual(next.row.top + 0.5)
+    }
+  })
 })
 
 test('7b-23: Pricing.css holds no literal that a design token already names', async () => {
