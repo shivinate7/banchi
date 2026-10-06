@@ -16,9 +16,13 @@ second it was read. A failed read keeps the last good readings and strips untouc
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
+import os
+import threading
 import time
-from typing import Callable, Optional
+from typing import Callable, Iterator, Optional
 
 from pipeline import pricehistory
 from store import files
@@ -50,9 +54,41 @@ def _read(path) -> Optional[dict]:
 
 def _write(path, document: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
+    # ONE TEMP FILE PER WRITER: two writers sharing a name lost each other's bytes.
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     tmp.write_text(json.dumps(document))
     tmp.replace(path)
+
+
+@contextlib.contextmanager
+def _locked(path) -> Iterator[None]:
+    """Hold a file's lock across a read-modify-write, in this process and across processes, so two
+    writers of the notes (the job and the server) never lose one."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path.with_name(path.name + ".lock"), "w") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+@contextlib.contextmanager
+def refresh_lock() -> Iterator[bool]:
+    """THE ONE REFRESH AT A TIME, ACROSS PROCESSES (the daily job and the server share it). Yields
+    `True` when this caller holds it, `False` when another refresh is running: that caller makes no fetch."""
+    status = status_path()
+    status.parent.mkdir(parents=True, exist_ok=True)
+    with open(status.with_name("price-refresh.running"), "w") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 def read_status() -> Optional[dict]:
@@ -98,12 +134,13 @@ def entry_facts(series: "pricehistory.Series") -> dict:
 def note_step(name: str, ok: bool, at: Optional[int] = None, **info) -> dict:
     """Record how one step of the refresh ended in `steps.<name>`: `at`, `ok` and its own counts or
     sentence. A failed step names itself here and never blanks a figure."""
-    status = read_status() or {}
     when = int(time.time()) if at is None else int(at)
-    # `last_ok_at` is what "Prices as of" keeps drawing while a later try fails.
-    last_ok = when if ok else ((status.get("steps") or {}).get(name) or {}).get("last_ok_at")
-    note = {"at": when, "ok": bool(ok), **({"last_ok_at": last_ok} if last_ok else {}), **info}
-    _write(status_path(), {**status, "steps": {**(status.get("steps") or {}), name: note}})
+    with _locked(status_path()):
+        status = read_status() or {}
+        # `last_ok_at` is what "Prices as of" keeps drawing while a later try fails.
+        last_ok = when if ok else ((status.get("steps") or {}).get(name) or {}).get("last_ok_at")
+        note = {"at": when, "ok": bool(ok), **({"last_ok_at": last_ok} if last_ok else {}), **info}
+        _write(status_path(), {**status, "steps": {**(status.get("steps") or {}), name: note}})
     return note
 
 
@@ -120,9 +157,10 @@ def run(fetch: Callable[[], dict], now: Optional[int] = None) -> dict:
             "code": str(getattr(caught, "code", type(caught).__name__)),
             "message": str(caught),
         }
-    status = read_status() or {}
-    kept = {key: status[key] for key in ("trends", "steps") if status.get(key)}
-    _write(status_path(), {**note, **kept})
+    with _locked(status_path()):
+        status = read_status() or {}
+        kept = {key: status[key] for key in ("trends", "steps") if status.get(key)}
+        _write(status_path(), {**note, **kept})
     return note
 
 
@@ -135,12 +173,13 @@ def save_strips(strips: dict, at: Optional[int] = None, keep: Optional[set] = No
     `{sku: entry_facts(...)}`; a SKU saved again without it keeps the facts it had.
     """
     when = int(time.time()) if at is None else int(at)
-    saved = read_trends()
-    for sku, ranges in strips.items():
-        saved[sku] = {**saved.get(sku, {}), "at": when, "ranges": ranges, **((extras or {}).get(sku) or {})}
-    if keep is not None:
-        saved = {sku: entry for sku, entry in saved.items() if sku in keep}
-    _write(trends_path(), {"skus": saved})
+    with _locked(trends_path()):
+        saved = read_trends()
+        for sku, ranges in strips.items():
+            saved[sku] = {**saved.get(sku, {}), "at": when, "ranges": ranges, **((extras or {}).get(sku) or {})}
+        if keep is not None:
+            saved = {sku: entry for sku, entry in saved.items() if sku in keep}
+        _write(trends_path(), {"skus": saved})
 
 
 def preload(fetch: Callable[[], dict], now: Optional[int] = None) -> dict:
@@ -177,5 +216,6 @@ def preload(fetch: Callable[[], dict], now: Optional[int] = None) -> dict:
             "at": at, "ok": False, "asked": 0, "read": 0, "no_history": 0, "unreadable": 0,
             "failed": 1, "message": str(caught) or type(caught).__name__,
         }
-    _write(status_path(), {**(read_status() or {}), "trends": note})
+    with _locked(status_path()):
+        _write(status_path(), {**(read_status() or {}), "trends": note})
     return note

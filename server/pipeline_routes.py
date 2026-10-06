@@ -7432,12 +7432,18 @@ def do_price_trends_preload() -> dict:
                 continue
             read.update({sku: found["ranges"] for sku, found in answer["skus"].items()})
             refused.update(answer["refused"])
+    current = [str(row["sku"]) for row in work["skus"]]
+    # THE LIVE TAB'S ROWS TOO, through the same walk: listed SKUs no open run holds.
+    listed, live_read, live_refused, live_failed = _preload_live(set(current), only)
+    read.update(live_read)
+    refused.update(live_refused)
+    failed.extend(live_failed)
     return {
-        "asked": sum(len(skus) for skus in by_door.values()),
+        "asked": sum(len(skus) for skus in by_door.values()) + len(listed),
         "skus": read,
         "refused": refused,
         "failed": failed,
-        "current": [str(row["sku"]) for row in work["skus"]],
+        "current": current + [sku for sku in listed if sku not in current],
     }
 
 
@@ -7467,14 +7473,15 @@ def _stale_history(work: dict) -> Set[str]:
 
 
 def _run_games(name: str) -> Tuple[str, ...]:
-    """The games a run was joined against, or the default game for a run that will not open."""
+    """The games a run holds a catalog to ask for (`_scope_counts`), or the default game for a run
+    that will not open."""
     try:
-        return tuple(sorted(run_files.open_run(_open_run(name)).exports_by_game)) or (game_registry.DEFAULT_GAME,)
+        return tuple(sorted(_scope_counts(_open_run(name))[1])) or (game_registry.DEFAULT_GAME,)
     except Exception:  # noqa: BLE001 - a run that will not open costs itself only
         return (game_registry.DEFAULT_GAME,)
 
 
-def _game_catalog(group: List[str]) -> Tuple[Optional[str], str]:
+def _game_catalog(group: List[str], game: str) -> Tuple[Optional[str], str]:
     """ONE fresh catalog export for every open run of a game: `(file, "")`, or `(None, sentence)`.
 
     THE REQUEST COVERS THE UNION OF THE RUNS' OWN SCOPES, so no run is joined against a file that
@@ -7483,14 +7490,14 @@ def _game_catalog(group: List[str]) -> Tuple[Optional[str], str]:
     makes the request the category (a width its own claims already earned); otherwise the request
     names the union of the set ids. Nothing here widens past what a run's own scope asked for."""
     try:
-        sets = {tuple(_scope_for_run(_open_run(name), {})[0].set_ids) for name in group}  # type: ignore[attr-defined]
+        sets = {tuple(_scope_for_run(_open_run(name), {"game": game})[0].set_ids) for name in group}  # type: ignore[attr-defined]
         if len(sets) == 1:
             payload: dict = {}
         elif () in sets:
             payload = {"scope": "category"}
         else:
             payload = {"set_ids": sorted({i for ids in sets for i in ids})}
-        return do_pipeline_export(group[0], {**payload, "refresh": True})["file"], ""
+        return do_pipeline_export(group[0], {**payload, "game": game, "refresh": True, "partial": True})["file"], ""
     except PipelineRefusal as refusal:
         return None, str(refusal)
     except tcg_export.FetchRefusal as refusal:
@@ -7501,8 +7508,17 @@ def do_prices_refresh(
     progress: Optional[Callable[[str, int, int], None]] = None,
     *,
     history: Optional[str] = "all",
-    live_refusal: bool = False,
 ) -> dict:
+    """ONE REFRESH AT A TIME, ACROSS PROCESSES: the daily job and the server share a file lock. A
+    caller that finds it held answers `running` and fetches nothing. The work is
+    `_prices_refresh_steps`."""
+    with pricerefresh.refresh_lock() as held:
+        if not held:
+            return {"ok": False, "running": True, "steps": (pricerefresh.read_status() or {}).get("steps") or {}, "live": {}}
+        return _prices_refresh_steps(progress, history)
+
+
+def _prices_refresh_steps(progress: Optional[Callable[[str, int, int], None]], history: Optional[str]) -> dict:
     """THE MORNING JOB AND THE "Refresh now" PRESS (`docs/specs/stale-listings.md`, 7b). It brings
     every waiting card's Market and Lowest current by refreshing the run tables, never by drawing
     a second figure over them: the unit is the pair `do_pipeline_export`, then the join, which is
@@ -7523,25 +7539,22 @@ def do_prices_refresh(
         if progress is not None:
             progress(step, done, total)
 
-    caught: List[Exception] = []
     live_answer: Dict[str, Any] = {}
 
     def fetch_live() -> dict:
-        try:
-            live_answer.update(do_live_export())
-            return live_answer
-        except Exception as exc:  # noqa: BLE001 - recorded by `pricerefresh.run`, re-raised below for a press
-            caught.append(exc)
-            raise
+        live_answer.update(do_live_export())
+        return live_answer
 
     tell("listings")
     note = pricerefresh.run(fetch_live)
     pricerefresh.note_step(
         "listings", note["ok"], at=note["at"],
-        **({"live_rows": note["live_rows"]} if note["ok"] else {"message": note["message"], "code": note["code"]}),
+        **(
+            {"live_rows": note["live_rows"], "fetched": live_answer.get("fetched")}
+            if note["ok"]
+            else {"message": note["message"], "code": note["code"]}
+        ),
     )
-    if live_refusal and caught:
-        raise caught[0]
 
     # 2. catalog prices: the first run of each game forces one request; later runs reuse it.
     tell("catalog")
@@ -7552,19 +7565,26 @@ def do_prices_refresh(
         files.log_cause("prices refresh runs", exc)
         runs = []
         unreadable = f"The open runs could not be read because {files.plain_cause(exc)}."
-    fetched: Dict[str, str] = {}
+    fetched: Dict[str, List[str]] = {}
     problems: List[str] = []
-    by_game: Dict[Tuple[str, ...], List[str]] = {}
+    by_game: Dict[str, List[str]] = {}
+    wanted: Dict[str, int] = {}
     for name in runs:
-        by_game.setdefault(_run_games(name), []).append(name)
-    # ONE CATALOG REQUEST PER GAME, outside the per-run walk: the first run of a game asks, and
-    # every run of that game is joined against the file that came back.
-    for group in by_game.values():
-        file, problem = _game_catalog(group)
+        games_held = _run_games(name)
+        wanted[name] = len(games_held)
+        for game in games_held:
+            by_game.setdefault(game, []).append(name)
+    # ONE CATALOG REQUEST PER GAME, outside the per-run walk. A run holding several games
+    # contributes its sets to each game's request, and every run is joined against the files of
+    # all its games.
+    for game, group in by_game.items():
+        file, problem = _game_catalog(group, game)
         if file is None:
             problems.extend(f"{name}: {problem}" for name in group)
         else:
-            fetched.update({name: file for name in group})
+            for name in group:
+                fetched.setdefault(name, []).append(file)
+    fetched = {name: found for name, found in fetched.items() if len(found) == wanted[name]}
     pricerefresh.note_step(
         "catalog", not problems and not unreadable, runs=len(runs), fetched=len(fetched),
         message=unreadable or (problems[0] if problems else ""),
@@ -7575,8 +7595,8 @@ def do_prices_refresh(
     tell("join")
     joined = 0
     trouble: List[str] = []
-    for name, file in fetched.items():
-        result = do_pipeline_step(name, "join", {"fetched": [file]})
+    for name, found in fetched.items():
+        result = do_pipeline_step(name, "join", {"fetched": found})
         if result["ok"]:
             joined += 1
         else:
@@ -7607,30 +7627,34 @@ def do_prices_refresh(
     }
 
 
-def do_live_export_rejoined() -> dict:
-    """`POST /pipeline/live-export` — the Live tab's "read again". The live listings, and then the
-    same steps 2 and 3 as a refresh, so the row and the sheet never show two times for one card.
-    The answer is the listings' own."""
-    return do_prices_refresh(history=None, live_refusal=True)["live"]
+def do_live_export_rejoined() -> Tuple[HTTPStatus, dict]:
+    """`POST /pipeline/live-export` — the Live tab's "read again". It runs through the SAME
+    background worker as Refresh now (listings, catalog, join; no history), so the row and the sheet
+    never show two times for one card, and the POST holds no request slot. It answers at once; the
+    screen reads `GET /pipeline/prices/refresh` and takes the listings' file name from
+    `steps.listings.fetched`. The press is the person's own, so it presses past the reuse window."""
+    return do_prices_refresh_start({"force": True}, history=None)
 
 
-def _refresh_worker() -> None:
+def _refresh_worker(history: Optional[str]) -> None:
     def progress(step: str, done: int, total: int) -> None:
         with _REFRESH_LOCK:
             _REFRESH.update(step=step, done=done, total=total)
 
     state = "failed"
     try:
-        state = "done" if do_prices_refresh(progress, history="stale")["ok"] else "failed"
+        answer = do_prices_refresh(progress, history=history)
+        state = "idle" if answer.get("running") else "done" if answer["ok"] else "failed"
     except Exception as caught:  # noqa: BLE001 - named in the note, never silent
         files.log_cause("prices refresh", caught)
         pricerefresh.note_step("refresh", False, message=files.plain_cause(caught))
     finally:
         with _REFRESH_LOCK:
-            _REFRESH.update(state=state, step=None, finished_at=time.time())
+            # ONLY "Refresh now" ARMS THE REUSE WINDOW; the Live tab's press is its own.
+            _REFRESH.update(state=state, step=None, **({"finished_at": time.time()} if history is not None else {}))
 
 
-def do_prices_refresh_start(payload: dict) -> Tuple[HTTPStatus, dict]:
+def do_prices_refresh_start(payload: dict, history: Optional[str] = "stale") -> Tuple[HTTPStatus, dict]:
     """`POST /pipeline/prices/refresh` — "Refresh now". It starts the work in a worker thread and
     answers 202 at once; steps 2 and 3 can outlast a request slot (DEBT11). One run goes at a
     time: a press while one runs answers `running` and starts nothing. A press inside
@@ -7648,7 +7672,7 @@ def do_prices_refresh_start(payload: dict) -> Tuple[HTTPStatus, dict]:
                 "Prices were refreshed a moment ago. Wait a few minutes before pressing again.",
             )
         _REFRESH.update(state="running", step="listings", done=0, total=0)
-    threading.Thread(target=_refresh_worker, name="prices-refresh", daemon=True).start()
+    threading.Thread(target=_refresh_worker, args=(history,), name="prices-refresh", daemon=True).start()
     return HTTPStatus.ACCEPTED, {"state": "running", "started": True}
 
 
@@ -7657,6 +7681,43 @@ def do_prices_refresh_state() -> dict:
     with _REFRESH_LOCK:
         state = {key: _REFRESH[key] for key in ("state", "step", "done", "total")}
     return {**state, "note": pricerefresh.read_status()}
+
+
+def _live_rows_for_trends(taken: Set[str]) -> Dict[str, dict]:
+    """`{sku: {"name", "row"}}` for the SKUs the newest live export lists with live copies that no
+    open run holds (`taken`), read off that file's own rows."""
+    directory = files.inventory_dir() / LIVE_DIR
+    fetched = sorted(directory.glob(f"{LIVE_PREFIX}*.csv")) if directory.is_dir() else []
+    if not fetched:
+        return {}
+    try:
+        export = tcgcsv.read_export(fetched[-1])
+    except (tcgcsv.MalformedCsv, OSError):
+        return {}
+    found: Dict[str, dict] = {}
+    for row in export.rows:
+        sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+        if sku and sku not in taken and tcgcsv.parse_quantity(row.get(tcgcsv.LIVE_QUANTITY_COLUMN, "")) > 0:
+            found[sku] = {"name": row.get(tcgcsv.NAME_COLUMN), "row": row}
+    return found
+
+
+def _preload_live(taken: Set[str], only: Optional[Set[str]]) -> Tuple[List[str], Dict[str, list], Dict[str, str], List[str]]:
+    """The overnight walk over listed SKUs, in the preload's own chunks. Returns `(asked, strips,
+    refused, failed)`."""
+    entries = _live_rows_for_trends(taken)
+    wanted = [sku for sku in entries if only is None or sku in only]
+    if not wanted:
+        return wanted, {}, {}, []
+    # ONE CALL: the reader keeps its own courtesy pace per product, and it never raises per product.
+    try:
+        answer = _trends_for_entries(entries, wanted, {"live": True}, missing="{sku}", skip_at_cap=False)
+    except Exception as caught:  # noqa: BLE001 - named, never silent; the strips already read stay
+        return wanted, {}, {sku: str(caught) for sku in wanted}, [f"live listings: {caught}"]
+    strips = {sku: found["ranges"] for sku, found in answer["skus"].items()}
+    refused = dict(answer["refused"])
+    failed: List[str] = []
+    return wanted, strips, refused, failed
 
 
 def do_pipeline_saved_trends() -> dict:
@@ -7687,10 +7748,32 @@ def do_price_facts(sku: str) -> dict:
     sku = str(sku or "").strip()
     if not sku:
         raise PipelineRefusal(HTTPStatus.BAD_REQUEST, "sku_required", "Name a card to read its prices.")
-    found, _sources = _readings()
-    reading = found.get(sku)
+    # ONLY THIS SKU'S OWN RUN LEGS: the runs holding a copy of it, and nothing of any other run, so the
+    # cost does not grow with the store.
+    try:
+        snapshot: Optional[Snapshot] = Store().read()
+    except (files.StoreError, OSError, ValueError, TypeError):
+        snapshot = None
+    reading = None if snapshot is None else snapshot.readings.entries.get(sku)
     saved = pricerefresh.read_trends().get(sku) or {}
-    row = next((r for r in do_pipeline_worklist([])["skus"] if str(r.get("sku")) == sku), None)
+    row = None
+    ledger: Optional[UnsentLedger] = None
+    if snapshot is not None:
+        legs = sorted({str(card.run) for card in snapshot.inventory.copies_on_hand(sku) if card.run})
+        tables: List[Tuple["run_files.Run", dict]] = []
+        for leg in legs:
+            try:
+                directory = _open_run(leg)
+                parsed = json.loads((directory / run_files.PRICING).read_text("utf-8"))
+            except (PipelineRefusal, OSError, ValueError):
+                continue
+            mine = [one for one in parsed.get("skus") or [] if str(one.get("sku")) == sku]
+            if not mine:
+                continue
+            row = {**mine[0], "snap_at": _row_snap_at(_export_seconds(directory), mine[0])}
+            tables.append((run_files.open_run(directory), {**parsed, "skus": mine}))
+        if tables:
+            ledger = _unsent_ledger(snapshot.inventory, tables)
     at = None if reading is None else int(reading.at)
     if reading is not None and reading.kind == store_readings.KIND_RUN and row is not None and row.get("snap_at"):
         at = int(row["snap_at"])
@@ -7709,8 +7792,8 @@ def do_price_facts(sku: str) -> dict:
             "direct_low": reading.direct_low,
         },
         "shelf": None if row is None else {
-            "on_hand": row.get("on_hand"),
-            "can_be_sent": row.get("add_to_quantity"),
+            "on_hand": None if ledger is None else ledger.on_hand.get(sku, 0),
+            "can_be_sent": None if ledger is None else len(ledger.unsent.get(sku, [])),
             "listed_now": listed,
             "asking": (row.get("snap") or {}).get("now"),
         },
@@ -8840,16 +8923,21 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
         for game, path in run.exports_by_game.items()
         if game not in claimed and Path(path).is_file()
     }
+    plan = None
     try:
         plan = run_resolve.exports_for(run, [str(target)] + [str(p) for p in baselines.values()])
     except run_files.RunError as caught:
-        raise refuse(
-            HTTPStatus.CONFLICT,
-            "export_refused",
-            f"{caught}",
-        ) from None
+        # `partial` IS THE PRICE REFRESH FETCHING ONE GAME OF A RUN THAT HOLDS SEVERAL: the other game's
+        # file is not here yet, so coverage cannot hold. The join that follows is given every file
+        # and makes the same check, so nothing is joined against a short set.
+        if payload.get("partial") is not True:
+            raise refuse(
+                HTTPStatus.CONFLICT,
+                "export_refused",
+                f"{caught}",
+            ) from None
 
-    answers_for = [game for game in plan.by_game if plan.by_game[game] == target]
+    answers_for = [asked["game"]] if plan is None else [game for game in plan.by_game if plan.by_game[game] == target]
     if not answers_for:
         # NOT THE PRICING TAB. Since D65 `_scope_for_run` names `CategoryId` from the run's
         # own game, so the portal's saved filter is not consulted and cannot be what is

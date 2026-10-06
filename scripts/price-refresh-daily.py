@@ -47,6 +47,9 @@ def run():
     from server import pipeline_routes
 
     answer = pipeline_routes.do_prices_refresh()
+    if answer.get("running"):
+        log("skipped: a refresh is already running")
+        return 0
     for name, step in (pricerefresh.read_status() or {}).get("steps", {}).items():
         extra = {key: value for key, value in step.items() if key not in ("at", "ok")}
         log("%s: %s %s" % (name, "ok" if step.get("ok") else "failed", extra))

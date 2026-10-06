@@ -17132,7 +17132,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # is still the only route in this server that can spend money.
                 # AND THEN THE OPEN RUNS ARE RE-JOINED (docs/specs/stale-listings.md, 7b), so
                 # the row and the product sheet agree on one read time.
-                return self._json(HTTPStatus.OK, pipeline_routes.do_live_export_rejoined())
+                status, body = pipeline_routes.do_live_export_rejoined()
+                return self._json(status, body)
             if path == "/pipeline/prices/refresh":
                 # "Refresh now": starts one worker and answers 202. Free, and only a press calls it.
                 status, body = pipeline_routes.do_prices_refresh_start(self._body())

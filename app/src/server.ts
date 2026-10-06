@@ -3012,12 +3012,27 @@ export function sendFileUrl(stamp: string, file: string): string {
  * sentence saying whether the credential, the request or the host is the problem.
  */
 export async function fetchLiveExport(): Promise<LiveExportFetched> {
-  return (await request('/pipeline/live-export', {
+  const started = (await request('/pipeline/live-export', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: '{}',
-  })) as LiveExportFetched
+  })) as Partial<LiveExportFetched>
+  if (typeof started.fetched === 'string') return started as LiveExportFetched
+  /* THE READ RUNS IN THE BACKGROUND, through the same worker as Refresh now: the press answers at
+     once, and this waits for the run to end, then takes the listings' file name from its note. */
+  for (let waited = 0; waited < LIVE_READ_WAIT_MS; waited += LIVE_READ_POLL_MS) {
+    await new Promise((resolve) => setTimeout(resolve, LIVE_READ_POLL_MS))
+    const now = await getPricesRefresh()
+    if (now.state === 'running') continue
+    const listings = now.note?.steps?.['listings'] as { ok: boolean; fetched?: string; message?: string } | undefined
+    if (listings?.ok === true && typeof listings.fetched === 'string') return { ok: true, fetched: listings.fetched } as LiveExportFetched
+    throw new Error(listings?.message || 'The live listings could not be read.')
+  }
+  throw new Error('The live listings are still being read. Try again in a minute.')
 }
+
+const LIVE_READ_POLL_MS = 1000
+const LIVE_READ_WAIT_MS = 600_000
 
 /**
  * Every live listing one markdown's survey saw, refused rows included (D103).
