@@ -1937,16 +1937,30 @@ test('send card, checked: names the last send, not a bare "Live and checked"', a
   await expect(card).not.toContainText('yesterday')
 })
 
-test('send card, checked yesterday: the time carries its day', async ({ page }) => {
+test('send card, checked before midnight and viewed after: the time carries its day', async ({ page }) => {
+  /* Inside the 24 hours the card shows for, but across midnight (browser zone America/Chicago):
+     checked 11:30 PM, viewed 9:00 AM the next day. */
+  await page.clock.setFixedTime(new Date('2026-09-25T14:00:00Z'))
   const done = sendSummary({
     state: 'checked',
-    checked_at: new Date(Date.now() - 26 * 3600_000).toISOString(),
+    checked_at: '2026-09-25T04:30:00+00:00',
     check: { export: 'live.csv', found: 3, expected: 3, missing: [] },
   })
   await open(page, { sends: () => ({ ...SENDS_NONE, sends: [done] }) })
   const card = page.locator('.send-standing')
   await expect(card).toContainText('Your last send is live.')
-  await expect(card).toContainText(/3 of 3 found at TCGplayer at \d{1,2}:\d{2} [AP]M yesterday\./)
+  await expect(card).toContainText('3 of 3 found at TCGplayer at 11:30 PM yesterday.')
+})
+
+test('send card, checked 25 hours ago: no card', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-09-25T14:00:00Z'))
+  const done = sendSummary({
+    state: 'checked',
+    checked_at: '2026-09-24T13:00:00+00:00',
+    check: { export: 'live.csv', found: 3, expected: 3, missing: [] },
+  })
+  await open(page, { sends: () => ({ ...SENDS_NONE, sends: [done] }) })
+  await expect(page.locator('.send-standing')).toHaveCount(0)
 })
 
 test('send card, short: names the last send', async ({ page }) => {
