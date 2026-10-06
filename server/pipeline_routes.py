@@ -8221,7 +8221,15 @@ def _scope_counts(directory: Path) -> Tuple[Dict[str, dict], Dict[str, dict]]:
 
     Returns `(every game the cards claim, the subset with a catalog to ask for)`.
     """
-    cards = (files.read_json(directory / run_files.IDENTIFICATIONS) or {}).get("cards") or {}
+    # ONE READER: `Run.read_identifications` falls back to the store for a store-backed run.
+    run = run_files.open_run(directory)
+    try:
+        cards = run.read_identifications().get("cards") or {}
+    except run_files.RunError as caught:
+        if not (run.manifest.get("selection") or {}).get("keys"):
+            cards = {}  # no file and no keys: nothing identified, the refusal below
+        else:  # a store-backed run the store cannot fill (a gone card): its own sentence
+            raise PipelineRefusal(HTTPStatus.CONFLICT, "export_refused", str(caught)) from caught
     if not cards:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
