@@ -3870,7 +3870,9 @@ def _m_cases() -> Dict[str, dict]:
             says=[f"{_M_D} — under the cut-off (Dunsparce)", _M_A],
             never=[f"{_M_A} — {_M_LIVE}", f'"sku": "{_M_A}", "would"', _M_ASKED0], home=send2)
         add("own/held+live", market=_M_MIX, pre=(_M_D,), live={_M_D: 1, _M_R: 0, _M_A: 0}, named=_M_NONE_NAMED,
-            exit=0, files={last: [r_mix]}, says=[_M_A],
+            # THE OWNER'S RULING, "held items have 0 qty live on TCGplayer": the held card the
+            # fresh read shows live gets a take-off row of that size, here minus one.
+            exit=0, files={last: [(_M_D, -1, "2.06"), r_mix]}, says=[_M_A],
             never=[f"{_M_D} — {_M_LIVE}", f'"sku": "{_M_D}", "would"', _M_ASKED0],
             home={"line": "send 1 copy to TCGplayer", "behind": "1 card needs a price", "tile": "run to price, 1 ready",
                   "failed": "send 2 copies to TCGplayer"})
