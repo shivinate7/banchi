@@ -675,6 +675,46 @@ def check_disagree_candidates_hold_both(checks: Checks) -> None:
 # ------------------------------------------------------------------------ the cache
 
 
+def check_agreement_is_the_same_printing(checks: Checks) -> None:
+    """False accepts: a set that merely contains the other's name, and a blank total, are no
+    agreement. The pick must name the same set and the same number the paid read resolved to."""
+    checks.note("")
+    checks.note("AGREEMENT IS THE SAME PRINTING — set fold, blank total")
+    router = join.default_router()
+
+    def run(catalog, pick, **card):
+        read = dict(position=join.Position(box=3, index=1), photo="captures/box3/0001.jpg",
+                    metadata_finish=("normal",), confidence="high", second_look=pick)
+        read.update(card)
+        return join.join_batch([join.IdentifiedCard(**read)], catalog, router=router)
+
+    # 1: `Origins` is not `Origins: Proving Grounds`, though both hold 279/298.
+    rift = join.Catalog(tcgcsv.read_export(REPO_ROOT / "fixtures/riftbound_export_untouched.csv"))
+    pick = join.MatcherPick(code=match.UNREAD_MARGIN, name="Fortified Position", number="279/298", set="Origins")
+    report = run(rift, pick, name="Fortified Position (Oversized)", number="279/298", game="riftbound",
+                 set_hint="Origins: Proving Grounds")
+    checks.equal(list(report.matches), [], "Origins vs Origins: Proving Grounds, same number: not an agreement, nothing lists")
+    checks.equal([q.destination.reason for q in report.queued], [routing.READERS_DISAGREE], "it is held as readers_disagree")
+
+    # 2: a blank paid total is no evidence of agreement with a different number.
+    catalog = join.Catalog(tcgcsv.read_export(REPO_ROOT / "fixtures/sv09_export_untouched.csv"))
+    far = join.MatcherPick(code=match.UNREAD_MARGIN, name="Dudunsparce ex", number="999", set=SV09_SET)
+    blank = run(catalog, far, name="Dunsparce", number="120", printed_total=None)
+    checks.equal(list(blank.matches), [], "paid 120 with no total vs free 999: not an agreement, nothing lists")
+    checks.equal([q.destination.reason for q in blank.queued], [routing.READERS_DISAGREE], "it is held as readers_disagree")
+    guard = run(catalog, far, name="Dunsparce", number="120", printed_total="159")
+    checks.equal([q.destination.reason for q in guard.queued], [routing.READERS_DISAGREE], "guard: with the total present it is held too")
+
+    # 3: with no total, the pick's own rows are those whose number is the pick's, never its name-mates.
+    near = join.MatcherPick(code=match.UNREAD_MARGIN, name="Dudunsparce ex", number="121", set=SV09_SET)
+    card = join.IdentifiedCard(
+        position=join.Position(box=3, index=1), name="Dunsparce", number="120", printed_total=None,
+        confidence="high", second_look=near, photo="captures/box3/0001.jpg",
+    )
+    numbers = sorted(r[tcgcsv.NUMBER_COLUMN] for r in join._pick_rows(catalog, card, ()))
+    checks.equal(set(numbers) - {"121/159"}, set(), f"_pick_rows with no total offers only the pick's number, got {numbers}")
+
+
 def check_cache_engines(checks: Checks) -> None:
     """Which engine's answer may replace which (`store/cache.py`'s header, section 7 of the spec)."""
     checks.note("")
@@ -954,6 +994,7 @@ CHECKS = (
     check_second_look_routing,
     check_second_look_agreement,
     check_disagree_candidates_hold_both,
+    check_agreement_is_the_same_printing,
     check_cache_engines,
     check_model_ready_hashes_once,
     check_promo_census,

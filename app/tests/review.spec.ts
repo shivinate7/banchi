@@ -1278,6 +1278,23 @@ test('a disagree card shows both readers as numbered choices, and 2 answers with
   expect((sent.find((s) => s.method === 'POST')!.body as { sku: string }).sku).toBe('8608469')
 })
 
+test('an old low_confidence entry whose pick AGREES is never shown as the readers disagreeing', async ({ page }) => {
+  const agreeing: Entry = {
+    ...entry(63, 'low_confidence', '1.20', [
+      { ...candidate(0, '1.20'), name: 'Raichu', set: 'Base Set', number: '014/102', sku: '9100002' },
+    ]),
+    read: {
+      name: 'Raichu', number: '014/102', set: 'Base Set',
+      matcher_pick: { name: 'Raichu', number: '014/102', set: 'Base Set', reason: 'margin_too_small' },
+    },
+  }
+  await open(page, [agreeing])
+  const card = page.locator('.review-card')
+  await expect(card).not.toContainText('name different cards')
+  await expect(card).not.toContainText('not in the catalog')
+  await expect(card).not.toContainText('Low confidence read')
+})
+
 test('a free pick that resolves to no catalog row is said so, and Search stays', async ({ page }) => {
   const gone: Entry = {
     ...DISAGREE_ENTRY,
