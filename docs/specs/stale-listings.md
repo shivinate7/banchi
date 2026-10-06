@@ -647,6 +647,29 @@ Each is one claim. A build makes each one red first.
 21. **Live re-joins.** A Live tab "read again" ends with the open runs re-joined. The row's
     `snap_at` and the T panel's read time are equal afterward.
 
+### The dollar columns sort from their header
+
+The owner asked to sort the dollar columns by pressing the header text: highest first, then
+lowest first, then the default order.
+
+- **Columns.** Market, Lowest, Range 7d and Price (New price on the Live tab). Range 7d sorts by
+  the upper end of the range. It is not offered where the column is hidden, and a URL sort on it
+  falls back to the default order there.
+- **Price freezes at the sort.** It sorts by the asking price taken when the sort is chosen
+  (`askingAtSort`), so a typed price does not re-rank rows (D181, the order is taken once).
+- **Order.** A sort orders within each group. Rows that need the owner stay on top (D277). A row
+  with no value for the column goes last in both directions.
+- **One column at a time.** The sort lives in the URL and survives a reload (D285, filter sort and
+  search live in the URL).
+- **One control.** The header is the kit's `SortHeader` in `app/src/kit/filters.tsx`, extended.
+  Pricing has no second header.
+- **Centering.** Row values center on the row's own center. Tokens set it, never pixel literals.
+- **Proof.** `app/tests/pricing.spec.ts`, cases `7b-21` to `7b-27`: "a row with a hold note
+  centers Market, Lowest, Range 7d and Qty on the row's own center", "header cycles highest first,
+  lowest first, then the default order", "typing a price while sorted by Price keeps the row
+  order", "below the width that hides Range 7d, no Range sort is offered and a URL one falls back"
+  and "Pricing.css holds no literal that a design token already names".
+
 ### Open questions for the owner
 
 1. **A card with no history** (18 of 366 today) stays "—". No fix is proposed.
