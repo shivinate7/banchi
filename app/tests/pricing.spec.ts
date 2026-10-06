@@ -5468,6 +5468,65 @@ test('7b-21: the age lines under Market and Range overlap no other cell and no n
   })
 })
 
+/* REVIEW OF #754: ARIA STATE ON THE COLUMN HEADER, A STABLE PRICE ORDER, AND NO RANGE SORT WHERE THE COLUMN IS GONE. */
+const columnHead = (page: Page, column: SortColumn): Locator =>
+  page.locator('.pricing-caption').getByRole('columnheader', { name: new RegExp(`^${column}`, 'i') })
+
+test('7b-25: the sort state is on the column header, never on a button', async ({ page }) => {
+  await openSortable(page)
+  await expect(page.locator('.pricing-caption')).toHaveAttribute('role', 'row')
+  for (const column of SORT_COLUMNS) {
+    await expect(columnHead(page, column)).toHaveAttribute('aria-sort', 'none')
+    await sortHead(page, column).click()
+    await expect(columnHead(page, column)).toHaveAttribute('aria-sort', 'descending')
+    await sortHead(page, column).click()
+    await expect(columnHead(page, column)).toHaveAttribute('aria-sort', 'ascending')
+    await expect(page.locator('button[aria-sort]')).toHaveCount(0)
+    await sortHead(page, column).click()
+    await expect(columnHead(page, column)).toHaveAttribute('aria-sort', 'none')
+  }
+})
+
+test('7b-26: typing a price while sorted by Price keeps the row order', async ({ page }) => {
+  await openSortable(page)
+  await sortHead(page, 'Price').click()
+  const names = () => page.locator('.pricing-row .pricing-name').allTextContents()
+  const before = await names()
+  const input = page.locator('.pricing-row').first().locator('.pricing-input')
+  /* A figure that would move the row to the other end of its section if the order re-took itself. */
+  const shown = Number((await input.inputValue()).replace(/[^\d.]/g, ''))
+  await input.fill(String(shown >= 25 ? 0.5 : 999))
+  await input.press('Tab')
+  await expect(input).not.toBeFocused()
+  expect(await names()).toEqual(before)
+})
+
+test('7b-27: below the width that hides Range 7d, no Range sort is offered and a URL one falls back', async ({ page }) => {
+  await setViewport(page, { width: 820, height: 900 })
+  await open(page, { skus: sortRows(), decisions: SORT_DECISIONS, saved: sortSaved(AGO(3600)) })
+  await expect(page.locator('.pricing-caption .pricing-col-range')).toHaveCount(0)
+  await expect(page.locator('.pricing-caption').getByRole('button', { name: /^Range/i })).toHaveCount(0)
+  const trigger = page.locator(`${VIEW} .bn-filterbar-trigger`)
+  if (await trigger.isVisible()) {
+    const body = await openFilterSheet(page)
+    await body.getByRole('button', { name: /^Sort/ }).click()
+  } else {
+    await page.locator(`${VIEW} .bn-sort .bn-pick`).click()
+  }
+  const options = page.getByRole('listbox', { name: 'Sort' }).getByRole('option')
+  await expect(options.first()).toBeVisible()
+  await expect(page.getByRole('listbox', { name: 'Sort' }).getByRole('option', { name: /^Range/ })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  /* A Range sort carried in the URL reads as the default order here. */
+  const named = () => page.locator('.pricing-row .pricing-name').allTextContents()
+  const start = await named()
+  await page.evaluate(() => { window.location.hash = `${window.location.hash}&sort=range&dir=desc` })
+  await page.reload()
+  await expect(page.locator('.pricing-row').first()).toBeVisible()
+  expect(await named()).toEqual(start)
+  await expect(page.locator('.pricing-caption [aria-sort]:not([aria-sort="none"])')).toHaveCount(0)
+})
+
 test('7b-23: Pricing.css holds no literal that a design token already names', async () => {
   /* `make token-literal-check` is a per-file ceiling and a Python script a browser spec may not
    * depend on (`make browser-scope` would then owe it a SCOPE entry), so this reads the same two
