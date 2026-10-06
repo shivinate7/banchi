@@ -19,7 +19,7 @@ import type { PricesRefreshState } from './types'
 import './PricesAsOf.css'
 
 /** How often a running refresh is asked where it is. */
-const POLL_MS = 1500
+const POLL_MS = 3000
 
 const STEPS = [
   { key: 'listings', label: 'Listings' },

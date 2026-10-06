@@ -1083,7 +1083,7 @@ export function Pricing() {
   const refresh = usePricesRefresh(() => {
     reload()
     readSaved()
-  }, !liveTab)
+  }, !liveTab && work !== null && (saved !== null || savedFailed)) /* NOT AT MOUNT: the worklist and the saved strips are read first, so the mount holds no more reads open at once than it did. */
   const asOf = asOfOf(refresh.state)
 
   /* THE LIST'S OWN WIDTH, measured: the Range 7d column needs room the name column would lose. */

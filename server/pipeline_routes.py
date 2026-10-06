@@ -7753,7 +7753,7 @@ def _live_rows_for_trends(taken: Set[str]) -> Dict[str, dict]:
         return {}
     found: Dict[str, dict] = {}
     for row in export.rows:
-        sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+        sku = tcgcsv.sku_cell(row)
         if sku and sku not in taken and tcgcsv.parse_quantity(row.get(tcgcsv.LIVE_QUANTITY_COLUMN, "")) > 0:
             found[sku] = {"name": row.get(tcgcsv.NAME_COLUMN), "row": row}
     return found
