@@ -4705,6 +4705,8 @@ export type SendSummary = {
     missing: { sku: string; name: string; sent: number; found: number }[]
   } | null
   trimmed: SendTrim[]
+  /** Cards the run held that the store no longer has, by last-known name: skipped, not sent. */
+  gone: string[]
   trimmed_copies: number
   accepted: number | null
   /** Rows TCGplayer's own count turned away. The screen never says more went live than it took. */

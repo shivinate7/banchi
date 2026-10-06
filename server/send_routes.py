@@ -507,6 +507,7 @@ def _summary(stamp: str, record: dict, now: datetime, held: frozenset = frozense
         "checked_at": record.get("checked_at"),
         "check": record.get("check"),
         "trimmed": (record.get("guard") or {}).get("trimmed") or [],
+        "gone": record.get("gone") or [],
         "trimmed_copies": int((record.get("guard") or {}).get("trimmed_copies") or 0),
         "accepted": accepted,
         # THE ROWS TCGPLAYER TURNED AWAY, from its own count. Never more went live than it
@@ -1223,6 +1224,9 @@ def _write_and_send(
             "live_before": {sku: live_before.get(sku, 0) for sku in copies},
             "sold_before": _sold_by_sku(copies),
             "guard": guard,
+            # THE CARDS A STORE-BACKED RUN HELD THAT THE STORE NO LONGER HAS, by last-known
+            # name: skipped, and named on the receipt.
+            "gone": list((_json_line(console, "send_gone") or {}).get("names") or []),
             "pushed": None,
             "published_at": None,
             "check_after": None,
