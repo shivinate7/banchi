@@ -1724,7 +1724,7 @@ def check_send_hold_takes_off(checks: Checks) -> None:
             "THE NEXT PRESS HEALS IT: it re-reads live and takes off what is still there",
         )
 
-    # ------------------------------------------------ a download never uploaded heals too
+    # ------------------------------------------------ a download's take-off is outstanding
     with send_portal() as portal, isolated_home():
         run_dir = settled(portal)
         start = counts()
@@ -1733,10 +1733,10 @@ def check_send_hold_takes_off(checks: Checks) -> None:
         checks.equal(counts(), start, "a downloaded take-off changes nothing in the store")
         portal["rows"].clear()
         press(run_dir)
-        checks.equal(
-            rows(portal),
-            {ARTICUNO_SKU: "-3"},
-            "and the file never uploaded is not a take-off done: the next send takes the copies off",
+        checks.ok(
+            ARTICUNO_SKU not in rows(portal),
+            "A DOWNLOADED FILE IS A TAKE-OFF OUTSTANDING: the next press writes no second row "
+            "for the SKU until a newer live read settles or lapses the first",
         )
 
     # ------------------------------------------------ an unknown answer leaves the store alone

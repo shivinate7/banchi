@@ -4577,7 +4577,7 @@ def check_hold_takes_live_off(checks: Checks) -> None:
     with isolated_home():
         run_dir = sent_run()
         hold(ARTICUNO_SKU)
-        guard = live_file(run_dir, {ARTICUNO_SKU: 3}, age_s=HOUR)
+        guard = live_file(run_dir, {ARTICUNO_SKU: 3}, age_s=50 * 60)
         capture_server.do_mark_sold(3, 3, {})
         code, said, rows = emit(run_dir, guard=guard)
         checks.equal(
