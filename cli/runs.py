@@ -321,8 +321,22 @@ class Run:
 
     # --------------------------------------------------------------- run-local files
 
+    @property
+    def store_backed(self) -> bool:
+        """No frozen `identifications.json`, but a key selection: its cards live in the store."""
+        keys = (self.manifest.get("selection") or {}).get("keys")
+        return bool(keys) and not self.path(IDENTIFICATIONS).exists()
+
     def read_identifications(self) -> Dict[str, Any]:
         payload = files.read_json(self.path(IDENTIFICATIONS))
+        keys = (self.manifest.get("selection") or {}).get("keys")
+        if payload is None and keys:
+            # A store-backed run (sweep, `join --keys`) holds no frozen copy: read the store's
+            # CURRENT cards for its keys (D65). Lazy import: `cli.resolve` imports this module.
+            from cli import resolve
+            from store.session import Store
+
+            return resolve.store_backed_payload(self, Store().read().inventory)
         if payload is None:
             raise RunError(
                 f"{self.path(IDENTIFICATIONS)} does not exist — run `pkmnscan identify` first"
@@ -361,6 +375,8 @@ def create(label: str, root: Optional[Path] = None) -> Run:
 
 def open_run(path) -> Run:
     directory = Path(path)
+    if len(directory.parts) == 1 and not directory.is_dir():  # a bare run name
+        directory = files.runs_dir() / directory
     if not directory.is_dir():
         raise RunError(f"not a run directory: {directory}")
     manifest = files.read_json(directory / MANIFEST)

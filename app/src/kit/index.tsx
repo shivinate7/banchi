@@ -1039,6 +1039,8 @@ export function Stat({
   money,
   className,
   valueClassName,
+  press,
+  pending,
 }: {
   readonly value: ReactNode
   readonly label: ReactNode
@@ -1052,11 +1054,47 @@ export function Stat({
   readonly className?: string
   /** Extra classes on the figure itself, for `.bn-live-count` where it may gain a digit. */
   readonly valueClassName?: string
+  /** A figure that opens something: the whole tile becomes ONE real `button` (40px or more), the number above its label,
+   *  with a chevron at the label's end so a count reads as a door before the hand is on it. The tile keeps its size. */
+  readonly press?: {
+    readonly onPress: () => void
+    /** Set while the thing it opens is open. */
+    readonly expanded: boolean
+    readonly popup?: 'dialog' | 'menu'
+    readonly disabled?: boolean
+  }
+  /** The figure has not answered yet: its room is held and its digits are not drawn (D313). */
+  readonly pending?: boolean
 }) {
+  const figure = (
+    <>
+      <span
+        className={['bn-stat-value', money ? 'bn-money' : '', pending ? 'bn-stat-pending' : '', valueClassName].filter(Boolean).join(' ')}
+      >
+        {value}
+      </span>{' '}
+      <span className="bn-stat-label">
+        {label}
+        {press === undefined ? null : <Icon name="chevronRight" size={12} className="bn-stat-go" />}
+      </span>
+    </>
+  )
   return (
-    <div className={['bn-stat', size ? `bn-stat-${size}` : '', className].filter(Boolean).join(' ')}>
-      <span className={['bn-stat-value', money ? 'bn-money' : '', valueClassName].filter(Boolean).join(' ')}>{value}</span>
-      <span className="bn-stat-label">{label}</span>
+    <div className={['bn-stat', size ? `bn-stat-${size}` : '', press === undefined ? '' : 'bn-stat-pressable', className].filter(Boolean).join(' ')}>
+      {press === undefined ? (
+        figure
+      ) : (
+        <button
+          type="button"
+          className="bn-stat-press"
+          aria-haspopup={press.popup ?? 'dialog'}
+          aria-expanded={press.expanded}
+          disabled={press.disabled}
+          onClick={press.onPress}
+        >
+          {figure}
+        </button>
+      )}
     </div>
   )
 }

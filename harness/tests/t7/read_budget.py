@@ -551,7 +551,64 @@ def _row(counts: dict) -> str:
     return "{" + ", ".join(f"{k!r}: {v}" for k, v in counts.items() if v) + "}"
 
 
-CHECKS = (check_server_read_budget,)
+# `detail=paid` over three keys, measured on the build: equal at S and 2S.
+DETAIL_PAID_SQL = 7
+
+
+def _detail_read(checks: Checks, size: int) -> tuple:
+    """`(status, has_cards, counts, lock_probes)` for one `detail=paid` read over a fixed scope, at one store size."""
+    from unittest import mock
+
+    from identify import sweep
+
+    with isolated_home():
+        _build(checks, size)
+        inv = Store().read().inventory
+        keys = [master.position_key(4, n) for n in (1, 2, 3)]  # the fixed scope: three paid cards, whatever the store holds
+        for n in (1, 2, 3):
+            capture_server.do_put_card(4, n, {"set_hint": "sv9"})
+        inv = Store().read().inventory
+        sweep.remember_tried({key: inv.cards[key].capture_id or "" for key in keys})
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = _spawn_server(httpd)
+        probes = []
+        try:
+            url = "/pipeline/match/sweep?keys=" + ",".join(keys) + "&detail=paid"
+            with mock.patch.object(sweep, "acquire_lock", lambda: probes.append(1)), mock.patch.object(
+                sweep, "running", lambda: probes.append(1) or False
+            ), _Meter() as meter:
+                status, body, _ = request(port, "GET", url, origin=capture_server.DEFAULT_ALLOWED_ORIGINS[0])
+            import json
+
+            has = status == 200 and "cards" in json.loads(body)
+            return status, has, dict(meter.counts), len(probes), url
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+
+def check_detail_read_budget(checks: Checks) -> None:
+    """BAND SHEETS 7 (`identify-engine-pick.md`, 10.5): `GET /pipeline/match/sweep?keys=..&detail=paid` is a photo-lane read
+    that takes no lock, opens the store read-only (no `Store.read`, no write), and does the same work at S and 2S for a fixed
+    scope. It answers `cards`. The pin is measured on the build: this check holds the shape, `BUDGET` the number."""
+    checks.note("")
+    checks.note("DETAIL READ BUDGET — the sheet's one read, at S and 2S")
+    small = _detail_read(checks, SIZES[0])
+    big = _detail_read(checks, SIZES[1])
+    checks.equal(small[0], 200, "7. the detail read answers")
+    checks.ok(small[1] and big[1], "7. it answers `cards`")
+    checks.ok(capture_server.photo_lane_path(small[4]), "7. it rides the photo lane")
+    checks.equal(small[3] + big[3], 0, "7. it takes no lock (no sweep.running, no sweep.acquire_lock)")
+    for counter in ("store_read", "store_write"):
+        checks.equal((small[2][counter], big[2][counter]), (0, 0), f"7. it makes no {counter} (the store is opened read-only)")
+    for counter in ("sql", "records_in", "layout_of", "places"):
+        checks.equal(small[2][counter], big[2][counter], f"7. {counter} is equal at S and 2S for a fixed scope")
+    checks.equal(small[2]["sql"], DETAIL_PAID_SQL, "7. detail=paid makes its measured SQL statements (cards and boxes, chunked by key count)")
+
+
+CHECKS = (check_server_read_budget, check_detail_read_budget)
 
 
 if __name__ == "__main__":  # `python -m harness.tests.t7.read_budget`: print the measured tables

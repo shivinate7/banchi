@@ -3014,6 +3014,30 @@ export type MatchSweep = {
   worker?: boolean
   /** Cards the reader set aside for crashing it alone: out of the free queue, never paid. */
   aside: number
+  /** Only with `detail=`: the rows of that one count, in position order (`MatchSweepCard`). */
+  cards?: MatchSweepCard[]
+}
+
+/** The counts the band's sheets open, and the `detail=` value that names each. */
+export type MatchSweepDetail = 'paid' | 'unread' | 'matched' | 'unhinted'
+
+/** One card of one band count (`GET /pipeline/match/sweep?keys=&detail=`): the box name and the slot only, never a layout walk.
+ *  `code` and `candidates` ride a paid row (null code: a mark made before reasons were kept); `name`, `set`, `number` and
+ *  `accept` ride a matched row. */
+export type MatchSweepCard = {
+  key: string
+  box: number
+  box_name: string
+  index: number
+  cid: string
+  set_hint?: string
+  rarity_claim?: string[] | null
+  code?: string | null
+  candidates?: { name: string; set: string; number: string }[]
+  name?: string
+  set?: string
+  number?: string
+  accept?: string
 }
 
 /** `GET /pipeline/match`: is the free reader prepared, and is a Prepare running. Free; the server
