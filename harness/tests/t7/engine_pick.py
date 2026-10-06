@@ -445,7 +445,7 @@ def check_identify_free_first(checks: Checks) -> None:
             joined = join.join_batch([card], catalog, router=join.default_router(review_below=routing.CONFIDENCE_NONE))
             checks.equal(
                 ([q.destination.reason for q in joined.queued], list(joined.matches)),
-                ([routing.LOW_CONFIDENCE], []),
+                ([routing.READERS_DISAGREE], []),
                 "and the join routes that cached card to review under review_below=none",
             )
 
@@ -526,8 +526,8 @@ def check_second_look_routing(checks: Checks) -> None:
     checks.equal(list(looked.matches), [], "a card with second_look lists nothing even under review_below=none")
     checks.equal(
         [q.destination.reason for q in looked.queued],
-        [routing.LOW_CONFIDENCE],
-        "it routes to review, as low_confidence",
+        [routing.READERS_DISAGREE],
+        "it routes to review, as readers_disagree",
     )
     if looked.queued:
         read = resolve.queue_entry(looked.queued[0]).read
