@@ -39,7 +39,7 @@
 .pricesasof-read-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 /* THE BAR HAS ITS OWN SLOT, drawn or not. */
 .pricesasof-bar { height: 5px; }
-.pricesasof .pricemovers-bare { border-top: 1px solid var(--bn-line); padding-top: var(--bn-2); }
+
 /* A SECOND PRESS WHILE ONE RUNS IS SAFE: the server answers running and starts nothing. So the busy
    button stays pressable, and the kit's pointer-events none on a busy button does not apply. */
 .pricesasof .bn-btn[data-busy='true'] { pointer-events: auto; }

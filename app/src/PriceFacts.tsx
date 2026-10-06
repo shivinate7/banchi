@@ -103,7 +103,7 @@ function percent(fraction: string | null | undefined): string {
  *  from the first paint (D313). */
 const BLANK: PriceFacts = { sku: '', name: null, at: null, through: null, prices: { market: '', low: null, low_with_shipping: null, direct_low: null }, shelf: { on_hand: null, can_be_sent: null, listed_now: null, asking: null }, days: [], facts: {} }
 
-export function PriceFactsBlock({ sku }: { readonly sku: string }) {
+export function PriceFactsBlock({ sku, onSales }: { readonly sku: string; readonly onSales?: (sold: boolean) => void }) {
   const [facts, setFacts] = useState<PriceFacts | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   useEffect(() => {
@@ -112,7 +112,9 @@ export function PriceFactsBlock({ sku }: { readonly sku: string }) {
     setFailure(null)
     getPriceFacts(sku)
       .then((payload) => {
-        if (alive) setFacts(payload)
+        if (!alive) return
+        setFacts(payload)
+        onSales?.((payload.facts?.sold_30d ?? 0) > 0 || (payload.days ?? []).some((day) => day[1] > 0))
       })
       .catch((error) => {
         if (alive) setFailure(describeFailure(error))
@@ -120,7 +122,7 @@ export function PriceFactsBlock({ sku }: { readonly sku: string }) {
     return () => {
       alive = false
     }
-  }, [sku])
+  }, [sku, onSales])
 
   if (failure !== null) return <Notice tone={failureTone(failure)} code={failure.code}>{failure.message}</Notice>
   const loading = facts === null

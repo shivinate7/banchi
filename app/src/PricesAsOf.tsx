@@ -118,8 +118,7 @@ export function PricesAsOf({
   const at = asOfOf(state)
   const today = at !== null && new Date(at * 1000).toDateString() === new Date().toDateString()
   /* THE OLD PANEL'S FACTS (price moves, the daily read, the trends read) ARE THE CHILDREN, so this is the one block that says how fresh things are. */
-  const rest = '\u00a0'
-  const line = failed ? (refused ?? (state === null ? '' : failureOf(state))) : running && state !== null ? stepsLine(state) : rest
+  const line = failed ? (refused ?? (state === null ? '' : failureOf(state))) : running && state !== null ? stepsLine(state) : ''
   return (
     <section className="pricesasof" aria-label="Prices as of" data-state={failed ? 'failed' : running ? 'running' : 'rest'}>
       <div className="pricesasof-head">
@@ -135,17 +134,21 @@ export function PricesAsOf({
           Refresh now
         </Button>
       </div>
-      <p className="pricesasof-read" data-failed={failed ? 'true' : undefined} aria-live="polite">
-        {failed ? <Icon name="alert" size={14} /> : null}
-        <span className="pricesasof-read-text">{line}</span>
-      </p>
-      <div className="pricesasof-bar">
-        {running && state !== null ? (
+      {/* THE STEPS LINE AND THE BAR ARE DRAWN ONLY WHILE A RUN GOES OR HAS FAILED: the press that starts one
+          is the person's own move, and a block with nothing to say keeps no empty band. */}
+      {failed || running ? (
+        <p className="pricesasof-read" data-failed={failed ? 'true' : undefined} aria-live="polite">
+          {failed ? <Icon name="alert" size={14} /> : null}
+          <span className="pricesasof-read-text">{line}</span>
+        </p>
+      ) : null}
+      {running && state !== null ? (
+        <div className="pricesasof-bar">
           <div className="bn-progress bn-progress-sm" role="progressbar" aria-label="Refreshing prices" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent(state)}>
             <span style={{ width: `${percent(state)}%` }} />
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       {children}
     </section>
   )

@@ -399,15 +399,17 @@ function useProductHistory(sku: string): {
 /** THE PRICES AND SALES BLOCK SITS ABOVE THE HISTORY (spec 7b), so the sheet and the routed page both
  *  get it, and it opens at once: it reads local files only. */
 export function ProductHistoryView(props: { readonly sku: string; readonly onSwitchSku: (sku: string) => void }) {
+  /* ONE ANSWER TO "DID THIS SELL": when the block above shows sales, the older notice below stays out. */
+  const [sold, setSold] = useState(false)
   return (
     <div className="producthistory-body">
-      <PriceFactsBlock sku={props.sku} />
-      <HistoryBody {...props} />
+      <PriceFactsBlock sku={props.sku} onSales={setSold} />
+      <HistoryBody {...props} hasSales={sold} />
     </div>
   )
 }
 
-function HistoryBody({ sku, onSwitchSku }: { readonly sku: string; readonly onSwitchSku: (sku: string) => void }) {
+function HistoryBody({ sku, onSwitchSku, hasSales }: { readonly sku: string; readonly onSwitchSku: (sku: string) => void; readonly hasSales: boolean }) {
   const { payload, orders, failure, loading } = useProductHistory(sku)
   const printings = usePrintings(payload?.name ?? null)
 
@@ -450,7 +452,7 @@ function HistoryBody({ sku, onSwitchSku }: { readonly sku: string; readonly onSw
         <p className="producthistory-begins">History on this view begins {payload.history_begins} — nothing older than that is market data.</p>
       ) : null}
 
-      {payload.never_sold ? (
+      {payload.never_sold && !hasSales ? (
         <Notice tone="info">This product has never been recorded to sell over the ranges read here.</Notice>
       ) : null}
 
