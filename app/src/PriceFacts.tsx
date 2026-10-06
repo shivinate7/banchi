@@ -83,6 +83,7 @@ function DayChart({ days }: { readonly days: PriceFacts['days'] }) {
           <polyline key={points} className="pricefacts-line" points={points} />
         ))}
       </svg>
+      <p className="pricefacts-legend">Bars are copies sold a day. The line is the market price.</p>
       <figcaption className="pricefacts-ticks" aria-hidden="true">
         <span>{first?.[0] ? shortDay(first[0]) : ''}</span>
         <span>{middle?.[0] ? shortDay(middle[0]) : ''}</span>

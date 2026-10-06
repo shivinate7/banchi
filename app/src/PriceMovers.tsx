@@ -105,7 +105,9 @@ export function PriceMovers({
   trendsLoading,
   trendsFailed,
   narrow,
+  bare = false,
 }: {
+  readonly bare?: boolean
   readonly trendsNote: TrendsPreloadNote | null
   readonly trendsLoading: boolean
   readonly trendsFailed: boolean
@@ -132,7 +134,7 @@ export function PriceMovers({
   const line = readLine(read)
   const trends = trendsLine(trendsNote, trendsLoading, trendsFailed, narrow)
   return (
-    <section className="pricemovers" aria-label="Price moves since first seen">
+    <section className={bare ? 'pricemovers pricemovers-bare' : 'pricemovers'} aria-label="Price moves since first seen">
       <div className="pricemovers-head">
         <p className="pricemovers-says">{summary(read)}</p>
         {moved.length === 0 ? null : (

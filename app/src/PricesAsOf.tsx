@@ -11,8 +11,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Button, Icon } from './kit'
-import { absoluteDate, clockTime, relativeDate } from './dates'
+import { absoluteDate, clockTime } from './dates'
 import { describeFailure, getPricesRefresh, startPricesRefresh } from './server'
 import type { PricesRefreshState } from './types'
 import './PricesAsOf.css'
@@ -105,7 +106,9 @@ export function PricesAsOf({
   state,
   refused,
   onPress,
+  children,
 }: {
+  readonly children?: ReactNode
   readonly state: PricesRefreshState | null
   readonly refused: string | null
   readonly onPress: (force: boolean) => void
@@ -114,8 +117,8 @@ export function PricesAsOf({
   const failed = refused !== null || state?.state === 'failed'
   const at = asOfOf(state)
   const today = at !== null && new Date(at * 1000).toDateString() === new Date().toDateString()
-  const history = state?.note?.steps?.['history']
-  const rest = history === undefined || !history.ok ? ' ' : `Sales history was read ${relativeDate(history.at * 1000)}.`
+  /* THE OLD PANEL'S FACTS (price moves, the daily read, the trends read) ARE THE CHILDREN, so this is the one block that says how fresh things are. */
+  const rest = '\u00a0'
   const line = failed ? (refused ?? (state === null ? '' : failureOf(state))) : running && state !== null ? stepsLine(state) : rest
   return (
     <section className="pricesasof" aria-label="Prices as of" data-state={failed ? 'failed' : running ? 'running' : 'rest'}>
@@ -143,6 +146,7 @@ export function PricesAsOf({
           </div>
         ) : null}
       </div>
+      {children}
     </section>
   )
 }

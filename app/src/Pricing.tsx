@@ -482,7 +482,7 @@ function savedRead(saved: SavedTrendsPayload | null, sku: string): TrendRead | u
 
 /** The page column is this wide or wider before it has room for the Range 7d column: the name
  *  column keeps about 220px beside it. Measured, not guessed (docs/specs/stale-listings.md, 7b). */
-const RANGE_ROOM_PX = 1000
+const RANGE_ROOM_PX = 1040
 /** Under this the Lowest and trend columns leave the row (`Pricing.css`, 899px). */
 const NARROW_PX = 900
 
@@ -2838,13 +2838,20 @@ export function Pricing() {
     >
       <div className="pricing-body" data-live={liveTab ? 'true' : undefined}>
         {bar}
-        {liveTab ? null : <PricesAsOf state={refresh.state} refused={refresh.refused} onPress={refresh.press} />}
-        <PriceMovers
-          trendsNote={liveTab || saved === null ? null : saved.note}
-          trendsLoading={liveTab || (saved === null && !savedFailed)}
-          trendsFailed={savedFailed}
-          narrow={narrow}
-        />
+        {/* ONE BLOCK SAYS HOW FRESH EVERYTHING IS: the time, the press, and under them the price moves and
+            how the daily and trends reads ended. The Live tab has no refresh, so it draws the moves alone. */}
+        {(() => {
+          const moves = (
+            <PriceMovers
+              bare={!liveTab}
+              trendsNote={liveTab || saved === null ? null : saved.note}
+              trendsLoading={liveTab || (saved === null && !savedFailed)}
+              trendsFailed={savedFailed}
+              narrow={narrow}
+            />
+          )
+          return liveTab ? moves : <PricesAsOf state={refresh.state} refused={refresh.refused} onPress={refresh.press}>{moves}</PricesAsOf>
+        })()}
         {ruleLine}
         {/* UN-11: outlives the toast, and a reload. Gone once a send has carried a cleared
             SKU (`clear_built_on`) — the next read finds no `last_clear`. */}
@@ -3247,10 +3254,9 @@ function PricingRow({
           ) : range === null ? (
             <span title="Nothing sold in the last 7 days.">—</span>
           ) : (
-            <>
-              <Money value={range.low} />
-              <Money value={range.high} />
-            </>
+            <span className="pricing-range-line">
+              <Money value={range.low} /> to <Money value={range.high} />
+            </span>
           )}
           <span className="pricing-ref-age" data-stale={typeof range === 'object' && range !== null && range.stale ? 'true' : undefined}>
             {typeof range === 'object' && range !== null && range.stale && range.through !== null ? absoluteDate(`${range.through}T12:00:00`) : null}

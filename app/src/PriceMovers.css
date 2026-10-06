@@ -11,6 +11,7 @@
   background: var(--bn-surface);
   min-width: 0;
 }
+.pricemovers-bare { padding: 0; border: 0; background: none; }
 .pricemovers-head {
   display: flex;
   align-items: center;

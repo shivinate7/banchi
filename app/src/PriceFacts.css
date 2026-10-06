@@ -36,3 +36,4 @@
   .pricefacts-body { min-height: 5.5rem; }
   .pricefacts-sales-body { min-height: 20rem; }
 }
+.pricefacts-legend { margin: var(--bn-1) 0 0; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
