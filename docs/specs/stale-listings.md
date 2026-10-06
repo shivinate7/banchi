@@ -432,10 +432,9 @@ list below pin that.
 TCGplayer, because nothing here writes there. But the job now rewrites run tables. So what the
 screen proposes can move overnight.
 
-**PROPOSED D104 amendment.** It waits for the owner's word. The new text is: "The daily job also
-fetches the catalog export per game. It then re-joins every open run. It writes no price at
-TCGplayer. It changes `snap`, the bucket and the proposed price of a waiting card. A typed answer
-never moves." This spec does not edit D104.
+D104 now says this, by the owner's word: the daily job also fetches the catalog export per game
+and re-joins every open run. Everything else in D104 stands. The guard stands: nothing here
+writes at TCGplayer, a failed step is named, and a typed answer never moves.
 
 ### The one home for the current Market and Lowest of a SKU
 
@@ -456,10 +455,28 @@ Two readers draw from it. Neither holds a second copy:
   worklist row. It is the fetch time of the export the run was last joined against. That is the
   file's mtime, which is its fetch time by D104's own rule.
 
-**Known limit.** A Live tab "read again" writes a reading newer than the last join. Until the
-next refresh, the row shows its join's time and the T panel shows the newer reading's time. Both
-are labeled, so nothing contradicts silently. Open question 3 asks whether that press should
-also re-join.
+**One time per card.** A Live tab "read again" also re-joins the open runs, by the owner's
+ruling. So the row and the T panel never show two times for one card. The Live press ends in
+the same steps 2 and 3 as a refresh, and it records the same `steps.<name>` notes.
+
+### Bug: the trend lines must draw at first paint
+
+The owner saw no trend lines until pressing the Trends button. The screen is meant to draw the
+morning's saved strips with no press. `Pricing` reads `GET /pipeline/trends-saved` once on
+mount and draws `savedRead(saved, sku)` when `trends[sku]` is empty. The likely causes, none
+yet reproduced:
+
+- **The read is one-shot and silent.** The `getSavedTrends` effect swallows a failure and never
+  retries. One failed or slow read (a server restart, a busy slot) leaves `saved` null for the
+  whole visit. Every strip stays empty, and only the Trends press fills them.
+- **The Live tab skips the saved strips.** `trend={trends[sku] ?? (liveTab ? undefined : ...)}`
+  draws nothing from `saved` when `liveTab` is true.
+- **The column is hidden.** `.pricing-col-trend` is `display: none` under a 900 wide page, and so
+  is the Trends button. Nothing draws, with no hint why.
+
+The fix: the saved read retries on failure, and shows a sentence when it cannot read. The Live
+tab draws the saved strips of its own SKUs. A page too narrow for the column says that T
+holds the strip. The build reproduces the owner's case first and names the real cause.
 
 ### Where the sales facts come from
 
@@ -525,19 +542,13 @@ button asks for that, and for everything else.
 
 ### The row as it opens
 
-Two new columns sit between Lowest and the trend. **Recommended pair, A: "Sold/week" and
-"Avg 7d".**
+One new column sits between Lowest and the trend: **Range 7d**, by the owner's pick. It is the
+lowest and highest price that copies sold at over the last 7 days. It is the safe read for a
+price floor. It comes from the month history already read. The trend column, with its yearly
+strip, stays where it is.
 
-- **Sold/week** is units sold a week over the last 30 days. It says whether a price is a fact or
-  a hope.
-- **Avg 7d** is the volume-weighted average sale price over the last 7 days. It is what buyers
-  paid. It shows a move that Market and Lowest hide.
-- Both come from the month history already read.
-
-**Alternative pair, B: "Sales/week" and "Range 7d".** Sales a week counts separate buyers. So one
-order of twelve does not read as demand. Range is the lowest and highest sale in 7 days. It is the
-safe read for a price floor, but it puts two numbers in one cell. Pick B if the owner prices to
-the lowest recent sale.
+Every other figure goes in the T panel: Sold/week, Sales/week, Avg 7d, Lowest with shipping,
+copies listed and the sold-per-day chart.
 
 Direct Low is not a candidate. Every waiting card's export row carries it blank (measured: none
 of 902). Total Quantity is the owner's own listed copies and never market supply. So it stays
@@ -546,14 +557,14 @@ where it is (`LiveCount`) and on T.
 - **Age of each price.** A cell prints its age only when it is older than the page's "Prices as
   of" by more than an hour. That is the `STALE_AFTER_S` rule that `keptStrip` already applies to
   strips. The age draws as a date, in the warn tone, under the figure. A fresh figure draws no
-  age, so a normal morning adds no noise. The sales columns draw their `through` date by the same
+  age, so a normal morning adds no noise. Range 7d draws its `through` date by the same
   rule.
-- **Width.** The new columns need a page 1100 wide or more, so the name column keeps about 300.
-  Under 1100 the row is today's row. Under 900, Lowest and the trend leave as they do now. T
-  keeps every figure at every width. Whether the 1440 desk with the sidebar open clears 1100 is
-  unmeasured. The build measures it before it picks the breakpoint.
-- **Empty states.** No saved history: both cells draw "—" with a title that says so. Nothing sold
-  in 7 days: Avg draws "—" and Sold/week still draws.
+- **Width.** The new column needs room for about 76 px. Under 900, Lowest, the trend and the new
+  column leave, as Lowest and the trend do now. T keeps every figure at every width. Whether the
+  1440 desk with the sidebar open keeps the name column wide enough is unmeasured. The build
+  measures it before it picks the breakpoint.
+- **Empty states.** No saved history: the cell draws "—" with a title that says so. Nothing sold
+  in 7 days also draws "—".
 
 ### T, and the panel behind it
 
@@ -619,29 +630,26 @@ Each is one claim. A build makes each one red first.
     `days`. `price-facts?sku=` serves them.
 14. **The key.** `SHORTCUTS` lists T with the new sentence. A test proves T opens the sheet from a
     row and from the price field. It also proves T does nothing inside a text field.
-15. **The columns.** `app/tests/pricing.spec.ts` asserts the two new headers at 1440 and their
+15. **The column.** `app/tests/pricing.spec.ts` asserts the one new header at 1440 and its
     absence at 820. It also asserts the age line in the warn tone on a figure older than an hour.
 16. **Nothing moves.** `app/tests/stability.spec.ts` stays green. The age line has a reserved
     line, so a refresh moves no row.
 17. **The header.** "Prices as of" shows the catalog step's time. Running shows the steps and the
     count. Failed shows the sentence and keeps the last good time.
-18. **Both themes.** The header states, the columns and the panel are looked at in light and dark
+18. **Both themes.** The header states, the column and the panel are looked at in light and dark
     at 1440 and 820, with a verdict per screen (`make screenshot`, `make design-check`).
+19. **Trends draw at first paint.** Seed `price-trends.json`. Open `#/pricing` and press nothing.
+    Every seeded SKU shows its strip, on the run tab and on the Live tab. Red today if either
+    tab draws none.
+20. **A failed saved read recovers.** Fail the first `trends-saved` request. The strips draw after
+    the retry, and a second failure shows a sentence.
+21. **Live re-joins.** A Live tab "read again" ends with the open runs re-joined. The row's
+    `snap_at` and the T panel's read time are equal afterward.
 
 ### Open questions for the owner
 
-1. **Ruling 2 looks half met already.** `Pricing` reads the saved strips at first paint from
-   `GET /pipeline/trends-saved`, with no press. The strips draw. What is not fresh is Market,
-   Lowest and the proposed price. This section fixes that half and removes the Trends press. Was
-   there a case where strips did not draw?
-2. **The D104 amendment above.** The job now re-joins runs. Agree?
-3. **Should the Live tab's "read again" also re-join?** Without it, the row and T can show two
-   labeled times for one SKU until the next refresh.
-4. **Columns: A or B?** A is recommended.
-5. **The trend column's annual strip.** Dropping it frees 64 px and lets the new columns fit
-   sooner. It is not proposed here, because it removes a figure the owner reads today.
-6. **A card with no history** (18 of 366 today) stays "—". No fix is proposed.
-7. **The trends read takes about two hours.** The gap against measured request time is
+1. **A card with no history** (18 of 366 today) stays "—". No fix is proposed.
+2. **The trends read takes about two hours.** The gap against measured request time is
    unmeasured. It is worth its own look, but not in this change.
 
 ## 8. Where things are
