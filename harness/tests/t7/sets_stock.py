@@ -1036,6 +1036,25 @@ def check_budget_row(checks: Checks) -> None:
     checks.ok((MIX_ROUTE, "sql") not in read_budget.KNOWN_OVER, "sql is equal at S and 2S: no KNOWN_OVER entry")
 
 
+def check_mix_listed_card_with_no_rarity_reads_unread(checks: Checks) -> None:
+    checks.note("")
+    checks.note("STOCK MIX 3b — a listed card whose SKU has no rarity or set reads Unread / No set yet, never its claim")
+    with isolated_home():
+        with Store().write() as snapshot:
+            inv = snapshot.inventory
+            inv.ensure_box(1, name="Alpha")
+            snapshot.skus.entries["S9"] = _mix_sku(set_name="", rarity="")
+            card, _ = inv.allocate_capture(1, cid=fake_cid("mix-unread"))
+            card.game, card.sku, card.state = "riftbound", "S9", master.IDENTIFIED
+            card.rarity_claim, card.set_hint = ["Epic"], "Origins"
+        status, payload = _mix_get()
+    if not checks.equal(status, 200, f"GET {MIX_ROUTE} answers 200") or not isinstance(payload, dict):
+        return
+    cards = payload.get("cards", [])
+    checks.equal([c.get("rarity") for c in cards], ["Unread"], "a listed card with no SKU rarity reads Unread, not its claim")
+    checks.equal([c.get("set") for c in cards], ["No set yet"], "a listed card with no SKU set reads No set yet, not its hint")
+
+
 CHECKS = (
     check_pipeline_sets,
     check_stock_images,
@@ -1045,6 +1064,7 @@ CHECKS = (
     check_mix_leaves_out_retired_and_moved,
     check_mix_wire_has_no_revenue_and_price_is_the_reading,
     check_mix_unlisted_card_reads_its_claim,
+    check_mix_listed_card_with_no_rarity_reads_unread,
     check_mix_state_labels,
     check_mix_sold_recent_edge,
     check_mix_wire_allowlist,

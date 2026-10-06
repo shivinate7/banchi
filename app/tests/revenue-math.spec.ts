@@ -81,10 +81,13 @@ test('the result is gross: it carries no cost, fee or profit field', () => {
  *   type MeasureId  'captured' | 'onhand' | 'sold' | 'pct' | 'recent' | 'weeks' | 'revenue' | 'median'
  *   type MixCard    the wire card: game set rarity finish state box capturedWeek soldWeek sku price soldRecent
  *   priceBand(price: number | null): string
- *   avgSalePrice(sales: readonly Sale[]): Record<sku, number>   // refund-adjusted gross / copies, per SKU
+ *   soldShare(cards: MixCard[], sales: readonly Sale[]): Record<sku, number>
+ *       // a SKU's Sales gross (sum of `salesOf` gross for it) divided by its sold-card count in `cards`;
+ *       // a SKU with sold cards and no sale gets 0, never a filled-in price
  *   measureOf(cards: MixCard[], measure: MeasureId, salePrice: Record<string, number>): number | null
  *       null is a dash. `pct` is a fraction (0.4), `weeks` is on hand over (recent / 2).
- *       A sold card's price is salePrice[sku]; any other card's price is its own `price`.
+ *       `revenue` is the sum over sold cards of salePrice[sku] ?? 0 (salePrice is `soldShare`'s answer).
+ *       A sold card's price for `median` and `band` is its share; any other card's price is its own `price`.
  *   pivot(cards, { by, across: DimId | null, measure, filters: Partial<Record<DimId, string[]>>, salePrice }):
  *       { columns: string[]  (distinct values of `across`, then 'All' last),
  *         rows: { key: string, cells: Record<string, number | null> }[] }
@@ -183,27 +186,60 @@ test('13. each option count respects the other filters and ignores its own dimen
   expect(optionCounts(cards, {}, 'salew')['Not sold']).toBe(4)
 })
 
-test('23. Mix revenue for a SKU equals Sales’ figure, with a refunded line left out', async () => {
-  const avgSalePrice = await need('avgSalePrice')
+const mixWire = (qty: number, price: string | null): OrderLineWire => ({
+  sku: 'S1', quantity: qty, name: 'Ahri', number: '001', printing: null, condition: 'Near Mint',
+  rarity: 'Rare', unit_price: price, kind: null,
+})
+const mixOrder = (key: string, lines: OrderLineWire[], refunded = false, status = 'Shipped'): OrderRow =>
+  ({
+    key, source: 'TCGplayer', number: key, placed_at: '2026-09-01T10:00:00+00:00', status,
+    first_seen: '2026-09-01T10:00:00+00:00', changed_at: null, buyer: 'x', wanted: 1, recorded: 1,
+    open: false, terminal: true, lines,
+    progress: refunded
+      ? [{ sku: 'S1', wanted: 1, recorded: 0, outstanding: 0, over: 0, copies: [], by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: 'not_shipping', at: null }]
+      : [],
+  }) as unknown as OrderRow
+
+test('23. Mix revenue for a SKU equals Sales’ gross, with a refunded line left out', async () => {
+  const soldShare = await need('soldShare')
   const measureOf = await need('measureOf')
-  const wire = (qty: number, price: string): OrderLineWire => ({
-    sku: 'S1', quantity: qty, name: 'Ahri', number: '001', printing: null, condition: 'Near Mint',
-    rarity: 'Rare', unit_price: price, kind: null,
-  })
-  const order = (key: string, lines: OrderLineWire[], refunded = false): OrderRow =>
-    ({
-      key, source: 'TCGplayer', number: key, placed_at: '2026-09-01T10:00:00+00:00', status: 'Shipped',
-      first_seen: '2026-09-01T10:00:00+00:00', changed_at: null, buyer: 'x', wanted: 1, recorded: 1,
-      open: false, terminal: true, lines,
-      progress: refunded
-        ? [{ sku: 'S1', wanted: 1, recorded: 0, outstanding: 0, over: 0, copies: [], by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: 'not_shipping', at: null }]
-        : [],
-    }) as unknown as OrderRow
-  // Two copies at $10 sold; one $40 line refunded. Sales counts $20 over 2 copies.
-  const { sales } = salesOf([order('A', [wire(2, '10.00')]), order('B', [wire(1, '40.00')], true)])
+  // Two copies at $10 sold; one $40 line refunded. Sales counts $20 over 2 sold cards.
+  const { sales } = salesOf([mixOrder('A', [mixWire(2, '10.00')]), mixOrder('B', [mixWire(1, '40.00')], true)])
   expect(sum(sales)).toBe(20)
-  const salePrice = avgSalePrice(sales)
-  expect(salePrice.S1).toBe(10)
   const twoSold = [sold(), sold()]
-  expect(measureOf(twoSold, 'revenue', salePrice), 'Mix agrees with Sales; ignoring the refund gives 40').toBe(sum(sales))
+  const share = soldShare(twoSold, sales)
+  expect(measureOf(twoSold, 'revenue', share), 'Mix agrees with Sales; ignoring the refund gives 40').toBe(sum(sales))
+})
+
+test('23a. an unpriced line is never filled in: $10 and a null price over 2 sold cards is $10, $5 each', async () => {
+  const soldShare = await need('soldShare')
+  const measureOf = await need('measureOf')
+  const { sales } = salesOf([mixOrder('A', [mixWire(1, '10.00')]), mixOrder('B', [mixWire(1, null)])])
+  expect(sum(sales)).toBe(10)
+  const cards = [sold(), sold()]
+  const share = soldShare(cards, sales)
+  expect(measureOf(cards, 'revenue', share)).toBe(10)
+  expect(measureOf([cards[0]], 'revenue', share), 'a slice carries an equal share').toBe(5)
+})
+
+test('23b. a sold card whose line salesOf dropped still leaves the SKU total equal to Sales', async () => {
+  const soldShare = await need('soldShare')
+  const measureOf = await need('measureOf')
+  for (const dropped of [
+    mixOrder('B', [mixWire(1, '40.00')], false, 'Canceled'),
+    mixOrder('B', [mixWire(1, '40.00')], true),
+  ]) {
+    const { sales } = salesOf([mixOrder('A', [mixWire(1, '10.00')]), dropped])
+    expect(sum(sales)).toBe(10)
+    const cards = [sold(), sold()]
+    const share = soldShare(cards, sales)
+    expect(measureOf(cards, 'revenue', share)).toBe(sum(sales))
+  }
+})
+
+test('23c. a sold card with no order line has revenue 0', async () => {
+  const soldShare = await need('soldShare')
+  const measureOf = await need('measureOf')
+  const cards = [sold()]
+  expect(measureOf(cards, 'revenue', soldShare(cards, []))).toBe(0)
 })

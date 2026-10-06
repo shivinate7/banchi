@@ -1343,7 +1343,7 @@ test('19. a press on any control fires no request', async ({ page }) => {
 test('20. the empty store shows one sentence and one action', async ({ page }) => {
   await stubMix(page, [])
   await page.goto('/#/revenue?lens=mix')
-  await expect(page.getByText('Nothing is captured yet. Capture a card and its mix shows here.')).toBeVisible()
+  await expect(page.getByText('No cards captured yet. Capture a card and its mix shows here.')).toBeVisible()
   await expect(page.locator('table')).toHaveCount(0)
   const action = page.locator('main').getByRole('link', { name: /capture/i })
   await expect(action).toHaveCount(1)
