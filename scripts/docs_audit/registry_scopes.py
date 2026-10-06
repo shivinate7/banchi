@@ -1246,6 +1246,18 @@ def check_spec_map(report: Report) -> None:
                 "`unnamed_route_views()` must then cover it as a shared surface (checked "
                 "in the shell-closure loop below); either way this is worth seeing.")))
 
+    # A gated spec (a pull request runs it only when its closure is touched) must be a real
+    # spec whose closure reaches `app/src/`, or no change could ever run it.
+    for gated in getattr(module, "GATED_SPECS", ()):
+        if gated not in spec_closures:
+            findings.append(Finding(rel(BROWSER_SCOPE_SCRIPT), (
+                f"`GATED_SPECS` names `{gated}`, which is not an `app/tests/*.spec.ts` file, "
+                "so the gate covers nothing.")))
+        elif not any(path.startswith("app/src/") for path in spec_closures[gated]):
+            findings.append(Finding(gated, (
+                "is gated to its own closure and that closure holds nothing under `app/src/`, "
+                "so no pull request would ever run it.")))
+
     for path in reached_by:
         if not exists(ROOT / path):
             findings.append(Finding(rel(BROWSER_SCOPE_SCRIPT), (

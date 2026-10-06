@@ -75,7 +75,8 @@ regardless — D136's pass record is the only thing that skips the matrix on mai
     scripts/browser-scope.py shard-refresh FILE ... [--write]
         Re-time from `.serve/design-check.json` files (`fileSeconds`); a spec's time is the median
         over the files that list it, so pass several runs' files for a median. Every full-suite run uploads
-        each shard's as `design-check-times-N`; download them and run this. Previews.
+        each shard's as `design-check-times-N`; download them and run this. Previews. Never feed it a long-sitting run's artifact: the
+        300-capture case skews the freeze file's time.
     scripts/browser-scope.py list
     scripts/browser-scope.py selftest
 
@@ -672,6 +673,25 @@ def selftest() -> int:
        "a whitespace path MAPPED to one spec still selects every spec — the clause, not "
        "the unmapped fallback, is what fires")
 
+    # THE GATED SPEC (owner's word): a pull request runs `capture-freeze.spec.ts` only when the
+    # diff touches its own derived closure, and any doubt still runs it.
+    gated = "app/tests/capture-freeze.spec.ts"
+    ok(gated not in classify_specs(["app/src/Inventory.tsx"]).specs,
+       "a change outside the gated spec's closure leaves it out")
+    ok(gated not in classify_specs(["app/src/App.tsx"]).specs,
+       "a shared surface outside the gated spec's closure leaves it out")
+    ok(gated in classify_specs(["app/src/CaptureScreen.tsx"]).specs,
+       "a change to the Capture screen runs the gated spec")
+    ok(gated in classify_specs(["app/src/dealer.ts"]).specs,
+       "a change to what the gated spec imports runs it")
+    ok(gated in classify_specs([gated]).specs, "a change to the gated spec itself runs it")
+    ok(gated in classify_specs(["app/src/NoSuchScreenEver.tsx"]).specs,
+       "a doubt (an unmapped path) runs the gated spec")
+    ok(gated in classify_specs(["app/src/Inventory.tsx", "app/src/My File.tsx"]).specs,
+       "a doubt (a whitespace path) runs the gated spec")
+    ok(gated in classify_specs([]).specs, "an empty diff runs the gated spec")
+    ok(gated in classify_specs(["Makefile"]).specs, "a top-level scope path runs the gated spec")
+
     old = os.environ.get("PKMNSCAN_BROWSER_SCOPE")
     os.environ["PKMNSCAN_BROWSER_SCOPE"] = "all"
     try:
@@ -1013,6 +1033,23 @@ def build_reverse_map() -> Dict[str, Set[str]]:
     return reverse
 
 
+# SPECS A PULL REQUEST RUNS ONLY WHEN ITS OWN DERIVED CLOSURE IS TOUCHED (owner's word, D141
+# amended). `capture-freeze.spec.ts` drives hundreds of captures; its scope is `spec_reach`
+# (the Capture screen, the dealer, and what they import), never a typed list.
+GATED_SPECS = ("app/tests/capture-freeze.spec.ts",)
+
+
+def _drop_untouched_gated(verdict: "SpecVerdict", paths: Sequence[str]) -> "SpecVerdict":
+    """Take each gated spec out of a verdict unless a changed path is in its closure."""
+    routes = route_views()
+    dropped = [g for g in GATED_SPECS if g in verdict.specs
+               and not set(paths) & spec_reach(g, routes)]
+    if not dropped:
+        return verdict
+    return SpecVerdict(verdict.specs - set(dropped), True,
+                       verdict.lines + [f"left out, nothing in its closure changed: {', '.join(dropped)}"])
+
+
 def classify_specs(paths: Sequence[str],
                    reverse: Optional[Dict[str, Set[str]]] = None) -> SpecVerdict:
     """Which specs `paths` can reach, or every spec, and whether that is a genuine narrowing.
@@ -1041,11 +1078,12 @@ def classify_specs(paths: Sequence[str],
     result: Set[str] = set()
     narrowed_any = False
     forced_all = False
+    doubt = False
     for path in paths:
         if re.search(r"\s", path):
             lines.append(f"  ALL   {path}  (whitespace in a path cannot be named to "
                          "PW_ARGS, which `make` word-splits)")
-            forced_all = True
+            forced_all = doubt = True
             continue
         if not path.startswith("app/"):
             # NO `within: recipe:design-check` NARROWING HERE, deliberately, unlike
@@ -1064,7 +1102,7 @@ def classify_specs(paths: Sequence[str],
             if hit is not None:
                 lines.append(f"  ALL   {path}  (outside `app/**`, already in the top-level "
                              f"SCOPE — {hit['path']})")
-                forced_all = True
+                forced_all = doubt = True
             else:
                 lines.append(f"  --    {path}  (outside `app/**`, not in SCOPE either — no "
                              "spec's concern)")
@@ -1077,15 +1115,19 @@ def classify_specs(paths: Sequence[str],
         if not reachers:
             lines.append(f"  ALL   {path}  (no spec's derived closure reaches it — an "
                          "unmapped file is a gap in the map, never a license to skip it)")
-            forced_all = True
+            forced_all = doubt = True
             continue
         narrowed_any = True
         result |= reachers
         lines.append(f"  {len(reachers)} spec(s)  {path}")
     if forced_all or not narrowed_any:
         lines.append("every spec runs")
-        return SpecVerdict(everyone, False, lines)
-    partial = result != everyone
+        verdict = SpecVerdict(everyone, False, lines)
+        # a shared surface is a known answer; whitespace, an unmapped file, a top-level scope
+        # path or a diff of nothing the suite reads is doubt, and doubt runs every spec
+        return verdict if doubt or not forced_all else _drop_untouched_gated(verdict, paths)
+    verdict = _drop_untouched_gated(SpecVerdict(result, False, lines), paths)
+    result, partial = verdict.specs, result != everyone or verdict.partial
     lines.append(f"{len(result)} of {len(everyone)} spec(s) reached" +
                  (" — a genuine narrowing" if partial else " — every spec, derived rather "
                   "than forced"))

@@ -116,8 +116,15 @@ on:
   # anything on a schedule or a dispatch (see the scope hatches on the steps below).
   schedule:
     - cron: '17 3 * * *'
+    # THE LONG SITTING (owner's word, D136 amended): once a month, the browser matrix also runs
+    # `capture-freeze.spec.ts`'s 300-capture case, about 16 minutes, which no nightly runs.
+    - cron: '47 4 1 * *'
   workflow_dispatch:
     inputs:
+      long_sitting:
+        description: Also run the 300-capture case (about 16 minutes, PKMNSCAN_LONG_SITTING=1)
+        type: boolean
+        default: false
       report_failure:
         description: Open or update the nightly-failure issue if this run fails (a schedule always does)
         type: boolean
@@ -418,7 +425,8 @@ jobs:
     # this line, a failed `already-passed` skipped the matrix; now it runs it.
     if: ${{ !cancelled() && needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # the long sitting (monthly, or a dispatch that asks) puts a 16-minute case on one shard
+    timeout-minutes: ${{ (github.event.schedule == '47 4 1 * *' || inputs.long_sitting) && 40 || 20 }}
     # The official image, by tag and digest. Chromium is preinstalled at the version the pin
     # needs (the "Image matches" step enforces it). `--ipc=host` is Playwright's own advice for
     # Chromium in a container.
@@ -491,6 +499,8 @@ jobs:
           SPECS: ${{ needs.browser-scope.outputs.specs != 'all' && needs.browser-scope.outputs.specs || '' }}
           SHARD: ${{ matrix.shard }}
           SHARDS: ${{ strategy.job-total }}
+          # the monthly schedule and a dispatch that asks; nothing else sets it
+          PKMNSCAN_LONG_SITTING: ${{ (github.event.schedule == '47 4 1 * *' || inputs.long_sitting) && '1' || '' }}
         run: |
           files="$(python3 scripts/browser-scope.py shard "$SHARD" "$SHARDS" $SPECS)"
           if [ -z "$files" ]; then
