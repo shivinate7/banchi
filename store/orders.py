@@ -199,6 +199,12 @@ TERMINAL_STATUSES = frozenset(
 )
 
 
+def is_canceled_status(status: Optional[str]) -> bool:
+    """Whether the feed's own word says this order was canceled: trimmed and case-folded, as
+    `TERMINAL_STATUSES` is compared. `app/src/Revenue.tsx:isCanceled` is the same rule."""
+    return str(status or "").strip().casefold() == "canceled"
+
+
 def is_terminal_status(status: Optional[str]) -> bool:
     """Whether the feed's own word says this order is finished — a TERMINAL OVERRIDE.
 

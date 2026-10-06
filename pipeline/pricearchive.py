@@ -65,6 +65,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Protocol, Tuple
 
 from pipeline import games, join, tcgcsv
+from store import orders as order_store
 from store.pricearchive import RANGE_WIDTH_DAYS, Bucket, PriceArchive, Source, _key
 from store.session import Store
 
@@ -109,12 +110,6 @@ THROTTLE_BACKOFF_FACTOR = 2.0
 # `pipeline/pricehistory.py`'s exceptions, and a fixed substring of an already-fixed
 # sentence is a fact this module can rely on without a second, drifting copy of it.
 BLOCKED_SIGNATURE = "answered HTTP 403"
-
-# `app/src/Revenue.tsx:isCanceled`'s own rule, read here rather than a second copy of the
-# feed: trimmed and case-folded, because the vocabulary is the marketplace's and "Canceled"
-# and "canceled " are one fact about an order to a person, exactly `store/orders.py`'s own
-# `TERMINAL_STATUSES` comparison one register over.
-CANCELED_STATUS = "canceled"
 
 
 class _MarketLike(Protocol):
@@ -516,7 +511,7 @@ def revenue_by_sku(ledger) -> Dict[str, Decimal]:
     """Gross revenue per SKU, canceled orders excluded — `app/src/Revenue.tsx`'s own rule
     (D214), read off the ledger directly rather than a second copy of it: `unit_price *
     quantity`, summed over every line of every order whose own `status` is not
-    `CANCELED_STATUS` once trimmed and case-folded.
+    `store.orders.is_canceled_status`.
 
     THIS IS THE ONLY THING A SEALED-PRODUCT SKU IS EVER WORTH TO THIS MODULE. Sealed
     product is never captured (`pipeline/games.py`'s own line for it) and so has no row in
@@ -533,8 +528,7 @@ def revenue_by_sku(ledger) -> Dict[str, Decimal]:
     """
     totals: Dict[str, Decimal] = {}
     for order in ledger.orders.values():
-        status = str(getattr(order, "status", "") or "").strip().casefold()
-        if status == CANCELED_STATUS:
+        if order_store.is_canceled_status(getattr(order, "status", "")):
             continue
         for line in getattr(order, "lines", ()) or ():
             sku = str(getattr(line, "sku", "") or "").strip()

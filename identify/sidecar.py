@@ -61,9 +61,9 @@ from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
 from pipeline import games
+from store.photos import SIDECAR_SUFFIX
 
 PHOTO_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp")
-SIDECAR_SUFFIX = ".json"
 
 # Source of the position, reported so a run can be read for how much of it was recovered
 # rather than declared.

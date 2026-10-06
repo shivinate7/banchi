@@ -877,7 +877,12 @@ test('a SKU pending past the cap ends on no photo found', async ({ page }) => {
   await open(page)
   const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
   await expect(thumb).toHaveAttribute('data-pending', 'true')
-  for (let i = 0; i < 8; i += 1) await page.clock.fastForward(9000)
+  // Each re-ask timer is set only after the previous answer lands, so wait for the ask
+  // before moving the clock. A tight fastForward loop outruns the fetch and strands the cap.
+  for (let i = 1; i <= 6; i += 1) {
+    await expect.poll(() => asks).toBe(i)
+    await page.clock.fastForward(9000)
+  }
   await expect(thumb).toHaveAttribute('data-missing', 'true')
   await expect(thumb).toContainText('No photo found')
   const final = asks

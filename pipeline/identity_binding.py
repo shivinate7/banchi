@@ -103,9 +103,10 @@ def number_agrees(strategy: str, read_number, read_printed_total, row_number: st
     Pokemon (`store/numbers.NUMBER_AND_PRINTED_TOTAL`): `store/numbers.join_key` of the
     read pair, then `pipeline/join.number_index_key` on both sides — the SAME fold
     `Catalog.rows_for_key` already applies, so a card that would join to this exact row
-    agrees here too. Both halves or nothing: a number with no denominator cannot compose the
-    key the row is indexed by (`pipeline/join.py:_key_number_and_printed_total`'s own rule),
-    so a partial read counts as blank rather than as a guessed disagreement.
+    agrees here too. A read that carries its own "/total" ("84/198") stands alone and is judged
+    on that total. A bare number with no total, or a one-sided slash ("84/", "/132"), cannot
+    compose the key the row is indexed by (`pipeline/join.py:_key_number_and_printed_total`'s
+    own rule), so it counts as blank rather than as a guessed disagreement.
 
     Every other strategy: `store/numbers.strip_set_code` of the read (D55/D67 — a model that
     glued a set code onto the front), then the same `number_index_key` fold.
@@ -120,10 +121,20 @@ def _read_number_key(strategy: str, read_number, read_printed_total) -> Optional
     `number_agrees` and the review-candidate builder derive it, so the two can never fold
     the read two different ways."""
     if strategy == NUMBER_AND_PRINTED_TOTAL:
-        if not read_number or not read_printed_total:
+        if not read_number:
             return None
         # A number that already carries its own "/total" is composed; gluing the total on again would never match a row.
-        composed = str(read_number) if "/" in str(read_number) else join_key(read_number, read_printed_total)
+        # It is judged on that total even when `read_printed_total` is None.
+        stripped = strip_set_code(read_number)
+        if "/" in stripped:
+            left, _, right = stripped.partition("/")
+            if not left.strip() or not right.strip():
+                return None  # a one-sided slash is half a pair: no evidence
+            composed = stripped
+        elif not read_printed_total:
+            return None
+        else:
+            composed = join_key(read_number, read_printed_total)
     else:
         if not read_number:
             return None
