@@ -484,6 +484,22 @@ file, which is `live_positions` and nothing wider. `pushed`, `staged` and `live`
 SKU's `Listing` (D7) and not card states. The card stays at `identified`. Passing `pushed` to
 `set_state` raises `UnknownState`.
 
+### 7.1 Send the rest: a store-backed run with gone cards
+
+A store-backed run (a sweep, or `join --keys`) records `{cid, name}` per card in its manifest.
+When the run holds a card the store no longer has, `emit` and the send do not stop. They send
+every card still there (`resolve.store_backed_payload`).
+
+- Each gone card is named by its last-known name. The name shows in the send's receipt
+  (`SendCard`), in the CLI's `emit` and `join` output, and in the "nothing to send" refusal
+  (`resolve.gone_sentence`).
+- Cards count by `cid`. Two cards with one name both count. One card held by two runs counts once.
+- A run whose cards are all gone refuses.
+- A manifest with keys and no card map refuses and writes nothing.
+
+Proven by `check_send_skips_gone_card` and `check_send_store_backed_follows_cards`
+(`harness/tests/t7/send_markdown.py`) and the "skipped cards" case in `app/tests/pricing.spec.ts`.
+
 ---
 
 ## 8. `reconcile` and listing states
