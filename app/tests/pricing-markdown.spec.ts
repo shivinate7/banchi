@@ -317,28 +317,24 @@ test('staleness is a filter and All is the default, which is the whole of the le
   await expect(page.locator('.pricing-row')).toHaveCount(2)
 })
 
-test('the trends press asks about the rows on screen, not about the whole survey', async ({
-  page,
-}) => {
+test('the Live tab draws the strips of the rows on screen, and asks no market host', async ({ page }) => {
+  const at = Math.floor(Date.now() / 1000) - 3600
+  const range = (name: string) => ({ range: name, from: '2026-08-01', to: '2026-08-30', fraction: '0.1', points: ['13.5', '15.2', '18.4'] })
+  const entry = { at, ranges: [range('month'), range('annual')] }
   const wire = await open(page, {
     skus: [
       live(),
       live({ sku: '8608464', name: 'Dunsparce', standing: 'refused', skip: 'too_young' }),
     ],
     counts: { considered: 2, offered: 1, deferred: 0, refused: 1 },
+    saved: { skus: { '8608859': entry, '8608464': entry }, note: null },
   })
 
+  /* THE TRENDS PRESS IS GONE (spec 7b): the filter narrows what is drawn, and nothing is asked. */
   await page.getByRole('button', { name: /Not selling/ }).click()
-  await page.getByRole('button', { name: 'Trends' }).click()
-  await expect.poll(() => wire.filter((row) => row.path.includes('/trends')).length).toBeGreaterThan(0)
-
-  const asked = wire
-    .filter((row) => row.path.includes('/trends'))
-    .flatMap((row) => new URLSearchParams(row.path.split('?')[1] ?? '').getAll('sku'))
-  /* ONE SKU AND NOT TWO. The run route measured 46 SKUs at ~34s of courtesy delay; a real
-     survey is ~441 rows, about five and a half minutes at a free public mirror. D278's rule is
-     that this is a PRESS, and a walk that big would make the press meaningless. */
-  expect(asked).toEqual(['8608859'])
+  await expect(page.locator('.pricing-row')).toHaveCount(1)
+  await expect(page.locator('.pricing-row .pricetrend svg')).toHaveCount(2)
+  expect(wire.filter((row) => /\/trends(\?|$)/.test(row.path))).toHaveLength(0)
 })
 
 test('a raise is named on the row and sent, not refused', async ({ page }) => {
@@ -771,7 +767,7 @@ test('the Live tab with no read yet says so and offers the read, and nothing is 
   expect(wire).toHaveLength(0)
   /* F5 verbiage cut (row 102): unified to the one word "Refresh", the same as the To-send
      tab's "Check what is live". */
-  await page.getByRole('button', { name: 'Refresh' }).first().click()
+  await page.getByRole('button', { name: 'Refresh', exact: true }).first().click()
   await expect(page.getByRole('dialog', { name: 'What to mark down' })).toBeVisible()
   expect(wire).toHaveLength(0)
 })

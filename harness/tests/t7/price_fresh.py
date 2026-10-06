@@ -2,7 +2,7 @@
 
 Part of `harness/tests/t7_store_and_seams.py` (one verdict). `CHECKS` is this group's checks in
 the order `CHECK_ORDER` runs them. Spec 7b's numbered checks that live on the server are
-numbered in each label: 1 to 8, 10 to 13 and the server half of 21. Check 9 (no market request
+numbered in each label: 1 to 8, 10 to 13 and the server half of 21. Item 9 (no market request
 on a visit) is here too. 14 to 20 are screen checks in `app/tests/`.
 
 EVERY CHECK ASKS FOR A THING THAT MAY NOT EXIST YET, and a missing function must read as a
@@ -22,6 +22,7 @@ import http.server
 import json
 import os
 import re
+import tempfile
 import threading
 import time
 from contextlib import contextmanager
@@ -29,6 +30,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import parse_qs
 
 import envfile
 from harness.tests import Checks
@@ -53,6 +55,7 @@ SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "price-refresh-daily.
 
 #: The real-world case from the spec: a waiting card's batch Market against its current reading.
 THEN, NOW = "10.37", "16.25"
+ARTICUNO_THEN, ARTICUNO_NOW = "20.00", "30.00"
 
 #: What a refresh may ask the portal for. Reading, never writing: a catalog export (POST that
 #: answers a CSV), its filter vocabulary and the live listings download.
@@ -83,7 +86,7 @@ def second_of(value):
 
 
 @contextmanager
-def world(checks: Checks, *, extra_runs: int = 0):
+def world(checks: Checks, *, extra_runs: int = 0, disjoint: bool = False):
     """A store with open Pokemon runs holding a stale Market, and a portal that serves a new one.
 
     Run one holds Dunsparce at the batch Market `THEN` and Articuno. `extra_runs` more runs of
@@ -93,9 +96,13 @@ def world(checks: Checks, *, extra_runs: int = 0):
     keys = ("PKMNSCAN_TCG_EXPORT_URL", "TCGPLAYER_STORE_COOKIE", "PKMNSCAN_TCG_USER_AGENT", envfile.FROM_FILE_ENV)
     previous = {name: os.environ.get(name) for name in keys}
     stub = {
-        "mode": "csv", "body": b"", "live_body": b"", "requests": [], "gate": None, "reached": threading.Event(),
+        "mode": "csv", "body": b"", "live_body": b"", "requests": [], "asked_sets": [], "gate": None, "reached": threading.Event(),
         "filters": {
-            "Sets": [{"Text": "All Set Names", "Value": "0"}, {"Text": "SV09: Journey Together", "Value": "4242"}],
+            "Sets": [
+                {"Text": "All Set Names", "Value": "0"},
+                {"Text": "SV09: Journey Together", "Value": "4242"},
+                {"Text": "SV08: Surging Sparks", "Value": "4343"},
+            ],
             "Rarities": [{"Text": "All Rarities", "Value": "0"}],
             "Conditions": [{"Text": "All Conditions", "Value": "0"}],
             "Printings": [{"Text": "All Printings", "Value": "0"}],
@@ -131,10 +138,18 @@ def world(checks: Checks, *, extra_runs: int = 0):
             return self._send(404, b"")
 
         def do_POST(self):  # noqa: N802
-            self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            sent = self.rfile.read(int(self.headers.get("Content-Length") or 0))
             self._record()
             if stub["mode"] == "waf":
                 return self._send(403, b"")
+            if stub.get("by_set"):  # the portal answers only the sets the request names
+                model = json.loads((parse_qs(sent.decode()).get("model") or ["{}"])[0])  # `model=<json>`, form-encoded
+                wanted = model.get("SetNameIds") or []
+                stub["asked_sets"].append(list(wanted))
+                rows = [row for set_id, held in stub["by_set"].items() if set_id in wanted for row in held]
+                scratch = Path(tempfile.mkdtemp()) / "scoped.csv"
+                tcgcsv.write_csv(scratch, stub["header"], rows)
+                return self._send(200, scratch.read_bytes())
             return self._send(200, stub["body"])
 
     portal = http.server.HTTPServer(("127.0.0.1", 0), Portal)
@@ -149,6 +164,8 @@ def world(checks: Checks, *, extra_runs: int = 0):
 
             made = []
             cards = [(3, 1, "Dunsparce", "120/159", "normal"), (3, 2, "Articuno", "161", None)]
+            if disjoint:
+                cards = cards[:1]
             first, _ = seam_run(checks, cards, market={DUNSPARCE_SKU: THEN})
             made.append(first)
             for at in range(extra_runs):
@@ -161,6 +178,20 @@ def world(checks: Checks, *, extra_runs: int = 0):
                     card["set_hint"] = "SV09"
                 path.write_text(json.dumps(payload))
 
+            if disjoint:  # a second run of the same game, on a different resolvable set
+                other, _ = seam_run(checks, [(4, 1, "Articuno", "161", None)], market={ARTICUNO_SKU: ARTICUNO_THEN})
+                path = other.directory / pipeline_routes.run_files.IDENTIFICATIONS
+                payload = json.loads(path.read_text())
+                for card in payload["cards"].values():
+                    card["set_hint"] = "SV08"
+                path.write_text(json.dumps(payload))
+                made.append(other)
+                fresh = tcgcsv.read_export(write_export(home / "both-sets.csv", market={DUNSPARCE_SKU: NOW, ARTICUNO_SKU: ARTICUNO_NOW}))
+                stub["header"] = fresh.header
+                stub["by_set"] = {
+                    "4242": [r for r in fresh.rows if r[tcgcsv.SKU_COLUMN] != ARTICUNO_SKU],
+                    "4343": [dict(r, **{"Set Name": "SV08: Surging Sparks"}) for r in fresh.rows if r[tcgcsv.SKU_COLUMN] == ARTICUNO_SKU],
+                }
             stub["body"] = write_export(home / "new-catalog.csv", market={DUNSPARCE_SKU: NOW}).read_bytes()
             stub["live_body"] = _live_export_bytes({DUNSPARCE_SKU: 0})
             httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
@@ -208,7 +239,9 @@ def table_of(run) -> dict:
 
 
 def table_row(run, sku: str) -> dict:
-    return next(row for row in table_of(run)["skus"] if row["sku"] == sku)
+    """The table row for a SKU, or an empty one: a card the join dropped is a failed assertion, not a crash."""
+    empty = {"snap": {}, "rule_price": None, "bucket": None, "presets": {}}
+    return next((row for row in table_of(run)["skus"] if row["sku"] == sku), empty)
 
 
 def sent_price(run_dir: Path, sku: str):
@@ -227,11 +260,11 @@ def decimal_of(value):
         return None
 
 
-# ------------------------------------------------------------------- checks 1, 2, 3, 7, 8
+# ------------------------------------------------------------------- Item 1, 2, 3, 7, 8
 
 
 def check_refresh_rewrites_the_waiting_row(checks: Checks) -> None:
-    """Checks 1, 2, 3, 7 and 8, on one refresh of three open runs of one game.
+    """Item 1, 2, 3, 7 and 8, on one refresh of three open runs of one game.
 
     THE REAL-WORLD CASE IS THE FIXTURE: a waiting card whose run-time Market is $10.37 while the
     current reading is $16.25. After the job the run table, the worklist and the send all say
@@ -308,8 +341,36 @@ def check_refresh_rewrites_the_waiting_row(checks: Checks) -> None:
         checks.equal(asked["built"] >= 0, True, "(the history stub was reached or not: either is fine for this arm)")
 
 
+def check_disjoint_scopes_share_one_request(checks: Checks) -> None:
+    """Two open runs of one game on different sets both get current prices from one request.
+
+    THE PORTAL ANSWERS ONLY THE SETS THE REQUEST NAMES, because a stub that serves every row to
+    every scope cannot tell a request for the union from a request for the first run's sets.
+    A catalog fetch that kept the first run's scope would serve run two's Articuno nothing.
+    """
+    checks.note("")
+    checks.note("PRICES REFRESH — disjoint set hints, one request for the union")
+    with world(checks, disjoint=True) as w:
+        asked, undo = refuse_history()
+        try:
+            attempt(checks, "two runs of one game: the refresh runs", lambda: pipeline_routes.do_prices_refresh())
+        finally:
+            undo()
+        posts = sum(1 for call in w.stub["requests"] if call == ("POST", "downloadexportcsv"))
+        checks.equal(posts, 1, "disjoint hints: exactly one catalog request for the game")
+        checks.equal(
+            sorted(set(sum(w.stub["asked_sets"], []))), ["4242", "4343"],
+            "and that request names both runs' sets",
+        )
+        checks.equal(
+            (table_row(w.runs[0], DUNSPARCE_SKU)["snap"].get("market"), table_row(w.runs[1], ARTICUNO_SKU)["snap"].get("market")),
+            (NOW, ARTICUNO_NOW),
+            "and both runs' tables hold the new Market",
+        )
+
+
 def check_join_is_idempotent(checks: Checks) -> None:
-    """Check 4. Joining twice against one export leaves `pricing.json` identical."""
+    """Item 4. Joining twice against one export leaves `pricing.json` identical."""
     checks.note("")
     checks.note("RE-JOIN — idempotent")
     with world(checks) as w:
@@ -327,11 +388,11 @@ def check_join_is_idempotent(checks: Checks) -> None:
         checks.equal(twice == once, True, "4. a second join against the same export gives byte-identical `pricing.json`")
 
 
-# ------------------------------------------------------------------------- checks 5 and 6
+# ------------------------------------------------------------------------- Item 5 and 6
 
 
 def check_refresh_order_and_failure(checks: Checks) -> None:
-    """Checks 5 and 6. Order of the steps; a failed history keeps 1 to 3; a refused catalog keeps the tables."""
+    """Item 5 and 6. Order of the steps; a failed history keeps 1 to 3; a refused catalog keeps the tables."""
     checks.note("")
     checks.note("PRICES REFRESH — order, and a failure keeps the last good figures")
 
@@ -400,7 +461,7 @@ def check_refresh_order_and_failure(checks: Checks) -> None:
 
 
 def check_reading_is_one_whole_row(checks: Checks) -> None:
-    """Check 10. A run table and a newer live row give one whole reading, never a mix."""
+    """Item 10. A run table and a newer live row give one whole reading, never a mix."""
     checks.note("")
     checks.note("ONE HOME — a reading keeps all four cells from one source and one second")
     with isolated_home(), hermetic():
@@ -439,7 +500,7 @@ def check_reading_is_one_whole_row(checks: Checks) -> None:
 
 
 def check_daily_job_reaches_only_the_refresh(checks: Checks) -> None:
-    """Check 8's static half. `do_prices_refresh` reaches no write. The job script's own fence is re-pointed in `price_moves`."""
+    """Item 8's static half. `do_prices_refresh` reaches no write. The job script's own fence is re-pointed in `price_moves`."""
     checks.note("")
     checks.note("DAILY JOB — one function, and nothing in it writes at TCGplayer")
     tree = ast.parse(Path(pipeline_routes.__file__).read_text())
@@ -458,7 +519,7 @@ def check_daily_job_reaches_only_the_refresh(checks: Checks) -> None:
 
 
 def check_refresh_route(checks: Checks) -> None:
-    """Check 11. 202 on a press, `running` on a second, a refusal inside the reuse window, `force` overrides."""
+    """Item 11. 202 on a press, `running` on a second, a refusal inside the reuse window, `force` overrides."""
     checks.note("")
     checks.note("POST /pipeline/prices/refresh — one at a time, and not twice in a row")
     with world(checks) as w:
@@ -508,7 +569,7 @@ def check_refresh_route(checks: Checks) -> None:
 
 
 def check_visit_asks_no_market_host(checks: Checks) -> None:
-    """Check 9. Reading the worklist, the saved strips and a product's facts opens no market request."""
+    """Item 9. Reading the worklist, the saved strips and a product's facts opens no market request."""
     checks.note("")
     checks.note("A VISIT AND A PRESS OF T — no request at any market host")
     with world(checks) as w:
@@ -566,7 +627,7 @@ def _get(thing, *names):
 
 
 def check_series_window(checks: Checks) -> None:
-    """Check 12. `Series.window(days)` is the one function for the row's and the panel's figures."""
+    """Item 12. `Series.window(days)` is the one function for the row's and the panel's figures."""
     checks.note("")
     checks.note("SERIES WINDOW — units, average and range over the newest days")
     series = _series([
@@ -595,7 +656,7 @@ def check_series_window(checks: Checks) -> None:
 
 
 def check_saved_file_and_routes(checks: Checks) -> None:
-    """Check 13. The preload writes `facts`, `days` and `through`; `trends-saved` omits `days`; `price-facts` serves them."""
+    """Item 13. The preload writes `facts`, `days` and `through`; `trends-saved` omits `days`; `price-facts` serves them."""
     checks.note("")
     checks.note("SAVED FILE — facts, days and through; the first paint stays small")
     with world(checks) as w:
@@ -644,7 +705,7 @@ def check_saved_file_and_routes(checks: Checks) -> None:
 
 
 def check_live_read_rejoins(checks: Checks) -> None:
-    """Check 21, server half. The route a Live tab "read again" calls ends with the open runs re-joined,
+    """Item 21, server half. The route a Live tab "read again" calls ends with the open runs re-joined,
     and the row's `snap_at` equals the read time `price-facts` serves."""
     checks.note("")
     checks.note("LIVE READ AGAIN — ends in steps 2 and 3, one time per card")
@@ -671,6 +732,7 @@ def check_live_read_rejoins(checks: Checks) -> None:
 
 CHECKS = (
     check_refresh_rewrites_the_waiting_row,
+    check_disjoint_scopes_share_one_request,
     check_join_is_idempotent,
     check_refresh_order_and_failure,
     check_reading_is_one_whole_row,
