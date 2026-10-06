@@ -1856,6 +1856,11 @@ COMPONENTS = [
                 "behavior, so it carries no tested_by: an unenforced claim is the defect "
                 "docs/debts/ names, not a rounding error.",
         "modules": {
+            "clock.py": {
+                "does": "the one UTC-second stamp every receipt writes, and the one way to read "
+                        "it back.",
+                "governed_by": ["D88"],
+            },
             "numbers.py": {"does": "a card's number, composed (`join_key`), screen-drawn "
                                    "(`display_number`) and stripped of a glued set code "
                                    "(`strip_set_code`) — a LEAF module with no imports beyond the "
@@ -5799,6 +5804,18 @@ COMPONENTS = [
                         "PKMNSCAN_TCG_ORDERS_URL aims it at a loopback socket the way T7 "
                         "already aims the export. PKMNSCAN_TCG_SELLER_KEY must be in .env or "
                         "a live fetch answers 403.",
+            },
+            "portal_http.py": {
+                "does": "the transport both TCGplayer hosts share: the session cookie read, "
+                        "the User-Agent, the no-redirect opener, the socket handling and the "
+                        "one status ladder. Each host passes in its own refusal class, codes "
+                        "and words.",
+                "governed_by": ["D65", "D69"],
+            },
+            "refusal.py": {
+                "does": "`BadRequest`, the refusal every route module can raise, and "
+                        "`require_box`, the one parser for a box number in a request body.",
+                "governed_by": ["D20"],
             },
             "match.py": {
                 "does": "the one forgiving matcher (FLT-06/04, UX-173), ported from "

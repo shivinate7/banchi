@@ -118,6 +118,26 @@ def main() -> int:
        "Riftbound: blank read agrees")
     ok(not ib.number_agrees("printed_code", "179/298", None, "066a/298"),
        "Riftbound: a genuinely different identifier disagrees")
+    ok(not ib.number_agrees("number_and_printed_total", "84/198", None, "084/132"),
+       "Pokemon: a read carrying its own /total judges on it with no printed_total — 198 vs 132 disagrees")
+    ok(ib.number_agrees("number_and_printed_total", "84/132", None, "084/132"),
+       "Pokemon: a read carrying its own /total, none stored, agrees when the total matches")
+    ok(ib.number_agrees("number_and_printed_total", "84", None, "084/132"),
+       "Pokemon: a bare number with no total stays blank — agrees (documented)")
+    ok(ib.number_agrees("number_and_printed_total", "SVI 084/132", None, "084/132"),
+       "Pokemon: a glued set code strips before the own-total fold, none stored — agrees")
+    ok(ib.number_agrees("number_and_printed_total", "84/", None, "084/132"),
+       "Pokemon: a one-sided slash (84/) carries no total — blank, agrees")
+    ok(ib.number_agrees("number_and_printed_total", "/132", None, "084/132"),
+       "Pokemon: a one-sided slash (/132) carries no number — blank, agrees")
+    wrong = ib.classify_card(
+        sku="700", game="pokemon", row=sku_row("700", "Pikachu", "084/132"),
+        read_name="Pikachu", read_number="84/198", read_printed_total=None, human_sku=None,
+        products_by_line={},
+    )
+    ok(wrong.cls == ib.T4U,
+       "classify_card: Pikachu 84/198 (no stored total) against 084/132 is a number move (T4U), not T1",
+       wrong.cls)
 
     # ------------------------------------------------------------------- name_fold_matches
     print("\nname_fold_matches (T1's own test)")

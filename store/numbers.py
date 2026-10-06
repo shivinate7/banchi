@@ -68,6 +68,11 @@ _SET_CODE_PREFIX = re.compile(r"^[A-Za-z]{2,5}(?:\s*[•·/-]\s*|\s+(?=\d))")
 NAME_NUMBER_SUFFIX = re.compile(r"\s*-\s*[A-Za-z0-9]+\s*/\s*[A-Za-z0-9]+\s*$")
 
 
+def pad_number(number) -> str:
+    """A number padded to three characters: the one `zfill(3)`, never a fourth digit."""
+    return str(number).strip().zfill(3)
+
+
 def join_key(number, printed_total) -> str:
     """zfill(3)(number) + "/" + printedTotal. `161/159` is a secret rare, not an error.
 
@@ -78,7 +83,7 @@ def join_key(number, printed_total) -> str:
     `pipeline/join.py:normalize_set` already makes a few lines down from its own copy of
     this docstring: a label to show, and a fold to compare.
     """
-    return f"{str(number).strip().zfill(3)}/{str(printed_total).strip()}"
+    return f"{pad_number(number)}/{str(printed_total).strip()}"
 
 
 def display_number(number, printed_total=None) -> Optional[str]:

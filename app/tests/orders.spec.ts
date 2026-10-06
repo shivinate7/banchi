@@ -5210,8 +5210,10 @@ test('a right arrow pressed in the frame the plan lands still moves exactly one 
 })
 
 test('the walk keys do nothing while a layer is open over the walk', async ({ page }) => {
-  const wire = await open(page, { orders: oneOpenOrder(), walkPlan: volcanionPlan(), inventoryCards: { '3/21': inventoryCard() } })
+  /* THE PHOTO STUB GOES UP BEFORE `open()`: the walk draws the frame on first paint, so a stub added
+     after it let that first `GET /photo/3/21` reach the seal (a rare red, 1 in 150 under load). */
   await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88"/>' }))
+  const wire = await open(page, { orders: oneOpenOrder(), walkPlan: volcanionPlan(), inventoryCards: { '3/21': inventoryCard() } })
   await page.reload()
   await page.locator('.browse-photo-frame').click()
   await expect(page.locator('[data-bn-overlay]')).toBeVisible()

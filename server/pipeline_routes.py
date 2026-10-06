@@ -172,6 +172,7 @@ from identify import sweep  # noqa: E402
 from identify import matchconst  # noqa: E402
 from store import Store, files, master  # noqa: E402
 from store import cache as cache_mod  # noqa: E402
+from store import clock  # noqa: E402
 from store import db as store_db  # noqa: E402
 from store import readings as store_readings  # noqa: E402
 from store import submissions as claims  # noqa: E402
@@ -2491,12 +2492,7 @@ def _position_label(
     else:
         stored = games.get(master.position_key(number, at))
     game = str(stored or game_registry.DEFAULT_GAME)
-    if not join.is_located(game):
-        return join.place_text(game, join.BoxView().at(number, at))
-    view = views.get(number)
-    if view is None:
-        return None
-    return join.place_text(game, view.at(number, at))
+    return join.position_label(game, views.get(number), number, at)
 
 
 def _games_in_boxes(inventory: master.Inventory, boxes) -> Dict[str, Any]:
@@ -3151,7 +3147,7 @@ def _unsent_ledger(
     # copy a table resolved to the SKU, counted in the loop above under the same resolution
     # `unsent` uses. A card is on hand under one SKU only: stamped, or unstamped and drawn.
     on_hand = {
-        sku: sum(1 for row in rows if row.state not in master.TERMINAL_STATES)
+        sku: sum(1 for row in rows if master.is_on_hand(row))
         for sku, rows in by_sku.items()
     }
     for sku, n in unstamped_on_hand.items():
@@ -5178,7 +5174,7 @@ def _newest_live_listing() -> Tuple[Optional[str], Dict[str, Tuple[Optional[str]
             header_ok = False
         listing: Dict[str, Tuple[Optional[str], Optional[int]]] = {}
         for row in rows:
-            sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+            sku = tcgcsv.sku_cell(row)
             if not sku:
                 continue
             try:
@@ -5793,7 +5789,7 @@ def do_markdown_publish(stamp: str, payload: dict) -> dict:
         answer = tcg_import.move_to_live(str(record["upload_id"]))
     except tcg_import.FetchRefusal as refusal:
         raise PipelineRefusal(HTTPStatus.BAD_GATEWAY, refusal.code, refusal.message) from None
-    record["published_at"] = _now_iso()
+    record["published_at"] = clock.now_iso()
     record["result"] = answer
     _write_push(directory, record)
     return {"published": record, "stamp": stamp}
@@ -5853,11 +5849,6 @@ def do_markdown_rollback(stamp: str, payload: dict) -> dict:
 PUSH_RECORD = "push.json"
 
 
-def _now_iso() -> str:
-    """UTC, to the second. The same stamp shape every other receipt in this module writes."""
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-
-
 def _record_push(directory: Path, pushed: "tcg_import.StagedUpload") -> None:
     """The receipt for a push, beside the file that was pushed.
 
@@ -5866,7 +5857,7 @@ def _record_push(directory: Path, pushed: "tcg_import.StagedUpload") -> None:
     rollback would need, so losing it would leave a staged upload nothing here can name.
     """
     record = pushed.as_dict()
-    record["pushed_at"] = _now_iso()
+    record["pushed_at"] = clock.now_iso()
     record["published_at"] = None
     _write_push(directory, record)
 
@@ -6715,7 +6706,7 @@ def _history_user_agent() -> str:
     One knob, because there is no argument for wanting two different browsers' worth of
     disguise out of one operator's own `.env`.
 
-    `get_live`, NOT `get` — the same D65 judgement `tcg_export._agent()` already made: this
+    `get_live`, NOT `get` — the same D65 judgement `portal_http.agent()` already made: this
     is exactly the kind of value an operator edits into a running process without a restart,
     and `get` cannot see the replacement once it has cached the name once.
 
@@ -7291,7 +7282,7 @@ def _trends_for_entries(
         snapshot = None
     if snapshot is not None:
         for row in rows:
-            sku = str(row.get(tcgcsv.SKU_COLUMN, "")).strip()
+            sku = tcgcsv.sku_cell(row)
             if not sku or sku in product_ids:
                 continue
             for bucket in snapshot.archive.for_sku(sku):
@@ -7624,9 +7615,9 @@ def _pricing_flags(payload: dict) -> List[str]:
 def _sku_set(export) -> set:
     """Every `TCGplayer Id` in an export. The unit the receipt counts SKUs in."""
     return {
-        str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+        tcgcsv.sku_cell(row)
         for row in export.rows
-        if str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+        if tcgcsv.sku_cell(row)
     }
 
 
@@ -8706,7 +8697,7 @@ def do_run_match(name: str, payload: dict) -> dict:
             return {"ran": False, "reason": "running", "summary": _summary(directory)}
         _MATCHING[directory.name] = True
     try:
-        at = _now_iso()
+        at = clock.now_iso()
         try:
             fetched = do_pipeline_export(name, {})
         except PipelineRefusal as refusal:
