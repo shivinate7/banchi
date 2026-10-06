@@ -194,6 +194,23 @@ function refreshState(state: string, over: Record<string, unknown> = {}) {
   return { state, step: null, done: 0, total: 0, note: refreshNote(CATALOG_AT()), ...over }
 }
 
+/** ONE CARD, ONE SET OF FACTS: the saved file's entry and the sheet's read carry this same object,
+ *  as the real file does. Every field is set, so no case reads a dash by accident. */
+const FACTS = {
+  sold_7d: 9,
+  sales_7d: 6,
+  avg_7d: '11.40',
+  low_7d: '9.00',
+  high_7d: '14.00',
+  sold_30d: 40,
+  sales_30d: 28,
+  avg_30d: '12.10',
+  low_30d: '8.50',
+  high_30d: '17.00',
+  best_day: ['2026-09-18', 6] as [string, number],
+  change_30d: '0.12',
+}
+
 const PRICE_FACTS = {
   sku: '8608859',
   name: 'Articuno - 161/159',
@@ -202,7 +219,7 @@ const PRICE_FACTS = {
   prices: { market: '16.25', low: '15.50', low_with_shipping: '17.98', direct_low: null },
   shelf: { on_hand: 3, can_be_sent: 3, listed_now: 0, asking: null },
   days: Array.from({ length: 30 }, (_, at) => [`2026-09-${String(at + 1).padStart(2, '0')}`, at % 4, at % 4, '14.00', '17.00', '16.00']),
-  facts: { sold_30d: 40, sold_7d: 9, low_7d: '14.00', high_7d: '17.00' },
+  facts: FACTS,
 }
 
 async function open(
@@ -4879,7 +4896,7 @@ const savedWithFacts = (at: number, skus = ['111', '222']) => ({
   skus: Object.fromEntries(
     skus.map((id) => [
       id,
-      { at, ranges: trends([id]).skus[id]!.ranges, through: '2026-09-30', facts: { sold_7d: 9, low_7d: '9.00', high_7d: '14.00' } },
+      { at, ranges: trends([id]).skus[id]!.ranges, through: '2026-09-30', facts: FACTS },
     ]),
   ),
   note: { at, ok: true, asked: 2, read: 2, no_history: 0, unreadable: 0, failed: 0, message: '' },
@@ -4992,6 +5009,22 @@ test('7b-15: the row grows one column, Range 7d, after Lowest, at 1440 and not a
 
   await setViewport(page, { width: 820, height: 900 })
   await expect(page.locator('.pricing-caption').first().getByText('Range 7d', { exact: true })).toHaveCount(0)
+})
+
+test('7b-15: the row Range 7d equals the sheet Sale range 7d for the same card', async ({ page }) => {
+  await stubProductSheet(page)
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { saved: savedWithFacts(AGO(3600), ['8608859']) })
+  const row = page.locator('.pricing-row').first()
+  await expect(row.locator('.pricing-col-range')).toContainText('$9.00')
+  const onRow = ((await row.locator('.pricing-col-range').textContent()) ?? '').match(/\$[\d,.]+/g)
+  expect(onRow).toEqual(['$9.00', '$14.00'])
+  await row.hover()
+  await page.keyboard.press('t')
+  const cell = page.getByRole('dialog').last().locator('.pricefacts-cell', { hasText: 'Sale range 7d' })
+  await expect(cell.locator('dd')).toContainText('$9.00')
+  const onSheet = ((await cell.locator('dd').textContent()) ?? '').match(/\$[\d,.]+/g)
+  expect(onSheet).toEqual(onRow)
 })
 
 test('7b-15: a card with no saved history draws a dash that says why', async ({ page }) => {
