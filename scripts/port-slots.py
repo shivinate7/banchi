@@ -317,6 +317,59 @@ PROBE_SPEC = (
 )
 
 
+SOURCE_EXTS = (".ts", ".tsx", ".mts", ".mjs", ".js")
+# `from './x'`, `import './x'`, `import('./x')`, either quote.
+IMPORT_RE = re.compile(r"""(?:from|import)\s*\(?\s*(['"])(\.{1,2}/[^'"?]+)\1""")
+
+
+def resolve_import(app: Path, name: str, spec: str) -> Optional[str]:
+    """The file a relative specifier names as the bundler reads it, or None.
+
+    The exact path, else the path plus each extension, else `index.<ext>`. Never outside `app`.
+    """
+    target = Path(os.path.normpath(Path(name).parent / spec))
+    for cand in (target, *(Path(f"{target}{e}") for e in SOURCE_EXTS),
+                 *(target / f"index{e}" for e in SOURCE_EXTS)):
+        if cand.parts[:1] != ("..",) and (app / cand).is_file():
+            return str(cand)
+    return None
+
+
+def import_closure(app: Path, roots) -> list:
+    """`roots` plus every file they import relatively, transitively, out of source files."""
+    pending, seen = list(roots), []
+    while pending:
+        name = pending.pop()
+        if name in seen:
+            continue
+        seen.append(name)
+        if Path(name).suffix in SOURCE_EXTS:
+            for spec in (m[2] for m in IMPORT_RE.finditer((app / name).read_text("utf-8"))):
+                hit = resolve_import(app, name, spec)
+                if hit:
+                    pending.append(hit)
+    return seen
+
+
+def resolver_failures(base: Path) -> list:
+    """Each import form, in a throwaway tree, must be followed. A path outside `app` must not."""
+    app = base / "resolver" / "app"
+    (app / "d").mkdir(parents=True)
+    (base / "resolver" / "outside.ts").write_text("", encoding="utf-8")
+    files = {
+        "r.ts": "import './side'\nexport * from \"./re\"\nimport('./dyn')\nimport x from './a.b'\n"
+                "import o from '../outside'\nimport e from './exact.js'\nimport i from './d'\n",
+        "side.tsx": "import './t.mts'\n", "t.mts": "import './m'\n", "m.mjs": "import './j'\n",
+        "j.js": "", "re.ts": "", "dyn.ts": "", "a.b.ts": "", "exact.js": "", "d/index.ts": "",
+    }
+    for name, text in files.items():
+        (app / name).write_text(text, encoding="utf-8")
+    got = set(import_closure(app, ["r.ts"]))
+    want = set(files)
+    return [f"import walk: missed {sorted(want - got)}, wrongly took {sorted(got - want)}"] \
+        if got != want else []
+
+
 def build_tree(tree: Path) -> None:
     """A throwaway linked-worktree-shaped checkout: the real configs, a real Vite, no source.
 
@@ -326,23 +379,9 @@ def build_tree(tree: Path) -> None:
     app = tree / "app"
     (app / "tests").mkdir(parents=True)
     (tree / ".git").write_text("gitdir: /nowhere/.git/worktrees/probe\n", encoding="utf-8")
-    pending, seen = list(APP_FILES), set()
-    while pending:  # plus the relative imports of each .ts copied, transitively: none can drift
-        name = pending.pop()
-        if name in seen:
-            continue
-        seen.add(name)
-        src = ROOT / "app" / name
+    for name in import_closure(ROOT / "app", APP_FILES):
         (app / name).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, app / name)
-        if src.suffix != ".ts":
-            continue
-        for rel in re.findall(r"from\s+'(\.{1,2}/[^']+)'", src.read_text("utf-8")):
-            target = Path(os.path.normpath(Path(name).parent / rel))
-            for cand in (target.with_suffix(".ts"), target.with_suffix(".tsx"), target):
-                if (ROOT / "app" / cand).is_file():
-                    pending.append(str(cand))
-                    break
+        shutil.copy2(ROOT / "app" / name, app / name)
     (app / "index.html").write_text("<!doctype html><title>probe</title>\n", encoding="utf-8")
     for rel in ("scripts/screenshot.sh", "server/ports.py"):
         (tree / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -523,6 +562,7 @@ def cmd_selftest(_args: argparse.Namespace) -> int:
         failures += launch_config_failures(
             base, launch_registry, {**env, ports.SLOT_REGISTRY_ENV: str(launch_registry)})
         failures += nested_failures(base)
+        failures += resolver_failures(base)
 
         # Two paths FORCED into one hash slot, on a slot whose ports and the next slot's are
         # free on this machine right now, so no real checkout's server is ever reached.
