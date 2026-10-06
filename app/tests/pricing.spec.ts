@@ -5556,3 +5556,86 @@ test('7b-23: Pricing.css holds no literal that a design token already names', as
   }
   expect(found).toEqual([])
 })
+
+/* 7b-28: THE SORT HEADER'S HOVER BOX HUGS ITS LABEL. Equal space left and right of the label inside the box,
+ * the label stays on its values' edge (end: right edges, start: left edges), the chevron draws outside the box
+ * and moves nothing, and the press stays at the thumb floor. The box is found by what it does: the header's
+ * own button or descendant whose background is on under the pointer. */
+const HOVER_COLUMNS = [
+  { name: 'Market', value: '.pricing-col-market', end: true },
+  { name: 'Lowest', value: '.pricing-col-low', end: true },
+  { name: 'Range 7d', value: '.pricing-col-range', end: true },
+  { name: 'Price', value: '.pricing-col-price', end: false },
+] as const
+const HOVER_TOLERANCE_PX = 1
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [1440, 820]) {
+    test(`7b-28: a sort header's hover box hugs its label in every column at ${width} in ${theme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: theme })
+      await setViewport(page, { width, height: 900 })
+      await open(page, { skus: sortRows(), decisions: SORT_DECISIONS, saved: sortSaved(AGO(3600)) })
+      await expect(sortHead(page, 'Market')).toBeVisible()
+      for (const column of HOVER_COLUMNS) {
+        const head = sortHead(page, column.name)
+        if (column.name !== 'Market' && column.name !== 'Price' && !(await head.isVisible())) continue // the screen drops Lowest and Range at 820
+        await head.hover()
+        await settleMotion(page)
+        const measure = () => head.evaluate((button, spec) => {
+          const row = document.querySelector('.pricing-row')!
+          const clear = (css: CSSStyleDeclaration) => css.backgroundColor === 'rgba(0, 0, 0, 0)' || css.backgroundColor === 'transparent'
+          const box = [button, ...button.querySelectorAll('*')].find((el) => !clear(getComputedStyle(el)))
+          const label = button.querySelector('.bn-sortth-label')!.getBoundingClientRect()
+          const text = document.createRange()
+          const cell = row.querySelector(spec.value)!
+          let valueEdge: number
+          const input = cell instanceof HTMLInputElement ? cell : cell.querySelector('input')
+          if (input !== null) {
+            valueEdge = Math.min(input.getBoundingClientRect().left, ...[...cell.children].map((c) => c.getBoundingClientRect().left)) /* the field with its $ prefix: where its label sits today */
+          } else {
+            const edges: number[] = []
+            for (const child of cell.childNodes) {
+              if (child instanceof Element && (child.classList.contains('pricing-ref-age') || getComputedStyle(child).display === 'none')) continue
+              text.selectNodeContents(child)
+              const r = text.getBoundingClientRect()
+              if (r.width > 0) edges.push(spec.end ? r.right : r.left)
+            }
+            valueEdge = spec.end ? Math.max(...edges) : Math.min(...edges)
+          }
+          const svg = button.querySelector('svg')
+          const mark = svg === null ? null : svg.getBoundingClientRect()
+          const b = box?.getBoundingClientRect()
+          return {
+            hasBox: box !== undefined,
+            box: b === undefined ? null : { left: b.left, right: b.right, height: b.height },
+            label: { left: label.left, right: label.right },
+            valueEdge,
+            mark: mark === null || getComputedStyle(svg!).opacity === '0' ? null : { left: mark.left, right: mark.right },
+          }
+        }, { value: column.value, end: column.end })
+        const rest = await measure()
+        const tag = `${column.name} (${theme}, ${width})`
+        expect(rest.hasBox, `${tag}: no element shows a hover background`).toBe(true)
+        const box = rest.box!
+        const left = rest.label.left - box.left
+        const right = box.right - rest.label.right
+        expect.soft(Math.abs(left - right), `${tag}: label has ${left.toFixed(1)}px left and ${right.toFixed(1)}px right inside the hover box`).toBeLessThanOrEqual(HOVER_TOLERANCE_PX)
+        expect.soft(left, `${tag}: the box does not reach past the label`).toBeGreaterThan(0)
+        const edge = column.end ? rest.label.right : rest.label.left
+        expect.soft(Math.abs(edge - rest.valueEdge), `${tag}: label ${column.end ? 'right' : 'left'} edge is ${(edge - rest.valueEdge).toFixed(1)}px off its values`).toBeLessThanOrEqual(HOVER_TOLERANCE_PX)
+        expect.soft(box.height, `${tag}: press target below the thumb floor`).toBeGreaterThanOrEqual(40)
+        /* Active: the chevron is drawn beside the label, outside the box, and the label has not moved. */
+        await head.click()
+        await head.hover()
+        await settleMotion(page)
+        const active = await measure()
+        expect(active.mark, `${tag}: the active header draws no chevron`).not.toBeNull()
+        const outside = active.mark!.right <= active.box!.left + 0.5 || active.mark!.left >= active.box!.right - 0.5
+        expect.soft(outside, `${tag}: the chevron sits inside the hover box`).toBe(true)
+        expect.soft(Math.abs(active.label.left - rest.label.left) + Math.abs(active.label.right - rest.label.right), `${tag}: the sort moved the label`).toBeLessThanOrEqual(0.5)
+        await head.click()
+        await head.click()
+      }
+    })
+  }
+}
