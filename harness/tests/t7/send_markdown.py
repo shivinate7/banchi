@@ -1622,15 +1622,17 @@ def check_send_press(checks: Checks) -> None:
 
 
 def check_send_hold_takes_off(checks: Checks) -> None:
-    """The press takes a held SKU's live copies off: one negative row, a receipt that says so.
+    """The press takes a held SKU's live copies off: one negative row, sized by the press's own
+    fresh live read, and the store changes only when the live check confirms.
 
-    THE OWNER'S RULING (D100's open question, "a negative `Add to Quantity` lowers a live
-    quantity"): the row reaches TCGplayer through the listing door, `Add to Quantity` minus
-    what Banchi put live and never more than the live read shows, and `_summary` carries the
-    count as `taken_off` for `SendCard`. No other press carries a negative.
+    THE OWNER'S RULING (D100's open question), AS THE REVIEW OF PR #768 REDESIGNED IT. The size
+    is the fresh read's live quantity for the held SKU, never the store's. Nothing in the store
+    moves at write time, so a take-off that fails, is only downloaded, or is never confirmed
+    heals on the next press. `_summary` carries the count as `taken_off` for `SendCard`.
+    `_already_pushed` still refuses a real double send, including a take-off pressed twice.
     """
     checks.note("")
-    checks.note("SEND PRESS — a held SKU's live copies come off")
+    checks.note("SEND PRESS — a held SKU's live copies come off, and the store waits for the check")
 
     cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
 
@@ -1642,65 +1644,157 @@ def check_send_hold_takes_off(checks: Checks) -> None:
             book.answers[sku] = corpus.Answer(value={"withheld": reason})
         book.write()
 
-    def pushed(sku):
-        listing = Store().read().inventory.listings.get(sku)
-        return 0 if listing is None else listing.pushed
+    def counts():
+        listing = Store().read().inventory.listings.get(ARTICUNO_SKU)
+        return (0, 0) if listing is None else (listing.pushed, listing.live)
 
-    def press(run_dir):
-        """The press's answer, or None with the refusal's sentence on the failure line."""
+    def rows(portal):
+        return {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]}
+
+    def press(run_dir, **extra):
+        """The press's answer, or None with the refusal's code on a failure line."""
         try:
-            return send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+            return send_routes.do_send({"runs": [run_dir.name], "confirm": True, **extra})
         except pipeline_routes.PipelineRefusal as caught:
-            checks.ok(False, f"the press was refused: {caught.code}", str(caught))
-            return None
+            return {"refused": caught.code}
 
-    with send_portal() as portal, isolated_home():
+    def settled(portal):
+        """A run whose three copies are sent AND confirmed live: the starting point."""
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
-        press(run_dir)
-        checks.equal(pushed(ARTICUNO_SKU), 3, "three copies went out and are pushed")
-
-        # THE OWNER HOLDS IT, with TCGplayer showing all three live.
-        hold(ARTICUNO_SKU, "bullish")
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        _age_receipt(sent["stamp"])
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({})
+        return run_dir
+
+    # ------------------------------------------------ the take, and the store waiting
+    with send_portal() as portal, isolated_home():
+        run_dir = settled(portal)
+        start = counts()
+        hold(ARTICUNO_SKU, "bullish")
         portal["rows"].clear()
-        answer = press(run_dir) or {"send": {}}
+        answer = press(run_dir)
         checks.equal(
-            {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]},
+            rows(portal),
             {ARTICUNO_SKU: "-3"},
-            "THE PORTAL RECEIVED ONE NEGATIVE ROW, minus the copies live, through the listing door",
+            f"THE PORTAL RECEIVED ONE NEGATIVE ROW, the fresh read's three. Press: {answer.get('refused', 'sent')}",
         )
         checks.equal(
-            answer["send"].get("taken_off"),
+            (answer.get("send") or {}).get("taken_off"),
             3,
-            "and the receipt names how many copies came off (`taken_off`, read by SendCard)",
+            "and the receipt names how many copies come off (`taken_off`, read by SendCard)",
         )
         checks.equal(
-            pushed(ARTICUNO_SKU),
-            0,
-            "THE CARDS ARE UNSENT AGAIN: pushed is back to zero",
+            counts(),
+            start,
+            "THE STORE CHANGED NOTHING AT WRITE TIME: `pushed` and `live` wait for the check",
         )
+        sent = (answer.get("send") or {}).get("stamp")
+        if sent:
+            _age_receipt(sent)
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+            send_routes.do_live_check({})
+            checks.equal(
+                counts(),
+                (0, 0),
+                "THE LIVE CHECK THAT FINDS THEM GONE is what lowers `pushed` and `live`",
+            )
 
-        # UNHOLD: the three go out again, an ordinary positive row.
-        hold(ARTICUNO_SKU, None)
-        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
-        portal["rows"].clear()
-        press(run_dir)
-        checks.equal(
-            {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]},
-            {ARTICUNO_SKU: "3"},
-            "UNHOLD AFTER, AND THE THREE GO OUT AGAIN as a positive row",
-        )
-
-        # TCGPLAYER HOLDS ONLY TWO (one sold): the row never takes more than the live read.
+    # ------------------------------------------------ a failed take-off leaves the store alone
+    with send_portal() as portal, isolated_home():
+        run_dir = settled(portal)
+        start = counts()
         hold(ARTICUNO_SKU, "keeping")
-        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
+        portal["refuse"] = {"uploadexportcsv"}
+        failed = press(run_dir)
+        checks.ok("refused" in failed, "TCGplayer turns the take-off away, and the press fails")
+        checks.equal(
+            counts(),
+            start,
+            "`_fail` LEAVES THE STORE UNCHANGED: a take-off that never landed took nothing, and "
+            "must not put copies back on top of what is still counted",
+        )
+        portal["refuse"] = set()
         portal["rows"].clear()
         press(run_dir)
         checks.equal(
-            {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]},
-            {ARTICUNO_SKU: "-2"},
-            "A NEGATIVE NEVER EXCEEDS WHAT TCGPLAYER HOLDS: three sent, two live, minus two",
+            rows(portal),
+            {ARTICUNO_SKU: "-3"},
+            "THE NEXT PRESS HEALS IT: it re-reads live and takes off what is still there",
+        )
+
+    # ------------------------------------------------ a download never uploaded heals too
+    with send_portal() as portal, isolated_home():
+        run_dir = settled(portal)
+        start = counts()
+        hold(ARTICUNO_SKU, "next_batch")
+        press(run_dir, download=True)
+        checks.equal(counts(), start, "a downloaded take-off changes nothing in the store")
+        portal["rows"].clear()
+        press(run_dir)
+        checks.equal(
+            rows(portal),
+            {ARTICUNO_SKU: "-3"},
+            "and the file never uploaded is not a take-off done: the next send takes the copies off",
+        )
+
+    # ------------------------------------------------ an unknown answer leaves the store alone
+    with send_portal() as portal, isolated_home():
+        run_dir = settled(portal)
+        start = counts()
+        hold(ARTICUNO_SKU, "keeping")
+        portal["published_then_5xx"] = True
+        press(run_dir)
+        checks.equal(
+            counts(),
+            start,
+            "A TAKE-OFF TCGPLAYER ANSWERED 500 TO is unknown, and the store stays as it was",
+        )
+
+    # ------------------------------------------------ a take-off pressed twice is refused
+    with send_portal() as portal, isolated_home():
+        run_dir = settled(portal)
+        hold(ARTICUNO_SKU, "keeping")
+        press(run_dir)
+        portal["rows"].clear()
+        again = press(run_dir)
+        checks.ok(
+            "refused" in again and not portal["rows"],
+            "THE SAME TAKE-OFF TWICE INSIDE THE UPLOAD WINDOW IS A DOUBLE SEND: refused, "
+            f"nothing reaches TCGplayer. Got: {again.get('refused', 'sent')}",
+        )
+
+    # ------------------------------------------------ `_already_pushed` on take-off receipts
+    def receipt(stamp, age_s, **fields):
+        now = clock.now()
+        at = clock.iso(now - timedelta(seconds=age_s))
+        send_routes._write(
+            send_routes.sends_dir() / stamp,
+            {
+                "kind": "send", "taken_back_at": None, "at": at,
+                "pushed": {"upload_id": "u", "pushed_at": at},
+                **fields,
+            },
+        )
+
+    with isolated_home():
+        receipt("20260924-110000", 120, digest="d-take", copies={}, taken_off={ARTICUNO_SKU: 3})
+        receipt("20260924-110100", 60, digest="d-take-2", copies={}, taken_off={ARTICUNO_SKU: 3})
+        checks.equal(
+            send_routes._already_pushed("d-take"),
+            "20260924-110000",
+            "A TAKE-OFF RECEIPT WITH NO COPIES IS STILL A PUSH: a later take-off of the same "
+            "SKU does not excuse the same bytes pressed again inside the window",
+        )
+    with isolated_home():
+        receipt("20260924-110000", 120, digest="d-sent", copies={ARTICUNO_SKU: 2})
+        receipt("20260924-110100", 60, digest="d-part", copies={}, taken_off={ARTICUNO_SKU: 1})
+        checks.equal(
+            send_routes._already_pushed("d-sent"),
+            "20260924-110000",
+            "A PARTIAL TAKE (1 of 2) DOES NOT CLEAR THE SEND: one copy is still pending at "
+            "TCGplayer, so the same two bytes again would double it",
         )
 
 

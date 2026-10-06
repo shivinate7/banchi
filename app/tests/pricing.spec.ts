@@ -2062,6 +2062,19 @@ test('a send that took held cards off TCGplayer says how many copies came off, a
   }
 })
 
+test('a downloaded file that takes held cards off says it takes them off, never that they came off', async ({ page }) => {
+  const written = sendSummary({ kind: 'download', state: 'written', taken_off: 2, published_at: null, check_after: '2026-09-24T12:15:05+00:00' })
+  await open(page, {
+    send: () => ({ status: 200, body: { send: written, console: '' } }),
+    sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [written] } : SENDS_NONE),
+  })
+  await page.getByRole('button', { name: 'Download' }).click()
+  await page.getByRole('button', { name: 'Write the file' }).click()
+  await expect(page.locator('.send-files a')).toBeVisible()
+  await expect(page.locator('.send-card')).toContainText(/takes 2 copies off TCGplayer/)
+  await expect(page.locator('.send-card')).not.toContainText('came off')
+})
+
 test('a send that skipped cards no longer in the store says so in one sentence, and says nothing when none', async ({ page }) => {
   for (const [gone, sentence] of [
     [['Articuno'], 'Not sent: Articuno. It is no longer in the store.'],
