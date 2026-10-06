@@ -207,8 +207,6 @@ KNOWN_OVER = {
     ('/search', 'sql'): (175, 325),
     ('/pipeline/pricing', 'sql'): (52, 64),
     ('/pipeline/pricing', 'read_export'): (3, 6),
-    ('/pipeline/price-facts', 'read_export'): (3, 6),
-    ('/pipeline/price-facts', 'sql'): (64, 76),
     ('/pipeline/value', 'sql'): (218, 371),
     ('POST /inventory/copies', 'sql'): (53, 77),
 }

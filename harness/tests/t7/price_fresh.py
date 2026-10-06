@@ -18,10 +18,13 @@ is about work done counts requests, as `pipeline_fetch` does for the reuse arm.
 from __future__ import annotations
 
 import ast
+import contextlib
 import http.server
 import json
 import os
 import re
+import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -35,6 +38,7 @@ from urllib.parse import parse_qs
 import envfile
 from harness.tests import Checks
 from harness.tests.t7.common import (
+    DUNSPARCE_REVERSE_SKU,
     DUNSPARCE_SKU,
     ARTICUNO_SKU,
     QuietHandler,
@@ -96,7 +100,8 @@ def world(checks: Checks, *, extra_runs: int = 0, disjoint: bool = False):
     keys = ("PKMNSCAN_TCG_EXPORT_URL", "TCGPLAYER_STORE_COOKIE", "PKMNSCAN_TCG_USER_AGENT", envfile.FROM_FILE_ENV)
     previous = {name: os.environ.get(name) for name in keys}
     stub = {
-        "mode": "csv", "body": b"", "live_body": b"", "requests": [], "asked_sets": [], "gate": None, "reached": threading.Event(),
+        "mode": "csv", "body": b"", "live_body": b"", "requests": [], "asked_sets": [], "asked_categories": [],
+        "catalog_gate": None, "catalog_reached": threading.Event(), "by_category": {}, "gate": None, "reached": threading.Event(),
         "filters": {
             "Sets": [
                 {"Text": "All Set Names", "Value": "0"},
@@ -140,10 +145,16 @@ def world(checks: Checks, *, extra_runs: int = 0, disjoint: bool = False):
         def do_POST(self):  # noqa: N802
             sent = self.rfile.read(int(self.headers.get("Content-Length") or 0))
             self._record()
+            model = json.loads((parse_qs(sent.decode()).get("model") or ["{}"])[0])  # `model=<json>`, form-encoded
+            stub["asked_categories"].append(str(model.get("CategoryId")))
+            if stub.get("catalog_gate") is not None:
+                stub["catalog_reached"].set()
+                stub["catalog_gate"].wait(30)
             if stub["mode"] == "waf":
                 return self._send(403, b"")
+            if str(model.get("CategoryId")) in stub.get("by_category", {}):
+                return self._send(200, stub["by_category"][str(model.get("CategoryId"))])
             if stub.get("by_set"):  # the portal answers only the sets the request names
-                model = json.loads((parse_qs(sent.decode()).get("model") or ["{}"])[0])  # `model=<json>`, form-encoded
                 wanted = model.get("SetNameIds") or []
                 stub["asked_sets"].append(list(wanted))
                 rows = [row for set_id, held in stub["by_set"].items() if set_id in wanted for row in held]
@@ -152,7 +163,8 @@ def world(checks: Checks, *, extra_runs: int = 0, disjoint: bool = False):
                 return self._send(200, scratch.read_bytes())
             return self._send(200, stub["body"])
 
-    portal = http.server.HTTPServer(("127.0.0.1", 0), Portal)
+    portal = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Portal)  # a gated request must not block the next caller
+    portal.daemon_threads = True
     _spawn_server(portal)
     try:
         with isolated_home() as home, hermetic():
@@ -730,7 +742,181 @@ def check_live_read_rejoins(checks: Checks) -> None:
         )
 
 
+# ------------------------------------------------------------ the PR #749 review defects
+
+
+def check_live_press_returns_at_once(checks: Checks) -> None:
+    """Review defect 1. The Live tab's "read again" goes through the background worker, so the POST
+    holds no request slot through the catalog fetch and the joins."""
+    checks.note("")
+    checks.note("LIVE READ AGAIN — the POST returns at once, the work runs behind it")
+    with world(checks) as w:
+        asked, undo = refuse_history()
+        w.stub["catalog_gate"] = threading.Event()  # the catalog request stays open until released
+        done = {}
+
+        def press():
+            began = time.time()
+            done["answer"] = request(w.port, "POST", "/pipeline/live-export", payload={})
+            done["seconds"] = time.time() - began
+
+        thread = threading.Thread(target=press, daemon=True)
+        try:
+            thread.start()
+            thread.join(6)
+            checks.ok(
+                not thread.is_alive() and done.get("seconds", 99) < 5,
+                "1. `POST /pipeline/live-export` answers while the catalog request is still open",
+                f"still waiting after 6 s with the catalog gated; answer={done.get('answer')!r}",
+            )
+            status, body, _ = request(w.port, "GET", "/pipeline/prices/refresh")
+            state = json.loads(body or b"{}").get("state") if status == 200 else None
+            checks.equal(state, "running", "1. and the work is running behind it, as Refresh now's state shows")
+        finally:
+            w.stub["catalog_gate"].set()
+            thread.join(30)
+            deadline = time.time() + 60
+            while time.time() < deadline:
+                status, body, _ = request(w.port, "GET", "/pipeline/prices/refresh")
+                if status != 200 or json.loads(body or b"{}").get("state") not in ("running", "starting"):
+                    break
+                time.sleep(0.1)
+            undo()
+
+
+def check_two_game_run_is_refreshed_for_both(checks: Checks) -> None:
+    """Review defect 2. An open run holding two games is refreshed for both: one request per game,
+    no `game_required`, and the job's steps 1 to 3 are ok (so the daily job exits 0)."""
+    checks.note("")
+    checks.note("PRICES REFRESH — one open run, two games")
+    with world(checks) as w:
+        first = w.runs[0]
+        path = first.directory / pipeline_routes.run_files.IDENTIFICATIONS
+        payload = json.loads(path.read_text())
+        key = sorted(payload["cards"])[-1]
+        payload["cards"][key]["game"] = "riftbound"
+        payload["cards"][key]["set_hint"] = None
+        payload["cards"][key]["identification"].update(name="Acceptable Losses", number="179/298")
+        path.write_text(json.dumps(payload))
+        w.stub["by_category"] = {"89": (Path(tcgcsv.__file__).resolve().parents[1] / "fixtures" / "riftbound_export_untouched.csv").read_bytes()}
+        asked, undo = refuse_history()
+        try:
+            answer = attempt(checks, "2. the refresh does not raise over a two-game run", lambda: pipeline_routes.do_prices_refresh())
+        finally:
+            undo()
+        catalog = ((pricerefresh.read_status() or {}).get("steps") or {}).get("catalog") or {}
+        checks.ok(
+            catalog.get("ok") is True and "more than one game" not in str(catalog.get("message")),
+            "2. the catalog step is ok, and never says `game_required`",
+            json.dumps(catalog)[:300],
+        )
+        checks.equal(sorted(set(w.stub["asked_categories"])), ["3", "89"], "2. each game of the run is asked for, one category each")
+        checks.equal(
+            table_row(first, DUNSPARCE_SKU)["snap"].get("market"), NOW,
+            "2. and the run's Pokemon card is current",
+        )
+        checks.equal((answer or {}).get("ok"), True, "2. steps 1 to 3 are ok, so the daily job exits 0")
+
+
+def check_live_rows_get_saved_strips(checks: Checks) -> None:
+    """Review defect 3. A listed SKU that no open run holds is read by the morning job too."""
+    checks.note("")
+    checks.note("MORNING JOB — Live-tab rows get saved strips")
+    with world(checks) as w:
+        w.stub["live_body"] = _live_export_bytes({DUNSPARCE_SKU: 0, DUNSPARCE_REVERSE_SKU: 1})
+        series = _series([(1, "9.00", "11.00", "10.00"), (3, "10.00", "14.00", "12.00")])
+        first_range = pricehistory.DEFAULT_RANGES[0]
+
+        class Market:
+            def __init__(self, **_kw):
+                pass
+
+            def readings_for_rows(self, rows, product_ids=None):
+                return {row[tcgcsv.SKU_COLUMN]: SimpleNamespace(product_id=1, series={first_range: series}) for row in rows}, {}
+
+        real = pricehistory.Market, pricehistory.catalogued_row
+        pricehistory.Market, pricehistory.catalogued_row = Market, lambda row: True
+        try:
+            attempt(checks, "3. the live listings are read", lambda: pipeline_routes.do_live_export())
+            attempt(checks, "3. the strips are read", lambda: pipeline_routes.do_price_trends_preload())
+        finally:
+            pricehistory.Market, pricehistory.catalogued_row = real
+        saved = pricerefresh.read_trends()
+        checks.ok(DUNSPARCE_SKU in saved, "3. a worklist card has its saved strip (control)", f"saved={sorted(saved)}")
+        checks.ok(
+            DUNSPARCE_REVERSE_SKU in saved,
+            "3. a listed SKU no open run holds has its saved strip too, so the Live tab draws it with no press",
+            f"saved={sorted(saved)}",
+        )
+
+
+def check_one_refresh_across_processes(checks: Checks) -> None:
+    """Review defect 4. One refresh at a time across processes; a second caller makes no fetch and
+    says so; step notes are never lost."""
+    checks.note("")
+    checks.note("PRICES REFRESH — one at a time, across processes")
+    with world(checks) as w:
+        asked, undo = refuse_history()
+        w.stub["gate"] = threading.Event()  # the first caller sits at the live download
+        first = threading.Thread(target=lambda: attempt(checks, "4. the first refresh runs", pipeline_routes.do_prices_refresh), daemon=True)
+        try:
+            first.start()
+            w.stub["reached"].wait(20)
+            before = len(w.stub["requests"])
+            program = (
+                "import json, sys; sys.path.insert(0, %r)\n"
+                "from server import pipeline_routes as r\n"
+                "try:\n"
+                "    print(json.dumps({'answer': r.do_prices_refresh()}, default=str))\n"
+                "except Exception as caught:\n"
+                "    print(json.dumps({'raised': str(caught), 'code': getattr(caught, 'code', '')}))\n"
+            ) % str(Path(__file__).resolve().parents[3])
+            try:
+                ran = subprocess.run([sys.executable, "-c", program], capture_output=True, text=True, timeout=15, env=dict(os.environ), cwd=str(Path(__file__).resolve().parents[3]))
+                said = ran.stdout.strip().splitlines()[-1] if ran.stdout.strip() else ""
+                stderr = ran.stderr[-200:]
+            except subprocess.TimeoutExpired:
+                said, stderr = "", "the second process was still refreshing after 15 s: it did not give way"
+            checks.ok(
+                "running" in said.lower() or "already" in said.lower(),
+                "4. a second process answers that a refresh is already running",
+                f"stdout={said[:300]!r} stderr={stderr!r}",
+            )
+            checks.equal(len(w.stub["requests"]), before, "4. and the second process fetched nothing")
+        finally:
+            w.stub["gate"].set()
+            first.join(60)
+            undo()
+        steps = (pricerefresh.read_status() or {}).get("steps") or {}
+        checks.ok(
+            all((steps.get(name) or {}).get("ok") for name in ("listings", "catalog", "join")),
+            "4. the first refresh's step notes are all there, none lost to the second caller",
+            json.dumps(steps)[:300],
+        )
+
+    with isolated_home():
+        names = [f"s{at}" for at in range(120)]
+
+        def write(part):
+            for name in part:
+                # a writer that lost the race to the shared temp file is one more lost note
+                with contextlib.suppress(OSError):
+                    pricerefresh.note_step(name, True)
+
+        halves = [threading.Thread(target=write, args=(names[at::2],)) for at in (0, 1)]
+        for thread in halves:
+            thread.start()
+        for thread in halves:
+            thread.join()
+        kept = ((pricerefresh.read_status() or {}).get("steps") or {})
+        checks.equal(len(kept), len(names), "4. two writers of step notes lose none of them")
+
+
 CHECKS = (
+    check_live_press_returns_at_once,
+    check_two_game_run_is_refreshed_for_both,
+    check_live_rows_get_saved_strips,
+    check_one_refresh_across_processes,
     check_refresh_rewrites_the_waiting_row,
     check_disjoint_scopes_share_one_request,
     check_join_is_idempotent,
