@@ -138,18 +138,18 @@ const PHOTO_FIX = 'Shoot the card again.'
 const SET_NOT_READ: UnreadGroup = { title: 'The set cannot be read free', fix: null }
 
 export const UNREAD_GROUPS: Readonly<Record<string, UnreadGroup>> = {
-  margin_too_small: { title: 'Two printings too close to call', fix: RARITY_FIX },
-  match_too_weak: { title: 'A weak match', fix: SET_FIX },
-  lookalike_guard: { title: 'A look-alike with no photo of its own', fix: null, note: 'Only a paid look can tell these apart.' },
-  photo_unreadable: { title: 'A photo problem', fix: PHOTO_FIX },
-  no_card_found: { title: 'A photo problem', fix: PHOTO_FIX },
-  set_not_resolved: { title: 'The set named matches no set, or more than one', fix: 'Correct the set.' },
-  promo_set: SET_NOT_READ,
-  promo_held: SET_NOT_READ,
-  set_not_indexed: SET_NOT_READ,
-  no_index: SET_NOT_READ,
-  game_not_served: { title: 'This game is not read free', fix: null },
-  index_stale: { title: "The free reader's data is out of date", fix: 'Prepare matching on the runs sheet.' },
+  'margin_too_small': { title: 'Two printings too close to call', fix: RARITY_FIX },
+  'match_too_weak': { title: 'A weak match', fix: SET_FIX },
+  'lookalike_guard': { title: 'A look-alike with no photo of its own', fix: null, note: 'Only a paid look can tell these apart.' },
+  'photo_unreadable': { title: 'A photo problem', fix: PHOTO_FIX },
+  'no_card_found': { title: 'A photo problem', fix: PHOTO_FIX },
+  'set_not_resolved': { title: 'The set named matches no set, or more than one', fix: 'Correct the set.' },
+  'promo_set': SET_NOT_READ,
+  'promo_held': SET_NOT_READ,
+  'set_not_indexed': SET_NOT_READ,
+  'no_index': SET_NOT_READ,
+  'game_not_served': { title: 'This game is not read free', fix: null },
+  'index_stale': { title: "The free reader's data is out of date", fix: 'Prepare matching on the runs sheet.' },
 }
 
 /* A card whose mark predates stored reasons: the free reader reads it again and fills the reason in. */
