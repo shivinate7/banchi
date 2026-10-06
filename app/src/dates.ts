@@ -67,6 +67,18 @@ export function relativeDate(at: Date | string | number | null | undefined, now:
   return days === 1 ? 'yesterday' : `${days} days ago`
 }
 
+/** `at 9:06 AM`, with the day when it was not today: `at 9:06 AM yesterday`, `at 9:06 AM 3 days ago`.
+ *  THE one "at <time>[ <day>]" phrase. */
+export function atClockTime(at: Date | string | number | null | undefined, now: Date = new Date()): string {
+  const when = toDate(at)
+  if (when === null) return `at ${clockTime(at)}`
+  const day = localDay(when)
+  if (day === localDay(now)) return `at ${clockTime(when)}`
+  const eve = new Date(now)
+  eve.setDate(eve.getDate() - 1)
+  return `at ${clockTime(when)} ${day === localDay(eve) ? 'yesterday' : relativeDate(when, now)}`
+}
+
 /** `YYYY-MM-DD` in the runtime's zone: the shape `<input type="date">` and a day key use. THE one
  *  local day key; `toISOString().slice(0, 10)` is the UTC day and is wrong after dusk west of Greenwich. */
 export function localDay(at: Date = new Date()): string {

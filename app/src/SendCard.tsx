@@ -26,7 +26,7 @@
 import { count } from './kit/dataRules'
 import { useEffect, useState } from 'react'
 import { Button, Icon, IconButton, Money, Notice, Refusal, Retry } from './kit'
-import { clockTime } from './dates'
+import { atClockTime, clockTime } from './dates'
 import { describeFailure, dismissSendWarning, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, takeBackSend } from './server'
 import type { Failure } from './server'
 import type { EmptySend, LiveMove, PriceChange, RefusedPrice, SendSummary, SendTrim } from './types'
@@ -53,7 +53,8 @@ function pressCarries(skus: number, copies: number, prices: number): string {
   ].filter((part): part is string => part !== null)
   return parts.join(' and ')
 }
-const DAY_MS = 24 * 60 * 60 * 1000
+/** A checked send stays on the card this long, its day named (`atClockTime`); past a week it goes. */
+const STANDS_MS = 7 * 24 * 60 * 60 * 1000
 
 /** The failures a second press can fix. Everything else is a refusal: pressing again gets the
  *  same answer, so the card offers no retry for it. */
@@ -450,8 +451,8 @@ function SendStanding({
     case 'checked':
       if (send.check === null) return null
       return (
-        <Notice tone="ok" compact className="send-standing" title={`Live and checked at ${clockTime(send.checked_at)}.`}>
-          {foundLine(send)} at TCGplayer.
+        <Notice tone="ok" compact className="send-standing" title="Your last send is live.">
+          {foundLine(send)} at TCGplayer {atClockTime(send.checked_at)}.
           <StagedWarning send={send} />
         </Notice>
       )
@@ -462,9 +463,10 @@ function SendStanding({
           tone="warn"
           compact
           className="send-standing send-short-check"
-          title={`${foundLine(send)} at TCGplayer at ${clockTime(send.checked_at)}.`}
+          title="Your last send is not all there yet."
           action={action}
         >
+          {foundLine(send)} at TCGplayer {atClockTime(send.checked_at)}.
           <StagedWarning send={send} />
           <MissingList send={send} />
           <PriceMisses send={send} />
@@ -638,7 +640,7 @@ export function SendCard({
       ? null
       : latest.state === 'waiting' || latest.state === 'short'
         ? latest
-        : latest.state === 'checked' && Number.isFinite(settledAt) && Date.now() - settledAt < DAY_MS
+        : latest.state === 'checked' && Number.isFinite(settledAt) && Date.now() - settledAt < STANDS_MS
           ? latest
           : null
   const running = open.some((send) => send.state === 'sending')
