@@ -1185,7 +1185,7 @@ const trigger = (page: Page, label: string) =>
   page.locator('.bn-pick', { has: page.locator('.bn-pick-label', { hasText: new RegExp(`^${label}$`) }) })
 const valueOf = (page: Page, label: string) => trigger(page, label).locator('.bn-pick-value').innerText()
 const option = (page: Page, name: string) =>
-  page.getByRole('option', { name: new RegExp(`^${name.replace(/[$]/g, '\\$')}(\\s|\\d|$)`) })
+  page.getByRole('option', { name: new RegExp(`^${name.replace(/[$]/g, '\\$')}(\\s+\\d+)?$`) })
 
 /** Pick one option from a single-pick control, which closes its own list. */
 async function choose(page: Page, label: string, name: string) {
@@ -1200,7 +1200,7 @@ async function toggleMulti(page: Page, label: string, name: string) {
   await page.keyboard.press('Escape')
   await settleMotion(page)
 }
-const queryOf = (page: Page) => page.evaluate(() => new URLSearchParams(location.hash.split('?')[1] ?? ''))
+const queryOf = async (page: Page) => new URLSearchParams(((await hashOf(page)).split('?')[1] ?? ''))
 const hashOf = (page: Page) => page.evaluate(() => location.hash)
 const tableText = (page: Page) => page.locator('table').innerText()
 
