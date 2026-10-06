@@ -111,9 +111,34 @@ Every box has a name. The seed refuses a box with no name and two boxes with one
 through a dynamic `import()` gated on `if (DEMO)`. Every screen, the kit, the shell, the router and
 the keyboard map are the same code the owner runs at the desk. Only the wire is frozen.
 
+### Fetched per screen (DEBT84)
+
+The recorder's chunks stay on disk as written (`app/demo/bundle/chunk-*.json`). The build splits
+them: `app/demoSplit.ts`, a Vite plugin loaded only when `VITE_DEMO=1`, writes
+`dist-demo/demo-data/` with these files:
+
+- `index.json`: canonical key to file name, for every recorded response.
+- `<n>.json`: `{canonicalKey: {status, body}}`. A route family under 1 MiB (`/boxes`,
+  `/pipeline/price-now`) shares one file. A larger family (`/pipeline/pricing`, `/inventory`,
+  `/search`) gets one file per response.
+- Two derived keys, `/inventory/history` and `/inventory/recent` (the newest 64 cards), computed
+  with `demoShared.ts`'s `historyCards` and `recentCards`, the same functions the runtime uses.
+  Home reads them and never fetches the 7 MB whole-store read until a press needs it.
+
+`demoServer.ts` fetches `index.json` on its first read, then the file that holds a key the first
+time a read asks for it, and keeps it in memory under `demoShared.ts`'s `canonical` key. Files
+resolve against `import.meta.env.BASE_URL`, so `DEMO_BASE` moves them. A key the index lacks answers
+`notRecorded()`. A press (`sold`, `retire`, review, rename, divider, price) fetches the documents it
+reads first. It also journals each card move, and the journal replays over any file that lands later,
+so a document fetched after a sale shows the sale.
+
+Measured, with the split: Home's first load is 8.3 MB decoded (it was 87.9 MB), of which the app shell
+is about 1.6 MB, the index 0.44 MB, and Home's own reads (`/pipeline/pricing` 4.2 MB, `/orders` 1.5 MB)
+the rest (6.3 MB of data in all). The daily mirror job and the recorder's on-disk format are unchanged.
+
 ## 6. `VITE_DEMO` is a build-time constant, not a runtime flag
 
-`app/vite.config.ts` defines `__BN_DEMO__` as `JSON.stringify(process.env.VITE_DEMO === '1')`. That is a compile-time literal. An ordinary build folds it to `false`. Rollup then removes the `if (DEMO)` branch in `server.ts`. So neither `demoServer.ts` nor the recorded bundle (`#demo-bundle`) is ever emitted into a real build's chunks.
+`app/vite.config.ts` defines `__BN_DEMO__` as `JSON.stringify(process.env.VITE_DEMO === '1')`. That is a compile-time literal. An ordinary build folds it to `false`. Rollup then removes the `if (DEMO)` branch in `server.ts`. So neither `demoServer.ts` nor the split recording (`demo-data/`) is ever emitted into a real build's chunks.
 
 A runtime flag was rejected. A UI that could answer from the wrong store at run time is D43's
 subject, generalized from "which checkout's store" to "which store, real or recorded, this bundle
