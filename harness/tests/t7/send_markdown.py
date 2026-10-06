@@ -3931,6 +3931,45 @@ def check_send_skips_gone_card(checks: Checks) -> None:
             "MERGED SEND, a gone card in each run: the summary's `gone` names both, not only the last run's",
         )
 
+    # THE SCREEN'S "nothing to send" ANSWER names the gone card, read from the console's own
+    # `send_gone` line (the CLI console always prints its sentence, so only this reads the route).
+    from pipeline import merge
+
+    answer = send_routes._empty_send_refusal(
+        f'...\n{merge.ONLY_UNPRICED}\n{json.dumps({"send_gone": {"names": ["Articuno"]}})}\n', [], "sent"
+    )
+    checks.ok("Articuno" in str(answer), f"the route's nothing-to-send refusal names the gone card: {str(answer)!r}")
+
+    def gone_of(specs_per_run, removals):
+        """POST one merged send over `runs_over` runs; return the summary's `gone`."""
+        with send_portal() as portal, isolated_home() as home:
+            made = [_store_backed_run(checks, home, specs) for specs in specs_per_run]
+            for box, index in removals:
+                card = Store().read().inventory.cards[master.position_key(box, index)]
+                capture_server.do_remove_card(box, index, {"capture_id": card.capture_id})
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+            httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+            port = httpd.server_address[1]
+            thread = _spawn_server(httpd)
+            try:
+                status, body, _ = request(port, "POST", "/pipeline/send", payload={"runs": [r.name for r in made], "confirm": True})
+            finally:
+                httpd.shutdown()
+                thread.join(timeout=5)
+            return status, (json.loads(body or b"{}").get("send") or {}).get("gone")
+
+    # TWO DIFFERENT CARDS that share a last-known name, one in each run, both count (identity is the cid).
+    status, gone = gone_of(
+        [[(6, 1, "Articuno", "161", None), (6, 2, "Dunsparce", "120", "normal")],
+         [(7, 1, "Articuno", "161", None), (7, 2, "Dunsparce", "120", "normal")]],
+        [(6, 1), (7, 1)],
+    )
+    checks.equal((status, gone), (200, ["Articuno", "Articuno"]), "two gone cards with one name: `gone` holds the name twice, not once")
+    # ONE CARD recorded by two runs counts once.
+    spec = [(6, 1, "Articuno", "161", None), (6, 2, "Dunsparce", "120", "normal")]
+    status, gone = gone_of([spec, spec], [(6, 1)])
+    checks.equal((status, gone), (200, ["Articuno"]), "one gone card held by two runs of one send: `gone` names it once")
+
 
 def check_schema_eleven_then_twelve(checks: Checks) -> None:
     """Two branches each took schema 11. Main's identity lane took it for `skus` and
