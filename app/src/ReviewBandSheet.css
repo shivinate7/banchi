@@ -1,0 +1,46 @@
+/* THE REVIEW BAND'S SHEETS (`ReviewBandSheet.tsx`). Tokens only; the kit's `Sheet` owns the frame, focus and leave beat.
+   A row's photo is held at 40 by 56 from the first paint (D313): the box is there before the image is. */
+.review-band-sheet { width: min(560px, 100vw); }
+
+/* The held line: a slot, so "The count has moved" arriving moves nothing below it. */
+.rbs-moved { margin-block-end: var(--bn-1); }
+.rbs-moved-slot { display: flex; align-items: center; gap: var(--bn-3); min-block-size: 28px; color: var(--bn-ink-2); font-size: var(--bn-fs-md); }
+
+.rbs-group { margin-block-end: var(--bn-5); }
+.rbs-group-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--bn-3); }
+.rbs-group-title { margin: 0; font-family: var(--bn-font-display); font-size: var(--bn-fs-base); font-weight: 700; color: var(--bn-ink); min-width: 0; }
+.rbs-group-count { flex: none; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.rbs-pointer { margin: var(--bn-1) 0 var(--bn-2); font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+.rbs-pointer a { color: var(--bn-ink-2); text-decoration: underline; }
+
+.rbs-list { list-style: none; margin: var(--bn-2) 0 0; padding: 0; display: flex; flex-direction: column; border-block-start: 1px solid var(--bn-line); }
+.rbs-row { border-block-end: 1px solid var(--bn-line); }
+.rbs-row-link {
+  display: flex;
+  gap: var(--bn-3);
+  align-items: flex-start;
+  min-block-size: 40px;
+  padding: var(--bn-2) var(--bn-1);
+  color: inherit;
+  text-decoration: none;
+}
+.rbs-row-link:hover { box-shadow: inset 0 0 0 100vmax var(--bn-hover); }
+.rbs-row-link:focus-visible { outline-offset: -2px; }
+.rbs-photo {
+  flex: none;
+  inline-size: 40px;
+  block-size: 56px;
+  overflow: hidden;
+  border-radius: var(--bn-r-xs);
+  background: var(--bn-surface-3);
+  box-shadow: inset 0 0 0 1px var(--bn-line);
+}
+.rbs-photo img { display: block; inline-size: 100%; block-size: 100%; object-fit: cover; }
+.rbs-row-body { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+.rbs-place { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.rbs-place-lead { color: var(--bn-ink); font-size: var(--bn-fs-md); font-weight: 600; }
+.rbs-line { overflow-wrap: anywhere; }
+.rbs-name { color: var(--bn-ink); font-weight: 600; }
+.rbs-set { color: var(--bn-ink-3); }
+.rbs-thin { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.rbs-more { margin-block-start: var(--bn-2); }

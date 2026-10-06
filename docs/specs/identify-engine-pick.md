@@ -621,3 +621,184 @@ Turning the toggle on never downloads. With no model or no index, the toggle rea
 
 **Open for the owner.** The two gates are measurements with no pass mark. The build lane brings the numbers before ship.
 The held-out check (section 3) also tests the look-alike guard, with photographs of cards whose same-name twin has no stock image.
+
+## 10. The band's sheets
+
+**The outcome.** The owner sees "N waiting for a paid look" and cannot tell why. A wrong rarity claim or a missing set hint is a free fix. A paid read costs money.
+Three counts and one line in the band open a sheet that shows what they are made of. The paid-look sheet is the one that matters. It groups the cards by why the free reader stopped.
+The sheet never builds a fix. It points to the fix the app already has. The free reader then reads the card again by itself.
+
+**What exists today, so it is reused (D275, every screen inherits the page scaffold, and D307, rulings CLAUDE.md carried).**
+
+- The kit's `Sheet` (focus trap, Escape, return focus, leave beat). Review already draws one for Runs, with `review-runs-sheet` for width.
+- A card's claims are corrected in `#/inventory`'s card panel, opened by `#/inventory?box=<n>&card=<cid>`. Its `correct` calls `updateCard` for a set hint, a rarity claim and a finish.
+  The same panel has the re-shoot control. Box scale is Manage box, under Set claims, which calls `updateBox`.
+- A claims write already makes the free reader read the card again: `_requeue_free_read` in `server/capture_server.py` calls `sweep.forget_tried`.
+  The card leaves "waiting for a paid look" and returns to "not yet looked at". So no sheet needs a "read again" press, and none is built.
+- A card photo is `previewUrl(box, index, ref)` in a lazy `<img>`, as `BoxBrowse` draws it.
+
+### 10.1 The sheets
+
+Each opens from its count, or from the set-named line, in the band. Its title is the count's own words with the number, for example "12 waiting for a paid look".
+Each holds a snapshot taken at open (D313, nothing on screen moves unless the person moved it, and D181, the order is taken once).
+When the band's count later differs, the sheet shows one line, "The count has moved", with one press, "Show it again". It never rewrites itself.
+A row press leaves the screen for the card's own place. The sheet does not change under the person's eyes.
+
+1. **Waiting for a paid look (the main one).** It lists `paid_keys`. Groups are the plain reasons in 10.3, largest first.
+   Each group shows its count and, when one exists, one pointer line to the free fix.
+   A row has the photo (40 by 56 px, held from first paint), the box name and the slot, and the free reader's top two candidates (name, set, number, one line each).
+   Rows inside a group sort by box, then slot, so a pattern in one box reads as a run.
+   A row press opens the card's panel on Inventory. There the claim and the set hint are corrected, and the photo is shot again.
+2. **Not yet looked at.** It lists the cards the reader has not tried. No reason exists yet, so groups are by box.
+   A row has the photo, the box name and the slot. Nothing else is known. A row press opens the same card panel.
+3. **Matched free.** It lists `matched_keys`, grouped by set, so a wrong set shows as one odd group.
+   A row has the photo, the matched name, set and number, and the box and slot.
+   A row shows one extra line only when the match was thin: "Chosen by your rarity claim". That covers the accepts `printing_settled_by_claim` and `narrowed_by_claim`.
+   A row press opens the card panel on Inventory, where a wrong match is corrected as any filed card is.
+4. **N need a set named.** It lists the Pokemon cards that have no set hint. No reader can read them yet, and they are in none of the three counts.
+   Groups are by box. A row has the photo, the box name and the slot. The pointer line is "Name the set on the card."
+   A row press opens the card panel on Inventory, where the set hint is written. The line shows only when its count is above 0, so this sheet has no empty state.
+
+"Waiting for you" is not pressable, at any width (10.6). Review's rail is its list, and it is unchanged.
+
+**Empty states, a sentence and one action.** The sheet still opens on a zero count. A count that can be pressed and answers nothing is a broken control.
+
+- Paid look at 0: "No card is waiting for a paid look." Action: "Back to Capture".
+- Not yet looked at at 0: "The free reader has looked at every card." Action: "Back to Capture".
+- Matched free at 0: "The free reader has not matched a card yet." Action: "Back to Capture".
+
+### 10.2 The data, and where it comes from
+
+| Sheet | Needs | Today |
+| --- | --- | --- |
+| Paid look | key, box, slot, photo name, free reader's code, margin, floor, top two candidates, claims | keys only. The code and candidates are dropped |
+| Not yet looked at | key, box, slot, photo name | the count only. The keys are not on the wire |
+| Matched free | key, box, slot, photo name, matched name, set, number, accept rule | the keys. The rest is in the `identifications` payload the free reader writes |
+| Unhinted | key, box, slot, photo name | the count only. The keys are not on the wire |
+
+**The cause.** `identify.match.Result` carries `code`, `margin`, `floor` and `candidates` for a card it does not accept.
+The sweep worker in `cli/cmd_match.py` notes only `{key: capture id}` through `sweep.remember_tried`. The reason is lost the moment it is known.
+Nothing recomputes it for free, because a re-read loads the model.
+
+**The smallest server change, in the two homes that already own the fact.**
+
+- **Keep the reason where the mark is kept.** `sweep.remember_tried` gains one optional argument: the unaccepted `Result`s.
+  It writes a `why` map beside `keys`, in the same record and the same atomic write.
+  A `why` entry is `{code, margin, floor, candidates}`, with at most two candidates, each `{name, set, number}`.
+  `sweep.tried` keeps its shape and its validity rules (model and index stamp).
+  A new `sweep.why` reads the same record under the same rules, so a stale mark drops its reason with it.
+  `sweep.forget_tried` drops a key's reason with its mark. The cost is about 250 bytes a card.
+  A mark made before this change has no reason. The sweep clears those marks once, free, so the background reader reads the cards again and they gain a reason.
+  It runs as the watcher's worker starts, before the first chunk. It runs under the watcher's own lock, in one atomic write of the same record.
+  `sweep.clear_unexplained` drops every key in `keys` that has no `why` entry. It leaves set-aside marks alone. It then writes the `why` field, even when empty.
+  A record that carries a `why` field is never cleared again. So the clearing runs once, and a card with no photo is not cleared in a loop.
+  The clearing spends nothing, because the free reader never spends. While it runs, a card with no reason sits under "No reason kept". No owner press is needed.
+- **Answer it from the read that already sorts the cards.** `_sweep_poll_state` in `server/pipeline_routes.py` is the one place that sorts a card into paid, unread or matched.
+  It gains one query value, `detail=paid|unread|matched|unhinted`, beside `keys=`. With it the answer adds `cards`: the rows of that one count, in position order, in the shape in the table.
+  A row is `{key, box, box_name, index, cid, set_hint, rarity_claim}`. A paid row adds `code` and `candidates`. A matched row adds `name`, `set`, `number` and `accept`.
+  There is no new route. The poll never sends `detail`, so its payload and its cost do not change. The sheet sends it once, when it opens.
+
+**Read budget (`docs/specs/efficiency.md`).** The detail read stays in the photo lane, because the path still starts with `/pipeline/match/sweep?keys=`.
+It takes no lock and opens the store read-only.
+It adds one `cards` select per 500 keys (box, slot, `cid`, `capture_id`, game, claims) and one `boxes` select for the names.
+For matched it adds one `identifications` select per 500 keys.
+The selects are chunked by key count. They are equal at S and 2S for a fixed scope, and they grow only with the scope.
+The read walks no box and parses no export.
+It needs its own entry in `harness/tests/t7/read_budget.py` (a test-author's file). The pin is measured, not copied.
+It returns the rows of one count only. A group shows its first 50 rows and "Show 50 more". A 2,000-card group paints 50 photos.
+
+**The position.** The sheet shows the box name and the slot (`index`). It does not use the server's position label.
+That label walks the box layout, and that walk once made `GET /capture/sitting` take 71.6 s. The owner ruled that box and slot are enough (10.6).
+
+### 10.3 Reason codes in plain words
+
+D196 (no screen string names a mechanism) and the reason-code rule in `docs/DESIGN.md` both apply.
+The group title is plain. No title or hover shows a raw code.
+The words below are for the owner to rule on. They are one table in `app/src/reasons.ts`, next to the review reasons.
+An unknown code groups under "Another reason", never as a blank and never as the raw code.
+
+| Code | Group title | Free fix it points to |
+| --- | --- | --- |
+| `margin_too_small` | Two printings too close to call | "Name the rarity on the card. A claim settles the printing." Card panel. Many in one box: the box |
+| `match_too_weak` | A weak match | "Name the set on the card. A narrower set gives a better match." Card panel |
+| `lookalike_guard` | A look-alike with no photo of its own | none. It shows the plain line "Only a paid look can tell these apart." under its title: an explanation, not a fix pointer |
+| `photo_unreadable`, `no_card_found` | A photo problem | "Shoot the card again." Card panel, re-shoot |
+| `set_not_resolved` | The set named matches no set, or more than one | "Correct the set." Card panel |
+| `promo_set`, `promo_held`, `set_not_indexed`, `no_index` | The set cannot be read free | none |
+| `game_not_served` (from the card's game, not stored) | This game is not read free | none |
+| no stored reason | No reason kept | "A free read will fill it in." while the reader is on, "Turn on the reader to fill it in." while it is off. Shown only while the one-time clearing runs (10.2) |
+| `index_stale` | The free reader's data is out of date | "Prepare matching on the runs sheet." |
+
+A group with a free fix shows it once, as one line under the group title, with the count it covers.
+A group with no free fix shows no pointer line and no empty promise. The one exception is the look-alike group, which shows its plain explanation (10.6, item 7).
+The pointer is a sentence, never a second control. The press is the row's own.
+The pattern is read from the rows and never guessed. Say most rows in a group sit in one box and carry no rarity claim.
+Then the pointer line says so ("9 of 12 are in Box Starter and name no rarity"). The box name links to that box on Inventory (10.6, settled).
+
+### 10.4 How a count reads as pressable
+
+The band has four figures in four equal columns. Three of them become one `button` each: matched free, waiting for a paid look and not yet looked at.
+"Waiting for you" stays a plain `div`, because it opens nothing. The "N need a set named" line in the health row becomes a `button` too.
+No figure changes its size (D313).
+
+- The `button` wraps the existing number and label, with the number above the label. Its name is the count and its label, "12 waiting for a paid look".
+  It is a real `button`, not a `role="button"` on a `div`.
+- The cursor is a pointer, from the floor in `base.css`. Hover lifts the surface one step with an inset `box-shadow`. Hover moves no layout.
+  The label takes `--bn-ink-2`. A chevron icon from the kit shows at rest at the label's end.
+  A count then reads as a door before the hand is on it. The button is 40 px tall or more (a thumb press, CLAUDE.md).
+- Focus is the global `:focus-visible` ring from `base.css`, inset so the band's edge does not clip it. Enter and Space press it.
+  Tab order is the three counts and the "N need a set named" line, left to right. Then "Read the N left", then "Back to Capture".
+- A press dips by `translate`, as the floor says (D118, a press changes what is on screen). It never moves the figures.
+- While the band is not loaded, the counts are `disabled` and keep their size. The sheet never opens on a count the band has not read.
+- The button carries `aria-haspopup="dialog"` and `aria-expanded` while its sheet is open. Focus returns to the same count on close, through the kit's `useReturnFocus`.
+- No new key binding is added, so nothing enters `SHORTCUTS` in `app/src/keys.ts`.
+
+### 10.5 Checks for the test-author (each can go red)
+
+Server, over a throwaway store and a `Result` fixture.
+
+1. `remember_tried`, given an unaccepted `Result`, writes `why[key]` with the code, margin, floor and at most two candidates. Red on today's code: no `why` exists.
+2. `sweep.why` returns `{}` for a record made against another model or another index stamp, as `tried` does. An ignored stamp turns it red.
+3. `forget_tried` removes the reason with the mark. A reason that outlives its mark turns it red.
+4. `GET /pipeline/match/sweep?keys=<k>&detail=paid` returns `cards` for exactly `paid_keys`.
+   Each row has the box name, the slot, `cid`, the code and two candidates. With no `detail`, the answer has no `cards`, and the poll's budget does not change.
+5. A paid card in a game the reader does not serve answers `game_not_served` with no stored reason.
+   A paid card with a mark from before this change answers no code, until the one-time clearing drops that mark. The sheet puts it in "No reason kept".
+6. A card in scope is in exactly one of the paid, unread and matched lists. Their counts equal the band's three figures.
+   An unhinted card appears in no one of those lists. It appears only in the `unhinted` list.
+7. The read budget has an entry for the `detail` read. It is equal at S and 2S for a fixed scope, in the photo lane, with no lock taken.
+8. Every `UNREAD_*` code that `identify.match` can emit has a group in the table in 10.3. A new code with no label turns it red.
+
+Front end.
+
+9. A table test: each code maps to its group title. An unknown code renders as itself. No title has a typed dot or a mechanism word (the `no mechanism on screen` and `typed interpunct` rows).
+10. Matched free, waiting for a paid look and not yet looked at are each a `button`. Its name is the count and label.
+    It has `aria-haspopup`, `aria-expanded` and a visible focus ring. It is the same size loaded and unloaded (`stability.spec.ts` style).
+11. Enter and Space open the sheet. Escape closes it, and focus returns to that count.
+12. The paid sheet groups by reason and orders groups by size. It shows two candidates and the box and slot. A group over 50 rows shows 50 and "Show 50 more".
+13. A row press goes to `#/inventory?box=<n>&card=<cid>` for the card, and the card panel opens on it. A group with no free fix shows no pointer line.
+14. The sheet holds its rows while the band's count moves behind it, and shows "The count has moved". "Show it again" reads once.
+15. A claims write on a paid card (`updateCard`) moves the card to "not yet looked at". It leaves "waiting for a paid look" on the next open.
+    This proves the existing requeue, not a new path.
+16. The "waiting for you" count is a plain figure at every width. It is not a `button`, has no `aria-haspopup` and opens nothing.
+17. The three count sheets show their empty sentence and "Back to Capture" on a zero count. Check both themes, at 1440 and 820 px, with no horizontal scroll.
+18. The "N need a set named" line is a `button` that shows only when the count is above 0. Its press opens the set-named sheet, with its title, and focus returns to the line on close.
+19. The set-named sheet groups its rows by box. A row has the photo, the box name and the slot. A row press goes to `#/inventory?box=<n>&card=<cid>`. The pointer line is "Name the set on the card."
+20. `GET /pipeline/match/sweep?keys=<k>&detail=unhinted` returns `cards` for exactly the cards the band counts as unhinted. Each row has the box name, the slot and `cid`, and no reason.
+21. A set hint written with `updateCard` takes the card out of the set-named sheet. The health line drops it on the next read.
+22. On its first run after the change, the sweep drops every tried mark that has no `why` entry. It then writes the `why` field. A second run drops nothing. A mark with a `why` entry stays.
+    A set-aside mark stays. The first run spends nothing. A record that already carries `why` from before the run is not cleared.
+
+### 10.6 Settled by the owner
+
+1. The group titles in 10.3 are approved as written.
+2. "Waiting for you" is not pressable, at any width. Only three counts open a sheet: matched free, waiting for a paid look, and not yet looked at.
+   Review's rail stays as it is. The count stays a plain figure.
+3. The "N need a set named" line in the health row opens a sheet of those cards, grouped by box (10.1).
+4. Cards tried before the `why` map ships are re-read once, free, by the sweep itself (10.2). No owner press is needed.
+5. The box name and the slot are enough for a position.
+6. A link to the box on Inventory is enough for many cards in one box. No deep link to Manage box is built.
+
+7. The look-alike group shows the plain line "Only a paid look can tell these apart." under its title. It explains, and points to no fix. Every other group with no free fix shows no line.
+
+Open: none.

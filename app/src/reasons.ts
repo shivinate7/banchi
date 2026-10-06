@@ -123,3 +123,43 @@ export function isRetiredReason(reason: string): boolean {
 export function reasonLabel(reason: string): string {
   return REASON_LABELS[reason] ?? RETIRED_REASON_LABELS[reason] ?? reason
 }
+
+/* THE FREE READER'S UNREAD CODES, IN PLAIN WORDS (`docs/specs/identify-engine-pick.md`, 10.3), for the Review band's
+ * paid-look sheet. A code is one group; codes that read alike share a title, so they share a group. `fix` is the one free
+ * way out, said once under the group's title as a sentence and never a control (the row's own press goes to the card).
+ * `note` is an explanation where no free fix exists, only for the look-alike group. Every other group with no free fix shows
+ * no line. An unknown code groups under "Another reason" (`unreadGroup`), never a blank and never the raw code. No title or hover shows a code. Every `UNREAD_*` code `identify.match` can emit is a key here (`harness/tests/t7/engine_sweep.py`). */
+export type UnreadGroup = { readonly title: string; readonly fix: string | null; readonly note?: string }
+
+const RARITY_FIX = 'Name the rarity on the card. A claim settles the printing.'
+const SET_FIX = 'Name the set on the card. A narrower set gives a better match.'
+const PHOTO_FIX = 'Shoot the card again.'
+const SET_NOT_READ: UnreadGroup = { title: 'The set cannot be read free', fix: null }
+
+export const UNREAD_GROUPS: Readonly<Record<string, UnreadGroup>> = {
+  'margin_too_small': { title: 'Two printings too close to call', fix: RARITY_FIX },
+  'match_too_weak': { title: 'A weak match', fix: SET_FIX },
+  'lookalike_guard': { title: 'A look-alike with no photo of its own', fix: null, note: 'Only a paid look can tell these apart.' },
+  'photo_unreadable': { title: 'A photo problem', fix: PHOTO_FIX },
+  'no_card_found': { title: 'A photo problem', fix: PHOTO_FIX },
+  'set_not_resolved': { title: 'The set named matches no set, or more than one', fix: 'Correct the set.' },
+  'promo_set': SET_NOT_READ,
+  'promo_held': SET_NOT_READ,
+  'set_not_indexed': SET_NOT_READ,
+  'no_index': SET_NOT_READ,
+  'game_not_served': { title: 'This game is not read free', fix: null },
+  'index_stale': { title: "The free reader's data is out of date", fix: 'Prepare matching on the runs sheet.' },
+}
+
+/* A card whose mark predates stored reasons: the free reader reads it again and fills the reason in. */
+export const NO_REASON: UnreadGroup = { title: 'No reason kept', fix: 'A free read will fill it in.' }
+
+/* A code this file has no words for: one group, never the raw code on screen. */
+export const OTHER_REASON: UnreadGroup = { title: 'Another reason', fix: null }
+
+export const NO_REASON_OFF = 'Turn on the reader to fill it in.'
+
+export function unreadGroup(code: string | null): UnreadGroup {
+  if (code === null || code === '') return NO_REASON
+  return UNREAD_GROUPS[code] ?? OTHER_REASON
+}

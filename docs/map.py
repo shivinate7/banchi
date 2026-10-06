@@ -7168,6 +7168,20 @@ COMPONENTS = [
                         "loaded size from the first paint (D313).",
                 "governed_by": ["D291", "D313"],
             },
+            "src/ReviewBandSheet.tsx": {
+                "does": "THE REVIEW BAND'S FOUR SHEETS (`docs/specs/identify-engine-pick.md`, section "
+                        "10): waiting for a paid look (grouped by why the free reader stopped), not "
+                        "yet looked at (by box), matched free (by set) and the cards that need a "
+                        "set named (by box). A snapshot taken at open, a held line when the count "
+                        "moves, a group's first 50 rows. A row press goes to the card on Inventory. "
+                        "Its styles are `ReviewBandSheet.css`.",
+                "governed_by": ["D181", "D196", "D313"],
+            },
+            "src/ReviewBandSheet.css": {
+                "does": "The band sheets' styles: group heads, pointer lines, rows with a 40 by 56 "
+                        "photo held from first paint, the held \"count has moved\" slot. Tokens only.",
+                "governed_by": ["D313"],
+            },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
                         "correction on 2026-08-23 was that this is \"find a card in a box-based "

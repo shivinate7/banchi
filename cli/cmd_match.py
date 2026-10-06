@@ -385,6 +385,7 @@ def sweep_worker(say) -> int:
     if not match.status()["ready"]:
         say("sweep           the model file or the fingerprints are not ready; nothing read")
         return sweep.EXIT_NOT_READY
+    sweep.clear_unexplained()  # once, free: a mark with no reason is read again
     os.nice(10)  # the capture server and the feeder come first
     stop = []
     signal.signal(signal.SIGTERM, lambda _signum, _frame: stop.append(True))
@@ -431,7 +432,7 @@ def sweep_worker(say) -> int:
                     noted.clear()
                     noted.update(before)
                     accepted += _write_chunk(store, results, meta, noted, adopt=False, session=session)
-                sweep.remember_tried(noted)
+                sweep.remember_tried(noted, [r for r in results if not r.accepted])
                 sweep.clear_inflight()
                 sweep.reset_chunk()
                 tried += len(noted)
