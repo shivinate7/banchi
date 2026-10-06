@@ -723,15 +723,13 @@ def _sold_since(inventory, sku, as_of) -> int:
 #: HOW OLD A LIVE READ MAY BE AND STILL SIZE A TAKE-OFF. A size is a count of copies live right
 #: now, so the read is seconds-to-minutes old, never the day a mark-down's prices may rest on.
 TAKE_READ_FRESH_S = 60 * 60
-#: SLACK FOR THE FILE'S STAMP, so a read taken an hour ago to the minute still sizes.
-TAKE_READ_SLACK_S = 120
 
 
 def _read_is_fresh(path) -> bool:
     import time
 
     try:
-        return time.time() - Path(path).stat().st_mtime <= TAKE_READ_FRESH_S + TAKE_READ_SLACK_S
+        return time.time() - Path(path).stat().st_mtime <= TAKE_READ_FRESH_S
     except OSError:
         return False
 
