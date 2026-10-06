@@ -1085,12 +1085,15 @@ export function FilterChips({
   onChange,
   label = 'Filters',
   className,
+  clear,
 }: {
   readonly facets: readonly FilterFacet[]
   readonly value: FilterValue
   readonly onChange: (next: FilterValue) => void
   readonly label?: string
   readonly className?: string
+  /** `false` leaves out the bar's own Clear all; the screen draws `ClearAll` itself. */
+  readonly clear?: boolean
 }) {
   const activeCount = facets.filter((facet) => (value[facet.key] ?? []).length > 0).length
   const group = useRef<HTMLDivElement | null>(null)
@@ -1107,20 +1110,34 @@ export function FilterChips({
       {/* Always drawn, so its arrival never wraps the bar (D118); hidden, and out of the tab
           order, until two facets are on. The press hides itself, so focus goes back to the
           first facet's trigger before it does. */}
-      <button
-        type="button"
-        className="bn-filterchips-clear"
-        data-off={activeCount < 2 ? 'true' : undefined}
-        tabIndex={activeCount < 2 ? -1 : undefined}
-        aria-hidden={activeCount < 2 ? true : undefined}
-        onClick={() => {
-          group.current?.querySelector<HTMLButtonElement>('.bn-pick')?.focus()
-          onChange({})
-        }}
-      >
-        Clear all
-      </button>
+      {clear === false ? null : (
+        <ClearAll
+          on={activeCount >= 2}
+          onClick={() => {
+            group.current?.querySelector<HTMLButtonElement>('.bn-pick')?.focus()
+            onChange({})
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+/** The filter bar's "Clear all", for a screen that draws it elsewhere (`FilterChips` with
+ *  `clear={false}`, then this in its own heading). Always drawn: hidden and out of the tab order
+ *  while `on` is false, so its arrival moves nothing (D118). */
+export function ClearAll({ on, onClick }: { readonly on: boolean; readonly onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="bn-filterchips-clear"
+      data-off={on ? undefined : 'true'}
+      tabIndex={on ? undefined : -1}
+      aria-hidden={on ? undefined : true}
+      onClick={onClick}
+    >
+      Clear all
+    </button>
   )
 }
 

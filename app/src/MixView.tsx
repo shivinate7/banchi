@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { describeFailure, getOrders, getStockMix, type Failure } from './server'
 import type { StockMixPayload } from './types'
 import {
-  Count, EmptyState, FailureNotice, FilterChips, Money, Page, Segmented, Select, SortControl,
+  ClearAll, Count, EmptyState, FailureNotice, FilterChips, Money, Page, Segmented, Select, SortControl,
   type FilterFacet, type FilterValue, type PickOption, type SortOption, type SortValue,
 } from './kit'
 import { patchViewQuery, useFacetParams, useSortParam, useViewParam } from './kit/viewState'
@@ -190,18 +190,9 @@ export function MixView() {
       <LensSwitch lens="mix" />
       <div className="mix-group-head">
         <p className="bn-eyebrow">Show only</p>
-        <button
-          type="button"
-          className="bn-filterchips-clear"
-          data-off={barClears ? undefined : 'true'}
-          tabIndex={barClears ? undefined : -1}
-          aria-hidden={barClears ? undefined : true}
-          onClick={() => setPicks({})}
-        >
-          Clear all
-        </button>
+        <ClearAll on={barClears} onClick={() => setPicks({})} />
       </div>
-      <FilterChips className="mix-grid" facets={facets} value={picks} onChange={setPicks} label="Filters" />
+      <FilterChips className="mix-grid" clear={false} facets={facets} value={picks} onChange={setPicks} label="Filters" />
       <div className="mix-group-head">
         <p className="bn-eyebrow">Layout</p>
       </div>

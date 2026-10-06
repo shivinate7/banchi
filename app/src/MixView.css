@@ -30,7 +30,6 @@
 .mix-controls .mix-grid .bn-sort { display: flex; }
 .mix-controls .mix-layout > .bn-filterchips { display: contents; }
 .mix-controls .mix-layout > .bn-filterchips > .bn-fchip { width: 100%; min-width: 0; }
-.mix-controls .mix-layout .bn-filterchips-clear { display: none; }
 .mix-group-head {
   display: flex;
   align-items: center;
@@ -40,7 +39,7 @@
   margin-top: var(--bn-1);
 }
 .mix-group-head .bn-eyebrow { margin: 0; }
-.mix-group-head .bn-filterchips-clear { height: var(--bn-control-h-sm); }
+.mix-group-head button { height: var(--bn-control-h-sm); }
 
 /* The table scrolls inside its own frame and never past the page. The first column sticks. */
 .mix-frame {
@@ -90,8 +89,3 @@
   font-size: var(--bn-fs-sm);
   color: var(--bn-ink-3);
 }
-
-/* The kit's own Clear all is drawn in the layout row instead (MixView.tsx): kept in the filter row it
-   wrapped onto a line of its own and reserved an empty band. It is still always drawn, so its
-   arrival moves nothing (D313). */
-.mix-controls .bn-filterchips > .bn-filterchips-clear { display: none; }
