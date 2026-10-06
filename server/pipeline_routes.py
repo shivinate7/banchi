@@ -7514,7 +7514,13 @@ def do_prices_refresh(
 
     # 2. catalog prices: the first run of each game forces one request; later runs reuse it.
     tell("catalog")
-    _work, runs = _open_runs()
+    unreadable = ""
+    try:
+        _work, runs = _open_runs()
+    except Exception as exc:  # noqa: BLE001 - a worklist that will not read costs the later steps, and says so
+        files.log_cause("prices refresh runs", exc)
+        runs = []
+        unreadable = f"The open runs could not be read because {files.plain_cause(exc)}."
     fetched: Dict[str, str] = {}
     refused: Dict[Tuple[str, ...], str] = {}
     asked_games: Set[Tuple[str, ...]] = set()
@@ -7536,7 +7542,8 @@ def do_prices_refresh(
         asked_games.add(games_of)
         fetched[name] = answer["file"]
     pricerefresh.note_step(
-        "catalog", not problems, runs=len(runs), fetched=len(fetched), message=problems[0] if problems else "",
+        "catalog", not problems and not unreadable, runs=len(runs), fetched=len(fetched),
+        message=unreadable or (problems[0] if problems else ""),
     )
 
     # 3. join every run whose catalog arrived. A re-join is free and re-runnable, and a typed
