@@ -3827,8 +3827,10 @@ def check_send_store_backed_follows_cards(checks: Checks) -> None:
         remove(1)
         code, rows, _ = emitted(run)
         checks.equal((code, rows), (0, {DUNSPARCE_SKU: "1"}), "(f) fixture: the card still held goes out once")
+        sent_file = run.path(runs.IMPORT_MERGED).read_bytes()
         code, rows, text = emitted(run)
-        checks.ok(not rows and "Articuno" in text, f"(f) a second send with nothing left names the gone card too: exit {code}, {text[-300:]!r}")
+        checks.ok(code != 0 and run.path(runs.IMPORT_MERGED).read_bytes() == sent_file, f"(f) the second emit sends nothing new: exit {code}, import.csv unchanged")
+        checks.ok("Articuno" in text, f"(f) and its refusal names the gone card too: {text[-300:]!r}")
 
     # (g) `join` over a store-backed run names the gone card in its output (the screen's join
     # route answers with this same console)
