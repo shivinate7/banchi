@@ -594,7 +594,7 @@ def _run_keys(name: str) -> List[str]:
     at all (`write_atomic`), so there is no half-answered run to mis-read.
     """
     try:
-        payload = run_files.Run(_open_run(name)).read_identifications()
+        payload = run_files.open_run(_open_run(name)).read_identifications()
     except Exception:  # noqa: BLE001
         return []
     cards = payload.get("cards")
