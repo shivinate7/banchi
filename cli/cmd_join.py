@@ -572,7 +572,7 @@ def run(args, say) -> int:
         say(str(refusal))
         return 1
     if resolved.gone:  # a store-backed run's card the store no longer has: named, never dropped
-        say(resolve.gone_sentence(resolved.gone))
+        say(resolve.gone_sentence([g["name"] for g in resolved.gone]))
 
     # One export/catalog block per game. A one-game run prints exactly the block it
     # always did; a multi-game run names the game on each line, because two files with

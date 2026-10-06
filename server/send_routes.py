@@ -874,7 +874,9 @@ def _empty_reasons(empty: dict, trimmed: list, step: str) -> "PipelineRefusal":
 
 
 def _gone_names(console: str) -> List[str]:
-    """Every run's `send_gone` names, in order, each once (`_json_line` reads only the last)."""
+    """Every run's `send_gone` names, in order. A card is its `cid`: one card in two runs counts
+    once, two cards with one name count twice (`_json_line` reads only the last line)."""
+    seen: set = set()
     names: List[str] = []
     for line in console.splitlines():
         line = line.strip()
@@ -884,7 +886,12 @@ def _gone_names(console: str) -> List[str]:
             said = json.loads(line).get("send_gone") or {}
         except (ValueError, AttributeError):
             continue
-        names += [n for n in said.get("names") or [] if n not in names]
+        said_names = said.get("names") or []
+        cids = said.get("cids") or said_names  # a line with no cids: the name is all there is
+        for key, name in zip(cids, said_names):
+            if key not in seen:
+                seen.add(key)
+                names.append(name)
     return names
 
 

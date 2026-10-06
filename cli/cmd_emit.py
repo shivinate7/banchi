@@ -1804,8 +1804,9 @@ def _say_gone(resolved, say) -> None:
     gone = list(resolved.gone)
     if not gone:
         return
-    say(resolve.gone_sentence(gone))
-    say(json.dumps({"send_gone": {"names": gone}}))
+    names = [g["name"] for g in gone]
+    say(resolve.gone_sentence(names))
+    say(json.dumps({"send_gone": {"names": names, "cids": [g["cid"] for g in gone]}}))
 
 
 def _bucket_files(game, group, split_threshold):
