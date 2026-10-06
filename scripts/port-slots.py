@@ -50,6 +50,7 @@ import argparse
 import fcntl
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -325,8 +326,23 @@ def build_tree(tree: Path) -> None:
     app = tree / "app"
     (app / "tests").mkdir(parents=True)
     (tree / ".git").write_text("gitdir: /nowhere/.git/worktrees/probe\n", encoding="utf-8")
-    for name in APP_FILES:
-        shutil.copy2(ROOT / "app" / name, app / name)
+    pending, seen = list(APP_FILES), set()
+    while pending:  # plus the relative imports of each .ts copied, transitively: none can drift
+        name = pending.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        src = ROOT / "app" / name
+        (app / name).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, app / name)
+        if src.suffix != ".ts":
+            continue
+        for rel in re.findall(r"from\s+'(\.{1,2}/[^']+)'", src.read_text("utf-8")):
+            target = Path(os.path.normpath(Path(name).parent / rel))
+            for cand in (target.with_suffix(".ts"), target.with_suffix(".tsx"), target):
+                if (ROOT / "app" / cand).is_file():
+                    pending.append(str(cand))
+                    break
     (app / "index.html").write_text("<!doctype html><title>probe</title>\n", encoding="utf-8")
     for rel in ("scripts/screenshot.sh", "server/ports.py"):
         (tree / rel).parent.mkdir(parents=True, exist_ok=True)

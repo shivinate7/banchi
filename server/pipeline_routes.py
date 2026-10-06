@@ -7816,7 +7816,13 @@ def do_price_facts(sku: str) -> dict:
     row = None
     ledger: Optional[UnsentLedger] = None
     if snapshot is not None:
-        legs = sorted({str(card.run) for card in snapshot.inventory.copies_on_hand(sku) if card.run})
+        legs = {str(card.run) for card in snapshot.inventory.copies_on_hand(sku) if card.run}
+        # THE READING'S OWN RUN IS A LEG TOO: a copy no run has claimed yet still has a reading from
+        # a run table, and its read time is that table's export second, the one the worklist row
+        # carries, never the join's own moment (the table's mtime).
+        if reading is not None and reading.kind == store_readings.KIND_RUN:
+            legs.add(str(reading.source))
+        legs = sorted(legs)
         tables: List[Tuple["run_files.Run", dict]] = []
         for leg in legs:
             try:
