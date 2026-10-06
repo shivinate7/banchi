@@ -3818,6 +3818,30 @@ def check_send_store_backed_follows_cards(checks: Checks) -> None:
         code, rows, text = emitted(run)
         checks.ok(code not in (0, None) and not rows, f"(b) a run whose every card is gone refuses and sends nothing: exit {code}, rows {rows}")
 
+    # (f) a gone card, every held card already sent: "nothing to send" still names the gone card
+    with isolated_home() as home:
+        run = _store_backed_run(
+            checks, home, cards_at(art, dun, rev),
+            only=[master.position_key(5, 1), master.position_key(5, 2)],
+        )
+        remove(1)
+        code, rows, _ = emitted(run)
+        checks.equal((code, rows), (0, {DUNSPARCE_SKU: "1"}), "(f) fixture: the card still held goes out once")
+        code, rows, text = emitted(run)
+        checks.ok(not rows and "Articuno" in text, f"(f) a second send with nothing left names the gone card too: exit {code}, {text[-300:]!r}")
+
+    # (g) `join` over a store-backed run names the gone card in its output (the screen's join
+    # route answers with this same console)
+    with isolated_home() as home:
+        run = _store_backed_run(
+            checks, home, cards_at(art, dun, rev),
+            only=[master.position_key(5, 1), master.position_key(5, 2)],
+        )
+        remove(1)
+        with quiet() as said:
+            code = entry.main(["join", str(run.directory), "--export", str(home / "sweep-export.csv")])
+        checks.ok("Articuno" in said.getvalue(), f"(g) `join <store-backed run>` names the gone card: exit {code}, {said.getvalue()[-300:]!r}")
+
     # (a) a later sweep re-reads and re-stamps one card of sweep-01: both runs still follow cards
     with isolated_home() as home:
         spec = cards_at(art, dun)
@@ -3881,6 +3905,29 @@ def check_send_skips_gone_card(checks: Checks) -> None:
                 f"{label}: TCGplayer receives only the card still in the store",
             )
             checks.equal((answer.get("send") or {}).get("gone"), ["Articuno"], f"{label}: the send summary's `gone` names the gone card by its last-known name")
+
+    # A MERGED SEND over two store-backed runs, a different gone card in each: both are named.
+    with send_portal() as portal, isolated_home() as home:
+        first = _store_backed_run(checks, home, [(6, 1, "Articuno", "161", None), (6, 2, "Dunsparce", "120", "normal")])
+        second = _store_backed_run(checks, home, [(7, 1, "Articuno", "161", None), (7, 2, "Dunsparce", "120", "normal")])
+        for box, index in ((6, 1), (7, 2)):
+            card = Store().read().inventory.cards[master.position_key(box, index)]
+            capture_server.do_remove_card(box, index, {"capture_id": card.capture_id})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = _spawn_server(httpd)
+        try:
+            status, body, _ = request(port, "POST", "/pipeline/send", payload={"runs": [first.name, second.name], "confirm": True})
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=5)
+        answer = json.loads(body or b"{}")
+        checks.equal(status, 200, f"MERGED SEND, a gone card in each run: answers 200: {body[-300:]!r}")
+        checks.equal(
+            sorted((answer.get("send") or {}).get("gone") or []), ["Articuno", "Dunsparce"],
+            "MERGED SEND, a gone card in each run: the summary's `gone` names both, not only the last run's",
+        )
 
 
 def check_schema_eleven_then_twelve(checks: Checks) -> None:
