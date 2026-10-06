@@ -395,27 +395,3 @@
 @media (prefers-reduced-motion: reduce) {
   .bn-pick-panel { animation: none; }
 }
-
-/* A SORTABLE COLUMN HEADER: the caption's own type, no button chrome. Its direction mark has a slot
-   at all times (before the label, or after it for a start-aligned column), so nothing moves. */
-.bn-sorthead {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--bn-0-5);
-  width: 100%;
-  min-height: var(--bn-control-h-lg);
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.bn-sorthead[data-align='start'] { justify-content: flex-end; flex-direction: row-reverse; }
-.bn-sorthead[aria-sort='ascending'],
-.bn-sorthead[aria-sort='descending'] { color: var(--bn-ink); }
-.bn-sorthead-mark { display: inline-flex; flex: none; width: var(--bn-3); }

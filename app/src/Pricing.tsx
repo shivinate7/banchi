@@ -104,7 +104,7 @@ import {
   SettingsGroup,
   SettingsOp,
   Sheet,
-  SortHead,
+  SortHeader,
   countFacets,
   filterRows,
   matchQuery,
@@ -1464,7 +1464,9 @@ export function Pricing() {
   /* F3: THE VIEW'S OWN FILTERS. Search, sort and the facets live in the URL (`?q=`, `?sort=`, `?game=`),
      narrow what is DRAWN and touch nothing else: Send, the presets and the counts read every row. */
   const [query, setQuery] = useViewParam('q')
-  const [sort, setSort] = useSortParam<PricingSortKey>(SORT_AT_REST, { options: SORT_OPTIONS })
+  /* NO RANGE SORT WHERE THE COLUMN IS NOT DRAWN: it is not offered, and one carried in the URL reads as the default order. */
+  const sortOptions = useMemo(() => (rangeOn ? SORT_OPTIONS : SORT_OPTIONS.filter((option) => option.key !== 'range')), [rangeOn])
+  const [sort, setSort] = useSortParam<PricingSortKey>(SORT_AT_REST, { options: sortOptions })
   const facetShape = useMemo<readonly FilterFacet[]>(() => {
     const games = [...new Set(rows.map((row) => row.game))].filter((game) => game !== '').sort()
     const sets = [...new Set(rows.map((row) => row.set_name))].filter((name) => name !== '').sort((a, b) => a.localeCompare(b))
@@ -2920,24 +2922,26 @@ export function Pricing() {
               onChange={setFacetPicks}
               count={{ shown: drawn.reduce((sum, group) => sum + group.rows.length, 0), total: rows.length, noun: { one: 'item', many: 'items' } }}
               search={{ query, onChange: setQuery, placeholder: 'Name, set, number or SKU', label: 'Search this list' }}
-              sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
+              sort={{ options: sortOptions, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
             />
           )}
           {filtering && drawn.length === 0 ? (
             <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." didYouMean={{ name: nearName, onPick: setQuery }} />
           ) : null}
           <div className="pricing-list" ref={measureList} data-copies={source.copies ? 'some' : 'none'} data-range={rangeOn ? 'some' : undefined}>
-            <div className="pricing-caption">
+            <div className="pricing-caption" role="row">
               {source.copies ? <span /> : null}
               {/* "ITEM", NOT "CARD" (the owner's add-on, 2026-09-26): the rows include sealed
                   product too, which is not a card. */}
-              <span>Item</span>
-              <span className="pricing-col-market"><SortHead id="price" label="Market" value={sort} onChange={setSort} defaultValue={SORT_AT_REST} /></span>
-              <span className="pricing-col-low"><SortHead id="low" label="Lowest" value={sort} onChange={setSort} defaultValue={SORT_AT_REST} /></span>
-              {rangeOn ? <span className="pricing-col-range"><SortHead id="range" label="Range 7d" value={sort} onChange={setSort} defaultValue={SORT_AT_REST} /></span> : null}
-              <span className="pricing-col-trend">Trend</span>
-              {source.copies ? <span className="pricing-col-qty">Qty</span> : null}
-              <span className="pricing-col-price"><SortHead id="asking" label={liveTab ? 'New price' : 'Price'} align="start" value={sort} onChange={setSort} defaultValue={SORT_AT_REST} /></span>
+              <span role="columnheader">Item</span>
+              <SortHeader grid className="pricing-col-market" sortKey="price" value={sort} onChange={setSort} rest={SORT_AT_REST} align="end">Market</SortHeader>
+              <SortHeader grid className="pricing-col-low" sortKey="low" value={sort} onChange={setSort} rest={SORT_AT_REST} align="end">Lowest</SortHeader>
+              {rangeOn ? (
+                <SortHeader grid className="pricing-col-range" sortKey="range" value={sort} onChange={setSort} rest={SORT_AT_REST} align="end">Range 7d</SortHeader>
+              ) : null}
+              <span className="pricing-col-trend" role="columnheader">Trend</span>
+              {source.copies ? <span className="pricing-col-qty" role="columnheader">Qty</span> : null}
+              <SortHeader grid className="pricing-col-price" sortKey="asking" value={sort} onChange={setSort} rest={SORT_AT_REST} align="start">{liveTab ? 'New price' : 'Price'}</SortHeader>
               <span />
             </div>
             {drawn.map((group) => (

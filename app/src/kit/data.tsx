@@ -1198,37 +1198,3 @@ export function SortControl<K extends string>({
     </span>
   )
 }
-
-/** A COLUMN HEADER THAT SORTS (Pricing's dollar columns). The label is the press: a native button that
- *  reads as the other headers do, with a direction mark only while it is the sorted column. The
- *  mark's slot is always there, so a press moves and resizes nothing (D313). A press cycles highest
- *  first, lowest first, then `defaultValue`. One column sorts at a time because `value` is one key. */
-export function SortHead<K extends string>({
-  id,
-  label,
-  value,
-  onChange,
-  defaultValue,
-  align = 'end',
-}: {
-  readonly id: K
-  readonly label: string
-  readonly value: SortValue<K>
-  readonly onChange: (next: SortValue<K>) => void
-  readonly defaultValue: SortValue<K>
-  readonly align?: 'start' | 'end'
-}) {
-  const on = value.key === id
-  return (
-    <button
-      type="button"
-      className="bn-sorthead"
-      data-align={align}
-      aria-sort={!on ? 'none' : value.dir === 'desc' ? 'descending' : 'ascending'}
-      onClick={() => onChange(!on ? { key: id, dir: 'desc' } : value.dir === 'desc' ? { key: id, dir: 'asc' } : defaultValue)}
-    >
-      <span className="bn-sorthead-mark">{on ? <Icon name={value.dir === 'desc' ? 'chevronDown' : 'chevronUp'} size={12} /> : null}</span>
-      {label}
-    </button>
-  )
-}
