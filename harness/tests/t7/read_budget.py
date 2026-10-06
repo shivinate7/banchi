@@ -51,6 +51,7 @@ from store.readings import Reading
 from store.session import Store
 from store.skus import SkuRow
 
+TABLE_STAMP = "20260102-000000"  # the one markdown the table route reads; the other markdown routes keep their 404 stamp
 SIZES = (150, 300)  # S and 2S: cards, orders and queue entries
 BOXES = (1, 2, 3)
 
@@ -106,7 +107,7 @@ ROUTE_URLS = {
     "/pipeline/runs": "/pipeline/runs",
     "/pipeline/markdowns": "/pipeline/markdowns",
     "/pipeline/sends": "/pipeline/sends",
-    "_MARKDOWN_TABLE_RE": "/pipeline/markdowns/20260101-000000",
+    "_MARKDOWN_TABLE_RE": "/pipeline/markdowns/{table_stamp}/table",
     "_MARKDOWN_HISTORY_RE": "/pipeline/markdowns/20260101-000000/history?sku=SKU1",
     "_MARKDOWN_TRENDS_RE": "/pipeline/markdowns/20260101-000000/trends?sku=SKU1",
     "_SEND_FILE_RE": "/pipeline/sends/20260101-000000/file?name=import.csv",
@@ -214,7 +215,8 @@ BUDGET = {
     # THE MIX ROW: one `cards` statement joined to `skus`, `readings` and `boxes` (docs/specs/sales-screen.md,
     # Mix, "Route"). `sql` is the store open's own statements plus that one, equal at S and 2S.
     '/stock/mix': {"status": 200, 'sql': 11, 'store_read': 1},
-    '_MARKDOWN_TABLE_RE': {"status": 404},
+    # One store open (11 statements) and one `Store.read`, equal at S and 2S: the on_hand count must come from that one read, never a query per row.
+    '_MARKDOWN_TABLE_RE': {"status": 200, 'sql': 11, 'json_loads': 0, 'store_read': 1},
     '_MARKDOWN_HISTORY_RE': {"status": 404},
     '_MARKDOWN_TRENDS_RE': {"status": 404},
     '_SEND_FILE_RE': {"status": 404},
@@ -412,7 +414,21 @@ def _build(checks: Checks, size: int) -> dict:
         for n in range(size)
         ])
     cid = Store().read().inventory.cards[master.position_key(4, 1)].cid
-    return {"run": run.directory.name, "cid": cid}
+    _write_survey(size)
+    return {"run": run.directory.name, "cid": cid, "table_stamp": TABLE_STAMP}
+
+
+def _write_survey(size: int, skus: tuple = ()) -> None:
+    """One markdown whose survey holds `size` live rows (SKU0..), or exactly `skus`, so the table route's work per row shows as growth."""
+    import json
+
+    from cli import cmd_reprice
+
+    directory = files.inventory_dir() / cmd_reprice.DIRNAME / TABLE_STAMP
+    directory.mkdir(parents=True, exist_ok=True)
+    named = skus or tuple(f"SKU{n}" for n in range(size))
+    rows_ = [{"sku": sku, "standing": "offered", "skip": None, "name": sku, "market": "1.00", "row": {}} for sku in named]
+    (directory / cmd_reprice.SURVEY).write_text(json.dumps({"at": None, "asked": {}, "counts": {}, "source": {}, "skus": rows_}), "utf-8")
 
 
 # --------------------------------------------------------------------------- the run
@@ -612,7 +628,27 @@ def check_detail_read_budget(checks: Checks) -> None:
     checks.equal(small[2]["sql"], DETAIL_PAID_SQL, "7. detail=paid makes its measured SQL statements (cards and boxes, chunked by key count)")
 
 
-CHECKS = (check_server_read_budget, check_detail_read_budget)
+def check_markdown_table_on_hand(checks: Checks) -> None:
+    """7b-29: the markdown table route sends `on_hand` per row, the copies still in a box. A SKU whose copies all
+    sold reads 0, a SKU with copies on hand reads n, and a SKU the store never held reads 0."""
+    checks.note("")
+    checks.note("MARKDOWN TABLE on_hand (7b-29)")
+    with isolated_home():
+        with Store().write() as snapshot:
+            inv = snapshot.inventory
+            for n, (sku, state) in enumerate(
+                [("SOLD1", master.SOLD), ("SOLD1", master.SOLD), ("HELD3", None), ("HELD3", None), ("HELD3", master.SOLD), ("HELD3", None)]
+            ):
+                card, _ = inv.allocate_capture(1, cid=fake_cid(f"oh-{n}"))
+                card.sku = sku
+                if state:
+                    card.state = state
+        _write_survey(0, ("SOLD1", "HELD3", "NEVER"))
+        got = {row["sku"]: row.get("on_hand") for row in pipeline_routes.do_markdown_table(TABLE_STAMP)["skus"]}
+    checks.equal(got, {"SOLD1": 0, "HELD3": 3, "NEVER": 0}, "7b-29. the table sends on_hand: 0 when every copy sold, n when n are in a box")
+
+
+CHECKS = (check_server_read_budget, check_detail_read_budget, check_markdown_table_on_hand)
 
 
 if __name__ == "__main__":  # `python -m harness.tests.t7.read_budget`: print the measured tables

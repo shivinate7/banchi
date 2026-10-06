@@ -196,6 +196,7 @@ function asRow(entry: MarkdownSku): MergedSku {
     // the values the row's own guards read as "nothing to draw", never an invented figure.
     positions: [],
     copies: 0,
+    on_hand: entry.on_hand,
     add_to_quantity: 0,
     backstock: 0,
     live_before: entry.live,

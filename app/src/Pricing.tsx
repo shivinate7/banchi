@@ -1638,7 +1638,12 @@ export function Pricing() {
       if (ca === null || cb === null) return ca === cb ? 0 : ca === null ? 1 : -1
       return (ca - cb) * (sort.dir === 'asc' ? 1 : -1)
     }
-    const sorted = [...shown].sort((a, b) => (sort.key === 'arranged' ? 0 : by(a, b)) || place(a) - place(b))
+    /* IN THE DEFAULT ORDER A ROW WHOSE COPIES HAVE ALL LEFT THE BOX SITS BELOW THE REST of its group
+       (spec 7b-29). A header sort ignores it; no `on_hand` figure means nothing sinks. */
+    const gone = (row: MergedSku) => (sort.key === 'arranged' && row.on_hand === 0 ? 1 : 0)
+    const sorted = [...shown].sort(
+      (a, b) => gone(a) - gone(b) || (sort.key === 'arranged' ? 0 : by(a, b)) || place(a) - place(b),
+    )
     const needs: MergedSku[] = []
     const ready: MergedSku[] = []
     const closed = new Map<string, MergedSku[]>()
