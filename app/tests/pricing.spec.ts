@@ -1921,6 +1921,49 @@ test('an unconfirmed send whose upload may wait in Staged keeps saying so after 
   await expect(card.getByRole('button', { name: 'Take 3 copies back' })).toBeVisible()
 })
 
+test('send card, checked: names the last send, not a bare "Live and checked"', async ({ page }) => {
+  /* Owner ruling "Name the send": the time is when Banchi confirmed the last send landed, so the
+     card says it is about that send. Checked today, the time carries no day. */
+  const done = sendSummary({
+    state: 'checked',
+    checked_at: new Date().toISOString(),
+    check: { export: 'live.csv', found: 3, expected: 3, missing: [] },
+  })
+  await open(page, { sends: () => ({ ...SENDS_NONE, sends: [done] }) })
+  const card = page.locator('.send-standing')
+  await expect(card).toContainText('Your last send is live.')
+  await expect(card).toContainText(/3 of 3 found at TCGplayer at \d{1,2}:\d{2} [AP]M\./)
+  await expect(card).not.toContainText('Live and checked')
+  await expect(card).not.toContainText('yesterday')
+})
+
+test('send card, checked yesterday: the time carries its day', async ({ page }) => {
+  const done = sendSummary({
+    state: 'checked',
+    checked_at: new Date(Date.now() - 26 * 3600_000).toISOString(),
+    check: { export: 'live.csv', found: 3, expected: 3, missing: [] },
+  })
+  await open(page, { sends: () => ({ ...SENDS_NONE, sends: [done] }) })
+  const card = page.locator('.send-standing')
+  await expect(card).toContainText('Your last send is live.')
+  await expect(card).toContainText(/3 of 3 found at TCGplayer at \d{1,2}:\d{2} [AP]M yesterday\./)
+})
+
+test('send card, short: names the last send', async ({ page }) => {
+  const short = sendSummary({
+    state: 'short',
+    published_at: null,
+    held: false,
+    takeable: 3,
+    checked_at: new Date().toISOString(),
+    check: { export: 'live.csv', found: 0, expected: 3, missing: [{ sku: '8608459', name: 'Dunsparce', sent: 3, found: 0 }] },
+  })
+  await open(page, { sends: () => ({ ...SENDS_NONE, sends: [short] }) })
+  const card = page.locator('.send-short-check')
+  await expect(card).toContainText('Your last send')
+  await expect(card).toContainText(/0 of 3 found at TCGplayer at \d{1,2}:\d{2} [AP]M\./)
+})
+
 test('an unconfirmed send the check found whole still names the upload that may wait in Staged', async ({ page }) => {
   /* NOTHING HERE CAN SAY THE UPLOAD LEFT STAGED: the copies found live may be that upload, or a
      hand upload of the same file. The warning outlives the check (F3). Checked moments ago, so
