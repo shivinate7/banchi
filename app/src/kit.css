@@ -928,6 +928,7 @@ span.bn-slot { display: inline-block; }
 .bn-stat-press:hover:not(:disabled) { box-shadow: inset 0 0 0 100vmax var(--bn-hover); }
 .bn-stat-press:hover:not(:disabled) .bn-stat-label { color: var(--bn-ink-2); }
 .bn-stat-press .bn-stat-label { display: inline-flex; align-items: center; gap: var(--bn-0-5); white-space: nowrap; }
+.bn-stat-press .bn-stat-label { transition: color var(--bn-t-fast) var(--bn-ease); }
 .bn-stat-go { flex: none; color: var(--bn-ink-4); }
 
 /* TWO SMALLER SIZES (S9): the tile shipped one ratio, 22:12, and two call sites hand-rolled
