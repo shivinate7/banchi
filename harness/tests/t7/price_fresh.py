@@ -921,7 +921,92 @@ def check_one_refresh_across_processes(checks: Checks) -> None:
         checks.equal(len(kept), len(names), "4. two writers of step notes lose none of them")
 
 
+# ------------------------------------------------------------ the PR #749 re-review defects
+
+
+def _wait_idle(port, seconds=60):
+    deadline = time.time() + seconds
+    ended = {}
+    while time.time() < deadline:
+        state, body, _ = request(port, "GET", "/pipeline/prices/refresh")
+        ended = json.loads(body or b"{}") if state == 200 else {}
+        if ended.get("state") not in ("running", "starting"):
+            break
+        time.sleep(0.1)
+    return ended
+
+
+def check_held_lock_is_a_recorded_skip(checks: Checks) -> None:
+    """Re-review defect 1. While another process holds the refresh lock, the Live press and Refresh now
+    end in a recorded "skipped: another refresh is running" state, and never read as a finished run."""
+    checks.note("")
+    checks.note("PRICES REFRESH — the lock is held by another process")
+    with world(checks) as w:
+        asked, undo = refuse_history()
+        try:
+            attempt(checks, "a first refresh runs, so a previous run's file exists", pipeline_routes.do_prices_refresh)
+        finally:
+            undo()
+        for press, path, payload in (
+            ("the Live press", "/pipeline/live-export", {}),
+            ("Refresh now", "/pipeline/prices/refresh", {"force": True}),
+        ):
+            before = len(w.stub["requests"])
+            with pricerefresh.refresh_lock() as held:  # another process holds it, as far as this call can tell
+                checks.ok(held, f"{press}: the probe holds the lock")
+                status, _raw, _ = request(w.port, "POST", path, payload=payload)
+                ended = _wait_idle(w.port)
+            noted = json.dumps(pricerefresh.read_status() or {})
+            checks.ok(status in (200, 202, 409), f"{press}: the press is answered", str(status))
+            checks.ok(
+                "another refresh is running" in noted and "skipped" in noted.lower(),
+                f"{press}: a held lock is recorded as `skipped: another refresh is running`",
+                noted[:300],
+            )
+            checks.ok(
+                ended.get("state") not in ("done", "running"),
+                f"{press}: the state is not `done`, so the screen never takes the previous run's file as fresh",
+                json.dumps({k: ended.get(k) for k in ("state", "step")}),
+            )
+            checks.equal(len(w.stub["requests"]), before, f"{press}: and it fetched nothing")
+            checks.ok(
+                ((ended.get("note") or {}).get("steps") or {}).get("listings", {}).get("fetched") in (None, "")
+                or "skipped" in noted.lower(),
+                f"{press}: no listings file is offered as this press's own",
+            )
+
+
+def check_single_game_wrong_rows_keep_no_file(checks: Checks) -> None:
+    """Re-review defect 2. `partial` is for a run that holds more than one game. A single-game run whose
+    portal answers another game's rows (Product Line "Magic") keeps no file, and says so."""
+    checks.note("")
+    checks.note("PRICES REFRESH — a single-game run, the portal answers another game")
+    with world(checks) as w:
+        source = tcgcsv.read_export(write_export(w.home / "magic.csv", market={DUNSPARCE_SKU: NOW}))
+        rows = [dict(row, **{"Product Line": "Magic"}) for row in source.rows]
+        wrong = w.home / "magic-out.csv"
+        tcgcsv.write_csv(wrong, source.header, rows)
+        w.stub["body"] = wrong.read_bytes()
+        before = (w.runs[0].directory / "pricing.json").read_bytes()
+        asked, undo = refuse_history()
+        try:
+            attempt(checks, "the refresh does not raise over wrong rows", pipeline_routes.do_prices_refresh)
+        finally:
+            undo()
+        kept = sorted((w.home / "inventory" / files.EXPORTS_DIRNAME / "pokemon").glob("*.csv"))
+        checks.equal([p.name for p in kept], [], "a single-game run keeps no file of another game's rows")
+        catalog = ((pricerefresh.read_status() or {}).get("steps") or {}).get("catalog") or {}
+        checks.ok(
+            catalog.get("ok") is False and ("Magic" in str(catalog.get("message")) or "carries" in str(catalog.get("message"))),
+            "and the catalog step says so, naming what came back",
+            json.dumps(catalog)[:300],
+        )
+        checks.equal((w.runs[0].directory / "pricing.json").read_bytes() == before, True, "and no run table moved")
+
+
 CHECKS = (
+    check_held_lock_is_a_recorded_skip,
+    check_single_game_wrong_rows_keep_no_file,
     check_live_press_returns_at_once,
     check_two_game_run_is_refreshed_for_both,
     check_live_rows_get_saved_strips,
