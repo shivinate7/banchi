@@ -367,9 +367,12 @@ test.describe('the published demo draws what reviewers grade', () => {
     page.on('response', (response) => {
       if (response.request().resourceType() === 'image') return
       reads.push(
-        response.text().then((text) => {
-          if (text.includes(NEEDLE)) carried = true
-        }, () => undefined),
+        response
+          .text()
+          .then((text) => {
+            if (text.includes(NEEDLE)) carried = true
+          })
+          .catch(() => undefined),
       )
     })
     await page.locator('.bn-side').getByRole('link', { name: /^Inventory/ }).first().click()
